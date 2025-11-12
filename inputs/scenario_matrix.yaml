@@ -1,0 +1,4 @@
+name: scenario_matrix
+parameters:
+  - name: tariff_lkr_per_kwh
+    values: [26.0, 40.0, 55.0]

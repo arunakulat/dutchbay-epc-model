@@ -1,0 +1,17 @@
+name: debt_smoke
+capacity_mw: 150
+tariff_usd_per_kwh: 0.203
+availability_pct: 95
+loss_factor: 0.06
+capex_musd: 225
+opex_musd_per_year: 6
+lifetime_years: 25
+debt_ratio: 0.70
+tenor_years: 15
+construction_grace_years: 2
+interest_rate_nominal: 0.08
+target_dscr: 1.30
+min_dscr: 1.20
+dsra_months: 6
+dscr_probability_basis: P50
+use_revenue_guarantee: false

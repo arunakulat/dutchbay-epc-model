@@ -1,0 +1,177 @@
+# DutchBay V13 (generated)
+[![CI](https://github.com/OWNER/REPO/actions/workflows/python-app.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/python-app.yml)
+> CI runs on push/PR, manual dispatch, and nightly at 02:00 UTC + 02:00 Asia/Colombo. Required check: **gate**.
+
+## Quickstart
+```bash
+pip install -e .[dev]
+python -m dutchbay_v13 baseline
+python -m dutchbay_v13 montecarlo --n 1000
+python -m dutchbay_v13 sensitivity
+python -m dutchbay_v13 optimize
+```
+
+- Inputs live in `inputs/baseline.yaml`.
+- V13 core delegates to `legacy_v12.py` initially; replace with pure functions incrementally.
+
+## Scenarios
+```bash
+# Run scenario matrix (inputs/scenario_matrix.yaml)
+python -m dutchbay_v13 scenarios
+
+# Or run all YAMLs under inputs/scenarios/
+python -m dutchbay_v13 scenarios --outdir outputs
+```
+
+## Pre-commit (mirror CI)
+```bash
+pip install pre-commit
+pre-commit install
+# optional: run on entire repo
+pre-commit run --all-files
+```
+
+
+## Scenario outputs (CSV + JSON Lines)
+- Directory: `outputs/scenario_dir_results_<stamp>.csv` and `.jsonl`
+- Matrix: `outputs/scenario_matrix_results_<stamp>.csv` and `.jsonl`
+
+Each line in `.jsonl` is a compact JSON object with scenario name and summary metrics — easy to stream/process at scale.
+
+## Scenario YAML validation
+- Unknown keys are rejected with a clear message listing where the error occurred.
+- Numeric fields are coerced; bad types raise friendly errors.
+
+
+See **docs/schema.md** for parameter units, types, and ranges.
+
+### Scenario output formats
+Control aggregate outputs:
+```bash
+python -m dutchbay_v13 scenarios --format jsonl   # JSON Lines only
+python -m dutchbay_v13 scenarios --format csv     # CSV only
+python -m dutchbay_v13 scenarios --format both    # CSV + JSONL (default)
+```
+
+
+### Per-scenario annual outputs
+```bash
+python -m dutchbay_v13 scenarios --save-annual           # writes per-scenario annual CSVs
+```
+
+### Quick charts
+```bash
+# Tornado chart from sensitivity
+python -m dutchbay_v13 sensitivity --charts
+
+# Baseline DSCR and Equity FCF charts
+python -m dutchbay_v13 baseline --charts
+```
+
+
+## DebtTerms via YAML
+You can override debt assumptions by adding a `debt:` section in any params/scenario YAML:
+```yaml
+debt:
+  debt_ratio: 0.75
+  tenor_years: 14
+  grace_years: 2
+  usd_debt_ratio: 0.50
+  usd_dfi_pct: 0.15
+  usd_dfi_rate: 0.065
+  usd_mkt_rate: 0.070
+  lkr_rate: 0.090
+```
+See **docs/schema.md** for allowed fields and ranges.
+
+## Tornado metric & sort
+```bash
+python -m dutchbay_v13 sensitivity --charts --tornado-metric irr|npv|dscr --tornado-sort abs|asc|desc
+```
+Outputs chart to `outputs/tornado.png`.
+
+
+## Pareto frontier (IRR vs DSCR)
+Search across debt terms and export a Pareto frontier:
+```bash
+python -m dutchbay_v13 optimize --pareto   --grid-dr 0.50:0.90:0.05   --grid-tenor 8:20:1   --grid-grace 0:3:1   --outdir outputs
+# creates outputs/pareto_grid_results.csv, outputs/pareto_frontier.csv|.json
+```
+
+## Tornado data export
+```bash
+python -m dutchbay_v13 sensitivity --charts --tornado-metric irr --tornado-sort abs
+# writes outputs/tornado_data.csv and outputs/tornado_data.json
+```
+
+
+### Pareto plot
+`optimize --pareto` writes `outputs/pareto.png` (frontier) alongside CSV/JSON.
+
+### YAML-driven batch optimizer
+```yaml
+# grids.yaml
+grids:
+  - name: G1
+    grid_dr: 0.55:0.80:0.05         # or [0.55, 0.60, 0.65]
+    grid_tenor: 10:16:1             # or [10, 12, 14, 16]
+    grid_grace: 0:2:1               # or [0, 1, 2]
+  - name: G2
+    grid_dr: [0.6, 0.7]
+    grid_tenor: [12, 14]
+    grid_grace: [0, 1]
+```
+Run:
+```bash
+python -m dutchbay_v13 optimize --pareto --grid-file grids.yaml --outdir outputs
+# produces pareto_frontier_<name>.csv|.json and pareto_<name>.png per grid, plus pareto_summary.json
+```
+
+
+## Utopia-ranked frontier
+The optimizer now writes `outputs/pareto_utopia_ranked.csv` (frontier sorted by distance-to-utopia, best first).
+
+## Single-file HTML report
+Create a quick report consolidating charts and tables:
+```bash
+# After running sensitivity/optimize
+python -m dutchbay_v13 report --outdir outputs
+
+# Or generate automatically:
+python -m dutchbay_v13 sensitivity --charts --report --outdir outputs
+python -m dutchbay_v13 optimize --pareto --report --outdir outputs
+```
+
+
+## PDF export
+```bash
+# requires extras
+pip install .[pdf]
+python -m dutchbay_v13 sensitivity --charts --report --pdf --outdir outputs
+# writes outputs/report.pdf (WeasyPrint if available, else ReportLab fallback)
+```
+
+## JSON API + web form (FastAPI)
+```bash
+pip install .[web]
+python -m dutchbay_v13 api
+# open http://127.0.0.1:8000/form  (edit params & debt, save YAML)
+# POST /run/baseline           -> summary JSON
+# POST /run/scenarios/stream   -> JSONL stream for scenarios
+# GET  /schema                 -> parameter & debt schema
+```
+
+## Run multiple scenario sources
+
+You can pass multiple files and/or directories via `--scenarios` (preferred).
+`--scenarios` takes precedence over `--scenarios-dir`.
+
+```bash
+python -m dutchbay_v13.cli --mode scenarios \  --scenarios inputs/scenarios/baseline.yaml inputs/extra_scenarios \  --outputs-dir outputs \  --format both
+```
+
+### Releases & Artifacts
+
+- **Tags:** https://github.com/<ORG>/<REPO>/tags  
+- **Latest release:** https://github.com/<ORG>/<REPO>/releases/latest  
+- **CI artifacts:** Uploaded from the `package` job as `dist-<TAG or vVERSION+runN>` containing built wheel and sdist.

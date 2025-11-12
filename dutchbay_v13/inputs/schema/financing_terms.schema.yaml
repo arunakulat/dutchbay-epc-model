@@ -1,0 +1,259 @@
+# DB13 Financing Terms schema (ASCII only)
+# Recognizes either flat keys at the root or nested under "Financing_Terms".
+
+type: object
+additionalProperties: true
+
+oneOf:
+  - $ref: "#/$defs/flat"
+  - type: object
+    additionalProperties: true
+    properties:
+      Financing_Terms:
+        $ref: "#/$defs/flat"
+    required: [Financing_Terms]
+
+$defs:
+  flat:
+    type: object
+    additionalProperties: false
+    properties:
+      # ---------------------------
+      # Core debt terms (optional)
+      # ---------------------------
+      debt_ratio:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: Debt share of total CAPEX at COD (0..1).
+
+      tenor_years:
+        type: integer
+        minimum: 1
+        maximum: 40
+        description: Loan tenor in years post-COD.
+
+      # Aliases for interest-only/grace
+      construction_grace_years:
+        type: integer
+        minimum: 0
+        maximum: 10
+        description: Interest-only period in years, including construction/COD ramp.
+      interest_only_years:
+        type: integer
+        minimum: 0
+        maximum: 10
+        description: Alias of construction_grace_years.
+
+      # ---------------------------
+      # Rate input styles
+      # ---------------------------
+      interest_rate_nominal:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: Annual nominal rate as decimal (alternative to base_rate + margin_bps).
+
+      base_rate:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: Reference rate as decimal.
+
+      margin_bps:
+        type: integer
+        minimum: 0
+        maximum: 3000
+        description: Credit spread in basis points.
+
+      # ---------------------------
+      # Amortization guidance
+      # ---------------------------
+      amortization_style:
+        type: string
+        enum: [auto, target_dscr, annuity, straight_line]
+        description: "auto" prefers target_dscr when present.
+      amortization:
+        type: string
+        enum: [auto, target_dscr, annuity, straight_line]
+        description: Alias of amortization_style.
+
+      # ---------------------------
+      # DSCR sculpting options
+      # ---------------------------
+      target_dscr:
+        type: number
+        minimum: 1.0
+        maximum: 3.0
+        description: Sculpt target DSCR.
+      dscr_target:
+        type: number
+        minimum: 1.0
+        maximum: 3.0
+        description: Alias of target_dscr.
+
+      min_dscr:
+        type: number
+        minimum: 1.0
+        maximum: 3.0
+        description: Minimum DSCR covenant threshold.
+
+      dscr_probability_basis:
+        type: string
+        enum: [P50, P90]
+        description: Probability basis for DSCR calculations.
+
+      dscr_haircut_factor:
+        type: number
+        minimum: 0.5
+        maximum: 1.0
+        description: Direct CFADS haircut factor (leave absent to disable).
+
+      # ---------------------------
+      # Debt mix caps by tranche
+      # ---------------------------
+      mix:
+        type: object
+        additionalProperties: false
+        properties:
+          lkr_max:
+            type: number
+            minimum: 0
+            maximum: 0.45
+            description: Max share of total debt that can be LKR (<= 0.45).
+          dfi_max:
+            type: number
+            minimum: 0
+            maximum: 0.10
+            description: Max share of total debt that can be DFI (<= 0.10).
+          usd_commercial_min:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: Optional floor for commercial USD share.
+
+      # ---------------------------
+      # Tranche rate floors
+      # ---------------------------
+      rates:
+        type: object
+        additionalProperties: false
+        properties:
+          lkr_min:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.08
+            description: Minimum LKR rate (decimal).
+          usd_commercial_min:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.075
+            description: Minimum commercial USD rate (decimal).
+          dfi_min:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.065
+            description: Minimum DFI USD rate (decimal).
+
+          # Aliases for "*_floor"
+          lkr_floor:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: Alias of lkr_min.
+          usd_floor:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: Alias of usd_commercial_min.
+          dfi_floor:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: Alias of dfi_min.
+
+      # ---------------------------
+      # Reserves and guarantees
+      # ---------------------------
+      dsra_months:
+        type: integer
+        minimum: 0
+        maximum: 24
+        description: DSRA size in months (flat location).
+
+      reserves:
+        type: object
+        additionalProperties: false
+        properties:
+          dsra_months:
+            type: integer
+            minimum: 0
+            maximum: 24
+            description: DSRA size in months (nested location).
+          receivables_guarantee_months:
+            type: integer
+            minimum: 0
+            maximum: 12
+            description: Max months of receivables covered by guarantee.
+
+      use_revenue_guarantee:
+        type: boolean
+        description: If true, use receivables guarantee instead of DSRA.
+
+      guarantee_revenue_pct:
+        type: number
+        minimum: 0
+        maximum: 0.05
+        default: 0.0075
+        description: Annual guarantee fee as fraction of revenue.
+
+      guarantee_max_months:
+        type: integer
+        minimum: 0
+        maximum: 12
+        default: 9
+        description: Max months receivables are guaranteed.
+
+      # ---------------------------
+      # Fees (optional)
+      # ---------------------------
+      fees:
+        type: object
+        additionalProperties: false
+        properties:
+          upfront_pct:
+            type: number
+            minimum: 0
+            maximum: 0.1
+            description: Upfront fee as fraction of gross debt.
+          commitment_pct:
+            type: number
+            minimum: 0
+            maximum: 0.1
+            description: Annual commitment fee on undrawn balance.
+
+      # ---------------------------
+      # Hard covenant enforcement
+      # ---------------------------
+      enforce_hard_covenants:
+        type: boolean
+        default: false
+        description: If true, engine raises on DSCR breach or balloon remaining > 0 at maturity.
+
+    allOf:
+      - $ref: "#/$defs/_rate_style_mutex"
+      - $ref: "#/$defs/_alias_hints"
+
+  _rate_style_mutex:
+    anyOf:
+      - required: [interest_rate_nominal]
+      - required: [base_rate, margin_bps]
+
+  _alias_hints:
+    # Soft guidance section (no hard cross-field logic; engine resolves precedence)
+    type: object
+
+    

@@ -1,0 +1,23 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": {
+    // Tell plugins which interpreter to use
+    "python_interpreter": "${project_path}/.venv311/bin/python",
+
+    // SublimeLinter executables (adjust if you use different linters)
+    "SublimeLinter.linters.flake8.executable": "${project_path}/.venv311/bin/flake8",
+    "SublimeLinter.linters.mypy.executable":   "${project_path}/.venv311/bin/mypy",
+    "SublimeLinter.linters.ruff.executable":   "${project_path}/.venv311/bin/ruff",
+
+    // PATH hint so Sublime can find venv tools
+    "paths": { "osx": ["${project_path}/.venv311/bin"] },
+
+    // LSP (if you use LSP + pylsp or ruff-lsp)
+    "LSP": {
+      "clients": {
+        "pylsp":   { "enabled": true, "command": ["${project_path}/.venv311/bin/pylsp"] },
+        "ruff-lsp":{ "enabled": false, "command": ["${project_path}/.venv311/bin/ruff-lsp"] }
+      }
+    }
+  }
+}

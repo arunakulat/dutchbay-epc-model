@@ -1,0 +1,52 @@
+{
+  "discovered_handlers": {
+    "baseline": {
+      "mode": "baseline",
+      "module": "dutchbay_v13.cli",
+      "func": "main",
+      "file": "dutchbay_v13/cli.py"
+    },
+    "sensitivity": {
+      "mode": "sensitivity",
+      "module": "dutchbay_v13.cli",
+      "func": "main",
+      "file": "dutchbay_v13/cli.py"
+    },
+    "optimize": {
+      "mode": "optimize",
+      "module": "dutchbay_v13.cli",
+      "func": "main",
+      "file": "dutchbay_v13/cli.py"
+    },
+    "report": {
+      "mode": "report",
+      "module": "dutchbay_v13.cli",
+      "func": "main",
+      "file": "dutchbay_v13/cli.py"
+    }
+  },
+  "scanned_files": [
+    "dutchbay_v13/legacy_v12.py",
+    "dutchbay_v13/config.py",
+    "dutchbay_v13/core.py",
+    "dutchbay_v13/monte_carlo.py",
+    "dutchbay_v13/sensitivity.py",
+    "dutchbay_v13/optimization.py",
+    "dutchbay_v13/validate.py",
+    "dutchbay_v13/cli.py",
+    "dutchbay_v13/__main__.py",
+    "dutchbay_v13/__init__.py",
+    "dutchbay_v13/types.py",
+    "dutchbay_v13/scenario_runner.py",
+    "dutchbay_v13/schema.py",
+    "dutchbay_v13/charts.py",
+    "dutchbay_v13/report.py",
+    "dutchbay_v13/report_pdf.py",
+    "dutchbay_v13/api.py",
+    "dutchbay_v13/finance/__init__.py",
+    "dutchbay_v13/finance/irr.py",
+    "dutchbay_v13/finance/utils.py",
+    "dutchbay_v13/finance/debt.py",
+    "dutchbay_v13/finance/cashflow.py"
+  ]
+}

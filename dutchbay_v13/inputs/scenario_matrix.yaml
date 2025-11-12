@@ -1,0 +1,13 @@
+scenarios:
+  - name: Baseline
+    params: {}
+  - name: HighTariff
+    params:
+      tariff_lkr_kwh: 22.40
+  - name: LowCF
+    params:
+      cf_p50: 0.36
+  - name: StressRates
+    params:
+      fx_depr: 0.05
+      opex_usd_mwh: 7.80

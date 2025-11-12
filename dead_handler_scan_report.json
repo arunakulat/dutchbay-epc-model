@@ -1,0 +1,16 @@
+{
+  "untested_modes_added": [
+    "baseline",
+    "cashflow",
+    "debt",
+    "epc",
+    "irr",
+    "montecarlo",
+    "optimize",
+    "sensitivity",
+    "utils",
+    "validate"
+  ],
+  "ast_ok": true,
+  "problems": []
+}

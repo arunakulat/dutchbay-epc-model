@@ -1,0 +1,6 @@
+{
+  "cmd": ["/usr/bin/env", "bash", "-lc", "source \"$project_path/.venv311/bin/activate\" && python -u \"$file\""],
+  "selector": "source.python",
+  "working_dir": "$project_path",
+  "env": { "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1" }
+}

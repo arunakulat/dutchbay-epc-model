@@ -1,0 +1,236 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, '**' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'    # nightly at 02:00 UTC
+    - cron: '30 20 * * *'  # nightly at 02:00 Asia/Colombo (UTC+5:30)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  smoke:
+    name: Smoke (CLI quick)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-smoke-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-smoke-
+      - name: Validate pyproject.toml
+        run: |
+          python - <<'PY'
+          import pathlib
+          try:
+            import tomllib as toml
+          except Exception:
+            import tomli as toml
+          data = toml.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          print("name:", data.get("project", {}).get("name"))
+          print("version:", data.get("project", {}).get("version"))
+          PY
+      - name: Install (editable, dev)
+        run: |
+          pip install -U pip wheel build
+          pip install -e .[dev]
+      - name: Pytest fast lane
+        run: |
+          pytest -q -k "cli and smoke"
+
+  build:
+    needs: [smoke]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10.x', '3.11.x', '3.12.x']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
+
+      - name: Cache datasets (inputs/, tests/data if present)
+        uses: actions/cache@v4
+        with:
+          path: |
+            inputs
+            tests/data
+          key: ${{ runner.os }}-datasets-${{ hashFiles('inputs/**', 'tests/data/**') }}
+          restore-keys: |
+            ${{ runner.os }}-datasets-
+
+      - name: Cache mypy cache
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-${{ matrix.python-version }}-${{ hashFiles('mypy.ini', 'pyproject.toml', 'dutchbay_v13/**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-mypy-${{ matrix.python-version }}-
+            ${{ runner.os }}-mypy-
+
+      - name: Cache pytest cache
+        uses: actions/cache@v4
+        with:
+          path: .pytest_cache
+          key: ${{ runner.os }}-pytest-${{ matrix.python-version }}-${{ hashFiles('pytest.ini', 'pyproject.toml', 'tests/**') }}
+          restore-keys: |
+            ${{ runner.os }}-pytest-${{ matrix.python-version }}-
+            ${{ runner.os }}-pytest-
+
+      - name: Upgrade pip
+        run: python -m pip install -U pip
+
+      
+      - name: Validate pyproject.toml
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+try:
+  import tomllib as toml
+except Exception:
+  import tomli as toml
+          data = toml.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          print("pyproject OK; sections:", list(data.keys()))
+          PY
+
+      - name: Install project (dev)
+        run: pip install -e .[dev]
+
+      - name: Pre-commit (format, lint, type)
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files
+
+      - name: Type check
+        run: mypy --config-file mypy.ini --strict dutchbay_v13
+
+      - name: Tests
+        run: pytest
+
+
+package:
+    env:
+      PACKAGE_NAME: ${{ github.repository }}
+      needs: build
+  runs-on: ubuntu-latest
+  steps:
+
+      - name: Compute version + artifact suffix
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON=python
+          $PYTHON - <<'PY'
+          import pathlib, sys
+          try:
+              import tomllib as toml
+          except Exception:
+              import tomli as toml
+          text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          data = toml.loads(text)
+          ver = data.get("project", {}).get("version", "0.0.0")
+          print(f"::echo::on")
+          print(f"version={ver}")
+          print(f"::set-output name=version::{ver}")
+          PY
+          REF="${GITHUB_REF_NAME}"
+          if [[ "$REF" == refs/tags/* ]]; then
+            TAG="${REF#refs/tags/}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          # Artifact suffix: tag if present else v<version>+<run>
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            SUF="$TAG"
+          else
+            SUF="v${{ steps.ver.outputs.version }}+run${GITHUB_RUN_NUMBER}"
+          fi
+          echo "ARTIFACT_SUFFIX=$SUF" >> $GITHUB_ENV
+      - name: Build package (sdist+wheel)
+        run: |
+          python -m build
+      - name: Upload dist artifacts (versioned)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ env.ARTIFACT_SUFFIX }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.x'
+        cache: 'pip'
+    - name: Validate pyproject.toml
+      shell: bash
+      run: |
+        python - <<'PY'
+        import pathlib
+try:
+  import tomllib as toml
+except Exception:
+  import tomli as toml
+        data = toml.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+        print("pyproject OK; sections:", list(data.keys()))
+        PY
+    - name: Read package version
+        id: pkg
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+try:
+  import tomllib as toml
+except Exception:
+  import tomli as toml, os
+          data = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))
+          ver = data.get('project', {}).get('version', '0.0.0')
+          print('version:', ver)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'version={ver}\n')
+          PY
+
+      - name: Build sdist/wheel
+      run: |
+        python -m pip install -U pip build
+        python -m build
+
+  gate:
+    needs: [build, package, smoke]
+    runs-on: ubuntu-latest
+    if: ${{ success() }}
+    steps:
+      - run: echo "All matrix jobs passed"

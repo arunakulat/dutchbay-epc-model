@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FILE="tests/test_finance_irr_debt.py"
+
+echo "→ Verifying $FILE exists..."
+[[ -f "$FILE" ]] || { echo "ERR: $FILE not found"; exit 1; }
+
+TS=$(date +%s)
+echo "→ Backing up original to ${FILE}.bak.${TS}"
+cp "$FILE" "${FILE}.bak.${TS}"
+
+echo "→ Updating expected IRR comment and assertion range..."
+# Fix the explanatory comment (8.27% → 13.07%)
+perl -0777 -i -pe 's/IRR\s*≈\s*8\.27%/IRR ≈ 13.07%/g' "$FILE"
+
+# Loosen the acceptable band to cover the correct value (~0.13066)
+perl -0777 -i -pe 's/assert\s*0\.05\s*<\s*r\s*<\s*0\.12/assert 0.12 < r < 0.14/g' "$FILE"
+
+echo "→ Running the IRR & Debt test with minimal coverage gate..."
+pytest -q tests/test_finance_irr_debt.py \
+  --override-ini="addopts=-q --cov=dutchbay_v13 --cov-report=term-missing --cov-fail-under=1"
+
+echo "✓ IRR expectation fixed and test executed."
+echo "   (Optional) commit:"
+echo "     git add $FILE && git commit -m 'tests: correct IRR expectation for [-100,60,60] to ~13.07% and adjust band'"
+
