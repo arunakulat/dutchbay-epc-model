@@ -136,7 +136,7 @@ constraints:
 # Monte Carlo Risk Analysis Parameters (P0-2B)
 # ============================================================================
 monte_carlo:
-  n_scenarios: 10000
+  n_scenarios: 100000
   seed: 42
 
   parameters:
