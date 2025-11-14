@@ -33,9 +33,12 @@ opex:
   # usd_per_mwh: 0
   # lkr_per_mwh: 0
 
-# ---------------------------
-# Financing terms (schema-backed; nested form)
-# ---------------------------
+
+returns:
+  project_discount_rate: 0.10      # Weighted Average Cost of Capital (WACC)
+  equity_discount_rate: 0.12       # Equity investor required return
+  project_life_years: 20           # Years for NPV/IRR calculation
+
 Financing_Terms:
   # Debt sizing and style
   debt_ratio: 0.70
