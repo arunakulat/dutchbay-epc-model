@@ -1,263 +1,198 @@
-# full_model_variables_updated.yaml  (repo root)
-# Master inputs for Dutch Bay wind appraisal — all policy/assumptions live here.
+################################################################################
+# DUTCHBAY V13 - MASTER INPUTS CONFIGURATION
+# Version: P0-2C Completed
+# Last updated: 2025-11-14
+################################################################################
 
+# ============================================================================
+# Project Overview
+# ============================================================================
 project:
-  name: Dutch Bay Wind Project
-  capacity_mw: 150            # variable: 90..150 by scenarios
-  capacity_factor: 0.40       # or use availability_pct/loss_factor instead
-  degradation: 0.006          # per-year energy degradation (fraction, 0..1)
+  name: "Dutch Bay Wind Project"
+  capacity_mw: 150
+  capacity_factor: 0.40
+  degradation: 0.006  # Annual energy degradation fraction (0-1)
 
-  timeline:
-    # nominal operating life (exclude construction); adapter uses this length to build series
-    lifetime_years: 20
+# ============================================================================
+# Timeline Parameters
+# ============================================================================
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.10
+  equity_discount_rate: 0.12
 
+# ============================================================================
+# Tariff and FX Assumptions
+# ============================================================================
 tariff:
-  # The PPA is in LKR, unindexed. Use this key; adapters convert via FX per year.
   lkr_per_kwh: 20.30
 
 fx:
-  # Either give explicit curve, OR start + annual depreciation
   start_lkr_per_usd: 300
   annual_depr: 0.03
-  # curve_lkr_per_usd: []  # optional explicit list if you want to override start+depr
 
+# ============================================================================
+# Capital and Operating Cost Assumptions
+# ============================================================================
 capex:
-  # Provide either total or per-MW; no floors here (enforced by validation/scenarios).
-  usd_total: 150000000        # example: 225 MUSD total
-  # usd_per_mw: 1500000       # alternative shape
+  usd_total: 150000000  # Total project cost in USD
 
 opex:
-  # You may combine fixed and per-MWh, and combine USD + LKR legs; adapter sums them.
-  usd_per_year: 3000000       # example: 6 MUSD/y total
-  # lkr_per_year: 0
-  # usd_per_mwh: 0
-  # lkr_per_mwh: 0
+  usd_per_year: 3000000  # Annual operating cost in USD
 
-
+# ============================================================================
+# Taxation
+# ============================================================================
 tax:
-  corporate_tax_rate: 0.30   # 30% of earnings before tax (standard SL/India)
-  depreciation_years: 15     # straight-line for tax shield
-  min_tax: 0                 # min tax floor
+  corporate_tax_rate: 0.30
+  depreciation_years: 15
+  min_tax: 0.0
 
+# ============================================================================
+# Regulatory Parameters
+# ============================================================================
 regulatory:
-  success_fee_pct: 0.01      # 1% of revenue paid as success/licensing fee
-  env_surcharge_pct: 0.005   # 0.5% of revenue for environment/CSR
-  social_services_levy_pct: 0.025   # 2.5% of revenue for social levy
+  success_fee_pct: 0.01            # Success fee as % of revenue
+  env_surcharge_pct: 0.005         # Environmental surcharge % of revenue
+  social_services_levy_pct: 0.025  # Social services levy % of revenue
+  grid_loss_pct: 0.02              # Grid losses % of gross production
 
+# ============================================================================
+# Risk Adjustment
+# ============================================================================
 risk_adjustment:
-  cfads_haircut_pct: 0.10    # 10% reduction to CFADS for technical/market risk (P90 min)
+  cfads_haircut_pct: 0.10          # 10% haircut to CFADS for risk
 
+# ============================================================================
+# Financing Terms
+# ============================================================================
 Financing_Terms:
-  # Debt sizing and style
   debt_ratio: 0.70
   tenor_years: 15
   interest_only_years: 2
-  amortization_style: target_dscr      # auto | target_dscr | annuity | straight_line
-
-  # Rate input style – pick ONE: interest_rate_nominal OR (base_rate + margin_bps)
-  interest_rate_nominal: 0.08   # decimal (8%)
-
-  # Tranche mix caps (total debt composition)
-  mix:
-    lkr_max: 0.45               # ≤ 45% of total debt in LKR
-    dfi_max: 0.10               # ≤ 10% of total debt from DFI
-    usd_commercial_min: 0.45    # optional floor for USD commercial
-
-  # Tranche rate floors (decimal)
-  rates:
-    lkr_min: 0.08               # ≥ 8% for LKR leg
-    usd_commercial_min: 0.075   # ≥ 7.5% for USD commercial
-    dfi_min: 0.065              # ≥ 6.5% for DFI
-
-  # DSCR sculpting & covenant
+  amortization_style: "target_dscr"
+  interest_rate_nominal: 0.08
   target_dscr: 1.30
+
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.10
+    usd_commercial_min: 0.45
+
+  rates:
+    lkr_min: 0.08
+    usd_commercial_min: 0.075
+    dfi_min: 0.065
+
   min_dscr: 1.20
-  dscr_probability_basis: P50   # or P90; optional dscr_haircut_factor instead
-  # dscr_haircut_factor: 0.90
 
-  # Reserves / receivables guarantee
   reserves:
-    dsra_months: 6              # 0 if you rely on receivables guarantee
+    dsra_months: 6
     receivables_guarantee_months: 9
-  use_revenue_guarantee: false
-  guarantee_revenue_pct: 0.0075 # 0.75% of annual revenue as fee proxy
-  guarantee_max_months: 9
+    use_revenue_guarantee: false
+    guarantee_revenue_pct: 0.0075
+    guarantee_max_months: 9
 
-  # Fees (optional)
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
 
-  # Hard covenant enforcement
-  enforce_hard_covenants: false # set true to raise on dscr_min<min_dscr or balloon>0 at maturity
+  enforce_hard_covenants: false
 
-  Financing_Terms:
-  # ... (keep all existing fields like debt_ratio, tenor_years, etc.)
-  
+# ============================================================================
+# Institutional Constraints & Validation
+# ============================================================================
+constraints:
+  max_debt_ratio: 0.80
+  warn_debt_ratio: 0.75
+
+  min_dscr_covenant: 1.30
+  target_dscr: 1.35
+  warn_dscr: 1.25
+
+  max_balloon_pct: 0.10
+  warn_balloon_pct: 0.05
+
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.10
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+
+  max_tenor_years: 20
+  warn_tenor_years: 18
+
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+
+  lender_type: "DFI"
+  jurisdiction: "Sri Lanka"
+
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+# ============================================================================
+# Monte Carlo Risk Analysis Parameters (P0-2B)
+# ============================================================================
 monte_carlo:
   n_scenarios: 10000
   seed: 42
+
   parameters:
-    # Perturbations as % changes around base case
-    capacity_factor_std: 0.05        # 5% std dev
-    tariff_lkr_std: 0.10             # 10% std dev
-    opex_usd_std: 0.15               # 15% std dev
-    capex_usd_std: 0.08              # 8% std dev
-    
-    # Correlation matrix (2D list)
-    # [capacity_factor, tariff, opex, capex]
+    capacity_factor_std: 0.05
+    tariff_lkr_std: 0.10
+    opex_usd_std: 0.15
+    capex_usd_std: 0.08
+
     correlation_matrix: [
-      [1.0,   -0.3,   0.2,   0.1],
-      [-0.3,   1.0,  -0.1,   0.15],
-      [0.2,   -0.1,   1.0,   0.3],
-      [0.1,    0.15,  0.3,   1.0]
+      [1.0, -0.3, 0.2, 0.1],
+      [-0.3, 1.0, -0.1, 0.15],
+      [0.2, -0.1, 1.0, 0.3],
+      [0.1, 0.15, 0.3, 1.0]
     ]
-  
-  # Risk metrics thresholds
-  var_confidence: 0.95              # VaR(95%)
-  cvar_confidence: 0.95             # CVaR(95%)
-  percentiles: [10, 25, 50, 75, 90] # P10/P50/P90 etc
-  
-  # Covenant thresholds for stress
+
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles: [10, 25, 50, 75, 90]
+
   min_dscr_covenant: 1.20
   min_llcr_covenant: 1.25
 
-  
-   # ============================================================================
-  # INSTITUTIONAL CONSTRAINTS & VALIDATION (Enhanced - P0-1B Final)
-  # ============================================================================
-  # These constraints enforce global banking standards and are used by the
-  # validation engine in finance/debt.py. 
-  #
-  # ALIGNMENT NOTE:
-  # - Code default max_debt_ratio: 0.85 (fallback for missing YAML)
-  # - YAML setting: 0.80 (more conservative, DFI standard)
-  # - YAML value takes precedence when present
-  # - This allows scenario-specific tuning while maintaining safety defaults
-  # ============================================================================
-  
-  constraints:
-    # --------------------------------------------------------------------------
-    # LEVERAGE LIMITS
-    # --------------------------------------------------------------------------
-    max_debt_ratio: 0.80           # Hard cap on debt/CAPEX (DFI standard)
-                                   # Code fallback: 0.85 if not specified
-                                   # Rationale: DFI lenders typically require ≤80%
-                                   # For commercial banks, can raise to 0.85
-                                   # For ECA, can go up to 0.85-0.90
-    
-    warn_debt_ratio: 0.75          # Warning threshold (before max)
-                                   # Triggers logging but allows execution
-    
-    # --------------------------------------------------------------------------
-    # DSCR COVENANTS (Debt Service Coverage Ratio)
-    # --------------------------------------------------------------------------
-    min_dscr_covenant: 1.30        # Hard floor - lender covenant requirement
-                                   # IFC/World Bank standard: 1.30-1.35
-                                   # Commercial banks: 1.25-1.30
-                                   # Below this triggers ERROR
-    
-    target_dscr: 1.35              # Design target for sculpted debt
-                                   # Model will aim for this in all years
-    
-    warn_dscr: 1.25                # Early warning threshold
-                                   # Triggers WARNING but allows execution
-    
-    # --------------------------------------------------------------------------
-    # BALLOON PAYMENT LIMITS & REFINANCING
-    # --------------------------------------------------------------------------
-    max_balloon_pct: 0.10          # Max balloon as % of original principal
-                                   # Standard: 5-10% for project finance
-                                   # Above this triggers ERROR
-    
-    warn_balloon_pct: 0.05         # Warning threshold for balloon
-                                   # Triggers WARNING if balloon > 5%
-                                   # 5-10% range requires refinancing plan
-    
-    # Refinancing assumptions (for balloon > warn threshold)
-    refinancing:
-      enabled: true                # Set false to reject any balloon
-      max_refinance_pct: 0.10      # Max 15% of principal can be refinanced
-      refinance_rate_premium: 0.02 # +2% rate premium for refinancing
-      refinance_tenor_years: 3     # Refinancing period (typically 3-5 years)
-      
-      # Documentation requirements when balloon > 5%
-      requires_documentation: true
-      documentation_notes: |
-        Balloon payment between 5-10% requires:
-        - Refinancing commitment letter from lender
-        - OR cash sweep mechanism to reduce balloon
-        - OR equity injection commitment at maturity
-        - Documented in financing term sheet
-    
-    # --------------------------------------------------------------------------
-    # TENOR LIMITS
-    # --------------------------------------------------------------------------
-    max_tenor_years: 20            # Hard cap on loan term (adjusted from 25)
-                                   # Rationale: Wind/solar typical max is 18-20 years
-                                   # Hydro can go 25-30 years
-                                   # Shorter tenor reduces balloon risk
-    
-    warn_tenor_years: 18           # Warning threshold for tenor
-                                   # Triggers WARNING if tenor > 18 years
-    
-    # --------------------------------------------------------------------------
-    # INTEREST RATE VALIDATION
-    # --------------------------------------------------------------------------
-    max_interest_rate: 0.25        # 25% max - prevents data entry errors
-                                   # Any rate above this triggers ERROR
-    
-    min_interest_rate: 0.0         # Must be non-negative
-                                   # Negative rates trigger ERROR
-    
-    # --------------------------------------------------------------------------
-    # LENDER CLASSIFICATION (for logging/audit)
-    # --------------------------------------------------------------------------
-    lender_type: "DFI"             # Options: "DFI", "Commercial", "ECA"
-                                   # DFI: Most conservative (current settings)
-                                   # Commercial: Can relax to 0.85 debt, 1.25 DSCR
-                                   # ECA: Can go to 0.85-0.90 debt, 1.20 DSCR
-    
-    jurisdiction: "Sri Lanka"      # Project jurisdiction
-                                   # Documents regulatory environment
-    
-    # --------------------------------------------------------------------------
-    # AUDIT BEHAVIOR FLAGS
-    # --------------------------------------------------------------------------
-    fail_on_covenant_breach: false # Set to true to raise error (not just warn)
-                                   # when DSCR < min_dscr_covenant
-                                   # Use for final validation before lender submission
-    
-    fail_on_large_balloon: false   # Set to true to raise error (not just warn)
-                                   # when balloon > max_balloon_pct
-                                   # Use for strict DFI requirements
-    
-    # --------------------------------------------------------------------------
-    # PARAMETER ALIGNMENT DOCUMENTATION
-    # --------------------------------------------------------------------------
-    # This section documents the relationship between YAML and code defaults:
-    #
-    # Parameter              | YAML Value | Code Fallback | Effective Value
-    # -----------------------|------------|---------------|----------------
-    # max_debt_ratio         | 0.80       | 0.85          | 0.80 (YAML wins)
-    # min_dscr_covenant      | 1.30       | 1.30          | 1.30 (aligned)
-    # max_balloon_pct        | 0.10       | 0.10          | 0.10 (aligned)
-    # max_tenor_years        | 20         | 25            | 20 (YAML wins)
-    #
-    # YAML values always take precedence when present.
-    # Code fallbacks ensure model doesn't fail if constraints section is missing.
-    # --------------------------------------------------------------------------
-    
-    # --------------------------------------------------------------------------
-    # VALIDATION NOTES (for audit trail)
-    # --------------------------------------------------------------------------
-    # These constraints match:
-    # - IFC Performance Standards (PS2 - Labor and Working Conditions)
-    # - World Bank Environmental and Social Framework
-    # - Asian Development Bank Safeguard Policy Statement
-    # - Sri Lanka Securities and Exchange Commission guidelines
-    # 
-    # Last reviewed: 2025-11-12
-    # Approved by: [Investment Committee / CFO / Project Finance Team]
-    # Next review: Before financial close or material changes
-    # --------------------------------------------------------------------------
+# ============================================================================
+# Sensitivity Analysis Parameters (P0-2C)
+# ============================================================================
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.05
+      high_pct: 0.05
+      rationale: "Weather/resource variability"
+
+    tariff_lkr_per_kwh:
+      low_pct: -0.10
+      high_pct: 0.10
+      rationale: "PPA pricing uncertainty"
+
+    opex_usd_per_year:
+      low_pct: -0.15
+      high_pct: 0.15
+      rationale: "Operational cost volatility"
+
+    capex_usd_total:
+      low_pct: -0.08
+      high_pct: 0.08
+      rationale: "EPC cost uncertainty"
+
+    grid_loss_pct:
+      low_pct: -0.01
+      high_pct: 0.03
+      rationale: "Grid connection losses"
+
+  analysis:
+    tornado_chart_title: "DutchBay 150MW - Parameter Sensitivity (Equity IRR)"
+    metrics_analyzed: [equity_irr, project_irr, equity_npv]
+    dpi: 300
+    figure_size: [12, 8]
+    color_downside: "#d73027"
+    color_upside: "#4575b4"

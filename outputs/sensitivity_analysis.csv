@@ -1,0 +1,6 @@
+Parameter,Base Case,Low Case,High Case,Total Swing
+PPA Tariff (LKR/kWh),17.56%,14.19%,20.93%,6.74%
+CAPEX (USD),17.56%,20.18%,15.34%,4.84%
+Capacity Factor,17.56%,15.89%,19.23%,3.34%
+OPEX (USD/yr),17.56%,18.10%,17.02%,1.08%
+Grid Loss %,17.56%,17.57%,17.54%,0.03%
