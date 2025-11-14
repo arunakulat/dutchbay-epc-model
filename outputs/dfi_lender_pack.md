@@ -1,4 +1,4 @@
-# DutchBay 150MW Wind Farm - DFI/Lender Due Diligence Pack
+# Dutch Bay Wind Project - DFI/Lender Due Diligence Pack
 
 **Prepared:** November 14, 2025
 
@@ -9,14 +9,46 @@
 | Metric | Value |
 |--------|-------|
 | **Project IRR** | 11.98% |
-| **Project NPV (10%)** | $17,613,831.32 |
+| **Project NPV (10.0%)** | $17,613,831.32 |
 | **Equity IRR** | 18.25% |
-| **Equity NPV (12%)** | $18,133,907.46 |
+| **Equity NPV (12.0%)** | $18,133,907.46 |
 | **Equity Investment** | $45,000,000.00 |
 
 ---
 
-## Debt Service Coverage Schedule (Full 15-Year Tenor, Net of Tax/Reg/Risk)
+## Full Term Coverage Ratios
+
+| Year | DSCR | LLCR | PLCR |
+|------|------|------|------|
+| 1 | 3.34x | 1.97x | 1.97x |
+| 2 | 3.21x | 1.87x | 1.87x |
+| 3 | 1.30x | 1.78x | 1.78x |
+| 4 | 1.30x | 1.89x | 1.89x |
+| 5 | 1.30x | 2.05x | 2.05x |
+| 6 | 1.30x | 2.26x | 2.26x |
+| 7 | 1.30x | 2.56x | 2.56x |
+| 8 | 1.30x | 3.05x | 3.05x |
+| 9 | 1.30x | 3.95x | 3.95x |
+| 10 | 1.30x | 6.11x | 6.11x |
+| 11 | 2.88x | 18.17x | 18.17x |
+| 12 | 0.00x | 0.00x | 0.00x |
+| 13 | 0.00x | 0.00x | 0.00x |
+| 14 | 0.00x | 0.00x | 0.00x |
+| 15 | 0.00x | 0.00x | 0.00x |
+
+---
+
+## Minimum/Mean Coverage
+
+- **Minimum DSCR:** 1.30x
+- **Minimum LLCR:** 1.78x 
+- **LLCR Avg:** 4.15x
+- **Minimum PLCR:** 1.78x 
+- **PLCR Avg:** 4.15x
+
+---
+
+## Financials w/ Net Tax & Regulatory (All Project Years)
 
 | Year | Gross CFADS | Net CFADS | Debt Service | Taxes |
 |------|-------------|-----------|--------------|-------|
@@ -35,13 +67,19 @@
 | 13 | $19,278,774.06 | $17,350,896.65 | $0.00 | $2,205,269.00 |
 | 14 | $18,500,098.46 | $16,650,088.61 | $0.00 | $1,995,026.58 |
 | 15 | $17,748,638.71 | $15,973,774.84 | $0.00 | $1,792,132.45 |
+| 16 | $17,023,443.57 | $15,321,099.21 | $0.00 | $1,596,329.76 |
+| 17 | $16,323,595.06 | $14,691,235.55 | $0.00 | $1,407,370.67 |
+| 18 | $15,648,207.27 | $14,083,386.54 | $0.00 | $1,225,015.96 |
+| 19 | $14,996,425.27 | $13,496,782.74 | $0.00 | $1,049,034.82 |
+| 20 | $14,367,423.99 | $12,930,681.60 | $0.00 | $879,204.48 |
 
 ---
 
-## Key Findings
+## Notes
 
-All returns and coverage numbers reflect tax, grid loss, technical risk adjustments.
-Debt schedule aligned to net after-tax cash generation.
+All returns and coverage numbers reflect LLCR, PLCR covenants, and post-tax, levy-adjusted flows.
+Debt schedule and coverage ratios aligned to actual net after-tax cash generation.
+Full project timeline includes construction, grace, and all operating years through project end.
 
 ---
 

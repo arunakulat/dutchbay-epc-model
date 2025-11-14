@@ -1,6 +1,6 @@
-# Dutch Bay 150MW Wind Farm - Executive Summary
+# Dutch Bay Wind Project - Executive Summary
 
-**Report Date:** November 14, 2025 at 09:50:29
+**Report Date:** November 14, 2025 at 14:14:11
 
 ---
 
@@ -22,13 +22,33 @@
 | Metric | Value |
 |--------|-------|
 | **Project IRR** | 11.98% |
-| **Project NPV (10%)** | $17,613,831.32 |
+| **Project NPV (10.0%)** | $17,613,831.32 |
 | **Equity IRR** | 18.25% |
-| **Equity NPV (12%)** | $18,133,907.46 |
+| **Equity NPV (12.0%)** | $18,133,907.46 |
 
 ---
 
-## Year 1 / Stress Year Financial Snapshot
+## Coverage Ratios (Key Years)
+
+| Year | DSCR | LLCR | PLCR |
+|------|------|------|------|
+| 1 | 3.34x | 1.97x | 1.97x |
+| 2 | 3.21x | 1.87x | 1.87x |
+| 3 | 1.30x | 1.78x | 1.78x |
+| 4 | 1.30x | 1.89x | 1.89x |
+| 5 | 1.30x | 2.05x | 2.05x |
+
+---
+
+## Coverage Summary
+
+- **Minimum DSCR:** 1.30x
+- **Minimum LLCR:** 1.78x 
+- **Minimum PLCR:** 1.78x 
+
+---
+
+## All Years: Financials w/ Net Tax & Regulatory
 
 | Year | CFADS (Gross) | Net CFADS | Debt Service | Taxes |
 |------|---------------|-----------|--------------|-------|
@@ -37,13 +57,28 @@
 |  3 | $28,797,991.74 | $25,918,192.56 | $19,937,071.20 | $2,532,347.48 |
 |  4 | $27,686,605.62 | $24,917,945.06 | $19,167,650.04 | $2,512,848.00 |
 |  5 | $26,614,064.06 | $23,952,657.66 | $18,425,121.27 | $2,508,461.85 |
+|  6 | $25,579,009.40 | $23,021,108.46 | $17,708,544.97 | $2,519,815.34 |
+|  7 | $24,580,131.40 | $22,122,118.26 | $17,017,014.05 | $2,547,605.24 |
+|  8 | $23,616,165.64 | $21,254,549.08 | $16,349,653.14 | $2,592,603.74 |
+|  9 | $22,685,891.89 | $20,417,302.70 | $15,705,617.46 | $2,655,663.77 |
+| 10 | $21,788,132.56 | $19,609,319.31 | $15,084,091.77 | $2,737,724.79 |
+| 11 | $20,921,751.23 | $18,829,576.11 | $6,528,195.14 | $2,648,872.83 |
+| 12 | $20,085,651.19 | $18,077,086.07 | $0.00 | $2,423,125.82 |
+| 13 | $19,278,774.06 | $17,350,896.65 | $0.00 | $2,205,269.00 |
+| 14 | $18,500,098.46 | $16,650,088.61 | $0.00 | $1,995,026.58 |
+| 15 | $17,748,638.71 | $15,973,774.84 | $0.00 | $1,792,132.45 |
+| 16 | $17,023,443.57 | $15,321,099.21 | $0.00 | $1,596,329.76 |
+| 17 | $16,323,595.06 | $14,691,235.55 | $0.00 | $1,407,370.67 |
+| 18 | $15,648,207.27 | $14,083,386.54 | $0.00 | $1,225,015.96 |
+| 19 | $14,996,425.27 | $13,496,782.74 | $0.00 | $1,049,034.82 |
+| 20 | $14,367,423.99 | $12,930,681.60 | $0.00 | $879,204.48 |
 
 ---
 
 ## Key Findings
 
-All financials are post-tax, after grid loss, regulatory and technical risk, and reflect actual USD revenues under deterministic FX/YAML.
+All financial metrics reflect actual DSCR/LLCR/PLCR, post-tax and post-levy. Data spans complete project lifecycle including construction, grace period, and all operating years.
 
 ---
 
-*This Executive Summary is based on fully netted base case as of {report_date}.*
+*This Executive Summary is based on fully netted base case as of November 14, 2025 at 14:14:11.*
