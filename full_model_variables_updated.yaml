@@ -94,6 +94,35 @@ Financing_Terms:
   Financing_Terms:
   # ... (keep all existing fields like debt_ratio, tenor_years, etc.)
   
+monte_carlo:
+  n_scenarios: 10000
+  seed: 42
+  parameters:
+    # Perturbations as % changes around base case
+    capacity_factor_std: 0.05        # 5% std dev
+    tariff_lkr_std: 0.10             # 10% std dev
+    opex_usd_std: 0.15               # 15% std dev
+    capex_usd_std: 0.08              # 8% std dev
+    
+    # Correlation matrix (2D list)
+    # [capacity_factor, tariff, opex, capex]
+    correlation_matrix: [
+      [1.0,   -0.3,   0.2,   0.1],
+      [-0.3,   1.0,  -0.1,   0.15],
+      [0.2,   -0.1,   1.0,   0.3],
+      [0.1,    0.15,  0.3,   1.0]
+    ]
+  
+  # Risk metrics thresholds
+  var_confidence: 0.95              # VaR(95%)
+  cvar_confidence: 0.95             # CVaR(95%)
+  percentiles: [10, 25, 50, 75, 90] # P10/P50/P90 etc
+  
+  # Covenant thresholds for stress
+  min_dscr_covenant: 1.20
+  min_llcr_covenant: 1.25
+
+  
    # ============================================================================
   # INSTITUTIONAL CONSTRAINTS & VALIDATION (Enhanced - P0-1B Final)
   # ============================================================================
