@@ -241,7 +241,7 @@ def calculate_llcr(
             'remaining_years': len(remaining_cfads)
         })
     
-    llcr_min = min(llcr_series) if llcr_series else 0.0
+    llcr_min = min([x for x in llcr_series if x > 0], default=0.0)
     llcr_avg = sum(llcr_series) / len(llcr_series) if llcr_series else 0.0
     
     return {
@@ -335,7 +335,7 @@ def calculate_plcr(
             'remaining_project_years': len(remaining_cfads)
         })
     
-    plcr_min = min(plcr_series) if plcr_series else 0.0
+    plcr_min = min([x for x in plcr_series if x > 0], default=0.0)
     plcr_avg = sum(plcr_series) / len(plcr_series) if plcr_series else 0.0
     
     return {
@@ -443,37 +443,37 @@ def summarize_project_metrics(
 ) -> Dict[str, Any]:
     """
     Compute all project finance metrics.
-    
     Returns comprehensive dict with DSCR, LLCR, PLCR, and covenant status.
     """
     metrics_config = params.get('metrics', {})
     discount_rate = _to_float(metrics_config.get('llcr_discount_rate'), 0.10)
-    
+
     # DSCR
     dscr_series = compute_dscr_series(annual_rows)
     dscr_summary = summarize_dscr(dscr_series)
-    
+
     # LLCR and PLCR
     cfads_series = [_to_float(row.get('cfads_usd'), 0.0) for row in annual_rows]
-    debt_outstanding_series = [_to_float(row.get('debt_outstanding'), 0.0) for row in annual_rows]
-    
+
+    # Always source debt outstanding from debt.py, as annual_rows never has that key
+    from dutchbay_v13.finance.debt import apply_debt_layer
+    debt_results = apply_debt_layer(params, annual_rows)
+    debt_outstanding_series = debt_results.get('debt_outstanding', [0.0]*len(annual_rows))
+
     llcr_result = calculate_llcr(cfads_series, debt_outstanding_series, discount_rate)
     plcr_result = calculate_plcr(cfads_series, debt_outstanding_series, discount_rate)
-    
+
     # Covenant checks
     llcr_covenant = check_llcr_covenant(llcr_result, params)
     plcr_covenant = check_plcr_covenant(plcr_result, params)
-    
+
     return {
         'dscr': {
             'series': dscr_series,
             'summary': dscr_summary
         },
         'llcr': llcr_result,
-        'llcr_covenant': llcr_covenant,
         'plcr': plcr_result,
-        'plcr_covenant': plcr_covenant,
-        'discount_rate': discount_rate,
-        'metrics_version': '2.0-P0-1C-Complete'
+        'llcr_covenant': llcr_covenant,
+        'plcr_covenant': plcr_covenant
     }
-

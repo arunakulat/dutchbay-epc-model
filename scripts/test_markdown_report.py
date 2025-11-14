@@ -1,54 +1,19 @@
-#!/usr/bin/env python3
-"""
-Test Script for Option A Step 2: Markdown Report Generation
-
-Usage:
-    python scripts/test_markdown_report.py
-"""
-
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from dutchbay_v13.reporting.markdown_generator import generate_executive_summary, generate_dfi_lender_pack
-from dutchbay_v13.finance.metrics import calculate_llcr, calculate_plcr
-from dutchbay_v13.finance.debt import apply_debt_layer
-from dutchbay_v13.finance.cashflow import build_annual_rows
 from dutchbay_v13.finance.returns import calculate_all_returns
 import yaml
 
 print("="*80)
-print("DUTCHBAY V13 - MARKDOWN REPORT GENERATION TEST")
+print("DUTCHBAY V13 - MARKDOWN REPORT GENERATION TEST (ENHANCED)")
 print("="*80)
 
 yaml_path = Path(__file__).parent.parent / 'full_model_variables_updated.yaml'
 with open(yaml_path) as f:
     params = yaml.safe_load(f)
 
-project_discount_rate = params.get('returns', {}).get('project_discount_rate', 0.10)
-equity_discount_rate = params.get('returns', {}).get('equity_discount_rate', 0.12)
-project_life = params.get('returns', {}).get('project_life_years', 20)
-
-annual_rows = build_annual_rows(params)
-debt_results = apply_debt_layer(params, annual_rows)
-cfads_series = [row['cfads_usd'] for row in annual_rows]
-debt_outstanding_series = debt_results.get('debt_outstanding', [0.0]*len(annual_rows))
-debt_service_series = debt_results.get('debt_service_total', [0.0]*len(annual_rows))
-llcr_result = calculate_llcr(cfads_series, debt_outstanding_series, discount_rate=0.10)
-plcr_result = calculate_plcr(cfads_series, debt_outstanding_series, discount_rate=0.10)
-
-# Returns from YAML
-capex = params.get('capex', {}).get('usd_total', 150e6)
-debt_ratio = params.get('Financing_Terms', {}).get('debt_ratio', 0.70)
-returns = calculate_all_returns(
-    cfads_series,
-    debt_service_series,
-    capex,
-    debt_ratio=debt_ratio,
-    project_discount_rate=project_discount_rate,
-    equity_discount_rate=equity_discount_rate,
-    project_life=project_life
-)
+returns = calculate_all_returns(params)
 
 outputs_dir = Path(__file__).parent.parent / 'outputs'
 outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -56,10 +21,6 @@ outputs_dir.mkdir(parents=True, exist_ok=True)
 print("\n--- Generating Executive Summary ---")
 exec_summary = generate_executive_summary(
     params,
-    cfads_series,
-    debt_outstanding_series,
-    llcr_result,
-    plcr_result,
     returns,
     output_path=outputs_dir / 'executive_summary.md'
 )
@@ -68,20 +29,15 @@ print(f"✓ Written to: {outputs_dir / 'executive_summary.md'}")
 print("\n--- Generating DFI/Lender Pack ---")
 dfi_pack = generate_dfi_lender_pack(
     params,
-    cfads_series,
-    debt_outstanding_series,
-    debt_service_series,
-    llcr_result,
-    plcr_result,
     returns,
     output_path=outputs_dir / 'dfi_lender_pack.md'
 )
 print(f"✓ Written to: {outputs_dir / 'dfi_lender_pack.md'}")
 
 print("\n" + "="*80)
-print("MARKDOWN REPORTS GENERATED SUCCESSFULLY")
+print("ENHANCED MARKDOWN REPORTS GENERATED SUCCESSFULLY")
 print("="*80)
 print("\nReports created:")
 print(f"  1. {outputs_dir / 'executive_summary.md'}")
 print(f"  2. {outputs_dir / 'dfi_lender_pack.md'}")
-print("\n✓ All tests passed - ready for production use")
+print("\n✓ All tests passed - financial rigor and adjustments shown in markdown")

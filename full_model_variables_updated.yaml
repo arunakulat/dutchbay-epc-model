@@ -34,10 +34,18 @@ opex:
   # lkr_per_mwh: 0
 
 
-returns:
-  project_discount_rate: 0.10      # Weighted Average Cost of Capital (WACC)
-  equity_discount_rate: 0.12       # Equity investor required return
-  project_life_years: 20           # Years for NPV/IRR calculation
+tax:
+  corporate_tax_rate: 0.30   # 30% of earnings before tax (standard SL/India)
+  depreciation_years: 15     # straight-line for tax shield
+  min_tax: 0                 # min tax floor
+
+regulatory:
+  success_fee_pct: 0.01      # 1% of revenue paid as success/licensing fee
+  env_surcharge_pct: 0.005   # 0.5% of revenue for environment/CSR
+  social_services_levy_pct: 0.025   # 2.5% of revenue for social levy
+
+risk_adjustment:
+  cfads_haircut_pct: 0.10    # 10% reduction to CFADS for technical/market risk (P90 min)
 
 Financing_Terms:
   # Debt sizing and style
