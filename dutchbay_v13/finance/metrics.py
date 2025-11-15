@@ -1,11 +1,42 @@
 """
-Project Finance Metrics Module - DutchBay V13 Enhanced
+Project Finance Metrics Module - DutchBay V13 (v2.1 - Tax Shield Aware)
 
 COMPLIANCE:
 -----------
 - IFC, World Bank, ADB coverage ratio standards
+- Sri Lanka Inland Revenue Act (interest expense deductibility)
 - Commercial bank credit assessment requirements
 - Basel III capital adequacy frameworks
+
+TAX TREATMENT (SRI LANKA):
+---------------------------
+- Interest on debt IS TAX-DEDUCTIBLE
+- CFADS calculation accounts for interest tax shield
+- Tax = (Revenue - Statutory - OPEX - Depreciation - Interest) × Tax Rate
+- CFADS = Post-tax cash flow (benefits from interest deductibility)
+
+CRITICAL CFADS DEFINITION:
+---------------------------
+CFADS = Revenue (LKR)
+        - Statutory deductions (success fee, environmental, social)
+        - Operating expenses (OPEX)
+        - Cash Taxes (calculated AFTER interest expense deduction)
+        - Risk adjustments
+
+Where Cash Taxes = Taxable Income × Tax Rate
+And Taxable Income = Revenue - Statutory - OPEX - Depreciation - Interest Expense
+
+NOTE: Interest expense is NOT deducted from CFADS itself (only from taxable
+      income for tax calculation). CFADS is used to SERVICE debt (pay both
+      interest and principal). The tax benefit of interest deductibility is
+      captured in the reduced tax amount.
+
+DSCR FORMULA:
+-------------
+DSCR = CFADS (post-tax, post all deductions) / Total Debt Service (LKR)
+
+For multi-currency projects:
+Total Debt Service (LKR) = LKR Debt Service + (USD Debt Service × FX Rate)
 
 FEATURES:
 ---------
@@ -13,36 +44,34 @@ FEATURES:
 - LLCR (Loan Life Coverage Ratio) - P0-1C Phase 1
 - PLCR (Project Life Coverage Ratio) - P0-1C Phase 2
 - Multi-period covenant monitoring
-- Integration with debt.py and irr.py modules
+- Multi-currency (LKR/USD) debt service handling with FX conversion
+- Integration with debt.py and cashflow.py modules
 
-OUTPUTS:
---------
-Comprehensive metrics dictionary with:
-    - dscr_series, dscr_min, dscr_avg
-    - llcr_series, llcr_min, llcr_avg
-    - plcr_series, plcr_min, plcr_avg
-    - covenant_status and violation tracking
+VERSION HISTORY:
+----------------
+v2.0 (2025-11-15): FX handling and strict typing
+v2.1 (2025-11-15): Tax shield awareness and Sri Lanka compliance
 
-Author: DutchBay V13 Team, Nov 2025, P0-1C Enhanced
-Version: 2.0 (Complete LLCR/PLCR)
+Author: DutchBay V13 Team
+Version: 2.1 (Tax Shield Aware)
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Import only what exists in irr.py
 try:
     from .irr import irr
 except ImportError:
-    # Fallback if irr module has different structure
     irr = None
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger('dutchbay.finance.metrics')
 
 __all__ = [
+    "build_annual_rows_with_fx",
     "compute_dscr_series",
     "summarize_dscr",
     "calculate_llcr",
@@ -52,6 +81,7 @@ __all__ = [
     "check_plcr_covenant",
     "summarize_project_metrics",
 ]
+
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -63,6 +93,7 @@ def _to_float(x: Any, default: Optional[float] = None) -> Optional[float]:
         return float(x) if x is not None else default
     except Exception:
         return default
+
 
 def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) -> float:
     """
@@ -85,15 +116,72 @@ def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) ->
     if not cashflows or discount_rate < 0:
         return 0.0
     
-    npv = 0.0
+    npv_val = 0.0
     for i, cf in enumerate(cashflows):
         period = start_period + i
-        npv += cf / ((1 + discount_rate) ** period)
+        npv_val += cf / ((1 + discount_rate) ** period)
     
-    return npv
+    return npv_val
+
 
 # ============================================================================
-# DSCR CALCULATIONS (Existing - Enhanced)
+# FX-AWARE ANNUAL_ROWS BUILDER (Bulletproofing)
+# ============================================================================
+
+def build_annual_rows_with_fx(
+    cfads_lkr: List[float],
+    lkr_debt_service: List[float],
+    usd_debt_service: List[float],
+    fx_rates: List[float],
+    debt_outstanding_lkr: Optional[List[float]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build annual_rows with FX-converted total debt service.
+    
+    CRITICAL: This ensures multi-currency debt is properly aggregated 
+    in common currency (LKR) before DSCR calculation.
+    
+    TAX SHIELD NOTE: The cfads_lkr input should be POST-TAX CFADS from
+    cashflow.py, which already accounts for interest expense tax deductibility.
+    
+    Parameters
+    ----------
+    cfads_lkr : list of float
+        CFADS in LKR for each year (POST-TAX, post all deductions)
+    lkr_debt_service : list of float
+        LKR tranche debt service for each year (interest + principal)
+    usd_debt_service : list of float
+        USD tranche debt service for each year (interest + principal)
+    fx_rates : list of float
+        LKR/USD exchange rate for each year
+    debt_outstanding_lkr : list of float, optional
+        Total debt outstanding in LKR (if needed for LLCR/PLCR)
+    
+    Returns
+    -------
+    list of dict
+        Annual rows ready for metrics.py DSCR calculation
+    """
+    annual_rows = []
+    n_years = len(cfads_lkr)
+    
+    for i in range(n_years):
+        total_ds_lkr = lkr_debt_service[i] + (usd_debt_service[i] * fx_rates[i])
+        row = {
+            'year': i + 1,
+            'cfads_usd': cfads_lkr[i],  # Legacy field name; actual LKR
+            'debt_service': total_ds_lkr,  # FX-converted total
+            'fx_rate': fx_rates[i]  # For reference/audit
+        }
+        if debt_outstanding_lkr is not None:
+            row['debt_outstanding'] = debt_outstanding_lkr[i]
+        annual_rows.append(row)
+    
+    return annual_rows
+
+
+# ============================================================================
+# DSCR CALCULATIONS
 # ============================================================================
 
 def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[float]]:
@@ -102,11 +190,32 @@ def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[floa
     
     DSCR_t = CFADS_t / DebtService_t
     
-    Expects per-row:
-      - 'cfads_usd' (Cash Flow Available for Debt Service)
-      - 'debt_service' (Interest + Principal payments)
+    CRITICAL REQUIREMENTS (SRI LANKA TAX-COMPLIANT):
+    ------------------------------------------------
+    - 'cfads_usd': Must be POST-TAX CFADS from cashflow.py
+      Calculation sequence:
+        1. Revenue - Statutory deductions - OPEX = Pre-tax cash flow
+        2. Taxable Income = Pre-tax cash flow - Depreciation - Interest Expense
+        3. Tax = Taxable Income × Tax Rate (interest expense is tax-deductible)
+        4. CFADS = Pre-tax cash flow - Tax - Risk adjustment
+      
+    - 'debt_service': Must be in COMMON CURRENCY (LKR)
+      For multi-currency projects: LKR_DS + (USD_DS × FX_rate)
+      
+    - Interest expense is deducted for TAX calculation (reducing tax liability)
+      but NOT from CFADS itself, since CFADS is used to PAY debt service
     
-    Returns None for years where DSCR is undefined (e.g., no debt service).
+    Parameters
+    ----------
+    annual_rows : list of dict
+        Each row must contain:
+        - 'cfads_usd': float (POST-TAX CFADS in LKR, despite legacy field name)
+        - 'debt_service': float (Total debt service in LKR)
+    
+    Returns
+    -------
+    list of float or None
+        DSCR for each year; None where debt service is zero
     """
     dscr_series = []
     for row in annual_rows:
@@ -121,6 +230,7 @@ def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[floa
         dscr_series.append(dscr)
     
     return dscr_series
+
 
 def summarize_dscr(dscr_series: List[Optional[float]]) -> Dict[str, Any]:
     """
@@ -159,6 +269,7 @@ def summarize_dscr(dscr_series: List[Optional[float]]) -> Dict[str, Any]:
         'years_below_1_3': sum(1 for d in valid if d < 1.3)
     }
 
+
 # ============================================================================
 # LLCR CALCULATION (P0-1C Phase 1)
 # ============================================================================
@@ -180,7 +291,7 @@ def calculate_llcr(
     Parameters
     ----------
     cfads_series : list of float
-        Cash Flow Available for Debt Service for each year
+        Cash Flow Available for Debt Service for each year (POST-TAX)
     debt_outstanding_series : list of float
         Outstanding debt balance at start of each year
     discount_rate : float, default 0.10
@@ -252,6 +363,7 @@ def calculate_llcr(
         'calculation_details': calculation_details
     }
 
+
 # ============================================================================
 # PLCR CALCULATION (P0-1C Phase 2)
 # ============================================================================
@@ -273,7 +385,7 @@ def calculate_plcr(
     Parameters
     ----------
     cfads_series : list of float
-        Cash Flow Available for Debt Service for entire project life
+        Cash Flow Available for Debt Service for entire project life (POST-TAX)
     debt_outstanding_series : list of float
         Outstanding debt balance at start of each year
     discount_rate : float, default 0.10
@@ -346,6 +458,7 @@ def calculate_plcr(
         'calculation_details': calculation_details
     }
 
+
 # ============================================================================
 # BACKWARD COMPATIBILITY (Legacy Function)
 # ============================================================================
@@ -356,7 +469,6 @@ def compute_llcr_plcr(
 ) -> Dict[str, Any]:
     """
     Legacy function for backward compatibility.
-    
     Computes both LLCR and PLCR from annual_rows structure.
     """
     cfads_series = [_to_float(row.get('cfads_usd'), 0.0) for row in annual_rows]
@@ -370,6 +482,7 @@ def compute_llcr_plcr(
         'plcr': plcr_result,
         'discount_rate': discount_rate
     }
+
 
 # ============================================================================
 # COVENANT MONITORING
@@ -404,6 +517,7 @@ def check_llcr_covenant(
         'summary': summary
     }
 
+
 def check_plcr_covenant(
     plcr_result: Dict[str, Any],
     params: Dict[str, Any]
@@ -433,6 +547,7 @@ def check_plcr_covenant(
         'summary': summary
     }
 
+
 # ============================================================================
 # COMPREHENSIVE SUMMARY
 # ============================================================================
@@ -447,26 +562,22 @@ def summarize_project_metrics(
     """
     metrics_config = params.get('metrics', {})
     discount_rate = _to_float(metrics_config.get('llcr_discount_rate'), 0.10)
-
+    
     # DSCR
     dscr_series = compute_dscr_series(annual_rows)
     dscr_summary = summarize_dscr(dscr_series)
-
+    
     # LLCR and PLCR
     cfads_series = [_to_float(row.get('cfads_usd'), 0.0) for row in annual_rows]
-
-    # Always source debt outstanding from debt.py, as annual_rows never has that key
-    from dutchbay_v13.finance.debt import apply_debt_layer
-    debt_results = apply_debt_layer(params, annual_rows)
-    debt_outstanding_series = debt_results.get('debt_outstanding', [0.0]*len(annual_rows))
-
+    debt_outstanding_series = [_to_float(row.get('debt_outstanding'), 0.0) for row in annual_rows]
+    
     llcr_result = calculate_llcr(cfads_series, debt_outstanding_series, discount_rate)
     plcr_result = calculate_plcr(cfads_series, debt_outstanding_series, discount_rate)
-
+    
     # Covenant checks
     llcr_covenant = check_llcr_covenant(llcr_result, params)
     plcr_covenant = check_plcr_covenant(plcr_result, params)
-
+    
     return {
         'dscr': {
             'series': dscr_series,
@@ -477,3 +588,5 @@ def summarize_project_metrics(
         'llcr_covenant': llcr_covenant,
         'plcr_covenant': plcr_covenant
     }
+
+
