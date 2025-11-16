@@ -1,0 +1,35 @@
+project:
+  name: "Dutch Bay 150MW Wind Farm"
+  base_currency: "USD"
+  description: "Example WACC configuration for a de-risked frontier-market wind project with DFI-led USD debt and local LKR debt."
+
+capital_structure:
+  tax_rate: 0.24                  # Corporate tax rate (24%)
+  project_hurdle_margin_bps: 200  # WACC + 200 bps as project IRR hurdle
+  equity_hurdle_margin_bps: 0     # Additional buffer over blended equity cost (bps)
+
+debt:
+  - name: "USD_DFI_debt"
+    share_of_capital: 0.385       # 38.5% of total capital
+    base_rate: 0.07               # 7.0% nominal USD interest rate
+    guarantee_fee_bps: 0.0        # e.g. MIGA fee in bps, if you want to include it
+    upfront_fee_bps: 0.0          # Upfront fee in bps (on principal)
+    fee_amort_years: null         # If set (e.g. 15), amortises upfront fee over that many years
+
+  - name: "LKR_local_banks"
+    share_of_capital: 0.315       # 31.5% of total capital
+    base_rate: 0.135              # 13.5% nominal LKR interest rate
+    guarantee_fee_bps: 0.0
+    upfront_fee_bps: 0.0
+    fee_amort_years: null
+
+equity:
+  - name: "FDI_equity"
+    share_of_capital: 0.165       # 16.5% of total capital
+    target_irr: 0.16              # 16.0% USD IRR hurdle
+    is_foreign: true
+
+  - name: "Local_equity"
+    share_of_capital: 0.135       # 13.5% of total capital
+    target_irr: 0.135             # 13.5% LKR IRR hurdle
+    is_foreign: false

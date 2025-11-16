@@ -1,8 +1,8 @@
 ################################################################################
-# DUTCHBAY V13 - MASTER CONFIGURATION (v2.2)
+# DUTCHBAY V13 - MASTER CONFIGURATION (v2.3 - Debt.py Compatible)
 # Workflow-Compliant | Sri Lanka BOI Tax Regime | Full Pipeline Integration
 # Last Updated: 2025-11-15
-# Modules: cashflow.py v2.2, metrics.py v2.1, debt.py
+# Modules: cashflow.py v2.2, metrics.py v2.1, debt.py, returns.py v1.0
 ################################################################################
 
 project:
@@ -72,29 +72,41 @@ regulatory:
 risk_adjustment:
   cfads_haircut_pct: 0.10
 
-financing:
+Financing_Terms:
   debt_ratio: 0.70
   tenor_years: 15
   interest_only_years: 2
-  amortization_style: target_dscr
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  
   mix:
-    lkr_pct: 0.45
-    dfi_pct: 0.10
-    usd_commercial_pct: 0.45
+    lkr_max: 0.45
+    dfi_max: 0.10
+    usd_commercial_min: 0.45
+  
   rates:
-    lkr_rate: 0.08
-    dfi_rate: 0.065
-    usd_commercial_rate: 0.075
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  
   target_dscr: 1.30
+  min_dscr: 1.20
   min_dscr_covenant: 1.20
+  
   reserves:
     dsra_months: 6
     receivables_guarantee_months: 9
-    use_revenue_guarantee: false
-    guarantee_revenue_pct: 0.0075
+  
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+  
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
+  
   enforce_hard_covenants: false
 
 metrics:
@@ -170,8 +182,10 @@ sensitivity:
     dpi: 300
 
 metadata:
-  version: "2.2"
+  version: "2.3"
   last_updated: "2025-11-15"
   author: DutchBay V13 Financial Modeling Team
   review_status: Draft - Pending Board Approval
   assumptions_source: "BOI Agreement Ref: BOI/2025/REN/001234"
+
+
