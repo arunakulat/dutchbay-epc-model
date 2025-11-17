@@ -1,0 +1,29 @@
+=== DutchBay v13 Regression Smoke @ 2025-11-10T20:28:35+05:30 (rev: 3722b81) ===
+
+--- finance.irr module tests ---
+CMD: bash CMD: scripts/test_one_module.sh CMD: irr 
+PASS  finance.irr module tests
+
+--- finance.debt module tests ---
+CMD: bash CMD: scripts/test_one_module.sh CMD: debt 
+PASS  finance.debt module tests
+
+--- cli smoke (direct) ---
+CMD: pytest CMD: -q CMD: tests/test_cli_smoke_direct.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+PASS  cli smoke (direct)
+
+--- scenarios (multi-file emit) ---
+CMD: pytest CMD: -q CMD: tests/test_cli_scenarios_more.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+PASS  scenarios (multi-file emit)
+
+--- matrix + validator ---
+CMD: pytest CMD: -q CMD: tests/test_scenarios_jsonl_and_validator.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+PASS  matrix + validator
+
+=== Summary ===
+Total: 5 | Failures: 0
+ - finance.irr module tests: PASS (1.0s)
+ - finance.debt module tests: PASS (1.0s)
+ - cli smoke (direct): PASS (0.0s)
+ - scenarios (multi-file emit): PASS (1.0s)
+ - matrix + validator: PASS (0.0s)

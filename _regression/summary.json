@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "name": "finance.irr module tests",
+      "status": "PASS",
+      "seconds": 1.0
+    },
+    {
+      "name": "finance.debt module tests",
+      "status": "PASS",
+      "seconds": 1.0
+    },
+    {
+      "name": "cli smoke (direct)",
+      "status": "PASS",
+      "seconds": 0.0
+    },
+    {
+      "name": "scenarios (multi-file emit)",
+      "status": "PASS",
+      "seconds": 1.0
+    },
+    {
+      "name": "matrix + validator",
+      "status": "PASS",
+      "seconds": 0.0
+    }
+  ]
+}
