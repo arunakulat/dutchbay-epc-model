@@ -1,0 +1,27 @@
+# DutchBay v14 Batch Scenario A
+project:
+  capacity_mw: 100
+  capacity_factor: 0.35
+  degradation: 0.005
+tariff:
+  lkr_per_kwh: 50
+opex:
+  usd_per_year: 1000000
+capex:
+  usd_total: 120000000
+Financing_Terms:
+  debt_ratio: 0.75
+  tenor_years: 17
+  construction_periods: 2
+  construction_schedule: [60.0, 60.0] # Must align with capex/period logic
+  debt_drawdown_pct: [0.6, 0.4]
+  grace_years: 2
+  interest_only_years: 0
+  amortization_style: "annuity"
+  target_dscr: 1.35
+  mix:
+    lkr_max: 0.0
+    dfi_max: 0.0
+    usd_commercial_min: 1.0
+  rates:
+    usd_nominal: 0.07

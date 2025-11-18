@@ -1,0 +1,30 @@
+Financing_Terms:
+  amortization_style: annuity
+  construction_periods: 2
+  construction_schedule:
+  - 60.0
+  - 60.0
+  debt_drawdown_pct:
+  - 0.5
+  - 0.5
+  debt_ratio: 0.7
+  grace_years: 1
+  interest_only_years: 1
+  mix:
+    dfi_max: 0.1
+    lkr_max: 0.45
+    usd_commercial_min: 1.0
+  rates:
+    usd_nominal: 0.08
+  target_dscr: 1.35
+  tenor_years: 15
+capex:
+  usd_total: 124000000.0
+opex:
+  usd_per_year: 2400000.0
+project:
+  capacity_factor: 0.4
+  capacity_mw: 120.0
+  degradation: 0.006
+tariff:
+  lkr_per_kwh: 20.3

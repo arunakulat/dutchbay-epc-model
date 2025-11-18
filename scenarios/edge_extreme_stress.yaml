@@ -1,0 +1,29 @@
+# DutchBay v14 Extreme Stress Scenario
+project:
+  capacity_mw: 50
+  capacity_factor: 0.25      # Very low for region/project
+  degradation: 0.015         # High technical risk
+tariff:
+  lkr_per_kwh: 40            # Adverse, low tariff
+opex:
+  usd_per_year: 1800000      # High opex, maintenance issues
+capex:
+  usd_total: 145000000       # Expensive, cost overruns
+Financing_Terms:
+  debt_ratio: 0.85           # Aggressive leverage
+  tenor_years: 10            # Short tenor, refinancing risk
+  construction_periods: 3    # Delays and 3 construction years
+  construction_schedule: [20.0, 45.0, 80.0]
+  debt_drawdown_pct: [0.2, 0.3, 0.5]
+  grace_years: 0             # No grace period
+  interest_only_years: 0
+  amortization_style: "linear"
+  target_dscr: 2.00          # Lender mandate unachievable
+  mix:
+    lkr_max: 0.5
+    dfi_max: 0.25
+    usd_commercial_min: 0.25
+  rates:
+    usd_nominal: 0.13        # Very high interest
+    lkr_nominal: 0.19
+    dfi: 0.10

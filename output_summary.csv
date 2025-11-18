@@ -1,0 +1,5 @@
+scenario,timeline_periods,min_dscr,total_idc_capitalized,max_debt_outstanding,final_year_cfads,grace_years
+example_b.json,23,0.0,8579979.8,76479979.8,26650168.374987636,1
+edge_extreme_stress.yaml,23,0.0,29283368.0625,152533368.0625,3751176.8968676897,0
+zz_bad.yaml,23,0.0,0.0,70.0,-300000.0,0
+example_a.yaml,23,0.0,10344600.000000002,100344600.0,23246021.77107383,2

@@ -1,0 +1,35 @@
+{
+  "project": {
+    "capacity_mw": 85,
+    "capacity_factor": 0.395,
+    "degradation": 0.004
+  },
+  "tariff": {
+    "lkr_per_kwh": 58
+  },
+  "opex": {
+    "usd_per_year": 850000
+  },
+  "capex": {
+    "usd_total": 97000000
+  },
+  "Financing_Terms": {
+    "debt_ratio": 0.70,
+    "tenor_years": 15,
+    "construction_periods": 2,
+    "construction_schedule": [50.0, 47.0],
+    "debt_drawdown_pct": [0.5, 0.5],
+    "grace_years": 1,
+    "interest_only_years": 0,
+    "amortization_style": "annuity",
+    "target_dscr": 1.30,
+    "mix": {
+      "lkr_max": 0.0,
+      "dfi_max": 0.0,
+      "usd_commercial_min": 1.0
+    },
+    "rates": {
+      "usd_nominal": 0.082
+    }
+  }
+}
