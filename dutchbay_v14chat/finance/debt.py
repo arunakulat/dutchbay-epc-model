@@ -24,6 +24,9 @@ import math
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
+from finance.utils import as_float, as_int, get_nested
+from constants import HOURS_PER_YEAR
+
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger('dutchbay.v14chat.finance.debt')
 
@@ -31,21 +34,14 @@ logger = logging.getLogger('dutchbay.v14chat.finance.debt')
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
-    """Safely traverse nested dict."""
-    cur: Any = d
-    for k in path:
-        if not isinstance(cur, dict) or k not in cur:
-            return default
-        cur = cur[k]
-    return cur
+    """Backward-compatible shim over finance.utils.get_nested."""
+    return get_nested(d, path, default)
 
 def _as_float(v: Any, default: Optional[float] = None) -> Optional[float]:
-    """Safe float conversion with default."""
-    try:
-        return float(v) if v is not None else default
-    except Exception:
-        return default
+    """Backward-compatible shim over finance.utils.as_float."""
+    return as_float(v, default)
 
 def _pmt(rate: float, nper: int, pv: float) -> float:
     """Calculate annuity payment (Excel PMT equivalent)."""

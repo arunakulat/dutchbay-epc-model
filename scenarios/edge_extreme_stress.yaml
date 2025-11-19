@@ -3,6 +3,13 @@ project:
   capacity_mw: 50
   capacity_factor: 0.25      # Very low for region/project
   degradation: 0.015         # High technical risk
+  life_years: 25
+  corporate_tax_rate: 0.24   # <--- NEW, 24% corporate tax
+  depreciation_years: 20     # <--- NEW, or whatever your model assumes
+  tax_holiday_years: 0       # optional, explicit zero is clean
+  tax_holiday_start_year: 1  # optional
+  enhanced_capital_allowance_pct: 1.0  # optional, 100%
+  risk_haircut_pct: 0.05     # if you want a 5% haircut; adjust as needed
 tariff:
   lkr_per_kwh: 40            # Adverse, low tariff
 opex:
@@ -27,3 +34,4 @@ Financing_Terms:
     usd_nominal: 0.13        # Very high interest
     lkr_nominal: 0.19
     dfi: 0.10
+  life_years: 25 

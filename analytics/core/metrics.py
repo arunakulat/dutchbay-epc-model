@@ -1,259 +1,322 @@
-"""Financial metrics calculation module.
+"""Core analytics metrics for DutchBay scenario analysis.
 
-Provides NPV, IRR, and DSCR KPI calculations for scenario analysis.
+This module computes high-level KPIs (NPV, IRR, DSCR stats, debt stats, CFADS stats)
+for use by the scenario_analytics pipeline.
 """
 
+from __future__ import annotations
+
+import math
+from typing import Any, Dict, List, Sequence, Optional, Union
+
+import numpy_financial as npf  # type: ignore
 import numpy as np
-import numpy_financial as npf
-from typing import Dict, List, Any, Optional
+import pandas as pd
+
+from finance.utils import as_float, get_nested
+from constants import DEFAULT_DISCOUNT_RATE
 
 
-def calculate_npv(
-    cashflows: List[float],
-    discount_rate: float = 0.08
-) -> float:
+Number = Union[int, float]
+
+
+def _to_rows(annual_rows: Union[Sequence[Dict[str, Any]], Any]) -> List[Dict[str, Any]]:
+    """Normalise annual_rows to a list of dicts."""
+    if hasattr(annual_rows, "to_dict"):
+        # Assume pandas DataFrame-like
+        try:
+            return list(annual_rows.to_dict(orient="records"))
+        except TypeError:
+            pass
+    # Already a list/sequence of dict-like objects
+    return [dict(row) for row in annual_rows]
+
+def _clean_dscr_series(dscr_raw) -> pd.Series:
     """
-    Calculate Net Present Value.
-    
-    Args:
-        cashflows: List of annual cashflows (year 0 = initial investment, typically negative)
-        discount_rate: Annual discount rate (e.g., 0.08 for 8%)
-    
-    Returns:
-        NPV in same currency as cashflows
+    Normalize DSCR per-year values:
+
+    - Convert list → Series
+    - Replace +/-inf with NaN
+    - Drop zero-debt-service years (where DSCR is undefined)
     """
-    if not cashflows:
-        return 0.0
-    return float(npf.npv(discount_rate, cashflows))
+    if not isinstance(dscr_raw, pd.Series):
+        dscr = pd.Series(dscr_raw)
+    else:
+        dscr = dscr_raw.copy()
+
+    # Remove +/-inf (zero debt service → inf)
+    dscr = dscr.replace([np.inf, -np.inf], np.nan)
+
+    # Drop NaN entries
+    dscr = dscr.dropna()
+
+    return dscr
+
+def _clean_series(raw: Sequence[Any]) -> List[float]:
+    """Convert a raw sequence to a list of finite floats."""
+    out: List[float] = []
+    for v in raw:
+        fv = as_float(v)
+        if fv is None:
+            continue
+        if isinstance(fv, (float, int)) and not math.isnan(fv):
+            out.append(float(fv))
+    return out
 
 
-def calculate_irr(
-    cashflows: List[float],
-    guess: float = 0.1
-) -> Optional[float]:
-    """
-    Calculate Internal Rate of Return.
-    
-    Args:
-        cashflows: List of annual cashflows (year 0 = initial investment, typically negative)
-        guess: Initial guess for IRR calculation
-    
-    Returns:
-        IRR as decimal (e.g., 0.12 for 12%), or None if calculation fails
-    """
-    if not cashflows or len(cashflows) < 2:
-        return None
-    
-    try:
-        irr_value = npf.irr(cashflows)
-        # Check for invalid results (nan, inf)
-        if np.isnan(irr_value) or np.isinf(irr_value):
-            return None
-        return float(irr_value)
-    except (ValueError, RuntimeError):
-        return None
-
-
-def calculate_dscr_stats(dscr_series: List[float]) -> Dict[str, float]:
-    """
-    Calculate DSCR statistics.
-    
-    Args:
-        dscr_series: List of annual DSCR values
-    
-    Returns:
-        Dictionary with min, max, mean, median DSCR
-    """
-    if not dscr_series:
-        return {
-            "dscr_min": None,
-            "dscr_max": None,
-            "dscr_mean": None,
-            "dscr_median": None
-        }
-    
-    # Filter out invalid values
-    valid_dscr = [x for x in dscr_series if isinstance(x, (int, float)) and not np.isnan(x) and not np.isinf(x)]
-    
-    if not valid_dscr:
-        return {
-            "dscr_min": None,
-            "dscr_max": None,
-            "dscr_mean": None,
-            "dscr_median": None
-        }
-    
-    return {
-        "dscr_min": float(np.min(valid_dscr)),
-        "dscr_max": float(np.max(valid_dscr)),
-        "dscr_mean": float(np.mean(valid_dscr)),
-        "dscr_median": float(np.median(valid_dscr))
-    }
-
-
-def calculate_debt_stats(debt_series: List[float]) -> Dict[str, float]:
-    """
-    Calculate debt statistics.
-    
-    Args:
-        debt_series: List of annual debt outstanding values
-    
-    Returns:
-        Dictionary with max debt, final debt
-    """
-    if not debt_series:
-        return {
-            "max_debt_outstanding": 0.0,
-            "final_debt_outstanding": 0.0
-        }
-    
-    valid_debt = [x for x in debt_series if isinstance(x, (int, float)) and not np.isnan(x)]
-    
-    if not valid_debt:
-        return {
-            "max_debt_outstanding": 0.0,
-            "final_debt_outstanding": 0.0
-        }
-    
-    return {
-        "max_debt_outstanding": float(np.max(valid_debt)),
-        "final_debt_outstanding": float(valid_debt[-1]) if valid_debt else 0.0
-    }
-
-
-def calculate_cfads_stats(cfads_series: List[float]) -> Dict[str, float]:
-    """
-    Calculate CFADS (Cash Flow Available for Debt Service) statistics.
-    
-    Args:
-        cfads_series: List of annual CFADS values
-    
-    Returns:
-        Dictionary with total CFADS, final year CFADS, operational mean
-    """
-    if not cfads_series:
-        return {
-            "total_cfads": 0.0,
-            "final_cfads": 0.0,
-            "mean_operational_cfads": 0.0
-        }
-    
-    valid_cfads = [x for x in cfads_series if isinstance(x, (int, float)) and not np.isnan(x)]
-    
-    if not valid_cfads:
-        return {
-            "total_cfads": 0.0,
-            "final_cfads": 0.0,
-            "mean_operational_cfads": 0.0
-        }
-    
-    # Operational CFADS: exclude construction years (typically first few years with negative/zero CFADS)
-    operational_cfads = [x for x in valid_cfads if x > 0]
-    
-    return {
-        "total_cfads": float(np.sum(valid_cfads)),
-        "final_cfads": float(valid_cfads[-1]) if valid_cfads else 0.0,
-        "mean_operational_cfads": float(np.mean(operational_cfads)) if operational_cfads else 0.0
-    }
-
+def _summary_stats(values: Sequence[Number]) -> Dict[str, Optional[float]]:
+    """Return min / max / mean / median for a numeric series."""
+    vals = [float(v) for v in values if v is not None and not math.isnan(float(v))]
+    if not vals:
+        return {"min": None, "max": None, "mean": None, "median": None}
+    vals_sorted = sorted(vals)
+    n = len(vals_sorted)
+    _min = vals_sorted[0]
+    _max = vals_sorted[-1]
+    _mean = sum(vals_sorted) / n
+    if n % 2 == 1:
+        _median = vals_sorted[n // 2]
+    else:
+        _median = 0.5 * (vals_sorted[n // 2 - 1] + vals_sorted[n // 2])
+    return {"min": _min, "max": _max, "mean": _mean, "median": _median}
 
 def calculate_scenario_kpis(
-    annual_rows: List[Dict[str, Any]],
+    annual_rows: Union[Sequence[Dict[str, Any]], Any],
     debt_result: Dict[str, Any],
-    discount_rate: float = 0.08,
-    initial_investment: Optional[float] = None
+    config: Optional[Dict[str, Any]] = None,
+    discount_rate: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
-    Calculate comprehensive KPIs for a single scenario.
-    
+    Calculate comprehensive KPIs for a scenario.
+
+    This is intentionally V14-centric but accepts a generic annual_rows/debt_result
+    pair so it can evolve with the finance layer.
+
     Args:
-        annual_rows: List of annual cashflow dictionaries from build_annual_rows_v14()
-        debt_result: Debt calculation result from apply_debt_layer()
-        discount_rate: Discount rate for NPV calculation
-        initial_investment: Initial investment (if not in annual_rows). If None, extracted from config.
-    
+        annual_rows: Per-year summary rows (list of dicts or DataFrame).
+        debt_result: Output from apply_debt_layer (must at least expose
+            'dscr_series' and 'debt_outstanding').
+        config: Normalised scenario config (from analytics.scenario_loader).
+        discount_rate: Discount rate for NPV; falls back to DEFAULT_DISCOUNT_RATE.
+
     Returns:
-        Dictionary with all KPIs: NPV, IRR, DSCR stats, debt stats, CFADS stats
+        Dict with at least: npv, irr, dscr_min, dscr_max, dscr_mean, dscr_median,
+        max_debt_usd, final_debt_usd, total_idc_usd, total_cfads_usd,
+        final_cfads_usd, mean_operational_cfads_usd, dscr_series.
     """
-    kpis = {}
-    
-    # Extract cashflow series
-    cfads_series = [row.get("cfads_usd", 0.0) for row in annual_rows]
-    equity_fcf_series = [row.get("equity_fcf_usd", 0.0) for row in annual_rows]
-    
-    # Extract debt series
-    dscr_series = debt_result.get("dscr_series", [])
-    debt_outstanding = debt_result.get("debt_outstanding", [])
-    
-    # NPV calculation (on equity free cash flow)
-    # Prepend initial equity investment if provided
-    if initial_investment is not None:
-        npv_cashflows = [-initial_investment] + equity_fcf_series
+    rows = _to_rows(annual_rows)
+
+    # ------------------------------------------------------------------
+    # CFADS series (USD)
+    # ------------------------------------------------------------------
+    cfads_series: List[float] = []
+    for row in rows:
+        cf = as_float(row.get("cfads_usd"), 0.0)
+        cfads_series.append(cf if cf is not None else 0.0)
+
+    # ------------------------------------------------------------------
+    # Debt / DSCR series (from debt_result – canonical in V14)
+    # ------------------------------------------------------------------
+    raw_dscr = debt_result.get("dscr_series", [])
+    dscr_series = _clean_dscr_series(raw_dscr)
+
+    # DSCR stats on the cleaned series
+    if hasattr(dscr_series, "empty") and dscr_series.empty:
+        dscr_min = None
+        dscr_max = None
+        dscr_mean = None
+        dscr_median = None
+    elif not raw_dscr:
+        dscr_min = None
+        dscr_max = None
+        dscr_mean = None
+        dscr_median = None
     else:
-        npv_cashflows = equity_fcf_series
-    
-    kpis["npv"] = calculate_npv(npv_cashflows, discount_rate)
-    
-    # IRR calculation (on equity free cash flow)
-    kpis["irr"] = calculate_irr(npv_cashflows)
-    
-    # DSCR statistics
-    kpis.update(calculate_dscr_stats(dscr_series))
-    
-    # Debt statistics
-    kpis.update(calculate_debt_stats(debt_outstanding))
-    
-    # CFADS statistics
-    kpis.update(calculate_cfads_stats(cfads_series))
-    
-    # Additional metrics from debt result
-    kpis["total_idc_capitalized"] = debt_result.get("total_idc_capitalized", 0.0)
-    kpis["grace_years"] = debt_result.get("grace_periods", 0)
-    kpis["timeline_periods"] = debt_result.get("timeline_periods", len(annual_rows))
-    
+        dscr_min = float(dscr_series.min())
+        dscr_max = float(dscr_series.max())
+        dscr_mean = float(dscr_series.mean())
+        dscr_median = float(dscr_series.median())
+
+    # Debt outstanding series (USD)
+    debt_outstanding = _clean_series(debt_result.get("debt_outstanding", []))
+    max_debt = max(debt_outstanding) if debt_outstanding else 0.0
+    final_debt = debt_outstanding[-1] if debt_outstanding else 0.0
+
+    # IDC – try a couple of common keys, defaulting to 0 if absent
+    total_idc_usd = 0.0
+    for key in ("total_idc_usd", "idc_total_usd", "idc_usd", "total_idc"):
+        val = debt_result.get(key)
+        if val is not None:
+            fv = as_float(val, 0.0)
+            if fv is not None:
+                total_idc_usd = fv
+            break
+
+    # ------------------------------------------------------------------
+    # CFADS aggregates
+    # ------------------------------------------------------------------
+    total_cfads_usd = sum(cfads_series)
+    final_cfads_usd = cfads_series[-1] if cfads_series else 0.0
+
+    # Crude "operational years" heuristic:
+    # - Prefer explicit phase/is_operational flags if present,
+    # - otherwise treat years after year 3 as operational (2-yr construction + 1 buffer).
+    ops_cfads: List[float] = []
+    for idx, row in enumerate(rows):
+        phase = str(row.get("phase", "")).lower()
+        is_ops_flag = row.get("is_operational")
+        year = row.get("year") or (idx + 1)
+
+        is_ops = False
+        if is_ops_flag is True:
+            is_ops = True
+        elif phase in {"ops", "operation", "operations"}:
+            is_ops = True
+        elif isinstance(year, (int, float)) and year > 3:
+            is_ops = True
+
+        if is_ops:
+            ops_cfads.append(cfads_series[idx])
+
+    if not ops_cfads:
+        ops_cfads = cfads_series
+
+    mean_operational_cfads_usd = (
+        sum(ops_cfads) / len(ops_cfads) if ops_cfads else 0.0
+    )
+
+    # ------------------------------------------------------------------
+    # Equity investment / NPV / IRR
+    # ------------------------------------------------------------------
+    if discount_rate is None:
+        discount_rate = DEFAULT_DISCOUNT_RATE
+
+    capex_total_usd = as_float(
+        get_nested(config, ["capex", "usd_total"], default=None) if config else None,
+        default=0.0,
+    )
+
+    principal_series = _clean_series(debt_result.get("principal_series", []))
+    debt_raised = sum(principal_series)
+
+    equity_investment = capex_total_usd - debt_raised
+    # If we don't have a sensible equity number, fall back to using total capex.
+    if equity_investment <= 0 and capex_total_usd > 0:
+        equity_investment = capex_total_usd
+
+    cash_flows: List[float] = []
+    if equity_investment != 0:
+        cash_flows.append(-equity_investment)
+    else:
+        # Avoid the "all non-negative cashflows" IRR pathology – inject a tiny
+        # negative at t=0 so the function has a sign change.
+        cash_flows.append(-1e-6)
+    cash_flows.extend(cfads_series)
+
+    # NPV (always computable, even if IRR isn't)
+    try:
+        npv_value = float(npf.npv(discount_rate, cash_flows))
+    except Exception:
+        npv_value = 0.0
+
+    # IRR – can legitimately fail or return nan; treat those as None.
+    try:
+        irr_value = float(npf.irr(cash_flows))
+        if math.isnan(irr_value) or math.isinf(irr_value):
+            irr_value = None  # type: ignore[assignment]
+    except Exception:
+        irr_value = None  # type: ignore[assignment]
+
+    # ------------------------------------------------------------------
+    # Final KPI dict (scalar stats + cleaned DSCR series)
+    # ------------------------------------------------------------------
+    kpis: Dict[str, Any] = {
+        "npv": npv_value,
+        "irr": irr_value,
+        "dscr_min": dscr_min,
+        "dscr_max": dscr_max,
+        "dscr_mean": dscr_mean,
+        "dscr_median": dscr_median,
+        "max_debt_usd": max_debt,
+        "final_debt_usd": final_debt,
+        "total_idc_usd": total_idc_usd,
+        "total_cfads_usd": total_cfads_usd,
+        "final_cfads_usd": final_cfads_usd,
+        "mean_operational_cfads_usd": mean_operational_cfads_usd,
+        # keep a JSON-/Excel-friendly copy of the DSCR curve
+        "dscr_series": list(dscr_series) if hasattr(dscr_series, "__iter__") else [],
+    }
+
     return kpis
-
-
-def format_kpi_summary(kpis: Dict[str, Any], scenario_name: str = "") -> str:
+def format_kpi_summary(kpis: Dict[str, Any], scenario_name: str) -> str:
     """
-    Format KPIs as human-readable text summary.
-    
-    Args:
-        kpis: KPI dictionary from calculate_scenario_kpis()
-        scenario_name: Scenario name for header
-    
-    Returns:
-        Formatted string summary
+    Render a human-friendly multi-line summary for console output.
+
+    This mirrors the lender-style printout used in the scenario_analytics suite.
     """
-    lines = []
-    
-    if scenario_name:
-        lines.append(f"\n{'='*60}")
-        lines.append(f"Scenario: {scenario_name}")
-        lines.append(f"{'='*60}")
-    
-    lines.append(f"\nValuation Metrics:")
-    lines.append(f"  NPV (USD):           {kpis.get('npv', 0):>15,.2f}")
-    irr = kpis.get('irr')
-    if irr is not None:
-        lines.append(f"  IRR:                 {irr:>15.2%}")
+    npv_value = kpis.get("npv")
+    irr_value = kpis.get("irr")
+
+    dscr_min = kpis.get("dscr_min")
+    dscr_max = kpis.get("dscr_max")
+    dscr_mean = kpis.get("dscr_mean")
+    dscr_median = kpis.get("dscr_median")
+
+    max_debt = kpis.get("max_debt_usd")
+    final_debt = kpis.get("final_debt_usd")
+    total_idc = kpis.get("total_idc_usd")
+
+    total_cfads = kpis.get("total_cfads_usd")
+    final_cfads = kpis.get("final_cfads_usd")
+    mean_ops_cfads = kpis.get("mean_operational_cfads_usd")
+
+    lines: List[str] = []
+    lines.append("\n" + "=" * 60)
+    lines.append(f"Scenario: {scenario_name}")
+    lines.append("=" * 60 + "\n")
+
+    # Valuation
+    lines.append("Valuation Metrics:")
+    if isinstance(npv_value, (int, float)):
+        lines.append(f"  NPV (USD):{npv_value:>26,.2f}")
     else:
-        lines.append(f"  IRR:                 {'N/A':>15}")
-    
-    lines.append(f"\nDSCR Statistics:")
-    lines.append(f"  Minimum DSCR:        {kpis.get('dscr_min', 0):>15.2f}")
-    lines.append(f"  Maximum DSCR:        {kpis.get('dscr_max', 0):>15.2f}")
-    lines.append(f"  Mean DSCR:           {kpis.get('dscr_mean', 0):>15.2f}")
-    lines.append(f"  Median DSCR:         {kpis.get('dscr_median', 0):>15.2f}")
-    
-    lines.append(f"\nDebt Statistics:")
-    lines.append(f"  Max Debt (USD):      {kpis.get('max_debt_outstanding', 0):>15,.2f}")
-    lines.append(f"  Final Debt (USD):    {kpis.get('final_debt_outstanding', 0):>15,.2f}")
-    lines.append(f"  Total IDC (USD):     {kpis.get('total_idc_capitalized', 0):>15,.2f}")
-    
-    lines.append(f"\nCFADS Statistics:")
-    lines.append(f"  Total CFADS (USD):   {kpis.get('total_cfads', 0):>15,.2f}")
-    lines.append(f"  Final Year CFADS:    {kpis.get('final_cfads', 0):>15,.2f}")
-    lines.append(f"  Mean Operational:    {kpis.get('mean_operational_cfads', 0):>15,.2f}")
-    
+        lines.append("  NPV (USD):                N/A")
+
+    if isinstance(irr_value, (int, float)):
+        lines.append(f"  IRR:{irr_value * 100:>31.2f}%")
+    else:
+        lines.append("  IRR:                       N/A")
+
+    lines.append("")  # blank line
+
+    # DSCR
+    lines.append("DSCR Statistics:")
+    if dscr_min is not None:
+        lines.append(f"  Minimum DSCR:{dscr_min:>22.2f}")
+        lines.append(f"  Maximum DSCR:{(dscr_max or 0):>22.2f}")
+        lines.append(f"  Mean DSCR:{(dscr_mean or 0):>25.2f}")
+        lines.append(f"  Median DSCR:{(dscr_median or 0):>23.2f}")
+    else:
+        lines.append("  (no DSCR data available)")
+    lines.append("")
+
+    # Debt
+    lines.append("Debt Statistics:")
+    if isinstance(max_debt, (int, float)):
+        lines.append(f"  Max Debt (USD):{max_debt:>17,.2f}")
+    if isinstance(final_debt, (int, float)):
+        lines.append(f"  Final Debt (USD):{final_debt:>15,.2f}")
+    if isinstance(total_idc, (int, float)):
+        lines.append(f"  Total IDC (USD):{total_idc:>16,.2f}")
+    lines.append("")
+
+    # CFADS
+    lines.append("CFADS Statistics:")
+    if isinstance(total_cfads, (int, float)):
+        lines.append(f"  Total CFADS (USD):{total_cfads:>12,.2f}")
+    if isinstance(final_cfads, (int, float)):
+        lines.append(f"  Final Year CFADS:{final_cfads:>14,.2f}")
+    if isinstance(mean_ops_cfads, (int, float)):
+        lines.append(f"  Mean Operational:{mean_ops_cfads:>16,.2f}")
+
     return "\n".join(lines)

@@ -1,14 +1,31 @@
-# DutchBay v14 Batch Scenario A
+# example_a.yaml (snippet)
+
 project:
   capacity_mw: 100
-  capacity_factor: 0.35
-  degradation: 0.005
+  capacity_factor_pct: 45
+  degradation_pct: 0.5
+  grid_loss_pct: 2.0
+  life_years: 20
+
 tariff:
   lkr_per_kwh: 50
+
 opex:
-  usd_per_year: 1000000
+  usd_per_year: 10000000
+
 capex:
   usd_total: 120000000
+
+tax:
+  corporate_tax_rate_pct: 24
+  depreciation_years: 20
+  tax_holiday_years: 10
+  tax_holiday_start_year: 1
+  enhanced_capital_allowance_pct: 150
+
+risk:
+  haircut_pct: 10
+
 Financing_Terms:
   debt_ratio: 0.75
   tenor_years: 17

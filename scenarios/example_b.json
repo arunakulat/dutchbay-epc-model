@@ -1,8 +1,15 @@
 {
   "project": {
-    "capacity_mw": 85,
-    "capacity_factor": 0.395,
-    "degradation": 0.004
+    "name": "Example B",
+    "capacity_mw": 100,
+    "capacity_factor": 0.40,
+    "life_years": 25,
+    "corporate_tax_rate": 0.24,
+    "depreciation_years": 20,
+    "tax_holiday_years": 0,
+    "tax_holiday_start_year": 1,
+    "enhanced_capital_allowance_pct": 1.0,
+    "risk_haircut_pct": 0.05
   },
   "tariff": {
     "lkr_per_kwh": 58
