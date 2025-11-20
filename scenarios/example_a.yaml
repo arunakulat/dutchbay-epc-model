@@ -10,6 +10,10 @@ project:
 tariff:
   lkr_per_kwh: 50
 
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+
 opex:
   usd_per_year: 10000000
 
@@ -18,9 +22,9 @@ capex:
 
 tax:
   corporate_tax_rate_pct: 24
-  depreciation_years: 20
   tax_holiday_years: 10
   tax_holiday_start_year: 1
+  depreciation_years: 20
   enhanced_capital_allowance_pct: 150
 
 risk:

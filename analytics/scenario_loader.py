@@ -1,4 +1,19 @@
-"""Universal scenario configuration loader for V13/V14 compatibility."""
+"""
+Universal scenario configuration loader for v13/v14 compatibility.
+
+Responsibilities:
+- Load YAML / JSON config files.
+- Perform light structural checks only (no over-eager schema enforcement).
+- Provide a strict FX resolver used by tests and higher layers.
+
+Deliberate design:
+- We DO NOT require v14-only sections like 'debt' or 'generation' here.
+  Those rules live with the financial core / validators.
+- We DO enforce that explicit FX configs are well-formed when _resolve_fx()
+  is used, and we do NOT silently invent FX when the caller asks for it.
+"""
+
+from __future__ import annotations
 
 import json
 import logging
@@ -7,139 +22,174 @@ from typing import Any, Dict
 
 import yaml
 
-from constants import DEFAULT_FX_USD_TO_LKR
-from finance.utils import get_nested, as_float
-
 logger = logging.getLogger(__name__)
 
-FIELD_ALIASES = {
-    "capex": ["capex", "total_capex", "project_cost"],
-    "opex": ["opex", "annual_opex", "operating_expense"],
-    "tariff": ["tariff", "tariff_config", "ppa_tariff"],
-}
+
+class ScenarioConfigError(ValueError):
+    """Configuration-level error for scenario loading."""
 
 
-def load_scenario_config(filepath: str) -> Dict[str, Any]:
-    """Load and normalize scenario config from YAML or JSON.
+# ---------------------------------------------------------------------------
+# Core helpers
+# ---------------------------------------------------------------------------
 
-    Handles V13 (master config) and V14 (per-scenario) formats.
-    Auto-populates missing currency fields using FX rate.
 
-    Args:
-        filepath: Path to YAML or JSON config file
-
-    Returns:
-        Normalized configuration dictionary
-
-    Raises:
-        ValueError: If required fields are missing
-        FileNotFoundError: If file doesn't exist
+def _load_raw_config(path: Path) -> Dict[str, Any]:
     """
-    path = Path(filepath)
+    Load a raw scenario configuration from YAML or JSON.
+
+    This function is intentionally dumb about schema – it only cares that
+    the top level is a mapping.
+    """
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {filepath}")
+        raise FileNotFoundError(f"Scenario config not found: {path}")
 
+    suffix = path.suffix.lower()
     with path.open("r", encoding="utf-8") as f:
-        if path.suffix.lower() == ".json":
-            config = json.load(f)
+        if suffix in (".yml", ".yaml"):
+            data = yaml.safe_load(f)
+        elif suffix == ".json":
+            data = json.load(f)
         else:
-            config = yaml.safe_load(f)
+            raise ScenarioConfigError(
+                f"Unsupported scenario config extension '{suffix}' for {path}"
+            )
 
-    if not config:
-        raise ValueError(f"Empty config file: {filepath}")
+    if data is None:
+        raise ScenarioConfigError(f"Empty configuration in file: {path}")
 
-    config = _normalize_keys(config)
-    config = _populate_currency_fields(config)
-    _validate_required_fields(config)
+    if not isinstance(data, dict):
+        raise ScenarioConfigError(
+            f"Expected a mapping at top level of {path}, "
+            f"got {type(data).__name__}"
+        )
 
-    logger.info("Loaded scenario config from: %s", filepath)
-    return config
-
-
-def _normalize_keys(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Map alias keys to canonical names at the top level."""
-    for canon, aliases in FIELD_ALIASES.items():
-        for alias in aliases:
-            if alias in config and canon not in config:
-                config[canon] = config.pop(alias)
-                logger.debug("Remapped %r → %r", alias, canon)
-    return config
+    return data
 
 
-def _resolve_fx(config: Dict[str, Any]) -> float:
-    """Resolve FX rate from config or fall back to project default."""
-    # Try direct numeric field first
-    fx_direct = as_float(config.get("fx"))
-    if fx_direct is not None:
-        return fx_direct
+def _ensure_meta_source(cfg: Dict[str, Any], path: Path) -> None:
+    """
+    Attach a lightweight 'meta.source_path' breadcrumb, if not already present.
 
-    # Try nested structure: fx: { start_lkr_per_usd: ... }
-    fx_nested = as_float(get_nested(config, ("fx", "start_lkr_per_usd")))
-    if fx_nested is not None:
-        return fx_nested
-
-    # Fall back to project-wide default
-    return DEFAULT_FX_USD_TO_LKR
+    This is helpful for diagnostics and does not interfere with the financial
+    pipeline.
+    """
+    meta = cfg.setdefault("meta", {})
+    meta.setdefault("source_path", str(path))
 
 
-def _populate_currency_fields(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Auto-populate missing USD/LKR fields using FX rate."""
-    fx = _resolve_fx(config)
-
-    # Ensure config['fx'] is a simple numeric scalar for downstream code
-    if not isinstance(config.get("fx"), (int, float)):
-        logger.warning("Using FX rate: %s (default or inferred)", fx)
-        config["fx"] = fx
-
-    # Normalize CAPEX
-    capex = config.get("capex") or {}
-    if capex:
-        usd = as_float(capex.get("usd_total"))
-        lkr = as_float(capex.get("lkr_total"))
-
-        if usd is not None and lkr is None:
-            capex["lkr_total"] = usd * fx
-            logger.debug("Computed CAPEX LKR: %s", capex["lkr_total"])
-        elif lkr is not None and usd is None:
-            capex["usd_total"] = lkr / fx
-            logger.debug("Computed CAPEX USD: %s", capex["usd_total"])
-        elif usd is None and lkr is None:
-            raise ValueError("CAPEX must have either usd_total or lkr_total")
-
-        config["capex"] = capex
-
-    # Normalize OPEX
-    opex = config.get("opex") or {}
-    if opex:
-        usd = as_float(opex.get("usd_per_year"))
-        lkr = as_float(opex.get("lkr_per_year"))
-
-        if usd is not None and lkr is None:
-            opex["lkr_per_year"] = usd * fx
-            logger.debug("Computed OPEX LKR: %s", opex["lkr_per_year"])
-        elif lkr is not None and usd is None:
-            opex["usd_per_year"] = lkr / fx
-            logger.debug("Computed OPEX USD: %s", opex["usd_per_year"])
-        elif usd is None and lkr is None:
-            raise ValueError("OPEX must have either usd_per_year or lkr_per_year")
-
-        config["opex"] = opex
-
-    return config
+# ---------------------------------------------------------------------------
+# FX handling
+# ---------------------------------------------------------------------------
 
 
-def _validate_required_fields(config: Dict[str, Any]) -> None:
-    """Validate minimum required fields are present and consistent."""
-    required = ["capex", "opex", "tariff"]
-    missing = [f for f in required if f not in config]
+def _resolve_fx(config: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Resolve FX configuration into a normalised mapping.
 
-    if missing:
-        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    Contract (as enforced by tests/test_fx_config_strictness.py):
 
-    capex = config.get("capex") or {}
-    if not any(k in capex for k in ("usd_total", "lkr_total")):
-        raise ValueError("CAPEX must have usd_total or lkr_total")
+    - If 'fx' is missing entirely  -> ValueError.
+    - If 'fx' is a scalar number   -> ValueError with a clear message.
+    - If 'fx' is a mapping, it MUST contain 'start_lkr_per_usd'.
+    - 'annual_depr' is optional and defaults to 0.0.
+    - Returns a dict with keys:
+        - 'start_lkr_per_usd' (float)
+        - 'annual_depr'      (float)
+    """
+    if "fx" not in config:
+        raise ValueError(
+            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"
+        )
 
-    opex = config.get("opex") or {}
-    if not any(k in opex for k in ("usd_per_year", "lkr_per_year")):
-        raise ValueError("OPEX must have usd_per_year or lkr_per_year")
+    fx_cfg = config["fx"]
+
+    # Reject bare scalar FX – the codebase now expects a structured mapping.
+    if isinstance(fx_cfg, (int, float)):
+        raise ValueError(
+            "Scalar 'fx' not supported; use mapping with "
+            "'start_lkr_per_usd' and 'annual_depr'"
+        )
+
+    if not isinstance(fx_cfg, dict):
+        raise ValueError(
+            "FX configuration must be a mapping with "
+            "'start_lkr_per_usd' and optional 'annual_depr'"
+        )
+
+    if "start_lkr_per_usd" not in fx_cfg:
+        raise ValueError(
+            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"
+        )
+
+    try:
+        start = float(fx_cfg["start_lkr_per_usd"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "fx.start_lkr_per_usd must be a valid number"
+        ) from exc
+
+    annual_raw = fx_cfg.get("annual_depr", 0.0)
+    try:
+        annual = float(annual_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "fx.annual_depr must be a valid number if provided"
+        ) from exc
+
+    result = {
+        "start_lkr_per_usd": start,
+        "annual_depr": annual,
+    }
+
+    logger.debug(
+        "Resolved FX config: start_lkr_per_usd=%s, annual_depr=%s",
+        result["start_lkr_per_usd"],
+        result["annual_depr"],
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Public loader
+# ---------------------------------------------------------------------------
+
+
+def load_scenario_config(path: str | Path) -> Dict[str, Any]:
+    """
+    Load and lightly normalise a scenario configuration.
+
+    Behaviour:
+    - Loads YAML/JSON and ensures a top-level mapping.
+    - Attaches meta.source_path for traceability.
+    - Does NOT enforce v14-only sections like 'debt' or 'generation'.
+      That logic lives with the financial core / validators.
+    - Does NOT require FX unless callers explicitly ask for it via _resolve_fx.
+      However, if FX *is* present and is a bare scalar, we reject it to enforce
+      the "no scalar fx" policy baked into the tests.
+    """
+    p = Path(path)
+    cfg = _load_raw_config(p)
+    _ensure_meta_source(cfg, p)
+
+    # Enforce "no scalar fx" rule at load time for any config that
+    # chooses to specify FX.
+    fx_cfg = cfg.get("fx", None)
+    if isinstance(fx_cfg, (int, float)):
+        raise ValueError(
+            "Invalid FX configuration: scalar 'fx' not supported; "
+            "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"
+        )
+
+    # We deliberately do NOT call _resolve_fx() unconditionally here.
+    # Some configs (e.g. legacy or tests that omit FX) may rely on
+    # downstream defaults. Tests that care about FX call _resolve_fx()
+    # directly.
+    return cfg
+
+
+__all__ = [
+    "ScenarioConfigError",
+    "load_scenario_config",
+    "_resolve_fx",
+]

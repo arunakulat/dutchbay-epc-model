@@ -1,8 +1,8 @@
 ################################################################################
-# DUTCHBAY V13 - MASTER CONFIGURATION (v2.3 - Debt.py Compatible)
+# DUTCHBAY LENDER CASE – V14 CANONICAL SCENARIO
+# Origin: V13 Master Configuration v2.3 (Debt.py Compatible)
 # Workflow-Compliant | Sri Lanka BOI Tax Regime | Full Pipeline Integration
 # Last Updated: 2025-11-15
-# Modules: cashflow.py v2.2, metrics.py v2.1, debt.py, returns.py v1.0
 ################################################################################
 
 project:
@@ -10,10 +10,20 @@ project:
   capacity_mw: 150
   capacity_factor: 0.40
   degradation: 0.006
+  life_years: 20              # v14-style lifetime; aligns with returns.project_life_years
   boi_approved: true
   boi_agreement_date: "2025-01-15"
   location: Mannar District, Northern Province
   jurisdiction: Sri Lanka
+
+  # Tax & allowance fields mirrored here for v14-style schemas
+  corporate_tax_rate: 0.30
+  depreciation_years: 15
+  depreciation_start_year: 1
+  tax_holiday_years: 12
+  tax_holiday_start_year: 1
+  enhanced_capital_allowance_pct: 1.50
+  loss_carryforward_years: 25
 
 returns:
   project_life_years: 20
@@ -78,12 +88,12 @@ Financing_Terms:
   interest_only_years: 2
   amortization_style: auto
   interest_rate_nominal: 0.08
-  
+
   mix:
     lkr_max: 0.45
     dfi_max: 0.10
     usd_commercial_min: 0.45
-  
+
   rates:
     lkr_nominal: 0.08
     lkr_min: 0.08
@@ -91,22 +101,22 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075
     usd_commercial_min: 0.075
-  
+
   target_dscr: 1.30
   min_dscr: 1.20
   min_dscr_covenant: 1.20
-  
+
   reserves:
     dsra_months: 6
     receivables_guarantee_months: 9
-  
+
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
-  
+
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
-  
+
   enforce_hard_covenants: false
 
 metrics:
@@ -185,7 +195,5 @@ metadata:
   version: "2.3"
   last_updated: "2025-11-15"
   author: DutchBay V13 Financial Modeling Team
-  review_status: Draft - Pending Board Approval
+  review_status: "Draft - Pending Board Approval"
   assumptions_source: "BOI Agreement Ref: BOI/2025/REN/001234"
-
-

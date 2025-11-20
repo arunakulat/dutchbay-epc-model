@@ -12,6 +12,9 @@ project:
   risk_haircut_pct: 0.05     # if you want a 5% haircut; adjust as needed
 tariff:
   lkr_per_kwh: 50
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
 opex:
   usd_per_year: 1000000
 capex:

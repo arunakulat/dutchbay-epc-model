@@ -11,21 +11,30 @@
     "enhanced_capital_allowance_pct": 1.0,
     "risk_haircut_pct": 0.05
   },
+
   "tariff": {
     "lkr_per_kwh": 58
   },
+
+  "fx": {
+    "start_lkr_per_usd": 300.0,
+    "annual_depr": 0.03
+  },
+
   "opex": {
-    "usd_per_year": 850000
+    "usd_per_year": 900000.0
   },
+
   "capex": {
-    "usd_total": 97000000
+    "usd_total": 120000000.0
   },
+
   "Financing_Terms": {
-    "debt_ratio": 0.70,
+    "debt_ratio": 0.75,
     "tenor_years": 15,
     "construction_periods": 2,
-    "construction_schedule": [50.0, 47.0],
-    "debt_drawdown_pct": [0.5, 0.5],
+    "construction_schedule": [60.0, 60.0],
+    "debt_drawdown_pct": [0.6, 0.4],
     "grace_years": 1,
     "interest_only_years": 0,
     "amortization_style": "annuity",

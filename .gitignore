@@ -67,3 +67,10 @@ scenario_*_results_*.csv
 scenario_*_annual_*.csv
 .venv311/
 venv/
+archive/
+exports/*.xlsx
+*.bak
+*structure.json
+codebase_filelist.txt
+patch.diff
+*_loader_fix.patch

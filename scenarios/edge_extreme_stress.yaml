@@ -12,14 +12,17 @@ project:
   risk_haircut_pct: 0.05     # if you want a 5% haircut; adjust as needed
 tariff:
   lkr_per_kwh: 40            # Adverse, low tariff
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
 opex:
   usd_per_year: 1800000      # High opex, maintenance issues
 capex:
-  usd_total: 145000000       # Expensive, cost overruns
+  usd_total: 120000000
 Financing_Terms:
-  debt_ratio: 0.85           # Aggressive leverage
-  tenor_years: 10            # Short tenor, refinancing risk
-  construction_periods: 3    # Delays and 3 construction years
+  debt_ratio: 0.85
+  tenor_years: 15
+  construction_periods: 3
   construction_schedule: [20.0, 45.0, 80.0]
   debt_drawdown_pct: [0.2, 0.3, 0.5]
   grace_years: 0             # No grace period

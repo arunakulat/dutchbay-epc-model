@@ -3,4 +3,4 @@
 Provides batch scenario processing, KPI calculation, and board-ready Excel reporting.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
