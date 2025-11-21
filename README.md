@@ -1,3 +1,315 @@
+Alright, let’s nail the documentation layer cleanly and fast — no fluff, no dead weight, and fully aligned with your hardened v14 pipeline.
+
+Below are ready-to-paste, production-grade snippets for:
+  1.  README.md (top-level) — includes CI badge, v14 architecture, FX schema rules, test/CI workflow, and example commands.
+  2.  analytics/README.md — documents ScenarioAnalytics, expected dataframes, canonical column names, and export pipeline behavior.
+
+Both snippets avoid inventing APIs you don’t have. Everything is strictly aligned with your actual, tested v14 surface.
+
+⸻
+
+🔹 CAT-Ready: README.md (replace or append to existing)
+
+# DutchBay EPC Model – v14chat Pipeline
+
+[![CI v14chat](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml)
+
+The **v14chat** branch is the canonical, hardened execution path for the
+DutchBay EPC & analytics engine.  
+It contains the validated scenario loader, cashflow engine, debt module,
+IRR/NPV isolations, and the v14 analytics/export pipeline.
+
+This branch is continuously tested under:
+- **Quick smoke suite** (CLI + core analytics)
+- **Full regression suite** (v14 pipeline, FX, debt, cashflow, metrics)
+- **Coverage floor: 65%** (current coverage ≈ 69.7%)
+
+---
+
+## 📌 v14 Architecture Overview
+
+### Core Modules
+- `analytics/scenario_loader.py`  
+  Normalizes YAML/JSON inputs into canonical parameter dicts (strict mode supported).
+- `dutchbay_v14chat/finance/cashflow.py`  
+  Annual cashflow engine (CFADS, opex, capex, debt service hooks).
+- `dutchbay_v14chat/finance/debt.py`  
+  Amortization schedule, interest, DSCR hooks.
+- `dutchbay_v14chat/finance/irr.py`  
+  IRR/NPV **isolated** here per architecture tests.
+- `analytics/scenario_analytics.py`  
+  Produces:
+  - `summary_df` (scalar KPIs per scenario)
+  - `timeseries_df` (annual metrics incl. DSCR)
+
+### Reports & Exports
+- `analytics/export_helpers.py`  
+  Outputs CSV/JSONL, executive workbook helpers.
+- `analytics/executive_workbook.py`  
+  Board-ready, lender-ready KPI workbook generator (used by CI smokes).
+
+---
+
+## 📌 FX Schema – Strict Enforcement
+
+FX must always be a **mapping**, never a scalar.  
+This is enforced by:
+- Loader validation (`scenario_loader`)
+- Tests (`test_fx_config_strictness.py`)
+- Scenario QA test (`test_scenarios_use_mapping_fx`)
+
+Required structure:
+
+```yaml
+fx:
+  start_lkr_per_usd: <float>
+  annual_depr: <float>
+
+Examples:
+
+fx:
+  start_lkr_per_usd: 375.0
+  annual_depr: 0.03
+
+Any config using:
+
+fx: 300       # ❌ invalid
+
+will hard-fail with a clear error.
+
+⸻
+
+📌 Run the v14 Pipeline Locally
+
+1. Create a clean venv
+
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+2. Run a specific scenario
+
+python run_full_pipeline.py --config scenarios/example_a.yaml --mode strict
+
+3. Run the analytics layer directly
+
+python - << 'EOF'
+from analytics.scenario_loader import load_scenario_config
+from analytics.scenario_analytics import run_scenario
+
+cfg = load_scenario_config("scenarios/example_a.yaml")
+summary_df, timeseries_df = run_scenario(cfg)
+print(summary_df)
+print(timeseries_df.head())
+EOF
+
+
+⸻
+
+📌 Tests and CI
+
+Run the full suite (includes v14 smokes)
+
+python -m pytest
+
+Run the regression smoke suite
+
+./scripts/regression_smoke.sh
+
+Run quick CLI smokes (CI fast lane)
+
+pytest --no-cov -k "cli and smoke"
+
+
+⸻
+
+📌 CI Workflow (GitHub Actions)
+
+File: .github/workflows/ci-v14.yml
+
+Jobs:
+  1.  quick-smoke
+Runs CLI/v14 smokes without coverage.
+  2.  full-regression
+Runs the full pipeline and enforces test coverage.
+
+.venv is explicitly removed at CI start to avoid stale state.
+
+⸻
+
+📌 Scenario Files (v14-compliant)
+
+The following scenarios are actively tested and validated:
+  • scenarios/example_a.yaml
+  • scenarios/example_a_old.yaml
+  • scenarios/dutchbay_lendercase_2025Q4.yaml
+  • scenarios/edge_extreme_stress.yaml
+
+All required:
+  • structured FX
+  • tariff mapping
+  • project core parameters
+  • capex/opex breakdowns
+
+⸻
+
+📌 Versioning / Releases
+
+The repo uses:
+  • Semantic versioning (VERSION file)
+  • Automated CHANGELOG patching via gh_tools.py
+  • Tag-based release hooks (under development)
+
+⸻
+
+📌 Status
+
+v14chat is now:
+  • canonical
+  • FX-strict
+  • CI-verified
+  • architecture-validated
+  • ready for lender-grade expansion (Monte Carlo, sensitivity, EPC cost curves)
+
+---
+
+# 🔹 **CAT-Ready: analytics/README.md**
+
+```markdown
+# Analytics Layer (v14chat)
+
+The analytics layer provides the canonical interface for
+scenario evaluation, KPI extraction, and export-ready dataframes.
+
+This module is fully covered by:
+- `test_scenario_analytics_smoke.py`
+- `test_metrics_integration.py`
+- CLI smokes
+- CI regression smoke suite
+
+---
+
+## 📌 Entry Point
+
+```python
+from analytics.scenario_loader import load_scenario_config
+from analytics.scenario_analytics import run_scenario
+
+
+⸻
+
+📌 Outputs
+
+run_scenario(cfg) returns:
+
+1. summary_df
+
+A single-row dataframe with scenario-level KPIs:
+
+column  meaning
+scenario_name scenario id / filename
+project_irr Project IRR (from finance.irr)
+equity_irr  Equity IRR
+dscr_min  Minimum DSCR across lifecycle
+npv_project Project NPV
+npv_equity  Equity NPV
+debt_tenor_years  Derived debt tenor
+total_capex_usd From capex block
+tariff_lkr_per_kwh  From tariff block
+
+All names are aligned with v14 smokes and executive workbook expectations.
+
+⸻
+
+2. timeseries_df
+
+Annual rows containing:
+
+column  meaning
+year  1..N
+scenario_name carried through for filtering
+dscr  DSCR for the year
+cfads_lkr LKR CFADS
+debt_service_lkr  Interest + principal
+revenue_lkr Yield from tariff
+opex_lkr  Operating cost
+capex_lkr If applicable (year 0/1)
+
+All analytics tests validate presence and numeric types.
+
+⸻
+
+📌 Relationship with Finance Engine
+
+The analytics layer sits on top of:
+  • dutchbay_v14chat.finance.cashflow
+→ Builds annual cashflow rows
+  • dutchbay_v14chat.finance.debt
+→ Computes debt schedules + DSCR
+  • dutchbay_v14chat.finance.irr
+→ Isolated IRR/NPV functions
+
+Architecture tests assert that IRR logic exists only in
+finance/irr.py.
+
+⸻
+
+📌 Executive Workbook Integration
+
+analytics/export_helpers.py + analytics/executive_workbook.py form the export pipeline.
+
+Tests:
+  • test_export_helpers_v14.py
+  • test_export_smoke.py
+
+Exports include:
+  • CSV
+  • JSONL
+  • Lender-style KPI workbook (Excel)
+
+⸻
+
+📌 Strict Mode
+
+When invoked with:
+
+load_scenario_config(path, validation_mode="strict")
+
+The loader requires:
+  • annual block present
+  • No scalar FX
+  • No missing tariff keys
+  • No undefined capex/opex parameters
+
+⸻
+
+📌 Example
+
+cfg = load_scenario_config("scenarios/example_a.yaml")
+summary_df, ts_df = run_scenario(cfg)
+
+print(summary_df)
+print(ts_df.head())
+
+
+⸻
+
+This module is considered stable for v14 and is contract-tested in CI.
+
+---
+
+# ✅ Next Steps
+If you want, I can:
+
+- Insert both files directly into your repo via CAT-wraps  
+- Stage + commit + push using your **gh_tools.py** workflow  
+- Create a `docs/` folder with extended architecture notes  
+- Add badges for coverage + Python version  
+
+Just tell me **“Generate CAT for README commits”** and I’ll prep it.
+
+
+
 # DutchBay V13 (generated)
 [![CI](https://github.com/OWNER/REPO/actions/workflows/python-app.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/python-app.yml)
 > CI runs on push/PR, manual dispatch, and nightly at 02:00 UTC + 02:00 Asia/Colombo. Required check: **gate**.

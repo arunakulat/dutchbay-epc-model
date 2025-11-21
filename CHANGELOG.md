@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.6 - 2025-11-21
+
+- Docs: analytics + architecture + executive workbook
+
+
+
 ## v0.2.5 - 2025-11-21
 
 - Lock FX schema to structured mapping + scenario guard tests
