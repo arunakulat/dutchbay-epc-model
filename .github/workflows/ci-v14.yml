@@ -20,6 +20,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Remove existing .venv folder
+        run: |
+          if [ -d ".venv" ]; then
+            rm -rf .venv
+          fi
+
       - name: Install dependencies
         run: |
           python -m venv .venv
@@ -46,6 +52,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Remove existing .venv folder
+        run: |
+          if [ -d ".venv" ]; then
+            rm -rf .venv
+          fi
+
       - name: Install dependencies
         run: |
           python -m venv .venv
@@ -53,9 +65,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: v14 regression smoke
+      - name: v14 regression smoke (pytest + coverage)
         run: |
           source .venv/bin/activate
           ./scripts/regression_smoke.sh
-
-          
