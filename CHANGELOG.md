@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.1 - 2025-11-21
+
+- v14 CI baseline – upstream auto
+
+
+
 
 ## [0.1.6] – 2025-11-20
 
