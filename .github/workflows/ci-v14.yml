@@ -20,11 +20,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Make sure no leftover venv from previous runs / artifacts
       - name: Remove existing .venv folder
         run: |
-          if [ -d ".venv" ]; then
-            rm -rf .venv
-          fi
+          if [ -d ".venv" ]; then rm -rf .venv; fi
 
       - name: Install dependencies
         run: |
@@ -52,11 +51,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Same safety net here too
       - name: Remove existing .venv folder
         run: |
-          if [ -d ".venv" ]; then
-            rm -rf .venv
-          fi
+          if [ -d ".venv" ]; then rm -rf .venv; fi
 
       - name: Install dependencies
         run: |
@@ -69,3 +67,5 @@ jobs:
         run: |
           source .venv/bin/activate
           ./scripts/regression_smoke.sh
+
+          

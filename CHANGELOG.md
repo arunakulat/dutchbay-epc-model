@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.5 - 2025-11-21
+
+- CI v14chat green; v14 stack stabilized
+
+
+
 ## v0.2.4 - 2025-11-21
 
 - CI v14chat: add .venv reset step
