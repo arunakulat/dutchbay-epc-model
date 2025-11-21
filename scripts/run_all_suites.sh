@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 echo "→ Phase A: CLI smoke"
-pytest -q tests/test_cli_smoke_direct.py \
+pytest -q tests/test_cli_v14_smoke.py \
   --override-ini="addopts=-q --cov=dutchbay_v13 --cov-report=term-missing --cov-fail-under=1"
 
 echo "→ Phase B: scenarios multi-file emit"

@@ -103,7 +103,7 @@ main() {
   ensure_test_helpers
 
   echo "=== Phase A: CLI + scenarios (permissive path already baked in) ==="
-  run_pytest tests/test_cli_smoke_direct.py
+  run_pytest tests/test_cli_v14_smoke.py
   run_pytest tests/test_cli_scenarios_more.py
 
   echo "=== Phase B: Matrix + strict validator ==="

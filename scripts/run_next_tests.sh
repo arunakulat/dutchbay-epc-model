@@ -6,7 +6,7 @@ covflags=(--override-ini="addopts=-q --cov=dutchbay_v13 --cov-report=term-missin
 
 echo "→ Phase A (permissive): CLI smoke and scenarios (already green, re-assert quickly)"
 export VALIDATION_MODE=permissive
-pytest -q tests/test_cli_smoke_direct.py "${covflags[@]}"
+pytest -q tests/test_cli_v14_smoke.py "${covflags[@]}"
 pytest -q tests/test_cli_scenarios_more.py "${covflags[@]}"
 
 echo "→ Phase B (strict): validator behaviors"

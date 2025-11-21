@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.2 - 2025-11-21
+
+- Fix regression_smoke date for macOS; v14-only smoke
+
+
+
 ## v0.2.1 - 2025-11-21
 
 - Analytics exports + ScenarioAnalytics DF unit tests
