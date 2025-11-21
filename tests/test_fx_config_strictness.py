@@ -56,6 +56,31 @@ def test_fx_mapping_with_start_rate_is_accepted(tmp_path):
     # annual_depr should be preserved if present
     assert loaded["fx"].get("annual_depr") == 0.03
 
+def test_scenarios_use_mapping_fx():
+    """All key scenarios must use structured mapping for fx (no scalar/null)."""
+    import yaml
+    from pathlib import Path
+
+    root = Path(__file__).parent.parent  # tests/ -> repo root via parent.parent
+    scenarios = [
+        root / "scenarios" / "example_a.yaml",
+        root / "scenarios" / "example_a_old.yaml",
+        root / "scenarios" / "dutchbay_lendercase_2025Q4.yaml",
+        root / "scenarios" / "edge_extreme_stress.yaml",
+    ]
+
+    for path in scenarios:
+        if not path.exists():
+            continue
+
+        cfg = yaml.safe_load(path.read_text())
+        fx = cfg.get("fx")
+        if fx is None:
+            # No FX block is fine; we only care when it's present.
+            continue
+
+        assert isinstance(fx, dict), f"{path} has non-mapping fx: {type(fx).__name__}"
+
 
 def test_scalar_fx_is_rejected_with_clear_error(tmp_path):
     """
