@@ -164,3 +164,46 @@ def test_npv_and_irr_worsen_with_higher_capex():
     # Economics sanity: *both* NPV and IRR should deteriorate with higher capex
     assert kpis_high["npv"] < kpis_low["npv"]
     assert kpis_high["irr"] < kpis_low["irr"]
+
+from finance.utils import get_nested, as_float, as_int
+
+
+def test_get_nested_happy_path_and_missing_default():
+    data = {"a": {"b": {"c": 123}}}
+
+    # Exact nested hit
+    assert get_nested(data, ["a", "b", "c"]) == 123
+
+    # Missing key falls back to default
+    assert get_nested(data, ["a", "x"], default="missing") == "missing"
+
+
+def test_get_nested_non_dict_intermediate_uses_default():
+    # Once we hit a non-dict along the path, we should immediately
+    # return the provided default.
+    data = {"a": 1}
+    sentinel = object()
+
+    assert get_nested(data, ["a", "b"], default=sentinel) is sentinel
+
+
+def test_as_float_variants_covering_fallbacks():
+    # Happy path: convertible string
+    assert as_float("3.5", 0.0) == 3.5
+
+    # None -> default
+    assert as_float(None, 1.25) == 1.25
+
+    # Non-convertible -> default
+    assert as_float("not-a-number", 2.5) == 2.5
+
+
+def test_as_int_variants_covering_fallbacks():
+    # Happy path: convertible string
+    assert as_int("7", 0) == 7
+
+    # None -> default
+    assert as_int(None, 4) == 4
+
+    # Non-convertible -> default
+    assert as_int("nope", 9) == 9

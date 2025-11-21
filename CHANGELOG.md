@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.6 - 2025-11-22
+
+- Top-up coverage with finance.utils tests
+
+
+
 ## v0.2.6 - 2025-11-21
 
 - Docs: add v14 dev workflow
