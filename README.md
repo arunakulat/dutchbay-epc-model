@@ -487,3 +487,5 @@ python -m dutchbay_v13.cli --mode scenarios \  --scenarios inputs/scenarios/base
 - **Tags:** https://github.com/<ORG>/<REPO>/tags  
 - **Latest release:** https://github.com/<ORG>/<REPO>/releases/latest  
 - **CI artifacts:** Uploaded from the `package` job as `dist-<TAG or vVERSION+runN>` containing built wheel and sdist.
+
+[![CI v14chat](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml)
