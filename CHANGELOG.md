@@ -9,6 +9,12 @@ All notable changes to this project will be documented here.
 
 ## v0.2.5 - 2025-11-21
 
+- Tighten v14 coverage gates; CI + local green
+
+
+
+## v0.2.5 - 2025-11-21
+
 - CI v14chat green; v14 stack stabilized
 
 

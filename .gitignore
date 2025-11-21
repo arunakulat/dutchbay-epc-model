@@ -26,6 +26,7 @@ venv/
 venv*/
 env/
 env*/
+.venv311/
 
 # --- Build / packaging artifacts ---
 build/
