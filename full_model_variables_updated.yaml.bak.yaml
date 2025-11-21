@@ -1,0 +1,191 @@
+################################################################################
+# DUTCHBAY V13 - MASTER CONFIGURATION (v2.3 - Debt.py Compatible)
+# Workflow-Compliant | Sri Lanka BOI Tax Regime | Full Pipeline Integration
+# Last Updated: 2025-11-15
+# Modules: cashflow.py v2.2, metrics.py v2.1, debt.py, returns.py v1.0
+################################################################################
+
+project:
+  name: Dutch Bay Wind Project
+  capacity_mw: 150
+  capacity_factor: 0.40
+  degradation: 0.006
+  boi_approved: true
+  boi_agreement_date: "2025-01-15"
+  location: Mannar District, Northern Province
+  jurisdiction: Sri Lanka
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.10
+  equity_discount_rate: 0.12
+
+timeline:
+  ppa_to_fc_years: 0
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+
+tariff:
+  lkr_per_kwh: 20.30
+  tariff_type: fixed
+  ppa_term_years: 20
+
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+
+capex:
+  usd_total: 150000000
+  breakdown:
+    epc_usd: 140000000
+    development_usd: 5000000
+    financing_fees_usd: 3000000
+    contingency_usd: 2000000
+
+opex:
+  usd_per_year: 3000000
+  breakdown:
+    om_contract_usd: 2000000
+    insurance_usd: 500000
+    land_lease_usd: 300000
+    admin_usd: 200000
+
+tax:
+  corporate_tax_rate: 0.30
+  tax_holiday_years: 12
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 15
+  depreciation_start_year: 1
+  enhanced_capital_allowance_pct: 1.50
+  enhanced_allowance_applies: true
+  loss_carryforward_years: 25
+  wht_on_interest_to_nonresidents: 0.10
+
+regulatory:
+  success_fee_pct: 0.01
+  env_surcharge_pct: 0.005
+  social_services_levy_pct: 0.025
+  grid_loss_pct: 0.02
+
+risk_adjustment:
+  cfads_haircut_pct: 0.10
+
+Financing_Terms:
+  debt_ratio: 0.70
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.10
+    usd_commercial_min: 0.45
+  
+  rates:
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  
+  target_dscr: 1.30
+  min_dscr: 1.20
+  min_dscr_covenant: 1.20
+  
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
+  
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+  
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+  
+  enforce_hard_covenants: false
+
+metrics:
+  llcr_min_covenant: 1.20
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.10
+  plcr_min_covenant: 1.40
+  plcr_target: 1.60
+  plcr_discount_rate: 0.10
+  dscr_min_covenant: 1.30
+
+constraints:
+  max_debt_ratio: 0.80
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.30
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.10
+  warn_balloon_pct: 0.05
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.10
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: DFI
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+monte_carlo:
+  n_scenarios: 100000
+  seed: 42
+  parameters:
+    capacity_factor_std: 0.05
+    tariff_lkr_std: 0.10
+    opex_usd_std: 0.15
+    capex_usd_std: 0.08
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles:
+    - 10
+    - 25
+    - 50
+    - 75
+    - 90
+  min_dscr_covenant: 1.20
+  min_llcr_covenant: 1.25
+
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.05
+      high_pct: 0.05
+    tariff_lkr_per_kwh:
+      low_pct: -0.10
+      high_pct: 0.10
+    opex_usd_per_year:
+      low_pct: -0.15
+      high_pct: 0.15
+    capex_usd_total:
+      low_pct: -0.08
+      high_pct: 0.08
+    grid_loss_pct:
+      low_pct: -0.01
+      high_pct: 0.03
+  analysis:
+    tornado_chart_title: "DutchBay 150MW - Parameter Sensitivity (Equity IRR)"
+    dpi: 300
+
+metadata:
+  version: "2.3"
+  last_updated: "2025-11-15"
+  author: DutchBay V13 Financial Modeling Team
+  review_status: Draft - Pending Board Approval
+  assumptions_source: "BOI Agreement Ref: BOI/2025/REN/001234"
+
+

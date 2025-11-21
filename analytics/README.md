@@ -317,3 +317,25 @@ For issues or questions:
 ## License
 
 Same as parent DutchBay project.
+
+
+### Board-pack Excel export & charts (v0.1.6)
+
+The analytics layer exposes helpers for board-ready exports:
+
+```python
+from analytics.export_helpers import ExcelExporter, ChartExporter, ChartGenerator
+
+# Excel: summary + timeseries + DSCR/IRR views
+exporter = ExcelExporter("out/dutchbay_board_pack.xlsx")
+exporter.export_summary_and_timeseries(summary_df, timeseries_df)
+
+# Charts: DSCR series and IRR histogram (PNG)
+charts = ChartExporter("out/charts")
+dscr_path = charts.export_dscr_chart(timeseries_df)
+irr_path = charts.export_irr_histogram(summary_df)
+
+# Monte Carlo / sensitivity visuals
+cg = ChartGenerator("out/charts")
+kpi_png = cg.plot_kpi_comparison(kpi_df, "npv", "npv_comparison.png")
+npv_png = cg.plot_npv_distribution(npv_samples, "npv_distribution.png", bins=30)

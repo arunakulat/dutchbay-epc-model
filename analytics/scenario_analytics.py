@@ -1,4 +1,3 @@
-
 """Batch scenario analytics orchestrator for v14 cashflow / debt / metrics.
 
 This module:
@@ -33,11 +32,11 @@ from dutchbay_v14chat.finance.cashflow import build_annual_rows
 from dutchbay_v14chat.finance.debt import apply_debt_layer
 
 try:
+    # Rich exports are optional – we degrade gracefully if absent.
     from analytics.export_helpers import ExcelExporter, ChartExporter
-except Exception:  # pragma: no cover - soft dependency for CLI use
-    ExcelExporter = None  # type: ignore[assignment]
-    ChartExporter = None  # type: ignore[assignment]
-
+except Exception:  # pragma: no cover - optional dependency
+    ExcelExporter = None
+    ChartExporter = None
 
 logger = logging.getLogger(__name__)
 
@@ -70,30 +69,17 @@ class ScenarioAnalytics:
         self,
         scenarios_dir: Path,
         output_path: Optional[Path] = None,
-        strict: bool = False,
+        strict: bool = True,
     ) -> None:
         self.scenarios_dir = Path(scenarios_dir)
-        self.output_path = output_path
-        self.strict = strict
-
-    # ------------------------------------------------------------------
-    # Config loading
-    # ------------------------------------------------------------------
-    def load_config(self, path: str) -> Dict[str, Any]:
-        """Load a scenario config via the shared loader.
-
-        This wraps analytics.scenario_loader.load_scenario_config so that:
-          * All v14 analytics code goes through a single, validated entrypoint.
-          * YAML/JSON handling, defaults, and basic schema checks are centralised.
-          * Future changes to the config schema only need to be taught in one place.
-        """
-        return load_scenario_config(path)
+        self.output_path = Path(output_path) if output_path is not None else None
+        self.strict = bool(strict)
 
     # ------------------------------------------------------------------
     # Scenario discovery
     # ------------------------------------------------------------------
     def discover_scenarios(self) -> List[Path]:
-        """Return a sorted list of scenario files (YAML / JSON) under scenarios_dir."""
+        """Return a sorted list of scenario config paths under scenarios_dir."""
         if not self.scenarios_dir.exists():
             raise FileNotFoundError(f"Scenarios directory not found: {self.scenarios_dir}")
 
@@ -108,35 +94,17 @@ class ScenarioAnalytics:
     # ------------------------------------------------------------------
     @staticmethod
     def _scenario_name_from_path(path: Path) -> str:
-        """Derive a human-friendly scenario name from the file path."""
+        """Derive a human-friendly scenario name from the config path."""
         return path.stem
 
-    @staticmethod
-    def _summarise_dscr(dscr_series: Iterable[float]) -> Dict[str, float]:
-        """Return min / max / mean / median DSCR stats from a series-like input."""
-        import math
-        import statistics
+    def load_config(self, config_path: Path) -> Dict[str, Any]:
+        """Load a scenario config via the shared loader."""
+        return load_scenario_config(str(config_path))
 
-        values = [float(v) for v in dscr_series if v is not None]
-        if not values:
-            return {
-                "dscr_min": math.nan,
-                "dscr_max": math.nan,
-                "dscr_mean": math.nan,
-                "dscr_median": math.nan,
-            }
-
-        return {
-            "dscr_min": min(values),
-            "dscr_max": max(values),
-            "dscr_mean": statistics.fmean(values),
-            "dscr_median": statistics.median(values),
-        }
-
-    # ------------------------------------------------------------------
-    # Core per-scenario pipeline
-    # ------------------------------------------------------------------
-    def process_scenario(self, config_path: Path) -> ScenarioResult:
+    def _run_single(
+        self,
+        config_path: Path,
+    ) -> ScenarioResult:
         """Run the full v14 pipeline for a single scenario.
 
         Steps:
@@ -151,32 +119,27 @@ class ScenarioAnalytics:
         logger.info("Processing scenario: %s", name)
 
         # Load config
-        config = self.load_config(str(config_path))
+        config = self.load_config(config_path)
 
-        # Cashflow: v14 annual rows
+        # Build annual cashflow rows
         annual_rows = build_annual_rows(config)
 
-        # Debt: v14 layer
+        # Apply debt layer
         debt_result = apply_debt_layer(config, annual_rows)
 
-        # Optional: derive an EPC cost breakdown for reporting.
-        # This uses the v14-compatible helper and is purely additive;
-        # failures here must not break the main analytics pipeline.
-        try:
-            epc_breakdown = epc_breakdown_from_config(config)
-        except Exception:
-            epc_breakdown = {}
-
-        # KPIs – this is where NPV/IRR/DSCR/CFADS stats are computed.
-        kpis = metrics_mod.calculate_scenario_kpis(
+        # Compute KPIs
+        kpis = metrics_mod.compute_kpis(
+            config=config,
             annual_rows=annual_rows,
             debt_result=debt_result,
-            config=config,
         )
 
-        # Enrich KPI payload with any EPC breakdown (if available).
-        if epc_breakdown:
+        # Optionally enrich KPIs with EPC breakdown (non-fatal if this fails)
+        try:
+            epc_breakdown = epc_breakdown_from_config(config)
             kpis.update(epc_breakdown)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("EPC breakdown derivation failed for %s: %s", name, exc)
 
         return ScenarioResult(
             name=name,
@@ -187,32 +150,28 @@ class ScenarioAnalytics:
         )
 
     # ------------------------------------------------------------------
-    # Batch runner
+    # Public API
     # ------------------------------------------------------------------
     def run(
         self,
-        export_excel: bool = True,
+        export_excel: bool = False,
         export_charts: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Run batch analytics over all discovered scenarios.
+        """Run analytics across all scenarios in scenarios_dir.
 
         Returns:
           (summary_df, timeseries_df)
         """
-        scenario_files = self.discover_scenarios()
-        if not scenario_files:
-            raise RuntimeError(f"No scenario files found under {self.scenarios_dir}")
+        paths = self.discover_scenarios()
+        if not paths:
+            raise RuntimeError(f"No scenario configs found under {self.scenarios_dir}")
 
         results: List[ScenarioResult] = []
         failures: List[Tuple[Path, Exception]] = []
 
-        logger.info("=" * 60)
-        logger.info("Running batch analysis on %d scenario(s)", len(scenario_files))
-        logger.info("=" * 60)
-
-        for path in scenario_files:
+        for path in paths:
             try:
-                result = self.process_scenario(path)
+                result = self._run_single(path)
                 results.append(result)
             except Exception as exc:
                 logger.error("ERROR processing %s: %s", path.name, exc)
@@ -247,22 +206,117 @@ class ScenarioAnalytics:
         self,
         results: Sequence[ScenarioResult],
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Build summary and timeseries DataFrames from results."""
+        """Build summary and timeseries DataFrames from results.
+
+        Shapes the analytics outputs into the two canonical layers used by
+        the executive report, and derives a per-period DSCR series when
+        CFADS and debt-service columns are available.
+
+        Fallback behaviour:
+          * If no debt-service series is present but KPIs expose a dscr_min,
+            we propagate that dscr_min as a flat 'dscr' line across periods
+            for that scenario so that DSCR charts and exports remain usable.
+        """
         summary_records: List[Dict[str, Any]] = []
         timeseries_records: List[Dict[str, Any]] = []
 
         for result in results:
+            # One KPI row per scenario
             rec = dict(result.kpis)
             rec["scenario_name"] = result.name
             summary_records.append(rec)
 
+            # Try to pick a DSCR scalar we can fall back to if needed
+            dscr_scalar = None
+            for key in ("dscr_min", "dscr", "min_dscr"):
+                if key in rec:
+                    dscr_scalar = rec[key]
+                    break
+
+            # One annual row per (scenario, period)
             for row in result.annual_rows:
                 row_rec = dict(row)
                 row_rec["scenario_name"] = result.name
+                # If the annual rows don't already have a DSCR, attach the
+                # scalar as a horizontal line – better than having no series
+                # at all for charting/export.
+                if "dscr" not in row_rec and dscr_scalar is not None:
+                    row_rec["dscr"] = dscr_scalar
                 timeseries_records.append(row_rec)
 
+        # ------------------------------------------------------------------
+        # Summary layer
+        # ------------------------------------------------------------------
         summary_df = pd.DataFrame(summary_records).set_index("scenario_name")
+        # Preserve scenario_name both as index (for existing callers) and as
+        # an explicit column (for filters / exporters that expect it).
+        if "scenario_name" not in summary_df.columns:
+            summary_df = summary_df.copy()
+            summary_df.insert(0, "scenario_name", summary_df.index)
+
+        # ------------------------------------------------------------------
+        # Timeseries layer + DSCR derivation
+        # ------------------------------------------------------------------
         timeseries_df = pd.DataFrame(timeseries_records)
+
+        # If we already have a dscr column (e.g. from the scalar fallback
+        # above or from the underlying finance layer), we don't attempt to
+        # derive it again.
+        if "dscr" not in timeseries_df.columns:
+            cols = list(timeseries_df.columns)
+
+            # CFADS candidates
+            cfads_candidates = [c for c in cols if "cfads" in c.lower()]
+
+            # Prefer final / LKR / post-tax CFADS if present
+            cfads_col: Optional[str] = None
+            preferred_order = ("cfads_final_lkr", "cfads_final", "posttax_cfads")
+            for pref in preferred_order:
+                for c in cfads_candidates:
+                    if pref in c.lower():
+                        cfads_col = c
+                        break
+                if cfads_col:
+                    break
+            if cfads_col is None and cfads_candidates:
+                cfads_col = cfads_candidates[0]
+
+            # Debt-service candidates – progressively widen the net:
+            #   1) '*debt_service*'
+            #   2) 'debt' plus 'serv' or 'pay'
+            #   3) any 'debt' column if still unique
+            debt_candidates = [
+                c
+                for c in cols
+                if "debt_serv" in c.lower() or "debt_service" in c.lower()
+            ]
+            if len(debt_candidates) != 1:
+                debt_candidates = [
+                    c
+                    for c in cols
+                    if "debt" in c.lower()
+                    and ("serv" in c.lower() or "pay" in c.lower())
+                ]
+            if len(debt_candidates) != 1:
+                debt_candidates = [c for c in cols if "debt" in c.lower()]
+
+            if cfads_col is not None and len(debt_candidates) == 1:
+                debt_col = debt_candidates[0]
+                logger.info(
+                    "Deriving per-period DSCR from %r / %r into 'dscr' column",
+                    cfads_col,
+                    debt_col,
+                )
+                timeseries_df = timeseries_df.copy()
+                denom = timeseries_df[debt_col].replace({0: pd.NA})
+                timeseries_df["dscr"] = timeseries_df[cfads_col] / denom
+            else:
+                logger.warning(
+                    "Could not derive DSCR series: cfads_col=%r, cfads_candidates=%r, debt_candidates=%r",
+                    cfads_col,
+                    cfads_candidates,
+                    debt_candidates,
+                )
 
         return summary_df, timeseries_df
 
@@ -294,14 +348,20 @@ class ScenarioAnalytics:
             return
 
         exporter = ExcelExporter(self.output_path)
-        exporter.export_summary_and_timeseries(summary_df, timeseries_df)
+        exporter.export_summary_and_timeseries(
+            summary_df=summary_df,
+            timeseries_df=timeseries_df,
+            summary_sheet="Summary",
+            timeseries_sheet="Timeseries",
+            add_board_views=True,
+        )
 
     def _export_charts(
         self,
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
     ) -> None:
-        """Export charts via ChartExporter if available."""
+        """Export DSCR / IRR charts if ChartExporter is available."""
         if self.output_path is None:
             logger.warning("No output_path configured; skipping chart export")
             return
@@ -310,72 +370,58 @@ class ScenarioAnalytics:
             logger.warning("ChartExporter not available; skipping chart export")
             return
 
-        exporter = ChartExporter(self.output_path)
-        exporter.export_charts(summary_df, timeseries_df)
+        charts_dir = self.output_path.with_name(self.output_path.stem + "_charts")
+        charts_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        chart_exporter = ChartExporter(output_dir=str(charts_dir))
+
+        # Preferred API if present
+        if hasattr(chart_exporter, "export_charts"):
+            chart_exporter.export_charts(summary_df, timeseries_df)
+            return
+
+        # Fallback: call helpers individually if available
+        if hasattr(chart_exporter, "export_dscr_chart"):
+            chart_exporter.export_dscr_chart(timeseries_df)
+        if hasattr(chart_exporter, "export_irr_histogram"):
+            chart_exporter.export_irr_histogram(summary_df)
 
 
 # ----------------------------------------------------------------------
-# CLI integration
+# CLI entrypoint (optional, used for quick local smokes)
 # ----------------------------------------------------------------------
-def _build_arg_parser() -> "argparse.ArgumentParser":
+def main(argv: Iterable[str]) -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="DutchBay v14 scenario analytics runner",
-    )
+    parser = argparse.ArgumentParser(description="Run v14 scenario analytics.")
     parser.add_argument(
         "--scenarios-dir",
-        type=str,
         default="scenarios",
-        help="Directory containing scenario YAML/JSON files",
+        help="Directory containing scenario YAML/JSON files.",
     )
     parser.add_argument(
         "--output",
-        type=str,
-        default="exports/scenario_analytics.xlsx",
-        help="Path to Excel output file",
+        default="exports/v14_analytics.xlsx",
+        help="Excel output path (for summary + timeseries).",
     )
     parser.add_argument(
         "--no-excel",
         action="store_true",
-        help="Do not write Excel output",
+        help="Do not export Excel, only print logs.",
     )
     parser.add_argument(
         "--charts",
         action="store_true",
-        help="Export charts (requires ChartExporter)",
+        help="Export charts alongside the Excel workbook.",
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Fail fast on first scenario error",
+        default=True,
+        help="Raise on first scenario failure instead of continuing.",
     )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Increase logging verbosity (-v, -vv)",
-    )
-    return parser
 
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    import argparse
-
-    parser = _build_arg_parser()
-    args = parser.parse_args(list(argv) if argv is not None else None)
-
-    # Logging setup
-    level = logging.WARNING
-    if args.verbose == 1:
-        level = logging.INFO
-    elif args.verbose >= 2:
-        level = logging.DEBUG
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+    args = parser.parse_args(list(argv))
 
     scenarios_dir = Path(args.scenarios_dir)
     output_path = Path(args.output) if not args.no_excel else None

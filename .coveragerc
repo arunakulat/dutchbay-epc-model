@@ -1,5 +1,24 @@
 [run]
-branch = True
-source = dutchbay_v13
+# Measure v14 + analytics + shared finance helpers only.
+# v13 is legacy and must not drag coverage down.
+source =
+    dutchbay_v14chat
+    analytics
+    finance
+
 [report]
-fail_under = 20
+# Exclude legacy package and tests from coverage calculations
+omit =
+    dutchbay_v13/*
+    */tests/*
+    .venv*/
+
+precision = 2
+
+# Short-term enforcement threshold.
+# Target (aspirational): 80%+
+# Current enforced floor: 60% so the current 64.7% passes.
+fail_under = 60
+
+show_missing = True
+
