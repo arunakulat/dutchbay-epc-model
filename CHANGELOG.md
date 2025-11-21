@@ -9,6 +9,12 @@ All notable changes to this project will be documented here.
 
 ## v0.2.6 - 2025-11-21
 
+- Docs: add v14 dev workflow
+
+
+
+## v0.2.6 - 2025-11-21
+
 - Docs: analytics + architecture + executive workbook
 
 
