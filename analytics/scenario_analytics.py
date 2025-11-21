@@ -28,6 +28,7 @@ import pandas as pd
 from analytics.core import metrics as metrics_mod
 from analytics.scenario_loader import load_scenario_config
 from analytics.core.epc_helper import epc_breakdown_from_config
+from analytics.kpi_normalizer import normalise_kpis_for_export
 from dutchbay_v14chat.finance.cashflow import build_annual_rows
 from dutchbay_v14chat.finance.debt import apply_debt_layer
 
@@ -317,6 +318,14 @@ class ScenarioAnalytics:
                     cfads_candidates,
                     debt_candidates,
                 )
+
+        # ------------------------------------------------------------------
+        # Final KPI normalisation for downstream consumers
+        # ------------------------------------------------------------------
+        summary_df, timeseries_df = normalise_kpis_for_export(
+            summary_df=summary_df,
+            timeseries_df=timeseries_df,
+        )
 
         return summary_df, timeseries_df
 

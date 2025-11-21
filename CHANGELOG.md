@@ -9,6 +9,12 @@ All notable changes to this project will be documented here.
 
 ## v0.2.1 - 2025-11-21
 
+- Analytics exports + ScenarioAnalytics DF unit tests
+
+
+
+## v0.2.1 - 2025-11-21
+
 - v14 CI baseline – upstream auto
 
 
