@@ -74,3 +74,4 @@ exports/*.xlsx
 codebase_filelist.txt
 patch.diff
 *_loader_fix.patch
+.venv
