@@ -9,6 +9,12 @@ All notable changes to this project will be documented here.
 
 ## v0.2.2 - 2025-11-22
 
+- v14 cashflow & metrics mypy-clean spine
+
+
+
+## v0.2.2 - 2025-11-22
+
 - Promote v14 finance modules + schema guard for bad_missing_tax
 
 

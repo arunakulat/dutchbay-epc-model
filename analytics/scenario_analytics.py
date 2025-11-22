@@ -1,11 +1,13 @@
-"""Batch scenario analytics orchestrator for v14 cashflow and debt modules.
+#!/usr/bin/env python3
+"""
+Batch scenario analytics orchestrator for v14 cashflow and debt modules.
 
 This module:
   * scans a scenarios directory for YAML or JSON configs,
   * loads each config via analytics.scenario_loader,
   * runs the v14 cashflow and debt stack,
   * computes KPIs via analytics.core.metrics,
-  * aggregates everything into a summary DataFrame,
+  * aggregates everything into summary and timeseries DataFrames,
   * optionally exports Excel and charts.
 
 Core heavy lifting lives in:
@@ -32,13 +34,6 @@ from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
-
-try:
-    # Rich exports are optional; we degrade gracefully if absent.
-    from analytics.export_helpers import ExcelExporter, ChartExporter
-except Exception:  # pragma: no cover - optional dependency
-    ExcelExporter = None
-    ChartExporter = None
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +99,7 @@ class ScenarioAnalytics:
         """Load a scenario config via the shared loader."""
         return load_scenario_config(str(config_path))
 
-    def _run_single(
-        self,
-        config_path: Path,
-    ) -> ScenarioResult:
+    def _run_single(self, config_path: Path) -> ScenarioResult:
         """Run the full v14 pipeline for a single scenario.
 
         Steps:
@@ -126,8 +118,6 @@ class ScenarioAnalytics:
         config = self.load_config(config_path)
 
         # Schema guard – stop early if essential fields are missing.
-        # For now we only register cashflow-required fields; "debt" can be
-        # added once its schema registration is wired up.
         validate_config_for_v14(
             raw_config=config,
             config_path=str(config_path),
@@ -151,8 +141,8 @@ class ScenarioAnalytics:
         try:
             epc_breakdown = epc_breakdown_from_config(config)
             kpis.update(epc_breakdown)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("EPC breakdown derivation failed for %s: %s", name, exc)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning("EPC breakdown derivation failed for %s: %s", name, e)
 
         return ScenarioResult(
             name=name,
@@ -186,15 +176,15 @@ class ScenarioAnalytics:
             try:
                 result = self._run_single(path)
                 results.append(result)
-            except ConfigValidationError as exc:
+            except ConfigValidationError as e:
                 # Intentionally non-fatal even when strict=True so that a
                 # single malformed scenario does not break the batch.
-                logger.error("Schema validation error in %s: %s", path.name, exc)
-                failures.append((path, exc))
+                logger.error("Schema validation error in %s: %s", path.name, e)
+                failures.append((path, e))
                 continue
-            except Exception as exc:
-                logger.error("ERROR processing %s: %s", path.name, exc)
-                failures.append((path, exc))
+            except Exception as e:
+                logger.error("ERROR processing %s: %s", path.name, e)
+                failures.append((path, e))
                 if self.strict:
                     raise
 
@@ -207,8 +197,8 @@ class ScenarioAnalytics:
         logger.info("  Successful scenarios: %d", len(results))
         logger.info("  Failed scenarios:     %d", len(failures))
         if failures:
-            for path, exc in failures:
-                logger.info("    - %s: %s", path.name, exc)
+            for failed_path, error in failures:
+                logger.info("    - %s: %s", failed_path.name, error)
 
         if export_excel and self.output_path is not None:
             self._export_to_excel(summary_df, timeseries_df)
@@ -241,20 +231,21 @@ class ScenarioAnalytics:
 
         for result in results:
             # One KPI row per scenario
-            rec = dict(result.kpis)
+            rec: Dict[str, Any] = dict(result.kpis)
             rec["scenario_name"] = result.name
             summary_records.append(rec)
 
             # Try to pick a DSCR scalar we can fall back to if needed
-            dscr_scalar = None
+            dscr_scalar: Optional[float] = None
             for key in ("dscr_min", "dscr", "min_dscr"):
-                if key in rec:
-                    dscr_scalar = rec[key]
+                value = rec.get(key)
+                if isinstance(value, (int, float)):
+                    dscr_scalar = float(value)
                     break
 
             # One annual row per (scenario, period)
             for row in result.annual_rows:
-                row_rec = dict(row)
+                row_rec: Dict[str, Any] = dict(row)
                 row_rec["scenario_name"] = result.name
                 # If the annual rows do not already have a DSCR, attach the
                 # scalar as a horizontal line for charting/export.
@@ -294,7 +285,7 @@ class ScenarioAnalytics:
                     if pref in c.lower():
                         cfads_col = c
                         break
-                if cfads_col:
+                if cfads_col is not None:
                     break
             if cfads_col is None and cfads_candidates:
                 cfads_col = cfads_candidates[0]
@@ -354,16 +345,24 @@ class ScenarioAnalytics:
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
     ) -> None:
-        """Export summary and timeseries to Excel via ExcelExporter if available.
+        """Export summary and timeseries to Excel if possible.
 
-        Falls back to a basic pandas.ExcelWriter-based export if the richer helper
-        is not present, so that the CLI remains usable in minimal installs.
+        Behaviour:
+          * If output_path is not set -> log + return.
+          * If analytics.export_helpers.ExcelExporter is unavailable ->
+            fall back to a basic pandas.ExcelWriter export.
+          * Otherwise use the richer ExcelExporter helper.
         """
         if self.output_path is None:
             logger.warning("No output_path configured; skipping Excel export")
             return
 
-        if ExcelExporter is None:
+        # Try rich exporter first
+        try:
+            # We don't care about the type here; export_helpers is treated as
+            # an untyped helper module.
+            from analytics.export_helpers import ExcelExporter
+        except Exception:  # pragma: no cover - optional dependency
             logger.warning(
                 "ExcelExporter not available; writing basic Excel workbook to %s",
                 self.output_path,
@@ -392,7 +391,9 @@ class ScenarioAnalytics:
             logger.warning("No output_path configured; skipping chart export")
             return
 
-        if ChartExporter is None:
+        try:
+            from analytics.export_helpers import ChartExporter
+        except Exception:  # pragma: no cover - optional dependency
             logger.warning("ChartExporter not available; skipping chart export")
             return
 

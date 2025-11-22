@@ -1,0 +1,31 @@
+# DutchBay Financial Model – Next Phase To-Do List (P0-2+)
+
+## P0-2: Model/Scenario/Optimization (Next Major)
+- Batch scenario engine and YAML sweep runner
+- Monte Carlo simulation integration (P50/90/99 interval bands)
+- Scenario reporting by metric: Margins, coverage, valuation, stress
+- Scenario-based compliance reporting (DFI/lender packs)
+
+## P1: Reporting, Extensibility, Audit (Planned)
+- Automated report export to Word (docx), PDF, Excel
+- Markdown → DocX/PDF converters, formatting pipeline
+- ESG report generator & technical appendix support
+- Auditor letter and independent review reporting
+- Monte Carlo and scenario confidence interval charts/attachments
+- Integrated dashboard: Model metrics → investor/lender portal or HTML dashboard
+- Custom report templates per stakeholder (DFI, board, IC, regulator)
+
+## P2: Process, Validation & Compliance Audits
+- Audit trail: Data provenance, hash/logging, and reproducibility
+- Validator: Full model data check against expected ranges/thresholds
+- Automated Git release tagging and output archiving
+- Scenario pack generator (due diligence/external submission)
+
+## Other Ongoing/Backlog
+- YAML auto-documentation/gen for governance
+- Modular plug-in system for quick parameter or metric extensibility
+- Real-time warning system/slack/email/push alert integration
+
+---
+
+This to-do list puts your model on a path to true DFI/investor/lender/committee-grade delivery, last-mile automation, and auditable, compliance-ready reporting.

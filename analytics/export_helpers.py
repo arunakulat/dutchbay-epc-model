@@ -82,7 +82,7 @@ class ExcelExporter:
 
         # openpyxl-backed workbook/worksheet
         try:
-            workbook = writer.book  # type: ignore[attr-defined]
+            workbook = writer.book
             if sheet_name in writer.sheets:
                 ws = writer.sheets[sheet_name]
             else:
@@ -90,6 +90,7 @@ class ExcelExporter:
         except Exception as exc:  # pragma: no cover - very defensive
             logger.warning("ExcelExporter: unable to access sheet %s: %s", sheet_name, exc)
             return
+
 
         try:
             from openpyxl.styles import Font
@@ -174,7 +175,7 @@ class ExcelExporter:
             return
 
         try:
-            workbook = self._writer.book  # type: ignore[attr-defined]
+            workbook = self._writer.book  
             if sheet_name in self._writer.sheets:
                 ws = self._writer.sheets[sheet_name]
             else:
@@ -242,7 +243,7 @@ class ExcelExporter:
             return
 
         try:
-            workbook = self._writer.book  # type: ignore[attr-defined]
+            workbook = self._writer.book  
             if sheet_name in self._writer.sheets:
                 ws = self._writer.sheets[sheet_name]
             else:
@@ -399,7 +400,7 @@ class ExcelExporter:
             return
 
         try:
-            workbook = self._writer.book  # type: ignore[attr-defined]
+            workbook = self._writer.book
         except Exception as exc:  # pragma: no cover - very defensive
             logger.warning("ExcelExporter: unable to access workbook: %s", exc)
             return
@@ -455,7 +456,7 @@ class ChartExporter:
     # ------------------------------------------------------------------
     def _get_plt(self):
         try:
-            import matplotlib.pyplot as plt  # type: ignore[import]
+            import matplotlib.pyplot as plt
         except Exception as exc:  # pragma: no cover - environment dependent
             logger.warning("ChartExporter: matplotlib not available: %s", exc)
             return None
@@ -591,7 +592,7 @@ class ChartGenerator:
 
     def _get_plt(self):
         try:
-            import matplotlib.pyplot as plt  # type: ignore[import]
+            import matplotlib.pyplot as plt
         except Exception as exc:  # pragma: no cover
             logger.warning("ChartGenerator: matplotlib not available: %s", exc)
             return None

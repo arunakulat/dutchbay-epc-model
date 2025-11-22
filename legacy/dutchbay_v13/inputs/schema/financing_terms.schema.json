@@ -1,0 +1,37 @@
+{
+  "$id": "dutchbay_v13/inputs/schema/financing_terms.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DB13 Financing Terms (acceptance stub)",
+  "type": "object",
+  "additionalProperties": true,
+  "oneOf": [
+    { "$ref": "#/$defs/flat" },
+    {
+      "type": "object",
+      "properties": { "Financing_Terms": { "$ref": "#/$defs/flat" } },
+      "required": ["Financing_Terms"]
+    }
+  ],
+  "$defs": {
+    "flat": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "debt_ratio":                { "type": "number",  "minimum": 0,    "maximum": 1,    "description": "Debt share of CAPEX at COD" },
+        "tenor_years":               { "type": "integer", "minimum": 1,    "maximum": 40,   "description": "Loan tenor (years)" },
+        "construction_grace_years":  { "type": "integer", "minimum": 0,    "maximum": 5,    "description": "Interest-only period (years)" },
+        "interest_rate_nominal":     { "type": "number",  "minimum": 0,    "maximum": 1,    "description": "Nominal annual rate (decimal)" },
+        "base_rate":                 { "type": "number",  "minimum": 0,    "maximum": 1,    "description": "Reference base rate (decimal)" },
+        "margin_bps":                { "type": "integer", "minimum": 0,    "maximum": 2000, "description": "Credit spread (bps)" },
+        "target_dscr":               { "type": "number",  "minimum": 1.0,  "maximum": 2.5,  "description": "DSCR sculpting target" },
+        "min_dscr":                  { "type": "number",  "minimum": 1.0,  "maximum": 2.5,  "description": "DSCR minimum covenant" },
+        "dsra_months":               { "type": "integer", "minimum": 0,    "maximum": 24,   "description": "DSRA months" },
+        "dscr_probability_basis":    { "type": "string",  "enum": ["P50","P90"],            "description": "Probability basis for covenant calc" },
+        "dscr_haircut_factor":       { "type": "number",  "minimum": 0.5,  "maximum": 1.0,  "description": "Direct CFADS haircut factor" },
+        "use_revenue_guarantee":     { "type": "boolean",                               "description": "Receivables guarantee used instead of DSRA" },
+        "guarantee_revenue_pct":     { "type": "number",  "minimum": 0,    "maximum": 0.05,"description": "Revenue-based fee proxy (decimal)" },
+        "guarantee_max_months":      { "type": "integer", "minimum": 0,    "maximum": 24,   "description": "Max months of arrears (future logic)" }
+      }
+    }
+  }
+}

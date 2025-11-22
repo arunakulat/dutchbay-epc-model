@@ -10,15 +10,12 @@ Standards: CFA Institute, IFC Project Finance Guidelines
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
+
+import numpy_financial as npf
 
 from finance.utils import as_float  # noqa: F401
 from constants import DEFAULT_DISCOUNT_RATE  # noqa: F401
-
-try:
-    import numpy_financial as npf  # type: ignore
-except Exception:
-    npf = None
 
 
 # ============================================================================
@@ -27,33 +24,7 @@ except Exception:
 
 
 def npv(rate: float, cashflows: Sequence[float]) -> float:
-    """Classic periodic Net Present Value.
-
-    NPV(r) = sum_{t=0..N} CF[t] / (1+r)^t
-
-    Parameters
-    ----------
-    rate : float
-        Discount rate (decimal, e.g. 0.12 for 12%)
-    cashflows : Sequence[float]
-        Cashflow series starting at t=0
-
-    Returns
-    -------
-    float
-        Net Present Value
-
-    Notes
-    -----
-    - Assumes periodic (annual) cashflows
-    - For irregular dates, use xnpv()
-    - Rate clamped at -99.99% to avoid division errors
-
-    Examples
-    --------
-    >>> npv(0.10, [-1000, 500, 500, 500])
-    243.426...
-    """
+    """Classic periodic Net Present Value."""
     r = float(rate)
     if r <= -1.0:
         r = -0.999999
@@ -65,59 +36,21 @@ def npv(rate: float, cashflows: Sequence[float]) -> float:
 
 
 def irr(cashflows: Sequence[float]) -> Optional[float]:
-    """Periodic Internal Rate of Return.
+    """Periodic Internal Rate of Return."""
+    cfs: List[float] = [float(x) for x in cashflows]
 
-    Finds rate r such that NPV(r, cashflows) = 0.
-    Uses numpy-financial if available, otherwise bisection solver.
+    try:
+        val = float(npf.irr(cfs))
+    except Exception:
+        return _irr_local(cfs)
 
-    Parameters
-    ----------
-    cashflows : Sequence[float]
-        Cashflow series starting at t=0
-
-    Returns
-    -------
-    Optional[float]
-        IRR as decimal (e.g. 0.18 = 18%), or None if not found
-
-    Notes
-    -----
-    - Returns None if no sign change in NPV across search range
-    - Search range: -99.99% to 500%
-    - For irregular dates, use xirr()
-
-    Edge Cases
-    ----------
-    - All zeros: returns 0.0
-    - No sign change: returns None
-    - Multiple roots: returns first found in [-0.9999, 5.0]
-
-    Examples
-    --------
-    >>> irr([-1000, 500, 500, 500])
-    0.2343...
-    """
-    cfs = [float(x) for x in cashflows]
-
-    if npf is not None:
-        try:
-            val = float(npf.irr(cfs))
-            if val != val:
-                return None
-            return val
-        except Exception:
-            pass
-
-    return _irr_local(cfs)
+    if val != val:  # NaN check
+        return None
+    return val
 
 
 def _irr_local(cashflows: Sequence[float]) -> Optional[float]:
-    """Bisection solver for IRR. Internal use only.
-
-    Search domain: [-0.9999, 5.0] (-99.99% to 500%)
-    Convergence: |NPV| < 1e-10
-    Max iterations: 200
-    """
+    """Bisection solver for IRR. Internal use only."""
     if not cashflows:
         return None
 
@@ -157,37 +90,7 @@ def _irr_local(cashflows: Sequence[float]) -> Optional[float]:
 
 
 def xnpv(rate: float, cashflows: Sequence[float], dates: Sequence[datetime]) -> float:
-    """Date-adjusted Net Present Value (XNPV).
-
-    NPV = sum CF[i] / (1+r)^((date[i]-date[0]).days/365.25)
-
-    Parameters
-    ----------
-    rate : float
-        Annual discount rate (decimal)
-    cashflows : Sequence[float]
-        Cashflow amounts
-    dates : Sequence[datetime]
-        Corresponding dates (must align with cashflows)
-
-    Returns
-    -------
-    float
-        Net Present Value adjusted for actual dates
-
-    Notes
-    -----
-    - Uses 365.25 days per year convention
-    - First date (dates[0]) is t=0 reference
-    - Standard in Excel XNPV and project finance models
-
-    Examples
-    --------
-    >>> from datetime import datetime
-    >>> xnpv(0.10, [-1000, 500, 500],
-    ...      [datetime(2020,1,1), datetime(2020,7,1), datetime(2021,1,1)])
-    -44.87...
-    """
+    """Date-adjusted Net Present Value (XNPV)."""
     if len(cashflows) != len(dates):
         raise ValueError("Cashflows and dates must have same length")
 
@@ -203,43 +106,7 @@ def xnpv(rate: float, cashflows: Sequence[float], dates: Sequence[datetime]) -> 
 
 
 def xirr(cashflows: Sequence[float], dates: Sequence[datetime]) -> Optional[float]:
-    """Date-adjusted Internal Rate of Return (XIRR).
-
-    Finds rate r such that XNPV(r, cashflows, dates) = 0.
-    Equivalent to Excel's XIRR function.
-
-    Parameters
-    ----------
-    cashflows : Sequence[float]
-        Cashflow amounts
-    dates : Sequence[datetime]
-        Corresponding dates (must align with cashflows)
-
-    Returns
-    -------
-    Optional[float]
-        Annual IRR as decimal, or None if not found
-
-    Notes
-    -----
-    - Uses bisection solver (same as Excel XIRR)
-    - Search range: -99.99% to 200% annual
-    - Convergence: |XNPV| < 1e-8
-    - Max iterations: 100
-
-    Edge Cases
-    ----------
-    - Mismatched lengths: raises ValueError
-    - No sign change: returns None
-    - All zero cashflows: returns None
-
-    Examples
-    --------
-    >>> from datetime import datetime
-    >>> xirr([-1000, 500, 700],
-    ...      [datetime(2020,1,1), datetime(2021,1,1), datetime(2022,7,1)])
-    0.2846...
-    """
+    """Date-adjusted Internal Rate of Return (XIRR)."""
     if len(cashflows) != len(dates):
         raise ValueError("Cashflows and dates must have same length")
 
@@ -253,12 +120,7 @@ def _xirr_bisect(
     cashflows: Sequence[float],
     dates: Sequence[datetime],
 ) -> Optional[float]:
-    """Bisection solver for XIRR. Internal use only.
-
-    Search domain: [-0.9999, 2.0] (-99.99% to 200%)
-    Convergence: |XNPV| < 1e-8
-    Max iterations: 100
-    """
+    """Bisection solver for XIRR. Internal use only."""
     lo, hi = -0.9999, 2.0
 
     npv_lo = xnpv(lo, cashflows, dates)
@@ -293,3 +155,4 @@ __all__ = [
     "xnpv",
     "xirr",
 ]
+

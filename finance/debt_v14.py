@@ -40,8 +40,11 @@ def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
 
 
 def _as_float(v: Any, default: Optional[float] = None) -> float:
-    """Backward-compatible shim over finance.utils.as_float."""
-    return float(as_float(v, default or 0.0))
+    """Backward-compatible shim over finance.utils.as_float, always returns float."""
+    base_default = 0.0 if default is None else default
+    val = as_float(v, base_default)
+    # as_float may return Optional[float]; normalise to plain float
+    return float(val if val is not None else base_default)
 
 
 def _pmt(rate: float, nper: int, pv: float) -> float:
@@ -49,7 +52,6 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
     if rate == 0:
         return pv / nper if nper > 0 else 0.0
     return pv * (rate * (1 + rate) ** nper) / ((1 + rate) ** nper - 1)
-
 
 # ============================================================================
 # NEW V14: CONSTRUCTION PERIOD FUNCTIONS
