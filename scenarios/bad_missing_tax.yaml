@@ -16,15 +16,7 @@ project:
   location: Puttlam District, North Western Province
   jurisdiction: Sri Lanka
 
-  # Tax & allowance fields mirrored here for v14-style schemas
-  corporate_tax_rate: 0.30
-  depreciation_years: 15
-  depreciation_start_year: 1
-  tax_holiday_years: 12
-  tax_holiday_start_year: 1
-  enhanced_capital_allowance_pct: 1.50
-  loss_carryforward_years: 25
-
+  
 returns:
   project_life_years: 20
   project_discount_rate: 0.10
@@ -62,11 +54,11 @@ opex:
     admin_usd: 200000
 
 tax:
-  corporate_tax_rate: 0.30
+  corporate_tax_rate: 
   tax_holiday_years: 12
   tax_holiday_start_year: 1
   depreciation_method: straight_line
-  depreciation_years: 15
+  depreciation_years: 
   depreciation_start_year: 1
   enhanced_capital_allowance_pct: 1.50
   enhanced_allowance_applies: no

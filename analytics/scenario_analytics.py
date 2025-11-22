@@ -1,16 +1,16 @@
-"""Batch scenario analytics orchestrator for v14 cashflow / debt / metrics.
+"""Batch scenario analytics orchestrator for v14 cashflow and debt modules.
 
 This module:
-  * scans a scenarios directory for YAML / JSON configs,
-  * loads each config via the shared analytics.scenario_loader,
-  * runs the v14 cashflow + debt stack,
+  * scans a scenarios directory for YAML or JSON configs,
+  * loads each config via analytics.scenario_loader,
+  * runs the v14 cashflow and debt stack,
   * computes KPIs via analytics.core.metrics,
   * aggregates everything into a summary DataFrame,
   * optionally exports Excel and charts.
 
-It is intentionally light on business logic – the heavy lifting lives in:
-  * dutchbay_v14chat.finance.cashflow
-  * dutchbay_v14chat.finance.debt
+Core heavy lifting lives in:
+  * finance.cashflow_v14
+  * finance.debt_v14
   * analytics.core.metrics
   * analytics.export_helpers
 """
@@ -26,14 +26,15 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from analytics.core import metrics as metrics_mod
-from analytics.scenario_loader import load_scenario_config
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.kpi_normalizer import normalise_kpis_for_export
-from dutchbay_v14chat.finance.cashflow import build_annual_rows
-from dutchbay_v14chat.finance.debt import apply_debt_layer
+from analytics.scenario_loader import load_scenario_config
+from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from finance.cashflow_v14 import build_annual_rows
+from finance.debt_v14 import apply_debt_layer
 
 try:
-    # Rich exports are optional – we degrade gracefully if absent.
+    # Rich exports are optional; we degrade gracefully if absent.
     from analytics.export_helpers import ExcelExporter, ChartExporter
 except Exception:  # pragma: no cover - optional dependency
     ExcelExporter = None
@@ -54,16 +55,17 @@ class ScenarioResult:
 
 
 class ScenarioAnalytics:
-    """V14-style orchestrator for batch scenario analytics.
+    """
+    V14-style orchestrator for batch scenario analytics.
 
     Responsibilities:
-      * discover scenario definitions under a directory,
-      * load each config via analytics.scenario_loader.load_scenario_config,
-      * run v14 CFADS and debt layers,
-      * compute KPIs via analytics.core.metrics,
-      * (optionally) derive EPC breakdowns via analytics.core.epc_helper,
-      * collate outputs into summary/timeseries DataFrames,
-      * (optionally) hand off to ExcelExporter/ChartExporter.
+      - discover scenario definitions under a directory,
+      - load each config via analytics.scenario_loader.load_scenario_config,
+      - run v14 CFADS and debt layers,
+      - compute KPIs via analytics.core.metrics,
+      - optionally derive EPC breakdowns via analytics.core.epc_helper,
+      - collate outputs into summary and timeseries DataFrames,
+      - optionally hand off to ExcelExporter and ChartExporter.
     """
 
     def __init__(
@@ -110,10 +112,11 @@ class ScenarioAnalytics:
 
         Steps:
           1. Load config via the shared loader.
-          2. Build v14 annual cashflow rows (CFADS, revenue, etc.).
-          3. Apply the v14 debt layer on top of CFADS.
-          4. Compute scenario KPIs via analytics.core.metrics.
-          5. Optionally derive EPC breakdown via analytics.core.epc_helper
+          2. Run schema guard for core v14 modules (fail fast if malformed).
+          3. Build v14 annual cashflow rows (CFADS, revenue, etc.).
+          4. Apply the v14 debt layer on top of CFADS.
+          5. Compute scenario KPIs via analytics.core.metrics.
+          6. Optionally derive EPC breakdown via analytics.core.epc_helper
              and merge it into the KPIs payload.
         """
         name = self._scenario_name_from_path(config_path)
@@ -121,6 +124,15 @@ class ScenarioAnalytics:
 
         # Load config
         config = self.load_config(config_path)
+
+        # Schema guard – stop early if essential fields are missing.
+        # For now we only register cashflow-required fields; "debt" can be
+        # added once its schema registration is wired up.
+        validate_config_for_v14(
+            raw_config=config,
+            config_path=str(config_path),
+            modules=["cashflow"],
+        )
 
         # Build annual cashflow rows
         annual_rows = build_annual_rows(config)
@@ -174,6 +186,12 @@ class ScenarioAnalytics:
             try:
                 result = self._run_single(path)
                 results.append(result)
+            except ConfigValidationError as exc:
+                # Intentionally non-fatal even when strict=True so that a
+                # single malformed scenario does not break the batch.
+                logger.error("Schema validation error in %s: %s", path.name, exc)
+                failures.append((path, exc))
+                continue
             except Exception as exc:
                 logger.error("ERROR processing %s: %s", path.name, exc)
                 failures.append((path, exc))
@@ -215,7 +233,7 @@ class ScenarioAnalytics:
 
         Fallback behaviour:
           * If no debt-service series is present but KPIs expose a dscr_min,
-            we propagate that dscr_min as a flat 'dscr' line across periods
+            we propagate that dscr_min as a flat "dscr" line across periods
             for that scenario so that DSCR charts and exports remain usable.
         """
         summary_records: List[Dict[str, Any]] = []
@@ -238,9 +256,8 @@ class ScenarioAnalytics:
             for row in result.annual_rows:
                 row_rec = dict(row)
                 row_rec["scenario_name"] = result.name
-                # If the annual rows don't already have a DSCR, attach the
-                # scalar as a horizontal line – better than having no series
-                # at all for charting/export.
+                # If the annual rows do not already have a DSCR, attach the
+                # scalar as a horizontal line for charting/export.
                 if "dscr" not in row_rec and dscr_scalar is not None:
                     row_rec["dscr"] = dscr_scalar
                 timeseries_records.append(row_rec)
@@ -261,7 +278,7 @@ class ScenarioAnalytics:
         timeseries_df = pd.DataFrame(timeseries_records)
 
         # If we already have a dscr column (e.g. from the scalar fallback
-        # above or from the underlying finance layer), we don't attempt to
+        # above or from the underlying finance layer), we do not attempt to
         # derive it again.
         if "dscr" not in timeseries_df.columns:
             cols = list(timeseries_df.columns)
@@ -283,9 +300,9 @@ class ScenarioAnalytics:
                 cfads_col = cfads_candidates[0]
 
             # Debt-service candidates – progressively widen the net:
-            #   1) '*debt_service*'
-            #   2) 'debt' plus 'serv' or 'pay'
-            #   3) any 'debt' column if still unique
+            #   1) "*debt_service*"
+            #   2) "debt" plus "serv" or "pay"
+            #   3) any "debt" column if still unique
             debt_candidates = [
                 c
                 for c in cols
@@ -330,14 +347,14 @@ class ScenarioAnalytics:
         return summary_df, timeseries_df
 
     # ------------------------------------------------------------------
-    # Excel & chart export
+    # Excel and chart export
     # ------------------------------------------------------------------
     def _export_to_excel(
         self,
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
     ) -> None:
-        """Export summary + timeseries to Excel via ExcelExporter if available.
+        """Export summary and timeseries to Excel via ExcelExporter if available.
 
         Falls back to a basic pandas.ExcelWriter-based export if the richer helper
         is not present, so that the CLI remains usable in minimal installs.
@@ -370,7 +387,7 @@ class ScenarioAnalytics:
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
     ) -> None:
-        """Export DSCR / IRR charts if ChartExporter is available."""
+        """Export DSCR and IRR charts if ChartExporter is available."""
         if self.output_path is None:
             logger.warning("No output_path configured; skipping chart export")
             return
@@ -411,7 +428,7 @@ def main(argv: Iterable[str]) -> int:
     parser.add_argument(
         "--output",
         default="exports/v14_analytics.xlsx",
-        help="Excel output path (for summary + timeseries).",
+        help="Excel output path (for summary and timeseries).",
     )
     parser.add_argument(
         "--no-excel",
@@ -454,3 +471,5 @@ def main(argv: Iterable[str]) -> int:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     raise SystemExit(main(sys.argv[1:]))
+
+    

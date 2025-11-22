@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.2 - 2025-11-22
+
+- Promote v14 finance modules + schema guard for bad_missing_tax
+
+
+
 ## v0.2.8 - 2025-11-22
 
 - Document v14 analytics, architecture, and executive workbook
