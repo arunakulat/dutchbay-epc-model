@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from analytics.core import metrics as metrics_mod
+from analytics.core.metrics import calculate_scenario_kpis
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.kpi_normalizer import normalise_kpis_for_export
 from analytics.scenario_loader import load_scenario_config
@@ -107,7 +107,7 @@ class ScenarioAnalytics:
           2. Run schema guard for core v14 modules (fail fast if malformed).
           3. Build v14 annual cashflow rows (CFADS, revenue, etc.).
           4. Apply the v14 debt layer on top of CFADS.
-          5. Compute scenario KPIs via analytics.core.metrics.
+          5. Compute scenario KPIs via analytics.core.metrics (Phase 1: WACC-aware).
           6. Optionally derive EPC breakdown via analytics.core.epc_helper
              and merge it into the KPIs payload.
         """
@@ -130,11 +130,14 @@ class ScenarioAnalytics:
         # Apply debt layer
         debt_result = apply_debt_layer(config, annual_rows)
 
-        # Compute KPIs
-        kpis = metrics_mod.compute_kpis(
+        # Compute KPIs (Phase 1: with default discount rate)
+        # Note: scenario_analytics uses default 10% rate; for WACC-aware
+        # valuation, use evaluate_scenario() instead
+        kpis = calculate_scenario_kpis(
             config=config,
             annual_rows=annual_rows,
             debt_result=debt_result,
+            discount_rate=0.10,  # Default rate for batch scenario analytics
         )
 
         # Optionally enrich KPIs with EPC breakdown (non-fatal if this fails)

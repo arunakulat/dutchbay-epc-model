@@ -1,0 +1,2238 @@
+{
+  "metadata": {
+    "created_at": "2025-11-23T06:06:59.371869",
+    "zip_file": "DutchBay_v14_codebase.zip",
+    "zip_size_bytes": 5754755,
+    "total_files": 318,
+    "total_uncompressed_bytes": 14243725,
+    "compression_ratio_percent": 59.6
+  },
+  "files": [
+    {
+      "path": "Cross-audit debt.py and the debt-service scheduling logic to confirm correct LKR amortization and paydown handling, and ensure DSCR is based on CFADS..md",
+      "size_bytes": 7389,
+      "compressed_size_bytes": 3092,
+      "modified_at": "2025-11-15T00:02:44",
+      "extension": ".md"
+    },
+    {
+      "path": "fx_data_processor_dual_regime.py",
+      "size_bytes": 13572,
+      "compressed_size_bytes": 4006,
+      "modified_at": "2025-11-14T21:50:00",
+      "extension": ".py"
+    },
+    {
+      "path": "fx_data_recent_Period2_2018_2019.yaml",
+      "size_bytes": 4029,
+      "compressed_size_bytes": 992,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "run_full_pipeline_v14.py",
+      "size_bytes": 2716,
+      "compressed_size_bytes": 1143,
+      "modified_at": "2025-11-23T00:25:20",
+      "extension": ".py"
+    },
+    {
+      "path": "analyze_directory.py",
+      "size_bytes": 5917,
+      "compressed_size_bytes": 1884,
+      "modified_at": "2025-11-20T09:34:24",
+      "extension": ".py"
+    },
+    {
+      "path": "handler_discovery.json",
+      "size_bytes": 1368,
+      "compressed_size_bytes": 297,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".json"
+    },
+    {
+      "path": "fx_correlation_module_corrected.py",
+      "size_bytes": 14942,
+      "compressed_size_bytes": 3706,
+      "modified_at": "2025-11-14T22:50:16",
+      "extension": ".py"
+    },
+    {
+      "path": "risk_metrics.py",
+      "size_bytes": 9866,
+      "compressed_size_bytes": 2367,
+      "modified_at": "2025-11-14T14:38:40",
+      "extension": ".py"
+    },
+    {
+      "path": "test_fx_dual_regime_standalone_fixed.py",
+      "size_bytes": 18094,
+      "compressed_size_bytes": 4216,
+      "modified_at": "2025-11-14T22:26:22",
+      "extension": ".py"
+    },
+    {
+      "path": "test_fx_complete_data.py",
+      "size_bytes": 9770,
+      "compressed_size_bytes": 2961,
+      "modified_at": "2025-11-14T19:06:42",
+      "extension": ".py"
+    },
+    {
+      "path": "RELEASING.md",
+      "size_bytes": 1112,
+      "compressed_size_bytes": 612,
+      "modified_at": "2025-11-10T04:01:50",
+      "extension": ".md"
+    },
+    {
+      "path": "pytest.ini",
+      "size_bytes": 867,
+      "compressed_size_bytes": 323,
+      "modified_at": "2025-11-22T14:35:48",
+      "extension": ".ini"
+    },
+    {
+      "path": "requirements.txt",
+      "size_bytes": 15,
+      "compressed_size_bytes": 17,
+      "modified_at": "2025-11-10T04:01:50",
+      "extension": ".txt"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size_bytes": 2758,
+      "compressed_size_bytes": 1386,
+      "modified_at": "2025-11-22T19:41:00",
+      "extension": ".md"
+    },
+    {
+      "path": "gen_scenario_yaml.py",
+      "size_bytes": 2496,
+      "compressed_size_bytes": 945,
+      "modified_at": "2025-11-17T14:59:22",
+      "extension": ".py"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "size_bytes": 1031,
+      "compressed_size_bytes": 384,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "fx_data_historical_Decade5_2015_2025.yaml",
+      "size_bytes": 19921,
+      "compressed_size_bytes": 3639,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "audit_report.json",
+      "size_bytes": 2439,
+      "compressed_size_bytes": 933,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".json"
+    },
+    {
+      "path": "plot_scenarios.py",
+      "size_bytes": 2752,
+      "compressed_size_bytes": 995,
+      "modified_at": "2025-11-17T19:35:38",
+      "extension": ".py"
+    },
+    {
+      "path": "fx_data_recent_Period1_2016_2017.yaml",
+      "size_bytes": 4005,
+      "compressed_size_bytes": 911,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "QUICKSTART_P0_2A.md",
+      "size_bytes": 1894,
+      "compressed_size_bytes": 1010,
+      "modified_at": "2025-11-14T01:34:18",
+      "extension": ".md"
+    },
+    {
+      "path": "schema.md",
+      "size_bytes": 640,
+      "compressed_size_bytes": 236,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".md"
+    },
+    {
+      "path": "pyproject.toml",
+      "size_bytes": 625,
+      "compressed_size_bytes": 343,
+      "modified_at": "2025-11-17T21:56:30",
+      "extension": ".toml"
+    },
+    {
+      "path": "constants.py",
+      "size_bytes": 497,
+      "compressed_size_bytes": 274,
+      "modified_at": "2025-11-20T09:21:00",
+      "extension": ".py"
+    },
+    {
+      "path": "optimization.py",
+      "size_bytes": 13109,
+      "compressed_size_bytes": 3689,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "test_full_v14_chain.py",
+      "size_bytes": 1523,
+      "compressed_size_bytes": 688,
+      "modified_at": "2025-11-17T13:52:34",
+      "extension": ".py"
+    },
+    {
+      "path": "scenario_timeseries.csv",
+      "size_bytes": 8270,
+      "compressed_size_bytes": 2205,
+      "modified_at": "2025-11-17T20:11:26",
+      "extension": ".csv"
+    },
+    {
+      "path": "run_exporter.py",
+      "size_bytes": 2845,
+      "compressed_size_bytes": 1068,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "README_v14_analytics_layer.md",
+      "size_bytes": 16678,
+      "compressed_size_bytes": 6197,
+      "modified_at": "2025-11-20T14:16:24",
+      "extension": ".md"
+    },
+    {
+      "path": "virtual environment requirement.md",
+      "size_bytes": 276,
+      "compressed_size_bytes": 182,
+      "modified_at": "2025-11-11T07:29:22",
+      "extension": ".md"
+    },
+    {
+      "path": "check_all_py_files.py",
+      "size_bytes": 2349,
+      "compressed_size_bytes": 994,
+      "modified_at": "2025-11-15T07:42:06",
+      "extension": ".py"
+    },
+    {
+      "path": "monte_carlo.py",
+      "size_bytes": 6031,
+      "compressed_size_bytes": 2065,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "returns.py",
+      "size_bytes": 18939,
+      "compressed_size_bytes": 4568,
+      "modified_at": "2025-11-15T12:45:14",
+      "extension": ".py"
+    },
+    {
+      "path": "sensitivity.py",
+      "size_bytes": 5606,
+      "compressed_size_bytes": 1882,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "v14_debt_test.py",
+      "size_bytes": 1119,
+      "compressed_size_bytes": 538,
+      "modified_at": "2025-11-17T11:59:18",
+      "extension": ".py"
+    },
+    {
+      "path": "data.csv",
+      "size_bytes": 62512,
+      "compressed_size_bytes": 14099,
+      "modified_at": "2025-11-14T17:51:04",
+      "extension": ".csv"
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 12858,
+      "compressed_size_bytes": 5109,
+      "modified_at": "2025-11-22T01:10:02",
+      "extension": ".md"
+    },
+    {
+      "path": " make_clean_zip.py",
+      "size_bytes": 3377,
+      "compressed_size_bytes": 1351,
+      "modified_at": "2025-11-22T14:01:22",
+      "extension": ".py"
+    },
+    {
+      "path": "missing_model_variables_to_fill.txt",
+      "size_bytes": 5623,
+      "compressed_size_bytes": 1769,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".txt"
+    },
+    {
+      "path": "mypy.ini",
+      "size_bytes": 1238,
+      "compressed_size_bytes": 480,
+      "modified_at": "2025-11-22T17:55:54",
+      "extension": ".ini"
+    },
+    {
+      "path": "validate.py",
+      "size_bytes": 7395,
+      "compressed_size_bytes": 2374,
+      "modified_at": "2025-11-11T22:58:20",
+      "extension": ".py"
+    },
+    {
+      "path": "DutchBay_v14_Analytics_README.md",
+      "size_bytes": 4461,
+      "compressed_size_bytes": 1862,
+      "modified_at": "2025-11-20T13:51:26",
+      "extension": ".md"
+    },
+    {
+      "path": "test_fx_dual_regime_standalone.py",
+      "size_bytes": 22263,
+      "compressed_size_bytes": 5048,
+      "modified_at": "2025-11-14T22:17:34",
+      "extension": ".py"
+    },
+    {
+      "path": "DutchBay_v14_Analytics_Snapshot_2025-11-20.md",
+      "size_bytes": 17051,
+      "compressed_size_bytes": 6212,
+      "modified_at": "2025-11-20T22:29:32",
+      "extension": ".md"
+    },
+    {
+      "path": "dead_handler_scan_report.json",
+      "size_bytes": 218,
+      "compressed_size_bytes": 133,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".json"
+    },
+    {
+      "path": "scenario_analytics_patched.py",
+      "size_bytes": 18442,
+      "compressed_size_bytes": 4416,
+      "modified_at": "2025-11-18T11:34:44",
+      "extension": ".py"
+    },
+    {
+      "path": "fx_data_historical_Decade4_2005_2014.yaml",
+      "size_bytes": 8168,
+      "compressed_size_bytes": 1585,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "fx_data_recent_Period4_2022_2023.yaml",
+      "size_bytes": 4009,
+      "compressed_size_bytes": 1036,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "P0_2A_COVERAGE_RATIOS_README.md",
+      "size_bytes": 8480,
+      "compressed_size_bytes": 3410,
+      "modified_at": "2025-11-14T01:33:30",
+      "extension": ".md"
+    },
+    {
+      "path": "gh_tools.py",
+      "size_bytes": 10354,
+      "compressed_size_bytes": 3158,
+      "modified_at": "2025-11-21T10:50:42",
+      "extension": ".py"
+    },
+    {
+      "path": "wacc_engine_yaml.py",
+      "size_bytes": 9444,
+      "compressed_size_bytes": 2793,
+      "modified_at": "2025-11-16T20:36:50",
+      "extension": ".py"
+    },
+    {
+      "path": "check_staged_py_files.py",
+      "size_bytes": 2592,
+      "compressed_size_bytes": 1055,
+      "modified_at": "2025-11-15T07:42:50",
+      "extension": ".py"
+    },
+    {
+      "path": "DEBT_ENHANCEMENT_PATCH.md",
+      "size_bytes": 3366,
+      "compressed_size_bytes": 1184,
+      "modified_at": "2025-11-14T01:34:00",
+      "extension": ".md"
+    },
+    {
+      "path": "debt_patched.py",
+      "size_bytes": 15114,
+      "compressed_size_bytes": 4217,
+      "modified_at": "2025-11-18T19:39:32",
+      "extension": ".py"
+    },
+    {
+      "path": "full_model_variables_updated.yaml.bak.yaml",
+      "size_bytes": 4100,
+      "compressed_size_bytes": 1642,
+      "modified_at": "2025-11-15T15:46:06",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenario_wide.csv",
+      "size_bytes": 4250,
+      "compressed_size_bytes": 1640,
+      "modified_at": "2025-11-17T20:11:26",
+      "extension": ".csv"
+    },
+    {
+      "path": "run_full_pipeline.py",
+      "size_bytes": 11602,
+      "compressed_size_bytes": 2987,
+      "modified_at": "2025-11-22T23:19:04",
+      "extension": ".py"
+    },
+    {
+      "path": "test_fx_dual_regime.py",
+      "size_bytes": 13369,
+      "compressed_size_bytes": 3089,
+      "modified_at": "2025-11-14T21:34:42",
+      "extension": ".py"
+    },
+    {
+      "path": "output_summary.csv",
+      "size_bytes": 371,
+      "compressed_size_bytes": 229,
+      "modified_at": "2025-11-17T15:11:06",
+      "extension": ".csv"
+    },
+    {
+      "path": "parameter_validation.py",
+      "size_bytes": 530,
+      "compressed_size_bytes": 287,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "scenario_analytics_fixed_debug.py",
+      "size_bytes": 18167,
+      "compressed_size_bytes": 4375,
+      "modified_at": "2025-11-18T12:40:46",
+      "extension": ".py"
+    },
+    {
+      "path": "fx_data_recent_Period3_2020_2021.yaml",
+      "size_bytes": 3981,
+      "compressed_size_bytes": 980,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "test_scenario.py",
+      "size_bytes": 1540,
+      "compressed_size_bytes": 604,
+      "modified_at": "2025-11-18T11:05:02",
+      "extension": ".py"
+    },
+    {
+      "path": "wacc_config_example.yaml",
+      "size_bytes": 1413,
+      "compressed_size_bytes": 604,
+      "modified_at": "2025-11-15T17:11:06",
+      "extension": ".yaml"
+    },
+    {
+      "path": "export_scenario_timeseries.py",
+      "size_bytes": 2692,
+      "compressed_size_bytes": 1007,
+      "modified_at": "2025-11-17T19:41:34",
+      "extension": ".py"
+    },
+    {
+      "path": "scenario_analytics_debug.py",
+      "size_bytes": 18967,
+      "compressed_size_bytes": 4484,
+      "modified_at": "2025-11-18T11:20:06",
+      "extension": ".py"
+    },
+    {
+      "path": "move_v13_to_legacy.py",
+      "size_bytes": 4659,
+      "compressed_size_bytes": 1540,
+      "modified_at": "2025-11-22T14:35:36",
+      "extension": ".py"
+    },
+    {
+      "path": "fx_data_recent_Period5_2024_2025.yaml",
+      "size_bytes": 3863,
+      "compressed_size_bytes": 975,
+      "modified_at": "2025-11-14T21:53:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "SECURITY.md",
+      "size_bytes": 422,
+      "compressed_size_bytes": 275,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".md"
+    },
+    {
+      "path": "make_clean_zip.py",
+      "size_bytes": 3286,
+      "compressed_size_bytes": 1319,
+      "modified_at": "2025-11-22T14:23:08",
+      "extension": ".py"
+    },
+    {
+      "path": "make_executive_report.py",
+      "size_bytes": 8927,
+      "compressed_size_bytes": 2425,
+      "modified_at": "2025-11-21T04:53:42",
+      "extension": ".py"
+    },
+    {
+      "path": "requirements_dev.txt",
+      "size_bytes": 1245,
+      "compressed_size_bytes": 706,
+      "modified_at": "2025-11-15T07:10:16",
+      "extension": ".txt"
+    },
+    {
+      "path": "dutchbay_v13.egg-info/SOURCES.txt",
+      "size_bytes": 2270,
+      "compressed_size_bytes": 611,
+      "modified_at": "2025-11-22T00:48:16",
+      "extension": ".txt"
+    },
+    {
+      "path": "dutchbay_v13.egg-info/requires.txt",
+      "size_bytes": 206,
+      "compressed_size_bytes": 133,
+      "modified_at": "2025-11-22T00:48:16",
+      "extension": ".txt"
+    },
+    {
+      "path": "dutchbay_v13.egg-info/top_level.txt",
+      "size_bytes": 13,
+      "compressed_size_bytes": 15,
+      "modified_at": "2025-11-22T00:48:16",
+      "extension": ".txt"
+    },
+    {
+      "path": "dutchbay_v13.egg-info/dependency_links.txt",
+      "size_bytes": 1,
+      "compressed_size_bytes": 3,
+      "modified_at": "2025-11-22T00:48:16",
+      "extension": ".txt"
+    },
+    {
+      "path": "_out_reporting_cli/stub-report.pdf",
+      "size_bytes": 52,
+      "compressed_size_bytes": 50,
+      "modified_at": "2025-11-10T22:43:44",
+      "extension": ".pdf"
+    },
+    {
+      "path": "_out_reporting_cli/stub-report2.pdf",
+      "size_bytes": 52,
+      "compressed_size_bytes": 50,
+      "modified_at": "2025-11-10T22:43:44",
+      "extension": ".pdf"
+    },
+    {
+      "path": "config/v14chat/README.md",
+      "size_bytes": 68,
+      "compressed_size_bytes": 70,
+      "modified_at": "2025-11-17T07:57:44",
+      "extension": ".md"
+    },
+    {
+      "path": "tests/conftest.py",
+      "size_bytes": 310,
+      "compressed_size_bytes": 214,
+      "modified_at": "2025-11-20T15:42:38",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_scenario_analytics_smoke.py",
+      "size_bytes": 3437,
+      "compressed_size_bytes": 1308,
+      "modified_at": "2025-11-23T05:38:08",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_metrics_integration.py",
+      "size_bytes": 2017,
+      "compressed_size_bytes": 826,
+      "modified_at": "2025-11-23T00:57:12",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_cli_v14_smoke.py",
+      "size_bytes": 838,
+      "compressed_size_bytes": 440,
+      "modified_at": "2025-11-23T05:39:18",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_v14_pipeline_smoke.py",
+      "size_bytes": 1431,
+      "compressed_size_bytes": 596,
+      "modified_at": "2025-11-23T05:40:00",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_fx_config_strictness.py",
+      "size_bytes": 3106,
+      "compressed_size_bytes": 1287,
+      "modified_at": "2025-11-21T17:16:46",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/test_export_smoke.py",
+      "size_bytes": 1807,
+      "compressed_size_bytes": 807,
+      "modified_at": "2025-11-20T16:35:08",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_executive_workbook_import.py",
+      "size_bytes": 387,
+      "compressed_size_bytes": 234,
+      "modified_at": "2025-11-21T18:01:56",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_fx_resolver_unit.py",
+      "size_bytes": 2593,
+      "compressed_size_bytes": 620,
+      "modified_at": "2025-11-21T13:25:46",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_scenario_analytics_unit_scenario_name.py",
+      "size_bytes": 4770,
+      "compressed_size_bytes": 1521,
+      "modified_at": "2025-11-22T02:39:24",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_irr_core.py",
+      "size_bytes": 2608,
+      "compressed_size_bytes": 970,
+      "modified_at": "2025-11-20T17:24:32",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_scenario_analytics_unit.py",
+      "size_bytes": 3491,
+      "compressed_size_bytes": 1141,
+      "modified_at": "2025-11-22T00:45:36",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_executive_workbook_smoke.py",
+      "size_bytes": 5027,
+      "compressed_size_bytes": 1751,
+      "modified_at": "2025-11-21T14:28:28",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_finance_utils.py",
+      "size_bytes": 1138,
+      "compressed_size_bytes": 435,
+      "modified_at": "2025-11-22T00:45:00",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_scenario_manager_smoke.py",
+      "size_bytes": 2146,
+      "compressed_size_bytes": 901,
+      "modified_at": "2025-11-20T16:44:00",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_tax_calculator_v14.py",
+      "size_bytes": 3370,
+      "compressed_size_bytes": 1037,
+      "modified_at": "2025-11-20T17:07:26",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_debt_v14_construction.py",
+      "size_bytes": 2654,
+      "compressed_size_bytes": 1052,
+      "modified_at": "2025-11-22T01:23:40",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_covenants_lendercase_2025Q4.py",
+      "size_bytes": 3842,
+      "compressed_size_bytes": 1444,
+      "modified_at": "2025-11-22T02:12:22",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_cashflow_tax_and_life.py",
+      "size_bytes": 5586,
+      "compressed_size_bytes": 1920,
+      "modified_at": "2025-11-18T19:05:40",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_cashflow_v14.py",
+      "size_bytes": 3192,
+      "compressed_size_bytes": 1148,
+      "modified_at": "2025-11-22T01:24:10",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_irr_module.py",
+      "size_bytes": 3164,
+      "compressed_size_bytes": 1215,
+      "modified_at": "2025-11-18T17:52:54",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_kpi_normalizer.py",
+      "size_bytes": 5038,
+      "compressed_size_bytes": 1233,
+      "modified_at": "2025-11-21T13:19:44",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_debt_construction_idc_regression.py",
+      "size_bytes": 7667,
+      "compressed_size_bytes": 2161,
+      "modified_at": "2025-11-21T06:44:52",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_covenants_v14.py",
+      "size_bytes": 7695,
+      "compressed_size_bytes": 2668,
+      "modified_at": "2025-11-22T01:45:22",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_epc_helper_v14.py",
+      "size_bytes": 3225,
+      "compressed_size_bytes": 1098,
+      "modified_at": "2025-11-20T17:03:14",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_cashflow_module.py",
+      "size_bytes": 3344,
+      "compressed_size_bytes": 1284,
+      "modified_at": "2025-11-18T18:43:32",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_metrics_core_stats.py",
+      "size_bytes": 4163,
+      "compressed_size_bytes": 1343,
+      "modified_at": "2025-11-22T00:44:30",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_scenario_analytics_schema_guard_integration.py",
+      "size_bytes": 2115,
+      "compressed_size_bytes": 810,
+      "modified_at": "2025-11-22T03:24:48",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_v14_lender_suite.py",
+      "size_bytes": 7656,
+      "compressed_size_bytes": 2660,
+      "modified_at": "2025-11-18T19:29:50",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_config_schema_guard.py",
+      "size_bytes": 2945,
+      "compressed_size_bytes": 1124,
+      "modified_at": "2025-11-22T03:08:00",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_bad_missing_tax_schema_guard.py",
+      "size_bytes": 1044,
+      "compressed_size_bytes": 449,
+      "modified_at": "2025-11-22T13:10:22",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_export_helpers_v14.py",
+      "size_bytes": 3898,
+      "compressed_size_bytes": 1376,
+      "modified_at": "2025-11-20T17:41:00",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_metrics_module.py",
+      "size_bytes": 4925,
+      "compressed_size_bytes": 1331,
+      "modified_at": "2025-11-23T00:59:14",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/__init__.py",
+      "size_bytes": 60,
+      "compressed_size_bytes": 61,
+      "modified_at": "2025-11-17T07:57:44",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/__init__.py",
+      "size_bytes": 21,
+      "compressed_size_bytes": 23,
+      "modified_at": "2025-11-17T07:57:44",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/cashflow.py",
+      "size_bytes": 421,
+      "compressed_size_bytes": 217,
+      "modified_at": "2025-11-22T11:43:16",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/debt.py",
+      "size_bytes": 782,
+      "compressed_size_bytes": 327,
+      "modified_at": "2025-11-22T11:30:12",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/irr.py",
+      "size_bytes": 323,
+      "compressed_size_bytes": 206,
+      "modified_at": "2025-11-22T11:46:00",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/v14/__init__.py",
+      "size_bytes": 18,
+      "compressed_size_bytes": 20,
+      "modified_at": "2025-11-17T07:57:44",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/v14/tax_calculator.py",
+      "size_bytes": 1231,
+      "compressed_size_bytes": 464,
+      "modified_at": "2025-11-22T18:03:26",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/v14/scenario_manager.py",
+      "size_bytes": 3342,
+      "compressed_size_bytes": 1297,
+      "modified_at": "2025-11-20T12:51:28",
+      "extension": ".py"
+    },
+    {
+      "path": "dutchbay_v14chat/finance/v14/epc_helper.py",
+      "size_bytes": 167,
+      "compressed_size_bytes": 98,
+      "modified_at": "2025-11-22T15:25:16",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/params.py",
+      "size_bytes": 7999,
+      "compressed_size_bytes": 2605,
+      "modified_at": "2025-11-11T20:50:02",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/config.py",
+      "size_bytes": 2914,
+      "compressed_size_bytes": 1127,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/legacy_v12.py",
+      "size_bytes": 13133,
+      "compressed_size_bytes": 3887,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/charts.py",
+      "size_bytes": 2213,
+      "compressed_size_bytes": 748,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/report_pdf.py",
+      "size_bytes": 776,
+      "compressed_size_bytes": 409,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/db_types.py",
+      "size_bytes": 1391,
+      "compressed_size_bytes": 497,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/epc.py",
+      "size_bytes": 1863,
+      "compressed_size_bytes": 728,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/__init__.py",
+      "size_bytes": 0,
+      "compressed_size_bytes": 2,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/core.py",
+      "size_bytes": 4933,
+      "compressed_size_bytes": 1692,
+      "modified_at": "2025-11-11T20:05:26",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/api.py",
+      "size_bytes": 4604,
+      "compressed_size_bytes": 1853,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/setup.py",
+      "size_bytes": 232,
+      "compressed_size_bytes": 147,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/cli.py",
+      "size_bytes": 2552,
+      "compressed_size_bytes": 1065,
+      "modified_at": "2025-11-11T22:41:26",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/old_scenario_runner.py",
+      "size_bytes": 2644,
+      "compressed_size_bytes": 1056,
+      "modified_at": "2025-11-17T14:33:58",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/__main__.py",
+      "size_bytes": 177,
+      "compressed_size_bytes": 133,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/report.py",
+      "size_bytes": 857,
+      "compressed_size_bytes": 431,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/schema.py",
+      "size_bytes": 3536,
+      "compressed_size_bytes": 1412,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/adapters.py",
+      "size_bytes": 6251,
+      "compressed_size_bytes": 2147,
+      "modified_at": "2025-11-11T22:35:24",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/visualization/sensitivity_tornado.py",
+      "size_bytes": 11053,
+      "compressed_size_bytes": 3017,
+      "modified_at": "2025-11-14T15:44:50",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/visualization/__init__.py",
+      "size_bytes": 0,
+      "compressed_size_bytes": 2,
+      "modified_at": "2025-11-14T15:41:22",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/reporting/__init__.py",
+      "size_bytes": 0,
+      "compressed_size_bytes": 2,
+      "modified_at": "2025-11-14T02:52:44",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/reporting/markdown_generator.py",
+      "size_bytes": 7915,
+      "compressed_size_bytes": 2016,
+      "modified_at": "2025-11-14T11:02:04",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/ DutchBay_Model_TODO_ARCHIVE_20251114.txt",
+      "size_bytes": 1496,
+      "compressed_size_bytes": 840,
+      "modified_at": "2025-11-14T01:01:08",
+      "extension": ".txt"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/metrics.py",
+      "size_bytes": 19385,
+      "compressed_size_bytes": 4732,
+      "modified_at": "2025-11-15T10:00:48",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/__init__.py",
+      "size_bytes": 0,
+      "compressed_size_bytes": 2,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/utils.py",
+      "size_bytes": 1465,
+      "compressed_size_bytes": 545,
+      "modified_at": "2025-11-18T16:56:50",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/cashflow.py",
+      "size_bytes": 16320,
+      "compressed_size_bytes": 4354,
+      "modified_at": "2025-11-15T11:26:50",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/debt.py",
+      "size_bytes": 13222,
+      "compressed_size_bytes": 3882,
+      "modified_at": "2025-11-15T17:08:18",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/irr.py",
+      "size_bytes": 10678,
+      "compressed_size_bytes": 3072,
+      "modified_at": "2025-11-12T07:44:36",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/finance/reporting.py",
+      "size_bytes": 14869,
+      "compressed_size_bytes": 4198,
+      "modified_at": "2025-11-14T00:41:08",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/scenario_matrix.yaml",
+      "size_bytes": 231,
+      "compressed_size_bytes": 142,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/baseline.yaml",
+      "size_bytes": 517,
+      "compressed_size_bytes": 273,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/schema/financing_terms.schema.yaml",
+      "size_bytes": 7071,
+      "compressed_size_bytes": 1566,
+      "modified_at": "2025-11-11T15:43:58",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/schema/financing_terms.schema.json",
+      "size_bytes": 2510,
+      "compressed_size_bytes": 796,
+      "modified_at": "2025-11-11T09:52:32",
+      "extension": ".json"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/scenarios/low_cf.yaml",
+      "size_bytes": 13,
+      "compressed_size_bytes": 15,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/scenarios/high_tariff.yaml",
+      "size_bytes": 22,
+      "compressed_size_bytes": 24,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/scenarios/stress_rates.yaml",
+      "size_bytes": 33,
+      "compressed_size_bytes": 35,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/dutchbay_v13/inputs/scenarios/baseline.yaml",
+      "size_bytes": 30,
+      "compressed_size_bytes": 32,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yaml"
+    },
+    {
+      "path": "legacy/tests_v13/test_debt_yaml_exposed.py",
+      "size_bytes": 499,
+      "compressed_size_bytes": 301,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_optimize_pareto_and_tornado_export.py",
+      "size_bytes": 1008,
+      "compressed_size_bytes": 346,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cli_format_flag.py",
+      "size_bytes": 1233,
+      "compressed_size_bytes": 387,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cli_unittest.py",
+      "size_bytes": 1485,
+      "compressed_size_bytes": 406,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_debt_validation.py",
+      "size_bytes": 9098,
+      "compressed_size_bytes": 2454,
+      "modified_at": "2025-11-12T23:18:14",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_metrics.py",
+      "size_bytes": 412,
+      "compressed_size_bytes": 215,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_imports.py",
+      "size_bytes": 158,
+      "compressed_size_bytes": 111,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_metrics_complete.py",
+      "size_bytes": 4713,
+      "compressed_size_bytes": 1606,
+      "modified_at": "2025-11-15T08:04:42",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cashflow_import.py",
+      "size_bytes": 204,
+      "compressed_size_bytes": 146,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_schema_validation.py",
+      "size_bytes": 851,
+      "compressed_size_bytes": 346,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_validators.py",
+      "size_bytes": 836,
+      "compressed_size_bytes": 318,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenarios_jsonl_and_validator.py",
+      "size_bytes": 913,
+      "compressed_size_bytes": 447,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenario_unittest.py",
+      "size_bytes": 559,
+      "compressed_size_bytes": 284,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenarios_multi.py",
+      "size_bytes": 723,
+      "compressed_size_bytes": 289,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_api_pdf_optional.py",
+      "size_bytes": 845,
+      "compressed_size_bytes": 399,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenarios_smoke_current.py",
+      "size_bytes": 1074,
+      "compressed_size_bytes": 538,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_adapters_map_smoke.py",
+      "size_bytes": 1137,
+      "compressed_size_bytes": 512,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenarios.py",
+      "size_bytes": 376,
+      "compressed_size_bytes": 221,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_irr.py",
+      "size_bytes": 287,
+      "compressed_size_bytes": 184,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_finance_irr_unit.py",
+      "size_bytes": 223,
+      "compressed_size_bytes": 161,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cli_tornado_flags.py",
+      "size_bytes": 536,
+      "compressed_size_bytes": 267,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cli_smoke.py",
+      "size_bytes": 312,
+      "compressed_size_bytes": 203,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_finance_irr_debt.py",
+      "size_bytes": 2485,
+      "compressed_size_bytes": 1054,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_pareto_plot_and_yaml_batch.py",
+      "size_bytes": 1736,
+      "compressed_size_bytes": 554,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_save_annual_and_charts.py",
+      "size_bytes": 999,
+      "compressed_size_bytes": 350,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_utopia_and_report.py",
+      "size_bytes": 1133,
+      "compressed_size_bytes": 417,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_adapter_and_validator.py",
+      "size_bytes": 1117,
+      "compressed_size_bytes": 557,
+      "modified_at": "2025-11-11T23:12:04",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_cli_e2e.py",
+      "size_bytes": 861,
+      "compressed_size_bytes": 438,
+      "modified_at": "2025-11-11T23:12:04",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_dscr.py",
+      "size_bytes": 631,
+      "compressed_size_bytes": 359,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_scenario.py",
+      "size_bytes": 377,
+      "compressed_size_bytes": 224,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_irr_is_singleton.py",
+      "size_bytes": 1402,
+      "compressed_size_bytes": 637,
+      "modified_at": "2025-11-11T21:10:40",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_debt.py",
+      "size_bytes": 666,
+      "compressed_size_bytes": 308,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_main_scenarios.py",
+      "size_bytes": 503,
+      "compressed_size_bytes": 237,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_v13/test_metrics_unittest.py",
+      "size_bytes": 462,
+      "compressed_size_bytes": 235,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli_scenarios_more.py",
+      "size_bytes": 1924,
+      "compressed_size_bytes": 664,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli_help.py",
+      "size_bytes": 94,
+      "compressed_size_bytes": 88,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli_modes_smoke.py",
+      "size_bytes": 620,
+      "compressed_size_bytes": 343,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli_dead_smokes.py",
+      "size_bytes": 552,
+      "compressed_size_bytes": 304,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_runner_and_validation.py",
+      "size_bytes": 550,
+      "compressed_size_bytes": 311,
+      "modified_at": "2025-11-20T11:42:18",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cashflow.py",
+      "size_bytes": 547,
+      "compressed_size_bytes": 316,
+      "modified_at": "2025-11-20T11:44:12",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli_smoke_direct.py",
+      "size_bytes": 1043,
+      "compressed_size_bytes": 498,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/test_cli.py",
+      "size_bytes": 519,
+      "compressed_size_bytes": 319,
+      "modified_at": "2025-11-20T11:59:14",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/reporting/test_report_smoke.py",
+      "size_bytes": 783,
+      "compressed_size_bytes": 385,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/reporting/test_report_pdf_smoke.py",
+      "size_bytes": 859,
+      "compressed_size_bytes": 403,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/reporting/test_charts_smoke.py",
+      "size_bytes": 1022,
+      "compressed_size_bytes": 479,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/core/test_validate_smoke.py",
+      "size_bytes": 516,
+      "compressed_size_bytes": 272,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/core/test_config_loader_smoke.py",
+      "size_bytes": 656,
+      "compressed_size_bytes": 347,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_legacy_v12.py",
+      "size_bytes": 145,
+      "compressed_size_bytes": 101,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_finance_cashflow.py",
+      "size_bytes": 157,
+      "compressed_size_bytes": 113,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_validate.py",
+      "size_bytes": 141,
+      "compressed_size_bytes": 101,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_report_pdf.py",
+      "size_bytes": 145,
+      "compressed_size_bytes": 100,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_optimization.py",
+      "size_bytes": 149,
+      "compressed_size_bytes": 104,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_reporting_stack.py",
+      "size_bytes": 298,
+      "compressed_size_bytes": 98,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_core.py",
+      "size_bytes": 133,
+      "compressed_size_bytes": 97,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_finance_debt.py",
+      "size_bytes": 149,
+      "compressed_size_bytes": 107,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_finance_utils.py",
+      "size_bytes": 151,
+      "compressed_size_bytes": 109,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_finance_irr.py",
+      "size_bytes": 147,
+      "compressed_size_bytes": 106,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_epc.py",
+      "size_bytes": 131,
+      "compressed_size_bytes": 96,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_charts.py",
+      "size_bytes": 137,
+      "compressed_size_bytes": 99,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_config.py",
+      "size_bytes": 137,
+      "compressed_size_bytes": 99,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_api_cov_smoke.py",
+      "size_bytes": 590,
+      "compressed_size_bytes": 288,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_sensitivity.py",
+      "size_bytes": 147,
+      "compressed_size_bytes": 103,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_monte_carlo.py",
+      "size_bytes": 147,
+      "compressed_size_bytes": 103,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_schema.py",
+      "size_bytes": 137,
+      "compressed_size_bytes": 99,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_scenario_runner.py",
+      "size_bytes": 155,
+      "compressed_size_bytes": 109,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_cli.py",
+      "size_bytes": 131,
+      "compressed_size_bytes": 96,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_report.py",
+      "size_bytes": 137,
+      "compressed_size_bytes": 97,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_api.py",
+      "size_bytes": 131,
+      "compressed_size_bytes": 96,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_surface.py",
+      "size_bytes": 883,
+      "compressed_size_bytes": 331,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_core_stack.py",
+      "size_bytes": 508,
+      "compressed_size_bytes": 157,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_finance_metrics.py",
+      "size_bytes": 155,
+      "compressed_size_bytes": 111,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_api_surface_smoke.py",
+      "size_bytes": 667,
+      "compressed_size_bytes": 328,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/imports/test_import_dutchbay_v13_types.py",
+      "size_bytes": 135,
+      "compressed_size_bytes": 98,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/cli/test_cli_help_smoke.py",
+      "size_bytes": 472,
+      "compressed_size_bytes": 292,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_sensitivity_asserts.py",
+      "size_bytes": 379,
+      "compressed_size_bytes": 215,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_mc_asserts.py",
+      "size_bytes": 553,
+      "compressed_size_bytes": 303,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_sensitivity_smoke.py",
+      "size_bytes": 895,
+      "compressed_size_bytes": 434,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_optimization_smoke.py",
+      "size_bytes": 994,
+      "compressed_size_bytes": 454,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_optimization_asserts.py",
+      "size_bytes": 327,
+      "compressed_size_bytes": 216,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_monte_carlo_smoke.py",
+      "size_bytes": 1361,
+      "compressed_size_bytes": 573,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "legacy/tests_legacy_v13/heavy/test_metrics_smoke.py",
+      "size_bytes": 495,
+      "compressed_size_bytes": 258,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "docs/executive_workbook_readme.md",
+      "size_bytes": 5552,
+      "compressed_size_bytes": 2325,
+      "modified_at": "2025-11-22T01:09:36",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/CODEFREEZE.md",
+      "size_bytes": 558,
+      "compressed_size_bytes": 404,
+      "modified_at": "2025-11-10T04:01:50",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/schema.md",
+      "size_bytes": 2694,
+      "compressed_size_bytes": 1003,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/architecture_v14.md",
+      "size_bytes": 6974,
+      "compressed_size_bytes": 2989,
+      "modified_at": "2025-11-22T01:07:52",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/ANALYTICS_PRODUCTION_READY.md",
+      "size_bytes": 6979,
+      "compressed_size_bytes": 2760,
+      "modified_at": "2025-11-18T13:45:46",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/Dev_workflow_v14.md",
+      "size_bytes": 8309,
+      "compressed_size_bytes": 3529,
+      "modified_at": "2025-11-21T17:55:06",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/ANALYTICS_SETUP_COMPLETE.md",
+      "size_bytes": 12089,
+      "compressed_size_bytes": 4397,
+      "modified_at": "2025-11-17T21:59:28",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/9c3cb031.md",
+      "size_bytes": 9214,
+      "compressed_size_bytes": 3497,
+      "modified_at": "2025-11-15T00:34:20",
+      "extension": ".md"
+    },
+    {
+      "path": "exports/Executive_dutchbay_lendercase_2025Q4.xlsx",
+      "size_bytes": 10972,
+      "compressed_size_bytes": 10031,
+      "modified_at": "2025-11-21T06:05:14",
+      "extension": ".xlsx"
+    },
+    {
+      "path": "exports/scenario_summary.csv",
+      "size_bytes": 818,
+      "compressed_size_bytes": 438,
+      "modified_at": "2025-11-18T12:41:44",
+      "extension": ".csv"
+    },
+    {
+      "path": "exports/scenario_timeseries.csv",
+      "size_bytes": 8567,
+      "compressed_size_bytes": 2234,
+      "modified_at": "2025-11-18T12:41:44",
+      "extension": ".csv"
+    },
+    {
+      "path": "scripts/generate_reports.py",
+      "size_bytes": 1785,
+      "compressed_size_bytes": 912,
+      "modified_at": "2025-11-14T00:27:52",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/diagnose_capacity_factor.py",
+      "size_bytes": 2091,
+      "compressed_size_bytes": 950,
+      "modified_at": "2025-11-14T06:21:44",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/test_returns_module.py",
+      "size_bytes": 1597,
+      "compressed_size_bytes": 741,
+      "modified_at": "2025-11-14T09:13:42",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/test_llcr_plcr_real_debt.py",
+      "size_bytes": 2649,
+      "compressed_size_bytes": 1043,
+      "modified_at": "2025-11-14T01:45:58",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/monte_carlo_risk_analysis.py",
+      "size_bytes": 12526,
+      "compressed_size_bytes": 3371,
+      "modified_at": "2025-11-14T14:52:00",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/force_base_assign.py",
+      "size_bytes": 1296,
+      "compressed_size_bytes": 606,
+      "modified_at": "2025-11-11T19:54:30",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/auto_close_issues.py",
+      "size_bytes": 9801,
+      "compressed_size_bytes": 3323,
+      "modified_at": "2025-11-21T06:27:28",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/diagnostic_check_cashflow_debt.py",
+      "size_bytes": 2036,
+      "compressed_size_bytes": 929,
+      "modified_at": "2025-11-14T01:50:20",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/test_markdown_report.py",
+      "size_bytes": 4390,
+      "compressed_size_bytes": 1645,
+      "modified_at": "2025-11-14T14:13:54",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts/tornado_sensitivity_analysis.py",
+      "size_bytes": 4948,
+      "compressed_size_bytes": 1848,
+      "modified_at": "2025-11-14T15:46:02",
+      "extension": ".py"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "size_bytes": 362,
+      "compressed_size_bytes": 249,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".md"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "size_bytes": 1180,
+      "compressed_size_bytes": 530,
+      "modified_at": "2025-11-10T04:01:50",
+      "extension": ".yml"
+    },
+    {
+      "path": ".github/workflows/regression-smoke.yml",
+      "size_bytes": 533,
+      "compressed_size_bytes": 268,
+      "modified_at": "2025-11-10T20:38:06",
+      "extension": ".yml"
+    },
+    {
+      "path": ".github/workflows/ci_v14_fastlane.yml",
+      "size_bytes": 1437,
+      "compressed_size_bytes": 580,
+      "modified_at": "2025-11-20T16:29:06",
+      "extension": ".yml"
+    },
+    {
+      "path": ".github/workflows/python-app.yml",
+      "size_bytes": 6806,
+      "compressed_size_bytes": 1820,
+      "modified_at": "2025-11-10T12:42:22",
+      "extension": ".yml"
+    },
+    {
+      "path": ".github/workflows/ci-v14.yml",
+      "size_bytes": 1728,
+      "compressed_size_bytes": 506,
+      "modified_at": "2025-11-21T16:21:22",
+      "extension": ".yml"
+    },
+    {
+      "path": "scenarios/scenario_mytest.yaml",
+      "size_bytes": 518,
+      "compressed_size_bytes": 283,
+      "modified_at": "2025-11-17T15:07:38",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/example_b.json",
+      "size_bytes": 972,
+      "compressed_size_bytes": 442,
+      "modified_at": "2025-11-20T16:04:14",
+      "extension": ".json"
+    },
+    {
+      "path": "scenarios/edge_extreme_stress.yaml",
+      "size_bytes": 1272,
+      "compressed_size_bytes": 660,
+      "modified_at": "2025-11-21T17:23:46",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/example_a_old.yaml",
+      "size_bytes": 1005,
+      "compressed_size_bytes": 550,
+      "modified_at": "2025-11-21T17:23:46",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/bad_missing_tax.yaml",
+      "size_bytes": 4153,
+      "compressed_size_bytes": 1681,
+      "modified_at": "2025-11-22T07:57:16",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "size_bytes": 4422,
+      "compressed_size_bytes": 1730,
+      "modified_at": "2025-11-22T02:08:52",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/example_a.yaml",
+      "size_bytes": 842,
+      "compressed_size_bytes": 453,
+      "modified_at": "2025-11-21T17:23:46",
+      "extension": ".yaml"
+    },
+    {
+      "path": "scenarios/_scratch/zz_bad.yaml",
+      "size_bytes": 49,
+      "compressed_size_bytes": 51,
+      "modified_at": "2025-11-19T06:05:48",
+      "extension": ".yaml"
+    },
+    {
+      "path": "finance/wacc_v14.py",
+      "size_bytes": 13730,
+      "compressed_size_bytes": 3399,
+      "modified_at": "2025-11-23T00:49:12",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/equity_v14.py",
+      "size_bytes": 8183,
+      "compressed_size_bytes": 2477,
+      "modified_at": "2025-11-23T00:04:00",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/cashflow_v14.py",
+      "size_bytes": 30357,
+      "compressed_size_bytes": 6405,
+      "modified_at": "2025-11-22T19:31:58",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/debt_v14.py",
+      "size_bytes": 19394,
+      "compressed_size_bytes": 5217,
+      "modified_at": "2025-11-22T18:53:34",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/__init__.py",
+      "size_bytes": 0,
+      "compressed_size_bytes": 2,
+      "modified_at": "2025-11-18T17:59:58",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/epc_helper_v14.py",
+      "size_bytes": 9342,
+      "compressed_size_bytes": 2795,
+      "modified_at": "2025-11-22T17:32:22",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/utils.py",
+      "size_bytes": 996,
+      "compressed_size_bytes": 375,
+      "modified_at": "2025-11-18T18:00:40",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/irr.py",
+      "size_bytes": 3999,
+      "compressed_size_bytes": 1263,
+      "modified_at": "2025-11-22T18:50:04",
+      "extension": ".py"
+    },
+    {
+      "path": "_regression/summary.json",
+      "size_bytes": 511,
+      "compressed_size_bytes": 163,
+      "modified_at": "2025-11-21T15:30:00",
+      "extension": ".json"
+    },
+    {
+      "path": "_regression/report.txt",
+      "size_bytes": 1257,
+      "compressed_size_bytes": 419,
+      "modified_at": "2025-11-21T15:30:00",
+      "extension": ".txt"
+    },
+    {
+      "path": "outputs/sensitivity_analysis.csv",
+      "size_bytes": 261,
+      "compressed_size_bytes": 188,
+      "modified_at": "2025-11-14T17:05:56",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/covenant_breach_probabilities.csv",
+      "size_bytes": 85,
+      "compressed_size_bytes": 72,
+      "modified_at": "2025-11-14T17:05:54",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/coverage_ratios_summary.csv",
+      "size_bytes": 857,
+      "compressed_size_bytes": 416,
+      "modified_at": "2025-11-14T08:07:22",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/sensitivity_report.md",
+      "size_bytes": 1091,
+      "compressed_size_bytes": 442,
+      "modified_at": "2025-11-14T17:05:56",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/investment_committee_summary_20251114.md",
+      "size_bytes": 3051,
+      "compressed_size_bytes": 1438,
+      "modified_at": "2025-11-14T00:28:14",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/executive_summary.md",
+      "size_bytes": 2795,
+      "compressed_size_bytes": 1315,
+      "modified_at": "2025-11-14T17:05:32",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/P0-1C_Investment_Committee_Summary.md",
+      "size_bytes": 3125,
+      "compressed_size_bytes": 1475,
+      "modified_at": "2025-11-14T00:14:08",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/dfi_lender_pack.md",
+      "size_bytes": 3006,
+      "compressed_size_bytes": 1368,
+      "modified_at": "2025-11-14T17:05:32",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/scenario_full_model_variables_updated_results.csv",
+      "size_bytes": 122,
+      "compressed_size_bytes": 97,
+      "modified_at": "2025-11-11T22:01:56",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/monte_carlo_results.csv",
+      "size_bytes": 13026759,
+      "compressed_size_bytes": 5319094,
+      "modified_at": "2025-11-14T17:05:54",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/risk_summary.csv",
+      "size_bytes": 267,
+      "compressed_size_bytes": 185,
+      "modified_at": "2025-11-14T17:05:54",
+      "extension": ".csv"
+    },
+    {
+      "path": "outputs/covenant_compliance_certificate_20251114.md",
+      "size_bytes": 2534,
+      "compressed_size_bytes": 1133,
+      "modified_at": "2025-11-14T00:28:14",
+      "extension": ".md"
+    },
+    {
+      "path": "outputs/covenant_compliance_certificate_template.md",
+      "size_bytes": 2553,
+      "compressed_size_bytes": 1169,
+      "modified_at": "2025-11-14T00:12:56",
+      "extension": ".md"
+    },
+    {
+      "path": "analytics/schema_guard.py",
+      "size_bytes": 6297,
+      "compressed_size_bytes": 2208,
+      "modified_at": "2025-11-22T07:18:18",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/contracts_v14.py",
+      "size_bytes": 3224,
+      "compressed_size_bytes": 1043,
+      "modified_at": "2025-11-23T00:31:58",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/config_schema.py",
+      "size_bytes": 3738,
+      "compressed_size_bytes": 1441,
+      "modified_at": "2025-11-22T03:01:28",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/export_helpers.py",
+      "size_bytes": 27453,
+      "compressed_size_bytes": 6067,
+      "modified_at": "2025-11-22T16:44:02",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/__init__.py",
+      "size_bytes": 164,
+      "compressed_size_bytes": 139,
+      "modified_at": "2025-11-20T21:05:50",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/kpi_normalizer.py",
+      "size_bytes": 4699,
+      "compressed_size_bytes": 1214,
+      "modified_at": "2025-11-21T12:55:50",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/README.md",
+      "size_bytes": 6004,
+      "compressed_size_bytes": 2552,
+      "modified_at": "2025-11-22T01:06:12",
+      "extension": ".md"
+    },
+    {
+      "path": "analytics/scenario_analytics.py",
+      "size_bytes": 18217,
+      "compressed_size_bytes": 4913,
+      "modified_at": "2025-11-23T00:02:06",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/evaluate_scenario.py",
+      "size_bytes": 6615,
+      "compressed_size_bytes": 2043,
+      "modified_at": "2025-11-23T00:55:36",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/scenario_loader.py",
+      "size_bytes": 6106,
+      "compressed_size_bytes": 2111,
+      "modified_at": "2025-11-20T18:30:16",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/executive_workbook.py",
+      "size_bytes": 7996,
+      "compressed_size_bytes": 2332,
+      "modified_at": "2025-11-20T21:07:10",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/core/metrics.py",
+      "size_bytes": 7634,
+      "compressed_size_bytes": 2119,
+      "modified_at": "2025-11-22T23:12:54",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/core/__init__.py",
+      "size_bytes": 115,
+      "compressed_size_bytes": 94,
+      "modified_at": "2025-11-20T21:06:16",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/core/epc_helper.py",
+      "size_bytes": 167,
+      "compressed_size_bytes": 98,
+      "modified_at": "2025-11-22T15:24:48",
+      "extension": ".py"
+    },
+    {
+      "path": "inputs/demo_override.yaml",
+      "size_bytes": 25,
+      "compressed_size_bytes": 27,
+      "modified_at": "2025-11-10T21:12:20",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/demo_override_low.yaml",
+      "size_bytes": 25,
+      "compressed_size_bytes": 27,
+      "modified_at": "2025-11-10T21:12:20",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/scenario_matrix.yaml",
+      "size_bytes": 94,
+      "compressed_size_bytes": 87,
+      "modified_at": "2025-11-10T21:12:20",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/overrides/_bad.yaml",
+      "size_bytes": 25,
+      "compressed_size_bytes": 27,
+      "modified_at": "2025-11-11T22:30:40",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/overrides/demo_override.yaml",
+      "size_bytes": 25,
+      "compressed_size_bytes": 27,
+      "modified_at": "2025-11-10T18:14:04",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/overrides/demo_override_low.yaml",
+      "size_bytes": 25,
+      "compressed_size_bytes": 27,
+      "modified_at": "2025-11-10T18:44:00",
+      "extension": ".yaml"
+    },
+    {
+      "path": "inputs/overrides/debt_smoke.yaml",
+      "size_bytes": 350,
+      "compressed_size_bytes": 227,
+      "modified_at": "2025-11-11T10:01:04",
+      "extension": ".yaml"
+    }
+  ]
+}
