@@ -32,14 +32,15 @@ from typing import Final, Dict
 # Industry-standard sensitivity ranges (CFA/DFI benchmarks)
 # Format: {parameter_name: (low_pct, high_pct)}
 SENSITIVITY_RANGES: Final[Dict[str, tuple[float, float]]] = {
-    "capex_usd_per_kw": (-10.0, +10.0),          # ±20% typical for Capex
-    "tariff_lkr_per_kwh": (-5.0, +0.0),        # ±15% for revenue/tariff
-    "capacity_factor_pct": (-10.0, +5.0),       # ±10% for generation
+    "capex_usd_per_kw": (-20.0, +20.0),          # ±20% typical for Capex
+    "tariff_lkr_per_kwh": (-15.0, +15.0),        # ±15% for revenue/tariff
+    "capacity_factor_pct": (-10.0, +10.0),       # ±10% for generation
     "discount_rate_pct": (-3.0, +3.0),           # ±3 percentage points for WACC
-    "debt_interest_rate_pct": (-1.0, +3.0),      # ±2 percentage points for debt
-    "construction_months": (-9.0, +6.0),         # ±6 months schedule risk
+    "debt_interest_rate_pct": (-2.0, +2.0),      # ±2 percentage points for debt
+    "construction_months": (-6.0, +6.0),         # ±6 months schedule risk
     "opex_pct_revenue": (-5.0, +5.0),            # ±5% for O&M costs
-    "grid_loss_pct": (-3.0, +2.0),               # ±2% for transmission losses
+    "grid_loss_pct": (-2.0, +2.0),               # ±2% for transmission losses
+
 }
 
 # Sensitivity analysis defaults
