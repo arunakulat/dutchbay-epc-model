@@ -1,51 +1,59 @@
-import os
-import sys
-import json
-import yaml
+#!/usr/bin/env python3
+"""Test scenario configuration loading.
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+Run from project root:
+    python test_scenarios.py
+"""
 
-from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14
-from dutchbay_v14chat.finance.debt import apply_debt_layer
+from finance.irr_config import load_config
+from finance.scenario_config import get_scenario, get_scenario_irr_bounds, list_scenarios
 
-def test_scenario(path):
-    print(f"\nTesting: {path}")
-    try:
-        if path.endswith('.json'):
-            with open(path, 'r') as f:
-                config = json.load(f)
-        elif path.endswith(('.yaml', '.yml')):
-            with open(path, 'r') as f:
-                config = yaml.safe_load(f)
+
+def main():
+    print("=" * 70)
+    print("SCENARIO CONFIGURATION TESTS")
+    print("=" * 70)
+    print()
+    
+    # Load config
+    config = load_config()
+    
+    # List scenarios
+    print("Available scenarios:")
+    print("-" * 70)
+    scenarios = list_scenarios(config)
+    for i, s in enumerate(scenarios, 1):
+        print(f"{i}. {s['name']}")
+        print(f"   Title: {s['title']}")
+        print(f"   Desc:  {s['description']}")
+    print()
+    
+    # Test each scenario
+    for scenario_name in [s["name"] for s in scenarios]:
+        print("=" * 70)
+        print(f"SCENARIO: {scenario_name}")
+        print("=" * 70)
         
-        print(f"  Config loaded: {list(config.keys())}")
+        scenario = get_scenario(config, scenario_name)
         
-        annual_rows = build_annual_rows_v14(config)
-        print(f"  Annual rows generated: {len(annual_rows)} years")
+        print(f"Title:       {scenario.get('name')}")
+        print(f"Description: {scenario.get('description')}")
+        print(f"Resource:    {scenario.get('resource_assumption')}")
+        print(f"Financing:   {scenario.get('financing_type')}")
+        print()
         
-        debt_result = apply_debt_layer(config, annual_rows)
-        print(f"  Debt layer applied: OK")
-        
-        print(f"  SUCCESS!")
-        return True
-    except Exception as e:
-        print(f"  ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        # Extract IRR bounds for each role
+        for role in ["project", "equity", "debt", "xirr"]:
+            lower, upper = get_scenario_irr_bounds(config, scenario_name, role)
+            print(f"  {role.upper():8} IRR bounds: [{lower:6.2f}, {upper:6.2f}]")
+        print()
+    
+    print("=" * 70)
+    print("✅ All scenario tests passed!")
+    print("=" * 70)
+    
+    return 0
+
 
 if __name__ == "__main__":
-    scenarios = [
-        './scenarios/example_a.yaml',
-        './scenarios/example_b.json',
-        './scenarios/edge_extreme_stress.yaml',
-        './scenarios/zz_bad.yaml',
-    ]
-    
-    success_count = 0
-    for scenario in scenarios:
-        if os.path.exists(scenario):
-            if test_scenario(scenario):
-                success_count += 1
-    
-    print(f"\n\nSummary: {success_count}/{len(scenarios)} scenarios processed successfully")
+    exit(main())

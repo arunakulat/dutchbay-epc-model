@@ -1,8 +1,8 @@
 ################################################################################
-# DUTCHBAY V13 - MASTER CONFIGURATION (v2.3 - Debt.py Compatible)
+# DUTCHBAY V14 - MASTER CONFIGURATION (v2.4 - IRR Bounds Added)
 # Workflow-Compliant | Sri Lanka BOI Tax Regime | Full Pipeline Integration
-# Last Updated: 2025-11-15
-# Modules: cashflow.py v2.2, metrics.py v2.1, debt.py, returns.py v1.0
+# Last Updated: 2025-11-23
+# Modules: cashflow_v14.py, debt_v14.py, equity_v14.py, irr.py v2.0
 ################################################################################
 
 project:
@@ -71,6 +71,31 @@ regulatory:
 
 risk_adjustment:
   cfads_haircut_pct: 0.10
+
+# ============================================================================
+# IRR VALIDATION BOUNDS (NEW IN V14) - YAML-DRIVEN CONFIGURATION
+# ============================================================================
+irr_validation:
+  # Project-level IRR bounds (used by analytics, scenario evaluation)
+  irr_lower_bound: -0.70          # -70% loss cap (wind resource worst case)
+  irr_upper_bound: 0.35            # 35% annual return cap (conservative DFI)
+  
+  # Date-aware XIRR bounds (for irregular cashflows)
+  xirr_lower_bound: -0.70
+  xirr_upper_bound: 0.25           # More conservative for irregular timing
+  
+  # Role-specific overrides (optional)
+  equity_irr_lower_bound: -0.50   # Equity can absorb more downside
+  equity_irr_upper_bound: 0.50     # Equity can target higher returns
+  
+  debt_irr_lower_bound: -0.20     # Debt less tolerant of loss
+  debt_irr_upper_bound: 0.15       # Debt capped at conservative returns
+  
+  # Audit trail / rationale (documentation)
+  irr_upper_bound_rationale: "Conservative cap per ADB financing guidelines for renewable energy projects in Sri Lanka"
+  irr_lower_bound_rationale: "Based on worst-case wind resource assessment (P90) with 30% grid curtailment scenario"
+  equity_bounds_rationale: "Equity IRR bounds reflect higher risk tolerance and return expectations per sponsor investment committee"
+  debt_bounds_rationale: "Debt IRR bounds reflect lender covenant requirements and DFI policy limits"
 
 Financing_Terms:
   debt_ratio: 0.70
@@ -181,11 +206,14 @@ sensitivity:
     tornado_chart_title: "DutchBay 150MW - Parameter Sensitivity (Equity IRR)"
     dpi: 300
 
-metadata:
-  version: "2.3"
-  last_updated: "2025-11-15"
-  author: DutchBay V13 Financial Modeling Team
+meta
+  version: "2.4"
+  last_updated: "2025-11-23"
+  author: DutchBay V14 Financial Modeling Team
   review_status: Draft - Pending Board Approval
   assumptions_source: "BOI Agreement Ref: BOI/2025/REN/001234"
-
+  changelog:
+    - version: "2.4"
+      date: "2025-11-23"
+      changes: "Added irr_validation section for YAML-driven IRR bounds configuration"
 

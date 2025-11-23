@@ -1,227 +1,34 @@
 """KPI Calculation Module for V14 - WACC-Integrated Valuation.
 
-Computes project- and equity-level key performance indicators including:
-- Project NPV and IRR with explicit discount rates (pre-debt, CFADS vs capex)
-- Equity NPV and IRR (capex minus debt vs CFADS after debt service)
-- Optional prudential NPV using a higher discount rate
-- DSCR series and minimum DSCR
-- LLCR / PLCR (if provided by the debt layer)
-- Covenant breach counts
+Computes project-level key performance indicators including:
+- Project NPV and IRR with explicit discount rates
+- Equity NPV and IRR (via equity_v14 engine)
+- Base and prudential valuations
+- DSCR series and covenant compliance
+- Debt service metrics
 
-Design notes
-------------
-- Project metrics are deliberately lender-agnostic: they ignore leverage
-  and treat capex as fully equity-funded for NPV/IRR purposes.
-- Equity metrics are leverage-aware: they use equity_investment
-  = capex_total - debt_raised and CFADS minus debt service.
-- All IRR/NPV calculations delegate to finance.irr, which provides
-  robust periodic solvers with graceful fallbacks.
+PHASE 1 ADDITIONS:
+------------------
+- Explicit discount_rate and prudential_rate parameters
+- Dual NPV calculation (base + prudential)
+- Equity cashflow extraction from annual_rows and debt_result
+- WACC transparency fields (discount_rate_used, wacc_label, wacc_is_real)
+- Surface equity KPIs alongside project KPIs
 """
 
 from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 from finance.irr import npv as calc_npv, irr as calc_irr
+from finance.equity_v14 import calculate_equity_performance
 
 logger = logging.getLogger(__name__)
 
-# Fallback only; callers should normally pass an explicit WACC.
+# Default discount rate fallback
 DEFAULT_DISCOUNT_RATE = 0.10
-
-# Tiny positive epsilon used when sanitising pathological DSCR values
-_DSCR_EPSILON = 1e-9
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _as_float(value: Any, default: float = 0.0) -> float:
-    """Best-effort float conversion with a safe default."""
-    try:
-        if value is None:
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _safe_npv(rate: float, cashflows: Sequence[float]) -> float:
-    """Wrapper around finance.irr.npv with defensive error handling."""
-    try:
-        return float(calc_npv(rate, cashflows))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.error("NPV calculation failed: %s", exc)
-        return 0.0
-
-
-def _safe_irr(cashflows: Sequence[float]) -> float:
-    """Wrapper around finance.irr.irr with defensive guards and sanitisation."""
-    try:
-        raw = calc_irr(cashflows)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("IRR calculation raised %s; returning 0.0", exc)
-        return 0.0
-
-    if raw is None:
-        logger.warning("IRR calculation returned None; setting to 0.0")
-        return 0.0
-
-    val = float(raw)
-
-    if not math.isfinite(val):
-        logger.warning("IRR calculation returned non-finite value; setting to 0.0")
-        return 0.0
-
-    # Guardband to avoid exploding IRRs from pathological profiles.
-    if val < -1.0 or val > 10.0:
-        logger.warning(
-            "IRR calculation returned extreme value (%.4f); setting to 0.0",
-            val,
-        )
-        return 0.0
-
-    return val
-
-
-def _extract_capex_and_debt(config: Dict[str, Any], debt_result: Dict[str, Any]) -> Tuple[float, float]:
-    """Pull total capex and total debt raised from the inputs."""
-    capex_cfg = config.get("capex", {})
-    capex_total = 0.0
-    if isinstance(capex_cfg, dict):
-        capex_total = _as_float(capex_cfg.get("usd_total", 0.0))
-
-    debt_raised = _as_float(debt_result.get("max_debt_usd", 0.0))
-
-    logger.debug(
-        "Capex/debt context: Capex=%.0f | Debt raised=%.0f",
-        capex_total,
-        debt_raised,
-    )
-    return capex_total, debt_raised
-
-
-def _build_project_cashflows(
-    capex_total: float,
-    annual_rows: Sequence[Dict[str, Any]],
-) -> List[float]:
-    """Construct project-level cashflows: -capex + CFADS (pre-debt)."""
-    series: List[float] = [-capex_total]
-
-    for row in annual_rows:
-        cfads_usd = _as_float(row.get("cfads_usd", 0.0))
-        series.append(cfads_usd)
-
-    if len(series) <= 1:
-        logger.warning("Insufficient project cashflows; injecting trailing zero.")
-        series = [-capex_total, 0.0]
-
-    return series
-
-
-def _build_equity_cashflows(
-    capex_total: float,
-    debt_raised: float,
-    annual_rows: Sequence[Dict[str, Any]],
-) -> Tuple[float, List[float]]:
-    """Construct equity cashflows: -equity_investment + (CFADS - debt service).
-
-    Equity investment is defined as capex_total - debt_raised, i.e. classic
-    project finance view where leverage is used to reduce sponsor equity.
-    """
-    equity_investment = capex_total - debt_raised
-    # T0: equity outflow
-    series: List[float] = [-equity_investment]
-
-    for row in annual_rows:
-        cfads_usd = _as_float(row.get("cfads_usd", 0.0))
-        debt_service = _as_float(
-            row.get("debt_service_usd", row.get("total_debt_service_usd", 0.0)),
-        )
-        equity_cf = cfads_usd - debt_service
-        series.append(equity_cf)
-
-    if len(series) <= 1:
-        logger.warning("Insufficient equity cashflows; injecting trailing zero.")
-        series = [-equity_investment, 0.0]
-
-    return equity_investment, series
-
-
-def _extract_dscr_metrics(
-    debt_result: Dict[str, Any],
-) -> Tuple[List[float], float, Dict[str, Any]]:
-    """Extract DSCR series, min_dscr, and ancillary debt metrics from debt_result.
-
-    Any finite DSCR <= 0 is coerced to a tiny positive epsilon for analytics
-    output, so that downstream consumers (including tests) see only positive
-    finite DSCRs. This does not change the qualitative signal: such years are
-    still catastrophically below covenant.
-    """
-    dscr_series_raw: Iterable[Any] = debt_result.get("dscr_series", [])
-    dscr_series: List[float] = []
-
-    for d in dscr_series_raw:
-        if d is None:
-            val = float("inf")
-        else:
-            try:
-                val = float(d)
-            except (TypeError, ValueError):
-                val = float("inf")
-
-        # Sanitise non-positive finite DSCRs for analytics/summary purposes.
-        if math.isfinite(val) and val <= 0.0:
-            logger.warning(
-                "Non-positive DSCR %.4f encountered; coercing to epsilon %.1e for analytics output",
-                val,
-                _DSCR_EPSILON,
-            )
-            val = _DSCR_EPSILON
-
-        dscr_series.append(val)
-
-    if not dscr_series:
-        logger.warning("No DSCR series found in debt_result")
-        min_dscr = 0.0
-    else:
-        valid_dscrs = [
-            d
-            for d in dscr_series
-            if isinstance(d, (int, float))
-            and math.isfinite(d)
-            and d > 0.0
-        ]
-        if valid_dscrs:
-            min_dscr = float(min(valid_dscrs))
-        else:
-            logger.warning(
-                "No valid positive DSCR values found; treating min_dscr as inf",
-            )
-            min_dscr = float("inf")
-
-    extras: Dict[str, Any] = {}
-
-    if "llcr" in debt_result:
-        extras["llcr"] = debt_result["llcr"]
-
-    if "plcr" in debt_result:
-        extras["plcr"] = debt_result["plcr"]
-
-    covenant_breaches = debt_result.get("covenant_breaches", [])
-    extras["covenant_breach_count"] = len(covenant_breaches)
-    extras["covenant_breaches"] = covenant_breaches
-
-    return dscr_series, min_dscr, extras
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def calculate_scenario_kpis(
@@ -236,124 +43,290 @@ def calculate_scenario_kpis(
 
     Parameters
     ----------
-    config:
+    config : Dict[str, Any]
         Full scenario configuration (for context/metadata).
-    annual_rows:
+    annual_rows : Sequence[Dict[str, Any]]
         Annual cashflow rows from build_annual_rows().
-    debt_result:
+    debt_result : Dict[str, Any]
         Debt layer results from apply_debt_layer().
-    discount_rate:
-        Base discount rate (typically nominal WACC) for NPV calculation.
-    prudential_rate:
-        Optional prudential discount rate (e.g. WACC + 100 bps) for
-        conservative valuation. If provided, npv_prudential is added.
+    discount_rate : float
+        Base discount rate (typically WACC nominal) for NPV calculation.
+    prudential_rate : Optional[float]
+        Prudential discount rate (e.g., WACC + 100 bps) for conservative valuation.
+        If provided, calculates npv_prudential.
 
     Returns
     -------
     Dict[str, Any]
-        KPI dictionary containing, at minimum:
-        - project_npv: float
-        - project_irr: float
-        - equity_npv: float
-        - equity_irr: float
-        - dscr_series: list[float]
-        - min_dscr: float
-        - discount_rate_used: float
-        - wacc_label: str
-        - wacc_is_real: bool
-        - npv_prudential: float (if prudential_rate is provided)
-        - discount_rate_prudential: float (if prudential_rate is provided)
-        - llcr / plcr / covenant_* (if present in debt_result)
+        KPI dictionary containing at least:
+        - project_npv: Project NPV (float) - CFADS vs total capex (ignores debt)
+        - project_irr: Project IRR (float) - based on CFADS vs total capex
+        - dscr_series: Annual DSCR values (List[float])
+        - min_dscr: Minimum DSCR across all years (float)
+        - discount_rate_used: Discount rate applied (float)
+        - wacc_label: "base" (str)
+        - wacc_is_real: Whether real vs nominal WACC (bool)
+        - npv_prudential: Prudential NPV (float, if prudential_rate provided)
+        - discount_rate_prudential: Prudential rate used (float, if provided)
+
+        And, where possible, equity metrics:
+        - equity_irr
+        - equity_npv
+        - equity_moic
+        - equity_dpi, equity_rvpi, equity_tvpi
+        - equity_annual_coc, equity_average_coc
+        - equity_payback_period_years
+        - equity_cashflows (raw series used)
     """
-    if discount_rate is None or discount_rate <= -0.9999:
-        logger.warning(
-            "Received invalid discount_rate %.4f; falling back to DEFAULT_DISCOUNT_RATE",
-            discount_rate,
-        )
-        discount_rate = DEFAULT_DISCOUNT_RATE
+    # -------------------------------------------------------------------------
+    # Extract CAPEX and debt context
+    # -------------------------------------------------------------------------
+    capex_total = 0.0
+    capex_cfg = config.get("capex", {})
+    if isinstance(capex_cfg, dict):
+        capex_total = float(capex_cfg.get("usd_total", 0.0))
 
-    # ------------------------------------------------------------------
-    # Core inputs: capex, debt, cashflows
-    # ------------------------------------------------------------------
-    capex_total, debt_raised = _extract_capex_and_debt(config, debt_result)
+    debt_raised = float(debt_result.get("max_debt_usd", 0.0))
 
-    project_cf_series = _build_project_cashflows(capex_total, annual_rows)
-    equity_investment, equity_cf_series = _build_equity_cashflows(
+    logger.debug(
+        "Project economics: Capex=%.0f | Debt raised=%.0f",
         capex_total,
         debt_raised,
-        annual_rows,
     )
 
-    # ------------------------------------------------------------------
-    # Project-level valuation (pre-debt)
-    # ------------------------------------------------------------------
-    project_npv = _safe_npv(discount_rate, project_cf_series)
-    project_irr = _safe_irr(project_cf_series)
+    # -------------------------------------------------------------------------
+    # Project-level cash flow series:
+    #   T0: -capex_total
+    #   T1..Tn: CFADS (pre-debt, pre-equity distributions)
+    # -------------------------------------------------------------------------
+    project_cf_series: List[float] = [-capex_total]
 
-    # ------------------------------------------------------------------
-    # Equity-level valuation (post-debt)
-    # ------------------------------------------------------------------
-    equity_npv = _safe_npv(discount_rate, equity_cf_series)
-    equity_irr = _safe_irr(equity_cf_series)
+    for row in annual_rows:
+        cfads_usd = row.get("cfads_usd", 0.0)
+        if cfads_usd is None:
+            cfads_usd = 0.0
+        project_cf_series.append(float(cfads_usd))
 
-    # ------------------------------------------------------------------
-    # Base result block
-    # ------------------------------------------------------------------
+    if len(project_cf_series) <= 1:
+        logger.warning("Insufficient cash flows; NPV/IRR will be zero for project series")
+        project_cf_series = [-capex_total, 0.0]
+
+    # -------------------------------------------------------------------------
+    # Project NPV (base discount rate)
+    # -------------------------------------------------------------------------
+    try:
+        project_npv = calc_npv(discount_rate, project_cf_series)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Project NPV calculation failed: %s", exc)
+        project_npv = 0.0
+
+    # -------------------------------------------------------------------------
+    # Project IRR
+    # -------------------------------------------------------------------------
+    try:
+        project_irr_raw = calc_irr(project_cf_series)
+
+        if project_irr_raw is None:
+            logger.warning("Project IRR calculation returned None; setting to 0.0")
+            project_irr = 0.0
+        else:
+            project_irr = float(project_irr_raw)
+
+            if math.isnan(project_irr) or math.isinf(project_irr):
+                logger.warning("Project IRR calculation returned non-finite value; setting to 0.0")
+                project_irr = 0.0
+            elif not (-1.0 <= project_irr <= 10.0):  # sanity guardband
+                logger.warning(
+                    "Project IRR calculation returned extreme value (%.2f); setting to 0.0",
+                    project_irr,
+                )
+                project_irr = 0.0
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Project IRR calculation failed: %s", exc)
+        project_irr = 0.0
+
+    # -------------------------------------------------------------------------
+    # Build base result dict (project KPIs)
+    # -------------------------------------------------------------------------
     result: Dict[str, Any] = {
-        # Project (pre-debt) metrics
         "project_npv": project_npv,
         "project_irr": project_irr,
-        # Equity (post-debt) metrics
-        "equity_npv": equity_npv,
-        "equity_irr": equity_irr,
-        "equity_investment": equity_investment,
-        # WACC metadata
         "discount_rate_used": discount_rate,
         "wacc_label": "base",
-        "wacc_is_real": False,  # callers can override if passing real WACC
+        "wacc_is_real": False,  # Caller can override if using real WACC
     }
 
-    # ------------------------------------------------------------------
-    # Prudential NPV (optional, project-side only for now)
-    # ------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Prudential NPV (optional)
+    # -------------------------------------------------------------------------
     if prudential_rate is not None:
-        if prudential_rate <= -0.9999:  # pragma: no cover - defensive
-            logger.warning(
-                "Received invalid prudential_rate %.4f; skipping prudential NPV.",
-                prudential_rate,
-            )
-        else:
-            npv_prudential = _safe_npv(prudential_rate, project_cf_series)
+        try:
+            npv_prudential = calc_npv(prudential_rate, project_cf_series)
             result["npv_prudential"] = npv_prudential
             result["discount_rate_prudential"] = prudential_rate
             logger.debug(
-                "Prudential NPV calculated: %.0f at %.2f%% discount rate",
+                "Prudential project NPV calculated: %.0f at %.2f%% discount rate",
                 npv_prudential,
                 prudential_rate * 100.0,
             )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Prudential project NPV calculation failed: %s", exc)
+            result["npv_prudential"] = 0.0
+            result["discount_rate_prudential"] = prudential_rate
 
-    # ------------------------------------------------------------------
-    # DSCR, LLCR, PLCR, covenants
-    # ------------------------------------------------------------------
-    dscr_series, min_dscr, extras = _extract_dscr_metrics(debt_result)
+    # -------------------------------------------------------------------------
+    # DSCR series from debt_result
+    # -------------------------------------------------------------------------
+    dscr_series = debt_result.get("dscr_series", [])
+    if not dscr_series:
+        logger.warning("No DSCR series found in debt_result")
+        dscr_series = []
+
     result["dscr_series"] = dscr_series
-    result["min_dscr"] = min_dscr
-    result.update(extras)
 
-    # ------------------------------------------------------------------
-    # Final logging
-    # ------------------------------------------------------------------
+    # Minimum DSCR (filtering out bad values but preserving genuine low numbers)
+    if dscr_series:
+        valid_dscrs = [
+            d
+            for d in dscr_series
+            if d is not None
+            and isinstance(d, (int, float))
+            and math.isfinite(d)
+            and d > 0.0  # Only positive DSCRs are meaningful
+        ]
+        if valid_dscrs:
+            min_dscr = float(min(valid_dscrs))
+        else:
+            logger.warning(
+                "No valid positive DSCR values found; setting min_dscr to inf "
+                "(likely construction-only or malformed series).",
+            )
+            min_dscr = float("inf")
+    else:
+        min_dscr = 0.0
+
+    result["min_dscr"] = min_dscr
+
+    # -------------------------------------------------------------------------
+    # Additional debt metrics (if available)
+    # -------------------------------------------------------------------------
+    if "llcr" in debt_result:
+        result["llcr"] = debt_result["llcr"]
+
+    if "plcr" in debt_result:
+        result["plcr"] = debt_result["plcr"]
+
+    covenant_breaches = debt_result.get("covenant_breaches", [])
+    result["covenant_breach_count"] = len(covenant_breaches)
+    result["covenant_breaches"] = covenant_breaches
+
+    # -------------------------------------------------------------------------
+    # Equity metrics via equity_v14 engine
+    # -------------------------------------------------------------------------
+    equity_investment = capex_total - debt_raised
+    equity_cf_series: List[float] = []
+
+    if equity_investment > 0.0:
+        # T0: equity outflow = capex - debt
+        equity_cf_series.append(-equity_investment)
+
+        # T1..Tn: equity free cashflow = CFADS - debt service
+        for row in annual_rows:
+            cfads_usd = row.get("cfads_usd", 0.0)
+            debt_service_usd = row.get("debt_service_usd", 0.0)
+
+            if cfads_usd is None:
+                cfads_usd = 0.0
+            if debt_service_usd is None:
+                debt_service_usd = 0.0
+
+            equity_cf = float(cfads_usd) - float(debt_service_usd)
+            equity_cf_series.append(equity_cf)
+
+        logger.debug(
+            "Equity cashflows built: T0=%.0f, periods=%d",
+            -equity_cf_series[0],
+            len(equity_cf_series) - 1,
+        )
+    else:
+        logger.debug(
+            "Equity investment <= 0 (Capex=%.0f, Debt=%.0f); "
+            "skipping equity KPI calculation.",
+            capex_total,
+            debt_raised,
+        )
+
+    # Always surface the raw equity series for downstream analytics, even if empty
+    result["equity_cashflows"] = equity_cf_series
+
+    if equity_cf_series:
+        equity_perf = calculate_equity_performance(
+            equity_cf_series,
+            discount_rate=discount_rate,
+            current_nav=0.0,
+        )
+    else:
+        equity_perf = None
+
+    if equity_perf is not None:
+        result.update(
+            {
+                "equity_irr": equity_perf.equity_irr,
+                "equity_npv": equity_perf.equity_npv,
+                "equity_moic": equity_perf.moic,
+                "equity_dpi": equity_perf.dpi,
+                "equity_rvpi": equity_perf.rvpi,
+                "equity_tvpi": equity_perf.tvpi,
+                "equity_annual_coc": equity_perf.annual_coc,
+                "equity_average_coc": equity_perf.average_coc,
+                "equity_payback_period_years": equity_perf.payback_period_years,
+            }
+        )
+    else:
+        # Normalised "empty" equity view so callers don't have to guard on keys.
+        result.update(
+            {
+                "equity_irr": None,
+                "equity_npv": None,
+                "equity_moic": None,
+                "equity_dpi": None,
+                "equity_rvpi": None,
+                "equity_tvpi": None,
+                "equity_annual_coc": [],
+                "equity_average_coc": 0.0,
+                "equity_payback_period_years": None,
+            }
+        )
+
+    # -------------------------------------------------------------------------
+    # Logging summary
+    # -------------------------------------------------------------------------
     logger.debug(
         "KPIs calculated: "
-        "Proj NPV=%.0f | Proj IRR=%.2f%% | "
-        "Eq NPV=%.0f | Eq IRR=%.2f%% | "
-        "Min DSCR=%.2fx | Discount=%.2f%%",
+        "Proj NPV=%.0f | Proj IRR=%.2f%% | Min DSCR=%.2fx | Discount=%.2f%%",
         project_npv,
         project_irr * 100.0,
-        equity_npv,
-        equity_irr * 100.0,
         min_dscr,
         discount_rate * 100.0,
     )
 
+    if prudential_rate is not None and "npv_prudential" in result:
+        logger.debug(
+            "Prudential project NPV=%.0f at %.2f%% discount",
+            result["npv_prudential"],
+            prudential_rate * 100.0,
+        )
+
+    if equity_perf is not None:
+        logger.debug(
+            "Equity KPIs: IRR=%s | NPV=%s | MOIC=%s | DPI=%s | TVPI=%s",
+            equity_perf.equity_irr,
+            equity_perf.equity_npv,
+            equity_perf.moic,
+            equity_perf.dpi,
+            equity_perf.tvpi,
+        )
+
     return result
+
+    

@@ -45,9 +45,46 @@ MODES:
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Dataclass contract
+# =============================================================================
+
+
+@dataclass
+class WaccComponents:
+    """Canonical WACC components contract.
+
+    This is the internal representation used by the WACC engine.
+    Callers that prefer dicts can use dataclasses.asdict().
+    """
+
+    mode: str
+    wacc_nominal: float
+    wacc_real: Optional[float]
+    wacc_prudential: float
+
+    risk_free_rate: float
+    market_risk_premium: float
+    asset_beta: float
+
+    target_debt_to_equity: float
+    target_debt_to_value: float
+    target_equity_to_value: float
+
+    cost_of_debt_pretax: float
+    cost_of_debt_aftertax: float
+    equity_beta_levered: float
+    cost_of_equity: float
+
+    tax_rate: float
+    inflation_rate: Optional[float]
+    prudential_spread_bps: int
 
 
 # =============================================================================
@@ -68,7 +105,7 @@ def _as_float_or_none(value: Any) -> Optional[float]:
 def _pct_to_decimal(raw: Optional[float]) -> Optional[float]:
     """
     Interpret a numeric as a percentage if > 1.0, otherwise as a decimal:
-        24 -> 0.24
+        24   -> 0.24
         0.24 -> 0.24
     """
     if raw is None:
@@ -88,6 +125,42 @@ def get_nested(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
             return default
         current = current[key]
     return current
+
+
+def _parse_prudential_spread_bps(raw: Any, default_bps: int = 100) -> int:
+    """Parse prudential spread expressed in basis points.
+
+    Accepts:
+    - int / float: interpreted directly as bps (e.g. 100 -> 100)
+    - str: e.g. "100", "+75bps", "50bp", "  +25  " etc.
+
+    Returns an integer number of basis points or raises ValueError on invalid input.
+    """
+    if raw is None:
+        return int(default_bps)
+
+    # Numeric types
+    if isinstance(raw, (int, float)):
+        return int(raw)
+
+    # String formats
+    if isinstance(raw, str):
+        s = raw.strip().lower()
+        # Drop optional "bps"/"bp" suffix
+        if s.endswith("bps"):
+            s = s[:-3]
+        elif s.endswith("bp"):
+            s = s[:-2]
+        s = s.strip()
+
+        # Allow optional + / -
+        try:
+            val = float(s)
+        except ValueError:
+            raise ValueError(f"Invalid prudential_spread_bps: {raw!r}")
+        return int(val)
+
+    raise ValueError(f"Invalid prudential_spread_bps type: {type(raw).__name__}")
 
 
 # =============================================================================
@@ -153,15 +226,18 @@ def build_wacc(
     tax_rate: float,
     inflation_rate: Optional[float] = None,
     prudential_spread_bps: int = 100,
-) -> Dict[str, Any]:
+) -> WaccComponents:
     """
     Pure WACC builder from explicit inputs.
 
     Parameters
     ----------
     risk_free_rate : float
+        Risk-free rate (decimal).
     asset_beta : float
+        Asset (unlevered) beta.
     market_risk_premium : float
+        Market risk premium (decimal).
     debt_to_value : float
         D/V in decimal (0–1).
     cost_of_debt : float
@@ -175,8 +251,9 @@ def build_wacc(
 
     Returns
     -------
-    Dict[str, Any]
-        WACC components dict compatible with WaccComponents dataclass.
+    WaccComponents
+        Structured WACC components; callers may use dataclasses.asdict()
+        if they prefer a plain dict.
     """
     if not (0.0 <= debt_to_value < 1.0):
         raise ValueError(f"Invalid debt_to_value: {debt_to_value}")
@@ -186,11 +263,17 @@ def build_wacc(
 
     equity_beta = relever_beta(asset_beta, d_to_e, tax_rate)
     cost_of_equity = calculate_cost_of_equity_capm(
-        risk_free_rate, equity_beta, market_risk_premium
+        risk_free_rate,
+        equity_beta,
+        market_risk_premium,
     )
 
     wacc_nominal = calculate_after_tax_wacc(
-        cost_of_equity, cost_of_debt, equity_to_value, debt_to_value, tax_rate
+        cost_of_equity,
+        cost_of_debt,
+        equity_to_value,
+        debt_to_value,
+        tax_rate,
     )
 
     wacc_real: Optional[float] = None
@@ -200,28 +283,29 @@ def build_wacc(
     prudential_spread = prudential_spread_bps / 10000.0
     wacc_prudential = wacc_nominal + prudential_spread
 
-    return {
-        "wacc_nominal": wacc_nominal,
-        "wacc_real": wacc_real,
-        "wacc_prudential": wacc_prudential,
-        "risk_free_rate": risk_free_rate,
-        "market_risk_premium": market_risk_premium,
-        "asset_beta": asset_beta,
-        "target_debt_to_equity": d_to_e,
-        "target_debt_to_value": debt_to_value,
-        "target_equity_to_value": equity_to_value,
-        "cost_of_debt_pretax": cost_of_debt,
-        "cost_of_debt_aftertax": cost_of_debt * (1.0 - tax_rate),
-        "equity_beta_levered": equity_beta,
-        "cost_of_equity": cost_of_equity,
-        "tax_rate": tax_rate,
-        "inflation_rate": inflation_rate,
-        "prudential_spread_bps": prudential_spread_bps,
-    }
+    return WaccComponents(
+        mode="capm",
+        wacc_nominal=wacc_nominal,
+        wacc_real=wacc_real,
+        wacc_prudential=wacc_prudential,
+        risk_free_rate=risk_free_rate,
+        market_risk_premium=market_risk_premium,
+        asset_beta=asset_beta,
+        target_debt_to_equity=d_to_e,
+        target_debt_to_value=debt_to_value,
+        target_equity_to_value=equity_to_value,
+        cost_of_debt_pretax=cost_of_debt,
+        cost_of_debt_aftertax=cost_of_debt * (1.0 - tax_rate),
+        equity_beta_levered=equity_beta,
+        cost_of_equity=cost_of_equity,
+        tax_rate=tax_rate,
+        inflation_rate=inflation_rate,
+        prudential_spread_bps=int(prudential_spread_bps),
+    )
 
 
 # =============================================================================
-# WACC from Config
+# WACC from Config (YAML-driven)
 # =============================================================================
 
 
@@ -229,8 +313,16 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Compute project-specific WACC from scenario config.
 
-    Returns a dict compatible with contracts_v14.WaccComponents.
-    If WACC block is absent, returns {} and caller should fall back.
+    Returns
+    -------
+    Dict[str, Any]
+        Dict compatible with contracts_v14.WaccComponents.
+
+    Notes
+    -----
+    - If the 'wacc' block is absent, returns {} and caller should fall back.
+    - Internally uses WaccComponents but preserves the dict surface for
+      backwards compatibility with existing callers.
     """
     wacc_cfg = config.get("wacc", {})
     if not wacc_cfg:
@@ -238,7 +330,9 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("No 'wacc' block in config; evaluator will use default rate.")
         return {}
 
+    # -------------------------------------------------------------------------
     # Simple / discount-rate-only mode
+    # -------------------------------------------------------------------------
     dr_raw = wacc_cfg.get("discount_rate")
     simple_mode = wacc_cfg.get("mode", "").lower() in {"", "simple", "fixed"}
 
@@ -247,29 +341,36 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         if discount_rate is None or discount_rate <= 0:
             raise ValueError(f"Invalid wacc.discount_rate: {dr_raw}")
 
-        prudential_bps = int(wacc_cfg.get("prudential_spread_bps", 100))
+        prudential_bps = _parse_prudential_spread_bps(
+            wacc_cfg.get("prudential_spread_bps"),
+            default_bps=100,
+        )
         prudential_spread = prudential_bps / 10000.0
 
-        return {
-            "mode": "fixed",
-            "wacc_nominal": discount_rate,
-            "wacc_real": None,
-            "wacc_prudential": discount_rate + prudential_spread,
-            "risk_free_rate": 0.0,
-            "market_risk_premium": 0.0,
-            "asset_beta": 0.0,
-            "target_debt_to_equity": 0.0,
-            "target_debt_to_value": 0.0,
-            "target_equity_to_value": 1.0,
-            "cost_of_debt_pretax": 0.0,
-            "cost_of_debt_aftertax": 0.0,
-            "equity_beta_levered": 0.0,
-            "cost_of_equity": discount_rate,
-            "tax_rate": 0.0,
-            "inflation_rate": None,
-            "prudential_spread_bps": prudential_bps,
-        }
+        components = WaccComponents(
+            mode="fixed",
+            wacc_nominal=discount_rate,
+            wacc_real=None,
+            wacc_prudential=discount_rate + prudential_spread,
+            risk_free_rate=0.0,
+            market_risk_premium=0.0,
+            asset_beta=0.0,
+            target_debt_to_equity=0.0,
+            target_debt_to_value=0.0,
+            target_equity_to_value=1.0,
+            cost_of_debt_pretax=0.0,
+            cost_of_debt_aftertax=0.0,
+            equity_beta_levered=0.0,
+            cost_of_equity=discount_rate,
+            tax_rate=0.0,
+            inflation_rate=None,
+            prudential_spread_bps=prudential_bps,
+        )
+        return asdict(components)
 
+    # -------------------------------------------------------------------------
+    # CAPM mode
+    # -------------------------------------------------------------------------
     mode = wacc_cfg.get("mode", "capm").lower()
     if mode != "capm":
         raise ValueError(f"Unknown wacc.mode: '{mode}'. Use 'capm' or 'fixed/simple'.")
@@ -289,7 +390,9 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("wacc.beta or wacc.asset_beta required for CAPM mode")
 
     risk_free_rate_opt: Optional[float] = _pct_to_decimal(_as_float_or_none(rf_raw))
-    market_risk_premium_opt: Optional[float] = _pct_to_decimal(_as_float_or_none(mrp_raw))
+    market_risk_premium_opt: Optional[float] = _pct_to_decimal(
+        _as_float_or_none(mrp_raw)
+    )
     asset_beta_opt: Optional[float] = _as_float_or_none(asset_beta_raw)
 
     if risk_free_rate_opt is None or risk_free_rate_opt < 0:
@@ -308,9 +411,6 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     d_to_e_raw = wacc_cfg.get("target_debt_to_equity")
     gearing_raw = wacc_cfg.get("target_gearing", wacc_cfg.get("gearing"))
 
-    d_to_v: float
-    d_to_e: float
-
     if d_to_e_raw is not None:
         d_to_e_opt: Optional[float] = _as_float_or_none(d_to_e_raw)
         if d_to_e_opt is None or d_to_e_opt < 0:
@@ -324,7 +424,9 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         d_to_v = d_to_v_opt
         d_to_e = d_to_v / (1.0 - d_to_v) if d_to_v < 1.0 else 0.0
     else:
-        raise ValueError("wacc: requires either target_debt_to_equity or gearing/target_gearing")
+        raise ValueError(
+            "wacc: requires either target_debt_to_equity or gearing/target_gearing"
+        )
 
     # Cost of debt
     kd_raw = wacc_cfg.get("cost_of_debt")
@@ -340,7 +442,9 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(
                 "wacc: requires either cost_of_debt or (base_rate + margin) for CAPM mode"
             )
-        base_rate_opt: Optional[float] = _pct_to_decimal(_as_float_or_none(base_rate_raw))
+        base_rate_opt: Optional[float] = _pct_to_decimal(
+            _as_float_or_none(base_rate_raw)
+        )
         margin_opt: Optional[float] = _pct_to_decimal(_as_float_or_none(margin_raw))
         if base_rate_opt is None or base_rate_opt < 0:
             raise ValueError(f"Invalid base_rate: {base_rate_raw}")
@@ -362,13 +466,16 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"Invalid tax_rate: {tax_rate_raw}")
     tax_rate: float = tax_rate_opt
 
-    # Optional inflation - FIX FOR LINE 312: Explicit type annotation
+    # Optional inflation
     inflation_raw = wacc_cfg.get("inflation_rate")
     inflation_rate: Optional[float] = None
     if inflation_raw is not None:
         inflation_rate = _pct_to_decimal(_as_float_or_none(inflation_raw))
 
-    prudential_bps = int(wacc_cfg.get("prudential_spread_bps", 100))
+    prudential_bps = _parse_prudential_spread_bps(
+        wacc_cfg.get("prudential_spread_bps"),
+        default_bps=100,
+    )
 
     components = build_wacc(
         risk_free_rate=risk_free_rate,
@@ -380,15 +487,20 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         inflation_rate=inflation_rate,
         prudential_spread_bps=prudential_bps,
     )
+    components.mode = "capm"
 
-    components["mode"] = "capm"
+    # Log in human-readable terms
     logger.info(
         "WACC calculated: nominal=%.2f%%, real=%s, prudential=%.2f%%",
-        components["wacc_nominal"] * 100,
-        f"{components['wacc_real']*100:.2f}%" if components["wacc_real"] is not None else "N/A",
-        components["wacc_prudential"] * 100,
+        components.wacc_nominal * 100.0,
+        (
+            f"{components.wacc_real * 100.0:.2f}%"
+            if components.wacc_real is not None
+            else "N/A"
+        ),
+        components.wacc_prudential * 100.0,
     )
 
-    return components
+    return asdict(components)
 
-
+    

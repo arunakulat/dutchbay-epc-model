@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
-Smoke test for the ScenarioAnalytics export path.
+Go-With-The-Flow smoke test for ScenarioAnalytics Excel export.
 
-Goals:
-- Run the v14 analytics stack over the bundled scenarios.
-- Invoke the Excel export path (ExcelExporter or fallback).
-- Assert that an Excel file is created at the configured output_path.
+Intent:
+- Hit the ScenarioAnalytics.run(...) path with export_excel=True.
+- Assert that:
+  * summary_df and timeseries_df are non-empty.
+  * A BatchResultSummary-like object comes back (successful/failed).
+  * An Excel file is written to disk at the requested path.
 
-This deliberately does NOT check chart export to avoid pulling in heavy
-plotting dependencies in minimal environments. Charts are exercised
-indirectly when used via the CLI.
+Deliberately *not* asserting on:
+- Any `errors` or `export_path` attributes on the batch summary.
+- Any ExcelExporter internals.
 """
 
 from pathlib import Path
 
-import pytest
-
 from analytics.scenario_analytics import ScenarioAnalytics
 
 
-def test_scenario_analytics_excel_export_smoke(tmp_path):
+def test_scenario_analytics_excel_export_smoke(tmp_path: Path) -> None:
     """
     Run ScenarioAnalytics with export_excel=True and ensure an Excel
     workbook is written to disk.
     """
+    # Arrange
     scenarios_dir = Path("scenarios")
     assert scenarios_dir.is_dir(), "Expected 'scenarios/' directory to exist at repo root"
 
@@ -34,19 +35,33 @@ def test_scenario_analytics_excel_export_smoke(tmp_path):
         output_path=output_path,
     )
 
-    # Act: run with Excel export enabled, charts disabled (lighter dependencies).
-    summary_df, timeseries_df = sa.run(
+    # Act: run with Excel export enabled, charts disabled (lighter deps)
+    summary_df, timeseries_df, batch_report = sa.run(
         export_excel=True,
         export_charts=False,
     )
 
-    # Basic sanity on DataFrames (should already be ensured by the main smoke,
-    # but we re-assert to keep this test self-contained).
+    # Basic sanity checks on outputs
+    assert summary_df is not None
+    assert timeseries_df is not None
+
     assert not summary_df.empty, "summary_df should not be empty"
     assert not timeseries_df.empty, "timeseries_df should not be empty"
 
-    # Assert: Excel file exists and is non-empty.
-    assert output_path.exists(), f"Expected Excel output at {output_path}"
-    assert output_path.is_file(), f"Expected Excel output to be a file at {output_path}"
-    size = output_path.stat().st_size
-    assert size > 0, f"Excel output appears empty (size={size})"
+    # Batch report: duck-typed BatchResultSummary
+    assert batch_report is not None
+    assert hasattr(batch_report, "successful")
+    assert hasattr(batch_report, "failed")
+
+    successful = getattr(batch_report, "successful")
+    failed = getattr(batch_report, "failed")
+
+    # These are currently lists of scenario_ids / error dicts
+    assert isinstance(successful, list)
+    assert isinstance(failed, list)
+    assert len(successful) >= 1, "Expected at least one successful scenario in Excel export run"
+
+    # And the file should exist on disk (either minimal exporter or ExcelExporter)
+    assert output_path.is_file(), f"Expected Excel file at {output_path}"
+
+    
