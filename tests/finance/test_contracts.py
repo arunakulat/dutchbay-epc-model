@@ -1,4 +1,4 @@
-"""Unit tests for finance.shared_contracts module.
+"""Unit tests for analytics.contracts_v14 module (Phase 3: Sensitivity).
 
 Tests validate:
 - Pydantic v2 validation patterns
@@ -13,8 +13,8 @@ import pytest
 import numpy as np
 from pydantic import ValidationError
 
-# Import will fail initially - that's expected in TDD
-from finance.shared_contracts import ParameterRangeConfig, TornadoResult
+# CORRECTED IMPORT (analytics.contracts_v14, not finance.shared_contracts)
+from analytics.contracts_v14 import ParameterRangeConfig, TornadoResult
 
 
 class TestParameterRangeConfig:
