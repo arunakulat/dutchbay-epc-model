@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.2.2 - 2025-11-23
+
+- IRR engine hardening + v14 KPI refactor (project NPV/IRR, DSCR sanitiser)
+
+
+
 ## v0.2.2 - 2025-11-22
 
 - v14 cashflow & metrics mypy-clean spine
