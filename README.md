@@ -1,491 +1,305 @@
-Alright, let’s nail the documentation layer cleanly and fast — no fluff, no dead weight, and fully aligned with your hardened v14 pipeline.
-
-Below are ready-to-paste, production-grade snippets for:
-  1.  README.md (top-level) — includes CI badge, v14 architecture, FX schema rules, test/CI workflow, and example commands.
-  2.  analytics/README.md — documents ScenarioAnalytics, expected dataframes, canonical column names, and export pipeline behavior.
-
-Both snippets avoid inventing APIs you don’t have. Everything is strictly aligned with your actual, tested v14 surface.
-
-⸻
-
-🔹 CAT-Ready: README.md (replace or append to existing)
-
-# DutchBay EPC Model – v14chat Pipeline
+# DutchBay EPC Model – 150MW Wind Farm Financial Model
 
 [![CI v14chat](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-The **v14chat** branch is the canonical, hardened execution path for the
-DutchBay EPC & analytics engine.  
-It contains the validated scenario loader, cashflow engine, debt module,
-IRR/NPV isolations, and the v14 analytics/export pipeline.
-
-This branch is continuously tested under:
-- **Quick smoke suite** (CLI + core analytics)
-- **Full regression suite** (v14 pipeline, FX, debt, cashflow, metrics)
-- **Coverage floor: 65%** (current coverage ≈ 69.7%)
+> **Production-grade financial modeling suite for renewable energy project development, DFI/Lender analysis, and EPC evaluation.**
 
 ---
 
-## 📌 v14 Architecture Overview
+## 🚀 Quick Start
+
+### For New AI Threads/Sessions
+
+Restore full project context instantly:
+
+**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)  
+**Complete:** See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)
+
+### For Developers
+
+```bash
+# Clone repository
+git clone https://github.com/arunakulat/dutchbay-epc-model.git
+cd dutchbay-epc-model
+
+# Create virtual environment
+python3.11 -m venv .venv311
+source .venv311/bin/activate  # On Windows: .venv311\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements_dev.txt
+
+# Run tests
+pytest tests/
+
+# Run scenario analysis
+python analytics/run_full_pipeline.py --config scenarios/base.yaml
+```
+
+---
+
+## 🏛️ Architecture Overview
+
+### v14 Status: Production Ready ✅
+
+The **v14chat** branch represents the canonical, hardened execution path featuring:
+
+- ✅ **Validated scenario loader** with strict YAML/JSON parsing
+- ✅ **Annual cashflow engine** (CFADS, OpEx, CapEx, debt service)
+- ✅ **Debt modeling** (amortization, DSCR calculations)
+- ✅ **Isolated IRR/NPV** calculations
+- ✅ **Analytics pipeline** (sensitivity, Monte Carlo ready)
+- ✅ **Export infrastructure** (CSV, Excel, JSON)
+- ✅ **CI/CD pipeline** with regression testing
 
 ### Core Modules
-- `analytics/scenario_loader.py`  
-  Normalizes YAML/JSON inputs into canonical parameter dicts (strict mode supported).
-- `dutchbay_v14chat/finance/cashflow.py`  
-  Annual cashflow engine (CFADS, opex, capex, debt service hooks).
-- `dutchbay_v14chat/finance/debt.py`  
-  Amortization schedule, interest, DSCR hooks.
-- `dutchbay_v14chat/finance/irr.py`  
-  IRR/NPV **isolated** here per architecture tests.
-- `analytics/scenario_analytics.py`  
-  Produces:
-  - `summary_df` (scalar KPIs per scenario)
-  - `timeseries_df` (annual metrics incl. DSCR)
 
-### Reports & Exports
-- `analytics/export_helpers.py`  
-  Outputs CSV/JSONL, executive workbook helpers.
-- `analytics/executive_workbook.py`  
-  Board-ready, lender-ready KPI workbook generator (used by CI smokes).
+```
+analytics/                    # Analytics & scenario evaluation
+  ├── foundation.py          # Base model (CRITICAL: do not rename)
+  ├── scenario_loader.py     # YAML/JSON config parser
+  ├── scenario_analytics.py  # KPI extraction & reporting
+  ├── sensitivity/           # Sensitivity analysis modules
+  └── monte_carlo/           # Monte Carlo simulation
 
----
+finance/                      # Financial calculation engine
+  ├── cashflow_v14.py        # Cash flow projections
+  ├── debt_v14.py            # Debt modeling & DSCR
+  ├── equity_v14.py          # Equity returns (IRR, NPV)
+  └── tax.py                 # Tax calculations
 
-## 📌 FX Schema – Strict Enforcement
+scenarios/                    # Scenario configuration files
+  ├── base.yaml              # Base case
+  ├── optimistic.yaml        # Upside scenario
+  └── pessimistic.yaml       # Downside scenario
 
-FX must always be a **mapping**, never a scalar.  
-This is enforced by:
-- Loader validation (`scenario_loader`)
-- Tests (`test_fx_config_strictness.py`)
-- Scenario QA test (`test_scenarios_use_mapping_fx`)
+exports/                      # Generated outputs (git-ignored)
+  ├── *.csv
+  ├── *.xlsx
+  └── *.png
 
-Required structure:
+tests/                        # Test suite
+  ├── contracts/             # Contract tests
+  ├── analytics/             # Analytics tests
+  └── integration/           # Integration tests
 
-```yaml
-fx:
-  start_lkr_per_usd: <float>
-  annual_depr: <float>
-
-Examples:
-
-fx:
-  start_lkr_per_usd: 375.0
-  annual_depr: 0.03
-
-Any config using:
-
-fx: 300       # ❌ invalid
-
-will hard-fail with a clear error.
-
-⸻
-
-📌 Run the v14 Pipeline Locally
-
-1. Create a clean venv
-
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-2. Run a specific scenario
-
-python run_full_pipeline.py --config scenarios/example_a.yaml --mode strict
-
-3. Run the analytics layer directly
-
-python - << 'EOF'
-from analytics.scenario_loader import load_scenario_config
-from analytics.scenario_analytics import run_scenario
-
-cfg = load_scenario_config("scenarios/example_a.yaml")
-summary_df, timeseries_df = run_scenario(cfg)
-print(summary_df)
-print(timeseries_df.head())
-EOF
-
-
-⸻
-
-📌 Tests and CI
-
-Run the full suite (includes v14 smokes)
-
-python -m pytest
-
-Run the regression smoke suite
-
-./scripts/regression_smoke.sh
-
-Run quick CLI smokes (CI fast lane)
-
-pytest --no-cov -k "cli and smoke"
-
-
-⸻
-
-📌 CI Workflow (GitHub Actions)
-
-File: .github/workflows/ci-v14.yml
-
-Jobs:
-  1.  quick-smoke
-Runs CLI/v14 smokes without coverage.
-  2.  full-regression
-Runs the full pipeline and enforces test coverage.
-
-.venv is explicitly removed at CI start to avoid stale state.
-
-⸻
-
-📌 Scenario Files (v14-compliant)
-
-The following scenarios are actively tested and validated:
-  • scenarios/example_a.yaml
-  • scenarios/example_a_old.yaml
-  • scenarios/dutchbay_lendercase_2025Q4.yaml
-  • scenarios/edge_extreme_stress.yaml
-
-All required:
-  • structured FX
-  • tariff mapping
-  • project core parameters
-  • capex/opex breakdowns
-
-⸻
-
-📌 Versioning / Releases
-
-The repo uses:
-  • Semantic versioning (VERSION file)
-  • Automated CHANGELOG patching via gh_tools.py
-  • Tag-based release hooks (under development)
-
-⸻
-
-📌 Status
-
-v14chat is now:
-  • canonical
-  • FX-strict
-  • CI-verified
-  • architecture-validated
-  • ready for lender-grade expansion (Monte Carlo, sensitivity, EPC cost curves)
+docs/                         # Documentation
+  ├── THREAD_MIGRATION_PACKAGE.md  # AI context restoration guide
+  ├── architecture_v14.md             # Technical architecture
+  └── Dev_workflow_v14.md             # Development workflow
+```
 
 ---
 
-# 🔹 **CAT-Ready: analytics/README.md**
+## 📊 Key Features
 
-```markdown
-# Analytics Layer (v14chat)
+### Financial Modeling
+- **Debt Structuring**: Multi-tranche debt (USD DFI, USD commercial, LKR local) with grace periods
+- **Cash Flow Analysis**: CFADS, debt service coverage, operating cash flows
+- **Returns Calculation**: Project IRR, Equity IRR, NPV (project & equity)
+- **Risk Metrics**: DSCR (minimum, average), break-even analysis
 
-The analytics layer provides the canonical interface for
-scenario evaluation, KPI extraction, and export-ready dataframes.
+### Analytics Capabilities
+- **Scenario Analysis**: Compare base, optimistic, pessimistic cases
+- **Sensitivity Analysis**: Tornado charts for key drivers
+- **Monte Carlo Simulation**: Probabilistic modeling (in development)
+- **Parameter Validation**: Strict YAML schema enforcement
 
-This module is fully covered by:
-- `test_scenario_analytics_smoke.py`
-- `test_metrics_integration.py`
-- CLI smokes
-- CI regression smoke suite
+### Export & Reporting
+- **CSV/Excel**: Timestamped exports, never overwrites
+- **Executive Workbooks**: Board-ready KPI summaries
+- **JSON/JSONL**: Machine-readable outputs for pipelines
+- **Charts**: Matplotlib-based visualizations
 
 ---
 
-## 📌 Entry Point
+## 🔧 Development Standards
+
+### "Go With The Flow" Rules
+
+These non-negotiable principles ensure production-grade quality:
+
+1. **Config-Driven**: All parameters in YAML with validation
+2. **Batch-Friendly**: No hardcoded paths, CLI-compatible
+3. **Stateless**: Reproducible results, no mutable globals
+4. **Test-First**: Contract tests for all analytics
+5. **Type-Safe**: Full mypy compliance
+
+See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md) for complete standards.
+
+### Code Quality
+
+```bash
+# Type checking
+mypy analytics/ finance/
+
+# Linting
+flake8 analytics/ finance/
+black --check analytics/ finance/
+isort --check-only analytics/ finance/
+
+# Testing with coverage
+pytest --cov=analytics --cov=finance --cov-report=html
+```
+
+### CI/CD Pipeline
+
+- **Quick Smoke**: CLI + core analytics (fast feedback)
+- **Full Regression**: Complete v14 pipeline + coverage
+- **Coverage Floor**: 65% minimum (current: ~70%)
+- **FX Schema**: Strict enforcement (mapping-only, no scalars)
+
+---
+
+## 📝 Usage Examples
+
+### Basic Scenario Run
+
+```bash
+python analytics/run_full_pipeline.py --config scenarios/base.yaml
+```
+
+### Sensitivity Analysis
+
+```bash
+python analytics/sensitivity_v14.py \
+  --config scenarios/base.yaml \
+  --output exports/
+```
+
+### Python API
 
 ```python
 from analytics.scenario_loader import load_scenario_config
 from analytics.scenario_analytics import run_scenario
 
+# Load configuration
+config = load_scenario_config("scenarios/base.yaml", validation_mode="strict")
 
-⸻
+# Run analysis
+summary_df, timeseries_df = run_scenario(config)
 
-📌 Outputs
+# Access results
+print(f"Project IRR: {summary_df['project_irr'].iloc[0]:.2%}")
+print(f"Min DSCR: {summary_df['dscr_min'].iloc[0]:.2f}")
+```
 
-run_scenario(cfg) returns:
+### Export to Excel
 
-1. summary_df
+```python
+from analytics.executive_workbook import create_executive_workbook
 
-A single-row dataframe with scenario-level KPIs:
-
-column  meaning
-scenario_name scenario id / filename
-project_irr Project IRR (from finance.irr)
-equity_irr  Equity IRR
-dscr_min  Minimum DSCR across lifecycle
-npv_project Project NPV
-npv_equity  Equity NPV
-debt_tenor_years  Derived debt tenor
-total_capex_usd From capex block
-tariff_lkr_per_kwh  From tariff block
-
-All names are aligned with v14 smokes and executive workbook expectations.
-
-⸻
-
-2. timeseries_df
-
-Annual rows containing:
-
-column  meaning
-year  1..N
-scenario_name carried through for filtering
-dscr  DSCR for the year
-cfads_lkr LKR CFADS
-debt_service_lkr  Interest + principal
-revenue_lkr Yield from tariff
-opex_lkr  Operating cost
-capex_lkr If applicable (year 0/1)
-
-All analytics tests validate presence and numeric types.
-
-⸻
-
-📌 Relationship with Finance Engine
-
-The analytics layer sits on top of:
-  • dutchbay_v14chat.finance.cashflow
-→ Builds annual cashflow rows
-  • dutchbay_v14chat.finance.debt
-→ Computes debt schedules + DSCR
-  • dutchbay_v14chat.finance.irr
-→ Isolated IRR/NPV functions
-
-Architecture tests assert that IRR logic exists only in
-finance/irr.py.
-
-⸻
-
-📌 Executive Workbook Integration
-
-analytics/export_helpers.py + analytics/executive_workbook.py form the export pipeline.
-
-Tests:
-  • test_export_helpers_v14.py
-  • test_export_smoke.py
-
-Exports include:
-  • CSV
-  • JSONL
-  • Lender-style KPI workbook (Excel)
-
-⸻
-
-📌 Strict Mode
-
-When invoked with:
-
-load_scenario_config(path, validation_mode="strict")
-
-The loader requires:
-  • annual block present
-  • No scalar FX
-  • No missing tariff keys
-  • No undefined capex/opex parameters
-
-⸻
-
-📌 Example
-
-cfg = load_scenario_config("scenarios/example_a.yaml")
-summary_df, ts_df = run_scenario(cfg)
-
-print(summary_df)
-print(ts_df.head())
-
-
-⸻
-
-This module is considered stable for v14 and is contract-tested in CI.
+create_executive_workbook(
+    summary_df=summary_df,
+    timeseries_df=timeseries_df,
+    output_path="exports/executive_summary.xlsx"
+)
+```
 
 ---
 
-# ✅ Next Steps
-If you want, I can:
+## 📚 Documentation
 
-- Insert both files directly into your repo via CAT-wraps  
-- Stage + commit + push using your **gh_tools.py** workflow  
-- Create a `docs/` folder with extended architecture notes  
-- Add badges for coverage + Python version  
+### For AI Assistants & Context Restoration
+- [Thread Migration Quick Start](THREAD_MIGRATION_QUICKSTART.md) - Minimal paste for new threads
+- [Complete Migration Package](docs/THREAD_MIGRATION_PACKAGE.md) - Full context & standards
 
-Just tell me **“Generate CAT for README commits”** and I’ll prep it.
+### For Developers
+- [Architecture Overview](docs/architecture_v14.md) - Technical design
+- [Development Workflow](docs/Dev_workflow_v14.md) - Git workflow & practices
+- [Analytics Layer](docs/ANALYTICS_SETUP_COMPLETE.md) - Analytics module details
+- [Production Readiness](docs/ANALYTICS_PRODUCTION_READY.md) - Deployment guide
 
+### For Project Managers
+- [Changelog](CHANGELOG.md) - Version history
+- [Release Process](RELEASING.md) - How to create releases
+- [Security](SECURITY.md) - Security policy
 
+---
 
-# DutchBay V13 (generated)
-[![CI](https://github.com/OWNER/REPO/actions/workflows/python-app.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/python-app.yml)
-> CI runs on push/PR, manual dispatch, and nightly at 02:00 UTC + 02:00 Asia/Colombo. Required check: **gate**.
+## 🛣️ Roadmap
 
-## Quickstart
+### Phase 2: Interactive Analytics (In Progress 🔄)
+- [ ] Streamlit dashboard for scenario exploration
+- [ ] REST API for sensitivity/Monte Carlo
+- [ ] Real-time parameter validation UI
+
+### Phase 3: Advanced Reporting (Planned 📋)
+- [ ] Automated Excel report generation
+- [ ] Chart export (PNG/SVG)
+- [ ] Health/audit tracking
+
+### Phase 4: Optimization (Planned 📋)
+- [ ] Scenario comparison tools
+- [ ] Multi-objective optimizer
+- [ ] Version control for scenarios
+
+### Phase 5: Stakeholder Deliverables (Planned 📋)
+- [ ] DFI/Lender presentation mode
+- [ ] Board presentation templates
+- [ ] Risk dashboards
+
+---
+
+## ⚙️ Technical Requirements
+
+- **Python**: 3.11+
+- **Dependencies**: See `requirements.txt`
+- **Dev Tools**: See `requirements_dev.txt`
+- **Environment**: macOS, Linux, or Windows with WSL
+
+---
+
+## 🤝 Contributing
+
+### Workflow
+
+1. Create feature branch: `git checkout -b feature/your-feature`
+2. Make changes following "Go with the Flow" rules
+3. Run tests: `pytest tests/`
+4. Run quality checks: `mypy`, `flake8`, `black`
+5. Commit: `git commit -am "feat: Your feature description"`
+6. Push: `git push origin feature/your-feature`
+7. Create Pull Request
+
+### Before Committing
+
 ```bash
-pip install -e .[dev]
-python -m dutchbay_v13 baseline
-python -m dutchbay_v13 montecarlo --n 1000
-python -m dutchbay_v13 sensitivity
-python -m dutchbay_v13 optimize
-```
-
-- Inputs live in `inputs/baseline.yaml`.
-- V13 core delegates to `legacy_v12.py` initially; replace with pure functions incrementally.
-
-## Scenarios
-```bash
-# Run scenario matrix (inputs/scenario_matrix.yaml)
-python -m dutchbay_v13 scenarios
-
-# Or run all YAMLs under inputs/scenarios/
-python -m dutchbay_v13 scenarios --outdir outputs
-```
-
-## Pre-commit (mirror CI)
-```bash
-pip install pre-commit
+# Install pre-commit hooks
 pre-commit install
-# optional: run on entire repo
+
+# Run all checks
 pre-commit run --all-files
 ```
 
+---
 
-## Scenario outputs (CSV + JSON Lines)
-- Directory: `outputs/scenario_dir_results_<stamp>.csv` and `.jsonl`
-- Matrix: `outputs/scenario_matrix_results_<stamp>.csv` and `.jsonl`
+## 📎 Project Information
 
-Each line in `.jsonl` is a compact JSON object with scenario name and summary metrics — easy to stream/process at scale.
+- **Project**: Dutch Bay 150MW Wind Farm
+- **Location**: Sri Lanka
+- **Technology**: Onshore wind energy
+- **Capacity**: 150 MW
+- **Status**: Financial modeling & development phase
 
-## Scenario YAML validation
-- Unknown keys are rejected with a clear message listing where the error occurred.
-- Numeric fields are coerced; bad types raise friendly errors.
+---
 
+## 📝 License
 
-See **docs/schema.md** for parameter units, types, and ranges.
+Proprietary - All Rights Reserved
 
-### Scenario output formats
-Control aggregate outputs:
-```bash
-python -m dutchbay_v13 scenarios --format jsonl   # JSON Lines only
-python -m dutchbay_v13 scenarios --format csv     # CSV only
-python -m dutchbay_v13 scenarios --format both    # CSV + JSONL (default)
-```
+---
 
+## 👥 Team & Support
 
-### Per-scenario annual outputs
-```bash
-python -m dutchbay_v13 scenarios --save-annual           # writes per-scenario annual CSVs
-```
+- **Repository**: [arunakulat/dutchbay-epc-model](https://github.com/arunakulat/dutchbay-epc-model)
+- **Issues**: Use GitHub Issues for bug reports and feature requests
+- **Documentation**: See `docs/` directory for detailed guides
 
-### Quick charts
-```bash
-# Tornado chart from sensitivity
-python -m dutchbay_v13 sensitivity --charts
+---
 
-# Baseline DSCR and Equity FCF charts
-python -m dutchbay_v13 baseline --charts
-```
-
-
-## DebtTerms via YAML
-You can override debt assumptions by adding a `debt:` section in any params/scenario YAML:
-```yaml
-debt:
-  debt_ratio: 0.75
-  tenor_years: 14
-  grace_years: 2
-  usd_debt_ratio: 0.50
-  usd_dfi_pct: 0.15
-  usd_dfi_rate: 0.065
-  usd_mkt_rate: 0.070
-  lkr_rate: 0.090
-```
-See **docs/schema.md** for allowed fields and ranges.
-
-## Tornado metric & sort
-```bash
-python -m dutchbay_v13 sensitivity --charts --tornado-metric irr|npv|dscr --tornado-sort abs|asc|desc
-```
-Outputs chart to `outputs/tornado.png`.
-
-
-## Pareto frontier (IRR vs DSCR)
-Search across debt terms and export a Pareto frontier:
-```bash
-python -m dutchbay_v13 optimize --pareto   --grid-dr 0.50:0.90:0.05   --grid-tenor 8:20:1   --grid-grace 0:3:1   --outdir outputs
-# creates outputs/pareto_grid_results.csv, outputs/pareto_frontier.csv|.json
-```
-
-## Tornado data export
-```bash
-python -m dutchbay_v13 sensitivity --charts --tornado-metric irr --tornado-sort abs
-# writes outputs/tornado_data.csv and outputs/tornado_data.json
-```
-
-
-### Pareto plot
-`optimize --pareto` writes `outputs/pareto.png` (frontier) alongside CSV/JSON.
-
-### YAML-driven batch optimizer
-```yaml
-# grids.yaml
-grids:
-  - name: G1
-    grid_dr: 0.55:0.80:0.05         # or [0.55, 0.60, 0.65]
-    grid_tenor: 10:16:1             # or [10, 12, 14, 16]
-    grid_grace: 0:2:1               # or [0, 1, 2]
-  - name: G2
-    grid_dr: [0.6, 0.7]
-    grid_tenor: [12, 14]
-    grid_grace: [0, 1]
-```
-Run:
-```bash
-python -m dutchbay_v13 optimize --pareto --grid-file grids.yaml --outdir outputs
-# produces pareto_frontier_<name>.csv|.json and pareto_<name>.png per grid, plus pareto_summary.json
-```
-
-
-## Utopia-ranked frontier
-The optimizer now writes `outputs/pareto_utopia_ranked.csv` (frontier sorted by distance-to-utopia, best first).
-
-## Single-file HTML report
-Create a quick report consolidating charts and tables:
-```bash
-# After running sensitivity/optimize
-python -m dutchbay_v13 report --outdir outputs
-
-# Or generate automatically:
-python -m dutchbay_v13 sensitivity --charts --report --outdir outputs
-python -m dutchbay_v13 optimize --pareto --report --outdir outputs
-```
-
-
-## PDF export
-```bash
-# requires extras
-pip install .[pdf]
-python -m dutchbay_v13 sensitivity --charts --report --pdf --outdir outputs
-# writes outputs/report.pdf (WeasyPrint if available, else ReportLab fallback)
-```
-
-## JSON API + web form (FastAPI)
-```bash
-pip install .[web]
-python -m dutchbay_v13 api
-# open http://127.0.0.1:8000/form  (edit params & debt, save YAML)
-# POST /run/baseline           -> summary JSON
-# POST /run/scenarios/stream   -> JSONL stream for scenarios
-# GET  /schema                 -> parameter & debt schema
-```
-
-## Run multiple scenario sources
-
-You can pass multiple files and/or directories via `--scenarios` (preferred).
-`--scenarios` takes precedence over `--scenarios-dir`.
-
-```bash
-python -m dutchbay_v13.cli --mode scenarios \  --scenarios inputs/scenarios/baseline.yaml inputs/extra_scenarios \  --outputs-dir outputs \  --format both
-```
-
-### Releases & Artifacts
-
-- **Tags:** https://github.com/<ORG>/<REPO>/tags  
-- **Latest release:** https://github.com/<ORG>/<REPO>/releases/latest  
-- **CI artifacts:** Uploaded from the `package` job as `dist-<TAG or vVERSION+runN>` containing built wheel and sdist.
-
-[![CI v14chat](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml)
+**Last Updated**: November 24, 2025  
+**Version**: 1.0.0 (v14 production-ready)
