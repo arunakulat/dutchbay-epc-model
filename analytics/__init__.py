@@ -1,6 +1,21 @@
-"""Analytics Master Suite for DutchBay EPC Model.
+"""
+Thin facade for v14 sensitivity analytics.
 
-Provides batch scenario processing, KPI calculation, and board-ready Excel reporting.
+For now this just re-exports the main public API from analytics.sensitivity_v14.
+The heavy v14 feature set (tail risk, Pareto, multi-metric, etc.) is parked for
+a future refactor.
 """
 
-__version__ = "1.1.0"
+from analytics.sensitivity_v14 import (  # type: ignore[import]
+    ParameterRangeConfig,
+    TornadoResult,
+    SensitivitySuite,
+    run_tornado_sensitivity,
+)
+
+__all__ = [
+    "ParameterRangeConfig",
+    "TornadoResult",
+    "SensitivitySuite",
+    "run_tornado_sensitivity",
+]

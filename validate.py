@@ -39,7 +39,7 @@ def _schema_paths() -> List[Path]:
 
     # optional code-level hint
     try:
-        from . import schema as _schema_mod  # type: ignore
+        from dutchbay_v13 import schema as _schema_mod  # type: ignore
         extra = getattr(_schema_mod, "EXTRA_SCHEMA_PATHS", [])
         for p in extra or []:
             pp = Path(p).expanduser().resolve()

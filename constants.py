@@ -46,5 +46,9 @@ SENSITIVITY_RANGES: Final[Dict[str, tuple[float, float]]] = {
 # Sensitivity analysis defaults
 SENSITIVITY_DEFAULT_STEPS: Final[int] = 5  # Industry standard: 5 data points per sweep
 
-# Monte Carlo simulation defaults (CFA Level III standards)
-MONTE_CARLO_ITERATIONS: Final[int] = 10000  # 10K iterations for stable distributions
+# =============================================================================
+# Monte Carlo Simulation Constants (Phase 3 - Added 2025-11-23)
+# =============================================================================
+
+# Default iteration count for Monte Carlo analysis (CFA Level III standard)
+MONTE_CARLO_ITERATIONS: Final[int] = 10000

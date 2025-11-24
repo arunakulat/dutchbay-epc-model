@@ -1,181 +1,173 @@
-#!/usr/bin/env python3
 """
-Smoke tests for ExecutiveWorkbookExporter.
+Smoke tests for analytics.executive_workbook.
 
-Goals:
-- Exercise the happy path of create_report() without requiring real Excel.
-- Stub xlwings so that no external dependencies or UI are needed.
+These tests deliberately stay high-level:
+    - Do we produce an XLSX file?
+    - Does it contain the expected sheet names?
+    - Do basic shapes match expectations?
+
+The detailed financial correctness is exercised elsewhere in the pipeline.
 """
 
 from pathlib import Path
-import sys
-import types
 
 import pandas as pd
-import pytest
+from openpyxl import load_workbook
 
-from analytics.executive_workbook import ExecutiveWorkbookExporter
-
-
-# ---------------------------------------------------------------------------
-# Lightweight xlwings stub for tests
-# ---------------------------------------------------------------------------
+from analytics.executive_workbook import build_executive_workbook
 
 
-class _FakeRange:
-    def __init__(self):
-        self._value = None
-
-    def options(self, **_kwargs):
-        # ScenarioAnalytics/exporter only chains .options(...).value = df
-        return self
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, _val):
-        # We don't need to store the actual value for these tests.
-        self._value = _val
-
-
-class _FakeSheet:
-    def __init__(self):
-        self._cells = {}
-
-    def range(self, addr: str) -> _FakeRange:
-        # Return a stable _FakeRange per address if we ever care later.
-        if addr not in self._cells:
-            self._cells[addr] = _FakeRange()
-        return self._cells[addr]
-
-
-class _FakeWorkbook:
-    def __init__(self):
-        # Provide the two sheets expected by ExecutiveWorkbookExporter.
-        self.sheets = {
-            "Summary": _FakeSheet(),
-            "Timeseries": _FakeSheet(),
-        }
-
-    def save(self, path: str) -> None:
-        # Emulate Excel saving a file to disk so callers can rely on it existing.
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        if not p.exists():
-            p.write_bytes(b"")
-
-    def close(self) -> None:
-        # Nothing special to do here; just keep the API surface.
-        pass
-
-    def to_pdf(self, path: str) -> None:
-        # Emulate Excel's PDF export by touching the file path.
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        if not p.exists():
-            p.write_bytes(b"")
-
-
-class _FakeBooks:
-    def open(self, _path: str) -> _FakeWorkbook:
-        # Always return a fresh fake workbook instance.
-        return _FakeWorkbook()
-
-
-class _FakeApi:
-    def __init__(self):
-        # Calculation mode flag; value is irrelevant for tests.
-        self.Calculation = -4105  # xlCalculationAutomatic (placeholder)
-
-    def Calculate(self):
-        # No-op; we don't simulate Excel calc.
-        return None
-
-
-class _FakeApp:
-    """Context-manager compatible stub for xlwings.App."""
-
-    def __init__(self, visible: bool = False):
-        self.visible = visible
-        self.books = _FakeBooks()
-        self.api = _FakeApi()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        # Nothing special to clean up.
-        return False
-
-
-def _install_fake_xlwings(monkeypatch):
-    """Install a fake xlwings module into sys.modules for the duration of the test."""
-    fake_mod = types.SimpleNamespace(App=_FakeApp)
-    monkeypatch.setitem(sys.modules, "xlwings", fake_mod)
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-
-def test_executive_workbook_create_report_smoke(monkeypatch, tmp_path):
-    """
-    Happy-path smoke test for ExecutiveWorkbookExporter.create_report().
-
-    - Uses a fake xlwings implementation (no real Excel required).
-    - Uses a minimal template file and small DataFrames.
-    - Requests both XLSX and PDF outputs.
-    """
-    _install_fake_xlwings(monkeypatch)
-
-    # Minimal but non-empty DataFrames that look like analytics outputs.
-    summary_df = pd.DataFrame(
+def _dummy_summary_df() -> pd.DataFrame:
+    return pd.DataFrame(
         [
             {
-                "scenario_name": "example_a",
-                "npv": 123.0,
-                "project_irr": 0.12,
+                "scenario_name": "dutchbay_lendercase_2025Q4",
+                "project_irr": 0.125,
+                "equity_irr": 0.165,
+                "project_npv_lkr": 1_234_567_890.0,
+                "equity_npv_lkr": 789_000_000.0,
+                "wacc_pct": 0.10,
+                "leverage_pct": 0.70,
+                "debt_tenor_years": 15,
+                "p50_generation_gwh": 650.0,
+                "p90_generation_gwh": 580.0,
+                "tariff_lkr_per_kwh": 20.30,
+                "dscr_min": 1.35,
+                "dscr_avg": 1.50,
+                "llcr": 1.55,
+                "plcr": 1.70,
+                "dsra_months": 6.0,
             }
         ]
     )
-    timeseries_df = pd.DataFrame(
+
+
+def _dummy_cashflow_df() -> pd.DataFrame:
+    return pd.DataFrame(
         [
             {
-                "scenario_name": "example_a",
+                "year": 0,
+                "revenue_lkr": 0.0,
+                "opex_lkr": 0.0,
+                "cfads_lkr": 0.0,
+            },
+            {
                 "year": 1,
-                "cfads_usd": 100.0,
-                "dscr": 1.3,
+                "revenue_lkr": 1_000_000.0,
+                "opex_lkr": 200_000.0,
+                "cfads_lkr": 800_000.0,
+            },
+        ]
+    )
+
+
+def _dummy_debt_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "year": 1,
+                "opening_balance_lkr": 10_000_000.0,
+                "interest_lkr": 500_000.0,
+                "principal_lkr": 700_000.0,
+                "debt_service_lkr": 1_200_000.0,
+                "cfads_lkr": 1_600_000.0,
+                "dscr": 1.33,
+            },
+            {
+                "year": 2,
+                "opening_balance_lkr": 9_300_000.0,
+                "interest_lkr": 465_000.0,
+                "principal_lkr": 735_000.0,
+                "debt_service_lkr": 1_200_000.0,
+                "cfads_lkr": 1_700_000.0,
+                "dscr": 1.42,
+            },
+        ]
+    )
+
+
+def _dummy_ratios_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "metric_name": "min_dscr",
+                "value": 1.33,
+                "unit": "x",
+                "covenant_threshold": 1.20,
+                "headroom": 0.13,
+                "status": "OK",
+            },
+            {
+                "metric_name": "llcr",
+                "value": 1.55,
+                "unit": "x",
+                "covenant_threshold": 1.40,
+                "headroom": 0.15,
+                "status": "OK",
+            },
+        ]
+    )
+
+
+def _dummy_scenario_summary_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "scenario_name": "dutchbay_lendercase_2025Q4",
+                "tag": "base",
+                "project_irr": 0.125,
+                "equity_irr": 0.165,
+                "project_npv_lkr": 1_234_567_890.0,
+                "equity_npv_lkr": 789_000_000.0,
+                "dscr_min": 1.33,
+                "llcr": 1.55,
+                "plcr": 1.70,
+                "capex_total_lkr": 30_000_000_000.0,
+                "tariff_lkr_per_kwh": 20.30,
+                "p50_generation_gwh": 650.0,
+                "p90_generation_gwh": 580.0,
             }
         ]
     )
 
-    # Create a dummy template file – existence is all the exporter checks.
-    template_path = tmp_path / "Dummy_Template.xlsx"
-    template_path.write_bytes(b"")
 
-    output_path = tmp_path / "Executive_Report.xlsx"
+def test_executive_workbook_basic_structure(tmp_path) -> None:
+    output_path = tmp_path / "executive_workbook_v1.xlsx"
 
-    exporter = ExecutiveWorkbookExporter(
-        template_path=template_path,
+    summary_df = _dummy_summary_df()
+    cashflow_df = _dummy_cashflow_df()
+    debt_df = _dummy_debt_df()
+    ratios_df = _dummy_ratios_df()
+    scenario_summary_df = _dummy_scenario_summary_df()
+
+    result_path = build_executive_workbook(
         output_path=output_path,
-        scenario_name="Example A 150 MW",
-    )
-
-    # Act
-    result_path = exporter.create_report(
         summary_df=summary_df,
-        timeseries_df=timeseries_df,
-        to_pdf=True,
+        cashflow_df=cashflow_df,
+        debt_df=debt_df,
+        ratios_df=ratios_df,
+        scenario_summary_df=scenario_summary_df,
     )
 
-    # Assert basic invariants
-    assert result_path == output_path
-    # Our fake workbook.save() should have created the XLSX file.
-    assert output_path.exists()
+    assert isinstance(result_path, Path)
+    assert result_path.exists()
 
-    # PDF should have been written next to the workbook (default behaviour).
-    pdf_path = output_path.with_suffix(".pdf")
-    assert pdf_path.exists()
+    wb = load_workbook(result_path, read_only=True)
+    sheet_names = set(wb.sheetnames)
+
+    expected = {
+        "Summary",
+        "Cashflow",
+        "DebtService",
+        "Ratios",
+        "ScenarioSummary",
+    }
+
+    # Workbook should contain at least these sheets
+    missing = expected.difference(sheet_names)
+    assert not missing, f"Missing expected sheets: {missing}"
+
+    # Basic shape sanity checks
+    summary_sheet = wb["Summary"]
+    assert summary_sheet.max_row >= 3  # header + at least a couple of metrics
+    assert summary_sheet.max_column >= 2  # section/metric/value style table

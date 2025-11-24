@@ -1,12 +1,12 @@
 {
   "metadata": {
-    "created_at": "2025-11-23T06:46:52.171242",
+    "created_at": "2025-11-24T08:45:00.046090",
     "root_directory": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model",
-    "zip_file": "DutchBay_v14_clean.zip",
-    "total_files": 312,
-    "zip_size_bytes": 444226,
-    "total_uncompressed_bytes": 1304695,
-    "compression_ratio_percent": 65.95
+    "zip_file": "DutchBay_EPC_20251124_0844",
+    "total_files": 337,
+    "zip_size_bytes": 542821,
+    "total_uncompressed_bytes": 1508079,
+    "compression_ratio_percent": 64.01
   },
   "filters": {
     "excluded_directories": [
@@ -42,12 +42,6 @@
   },
   "files": [
     {
-      "path": "Cross-audit debt.py and the debt-service scheduling logic to confirm correct LKR amortization and paydown handling, and ensure DSCR is based on CFADS..md",
-      "size_bytes": 7389,
-      "modified_at": "2025-11-15T00:02:45",
-      "extension": ".md"
-    },
-    {
       "path": "fx_data_processor_dual_regime.py",
       "size_bytes": 13572,
       "modified_at": "2025-11-14T21:50:01",
@@ -70,12 +64,6 @@
       "size_bytes": 5917,
       "modified_at": "2025-11-20T09:34:25.142217",
       "extension": ".py"
-    },
-    {
-      "path": "DutchBay_v14_clean.json",
-      "size_bytes": 28739,
-      "modified_at": "2025-11-23T06:40:00.713611",
-      "extension": ".json"
     },
     {
       "path": "handler_discovery.json",
@@ -115,8 +103,8 @@
     },
     {
       "path": "pytest.ini",
-      "size_bytes": 867,
-      "modified_at": "2025-11-22T14:35:49.012267",
+      "size_bytes": 511,
+      "modified_at": "2025-11-24T08:40:29.080276",
       "extension": ".ini"
     },
     {
@@ -127,8 +115,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size_bytes": 2758,
-      "modified_at": "2025-11-22T19:41:01.460156",
+      "size_bytes": 3050,
+      "modified_at": "2025-11-23T17:24:10.767334",
       "extension": ".md"
     },
     {
@@ -162,12 +150,6 @@
       "extension": ".yaml"
     },
     {
-      "path": "QUICKSTART_P0_2A.md",
-      "size_bytes": 1894,
-      "modified_at": "2025-11-14T01:34:18",
-      "extension": ".md"
-    },
-    {
       "path": "schema.md",
       "size_bytes": 640,
       "modified_at": "2025-11-10T12:42:22",
@@ -181,8 +163,8 @@
     },
     {
       "path": "constants.py",
-      "size_bytes": 497,
-      "modified_at": "2025-11-20T09:21:00.759905",
+      "size_bytes": 2005,
+      "modified_at": "2025-11-23T21:48:30.432750",
       "extension": ".py"
     },
     {
@@ -231,12 +213,6 @@
       "path": "check_all_py_files.py",
       "size_bytes": 2349,
       "modified_at": "2025-11-15T07:42:06",
-      "extension": ".py"
-    },
-    {
-      "path": "monte_carlo.py",
-      "size_bytes": 6031,
-      "modified_at": "2025-11-11T19:54:31",
       "extension": ".py"
     },
     {
@@ -289,8 +265,8 @@
     },
     {
       "path": "validate.py",
-      "size_bytes": 7395,
-      "modified_at": "2025-11-11T22:58:20",
+      "size_bytes": 7406,
+      "modified_at": "2025-11-23T19:40:11.140393",
       "extension": ".py"
     },
     {
@@ -360,6 +336,12 @@
       "extension": ".py"
     },
     {
+      "path": "test_irr_quick.py",
+      "size_bytes": 2491,
+      "modified_at": "2025-11-23T10:20:22.930447",
+      "extension": ".py"
+    },
+    {
       "path": "DEBT_ENHANCEMENT_PATCH.md",
       "size_bytes": 3366,
       "modified_at": "2025-11-14T01:34:00",
@@ -370,12 +352,6 @@
       "size_bytes": 15114,
       "modified_at": "2025-11-18T19:39:33.611616",
       "extension": ".py"
-    },
-    {
-      "path": "full_model_variables_updated.yaml.bak.yaml",
-      "size_bytes": 4100,
-      "modified_at": "2025-11-15T15:46:07",
-      "extension": ".yaml"
     },
     {
       "path": "scenario_wide.csv",
@@ -421,8 +397,8 @@
     },
     {
       "path": "test_scenario.py",
-      "size_bytes": 1540,
-      "modified_at": "2025-11-18T11:05:02.774014",
+      "size_bytes": 1665,
+      "modified_at": "2025-11-23T10:11:42.001804",
       "extension": ".py"
     },
     {
@@ -436,12 +412,6 @@
       "size_bytes": 2692,
       "modified_at": "2025-11-17T19:41:35.727437",
       "extension": ".py"
-    },
-    {
-      "path": "DutchBay_v14_codebase.json",
-      "size_bytes": 63344,
-      "modified_at": "2025-11-23T06:06:59.375894",
-      "extension": ".json"
     },
     {
       "path": "scenario_analytics_debug.py",
@@ -475,8 +445,8 @@
     },
     {
       "path": "make_clean_zip.py",
-      "size_bytes": 6665,
-      "modified_at": "2025-11-23T06:46:34.761318",
+      "size_bytes": 9837,
+      "modified_at": "2025-11-23T16:05:25.507369",
       "extension": ".py"
     },
     {
@@ -492,45 +462,63 @@
       "extension": ".txt"
     },
     {
+      "path": "full_model_variables_updated.yaml",
+      "size_bytes": 5697,
+      "modified_at": "2025-11-23T09:43:22.596136",
+      "extension": ".yaml"
+    },
+    {
       "path": "dutchbay_v13.egg-info/SOURCES.txt",
-      "size_bytes": 2270,
-      "modified_at": "2025-11-22T00:48:16.082880",
+      "size_bytes": 399,
+      "modified_at": "2025-11-23T22:13:44.578956",
       "extension": ".txt"
     },
     {
       "path": "dutchbay_v13.egg-info/requires.txt",
       "size_bytes": 206,
-      "modified_at": "2025-11-22T00:48:16.075910",
+      "modified_at": "2025-11-23T22:13:44.575593",
       "extension": ".txt"
     },
     {
       "path": "dutchbay_v13.egg-info/top_level.txt",
-      "size_bytes": 13,
-      "modified_at": "2025-11-22T00:48:16.076038",
+      "size_bytes": 1,
+      "modified_at": "2025-11-23T22:13:44.575912",
       "extension": ".txt"
     },
     {
       "path": "dutchbay_v13.egg-info/dependency_links.txt",
       "size_bytes": 1,
-      "modified_at": "2025-11-22T00:48:16.075478",
+      "modified_at": "2025-11-23T22:13:44.574947",
       "extension": ".txt"
     },
     {
-      "path": "config/v14chat/README.md",
-      "size_bytes": 68,
-      "modified_at": "2025-11-17T07:57:45.947944",
-      "extension": ".md"
+      "path": "config/monte_carlo_defaults.yaml",
+      "size_bytes": 3361,
+      "modified_at": "2025-11-23T21:35:13.246366",
+      "extension": ".yaml"
+    },
+    {
+      "path": "config/__init__.py",
+      "size_bytes": 0,
+      "modified_at": "2025-11-23T19:18:15.845808",
+      "extension": ".py"
+    },
+    {
+      "path": "config/sensitivity_defaults.yaml",
+      "size_bytes": 5897,
+      "modified_at": "2025-11-23T19:21:22.236799",
+      "extension": ".yaml"
     },
     {
       "path": "tests/conftest.py",
-      "size_bytes": 310,
-      "modified_at": "2025-11-20T15:42:39.901877",
+      "size_bytes": 772,
+      "modified_at": "2025-11-23T20:35:25.969627",
       "extension": ".py"
     },
     {
       "path": "tests/test_scenario_analytics_smoke.py",
-      "size_bytes": 3437,
-      "modified_at": "2025-11-23T05:38:08.953121",
+      "size_bytes": 3333,
+      "modified_at": "2025-11-23T17:16:43.262515",
       "extension": ".py"
     },
     {
@@ -559,8 +547,38 @@
     },
     {
       "path": "tests/test_export_smoke.py",
-      "size_bytes": 1807,
-      "modified_at": "2025-11-20T16:35:09.753266",
+      "size_bytes": 2194,
+      "modified_at": "2025-11-23T17:00:52.009019",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/analytics_layer/test_sensitivity_regression.py",
+      "size_bytes": 2541,
+      "modified_at": "2025-11-24T08:16:54.255783",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/analytics_layer/__init__.py",
+      "size_bytes": 0,
+      "modified_at": "2025-11-23T19:24:51.295285",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/analytics_layer/test_sensitivity_v14.py",
+      "size_bytes": 10868,
+      "modified_at": "2025-11-24T08:16:13.151026",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/analytics_layer/test_sensitivity_v14_all.py",
+      "size_bytes": 2753,
+      "modified_at": "2025-11-24T01:34:25.744192",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/analytics_layer/test_monte_carlo_v14.py",
+      "size_bytes": 11533,
+      "modified_at": "2025-11-23T21:46:56.463885",
       "extension": ".py"
     },
     {
@@ -573,6 +591,12 @@
       "path": "tests/api/test_fx_resolver_unit.py",
       "size_bytes": 2593,
       "modified_at": "2025-11-21T13:25:47.423464",
+      "extension": ".py"
+    },
+    {
+      "path": "tests/api/test_wacc_module.py",
+      "size_bytes": 5466,
+      "modified_at": "2025-11-23T12:31:15.796133",
       "extension": ".py"
     },
     {
@@ -595,8 +619,8 @@
     },
     {
       "path": "tests/api/test_executive_workbook_smoke.py",
-      "size_bytes": 5027,
-      "modified_at": "2025-11-21T14:28:29.025866",
+      "size_bytes": 4882,
+      "modified_at": "2025-11-24T01:07:41.954624",
       "extension": ".py"
     },
     {
@@ -643,8 +667,8 @@
     },
     {
       "path": "tests/api/test_irr_module.py",
-      "size_bytes": 3164,
-      "modified_at": "2025-11-18T17:52:54.402110",
+      "size_bytes": 5462,
+      "modified_at": "2025-11-23T08:50:09.355812",
       "extension": ".py"
     },
     {
@@ -720,6 +744,12 @@
       "extension": ".py"
     },
     {
+      "path": "tests/finance/test_contracts.py",
+      "size_bytes": 14532,
+      "modified_at": "2025-11-23T17:51:47.292283",
+      "extension": ".py"
+    },
+    {
       "path": "dutchbay_v14chat/__init__.py",
       "size_bytes": 60,
       "modified_at": "2025-11-17T07:57:45.946943",
@@ -733,8 +763,8 @@
     },
     {
       "path": "dutchbay_v14chat/finance/cashflow.py",
-      "size_bytes": 421,
-      "modified_at": "2025-11-22T11:43:17.085699",
+      "size_bytes": 2069,
+      "modified_at": "2025-11-23T22:07:44.257727",
       "extension": ".py"
     },
     {
@@ -758,13 +788,13 @@
     {
       "path": "dutchbay_v14chat/finance/v14/tax_calculator.py",
       "size_bytes": 1231,
-      "modified_at": "2025-11-22T18:03:26.480354",
+      "modified_at": "2025-11-23T07:03:58.519344",
       "extension": ".py"
     },
     {
       "path": "dutchbay_v14chat/finance/v14/scenario_manager.py",
-      "size_bytes": 3342,
-      "modified_at": "2025-11-20T12:51:29.239976",
+      "size_bytes": 362,
+      "modified_at": "2025-11-23T21:05:53.700207",
       "extension": ".py"
     },
     {
@@ -1506,6 +1536,12 @@
       "extension": ".md"
     },
     {
+      "path": "docs/equity_v14.py Code Review.md",
+      "size_bytes": 6102,
+      "modified_at": "2025-11-23T08:48:02.019522",
+      "extension": ".md"
+    },
+    {
       "path": "docs/ANALYTICS_PRODUCTION_READY.md",
       "size_bytes": 6979,
       "modified_at": "2025-11-18T13:45:46.082786",
@@ -1518,15 +1554,33 @@
       "extension": ".md"
     },
     {
+      "path": "docs/Cashflow_v14.py refactoring notes.md",
+      "size_bytes": 30788,
+      "modified_at": "2025-11-23T08:50:09.354512",
+      "extension": ".md"
+    },
+    {
       "path": "docs/ANALYTICS_SETUP_COMPLETE.md",
       "size_bytes": 12089,
       "modified_at": "2025-11-17T21:59:29.705498",
       "extension": ".md"
     },
     {
+      "path": "docs/debt_v14.py — Comprehensive Code Review.md",
+      "size_bytes": 31231,
+      "modified_at": "2025-11-23T08:50:09.354870",
+      "extension": ".md"
+    },
+    {
       "path": "docs/9c3cb031.md",
       "size_bytes": 9214,
       "modified_at": "2025-11-15T00:34:21",
+      "extension": ".md"
+    },
+    {
+      "path": "docs/thread migration readiness.md",
+      "size_bytes": 26889,
+      "modified_at": "2025-11-23T13:42:03.526368",
       "extension": ".md"
     },
     {
@@ -1546,6 +1600,18 @@
       "size_bytes": 8567,
       "modified_at": "2025-11-18T12:41:44.515358",
       "extension": ".csv"
+    },
+    {
+      "path": "exports/v14_analytics.xlsx",
+      "size_bytes": 10520,
+      "modified_at": "2025-11-23T11:36:17.986179",
+      "extension": ".xlsx"
+    },
+    {
+      "path": "exports/batch_out.xlsx",
+      "size_bytes": 29696,
+      "modified_at": "2025-11-23T11:34:18.891869",
+      "extension": ".xlsx"
     },
     {
       "path": "scripts/generate_reports.py",
@@ -1614,16 +1680,16 @@
       "extension": ".yaml"
     },
     {
+      "path": "scenarios/edge_extreme_stress.yml",
+      "size_bytes": 1272,
+      "modified_at": "2025-11-21T17:23:46.573581",
+      "extension": ".yml"
+    },
+    {
       "path": "scenarios/example_b.json",
       "size_bytes": 972,
       "modified_at": "2025-11-20T16:04:14.101464",
       "extension": ".json"
-    },
-    {
-      "path": "scenarios/edge_extreme_stress.yaml",
-      "size_bytes": 1272,
-      "modified_at": "2025-11-21T17:23:46.573581",
-      "extension": ".yaml"
     },
     {
       "path": "scenarios/example_a_old.yaml",
@@ -1644,27 +1710,39 @@
       "extension": ".yaml"
     },
     {
+      "path": "scenarios/dutchbay_master_config_v14.yaml",
+      "size_bytes": 8136,
+      "modified_at": "2025-11-23T10:39:30.398610",
+      "extension": ".yaml"
+    },
+    {
       "path": "scenarios/example_a.yaml",
       "size_bytes": 842,
       "modified_at": "2025-11-21T17:23:46.466715",
       "extension": ".yaml"
     },
     {
-      "path": "scenarios/_scratch/zz_bad.yaml",
+      "path": "scenarios/_scrtch/zz_bad.yaml",
       "size_bytes": 49,
       "modified_at": "2025-11-19T06:05:48.806556",
       "extension": ".yaml"
     },
     {
       "path": "finance/wacc_v14.py",
-      "size_bytes": 13730,
-      "modified_at": "2025-11-23T00:49:12.166336",
+      "size_bytes": 16611,
+      "modified_at": "2025-11-23T11:05:47.714827",
+      "extension": ".py"
+    },
+    {
+      "path": "finance/scenario_config.py",
+      "size_bytes": 3011,
+      "modified_at": "2025-11-23T10:09:42.500965",
       "extension": ".py"
     },
     {
       "path": "finance/equity_v14.py",
       "size_bytes": 8183,
-      "modified_at": "2025-11-23T00:04:00.389064",
+      "modified_at": "2025-11-23T09:08:19.242474",
       "extension": ".py"
     },
     {
@@ -1692,6 +1770,12 @@
       "extension": ".py"
     },
     {
+      "path": "finance/irr_config.py",
+      "size_bytes": 4688,
+      "modified_at": "2025-11-23T10:02:54.331836",
+      "extension": ".py"
+    },
+    {
       "path": "finance/utils.py",
       "size_bytes": 996,
       "modified_at": "2025-11-18T18:00:41.227053",
@@ -1699,8 +1783,8 @@
     },
     {
       "path": "finance/irr.py",
-      "size_bytes": 3999,
-      "modified_at": "2025-11-22T18:50:05.400234",
+      "size_bytes": 11727,
+      "modified_at": "2025-11-23T09:47:12.087548",
       "extension": ".py"
     },
     {
@@ -1794,9 +1878,27 @@
       "extension": ".py"
     },
     {
+      "path": "analytics/sensitivity_tail_risk.py",
+      "size_bytes": 1661,
+      "modified_at": "2025-11-24T01:25:49.046345",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity_v14.py",
+      "size_bytes": 6527,
+      "modified_at": "2025-11-24T01:16:54.755333",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity_visualization.py",
+      "size_bytes": 2775,
+      "modified_at": "2025-11-24T01:21:44.334953",
+      "extension": ".py"
+    },
+    {
       "path": "analytics/contracts_v14.py",
-      "size_bytes": 3224,
-      "modified_at": "2025-11-23T00:31:59.983371",
+      "size_bytes": 20762,
+      "modified_at": "2025-11-24T01:41:51.542651",
       "extension": ".py"
     },
     {
@@ -1806,15 +1908,33 @@
       "extension": ".py"
     },
     {
+      "path": "analytics/monte_carlo_v14.py",
+      "size_bytes": 23512,
+      "modified_at": "2025-11-23T22:04:08.927052",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity_export.py",
+      "size_bytes": 2421,
+      "modified_at": "2025-11-24T01:20:39.656941",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity_pareto.py",
+      "size_bytes": 2576,
+      "modified_at": "2025-11-24T01:30:07.804325",
+      "extension": ".py"
+    },
+    {
       "path": "analytics/export_helpers.py",
-      "size_bytes": 27453,
-      "modified_at": "2025-11-22T16:44:02.238215",
+      "size_bytes": 26101,
+      "modified_at": "2025-11-23T20:48:43.183334",
       "extension": ".py"
     },
     {
       "path": "analytics/__init__.py",
-      "size_bytes": 164,
-      "modified_at": "2025-11-20T21:05:51.320409",
+      "size_bytes": 513,
+      "modified_at": "2025-11-24T08:37:52.642819",
       "extension": ".py"
     },
     {
@@ -1830,15 +1950,21 @@
       "extension": ".md"
     },
     {
+      "path": "analytics/scenario_manager.py",
+      "size_bytes": 8240,
+      "modified_at": "2025-11-23T21:41:04.989701",
+      "extension": ".py"
+    },
+    {
       "path": "analytics/scenario_analytics.py",
-      "size_bytes": 18217,
-      "modified_at": "2025-11-23T00:02:07.198721",
+      "size_bytes": 19502,
+      "modified_at": "2025-11-23T13:27:20.716693",
       "extension": ".py"
     },
     {
       "path": "analytics/evaluate_scenario.py",
-      "size_bytes": 6615,
-      "modified_at": "2025-11-23T00:55:37.921930",
+      "size_bytes": 10491,
+      "modified_at": "2025-11-23T19:54:08.471083",
       "extension": ".py"
     },
     {
@@ -1848,15 +1974,27 @@
       "extension": ".py"
     },
     {
+      "path": "analytics/parameter_solvers.py",
+      "size_bytes": 6948,
+      "modified_at": "2025-11-23T21:33:39.430066",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity_heatmap.py",
+      "size_bytes": 2459,
+      "modified_at": "2025-11-24T01:32:59.318542",
+      "extension": ".py"
+    },
+    {
       "path": "analytics/executive_workbook.py",
-      "size_bytes": 7996,
-      "modified_at": "2025-11-20T21:07:10.816387",
+      "size_bytes": 3656,
+      "modified_at": "2025-11-24T06:58:49.998526",
       "extension": ".py"
     },
     {
       "path": "analytics/core/metrics.py",
-      "size_bytes": 7634,
-      "modified_at": "2025-11-22T23:12:55.755463",
+      "size_bytes": 12302,
+      "modified_at": "2025-11-23T09:35:05.637296",
       "extension": ".py"
     },
     {
@@ -1869,6 +2007,18 @@
       "path": "analytics/core/epc_helper.py",
       "size_bytes": 167,
       "modified_at": "2025-11-22T15:24:48.663981",
+      "extension": ".py"
+    },
+    {
+      "path": "analytics/sensitivity/sensitivity_usage_readme.md",
+      "size_bytes": 3941,
+      "modified_at": "2025-11-24T01:44:41.445525",
+      "extension": ".md"
+    },
+    {
+      "path": "analytics/sensitivity/__init__.py",
+      "size_bytes": 621,
+      "modified_at": "2025-11-24T01:39:39.521757",
       "extension": ".py"
     },
     {

@@ -18,6 +18,7 @@ import datetime
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from os import PathLike
 from typing import (
     Any,
     Dict,
@@ -26,19 +27,8 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    List,
 )
-from os import PathLike
-
-import pandas as pd
-
-logger = logging.getLogger(__name__)
-
-
-import datetime
-import logging
-from pathlib import Path
-from os import PathLike
-from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -79,6 +69,8 @@ class ExcelExporter:
     Provides:
       - add_metadata_sheet
       - add_dataframe_sheet
+      - add_conditional_formatting
+      - add_chart_image
       - write_scenario_summary
       - write_scenario_timeseries
       - export_summary_and_timeseries
@@ -119,7 +111,7 @@ class ExcelExporter:
         writer = self._ensure_writer()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        lines = [("Report Generated", timestamp)]
+        lines: list[tuple[str, str]] = [("Report Generated", timestamp)]
         if run_id:
             lines.append(("Run ID", run_id))
 
@@ -129,16 +121,19 @@ class ExcelExporter:
         df = pd.DataFrame(lines, columns=["Field", "Value"])
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
+        # Best-effort styling; failures are non-fatal
         try:
             from openpyxl.styles import Font
 
             workbook = writer.book
             ws = writer.sheets.get(sheet_name) or workbook[sheet_name]
+
             for cell in ws[1]:
                 cell.font = Font(bold=True, size=12)
+
             ws.column_dimensions["A"].width = 30
             ws.column_dimensions["B"].width = 50
-        except Exception as exc:  # pragma: no cover - cosmetic
+        except Exception as exc:  # pragma: no cover - cosmetics only
             logger.warning("ExcelExporter: cover sheet formatting failed: %s", exc)
 
     # ---------------------------------------------------------------------
@@ -208,6 +203,125 @@ class ExcelExporter:
                 logger.warning(
                     "ExcelExporter: warning highlight error %s: %s", sheet_name, exc
                 )
+
+    # ---------------------------------------------------------------------
+    # Conditional formatting helper (used by tests)
+    # ---------------------------------------------------------------------
+
+    def add_conditional_formatting(
+        self,
+        sheet_name: str,
+        column_range: str,
+        rule_type: str = "lessThan",
+        threshold: Optional[float] = None,
+    ) -> None:
+        """
+        Add a simple conditional formatting rule to an existing sheet.
+
+        Parameters
+        ----------
+        sheet_name : str
+            Name of the sheet to format (e.g., "Summary").
+        column_range : str
+            Excel range string (e.g., "B2:B3").
+        rule_type : str
+            openpyxl CellIsRule operator, e.g. "lessThan", "greaterThan".
+        threshold : Optional[float]
+            Numeric threshold value for the rule.
+        """
+        writer = self._ensure_writer()
+        if threshold is None:
+            logger.warning(
+                "ExcelExporter: conditional formatting skipped for %s; "
+                "threshold was None",
+                sheet_name,
+            )
+            return
+
+        try:
+            from openpyxl.formatting.rule import CellIsRule
+            from openpyxl.styles import PatternFill
+
+            workbook = writer.book
+            ws = writer.sheets.get(sheet_name) or workbook[sheet_name]
+        except Exception as exc:  # pragma: no cover - env / IO issues
+            logger.warning(
+                "ExcelExporter: conditional formatting not available for %s: %s",
+                sheet_name,
+                exc,
+            )
+            return
+
+        try:
+            fill = PatternFill(
+                start_color="FFCCCC",
+                end_color="FFCCCC",
+                fill_type="solid",
+            )
+            rule = CellIsRule(
+                operator=rule_type,
+                formula=[str(threshold)],
+                fill=fill,
+            )
+            ws.conditional_formatting.add(column_range, rule)
+        except Exception as exc:  # pragma: no cover - cosmetic / env
+            logger.warning(
+                "ExcelExporter: failed to apply conditional formatting on %s "
+                "(%s %s, threshold=%s): %s",
+                sheet_name,
+                rule_type,
+                column_range,
+                threshold,
+                exc,
+            )
+
+    # ---------------------------------------------------------------------
+    # Image embedding helper (used by tests for dummy chart)
+    # ---------------------------------------------------------------------
+
+    def add_chart_image(
+        self,
+        sheet_name: str,
+        image_path: str,
+        cell: str = "A1",
+    ) -> None:
+        """
+        Embed a chart/image file into the given sheet at the specified cell.
+
+        Parameters
+        ----------
+        sheet_name : str
+            Target sheet name (e.g., "Summary").
+        image_path : str
+            Path to a PNG (or other supported) image on disk.
+        cell : str
+            Anchor cell location (e.g., "D2").
+        """
+        writer = self._ensure_writer()
+        try:
+            from openpyxl.drawing.image import Image as XLImage
+
+            workbook = writer.book
+            ws = writer.sheets.get(sheet_name) or workbook[sheet_name]
+        except Exception as exc:  # pragma: no cover - env / IO issues
+            logger.warning(
+                "ExcelExporter: cannot attach image on sheet %s: %s",
+                sheet_name,
+                exc,
+            )
+            return
+
+        try:
+            img = XLImage(image_path)
+            ws.add_image(img, cell)
+        except Exception as exc:  # pragma: no cover - cosmetic / IO
+            logger.warning(
+                "ExcelExporter: failed to add chart image '%s' at %s on %s: %s",
+                image_path,
+                cell,
+                sheet_name,
+                exc,
+            )
 
     # ---------------------------------------------------------------------
     # Scenario summary/timeseries helpers
@@ -376,289 +490,10 @@ class ExcelExporter:
                 col_letter = get_column_letter(column_cells[0].column)
                 ws.column_dimensions[col_letter].width = adjusted_width
 
-    # You can keep or extend your add_metadata_sheet / add_dataframe_sheet /
-    # export_summary_and_timeseries etc. here; mypy only cares that the class exists.
-    
-def add_metadata_sheet(
-    self,
-    metadata: Dict[str, Any],
-    sheet_name: str = "Report_Cover",
-    run_id: Optional[str] = None,
-) -> None:
-    writer = self._ensure_writer()
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    lines: list[tuple[str, str]] = [("Report Generated", timestamp)]
-    if run_id:
-        lines.append(("Run ID", run_id))
-
-    for k, v in metadata.items():
-        lines.append((str(k), str(v)))
-
-    df = pd.DataFrame(lines, columns=["Field", "Value"])
-    df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    # Best-effort styling; failures are non-fatal
-    try:
-        from openpyxl.styles import Font
-
-        workbook = writer.book
-        ws = writer.sheets.get(sheet_name) or workbook[sheet_name]
-
-        for cell in ws[1]:
-            cell.font = Font(bold=True, size=12)
-
-        ws.column_dimensions["A"].width = 30
-        ws.column_dimensions["B"].width = 50
-    except Exception as exc:  # pragma: no cover - cosmetics only
-        logger.warning("ExcelExporter: cover sheet formatting failed: %s", exc)
-
-
-def add_dataframe_sheet(
-    self,
-    sheet_name: str,
-    df: pd.DataFrame,
-    freeze_panes: Optional[Union[str, tuple[int, int]]] = None,
-    format_headers: bool = True,
-    auto_filter: bool = True,
-    highlight_warnings: bool = False,
-    warning_column: Optional[str] = None,
-    warning_threshold: Optional[float] = None,
-) -> None:
-    writer = self._ensure_writer()
-    df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    try:
-        from openpyxl.styles import Font, PatternFill
-        from openpyxl.utils import get_column_letter
-
-        workbook = writer.book
-        ws = writer.sheets.get(sheet_name) or workbook[sheet_name]
-    except Exception as exc:  # pragma: no cover - cosmetics only
-        logger.warning("ExcelExporter: cannot access sheet %s: %s", sheet_name, exc)
-        return
-
-    if format_headers:
-        try:
-            for cell in ws[1]:
-                cell.font = Font(bold=True)
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "ExcelExporter: header format error for %s: %s", sheet_name, exc
-            )
-
-    if auto_filter:
-        try:
-            ws.auto_filter.ref = ws.dimensions
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "ExcelExporter: auto-filter error for %s: %s", sheet_name, exc
-            )
-
-    if freeze_panes:
-        try:
-            ws.freeze_panes = freeze_panes
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "ExcelExporter: freeze panes error for %s: %s", sheet_name, exc
-            )
-
-    if highlight_warnings and warning_column and warning_threshold is not None:
-        try:
-            if warning_column in df.columns:
-                col_idx = df.columns.get_loc(warning_column) + 1
-                col_letter = get_column_letter(col_idx)
-                red_fill = PatternFill(
-                    start_color="FFCCCC",
-                    end_color="FFCCCC",
-                    fill_type="solid",
-                )
-                for row_idx, value in enumerate(df[warning_column], start=2):
-                    try:
-                        if pd.notna(value) and float(value) < warning_threshold:
-                            ws[f"{col_letter}{row_idx}"].fill = red_fill
-                    except (ValueError, TypeError):
-                        continue
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "ExcelExporter: warning highlight error for %s: %s",
-                sheet_name,
-                exc,
-            )
-
-
-def write_scenario_summary(
-    self,
-    summary_df: pd.DataFrame,
-    sheet_name: str = "Summary",
-) -> None:
-    self.add_dataframe_sheet(
-        sheet_name=sheet_name,
-        df=summary_df,
-        format_headers=True,
-        auto_filter=True,
-    )
-
-
-def write_scenario_timeseries(
-    self,
-    timeseries_df: pd.DataFrame,
-    sheet_name: str = "Timeseries",
-) -> None:
-    self.add_dataframe_sheet(
-        sheet_name=sheet_name,
-        df=timeseries_df,
-        format_headers=True,
-        auto_filter=True,
-    )
-
-
-def export_summary_and_timeseries(
-    self,
-    summary_df: pd.DataFrame,
-    timeseries_df: pd.DataFrame,
-    summary_sheet: str = "Summary",
-    timeseries_sheet: str = "Timeseries",
-    add_board_views: bool = True,
-    scenario_metadata: Optional[Dict[str, Any]] = None,
-    run_id: Optional[str] = None,
-    validate_before_export: bool = True,
-) -> None:
-    logger.info(
-        "ExcelExporter: exporting summary + timeseries to %s", self.output_path
-    )
-
-    if validate_before_export:
-        warnings = validate_for_export(summary_df, timeseries_df)
-        for warning in warnings:
-            logger.warning("Export validation: %s", warning)
-
-    if scenario_metadata is not None:
-        self.add_metadata_sheet(metadata=scenario_metadata, run_id=run_id)
-
-    self.write_scenario_summary(summary_df, sheet_name=summary_sheet)
-    self.write_scenario_timeseries(timeseries_df, sheet_name=timeseries_sheet)
-
-    if add_board_views:
-        self._add_board_friendly_views(summary_df, timeseries_df)
-
-    self._reorder_sheets_for_board()
-    self.autofit_all()
-    self.save()  # Correct: always self.save()
-
-
-def _add_board_friendly_views(
-    self,
-    summary_df: pd.DataFrame,
-    timeseries_df: pd.DataFrame,
-) -> None:
-    writer = self._ensure_writer()
-
-    # DSCR view
-    if {"scenario_name", "dscr"}.issubset(timeseries_df.columns):
-        try:
-            dscr_cols = [
-                c
-                for c in timeseries_df.columns
-                if c in {"scenario_name", "year", "period", "dscr"}
-            ]
-            dscr_view = timeseries_df[dscr_cols].copy()
-
-            if "year" in dscr_view.columns:
-                dscr_view.rename(columns={"year": "Year"}, inplace=True)
-            elif "period" in dscr_view.columns:
-                dscr_view.rename(columns={"period": "Period"}, inplace=True)
-
-            dscr_view.to_excel(writer, sheet_name="DSCR_View", index=False)
-
-            self.add_dataframe_sheet(
-                sheet_name="DSCR_View",
-                df=dscr_view,
-                highlight_warnings=True,
-                warning_column="dscr",
-                warning_threshold=1.2,
-            )
-        except Exception as exc:  # pragma: no cover
-            logger.warning("ExcelExporter: DSCR view export failed: %s", exc)
-
-    # IRR view
-    irr_candidates = [c for c in summary_df.columns if "irr" in str(c).lower()]
-    if irr_candidates:
-        try:
-            cols = ["scenario_name", *irr_candidates]
-            available = [c for c in cols if c in summary_df.columns]
-            if not available:
-                return
-            irr_view = summary_df[available].copy()
-            irr_view.to_excel(writer, sheet_name="IRR_View", index=False)
-        except Exception as exc:  # pragma: no cover
-            logger.warning("ExcelExporter: IRR view export failed: %s", exc)
-
-
-def _reorder_sheets_for_board(self) -> None:
-    if self._writer is None:
-        return
-
-    try:
-        workbook = self._writer.book
-        priority_order = [
-            "Report_Cover",
-            "Summary",
-            "DSCR_View",
-            "IRR_View",
-            "Timeseries",
-        ]
-        all_sheets = workbook.sheetnames
-
-        new_order: list[str] = []
-        for priority_name in priority_order:
-            if priority_name in all_sheets:
-                new_order.append(priority_name)
-
-        for sheet_name in all_sheets:
-            if sheet_name not in new_order:
-                new_order.append(sheet_name)
-
-        workbook._sheets = [workbook[name] for name in new_order]
-    except Exception as exc:  # pragma: no cover
-        logger.warning("ExcelExporter: sheet reordering failed: %s", exc)
-
-
-def autofit_all(self, max_width: int = 50) -> None:
-    if self._writer is None:
-        return
-
-    try:
-        from openpyxl.utils import get_column_letter
-
-        workbook = self._writer.book
-    except Exception as exc:  # pragma: no cover
-        logger.warning(
-            "ExcelExporter: can't access workbook for autofit: %s", exc
-        )
-        return
-
-    for ws in workbook.worksheets:
-        for column_cells in ws.columns:
-            try:
-                max_length = max(
-                    len(str(cell.value)) if cell.value is not None else 0
-                    for cell in column_cells
-                )
-            except ValueError:
-                continue
-
-            adjusted_width = min(max_length + 2, max_width)
-            col_letter = get_column_letter(column_cells[0].column)
-            ws.column_dimensions[col_letter].width = adjusted_width
-
-
 # ---------------------------------------------------------------------------
 # Chart exporters
 # ---------------------------------------------------------------------------
 
-
-from typing import Union  # (if not already imported)
 
 @dataclass
 class ChartExporter:
@@ -773,7 +608,11 @@ class ChartExporter:
 
 
 class ChartGenerator:
-    def __init__(self, output_dir: PathLike) -> None:
+    """
+    Legacy / more generic chart generator used by other analytics layers.
+    """
+
+    def __init__(self, output_dir: PathLike[Any]) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -786,7 +625,7 @@ class ChartGenerator:
             logger.warning("ChartGenerator: matplotlib not available: %s", exc)
             return None
 
-    def _resolve_path(self, output_file: PathLike) -> Path:
+    def _resolve_path(self, output_file: PathLike[Any]) -> Path:
         path = Path(output_file)
         if not path.is_absolute():
             path = self.output_dir / path
@@ -797,7 +636,7 @@ class ChartGenerator:
         self,
         kpi_data: Union[pd.DataFrame, Mapping[str, Iterable[float]]],
         kpi_name: str,
-        output_file: PathLike,
+        output_file: PathLike[Any],
     ) -> Path:
         plt = self._get_plt()
         path = self._resolve_path(output_file)
@@ -838,7 +677,7 @@ class ChartGenerator:
     def plot_npv_distribution(
         self,
         npv_values: Iterable[float],
-        output_file: PathLike,
+        output_file: PathLike[Any],
         bins: int = 20,
     ) -> Path:
         plt = self._get_plt()
@@ -860,7 +699,7 @@ class ChartGenerator:
     def plot_dscr_comparison(
         self,
         scenario_data: Mapping[str, Sequence[float]],
-        output_file: PathLike,
+        output_file: PathLike[Any],
         threshold: Optional[float] = None,
     ) -> Path:
         plt = self._get_plt()
@@ -890,7 +729,7 @@ class ChartGenerator:
     def plot_debt_waterfall(
         self,
         scenario_data: Mapping[str, Sequence[float]],
-        output_file: PathLike,
+        output_file: PathLike[Any],
     ) -> Path:
         plt = self._get_plt()
         path = self._resolve_path(output_file)
@@ -916,4 +755,5 @@ class ChartGenerator:
         fig.savefig(path, dpi=150)
         plt.close(fig)
         return path
+
         

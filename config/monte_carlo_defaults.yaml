@@ -1,0 +1,79 @@
+correlations:
+  enabled: false
+  matrix:
+  - [project.capex_usd_per_kw, financial.construction_period_months, 0.6]
+  - [generation.capacity_factor_pct, generation.availability_pct, 0.4]
+  method: cholesky
+derived_parameters:
+- derive_from: target_project_irr
+  description: Tariff required to achieve lender/equity IRR hurdles given sampled
+    costs
+  enabled: true
+  solver_config:
+    bounds: [40.0, 100.0]
+    max_iterations: 50
+    method: bisection
+    tolerance: 0.0001
+  target_distribution: {dist_type: normal, mean: 0.12, std: 0.01}
+  variable_name: financial.tariff_lkr_per_kwh
+- derive_from: dscr_covenant
+  description: Maximum debt that maintains minimum DSCR covenant
+  enabled: false
+  solver_config:
+    bounds: [1000000.0, 500000000.0]
+    max_iterations: 50
+    method: bisection
+    tolerance: 10000.0
+  target_distribution: {dist_type: uniform, max_val: 1.35, min_val: 1.25}
+  variable_name: financial.debt_amount_usd
+output:
+  custom_metrics:
+  - {description: Years to positive cumulative cashflow, name: payback_years}
+  - {description: Total equity cash return / equity invested, name: equity_multiple}
+  - {description: Average DSCR over full debt tenor, name: debt_service_coverage_avg}
+  risk_metrics: {cvar_confidence: 0.95, var_confidence: 0.95}
+  save_path: outputs/monte_carlo/
+  save_raw_results: true
+scenarios:
+- description: Standard DFI assumptions (P50 parameters)
+  enabled: true
+  name: base_case
+  parameter_overrides: {}
+- description: Favorable capex + high capacity factor
+  enabled: false
+  name: optimistic
+  parameter_overrides:
+    derived_parameters:
+    - target_distribution: {mean: 0.1}
+      variable_name: financial.tariff_lkr_per_kwh
+    standard_parameters:
+    - {mean: 800.0, std: 60.0, variable_name: project.capex_usd_per_kw}
+    - {mode: 48.0, variable_name: generation.capacity_factor_pct}
+- description: High capex + low CF + elevated lender IRR floor
+  enabled: false
+  name: stress_case
+  parameter_overrides:
+    derived_parameters:
+    - target_distribution: {mean: 0.14}
+      variable_name: financial.tariff_lkr_per_kwh
+    standard_parameters:
+    - {mean: 950.0, std: 120.0, variable_name: project.capex_usd_per_kw}
+    - {mode: 42.0, variable_name: generation.capacity_factor_pct}
+simulation:
+  iterations: 10000
+  output_percentiles: [5, 10, 25, 50, 75, 90, 95]
+  parallel_workers: 4
+  random_seed: 42
+standard_parameters:
+- {description: All-in capital cost per kW including contingency, dist_type: normal,
+  mean: 850.0, std: 85.0, variable_name: project.capex_usd_per_kw}
+- {description: Annual fixed + variable O&M costs, dist_type: triangular, max_val: 22.0,
+  min_val: 15.0, mode: 18.0, variable_name: operating.opex_usd_per_kw_per_year}
+- {description: Net capacity factor after all losses, dist_type: triangular, max_val: 50.0,
+  min_val: 40.0, mode: 45.0, variable_name: generation.capacity_factor_pct}
+- {description: Technical availability (excludes grid curtailment), dist_type: triangular,
+  max_val: 99.0, min_val: 95.0, mode: 97.5, variable_name: generation.availability_pct}
+- {description: Senior debt all-in interest rate, dist_type: normal, mean: 9.0, std: 0.5,
+  variable_name: financial.debt_interest_rate_pct}
+- {description: EPC construction duration (affects IDC), dist_type: lognormal, mean: 24.0,
+  std: 3.0, variable_name: financial.construction_period_months}
