@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v1.0.0 - 2025-11-24
+
+- docs: Add comprehensive Thread Migration Package
+
+
+
 ## v0.2.3.1 - 2025-11-24
 
 - docs: Add Thread Migration Package suite for seamless AI context restoration
