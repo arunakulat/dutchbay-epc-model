@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke + behaviour tests for dutchbay_v14chat.finance.v14.tax_calculator.
+Smoke + behaviour tests for finance.tax_v14.
 
 We cover:
 - The free function `calculate_depreciation_schedule`
@@ -9,10 +9,9 @@ We cover:
 We only assert simple invariants that are stable across refactors.
 """
 
-from dutchbay_v14chat.finance.v14.tax_calculator import (
-    calculate_depreciation_schedule,
-    TaxCalculatorV14,
-)
+import pytest
+
+from finance.tax_v14 import TaxCalculatorV14, calculate_depreciation_schedule
 
 
 def test_calculate_depreciation_schedule_straight_line_basic():
