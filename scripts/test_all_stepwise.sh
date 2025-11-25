@@ -58,3 +58,4 @@ echo
 echo "✅ All phases passed with the current gate (20%)."
 echo "→ When green, raise coverage gate (e.g., 60/70/80) in .coveragerc:"
 echo "[report]\nfail_under = 80"
+# EOF

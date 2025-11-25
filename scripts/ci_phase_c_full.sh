@@ -27,3 +27,5 @@ bash "$ROOT/scripts/add_charts_smoke_and_run.sh" || true
 
 echo "✓ Phase C complete."
 
+
+# EOF

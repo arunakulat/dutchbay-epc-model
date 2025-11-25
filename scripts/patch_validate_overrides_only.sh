@@ -37,3 +37,5 @@ ruff check . --fix >/dev/null 2>&1 || true
 black . >/dev/null 2>&1 || true
 echo "Done."
 
+
+# EOF

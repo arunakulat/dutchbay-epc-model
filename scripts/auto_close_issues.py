@@ -25,7 +25,6 @@ import subprocess
 import textwrap
 from typing import Any, Dict, List, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Configuration: per-issue close notes (you can extend/modify this mapping)
 # ---------------------------------------------------------------------------
@@ -299,3 +298,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+# EOF

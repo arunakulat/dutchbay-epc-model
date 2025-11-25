@@ -39,3 +39,5 @@ git push origin "refs/tags/${tag}"
 
 echo "✓ Pushed ${branch} and tag ${tag}"
 
+
+# EOF

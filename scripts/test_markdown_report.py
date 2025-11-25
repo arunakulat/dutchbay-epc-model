@@ -17,10 +17,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dutchbay_v13.reporting.markdown_generator import generate_executive_summary, generate_dfi_lender_pack
-from dutchbay_v13.finance.returns import calculate_all_returns
-from dutchbay_v13.finance.metrics import calculate_llcr, calculate_plcr
 import yaml
+from dutchbay_v13.finance.metrics import calculate_llcr, calculate_plcr
+from dutchbay_v13.finance.returns import calculate_all_returns
+from dutchbay_v13.reporting.markdown_generator import (
+    generate_dfi_lender_pack, generate_executive_summary)
 
 print("=" * 80)
 print("DUTCHBAY V13 - MARKDOWN REPORT GENERATION TEST")
@@ -28,7 +29,7 @@ print("LLCR/PLCR Enhanced | All Years | Fully Parameterized")
 print("=" * 80)
 
 # Load YAML configuration
-yaml_path = Path(__file__).parent.parent / 'full_model_variables_updated.yaml'
+yaml_path = Path(__file__).parent.parent / "full_model_variables_updated.yaml"
 if not yaml_path.exists():
     print(f"\n❌ ERROR: YAML config not found at {yaml_path}")
     sys.exit(1)
@@ -41,10 +42,12 @@ print(f"✓ Configuration loaded")
 
 # Calculate all returns (includes tax, regulatory, risk, DSCR)
 print("\n--- Computing Financial Returns ---")
-print("Computing: Revenue (grid loss) → Regulatory deductions → Risk haircut → Tax → DSCR sculpting")
+print(
+    "Computing: Revenue (grid loss) → Regulatory deductions → Risk haircut → Tax → DSCR sculpting"
+)
 returns = calculate_all_returns(params)
-ds_list = returns['debt_service']
-cfads_list = returns['cfads']
+ds_list = returns["debt_service"]
+cfads_list = returns["cfads"]
 print(f"✓ Returns calculated: {len(cfads_list)} years of data")
 
 # Display summary
@@ -58,12 +61,12 @@ print(f"Equity NPV (12%): ${returns['equity']['equity_npv']:,.2f}")
 print("\n--- Computing Coverage Ratios (LLCR/PLCR) ---")
 print("LLCR: Loan Life Coverage Ratio (NPV of remaining CFADS / Debt Outstanding)")
 print("PLCR: Project Life Coverage Ratio (NPV of all CFADS / Debt Outstanding)")
-debt_outstanding_list = returns['debt_outstanding']  # ← NEW: Get from returns
+debt_outstanding_list = returns["debt_outstanding"]  # ← NEW: Get from returns
 llcr_summary = calculate_llcr(cfads_list, debt_outstanding_list, discount_rate=0.10)
 plcr_summary = calculate_plcr(cfads_list, debt_outstanding_list, discount_rate=0.10)
 dscr_min = min(
     [cfads_list[y] / ds_list[y] for y in range(len(ds_list)) if ds_list[y] > 1e-7],
-    default=0
+    default=0,
 )
 print(f"✓ Coverage ratios calculated")
 
@@ -74,7 +77,7 @@ print(f"Minimum LLCR: {llcr_summary['llcr_min']:.2f}x")
 print(f"Minimum PLCR: {plcr_summary['plcr_min']:.2f}x")
 
 # Create output directory
-outputs_dir = Path(__file__).parent.parent / 'outputs'
+outputs_dir = Path(__file__).parent.parent / "outputs"
 outputs_dir.mkdir(parents=True, exist_ok=True)
 
 # Generate Executive Summary
@@ -86,7 +89,7 @@ exec_summary = generate_executive_summary(
     dscr_min,
     llcr_summary,
     plcr_summary,
-    output_path=outputs_dir / 'executive_summary.md'
+    output_path=outputs_dir / "executive_summary.md",
 )
 print(f"✓ Written to: {outputs_dir / 'executive_summary.md'}")
 
@@ -99,7 +102,7 @@ dfi_pack = generate_dfi_lender_pack(
     dscr_min,
     llcr_summary,
     plcr_summary,
-    output_path=outputs_dir / 'dfi_lender_pack.md'
+    output_path=outputs_dir / "dfi_lender_pack.md",
 )
 print(f"✓ Written to: {outputs_dir / 'dfi_lender_pack.md'}")
 
@@ -116,3 +119,5 @@ print("✓ Post-tax, post-regulatory, post-risk financials shown")
 print("✓ All values parameterized from YAML config")
 print("\n✓ Ready for DFI/lender/board review")
 print("=" * 80)
+
+# EOF

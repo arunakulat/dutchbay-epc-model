@@ -91,3 +91,5 @@ pytest -q "$FILE" --override-ini="addopts=-q --cov=dutchbay_v13 --cov-report=ter
 echo "✓ Done. Consider committing the restored test:"
 echo "   git add $FILE && git commit -m 'tests: restore finance IRR & debt smoke test'"
 
+
+# EOF

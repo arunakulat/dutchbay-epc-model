@@ -49,3 +49,5 @@ PY
 fi
 echo "✓ Minimal core APIs ensured."
 
+
+# EOF

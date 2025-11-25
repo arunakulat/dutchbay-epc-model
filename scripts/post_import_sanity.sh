@@ -43,3 +43,5 @@ echo "-- pytest --"
 [ -d tests ] && pytest -q || true
 
 echo "✅ sanity complete"
+
+# EOF

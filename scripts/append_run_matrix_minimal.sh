@@ -106,3 +106,5 @@ def run_matrix(matrix, outdir):
 PY
 
 echo "✓ Appended minimal run_matrix() that emits scenario_matrix_*"
+
+# EOF

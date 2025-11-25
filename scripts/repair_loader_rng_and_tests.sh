@@ -106,3 +106,5 @@ pytest -q || {
   pytest -k "cli or scenario" -vv
   exit 1
 }
+
+# EOF

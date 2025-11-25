@@ -23,3 +23,4 @@ PY
 else
   echo "= Shim already present in $TARGET"
 fi
+# EOF

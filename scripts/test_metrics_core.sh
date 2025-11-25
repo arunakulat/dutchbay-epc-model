@@ -24,3 +24,4 @@ pytest -q tests/heavy/test_metrics_smoke.py \
   --override-ini="addopts=-q --cov=dutchbay_v13.finance.metrics --cov-report=term-missing --cov-fail-under=1"
 
   
+# EOF

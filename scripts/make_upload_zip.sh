@@ -49,3 +49,5 @@ echo "— Contents —"
 zipinfo -1 "$OUT" | sed 's/^/  /'
 echo "→ Zip ready: $OUT"
 
+
+# EOF

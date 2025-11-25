@@ -52,3 +52,5 @@ printf '   %s\n' "${TEST_FILES[@]}"
 
 # keep the module-by-module loop flexible; relax coverage gate for focused runs
 pytest -q --cov="${MODULE_IMPORT}" --cov-fail-under=1 "${TEST_FILES[@]}"
+
+# EOF

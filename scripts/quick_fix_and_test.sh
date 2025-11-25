@@ -79,3 +79,5 @@ ruff check . --fix || true
 black . || true
 bandit -r dutchbay_v13 || true
 pytest -q || { echo; echo "—— Verbose rerun on CLI/Scenario ——"; pytest -k "cli or scenario" -vv; exit 1; }
+
+# EOF

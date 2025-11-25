@@ -55,3 +55,5 @@ PY
 
 mv "${f}.clean" "$f"
 echo "✓ Repaired wrapper in $f"
+
+# EOF

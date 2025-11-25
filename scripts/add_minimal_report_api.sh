@@ -53,3 +53,5 @@ patch_py "$root/dutchbay_v13/report_pdf.py" "render_pdf"
 
 echo "✓ Minimal reporting APIs ensured."
 
+
+# EOF

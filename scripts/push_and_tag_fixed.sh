@@ -24,3 +24,5 @@ git tag "$TAG"
 git push origin "$TAG"
 echo "✓ Pushed $BRANCH and tag $TAG"
 
+
+# EOF

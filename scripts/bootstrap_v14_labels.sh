@@ -18,3 +18,5 @@ for label in P0 P1 P1.5 P2 P2-optional; do
 done
 
 echo "Label bootstrap complete."
+
+# EOF

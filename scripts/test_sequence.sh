@@ -8,3 +8,4 @@ for m in "${mods[@]}"; do
   fi
 done
 echo "✓ All selected modules passed."
+# EOF

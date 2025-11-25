@@ -78,3 +78,5 @@ echo "   (Optional) commit:"
 echo "     git add parameter_validation.py tests/imports || true"
 echo "     git commit -m 'chore: add legacy import bridge for validate_project_parameters'"
 
+
+# EOF

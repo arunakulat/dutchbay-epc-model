@@ -39,3 +39,4 @@ python -m dutchbay_v13 baseline --charts --outdir _out
 python -m dutchbay_v13 scenarios --format both --save-annual --outdir _out --scenarios inputs || true
 
 echo "Done."
+# EOF

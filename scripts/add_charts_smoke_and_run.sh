@@ -42,3 +42,4 @@ pytest -q tests/reporting/test_charts_smoke.py \
   --override-ini="addopts=-q --cov=dutchbay_v13.charts --cov-report=term-missing --cov-fail-under=1"
 
   
+# EOF

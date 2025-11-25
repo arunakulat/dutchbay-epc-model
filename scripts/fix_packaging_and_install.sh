@@ -92,3 +92,5 @@ mypy dutchbay_v13 || true
 [ -d tests ] && pytest -q || true
 
 echo "✅ Done. Packaging fixed and editable install complete."
+
+# EOF

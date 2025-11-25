@@ -50,3 +50,5 @@ echo "  Try: git reflog --pretty=oneline | head -n 20  # identify a good commit"
 echo "       git restore --source=<GOOD_COMMIT> -- $FILE"
 exit 1
 
+
+# EOF

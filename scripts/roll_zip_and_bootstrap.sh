@@ -189,3 +189,5 @@ ok "Imported zip → $REPO on branch $BR"
 echo "Next:"
 echo "  git diff main...$BR | less"
 echo "  git checkout main && git merge --no-ff $BR && git push"
+
+# EOF

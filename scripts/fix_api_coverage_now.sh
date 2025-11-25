@@ -32,3 +32,5 @@ PY
 
 pytest -q tests/imports/test_api_cov_smoke.py \
   --override-ini="addopts=-q --no-header --no-summary --cov=dutchbay_v13 --cov-report=term-missing --cov-fail-under=1"
+
+# EOF

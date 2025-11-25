@@ -78,3 +78,5 @@ for c in d["cases"]:
 exit(1 if fails else 0)
 PY
 
+
+# EOF

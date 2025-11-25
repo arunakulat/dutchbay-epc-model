@@ -38,7 +38,7 @@ def load_fx_regime(regime_file: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def discover_fx_files(scenarios_dir: Path = None) -> dict[str, Path]:
+def discover_fx_files(scenarios_dir: Path | None = None) -> dict[str, Path]:
     """Discover all FX YAML files in scenarios directory.
 
     Args:

@@ -51,3 +51,4 @@ BASH
 
 chmod +x scripts/lower_coverage_gate.sh
 bash scripts/lower_coverage_gate.sh
+# EOF

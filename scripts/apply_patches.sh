@@ -266,3 +266,4 @@ echo "✅ Patches applied."
 echo "You can now run quick tests, e.g.:"
 echo "  pytest -q -k 'validators or irr or scenarios or cli'  # fast"
 echo "  python -m dutchbay_v13 scenarios --format jsonl --outdir _out"
+# EOF

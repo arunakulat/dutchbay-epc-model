@@ -42,3 +42,5 @@ PYEOF
 done
 
 echo "Done. Review diffs and adjust FX numbers if needed."
+
+# EOF

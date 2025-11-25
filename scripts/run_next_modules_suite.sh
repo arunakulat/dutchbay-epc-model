@@ -10,3 +10,5 @@ echo "→ Running core/config tests…"
 bash scripts/test_core_modules.sh
 echo "✓ Next modules suite complete."
 
+
+# EOF

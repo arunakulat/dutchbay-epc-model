@@ -92,3 +92,5 @@ bandit -r dutchbay_v13 || true
 echo
 echo "== Pytest =="
 pytest -q
+
+# EOF

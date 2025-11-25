@@ -1,10 +1,10 @@
+import json
 import os
 import sys
 import zipfile
-import json
-from pathlib import Path
-from typing import Iterable, Set, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Iterable, Set
 
 # Directories to skip entirely
 SKIP_DIR_NAMES: Set[str] = {
@@ -103,9 +103,7 @@ def iter_files(root: Path) -> Iterable[Path]:
 
 
 def create_manifest(
-    root: Path,
-    file_list: list[tuple[Path, Path]],
-    zip_path: Path
+    root: Path, file_list: list[tuple[Path, Path]], zip_path: Path
 ) -> Dict[str, Any]:
     """
     Create a manifest dictionary with metadata about the archived files.
@@ -123,7 +121,7 @@ def create_manifest(
             "included_extensions": sorted(list(ALLOWED_EXTS)),
             "max_file_size_bytes": MAX_FILE_SIZE,
         },
-        "files": []
+        "files": [],
     }
 
     # Add file details
@@ -159,15 +157,13 @@ def save_manifest(manifest: Dict[str, Any], manifest_path: Path) -> None:
 
 
 def create_concatenated_snapshot(
-    root: Path,
-    file_list: list[tuple[Path, Path]],
-    output_path: Path
+    root: Path, file_list: list[tuple[Path, Path]], output_path: Path
 ) -> None:
     """
     Create a single markdown file concatenating all files for Perplexity upload.
     """
     print(f"Creating concatenated snapshot: {output_path}")
-    
+
     with open(output_path, "w", encoding="utf-8") as out:
         # Header
         out.write(f"# DutchBay EPC Model - Code Snapshot\n")
@@ -175,14 +171,14 @@ def create_concatenated_snapshot(
         out.write(f"**Total Files:** {len(file_list)}\n")
         out.write(f"**Root:** {root}\n\n")
         out.write("---\n\n")
-        
+
         # Concatenate each file
         for abs_path, rel_path in file_list:
             # Skip binary files (xlsx, csv for now - just show metadata)
             ext = abs_path.suffix.lower()
-            
+
             out.write(f"## `{rel_path.as_posix()}`\n\n")
-            
+
             if ext in {".xlsx", ".csv"}:
                 # For binary/data files, just note them
                 size = abs_path.stat().st_size
@@ -192,7 +188,7 @@ def create_concatenated_snapshot(
                 try:
                     with open(abs_path, "r", encoding="utf-8") as f:
                         content = f.read()
-                    
+
                     # Determine code fence type
                     if ext == ".py":
                         fence = "python"
@@ -208,27 +204,29 @@ def create_concatenated_snapshot(
                         fence = "markdown"
                     else:
                         fence = "text"
-                    
+
                     out.write(f"```{fence}\n")
                     out.write(content)
                     if not content.endswith("\n"):
                         out.write("\n")
                     out.write("```\n\n")
-                    
+
                 except Exception as e:
                     out.write(f"*[Error reading file: {e}]*\n\n")
-            
+
             out.write("---\n\n")
-    
+
     snapshot_size = output_path.stat().st_size
-    print(f"✓ Snapshot created: {snapshot_size:,} bytes ({snapshot_size/1024/1024:.2f} MB)")
+    print(
+        f"✓ Snapshot created: {snapshot_size:,} bytes ({snapshot_size/1024/1024:.2f} MB)"
+    )
 
 
 def make_zip(
-    root: Path, 
-    zip_path: Path, 
+    root: Path,
+    zip_path: Path,
     create_json_manifest: bool = True,
-    create_snapshot: bool = True
+    create_snapshot: bool = True,
 ) -> None:
     """
     Create a zip archive at zip_path containing allowed files under root.
@@ -272,10 +270,12 @@ def make_zip(
         manifest = create_manifest(root, file_list, zip_path)
         manifest_path = zip_path.with_suffix(".json")
         save_manifest(manifest, manifest_path)
-        print(f"  Compression: {manifest['metadata']['total_uncompressed_bytes']:,} → "
-              f"{manifest['metadata']['zip_size_bytes']:,} bytes "
-              f"({manifest['metadata'].get('compression_ratio_percent', 0):.1f}% reduction)")
-    
+        print(
+            f"  Compression: {manifest['metadata']['total_uncompressed_bytes']:,} → "
+            f"{manifest['metadata']['zip_size_bytes']:,} bytes "
+            f"({manifest['metadata'].get('compression_ratio_percent', 0):.1f}% reduction)"
+        )
+
     # Create concatenated snapshot if requested
     if create_snapshot:
         snapshot_path = zip_path.with_suffix(".md")
@@ -284,12 +284,18 @@ def make_zip(
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
-        print(f"Usage: {argv[0]} <output_name> [--no-manifest] [--no-snapshot]", file=sys.stderr)
+        print(
+            f"Usage: {argv[0]} <output_name> [--no-manifest] [--no-snapshot]",
+            file=sys.stderr,
+        )
         print(f"", file=sys.stderr)
         print(f"Creates three files by default:", file=sys.stderr)
         print(f"  • <output_name>.zip - compressed archive", file=sys.stderr)
         print(f"  • <output_name>.json - file manifest", file=sys.stderr)
-        print(f"  • <output_name>.md - concatenated snapshot for Perplexity", file=sys.stderr)
+        print(
+            f"  • <output_name>.md - concatenated snapshot for Perplexity",
+            file=sys.stderr,
+        )
         return 1
 
     zip_name = argv[1]
@@ -300,10 +306,10 @@ def main(argv: list[str]) -> int:
     zip_path = root / zip_name
 
     make_zip(
-        root=root, 
-        zip_path=zip_path, 
+        root=root,
+        zip_path=zip_path,
         create_json_manifest=create_manifest,
-        create_snapshot=create_snapshot
+        create_snapshot=create_snapshot,
     )
 
     return 0
@@ -311,3 +317,5 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
+
+# EOF

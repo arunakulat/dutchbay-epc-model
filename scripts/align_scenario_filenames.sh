@@ -30,3 +30,5 @@ sed -i '' -E "s/f\"scenario_\\{name\\}_results_/f\"{base}_results_/g" "$F"
 
 python -m pyflakes "$F" >/dev/null 2>&1 || true
 echo "✓ scenario_runner.py: filenames now use scenario stem for results + annual"
+
+# EOF

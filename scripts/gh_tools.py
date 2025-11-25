@@ -25,7 +25,6 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Low-level helpers
 # ---------------------------------------------------------------------------
@@ -339,4 +338,5 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-    
+
+# EOF

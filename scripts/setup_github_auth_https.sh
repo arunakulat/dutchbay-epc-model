@@ -19,3 +19,5 @@ EOF
 echo "✓ Credentials saved to macOS Keychain for ${GH_USER}@github.com"
 echo "Next: bash scripts/push_and_tag.sh  # or with args: bash scripts/push_and_tag.sh main v13-irr-restore"
 
+
+# EOF

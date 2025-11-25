@@ -53,3 +53,5 @@ sys.stdout.write(src)
 PY
 mv "$T" "$F"
 echo "✓ Restored env-aware validator in $F"
+
+# EOF

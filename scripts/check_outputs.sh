@@ -62,3 +62,5 @@ else
   echo
   echo "(no Annual CSV found)"
 fi
+
+# EOF

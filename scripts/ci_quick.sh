@@ -42,3 +42,5 @@ bash scripts/run_cli_scenarios_fast.sh
 echo ""
 echo "✓ Quick CI complete."
 
+
+# EOF

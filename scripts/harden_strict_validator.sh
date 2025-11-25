@@ -59,3 +59,5 @@ open(p, "w", encoding="utf-8").write(src)
 print("✓ Hardened strict validator in", p)
 PY
 mv "$T" "$F"
+
+# EOF

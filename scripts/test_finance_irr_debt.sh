@@ -96,3 +96,5 @@ echo "   (Optional) commit:"
 echo "     git add tests/test_finance_irr_debt.py && git commit -m 'tests: finance IRR & debt focused smokes (flex signatures)' || true"
 PY
 
+
+# EOF

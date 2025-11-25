@@ -31,3 +31,4 @@ if "if debt is not None:" not in s:
 Path("dutchbay_v13/core.py").write_text(s, encoding="utf-8")
 print("✓ core.py patched for debt override passthrough")
 PY
+# EOF

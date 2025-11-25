@@ -65,3 +65,5 @@ PY
 mv "${F}.tmp3" "$F"
 rm -f "${F}.tmp1" "${F}.tmp2"
 echo "✓ Neutralized _validate_params_dict for CLI smoke in $F"
+
+# EOF

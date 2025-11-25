@@ -47,3 +47,5 @@ python -m pip install --upgrade pip >/dev/null 2>&1 || true
 [ -f pyproject.toml ] && pip install -e . || true
 
 echo "✓ venv active: $VIRTUAL_ENV"
+
+# EOF

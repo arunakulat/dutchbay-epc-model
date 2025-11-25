@@ -6,3 +6,5 @@ bash scripts/harden_reporting_smokes.sh
 bash scripts/run_reporting_hardened.sh
 echo "✓ Reporting stack upgraded."
 
+
+# EOF

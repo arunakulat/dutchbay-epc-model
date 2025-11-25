@@ -135,3 +135,5 @@ PY
 
 echo "✓ scenario_runner.py patched with VALIDATION_MODE={permissive|strict}"
 
+
+# EOF

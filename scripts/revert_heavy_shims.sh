@@ -25,3 +25,5 @@ strip_shims dutchbay_v13/optimization.py
 
 echo "✓ Shim removal complete. Consider running tests and committing."
 
+
+# EOF

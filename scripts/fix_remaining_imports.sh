@@ -50,3 +50,5 @@ echo "✅ Fixed path assertions"
 echo ""
 echo "📋 Verification:"
 echo "  python scripts/check_legacy_imports.py"
+
+# EOF

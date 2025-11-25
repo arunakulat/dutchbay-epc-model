@@ -44,3 +44,5 @@ PY
 
 mv "${f}.tmp" "$f"
 echo "✓ Patched $f"
+
+# EOF

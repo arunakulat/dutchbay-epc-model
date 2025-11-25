@@ -8,3 +8,5 @@ rev="$(git rev-parse --short HEAD || echo "no-git")"
 echo "=== DutchBay v14 Regression Smoke @ ${ts} (rev: ${rev}) ==="
 
 python -m pytest
+
+# EOF

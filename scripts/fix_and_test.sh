@@ -385,3 +385,5 @@ PY
 ruff check . --fix || true
 black . || true
 pytest
+
+# EOF

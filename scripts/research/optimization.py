@@ -5,21 +5,21 @@ Optimizes debt ratio, USD/LKR split, and DFI debt under IRR/DSCR constraints
 ENHANCED VERSION: Robust error handling, constraint verification, dict key access
 """
 from __future__ import annotations
-from pathlib import Path
-from typing import List, Dict, Any
+
 import json
+import warnings
+from pathlib import Path
+from typing import Any, Dict, List
+
+import numpy as np
 import pandas as pd
 import yaml
+from scipy.optimize import Bounds, NonlinearConstraint, minimize
+
 from .charts import pareto_chart
-import numpy as np
-import warnings
-from scipy.optimize import minimize, Bounds, NonlinearConstraint
-from .legacy_v12 import (
-    create_default_parameters,
-    build_financial_model,
-    create_default_debt_structure,
-    DebtStructure,
-)
+from .legacy_v12 import (DebtStructure, build_financial_model,
+                         create_default_debt_structure,
+                         create_default_parameters)
 
 
 def optimize_capital_structure(
@@ -343,9 +343,12 @@ def optimize_debt_pareto_yaml(
             json.dumps(results, indent=2), encoding="utf-8"
         )
     return {"grids": results}
+
+
 # === BEGIN TEST SHIM (non-intrusive) ===
 def __test_shim_optimization__():
     return True
+
 
 def solve_tariff(target_equity_irr: float, params: dict | None = None):
     """Closed-form inverse of the shim IRR mapping: irr = 0.01 + (t - 20)*0.002."""
@@ -353,5 +356,12 @@ def solve_tariff(target_equity_irr: float, params: dict | None = None):
         target_equity_irr = 0.15
     # invert: t = 20 + (irr - 0.01)/0.002
     t = 20.0 + (float(target_equity_irr) - 0.01) / 0.002
-    return {"tariff_lkr_per_kwh": round(t, 4), "target_equity_irr": float(target_equity_irr)}
+    return {
+        "tariff_lkr_per_kwh": round(t, 4),
+        "target_equity_irr": float(target_equity_irr),
+    }
+
+
 # === END TEST SHIM ===
+
+# EOF

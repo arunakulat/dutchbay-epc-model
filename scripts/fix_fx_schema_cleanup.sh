@@ -51,3 +51,5 @@ PYEOF
 done
 
 echo "Done. Verify with: git diff"
+
+# EOF

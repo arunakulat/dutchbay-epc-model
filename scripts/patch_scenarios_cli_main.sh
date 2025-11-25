@@ -256,3 +256,5 @@ echo "✓ Patched scenario_runner.py, cli.py, and __main__.py"
 # formatting (best-effort)
 ruff check . --fix >/dev/null 2>&1 || true
 black . >/dev/null 2>&1 || true
+
+# EOF

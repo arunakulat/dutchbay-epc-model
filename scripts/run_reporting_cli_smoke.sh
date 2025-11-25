@@ -25,3 +25,5 @@ assert Path(m2["output_path"]).exists()
 print("✓ reporting CLI smoke ok:", m1["output_path"], "&&", m2["output_path"])
 PY
 
+
+# EOF

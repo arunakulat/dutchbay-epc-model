@@ -43,3 +43,5 @@ echo "✓ cashflow module now imported for coverage."
 echo "   (Optional) git add/commit:"
 echo "     git add $IMPORT_TEST && git commit -m 'tests: import-only coverage smoke for finance.cashflow'"
 
+
+# EOF

@@ -76,3 +76,5 @@ echo "✓ cashflow smoke test completed."
 echo "   (Optional) git add/commit:"
 echo "     git add $TEST_FILE && git commit -m 'tests: add cashflow scenario smoke (JSONL/CSV + annual header)'"
 
+
+# EOF
