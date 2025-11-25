@@ -81,3 +81,10 @@ patch.diff
 DutchBay_EPC_*.json
 DutchBay_EPC_*.md
 DutchBay_EPC_2025*
+
+# Snapshot archives (keep out of version control)
+DutchBay_EPC_2025*/
+DutchBay_EPC_*.json
+DutchBay_EPC_*.md
+!DutchBay_EPC_20251125_0637.json
+!DutchBay_EPC_20251125_0637.md
