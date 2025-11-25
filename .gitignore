@@ -76,3 +76,8 @@ codebase_filelist.txt
 patch.diff
 *_loader_fix.patch
 .venv
+
+# Snapshot archives
+DutchBay_EPC_*.json
+DutchBay_EPC_*.md
+DutchBay_EPC_2025*
