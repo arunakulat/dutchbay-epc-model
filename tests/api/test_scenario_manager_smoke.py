@@ -15,7 +15,7 @@ just invariants around discovery and loading.
 
 from pathlib import Path
 
-from dutchbay_v14chat.finance.v14.scenario_manager import ScenarioManager
+from analytics.scenario_manager import ScenarioManager
 
 
 def test_iter_config_paths_includes_canonical_scenarios():
@@ -48,7 +48,9 @@ def test_iter_scenarios_loads_lendercase_via_loader():
     # Narrow to the canonical lender-case file to keep this test tight.
     pairs = list(manager.iter_scenarios(patterns=("dutchbay_lendercase_2025Q4.yaml",)))
 
-    assert len(pairs) == 1, "Expected exactly one lender-case scenario from ScenarioManager"
+    assert (
+        len(pairs) == 1
+    ), "Expected exactly one lender-case scenario from ScenarioManager"
     name, config = pairs[0]
 
     # Name and type checks

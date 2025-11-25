@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Core tests for dutchbay_v14chat.finance.irr
+Core tests for finance.irr
 
 We verify:
 - npv() matches the documented example.
@@ -13,7 +13,7 @@ from datetime import datetime
 
 import pytest
 
-from dutchbay_v14chat.finance.irr import npv, irr, xnpv, xirr
+from finance.irr import irr, npv, xirr, xnpv
 
 
 def test_npv_matches_doc_example():

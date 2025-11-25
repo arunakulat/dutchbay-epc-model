@@ -7,7 +7,7 @@ Purpose:
 - Sanity-check tranche summaries exposed via plan_debt.
 """
 
-from dutchbay_v14chat.finance.debt import plan_debt
+from finance.debt_v14 import plan_debt
 
 
 def _make_simple_annual_rows(years: int = 20, cfads_usd: float = 10_000_000.0):

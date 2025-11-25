@@ -13,14 +13,13 @@ Goals:
         * the lender-case scenario is present in the labels.
 """
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pandas as pd
 
-from analytics.scenario_loader import load_scenario_config
 from analytics.scenario_analytics import ScenarioAnalytics
-
+from analytics.scenario_loader import load_scenario_config
 
 # Canonical lender-case scenario in the repo
 SCENARIO_PATH = Path("scenarios") / "dutchbay_lendercase_2025Q4.yaml"

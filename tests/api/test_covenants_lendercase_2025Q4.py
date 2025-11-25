@@ -13,13 +13,12 @@ Goals:
       outcomes in the test itself.
 """
 
-from pathlib import Path
 import math
+from pathlib import Path
 
 from analytics.scenario_loader import load_scenario_config
-from dutchbay_v14chat.finance.cashflow import build_annual_rows
-from dutchbay_v14chat.finance.debt import plan_debt
-
+from finance.cashflow_v14 import build_annual_rows
+from finance.debt_v14 import plan_debt
 
 SCENARIO_PATH = Path("scenarios") / "dutchbay_lendercase_2025Q4.yaml"
 
@@ -94,9 +93,9 @@ def test_lendercase_covenants_min_dscr_and_audit_status():
     assert -10.0 < min_dscr < 50.0, f"min_dscr looks insane: {min_dscr}"
 
     # Lender case should be above bare break-even
-    assert min_dscr >= 1.20, (
-        f"Expected lender-case min DSCR >= 1.20, got {min_dscr:.3f}"
-    )
+    assert (
+        min_dscr >= 1.20
+    ), f"Expected lender-case min DSCR >= 1.20, got {min_dscr:.3f}"
 
     # Pin the mapping from min_dscr -> audit_status to the engine's rule.
     # The debt engine currently does:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke + behaviour tests for dutchbay_v14chat.finance.v14.epc_helper.
+Smoke + behaviour tests for analytics.epc_helper.
 
 We rely only on invariants that are implied by the module's docstrings
 and current FX resolution logic:
@@ -27,8 +27,7 @@ and current FX resolution logic:
     total_lcy
 """
 
-from dutchbay_v14chat.finance.v14.epc_helper import epc_breakdown_dict
-
+from analytics.core.epc_helper import epc_breakdown_dict
 
 EXPECTED_KEYS = {
     "base_cost_usd",

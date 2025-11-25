@@ -16,15 +16,13 @@ thresholds. The goal is to ensure that:
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
 import math
+from typing import Any, Dict
 
 import pytest
 
-from dutchbay_v14chat.finance.cashflow import build_annual_rows
-from dutchbay_v14chat.finance.debt import plan_debt
-
+from finance.cashflow_v14 import build_annual_rows
+from finance.debt_v14 import plan_debt
 
 # ---------------------------------------------------------------------------
 # Helper configs
@@ -102,14 +100,14 @@ def _base_financing_block() -> Dict[str, Any]:
             "target_dscr": 1.30,
             # Mix and rates (nominal – not trying to be exact market levels)
             "mix": {
-                "lkr_max": 0.25,          # up to 25% local
-                "dfi_max": 0.50,          # up to 50% DFI
+                "lkr_max": 0.25,  # up to 25% local
+                "dfi_max": 0.50,  # up to 50% DFI
                 "usd_commercial_min": 0.25,
             },
             "rates": {
-                "lkr_nominal": 0.16,      # 16% LKR
-                "usd_nominal": 0.08,      # 8% USD
-                "dfi_nominal": 0.06,      # 6% DFI
+                "lkr_nominal": 0.16,  # 16% LKR
+                "usd_nominal": 0.08,  # 8% USD
+                "dfi_nominal": 0.06,  # 6% DFI
             },
         }
     }

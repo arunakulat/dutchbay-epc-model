@@ -8,15 +8,22 @@ Typical callers:
     - Tornado / sensitivity analysis (analytics.sensitivity_v14)
     - CLI tools / notebooks that want quick IRR/NPV/DSCR for a scenario
 
-The contract is intentionally simple:
+The contracts are intentionally simple:
 
-    >>> from analytics.evaluate_scenario import evaluate_with_overrides
-    >>> kpis = evaluate_with_overrides(
-    ...     "scenarios/example_a.yaml",
-    ...     overrides={"project": {"capex_usd_per_kw": 900.0}},
-    ... )
-    >>> kpis["project_irr"]
-    0.1375  # for example
+    1) High-level KPI dict, with overrides:
+        >>> from analytics.evaluate_scenario import evaluate_with_overrides
+        >>> kpis = evaluate_with_overrides(
+        ...     "scenarios/example_a.yaml",
+        ...     overrides={"project": {"capex_usd_per_kw": 900.0}},
+        ... )
+        >>> kpis["project_irr"]
+        0.1375  # for example
+
+    2) Legacy dict adapter used by run_full_pipeline_v14:
+        >>> from analytics.evaluate_scenario import evaluate_scenario_as_dict
+        >>> result = evaluate_scenario_as_dict("scenarios/example_a.yaml")
+        >>> result["project_irr"]
+        0.1375
 
 Under the hood we:
     1. Load the YAML/JSON config
@@ -28,7 +35,7 @@ Under the hood we:
 
 The main design goal: keep all this wiring in *one place* so the rest of
 the analytics layer only needs to call a single function and reason about
-a simple {metric_name -> value} dict.
+a simple {metric_name -> value} dict or a dict-like result surface.
 """
 
 from __future__ import annotations
@@ -50,8 +57,14 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "evaluate_with_overrides",
+    "evaluate_scenario_as_dict",
     "_apply_nested_overrides",
 ]
+
+
+# =====================================================================
+# High-level KPI dict API (used by sensitivity / Monte Carlo)
+# =====================================================================
 
 
 def evaluate_with_overrides(
@@ -119,7 +132,6 @@ def evaluate_with_overrides(
         ...     overrides={"tariff": {"lkr_per_kwh": 20.30}},
         ... )
         >>> print(f"Project IRR: {kpis['project_irr']:.2%}")
-
     """
     cfg_path = Path(base_config_path)
     if not cfg_path.exists():
@@ -195,6 +207,151 @@ def evaluate_with_overrides(
         )
 
     return kpi_result
+
+
+# =====================================================================
+# Legacy adapter for run_full_pipeline_v14 (dict surface)
+# =====================================================================
+
+
+def evaluate_scenario_as_dict(
+    config_path: str,
+    scenario_name: Optional[str] = None,
+    validation_mode: str = "strict",
+) -> Dict[str, Any]:
+    """
+    Backward-compatible adapter used by run_full_pipeline_v14 and similar callers.
+
+    This provides a *richer* dict than evaluate_with_overrides, including:
+        - scenario_name
+        - config_path
+        - key KPIs as top-level fields
+        - dscr_series and max_debt_usd
+        - flattened WACC information
+        - the raw kpis dict (under "kpis")
+
+    Args:
+        config_path:
+            Path to the scenario config file (YAML/JSON).
+
+        scenario_name:
+            Optional override for the scenario name. If not provided, we use:
+                - config["scenario_name"], or
+                - the filename stem.
+
+        validation_mode:
+            Currently unused but kept to maintain the historic signature
+            for CLI / pipeline callers ("strict" / "relaxed").
+
+    Returns:
+        Dict[str, Any]: a flat dict surface suitable for CLI and older
+        consumers that expect to index into result["project_irr"], etc.
+    """
+    cfg_path = Path(config_path)
+    if not cfg_path.exists():
+        raise FileNotFoundError(str(cfg_path))
+
+    logger.info("evaluate_scenario_as_dict: loading scenario from %s", cfg_path)
+    raw_config: Dict[str, Any] = load_scenario_config(str(cfg_path))
+    config: Dict[str, Any] = copy.deepcopy(raw_config)
+
+    try:
+        validate_config_for_v14(
+            raw_config=config,
+            config_path=str(cfg_path),
+            modules=["cashflow"],
+        )
+    except TypeError:
+        validate_config_for_v14(config, str(cfg_path), modules=["cashflow"])
+
+    logger.info("evaluate_scenario_as_dict: computing WACC.")
+    wacc_result: WaccResult = compute_wacc_from_config(config=config)
+
+    logger.info("evaluate_scenario_as_dict: building annual cashflows.")
+    annual_rows = build_annual_rows(config)
+
+    logger.info("evaluate_scenario_as_dict: applying debt layer.")
+    debt_result = apply_debt_layer(
+        annual_rows=annual_rows,
+        config=config,
+    )
+
+    logger.info("evaluate_scenario_as_dict: calculating KPIs.")
+    kpi_result = calculate_scenario_kpis(
+        annual_rows=annual_rows,
+        debt_result=debt_result,
+        wacc_result=wacc_result,
+    )
+
+    # Normalise KPI surface to a dict (same logic as evaluate_with_overrides).
+    if isinstance(kpi_result, ScenarioResult):
+        if hasattr(kpi_result, "as_dict"):
+            kpis: Dict[str, Any] = kpi_result.as_dict()  # type: ignore[assignment]
+        elif hasattr(kpi_result, "kpis"):
+            kpis = getattr(kpi_result, "kpis")  # type: ignore[assignment]
+        else:
+            kpis = dict(vars(kpi_result))
+    elif isinstance(kpi_result, dict):
+        kpis = kpi_result
+    else:
+        raise ValueError(
+            f"Unexpected KPI result type in evaluate_scenario_as_dict: "
+            f"{type(kpi_result)!r}"
+        )
+
+    # Scenario name resolution
+    if scenario_name is None:
+        scenario_name = str(config.get("scenario_name") or cfg_path.stem)
+
+    # Convenience top-level fields for pipeline consumers.
+    project_npv = kpis.get("project_npv")
+    project_irr = kpis.get("project_irr")
+    equity_irr = kpis.get("equity_irr")
+    dscr_min = (
+        kpis.get("dscr_min")
+        if "dscr_min" in kpis
+        else kpis.get("min_dscr")
+    )
+
+    max_debt_usd = float(debt_result.get("total_debt_usd", 0.0))
+    dscr_series = debt_result.get("dscr_series", [])
+
+    result: Dict[str, Any] = {
+        "scenario_name": scenario_name,
+        "config_path": str(cfg_path),
+        "validation_mode": validation_mode,
+        "project_npv": project_npv,
+        "project_irr": project_irr,
+        "equity_irr": equity_irr,
+        "dscr_min": dscr_min,
+        "max_debt_usd": max_debt_usd,
+        "dscr_series": dscr_series,
+        "kpis": kpis,
+        "annual_rows": annual_rows,
+        "debt_result": debt_result,
+    }
+
+    # Flatten WACC info into a dict if available.
+    if isinstance(wacc_result, WaccResult):
+        base = wacc_result.base
+        result["wacc"] = {
+            "mode": base.mode,
+            "wacc_nominal": base.wacc_nominal,
+            "wacc_real": base.wacc_real,
+            "wacc_prudential": base.wacc_prudential,
+            "risk_free_rate": base.risk_free_rate,
+            "market_risk_premium": base.market_risk_premium,
+            "asset_beta": base.asset_beta,
+            "prudential_rate": wacc_result.prudential_rate,
+            "prudential_npv": wacc_result.prudential_npv,
+        }
+
+    return result
+
+
+# =====================================================================
+# Nested override helper
+# =====================================================================
 
 
 def _apply_nested_overrides(

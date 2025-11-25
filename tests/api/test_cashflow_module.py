@@ -1,14 +1,14 @@
 """Smoke tests for the v14 cashflow module.
 
 Canonical engine path (from repo root):
-    dutchbay_v14chat/finance/cashflow.py
+    finance/cashflow_v14.py
 
 These tests pin the public-ish CFADS surface so that future refactors
 can't silently break behaviour.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,13 +28,13 @@ if str(REPO_ROOT) not in sys.path:
 # Canonical import: v14chat cashflow engine
 # ---------------------------------------------------------------------------
 
-from dutchbay_v14chat.finance import cashflow as cf_mod  # type: ignore
+from finance import cashflow_v14 as cf_mod  # type: ignore
 
 
 def test_cashflow_module_path_is_v14chat():
     """Ensure we are really testing the v14chat cashflow engine at the expected path."""
     cf_path = Path(cf_mod.__file__).as_posix()
-    assert "dutchbay_v14chat/finance/cashflow.py" in cf_path, cf_path
+    assert "finance/cashflow_v14.py" in cf_path, cf_path
 
 
 def test_net_production_uses_hours_per_year_constant():

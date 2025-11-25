@@ -6,6 +6,7 @@ This exists primarily to:
 - Guarantee that the module remains import-safe under v14.
 """
 
+
 def test_import_executive_workbook_module():
     # Import should succeed without side effects or errors.
     import analytics.executive_workbook  # noqa: F401

@@ -14,11 +14,8 @@ from typing import Any, Dict
 
 import pytest
 
-from finance.wacc_v14 import (
-    WaccComponents,
-    build_wacc,
-    compute_wacc_from_config,
-)
+from finance.wacc_v14 import (WaccComponents, build_wacc,
+                              compute_wacc_from_config)
 
 
 def _isclose(a: float, b: float, tol: float = 1e-8) -> bool:
@@ -55,7 +52,7 @@ def test_fixed_mode_decimal_input_with_string_bps() -> None:
     """Simple fixed mode: decimal discount_rate and string prudential bps."""
     config: Dict[str, Any] = {
         "wacc": {
-            "discount_rate": 0.12,        # already decimal
+            "discount_rate": 0.12,  # already decimal
             "prudential_spread_bps": "+50bps",  # string form
         }
     }

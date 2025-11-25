@@ -7,9 +7,8 @@ Targeted tests for analytics.core.metrics:
 - compute_kpis adapter passing through scenario_name.
 """
 
-from typing import Any, Dict, List
-
 import math
+from typing import Any, Dict, List
 
 from analytics.core import metrics
 

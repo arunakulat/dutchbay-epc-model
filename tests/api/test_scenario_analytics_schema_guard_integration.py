@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from analytics.schema_guard import ConfigValidationError
 from analytics.scenario_analytics import ScenarioAnalytics
+from analytics.schema_guard import ConfigValidationError
 
 
 def _make_good_config() -> dict:

@@ -3,7 +3,7 @@ Unit tests for analytics.config_schema + analytics.schema_guard.
 
 These tests are deliberately light-touch: they prove that
 
-- dutchbay_v14chat.finance.cashflow has registered core required fields
+- finance.cashflow_v14 has registered core required fields
   into the global registry; and
 - validate_config_for_v14() catches a missing required field with a clear error.
 """
@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import pytest
 
-# Import cashflow to trigger its module-level schema registration
-from dutchbay_v14chat.finance import cashflow as cashflow_mod  # noqa: F401
-
 from analytics.config_schema import build_schema_dataframe, get_required_fields
-from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from analytics.schema_guard import (ConfigValidationError,
+                                    validate_config_for_v14)
+# Import cashflow to trigger its module-level schema registration
+from finance import cashflow_v14 as cashflow_mod  # noqa: F401
 
 
 def test_cashflow_fields_are_registered():

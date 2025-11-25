@@ -132,3 +132,15 @@ xlwings==0.33.16
 yamllint==1.37.1
 yarl==1.22.0
 yfinance==0.2.66
+# Code refactoring and modernization tools
+libcst>=1.1.0
+bowler>=0.9.0
+rope>=1.11.0
+
+# Code formatting and linting
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+flake8-bugbear>=23.0.0
+flake8-comprehensions>=3.14.0
+flake8-simplify>=0.21.0

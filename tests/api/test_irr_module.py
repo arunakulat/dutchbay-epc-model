@@ -17,12 +17,12 @@ from typing import Sequence
 import numpy_financial as npf
 import pytest
 
-from finance.irr import npv, irr, xnpv, xirr
-
+from finance.irr import irr, npv, xirr, xnpv
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _approx(a: float, b: float, tol: float = 1e-8) -> bool:
     """Simple approximate equality helper."""
@@ -32,6 +32,7 @@ def _approx(a: float, b: float, tol: float = 1e-8) -> bool:
 # ---------------------------------------------------------------------------
 # NPV tests
 # ---------------------------------------------------------------------------
+
 
 def test_npv_basic_discounting() -> None:
     """
@@ -79,6 +80,7 @@ def test_npv_handles_near_minus_one_rate() -> None:
 # ---------------------------------------------------------------------------
 # IRR tests
 # ---------------------------------------------------------------------------
+
 
 def test_irr_simple_profile_matches_numpy_financial() -> None:
     """
@@ -146,6 +148,7 @@ def test_irr_falls_back_when_numpy_financial_raises(
 # XNPV / XIRR tests
 # ---------------------------------------------------------------------------
 
+
 def test_xnpv_matches_periodic_npv_for_annual_steps() -> None:
     """
     For cashflows spaced ~1 year apart, xnpv should be close to periodic npv.
@@ -206,6 +209,3 @@ def test_xirr_raises_on_length_mismatch() -> None:
 
     with pytest.raises(ValueError):
         xirr(cfs, dates)
-
-
-        

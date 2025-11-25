@@ -20,9 +20,8 @@ from typing import Any, Dict
 import pytest
 
 from analytics.scenario_loader import load_scenario_config
-from dutchbay_v14chat.finance.cashflow import build_annual_rows
-from dutchbay_v14chat.finance import debt as debt_mod
-
+from finance import debt_v14 as debt_mod
+from finance.cashflow_v14 import build_annual_rows
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,9 +70,13 @@ def _extract_tranche(result: Dict[str, Any], key: str) -> Dict[str, Any]:
 
     We assert keys exist so the test fails loudly if the shape changes.
     """
-    assert key in result, f"Tranche {key!r} missing in debt result keys={list(result.keys())}"
+    assert (
+        key in result
+    ), f"Tranche {key!r} missing in debt result keys={list(result.keys())}"
     tranche = result[key]
-    assert isinstance(tranche, dict), f"Expected tranche {key!r} to be a dict, got {type(tranche)!r}"
+    assert isinstance(
+        tranche, dict
+    ), f"Expected tranche {key!r} to be a dict, got {type(tranche)!r}"
     return tranche
 
 
@@ -96,7 +99,9 @@ def test_lendercase_construction_and_tenor_pinned() -> None:
     construction_years = result.get("construction_years")
     tenor_years = result.get("tenor_years")
 
-    assert construction_years == 2, f"Expected 2-year construction, got {construction_years!r}"
+    assert (
+        construction_years == 2
+    ), f"Expected 2-year construction, got {construction_years!r}"
     assert tenor_years == 15, f"Expected 15-year tenor, got {tenor_years!r}"
 
 
@@ -137,10 +142,14 @@ def test_lendercase_idc_totals_pinned() -> None:
     expected_total_idc = 12_315_646.88
 
     if "total_idc_m" in result:
-        assert result["total_idc_m"] == pytest.approx(expected_total_idc, rel=0, abs=tol)
+        assert result["total_idc_m"] == pytest.approx(
+            expected_total_idc, rel=0, abs=tol
+        )
     else:
         # Fall back to derived sum if no explicit total is stored.
-        assert total_idc_from_tranches == pytest.approx(expected_total_idc, rel=0, abs=tol)
+        assert total_idc_from_tranches == pytest.approx(
+            expected_total_idc, rel=0, abs=tol
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +170,9 @@ def test_edge_stress_construction_and_tenor_pinned() -> None:
     construction_years = result.get("construction_years")
     tenor_years = result.get("tenor_years")
 
-    assert construction_years == 3, f"Expected 3-year construction, got {construction_years!r}"
+    assert (
+        construction_years == 3
+    ), f"Expected 3-year construction, got {construction_years!r}"
     assert tenor_years == 15, f"Expected 15-year tenor, got {tenor_years!r}"
 
 
@@ -201,6 +212,10 @@ def test_edge_stress_idc_totals_pinned() -> None:
     expected_total_idc = 24_234_511.50
 
     if "total_idc_m" in result:
-        assert result["total_idc_m"] == pytest.approx(expected_total_idc, rel=0, abs=tol)
+        assert result["total_idc_m"] == pytest.approx(
+            expected_total_idc, rel=0, abs=tol
+        )
     else:
-        assert total_idc_from_tranches == pytest.approx(expected_total_idc, rel=0, abs=tol)
+        assert total_idc_from_tranches == pytest.approx(
+            expected_total_idc, rel=0, abs=tol
+        )

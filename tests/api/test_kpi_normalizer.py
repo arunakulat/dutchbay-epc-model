@@ -13,22 +13,15 @@ from __future__ import annotations
 
 import pandas as pd
 
-from analytics.kpi_normalizer import (
-    _ensure_scenario_name,
-    _ensure_project_irr,
-    _ensure_dscr,
-    normalise_kpis_for_export,
-)
+from analytics.kpi_normalizer import (_ensure_dscr, _ensure_project_irr,
+                                      _ensure_scenario_name,
+                                      normalise_kpis_for_export)
 
 
 def test_ensure_scenario_name_preserves_existing_column():
     """If both frames already have 'scenario_name', they should be returned unchanged."""
-    summary = pd.DataFrame(
-        {"scenario_name": ["A", "B"], "npv": [1.0, 2.0]}
-    )
-    timeseries = pd.DataFrame(
-        {"scenario_name": ["A", "A", "B"], "year": [1, 2, 1]}
-    )
+    summary = pd.DataFrame({"scenario_name": ["A", "B"], "npv": [1.0, 2.0]})
+    timeseries = pd.DataFrame({"scenario_name": ["A", "A", "B"], "year": [1, 2, 1]})
 
     out_summary, out_timeseries = _ensure_scenario_name(
         summary_df=summary,
@@ -48,12 +41,8 @@ def test_ensure_scenario_name_renames_common_keys_and_falls_back():
     If 'scenario' / 'config_name' exist, they should be renamed.
     If still missing, a default scenario_name should be attached.
     """
-    summary = pd.DataFrame(
-        {"scenario": ["S1", "S2"], "npv": [10.0, 20.0]}
-    )
-    timeseries = pd.DataFrame(
-        {"year": [1, 2], "cfads_usd": [100.0, 200.0]}
-    )
+    summary = pd.DataFrame({"scenario": ["S1", "S2"], "npv": [10.0, 20.0]})
+    timeseries = pd.DataFrame({"year": [1, 2], "cfads_usd": [100.0, 200.0]})
 
     out_summary, out_timeseries = _ensure_scenario_name(
         summary_df=summary,

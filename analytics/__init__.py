@@ -1,21 +1,32 @@
-"""
-Thin facade for v14 sensitivity analytics.
+"""Analytics Package - v14 Orchestration Layer.
 
-For now this just re-exports the main public API from analytics.sensitivity_v14.
-The heavy v14 feature set (tail risk, Pareto, multi-metric, etc.) is parked for
-a future refactor.
-"""
+Canonical entry point for v14 financial analytics, scenario management,
+and reporting. Sits above finance/ engines.
 
-from analytics.sensitivity_v14 import (  # type: ignore[import]
-    ParameterRangeConfig,
-    TornadoResult,
-    SensitivitySuite,
-    run_tornado_sensitivity,
-)
+**Core Modules:**
+- scenario_loader: Load YAML scenarios
+- scenario_manager: Batch scenario discovery
+- scenario_analytics: Main orchestrator
+- contracts_v14: API surface contracts
+
+**Analysis Subpackages:**
+- fx: Advanced FX modeling and risk analysis (independent, optional)
+- core: Core analytics helpers (metrics, EPC)
+
+**Exports:**
+    from analytics import (
+        load_scenario_config,
+        ScenarioManager,
+        ScenarioAnalytics,
+    )
+
+**Part of:** Sprint Day 5 (Task 2 - FX modularization)
+"""
+from __future__ import annotations
+
+# Re-export key analytics APIs
+from . import fx  # noqa: F401 - subpackage
 
 __all__ = [
-    "ParameterRangeConfig",
-    "TornadoResult",
-    "SensitivitySuite",
-    "run_tornado_sensitivity",
+    'fx',  # FX/risk analytics subpackage
 ]

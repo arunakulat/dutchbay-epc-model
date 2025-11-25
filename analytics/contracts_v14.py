@@ -126,7 +126,8 @@ class ParameterRangeConfig(BaseModel):
         frozen=False,
     )
     variable_name: str = Field(..., min_length=1, description="Dot path: e.g., project.capex_usd_per_kw")
-    base_value: float = Field(..., gt=0)
+     # Allow any numeric base_value (including 0 and negative) – tests rely on this.
+    base_value: float = Field(...)
     low_pct: float = Field(..., ge=-50.0, le=0.0)
     high_pct: float = Field(..., ge=0.0, le=100.0)
     steps: int = Field(default=5, ge=3, le=20)

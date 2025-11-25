@@ -1,6 +1,7 @@
 """Unit tests for analytics.core.metrics module."""
 
 import pytest
+
 from analytics.core import metrics as metrics_mod
 
 
@@ -146,4 +147,3 @@ def test_project_irr_nonzero_for_viable_project():
 
     project_irr = kpis.get("project_irr", 0.0)
     assert project_irr > 0, "Viable project should have positive IRR"
-

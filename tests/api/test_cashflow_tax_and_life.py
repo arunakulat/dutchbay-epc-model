@@ -1,7 +1,7 @@
 """Deeper cashflow tests: project life, tax, and stress scenarios.
 
 Canonical engine path:
-    dutchbay_v14chat/finance/cashflow.py
+    finance/cashflow_v14.py
 
 These tests are about lender-grade comfort:
 - Full CFADS shape for 5 vs 20 year lives
@@ -11,9 +11,9 @@ These tests are about lender-grade comfort:
 - Zero-tariff stress case
 """
 
-from pathlib import Path
-import sys
 import copy
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -27,8 +27,7 @@ REPO_ROOT = THIS_FILE.parents[2]  # .../DutchBay_EPC_Model
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from dutchbay_v14chat.finance import cashflow as cf_mod  # type: ignore
-
+from finance import cashflow_v14 as cf_mod  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -94,7 +93,9 @@ def test_project_life_5_vs_20_years_shapes_and_magnitude():
     # we just assert they are non-zero and same sign.
     assert any(x != 0.0 for x in cf5)
     assert any(x != 0.0 for x in cf20[:5])
-    assert all((x >= 0 and y >= 0) or (x <= 0 and y <= 0) for x, y in zip(cf5, cf20[:5]))
+    assert all(
+        (x >= 0 and y >= 0) or (x <= 0 and y <= 0) for x, y in zip(cf5, cf20[:5])
+    )
 
 
 def test_tax_holiday_increases_early_cfads():

@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from analytics.scenario_loader import load_scenario_config
-from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from analytics.schema_guard import (ConfigValidationError,
+                                    validate_config_for_v14)
 
 
 def test_bad_missing_tax_yaml_is_rejected_by_schema_guard():
@@ -29,5 +30,3 @@ def test_bad_missing_tax_yaml_is_rejected_by_schema_guard():
     # Defensive: make sure the error really is about corporate_tax_rate
     assert "corporate_tax_rate" in msg
     assert "bad_missing_tax.yaml" in msg
-
-    

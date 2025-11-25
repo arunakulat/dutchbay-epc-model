@@ -1,15 +1,15 @@
 """Lender-grade v14 finance tests in one suite.
 
 Covers:
-- dutchbay_v14chat.finance.cashflow (extra tax behaviour: 0% vs 30%)
-- dutchbay_v14chat.finance.debt (basic amortisation sanity)
-- dutchbay_v14chat.finance.irr (end-to-end CFADS -> IRR/NPV smoke)
+- finance.cashflow_v14 (extra tax behaviour: 0% vs 30%)
+- finance.debt_v14 (basic amortisation sanity)
+- finance.irr (end-to-end CFADS -> IRR/NPV smoke)
 """
 
-from pathlib import Path
-import sys
 import copy
 import inspect
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,11 +28,10 @@ REPO_ROOT = THIS_FILE.parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from dutchbay_v14chat.finance import cashflow as cf_mod  # type: ignore
-from dutchbay_v14chat.finance import debt as debt_mod  # type: ignore
-from dutchbay_v14chat.finance import irr as irr_mod  # type: ignore
 from constants import DEFAULT_DISCOUNT_RATE
-
+from finance import cashflow_v14 as cf_mod  # type: ignore
+from finance import debt_v14 as debt_mod  # type: ignore
+from finance import irr as irr_mod  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Shared helpers / base parameters
@@ -79,6 +78,7 @@ def _run_cfads(params: dict) -> list[float]:
 # 1) Extra tax behaviour pin: 0% vs 30% corporate tax
 # ---------------------------------------------------------------------------
 
+
 def test_zero_tax_rate_increases_total_cfads():
     """0% corporate tax should increase total CFADS vs a positive tax rate."""
     base = copy.deepcopy(BASE_PARAMS)
@@ -98,6 +98,7 @@ def test_zero_tax_rate_increases_total_cfads():
 # ---------------------------------------------------------------------------
 # 2) Debt engine sanity: amortising schedule shape & final balance
 # ---------------------------------------------------------------------------
+
 
 def _find_debt_builder_function():
     """Try to locate a reasonable debt schedule builder in the module."""
@@ -161,9 +162,7 @@ def test_debt_schedule_basic_shape_and_final_balance():
     """Amortising loan should yield sensible schedule with final balance ≈ 0."""
     builder_fn = _find_debt_builder_function()
     if builder_fn is None:
-        pytest.skip(
-            "No known debt schedule builder found in dutchbay_v14chat.finance.debt"
-        )
+        pytest.skip("No known debt schedule builder found in finance.debt_v14")
 
     schedule = _call_debt_builder(builder_fn)
     records = _normalize_debt_schedule(schedule)
@@ -204,6 +203,7 @@ def test_debt_schedule_basic_shape_and_final_balance():
 # ---------------------------------------------------------------------------
 # 3) End-to-end v14 smoke: CFADS -> IRR & NPV
 # ---------------------------------------------------------------------------
+
 
 def test_end_to_end_cfads_irr_npv_sanity():
     """Synthetic end-to-end smoke: CFADS -> IRR/NPV should be sane."""

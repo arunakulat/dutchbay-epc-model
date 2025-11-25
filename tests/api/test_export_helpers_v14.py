@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from analytics.export_helpers import ExcelExporter, ChartGenerator
+from analytics.export_helpers import ChartGenerator, ExcelExporter
 
 
 def test_excel_exporter_end_to_end(tmp_path):

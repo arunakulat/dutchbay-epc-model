@@ -5,7 +5,7 @@ Tests for finance.utils helpers:
 - as_float / as_int conversion and fallbacks.
 """
 
-from finance.utils import get_nested, as_float, as_int
+from finance.utils import as_float, as_int, get_nested
 
 
 def test_get_nested_happy_path_and_missing():
