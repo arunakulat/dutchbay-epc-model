@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover
 # Schema discovery (optional)
 # ---------------------------
 
+
 def _schema_paths() -> List[Path]:
     """
     Where to look for YAML schemas. We use:
@@ -40,6 +41,7 @@ def _schema_paths() -> List[Path]:
     # optional code-level hint
     try:
         from dutchbay_v13 import schema as _schema_mod  # type: ignore
+
         extra = getattr(_schema_mod, "EXTRA_SCHEMA_PATHS", [])
         for p in extra or []:
             pp = Path(p).expanduser().resolve()
@@ -75,7 +77,9 @@ def _load_yaml_file(path: Pathish) -> Dict[str, Any]:
     with p.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
         if not isinstance(data, dict):
-            raise TypeError(f"Top-level YAML must be a mapping, got {type(data).__name__}")
+            raise TypeError(
+                f"Top-level YAML must be a mapping, got {type(data).__name__}"
+            )
         return data
 
 
@@ -99,6 +103,7 @@ def _load_financing_schema() -> Optional[Dict[str, Any]]:
 # ------------------------------------
 # Public API used by scenario_runner
 # ------------------------------------
+
 
 def load_params_from_file(path: Pathish) -> Dict[str, Any]:
     """
@@ -139,7 +144,9 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
     if strict:
         unknown = set(ft.keys()) - allowed_top
         if unknown:
-            raise ValueError(f"Unknown Financing_Terms keys (strict): {sorted(unknown)}")
+            raise ValueError(
+                f"Unknown Financing_Terms keys (strict): {sorted(unknown)}"
+            )
 
     mix = ft.get("mix")
     if mix is not None:
@@ -148,7 +155,9 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
         if strict:
             unk = set(mix.keys()) - allowed_mix
             if unk:
-                raise ValueError(f"Unknown Financing_Terms.mix keys (strict): {sorted(unk)}")
+                raise ValueError(
+                    f"Unknown Financing_Terms.mix keys (strict): {sorted(unk)}"
+                )
 
     rates = ft.get("rates")
     if rates is not None:
@@ -157,7 +166,9 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
         if strict:
             unk = set(rates.keys()) - allowed_rates
             if unk:
-                raise ValueError(f"Unknown Financing_Terms.rates keys (strict): {sorted(unk)}")
+                raise ValueError(
+                    f"Unknown Financing_Terms.rates keys (strict): {sorted(unk)}"
+                )
 
     reserves = ft.get("reserves")
     if reserves is not None:
@@ -166,7 +177,9 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
         if strict:
             unk = set(reserves.keys()) - allowed_reserves
             if unk:
-                raise ValueError(f"Unknown Financing_Terms.reserves keys (strict): {sorted(unk)}")
+                raise ValueError(
+                    f"Unknown Financing_Terms.reserves keys (strict): {sorted(unk)}"
+                )
 
     fees = ft.get("fees")
     if fees is not None:
@@ -175,10 +188,14 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
         if strict:
             unk = set(fees.keys()) - allowed_fees
             if unk:
-                raise ValueError(f"Unknown Financing_Terms.fees keys (strict): {sorted(unk)}")
+                raise ValueError(
+                    f"Unknown Financing_Terms.fees keys (strict): {sorted(unk)}"
+                )
 
 
-def validate_params_dict(d: Dict[str, Any], mode: Optional[str] = None) -> Dict[str, Any]:
+def validate_params_dict(
+    d: Dict[str, Any], mode: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Validate a params dict. STRICT raises on unknown/invalid keys.
     RELAXED tolerates harmless extras.
@@ -206,11 +223,16 @@ def validate_params_dict(d: Dict[str, Any], mode: Optional[str] = None) -> Dict[
 # CLI entry for `-m`
 # -----------------------
 
+
 def _cli() -> int:
     ap = argparse.ArgumentParser(description="Validate a DutchBay YAML config.")
     ap.add_argument("file", help="Path to YAML file.")
-    ap.add_argument("--mode", choices=["strict", "relaxed"], default=None,
-                    help="Override validation mode (default: env VALIDATION_MODE or relaxed).")
+    ap.add_argument(
+        "--mode",
+        choices=["strict", "relaxed"],
+        default=None,
+        help="Override validation mode (default: env VALIDATION_MODE or relaxed).",
+    )
     args = ap.parse_args()
 
     try:
@@ -225,5 +247,3 @@ def _cli() -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(_cli())
-
-    

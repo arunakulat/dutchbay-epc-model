@@ -61,7 +61,9 @@ def _capex_usd_total(p: Dict[str, Any]) -> float:
 # -------------------------
 # public adapter entrypoint
 # -------------------------
-def run_irr(params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def run_irr(
+    params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
     """
     High-level orchestration for IRR/NPV:
       * Uses provided annual rows if passed (expects 'cfads_usd' per year).
@@ -88,7 +90,7 @@ def run_irr(params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = Non
             rows.append({"year": float(i + 1), "cfads_usd": 0.0})
 
     # financing terms (can be under Financing_Terms or financing)
-    fin = (params.get("Financing_Terms") or params.get("financing") or {})
+    fin = params.get("Financing_Terms") or params.get("financing") or {}
     debt_ratio = _as_float(fin.get("debt_ratio"), 0.0) or 0.0
 
     # --------------------------
@@ -102,10 +104,15 @@ def run_irr(params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = Non
     if debt_ratio > 0.0:
         # Let the debt layer do its job (sculpt/annuity, DSRA/guarantees, etc.).
         # Contract: it returns aligned 'equity_cf' and 'debt_service' arrays (length == years).
-        debt_out = apply_debt_layer(
-            params,
-            [{"cfads_usd": r["cfads_usd"]} for r in rows],  # minimal signal needed by the debt layer
-        ) or {}
+        debt_out = (
+            apply_debt_layer(
+                params,
+                [
+                    {"cfads_usd": r["cfads_usd"]} for r in rows
+                ],  # minimal signal needed by the debt layer
+            )
+            or {}
+        )
 
         equity_cf = [float(x) for x in (debt_out.get("equity_cf") or [])]
         debt_service = [float(x) for x in (debt_out.get("debt_service") or [])]
@@ -115,7 +122,8 @@ def run_irr(params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = Non
         # Fallback if the debt layer didn't provide equity_cf but did provide debt_service
         if (not equity_cf) and debt_service:
             equity_cf = [
-                max(0.0, rows[i]["cfads_usd"] - debt_service[i]) for i in range(min(len(rows), len(debt_service)))
+                max(0.0, rows[i]["cfads_usd"] - debt_service[i])
+                for i in range(min(len(rows), len(debt_service)))
             ]
             # pad if needed
             if len(equity_cf) < years:
@@ -165,5 +173,3 @@ def run_irr(params: Dict[str, Any], annual: Optional[List[Dict[str, Any]]] = Non
         "dscr_min": dscr_min,
         "balloon_remaining": balloon,
     }
-
-    

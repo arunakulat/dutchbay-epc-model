@@ -2,6 +2,7 @@ import importlib, types, pytest
 
 CANDIDATES = ("run_sensitivity", "sensitivity_sweep", "one_way_sensitivity")
 
+
 def _find_callable(mod, names):
     for n in names:
         fn = getattr(mod, n, None)
@@ -9,9 +10,11 @@ def _find_callable(mod, names):
             return fn
     return None
 
+
 def test_import_sensitivity_module():
     m = importlib.import_module("dutchbay_v13.sensitivity")
     assert isinstance(m, types.ModuleType)
+
 
 def test_optional_sensitivity_if_present():
     m = importlib.import_module("dutchbay_v13.sensitivity")

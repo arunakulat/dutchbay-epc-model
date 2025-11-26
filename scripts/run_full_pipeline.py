@@ -35,7 +35,9 @@ MODE_REGISTRY = {
 }
 
 
-def run_base_mode(config_path: str, validation_mode: str, export_path: str | None) -> int:
+def run_base_mode(
+    config_path: str, validation_mode: str, export_path: str | None
+) -> int:
     """
     Run base scenario evaluation mode with WACC-integrated valuation.
 
@@ -84,20 +86,35 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
                 result.discount_rate_used * 100,
                 wacc_type,
             )
-        
+
         # Prudential valuation (if WACC configured)
         if result.wacc is not None:
             logger.info("")
             logger.info("WACC Components:")
             logger.info("  Mode:             %s", result.wacc.base.mode)
             if result.wacc.base.mode == "capm":
-                logger.info("  Risk-free rate:   %.2f%%", result.wacc.base.risk_free_rate * 100)
-                logger.info("  Equity beta:      %.2f", result.wacc.base.equity_beta_levered)
-                logger.info("  Cost of equity:   %.2f%%", result.wacc.base.cost_of_equity * 100)
-                logger.info("  Cost of debt:     %.2f%%", result.wacc.base.cost_of_debt_pretax * 100)
-                logger.info("  Gearing (D/V):    %.1f%%", result.wacc.base.target_debt_to_value * 100)
-            
-            if result.wacc.prudential_npv is not None and result.wacc.prudential_rate is not None:
+                logger.info(
+                    "  Risk-free rate:   %.2f%%", result.wacc.base.risk_free_rate * 100
+                )
+                logger.info(
+                    "  Equity beta:      %.2f", result.wacc.base.equity_beta_levered
+                )
+                logger.info(
+                    "  Cost of equity:   %.2f%%", result.wacc.base.cost_of_equity * 100
+                )
+                logger.info(
+                    "  Cost of debt:     %.2f%%",
+                    result.wacc.base.cost_of_debt_pretax * 100,
+                )
+                logger.info(
+                    "  Gearing (D/V):    %.1f%%",
+                    result.wacc.base.target_debt_to_value * 100,
+                )
+
+            if (
+                result.wacc.prudential_npv is not None
+                and result.wacc.prudential_rate is not None
+            ):
                 logger.info("")
                 logger.info("Prudential Valuation:")
                 logger.info(
@@ -105,7 +122,9 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
                     result.wacc.prudential_rate * 100,
                     result.wacc.base.prudential_spread_bps,
                 )
-                logger.info("  NPV (prudential): %s", f"{result.wacc.prudential_npv:,.0f}")
+                logger.info(
+                    "  NPV (prudential): %s", f"{result.wacc.prudential_npv:,.0f}"
+                )
                 npv_delta = result.wacc.prudential_npv - result.project_npv
                 logger.info("  NPV delta:        %s", f"{npv_delta:,.0f}")
 
@@ -130,7 +149,6 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
                 "project_irr": result.project_irr,
                 "min_dscr": result.min_dscr,
                 "max_debt_usd": result.max_debt_usd,
-                
                 # WACC and discount rate fields (Phase 1)
                 "discount_rate_used": result.discount_rate_used,
                 "wacc_label": result.wacc_label,
@@ -145,7 +163,7 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
                     "wacc_real": result.wacc.base.wacc_real,
                     "wacc_prudential": result.wacc.base.wacc_prudential,
                 }
-                
+
                 if result.wacc.base.mode == "capm":
                     export_data["wacc"]["components"] = {
                         "risk_free_rate": result.wacc.base.risk_free_rate,
@@ -158,7 +176,7 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
                         "target_gearing": result.wacc.base.target_debt_to_value,
                         "tax_rate": result.wacc.base.tax_rate,
                     }
-                
+
                 # Prudential valuation
                 if result.wacc.prudential_npv is not None:
                     export_data["prudential"] = {
@@ -169,10 +187,10 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
 
             export_path_obj = Path(export_path)
             export_path_obj.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with open(export_path_obj, "w") as f:
                 json.dump(export_data, f, indent=2)
-            
+
             logger.info("Results exported to: %s", export_path)
 
         logger.info("✓ Base scenario evaluation completed successfully")
@@ -183,19 +201,25 @@ def run_base_mode(config_path: str, validation_mode: str, export_path: str | Non
         return 1
 
 
-def run_sensitivity_mode(config_path: str, knobs_path: str, export_path: str | None) -> int:
+def run_sensitivity_mode(
+    config_path: str, knobs_path: str, export_path: str | None
+) -> int:
     """Run sensitivity analysis mode (placeholder for Phase 3)."""
     logger.error("Sensitivity mode not yet implemented (Phase 3)")
     return 1
 
 
-def run_montecarlo_mode(config_path: str, dists_path: str, export_path: str | None) -> int:
+def run_montecarlo_mode(
+    config_path: str, dists_path: str, export_path: str | None
+) -> int:
     """Run Monte Carlo simulation mode (placeholder for Phase 3)."""
     logger.error("Monte Carlo mode not yet implemented (Phase 3)")
     return 1
 
 
-def run_optimize_mode(config_path: str, opt_config_path: str, export_path: str | None) -> int:
+def run_optimize_mode(
+    config_path: str, opt_config_path: str, export_path: str | None
+) -> int:
     """Run optimization mode (placeholder for Phase 4)."""
     logger.error("Optimize mode not yet implemented (Phase 4)")
     return 1
@@ -250,7 +274,7 @@ Examples:
         default=None,
         help="Path to export results (JSON format)",
     )
-    
+
     # Mode-specific arguments
     parser.add_argument(
         "--knobs",
@@ -314,5 +338,3 @@ Examples:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

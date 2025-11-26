@@ -1,7 +1,8 @@
 import importlib, math, types, pytest
 
 CANDIDATES = ("run_monte_carlo", "run", "simulate", "monte_carlo", "run_simulation")
-PARAMS     = ("generate_mc_parameters", "generate_parameters")
+PARAMS = ("generate_mc_parameters", "generate_parameters")
+
 
 def _find_callable(mod, names):
     for n in names:
@@ -10,9 +11,11 @@ def _find_callable(mod, names):
             return fn
     return None
 
+
 def test_import_monte_carlo_module():
     m = importlib.import_module("dutchbay_v13.monte_carlo")
     assert isinstance(m, types.ModuleType)
+
 
 def test_optional_run_if_present():
     m = importlib.import_module("dutchbay_v13.monte_carlo")

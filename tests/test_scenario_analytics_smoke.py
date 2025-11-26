@@ -25,7 +25,9 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
     """
     # Arrange: point to the bundled example scenarios
     scenarios_dir = Path("scenarios")
-    assert scenarios_dir.is_dir(), "Expected 'scenarios/' directory to exist at repo root"
+    assert (
+        scenarios_dir.is_dir()
+    ), "Expected 'scenarios/' directory to exist at repo root"
 
     output_path = tmp_path / "dummy.xlsx"
 
@@ -57,7 +59,9 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
 
     assert isinstance(successful, list)
     assert isinstance(failed, list)
-    assert len(successful) >= 1, "Expected at least one successful scenario in batch run"
+    assert (
+        len(successful) >= 1
+    ), "Expected at least one successful scenario in batch run"
     assert len(successful) + len(failed) >= 1, "Batch counters look broken"
 
     # Expected canonical example scenarios should be present in the summary index.
@@ -74,8 +78,12 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
     assert not missing, f"Missing expected scenarios in summary_df index: {missing}"
 
     # Timeseries should be wired with scenario_name so downstream filtering works.
-    assert "scenario_name" in timeseries_df.columns, "timeseries_df must have 'scenario_name' column"
-    assert timeseries_df["scenario_name"].notna().any(), "scenario_name column should contain non-null values"
+    assert (
+        "scenario_name" in timeseries_df.columns
+    ), "timeseries_df must have 'scenario_name' column"
+    assert (
+        timeseries_df["scenario_name"].notna().any()
+    ), "scenario_name column should contain non-null values"
 
     # There should be at least one row in timeseries per expected scenario set
     timeseries_scenarios = set(timeseries_df["scenario_name"].astype(str))
@@ -88,5 +96,3 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
     # IMPORTANT: we do *not* assert on output_path.is_file() here.
     # File creation on disk is covered by test_scenario_analytics_excel_export_smoke
     # where export_excel=True.
-
-    

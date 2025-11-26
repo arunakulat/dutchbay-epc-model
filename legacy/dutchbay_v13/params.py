@@ -1,5 +1,6 @@
 # dutchbay_v13/params.py
 from __future__ import annotations
+
 """
 Centralized parameter loader and accessors.
 
@@ -20,11 +21,12 @@ except Exception as e:  # pragma: no cover
 
 # --------------------------- basic IO & merge ---------------------------
 
+
 def _load_yaml_file(p: Union[str, Path]) -> Dict[str, Any]:
     path = Path(p)
     if not path.exists():
         raise FileNotFoundError(f"YAML not found: {path}")
-    with path.open('r', encoding='utf-8') as fh:
+    with path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     if not isinstance(data, dict):
         raise ValueError(f"Top-level YAML must be a mapping/dict: {path}")
@@ -43,6 +45,7 @@ def _deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, 
 
 # --------------------------- validation bridge -------------------------
 
+
 def _maybe_validate(params: Dict[str, Any], mode: str = "strict") -> None:
     """Call project validator if available. No-op if module not present."""
     try:
@@ -53,6 +56,7 @@ def _maybe_validate(params: Dict[str, Any], mode: str = "strict") -> None:
 
 
 # --------------------------- public loader -----------------------------
+
 
 def load_params(
     config: Optional[Union[str, Path]] = None,
@@ -98,6 +102,7 @@ def load_params(
 
 # --------------------------- namespaced getters ------------------------
 
+
 def _get(d: Dict[str, Any], path: Iterable[str], default: Any = None) -> Any:
     cur: Any = d
     for k in path:
@@ -115,6 +120,7 @@ def _as_float(v: Any, default: Optional[float] = None) -> Optional[float]:
 
 
 # Project basics
+
 
 def capacity_mw(p: Dict[str, Any]) -> float:
     v = _get(p, ["Project", "capacity_mw"])
@@ -142,16 +148,20 @@ def loss_factor(p: Dict[str, Any]) -> float:
 
 # Pricing
 
+
 def tariff_usd_per_kwh(p: Dict[str, Any]) -> float:
     v = _get(p, ["Pricing", "tariff_usd_per_kwh"])
     if v is None:
         v = p.get("tariff_usd_per_kwh", p.get("tariff"))
     if v is None:
-        raise KeyError("Pricing.tariff_usd_per_kwh is required in YAML (no in-code default).")
+        raise KeyError(
+            "Pricing.tariff_usd_per_kwh is required in YAML (no in-code default)."
+        )
     return float(v)
 
 
 # Capex / Opex (no policy baked in; floors only if provided)
+
 
 def capex_usd(p: Dict[str, Any]) -> float:
     total = _get(p, ["Capex", "usd_total"])
@@ -177,6 +187,7 @@ def opex_usd_per_year(p: Dict[str, Any]) -> float:
 
 # FX curve
 
+
 def fx_curve_lkr_per_usd(p: Dict[str, Any], years: int) -> List[float]:
     explicit = _get(p, ["FX", "curve_lkr_per_usd"])
     if isinstance(explicit, list) and explicit:
@@ -188,16 +199,19 @@ def fx_curve_lkr_per_usd(p: Dict[str, Any], years: int) -> List[float]:
     start = _get(p, ["FX", "start_lkr_per_usd"])
     depr = _get(p, ["FX", "annual_depr"])
     if start is None or depr is None:
-        raise KeyError("Provide FX.curve_lkr_per_usd OR both FX.start_lkr_per_usd and FX.annual_depr in YAML.")
+        raise KeyError(
+            "Provide FX.curve_lkr_per_usd OR both FX.start_lkr_per_usd and FX.annual_depr in YAML."
+        )
     out: List[float] = []
     cur = float(start)
     for _ in range(max(1, years)):
         out.append(cur)
-        cur *= (1.0 + float(depr))
+        cur *= 1.0 + float(depr)
     return out
 
 
 # Financing terms (normalized view)
+
 
 def financing_terms(p: Dict[str, Any]) -> Dict[str, Any]:
     ft = dict(_get(p, ["Financing_Terms"], {}) or {})
@@ -236,5 +250,3 @@ def financing_terms(p: Dict[str, Any]) -> Dict[str, Any]:
         if key in fees and fees[key] is not None:
             fees[key] = float(fees[key])
     return ft
-
-    

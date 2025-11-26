@@ -26,7 +26,9 @@ def test_scenario_analytics_excel_export_smoke(tmp_path: Path) -> None:
     """
     # Arrange
     scenarios_dir = Path("scenarios")
-    assert scenarios_dir.is_dir(), "Expected 'scenarios/' directory to exist at repo root"
+    assert (
+        scenarios_dir.is_dir()
+    ), "Expected 'scenarios/' directory to exist at repo root"
 
     output_path = tmp_path / "scenario_analytics_export.xlsx"
 
@@ -59,9 +61,9 @@ def test_scenario_analytics_excel_export_smoke(tmp_path: Path) -> None:
     # These are currently lists of scenario_ids / error dicts
     assert isinstance(successful, list)
     assert isinstance(failed, list)
-    assert len(successful) >= 1, "Expected at least one successful scenario in Excel export run"
+    assert (
+        len(successful) >= 1
+    ), "Expected at least one successful scenario in Excel export run"
 
     # And the file should exist on disk (either minimal exporter or ExcelExporter)
     assert output_path.is_file(), f"Expected Excel file at {output_path}"
-
-    

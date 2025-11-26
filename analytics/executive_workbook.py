@@ -123,4 +123,3 @@ def build_executive_workbook(
 
     exporter.save()
     return path
-    

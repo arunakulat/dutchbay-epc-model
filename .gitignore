@@ -1,90 +1,92 @@
-
-# build artifacts
-*.egg-info/
-# --- Python bytecode / caches ---
+# Python
 __pycache__/
 *.py[cod]
-*.pyd
-*.pyo
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.hypothesis/
-.pyre/
-.pytype/
-
-_out/
-_regression/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# --- Virtual environments (name-agnostic) ---
-.venv/
-.venv*/
-venv/
-venv*/
-env/
-env*/
-.venv311/
-
-# --- Build / packaging artifacts ---
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
 dist/
-*.egg-info/
+downloads/
+eggs/
 .eggs/
-pip-wheel-metadata/
-*.manifest
-*.spec
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# --- Coverage / test reports ---
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv311/
+.venv3*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
 .tox/
-.nox/
+.hypothesis/
+*.cover
+.cache
 
-# --- Notebooks ---
-.ipynb_checkpoints/
+# Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
 
-# --- Tooling / config artifacts ---
+# Linting
+.ruff_cache/
+
+# Project Specific
 *.log
-.cache/
+*.xlsx
+*.xlsm
+*.docx
+DutchBay_EPC_*.zip
+DutchBay_EPC_*.json
+manifest_*.txt
+output/
+exports/
+temp/
+tmp/
 
-# --- Secrets / local env files (keep your real secrets elsewhere) ---
-.env
-.env.*
-*.env
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
 
-# --- Editors / OS cruft ---
+# Build artifacts
+*.spec
+
+# macOS
 .DS_Store
-.vscode/
-.idea/
-*.swp
+.AppleDouble
+.LSOverride
 
-_out/
-scenario_*_results_*.jsonl
-scenario_*_results_*.csv
-scenario_*_annual_*.csv
-.venv311/
-venv/
-archive/
-exports/*.xlsx
-*.bak
-*structure.json
-codebase_filelist.txt
-patch.diff
-*_loader_fix.patch
-.venv
+# Keep empty directories
+!.gitkeep
 
-# Snapshot archives
-DutchBay_EPC_*.json
-DutchBay_EPC_*.md
-DutchBay_EPC_2025*
-
-# Snapshot archives (keep out of version control)
-DutchBay_EPC_2025*/
-DutchBay_EPC_*.json
-DutchBay_EPC_*.md
-!DutchBay_EPC_20251125_0637.json
-!DutchBay_EPC_20251125_0637.md
+# EOF

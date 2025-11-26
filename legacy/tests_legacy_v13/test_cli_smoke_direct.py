@@ -3,19 +3,26 @@ from glob import glob
 
 import dutchbay_v13.cli as cli
 
+
 def test_cli_scenarios_direct(tmp_path: Path):
-    scen = tmp_path / "scen"; scen.mkdir()
-    out  = tmp_path / "out";  out.mkdir()
+    scen = tmp_path / "scen"
+    scen.mkdir()
+    out = tmp_path / "out"
+    out.mkdir()
 
     # minimal override; our relaxed validator accepts this key
     (scen / "demo.yaml").write_text("tariff_usd_per_kwh: 0.12\n", encoding="utf-8")
 
     # run CLI main in-process so coverage sees imports
     argv = [
-        "--mode","scenarios",
-        "--scenarios", str(scen),
-        "--outputs-dir", str(out),
-        "--format","both",
+        "--mode",
+        "scenarios",
+        "--scenarios",
+        str(scen),
+        "--outputs-dir",
+        str(out),
+        "--format",
+        "both",
         "--save-annual",
     ]
     try:

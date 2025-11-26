@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 
 __all__ = ["render_pdf"]
 
+
 def render_pdf(
     meta: Optional[Dict[str, Any]] = None,
     output_path: Optional[str | Path] = None,

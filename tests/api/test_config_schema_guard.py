@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 
 from analytics.config_schema import build_schema_dataframe, get_required_fields
-from analytics.schema_guard import (ConfigValidationError,
-                                    validate_config_for_v14)
+from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+
 # Import cashflow to trigger its module-level schema registration
 from finance import cashflow_v14 as cashflow_mod  # noqa: F401
 
@@ -68,6 +68,9 @@ def test_schema_guard_detects_missing_corporate_tax_rate():
         },
         "opex": {
             "usd_per_year": 2_400_000.0,
+        },
+        "capex": {
+            "usd_total": 225_000_000.0,
         },
         "tax": {
             "corporate_tax_rate_pct": 24.0,

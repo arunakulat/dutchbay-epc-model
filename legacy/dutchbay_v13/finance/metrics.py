@@ -67,8 +67,8 @@ try:
 except ImportError:
     irr = None
 
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-logger = logging.getLogger('dutchbay.finance.metrics')
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("dutchbay.finance.metrics")
 
 __all__ = [
     "build_annual_rows_with_fx",
@@ -87,6 +87,7 @@ __all__ = [
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 def _to_float(x: Any, default: Optional[float] = None) -> Optional[float]:
     """Safe float conversion with default."""
     try:
@@ -98,7 +99,7 @@ def _to_float(x: Any, default: Optional[float] = None) -> Optional[float]:
 def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) -> float:
     """
     Calculate Net Present Value of cashflow series.
-    
+
     Parameters
     ----------
     cashflows : list of float
@@ -107,7 +108,7 @@ def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) ->
         Annual discount rate (decimal, e.g., 0.10 for 10%)
     start_period : int, default 0
         Starting period for discounting (0 = now)
-    
+
     Returns
     -------
     float
@@ -115,12 +116,12 @@ def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) ->
     """
     if not cashflows or discount_rate < 0:
         return 0.0
-    
+
     npv_val = 0.0
     for i, cf in enumerate(cashflows):
         period = start_period + i
         npv_val += cf / ((1 + discount_rate) ** period)
-    
+
     return npv_val
 
 
@@ -128,22 +129,23 @@ def _npv(cashflows: List[float], discount_rate: float, start_period: int = 0) ->
 # FX-AWARE ANNUAL_ROWS BUILDER (Bulletproofing)
 # ============================================================================
 
+
 def build_annual_rows_with_fx(
     cfads_lkr: List[float],
     lkr_debt_service: List[float],
     usd_debt_service: List[float],
     fx_rates: List[float],
-    debt_outstanding_lkr: Optional[List[float]] = None
+    debt_outstanding_lkr: Optional[List[float]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Build annual_rows with FX-converted total debt service.
-    
-    CRITICAL: This ensures multi-currency debt is properly aggregated 
+
+    CRITICAL: This ensures multi-currency debt is properly aggregated
     in common currency (LKR) before DSCR calculation.
-    
+
     TAX SHIELD NOTE: The cfads_lkr input should be POST-TAX CFADS from
     cashflow.py, which already accounts for interest expense tax deductibility.
-    
+
     Parameters
     ----------
     cfads_lkr : list of float
@@ -156,7 +158,7 @@ def build_annual_rows_with_fx(
         LKR/USD exchange rate for each year
     debt_outstanding_lkr : list of float, optional
         Total debt outstanding in LKR (if needed for LLCR/PLCR)
-    
+
     Returns
     -------
     list of dict
@@ -164,19 +166,19 @@ def build_annual_rows_with_fx(
     """
     annual_rows = []
     n_years = len(cfads_lkr)
-    
+
     for i in range(n_years):
         total_ds_lkr = lkr_debt_service[i] + (usd_debt_service[i] * fx_rates[i])
         row = {
-            'year': i + 1,
-            'cfads_usd': cfads_lkr[i],  # Legacy field name; actual LKR
-            'debt_service': total_ds_lkr,  # FX-converted total
-            'fx_rate': fx_rates[i]  # For reference/audit
+            "year": i + 1,
+            "cfads_usd": cfads_lkr[i],  # Legacy field name; actual LKR
+            "debt_service": total_ds_lkr,  # FX-converted total
+            "fx_rate": fx_rates[i],  # For reference/audit
         }
         if debt_outstanding_lkr is not None:
-            row['debt_outstanding'] = debt_outstanding_lkr[i]
+            row["debt_outstanding"] = debt_outstanding_lkr[i]
         annual_rows.append(row)
-    
+
     return annual_rows
 
 
@@ -184,12 +186,13 @@ def build_annual_rows_with_fx(
 # DSCR CALCULATIONS
 # ============================================================================
 
+
 def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[float]]:
     """
     Calculate DSCR for each year.
-    
+
     DSCR_t = CFADS_t / DebtService_t
-    
+
     CRITICAL REQUIREMENTS (SRI LANKA TAX-COMPLIANT):
     ------------------------------------------------
     - 'cfads_usd': Must be POST-TAX CFADS from cashflow.py
@@ -198,20 +201,20 @@ def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[floa
         2. Taxable Income = Pre-tax cash flow - Depreciation - Interest Expense
         3. Tax = Taxable Income × Tax Rate (interest expense is tax-deductible)
         4. CFADS = Pre-tax cash flow - Tax - Risk adjustment
-      
+
     - 'debt_service': Must be in COMMON CURRENCY (LKR)
       For multi-currency projects: LKR_DS + (USD_DS × FX_rate)
-      
+
     - Interest expense is deducted for TAX calculation (reducing tax liability)
       but NOT from CFADS itself, since CFADS is used to PAY debt service
-    
+
     Parameters
     ----------
     annual_rows : list of dict
         Each row must contain:
         - 'cfads_usd': float (POST-TAX CFADS in LKR, despite legacy field name)
         - 'debt_service': float (Total debt service in LKR)
-    
+
     Returns
     -------
     list of float or None
@@ -219,23 +222,23 @@ def compute_dscr_series(annual_rows: List[Dict[str, Any]]) -> List[Optional[floa
     """
     dscr_series = []
     for row in annual_rows:
-        cfads = _to_float(row.get('cfads_usd'), 0.0)
-        ds = _to_float(row.get('debt_service'), 0.0)
-        
+        cfads = _to_float(row.get("cfads_usd"), 0.0)
+        ds = _to_float(row.get("debt_service"), 0.0)
+
         if ds > 0:
             dscr = cfads / ds
         else:
             dscr = None  # Undefined when no debt service
-        
+
         dscr_series.append(dscr)
-    
+
     return dscr_series
 
 
 def summarize_dscr(dscr_series: List[Optional[float]]) -> Dict[str, Any]:
     """
     Compute summary statistics for DSCR series.
-    
+
     Returns
     -------
     dict
@@ -249,24 +252,24 @@ def summarize_dscr(dscr_series: List[Optional[float]]) -> Dict[str, Any]:
         }
     """
     valid = [d for d in dscr_series if d is not None]
-    
+
     if not valid:
         return {
-            'dscr_min': None,
-            'dscr_avg': None,
-            'dscr_max': None,
-            'years_with_dscr': 0,
-            'years_below_1_0': 0,
-            'years_below_1_3': 0
+            "dscr_min": None,
+            "dscr_avg": None,
+            "dscr_max": None,
+            "years_with_dscr": 0,
+            "years_below_1_0": 0,
+            "years_below_1_3": 0,
         }
-    
+
     return {
-        'dscr_min': min(valid),
-        'dscr_avg': sum(valid) / len(valid),
-        'dscr_max': max(valid),
-        'years_with_dscr': len(valid),
-        'years_below_1_0': sum(1 for d in valid if d < 1.0),
-        'years_below_1_3': sum(1 for d in valid if d < 1.3)
+        "dscr_min": min(valid),
+        "dscr_avg": sum(valid) / len(valid),
+        "dscr_max": max(valid),
+        "years_with_dscr": len(valid),
+        "years_below_1_0": sum(1 for d in valid if d < 1.0),
+        "years_below_1_3": sum(1 for d in valid if d < 1.3),
     }
 
 
@@ -274,20 +277,21 @@ def summarize_dscr(dscr_series: List[Optional[float]]) -> Dict[str, Any]:
 # LLCR CALCULATION (P0-1C Phase 1)
 # ============================================================================
 
+
 def calculate_llcr(
     cfads_series: List[float],
     debt_outstanding_series: List[float],
     discount_rate: float = 0.10,
-    start_year: int = 0
+    start_year: int = 0,
 ) -> Dict[str, Any]:
     """
     Calculate Loan Life Coverage Ratio (LLCR) for each period.
-    
+
     LLCR = NPV(future CFADS over remaining loan life) / Outstanding Debt
-    
+
     This is the PRIMARY coverage metric used by DFIs and commercial lenders
     for project finance credit decisions.
-    
+
     Parameters
     ----------
     cfads_series : list of float
@@ -298,7 +302,7 @@ def calculate_llcr(
         Discount rate for NPV calculation (typically WACC or lender's hurdle)
     start_year : int, default 0
         Starting year index for LLCR calculation
-    
+
     Returns
     -------
     dict
@@ -309,7 +313,7 @@ def calculate_llcr(
             'years_calculated': int,
             'calculation_details': list of dict
         }
-    
+
     Notes
     -----
     - LLCR ≥ 1.20x is typical DFI covenant
@@ -318,49 +322,55 @@ def calculate_llcr(
     """
     if not cfads_series or not debt_outstanding_series:
         return {
-            'llcr_series': [],
-            'llcr_min': 0.0,
-            'llcr_avg': 0.0,
-            'years_calculated': 0,
-            'calculation_details': []
+            "llcr_series": [],
+            "llcr_min": 0.0,
+            "llcr_avg": 0.0,
+            "years_calculated": 0,
+            "calculation_details": [],
         }
-    
+
     llcr_series = []
     calculation_details = []
-    
+
     n_years = min(len(cfads_series), len(debt_outstanding_series))
-    
+
     for year in range(start_year, n_years):
         debt_outstanding = debt_outstanding_series[year]
-        
+
         if debt_outstanding <= 0:
             continue
-        
+
         # NPV of remaining cashflows from this year forward
         remaining_cfads = cfads_series[year:]
         npv_future_cfads = _npv(remaining_cfads, discount_rate, start_period=0)
-        
+
         # LLCR = NPV(future CFADS) / Current Debt Outstanding
-        llcr = npv_future_cfads / debt_outstanding if debt_outstanding > 0 else float('inf')
+        llcr = (
+            npv_future_cfads / debt_outstanding
+            if debt_outstanding > 0
+            else float("inf")
+        )
         llcr_series.append(llcr)
-        
-        calculation_details.append({
-            'year': year,
-            'debt_outstanding': debt_outstanding,
-            'npv_future_cfads': npv_future_cfads,
-            'llcr': llcr,
-            'remaining_years': len(remaining_cfads)
-        })
-    
+
+        calculation_details.append(
+            {
+                "year": year,
+                "debt_outstanding": debt_outstanding,
+                "npv_future_cfads": npv_future_cfads,
+                "llcr": llcr,
+                "remaining_years": len(remaining_cfads),
+            }
+        )
+
     llcr_min = min([x for x in llcr_series if x > 0], default=0.0)
     llcr_avg = sum(llcr_series) / len(llcr_series) if llcr_series else 0.0
-    
+
     return {
-        'llcr_series': llcr_series,
-        'llcr_min': llcr_min,
-        'llcr_avg': llcr_avg,
-        'years_calculated': len(llcr_series),
-        'calculation_details': calculation_details
+        "llcr_series": llcr_series,
+        "llcr_min": llcr_min,
+        "llcr_avg": llcr_avg,
+        "years_calculated": len(llcr_series),
+        "calculation_details": calculation_details,
     }
 
 
@@ -368,20 +378,21 @@ def calculate_llcr(
 # PLCR CALCULATION (P0-1C Phase 2)
 # ============================================================================
 
+
 def calculate_plcr(
     cfads_series: List[float],
     debt_outstanding_series: List[float],
     discount_rate: float = 0.10,
-    start_year: int = 0
+    start_year: int = 0,
 ) -> Dict[str, Any]:
     """
     Calculate Project Life Coverage Ratio (PLCR) for each period.
-    
+
     PLCR = NPV(all future CFADS over full project life) / Outstanding Debt
-    
+
     PLCR measures full project value vs debt burden and is used for
     refinancing and restructuring decisions.
-    
+
     Parameters
     ----------
     cfads_series : list of float
@@ -392,7 +403,7 @@ def calculate_plcr(
         Discount rate for NPV calculation
     start_year : int, default 0
         Starting year index
-    
+
     Returns
     -------
     dict
@@ -403,7 +414,7 @@ def calculate_plcr(
             'years_calculated': int,
             'calculation_details': list of dict
         }
-    
+
     Notes
     -----
     - PLCR ≥ 1.40x is typical target
@@ -412,50 +423,54 @@ def calculate_plcr(
     """
     if not cfads_series or not debt_outstanding_series:
         return {
-            'plcr_series': [],
-            'plcr_min': 0.0,
-            'plcr_avg': 0.0,
-            'years_calculated': 0,
-            'calculation_details': []
+            "plcr_series": [],
+            "plcr_min": 0.0,
+            "plcr_avg": 0.0,
+            "years_calculated": 0,
+            "calculation_details": [],
         }
-    
+
     plcr_series = []
     calculation_details = []
-    
+
     n_years = min(len(cfads_series), len(debt_outstanding_series))
-    
+
     # PLCR uses ALL remaining cashflows (not just loan life)
     for year in range(start_year, n_years):
         debt_outstanding = debt_outstanding_series[year]
-        
+
         if debt_outstanding <= 0:
             continue
-        
+
         # NPV of ALL remaining project cashflows
         remaining_cfads = cfads_series[year:]
         npv_all_cfads = _npv(remaining_cfads, discount_rate, start_period=0)
-        
+
         # PLCR = NPV(all future CFADS) / Current Debt Outstanding
-        plcr = npv_all_cfads / debt_outstanding if debt_outstanding > 0 else float('inf')
+        plcr = (
+            npv_all_cfads / debt_outstanding if debt_outstanding > 0 else float("inf")
+        )
         plcr_series.append(plcr)
-        
-        calculation_details.append({
-            'year': year,
-            'debt_outstanding': debt_outstanding,
-            'npv_all_cfads': npv_all_cfads,
-            'plcr': plcr,
-            'remaining_project_years': len(remaining_cfads)
-        })
-    
+
+        calculation_details.append(
+            {
+                "year": year,
+                "debt_outstanding": debt_outstanding,
+                "npv_all_cfads": npv_all_cfads,
+                "plcr": plcr,
+                "remaining_project_years": len(remaining_cfads),
+            }
+        )
+
     plcr_min = min([x for x in plcr_series if x > 0], default=0.0)
     plcr_avg = sum(plcr_series) / len(plcr_series) if plcr_series else 0.0
-    
+
     return {
-        'plcr_series': plcr_series,
-        'plcr_min': plcr_min,
-        'plcr_avg': plcr_avg,
-        'years_calculated': len(plcr_series),
-        'calculation_details': calculation_details
+        "plcr_series": plcr_series,
+        "plcr_min": plcr_min,
+        "plcr_avg": plcr_avg,
+        "years_calculated": len(plcr_series),
+        "calculation_details": calculation_details,
     }
 
 
@@ -463,130 +478,124 @@ def calculate_plcr(
 # BACKWARD COMPATIBILITY (Legacy Function)
 # ============================================================================
 
+
 def compute_llcr_plcr(
-    annual_rows: List[Dict[str, Any]],
-    discount_rate: float = 0.10
+    annual_rows: List[Dict[str, Any]], discount_rate: float = 0.10
 ) -> Dict[str, Any]:
     """
     Legacy function for backward compatibility.
     Computes both LLCR and PLCR from annual_rows structure.
     """
-    cfads_series = [_to_float(row.get('cfads_usd'), 0.0) for row in annual_rows]
-    debt_outstanding_series = [_to_float(row.get('debt_outstanding'), 0.0) for row in annual_rows]
-    
+    cfads_series = [_to_float(row.get("cfads_usd"), 0.0) for row in annual_rows]
+    debt_outstanding_series = [
+        _to_float(row.get("debt_outstanding"), 0.0) for row in annual_rows
+    ]
+
     llcr_result = calculate_llcr(cfads_series, debt_outstanding_series, discount_rate)
     plcr_result = calculate_plcr(cfads_series, debt_outstanding_series, discount_rate)
-    
-    return {
-        'llcr': llcr_result,
-        'plcr': plcr_result,
-        'discount_rate': discount_rate
-    }
+
+    return {"llcr": llcr_result, "plcr": plcr_result, "discount_rate": discount_rate}
 
 
 # ============================================================================
 # COVENANT MONITORING
 # ============================================================================
 
+
 def check_llcr_covenant(
-    llcr_result: Dict[str, Any],
-    params: Dict[str, Any]
+    llcr_result: Dict[str, Any], params: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Check LLCR against covenant thresholds from YAML."""
-    metrics = params.get('metrics', {})
-    llcr_min_covenant = _to_float(metrics.get('llcr_min_covenant'), 1.20)
-    llcr_warn_threshold = _to_float(metrics.get('llcr_warn_threshold'), 1.25)
-    
-    llcr_min = llcr_result.get('llcr_min', 0.0)
+    metrics = params.get("metrics", {})
+    llcr_min_covenant = _to_float(metrics.get("llcr_min_covenant"), 1.20)
+    llcr_warn_threshold = _to_float(metrics.get("llcr_warn_threshold"), 1.25)
+
+    llcr_min = llcr_result.get("llcr_min", 0.0)
     violations = []
-    status = 'PASS'
-    
+    status = "PASS"
+
     if llcr_min < llcr_min_covenant:
-        status = 'BREACH'
-        violations.append(f"BREACH: Minimum LLCR {llcr_min:.2f}x < covenant {llcr_min_covenant:.2f}x")
+        status = "BREACH"
+        violations.append(
+            f"BREACH: Minimum LLCR {llcr_min:.2f}x < covenant {llcr_min_covenant:.2f}x"
+        )
     elif llcr_min < llcr_warn_threshold:
-        status = 'WARN'
-        violations.append(f"WARNING: Minimum LLCR {llcr_min:.2f}x < warning {llcr_warn_threshold:.2f}x")
-    
+        status = "WARN"
+        violations.append(
+            f"WARNING: Minimum LLCR {llcr_min:.2f}x < warning {llcr_warn_threshold:.2f}x"
+        )
+
     summary = f"LLCR {status}: Min {llcr_min:.2f}x (covenant: {llcr_min_covenant:.2f}x)"
     logger.info(summary)
-    
-    return {
-        'covenant_status': status,
-        'violations': violations,
-        'summary': summary
-    }
+
+    return {"covenant_status": status, "violations": violations, "summary": summary}
 
 
 def check_plcr_covenant(
-    plcr_result: Dict[str, Any],
-    params: Dict[str, Any]
+    plcr_result: Dict[str, Any], params: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Check PLCR against covenant thresholds from YAML."""
-    metrics = params.get('metrics', {})
-    plcr_min_covenant = _to_float(metrics.get('plcr_min_covenant'), 1.40)
-    plcr_target = _to_float(metrics.get('plcr_target'), 1.60)
-    
-    plcr_min = plcr_result.get('plcr_min', 0.0)
+    metrics = params.get("metrics", {})
+    plcr_min_covenant = _to_float(metrics.get("plcr_min_covenant"), 1.40)
+    plcr_target = _to_float(metrics.get("plcr_target"), 1.60)
+
+    plcr_min = plcr_result.get("plcr_min", 0.0)
     violations = []
-    status = 'PASS'
-    
+    status = "PASS"
+
     if plcr_min < plcr_min_covenant:
-        status = 'BREACH'
-        violations.append(f"BREACH: Minimum PLCR {plcr_min:.2f}x < covenant {plcr_min_covenant:.2f}x")
+        status = "BREACH"
+        violations.append(
+            f"BREACH: Minimum PLCR {plcr_min:.2f}x < covenant {plcr_min_covenant:.2f}x"
+        )
     elif plcr_min < plcr_target:
-        status = 'WARN'
-        violations.append(f"WARNING: Minimum PLCR {plcr_min:.2f}x < target {plcr_target:.2f}x")
-    
+        status = "WARN"
+        violations.append(
+            f"WARNING: Minimum PLCR {plcr_min:.2f}x < target {plcr_target:.2f}x"
+        )
+
     summary = f"PLCR {status}: Min {plcr_min:.2f}x (covenant: {plcr_min_covenant:.2f}x)"
     logger.info(summary)
-    
-    return {
-        'covenant_status': status,
-        'violations': violations,
-        'summary': summary
-    }
+
+    return {"covenant_status": status, "violations": violations, "summary": summary}
 
 
 # ============================================================================
 # COMPREHENSIVE SUMMARY
 # ============================================================================
 
+
 def summarize_project_metrics(
-    annual_rows: List[Dict[str, Any]],
-    params: Dict[str, Any]
+    annual_rows: List[Dict[str, Any]], params: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     Compute all project finance metrics.
     Returns comprehensive dict with DSCR, LLCR, PLCR, and covenant status.
     """
-    metrics_config = params.get('metrics', {})
-    discount_rate = _to_float(metrics_config.get('llcr_discount_rate'), 0.10)
-    
+    metrics_config = params.get("metrics", {})
+    discount_rate = _to_float(metrics_config.get("llcr_discount_rate"), 0.10)
+
     # DSCR
     dscr_series = compute_dscr_series(annual_rows)
     dscr_summary = summarize_dscr(dscr_series)
-    
+
     # LLCR and PLCR
-    cfads_series = [_to_float(row.get('cfads_usd'), 0.0) for row in annual_rows]
-    debt_outstanding_series = [_to_float(row.get('debt_outstanding'), 0.0) for row in annual_rows]
-    
+    cfads_series = [_to_float(row.get("cfads_usd"), 0.0) for row in annual_rows]
+    debt_outstanding_series = [
+        _to_float(row.get("debt_outstanding"), 0.0) for row in annual_rows
+    ]
+
     llcr_result = calculate_llcr(cfads_series, debt_outstanding_series, discount_rate)
     plcr_result = calculate_plcr(cfads_series, debt_outstanding_series, discount_rate)
-    
+
     # Covenant checks
     llcr_covenant = check_llcr_covenant(llcr_result, params)
     plcr_covenant = check_plcr_covenant(plcr_result, params)
-    
+
     return {
-        'dscr': {
-            'series': dscr_series,
-            'summary': dscr_summary
-        },
-        'llcr': llcr_result,
-        'plcr': plcr_result,
-        'llcr_covenant': llcr_covenant,
-        'plcr_covenant': plcr_covenant
+        "dscr": {"series": dscr_series, "summary": dscr_summary},
+        "llcr": llcr_result,
+        "plcr": plcr_result,
+        "llcr_covenant": llcr_covenant,
+        "plcr_covenant": plcr_covenant,
     }
-
-

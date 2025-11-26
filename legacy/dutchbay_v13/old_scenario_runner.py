@@ -7,22 +7,25 @@ import yaml
 from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14
 from dutchbay_v14chat.finance.debt import apply_debt_layer
 
+
 def load_config(path):
-    if path.endswith('.json'):
-        with open(path, 'r') as f:
+    if path.endswith(".json"):
+        with open(path, "r") as f:
             return json.load(f)
-    elif path.endswith(('.yaml', '.yml')):
-        with open(path, 'r') as f:
+    elif path.endswith((".yaml", ".yml")):
+        with open(path, "r") as f:
             return yaml.safe_load(f)
     else:
         raise ValueError("Unsupported file extension for scenario: " + path)
 
+
 def get_scenario_files(directory):
-    pats = ['*.json', '*.yaml', '*.yml']
+    pats = ["*.json", "*.yaml", "*.yml"]
     files = []
     for pat in pats:
         files.extend(glob.glob(os.path.join(directory, pat)))
     return files
+
 
 def run_scenarios(scenarios_dir, csv_outfile="scenario_results.csv"):
     files = get_scenario_files(scenarios_dir)
@@ -43,7 +46,7 @@ def run_scenarios(scenarios_dir, csv_outfile="scenario_results.csv"):
                 "total_idc_capitalized": debt.get("total_idc_capitalized"),
                 "max_debt_outstanding": max(debt.get("debt_outstanding", [0])),
                 "final_year_cfads": rows[-1].get("cfads_usd", None),
-                "grace_years": debt.get("grace_periods")
+                "grace_years": debt.get("grace_periods"),
             }
             print(f"[{kpis['scenario']}]: {kpis}")
             results.append(kpis)
@@ -60,10 +63,24 @@ def run_scenarios(scenarios_dir, csv_outfile="scenario_results.csv"):
     else:
         print("No successful scenario runs.")
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Batch scenario runner for v14 model")
-    parser.add_argument("--dir", "-d", type=str, required=True, help="Directory with scenario YAML or JSON files")
-    parser.add_argument("--csv", "-o", type=str, default="scenario_results.csv", help="Output CSV file for KPIs")
+    parser.add_argument(
+        "--dir",
+        "-d",
+        type=str,
+        required=True,
+        help="Directory with scenario YAML or JSON files",
+    )
+    parser.add_argument(
+        "--csv",
+        "-o",
+        type=str,
+        default="scenario_results.csv",
+        help="Output CSV file for KPIs",
+    )
     args = parser.parse_args()
     run_scenarios(args.dir, args.csv)

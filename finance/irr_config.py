@@ -12,30 +12,31 @@ Version: 1.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
 import yaml
 
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """Load canonical YAML configuration (Pattern 1 helper).
-    
+
     Parameters
     ----------
     config_path:
         Path to YAML config file.
         Default: "scenarios/dutchbay_master_config_v14.yaml"
-    
+
     Returns
     -------
     Dict[str, Any]
         Loaded configuration dictionary.
-    
+
     Raises
     ------
     FileNotFoundError:
         If config file doesn't exist.
-    
+
     Examples
     --------
     >>> config = load_config()  # Uses default path
@@ -43,7 +44,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
     if config_path is None:
         config_path = "scenarios/dutchbay_master_config_v14.yaml"
-    
+
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(
@@ -51,7 +52,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             f"Current working directory: {Path.cwd()}\n"
             f"Ensure you're running from project root."
         )
-    
+
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
@@ -61,19 +62,19 @@ def get_irr_bounds(
     role: Optional[str] = None,
 ) -> Tuple[Optional[float], Optional[float]]:
     """Extract IRR bounds from YAML configuration.
-    
+
     Parameters
     ----------
     config:
         Full YAML configuration dictionary (from load_config()).
     role:
         Optional role-specific override: "equity", "debt", or None for project-level.
-    
+
     Returns
     -------
     Tuple[Optional[float], Optional[float]]
         (lower_bound, upper_bound) or (None, None) if not configured.
-    
+
     Examples
     --------
     Pattern 1 (Explicit Config - Recommended):
@@ -82,16 +83,16 @@ def get_irr_bounds(
     >>> lower, upper = get_irr_bounds(config)
     >>> print(f"Project IRR bounds: [{lower}, {upper}]")
     Project IRR bounds: [-0.7, 0.35]
-    
+
     >>> lower_eq, upper_eq = get_irr_bounds(config, role="equity")
     >>> print(f"Equity IRR bounds: [{lower_eq}, {upper_eq}]")
     Equity IRR bounds: [-0.5, 0.5]
     """
     irr_cfg = config.get("irr_validation", {})
-    
+
     if not irr_cfg:
         return None, None
-    
+
     # Role-specific override if requested
     if role == "equity":
         lower = irr_cfg.get("equity_irr_lower_bound")
@@ -101,7 +102,7 @@ def get_irr_bounds(
             lower = lower or irr_cfg.get("irr_lower_bound")
             upper = upper or irr_cfg.get("irr_upper_bound")
             return lower, upper
-    
+
     elif role == "debt":
         lower = irr_cfg.get("debt_irr_lower_bound")
         upper = irr_cfg.get("debt_irr_upper_bound")
@@ -109,7 +110,7 @@ def get_irr_bounds(
             lower = lower or irr_cfg.get("irr_lower_bound")
             upper = upper or irr_cfg.get("irr_upper_bound")
             return lower, upper
-    
+
     # Default: project-level bounds
     lower = irr_cfg.get("irr_lower_bound")
     upper = irr_cfg.get("irr_upper_bound")
@@ -120,17 +121,17 @@ def get_xirr_bounds(
     config: Dict[str, Any],
 ) -> Tuple[Optional[float], Optional[float]]:
     """Extract XIRR bounds from YAML configuration.
-    
+
     Parameters
     ----------
     config:
         Full YAML configuration dictionary (from load_config()).
-    
+
     Returns
     -------
     Tuple[Optional[float], Optional[float]]
         (lower_bound, upper_bound) or (None, None) if not configured.
-    
+
     Examples
     --------
     Pattern 1 (Explicit Config):
@@ -141,10 +142,10 @@ def get_xirr_bounds(
     XIRR bounds: [-0.7, 0.25]
     """
     irr_cfg = config.get("irr_validation", {})
-    
+
     if not irr_cfg:
         return None, None
-    
+
     lower = irr_cfg.get("xirr_lower_bound")
     upper = irr_cfg.get("xirr_upper_bound")
     return lower, upper

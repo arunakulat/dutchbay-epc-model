@@ -1,0 +1,15 @@
+Sprint,Team,Priority,Task ID,Task,Deliverable,Dependencies,Est. Hours,Status,Ground Truth Notes
+1A,AI (Perplexity),P0,AI-1.1,Scan for dutchbay_v14chat imports,Import analysis report + LibCST fixer script,None,1.0,✅ COMPLETE,Scripts delivered and verified
+1A,AI (Perplexity),P0,AI-1.2,Generate finance/__init__.py,Complete finance/__init__.py with public API,None,0.5,✅ COMPLETE,Exposes what run_v14_pipeline uses
+1A,AI (Perplexity),P0,AI-1.3,Verify analytics/__init__.py,Verified/fixed analytics/__init__.py + migration guide,None,0.5,✅ CLEAN,No legacy imports found
+1A,AI (Perplexity),P0,AI-1.4,Create quarantine automation,quarantine_v14chat.py script,AI-1.1,1.0,Ready,Moves dutchbay_v14chat/ to legacy/
+1B,AI (Perplexity),P1,AI-1.5,FX data organization script,organize_fx_data.py + path migration guide,None,0.5,Ready,Move 6 FX YAMLs to data/fx_historical/
+1B,AI (Perplexity),P2,AI-1.6,Update .gitignore,Comprehensive .gitignore update,None,0.3,Ready,Add legacy/ and backup patterns
+1B,AI (Perplexity),P2,AI-1.7,Root cleanup + v14 docs,Root file analysis + v14 entrypoint doc,None,0.5,Ready,Document run_full_pipeline_v14.py usage
+2A,Local,P0,LOCAL-2.1,Run import fixer + validate,"All imports fixed, tests passing",AI-1.1,1.0,Blocked,Waiting for AI-1.1 scripts execution
+2A,Local,P0,LOCAL-2.2,Execute quarantine script,dutchbay_v14chat/ moved to legacy/,"AI-1.4, LOCAL-2.1",0.5,Blocked,After import fixes applied
+2A,Local,P0,LOCAL-2.3,Verify __init__.py files,finance/analytics imports validated,"AI-1.2, AI-1.3",0.5,Blocked,Test new finance/__init__.py
+2A,Local,P0,LOCAL-2.4,Full test suite + type checking,pytest + mypy clean,"LOCAL-2.1, LOCAL-2.2, LOCAL-2.3",1.0,Blocked,Coverage floor still 0% (lenient)
+2B,Local,P1,LOCAL-2.5,Organize FX data,FX data in data/fx_historical/,AI-1.5,0.5,Blocked,6 canonical FX YAML files
+2B,Local,P2,LOCAL-2.6,Root cleanup execution,Clean root directory,"AI-1.6, AI-1.7",0.5,Blocked,After validation passes
+2B,Local,P0,LOCAL-2.7,Git checkpoint + push,Clean codebase committed,"LOCAL-2.4, LOCAL-2.5, LOCAL-2.6",0.5,Blocked,Final Sprint 1+2 commit

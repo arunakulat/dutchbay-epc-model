@@ -1,5 +1,6 @@
 import importlib
 
+
 def test_solve_tariff_inverse_of_shim():
     o = importlib.import_module("dutchbay_v13.optimization")
     assert hasattr(o, "solve_tariff")

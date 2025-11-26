@@ -1,4 +1,4 @@
-from dutchbay_v14chat.finance.debt import apply_debt_layer
+from finance.debt_v14 import apply_debt_layer
 
 params = {
     "capex": {"usd_total": 100.0},
@@ -13,8 +13,8 @@ params = {
         "amortization_style": "annuity",
         "target_dscr": 1.30,
         "mix": {"lkr_max": 0.0, "dfi_max": 0.0, "usd_commercial_min": 1.0},
-        "rates": {"usd_nominal": 0.08}
-    }
+        "rates": {"usd_nominal": 0.08},
+    },
 }
 annual_rows = [{"cfads_usd": 12.0} for _ in range(20)]
 

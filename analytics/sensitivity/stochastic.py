@@ -2,7 +2,7 @@
 stochastic.py – Stochastic Tornado Sensitivity for v14+ analytics
 
 PURPOSE:
-    Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter, 
+    Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter,
     simulates a distribution of outcomes by jittering all other parameters with random noise.
     Used to expose nonlinearities and risk distributions—essential for DFI/board-level and risk-focused dashboards.
 
@@ -29,10 +29,13 @@ RETURNS:
 """
 
 from typing import List
+
 import numpy as np
 import pandas as pd
+
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.evaluate_scenario import evaluate_with_overrides
+
 
 def run_stochastic_tornado(
     base_config_path: str,
@@ -40,7 +43,7 @@ def run_stochastic_tornado(
     metric: str = "project_irr",
     n_samples: int = 300,
     sweep_size: int = 5,
-    jitter_pct: float = 5.0
+    jitter_pct: float = 5.0,
 ) -> pd.DataFrame:
     """
     See module docstring above for purpose and usage.
@@ -51,7 +54,7 @@ def run_stochastic_tornado(
         sweep_vals = np.linspace(
             driver.base_value * (1 + driver.low_pct / 100),
             driver.base_value * (1 + driver.high_pct / 100),
-            sweep_size
+            sweep_size,
         )
         for sv in sweep_vals:
             metric_samples = []
@@ -67,15 +70,18 @@ def run_stochastic_tornado(
                 overrides.update(_build_nested_override(driver.variable_name, sv))
                 kpis = evaluate_with_overrides(base_config_path, overrides)
                 metric_samples.append(float(kpis[metric]))
-            records.append({
-                "variable": driver.variable_name,
-                "sweep": sv,
-                "P10": np.percentile(metric_samples, 10),
-                "P50": np.percentile(metric_samples, 50),
-                "P90": np.percentile(metric_samples, 90),
-                "samples": metric_samples
-            })
+            records.append(
+                {
+                    "variable": driver.variable_name,
+                    "sweep": sv,
+                    "P10": np.percentile(metric_samples, 10),
+                    "P50": np.percentile(metric_samples, 50),
+                    "P90": np.percentile(metric_samples, 90),
+                    "samples": metric_samples,
+                }
+            )
     return pd.DataFrame(records)
+
 
 def _build_nested_override(variable_name: str, value):
     """

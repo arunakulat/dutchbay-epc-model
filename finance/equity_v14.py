@@ -15,15 +15,14 @@ with the following sign convention:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
-import math
-
+from analytics.contracts_v14 import DownsideMetrics, EquityPerformance
 from constants import DEFAULT_DISCOUNT_RATE
-from finance.irr import irr as _irr, npv as _npv
-from analytics.contracts_v14 import EquityPerformance, DownsideMetrics
-
+from finance.irr import irr as _irr
+from finance.irr import npv as _npv
 
 Number = float  # keep it simple internally
 
@@ -132,7 +131,9 @@ def calculate_moic(
     """
     if total_invested <= 0.0:
         return None
-    return (float(cumulative_distributions) + float(current_nav)) / float(total_invested)
+    return (float(cumulative_distributions) + float(current_nav)) / float(
+        total_invested
+    )
 
 
 def calculate_payback_period(
@@ -241,8 +242,12 @@ def calculate_equity_performance(
 
     annual_coc = calculate_cash_on_cash(annual_dists, summary.total_invested)
     average_coc: float = float(sum(annual_coc) / len(annual_coc)) if annual_coc else 0.0
-    payback_period_years = calculate_payback_period(annual_dists, summary.total_invested)
-    moic = calculate_moic(summary.cumulative_distributions, current_nav, summary.total_invested)
+    payback_period_years = calculate_payback_period(
+        annual_dists, summary.total_invested
+    )
+    moic = calculate_moic(
+        summary.cumulative_distributions, current_nav, summary.total_invested
+    )
 
     dpi, rvpi, tvpi = calculate_pe_triad(
         cumulative_distributions=summary.cumulative_distributions,
@@ -262,5 +267,3 @@ def calculate_equity_performance(
         payback_period_years=payback_period_years,
         downside=None,
     )
-
-    

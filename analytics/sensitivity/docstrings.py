@@ -19,6 +19,7 @@ RETURNS:
     Explanatory string, or "" if not mapped.
 """
 
+
 def param_narrative_lookup(variable_name: str, doc_yaml: dict) -> str:
     """Look up a doc/explanation string for a variable (for use in table/tooltip/export)."""
     return doc_yaml.get(variable_name, "")

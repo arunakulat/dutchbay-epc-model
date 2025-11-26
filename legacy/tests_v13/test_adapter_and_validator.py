@@ -1,6 +1,7 @@
 from dutchbay_v13.validate import validate_params_dict
 from dutchbay_v13.adapters import run_irr
 
+
 def test_adapter_and_validator():
     p = {
         "project": {"capacity_mw": 150, "timeline": {"lifetime_years": 25}},
@@ -22,7 +23,7 @@ def test_adapter_and_validator():
     validate_params_dict(p, mode="relaxed")
 
     # simple CFADS stream (flat 50m for 25y)
-    annual = [{"year": i+1, "cfads_usd": 50_000_000.0} for i in range(25)]
+    annual = [{"year": i + 1, "cfads_usd": 50_000_000.0} for i in range(25)]
     res = run_irr(p, annual)
 
     assert isinstance(res, dict), "adapter must return a mapping"

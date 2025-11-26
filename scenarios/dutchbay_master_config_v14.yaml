@@ -2,22 +2,37 @@ Financing_Terms:
   amortization_style: auto
   debt_ratio: 0.7
   enforce_hard_covenants: false
-  fees: {commitment_pct: 0.01, upfront_pct: 0.01}
+  fees:
+    commitment_pct: 0.01
+    upfront_pct: 0.01
   guarantee_revenue_pct: 0.0075
   interest_only_years: 2
   interest_rate_nominal: 0.08
   min_dscr: 1.2
   min_dscr_covenant: 1.2
-  mix: {dfi_max: 0.1, lkr_max: 0.45, usd_commercial_min: 0.45}
-  rates: {dfi_min: 0.065, dfi_nominal: 0.065, lkr_min: 0.08, lkr_nominal: 0.08, usd_commercial_min: 0.075,
-    usd_nominal: 0.075}
-  reserves: {dsra_months: 6, receivables_guarantee_months: 9}
+  mix:
+    dfi_max: 0.1
+    lkr_max: 0.45
+    usd_commercial_min: 0.45
+  rates:
+    dfi_min: 0.065
+    dfi_nominal: 0.065
+    lkr_min: 0.08
+    lkr_nominal: 0.08
+    usd_commercial_min: 0.075
+    usd_nominal: 0.075
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
   target_dscr: 1.3
   tenor_years: 15
   use_revenue_guarantee: false
 capex:
-  breakdown: {contingency_usd: 2000000, development_usd: 5000000, epc_usd: 140000000,
-    financing_fees_usd: 3000000}
+  breakdown:
+    contingency_usd: 2000000
+    development_usd: 5000000
+    epc_usd: 140000000
+    financing_fees_usd: 3000000
   usd_total: 150000000
 constraints:
   fail_on_covenant_breach: false
@@ -30,140 +45,279 @@ constraints:
   max_tenor_years: 20
   min_dscr_covenant: 1.3
   min_interest_rate: 0.0
-  refinancing: {enabled: true, max_refinance_pct: 0.1, refinance_rate_premium: 0.02,
-    refinance_tenor_years: 3, requires_documentation: true}
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.1
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
   target_dscr: 1.35
   warn_balloon_pct: 0.05
   warn_debt_ratio: 0.75
   warn_dscr: 1.25
   warn_tenor_years: 18
-fx: {annual_depr: 0.03, start_lkr_per_usd: 300.0}
-irr_validation: {debt_bounds_rationale: Debt IRR bounds reflect lender covenant requirements
-    and DFI policy limits, debt_irr_lower_bound: -0.2, debt_irr_upper_bound: 0.15,
+fx:
+  annual_depr: 0.03
+  start_lkr_per_usd: 300.0
+irr_validation:
+  debt_bounds_rationale: Debt IRR bounds reflect lender covenant requirements and
+    DFI policy limits
+  debt_irr_lower_bound: -0.2
+  debt_irr_upper_bound: 0.15
   equity_bounds_rationale: Equity IRR bounds reflect higher risk tolerance and return
-    expectations per sponsor investment committee, equity_irr_lower_bound: -0.5, equity_irr_upper_bound: 0.5,
-  irr_lower_bound: -0.7, irr_lower_bound_rationale: Based on worst-case wind resource
-    assessment (P90) with 30% grid curtailment scenario, irr_upper_bound: 0.35, irr_upper_bound_rationale: Conservative
-    cap per ADB financing guidelines for renewable energy projects in Sri Lanka, xirr_lower_bound: -0.7,
-  xirr_upper_bound: 0.25}
+    expectations per sponsor investment committee
+  equity_irr_lower_bound: -0.5
+  equity_irr_upper_bound: 0.5
+  irr_lower_bound: -0.7
+  irr_lower_bound_rationale: Based on worst-case wind resource assessment (P90) with
+    30% grid curtailment scenario
+  irr_upper_bound: 0.35
+  irr_upper_bound_rationale: Conservative cap per ADB financing guidelines for renewable
+    energy projects in Sri Lanka
+  xirr_lower_bound: -0.7
+  xirr_upper_bound: 0.25
 metadata:
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
   author: DutchBay V14 Financial Modeling Team
   changelog:
-  - {changes: Added irr_validation section for YAML-driven IRR bounds configuration,
-    date: '2025-11-23', version: '2.4'}
+  - changes: Added irr_validation section for YAML-driven IRR bounds configuration
+    date: '2025-11-23'
+    version: '2.4'
   last_updated: '2025-11-23'
   review_status: Draft - Pending Board Approval
   version: '2.4'
-metrics: {dscr_min_covenant: 1.3, llcr_discount_rate: 0.1, llcr_min_covenant: 1.2,
-  llcr_warn_threshold: 1.25, plcr_discount_rate: 0.1, plcr_min_covenant: 1.4, plcr_target: 1.6}
+metrics:
+  dscr_min_covenant: 1.3
+  llcr_discount_rate: 0.1
+  llcr_min_covenant: 1.2
+  llcr_warn_threshold: 1.25
+  plcr_discount_rate: 0.1
+  plcr_min_covenant: 1.4
+  plcr_target: 1.6
 monte_carlo:
   cvar_confidence: 0.95
   min_dscr_covenant: 1.2
   min_llcr_covenant: 1.25
   n_scenarios: 100000
-  parameters: {capacity_factor_std: 0.05, capex_usd_std: 0.08, opex_usd_std: 0.15,
-    tariff_lkr_std: 0.1}
-  percentiles: [10, 25, 50, 75, 90]
+  parameters:
+    capacity_factor_std: 0.05
+    capex_usd_std: 0.08
+    opex_usd_std: 0.15
+    tariff_lkr_std: 0.1
+  percentiles:
+  - 10
+  - 25
+  - 50
+  - 75
+  - 90
   seed: 42
   var_confidence: 0.95
 opex:
-  breakdown: {admin_usd: 200000, insurance_usd: 500000, land_lease_usd: 300000, om_contract_usd: 2000000}
+  breakdown:
+    admin_usd: 200000
+    insurance_usd: 500000
+    land_lease_usd: 300000
+    om_contract_usd: 2000000
   usd_per_year: 3000000
-project: {boi_agreement_date: '2025-01-15', boi_approved: true, capacity_factor: 0.4,
-  capacity_mw: 150, degradation: 0.006, jurisdiction: Sri Lanka, location: 'Mannar
-    District, Northern Province', name: Dutch Bay Wind Project}
-regulatory: {env_surcharge_pct: 0.005, grid_loss_pct: 0.02, social_services_levy_pct: 0.025,
-  success_fee_pct: 0.01}
-returns: {equity_discount_rate: 0.12, project_discount_rate: 0.1, project_life_years: 20}
-risk_adjustment: {cfads_haircut_pct: 0.1}
+project:
+  boi_agreement_date: '2025-01-15'
+  boi_approved: true
+  capacity_factor: 0.4
+  capacity_mw: 150
+  degradation: 0.006
+  jurisdiction: Sri Lanka
+  location: Mannar District, Northern Province
+  name: Dutch Bay Wind Project
+regulatory:
+  env_surcharge_pct: 0.005
+  grid_loss_pct: 0.02
+  social_services_levy_pct: 0.025
+  success_fee_pct: 0.01
+returns:
+  equity_discount_rate: 0.12
+  project_discount_rate: 0.1
+  project_life_years: 20
+risk_adjustment:
+  cfads_haircut_pct: 0.1
 scenarios:
   base_case:
     description: Conservative wind resource assessment (P75) with DFI financing structure
     financing_type: DFI-led with commercial co-financing
-    irr_bounds: {debt_irr_lower: -0.2, debt_irr_upper: 0.15, equity_irr_lower: -0.5,
-      equity_irr_upper: 0.5, project_irr_lower: -0.7, project_irr_upper: 0.35, xirr_lower: -0.7,
-      xirr_upper: 0.25}
+    irr_bounds:
+      debt_irr_lower: -0.2
+      debt_irr_upper: 0.15
+      equity_irr_lower: -0.5
+      equity_irr_upper: 0.5
+      project_irr_lower: -0.7
+      project_irr_upper: 0.35
+      xirr_lower: -0.7
+      xirr_upper: 0.25
     name: DutchBay Base Case - Wind (P75 Resource, DFI)
-    project_overrides: {capacity_factor: 0.4, degradation: 0.006}
+    project_overrides:
+      capacity_factor: 0.4
+      degradation: 0.006
     resource_assumption: P75 wind resource, 3% annual degradation
-    tariff_overrides: {lkr_per_kwh: 20.3}
+    tariff_overrides:
+      lkr_per_kwh: 20.3
   conservative_wind:
     description: Conservative wind resource (P90) with stress test
     financing_type: DFI-led with conservative covenants
-    irr_bounds: {debt_irr_lower: -0.3, debt_irr_upper: 0.1, equity_irr_lower: -0.7,
-      equity_irr_upper: 0.3, project_irr_lower: -0.9, project_irr_upper: 0.2, xirr_lower: -0.9,
-      xirr_upper: 0.15}
+    irr_bounds:
+      debt_irr_lower: -0.3
+      debt_irr_upper: 0.1
+      equity_irr_lower: -0.7
+      equity_irr_upper: 0.3
+      project_irr_lower: -0.9
+      project_irr_upper: 0.2
+      xirr_lower: -0.9
+      xirr_upper: 0.15
     name: DutchBay Conservative - Wind (P90 Resource)
-    project_overrides: {capacity_factor: 0.35, degradation: 0.008, grid_loss_pct: 0.05}
+    project_overrides:
+      capacity_factor: 0.35
+      degradation: 0.008
+      grid_loss_pct: 0.05
     resource_assumption: P90 wind resource, 3% annual degradation, 30% curtailment
-    tariff_overrides: {lkr_per_kwh: 20.3}
+    tariff_overrides:
+      lkr_per_kwh: 20.3
   hybrid_wind_solar:
     description: Mixed renewable portfolio (75% wind, 25% solar) reduces resource
       risk
     financing_type: DFI-led, blended resource risk
-    irr_bounds: {debt_irr_lower: -0.18, debt_irr_upper: 0.16, equity_irr_lower: -0.4,
-      equity_irr_upper: 0.55, project_irr_lower: -0.6, project_irr_upper: 0.4, xirr_lower: -0.6,
-      xirr_upper: 0.3}
+    irr_bounds:
+      debt_irr_lower: -0.18
+      debt_irr_upper: 0.16
+      equity_irr_lower: -0.4
+      equity_irr_upper: 0.55
+      project_irr_lower: -0.6
+      project_irr_upper: 0.4
+      xirr_lower: -0.6
+      xirr_upper: 0.3
     name: DutchBay Hybrid - Wind 75% + Solar 25%
-    project_overrides: {capacity_factor: 0.42, capacity_mw: 150, degradation: 0.005}
+    project_overrides:
+      capacity_factor: 0.42
+      capacity_mw: 150
+      degradation: 0.005
     resource_assumption: "Wind P75 + Solar 1,200 kWh/m\xB2/yr (annual avg)"
-    tariff_overrides: {lkr_per_kwh: 20.3}
+    tariff_overrides:
+      lkr_per_kwh: 20.3
   optimistic_wind:
     description: Better wind resource (P50) with same DFI financing
     financing_type: DFI-led with commercial co-financing
-    irr_bounds: {debt_irr_lower: -0.15, debt_irr_upper: 0.18, equity_irr_lower: -0.3,
-      equity_irr_upper: 0.65, project_irr_lower: -0.5, project_irr_upper: 0.5, xirr_lower: -0.5,
-      xirr_upper: 0.35}
+    irr_bounds:
+      debt_irr_lower: -0.15
+      debt_irr_upper: 0.18
+      equity_irr_lower: -0.3
+      equity_irr_upper: 0.65
+      project_irr_lower: -0.5
+      project_irr_upper: 0.5
+      xirr_lower: -0.5
+      xirr_upper: 0.35
     name: DutchBay Optimistic - Wind (P50 Resource)
-    project_overrides: {capacity_factor: 0.43, degradation: 0.006}
+    project_overrides:
+      capacity_factor: 0.43
+      degradation: 0.006
     resource_assumption: P50 wind resource, 3% annual degradation
-    tariff_overrides: {lkr_per_kwh: 20.3}
+    tariff_overrides:
+      lkr_per_kwh: 20.3
   private_equity_case:
     description: Higher leverage (75% debt ratio) for PE-backed investment
-    financing_overrides: {debt_ratio: 0.75, interest_only_years: 1, target_dscr: 1.25,
-      tenor_years: 12}
+    financing_overrides:
+      debt_ratio: 0.75
+      interest_only_years: 1
+      target_dscr: 1.25
+      tenor_years: 12
     financing_type: Higher leverage with institutional investors
-    irr_bounds: {debt_irr_lower: -0.15, debt_irr_upper: 0.12, equity_irr_lower: -0.4,
-      equity_irr_upper: 0.7, project_irr_lower: -0.7, project_irr_upper: 0.35, xirr_lower: -0.7,
-      xirr_upper: 0.28}
+    irr_bounds:
+      debt_irr_lower: -0.15
+      debt_irr_upper: 0.12
+      equity_irr_lower: -0.4
+      equity_irr_upper: 0.7
+      project_irr_lower: -0.7
+      project_irr_upper: 0.35
+      xirr_lower: -0.7
+      xirr_upper: 0.28
     name: DutchBay Private Equity - Wind (75% Debt)
-    project_overrides: {capacity_factor: 0.4, degradation: 0.006}
+    project_overrides:
+      capacity_factor: 0.4
+      degradation: 0.006
     resource_assumption: P75 wind resource, same as base case
-    tariff_overrides: {lkr_per_kwh: 20.3}
+    tariff_overrides:
+      lkr_per_kwh: 20.3
 sensitivity:
-  analysis: {dpi: 300, tornado_chart_title: DutchBay 150MW - Parameter Sensitivity
-      (Equity IRR)}
+  analysis:
+    dpi: 300
+    tornado_chart_title: DutchBay 150MW - Parameter Sensitivity (Equity IRR)
   ranges:
-    capacity_factor: {high_pct: 0.05, low_pct: -0.05}
-    capex_usd_total: {high_pct: 0.08, low_pct: -0.08}
-    grid_loss_pct: {high_pct: 0.03, low_pct: -0.01}
-    opex_usd_per_year: {high_pct: 0.15, low_pct: -0.15}
-    tariff_lkr_per_kwh: {high_pct: 0.1, low_pct: -0.1}
+    capacity_factor:
+      high_pct: 0.05
+      low_pct: -0.05
+    capex_usd_total:
+      high_pct: 0.08
+      low_pct: -0.08
+    grid_loss_pct:
+      high_pct: 0.03
+      low_pct: -0.01
+    opex_usd_per_year:
+      high_pct: 0.15
+      low_pct: -0.15
+    tariff_lkr_per_kwh:
+      high_pct: 0.1
+      low_pct: -0.1
 sensitivity_scenarios:
   capacity_factor:
     scenarios:
-    - {name: CF -10%, value: 0.36}
-    - {name: CF -5%, value: 0.38}
-    - {name: CF Base, value: 0.4}
-    - {name: CF +5%, value: 0.42}
-    - {name: CF +10%, value: 0.44}
+    - name: CF -10%
+      value: 0.36
+    - name: CF -5%
+      value: 0.38
+    - name: CF Base
+      value: 0.4
+    - name: CF +5%
+      value: 0.42
+    - name: CF +10%
+      value: 0.44
   opex_usd:
     scenarios:
-    - {name: OPEX +30%, value: 3900000}
-    - {name: OPEX +15%, value: 3450000}
-    - {name: OPEX Base, value: 3000000}
-    - {name: OPEX -15%, value: 2550000}
-    - {name: OPEX -30%, value: 2100000}
+    - name: OPEX +30%
+      value: 3900000
+    - name: OPEX +15%
+      value: 3450000
+    - name: OPEX Base
+      value: 3000000
+    - name: OPEX -15%
+      value: 2550000
+    - name: OPEX -30%
+      value: 2100000
   tariff_lkr:
     scenarios:
-    - {name: Tariff -20%, value: 16.24}
-    - {name: Tariff -10%, value: 18.27}
-    - {name: Tariff Base, value: 20.3}
-    - {name: Tariff +10%, value: 22.33}
-    - {name: Tariff +20%, value: 24.36}
-tariff: {lkr_per_kwh: 20.3, ppa_term_years: 20, tariff_type: fixed}
-tax: {corporate_tax_rate: 0.3, depreciation_method: straight_line, depreciation_start_year: 1,
-  depreciation_years: 15, enhanced_allowance_applies: true, enhanced_capital_allowance_pct: 1.5,
-  loss_carryforward_years: 25, tax_holiday_start_year: 1, tax_holiday_years: 12, wht_on_interest_to_nonresidents: 0.1}
-timeline: {construction_years: 2, lifetime_years: 22, ops_years: 20, ppa_to_fc_years: 0}
+    - name: Tariff -20%
+      value: 16.24
+    - name: Tariff -10%
+      value: 18.27
+    - name: Tariff Base
+      value: 20.3
+    - name: Tariff +10%
+      value: 22.33
+    - name: Tariff +20%
+      value: 24.36
+tariff:
+  lkr_per_kwh: 20.3
+  ppa_term_years: 20
+  tariff_type: fixed
+tax:
+  corporate_tax_rate: 0.3
+  depreciation_method: straight_line
+  depreciation_start_year: 1
+  depreciation_years: 15
+  enhanced_allowance_applies: true
+  enhanced_capital_allowance_pct: 1.5
+  loss_carryforward_years: 25
+  tax_holiday_start_year: 1
+  tax_holiday_years: 12
+  wht_on_interest_to_nonresidents: 0.1
+timeline:
+  construction_years: 2
+  lifetime_years: 22
+  ops_years: 20
+  ppa_to_fc_years: 0
+discount_rate: 0.12

@@ -1,4 +1,5 @@
 """Tax Calculator V14"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -24,7 +25,9 @@ class TaxCalculatorV14:
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config: Dict[str, Any] = config
         self.tax_config: Dict[str, Any] = config.get("tax", {})
-        self.corporate_rate: float = float(self.tax_config.get("corporate_tax_rate", 0.30))
+        self.corporate_rate: float = float(
+            self.tax_config.get("corporate_tax_rate", 0.30)
+        )
 
     def calculate_depreciation(
         self,
@@ -34,5 +37,6 @@ class TaxCalculatorV14:
         method: str = self.tax_config.get("depreciation_method", "straight_line")
         years_raw: Any = self.tax_config.get("depreciation_years", 15)
         years: int = int(years_raw)
-        return calculate_depreciation_schedule(asset_value, method, years, operational_years)
-
+        return calculate_depreciation_schedule(
+            asset_value, method, years, operational_years
+        )

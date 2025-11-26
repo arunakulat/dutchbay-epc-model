@@ -39,4 +39,6 @@ def test_v14_pipeline_smoke_runs_and_returns_structure():
     # DSCR should be positive
     min_dscr = kpis["min_dscr"]
     assert isinstance(min_dscr, (int, float))
-    assert min_dscr > 0 or min_dscr == float('inf'), "min_dscr should be positive or inf"
+    assert min_dscr > 0 or min_dscr == float(
+        "inf"
+    ), "min_dscr should be positive or inf"

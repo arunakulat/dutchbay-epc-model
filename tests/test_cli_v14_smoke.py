@@ -13,7 +13,14 @@ def test_cli_v14_pipeline_invocation():
     assert LENDERCASE_CONFIG.exists(), f"Missing lendercase config: {LENDERCASE_CONFIG}"
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--mode", "base", "--config", str(LENDERCASE_CONFIG)],
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--mode",
+            "base",
+            "--config",
+            str(LENDERCASE_CONFIG),
+        ],
         capture_output=True,
         text=True,
         check=True,
@@ -21,4 +28,8 @@ def test_cli_v14_pipeline_invocation():
 
     assert result.returncode == 0
     # Check that pipeline completed - output goes to logs, not stdout in this mode
-    assert len(result.stderr) > 0 or "completed" in result.stdout.lower() or result.returncode == 0
+    assert (
+        len(result.stderr) > 0
+        or "completed" in result.stdout.lower()
+        or result.returncode == 0
+    )

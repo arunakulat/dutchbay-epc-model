@@ -16,19 +16,30 @@ EXAMPLE:
     batch_heatmap_grid("scenarios/basecase.yaml", params, steps=4)
 """
 
-from itertools import combinations
 import os
-from analytics.sensitivity_heatmap import run_two_way_sensitivity, plot_two_way_heatmap
-from analytics.contracts_v14 import ParameterRangeConfig
+from itertools import combinations
 
-def batch_heatmap_grid(base_config_path: str, parameters: list[ParameterRangeConfig], metric: str = "project_irr", steps: int = 4, outdir: str = "exports/heatmaps/"):
+from analytics.contracts_v14 import ParameterRangeConfig
+from analytics.sensitivity_heatmap import (plot_two_way_heatmap,
+                                           run_two_way_sensitivity)
+
+
+def batch_heatmap_grid(
+    base_config_path: str,
+    parameters: list[ParameterRangeConfig],
+    metric: str = "project_irr",
+    steps: int = 4,
+    outdir: str = "exports/heatmaps/",
+):
     """
     Loops over all parameter pairs, creates heatmap/contour plots as PNGs.
     Each file is named by driver variable names.
     """
     os.makedirs(outdir, exist_ok=True)
     for pa, pb in combinations(parameters, 2):
-        df = run_two_way_sensitivity(base_config_path, pa, pb, metric=metric, steps=steps)
+        df = run_two_way_sensitivity(
+            base_config_path, pa, pb, metric=metric, steps=steps
+        )
         fname = f"{outdir}/{pa.variable_name.replace('.', '_')}_{pb.variable_name.replace('.', '_')}.png"
         plot_two_way_heatmap(df, fname)
     print(f"Generated {len(list(combinations(parameters,2)))} heatmaps in {outdir}")

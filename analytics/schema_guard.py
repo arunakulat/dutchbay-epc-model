@@ -119,6 +119,7 @@ def _ensure_module_registered(name: str) -> None:
 # Core helpers – nested lookup and value resolution
 # ---------------------------------------------------------------------------
 
+
 def _get_nested(container: Mapping[str, Any], path: PathSpec) -> Any:
     """
     Walk a nested mapping by path segments and return the value, or None.
@@ -143,7 +144,9 @@ def _get_nested(container: Mapping[str, Any], path: PathSpec) -> Any:
     return current
 
 
-def _first_resolved_value(raw_config: Mapping[str, Any], paths: Sequence[PathSpec]) -> Any:
+def _first_resolved_value(
+    raw_config: Mapping[str, Any], paths: Sequence[PathSpec]
+) -> Any:
     """
     Try each candidate path in order and return the first resolved value.
 
@@ -173,6 +176,7 @@ def _first_resolved_value(raw_config: Mapping[str, Any], paths: Sequence[PathSpe
 # ---------------------------------------------------------------------------
 # Public API – v14 config validation entry point
 # ---------------------------------------------------------------------------
+
 
 def validate_config_for_v14(
     raw_config: Dict[str, Any],

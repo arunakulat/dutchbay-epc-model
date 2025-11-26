@@ -16,6 +16,7 @@ __all__ = [
 # Internal safe-access utilities
 # -------------------------------
 
+
 def _get(d: Dict[str, Any], path: Iterable[str], default: Any = None) -> Any:
     """Nested dict getter: _get(p, ['project','capacity_mw'])."""
     cur: Any = d
@@ -37,14 +38,23 @@ def _as_float(v: Any, default: Optional[float] = None) -> Optional[float]:
 # Parameter readers (no policy)
 # -------------------------------
 
+
 def capacity_mw(p: Dict[str, Any]) -> float:
     """project.capacity_mw or legacy capacity_mw; default 0.0 (policy lives in YAML)."""
-    return _as_float(_get(p, ["project", "capacity_mw"]), _as_float(p.get("capacity_mw"), 0.0)) or 0.0
+    return (
+        _as_float(
+            _get(p, ["project", "capacity_mw"]), _as_float(p.get("capacity_mw"), 0.0)
+        )
+        or 0.0
+    )
 
 
 def lifetime_years(p: Dict[str, Any]) -> int:
     """project.timeline.lifetime_years or legacy lifetime_years; default 0."""
-    val = _as_float(_get(p, ["project", "timeline", "lifetime_years"]), _as_float(p.get("lifetime_years"), 0.0))
+    val = _as_float(
+        _get(p, ["project", "timeline", "lifetime_years"]),
+        _as_float(p.get("lifetime_years"), 0.0),
+    )
     return int(val or 0)
 
 
@@ -62,7 +72,9 @@ def loss_factor(p: Dict[str, Any]) -> float:
 
 def tariff_usd_per_kwh(p: Dict[str, Any]) -> float:
     """Prefer 'tariff_usd_per_kwh'; fallback to legacy 'tariff' if already USD/kWh; default 0.0."""
-    return _as_float(p.get("tariff_usd_per_kwh"), _as_float(p.get("tariff"), 0.0)) or 0.0
+    return (
+        _as_float(p.get("tariff_usd_per_kwh"), _as_float(p.get("tariff"), 0.0)) or 0.0
+    )
 
 
 def capex_usd_total(p: Dict[str, Any]) -> float:
@@ -85,6 +97,7 @@ def opex_usd_per_year(p: Dict[str, Any]) -> float:
 # -------------------------------
 # Simple production & cashflows
 # -------------------------------
+
 
 def kwh_per_year(p: Dict[str, Any]) -> float:
     """
@@ -122,6 +135,7 @@ def equity_only_cashflows(p: Dict[str, Any]) -> List[float]:
 # IRR utility (with graceful fallback)
 # -------------------------------
 
+
 def compute_irr(cashflows: List[float]) -> float:
     """
     IRR for a vector like [-capex, cf1, cf2, ...].
@@ -133,6 +147,7 @@ def compute_irr(cashflows: List[float]) -> float:
     # Preferred: numpy_financial
     try:
         import numpy_financial as npf  # type: ignore
+
         val = npf.irr(cashflows)
         return float(val) if val is not None else 0.0
     except Exception:
@@ -148,7 +163,7 @@ def compute_irr(cashflows: List[float]) -> float:
     r0, r1 = 0.05, 0.15  # two starting guesses
     for _ in range(100):
         f0, f1 = _npv(r0), _npv(r1)
-        denom = (f1 - f0)
+        denom = f1 - f0
         if abs(denom) < 1e-12:
             break
         r2 = r1 - f1 * (r1 - r0) / denom
@@ -156,5 +171,3 @@ def compute_irr(cashflows: List[float]) -> float:
             return float(r2)
         r0, r1 = r1, r2
     return float(r1)
-
-    

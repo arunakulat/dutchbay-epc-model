@@ -31,15 +31,15 @@ def solve_for_tariff_given_irr(
     method: str = "bisection",
     bounds: tuple[float, float] = (40.0, 100.0),
     tolerance: float = 0.0001,
-    max_iterations: int = 50
+    max_iterations: int = 50,
 ) -> float:
     """
     Find tariff (LKR/kWh) that achieves target project IRR.
-    
+
     Uses binary search (bisection method) to efficiently find the
     tariff value that produces the desired IRR given all other
     sampled parameters (capex, opex, capacity factor, etc.).
-    
+
     Args:
         base_config_path: Path to base scenario YAML
         base_overrides: Dict of sampled parameter values
@@ -48,13 +48,13 @@ def solve_for_tariff_given_irr(
         bounds: (min_tariff, max_tariff) search range in LKR/kWh
         tolerance: IRR convergence tolerance
         max_iterations: Maximum solver iterations
-    
+
     Returns:
         Required tariff in LKR/kWh
-    
+
     Raises:
         ValueError: If solver fails to converge
-    
+
     Example:
         >>> tariff = solve_for_tariff_given_irr(
         ...     "scenarios/dutchbay_master_config_v14.yaml",
@@ -65,16 +65,16 @@ def solve_for_tariff_given_irr(
     """
     if method != "bisection":
         raise ValueError(f"Unsupported solver method: {method}")
-    
+
     low, high = bounds
-    
+
     for iteration in range(max_iterations):
         mid = (low + high) / 2.0
-        
+
         # Evaluate scenario with this tariff
         overrides = {**base_overrides}
         overrides.setdefault("financial", {})["tariff_lkr_per_kwh"] = mid
-        
+
         try:
             kpis = evaluate_with_overrides(base_config_path, overrides)
             achieved_irr = kpis["project_irr"]
@@ -83,7 +83,7 @@ def solve_for_tariff_given_irr(
             # If evaluation fails, assume tariff too low
             low = mid
             continue
-        
+
         # Check convergence
         error = abs(achieved_irr - target_irr)
         if error < tolerance:
@@ -92,7 +92,7 @@ def solve_for_tariff_given_irr(
                 f"tariff={mid:.2f}, IRR={achieved_irr:.4f} (target={target_irr:.4f})"
             )
             return mid
-        
+
         # Binary search update
         if achieved_irr < target_irr:
             # Need higher tariff
@@ -100,7 +100,7 @@ def solve_for_tariff_given_irr(
         else:
             # Need lower tariff
             high = mid
-    
+
     # Failed to converge
     raise ValueError(
         f"Solver failed to converge after {max_iterations} iterations. "
@@ -114,14 +114,14 @@ def solve_for_max_debt_given_dscr(
     target_dscr: float,
     bounds: tuple[float, float] = (1.0e6, 1.0e9),
     tolerance: float = 1000.0,
-    max_iterations: int = 50
+    max_iterations: int = 50,
 ) -> float:
     """
     Find maximum debt amount that maintains minimum DSCR covenant.
-    
+
     Uses bisection to find the debt level where min(DSCR) equals
     the target covenant threshold.
-    
+
     Args:
         base_config_path: Path to base scenario YAML
         base_overrides: Dict of sampled parameter values
@@ -129,13 +129,13 @@ def solve_for_max_debt_given_dscr(
         bounds: (min_debt, max_debt) search range in USD
         tolerance: Convergence tolerance in USD
         max_iterations: Maximum solver iterations
-    
+
     Returns:
         Maximum debt amount in USD
-    
+
     Raises:
         ValueError: If solver fails to converge
-    
+
     Example:
         >>> max_debt = solve_for_max_debt_given_dscr(
         ...     "scenarios/dutchbay_master_config_v14.yaml",
@@ -145,14 +145,14 @@ def solve_for_max_debt_given_dscr(
         >>> print(f"Max debt at DSCR 1.30: ${max_debt:,.0f}")
     """
     low, high = bounds
-    
+
     for iteration in range(max_iterations):
         mid = (low + high) / 2.0
-        
+
         # Evaluate scenario with this debt level
         overrides = {**base_overrides}
         overrides.setdefault("financial", {})["debt_amount_usd"] = mid
-        
+
         try:
             kpis = evaluate_with_overrides(base_config_path, overrides)
             achieved_dscr = kpis["dscr_min"]
@@ -161,7 +161,7 @@ def solve_for_max_debt_given_dscr(
             # If evaluation fails, assume debt too high
             high = mid
             continue
-        
+
         # Check convergence
         error = abs(mid - (low + high) / 2.0)
         if error < tolerance:
@@ -170,7 +170,7 @@ def solve_for_max_debt_given_dscr(
                 f"debt=${mid:,.0f}, DSCR={achieved_dscr:.2f} (target={target_dscr:.2f})"
             )
             return mid
-        
+
         # Binary search update
         if achieved_dscr > target_dscr:
             # Can increase debt
@@ -178,7 +178,7 @@ def solve_for_max_debt_given_dscr(
         else:
             # Must decrease debt
             high = mid
-    
+
     # Failed to converge
     raise ValueError(
         f"Solver failed to converge after {max_iterations} iterations. "
@@ -198,13 +198,13 @@ SOLVER_REGISTRY: dict[str, Callable[..., float]] = {
 def get_solver(derive_from: str) -> Callable[..., float]:
     """
     Get solver function from registry.
-    
+
     Args:
         derive_from: Derivation type (e.g., "target_project_irr")
-    
+
     Returns:
         Solver function
-    
+
     Raises:
         KeyError: If solver not found in registry
     """
@@ -213,5 +213,5 @@ def get_solver(derive_from: str) -> Callable[..., float]:
             f"No solver registered for '{derive_from}'. "
             f"Available solvers: {list(SOLVER_REGISTRY.keys())}"
         )
-    
+
     return SOLVER_REGISTRY[derive_from]

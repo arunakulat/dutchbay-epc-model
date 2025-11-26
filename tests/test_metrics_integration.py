@@ -4,8 +4,8 @@ from pathlib import Path
 
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
-from dutchbay_v14chat.finance.cashflow import build_annual_rows
-from dutchbay_v14chat.finance.debt import apply_debt_layer
+from finance.cashflow_v14 import build_annual_rows
+from finance.debt_v14 import apply_debt_layer
 
 LENDERCASE_CONFIG = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
@@ -60,4 +60,3 @@ def test_metrics_integration_lendercase_yaml():
     # DSCR series should have been passed through
     kpi_dscr_series = kpis["dscr_series"]
     assert len(kpi_dscr_series) > 0
-

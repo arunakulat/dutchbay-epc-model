@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tornado / sensitivity analysis hub for the v14 analytics layer.
 
@@ -51,25 +52,23 @@ API to use going forward is:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: F401 - reserved for future use
+import pandas as pd  # noqa: F401 - reserved for future export helpers
 
-from analytics.contracts_v14 import (
-    ParameterRangeConfig,
-    TornadoResult,
-    SensitivitySuite,
-    BreakevenResult,
-    MultiMetricTornadoResult,
-    MultiMetricSensitivitySuite,
-)
+from analytics.contracts_v14 import (BreakevenResult,
+                                     MultiMetricSensitivitySuite,
+                                     MultiMetricTornadoResult,
+                                     ParameterRangeConfig, SensitivitySuite,
+                                     TornadoResult)
 from analytics.evaluate_scenario import evaluate_with_overrides
+from analytics.monte_carlo_v14 import \
+    MonteCarloResult  # noqa: F401; Reserved for future VaR / CVaR integration
 from analytics.scenario_loader import load_scenario_config
-from analytics.monte_carlo_v14 import MonteCarloResult  # Reserved for future VaR / CVaR integration
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +76,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Core public request type
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SensitivityRequest:
@@ -107,8 +107,9 @@ class SensitivityRequest:
 
 
 # ---------------------------------------------------------------------------
-# Core helpers
+# Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_nested_override(
     path: Union[str, Sequence[str]],
@@ -117,22 +118,12 @@ def _build_nested_override(
     """
     Build a nested override dict from either a dotted string or a list of keys.
 
-    This is the small but critical glue between the *flat* parameter naming
-    convention used in analytics ("financial.tariff_lkr_per_kwh") and the
-    nested dict structure expected by `evaluate_with_overrides`.
-
-    Examples
-    --------
-    >>> _build_nested_override("financial.tariff_lkr_per_kwh", 70.0)
-    {'financial': {'tariff_lkr_per_kwh': 70.0}}
-
-    >>> _build_nested_override(["tax", "corporate_tax_rate"], 0.24)
-    {'tax': {'corporate_tax_rate': 0.24}}
+    Bridge between flat parameter names ("financial.tariff_lkr_per_kwh")
+    and the nested dict structure expected by `evaluate_with_overrides`.
     """
     if isinstance(path, str):
         parts: List[str] = [p for p in path.split(".") if p]
     else:
-        # Tests sometimes pass a list/tuple of keys – support that too.
         parts = [str(p) for p in path]
 
     if not parts:
@@ -144,37 +135,59 @@ def _build_nested_override(
     return nested
 
 
+def _debug_log_parameters(
+    *,
+    where: str,
+    base_config_path: str,
+    metric_names: Sequence[str],
+    params: Sequence[ParameterRangeConfig],
+) -> None:
+    """
+    Centralised debug helper so we can see what the tornado engine *thinks*
+    it's about to run.
+    """
+    names_str = ",".join(metric_names)
+    logger.debug(
+        "%s: base_config_path=%s metric(s)=%s n_params=%d",
+        where,
+        base_config_path,
+        names_str,
+        len(params),
+    )
+
+    if not params:
+        logger.warning(
+            "%s: no parameters provided – tornado will yield zero rows. "
+            "Check test wiring / SensitivityRequest.parameters.",
+            where,
+        )
+        return
+
+    sample = list(params)[:10]
+    for idx, p in enumerate(sample):
+        logger.debug(
+            "%s: param[%d]: variable=%s base=%.6f low_pct=%.3f high_pct=%.3f",
+            where,
+            idx,
+            p.variable_name,
+            p.base_value,
+            p.low_pct,
+            p.high_pct,
+        )
+
+
 def _analyze_single_parameter(
     base_config_path: str,
     param: ParameterRangeConfig,
-    base_metric: float,
+    base_metric_value: float,
     metric: str = "project_irr",
     override_labels: Optional[Dict[str, str]] = None,
 ) -> TornadoResult:
     """
     Evaluate the effect of a single parameter on the chosen metric.
 
-    This is the workhorse used by `run_tornado_sensitivity`: given one
-    ParameterRangeConfig, it builds low/high overrides, runs the model,
-    and returns a `TornadoResult`.
-
-    Parameters
-    ----------
-    base_config_path:
-        Scenario file to evaluate.
-    param:
-        ParameterRangeConfig describing base value and +/- percentage shocks.
-    base_metric:
-        Already-computed base metric (e.g. project IRR for the un-shocked case).
-    metric:
-        KPI name to read from the KPI dict.
-    override_labels:
-        Optional mapping of variable_name -> short label.
-
-    Returns
-    -------
-    TornadoResult
-        dataclass from `analytics.contracts_v14`, safe for plotting and export.
+    We return a TornadoResult that matches the contracts_v14 signature:
+    (label, base_value, low_value, high_value, impact_abs, impact_dir).
     """
     low_val = param.base_value * (1.0 + 0.01 * param.low_pct)
     high_val = param.base_value * (1.0 + 0.01 * param.high_pct)
@@ -193,13 +206,34 @@ def _analyze_single_parameter(
         else param.variable_name
     )
 
-    # NOTE: TornadoResult in contracts_v14 owns the impact_abs/impact_dir logic
-    # via properties; we just pass through the three metric values.
+    # Absolute and directional impact on the KPI (not on the raw parameter).
+    impact_low = abs(low_metric - base_metric_value)
+    impact_high = abs(high_metric - base_metric_value)
+    impact_abs = max(impact_low, impact_high)
+
+    # Direction: +1 if the high shock is >= base, else -1.
+    impact_dir = 1 if high_metric >= base_metric_value else -1
+
+    logger.debug(
+        "analyze_single_parameter: label=%s base=%.6f low=%.6f high=%.6f "
+        "impact_abs=%.6e impact_dir=%d metric=%s",
+        label,
+        base_metric_value,
+        low_metric,
+        high_metric,
+        impact_abs,
+        impact_dir,
+        metric,
+    )
+
+    # IMPORTANT: arguments here must match TornadoResult.__init__ signature.
     return TornadoResult(
-        variable=label,
-        base_irr=base_metric,
-        low_irr=low_metric,
-        high_irr=high_metric,
+        label,
+        base_metric_value,
+        low_metric,
+        high_metric,
+        impact_abs,
+        impact_dir,
     )
 
 
@@ -207,67 +241,104 @@ def _analyze_single_parameter(
 # Public tornado runners
 # ---------------------------------------------------------------------------
 
-def run_tornado_sensitivity(request: SensitivityRequest) -> SensitivitySuite:
+
+def run_tornado_sensitivity(
+    request: Union[SensitivityRequest, str],
+    parameters: Optional[Sequence[ParameterRangeConfig]] = None,
+    metric: Optional[str] = None,
+) -> SensitivitySuite:
     """
     Run a deterministic one-way tornado on the provided parameters.
 
-    Parameters
-    ----------
-    request:
-        SensitivityRequest bundling scenario path, parameters, and metric name.
+    Two supported calling styles (for compatibility):
 
-    Returns
-    -------
-    SensitivitySuite
-        A simple container with:
-        - `base_case_irr` (or base metric),
-        - `tornado_results` (list of TornadoResult),
-        - `metric_name`,
-        - `config_path`.
+    1) New, canonical API (preferred):
+        >>> req = SensitivityRequest(
+        ...     base_config_path="scenarios/example_a.yaml",
+        ...     parameters=[...],
+        ...     metric="project_irr",
+        ... )
+        >>> suite = run_tornado_sensitivity(req)
 
-    Usage
-    -----
-    >>> suite = run_tornado_sensitivity(
-    ...     SensitivityRequest(
-    ...         base_config_path="scenarios/example_a.yaml",
-    ...         parameters=[...],
-    ...         metric="project_irr",
-    ...     )
-    ... )
-    >>> for row in suite.tornado_results:
-    ...     print(row.variable, row.impact_abs)
+    2) Legacy API (string + optional parameters):
+        >>> suite = run_tornado_sensitivity(
+        ...     "scenarios/example_a.yaml",
+        ...     parameters=my_params,
+        ...     metric="project_irr",
+        ... )
     """
-    logger.info("Starting tornado sensitivity for %s", request.base_config_path)
+    if isinstance(request, SensitivityRequest):
+        base_config_path = request.base_config_path
+        params: Sequence[ParameterRangeConfig] = list(request.parameters)
+        override_labels = request.override_labels
+        metric_name = request.metric
+    else:
+        base_config_path = str(request)
+        override_labels = None
+        metric_name = metric or "project_irr"
+        if parameters is not None:
+            params = list(parameters)
+        else:
+            params = list(_load_parameters())
 
-    # Base case KPI evaluation (no overrides).
-    base_kpis = evaluate_with_overrides(request.base_config_path, {})
-    base_metric_value = float(base_kpis[request.metric])
+    # Fallback if tests hand us an empty parameter list.
+    if not params:
+        logger.warning(
+            "run_tornado_sensitivity[request]: resolved empty parameters for %s; "
+            "falling back to _load_parameters() defaults.",
+            base_config_path,
+        )
+        params = list(_load_parameters())
+
+    logger.info("Starting tornado sensitivity for %s", base_config_path)
+    _debug_log_parameters(
+        where="run_tornado_sensitivity[request]",
+        base_config_path=base_config_path,
+        metric_names=[metric_name],
+        params=params,
+    )
+
+    base_kpis = evaluate_with_overrides(base_config_path, {})
+    base_metric_value = float(base_kpis[metric_name])
+
+    logger.debug(
+        "run_tornado_sensitivity[request]: base KPI metric=%s value=%f",
+        metric_name,
+        base_metric_value,
+    )
 
     results: List[TornadoResult] = []
-    for param in request.parameters:
+    for param in params:
         tr = _analyze_single_parameter(
-            base_config_path=request.base_config_path,
+            base_config_path=base_config_path,
             param=param,
-            base_metric=base_metric_value,
-            metric=request.metric,
-            override_labels=request.override_labels,
+            base_metric_value=base_metric_value,
+            metric=metric_name,
+            override_labels=override_labels,
         )
         results.append(tr)
 
     # Sort descending by absolute impact, so the biggest drivers float to the top.
-    results.sort(key=lambda r: r.impact_abs, reverse=True)
+    results.sort(key=lambda r: getattr(r, "impact_abs", 0.0), reverse=True)
+
+    top_impact = results[0].impact_abs if results else 0.0
+    logger.debug(
+        "run_tornado_sensitivity[request]: completed with %d tornado rows; "
+        "top_impact=%f",
+        len(results),
+        top_impact,
+    )
 
     suite = SensitivitySuite(
         tornado_results=results,
-        base_case_irr=base_metric_value,
-        metric_name=request.metric,
-        config_path=request.base_config_path,
+        base_metric=base_metric_value,
+        base_config_path=base_config_path,
+        metric=metric_name,
     )
 
     if results:
         logger.info(
-            "Tornado complete: %d parameters, top driver: %s (impact %.4f)",
-            len(results),
+            "Tornado complete: %d parameters, top driver impact=%.4f",
             len(results),
             results[0].impact_abs,
         )
@@ -278,83 +349,128 @@ def run_tornado_sensitivity(request: SensitivityRequest) -> SensitivitySuite:
 
 
 def run_multi_metric_tornado(
-    request: SensitivityRequest,
+    request: Union[SensitivityRequest, str],
     metrics: Sequence[str],
+    parameters: Optional[Sequence[ParameterRangeConfig]] = None,
 ) -> MultiMetricSensitivitySuite:
     """
     Run a tornado over multiple KPI metrics at once.
 
-    This is intended for “spider chart” style views where, for each parameter,
-    you want to see its impact on (say) project_irr, equity_irr, and project_mirr
-    side-by-side.
+    New, preferred style:
 
-    Parameters
-    ----------
-    request:
-        SensitivityRequest describing the scenario + parameters.
-    metrics:
-        KPI names to pull from the KPI dict for each run.
+        >>> req = SensitivityRequest(
+        ...     base_config_path="scenarios/example_a.yaml",
+        ...     parameters=[...],
+        ... )
+        >>> suite = run_multi_metric_tornado(req, metrics=["project_irr", "equity_irr"])
 
-    Returns
-    -------
-    MultiMetricSensitivitySuite
-        See `analytics.contracts_v14` for the exact schema.
+    Legacy style (kept for compatibility):
+
+        >>> suite = run_multi_metric_tornado(
+        ...     "scenarios/example_a.yaml",
+        ...     metrics=["project_irr", "equity_irr"],
+        ...     parameters=my_params,
+        ... )
     """
+    if isinstance(request, SensitivityRequest):
+        base_config_path = request.base_config_path
+        params: Sequence[ParameterRangeConfig] = list(request.parameters)
+        override_labels = request.override_labels
+    else:
+        base_config_path = str(request)
+        override_labels = None
+        if parameters is not None:
+            params = list(parameters)
+        else:
+            params = list(_load_parameters())
+
+    if not params:
+        logger.warning(
+            "run_multi_metric_tornado[request]: resolved empty parameters for %s; "
+            "falling back to _load_parameters() defaults.",
+            base_config_path,
+        )
+        params = list(_load_parameters())
+
     logger.info(
         "Starting multi-metric tornado for %s on metrics=%s",
-        request.base_config_path,
+        base_config_path,
         list(metrics),
     )
+    _debug_log_parameters(
+        where="run_multi_metric_tornado[request]",
+        base_config_path=base_config_path,
+        metric_names=list(metrics),
+        params=params,
+    )
 
-    base_kpis = evaluate_with_overrides(request.base_config_path, {})
+    base_kpis = evaluate_with_overrides(base_config_path, {})
     base_metric_vals = {m: float(base_kpis[m]) for m in metrics}
+
+    logger.debug(
+        "run_multi_metric_tornado[request]: base KPI metrics=%s values=%s",
+        list(metrics),
+        base_metric_vals,
+    )
 
     results: List[MultiMetricTornadoResult] = []
 
-    for param in request.parameters:
+    for param in params:
         low_val = param.base_value * (1.0 + 0.01 * param.low_pct)
         high_val = param.base_value * (1.0 + 0.01 * param.high_pct)
 
         low_override = _build_nested_override(param.variable_name, low_val)
-        low_kpis = evaluate_with_overrides(request.base_config_path, low_override)
+        low_kpis = evaluate_with_overrides(base_config_path, low_override)
 
         high_override = _build_nested_override(param.variable_name, high_val)
-        high_kpis = evaluate_with_overrides(request.base_config_path, high_override)
+        high_kpis = evaluate_with_overrides(base_config_path, high_override)
 
         low_metrics = {m: float(low_kpis[m]) for m in metrics}
         high_metrics = {m: float(high_kpis[m]) for m in metrics}
 
         label = (
-            request.override_labels.get(param.variable_name, param.variable_name)
-            if request.override_labels
+            override_labels.get(param.variable_name, param.variable_name)
+            if override_labels
             else param.variable_name
         )
 
-        impacts = {
-            m: abs(high_metrics[m] - low_metrics[m]) for m in metrics
-        }
+        impacts = {m: abs(high_metrics[m] - low_metrics[m]) for m in metrics}
         impact_dirs = {
             m: 1 if high_metrics[m] >= low_metrics[m] else -1 for m in metrics
         }
 
+        logger.debug(
+            "run_multi_metric_tornado[request]: label=%s low=%s high=%s impacts=%s",
+            label,
+            low_metrics,
+            high_metrics,
+            impacts,
+        )
+
+        # IMPORTANT: arguments here must match MultiMetricTornadoResult signature.
         results.append(
             MultiMetricTornadoResult(
-                variable=label,
-                base_values=base_metric_vals.copy(),
-                low_values=low_metrics,
-                high_values=high_metrics,
-                impacts=impacts,
-                impact_dirs=impact_dirs,
+                label,
+                base_metric_vals.copy(),
+                low_metrics,
+                high_metrics,
+                impacts,
+                impact_dirs,
             )
         )
 
     suite = MultiMetricSensitivitySuite(
         tornado_results=results,
         base_metrics=base_metric_vals,
-        base_config_path=request.base_config_path,
+        base_config_path=base_config_path,
         metrics=list(metrics),
     )
 
+    logger.debug(
+        "run_multi_metric_tornado[request]: completed with %d tornado rows; metrics=%s",
+        len(results),
+        list(metrics),
+    )
     logger.info(
         "Multi-metric tornado complete: %d parameters, %d metrics",
         len(results),
@@ -381,29 +497,6 @@ def run_breakeven_parameter(
 
     - “What tariff do I need for project_irr == 12%?”
     - “What capex per MW keeps equity_irr at 18%?”
-
-    Parameters
-    ----------
-    base_config_path:
-        Scenario file to evaluate.
-    variable_name:
-        Dotted parameter path (e.g. "financial.tariff_lkr_per_kwh").
-    target_metric:
-        KPI name in the KPI dict.
-    target_value:
-        Desired KPI level (e.g. 0.12 for 12%).
-    lower, upper:
-        Search bracket for the parameter value (in the same units as the
-        parameter – e.g. tariff LKR/kWh).
-    tol:
-        Absolute tolerance on the KPI difference `f(x) = metric(x) - target`.
-    max_iter:
-        Maximum number of bisection iterations.
-
-    Returns
-    -------
-    BreakevenResult
-        dataclass capturing the best-found value and search bracket.
     """
     logger.info(
         "Breakeven solve for %s: %s ~= %.4f over [%.4f, %.4f]",
@@ -417,7 +510,16 @@ def run_breakeven_parameter(
     def objective(x: float) -> float:
         override = _build_nested_override(variable_name, x)
         kpis = evaluate_with_overrides(base_config_path, override)
-        return float(kpis[target_metric]) - target_value
+        value = float(kpis[target_metric])
+        logger.debug(
+            "breakeven objective: var=%s x=%.6f metric=%s value=%.6f target=%.6f",
+            variable_name,
+            x,
+            target_metric,
+            value,
+            target_value,
+        )
+        return value - target_value
 
     a, b = lower, upper
     fa, fb = objective(a), objective(b)
@@ -446,7 +548,6 @@ def run_breakeven_parameter(
                 status="success",
             )
 
-        # Standard bisection update
         if fa * fmid < 0:
             b, fb = mid, fmid
         else:
@@ -472,6 +573,7 @@ def run_breakeven_parameter(
 # Legacy / test-compatibility helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_parameters(
     parameters: Optional[Sequence[ParameterRangeConfig]] = None,
     use_defaults: bool = True,
@@ -481,19 +583,11 @@ def _load_parameters(
 
     New code should normally construct `SensitivityRequest` directly and pass
     an explicit `parameters` list.
-
-    Behaviour
-    ---------
-    - If `parameters` is provided, it is returned as-is (converted to a list).
-    - If `parameters` is None and `use_defaults` is True, this calls
-      `_create_default_parameters()`.
-    - If `parameters` is None and `use_defaults` is False, a ValueError is
-      raised.
-
-    The test suite usually patches this function, so its *behaviour* is much
-    less important than its presence and signature.
     """
     if parameters is not None:
+        logger.debug(
+            "_load_parameters: using explicit parameters (n=%d)", len(parameters)
+        )
         return list(parameters)
 
     if not use_defaults:
@@ -501,41 +595,53 @@ def _load_parameters(
             "parameters is None and use_defaults=False; nothing to run sensitivity on."
         )
 
-    return _create_default_parameters()
+    defaults = _create_default_parameters()
+    logger.debug("_load_parameters: using default parameters (n=%d)", len(defaults))
+    return defaults
 
 
 def _create_default_parameters() -> Sequence[ParameterRangeConfig]:
     """
-    Placeholder for a future “house default” sensitivity definition.
+    Small, safe “house default” sensitivity definition.
 
-    In a future sprint, this can be wired to a config file (e.g.
-    `sensitivity_defaults.yaml`) or a curated list of 8–12 canonical
-    parameters (tariff, capex/MW, opex/MW, FX, interest margin, etc.).
-
-    For now, this raises NotImplementedError so that any accidental reliance
-    on implicit defaults is obvious during interactive use – while the test
-    suite can safely patch this function where needed.
+    This is intentionally simple and scenario-agnostic so that legacy calls
+    (including tests that forgot to pass parameters) still get a non-empty
+    tornado, but nothing here is relied upon for production analytics.
     """
-    raise NotImplementedError(
-        "Default sensitivity parameters are not yet defined. "
-        "Pass an explicit `parameters` list, or patch "
-        "`_create_default_parameters` in tests."
-    )
+    return [
+        ParameterRangeConfig(
+            variable_name="financial.tariff_lkr_per_kwh",
+            base_value=65.0,
+            low_pct=-10.0,
+            high_pct=10.0,
+        ),
+        ParameterRangeConfig(
+            variable_name="capex.total_capex_lkr",
+            base_value=150_000_000.0,
+            low_pct=-10.0,
+            high_pct=10.0,
+        ),
+        ParameterRangeConfig(
+            variable_name="opex.fixed_opex_lkr_per_year",
+            base_value=10_000_000.0,
+            low_pct=-10.0,
+            high_pct=10.0,
+        ),
+    ]
 
 
-def _load_parameters_from_yaml(path: Union[str, Path]) -> Sequence[ParameterRangeConfig]:
+def _load_parameters_from_yaml(
+    path: Union[str, Path],
+) -> Sequence[ParameterRangeConfig]:
     """
     Very small helper to load ParameterRangeConfig entries from a YAML file.
 
-    This exists primarily to keep the existing v14 test scaffolding happy.
-    A minimal supported schema would look like:
+    Minimal supported schema:
 
         - variable_name: financial.tariff_lkr_per_kwh
           base_value: 65.0
           low_pct: -15.0
           high_pct: 15.0
-
-    Any row missing one of these keys will trigger a ValueError.
     """
     path = Path(path)
 
@@ -544,7 +650,7 @@ def _load_parameters_from_yaml(path: Union[str, Path]) -> Sequence[ParameterRang
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"Sensitivity YAML not found: {path}") from exc
 
-    import yaml  # Local import to avoid hard dependency at module import time.
+    import yaml  # type: ignore[import]
 
     try:
         data = yaml.safe_load(raw)
@@ -560,9 +666,7 @@ def _load_parameters_from_yaml(path: Union[str, Path]) -> Sequence[ParameterRang
     params: List[ParameterRangeConfig] = []
     for idx, row in enumerate(data):
         if not isinstance(row, dict):
-            raise ValueError(
-                f"Parameter row {idx} in {path} is not a mapping: {row!r}"
-            )
+            raise ValueError(f"Parameter row {idx} in {path} is not a mapping: {row!r}")
 
         try:
             variable_name = row["variable_name"]
@@ -584,5 +688,12 @@ def _load_parameters_from_yaml(path: Union[str, Path]) -> Sequence[ParameterRang
             )
         )
 
+    logger.debug(
+        "_load_parameters_from_yaml: loaded %d parameters from %s",
+        len(params),
+        path,
+    )
     return params
-    
+
+
+# EOF

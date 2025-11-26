@@ -29,9 +29,9 @@ from typing import Optional, Tuple
 
 import pandas as pd
 
-from analytics.scenario_analytics import ScenarioAnalytics
-from analytics.export_helpers import ExcelExporter, ChartExporter
+from analytics.export_helpers import ChartExporter, ExcelExporter
 from analytics.kpi_normalizer import normalise_kpis_for_export
+from analytics.scenario_analytics import ScenarioAnalytics
 
 logger = logging.getLogger(__name__)
 

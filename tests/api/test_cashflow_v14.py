@@ -7,8 +7,11 @@ Focus:
 - FX curve behaviour when using the mapping-style configuration.
 """
 
-from finance.cashflow_v14 import (_extract_project_life_years, _fx_curve,
-                                  build_annual_rows)
+from finance.cashflow_v14 import (
+    _extract_project_life_years,
+    _fx_curve,
+    build_annual_rows,
+)
 
 
 def _make_basic_v14_cashflow_config():

@@ -10,4 +10,3 @@ pytest.skip(
 
 # Original import retained only as a hint of prior wiring.
 from dutchbay_v13 import cli  # type: ignore  # noqa: F401
-

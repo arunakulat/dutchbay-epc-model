@@ -25,8 +25,10 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional, Tuple
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('dutchbay.finance.cashflow')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("dutchbay.finance.cashflow")
 
 HOURS_PER_YEAR: float = 8760.0
 
@@ -37,6 +39,7 @@ __all__ = [
     "validate_parameters",
 ]
 
+
 def _get(d: Dict[str, Any], path: List[str], default=None) -> Any:
     cur = d
     for k in path:
@@ -45,11 +48,13 @@ def _get(d: Dict[str, Any], path: List[str], default=None) -> Any:
         cur = cur[k]
     return cur
 
+
 def _as_float(x: Any, default: Optional[float] = None) -> Optional[float]:
     try:
         return float(x) if x is not None else default
     except Exception:
         return default
+
 
 def _as_int(x: Any, default: int = 0) -> int:
     try:
@@ -57,51 +62,58 @@ def _as_int(x: Any, default: int = 0) -> int:
     except Exception:
         return default
 
+
 def _years_total(p: Dict[str, Any]) -> int:
-    life_years = _as_int(_get(p, ['returns', 'project_life_years'], None))
+    life_years = _as_int(_get(p, ["returns", "project_life_years"], None))
     if life_years is not None and life_years > 0:
         return life_years
-    ops_years = _as_int(_get(p, ['project', 'timeline', 'ops_years'], None))
+    ops_years = _as_int(_get(p, ["project", "timeline", "ops_years"], None))
     if ops_years is not None:
-        pre = _as_int(_get(p, ['project', 'timeline', 'ppa_to_fc_years'], 0)) + \
-              _as_int(_get(p, ['project', 'timeline', 'construction_years'], 0))
+        pre = _as_int(_get(p, ["project", "timeline", "ppa_to_fc_years"], 0)) + _as_int(
+            _get(p, ["project", "timeline", "construction_years"], 0)
+        )
         return pre + ops_years
-    return _as_int(_get(p, ['project', 'timeline', 'lifetime_years'], 20))
+    return _as_int(_get(p, ["project", "timeline", "lifetime_years"], 20))
+
 
 def _fx_curve(p: Dict[str, Any], n: int) -> List[float]:
-    explicit = _get(p, ['fx', 'curve_lkr_per_usd'])
+    explicit = _get(p, ["fx", "curve_lkr_per_usd"])
     if isinstance(explicit, list) and explicit:
         if len(explicit) >= n:
             return [float(x) for x in explicit[:n]]
-        return [float(x) for x in explicit] + [float(explicit[-1])] * (n - len(explicit))
-    start = _as_float(_get(p, ['fx', 'start_lkr_per_usd'], 300.0)) or 300.0
-    depr = _as_float(_get(p, ['fx', 'annual_depr'], 0.03)) or 0.03
+        return [float(x) for x in explicit] + [float(explicit[-1])] * (
+            n - len(explicit)
+        )
+    start = _as_float(_get(p, ["fx", "start_lkr_per_usd"], 300.0)) or 300.0
+    depr = _as_float(_get(p, ["fx", "annual_depr"], 0.03)) or 0.03
     out: List[float] = []
     cur = float(start)
     for _ in range(max(1, n)):
         out.append(cur)
-        cur *= (1.0 + depr)
+        cur *= 1.0 + depr
     return out
+
 
 def validate_parameters(p: Dict[str, Any]) -> List[str]:
     issues: List[str] = []
-    if _get(p, ['project', 'capacity_mw']) is None:
+    if _get(p, ["project", "capacity_mw"]) is None:
         issues.append("ERROR: project.capacity_mw missing")
-    if _get(p, ['project', 'capacity_factor']) is None:
+    if _get(p, ["project", "capacity_factor"]) is None:
         issues.append("ERROR: project.capacity_factor missing")
-    if _get(p, ['tariff', 'lkr_per_kwh']) is None:
+    if _get(p, ["tariff", "lkr_per_kwh"]) is None:
         issues.append("ERROR: tariff.lkr_per_kwh missing")
-    if _get(p, ['regulatory', 'grid_loss_pct']) is None:
+    if _get(p, ["regulatory", "grid_loss_pct"]) is None:
         issues.append("WARNING: regulatory.grid_loss_pct missing (defaulting to 0.02)")
-    if _get(p, ['opex', 'usd_per_year']) is None:
+    if _get(p, ["opex", "usd_per_year"]) is None:
         issues.append("ERROR: opex.usd_per_year missing")
-    cap_factor = _as_float(_get(p, ['project', 'capacity_factor'], None))
+    cap_factor = _as_float(_get(p, ["project", "capacity_factor"], None))
     if cap_factor is not None and (cap_factor <= 0 or cap_factor > 1):
         issues.append(f"ERROR: capacity_factor {cap_factor} out of range (0, 1)")
-    grid_loss = _as_float(_get(p, ['regulatory', 'grid_loss_pct'], None))
+    grid_loss = _as_float(_get(p, ["regulatory", "grid_loss_pct"], None))
     if grid_loss is not None and (grid_loss < 0 or grid_loss > 0.5):
         issues.append(f"WARNING: grid_loss_pct {grid_loss} seems high")
     return issues
+
 
 def _extract_parameters(p: Dict[str, Any]) -> Dict[str, float]:
     # Extract all required parameters from YAML config with safe defaults.
@@ -112,17 +124,28 @@ def _extract_parameters(p: Dict[str, Any]) -> Dict[str, float]:
         "tariff_lkr_per_kwh": _as_float(_get(p, ["tariff", "lkr_per_kwh"], 20.30)),
         "grid_loss_pct": _as_float(_get(p, ["regulatory", "grid_loss_pct"], 0.02)),
         "success_fee_pct": _as_float(_get(p, ["regulatory", "success_fee_pct"], 0.01)),
-        "env_surcharge_pct": _as_float(_get(p, ["regulatory", "env_surcharge_pct"], 0.005)),
-        "social_levy_pct": _as_float(_get(p, ["regulatory", "social_services_levy_pct"], 0.025)),
+        "env_surcharge_pct": _as_float(
+            _get(p, ["regulatory", "env_surcharge_pct"], 0.005)
+        ),
+        "social_levy_pct": _as_float(
+            _get(p, ["regulatory", "social_services_levy_pct"], 0.025)
+        ),
         "opex_usd_per_year": _as_float(_get(p, ["opex", "usd_per_year"], 3000000.0)),
         "corporate_tax_rate": _as_float(_get(p, ["tax", "corporate_tax_rate"], 0.30)),
         "depreciation_years": _as_int(_get(p, ["tax", "depreciation_years"], 15)),
         "tax_holiday_years": _as_int(_get(p, ["tax", "tax_holiday_years"], 0)),
-        "tax_holiday_start_year": _as_int(_get(p, ["tax", "tax_holiday_start_year"], 1)),
-        "enhanced_capital_allowance_pct": _as_float(_get(p, ["tax", "enhanced_capital_allowance_pct"], 1.0)),
-        "risk_haircut_pct": _as_float(_get(p, ["risk_adjustment", "cfads_haircut_pct"], 0.10)),
+        "tax_holiday_start_year": _as_int(
+            _get(p, ["tax", "tax_holiday_start_year"], 1)
+        ),
+        "enhanced_capital_allowance_pct": _as_float(
+            _get(p, ["tax", "enhanced_capital_allowance_pct"], 1.0)
+        ),
+        "risk_haircut_pct": _as_float(
+            _get(p, ["risk_adjustment", "cfads_haircut_pct"], 0.10)
+        ),
         "project_life_years": _years_total(p),
     }
+
 
 def _calculate_net_production(
     capacity_mw: float,
@@ -136,8 +159,10 @@ def _calculate_net_production(
     net_kwh = gross_kwh * (1.0 - grid_loss_pct)
     return gross_kwh, net_kwh
 
+
 def _calculate_revenue_lkr(net_kwh: float, tariff_lkr_per_kwh: float) -> float:
     return net_kwh * tariff_lkr_per_kwh
+
 
 def _calculate_statutory_deductions(
     revenue_lkr: float,
@@ -156,8 +181,10 @@ def _calculate_statutory_deductions(
         "total_statutory_deductions": total_statutory,
     }
 
+
 def _calculate_opex_lkr(opex_usd_per_year: float, fx_rate: float) -> float:
     return opex_usd_per_year * fx_rate
+
 
 def calculate_tax_with_interest_shield(
     pretax_income: float,
@@ -176,7 +203,9 @@ def calculate_tax_with_interest_shield(
     - Returns (tax_amount, total_depreciation)
     """
     # Check BOI tax holiday
-    if year + 1 >= tax_holiday_start_year and year + 1 < (tax_holiday_start_year + tax_holiday_years):
+    if year + 1 >= tax_holiday_start_year and year + 1 < (
+        tax_holiday_start_year + tax_holiday_years
+    ):
         normal_depr = 0.0
         if capex_total and depreciation_years and year < depreciation_years:
             normal_depr = capex_total / depreciation_years
@@ -192,8 +221,10 @@ def calculate_tax_with_interest_shield(
     tax = taxable_income * tax_rate
     return tax, total_dep
 
+
 def _apply_risk_haircut(cfads_pretax: float, haircut_pct: float) -> float:
     return cfads_pretax * (1.0 - haircut_pct)
+
 
 def calculate_single_year_cfads(
     params: Dict[str, float],
@@ -212,7 +243,10 @@ def calculate_single_year_cfads(
     )
     revenue_lkr = _calculate_revenue_lkr(net_kwh, params["tariff_lkr_per_kwh"])
     statutory = _calculate_statutory_deductions(
-        revenue_lkr, params["success_fee_pct"], params["env_surcharge_pct"], params["social_levy_pct"]
+        revenue_lkr,
+        params["success_fee_pct"],
+        params["env_surcharge_pct"],
+        params["social_levy_pct"],
     )
     opex_lkr = _calculate_opex_lkr(params["opex_usd_per_year"], fx_rate)
     pretax_cfads = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
@@ -257,6 +291,7 @@ def calculate_single_year_cfads(
         logger.info(f"Year {year+1} CFADS: {result}")
     return result
 
+
 def build_annual_cfads(
     p: Dict[str, Any],
     fx_curve: Optional[List[float]] = None,
@@ -285,11 +320,20 @@ def build_annual_cfads(
     cfads_list = []
     for year in range(years):
         fx_rate = fx_curve[year] if year < len(fx_curve) else fx_curve[-1]
-        interest_lkr = interest_expense_series[year] if year < len(interest_expense_series) else 0.0
-        result = calculate_single_year_cfads(params, fx_rate, year, capex_total, interest_lkr, verbose=verbose)
+        interest_lkr = (
+            interest_expense_series[year]
+            if year < len(interest_expense_series)
+            else 0.0
+        )
+        result = calculate_single_year_cfads(
+            params, fx_rate, year, capex_total, interest_lkr, verbose=verbose
+        )
         cfads_list.append(result["cfads_final_lkr"])
-    logger.info(f"Calculated CFADS for {years} years, range: {min(cfads_list):,.0f} to {max(cfads_list):,.0f}")
+    logger.info(
+        f"Calculated CFADS for {years} years, range: {min(cfads_list):,.0f} to {max(cfads_list):,.0f}"
+    )
     return cfads_list
+
 
 def build_annual_rows(
     p: Dict[str, Any],
@@ -310,12 +354,21 @@ def build_annual_rows(
     rows = []
     for year in range(years):
         fx_rate = fx_curve[year] if year < len(fx_curve) else fx_curve[-1]
-        interest_lkr = interest_expense_series[year] if year < len(interest_expense_series) else 0.0
-        result = calculate_single_year_cfads(params, fx_rate, year, capex_total, interest_lkr, verbose=False)
+        interest_lkr = (
+            interest_expense_series[year]
+            if year < len(interest_expense_series)
+            else 0.0
+        )
+        result = calculate_single_year_cfads(
+            params, fx_rate, year, capex_total, interest_lkr, verbose=False
+        )
         result["revenue_usd"] = result["revenue_lkr"] / fx_rate if fx_rate > 0 else 0.0
-        result["cfads_usd"] = result["cfads_final_lkr"] / fx_rate if fx_rate > 0 else 0.0
+        result["cfads_usd"] = (
+            result["cfads_final_lkr"] / fx_rate if fx_rate > 0 else 0.0
+        )
         rows.append(result)
     return rows
+
 
 if __name__ == "__main__":
     print("=" * 100)
@@ -323,7 +376,10 @@ if __name__ == "__main__":
     print("=" * 100)
     import yaml
     from pathlib import Path
-    yaml_path = Path(__file__).parent.parent.parent / "full_model_variables_updated.yaml"
+
+    yaml_path = (
+        Path(__file__).parent.parent.parent / "full_model_variables_updated.yaml"
+    )
     if yaml_path.exists():
         with open(yaml_path, "r") as f:
             sample_config = yaml.safe_load(f)
@@ -331,7 +387,11 @@ if __name__ == "__main__":
     else:
         print("\nWARNING: YAML not found, using test config")
         sample_config = {
-            "project": {"capacity_mw": 150, "capacity_factor": 0.40, "degradation": 0.006},
+            "project": {
+                "capacity_mw": 150,
+                "capacity_factor": 0.40,
+                "degradation": 0.006,
+            },
             "tariff": {"lkr_per_kwh": 20.30},
             "regulatory": {
                 "grid_loss_pct": 0.02,
@@ -361,7 +421,9 @@ if __name__ == "__main__":
         print("  All parameters valid!")
     print("\nTesting CFADS calculation (with tax holiday + enhancement)...")
     interest_series = [8_000_000 * (1 - i / 15) for i in range(20)]
-    cfads_series = build_annual_cfads(sample_config, interest_expense_series=interest_series, verbose=False)
+    cfads_series = build_annual_cfads(
+        sample_config, interest_expense_series=interest_series, verbose=False
+    )
     print(f"\nCFADS Summary (with tax holiday/enhancement):")
     print(f"  Year 1 (LKR):  {cfads_series[0]:,.0f}")
     print(f"  Year 10 (LKR): {cfads_series[9]:,.0f}")
@@ -377,5 +439,3 @@ if __name__ == "__main__":
     print("\n" + "=" * 100)
     print("SELF-TEST COMPLETE - Module ready for production use")
     print("=" * 100)
-
-

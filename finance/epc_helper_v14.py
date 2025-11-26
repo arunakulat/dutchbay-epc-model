@@ -32,7 +32,6 @@ from typing import Any, Dict, List, Mapping, Optional
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
 from finance.utils import as_float, get_nested
 
-
 # ---------------------------------------------------------------------------
 # FX resolution
 # ---------------------------------------------------------------------------
@@ -299,4 +298,3 @@ __all__ = [
     "epc_breakdown_from_config",
     "epc_breakdown_dict",
 ]
-

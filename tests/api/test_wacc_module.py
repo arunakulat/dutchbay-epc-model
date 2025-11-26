@@ -14,8 +14,7 @@ from typing import Any, Dict
 
 import pytest
 
-from finance.wacc_v14 import (WaccComponents, build_wacc,
-                              compute_wacc_from_config)
+from finance.wacc_v14 import WaccComponents, build_wacc, compute_wacc_from_config
 
 
 def _isclose(a: float, b: float, tol: float = 1e-8) -> bool:

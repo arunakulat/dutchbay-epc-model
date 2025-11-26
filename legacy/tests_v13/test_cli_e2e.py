@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+
 def test_cli_e2e(tmp_path: Path):
     cfg = tmp_path / "cfg.yaml"
     cfg.write_text(
@@ -19,7 +20,17 @@ def test_cli_e2e(tmp_path: Path):
     outdir.mkdir(parents=True, exist_ok=True)
 
     subprocess.check_call(
-        [sys.executable, "-m", "dutchbay_v13", "--mode", "irr", "--config", str(cfg), "--out", str(outdir)]
+        [
+            sys.executable,
+            "-m",
+            "dutchbay_v13",
+            "--mode",
+            "irr",
+            "--config",
+            str(cfg),
+            "--out",
+            str(outdir),
+        ]
     )
     summary_path = outdir / "summary.json"
     assert summary_path.exists(), "CLI should emit summary.json"

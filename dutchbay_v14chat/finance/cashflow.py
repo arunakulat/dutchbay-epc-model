@@ -35,6 +35,7 @@ __all__ = [
 
 # Explicit re-bindings for static checkers and introspection tools.
 
+
 def build_annual_rows(config: Dict[str, Any]) -> Sequence[Dict[str, Any]]:
     """
     Public v14chat-facing entry point for annual cashflow rows.

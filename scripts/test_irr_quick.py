@@ -14,7 +14,8 @@ print()
 print("TEST 1: Importing modules...")
 try:
     from finance.irr import irr, npv
-    from finance.irr_config import load_config, get_irr_bounds
+    from finance.irr_config import get_irr_bounds, load_config
+
     print("✅ All imports successful")
 except ImportError as e:
     print(f"❌ Import failed: {e}")
@@ -25,7 +26,7 @@ print()
 print("TEST 2: Loading config...")
 try:
     config = load_config()
-    project_name = config.get('project', {}).get('name', 'Unknown')
+    project_name = config.get("project", {}).get("name", "Unknown")
     print(f"✅ Config loaded: {project_name}")
 except Exception as e:
     print(f"❌ Config load failed: {e}")
@@ -49,22 +50,22 @@ print()
 print("TEST 4: Calculating IRR...")
 try:
     cashflows = [-100, 30, 30, 30, 30]
-    
+
     # With config bounds
     result_config = irr(cashflows, lower_bound=lower_proj, upper_bound=upper_proj)
     print(f"   IRR (config bounds): {result_config:.4f} ({result_config*100:.2f}%)")
-    
+
     # Without config (backward compatible)
     result_default = irr(cashflows)
     print(f"   IRR (default):       {result_default:.4f} ({result_default*100:.2f}%)")
-    
+
     print("✅ IRR calculations successful")
 except Exception as e:
     print(f"❌ IRR calculation failed: {e}")
     exit(1)
 print()
 
-#Test 5: NPV
+# Test 5: NPV
 print("TEST 5: Calculating NPV...")
 try:
     npv_result = npv(0.10, cashflows)

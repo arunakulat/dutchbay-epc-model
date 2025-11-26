@@ -1,0 +1,41 @@
+project:
+  name: DutchBay Good Unit Test
+  capacity_mw: 150
+  capacity_factor_pct: 20
+  degradation_pct: 0.5
+  grid_loss_pct: 3.0
+parameters:
+  project_life_years: 20
+tariff:
+  tariff_lkr_per_kwh: 8.5
+opex:
+  usd_per_year: 2000000
+capex:
+  usd_total: 225000000
+  epc_usd: 225000000
+tax:
+  corporate_tax_rate_pct: 28
+  depreciation_years: 20
+  holiday_years: 0
+  enhanced_capital_allowance_pct: 100
+statutory:
+  success_fee_pct: 0.5
+  env_surcharge_pct: 0.2
+  social_levy_pct: 0.1
+fx:
+  start_lkr_per_usd: 375.0
+  annual_depr_pct: 2.5
+risk:
+  haircut_pct: 0.0
+financing:
+  debt_amount_lkr: 170000000
+  tenor_years: 15
+  margin_pct: 2.5
+  base_rate_pct: 5.0
+  idc_pct: 75
+covenants:
+  dscr_minimum: 1.2
+  dscr_stress: 1.1
+returns:
+  project_life_years: 20
+discount_rate: 0.12

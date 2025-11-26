@@ -1,14 +1,17 @@
 import importlib, pytest, tempfile, textwrap, pathlib
 
+
 def _find(m, names):
     for n in names:
         fn = getattr(m, n, None)
-        if callable(fn): return fn
+        if callable(fn):
+            return fn
     return None
+
 
 def test_config_loader_smoke(tmp_path):
     m = importlib.import_module("dutchbay_v13.config")
-    fn = _find(m, ("load_config","read_config","parse_config"))
+    fn = _find(m, ("load_config", "read_config", "parse_config"))
     if not fn:
         pytest.xfail("config loader not exported yet")
     yml = tmp_path / "demo.yaml"

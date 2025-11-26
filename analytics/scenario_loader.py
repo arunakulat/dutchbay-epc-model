@@ -60,8 +60,7 @@ def _load_raw_config(path: Path) -> Dict[str, Any]:
 
     if not isinstance(data, dict):
         raise ScenarioConfigError(
-            f"Expected a mapping at top level of {path}, "
-            f"got {type(data).__name__}"
+            f"Expected a mapping at top level of {path}, " f"got {type(data).__name__}"
         )
 
     return data
@@ -125,17 +124,13 @@ def _resolve_fx(config: Dict[str, Any]) -> Dict[str, float]:
     try:
         start = float(fx_cfg["start_lkr_per_usd"])
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "fx.start_lkr_per_usd must be a valid number"
-        ) from exc
+        raise ValueError("fx.start_lkr_per_usd must be a valid number") from exc
 
     annual_raw = fx_cfg.get("annual_depr", 0.0)
     try:
         annual = float(annual_raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "fx.annual_depr must be a valid number if provided"
-        ) from exc
+        raise ValueError("fx.annual_depr must be a valid number if provided") from exc
 
     result = {
         "start_lkr_per_usd": start,

@@ -31,9 +31,9 @@ import numpy_financial as npf
 
 # Conservative mathematical defaults (used when no config provided)
 # These are numerical stability guards, not business rules
-_DEFAULT_IRR_LOWER_BOUND = -0.9999   # Prevents division by zero at -100%
-_DEFAULT_IRR_UPPER_BOUND = 5.0       # 500% p.a. numerical stability cap
-_DEFAULT_XIRR_UPPER_BOUND = 2.0      # 200% p.a. cap for dated cashflows
+_DEFAULT_IRR_LOWER_BOUND = -0.9999  # Prevents division by zero at -100%
+_DEFAULT_IRR_UPPER_BOUND = 5.0  # 500% p.a. numerical stability cap
+_DEFAULT_XIRR_UPPER_BOUND = 2.0  # 200% p.a. cap for dated cashflows
 
 
 # ============================================================================
@@ -400,4 +400,3 @@ __all__ = [
     "xnpv",
     "xirr",
 ]
-

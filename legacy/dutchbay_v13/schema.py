@@ -113,4 +113,3 @@ __all__ = [
     "register_extra_schema",
     "iter_schema_documents",
 ]
-

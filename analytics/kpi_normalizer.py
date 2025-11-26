@@ -32,7 +32,10 @@ def _ensure_scenario_name(
     - If still missing, attach a default:
       - use provided scenario_id if not None, else 'default_scenario'.
     """
-    if "scenario_name" in summary_df.columns and "scenario_name" in timeseries_df.columns:
+    if (
+        "scenario_name" in summary_df.columns
+        and "scenario_name" in timeseries_df.columns
+    ):
         return summary_df, timeseries_df
 
     # Try to detect an existing scenario key to rename.
@@ -41,7 +44,10 @@ def _ensure_scenario_name(
         if col in summary_df.columns and "scenario_name" not in summary_df.columns:
             logger.info("Renaming '%s' -> 'scenario_name' in summary_df", col)
             summary_df = summary_df.rename(columns={col: "scenario_name"})
-        if col in timeseries_df.columns and "scenario_name" not in timeseries_df.columns:
+        if (
+            col in timeseries_df.columns
+            and "scenario_name" not in timeseries_df.columns
+        ):
             logger.info("Renaming '%s' -> 'scenario_name' in timeseries_df", col)
             timeseries_df = timeseries_df.rename(columns={col: "scenario_name"})
 
@@ -105,9 +111,7 @@ def _ensure_dscr(timeseries_df: pd.DataFrame) -> pd.DataFrame:
     dscr_candidates = [c for c in timeseries_df.columns if "dscr" in c.lower()]
     if dscr_candidates:
         chosen = dscr_candidates[0]
-        logger.warning(
-            "Canonical 'dscr' missing; using %r as source column", chosen
-        )
+        logger.warning("Canonical 'dscr' missing; using %r as source column", chosen)
         timeseries_df = timeseries_df.copy()
         timeseries_df["dscr"] = timeseries_df[chosen]
     else:

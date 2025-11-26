@@ -1,0 +1,101 @@
+{
+  "files_with_imports": 5,
+  "references": [
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/test_metrics_integration.py",
+      "import_statement": "from dutchbay_v14chat.finance.cashflow import build_annual_rows",
+      "import_type": "from",
+      "line_number": 7,
+      "module_imported": "dutchbay_v14chat.finance.cashflow",
+      "names_imported": [
+        "build_annual_rows"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/test_metrics_integration.py",
+      "import_statement": "from dutchbay_v14chat.finance.debt import apply_debt_layer",
+      "import_type": "from",
+      "line_number": 8,
+      "module_imported": "dutchbay_v14chat.finance.debt",
+      "names_imported": [
+        "apply_debt_layer"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/plot_scenarios.py",
+      "import_statement": "from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14",
+      "import_type": "from",
+      "line_number": 8,
+      "module_imported": "dutchbay_v14chat.finance.cashflow",
+      "names_imported": [
+        "build_annual_rows_v14"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/plot_scenarios.py",
+      "import_statement": "from dutchbay_v14chat.finance.debt import apply_debt_layer",
+      "import_type": "from",
+      "line_number": 9,
+      "module_imported": "dutchbay_v14chat.finance.debt",
+      "names_imported": [
+        "apply_debt_layer"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/test_full_v14_chain.py",
+      "import_statement": "from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14",
+      "import_type": "from",
+      "line_number": 1,
+      "module_imported": "dutchbay_v14chat.finance.cashflow",
+      "names_imported": [
+        "build_annual_rows_v14"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/test_full_v14_chain.py",
+      "import_statement": "from dutchbay_v14chat.finance.debt import apply_debt_layer",
+      "import_type": "from",
+      "line_number": 2,
+      "module_imported": "dutchbay_v14chat.finance.debt",
+      "names_imported": [
+        "apply_debt_layer"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/v14_debt_test.py",
+      "import_statement": "from dutchbay_v14chat.finance.debt import apply_debt_layer",
+      "import_type": "from",
+      "line_number": 1,
+      "module_imported": "dutchbay_v14chat.finance.debt",
+      "names_imported": [
+        "apply_debt_layer"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/export_scenario_timeseries.py",
+      "import_statement": "from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14",
+      "import_type": "from",
+      "line_number": 8,
+      "module_imported": "dutchbay_v14chat.finance.cashflow",
+      "names_imported": [
+        "build_annual_rows_v14"
+      ]
+    },
+    {
+      "file_path": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/export_scenario_timeseries.py",
+      "import_statement": "from dutchbay_v14chat.finance.debt import apply_debt_layer",
+      "import_type": "from",
+      "line_number": 9,
+      "module_imported": "dutchbay_v14chat.finance.debt",
+      "names_imported": [
+        "apply_debt_layer"
+      ]
+    }
+  ],
+  "total_files_scanned": 150,
+  "total_import_statements": 9,
+  "unique_modules_imported": [
+    "dutchbay_v14chat.finance.cashflow",
+    "dutchbay_v14chat.finance.debt"
+  ]
+}

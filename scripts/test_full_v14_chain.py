@@ -1,5 +1,5 @@
-from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14
-from dutchbay_v14chat.finance.debt import apply_debt_layer
+from finance.cashflow_v14 import build_annual_rows_v14
+from finance.debt_v14 import apply_debt_layer
 
 # Example scenario params
 params = {
@@ -18,8 +18,8 @@ params = {
         "amortization_style": "annuity",
         "target_dscr": 1.30,
         "mix": {"lkr_max": 0.0, "dfi_max": 0.0, "usd_commercial_min": 1.0},
-        "rates": {"usd_nominal": 0.08}
-    }
+        "rates": {"usd_nominal": 0.08},
+    },
 }
 
 print("\n--- Phase 1: Cashflow ---")

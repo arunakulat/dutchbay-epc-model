@@ -4,9 +4,12 @@ from glob import glob
 # Import the runner directly so coverage can track imports
 from dutchbay_v13.scenario_runner import run_dir
 
+
 def test_scenarios_emits_csv_and_jsonl(tmp_path: Path):
-    inp = tmp_path / "in"; inp.mkdir()
-    out = tmp_path / "o";  out.mkdir()
+    inp = tmp_path / "in"
+    inp.mkdir()
+    out = tmp_path / "o"
+    out.mkdir()
 
     # minimal override; validator is relaxed to allow this key
     (inp / "demo.yaml").write_text("tariff_usd_per_kwh: 0.12\n", encoding="utf-8")

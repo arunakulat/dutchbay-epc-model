@@ -16,15 +16,23 @@ RETURNS:
 """
 
 from typing import List
+
 import pandas as pd
+
 from analytics.contracts_v14 import ParameterRangeConfig
 
-def validate_parameter_ranges(base_config_path: str, parameters: List[ParameterRangeConfig], metric: str = "project_irr") -> pd.DataFrame:
+
+def validate_parameter_ranges(
+    base_config_path: str,
+    parameters: List[ParameterRangeConfig],
+    metric: str = "project_irr",
+) -> pd.DataFrame:
     """
     For every parameter, check low and high sweep points for suspicious outputs (negative IRR, >50%, etc.).
     """
-    from analytics.sensitivity_v14 import _build_nested_override
     from analytics.evaluate_scenario import evaluate_with_overrides
+    from analytics.sensitivity_v14 import _build_nested_override
+
     errors = []
     for p in parameters:
         for pct in (p.low_pct, p.high_pct):
@@ -34,7 +42,16 @@ def validate_parameter_ranges(base_config_path: str, parameters: List[ParameterR
                 out = evaluate_with_overrides(base_config_path, ovr)
                 met = out[metric]
                 if met < 0 or met > 0.5:  # Typical check for IRR
-                    errors.append({"var": p.variable_name, "input": val, "output": met, "pct": pct})
+                    errors.append(
+                        {
+                            "var": p.variable_name,
+                            "input": val,
+                            "output": met,
+                            "pct": pct,
+                        }
+                    )
             except Exception as e:
-                errors.append({"var": p.variable_name, "input": val, "error": str(e), "pct": pct})
+                errors.append(
+                    {"var": p.variable_name, "input": val, "error": str(e), "pct": pct}
+                )
     return pd.DataFrame(errors)

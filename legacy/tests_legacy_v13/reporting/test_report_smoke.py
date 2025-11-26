@@ -1,14 +1,17 @@
 import importlib, pytest, tempfile, pathlib
 
+
 def _find(m, names):
     for n in names:
         fn = getattr(m, n, None)
-        if callable(fn): return fn
+        if callable(fn):
+            return fn
     return None
+
 
 def test_report_generate_smoke(tmp_path):
     m = importlib.import_module("dutchbay_v13.report")
-    fn = _find(m, ("generate_report","build_report","make_report","render","run"))
+    fn = _find(m, ("generate_report", "build_report", "make_report", "render", "run"))
     if not fn:
         pytest.xfail("report API not exported yet")
     try:

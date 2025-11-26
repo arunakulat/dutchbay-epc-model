@@ -4,18 +4,14 @@ Sensitivity analysis module for Dutch Bay 150MW
 One-at-a-time stress test (tornado chart compatible)
 ENHANCED with additional parameters, type hints, and validation
 """
-from typing import Optional, Dict, Any, List
+import warnings
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 
-from .legacy_v12 import (
-    build_financial_model,
-    create_default_parameters,
-    create_default_debt_structure,
-    ProjectParameters,
-    DebtStructure,
-)
-
-import warnings
+from .legacy_v12 import (DebtStructure, ProjectParameters,
+                         build_financial_model, create_default_debt_structure,
+                         create_default_parameters)
 
 SENSITIVITY_CONFIG: List[Dict[str, Any]] = [
     {
@@ -160,9 +156,12 @@ def create_tornado_chart_data(df: pd.DataFrame) -> pd.DataFrame:
     tornado_df = tornado_df.sort_values("impact", ascending=False)
 
     return tornado_df
+
+
 # === BEGIN TEST SHIM (non-intrusive) ===
 def __test_shim_sensitivity__():
     return True
+
 
 def run_sensitivity(base: dict, key: str, values):
     """Minimal one-way sensitivity that returns tuples of (value, mock_irr)."""
@@ -173,4 +172,6 @@ def run_sensitivity(base: dict, key: str, values):
         irr = max(0.0, min(0.30, 0.01 + (float(v) - 20.0) * 0.002))
         out.append({"value": v, "equity_irr": irr})
     return out
+
+
 # === END TEST SHIM ===

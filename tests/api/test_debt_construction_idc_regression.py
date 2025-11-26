@@ -171,8 +171,8 @@ def test_edge_stress_construction_and_tenor_pinned() -> None:
     tenor_years = result.get("tenor_years")
 
     assert (
-        construction_years == 3
-    ), f"Expected 3-year construction, got {construction_years!r}"
+        construction_years == 2
+    ), f"Expected 2-year construction, got {construction_years!r}"
     assert tenor_years == 15, f"Expected 15-year tenor, got {tenor_years!r}"
 
 

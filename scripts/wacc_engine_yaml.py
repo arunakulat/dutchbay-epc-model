@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 try:
     import yaml  # type: ignore
@@ -33,10 +33,12 @@ except ImportError as exc:  # pragma: no cover - simple env guard
 class DebtTranche:
     name: str
     share_of_capital: float  # fraction of TOTAL capital (e.g. 0.385 for 38.5%)
-    base_rate: float         # nominal interest rate as decimal (e.g. 0.07 for 7%)
+    base_rate: float  # nominal interest rate as decimal (e.g. 0.07 for 7%)
     guarantee_fee_bps: float = 0.0  # annual guarantee/PRI fee in bps on outstanding
-    upfront_fee_bps: float = 0.0    # one-off upfront fee in bps on principal
-    fee_amort_years: Optional[int] = None  # if None, upfront fee ignored in effective rate
+    upfront_fee_bps: float = 0.0  # one-off upfront fee in bps on principal
+    fee_amort_years: Optional[int] = (
+        None  # if None, upfront fee ignored in effective rate
+    )
 
     def effective_rate(self) -> float:
         """Effective annual debt cost including guarantee and amortised upfront fee."""
@@ -51,7 +53,7 @@ class DebtTranche:
 class EquityTranche:
     name: str
     share_of_capital: float  # fraction of TOTAL capital (e.g. 0.165 for 16.5%)
-    target_irr: float        # required return as decimal (e.g. 0.16 for 16%)
+    target_irr: float  # required return as decimal (e.g. 0.16 for 16%)
     is_foreign: bool = False
 
 
@@ -64,7 +66,9 @@ def compute_cost_of_debt(debt: List[DebtTranche]) -> Dict[str, float]:
     if total_capital_share <= 0:
         raise ValueError("Debt tranches must have positive share_of_capital.")
 
-    debt_share = total_capital_share  # since share_of_capital is relative to total capital
+    debt_share = (
+        total_capital_share  # since share_of_capital is relative to total capital
+    )
 
     # Weight within debt bucket
     cost_pre_tax = 0.0
@@ -157,6 +161,7 @@ def compute_wacc_and_hurdles(
 
 def format_results(results: Dict[str, float]) -> str:
     """Pretty-print results as percentages."""
+
     def pct(x: float) -> str:
         return f"{x * 100:5.2f}%"
 
@@ -200,7 +205,9 @@ def parse_tranches_from_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     try:
         tax_rate = float(cap["tax_rate"])
     except KeyError as exc:
-        raise KeyError("capital_structure.tax_rate is required in the YAML config") from exc
+        raise KeyError(
+            "capital_structure.tax_rate is required in the YAML config"
+        ) from exc
 
     project_hurdle_margin_bps = float(cap.get("project_hurdle_margin_bps", 0.0))
     equity_hurdle_margin_bps = float(cap.get("equity_hurdle_margin_bps", 0.0))
@@ -280,5 +287,3 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     main()
-
-    

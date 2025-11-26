@@ -17,18 +17,10 @@ from __future__ import annotations
 import datetime
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from os import PathLike
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-    List,
-)
+from pathlib import Path
+from typing import (Any, Dict, Iterable, List, Mapping, Optional, Sequence,
+                    Union)
 
 import pandas as pd
 
@@ -169,19 +161,25 @@ class ExcelExporter:
                 for cell in ws[1]:
                     cell.font = Font(bold=True)
             except Exception as exc:  # pragma: no cover - cosmetic
-                logger.warning("ExcelExporter: header format error %s: %s", sheet_name, exc)
+                logger.warning(
+                    "ExcelExporter: header format error %s: %s", sheet_name, exc
+                )
 
         if auto_filter:
             try:
                 ws.auto_filter.ref = ws.dimensions
             except Exception as exc:  # pragma: no cover - cosmetic
-                logger.warning("ExcelExporter: auto-filter error %s: %s", sheet_name, exc)
+                logger.warning(
+                    "ExcelExporter: auto-filter error %s: %s", sheet_name, exc
+                )
 
         if freeze_panes:
             try:
                 ws.freeze_panes = freeze_panes
             except Exception as exc:  # pragma: no cover - cosmetic
-                logger.warning("ExcelExporter: freeze panes error %s: %s", sheet_name, exc)
+                logger.warning(
+                    "ExcelExporter: freeze panes error %s: %s", sheet_name, exc
+                )
 
         if highlight_warnings and warning_column and warning_threshold is not None:
             try:
@@ -490,6 +488,7 @@ class ExcelExporter:
                 col_letter = get_column_letter(column_cells[0].column)
                 ws.column_dimensions[col_letter].width = adjusted_width
 
+
 # ---------------------------------------------------------------------------
 # Chart exporters
 # ---------------------------------------------------------------------------
@@ -755,5 +754,3 @@ class ChartGenerator:
         fig.savefig(path, dpi=150)
         plt.close(fig)
         return path
-
-        

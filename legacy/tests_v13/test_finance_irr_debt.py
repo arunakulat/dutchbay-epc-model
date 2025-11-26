@@ -2,6 +2,7 @@ import importlib
 import math
 import pytest
 
+
 def _find_callable(mod, names):
     for n in names:
         fn = getattr(mod, n, None)
@@ -9,13 +10,15 @@ def _find_callable(mod, names):
             return fn
     return None
 
+
 def _norm_rate(x):
     # Accept decimals (0.08) or percents (8.0); coerce to decimal
     try:
         x = float(x)
     except Exception:
         raise AssertionError(f"IRR result not numeric: {x!r}")
-    return x/100.0 if x > 1.0 else x
+    return x / 100.0 if x > 1.0 else x
+
 
 def test_finance_irr_basic():
     m = importlib.import_module("dutchbay_v13.finance.irr")
@@ -27,7 +30,9 @@ def test_finance_irr_basic():
     # CF: year0 -100, year1 +60, year2 +60 → expected IRR ≈ 8.27%
     cfs = [-100.0, 60.0, 60.0]
     try:
-        r = fn(cfs) if fn.__code__.co_argcount >= 1 else fn(cashflows=cfs)  # best-effort
+        r = (
+            fn(cfs) if fn.__code__.co_argcount >= 1 else fn(cashflows=cfs)
+        )  # best-effort
     except TypeError:
         # Some APIs require guess/periods; try common fallbacks
         try:
@@ -38,10 +43,14 @@ def test_finance_irr_basic():
     assert math.isfinite(r), "IRR should be finite"
     assert 0.05 < r < 0.12, f"IRR out of expected band: {r}"
 
+
 def test_finance_debt_smoke():
     m = importlib.import_module("dutchbay_v13.finance.debt")
     # Try common schedule builders
-    fn = _find_callable(m, ("amortization_schedule","build_schedule","schedule","build_debt_schedule"))
+    fn = _find_callable(
+        m,
+        ("amortization_schedule", "build_schedule", "schedule", "build_debt_schedule"),
+    )
     if fn is None:
         pytest.skip("No debt schedule function exported yet")
     # Best-effort signature attempts (principal, rate, years, payments_per_year)

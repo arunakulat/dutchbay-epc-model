@@ -1,0 +1,31 @@
+{
+  "base_dir": ".",
+  "output_zip": "DutchBay_EPC_Model_release.zip",
+
+  "include": [
+    "pyproject.toml",
+    "VERSION",
+    "CHANGELOG.md",
+    "README.md",
+    "run_full_pipeline_v14.py",
+    "gh_tools.py",
+    "analytics/",
+    "finance/",
+    "dutchbay_v14chat/",
+    "tests/"
+  ],
+
+  "exclude": [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".mypy_cache/",
+    ".pytest_cache/",
+    ".idea/",
+    ".vscode/"
+  ],
+
+  "rename_map": {
+    "README.md": "docs/README.md"
+  }
+}

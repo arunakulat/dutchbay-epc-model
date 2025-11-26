@@ -1,5 +1,6 @@
 import importlib, math
 
+
 def test_mc_generate_and_run():
     m = importlib.import_module("dutchbay_v13.monte_carlo")
     assert hasattr(m, "generate_mc_parameters")
@@ -9,4 +10,4 @@ def test_mc_generate_and_run():
     assert "results" in res and len(res["results"]) == 4
     irrs = [r["equity_irr"] for r in res["results"]]
     # strictly increasing with tariff
-    assert all(irrs[i] <= irrs[i+1] for i in range(len(irrs)-1))
+    assert all(irrs[i] <= irrs[i + 1] for i in range(len(irrs) - 1))

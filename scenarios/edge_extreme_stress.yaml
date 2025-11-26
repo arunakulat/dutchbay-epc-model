@@ -1,0 +1,46 @@
+project:
+  name: DutchBay Edge Extreme Stress
+  capacity_mw: 150
+  capacity_factor_pct: 15
+  degradation_pct: 0.5
+  grid_loss_pct: 3.0
+  life_years: 20
+parameters:
+  project_life_years: 20
+tariff:
+  tariff_lkr_per_kwh: 6.5
+opex:
+  usd_per_year: 2500000
+capex:
+  usd_total: 225000000
+  epc_usd: 225000000
+tax:
+  corporate_tax_rate_pct: 28
+  depreciation_years: 20
+  holiday_years: 0
+  enhanced_capital_allowance_pct: 100
+statutory:
+  success_fee_pct: 0.5
+  env_surcharge_pct: 0.2
+  social_levy_pct: 0.0
+fx:
+  start_lkr_per_usd: 375.0
+  annual_depr_pct: 3.0
+risk:
+  haircut_pct: 0.0
+construction_periods: 2
+construction_schedule:
+- 40.0
+- 60.0
+Financing_Terms:
+  debt_amount_lkr: 180000000
+  tenor_years: 15
+  margin_pct: 2.5
+  base_rate_pct: 5.0
+  idc_pct: 75
+covenants:
+  dscr_minimum: 1.2
+  dscr_stress: 1.1
+returns:
+  project_life_years: 20
+discount_rate: 0.12

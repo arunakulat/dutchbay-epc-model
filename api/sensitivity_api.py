@@ -9,16 +9,20 @@ from fastapi import FastAPI, Body
 from pydantic import BaseModel
 import pandas as pd
 from analytics.sensitivity import (
-    SensitivityRequest, run_tornado_sensitivity, tornado_suite_to_dataframe
+    SensitivityRequest,
+    run_tornado_sensitivity,
+    tornado_suite_to_dataframe,
 )
 from analytics.contracts_v14 import ParameterRangeConfig
 
 app = FastAPI()
 
+
 class SensitivityInput(BaseModel):
     config_path: str
     parameters: list[dict]
     metric: str = "project_irr"
+
 
 @app.post("/run-tornado/")
 def run_tornado(input: SensitivityInput):

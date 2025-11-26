@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 
 __all__ = ["generate_report"]
 
+
 def generate_report(
     meta: Optional[Dict[str, Any]] = None,
     outdir: Optional[str | Path] = None,

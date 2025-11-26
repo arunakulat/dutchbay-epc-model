@@ -60,3 +60,99 @@ rg "import dutchbay_v14chat" analytics/ finance/ || echo "✅ No v14chat imports
 
 FX/risk analytics modules (`fx_data_processor_dual_regime.py`, `risk_metrics.py`, `returns.py`) 
 will be moved to `analytics/fx/` as part of Task 2 (modularization sprint).
+
+## Go with the Flow Script Standards (Updated 2025-11-25)
+
+### EOF Marker Requirement
+
+**All generated scripts MUST end with `# EOF`**
+
+Purpose:
+- Prevents accidentally truncated scripts from being pasted
+- Provides visual confirmation of complete script
+- Safety guard for copy-paste workflows
+
+Applies to:
+- All `.py` scripts in `scripts/`
+- All `.sh` scripts in `scripts/`
+- All executable utility scripts
+
+Example:
+
+#!/usr/bin/env python3
+"""My script."""
+
+def main():
+print("Hello")
+
+if name == "main":
+main()
+
+Verification:
+# Format all new scripts
+black scripts/
+isort scripts/
+
+# Run housekeeping
+./scripts/housekeep.sh
+
+# Verify CI structure
+python scripts/ci_structure_check.py
+
+# Verify all tests still pass
+python -m pytest tests/api/ -q --tb=line
+
+echo "✅ All Task 3 deliverables complete"
+
+cat > scripts/add_eof_markers.sh << 'EOF'
+#!/bin/bash
+# Add # EOF markers to all scripts that don't have them
+#
+# Go with the Flow Compliance:
+# - Adds # EOF to end of all .py and .sh files in scripts/
+# - Only adds if not already present
+# - Preserves file permissions
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "🔖 Adding EOF markers to scripts..."
+
+# Function to add EOF marker if missing
+add_eof_if_missing() {
+    local file="$1"
+    
+    # Check if file already ends with # EOF
+    if tail -1 "$file" | grep -q "^# EOF$"; then
+        echo "   ✓ Already has EOF: $(basename "$file")"
+        return 0
+    fi
+    
+    # Add EOF marker
+    echo "" >> "$file"
+    echo "# EOF" >> "$file"
+    echo "   ✅ Added EOF: $(basename "$file")"
+}
+
+# Process all Python scripts
+for script in "$SCRIPT_DIR"/*.py; do
+    [ -f "$script" ] && add_eof_if_missing "$script"
+done
+
+# Process all Shell scripts
+for script in "$SCRIPT_DIR"/*.sh; do
+    [ -f "$script" ] && add_eof_if_missing "$script"
+done
+
+# Process research subdirectory
+if [ -d "$SCRIPT_DIR/research" ]; then
+    for script in "$SCRIPT_DIR/research"/*.py; do
+        [ -f "$script" ] && add_eof_if_missing "$script"
+    done
+fi
+
+echo ""
+echo "✅ EOF markers added to all scripts"
+
+# EOF

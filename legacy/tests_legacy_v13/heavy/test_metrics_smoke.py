@@ -1,8 +1,10 @@
 import importlib, types, pytest, math
 
+
 def test_import_metrics():
     m = importlib.import_module("dutchbay_v13.finance.metrics")
     assert isinstance(m, types.ModuleType)
+
 
 def test_optional_basic_funcs_if_present():
     m = importlib.import_module("dutchbay_v13.finance.metrics")

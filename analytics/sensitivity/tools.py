@@ -20,10 +20,14 @@ INPUTS:
 """
 
 import pandas as pd
-from analytics.sensitivity_export import tornado_suite_to_dataframe
-from analytics.contracts_v14 import SensitivitySuite
 
-def top_drivers_with_confidence(suite: SensitivitySuite, input_conf_map: dict) -> pd.DataFrame:
+from analytics.contracts_v14 import SensitivitySuite
+from analytics.sensitivity_export import tornado_suite_to_dataframe
+
+
+def top_drivers_with_confidence(
+    suite: SensitivitySuite, input_conf_map: dict
+) -> pd.DataFrame:
     """
     Weights each tornado driver by confidence/uncertainty/prioritization factor.
     Higher weight means bigger risk or concern.
@@ -33,7 +37,10 @@ def top_drivers_with_confidence(suite: SensitivitySuite, input_conf_map: dict) -
     # Sorted by most concerning risk, not just largest numerical impact
     return df.sort_values("WeightedImpact", ascending=False)
 
-def compare_tornadoes(suite_a: SensitivitySuite, suite_b: SensitivitySuite) -> pd.DataFrame:
+
+def compare_tornadoes(
+    suite_a: SensitivitySuite, suite_b: SensitivitySuite
+) -> pd.DataFrame:
     """
     Produces a DataFrame showing how tornado impact shifts between scenarios (base vs stress etc.).
     Useful for board, IC, or DFI "what changed?" summaries.

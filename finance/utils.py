@@ -1,5 +1,7 @@
 """Consolidated utility functions for the finance module."""
+
 from typing import Any, Dict, Iterable, Optional
+
 
 def get_nested(d: Dict[str, Any], path: Iterable[str], default: Any = None) -> Any:
     """Safely get nested dict value using dot-notation path."""
@@ -12,6 +14,7 @@ def get_nested(d: Dict[str, Any], path: Iterable[str], default: Any = None) -> A
             return default
     return result
 
+
 def as_float(v: Any, default: Optional[float] = None) -> Optional[float]:
     """Safely convert value to float with fallback."""
     if v is None:
@@ -20,6 +23,7 @@ def as_float(v: Any, default: Optional[float] = None) -> Optional[float]:
         return float(v)
     except (ValueError, TypeError):
         return default
+
 
 def as_int(v: Any, default: Optional[int] = None) -> Optional[int]:
     """Safely convert value to int with fallback."""

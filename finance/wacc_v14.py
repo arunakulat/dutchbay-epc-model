@@ -502,5 +502,3 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     return asdict(components)
-
-    

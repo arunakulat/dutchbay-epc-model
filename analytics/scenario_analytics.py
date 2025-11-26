@@ -17,20 +17,22 @@ All previous features retained (EPC breakdown, Excel/charts, robust error handli
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
-import json
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Callable
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Tuple)
 
 import pandas as pd
 
-from analytics.core.metrics import calculate_scenario_kpis
 from analytics.core.epc_helper import epc_breakdown_from_config
+from analytics.core.metrics import calculate_scenario_kpis
 from analytics.kpi_normalizer import normalise_kpis_for_export
 from analytics.scenario_loader import load_scenario_config
-from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from analytics.schema_guard import (ConfigValidationError,
+                                    validate_config_for_v14)
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
@@ -43,6 +45,7 @@ logger.addHandler(console_handler)
 @dataclass
 class ScenarioResult:
     """Container for per-scenario results."""
+
     name: str
     config_path: Path
     kpis: Dict[str, Any]
@@ -51,6 +54,7 @@ class ScenarioResult:
     discount_rate: float
     fail_reason: Optional[str] = None
 
+
 @dataclass
 class BatchResultSummary:
     successful: List[str]
@@ -58,6 +62,7 @@ class BatchResultSummary:
     n_success: int
     n_failed: int
     batch_summary: Dict[str, Any]
+
 
 class ScenarioAnalytics:
     """
@@ -86,7 +91,9 @@ class ScenarioAnalytics:
     def discover_scenarios(self) -> List[Path]:
         """Return a sorted list of scenario config paths under scenarios_dir, optionally filtered."""
         if not self.scenarios_dir.exists():
-            raise FileNotFoundError(f"Scenarios directory not found: {self.scenarios_dir}")
+            raise FileNotFoundError(
+                f"Scenarios directory not found: {self.scenarios_dir}"
+            )
 
         candidates: List[Path] = []
         for ext in ("*.yaml", "*.yml", "*.json"):
@@ -124,10 +131,12 @@ class ScenarioAnalytics:
             return float(scenario_overrides["discount_rate"])
 
         # 2. WACC block
-        wacc_cfg = config.get('wacc', {})
-        if wacc_cfg and wacc_cfg.get('discount_rate') is not None:
+        wacc_cfg = config.get("wacc", {})
+        if wacc_cfg and wacc_cfg.get("discount_rate") is not None:
             try:
-                return float(wacc_cfg['discount_rate']) / (100.0 if wacc_cfg['discount_rate'] > 1.0 else 1.0)
+                return float(wacc_cfg["discount_rate"]) / (
+                    100.0 if wacc_cfg["discount_rate"] > 1.0 else 1.0
+                )
             except Exception:
                 pass
 
@@ -189,7 +198,11 @@ class ScenarioAnalytics:
                 kpis={},
                 annual_rows=[],
                 debt_result={},
-                discount_rate=discount_rate if discount_rate is not None else self.global_default_discount_rate,
+                discount_rate=(
+                    discount_rate
+                    if discount_rate is not None
+                    else self.global_default_discount_rate
+                ),
                 fail_reason=str(e),
             )
 
@@ -210,15 +223,21 @@ class ScenarioAnalytics:
             raise RuntimeError(f"No scenario configs found under {self.scenarios_dir}")
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
         results: List[ScenarioResult] = []
         failures: List[ScenarioResult] = []
 
-        batch_run = (self.parallel and len(scenario_paths) > 4)
-        logger.info(f"Running {len(scenario_paths)} scenario(s) {'in parallel' if batch_run else 'serially'}.")
+        batch_run = self.parallel and len(scenario_paths) > 4
+        logger.info(
+            f"Running {len(scenario_paths)} scenario(s) {'in parallel' if batch_run else 'serially'}."
+        )
 
         if batch_run:
             with ThreadPoolExecutor() as executor:
-                future_to_path = {executor.submit(self._run_single, path): path for path in scenario_paths}
+                future_to_path = {
+                    executor.submit(self._run_single, path): path
+                    for path in scenario_paths
+                }
                 for future in as_completed(future_to_path):
                     res = future.result()
                     if res.kpis:
@@ -247,14 +266,18 @@ class ScenarioAnalytics:
                 "n_scenarios_found": len(scenario_paths),
                 "n_scenarios_run": len(results),
                 "n_failed": len(failures),
-                "failed_scenarios": [{ "name": r.name, "reason": r.fail_reason } for r in failures],
-            }
+                "failed_scenarios": [
+                    {"name": r.name, "reason": r.fail_reason} for r in failures
+                ],
+            },
         )
 
         logger.info("Batch analysis complete")
         logger.info("  Successful scenarios: %d", len(results))
         logger.info("  Failed scenarios:     %d", len(failures))
-        logger.info("  Export path: %s", self.output_path if self.output_path else "(not set)")
+        logger.info(
+            "  Export path: %s", self.output_path if self.output_path else "(not set)"
+        )
         if failures:
             for r in failures:
                 logger.info(f"    - {r.name}: {r.fail_reason}")
@@ -283,7 +306,7 @@ class ScenarioAnalytics:
         summary_records: List[Dict[str, Any]] = []
         timeseries_records: List[Dict[str, Any]] = []
         all_kpi_keys: set[str] = set()
-        
+
         for result in results:
             rec: Dict[str, Any] = dict(result.kpis)
             rec["scenario_name"] = result.name
@@ -322,15 +345,19 @@ class ScenarioAnalytics:
             for pref in ("cfads_final_lkr", "cfads_final", "posttax_cfads"):
                 for c in cfads_candidates:
                     if pref in c.lower():
-                        cfads_col = c; break
-                if cfads_col: break
+                        cfads_col = c
+                        break
+                if cfads_col:
+                    break
             if not cfads_col and cfads_candidates:
                 cfads_col = cfads_candidates[0]
 
             # Debt-service inference (broader, as per minor notes)
             debt_candidates = [
-                c for c in cols if "debt" in c.lower() and (
-                    "serv" in c.lower() or "pay" in c.lower() or "repay" in c.lower())
+                c
+                for c in cols
+                if "debt" in c.lower()
+                and ("serv" in c.lower() or "pay" in c.lower() or "repay" in c.lower())
             ]
             if not debt_candidates:
                 debt_candidates = [c for c in cols if "debt" in c.lower()]
@@ -364,6 +391,7 @@ class ScenarioAnalytics:
             return
         try:
             from analytics.export_helpers import ExcelExporter
+
             exporter = ExcelExporter(self.output_path)
             exporter.export_summary_and_timeseries(
                 summary_df=summary_df,
@@ -393,6 +421,7 @@ class ScenarioAnalytics:
             return
         try:
             from analytics.export_helpers import ChartExporter
+
             charts_dir = self.output_path.with_name(self.output_path.stem + "_charts")
             charts_dir.parent.mkdir(parents=True, exist_ok=True)
             chart_exporter = ChartExporter(output_dir=str(charts_dir))
@@ -407,6 +436,7 @@ class ScenarioAnalytics:
         except Exception:
             logger.warning("ChartExporter not available; skipping chart export")
 
+
 # ----------------------------------------------------------------------
 # CLI entrypoint (pattern-rich, Go With The Flow)
 # ----------------------------------------------------------------------
@@ -417,24 +447,60 @@ def parse_filter(expr: Optional[str]) -> Optional[Callable[[str], bool]]:
     if "*" in expr:
         # Glob-style wildcard
         import fnmatch
+
         expr = expr.strip()
         return lambda name: fnmatch.fnmatch(name, expr)
-    expr_list = [x.strip() for x in expr.split(',') if x.strip()]
+    expr_list = [x.strip() for x in expr.split(",") if x.strip()]
     return lambda name: name in expr_list
+
 
 def main(argv: Iterable[str]) -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run v14 scenario analytics (Go With The Flow edition).")
-    parser.add_argument("--scenarios-dir", default="scenarios", help="Directory containing scenario YAML/JSON files.")
-    parser.add_argument("--output", default="exports/v14_analytics.xlsx", help="Excel output path.")
-    parser.add_argument("--no-excel", action="store_true", help="Do not export Excel, only print logs.")
-    parser.add_argument("--charts", action="store_true", help="Export charts alongside Excel workbook.")
-    parser.add_argument("--strict", action="store_true", default=True, help="Raise on first scenario failure.")
-    parser.add_argument("--parallel", action="store_true", help="Process scenarios in parallel if >4.")
-    parser.add_argument("--filter", type=str, default=None, help="Only run scenarios matching filter (glob or comma-list).")
-    parser.add_argument("--summary-json", type=str, default=None, help="Write run summary/metadata here.")
-    parser.add_argument("--default-discount-rate", type=float, default=0.10, help="Global fallback discount rate.")
+    parser = argparse.ArgumentParser(
+        description="Run v14 scenario analytics (Go With The Flow edition)."
+    )
+    parser.add_argument(
+        "--scenarios-dir",
+        default="scenarios",
+        help="Directory containing scenario YAML/JSON files.",
+    )
+    parser.add_argument(
+        "--output", default="exports/v14_analytics.xlsx", help="Excel output path."
+    )
+    parser.add_argument(
+        "--no-excel", action="store_true", help="Do not export Excel, only print logs."
+    )
+    parser.add_argument(
+        "--charts", action="store_true", help="Export charts alongside Excel workbook."
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        default=True,
+        help="Raise on first scenario failure.",
+    )
+    parser.add_argument(
+        "--parallel", action="store_true", help="Process scenarios in parallel if >4."
+    )
+    parser.add_argument(
+        "--filter",
+        type=str,
+        default=None,
+        help="Only run scenarios matching filter (glob or comma-list).",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=str,
+        default=None,
+        help="Write run summary/metadata here.",
+    )
+    parser.add_argument(
+        "--default-discount-rate",
+        type=float,
+        default=0.10,
+        help="Global fallback discount rate.",
+    )
 
     args = parser.parse_args(list(argv))
 
@@ -457,8 +523,13 @@ def main(argv: Iterable[str]) -> int:
     logger.info("Timeseries head:\n%s", timeseries_df.head(3))
     if batch_meta.failed:
         logger.warning("Failed scenarios: %s", batch_meta.failed)
-    logger.info("Scenario analytics complete. %d success | %d failed", batch_meta.n_success, batch_meta.n_failed)
+    logger.info(
+        "Scenario analytics complete. %d success | %d failed",
+        batch_meta.n_success,
+        batch_meta.n_failed,
+    )
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

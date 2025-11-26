@@ -56,10 +56,12 @@ def test_fx_mapping_with_start_rate_is_accepted(tmp_path):
     # annual_depr should be preserved if present
     assert loaded["fx"].get("annual_depr") == 0.03
 
+
 def test_scenarios_use_mapping_fx():
     """All key scenarios must use structured mapping for fx (no scalar/null)."""
-    import yaml
     from pathlib import Path
+
+    import yaml
 
     root = Path(__file__).parent.parent  # tests/ -> repo root via parent.parent
     scenarios = [

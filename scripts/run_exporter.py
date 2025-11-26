@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import subprocess
 import sys
 import tempfile
-import subprocess
 from copy import deepcopy
+
 import yaml
 
 TRY_JSON = ["--format", "json"]

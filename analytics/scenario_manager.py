@@ -127,5 +127,3 @@ class ScenarioManager:
 
             # Yield as (name, config) pair; no Path objects leak out.
             yield scenario_name, config
-
-            

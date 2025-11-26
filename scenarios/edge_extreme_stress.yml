@@ -1,40 +1,46 @@
-# DutchBay v14 Extreme Stress Scenario
 project:
   capacity_mw: 50
-  capacity_factor: 0.25      # Very low for region/project
-  degradation: 0.015         # High technical risk
+  capacity_factor: 0.25
+  degradation: 0.015
   life_years: 25
-  corporate_tax_rate: 0.24   # <--- NEW, 24% corporate tax
-  depreciation_years: 20     # <--- NEW, or whatever your model assumes
-  tax_holiday_years: 0       # optional, explicit zero is clean
-  tax_holiday_start_year: 1  # optional
-  enhanced_capital_allowance_pct: 1.0  # optional, 100%
-  risk_haircut_pct: 0.05     # if you want a 5% haircut; adjust as needed
+  corporate_tax_rate: 0.24
+  depreciation_years: 20
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  enhanced_capital_allowance_pct: 1.0
+  risk_haircut_pct: 0.05
 tariff:
-  lkr_per_kwh: 40            # Adverse, low tariff
+  lkr_per_kwh: 40
 fx:
   start_lkr_per_usd: 300.0
   annual_depr: 0.03
 opex:
-  usd_per_year: 1800000      # High opex, maintenance issues
+  usd_per_year: 1800000
 capex:
   usd_total: 120000000
 Financing_Terms:
   debt_ratio: 0.85
   tenor_years: 15
   construction_periods: 3
-  construction_schedule: [20.0, 45.0, 80.0]
-  debt_drawdown_pct: [0.2, 0.3, 0.5]
-  grace_years: 0             # No grace period
+  construction_schedule:
+  - 20.0
+  - 45.0
+  - 80.0
+  debt_drawdown_pct:
+  - 0.2
+  - 0.3
+  - 0.5
+  grace_years: 0
   interest_only_years: 0
-  amortization_style: "linear"
-  target_dscr: 2.00          # Lender mandate unachievable
+  amortization_style: linear
+  target_dscr: 2.0
   mix:
     lkr_max: 0.5
     dfi_max: 0.25
     usd_commercial_min: 0.25
   rates:
-    usd_nominal: 0.13        # Very high interest
+    usd_nominal: 0.13
     lkr_nominal: 0.19
-    dfi: 0.10
-  life_years: 25 
+    dfi: 0.1
+  life_years: 25
+discount_rate: 0.12

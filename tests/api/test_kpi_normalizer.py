@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from analytics.kpi_normalizer import (_ensure_dscr, _ensure_project_irr,
-                                      _ensure_scenario_name,
-                                      normalise_kpis_for_export)
+from analytics.kpi_normalizer import (
+    _ensure_dscr,
+    _ensure_project_irr,
+    _ensure_scenario_name,
+    normalise_kpis_for_export,
+)
 
 
 def test_ensure_scenario_name_preserves_existing_column():

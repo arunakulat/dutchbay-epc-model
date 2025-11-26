@@ -1,44 +1,39 @@
-# example_a.yaml (snippet)
-
 project:
   capacity_mw: 100
   capacity_factor_pct: 45
   degradation_pct: 0.5
   grid_loss_pct: 2.0
   life_years: 20
-
 tariff:
   lkr_per_kwh: 50
-
 fx:
   start_lkr_per_usd: 300.0
   annual_depr: 0.03
-
 opex:
   usd_per_year: 10000000
-
 capex:
   usd_total: 120000000
-
 tax:
   corporate_tax_rate_pct: 24
   tax_holiday_years: 10
   tax_holiday_start_year: 1
   depreciation_years: 20
   enhanced_capital_allowance_pct: 150
-
 risk:
   haircut_pct: 10
-
 Financing_Terms:
   debt_ratio: 0.75
   tenor_years: 17
   construction_periods: 2
-  construction_schedule: [60.0, 60.0] # Must align with capex/period logic
-  debt_drawdown_pct: [0.6, 0.4]
+  construction_schedule:
+  - 60.0
+  - 60.0
+  debt_drawdown_pct:
+  - 0.6
+  - 0.4
   grace_years: 2
   interest_only_years: 0
-  amortization_style: "annuity"
+  amortization_style: annuity
   target_dscr: 1.35
   mix:
     lkr_max: 0.0
@@ -46,3 +41,4 @@ Financing_Terms:
     usd_commercial_min: 1.0
   rates:
     usd_nominal: 0.07
+discount_rate: 0.12
