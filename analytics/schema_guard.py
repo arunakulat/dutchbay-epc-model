@@ -58,7 +58,12 @@ class ConfigValidationError(RuntimeError):
     Example (CLI style)::
 
         try:
-            validate_config_for_v14(raw_config=cfg, config_path=config_path, modules=["cashflow", "debt"])
+                validate_config_for_v14(
+                raw_config=cfg,
+                config_path=config_path,
+                modules=["cashflow", "debt"],
+            )
+
         except ConfigValidationError as exc:
             print(f"ERROR: {exc}")
             raise SystemExit(1)
@@ -276,8 +281,10 @@ def validate_config_for_v14(
     if missing:
         details = "; ".join(sorted(missing))
         raise ConfigValidationError(
-            f"Config '{config_path}' is missing or has invalid required fields: {details}"
-        )
+        f"Config '{config_path}' is missing or has invalid required "
+        f"fields: {details}"
+    )
+
 
 
 __all__ = [
