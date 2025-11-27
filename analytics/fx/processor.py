@@ -20,10 +20,10 @@ Usage: python3 fx_data_processor.py <csv_file>
 Output: 10 YAML files (5 recent periods + 5 historical decades)
 """
 
-from pathlib import Path
+from pathlib import Path  # noqa: E402
 
-import pandas as pd
-import yaml
+import pandas as pd  # noqa: E402
+import yaml  # noqa: E402
 
 
 def process_fx_csv_dual_regime(csv_file):
@@ -224,8 +224,8 @@ COMBINED ANALYSIS (Most Rigorous):
 
 PYTHON CODE TO LOAD BOTH REGIMES:
 
-import yaml
-from glob import glob
+import yaml  # noqa: E402
+from glob import glob  # noqa: E402
 
 # Load recent regime
 recent_files = sorted(glob('fx_data_recent_Period*.yaml'))
@@ -358,7 +358,7 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
 
 
 if __name__ == "__main__":
-    import sys
+    import sys  # noqa: E402
 
     if len(sys.argv) > 1:
         csv_file = sys.argv[1]

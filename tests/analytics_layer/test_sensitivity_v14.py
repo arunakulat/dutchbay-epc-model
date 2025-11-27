@@ -9,18 +9,18 @@ Tests validate guardrail contract compliance:
 Pattern: TDD approach with monkeypatching for integration tests.
 """
 
-import pytest
+import pytest  # noqa: E402
 
 pytestmark = pytest.mark.skip(
     reason="sensitivity_v14 is parked for a future refactor; "
     "regression + helper surface not finalized yet."
 )
-from unittest.mock import patch
+from unittest.mock import patch  # noqa: E402
 
-import pytest
+import pytest  # noqa: E402
 
-from analytics.contracts_v14 import ParameterRangeConfig, TornadoResult
-from analytics.sensitivity_v14 import (
+from analytics.contracts_v14 import ParameterRangeConfig, TornadoResult  # noqa: E402
+from analytics.sensitivity_v14 import (  # noqa: E402
     _analyze_single_parameter,
     _build_nested_override,
     _load_parameters,
@@ -234,7 +234,7 @@ class TestImportCompliance:
 
     def test_no_direct_finance_imports(self):
         """Test that finance.irr and finance.wacc_v14 are not imported."""
-        import analytics.sensitivity_v14 as sens_module
+        import analytics.sensitivity_v14 as sens_module  # noqa: E402
 
         module_globals = vars(sens_module)
 
@@ -253,7 +253,7 @@ class TestImportCompliance:
 
     def test_only_allowed_imports(self):
         """Test that only allowed surfaces are imported."""
-        import analytics.sensitivity_v14 as sens_module
+        import analytics.sensitivity_v14 as sens_module  # noqa: E402
 
         # Allowed imports
         allowed_prefixes = [
@@ -278,7 +278,7 @@ class TestYAMLErrorHandling:
         yaml_file.write_text("invalid: structure\nno: parameters")
 
         with pytest.raises(ValueError, match="Invalid YAML structure"):
-            from analytics.sensitivity_v14 import _load_parameters_from_yaml
+            from analytics.sensitivity_v14 import _load_parameters_from_yaml  # noqa: E402
 
             _load_parameters_from_yaml(yaml_file)
 
@@ -296,7 +296,7 @@ parameters:
         )
 
         with pytest.raises(ValueError, match="validation failed"):
-            from analytics.sensitivity_v14 import _load_parameters_from_yaml
+            from analytics.sensitivity_v14 import _load_parameters_from_yaml  # noqa: E402
 
             _load_parameters_from_yaml(yaml_file)
 

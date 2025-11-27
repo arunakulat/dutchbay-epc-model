@@ -7,12 +7,12 @@ These tests pin the public-ish CFADS surface so that future refactors
 can't silently break behaviour.
 """
 
-import sys
-from pathlib import Path
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import pytest
+import pytest  # noqa: E402
 
-from constants import HOURS_PER_YEAR
+from constants import HOURS_PER_YEAR  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Ensure repo root (/DutchBay_EPC_Model) is on sys.path
@@ -28,7 +28,7 @@ if str(REPO_ROOT) not in sys.path:
 # Canonical import: v14chat cashflow engine
 # ---------------------------------------------------------------------------
 
-from finance import cashflow_v14 as cf_mod  # type: ignore
+from finance import cashflow_v14 as cf_mod  # type: ignore  # noqa: E402
 
 
 def test_cashflow_module_path_is_v14chat():

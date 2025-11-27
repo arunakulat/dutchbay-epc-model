@@ -11,11 +11,11 @@ These tests are about lender-grade comfort:
 - Zero-tariff stress case
 """
 
-import copy
-import sys
-from pathlib import Path
+import copy  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import pytest
+import pytest  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Ensure repo root (/DutchBay_EPC_Model) is on sys.path
@@ -27,7 +27,7 @@ REPO_ROOT = THIS_FILE.parents[2]  # .../DutchBay_EPC_Model
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from finance import cashflow_v14 as cf_mod  # type: ignore
+from finance import cashflow_v14 as cf_mod  # type: ignore  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

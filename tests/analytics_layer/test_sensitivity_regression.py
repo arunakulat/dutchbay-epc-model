@@ -5,11 +5,11 @@ pytestmark = pytest.mark.skip(
     "regression + helper surface not finalized yet."
 )
 
-import numpy as np
-import pytest
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
-from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
+from analytics.contracts_v14 import ParameterRangeConfig  # noqa: E402
+from analytics.sensitivity import (  # noqa: E402
     SensitivityRequest,
     optimize_from_sensitivity_insights,
     run_breakeven_parameter,
