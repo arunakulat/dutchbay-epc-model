@@ -156,7 +156,7 @@ def run_command(
             if allow_fail:
                 logger.warning(
                     f"⚠️  {label} exited with code {result.returncode} "
-                    f"(allowed to fail)"
+                    "(allowed to fail)"
                 )
                 return StepResult(
                     label=label,
@@ -245,14 +245,14 @@ def diagnose_environment() -> None:
     typer.echo(f"\n📍 Repository: {repo}")
 
     # Python info
-    typer.echo(f"\n🐍 Python Information:")
+    typer.echo("\n🐍 Python Information:")
     typer.echo(f"  Executable: {sys.executable}")
     typer.echo(f"  Version: {sys.version}")
 
     # Virtual environment
     venv_active = "VIRTUAL_ENV" in os.environ
     venv_path = os.environ.get("VIRTUAL_ENV", "Not active")
-    typer.echo(f"\n📦 Virtual Environment:")
+    typer.echo("\n📦 Virtual Environment:")
     status = "✅ ACTIVE" if venv_active else "❌ NOT ACTIVE"
     typer.echo(f"  Status: {status}")
     typer.echo(f"  Path: {venv_path}")
@@ -261,7 +261,7 @@ def diagnose_environment() -> None:
         typer.echo(f"  💡 Activate with: source {repo}/.venv311/bin/activate")
 
     # pip info
-    typer.echo(f"\n📋 pip Information:")
+    typer.echo("\n📋 pip Information:")
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "--version"],
@@ -271,10 +271,10 @@ def diagnose_environment() -> None:
         )
         typer.echo(f"  {result.stdout.strip()}")
     except subprocess.CalledProcessError:
-        typer.echo(f"  ❌ Error checking pip")
+        typer.echo("  ❌ Error checking pip")
 
     # Key dependencies
-    typer.echo(f"\n🔧 Key Dependencies:")
+    typer.echo("\n🔧 Key Dependencies:")
     key_packages = ["black", "isort", "pytest", "mypy", "pytest-xdist"]
     for pkg in key_packages:
         try:
@@ -294,7 +294,7 @@ def diagnose_environment() -> None:
             typer.echo(f"  ❌ {pkg}: NOT INSTALLED")
 
     # Git info
-    typer.echo(f"\n🔀 Git Information:")
+    typer.echo("\n🔀 Git Information:")
     try:
         result = subprocess.run(
             ["git", "branch", "--show-current"],
@@ -306,7 +306,7 @@ def diagnose_environment() -> None:
         branch = result.stdout.strip()
         typer.echo(f"  Current branch: {branch}")
     except subprocess.CalledProcessError:
-        typer.echo(f"  ❌ Error getting branch")
+        typer.echo("  ❌ Error getting branch")
 
     try:
         result = subprocess.run(
@@ -317,14 +317,14 @@ def diagnose_environment() -> None:
             check=True,
         )
         if result.stdout.strip():
-            typer.echo(f"  ⚠️  Uncommitted changes detected")
+            typer.echo("  ⚠️  Uncommitted changes detected")
         else:
-            typer.echo(f"  ✅ Working directory clean")
+            typer.echo("  ✅ Working directory clean")
     except subprocess.CalledProcessError:
         pass
 
     # Disk space
-    typer.echo(f"\n💾 Disk Space:")
+    typer.echo("\n💾 Disk Space:")
     try:
         import shutil
 
@@ -336,7 +336,7 @@ def diagnose_environment() -> None:
         typer.echo(f"  Used: {used_pct:.1f}%")
         typer.echo(f"  Free: {free_gb:.1f} GB")
         if free_gb < 1:
-            typer.echo(f"  ⚠️  WARNING: Low disk space!")
+            typer.echo("  ⚠️  WARNING: Low disk space!")
     except Exception as e:
         typer.echo(f"  Could not determine: {e}")
 
@@ -553,22 +553,22 @@ repos:
 
     typer.echo(f"\n📝 Writing {precommit_config}")
     precommit_config.write_text(config_content)
-    typer.echo(f"   ✅ Config written")
+    typer.echo("   ✅ Config written")
 
     # Install pre-commit framework
-    typer.echo(f"\n📦 Installing pre-commit framework...")
+    typer.echo("\n📦 Installing pre-commit framework...")
     try:
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q", "pre-commit"],
             check=True,
         )
-        typer.echo(f"   ✅ pre-commit installed")
+        typer.echo("   ✅ pre-commit installed")
     except subprocess.CalledProcessError:
-        typer.echo(f"   ⚠️  Could not install pre-commit")
+        typer.echo("   ⚠️  Could not install pre-commit")
         return
 
     # Install git hooks
-    typer.echo(f"\n🔧 Installing git hooks...")
+    typer.echo("\n🔧 Installing git hooks...")
     try:
         subprocess.run(
             ["pre-commit", "install"],
@@ -576,9 +576,9 @@ repos:
             check=True,
             capture_output=True,
         )
-        typer.echo(f"   ✅ Git hooks installed")
+        typer.echo("   ✅ Git hooks installed")
     except subprocess.CalledProcessError:
-        typer.echo(f"   ⚠️  Could not install git hooks")
+        typer.echo("   ⚠️  Could not install git hooks")
         typer.echo(f"   💡 Try: cd {repo} && pre-commit install")
         return
 
@@ -748,7 +748,7 @@ def main(
         pytest_targets = list(FAST_PYTEST_TARGETS if fast else FULL_PYTEST_TARGETS)
 
     if verbose:
-        typer.echo(f"\n📋 Configuration:")
+        typer.echo("\n📋 Configuration:")
         typer.echo(f"  Black targets: {', '.join(black_targets)}")
         typer.echo(f"  Test targets: {', '.join(pytest_targets)}")
         typer.echo(f"  Stages: black={not no_black}, isort={not no_isort}, " +
