@@ -1,4 +1,5 @@
-"""Cash Flow Module for DutchBay V14 Project Finance (BOI Tax Holiday/Enhancement Compliant)
+"""Cash Flow Module for DutchBay V14 Project 
+Finance (BOI Tax Holiday/Enhancement Compliant)
 
 COMPLIANCE:
 -----------
@@ -301,7 +302,8 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
     # Final hard fallback – should be rare
     default_fx = 375.0
     logger.warning(
-        "FX configuration missing or invalid; falling back to flat %.2f LKR/USD for %d years",
+        "FX configuration missing or invalid; "
+        "falling back to flat %.2f LKR/USD for %d years",
         default_fx,
         years,
     )
@@ -354,7 +356,8 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
     if hits:
         chosen_path, chosen_val = hits[0]
         logger.warning(
-            "Project life not found in explicit fields; using heuristic match %r = %d years",
+            "Project life not found in explicit fields;"
+            " using heuristic match %r = %d years",
             chosen_path,
             chosen_val,
         )
@@ -685,8 +688,10 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
         tax_rate = _pct_to_decimal(tax_rate_raw)
         if tax_rate is None or not (0.0 <= tax_rate <= 1.0):
             errors.append(
-                f"corporate_tax_rate: {tax_rate} out of range (must be 0.0-1.0 or 0-100%)"
-            )
+                "corporate_tax_rate: "
+                f"{tax_rate} out of range "
+                "(must be 0.0-1.0 or 0-100%)"
+)
 
     # Extract and validate project life
     try:
