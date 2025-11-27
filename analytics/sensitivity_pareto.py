@@ -10,6 +10,8 @@ from typing import Any, Dict, Sequence
 
 from analytics.contracts_v14 import ParetoFrontierResult, SensitivitySuite
 from analytics.evaluate_scenario import evaluate_with_overrides
+import numpy as np
+import pandas as pd
 
 
 def optimize_from_sensitivity_insights(
