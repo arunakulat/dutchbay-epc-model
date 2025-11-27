@@ -11,13 +11,9 @@ Tests validate Monte Carlo coordinator functionality:
 Pattern: Fast tests with small iteration counts, mocked solvers.
 """
 
-
 import pytest
 
-from analytics.contracts_v14 import (
-    Distribution,
-    MonteCarloResult,
-)
+from analytics.contracts_v14 import Distribution, MonteCarloResult
 from analytics.monte_carlo_v14 import (
     _aggregate_results,
     _build_overrides_from_sample,

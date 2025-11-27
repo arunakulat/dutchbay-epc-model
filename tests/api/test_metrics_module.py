@@ -1,6 +1,5 @@
 """Unit tests for analytics.core.metrics module."""
 
-
 from analytics.core import metrics as metrics_mod
 
 

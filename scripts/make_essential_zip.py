@@ -49,7 +49,7 @@ def iter_essential_files(root: Path):
                         f"({file_path.stat().st_size:,} bytes)"
                     )
                     continue
-            except:
+            except Exception:
                 continue
 
             yield file_path

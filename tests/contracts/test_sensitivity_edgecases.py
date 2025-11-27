@@ -201,19 +201,3 @@ def test_range_validation_edge_cases(edge_case: str) -> None:
     logger.info(f"\nSkipped (range validation not yet in schema_guard): {edge_case}")
 
 
-@pytest.mark.skip(
-    reason="Range validation (capex > 0, etc.) is in sensitivity layer, not schema_guard"
-)
-@pytest.mark.parametrize(
-    "edge_case",
-    [
-        "zero_capex",  # Nonphysical: zero investment
-        "negative_capex",  # Invalid: negative investment
-    ],
-)
-def test_range_validation_edge_cases(edge_case: str) -> None:
-    """SKIPPED: Range validators not yet in schema_guard."""
-    logger.info(f"\nSkipped (range validation not yet in schema_guard): {edge_case}")
-
-
-# EOF

@@ -34,10 +34,10 @@ def plot_tornado_chart(
     )
     y = df["Parameter"]
     low, base, high = df["Low"], df["Base"], df["High"]
-    [base - l for l in low]
+    [base - low_val for low_val in low]
     [h - base for h in high]
     fig, ax = plt.subplots(figsize=(10, 0.6 * len(df) + 2))
-    for i, (b, l, h) in enumerate(zip(base, low, high)):
+    for i, (b, low_val, h) in enumerate(zip(base, low, high)):
         ax.barh(
             i, b - l, left=l, color="#d35400", height=0.5, label="Low" if i == 0 else ""
         )
