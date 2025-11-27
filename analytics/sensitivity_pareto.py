@@ -18,7 +18,10 @@ def optimize_from_sensitivity_insights(
     sensitivity_suite: SensitivitySuite,
     base_config_path: str,
     objectives: Sequence[str] = ("project_irr", "dscr_min"),
-    constraints: Dict[str, float] = {"project_irr": 0.12, "dscr_min": 1.3},  # noqa: B006
+    constraints: Dict[str, float] = { 
+    "project_irr": 0.12, "dscr_min": 1.3
+},
+
     steps: int = 6,
 ) -> ParetoFrontierResult:
     """

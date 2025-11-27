@@ -195,7 +195,9 @@ class ParameterRangeConfig(BaseModel):
     variable_name: str = Field(
         ...,
         min_length=1,
-        description="Parameter to sweep (dot-separated path e.g. project.capex_usd_per_kw)",
+        description="Parameter to sweep (dot-separated path," 
+        "e.g. project.capex_usd_per_kw)",
+
     )
 
     base_value: float = Field(
@@ -697,7 +699,7 @@ class MonteCarloResult:
 @dataclass(frozen=True)
 class ScenarioDescriptor:
     """
-    Canonical descriptor for a config/scenario. Used by analytics pipeline and reporting.
+    Canonical descriptor for a config/scenario. Used by analytics pipeline & reporting.
     """
 
     scenario_name: str

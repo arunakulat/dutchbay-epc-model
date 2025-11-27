@@ -201,7 +201,7 @@ def calculate_mirr(
     """
     Calculate Modified Internal Rate of Return.
 
-    MIRR accounts for cost of financing (negative CF) and reinvestment rate (positive CF)
+    MIRR accounts for cost of financing (negative CF) & reinvestment rate (positive CF)
 
     Parameters
     ----------

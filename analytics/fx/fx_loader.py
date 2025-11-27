@@ -45,7 +45,8 @@ def discover_fx_files(scenarios_dir: Path | None = None) -> dict[str, Path]:
         scenarios_dir: Path to scenarios directory (default: ./scenarios)
 
     Returns:
-        Dict mapping file stem to Path (e.g., 'fx_data_recent_Period2_2018_2019' -> Path)
+        Dict mapping file stem to Path (e.g., 'fx_data_recent_Period2_2018_2019' → Path)
+
     """
     if scenarios_dir is None:
         scenarios_dir = Path("scenarios")

@@ -69,12 +69,12 @@ from analytics.contracts_v14 import (
     TornadoResult,
 )
 from analytics.evaluate_scenario import evaluate_with_overrides
-from analytics.monte_carlo_v14 import (  # noqa: F401; Reserved for future VaR / CVaR integration
+from analytics.monte_carlo_v14 import (  # noqa: F401
+    # Reserved for future VaR / CVaR integration
     MonteCarloResult,
 )
 
 logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Core public request type
@@ -557,7 +557,9 @@ def run_breakeven_parameter(
             a, fa = mid, fmid
 
     logger.warning(
-        "Breakeven did not converge for %s after %d iterations; last bracket=[%.4f, %.4f]",
+       "Breakeven did not converge for %s after %d iterations; "
+        "last bracket=[%.4f, %.4f]",
+
         variable_name,
         max_iter,
         a,
