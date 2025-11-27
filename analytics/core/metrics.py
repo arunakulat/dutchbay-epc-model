@@ -296,9 +296,7 @@ def calculate_scenario_kpis(
             try:
                 npv_prudential = calc_npv(prudential_rate, project_cf_series)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning(
-                    "Prudential project NPV calculation failed: %s", exc
-                )
+                logger.warning("Prudential project NPV calculation failed: %s", exc)
                 npv_prudential = 0.0
 
             result["npv_prudential"] = npv_prudential

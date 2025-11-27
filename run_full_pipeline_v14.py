@@ -33,7 +33,7 @@ CI / programmatic:
         config="scenarios/full_model_variables_updated.yaml",
         validation_mode="strict",
     )
-    project_irr = result["project_irr"]
+    project_irr = result["kpis"]["project_irr"]
 
 The cost of loading the config twice (schema guard + evaluation) is tiny
 compared to a full analytics run and keeps the pre-flight validation logic
@@ -79,13 +79,14 @@ def run_v14_pipeline(
             - "off": skip the schema guard and go straight to evaluation.
 
     Returns:
-        A flat dict of KPIs and metadata, as returned by
-        analytics.evaluate_scenario.evaluate_with_overrides.
+        A dict shaped like a ScenarioResult-like surface, including:
 
-    Example:
-        >>> result = run_v14_pipeline("scenarios/example_a.yaml")
-        >>> round(result["project_irr"], 4)
-        0.1234
+        - validation_mode: the effective mode used ("strict" or "off")
+        - config_path: the config path string
+        - config: the loaded raw config dict
+        - annual_rows: list of annual cashflow rows (may be empty)
+        - debt_result: dict of debt metrics/results (may be empty)
+        - kpis: dict of KPI fields (e.g. project_npv, project_irr, dscr_min, ...)
     """
     mode = validation_mode.lower()
     if mode not in {"strict", "off"}:
@@ -108,7 +109,39 @@ def run_v14_pipeline(
 
     # 2) Full evaluation: this will reload the config and run the v14 stacks
     #    under finance.cashflow_v14 / finance.debt_v14 / analytics.core.metrics.
-    return evaluate_with_overrides(config, {})
+    raw_result = evaluate_with_overrides(config, {})
+
+    # Normalise to a dict and capture the KPI payload *before* we add metadata.
+    if isinstance(raw_result, dict):
+        kpis_payload: dict[str, Any] = dict(raw_result)
+        result: dict[str, Any] = dict(raw_result)
+    else:
+        # Extremely defensive: if the core ever returns a non-dict, we still
+        # provide a sensible surface for callers and tests.
+        kpis_payload = {"value": raw_result}
+        result = {"result": raw_result}
+
+    # Attach config + metadata the tests (and downstream tooling) expect.
+    result.setdefault("config", cfg)
+    result.setdefault("config_path", config)
+    result["validation_mode"] = mode
+
+    # Ensure structural keys from a ScenarioResult-like surface are always present
+    # so that callers can rely on them without extra guards.
+    result.setdefault("annual_rows", [])
+    result.setdefault("debt_result", {})
+
+    # kpis: if the core already produced a nested "kpis" dict, keep it.
+    # Otherwise, treat the flat raw_result as the KPI dictionary.
+    existing_kpis = result.get("kpis")
+    if isinstance(existing_kpis, dict) and existing_kpis:
+        kpis = existing_kpis
+    else:
+        kpis = kpis_payload
+
+    result["kpis"] = kpis
+
+    return result
 
 
 @app.command()

@@ -110,7 +110,9 @@ def calculate_idc(
 
 class Tranche:
     """Represents a single debt tranche."""
+
     __slots__ = ("name", "rate", "principal", "years_io")
+
     def __init__(self, name: str, rate: float, principal: float, years_io: int) -> None:
         self.name = name
         self.rate = float(rate)
@@ -290,7 +292,9 @@ def apply_debt_layer(
                 total_service += service
                 outstanding_balances[k] = max(0.0, outstanding_balances[k] - principal)
         debt_service_total.append(total_service)
-        cfads_this_period = cfads_extended[period] if period < len(cfads_extended) else 0.0
+        cfads_this_period = (
+            cfads_extended[period] if period < len(cfads_extended) else 0.0
+        )
         if period >= construction_periods and total_service > 0:
             dscr = cfads_this_period / total_service
         else:
@@ -361,7 +365,8 @@ def plan_debt(
     # >>> This is the patch for test compatibility <<<
     # Lowercase output keys for "lkr", "usd", "dfi" compatibility.
     principal_by_tranche: Dict[str, float] = {
-        k.lower(): float(v) for k, v in (core.get("principal_after_idc", {}) or {}).items()
+        k.lower(): float(v)
+        for k, v in (core.get("principal_after_idc", {}) or {}).items()
     }
     idc_by_tranche: Dict[str, float] = {
         k.lower(): float(v) for k, v in (core.get("idc_by_tranche", {}) or {}).items()

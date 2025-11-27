@@ -8,8 +8,11 @@ Pareto Frontier Optimization Guided by Sensitivity (v14+)
 
 from typing import Any, Dict, Optional, Sequence, Tuple
 
-from analytics.contracts_v14 import (ParameterRangeConfig,
-                                     ParetoFrontierResult, SensitivitySuite)
+from analytics.contracts_v14 import (
+    ParameterRangeConfig,
+    ParetoFrontierResult,
+    SensitivitySuite,
+)
 from analytics.evaluate_scenario import evaluate_with_overrides
 
 

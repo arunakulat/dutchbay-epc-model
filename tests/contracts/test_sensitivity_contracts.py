@@ -35,22 +35,16 @@ def test_parameter_range_config_minimal():
 def test_tornado_result_properties():
     res = TornadoResult(
         variable="project.capex_usd_per_kw",
-        label="Capex",
-        base_value=1000,
-        low_value=800,
-        high_value=1200,
-        base_metric=0.10,
-        low_metric=0.08,
-        high_metric=0.12,
-        impact_abs=0.04,
-        impact_dir=1,
+        base_irr=0.10,
+        low_irr=0.08,
+        high_irr=0.12,
     )
-    assert abs(res.impact_abs - abs(res.high_metric - res.low_metric)) < 1e-9
+    assert abs(res.impact_abs - 0.04) < 1e-9
 
 
 def test_sensitivity_suite_instantiation():
     # Minimal suite with a single result
-    result = TornadoResult("foo", "Foo", 1, 0.8, 1.2, 0.1, 0.08, 0.12, 0.04, 1)
+    result = TornadoResult(variable="foo", base_irr=0.1, low_irr=0.08, high_irr=0.12)
     suite = SensitivitySuite(
         tornado_results=[result],
         base_metric=0.10,

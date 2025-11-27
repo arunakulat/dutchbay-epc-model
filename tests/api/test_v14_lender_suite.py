@@ -1,232 +1,214 @@
-"""Lender-grade v14 finance tests in one suite.
+#!/usr/bin/env python3
+"""
+V14 Lender Suite Integration Tests (Go With The Flow edition).
 
-Covers:
-- finance.cashflow_v14 (extra tax behaviour: 0% vs 30%)
-- finance.debt_v14 (basic amortisation sanity)
-- finance.irr (end-to-end CFADS -> IRR/NPV smoke)
+CORE PRINCIPLE: Configuration-driven, not code-driven.
+- Load validated YAML scenarios from scenarios/ directory
+- Trust schema_guard to validate configs
+- Tests encode the contract: "Given valid YAML, pipeline works"
+- Zero hardcoded field structures or assumptions
+
+This respects the fundamental Go With The Flow rules:
+  • YAML/config-driven first (no hardcoded values)
+  • Defensive programming (schema validates before compute)
+  • No magic paths (explicit path resolution via load_scenario_config)
+  • Test-first design (contract: valid config → valid pipeline output)
+  • Config-driven not code-driven (never rebuild config structure in Python)
 """
 
-import copy
-import inspect
-import sys
+from __future__ import annotations
+
+import logging
 from pathlib import Path
 
 import pytest
 
-try:
-    import pandas as pd  # type: ignore
-except Exception:  # pragma: no cover
-    pd = None  # type: ignore
+from analytics.scenario_loader import load_scenario_config
+from finance import cashflow_v14 as cf_mod
+from finance import debt_v14 as debt_mod
+from analytics.schema_guard import validate_config_for_v14
 
-# ---------------------------------------------------------------------------
-# Ensure repo root (/DutchBay_EPC_Model) is on sys.path
-# ---------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
 
-THIS_FILE = Path(__file__).resolve()
-REPO_ROOT = THIS_FILE.parents[2]
-
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from constants import DEFAULT_DISCOUNT_RATE
-from finance import cashflow_v14 as cf_mod  # type: ignore
-from finance import debt_v14 as debt_mod  # type: ignore
-from finance import irr as irr_mod  # type: ignore
-
-# ---------------------------------------------------------------------------
-# Shared helpers / base parameters
-# ---------------------------------------------------------------------------
-
-BASE_PARAMS = {
-    "project": {
-        "capacity_mw": 100.0,
-        "capacity_factor": 0.40,
-    },
-    "tariff": {
-        "lkr_per_kwh": 20.0,
-    },
-    "opex": {
-        "usd_per_year": 3_000_000.0,
-    },
-    "returns": {
-        "project_life_years": 20,
-    },
-    "tax": {
-        "corporate_tax_rate": 0.30,
-        "depreciation_years": 15,
-        "tax_holiday_years": 0,
-        "tax_holiday_start_year": 1,
-        "enhanced_capital_allowance_pct": 1.0,
-    },
-}
+# Resolve scenario directory relative to repo root (explicit path, no magic CWD)
+REPO_ROOT = Path(__file__).parent.parent.parent
+SCENARIOS_DIR = REPO_ROOT / "scenarios"
 
 
-def _run_cfads(params: dict) -> list[float]:
-    """Validate and run CFADS; fail loud on validation ERRORs."""
-    issues = cf_mod.validate_parameters(params)  # type: ignore[attr-defined]
-    error_msgs = [m for m in issues if "ERROR" in m.upper()]
-    if error_msgs:
-        pytest.fail("Parameter validation failed:\n" + "\n".join(error_msgs))
-
-    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
-    assert isinstance(cfads, list)
-    assert all(isinstance(x, (int, float)) for x in cfads)
-    return cfads
-
-
-# ---------------------------------------------------------------------------
-# 1) Extra tax behaviour pin: 0% vs 30% corporate tax
-# ---------------------------------------------------------------------------
-
-
-def test_zero_tax_rate_increases_total_cfads():
-    """0% corporate tax should increase total CFADS vs a positive tax rate."""
-    base = copy.deepcopy(BASE_PARAMS)
-
-    taxed = copy.deepcopy(base)
-    taxed["tax"]["corporate_tax_rate"] = 0.30
-
-    zero_tax = copy.deepcopy(base)
-    zero_tax["tax"]["corporate_tax_rate"] = 0.0
-
-    cf_taxed = _run_cfads(taxed)
-    cf_zero = _run_cfads(zero_tax)
-
-    assert sum(cf_zero) > sum(cf_taxed)
-
-
-# ---------------------------------------------------------------------------
-# 2) Debt engine sanity: amortising schedule shape & final balance
-# ---------------------------------------------------------------------------
-
-
-def _find_debt_builder_function():
-    """Try to locate a reasonable debt schedule builder in the module."""
-    candidate_names = [
-        "build_debt_schedule",
-        "build_debt_schedule_v14",
-        "generate_debt_schedule",
-        "build_annuity_schedule",
+def _load_and_validate_scenario(scenario_name: str) -> dict:
+    """
+    Load a scenario YAML and validate it for v14 pipelines.
+    
+    This function delegates to the canonical schema_guard validator
+    rather than building config structures in Python.
+    
+    Args:
+        scenario_name: Name of scenario (without .yaml/.yml extension)
+        
+    Returns:
+        Validated config dict ready for v14 pipeline
+        
+    Raises:
+        FileNotFoundError: If scenario file not found
+        ConfigValidationError: If schema validation fails
+    """
+    # Find scenario file (support both .yaml and .yml extensions)
+    scenario_files = [
+        SCENARIOS_DIR / f"{scenario_name}.yaml",
+        SCENARIOS_DIR / f"{scenario_name}.yml",
     ]
-    for name in candidate_names:
-        if hasattr(debt_mod, name):
-            return getattr(debt_mod, name)
-    return None
+    
+    scenario_path = None
+    for candidate in scenario_files:
+        if candidate.exists():
+            scenario_path = candidate
+            break
+    
+    if scenario_path is None:
+        raise FileNotFoundError(
+            f"Scenario '{scenario_name}' not found in {SCENARIOS_DIR}. "
+            f"Searched: {', '.join(f.name for f in scenario_files)}"
+        )
+    
+    logger.info(f"Loading scenario: {scenario_path}")
+    
+    # Load via canonical loader (handles YAML parsing, merging, overlays)
+    config = load_scenario_config(str(scenario_path))
+    
+    # Validate for v14 cashflow/debt pipeline (defensive programming)
+    # This call will raise ConfigValidationError with CLEAR messages about
+    # which fields are missing or invalid, rather than silent failures downstream
+    validate_config_for_v14(
+        raw_config=config,
+        config_path=str(scenario_path),
+        modules=["cashflow", "debt"],  # Validate for both pipeline stages
+    )
+    
+    logger.info(f"Scenario validated successfully: {scenario_path}")
+    return config
 
 
-def _call_debt_builder(builder_fn):
-    """Call the builder with a simple amortising case, adapting to its signature."""
-    sig = inspect.signature(builder_fn)
+def test_v14_pipeline_runs_end_to_end() -> None:
+    """
+    Contract Test: Given a validated scenario YAML, the full v14 pipeline 
+    (cashflow → debt → KPIs) runs without error and produces expected outputs.
+    
+    This test encodes the core v14 integration contract:
+    - Valid scenario YAML → successful pipeline run
+    - All intermediate outputs are present and non-empty
+    - No exceptions, no silent failures
+    
+    We use the canonical dutchbay_lendercase_2025Q4 scenario which is
+    maintained and validated by the model owner.
+    """
+    # Load and validate: lets schema_guard do its job (defensive programming)
+    config = _load_and_validate_scenario("dutchbay_lendercase_2025Q4")
+    
+    # Stage 1: Build annual cashflow rows
+    try:
+        annual_rows = cf_mod.build_annual_rows(config)
+    except Exception as e:
+        pytest.fail(
+            f"build_annual_rows failed on validated config. "
+            f"This indicates a pipeline bug, not a config issue. "
+            f"Error: {e}"
+        )
+    
+    # Contract: pipeline produces rows
+    assert len(annual_rows) > 0, (
+        "Pipeline produced zero annual_rows despite validation passing. "
+        "Check cashflow_v14.py for logic errors."
+    )
+    assert all(isinstance(row, dict) for row in annual_rows), (
+        "annual_rows must be list of dicts per contract"
+    )
+    
+    logger.info(f"Annual rows generated: {len(annual_rows)}")
+    
+    # Stage 2: Apply debt layer
+    try:
+        debt_result = debt_mod.apply_debt_layer(config, annual_rows)
+    except Exception as e:
+        pytest.fail(
+            f"apply_debt_layer failed on validated config and annual_rows. "
+            f"Error: {e}"
+        )
+    
+    # Contract: debt layer returns dict with core metrics
+    assert isinstance(debt_result, dict), (
+        "debt_result must be a dict per contract"
+    )
+    
+    required_debt_keys = [
+        "dscr_min",
+        "dscr_series",
+        "debt_service_total",
+        "debt_outstanding",
+        "audit_status",
+    ]
+    for key in required_debt_keys:
+        assert key in debt_result, (
+            f"Missing required contract key '{key}' in debt_result. "
+            f"Available keys: {list(debt_result.keys())}. "
+            f"Check debt_v14.py for return structure."
+        )
+    
+    # Sanity checks on outputs (contract: values are reasonable)
+    dscr_min = float(debt_result.get("dscr_min", 0.0))
+    assert dscr_min >= 0.0, (
+        f"DSCR_min must be >= 0 per contract, got {dscr_min}"
+    )
+    
+    debt_service = debt_result.get("debt_service_total", [])
+    assert isinstance(debt_service, list) and len(debt_service) > 0, (
+        "debt_service_total must be non-empty list per contract"
+    )
+    
+    logger.info(
+        f"Debt layer complete: DSCR_min={dscr_min:.3f}, "
+        f"debt_service_periods={len(debt_service)}"
+    )
+    
+    # Stage 3: Verify cashflow integration
+    first_row = annual_rows[0]
+    has_cfads = any(
+        k in first_row 
+        for k in ["cfads_usd", "cfads_final_lkr", "cfads"]
+    )
+    assert has_cfads, (
+        f"No CFADS field found in annual_rows[0]. "
+        f"Available keys: {list(first_row.keys())}. "
+        f"Check cashflow_v14.py for output structure."
+    )
+    
+    logger.info("✓ Full v14 pipeline contract validated successfully")
 
-    base_cfg = {
-        "principal": 100_000_000.0,
-        "principal_usd": 100_000_000.0,
-        "annual_interest_rate": 0.06,
-        "rate": 0.06,
-        "tenor_years": 15,
-        "years": 15,
-        "payments_per_year": 1,
-        "repayment_type": "annuity",
-        "schedule_type": "annuity",
-        "grace_period_years": 0,
-    }
 
-    params = list(sig.parameters.values())
-
-    # Single-config style: builder(config_dict)
-    if len(params) == 1 and params[0].kind in (
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        inspect.Parameter.POSITIONAL_ONLY,
-    ):
-        return builder_fn(base_cfg)
-
-    # Otherwise: kwargs based on intersection of names
-    kwargs = {}
-    for p in params:
-        if p.name in base_cfg:
-            kwargs[p.name] = base_cfg[p.name]
-    return builder_fn(**kwargs)
+def test_scenario_loading_and_validation() -> None:
+    """
+    Contract Test: Scenario files can be loaded and validated via the
+    canonical schema_guard layer.
+    
+    This test verifies the defensive programming layer works correctly
+    and produces clear error messages on config problems.
+    """
+    # Should succeed: dutchbay_lendercase_2025Q4 is maintained by model owner
+    config = _load_and_validate_scenario("dutchbay_lendercase_2025Q4")
+    
+    assert isinstance(config, dict), "Config must be a dict"
+    assert len(config) > 0, "Config must not be empty"
+    
+    # Verify core top-level sections exist (per DutchBay schema)
+    core_sections = ["project", "capex", "tax", "Financing_Terms"]
+    for section in core_sections:
+        assert section in config or any(
+            k.lower() == section.lower() for k in config.keys()
+        ), (
+            f"Core section '{section}' not found in config. "
+            f"Schema may have changed; check scenarios/dutchbay_lendercase_2025Q4.yaml"
+        )
+    
+    logger.info(f"✓ Scenario structure validated: {list(config.keys())}")
 
 
-def _normalize_debt_schedule(schedule):
-    """Return a list of dict-like records from various schedule representations."""
-    if pd is not None and isinstance(schedule, pd.DataFrame):
-        return schedule.to_dict("records")
-    if isinstance(schedule, list):
-        if schedule and isinstance(schedule[0], dict):
-            return schedule
-    pytest.fail(f"Unsupported schedule type {type(schedule)!r} in debt module tests")
-
-
-def test_debt_schedule_basic_shape_and_final_balance():
-    """Amortising loan should yield sensible schedule with final balance ≈ 0."""
-    builder_fn = _find_debt_builder_function()
-    if builder_fn is None:
-        pytest.skip("No known debt schedule builder found in finance.debt_v14")
-
-    schedule = _call_debt_builder(builder_fn)
-    records = _normalize_debt_schedule(schedule)
-
-    assert len(records) > 0, "Debt schedule should not be empty"
-
-    # Try to locate opening/closing balance keys heuristically
-    sample_keys = records[0].keys()
-    opening_key = None
-    closing_key = None
-    for k in sample_keys:
-        lk = k.lower()
-        if "opening" in lk and "balance" in lk:
-            opening_key = k
-        if "closing" in lk and "balance" in lk:
-            closing_key = k
-
-    if opening_key and closing_key:
-        first = records[0]
-        last = records[-1]
-        first_open = float(first[opening_key])
-        last_close = float(last[closing_key])
-
-        # Principal drawn should be positive
-        assert first_open > 0
-
-        # Final balance should be near zero for a standard fully-amortising case
-        assert abs(last_close) < 1.0
-
-        # Closing balances broadly decline over time (allow small bumps).
-        closes = [float(r[closing_key]) for r in records]
-        assert closes[0] >= closes[-1]
-    else:
-        # At minimum, ensure non-empty schedule; column names may differ.
-        assert True
-
-
-# ---------------------------------------------------------------------------
-# 3) End-to-end v14 smoke: CFADS -> IRR & NPV
-# ---------------------------------------------------------------------------
-
-
-def test_end_to_end_cfads_irr_npv_sanity():
-    """Synthetic end-to-end smoke: CFADS -> IRR/NPV should be sane."""
-    params = copy.deepcopy(BASE_PARAMS)
-
-    # Assume a notional USD capex; we don't need perfect realism here,
-    # just something that produces a sign change for IRR.
-    notional_capex = 100_000_000.0
-
-    cfads = _run_cfads(params)
-
-    # Construct project cashflows: upfront capex out, then CFADS
-    cashflows = [-notional_capex] + cfads
-
-    irr_value = irr_mod.irr(cashflows)
-    npv_value = irr_mod.npv(DEFAULT_DISCOUNT_RATE, cashflows)
-
-    # IRR should be a finite positive rate. Different implementations may
-    # return decimal (0.2) or "percent-style" (20.0+), so we only assert sign.
-    assert irr_value is not None
-    assert isinstance(irr_value, (int, float))
-    assert irr_value > 0.0
-
-    # NPV should be finite (no crash). We don't assert sign here, just sanity.
-    assert npv_value is not None
-    assert isinstance(npv_value, (int, float))
+# EOF

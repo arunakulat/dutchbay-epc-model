@@ -17,9 +17,12 @@ import yaml
 from scipy.optimize import Bounds, NonlinearConstraint, minimize
 
 from .charts import pareto_chart
-from .legacy_v12 import (DebtStructure, build_financial_model,
-                         create_default_debt_structure,
-                         create_default_parameters)
+from .legacy_v12 import (
+    DebtStructure,
+    build_financial_model,
+    create_default_debt_structure,
+    create_default_parameters,
+)
 
 
 def optimize_capital_structure(

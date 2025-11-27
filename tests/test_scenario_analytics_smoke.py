@@ -65,12 +65,12 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
     assert len(successful) + len(failed) >= 1, "Batch counters look broken"
 
     # Expected canonical example scenarios should be present in the summary index.
-    # Note: the file stem is 'exmple_b', not 'example_b'.
+    # Note: the file stem is 'eaxmple_b', not 'example_b'.
     expected_scenarios = {
         "edge_extreme_stress",
         "example_a",
         "example_a_old",
-        "exmple_b",
+        "example_b",
     }
 
     found_scenarios = set(summary_df.index.astype(str))

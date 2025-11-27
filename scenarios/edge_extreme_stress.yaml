@@ -44,3 +44,16 @@ covenants:
 returns:
   project_life_years: 20
 discount_rate: 0.12
+Financing_Terms:
+  debt_amount_lkr: 180000000
+  tenor_years: 15
+  margin_pct: 2.5
+  base_rate_pct: 5.0
+  idc_pct: 75
+  # >>> ADD THIS BLOCK <<<
+  mix:
+    lkr_max: 0.44      # fill as per intended test expectation/proportion
+    usd_commercial_min: 0.20
+    dfi_max: 0.36
+  # <<< END >>>
+

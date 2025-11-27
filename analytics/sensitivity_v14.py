@@ -60,14 +60,18 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import numpy as np  # noqa: F401 - reserved for future use
 import pandas as pd  # noqa: F401 - reserved for future export helpers
 
-from analytics.contracts_v14 import (BreakevenResult,
-                                     MultiMetricSensitivitySuite,
-                                     MultiMetricTornadoResult,
-                                     ParameterRangeConfig, SensitivitySuite,
-                                     TornadoResult)
+from analytics.contracts_v14 import (
+    BreakevenResult,
+    MultiMetricSensitivitySuite,
+    MultiMetricTornadoResult,
+    ParameterRangeConfig,
+    SensitivitySuite,
+    TornadoResult,
+)
 from analytics.evaluate_scenario import evaluate_with_overrides
-from analytics.monte_carlo_v14 import \
-    MonteCarloResult  # noqa: F401; Reserved for future VaR / CVaR integration
+from analytics.monte_carlo_v14 import (
+    MonteCarloResult,
+)  # noqa: F401; Reserved for future VaR / CVaR integration
 from analytics.scenario_loader import load_scenario_config
 
 logger = logging.getLogger(__name__)

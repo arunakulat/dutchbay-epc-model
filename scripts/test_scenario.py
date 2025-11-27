@@ -6,8 +6,11 @@ Run from project root:
 """
 
 from finance.irr_config import load_config
-from finance.scenario_config import (get_scenario, get_scenario_irr_bounds,
-                                     list_scenarios)
+from finance.scenario_config import (
+    get_scenario,
+    get_scenario_irr_bounds,
+    list_scenarios,
+)
 
 
 def main():

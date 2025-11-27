@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from analytics.contracts_v14 import (MultiMetricSensitivitySuite,
-                                     SensitivitySuite)
+from analytics.contracts_v14 import MultiMetricSensitivitySuite, SensitivitySuite
 
 
 def plot_tornado_chart(

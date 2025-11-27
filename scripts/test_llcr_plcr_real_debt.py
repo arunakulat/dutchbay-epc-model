@@ -15,8 +15,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import yaml
 from dutchbay_v13.finance.cashflow import build_annual_rows
 from dutchbay_v13.finance.debt import apply_debt_layer
-from dutchbay_v13.finance.metrics import (calculate_llcr, calculate_plcr,
-                                          summarize_project_metrics)
+from dutchbay_v13.finance.metrics import (
+    calculate_llcr,
+    calculate_plcr,
+    summarize_project_metrics,
+)
 
 print("=" * 80)
 print("DUTCHBAY V13 - LLCR/PLCR REAL DEBT BALANCE TEST")
