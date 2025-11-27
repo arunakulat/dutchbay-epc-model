@@ -30,12 +30,8 @@ import yaml
 from pydantic import ValidationError
 from SALib.sample import latin as lhs
 
-from analytics.contracts_v14 import (
-    DerivedParameter,
-    Distribution,
-    MonteCarloResult,
-    MonteCarloScenario,
-)
+from analytics.contracts_v14 import (DerivedParameter, Distribution,
+                                     MonteCarloResult, MonteCarloScenario)
 from analytics.evaluate_scenario import evaluate_with_overrides
 from analytics.parameter_solvers import get_solver
 from constants import MONTE_CARLO_ITERATIONS

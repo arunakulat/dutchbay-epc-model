@@ -195,9 +195,8 @@ class ParameterRangeConfig(BaseModel):
     variable_name: str = Field(
         ...,
         min_length=1,
-        description="Parameter to sweep (dot-separated path," 
+        description="Parameter to sweep (dot-separated path,"
         "e.g. project.capex_usd_per_kw)",
-
     )
 
     base_value: float = Field(

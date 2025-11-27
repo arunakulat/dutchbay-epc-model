@@ -1,9 +1,6 @@
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_tornado_chart,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+from analytics.sensitivity import (SensitivityRequest, plot_tornado_chart,
+                                   run_tornado_sensitivity,
+                                   tornado_suite_to_dataframe)
 
 req = SensitivityRequest(
     "scenarios/dutchbay_lendercase_2025Q4.yaml",

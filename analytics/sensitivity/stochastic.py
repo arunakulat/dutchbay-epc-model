@@ -2,11 +2,11 @@
 stochastic.py – Stochastic Tornado Sensitivity for v14+ analytics
 
 PURPOSE:
-    Provides an advanced sensitivity tool that not only sweeps 
+    Provides an advanced sensitivity tool that not only sweeps
     parameters from min→max but, for each parameter,
-    simulates a distribution of outcomes by jittering 
+    simulates a distribution of outcomes by jittering
     all other parameters with random noise.
-    Used to expose nonlinearities and risk distributions—essential 
+    Used to expose nonlinearities and risk distributions—essential
     for DFI/board-level and risk-focused dashboards.
 
 USAGE:

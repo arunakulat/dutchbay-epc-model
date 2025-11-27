@@ -1,0 +1,111 @@
+================================================================================
+analytics/contracts_v14.py:198
+================================================================================
+     195:     variable_name: str = Field(
+     196:         ...,
+     197:         min_length=1,
+>>>  198:         description="Parameter to sweep (dot-separated path e.g. project.capex_usd_per_kw)",
+     199:     )
+     200: 
+     201:     base_value: float = Field(
+
+    Length: 92 characters (limit: 88)
+    Excess: 4 characters
+
+================================================================================
+analytics/contracts_v14.py:700
+================================================================================
+     697: @dataclass(frozen=True)
+     698: class ScenarioDescriptor:
+     699:     """
+>>>  700:     Canonical descriptor for a config/scenario. Used by analytics pipeline and reporting.
+     701:     """
+     702: 
+     703:     scenario_name: str
+
+    Length: 89 characters (limit: 88)
+    Excess: 1 characters
+
+================================================================================
+analytics/fx/fx_loader.py:48
+================================================================================
+      45:         scenarios_dir: Path to scenarios directory (default: ./scenarios)
+      46: 
+      47:     Returns:
+>>>   48:         Dict mapping file stem to Path (e.g., 'fx_data_recent_Period2_2018_2019' -> Path)
+      49:     """
+      50:     if scenarios_dir is None:
+      51:         scenarios_dir = Path("scenarios")
+
+    Length: 89 characters (limit: 88)
+    Excess: 1 characters
+
+================================================================================
+analytics/fx/returns.py:204
+================================================================================
+     201:     """
+     202:     Calculate Modified Internal Rate of Return.
+     203: 
+>>>  204:     MIRR accounts for cost of financing (negative CF) and reinvestment rate (positive CF)
+     205: 
+     206:     Parameters
+     207:     ----------
+
+    Length: 89 characters (limit: 88)
+    Excess: 1 characters
+
+================================================================================
+analytics/fx/risk.py:83
+================================================================================
+      80:         }
+      81: 
+      82:     def percentile_analysis(
+>>>   83:         self, returns: np.ndarray, percentiles: List[int] = [10, 25, 50, 75, 90]  # noqa: B006
+      84:     ) -> Dict[str, float]:
+      85:         """
+      86:         Calculate percentile distribution of returns.
+
+    Length: 94 characters (limit: 88)
+    Excess: 6 characters
+
+================================================================================
+analytics/sensitivity_pareto.py:21
+================================================================================
+      18:     sensitivity_suite: SensitivitySuite,
+      19:     base_config_path: str,
+      20:     objectives: Sequence[str] = ("project_irr", "dscr_min"),
+>>>   21:     constraints: Dict[str, float] = {"project_irr": 0.12, "dscr_min": 1.3},  # noqa: B006
+      22:     steps: int = 6,
+      23: ) -> ParetoFrontierResult:
+      24:     """
+
+    Length: 89 characters (limit: 88)
+    Excess: 1 characters
+
+================================================================================
+analytics/sensitivity_v14.py:72
+================================================================================
+      69:     TornadoResult,
+      70: )
+      71: from analytics.evaluate_scenario import evaluate_with_overrides
+>>>   72: from analytics.monte_carlo_v14 import (  # noqa: F401; Reserved for future VaR / CVaR integration
+      73:     MonteCarloResult,
+      74: )
+      75: 
+
+    Length: 97 characters (limit: 88)
+    Excess: 9 characters
+
+================================================================================
+analytics/sensitivity_v14.py:560
+================================================================================
+     557:             a, fa = mid, fmid
+     558: 
+     559:     logger.warning(
+>>>  560:         "Breakeven did not converge for %s after %d iterations; last bracket=[%.4f, %.4f]",
+     561:         variable_name,
+     562:         max_iter,
+     563:         a,
+
+    Length: 91 characters (limit: 88)
+    Excess: 3 characters

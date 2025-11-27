@@ -2,8 +2,8 @@
 validation.py – Parameter Range QA Checker for v14+ Sensitivity Pipelines
 
 PURPOSE:
-    Quickly checks that every lift-lower parameter sweep yields 
-    reasonable output values. Detects config/model errors (negative IRR, 
+    Quickly checks that every lift-lower parameter sweep yields
+    reasonable output values. Detects config/model errors (negative IRR,
     crazy outliers) and surface issues early in tests/CI.
 
 USAGE:
@@ -29,7 +29,7 @@ def validate_parameter_ranges(
     metric: str = "project_irr",
 ) -> pd.DataFrame:
     """
-    For every parameter, check low and high sweep points 
+    For every parameter, check low and high sweep points
     for suspicious outputs (negative IRR, >50%, etc.).
     """
     from analytics.evaluate_scenario import evaluate_with_overrides

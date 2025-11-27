@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from analytics.contracts_v14 import MultiMetricSensitivitySuite, SensitivitySuite
+from analytics.contracts_v14 import (MultiMetricSensitivitySuite,
+                                     SensitivitySuite)
 
 
 def plot_tornado_chart(
@@ -77,7 +78,7 @@ def plot_spider_chart(
     )[:top_n]
     angles = [n / float(len(metrics)) * 2 * np.pi for n in range(len(metrics))]
     angles += angles[:1]
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={'polar': True})
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True})
     for _idx, row in df.iterrows():
         vals = [row[f"Impact_{m}"] for m in metrics] + [row[f"Impact_{metrics[0]}"]]
         ax.plot(angles, vals, linewidth=2, label=row["Parameter"])

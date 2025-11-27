@@ -1,4 +1,4 @@
-"""Cash Flow Module for DutchBay V14 Project 
+"""Cash Flow Module for DutchBay V14 Project
 Finance (BOI Tax Holiday/Enhancement Compliant)
 
 COMPLIANCE:
@@ -691,7 +691,7 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
                 "corporate_tax_rate: "
                 f"{tax_rate} out of range "
                 "(must be 0.0-1.0 or 0-100%)"
-)
+            )
 
     # Extract and validate project life
     try:

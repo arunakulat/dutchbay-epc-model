@@ -5,7 +5,6 @@ These strings are shared by multiple modules (batch, v14, dashboards)
 to ensure consistent terminology and easier updates.
 """
 
-
 SENSITIVITY_OVERVIEW = """
 Sensitivity analysis evaluates how changes in key parameters
 (capex, opex, tariff, debt terms, etc.) impact project KPIs

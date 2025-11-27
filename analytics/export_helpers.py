@@ -19,7 +19,8 @@ import logging
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from typing import (Any, Dict, Iterable, List, Mapping, Optional, Sequence,
+                    Union)
 
 import pandas as pd
 

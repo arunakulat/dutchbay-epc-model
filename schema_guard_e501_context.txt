@@ -1,0 +1,34 @@
+================================================================================
+analytics/schema_guard.py - E501/B950 violations
+================================================================================
+
+Total violation sites: 2
+
+
+================================================================================
+LINE 61
+================================================================================
+      58:     Example (CLI style)::
+      59: 
+      60:         try:
+>>>   61:             validate_config_for_v14(raw_config=cfg, config_path=config_path, modules=["cashflow", "debt"])
+      62:         except ConfigValidationError as exc:
+      63:             print(f"ERROR: {exc}")
+      64:             raise SystemExit(1)
+
+    Length: 106 characters (limit: 88)
+    Excess: 18 characters
+
+================================================================================
+LINE 279
+================================================================================
+     276:     if missing:
+     277:         details = "; ".join(sorted(missing))
+     278:         raise ConfigValidationError(
+>>>  279:             f"Config '{config_path}' is missing or has invalid required fields: {details}"
+     280:         )
+     281: 
+     282: 
+
+    Length: 90 characters (limit: 88)
+    Excess: 2 characters

@@ -11,13 +11,10 @@ Run with:
 import streamlit as st
 
 from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+from analytics.sensitivity import (SensitivityRequest, plot_spider_chart,
+                                   run_multi_metric_tornado,
+                                   run_tornado_sensitivity,
+                                   tornado_suite_to_dataframe)
 
 # Quick UI for scenario and drivers (customize as needed)
 st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")

@@ -83,7 +83,6 @@ class TailRiskAnalyzer:
         self,
         returns: np.ndarray,
         percentiles: List[int] = [10, 25, 50, 75, 90],  # noqa: B006
-
     ) -> Dict[str, float]:
         """
         Calculate percentile distribution of returns.

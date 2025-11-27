@@ -41,7 +41,6 @@ class EquityCashflowSummary:
         Negative = contributions, positive = distributions.
     """
 
-
     total_invested: float
     """Total equity contributed (absolute value of negative cashflows)."""
 

@@ -21,9 +21,7 @@ import yaml
 from dutchbay_v13.finance.metrics import calculate_llcr, calculate_plcr
 from dutchbay_v13.finance.returns import calculate_all_returns
 from dutchbay_v13.reporting.markdown_generator import (
-    generate_dfi_lender_pack,
-    generate_executive_summary,
-)
+    generate_dfi_lender_pack, generate_executive_summary)
 
 print("=" * 80)
 print("DUTCHBAY V13 - MARKDOWN REPORT GENERATION TEST")

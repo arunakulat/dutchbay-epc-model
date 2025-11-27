@@ -281,10 +281,9 @@ def validate_config_for_v14(
     if missing:
         details = "; ".join(sorted(missing))
         raise ConfigValidationError(
-        f"Config '{config_path}' is missing or has invalid required "
-        f"fields: {details}"
-    )
-
+            f"Config '{config_path}' is missing or has invalid required "
+            f"fields: {details}"
+        )
 
 
 __all__ = [

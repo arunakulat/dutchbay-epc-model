@@ -22,7 +22,8 @@ import logging
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Tuple)
 
 import pandas as pd
 
@@ -121,7 +122,7 @@ class ScenarioAnalytics:
     # ------------------------------------------------------------------
     def _effective_discount_rate(self, config: Dict[str, Any]) -> float:
         """Extract discount rate per scenario using
-         precedence: scenario > wacc > global default."""
+        precedence: scenario > wacc > global default."""
         # 1. Scenario override
         scenario = config.get("scenario", {})  # legacy field
         scenario_overrides = scenario.get("override", {}) if scenario else {}

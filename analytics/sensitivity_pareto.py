@@ -8,20 +8,18 @@ Pareto Frontier Optimization Guided by Sensitivity (v14+)
 
 from typing import Any, Dict, Sequence
 
-from analytics.contracts_v14 import ParetoFrontierResult, SensitivitySuite
-from analytics.evaluate_scenario import evaluate_with_overrides
 import numpy as np
 import pandas as pd
+
+from analytics.contracts_v14 import ParetoFrontierResult, SensitivitySuite
+from analytics.evaluate_scenario import evaluate_with_overrides
 
 
 def optimize_from_sensitivity_insights(
     sensitivity_suite: SensitivitySuite,
     base_config_path: str,
     objectives: Sequence[str] = ("project_irr", "dscr_min"),
-    constraints: Dict[str, float] = { 
-    "project_irr": 0.12, "dscr_min": 1.3
-},
-
+    constraints: Dict[str, float] = {"project_irr": 0.12, "dscr_min": 1.3},
     steps: int = 6,
 ) -> ParetoFrontierResult:
     """
