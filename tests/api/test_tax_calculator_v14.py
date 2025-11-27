@@ -9,7 +9,6 @@ We cover:
 We only assert simple invariants that are stable across refactors.
 """
 
-import pytest
 
 from finance.tax_v14 import TaxCalculatorV14, calculate_depreciation_schedule
 

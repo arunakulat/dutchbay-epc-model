@@ -19,8 +19,6 @@ from __future__ import annotations
 import math
 from typing import Any, Dict
 
-import pytest
-
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
 

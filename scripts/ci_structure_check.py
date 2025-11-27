@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
 
 # Expected directory structure
 EXPECTED_DIRS = [

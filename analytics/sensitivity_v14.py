@@ -69,10 +69,9 @@ from analytics.contracts_v14 import (
     TornadoResult,
 )
 from analytics.evaluate_scenario import evaluate_with_overrides
-from analytics.monte_carlo_v14 import (
+from analytics.monte_carlo_v14 import (  # noqa: F401; Reserved for future VaR / CVaR integration
     MonteCarloResult,
-)  # noqa: F401; Reserved for future VaR / CVaR integration
-from analytics.scenario_loader import load_scenario_config
+)
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,5 @@
 import pathlib
 import re
-import sys
 
 p = pathlib.Path("dutchbay_v13/scenario_runner.py")
 s = p.read_text(encoding="utf-8")

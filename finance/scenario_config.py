@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from finance.irr_config import load_config
-
 
 def get_scenario(
     config: Dict[str, Any],

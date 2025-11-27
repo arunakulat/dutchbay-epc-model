@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import logging
 from math import isinf, isnan
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

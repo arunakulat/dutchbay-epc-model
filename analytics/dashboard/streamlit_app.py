@@ -8,7 +8,6 @@ Run with:
     streamlit run dashboard/streamlit_app.py
 """
 
-import pandas as pd
 import streamlit as st
 
 from analytics.contracts_v14 import ParameterRangeConfig

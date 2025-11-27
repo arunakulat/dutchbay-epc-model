@@ -24,7 +24,7 @@ def fix_validate_parameters():
         ValueError: If required parameters missing or values out of valid range""",
         """    Returns:
         Empty list if validation passes (backward compatible)
-        
+
     Raises:
         ValueError: If required parameters missing or values out of valid range""",
     )
@@ -44,7 +44,7 @@ def fix_validate_parameters():
             f"  • {err}" for err in errors
         )
         raise ValueError(error_msg)
-    
+
     # Return empty list on success (backward compatible)
     return []"""
 

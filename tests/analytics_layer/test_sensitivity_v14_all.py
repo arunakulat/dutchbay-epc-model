@@ -69,10 +69,9 @@ from analytics.contracts_v14 import (
     TornadoResult,
 )
 from analytics.evaluate_scenario import evaluate_with_overrides
-from analytics.monte_carlo_v14 import (  # noqa: F401
+from analytics.monte_carlo_v14 import (  # noqa: F401; Reserved for future VaR / CVaR integration
     MonteCarloResult,
-)  # Reserved for future VaR / CVaR integration
-from analytics.scenario_loader import load_scenario_config
+)
 
 logger = logging.getLogger(__name__)
 
@@ -593,7 +592,9 @@ def _load_parameters(
     an explicit `parameters` list.
     """
     if parameters is not None:
-        logger.debug("_load_parameters: using explicit parameters (n=%d)", len(parameters))
+        logger.debug(
+            "_load_parameters: using explicit parameters (n=%d)", len(parameters)
+        )
         return list(parameters)
 
     if not use_defaults:

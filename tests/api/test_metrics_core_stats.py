@@ -8,7 +8,7 @@ Targeted tests for analytics.core.metrics:
 """
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from analytics.core import metrics
 

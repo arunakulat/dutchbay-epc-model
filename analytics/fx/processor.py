@@ -20,10 +20,8 @@ Usage: python3 fx_data_processor.py <csv_file>
 Output: 10 YAML files (5 recent periods + 5 historical decades)
 """
 
-from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import yaml
 
@@ -210,12 +208,12 @@ LENDER PRESENTATION (Primary):
   Use: Recent regime files (2016-2025)
   Load: fx_data_recent_Period*.yaml
   Rationale: Current market dynamics, lender-relevant timeframe
-  
+
 STRESS TESTING (Comprehensive):
   Use: Historical decades (1975-2025)
   Load: fx_data_historical_Decade*.yaml
   Rationale: Tail-risk calibration, 50-year extremes
-  
+
 COMBINED ANALYSIS (Most Rigorous):
   Use: Both regimes
   Process:

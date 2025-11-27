@@ -6,7 +6,6 @@ Purpose: Ensure basic constructibility, default values, property logic,
          required fields, and type annotations for all new sensitivity/analytics types.
 """
 
-import pytest
 
 from analytics.contracts_v14 import (
     BreakevenResult,

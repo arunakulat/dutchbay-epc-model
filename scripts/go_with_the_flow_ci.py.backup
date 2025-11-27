@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import subprocess
 import sys
@@ -496,7 +495,6 @@ def stage_bandit(targets: list[str], verbose: bool = False) -> StepResult:
 
 def setup_pre_commit_hooks() -> None:
     """Generate and install pre-commit hooks."""
-    import os
 
     repo = get_repo_root()
     precommit_config = repo / ".pre-commit-config.yaml"

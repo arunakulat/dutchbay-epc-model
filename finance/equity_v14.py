@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
-from analytics.contracts_v14 import DownsideMetrics, EquityPerformance
+from analytics.contracts_v14 import EquityPerformance
 from constants import DEFAULT_DISCOUNT_RATE
 from finance.irr import irr as _irr
 from finance.irr import npv as _npv

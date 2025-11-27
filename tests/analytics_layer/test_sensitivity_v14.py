@@ -15,8 +15,7 @@ pytestmark = pytest.mark.skip(
     reason="sensitivity_v14 is parked for a future refactor; "
     "regression + helper surface not finalized yet."
 )
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +23,6 @@ from analytics.contracts_v14 import ParameterRangeConfig, TornadoResult
 from analytics.sensitivity_v14 import (
     _analyze_single_parameter,
     _build_nested_override,
-    _create_default_parameters,
     _load_parameters,
     run_tornado_sensitivity,
 )

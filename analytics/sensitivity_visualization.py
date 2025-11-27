@@ -5,7 +5,7 @@ Sensitivity Visualization Routines (tornado, spider, heatmap) – v14+
 Publication-quality, DFI-friendly; fully Matplotlib/Plotly compatible
 """
 
-from typing import Optional, Sequence
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,8 +34,8 @@ def plot_tornado_chart(
     )
     y = df["Parameter"]
     low, base, high = df["Low"], df["Base"], df["High"]
-    wid = [base - l for l in low]
-    sid = [h - base for h in high]
+    [base - l for l in low]
+    [h - base for h in high]
     fig, ax = plt.subplots(figsize=(10, 0.6 * len(df) + 2))
     for i, (b, l, h) in enumerate(zip(base, low, high)):
         ax.barh(
@@ -68,7 +68,6 @@ def plot_spider_chart(
     title: Optional[str] = None,
 ) -> None:
     """Radar/spider: K metrics × N parameters."""
-    from math import pi
 
     import matplotlib.pyplot as plt
 

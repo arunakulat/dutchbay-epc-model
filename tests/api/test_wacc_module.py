@@ -12,8 +12,6 @@ from __future__ import annotations
 import math
 from typing import Any, Dict
 
-import pytest
-
 from finance.wacc_v14 import WaccComponents, build_wacc, compute_wacc_from_config
 
 

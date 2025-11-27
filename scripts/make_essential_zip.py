@@ -2,7 +2,6 @@
 import os
 import zipfile
 from pathlib import Path
-from typing import Set
 
 
 def iter_essential_files(root: Path):

@@ -9,7 +9,6 @@ Traverses a root folder and generates a structured JSON view with:
 
 import ast
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
