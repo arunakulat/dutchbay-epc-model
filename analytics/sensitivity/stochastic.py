@@ -2,9 +2,12 @@
 stochastic.py – Stochastic Tornado Sensitivity for v14+ analytics
 
 PURPOSE:
-    Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter,
-    simulates a distribution of outcomes by jittering all other parameters with random noise.
-    Used to expose nonlinearities and risk distributions—essential for DFI/board-level and risk-focused dashboards.
+    Provides an advanced sensitivity tool that not only sweeps 
+    parameters from min→max but, for each parameter,
+    simulates a distribution of outcomes by jittering 
+    all other parameters with random noise.
+    Used to expose nonlinearities and risk distributions—essential 
+    for DFI/board-level and risk-focused dashboards.
 
 USAGE:
     Example: Plot violin or P10/P50/P90 impact bands for each driver param.
@@ -18,7 +21,8 @@ INPUTS:
     - metric (str): Output KPI, e.g. "project_irr".
     - n_samples (int): Number of MC samples per sweep point.
     - sweep_size (int): How many points to sample through min→max range.
-    - jitter_pct (float): Standard deviation for random jitter of all non-driver params (percent).
+    - jitter_pct (float): Standard deviation for random jitter
+         of all non-driver params (percent).
 
 RETURNS:
     DataFrame with:
