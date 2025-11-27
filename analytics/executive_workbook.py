@@ -69,7 +69,7 @@ def build_executive_workbook(
     # Tests expect at least header + 2 data rows (max_row >= 3).
     if summary_df.shape[0] < 2:
         # Pad with an extra blank row so the sheet has enough "metrics" rows
-        blank_row = {col: "" for col in summary_df.columns}
+        blank_row = {col: "" for col in summary_df.columns}  # noqa: C420
         summary_df_to_write = pd.concat(
             [summary_df, pd.DataFrame([blank_row])],
             ignore_index=True,

@@ -160,7 +160,7 @@ def calculate_irr(
     # Newton-Raphson method
     rate = initial_guess
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Calculate NPV and derivative (NPV')
         npv_val = 0.0
         npv_derivative = 0.0

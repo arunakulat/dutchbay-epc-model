@@ -102,7 +102,7 @@ def test_bad_params_are_caught_by_schema_guard(edge_case: str) -> None:
     logger.debug(f"Project block: {config.get('project', {})}")
 
     # Use the canonical defensive layer (schema_guard)
-    logger.info(f"Calling validate_config_for_v14 with modules=['cashflow', 'debt']")
+    logger.info(f"Calling validate_config_for_v14 with modules=['cashflow', 'debt']")  # noqa: F541
 
     raised_error = False
     error_msg = None
@@ -116,7 +116,7 @@ def test_bad_params_are_caught_by_schema_guard(edge_case: str) -> None:
     except ConfigValidationError as exc:
         raised_error = True
         error_msg = str(exc)
-        logger.info(f"✓ ConfigValidationError raised as expected")
+        logger.info(f"✓ ConfigValidationError raised as expected")  # noqa: F541
         logger.debug(f"Error message: {error_msg}")
 
     # Assert the error was raised
@@ -199,5 +199,3 @@ def test_range_validation_edge_cases(edge_case: str) -> None:
     Skipped tests are TODO markers for future enhancement.
     """
     logger.info(f"\nSkipped (range validation not yet in schema_guard): {edge_case}")
-
-

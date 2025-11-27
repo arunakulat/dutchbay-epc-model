@@ -55,8 +55,8 @@ def test_scenario_analytics_excel_export_smoke(tmp_path: Path) -> None:
     assert hasattr(batch_report, "successful")
     assert hasattr(batch_report, "failed")
 
-    successful = getattr(batch_report, "successful")
-    failed = getattr(batch_report, "failed")
+    successful = batch_report.successful
+    failed = batch_report.failed
 
     # These are currently lists of scenario_ids / error dicts
     assert isinstance(successful, list)

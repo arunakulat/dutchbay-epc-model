@@ -4,7 +4,7 @@ Migrated from: fx_data_processor_dual_regime.py (root)
 Part of: analytics/fx/ subpackage (Task 2, Sprint Day 5)
 """
 
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 """
 DUTCHBAY V13 - FX DATA PROCESSOR (DUAL-REGIME ANALYSIS)
 Convert complete CSV to DUAL models:
@@ -50,7 +50,7 @@ def process_fx_csv_dual_regime(csv_file):
             df.columns = ["Currency", "Date", "Rate"]
             df = df[["Date", "Rate"]].copy()
         else:
-            print(f"âœ— ERROR: Unexpected CSV format")
+            print(f"âœ— ERROR: Unexpected CSV format")  # noqa: F541
             return False
 
         df["Date"] = pd.to_datetime(df["Date"])

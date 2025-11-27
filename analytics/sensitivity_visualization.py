@@ -37,7 +37,7 @@ def plot_tornado_chart(
     [base - low_val for low_val in low]
     [h - base for h in high]
     fig, ax = plt.subplots(figsize=(10, 0.6 * len(df) + 2))
-    for i, (b, low_val, h) in enumerate(zip(base, low, high)):
+    for i, (b, _low_val, h) in enumerate(zip(base, low, high)):
         ax.barh(
             i, b - l, left=l, color="#d35400", height=0.5, label="Low" if i == 0 else ""
         )
@@ -77,8 +77,8 @@ def plot_spider_chart(
     )[:top_n]
     angles = [n / float(len(metrics)) * 2 * np.pi for n in range(len(metrics))]
     angles += angles[:1]
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
-    for idx, row in df.iterrows():
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={'polar': True})
+    for _idx, row in df.iterrows():
         vals = [row[f"Impact_{m}"] for m in metrics] + [row[f"Impact_{metrics[0]}"]]
         ax.plot(angles, vals, linewidth=2, label=row["Parameter"])
         ax.fill(angles, vals, alpha=0.1)

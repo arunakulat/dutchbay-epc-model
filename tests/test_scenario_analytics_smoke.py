@@ -54,8 +54,8 @@ def test_scenario_analytics_smoke(tmp_path: Path) -> None:
     assert hasattr(batch_report, "successful")
     assert hasattr(batch_report, "failed")
 
-    successful = getattr(batch_report, "successful")
-    failed = getattr(batch_report, "failed")
+    successful = batch_report.successful
+    failed = batch_report.failed
 
     assert isinstance(successful, list)
     assert isinstance(failed, list)

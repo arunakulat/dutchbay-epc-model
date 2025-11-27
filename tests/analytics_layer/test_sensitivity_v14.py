@@ -256,7 +256,7 @@ class TestImportCompliance:
         import analytics.sensitivity_v14 as sens_module  # noqa: E402
 
         # Allowed imports
-        allowed_prefixes = [
+        _allowed_prefixes = [  # noqa: F841
             "analytics.contracts_v14",
             "analytics.evaluate_scenario",
             "constants",
