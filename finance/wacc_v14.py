@@ -440,8 +440,10 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         margin_raw = wacc_cfg.get("margin")
         if base_rate_raw is None or margin_raw is None:
             raise ValueError(
-                "wacc: requires either cost_of_debt or (base_rate + margin) for CAPM mode"
-            )
+            "wacc: requires either cost_of_debt or "
+            "(base_rate + margin) for CAPM mode"
+        )
+
         base_rate_opt: Optional[float] = _pct_to_decimal(
             _as_float_or_none(base_rate_raw)
         )

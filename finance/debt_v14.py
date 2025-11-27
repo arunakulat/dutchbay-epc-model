@@ -222,7 +222,8 @@ def apply_debt_layer(
     capex = _extract_capex_usd(params)
     debt_total = capex * debt_ratio
     logger.info(
-        "V14 Debt Planning: %d-year construction, %d-year tenor | CAPEX=%.2f | debt_total=%.2f",
+        "V14 Debt Planning: %d-year construction, %d-year tenor | "
+        "CAPEX=%.2f | debt_total=%.2f",
         construction_periods,
         tenor,
         capex,

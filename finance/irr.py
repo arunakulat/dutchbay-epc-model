@@ -288,7 +288,8 @@ def xirr(
 ) -> Optional[float]:
     """Date-adjusted Internal Rate of Return (XIRR) with configurable bounds.
 
-    Uses bisection method directly (more reliable than library XIRR for irregular dates).
+    Uses bisection method for reliability with irregular dates.
+
 
     Parameters
     ----------

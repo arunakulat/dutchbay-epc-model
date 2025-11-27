@@ -36,7 +36,11 @@ class EquityCashflowSummary:
     """
 
     cashflows: List[Number]
-    """Full equity cashflow series (negative = contributions, positive = distributions)."""
+    cashflows: List[Number]
+    """Full equity cashflow series.
+        Negative = contributions, positive = distributions.
+    """
+
 
     total_invested: float
     """Total equity contributed (absolute value of negative cashflows)."""
