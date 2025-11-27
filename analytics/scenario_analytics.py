@@ -64,7 +64,8 @@ class BatchResultSummary:
 
 class ScenarioAnalytics:
     """
-    V14-style orchestrator for batch scenario analytics with full Go With The Flow features.
+    V14-style orchestrator for batch scenario analytics
+    with full Go With The Flow features.
     """
 
     def __init__(
@@ -87,7 +88,9 @@ class ScenarioAnalytics:
     # Scenario discovery and filters
     # ------------------------------------------------------------------
     def discover_scenarios(self) -> List[Path]:
-        """Return a sorted list of scenario config paths under scenarios_dir, optionally filtered."""
+        """Return sorted scenario config paths under scenarios_dir,
+        optionally filtered.
+        """
         if not self.scenarios_dir.exists():
             raise FileNotFoundError(
                 f"Scenarios directory not found: {self.scenarios_dir}"
@@ -117,7 +120,8 @@ class ScenarioAnalytics:
     # Discount rate logic
     # ------------------------------------------------------------------
     def _effective_discount_rate(self, config: Dict[str, Any]) -> float:
-        """Extract discount rate per scenario using precedence: scenario > wacc > global default."""
+        """Extract discount rate per scenario using
+         precedence: scenario > wacc > global default."""
         # 1. Scenario override
         scenario = config.get("scenario", {})  # legacy field
         scenario_overrides = scenario.get("override", {}) if scenario else {}
@@ -227,7 +231,8 @@ class ScenarioAnalytics:
 
         batch_run = self.parallel and len(scenario_paths) > 4
         logger.info(
-            f"Running {len(scenario_paths)} scenario(s) {'in parallel' if batch_run else 'serially'}."
+            f"Running {len(scenario_paths)} scenario(s)"
+            " {'in parallel' if batch_run else 'serially'}."
         )
 
         if batch_run:
@@ -365,7 +370,8 @@ class ScenarioAnalytics:
                 timeseries_df["dscr"] = timeseries_df[cfads_col] / denom
             else:
                 logger.warning(
-                    f"Could not derive DSCR column: cfads_col={cfads_col}, debt_candidates={debt_candidates}"
+                    f"Could not derive DSCR column:"
+                    "cfads_col={cfads_col}, debt_candidates={debt_candidates}"
                 )
 
         summary_df, timeseries_df = normalise_kpis_for_export(
