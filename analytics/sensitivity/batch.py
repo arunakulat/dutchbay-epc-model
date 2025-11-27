@@ -2,15 +2,17 @@
 batch.py – Batch Heatmap Generator for Sensitivity Analysis (v14+)
 
 PURPOSE:
-    For a given scenario/param set, generates PNG heatmaps for all param pairs.
-    Useful for investigator/developer speed, board or IC slide decks, and automated model validation.
+    For a given scenario/param set, generates PNG heatmaps 
+    for all param pairs. Useful for investigator/developer speed, 
+    board or IC slide decks, and automated model validation.
 
 USAGE:
     from analytics.sensitivity.batch import batch_heatmap_grid
     batch_heatmap_grid(config_path, params)
 
 OUTPUT:
-    Exports all heatmaps to "exports/heatmaps/" as PNG files for inclusion in PowerPoint, docs, or dashboard.
+    Exports all heatmaps to "exports/heatmaps/" as PNG files 
+    for inclusion in PowerPoint, docs, or dashboard.
 
 EXAMPLE:
     batch_heatmap_grid("scenarios/basecase.yaml", params, steps=4)
@@ -39,6 +41,9 @@ def batch_heatmap_grid(
         df = run_two_way_sensitivity(
             base_config_path, pa, pb, metric=metric, steps=steps
         )
-        fname = f"{outdir}/{pa.variable_name.replace('.', '_')}_{pb.variable_name.replace('.', '_')}.png"
+        fname = (
+    f"{outdir}/{pa.variable_name.replace('.', '_')}_"
+    f"{pb.variable_name.replace('.', '_')}.png"
+)
         plot_two_way_heatmap(df, fname)
     print(f"Generated {len(list(combinations(parameters,2)))} heatmaps in {outdir}")
