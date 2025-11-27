@@ -60,6 +60,7 @@ def process_fx_csv_dual_regime(csv_file):
         print(f"  Date range: {df['Date'].min().date()} to {df['Date'].max().date()}")
         print(
             f"  Coverage: {(df['Date'].max() - df['Date'].min()).days / 365.25:.1f} years"
+
         )
         print(f"  FX range: {df['Rate'].min():.2f} - {df['Rate'].max():.2f} LKR/USD")
 
@@ -80,16 +81,28 @@ def process_fx_csv_dual_regime(csv_file):
             "name": "Recent_Period1_2016_2017",
             "start_year": 2016,
             "end_year": 2017,
-            "description": "Pre-Crisis Baseline (2016-2017)",
-            "context": "Pegged rate regime, controlled environment, baseline ~150 LKR/USD",
+            "context": (
+                "Pegged rate regime, controlled environment, "
+                "baseline ~150 LKR/USD"
+            ),
+            "context": (
+                "Pegged rate regime, controlled environment, "
+                "baseline ~150 LKR/USD"
+            ),
             "regime": "Currency Board / Managed",
         },
         {
-            "name": "Recent_Period2_2018_2019",
+            "context": (
+                "2018 major depreciation (50%+), gradual "
+                "stabilization through 2019"
+            ),
             "start_year": 2018,
             "end_year": 2019,
             "description": "Major Crisis & Stabilization (2018-2019)",
-            "context": "2018 major depreciation (50%+), gradual stabilization through 2019",
+            "context": (
+                "2018 major depreciation (50%+), gradual "
+                "stabilization through 2019"
+            ),
             "regime": "Floating / Managed Float",
         },
         {
@@ -98,14 +111,23 @@ def process_fx_csv_dual_regime(csv_file):
             "end_year": 2021,
             "description": "COVID Pressure (2020-2021)",
             "context": "COVID-19 impacts, reserve pressure, controlled rate regime",
-            "regime": "Managed Float",
+            "context": (
+                "2022 extreme crisis (pegged ~363 LKR/USD), "
+                "2023 gradual recovery"
+            ),
         },
         {
             "name": "Recent_Period4_2022_2023",
             "start_year": 2022,
             "end_year": 2023,
             "description": "Extreme Crisis & Recovery (2022-2023)",
-            "context": "2022 extreme crisis (pegged ~363 LKR/USD), 2023 gradual recovery",
+            "context": (
+            "context": (
+                "Post-crisis stabilization, market-determined "
+                "rates ~290-305 LKR/USD"
+            ),
+                "2023 gradual recovery"
+            ),
             "regime": "Floating (Post-CB)",
         },
         {
@@ -113,7 +135,10 @@ def process_fx_csv_dual_regime(csv_file):
             "start_year": 2024,
             "end_year": 2025,
             "description": "Stabilization & Current (2024-2025)",
-            "context": "Post-crisis stabilization, market-determined rates ~290-305 LKR/USD",
+            "context": (
+                "Post-crisis stabilization, market-determined "
+                "rates ~290-305 LKR/USD"
+            ),
             "regime": "Floating Market",
         },
     ]
@@ -122,7 +147,10 @@ def process_fx_csv_dual_regime(csv_file):
     recent_files = _process_periods(df, recent_periods, "recent", "LENDER-FOCUSED")
 
     # ==================================================================================
-    # REGIME 2: FULL HISTORICAL (1975-2025) - 5 True Decades for Tail-Risk
+            "context": (
+                "Post-independence currency stabilization, "
+                "fixed peg regime, baseline period"
+            ),
     # ==================================================================================
     print("\n" + "â–ˆ" * 90)
     print("REGIME 2: FULL HISTORICAL (1975-2025) - 5 True Decades")
@@ -131,20 +159,35 @@ def process_fx_csv_dual_regime(csv_file):
 
     historical_decades = [
         {
-            "name": "Historical_Decade1_1975_1984",
+            "context": (
+                "Exchange controls, civil war begins (1983), "
+                "capital controls active"
+            ),
             "start_year": 1975,
             "end_year": 1984,
             "description": "Foundation Decade (1975-1984)",
-            "context": "Post-independence currency stabilization, fixed peg regime, baseline period",
+            "context": (
+                "Post-independence currency stabilization, "
+                "fixed peg regime, baseline period"
+            ),
             "regime": "Fixed Peg",
-            "note": "Historical baseline - may have data quality issues",
+            "context": (
+                "Currency Board introduced 1995, civil war ends 2002, "
+                "strong peg constraints"
+            ),
         },
         {
             "name": "Historical_Decade2_1985_1994",
             "start_year": 1985,
             "end_year": 1994,
             "description": "Pre-Crisis Decade (1985-1994)",
-            "context": "Exchange controls, civil war begins (1983), capital controls active",
+            "context": (
+                "Exchange controls, civil war begins (1983), "
+            "context": (
+                "CB abolished 2005, managed float introduced, "
+                "gradual liberalization"
+            ),
+            ),
             "regime": "Fixed Peg with Controls",
             "note": "Civil war period - significant disruption",
         },
@@ -152,8 +195,14 @@ def process_fx_csv_dual_regime(csv_file):
             "name": "Historical_Decade3_1995_2004",
             "start_year": 1995,
             "end_year": 2004,
-            "description": "Currency Board Decade (1995-2004)",
-            "context": "Currency Board introduced 1995, civil war ends 2002, strong peg constraints",
+            "context": (
+                "2018 crisis, 2022 extreme crisis, floating market, "
+                "IMF programs"
+            ),
+            "context": (
+                "Currency Board introduced 1995, civil war ends 2002, "
+                "strong peg constraints"
+            ),
             "regime": "Currency Board (Hard Peg)",
             "note": "Artificial constraints - limited depreciation possible",
         },
@@ -162,7 +211,10 @@ def process_fx_csv_dual_regime(csv_file):
             "start_year": 2005,
             "end_year": 2014,
             "description": "Liberalization Decade (2005-2014)",
-            "context": "CB abolished 2005, managed float introduced, gradual liberalization",
+            "context": (
+                "CB abolished 2005, managed float introduced, "
+                "gradual liberalization"
+            ),
             "regime": "Managed Float",
             "note": "2008-09 Global Financial Crisis impact",
         },
@@ -171,7 +223,10 @@ def process_fx_csv_dual_regime(csv_file):
             "start_year": 2015,
             "end_year": 2025,
             "description": "Modern Crisis Decade (2015-2025)",
-            "context": "2018 crisis, 2022 extreme crisis, floating market, IMF programs",
+            "context": (
+                "2018 crisis, 2022 extreme crisis, floating market, "
+                "IMF programs"
+            ),
             "regime": "Floating Market",
             "note": "Most relevant for current dynamics - extreme events captured",
         },
@@ -241,7 +296,7 @@ historical_data = []
 for f in historical_files:
     with open(f) as file:
         data = yaml.safe_load(file)
-    historical_data.extend(data['fx_monthly_data'])
+                f"  ⚠  No data for period {period_cfg['start_year']}-{period_cfg['end_year']}"
 
 # Combined analysis
 print(f"Recent regime: {len(recent_data)} months")
@@ -269,7 +324,8 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
 
         if len(period_df) == 0:
             print(
-                f"  âš  No data for period {period_cfg['start_year']}-{period_cfg['end_year']}"
+                f"  ⚠  No data for period "
+                "{period_cfg['start_year']}-{period_cfg['end_year']}"
             )
             continue
 
@@ -279,7 +335,9 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
             period_df.groupby("YearMonth")
             .agg({"Rate": ["mean", "min", "max", "std"]})
             .round(4)
-        )
+                "date_range": (
+                    f"{monthly['date'].iloc[0]} to {monthly['date'].iloc[-1]}"
+                ),
 
         monthly.columns = ["avg_rate", "min_rate", "max_rate", "std_rate"]
         monthly = monthly.reset_index()
@@ -308,7 +366,9 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
                 "regime_name": period_cfg["regime"],
                 "regime_note": period_cfg.get("note", ""),
                 "version": "1.0-dual-regime",
-                "date_range": f"{monthly['date'].iloc[0]} to {monthly['date'].iloc[-1]}",
+                "date_range": (
+                    f"{monthly['date'].iloc[0]} to {monthly['date'].iloc[-1]}"
+                ),
                 "total_months": len(monthly),
                 "total_daily_obs": len(period_df),
                 "analysis_purpose": regime_desc,
@@ -317,7 +377,7 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
         }
 
         # Add records
-        for _, row in monthly.iterrows():
+            f"  ✓ FX range: {monthly['avg_rate'].min():.2f} - {monthly['avg_rate'].max():.2f}"
             yaml_data["fx_monthly_data"].append(
                 {
                     "date": row["date"],
@@ -346,9 +406,11 @@ def _process_periods(df, periods_config, regime_type, regime_desc):
         files_created.append(yaml_filename)
 
         # Print stats
-        print(f"  âœ“ {len(monthly)} months, {len(period_df)} daily obs")
+        print(f"  âœ“ {len(monthly)} months," 
+            "{len(period_df)} daily obs")
         print(
-            f"  âœ“ FX range: {monthly['avg_rate'].min():.2f} - {monthly['avg_rate'].max():.2f}"
+            f"  ✓ FX range: {monthly['avg_rate'].min():.2f}" 
+            "- {monthly['avg_rate'].max():.2f}"
         )
         print(f"  âœ“ Mean volatility: {monthly['rolling_12m_vol_pct'].mean():.2f}%")
         print(f"  âœ“ Regime: {period_cfg['regime']}")
