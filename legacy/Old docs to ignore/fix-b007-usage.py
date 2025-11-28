@@ -4,9 +4,9 @@
 from pathlib import Path
 
 # Fix: finance/debt_v14.py - change 'tr' usage to '_tr' in loop body
-filepath = Path('finance/debt_v14.py')
+filepath = Path("finance/debt_v14.py")
 
-with open(filepath, 'r') as f:
+with open(filepath, "r") as f:
     content = f.read()
 
 # Around line 185-206, replace tr.rate with _tr.rate, tr.schedule with _tr.schedule
@@ -27,11 +27,11 @@ if old_block in content:
     print("✓ Fixed tr → _tr usage in debt_v14.py loop body")
 else:
     # Try more targeted fix
-    content = content.replace('interest = bal * tr.rate', 'interest = bal * _tr.rate')
-    content = content.replace('tr.schedule', '_tr.schedule')
+    content = content.replace("interest = bal * tr.rate", "interest = bal * _tr.rate")
+    content = content.replace("tr.schedule", "_tr.schedule")
     print("✓ Fixed tr → _tr references in debt_v14.py")
 
-with open(filepath, 'w') as f:
+with open(filepath, "w") as f:
     f.write(content)
 
 print("Done!")

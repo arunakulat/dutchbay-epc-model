@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+
 def gather() -> str:
     path = Path("analytics/sensitivity/stochastic.py")
     if not path.exists():
@@ -33,6 +34,7 @@ def gather() -> str:
         out.append(f"\n    Length: {length} characters (limit: 88)")
         out.append(f"    Excess: {length - 88} characters")
     return "\n".join(out)
+
 
 if __name__ == "__main__":
     content = gather()

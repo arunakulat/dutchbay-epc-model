@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+
 def gather_analytics_singles():
     # From e501_b950_violations.txt
     files_and_lines = [
@@ -13,34 +14,35 @@ def gather_analytics_singles():
         ("analytics/sensitivity_pareto.py", [21]),
         ("analytics/sensitivity_v14.py", [72, 560]),
     ]
-    
+
     all_output = []
-    
+
     for filepath_str, violation_lines in files_and_lines:
         path = Path(filepath_str)
         if not path.exists():
             all_output.append(f"❌ {filepath_str} not found\n")
             continue
-        
+
         with open(path, "r") as f:
             lines = f.readlines()
-        
+
         for ln in violation_lines:
             all_output.append("=" * 80)
             all_output.append(f"{filepath_str}:{ln}")
             all_output.append("=" * 80)
-            
+
             start = max(0, ln - 4)
             end = min(len(lines), ln + 3)
             for i in range(start, end):
                 marker = ">>> " if i == ln - 1 else "    "
                 all_output.append(f"{marker}{i+1:4d}: {lines[i].rstrip()}")
-            
+
             length = len(lines[ln - 1].rstrip())
             all_output.append(f"\n    Length: {length} characters (limit: 88)")
             all_output.append(f"    Excess: {length - 88} characters\n")
-    
+
     return "\n".join(all_output)
+
 
 if __name__ == "__main__":
     content = gather_analytics_singles()

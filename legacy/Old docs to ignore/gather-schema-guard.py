@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""Gather E501/B950 context from analytics/scenario_analytics.py"""
+"""Gather E501/B950 context for analytics/schema_guard.py"""
 
 from pathlib import Path
 
-def gather() -> str:
-    path = Path("analytics/scenario_analytics.py")
+
+def gather():
+    path = Path("analytics/schema_guard.py")
     if not path.exists():
-        return "❌ analytics/scenario_analytics.py not found"
+        return "❌ analytics/schema_guard.py not found"
 
     with open(path, "r") as f:
         lines = f.readlines()
 
-    # From e501_b950_violations.txt
-    violation_lines = [67, 90, 120, 230, 368]
+    # From e501_b950_violations.txt: lines 61, 279, and one more
+    violation_lines = [61, 279]
 
     out: list[str] = []
     out.append("=" * 80)
-    out.append("analytics/scenario_analytics.py - E501/B950 violations")
+    out.append("analytics/schema_guard.py - E501/B950 violations")
     out.append("=" * 80)
-    out.append(f"\nTotal violation sites (line numbers): {len(violation_lines)}\n")
+    out.append(f"\nTotal violation sites: {len(violation_lines)}\n")
 
     for ln in violation_lines:
         out.append("\n" + "=" * 80)
@@ -34,9 +35,10 @@ def gather() -> str:
         out.append(f"    Excess: {length - 88} characters")
     return "\n".join(out)
 
+
 if __name__ == "__main__":
     content = gather()
-    with open("scenario_analytics_e501_context.txt", "w") as f:
+    with open("schema_guard_e501_context.txt", "w") as f:
         f.write(content)
     print(content)
-    print("\n✅ Saved to scenario_analytics_e501_context.txt")
+    print("\n✅ Saved to schema_guard_e501_context.txt")
