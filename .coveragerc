@@ -21,4 +21,3 @@ precision = 2
 fail_under = 60
 
 show_missing = True
-
