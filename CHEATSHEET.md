@@ -318,5 +318,5 @@ See: `Python (venv311).sublime-build`
 
 ---
 
-**Last Updated**: November 24, 2025  
+**Last Updated**: November 24, 2025
 **For detailed documentation, see**: [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)

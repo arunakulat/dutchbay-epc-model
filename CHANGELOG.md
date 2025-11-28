@@ -170,5 +170,3 @@ All notable changes to this project will be documented here.
 - Schema/docs: EPC parameters (ranges + units) in `schema.py`/`schema.md`
 - Packaging: `python -m build`, smoke-install, artifact upload with versioned names
 - Security/hygiene: CODEOWNERS, SECURITY.md, CONTRIBUTING.md
-
-

@@ -69,7 +69,7 @@ if [ -d "$VENV_DIR" ]; then
 else
     echo -e "${YELLOW}⚠${NC}  Virtual environment not found. Creating..."
     $PYTHON_CMD -m venv "$VENV_DIR"
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓${NC} Virtual environment created successfully"
     else

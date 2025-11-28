@@ -278,7 +278,9 @@ class TestYAMLErrorHandling:
         yaml_file.write_text("invalid: structure\nno: parameters")
 
         with pytest.raises(ValueError, match="Invalid YAML structure"):
-            from analytics.sensitivity_v14 import _load_parameters_from_yaml  # noqa: E402
+            from analytics.sensitivity_v14 import (  # noqa: E402
+                _load_parameters_from_yaml,
+            )
 
             _load_parameters_from_yaml(yaml_file)
 
@@ -296,7 +298,9 @@ parameters:
         )
 
         with pytest.raises(ValueError, match="validation failed"):
-            from analytics.sensitivity_v14 import _load_parameters_from_yaml  # noqa: E402
+            from analytics.sensitivity_v14 import (  # noqa: E402
+                _load_parameters_from_yaml,
+            )
 
             _load_parameters_from_yaml(yaml_file)
 

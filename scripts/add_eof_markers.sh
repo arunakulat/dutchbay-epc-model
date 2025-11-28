@@ -15,13 +15,13 @@ echo "🔖 Adding EOF markers to scripts..."
 # Function to add EOF marker if missing
 add_eof_if_missing() {
     local file="$1"
-    
+
     # Check if file already ends with # EOF
     if tail -1 "$file" | grep -q "^# EOF$"; then
         echo "   ✓ Already has EOF: $(basename "$file")"
         return 0
     fi
-    
+
     # Add EOF marker
     echo "" >> "$file"
     echo "# EOF" >> "$file"

@@ -1,8 +1,8 @@
 # INVESTMENT COMMITTEE SUMMARY
 ## P0-1C: Enhanced Coverage Metrics Implementation
 
-**Date:** November 14, 2025  
-**Project:** Dutch Bay 150MW Wind Farm  
+**Date:** November 14, 2025
+**Project:** Dutch Bay 150MW Wind Farm
 **Phase:** P0-1C Complete
 
 ---
@@ -50,9 +50,9 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 ## RISK ASSESSMENT
 
 ### Strengths:
-✅ All metrics significantly exceed minimums  
-✅ Conservative debt structure (fully amortizing)  
-✅ Strong downside protection for equity  
+✅ All metrics significantly exceed minimums
+✅ Conservative debt structure (fully amortizing)
+✅ Strong downside protection for equity
 ✅ DFI-compliant methodology and reporting
 
 ### Considerations:
@@ -101,6 +101,6 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 
 ---
 
-**Prepared by:** Financial Modeling Team  
-**Date:** November 14, 2025  
+**Prepared by:** Financial Modeling Team
+**Date:** November 14, 2025
 **Status:** For Committee Review

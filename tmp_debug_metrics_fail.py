@@ -1,5 +1,7 @@
-import yaml
 import sys
+
+import yaml
+
 # Path to scenario YAML actually used by failing test
 yaml_path = "scenarios/dutchbay_lendercase_2025Q4.yaml"
 with open(yaml_path) as f:

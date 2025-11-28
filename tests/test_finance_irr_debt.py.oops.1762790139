@@ -24,4 +24,3 @@ pytest -q tests/test_finance_irr_debt.py \
 echo "✓ IRR expectation fixed and test executed."
 echo "   (Optional) commit:"
 echo "     git add $FILE && git commit -m 'tests: correct IRR expectation for [-100,60,60] to ~13.07% and adjust band'"
-

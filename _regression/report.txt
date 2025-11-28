@@ -1,25 +1,25 @@
 === DutchBay v13 Regression Smoke @ 2025-11-21T15:29:57+05:30 (rev: 18494e1) ===
 
 --- finance.irr module tests ---
-CMD: bash CMD: scripts/test_one_module.sh CMD: irr 
+CMD: bash CMD: scripts/test_one_module.sh CMD: irr
 FAIL  finance.irr module tests (exit 1)
 
 --- finance.debt module tests ---
-CMD: bash CMD: scripts/test_one_module.sh CMD: debt 
+CMD: bash CMD: scripts/test_one_module.sh CMD: debt
 FAIL  finance.debt module tests (exit 2)
 
 --- cli smoke (direct) ---
-CMD: pytest CMD: -q CMD: tests/test_cli_v14_smoke.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_cli_v14_smoke.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  cli smoke (direct) (exit 1)
 
 --- scenarios (multi-file emit) ---
-CMD: pytest CMD: -q CMD: tests/test_cli_scenarios_more.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_cli_scenarios_more.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  scenarios (multi-file emit) (exit 4)
 
 --- matrix + validator ---
-CMD: pytest CMD: -q CMD: tests/test_scenarios_jsonl_and_validator.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_scenarios_jsonl_and_validator.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  matrix + validator (exit 2)
--e 
+-e
 === Summary ===
 Total: 5 | Failures: 5
  - finance.irr module tests: FAIL (1.0s)

@@ -27,7 +27,7 @@ MAX_CAPACITY_FACTOR = 0.50
 # Sensitivity Analysis Constants (Phase 3 - Added 2025-11-23)
 # =============================================================================
 
-from typing import Final, Dict
+from typing import Dict, Final
 
 # Industry-standard sensitivity ranges (CFA/DFI benchmarks)
 # Format: {parameter_name: (low_pct, high_pct)}

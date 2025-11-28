@@ -41,9 +41,9 @@
 ## Minimum/Mean Coverage
 
 - **Minimum DSCR:** 1.30x
-- **Minimum LLCR:** 1.74x 
+- **Minimum LLCR:** 1.74x
 - **LLCR Avg:** 3.25x
-- **Minimum PLCR:** 1.74x 
+- **Minimum PLCR:** 1.74x
 - **PLCR Avg:** 3.25x
 
 ---

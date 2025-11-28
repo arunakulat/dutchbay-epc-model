@@ -14,7 +14,7 @@
 
 Restore full project context instantly:
 
-**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)  
+**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)
 **Complete:** See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)
 
 ### For Developers
@@ -301,5 +301,5 @@ Proprietary - All Rights Reserved
 
 ---
 
-**Last Updated**: November 24, 2025  
+**Last Updated**: November 24, 2025
 **Version**: 1.0.0 (v14 production-ready)

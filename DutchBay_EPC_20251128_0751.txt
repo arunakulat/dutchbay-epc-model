@@ -1075,12 +1075,12 @@ IMPORT_MAPPING: Dict[str, str] = {
     "dutchbay_v14chat.finance.debt": "finance.debt_v14",
     "dutchbay_v14chat.finance.irr": "finance.irr",
     "dutchbay_v14chat.finance.utils": "finance.utils",
-    
+
     # v14 submodules (promoted to top-level finance)
     "dutchbay_v14chat.finance.v14.tax_calculator": "finance.tax_calculator_v14",
     "dutchbay_v14chat.finance.v14.scenario_manager": "finance.scenario_manager_v14",
     "dutchbay_v14chat.finance.v14.epc_helper": "finance.epc_helper_v14",
-    
+
     # Catch-all for any missed v14 modules
     "dutchbay_v14chat.finance.v14": "finance",
     "dutchbay_v14chat.finance": "finance",
@@ -1089,11 +1089,11 @@ IMPORT_MAPPING: Dict[str, str] = {
 
 class ImportTransformer(cst.CSTTransformer):
     """LibCST transformer to rewrite dutchbay_v14chat imports."""
-    
+
     def __init__(self) -> None:
         super().__init__()
         self.changes_made = 0
-    
+
     def leave_ImportFrom(
         self,
         original_node: cst.ImportFrom,
@@ -1107,13 +1107,13 @@ class ImportTransformer(cst.CSTTransformer):
             module_parts = [updated_node.module.value]
         else:
             return updated_node
-        
+
         module_name = ".".join(module_parts)
-        
+
         # Check if this import needs transformation
         if not module_name.startswith("dutchbay_v14chat"):
             return updated_node
-        
+
         # Find matching rule (try longest match first)
         new_module_name = None
         for old_path, new_path in sorted(
@@ -1125,20 +1125,20 @@ class ImportTransformer(cst.CSTTransformer):
                 # Replace prefix
                 new_module_name = module_name.replace(old_path, new_path, 1)
                 break
-        
+
         if new_module_name is None:
             print(
                 f"⚠️  Warning: No mapping rule for {module_name}",
                 file=sys.stderr,
             )
             return updated_node
-        
+
         # Build new module node
         new_module = self._build_module_node(new_module_name)
-        
+
         self.changes_made += 1
         return updated_node.with_changes(module=new_module)
-    
+
     def leave_Import(
         self,
         original_node: cst.Import,
@@ -1146,12 +1146,12 @@ class ImportTransformer(cst.CSTTransformer):
     ) -> cst.Import:
         """Transform 'import dutchbay_v14chat' statements."""
         new_names = []
-        
+
         for name in updated_node.names:
             if not isinstance(name, cst.ImportAlias):
                 new_names.append(name)
                 continue
-            
+
             # Extract module name
             if isinstance(name.name, cst.Attribute):
                 module_parts = self._get_module_parts(name.name)
@@ -1160,14 +1160,14 @@ class ImportTransformer(cst.CSTTransformer):
             else:
                 new_names.append(name)
                 continue
-            
+
             module_name = ".".join(module_parts)
-            
+
             # Check if needs transformation
             if not module_name.startswith("dutchbay_v14chat"):
                 new_names.append(name)
                 continue
-            
+
             # Find mapping
             new_module_name = None
             for old_path, new_path in sorted(
@@ -1178,7 +1178,7 @@ class ImportTransformer(cst.CSTTransformer):
                 if module_name.startswith(old_path):
                     new_module_name = module_name.replace(old_path, new_path, 1)
                     break
-            
+
             if new_module_name is None:
                 print(
                     f"⚠️  Warning: No mapping rule for {module_name}",
@@ -1186,17 +1186,17 @@ class ImportTransformer(cst.CSTTransformer):
                 )
                 new_names.append(name)
                 continue
-            
+
             # Build new import alias
             new_name_node = self._build_module_node(new_module_name)
             new_alias = name.with_changes(name=new_name_node)
             new_names.append(new_alias)
             self.changes_made += 1
-        
+
         if self.changes_made > 0:
             return updated_node.with_changes(names=new_names)
         return updated_node
-    
+
     def _get_module_parts(self, node: cst.Attribute | cst.Name) -> list[str]:
         """Recursively extract module path parts."""
         if isinstance(node, cst.Name):
@@ -1205,22 +1205,22 @@ class ImportTransformer(cst.CSTTransformer):
             parent_parts = self._get_module_parts(node.value)
             return parent_parts + [node.attr.value]
         return []
-    
+
     def _build_module_node(
         self,
         module_name: str,
     ) -> cst.Attribute | cst.Name:
         """Build a module node from dot-separated string."""
         parts = module_name.split(".")
-        
+
         if len(parts) == 1:
             return cst.Name(parts[0])
-        
+
         # Build nested Attribute nodes
         node: cst.Attribute | cst.Name = cst.Name(parts[0])
         for part in parts[1:]:
             node = cst.Attribute(value=node, attr=cst.Name(part))
-        
+
         return node
 
 
@@ -1231,49 +1231,49 @@ def fix_file(
 ) -> tuple[bool, int]:
     """
     Fix imports in a single file.
-    
+
     Args:
         file_path: Path to Python file
         dry_run: If True, only preview changes
         create_backup: If True, create .bak backup file
-        
+
     Returns:
         (changed, num_changes) tuple
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
-        
+
         # Parse and transform
         tree = cst.parse_module(source)
         transformer = ImportTransformer()
         new_tree = tree.visit(transformer)
-        
+
         if transformer.changes_made == 0:
             return False, 0
-        
+
         # Generate new source
         new_source = new_tree.code
-        
+
         if dry_run:
             print(f"📝 Would modify: {file_path}")
             print(f"   Changes: {transformer.changes_made} import(s)")
             return True, transformer.changes_made
-        
+
         # Create backup
         if create_backup:
             backup_path = file_path.with_suffix(file_path.suffix + ".bak")
             shutil.copy2(file_path, backup_path)
-        
+
         # Write new source
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_source)
-        
+
         print(f"✅ Fixed: {file_path}")
         print(f"   Changes: {transformer.changes_made} import(s)")
-        
+
         return True, transformer.changes_made
-    
+
     except Exception as e:
         print(f"❌ Error fixing {file_path}: {e}", file=sys.stderr)
         return False, 0
@@ -1287,13 +1287,13 @@ def fix_directory(
 ) -> dict[str, int]:
     """
     Fix imports in all Python files under directory.
-    
+
     Args:
         root_dir: Root directory to scan
         dry_run: If True, only preview changes
         create_backup: If True, create .bak files
         exclude_dirs: Directory names to skip
-        
+
     Returns:
         Summary dict with statistics
     """
@@ -1305,23 +1305,23 @@ def fix_directory(
             "dutchbay_v14chat",  # Don't fix the source directory
             "legacy",  # Don't fix legacy code
         }
-    
+
     files_scanned = 0
     files_modified = 0
     total_changes = 0
-    
+
     for py_file in root_dir.rglob("*.py"):
         # Skip excluded directories
         if any(excluded in py_file.parts for excluded in exclude_dirs):
             continue
-        
+
         files_scanned += 1
         changed, num_changes = fix_file(py_file, dry_run, create_backup)
-        
+
         if changed:
             files_modified += 1
             total_changes += num_changes
-    
+
     return {
         "files_scanned": files_scanned,
         "files_modified": files_modified,
@@ -1355,27 +1355,27 @@ def main() -> None:
         action="store_true",
         help="Don't create .bak backup files",
     )
-    
+
     args = parser.parse_args()
-    
+
     if not args.dry_run and not args.apply:
         parser.error("Must specify either --dry-run or --apply")
-    
+
     dry_run = args.dry_run
     create_backup = not args.no_backup
-    
+
     mode = "DRY-RUN" if dry_run else "APPLY"
     print(f"🔧 Import Fixer - Mode: {mode}")
     print(f"📁 Root: {args.root}")
     print(f"💾 Backups: {'enabled' if create_backup and not dry_run else 'disabled'}")
     print()
-    
+
     summary = fix_directory(
         args.root,
         dry_run=dry_run,
         create_backup=create_backup,
     )
-    
+
     print("\n" + "=" * 70)
     print("📊 SUMMARY")
     print("=" * 70)
@@ -1383,7 +1383,7 @@ def main() -> None:
     print(f"Files modified: {summary['files_modified']}")
     print(f"Total changes: {summary['total_changes']}")
     print("=" * 70)
-    
+
     if dry_run and summary['files_modified'] > 0:
         print("\n💡 Run with --apply to apply these changes")
     elif summary['files_modified'] > 0:
@@ -3213,7 +3213,7 @@ This script automatically adds the missing @field_validator to enforce base_valu
 
 Usage:
     python fix_parameter_range_config.py
-    
+
 Result:
     - analytics/contractsv14.py is modified in-place
     - Backup created as analytics/contractsv14.py.backup
@@ -3237,7 +3237,7 @@ from pathlib import Path
 TARGET_FILE = Path(__file__).parent / "analytics" / "contractsv14.py"
 
 # The validator we're adding (will be inserted after the base_value field)
-NEW_VALIDATOR = '''    
+NEW_VALIDATOR = '''
     @field_validator('base_value')
     @classmethod
     def validate_base_value(cls, v):
@@ -3286,7 +3286,7 @@ def check_validator_already_exists(content: str) -> bool:
 def find_base_value_field(content: str) -> tuple[int, int] | None:
     """
     Find the position of the base_value field definition.
-    
+
     Returns: (start_pos, end_pos) tuple or None if not found
     """
     match = INSERT_PATTERN.search(content)
@@ -3294,7 +3294,7 @@ def find_base_value_field(content: str) -> tuple[int, int] | None:
         print("❌ ERROR: Could not find 'base_value' field definition")
         print("   Expected pattern: base_value: float = Field(..., gt=0)")
         return None
-    
+
     # Return positions: start of match and end of the line (where newline is)
     return (match.start(), match.end())
 
@@ -3302,19 +3302,19 @@ def find_base_value_field(content: str) -> tuple[int, int] | None:
 def apply_fix(content: str) -> tuple[str, bool]:
     """
     Apply the fix by inserting the validator after base_value field.
-    
+
     Returns: (modified_content, success) tuple
     """
     # Find where to insert
     positions = find_base_value_field(content)
     if not positions:
         return (content, False)
-    
+
     start_pos, end_pos = positions
-    
+
     # Insert the validator after the base_value field
     modified_content = content[:end_pos] + NEW_VALIDATOR + '\n' + content[end_pos:]
-    
+
     return (modified_content, True)
 
 
@@ -3338,21 +3338,21 @@ def write_file(file_path: Path, content: str) -> bool:
 def verify_fix(file_path: Path) -> bool:
     """Verify that the fix was applied correctly."""
     content = file_path.read_text(encoding='utf-8')
-    
+
     # Check that validator exists
     if 'validate_base_value' not in content:
         print("❌ Verification FAILED: Validator not found in file")
         return False
-    
+
     # Check that the validator has the correct logic
     if 'if v <= 0:' not in content:
         print("❌ Verification FAILED: Validator logic not found")
         return False
-    
+
     if 'raise ValueError' not in content or 'base_value must be positive' not in content:
         print("❌ Verification FAILED: Error message not found")
         return False
-    
+
     print("✓ Verification PASSED: All validator components present")
     return True
 
@@ -3360,7 +3360,7 @@ def verify_fix(file_path: Path) -> bool:
 def main() -> int:
     """
     Main execution flow.
-    
+
     Returns: Exit code (0 = success, 1 = failure)
     """
     print("╔" + "═" * 76 + "╗")
@@ -5174,7 +5174,7 @@ See: `Python (venv311).sublime-build`
 
 ---
 
-**Last Updated**: November 24, 2025  
+**Last Updated**: November 24, 2025
 **For detailed documentation, see**: [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)
 ---END:md---
 
@@ -5230,7 +5230,7 @@ FILE: README.md
 
 Restore full project context instantly:
 
-**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)  
+**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)
 **Complete:** See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)
 
 ### For Developers
@@ -5517,7 +5517,7 @@ Proprietary - All Rights Reserved
 
 ---
 
-**Last Updated**: November 24, 2025  
+**Last Updated**: November 24, 2025
 **Version**: 1.0.0 (v14 production-ready)
 ---END:md---
 
@@ -6376,7 +6376,7 @@ from typing import Any, Dict, List, Set
 @dataclass
 class ImportReference:
     """Single import statement reference."""
-    
+
     file_path: str
     line_number: int
     import_statement: str
@@ -6388,13 +6388,13 @@ class ImportReference:
 @dataclass
 class ScanReport:
     """Complete import scan report."""
-    
+
     total_files_scanned: int
     files_with_imports: int
     total_import_statements: int
     unique_modules_imported: Set[str]
     references: List[ImportReference]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON-serializable dict."""
         return {
@@ -6408,11 +6408,11 @@ class ScanReport:
 
 class ImportScanner(ast.NodeVisitor):
     """AST visitor to detect dutchbay_v14chat imports."""
-    
+
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
         self.references: List[ImportReference] = []
-    
+
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Handle 'from dutchbay_v14chat.X import Y' statements."""
         if node.module and node.module.startswith("dutchbay_v14chat"):
@@ -6428,7 +6428,7 @@ class ImportScanner(ast.NodeVisitor):
                 )
             )
         self.generic_visit(node)
-    
+
     def visit_Import(self, node: ast.Import) -> None:
         """Handle 'import dutchbay_v14chat' statements."""
         for alias in node.names:
@@ -6444,7 +6444,7 @@ class ImportScanner(ast.NodeVisitor):
                     )
                 )
         self.generic_visit(node)
-    
+
     def _reconstruct_import(self, node: ast.ImportFrom) -> str:
         """Reconstruct the original import statement."""
         names_str = ", ".join(alias.name for alias in node.names)
@@ -6454,22 +6454,22 @@ class ImportScanner(ast.NodeVisitor):
 def scan_file(file_path: Path) -> List[ImportReference]:
     """
     Scan a single Python file for dutchbay_v14chat imports.
-    
+
     Args:
         file_path: Path to Python file
-        
+
     Returns:
         List of ImportReference objects found in the file
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
-        
+
         tree = ast.parse(source, filename=str(file_path))
         scanner = ImportScanner(file_path)
         scanner.visit(tree)
         return scanner.references
-    
+
     except SyntaxError as e:
         print(f"⚠️  Syntax error in {file_path}: {e}", file=sys.stderr)
         return []
@@ -6484,11 +6484,11 @@ def scan_directory(
 ) -> ScanReport:
     """
     Recursively scan directory for dutchbay_v14chat imports.
-    
+
     Args:
         root_dir: Root directory to scan
         exclude_dirs: Directory names to skip (e.g., .venv, __pycache__)
-        
+
     Returns:
         Complete ScanReport with all findings
     """
@@ -6501,26 +6501,26 @@ def scan_directory(
             "dutchbay_v14chat",  # Don't scan the directory we're refactoring
             "legacy",  # Don't scan already-quarantined code
         }
-    
+
     all_references: List[ImportReference] = []
     files_scanned = 0
     files_with_imports = 0
-    
+
     for py_file in root_dir.rglob("*.py"):
         # Skip excluded directories
         if any(excluded in py_file.parts for excluded in exclude_dirs):
             continue
-        
+
         files_scanned += 1
         refs = scan_file(py_file)
-        
+
         if refs:
             files_with_imports += 1
             all_references.extend(refs)
-    
+
     # Extract unique modules
     unique_modules = {ref.module_imported for ref in all_references}
-    
+
     return ScanReport(
         total_files_scanned=files_scanned,
         files_with_imports=files_with_imports,
@@ -6541,19 +6541,19 @@ def print_summary(report: ScanReport) -> None:
     print(f"\n🔍 Unique modules imported:")
     for module in sorted(report.unique_modules_imported):
         print(f"   - {module}")
-    
+
     # Group by file
     by_file: Dict[str, List[ImportReference]] = defaultdict(list)
     for ref in report.references:
         by_file[ref.file_path].append(ref)
-    
+
     print(f"\n📄 Files requiring fixes ({len(by_file)}):")
     for file_path in sorted(by_file.keys()):
         refs = by_file[file_path]
         print(f"\n   {file_path}")
         for ref in refs:
             print(f"      Line {ref.line_number}: {ref.import_statement}")
-    
+
     print("\n" + "=" * 70)
 
 
@@ -6579,9 +6579,9 @@ def main() -> None:
         default=None,
         help="Additional directories to exclude",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Build exclude set
     exclude_dirs = {
         ".venv", ".venv311", "venv", "env",
@@ -6592,22 +6592,22 @@ def main() -> None:
     }
     if args.exclude:
         exclude_dirs.update(args.exclude)
-    
+
     print(f"🔍 Scanning {args.root} for dutchbay_v14chat imports...")
     print(f"   Excluding: {', '.join(sorted(exclude_dirs))}")
-    
+
     report = scan_directory(args.root, exclude_dirs)
-    
+
     # Print summary
     print_summary(report)
-    
+
     # Export JSON if requested
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2, sort_keys=True)
         print(f"\n✅ JSON report exported to: {args.output}")
-    
+
     # Exit with error code if imports found
     if report.files_with_imports > 0:
         sys.exit(1)
@@ -7090,33 +7090,33 @@ jobs:
   test:
     name: Test on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    
+
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for better analysis
-      
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install tox tox-gh-actions
-      
+
       - name: Run tox (Go-With-The-Flow CI Pipeline)
         run: tox
         timeout-minutes: 30
-      
+
       - name: Upload coverage reports
         if: matrix.python-version == '3.11'  # Only for primary version
         uses: codecov/codecov-action@v3
@@ -7125,71 +7125,71 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-  
+
   # Code quality checks (run once)
   quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
           cache: 'pip'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install black isort flake8 pylint bandit
-      
+
       - name: Run code formatting checks
         run: |
           black --check --line-length=100 analytics finance run_full_pipeline_v14.py scripts
           isort --check-only --profile=black analytics finance run_full_pipeline_v14.py scripts
-      
+
       - name: Run linting (flake8)
         run: flake8 analytics finance run_full_pipeline_v14.py scripts --max-line-length=100
         continue-on-error: true
-      
+
       - name: Run security scan (bandit)
         run: bandit -r analytics finance -ll
         continue-on-error: true
-  
+
   # Type checking (run once)
   types:
     name: Type Checking
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
           cache: 'pip'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mypy
-      
+
       - name: Run mypy type checker
         run: mypy analytics finance run_full_pipeline_v14.py
         continue-on-error: true
-  
+
   # Overall status
   status:
     name: CI Status
     runs-on: ubuntu-latest
     needs: [test, quality, types]
     if: always()
-    
+
     steps:
       - name: Check test results
         run: |
@@ -7198,7 +7198,7 @@ jobs:
             exit 1
           fi
           echo "✅ All checks passed!"
-      
+
       - name: Report status
         run: |
           echo "CI Pipeline Status: SUCCESS ✅"
@@ -7288,13 +7288,13 @@ class ValidationError(QuarantineError):
 def check_git_status(repo_root: Path) -> Dict[str, Any]:
     """
     Check Git status for uncommitted changes.
-    
+
     Args:
         repo_root: Repository root directory
-        
+
     Returns:
         Dict with git status info
-    
+
     Raises:
         GitSafetyError: If git command fails
     """
@@ -7306,7 +7306,7 @@ def check_git_status(repo_root: Path) -> Dict[str, Any]:
             text=True,
             timeout=5,
         )
-        
+
         if result.returncode != 0:
             return {
                 "is_repo": False,
@@ -7314,7 +7314,7 @@ def check_git_status(repo_root: Path) -> Dict[str, Any]:
                 "untracked_files": [],
                 "modified_files": [],
             }
-        
+
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=repo_root,
@@ -7322,32 +7322,32 @@ def check_git_status(repo_root: Path) -> Dict[str, Any]:
             text=True,
             timeout=5,
         )
-        
+
         if result.returncode != 0:
             raise GitSafetyError(f"git status failed: {result.stderr}")
-        
+
         lines = result.stdout.strip().split("\n")
         untracked = []
         modified = []
-        
+
         for line in lines:
             if not line:
                 continue
             status = line[:2]
             filepath = line[3:]
-            
+
             if status.strip() == "??":
                 untracked.append(filepath)
             else:
                 modified.append(filepath)
-        
+
         return {
             "is_repo": True,
             "has_changes": len(modified) > 0 or len(untracked) > 0,
             "untracked_files": untracked,
             "modified_files": modified,
         }
-    
+
     except subprocess.TimeoutExpired:
         raise GitSafetyError("Git command timed out")
     except Exception as e:
@@ -7358,29 +7358,29 @@ def validate_quarantine(source_dir: Path, dest_parent: Path) -> None:
     """Pre-flight validation checks."""
     if not source_dir.exists():
         raise ValidationError(f"Source directory does not exist: {source_dir}")
-    
+
     if not source_dir.is_dir():
         raise ValidationError(f"Source is not a directory: {source_dir}")
-    
+
     if not any(source_dir.iterdir()):
         raise ValidationError(f"Source directory is empty: {source_dir}")
-    
+
     if not dest_parent.exists():
         try:
             dest_parent.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise ValidationError(f"Cannot create destination parent: {e}")
-    
+
     dest_dir = dest_parent / source_dir.name
     if dest_dir.exists():
         raise ValidationError(
             f"Destination already exists: {dest_dir}\n"
             f"Please remove it manually or use a different destination."
         )
-    
+
     if not dest_parent.is_dir():
         raise ValidationError(f"Destination parent is not a directory: {dest_parent}")
-    
+
     test_file = dest_parent / ".quarantine_write_test"
     try:
         test_file.touch()
@@ -7394,7 +7394,7 @@ def count_files_recursive(directory: Path) -> Dict[str, int]:
     total_files = 0
     total_dirs = 0
     py_files = 0
-    
+
     for item in directory.rglob("*"):
         if item.is_file():
             total_files += 1
@@ -7402,7 +7402,7 @@ def count_files_recursive(directory: Path) -> Dict[str, int]:
                 py_files += 1
         elif item.is_dir():
             total_dirs += 1
-    
+
     return {
         "total_files": total_files,
         "total_dirs": total_dirs,
@@ -7435,28 +7435,28 @@ def execute_quarantine(
 ) -> Path:
     """Execute the quarantine operation."""
     dest_dir = dest_parent / source_dir.name
-    
+
     if dry_run:
         print(f"[DRY-RUN] Would move:")
         print(f"  Source: {source_dir}")
         print(f"  Dest:   {dest_dir}")
         return dest_dir
-    
+
     temp_dest = dest_parent / f".{source_dir.name}_quarantine_temp"
-    
+
     try:
         print(f"📦 Moving {source_dir} → {temp_dest} (temp)...")
         shutil.move(str(source_dir), str(temp_dest))
-        
+
         print(f"✅ Renaming {temp_dest} → {dest_dir}...")
         temp_dest.rename(dest_dir)
-        
+
         print(f"✅ Quarantine complete: {dest_dir}")
         return dest_dir
-    
+
     except Exception as e:
         print(f"❌ Error during quarantine: {e}", file=sys.stderr)
-        
+
         if temp_dest.exists() and not source_dir.exists():
             print(f"🔄 Rolling back: {temp_dest} → {source_dir}...", file=sys.stderr)
             try:
@@ -7465,7 +7465,7 @@ def execute_quarantine(
             except Exception as rollback_error:
                 print(f"❌ ROLLBACK FAILED: {rollback_error}", file=sys.stderr)
                 print(f"   Manual recovery needed!", file=sys.stderr)
-        
+
         raise QuarantineError(f"Quarantine failed: {e}")
 
 
@@ -7501,17 +7501,17 @@ def main() -> None:
         action="store_true",
         help="Skip Git safety check (not recommended)",
     )
-    
+
     args = parser.parse_args()
-    
+
     if not args.dry_run and not args.execute:
         parser.error("Must specify either --dry-run or --execute")
-    
+
     dry_run = args.dry_run
     source_dir = args.source.resolve()
     dest_parent = args.dest.resolve()
     dest_dir = dest_parent / source_dir.name
-    
+
     print("=" * 70)
     print("🔒 QUARANTINE AUTOMATION: dutchbay_v14chat → legacy/")
     print("=" * 70)
@@ -7519,16 +7519,16 @@ def main() -> None:
     print(f"Source: {source_dir}")
     print(f"Dest:   {dest_dir}")
     print()
-    
+
     try:
         if not args.force:
             print("🔍 Checking Git status...")
             repo_root = source_dir.parent
             git_status = check_git_status(repo_root)
-            
+
             if git_status["is_repo"]:
                 print("✅ Git repository detected")
-                
+
                 if git_status["has_changes"]:
                     print("⚠️  WARNING: Uncommitted changes detected!")
                     print(f"   Modified files: {len(git_status['modified_files'])}")
@@ -7545,25 +7545,25 @@ def main() -> None:
         else:
             print("⚠️  Skipping Git safety check (--force)")
             git_status = {"is_repo": False, "forced": True}
-        
+
         print()
-        
+
         print("🔍 Running pre-flight validation...")
         validate_quarantine(source_dir, dest_parent)
         print("✅ Validation passed")
         print()
-        
+
         print("📊 Scanning source directory...")
         file_counts = count_files_recursive(source_dir)
         print(f"   Total files: {file_counts['total_files']}")
         print(f"   Python files: {file_counts['py_files']}")
         print(f"   Directories: {file_counts['total_dirs']}")
         print()
-        
+
         print("🚀 Executing quarantine operation...")
         result_dest = execute_quarantine(source_dir, dest_parent, dry_run)
         print()
-        
+
         if not dry_run:
             print("📝 Creating quarantine manifest...")
             manifest = create_quarantine_manifest(
@@ -7572,18 +7572,18 @@ def main() -> None:
                 file_counts,
                 git_status,
             )
-            
+
             manifest_path = dest_parent / "QUARANTINE_MANIFEST.json"
             with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, indent=2, sort_keys=True)
-            
+
             print(f"✅ Manifest saved: {manifest_path}")
             print()
-        
+
         print("=" * 70)
         print("✅ QUARANTINE COMPLETE")
         print("=" * 70)
-        
+
         if dry_run:
             print("This was a DRY-RUN. No files were moved.")
             print("Run with --execute to perform the actual quarantine.")
@@ -7595,26 +7595,26 @@ def main() -> None:
             print("  1. Run import scanner to verify no broken imports")
             print("  2. Run test suite: pytest")
             print("  3. Commit changes: git add -A && git commit")
-        
+
         sys.exit(0)
-    
+
     except ValidationError as e:
         print(f"\n❌ VALIDATION ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-    
+
     except GitSafetyError as e:
         print(f"\n❌ GIT SAFETY ERROR: {e}", file=sys.stderr)
         print("   Use --force to skip Git checks (not recommended)", file=sys.stderr)
         sys.exit(2)
-    
+
     except QuarantineError as e:
         print(f"\n❌ QUARANTINE FAILED: {e}", file=sys.stderr)
         sys.exit(3)
-    
+
     except KeyboardInterrupt:
         print("\n\n⚠️  Operation cancelled by user", file=sys.stderr)
         sys.exit(130)
-    
+
     except Exception as e:
         print(f"\n❌ UNEXPECTED ERROR: {e}", file=sys.stderr)
         import traceback
@@ -7992,18 +7992,18 @@ irr_validation:
   # Project-level IRR bounds (used by analytics, scenario evaluation)
   irr_lower_bound: -0.70          # -70% loss cap (wind resource worst case)
   irr_upper_bound: 0.35            # 35% annual return cap (conservative DFI)
-  
+
   # Date-aware XIRR bounds (for irregular cashflows)
   xirr_lower_bound: -0.70
   xirr_upper_bound: 0.25           # More conservative for irregular timing
-  
+
   # Role-specific overrides (optional)
   equity_irr_lower_bound: -0.50   # Equity can absorb more downside
   equity_irr_upper_bound: 0.50     # Equity can target higher returns
-  
+
   debt_irr_lower_bound: -0.20     # Debt less tolerant of loss
   debt_irr_upper_bound: 0.15       # Debt capped at conservative returns
-  
+
   # Audit trail / rationale (documentation)
   irr_upper_bound_rationale: "Conservative cap per ADB financing guidelines for renewable energy projects in Sri Lanka"
   irr_lower_bound_rationale: "Based on worst-case wind resource assessment (P90) with 30% grid curtailment scenario"
@@ -8016,12 +8016,12 @@ Financing_Terms:
   interest_only_years: 2
   amortization_style: auto
   interest_rate_nominal: 0.08
-  
+
   mix:
     lkr_max: 0.45
     dfi_max: 0.10
     usd_commercial_min: 0.45
-  
+
   rates:
     lkr_nominal: 0.08
     lkr_min: 0.08
@@ -8029,22 +8029,22 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075
     usd_commercial_min: 0.075
-  
+
   target_dscr: 1.30
   min_dscr: 1.20
   min_dscr_covenant: 1.20
-  
+
   reserves:
     dsra_months: 6
     receivables_guarantee_months: 9
-  
+
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
-  
+
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
-  
+
   enforce_hard_covenants: false
 
 metrics:
@@ -8301,7 +8301,7 @@ FILE: config/sensitivity_defaults.yaml
 
 parameters:
   # ===== COST PARAMETERS (±20% typical range) =====
-  
+
   - variable_name: "project.capex_usd_per_kw"
     base_value: 850.0
     low_pct: -20.0
@@ -8309,9 +8309,9 @@ parameters:
     steps: 5
     # Range: $680-1020/kW
     # Comment: Capital expenditure is typically the highest impact driver
-  
+
   # ===== REVENUE PARAMETERS (±15% typical range) =====
-  
+
   - variable_name: "financial.tariff_lkr_per_kwh"
     base_value: 65.0
     low_pct: -15.0
@@ -8319,9 +8319,9 @@ parameters:
     steps: 5
     # Range: LKR 55.25-74.75/kWh
     # Comment: Tariff is second-highest impact driver for merchant projects
-  
+
   # ===== GENERATION PARAMETERS (±10% typical range) =====
-  
+
   - variable_name: "generation.capacity_factor_pct"
     base_value: 45.0
     low_pct: -10.0
@@ -8329,9 +8329,9 @@ parameters:
     steps: 5
     # Range: 40.5%-49.5%
     # Comment: Wind resource uncertainty (P50, P75, P90 scenarios)
-  
+
   # ===== FINANCIAL PARAMETERS (±2-3 percentage points) =====
-  
+
   - variable_name: "financial.discount_rate_pct"
     base_value: 8.0
     low_pct: -3.0
@@ -8339,7 +8339,7 @@ parameters:
     steps: 5
     # Range: 5.0%-11.0%
     # Comment: WACC sensitivity for different capital structures
-  
+
   - variable_name: "financial.debt_interest_rate_pct"
     base_value: 9.0
     low_pct: -2.0
@@ -8347,9 +8347,9 @@ parameters:
     steps: 5
     # Range: 7.0%-11.0%
     # Comment: Senior debt pricing sensitivity
-  
+
   # ===== SCHEDULE PARAMETERS (±6 months typical) =====
-  
+
   - variable_name: "project.construction_months"
     base_value: 24.0
     low_pct: -6.0
@@ -8357,9 +8357,9 @@ parameters:
     steps: 5
     # Range: 22.56-25.44 months
     # Comment: Construction delay risk (IDC impact)
-  
+
   # ===== OPERATING PARAMETERS (±5% typical) =====
-  
+
   - variable_name: "operating.opex_pct_revenue"
     base_value: 2.5
     low_pct: -5.0
@@ -8367,9 +8367,9 @@ parameters:
     steps: 5
     # Range: 2.375%-2.625% of revenue
     # Comment: O&M cost efficiency
-  
+
   # ===== TECHNICAL PARAMETERS (±2% typical) =====
-  
+
   - variable_name: "technical.grid_loss_pct"
     base_value: 3.0
     low_pct: -2.0
@@ -8407,7 +8407,7 @@ base_values:
 
 parameters:
   # ===== COST PARAMETERS (±20% typical range) =====
-  
+
   - variable_name: "project.capex_usd_per_kw"
     base_value: 850.0
     low_pct: -20.0
@@ -8415,9 +8415,9 @@ parameters:
     steps: 5
     # Range: $680-1020/kW
     # Comment: Capital expenditure is typically the highest impact driver
-  
+
   # ===== REVENUE PARAMETERS (±15% typical range) =====
-  
+
   - variable_name: "financial.tariff_lkr_per_kwh"
     base_value: 65.0
     low_pct: -15.0
@@ -8425,9 +8425,9 @@ parameters:
     steps: 5
     # Range: LKR 55.25-74.75/kWh
     # Comment: Tariff is second-highest impact driver for merchant projects
-  
+
   # ===== GENERATION PARAMETERS (±10% typical range) =====
-  
+
   - variable_name: "generation.capacity_factor_pct"
     base_value: 45.0
     low_pct: -10.0
@@ -8435,9 +8435,9 @@ parameters:
     steps: 5
     # Range: 40.5%-49.5%
     # Comment: Wind resource uncertainty (P50, P75, P90 scenarios)
-  
+
   # ===== FINANCIAL PARAMETERS (±2-3 percentage points) =====
-  
+
   - variable_name: "financial.discount_rate_pct"
     base_value: 8.0
     low_pct: -3.0
@@ -8445,7 +8445,7 @@ parameters:
     steps: 5
     # Range: 5.0%-11.0%
     # Comment: WACC sensitivity for different capital structures
-  
+
   - variable_name: "financial.debt_interest_rate_pct"
     base_value: 9.0
     low_pct: -2.0
@@ -8453,9 +8453,9 @@ parameters:
     steps: 5
     # Range: 7.0%-11.0%
     # Comment: Senior debt pricing sensitivity
-  
+
   # ===== SCHEDULE PARAMETERS (±6 months typical) =====
-  
+
   - variable_name: "project.construction_months"
     base_value: 24.0
     low_pct: -6.0
@@ -8463,9 +8463,9 @@ parameters:
     steps: 5
     # Range: 22.56-25.44 months
     # Comment: Construction delay risk (IDC impact)
-  
+
   # ===== OPERATING PARAMETERS (±5% typical) =====
-  
+
   - variable_name: "operating.opex_pct_revenue"
     base_value: 2.5
     low_pct: -5.0
@@ -8473,9 +8473,9 @@ parameters:
     steps: 5
     # Range: 2.375%-2.625% of revenue
     # Comment: O&M cost efficiency
-  
+
   # ===== TECHNICAL PARAMETERS (±2% typical) =====
-  
+
   - variable_name: "technical.grid_loss_pct"
     base_value: 3.0
     low_pct: -2.0
@@ -14622,7 +14622,7 @@ rg "import dutchbay_v14chat" analytics/ finance/ || echo "✅ No v14chat imports
 
 ## Note
 
-FX/risk analytics modules (`fx_data_processor_dual_regime.py`, `risk_metrics.py`, `returns.py`) 
+FX/risk analytics modules (`fx_data_processor_dual_regime.py`, `risk_metrics.py`, `returns.py`)
 will be moved to `analytics/fx/` as part of Task 2 (modularization sprint).
 
 ## Go with the Flow Script Standards (Updated 2025-11-25)
@@ -14686,13 +14686,13 @@ echo "🔖 Adding EOF markers to scripts..."
 # Function to add EOF marker if missing
 add_eof_if_missing() {
     local file="$1"
-    
+
     # Check if file already ends with # EOF
     if tail -1 "$file" | grep -q "^# EOF$"; then
         echo "   ✓ Already has EOF: $(basename "$file")"
         return 0
     fi
-    
+
     # Add EOF marker
     echo "" >> "$file"
     echo "# EOF" >> "$file"
@@ -15167,10 +15167,10 @@ def main():
     Examples:
       # Basic usage
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx
-      
+
       # With custom discount rate and DSCR threshold
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --discount 0.10 --dscr 1.30
-      
+
       # Skip charts for faster processing
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --no-charts
         """,
@@ -16600,10 +16600,10 @@ class ScenarioAnalytics:
     Examples:
       # Basic usage
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx
-      
+
       # With custom discount rate and DSCR threshold
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --discount 0.10 --dscr 1.30
-      
+
       # Skip charts for faster processing
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --no-charts
             """,
@@ -19282,8 +19282,8 @@ def generate_executive_summary(
 ## Coverage Summary
 
 - **Minimum DSCR:** {_format_ratio(dscr_min)}
-- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])} 
-- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])} 
+- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])}
+- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])}
 
 ---
 
@@ -19385,9 +19385,9 @@ def generate_dfi_lender_pack(
 ## Minimum/Mean Coverage
 
 - **Minimum DSCR:** {_format_ratio(dscr_min)}
-- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])} 
+- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])}
 - **LLCR Avg:** {_format_ratio(llcr_summary['llcr_avg'])}
-- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])} 
+- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])}
 - **PLCR Avg:** {_format_ratio(plcr_summary['plcr_avg'])}
 
 ---
@@ -21519,9 +21519,9 @@ def generate_covenant_certificate(
     report = f"""# COVENANT COMPLIANCE CERTIFICATE
 ## Dutch Bay 150MW Wind Farm Project
 
-**Reporting Period:** {reporting_period}  
-**Report Date:** {report_date}  
-**Prepared By:** Envision Energy / Financial Team  
+**Reporting Period:** {reporting_period}
+**Report Date:** {report_date}
+**Prepared By:** Envision Energy / Financial Team
 **Lender:** {lender_name}
 
 ---
@@ -21593,8 +21593,8 @@ I hereby certify that:
 
 **Authorized Signatory:**
 
-Name: ______________________  
-Title: Chief Financial Officer  
+Name: ______________________
+Title: Chief Financial Officer
 Date: {report_date}
 
 ---
@@ -21607,7 +21607,7 @@ Date: {report_date}
 
 ---
 
-*Generated by DutchBay V13 Financial Model - P0-1C*  
+*Generated by DutchBay V13 Financial Model - P0-1C*
 *Report ID: COV-{datetime.now().strftime("%Y%m%d-%H%M%S")}*
 """
 
@@ -21690,8 +21690,8 @@ def generate_investment_committee_summary(
     report = f"""# INVESTMENT COMMITTEE SUMMARY
 ## P0-1C: Enhanced Coverage Metrics Implementation
 
-**Date:** {report_date}  
-**Project:** Dutch Bay 150MW Wind Farm  
+**Date:** {report_date}
+**Project:** Dutch Bay 150MW Wind Farm
 **Phase:** P0-1C Complete
 
 ---
@@ -21749,9 +21749,9 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 ## RISK ASSESSMENT
 
 ### Strengths:
-{'✅ All metrics significantly exceed minimums' if all_pass else '⚠️ Covenant compliance under review'}  
-✅ Conservative debt structure  
-✅ Strong downside protection for equity  
+{'✅ All metrics significantly exceed minimums' if all_pass else '⚠️ Covenant compliance under review'}
+✅ Conservative debt structure
+✅ Strong downside protection for equity
 ✅ DFI-compliant methodology and reporting
 
 ### Considerations:
@@ -21788,13 +21788,13 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 
 ---
 
-**Prepared by:** Financial Modeling Team  
-**Date:** {report_date}  
+**Prepared by:** Financial Modeling Team
+**Date:** {report_date}
 **Status:** For Committee Review
 
 ---
 
-*Generated by DutchBay V13 Financial Model - P0-1C*  
+*Generated by DutchBay V13 Financial Model - P0-1C*
 *Report ID: IC-{datetime.now().strftime("%Y%m%d-%H%M%S")}*
 """
 
@@ -22168,7 +22168,7 @@ $defs:
     # Soft guidance section (no hard cross-field logic; engine resolves precedence)
     type: object
 
-    
+
 ---END:yaml---
 
 ------------------------------------------------
@@ -24876,7 +24876,7 @@ Total violation sites: 2
 LINE 61
 ================================================================================
       58:     Example (CLI style)::
-      59: 
+      59:
       60:         try:
 >>>   61:             validate_config_for_v14(raw_config=cfg, config_path=config_path, modules=["cashflow", "debt"])
       62:         except ConfigValidationError as exc:
@@ -24894,8 +24894,8 @@ LINE 279
      278:         raise ConfigValidationError(
 >>>  279:             f"Config '{config_path}' is missing or has invalid required fields: {details}"
      280:         )
-     281: 
-     282: 
+     281:
+     282:
 
     Length: 90 characters (limit: 88)
     Excess: 2 characters
@@ -24927,15 +24927,15 @@ from typing import List, Tuple
 
 class FileEditor:
     """Safe, reliable file editing with Python"""
-    
+
     def __init__(self, verbose=True):
         self.verbose = verbose
         self.repo_root = Path.cwd()
-    
+
     def log(self, msg: str):
         if self.verbose:
             print(f"✓ {msg}")
-    
+
     def fix_e265_block_comments(self) -> int:
         """Fix E265: Block comment should start with '# '"""
         fixed = 0
@@ -24943,16 +24943,16 @@ class FileEditor:
             ('analytics/fx/correlation.py', 7),
             ('analytics/fx/processor.py', 7),
         ]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 print(f"✗ {filepath} not found")
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             # Line number is 1-indexed, convert to 0-indexed
             idx = line_num - 1
             if idx < len(lines):
@@ -24964,49 +24964,49 @@ class FileEditor:
                         f.writelines(lines)
                     self.log(f"E265: {filepath}:{line_num}")
                     fixed += 1
-        
+
         return fixed
-    
+
     def fix_w391_blank_eof(self) -> int:
         """Fix W391: Blank line at end of file"""
         fixed = 0
         files = ['tests/contracts/test_sensitivity_edgecases.py']
-        
+
         for filepath in files:
             path = self.repo_root / filepath
             if not path.exists():
                 print(f"✗ {filepath} not found")
                 continue
-            
+
             with open(path, 'r') as f:
                 content = f.read()
-            
+
             # Remove trailing blank lines, keep only one newline
             original = content
             content = content.rstrip() + '\n'
-            
+
             if content != original:
                 with open(path, 'w') as f:
                     f.write(content)
                 self.log(f"W391: {filepath}")
                 fixed += 1
-        
+
         return fixed
-    
+
     def fix_c420_dict_fromkeys(self) -> int:
         """Fix C420: Use dict.fromkeys() instead of dict comprehension"""
         fixed = 0
         files = [('analytics/executive_workbook.py', 72)]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 print(f"✗ {filepath} not found")
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             idx = line_num - 1
             if idx < len(lines):
                 line = lines[idx]
@@ -25023,23 +25023,23 @@ class FileEditor:
                         f.writelines(lines)
                     self.log(f"C420: {filepath}:{line_num}")
                     fixed += 1
-        
+
         return fixed
-    
+
     def fix_c408_dict_literal(self) -> int:
         """Fix C408: Use dict literal instead of dict() call"""
         fixed = 0
         files = [('analytics/sensitivity_visualization.py', 80)]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 print(f"✗ {filepath} not found")
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             idx = line_num - 1
             if idx < len(lines):
                 line = lines[idx]
@@ -25057,23 +25057,23 @@ class FileEditor:
                                 f.writelines(lines)
                             self.log(f"C408: {filepath}:{line_num}")
                             fixed += 1
-        
+
         return fixed
-    
+
     def fix_f841_unused_variables(self) -> int:
         """Fix F841: Unused variable - prefix with underscore"""
         fixed = 0
         files = [('tests/analytics_layer/test_sensitivity_v14.py', 259)]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 print(f"✗ {filepath} not found")
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             idx = line_num - 1
             if idx < len(lines):
                 line = lines[idx]
@@ -25084,9 +25084,9 @@ class FileEditor:
                         f.writelines(lines)
                     self.log(f"F841: {filepath}:{line_num}")
                     fixed += 1
-        
+
         return fixed
-    
+
     def fix_all_quick_wins(self) -> int:
         """Fix all quick wins in one go"""
         total = 0
@@ -25107,10 +25107,10 @@ def main():
     parser.add_argument('--fix-f841', action='store_true', help='Fix F841 unused variables')
     parser.add_argument('--fix-all', action='store_true', help='Fix all quick wins')
     parser.add_argument('--verbose', action='store_true', default=True, help='Verbose output')
-    
+
     args = parser.parse_args()
     editor = FileEditor(verbose=args.verbose)
-    
+
     total = 0
     if args.fix_all or not any([args.fix_e265, args.fix_w391, args.fix_c420, args.fix_c408, args.fix_f841]):
         print("=== FIXING ALL QUICK WINS ===")
@@ -25126,7 +25126,7 @@ def main():
             total += editor.fix_c408_dict_literal()
         if args.fix_f841:
             total += editor.fix_f841_unused_variables()
-    
+
     print(f"\n✅ Fixed {total} violations")
 
 
@@ -25137,15 +25137,15 @@ if __name__ == '__main__':
         """Add # noqa: C420 for dict comprehensions that aren't removable"""
         fixed = 0
         files = [('analytics/executive_workbook.py', 72)]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             idx = line_num - 1
             if idx < len(lines) and '# noqa' not in lines[idx]:
                 lines[idx] = lines[idx].rstrip() + '  # noqa: C420\n'
@@ -25153,22 +25153,22 @@ if __name__ == '__main__':
                     f.writelines(lines)
                 self.log(f"C420 noqa: {filepath}:{line_num}")
                 fixed += 1
-        
+
         return fixed
-    
+
     def fix_c408_dict_kwargs(self) -> int:
         """Fix C408: Use dict literal {**kwargs} instead of dict(kwargs=value)"""
         fixed = 0
         files = [('analytics/sensitivity_visualization.py', 80)]
-        
+
         for filepath, line_num in files:
             path = self.repo_root / filepath
             if not path.exists():
                 continue
-            
+
             with open(path, 'r') as f:
                 lines = f.readlines()
-            
+
             idx = line_num - 1
             if idx < len(lines):
                 line = lines[idx]
@@ -25179,7 +25179,7 @@ if __name__ == '__main__':
                         f.writelines(lines)
                     self.log(f"C408: {filepath}:{line_num}")
                     fixed += 1
-        
+
         return fixed
 
 # Update main to include new fixes
@@ -25392,10 +25392,10 @@ finance/equity_v14.py - E501/B950 violation
 Line: 39
 
       36:     """
-      37: 
+      37:
       38:     cashflows: List[Number]
 >>>   39:     """Full equity cashflow series (negative = contributions, positive = distributions)."""
-      40: 
+      40:
       41:     total_invested: float
       42:     """Total equity contributed (absolute value of negative cashflows)."""
 
@@ -25410,9 +25410,9 @@ Line: 291
 
      288: ) -> Optional[float]:
      289:     """Date-adjusted Internal Rate of Return (XIRR) with configurable bounds.
-     290: 
+     290:
 >>>  291:     Uses bisection method directly (more reliable than library XIRR for irregular dates).
-     292: 
+     292:
      293:     Parameters
      294:     ----------
 
@@ -25477,7 +25477,7 @@ with open(filepath, 'r') as f:
     lines = f.readlines()
 
 # Line 178: for k, tr in tranches.items() - tr IS used, so no noqa
-# Line 180: max(tr.years_io for tr in ...) - tr IS used, so no noqa  
+# Line 180: max(tr.years_io for tr in ...) - tr IS used, so no noqa
 # Lines 183, 198: for k, tr in tranches.items() - tr IS used in loop
 
 # Actually, reviewing the code: ALL tr variables ARE used!
@@ -25576,10 +25576,10 @@ Imports:
 
 #### Helper functions
 
-- `_safe_float(value, default=0.0) -> float`  
+- `_safe_float(value, default=0.0) -> float`
   Defensive float conversion (rarely needed outside this module).
 
-- `_summary_stats(values) -> dict`  
+- `_summary_stats(values) -> dict`
   Returns `{min, max, mean, median}` for a numeric series, with all fields `None` on empty input.
 
 #### `calculate_scenario_kpis(...)`
@@ -25787,11 +25787,11 @@ sa = ScenarioAnalytics(
 
 Core methods:
 
-- `discover_scenarios() -> List[Path]`  
-  - Scans `scenarios_dir` for `*.yaml`, `*.yml`, `*.json`.  
+- `discover_scenarios() -> List[Path]`
+  - Scans `scenarios_dir` for `*.yaml`, `*.yml`, `*.json`.
   - Raises `FileNotFoundError` if the directory itself is missing.
 
-- `process_scenario(config_path: Path) -> ScenarioResult`  
+- `process_scenario(config_path: Path) -> ScenarioResult`
   For a single scenario:
   1. Loads and normalises the config via `load_scenario_config`.
   2. Builds annual cashflows via `build_annual_rows(config)`.
@@ -25801,12 +25801,12 @@ Core methods:
   6. Merges EPC breakdown into the KPI dict (if available).
   7. Returns a `ScenarioResult` with all artefacts attached.
 
-- `_build_dataframes(results)` (internal)  
+- `_build_dataframes(results)` (internal)
   - Builds:
     - **summary_df**: one row per scenario, essentially `result.kpis` plus `scenario_name`.
     - **timeseries_df**: flattens each `annual_rows` list into long form with scenario labels.
 
-- `run(export_excel=True, export_charts=False)`  
+- `run(export_excel=True, export_charts=False)`
   - Discovers all scenarios under `scenarios_dir`.
   - Runs `process_scenario` for each, capturing any failures.
   - Logs a multi‑scenario summary, including a list of failures if any.
@@ -26050,33 +26050,33 @@ def gather():
         'analytics/fx/risk.py': 83,
         'analytics/sensitivity_pareto.py': 21,
     }
-    
+
     output = ["=" * 80, "VIOLATION CONTEXT", "=" * 80, ""]
-    
+
     for filepath, line_nums in files.items():
         if not Path(filepath).exists():
             output.append(f"NOT FOUND: {filepath}")
             continue
-        
+
         if isinstance(line_nums, int):
             line_nums = [line_nums]
-        
+
         with open(filepath, 'r') as f:
             lines = f.readlines()
-        
+
         for line_num in line_nums:
             output.append("")
             output.append("=" * 80)
             output.append(f"FILE: {filepath} | LINE: {line_num}")
             output.append("=" * 80)
-            
+
             start = max(0, line_num - 4)
             end = min(len(lines), line_num + 3)
-            
+
             for i in range(start, end):
                 marker = ">>> " if i == line_num - 1 else "    "
                 output.append(f"{marker}{i+1:4d}: {lines[i].rstrip()}")
-    
+
     return "\n".join(output)
 
 if __name__ == '__main__':
@@ -26119,11 +26119,11 @@ Total violation sites: 3
 ================================================================================
 LINE 6
 ================================================================================
-       3: 
+       3:
        4: PURPOSE:
        5:     For a given scenario/param set, generates PNG heatmaps for all param pairs.
 >>>    6:     Useful for investigator/developer speed, board or IC slide decks, and automated model validation.
-       7: 
+       7:
        8: USAGE:
        9:     from analytics.sensitivity.batch import batch_heatmap_grid
 
@@ -26134,10 +26134,10 @@ LINE 6
 LINE 13
 ================================================================================
       10:     batch_heatmap_grid(config_path, params)
-      11: 
+      11:
       12: OUTPUT:
 >>>   13:     Exports all heatmaps to "exports/heatmaps/" as PNG files for inclusion in PowerPoint, docs, or dashboard.
-      14: 
+      14:
       15: EXAMPLE:
       16:     batch_heatmap_grid("scenarios/basecase.yaml", params, steps=4)
 
@@ -26174,7 +26174,7 @@ from pathlib import Path
 
 def fix_all_violations():
     """Apply all fixes"""
-    
+
     fixes = [
         # B007: Rename unused loop variables
         {
@@ -26227,19 +26227,19 @@ def fix_all_violations():
             'new': 'failed = batch_report.failed'
         },
     ]
-    
+
     fixed_count = 0
-    
+
     for fix in fixes:
         filepath = Path(fix['file'])
-        
+
         if not filepath.exists():
             print(f"✗ {fix['file']} not found")
             continue
-        
+
         with open(filepath, 'r') as f:
             content = f.read()
-        
+
         if fix['old'] in content:
             content = content.replace(fix['old'], fix['new'])
             with open(filepath, 'w') as f:
@@ -26248,23 +26248,23 @@ def fix_all_violations():
             fixed_count += 1
         else:
             print(f"⚠ {fix['file']}:{fix['line']} - pattern not found")
-    
+
     # B006: Mutable defaults - mark with noqa
     b006_fixes = [
         ('analytics/fx/risk.py', 83),
         ('analytics/sensitivity_pareto.py', 21),
     ]
-    
+
     print("\n=== B006 (Mutable Defaults) ===")
     for filepath, line_num in b006_fixes:
         path = Path(filepath)
         if not path.exists():
             print(f"✗ {filepath} not found")
             continue
-        
+
         with open(path, 'r') as f:
             lines = f.readlines()
-        
+
         line_idx = line_num - 1
         if line_idx < len(lines):
             line = lines[line_idx]
@@ -26274,7 +26274,7 @@ def fix_all_violations():
                     f.writelines(lines)
                 print(f"✓ {filepath}:{line_num} - added # noqa: B006")
                 fixed_count += 1
-    
+
     return fixed_count
 
 if __name__ == '__main__':
@@ -26282,9 +26282,9 @@ if __name__ == '__main__':
     print("APPLYING FIXES FOR B007, B009, B006 VIOLATIONS")
     print("=" * 80)
     print()
-    
+
     total = fix_all_violations()
-    
+
     print()
     print("=" * 80)
     print(f"✅ TOTAL FIXED: {total} violations")
@@ -26296,364 +26296,364 @@ if __name__ == '__main__':
 FILE: legacy/Old docs to ignore/missing_model_variables_to_fill.txt
 
 ---BEGIN:txt---
-__future__: 
-__main__: 
-__name__: 
-_validate_debt_dict: 
-_validate_params_dict: 
-a.outputs_dir: 
-a.scenarios_dir: 
-a_dscr: 
-a_irr: 
-additional_dependencies: 
-all_errors: 
-amort_years_total: 
-amortization_schedule: 
-annual_data: 
-avg_dscr: 
-b_dscr: 
-b_irr: 
-base_cost_usd: 
-base_dscr: 
-base_equity_irr: 
-base_grid: 
-base_irr: 
-base_json: 
-base_model: 
-base_npv: 
-base_png: 
-base_value: 
-baseline_dscr.png: 
-baseline_equity_fcf.png: 
-best_dscr: 
-best_equity_irr: 
-best_irr: 
-best_min_dscr: 
-blended_rate: 
-build_cashflow: 
-build_financial_model: 
-build_schedule: 
-capacity_factor: 
-capture_output: 
-cash_flows: 
-cf_p50: 
-cfads_usd: 
-cfg_path: 
-config_path: 
-constraint_violations: 
-contingency_pct: 
-contingency_usd: 
-create_app: 
-create_default_debt_structure: 
-create_default_parameters: 
-d.debt_ratio: 
-debt.debt_tenor_years: 
-debt.grace_years: 
-debt.lkr_debt: 
-debt.lkr_rate: 
-debt.principal_pct_1_4: 
-debt.principal_pct_5_on: 
-debt.total_debt: 
-debt.usd_debt: 
-debt.usd_debt_ratio: 
-debt.usd_dfi_pct: 
-debt.usd_dfi_rate: 
-debt.usd_mkt_rate: 
-debt_html: 
-debt_inputs: 
-debt_ratio: 
-debt_schedule: 
-debt_service: 
-debt_service_usd: 
-debt_template: 
-debt_tenor_years: 
-delta_dscr: 
-delta_irr: 
-delta_irr_pct: 
-delta_npv: 
-dfi_pct: 
-dfi_pct_of_usd: 
-discount_rate: 
-dr_vals: 
-dscr_hi: 
-dscr_lo: 
-dscr_vals: 
-dscr_violation: 
-dutchbay_v13: 
-dutchbay_v13.adapters: 
-dutchbay_v13.api: 
-dutchbay_v13.cli: 
-dutchbay_v13.core: 
-dutchbay_v13.epc: 
-dutchbay_v13.finance.debt: 
-dutchbay_v13.finance.irr: 
-dutchbay_v13.report_pdf.build_pdf_report: 
-dutchbay_v13.scenario_runner: 
-dutchbay_v13.types: 
-ebit_usd: 
-ebit_y: 
-ebitda_y: 
-ebt_usd: 
-econ_life: 
-epc_summary.json: 
-eq_cf: 
-eq_cf_full: 
-eq_cfs: 
-eq_irr: 
-equity_cashflows: 
-equity_fcf: 
-equity_fcf_usd: 
-equity_irr: 
-equity_irr_result: 
-equity_irr_result.irr: 
-equity_irr_result.method: 
-equity_irr_result.status: 
-error_msg: 
-exist_ok: 
-expected_metrics: 
-failed_count: 
-first_block: 
-freight_pct: 
-freight_usd: 
-frontier_count: 
-frontier_df: 
-frontier_ranked: 
-fx_depr: 
-fx_high_tariff_min: 
-fx_init: 
-fx_initial: 
-fx_initial.: 
-fx_rate: 
-fx_year: 
-grace_period: 
-grace_vals: 
-grace_years: 
-grid_count: 
-grid_df: 
-grid_dr: 
-grid_grace: 
-grid_tenor: 
-grid_yaml: 
-high_irr: 
-hours_per_year: 
-html_path: 
-img_pareto: 
-img_tornado: 
-in_dir: 
-initial_guess: 
-interest_usd: 
-irr_convergence_status: 
-irr_hi: 
-irr_lo: 
-irr_method: 
-irr_result: 
-irr_violation: 
-is_int: 
-is_valid: 
-jsonl_lines: 
-language_version: 
-last_amort_year: 
-lkr_bal: 
-lkr_comp_usd: 
-lkr_debt: 
-lkr_debt_rate: 
-lkr_ds: 
-lkr_ds_hist: 
-lkr_int: 
-lkr_int_usd: 
-lkr_interest_hist: 
-lkr_portion_base: 
-lkr_portion_usd: 
-lkr_prin: 
-lkr_prin_usd: 
-lkr_principal_hist: 
-lkr_rate: 
-lkr_split: 
-low_irr: 
-max_debt_ratio: 
-max_irr: 
-max_iterations: 
-max_rows: 
-mean_equity_irr: 
-media_type: 
-min_dscr: 
-min_irr: 
-monte_carlo: 
-months_to_cod: 
-n_scenarios: 
-nameplate_mw: 
-nlc_dscr: 
-nlc_irr: 
-not_a_param: 
-npv_12: 
-npv_12pct: 
-npv_check: 
-npv_fn: 
-objective_func: 
-op_cf: 
-op_cf_avail: 
-op_cf_y: 
-opex_esc_lkr: 
-opex_esc_usd: 
-opex_split_lkr: 
-opex_split_usd: 
-opex_splits_sum_to_one: 
-opex_usd: 
-opex_usd_mwh: 
-optimal_debt_ratio: 
-optimal_dfi_pct: 
-optimal_usd_pct: 
-optimized_equity_irr: 
-optimized_min_dscr: 
-optimized_npv: 
-optimized_project_irr: 
-out_data: 
-out_dir: 
-output_dir: 
-outputs_dir: 
-p.base_cost_usd: 
-p.cf_p50: 
-p.contingency_pct: 
-p.freight_pct: 
-p.fx_rate: 
-p.hours_per_year: 
-p.opex_split_lkr: 
-p.opex_split_usd: 
-p.opex_usd_mwh: 
-p.project_life_years: 
-p.tariff_lkr_kwh: 
-p.tax_rate: 
-p.total_capex: 
-p10_equity_irr: 
-p90_equity_irr: 
-param_df: 
-param_html: 
-param_inputs: 
-params.total_capex: 
-pareto_csv: 
-pareto_df: 
-pareto_frontier.csv: 
-pareto_frontier.json: 
-pareto_grid_results.csv: 
-pareto_summary.json: 
-pareto_utopia_ranked.csv: 
-pdf_path: 
-per_mwh_usd: 
-principal_first: 
-principal_pct_1_4: 
-principal_pct_5_on: 
-principal_second: 
-principal_sum: 
-principal_usd: 
-prj_irr: 
-production_mwh: 
-proj.cf_p50: 
-proj.fx_initial: 
-proj.hours_per_year: 
-proj.nameplate_mw: 
-proj.opex_split_lkr: 
-proj.opex_split_usd: 
-proj.opex_usd_mwh: 
-proj.principal_pct_1_4: 
-proj.principal_pct_5_on: 
-proj.project_life_years: 
-proj.sscl_rate: 
-proj.tariff_lkr_kwh: 
-proj.total_capex: 
-proj_cf: 
-proj_cfs: 
-proj_irr: 
-project_cashflow: 
-project_cashflows: 
-project_cf: 
-project_irr: 
-project_irr_result: 
-project_irr_result.irr: 
-project_life_years: 
-project_years: 
-pull_request: 
-response_class: 
-revenue_lkr: 
-revenue_usd: 
-run_cashflow_demo: 
-run_debt_demo: 
-run_dir: 
-run_epc: 
-run_irr_demo: 
-run_matrix: 
-run_monte_carlo: 
-run_monte_carlo_demo: 
-run_utils_demo: 
-run_validate_demo: 
-save_annual: 
-scen_dir: 
-scenario_runner: 
-second_block: 
-setuptools.build_meta: 
-sign_changes: 
-sort_keys: 
-sscl_rate: 
-sscl_usd: 
-start_amort: 
-store_true: 
-stress_pct: 
-stressed_dscr: 
-stressed_equity_irr: 
-stressed_npv: 
-stressed_value: 
-success_rate: 
-tariff_lkr_kwh: 
-tariff_usd: 
-tariff_usd_guardrail: 
-tariff_usd_per_kwh: 
-tax_on_ebit: 
-tax_on_ebt: 
-tax_rate: 
-tax_usd: 
-tax_y: 
-tenor_vals: 
-tenor_years: 
-terms.usd_mkt_rate: 
-test_params: 
-tmp_path: 
-tornado_csv: 
-tornado_data: 
-tornado_data.csv: 
-tornado_data.json: 
-tornado_df: 
-total_capex: 
-total_debt: 
-total_ds: 
-total_epc_lcy: 
-total_epc_usd: 
-total_lcy: 
-total_usd: 
-usd_bal: 
-usd_comp: 
-usd_debt: 
-usd_debt_rate: 
-usd_debt_ratio: 
-usd_debt_tenor: 
-usd_dfi_pct: 
-usd_dfi_rate: 
-usd_int: 
-usd_interest_hist: 
-usd_mkt_pct: 
-usd_mkt_rate: 
-usd_pct: 
-usd_portion: 
-usd_prin: 
-usd_principal_hist: 
-usd_rate: 
-usd_split: 
-utopia_csv: 
-utopia_df: 
-utopia_distance: 
-validate_debt_structure: 
-workflow_dispatch: 
-yaml_path: 
-year1_dscr: 
-yearly_degradation: 
+__future__:
+__main__:
+__name__:
+_validate_debt_dict:
+_validate_params_dict:
+a.outputs_dir:
+a.scenarios_dir:
+a_dscr:
+a_irr:
+additional_dependencies:
+all_errors:
+amort_years_total:
+amortization_schedule:
+annual_data:
+avg_dscr:
+b_dscr:
+b_irr:
+base_cost_usd:
+base_dscr:
+base_equity_irr:
+base_grid:
+base_irr:
+base_json:
+base_model:
+base_npv:
+base_png:
+base_value:
+baseline_dscr.png:
+baseline_equity_fcf.png:
+best_dscr:
+best_equity_irr:
+best_irr:
+best_min_dscr:
+blended_rate:
+build_cashflow:
+build_financial_model:
+build_schedule:
+capacity_factor:
+capture_output:
+cash_flows:
+cf_p50:
+cfads_usd:
+cfg_path:
+config_path:
+constraint_violations:
+contingency_pct:
+contingency_usd:
+create_app:
+create_default_debt_structure:
+create_default_parameters:
+d.debt_ratio:
+debt.debt_tenor_years:
+debt.grace_years:
+debt.lkr_debt:
+debt.lkr_rate:
+debt.principal_pct_1_4:
+debt.principal_pct_5_on:
+debt.total_debt:
+debt.usd_debt:
+debt.usd_debt_ratio:
+debt.usd_dfi_pct:
+debt.usd_dfi_rate:
+debt.usd_mkt_rate:
+debt_html:
+debt_inputs:
+debt_ratio:
+debt_schedule:
+debt_service:
+debt_service_usd:
+debt_template:
+debt_tenor_years:
+delta_dscr:
+delta_irr:
+delta_irr_pct:
+delta_npv:
+dfi_pct:
+dfi_pct_of_usd:
+discount_rate:
+dr_vals:
+dscr_hi:
+dscr_lo:
+dscr_vals:
+dscr_violation:
+dutchbay_v13:
+dutchbay_v13.adapters:
+dutchbay_v13.api:
+dutchbay_v13.cli:
+dutchbay_v13.core:
+dutchbay_v13.epc:
+dutchbay_v13.finance.debt:
+dutchbay_v13.finance.irr:
+dutchbay_v13.report_pdf.build_pdf_report:
+dutchbay_v13.scenario_runner:
+dutchbay_v13.types:
+ebit_usd:
+ebit_y:
+ebitda_y:
+ebt_usd:
+econ_life:
+epc_summary.json:
+eq_cf:
+eq_cf_full:
+eq_cfs:
+eq_irr:
+equity_cashflows:
+equity_fcf:
+equity_fcf_usd:
+equity_irr:
+equity_irr_result:
+equity_irr_result.irr:
+equity_irr_result.method:
+equity_irr_result.status:
+error_msg:
+exist_ok:
+expected_metrics:
+failed_count:
+first_block:
+freight_pct:
+freight_usd:
+frontier_count:
+frontier_df:
+frontier_ranked:
+fx_depr:
+fx_high_tariff_min:
+fx_init:
+fx_initial:
+fx_initial.:
+fx_rate:
+fx_year:
+grace_period:
+grace_vals:
+grace_years:
+grid_count:
+grid_df:
+grid_dr:
+grid_grace:
+grid_tenor:
+grid_yaml:
+high_irr:
+hours_per_year:
+html_path:
+img_pareto:
+img_tornado:
+in_dir:
+initial_guess:
+interest_usd:
+irr_convergence_status:
+irr_hi:
+irr_lo:
+irr_method:
+irr_result:
+irr_violation:
+is_int:
+is_valid:
+jsonl_lines:
+language_version:
+last_amort_year:
+lkr_bal:
+lkr_comp_usd:
+lkr_debt:
+lkr_debt_rate:
+lkr_ds:
+lkr_ds_hist:
+lkr_int:
+lkr_int_usd:
+lkr_interest_hist:
+lkr_portion_base:
+lkr_portion_usd:
+lkr_prin:
+lkr_prin_usd:
+lkr_principal_hist:
+lkr_rate:
+lkr_split:
+low_irr:
+max_debt_ratio:
+max_irr:
+max_iterations:
+max_rows:
+mean_equity_irr:
+media_type:
+min_dscr:
+min_irr:
+monte_carlo:
+months_to_cod:
+n_scenarios:
+nameplate_mw:
+nlc_dscr:
+nlc_irr:
+not_a_param:
+npv_12:
+npv_12pct:
+npv_check:
+npv_fn:
+objective_func:
+op_cf:
+op_cf_avail:
+op_cf_y:
+opex_esc_lkr:
+opex_esc_usd:
+opex_split_lkr:
+opex_split_usd:
+opex_splits_sum_to_one:
+opex_usd:
+opex_usd_mwh:
+optimal_debt_ratio:
+optimal_dfi_pct:
+optimal_usd_pct:
+optimized_equity_irr:
+optimized_min_dscr:
+optimized_npv:
+optimized_project_irr:
+out_data:
+out_dir:
+output_dir:
+outputs_dir:
+p.base_cost_usd:
+p.cf_p50:
+p.contingency_pct:
+p.freight_pct:
+p.fx_rate:
+p.hours_per_year:
+p.opex_split_lkr:
+p.opex_split_usd:
+p.opex_usd_mwh:
+p.project_life_years:
+p.tariff_lkr_kwh:
+p.tax_rate:
+p.total_capex:
+p10_equity_irr:
+p90_equity_irr:
+param_df:
+param_html:
+param_inputs:
+params.total_capex:
+pareto_csv:
+pareto_df:
+pareto_frontier.csv:
+pareto_frontier.json:
+pareto_grid_results.csv:
+pareto_summary.json:
+pareto_utopia_ranked.csv:
+pdf_path:
+per_mwh_usd:
+principal_first:
+principal_pct_1_4:
+principal_pct_5_on:
+principal_second:
+principal_sum:
+principal_usd:
+prj_irr:
+production_mwh:
+proj.cf_p50:
+proj.fx_initial:
+proj.hours_per_year:
+proj.nameplate_mw:
+proj.opex_split_lkr:
+proj.opex_split_usd:
+proj.opex_usd_mwh:
+proj.principal_pct_1_4:
+proj.principal_pct_5_on:
+proj.project_life_years:
+proj.sscl_rate:
+proj.tariff_lkr_kwh:
+proj.total_capex:
+proj_cf:
+proj_cfs:
+proj_irr:
+project_cashflow:
+project_cashflows:
+project_cf:
+project_irr:
+project_irr_result:
+project_irr_result.irr:
+project_life_years:
+project_years:
+pull_request:
+response_class:
+revenue_lkr:
+revenue_usd:
+run_cashflow_demo:
+run_debt_demo:
+run_dir:
+run_epc:
+run_irr_demo:
+run_matrix:
+run_monte_carlo:
+run_monte_carlo_demo:
+run_utils_demo:
+run_validate_demo:
+save_annual:
+scen_dir:
+scenario_runner:
+second_block:
+setuptools.build_meta:
+sign_changes:
+sort_keys:
+sscl_rate:
+sscl_usd:
+start_amort:
+store_true:
+stress_pct:
+stressed_dscr:
+stressed_equity_irr:
+stressed_npv:
+stressed_value:
+success_rate:
+tariff_lkr_kwh:
+tariff_usd:
+tariff_usd_guardrail:
+tariff_usd_per_kwh:
+tax_on_ebit:
+tax_on_ebt:
+tax_rate:
+tax_usd:
+tax_y:
+tenor_vals:
+tenor_years:
+terms.usd_mkt_rate:
+test_params:
+tmp_path:
+tornado_csv:
+tornado_data:
+tornado_data.csv:
+tornado_data.json:
+tornado_df:
+total_capex:
+total_debt:
+total_ds:
+total_epc_lcy:
+total_epc_usd:
+total_lcy:
+total_usd:
+usd_bal:
+usd_comp:
+usd_debt:
+usd_debt_rate:
+usd_debt_ratio:
+usd_debt_tenor:
+usd_dfi_pct:
+usd_dfi_rate:
+usd_int:
+usd_interest_hist:
+usd_mkt_pct:
+usd_mkt_rate:
+usd_pct:
+usd_portion:
+usd_prin:
+usd_principal_hist:
+usd_rate:
+usd_split:
+utopia_csv:
+utopia_df:
+utopia_distance:
+validate_debt_structure:
+workflow_dispatch:
+yaml_path:
+year1_dscr:
+yearly_degradation:
 ---END:txt---
 
 ------------------------------------------------
@@ -26818,7 +26818,7 @@ analytics/contracts_v14.py:198
      197:         min_length=1,
 >>>  198:         description="Parameter to sweep (dot-separated path e.g. project.capex_usd_per_kw)",
      199:     )
-     200: 
+     200:
      201:     base_value: float = Field(
 
     Length: 92 characters (limit: 88)
@@ -26832,7 +26832,7 @@ analytics/contracts_v14.py:700
      699:     """
 >>>  700:     Canonical descriptor for a config/scenario. Used by analytics pipeline and reporting.
      701:     """
-     702: 
+     702:
      703:     scenario_name: str
 
     Length: 89 characters (limit: 88)
@@ -26842,7 +26842,7 @@ analytics/contracts_v14.py:700
 analytics/fx/fx_loader.py:48
 ================================================================================
       45:         scenarios_dir: Path to scenarios directory (default: ./scenarios)
-      46: 
+      46:
       47:     Returns:
 >>>   48:         Dict mapping file stem to Path (e.g., 'fx_data_recent_Period2_2018_2019' -> Path)
       49:     """
@@ -26857,9 +26857,9 @@ analytics/fx/returns.py:204
 ================================================================================
      201:     """
      202:     Calculate Modified Internal Rate of Return.
-     203: 
+     203:
 >>>  204:     MIRR accounts for cost of financing (negative CF) and reinvestment rate (positive CF)
-     205: 
+     205:
      206:     Parameters
      207:     ----------
 
@@ -26870,7 +26870,7 @@ analytics/fx/returns.py:204
 analytics/fx/risk.py:83
 ================================================================================
       80:         }
-      81: 
+      81:
       82:     def percentile_analysis(
 >>>   83:         self, returns: np.ndarray, percentiles: List[int] = [10, 25, 50, 75, 90]  # noqa: B006
       84:     ) -> Dict[str, float]:
@@ -26903,7 +26903,7 @@ analytics/sensitivity_v14.py:72
 >>>   72: from analytics.monte_carlo_v14 import (  # noqa: F401; Reserved for future VaR / CVaR integration
       73:     MonteCarloResult,
       74: )
-      75: 
+      75:
 
     Length: 97 characters (limit: 88)
     Excess: 9 characters
@@ -26912,7 +26912,7 @@ analytics/sensitivity_v14.py:72
 analytics/sensitivity_v14.py:560
 ================================================================================
      557:             a, fa = mid, fmid
-     558: 
+     558:
      559:     logger.warning(
 >>>  560:         "Breakeven did not converge for %s after %d iterations; last bracket=[%.4f, %.4f]",
      561:         variable_name,
@@ -26952,7 +26952,7 @@ for i, line in enumerate(lines):
         loop_indent = len(line) - len(line.lstrip())
         print(f"Line {i+1}: Found _tr loop")
         continue
-    
+
     if in_tr_loop:
         # Check if we've exited the loop (unindented or same indent as for)
         current_indent = len(line) - len(line.lstrip())
@@ -26980,8 +26980,8 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
 ---BEGIN:md---
 # DutchBay_EPC_Model – v14 Analytics & Executive Report Snapshot
 
-**Snapshot date:** 2025-11-20 16:58:27  
-**Branch:** `v14chat-upgrade`  
+**Snapshot date:** 2025-11-20 16:58:27
+**Branch:** `v14chat-upgrade`
 **Context:** Hardening the v14 analytics layer, exports, and executive report wrapper (`make_executive_report.py`).
 
 ---
@@ -26994,8 +26994,8 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
   - `analytics/scenario_loader.py` is now the canonical entry for configs (YAML/JSON).
   - FX config tightened:
     - Scalar `fx: 300.0` is **explicitly rejected**.
-    - Required mapping structure:  
-      `fx: { start_lkr_per_usd: <float>, annual_depr: <float> }`  
+    - Required mapping structure:
+      `fx: { start_lkr_per_usd: <float>, annual_depr: <float> }`
     - Clear error messaging enforced via `tests/test_fx_config_strictness.py`:
       - Asserts `"Invalid FX configuration"` and mapping vs scalar guidance.
   - `load_scenario_config(path)` is the single, test‑covered loader used by the analytics layer.
@@ -27009,10 +27009,10 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
 - **ExcelExporter**
   - Lazily creates a `pandas.ExcelWriter` using `openpyxl` (no empty files).
   - Key methods:
-    - `add_dataframe_sheet(sheet_name, df, freeze_panes=None, format_headers=True, auto_filter=True)`  
+    - `add_dataframe_sheet(sheet_name, df, freeze_panes=None, format_headers=True, auto_filter=True)`
       - Writes a DataFrame to a sheet.
       - Optional header bolding, auto-filter, and freeze panes.
-    - `export_summary_and_timeseries(summary_df, timeseries_df, summary_sheet="Summary", timeseries_sheet="Timeseries", add_board_views=True)`  
+    - `export_summary_and_timeseries(summary_df, timeseries_df, summary_sheet="Summary", timeseries_sheet="Timeseries", add_board_views=True)`
       - Main high‑level entry for ScenarioAnalytics.
       - Writes summary + timeseries sheets.
       - Optionally adds board‑friendly views.
@@ -27031,7 +27031,7 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
 
 - **ChartExporter**
   - Chart‑only helper that **does not touch Excel**.
-  - Constructed with an **output directory**, e.g.  
+  - Constructed with an **output directory**, e.g.
     `ChartExporter(output_dir="exports/Executive_..._charts")`
   - Methods:
     - `_get_plt()` – lazy `matplotlib` import; logs and returns `None` if unavailable.
@@ -27077,8 +27077,8 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
   - Workflow:
     1. Resolve `config_path`, `scenario_id` (= stem of config), and `scenarios_dir` (= parent of config).
     2. Instantiate `ScenarioAnalytics` with:
-       - `scenarios_dir=str(scenarios_dir)`  
-       - `output_path=None`  
+       - `scenarios_dir=str(scenarios_dir)`
+       - `output_path=None`
        - `strict=args.strict_fx_config`
     3. Run analytics: `summary_df, timeseries_df = analytics.run()`.
     4. Filter both DataFrames **by `scenario_id` if `scenario_name` exists**; else log warnings and fall back to unfiltered DataFrames.
@@ -27091,7 +27091,7 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
        - `ChartExporter(output_dir=charts_dir)`
        - Call low‑level chart methods (`export_dscr_chart`, `export_irr_histogram`).
   - Result (current run):
-    - Excel is successfully generated:  
+    - Excel is successfully generated:
       `exports/Executive_dutchbay_lendercase_2025Q4.xlsx`
     - Chart exporter currently logs that DSCR/IRR columns are missing, so no PNGs yet (see TODOs).
 
@@ -27119,8 +27119,8 @@ FILE: legacy/Old docs to ignore/DutchBay_v14_Analytics_Snapshot_2025-11-20.md
     - `tests/api/test_v14_lender_suite.py`
     - `tests/test_cli_v14_smoke.py`
     - `tests/test_v14_pipeline_smoke.py`
-- **Coverage snapshot (last full run)**  
-  - Total coverage ≈ **69%** with a required threshold of **60%** (per `pytest.ini`).  
+- **Coverage snapshot (last full run)**
+  - Total coverage ≈ **69%** with a required threshold of **60%** (per `pytest.ini`).
   - v14 analytics and export helpers are covered by multiple smokes and API tests.
 
 - **CI / fast-lane**
@@ -27285,7 +27285,7 @@ This is the state you observed in the latest run of `make_executive_report.py`:
 ### P1 – Chart exporter ergonomics & executive wrapper clean-up
 
 4. **Add a high-level `export_charts` method to ChartExporter**
-   - Signature idea:  
+   - Signature idea:
      `export_charts(summary_df, timeseries_df, scenario_id=None)`
    - Responsibilities:
      - Resolve which IRR column to use:
@@ -27298,8 +27298,8 @@ This is the state you observed in the latest run of `make_executive_report.py`:
 
 5. **Update `make_executive_report.py` to use `export_charts`**
    - Replace the direct calls:
-     - `chart_exporter.export_dscr_chart(filtered_timeseries)`  
-     - `chart_exporter.export_irr_histogram(filtered_summary)`  
+     - `chart_exporter.export_dscr_chart(filtered_timeseries)`
+     - `chart_exporter.export_irr_histogram(filtered_summary)`
    - With a single call:
      - `chart_exporter.export_charts(filtered_summary, filtered_timeseries, scenario_id=scenario_id)`
    - This keeps the wrapper wafer-thin and pushes the KPI detection logic into the export helper.
@@ -27338,10 +27338,10 @@ This is the state you observed in the latest run of `make_executive_report.py`:
   - New smokes and API tests under `tests/` and `tests/api/`.
 
 **Suggested tagging pattern after commit & push:**
-- Commit message: e.g.  
+- Commit message: e.g.
   `feat(v14): analytics/export layer + executive report wrapper`
-- Tag (annotated): e.g.  
-  `git tag -a v14-analytics-0.1.0 -m "v14 analytics + export + executive report alpha"`  
+- Tag (annotated): e.g.
+  `git tag -a v14-analytics-0.1.0 -m "v14 analytics + export + executive report alpha"`
   `git push origin v14chat-upgrade --tags`
 
 You can now re-upload this document into a fresh ChatGPT thread and treat it as the authoritative “state of play” for the v14 analytics/export/executive layer.
@@ -27364,34 +27364,34 @@ def gather_finance_singles():
         ("finance/irr.py", [291]),
         ("finance/wacc_v14.py", [443]),
     ]
-    
+
     all_output = []
-    
+
     for filepath_str, violation_lines in files_and_lines:
         path = Path(filepath_str)
         if not path.exists():
             all_output.append(f"❌ {filepath_str} not found\n")
             continue
-        
+
         with open(path, "r") as f:
             lines = f.readlines()
-        
+
         all_output.append("=" * 80)
         all_output.append(f"{filepath_str} - E501/B950 violation")
         all_output.append("=" * 80)
         all_output.append(f"\nLine: {violation_lines[0]}\n")
-        
+
         ln = violation_lines[0]
         start = max(0, ln - 4)
         end = min(len(lines), ln + 3)
         for i in range(start, end):
             marker = ">>> " if i == ln - 1 else "    "
             all_output.append(f"{marker}{i+1:4d}: {lines[i].rstrip()}")
-        
+
         length = len(lines[ln - 1].rstrip())
         all_output.append(f"\n    Length: {length} characters (limit: 88)")
         all_output.append(f"    Excess: {length - 88} characters\n")
-    
+
     return "\n".join(all_output)
 
 if __name__ == "__main__":
@@ -27451,11 +27451,11 @@ Total violation sites: 3
 LINE 5
 ================================================================================
        2: validation.py – Parameter Range QA Checker for v14+ Sensitivity Pipelines
-       3: 
+       3:
        4: PURPOSE:
 >>>    5:     Quickly checks that every lift-lower parameter sweep yields reasonable output values.
        6:     Detects config/model errors (negative IRR, crazy outliers) and surface issues early in tests/CI.
-       7: 
+       7:
        8: USAGE:
 
     Length: 89 characters (limit: 88)
@@ -27464,11 +27464,11 @@ LINE 5
 ================================================================================
 LINE 6
 ================================================================================
-       3: 
+       3:
        4: PURPOSE:
        5:     Quickly checks that every lift-lower parameter sweep yields reasonable output values.
 >>>    6:     Detects config/model errors (negative IRR, crazy outliers) and surface issues early in tests/CI.
-       7: 
+       7:
        8: USAGE:
        9:     from analytics.sensitivity.validation import validate_parameter_ranges
 
@@ -27505,7 +27505,7 @@ FILE: analytics/fx/returns.py | LINE: 163
 ================================================================================
      160:     # Newton-Raphson method
      161:     rate = initial_guess
-     162: 
+     162:
 >>>  163:     for iteration in range(max_iterations):
      164:         # Calculate NPV and derivative (NPV')
      165:         npv_val = 0.0
@@ -27549,20 +27549,20 @@ FILE: tests/test_export_smoke.py | LINE: 58
 ================================================================================
       55:     assert hasattr(batch_report, "successful")
       56:     assert hasattr(batch_report, "failed")
-      57: 
+      57:
 >>>   58:     successful = getattr(batch_report, "successful")
       59:     failed = getattr(batch_report, "failed")
-      60: 
+      60:
       61:     # These are currently lists of scenario_ids / error dicts
 
 ================================================================================
 FILE: tests/test_export_smoke.py | LINE: 59
 ================================================================================
       56:     assert hasattr(batch_report, "failed")
-      57: 
+      57:
       58:     successful = getattr(batch_report, "successful")
 >>>   59:     failed = getattr(batch_report, "failed")
-      60: 
+      60:
       61:     # These are currently lists of scenario_ids / error dicts
       62:     assert isinstance(successful, list)
 
@@ -27571,20 +27571,20 @@ FILE: tests/test_scenario_analytics_smoke.py | LINE: 57
 ================================================================================
       54:     assert hasattr(batch_report, "successful")
       55:     assert hasattr(batch_report, "failed")
-      56: 
+      56:
 >>>   57:     successful = getattr(batch_report, "successful")
       58:     failed = getattr(batch_report, "failed")
-      59: 
+      59:
       60:     assert isinstance(successful, list)
 
 ================================================================================
 FILE: tests/test_scenario_analytics_smoke.py | LINE: 58
 ================================================================================
       55:     assert hasattr(batch_report, "failed")
-      56: 
+      56:
       57:     successful = getattr(batch_report, "successful")
 >>>   58:     failed = getattr(batch_report, "failed")
-      59: 
+      59:
       60:     assert isinstance(successful, list)
       61:     assert isinstance(failed, list)
 
@@ -27592,7 +27592,7 @@ FILE: tests/test_scenario_analytics_smoke.py | LINE: 58
 FILE: analytics/fx/risk.py | LINE: 83
 ================================================================================
       80:         }
-      81: 
+      81:
       82:     def percentile_analysis(
 >>>   83:         self, returns: np.ndarray, percentiles: List[int] = [10, 25, 50, 75, 90]
       84:     ) -> Dict[str, float]:
@@ -27843,7 +27843,7 @@ return {
 
 ### 2. Test Data vs Real Model
 
-Current `generate_reports.py` uses simplified test 
+Current `generate_reports.py` uses simplified test
 ```python
 annual_rows = [
     {
@@ -27952,7 +27952,7 @@ python scripts/generate_reports.py
 **P0-2A Coverage Ratios: ✅ COMPLETE**
 
 - LLCR calculation: ✅ Implemented
-- PLCR calculation: ✅ Implemented  
+- PLCR calculation: ✅ Implemented
 - Covenant monitoring: ✅ Implemented
 - Report generation: ✅ Working
 - Test suite: ✅ Created
@@ -28042,26 +28042,26 @@ for i in range(years):
     # Total outstanding at start of this year
     total_outstanding = sum(outstanding_balances.values())
     debt_outstanding_series.append(total_outstanding)  # NEW
-    
+
     # Debt service for this year
     total_service = 0.0
     total_principal_paid = 0.0
-    
+
     for k in schedules:
         if i < len(schedules[k]):
             interest, principal, service = schedules[k][i]
             total_service += service
             total_principal_paid += principal
-            
+
             # Update outstanding balance for this tranche
             outstanding_balances[k] = max(0.0, outstanding_balances[k] - principal)
         else:
             total_service += 0.0
-    
+
     # DSCR calculation
     opcf = cfads[i] if i < len(cfads) else 0.0
     dscr = opcf / total_service if total_service > 0 else float('inf')
-    
+
     dscr_series.append(dscr)
     debt_service_total.append(total_service)
 ```
@@ -28180,12 +28180,12 @@ Total violation sites: 4
 LINE 5
 ================================================================================
        2: stochastic.py – Stochastic Tornado Sensitivity for v14+ analytics
-       3: 
+       3:
        4: PURPOSE:
 >>>    5:     Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter,
        6:     simulates a distribution of outcomes by jittering all other parameters with random noise.
        7:     Used to expose nonlinearities and risk distributions—essential for DFI/board-level and risk-focused dashboards.
-       8: 
+       8:
 
     Length: 111 characters (limit: 88)
     Excess: 23 characters
@@ -28193,12 +28193,12 @@ LINE 5
 ================================================================================
 LINE 6
 ================================================================================
-       3: 
+       3:
        4: PURPOSE:
        5:     Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter,
 >>>    6:     simulates a distribution of outcomes by jittering all other parameters with random noise.
        7:     Used to expose nonlinearities and risk distributions—essential for DFI/board-level and risk-focused dashboards.
-       8: 
+       8:
        9: USAGE:
 
     Length: 93 characters (limit: 88)
@@ -28211,7 +28211,7 @@ LINE 7
        5:     Provides an advanced sensitivity tool that not only sweeps parameters from min→max but, for each parameter,
        6:     simulates a distribution of outcomes by jittering all other parameters with random noise.
 >>>    7:     Used to expose nonlinearities and risk distributions—essential for DFI/board-level and risk-focused dashboards.
-       8: 
+       8:
        9: USAGE:
       10:     Example: Plot violin or P10/P50/P90 impact bands for each driver param.
 
@@ -28225,7 +28225,7 @@ LINE 21
       19:     - n_samples (int): Number of MC samples per sweep point.
       20:     - sweep_size (int): How many points to sample through min→max range.
 >>>   21:     - jitter_pct (float): Standard deviation for random jitter of all non-driver params (percent).
-      22: 
+      22:
       23: RETURNS:
       24:     DataFrame with:
 
@@ -28254,12 +28254,12 @@ Total violation sites (line numbers): 5
 ================================================================================
 LINE 67
 ================================================================================
-      64: 
+      64:
       65: class ScenarioAnalytics:
       66:     """
 >>>   67:     V14-style orchestrator for batch scenario analytics with full Go With The Flow features.
       68:     """
-      69: 
+      69:
       70:     def __init__(
 
     Length: 92 characters (limit: 88)
@@ -28296,12 +28296,12 @@ LINE 120
 ================================================================================
 LINE 230
 ================================================================================
-     227: 
+     227:
      228:         batch_run = self.parallel and len(scenario_paths) > 4
      229:         logger.info(
 >>>  230:             f"Running {len(scenario_paths)} scenario(s) {'in parallel' if batch_run else 'serially'}."
      231:         )
-     232: 
+     232:
      233:         if batch_run:
 
     Length: 102 characters (limit: 88)
@@ -28315,7 +28315,7 @@ LINE 368
      367:                 logger.warning(
 >>>  368:                     f"Could not derive DSCR column: cfads_col={cfads_col}, debt_candidates={debt_candidates}"
      369:                 )
-     370: 
+     370:
      371:         summary_df, timeseries_df = normalise_kpis_for_export(
 
     Length: 109 characters (limit: 88)
@@ -28440,33 +28440,33 @@ def gather_analytics_singles():
         ("analytics/sensitivity_pareto.py", [21]),
         ("analytics/sensitivity_v14.py", [72, 560]),
     ]
-    
+
     all_output = []
-    
+
     for filepath_str, violation_lines in files_and_lines:
         path = Path(filepath_str)
         if not path.exists():
             all_output.append(f"❌ {filepath_str} not found\n")
             continue
-        
+
         with open(path, "r") as f:
             lines = f.readlines()
-        
+
         for ln in violation_lines:
             all_output.append("=" * 80)
             all_output.append(f"{filepath_str}:{ln}")
             all_output.append("=" * 80)
-            
+
             start = max(0, ln - 4)
             end = min(len(lines), ln + 3)
             for i in range(start, end):
                 marker = ">>> " if i == ln - 1 else "    "
                 all_output.append(f"{marker}{i+1:4d}: {lines[i].rstrip()}")
-            
+
             length = len(lines[ln - 1].rstrip())
             all_output.append(f"\n    Length: {length} characters (limit: 88)")
             all_output.append(f"    Excess: {length - 88} characters\n")
-    
+
     return "\n".join(all_output)
 
 if __name__ == "__main__":
@@ -28484,8 +28484,8 @@ FILE: docs/THREAD_MIGRATION_PACKAGE.md
 ---BEGIN:md---
 # 🚦 DutchBay EPC Model Thread Migration Package
 
-**Version:** 1.0  
-**Last Updated:** November 24, 2025  
+**Version:** 1.0
+**Last Updated:** November 24, 2025
 **Purpose:** Restore full project context and quality standards for any AI assistant or collaborator
 
 ---
@@ -28575,7 +28575,7 @@ def validate_parameter_ranges(
     params: Dict[str, float]
 ) -> pd.DataFrame:
     """Validate parameters against defined ranges.
-    
+
     Returns:
         DataFrame with validation results (errors if any)
     """
@@ -28588,7 +28588,7 @@ def validate_parameter_ranges(
                 'value': value
             })
             continue
-        
+
         range_def = config['parameter_ranges'][name]
         if not (range_def['min'] <= value <= range_def['max']):
             errors.append({
@@ -28596,7 +28596,7 @@ def validate_parameter_ranges(
                 'error': f"Value {value} outside range [{range_def['min']}, {range_def['max']}]",
                 'value': value
             })
-    
+
     return pd.DataFrame(errors)
 ```
 
@@ -28623,9 +28623,9 @@ def main() -> int:
         default=Path('exports'),
         help='Output directory for results'
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         config = load_config(args.config)
         results = run_analytics(config)
@@ -28651,22 +28651,22 @@ def save_results(
     run_name: Optional[str] = None
 ) -> Path:
     """Save results with unique timestamped filename.
-    
+
     Never overwrites existing files.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if run_name is None:
         run_name = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
+
     output_path = output_dir / f"results_{run_name}.csv"
-    
+
     # Ensure unique filename
     counter = 1
     while output_path.exists():
         output_path = output_dir / f"results_{run_name}_{counter}.csv"
         counter += 1
-    
+
     results.to_csv(output_path, index=False)
     return output_path
 ```
@@ -28682,7 +28682,7 @@ def save_results(
 
 #### Phase 2: Interactive Analytics (IN PROGRESS 🔄)
 - [ ] Make tornado/sensitivity available via Streamlit
-- [ ] Make Monte Carlo available via Streamlit  
+- [ ] Make Monte Carlo available via Streamlit
 - [ ] Validation (guard) available as REST API
 - [ ] Basic Streamlit dashboard with parameter inputs
 
@@ -28889,7 +28889,7 @@ from typing import Dict
 @dataclass
 class Config:
     parameters: Dict[str, float]
-    
+
     @classmethod
     def from_yaml(cls, path: Path) -> 'Config':
         data = yaml.safe_load(open(path))
@@ -29067,7 +29067,7 @@ FILE: docs/executive_workbook_readme.md
 ---BEGIN:md---
 # Executive Workbook (v14) – Overview
 
-Status: v14 stable (0.2.x)  
+Status: v14 stable (0.2.x)
 Owner: Analytics & Reporting
 
 The **Executive Workbook** is the main Excel artifact produced by the v14
@@ -29295,7 +29295,7 @@ FILE: docs/CODEFREEZE.md
 FILE: docs/sensitivity_data_contracts.md
 
 ---BEGIN:md---
-Absolutely! Here’s a robust “Go with the Flow” approach for **automatic documentation generation** and **test scaffolding** for your advanced sensitivity data contracts and pipeline. This is best-in-class analytics practice:  
+Absolutely! Here’s a robust “Go with the Flow” approach for **automatic documentation generation** and **test scaffolding** for your advanced sensitivity data contracts and pipeline. This is best-in-class analytics practice:
 - **Documentation**: full summary/inventory of every sensitivity-related dataclass/type, usable as Markdown or reStructuredText for Sphinx/Docs.
 - **Test scaffolding**: a template test file that validates all contracts—instantiates with minimal valid dummy data, checks field defaults, basic logic, and type compliance.
 
@@ -29309,7 +29309,7 @@ Absolutely! Here’s a robust “Go with the Flow” approach for **automatic do
 
 ## Sensitivity and Analytics Data Contracts (autosummary, v14+)
 
-This document summarizes all data contracts (dataclasses, Pydantic models) used by the advanced sensitivity, tornado, MC, and optimizer analytics pipeline.  
+This document summarizes all data contracts (dataclasses, Pydantic models) used by the advanced sensitivity, tornado, MC, and optimizer analytics pipeline.
 **Always update this as the definitive source for results/data shapes as you add new models.**
 
 ***
@@ -29319,13 +29319,13 @@ This document summarizes all data contracts (dataclasses, Pydantic models) used 
 Validated config for any tornado driver sweep or MC distribution.
 
 - **Type:** `Pydantic BaseModel`
-- **Fields:**  
+- **Fields:**
   - `variable_name: str` — dot path (e.g., project.capex_usd_per_kw)
   - `base_value: float` — base case value
   - `low_pct: float` — e.g., -20.0
   - `high_pct: float` — e.g., 20.0
   - `steps: int` — (default 5)
-- **Properties:**  
+- **Properties:**
   - `.low_value`, `.high_value` for automatic sweep endpoints
 
 ***
@@ -29335,7 +29335,7 @@ Validated config for any tornado driver sweep or MC distribution.
 One row of a tornado sensitivity analysis; can be used as dict for tables.
 
 - **Type:** `@dataclass`
-- **Fields:**  
+- **Fields:**
   - `variable: str` — parameter
   - `label: str` — human-friendly name
   - `base_value: float`, `low_value: float`, `high_value: float`
@@ -29346,10 +29346,10 @@ One row of a tornado sensitivity analysis; can be used as dict for tables.
 
 ### 3. **SensitivitySuite**
 
-Encapsulates a full tornado analysis for a metric/config.  
+Encapsulates a full tornado analysis for a metric/config.
 Best for export, ranking, and reporting.
 
-- **Fields:**  
+- **Fields:**
   - `tornado_results: List[TornadoResult]`
   - `base_metric: float`
   - `base_config_path: str`
@@ -29361,7 +29361,7 @@ Best for export, ranking, and reporting.
 
 Output from breakeven optimizer.
 
-- **Fields:**  
+- **Fields:**
   - `variable: str`
   - `breakeven_value: Optional[float]`
   - `bracket: Tuple[float, float]`
@@ -29553,7 +29553,7 @@ FILE: docs/architecture_v14.md
 ---BEGIN:md---
 # DutchBay v14 Architecture – Finance & Analytics
 
-Status: v14 stable (0.2.x)  
+Status: v14 stable (0.2.x)
 Scope: Cashflow, debt, KPIs, analytics, exports
 
 This document describes the **canonical v14 pipeline** used by the DutchBay EPC
@@ -29902,7 +29902,7 @@ def run_monte_carlo_equity(config, n_scenarios=1000):
     results = []
     for scenario in range(n_scenarios):
         simulated_cashflows = simulate_equity_cashflows(config)
-        
+
         # ✅ Use existing equity_v14 functions directly
         perf = calculate_equity_performance(
             simulated_cashflows,
@@ -29910,7 +29910,7 @@ def run_monte_carlo_equity(config, n_scenarios=1000):
             current_nav=config.terminal_nav,
         )
         results.append(perf)
-    
+
     # Aggregate distributions
     irr_p10 = percentile([r.equity_irr for r in results], 10)
     irr_p50 = percentile([r.equity_irr for r in results], 50)
@@ -30249,9 +30249,9 @@ For issues or questions:
 
 ---
 
-**Status: ✅ PRODUCTION READY**  
-**Last Updated: 2025-11-18**  
-**Tested: 4 scenarios in 0.5s**  
+**Status: ✅ PRODUCTION READY**
+**Last Updated: 2025-11-18**
+**Tested: 4 scenarios in 0.5s**
 **Ready for: Board reporting, monthly analysis, stakeholder distribution**
 ---END:md---
 
@@ -30540,9 +30540,9 @@ FILE: docs/Cashflow_v14.py refactoring notes.md
 ---BEGIN:md---
 # cashflow_v14.py — Comprehensive Code Review
 
-**Date:** November 23, 2025  
-**Module:** `finance/cashflow_v14.py`  
-**Lines of Code:** ~700 lines  
+**Date:** November 23, 2025
+**Module:** `finance/cashflow_v14.py`
+**Lines of Code:** ~700 lines
 **Status:** Production-ready with optimization opportunities
 
 ---
@@ -30759,7 +30759,7 @@ logger = logging.getLogger(__name__)
 
 def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     """Extract and validate project technical parameters.
-    
+
     Raises:
         ValueError: If required fields missing or invalid.
     """
@@ -30769,9 +30769,9 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         _pct_to_decimal,
         _extract_project_life_years,
     )
-    
+
     project_life_years = _extract_project_life_years(cfg)
-    
+
     capacity_mw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30783,7 +30783,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     )
     if capacity_mw is None or capacity_mw <= 0:
         raise ValueError(f"Invalid capacity_mw: {capacity_mw}")
-    
+
     capacity_factor_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30796,7 +30796,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     capacity_factor = _pct_to_decimal(capacity_factor_raw)
     if capacity_factor is None or not (0 < capacity_factor <= 1):
         raise ValueError(f"Invalid capacity_factor: {capacity_factor_raw}")
-    
+
     degradation_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30807,7 +30807,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         )
     )
     degradation = _pct_to_decimal(degradation_raw) or 0.0
-    
+
     grid_loss_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30817,7 +30817,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         )
     )
     grid_loss_pct = _pct_to_decimal(grid_loss_raw) or 0.0
-    
+
     return ProjectParams(
         capacity_mw=capacity_mw,
         capacity_factor=capacity_factor,
@@ -30830,7 +30830,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
 def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> FinancingParams:
     """Extract and validate financing parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, get_nested, as_float
-    
+
     opex_usd_per_year = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30842,13 +30842,13 @@ def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> Fin
     )
     if opex_usd_per_year is None or opex_usd_per_year < 0:
         raise ValueError(f"Invalid opex_usd_per_year: {opex_usd_per_year}")
-    
+
     # Capex in LKR (optional, can be computed from debt module)
     capex_usd = as_float(get_nested(cfg, ["capex", "usd_total"], None))
     capex_total_lkr = None
     if capex_usd is not None and fx_curve:
         capex_total_lkr = capex_usd * fx_curve[0]
-    
+
     return FinancingParams(
         opex_usd_per_year=opex_usd_per_year,
         capex_total_lkr=capex_total_lkr,
@@ -30859,7 +30859,7 @@ def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> Fin
 def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
     """Extract and validate tax and BOI parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal, as_int
-    
+
     corporate_tax_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30872,7 +30872,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
     corporate_tax_rate = _pct_to_decimal(corporate_tax_raw)
     if corporate_tax_rate is None or not (0 <= corporate_tax_rate <= 1):
         raise ValueError(f"Invalid corporate_tax_rate: {corporate_tax_raw}")
-    
+
     depreciation_years = as_int(
         _resolve_first(
             cfg,
@@ -30882,10 +30882,10 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=20,
     ) or 20
-    
+
     if depreciation_years <= 0:
         raise ValueError(f"depreciation_years must be > 0, got {depreciation_years}")
-    
+
     tax_holiday_years = as_int(
         _resolve_first(
             cfg,
@@ -30895,7 +30895,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=0,
     ) or 0
-    
+
     tax_holiday_start_year = as_int(
         _resolve_first(
             cfg,
@@ -30905,7 +30905,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=1,
     ) or 1
-    
+
     eca_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30918,7 +30918,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         enhanced_capital_allowance_pct = eca_raw / 100.0
     else:
         enhanced_capital_allowance_pct = eca_raw or 1.0
-    
+
     return TaxParams(
         corporate_tax_rate=corporate_tax_rate,
         depreciation_years=depreciation_years,
@@ -30931,7 +30931,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
 def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
     """Extract statutory deduction parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal
-    
+
     success_fee_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30941,7 +30941,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     success_fee_pct = _pct_to_decimal(success_fee_raw) or 0.0
-    
+
     env_surcharge_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30951,7 +30951,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     env_surcharge_pct = _pct_to_decimal(env_surcharge_raw) or 0.0
-    
+
     social_levy_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30961,7 +30961,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     social_levy_pct = _pct_to_decimal(social_levy_raw) or 0.0
-    
+
     return StatutoryParams(
         success_fee_pct=success_fee_pct,
         env_surcharge_pct=env_surcharge_pct,
@@ -30972,7 +30972,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
 def _extract_revenue_params(cfg: Dict[str, Any]) -> RevenueParams:
     """Extract revenue parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none
-    
+
     tariff_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -30984,14 +30984,14 @@ def _extract_revenue_params(cfg: Dict[str, Any]) -> RevenueParams:
     )
     if tariff_raw is None or tariff_raw <= 0:
         raise ValueError(f"Invalid tariff_lkr_per_kwh: {tariff_raw}")
-    
+
     return RevenueParams(tariff_lkr_per_kwh=tariff_raw)
 
 
 def _extract_risk_params(cfg: Dict[str, Any]) -> RiskParams:
     """Extract risk adjustment parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal
-    
+
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -31001,31 +31001,31 @@ def _extract_risk_params(cfg: Dict[str, Any]) -> RiskParams:
         )
     )
     risk_haircut_pct = _pct_to_decimal(risk_haircut_raw) or 0.0
-    
+
     return RiskParams(risk_haircut_pct=risk_haircut_pct)
 
 
 def extract_cfads_params(cfg: Dict[str, Any]) -> CfadsParams:
     """Extract all CFADS parameters (orchestrator).
-    
+
     This is the main entry point for parameter extraction.
     Replaces the large _extract_parameters() function.
     """
     from finance.cashflow_v14 import _fx_curve
-    
+
     # Extract project params first (includes project_life_years)
     project_params = _extract_project_params(cfg)
-    
+
     # Build FX curve
     fx_curve = _fx_curve(cfg, project_params.project_life_years)
-    
+
     # Extract other parameter groups
     financing_params = _extract_financing_params(cfg, fx_curve)
     tax_params = _extract_tax_params(cfg)
     statutory_params = _extract_statutory_params(cfg)
     revenue_params = _extract_revenue_params(cfg)
     risk_params = _extract_risk_params(cfg)
-    
+
     return CfadsParams(
         project=project_params,
         financing=financing_params,
@@ -31055,27 +31055,27 @@ logger = logging.getLogger(__name__)
 
 def validate_fx_curve(fx_curve: List[float], project_life_years: int) -> None:
     """Validate FX curve for realistic values.
-    
+
     Raises:
         ValueError: If FX curve is invalid.
     """
     if not fx_curve:
         raise ValueError("FX curve is empty")
-    
+
     if len(fx_curve) < project_life_years:
         logger.warning(
             f"FX curve length ({len(fx_curve)}) < project life ({project_life_years}), "
             "last rate will be extended"
         )
-    
+
     for i, rate in enumerate(fx_curve):
         # LKR/USD typically 100-500 range
         if rate < 100 or rate > 500:
             logger.warning(f"Unusual FX rate at year {i+1}: {rate} LKR/USD")
-        
+
         if rate <= 0:
             raise ValueError(f"Invalid FX rate at year {i+1}: {rate} (must be positive)")
-    
+
     # Check for unrealistic annual changes
     for i in range(1, len(fx_curve)):
         annual_change = (fx_curve[i] / fx_curve[i-1]) - 1.0
@@ -31092,16 +31092,16 @@ def validate_tax_holiday(
     project_life_years: int,
 ) -> None:
     """Validate tax holiday parameters.
-    
+
     Raises:
         ValueError: If tax holiday configuration is invalid.
     """
     if tax_holiday_years < 0:
         raise ValueError(f"tax_holiday_years cannot be negative: {tax_holiday_years}")
-    
+
     if tax_holiday_start_year < 1:
         raise ValueError(f"tax_holiday_start_year must be >= 1: {tax_holiday_start_year}")
-    
+
     end_year = tax_holiday_start_year + tax_holiday_years - 1
     if end_year > project_life_years:
         logger.warning(
@@ -31112,9 +31112,9 @@ def validate_tax_holiday(
 
 def validate_cfads_params(params: CfadsParams) -> None:
     """Validate complete CFADS parameter set.
-    
+
     Performs cross-parameter validation checks.
-    
+
     Raises:
         ValueError: If parameters are invalid or inconsistent.
     """
@@ -31123,27 +31123,27 @@ def validate_cfads_params(params: CfadsParams) -> None:
         params.financing.fx_curve,
         params.project.project_life_years,
     )
-    
+
     # Tax holiday validation
     validate_tax_holiday(
         params.tax.tax_holiday_years,
         params.tax.tax_holiday_start_year,
         params.project.project_life_years,
     )
-    
+
     # Bounds checks
     if params.project.degradation < 0 or params.project.degradation > 0.03:
         logger.warning(
             f"Unusual degradation rate: {params.project.degradation*100:.2f}% "
             "(typical range: 0-3%)"
         )
-    
+
     if params.project.grid_loss_pct < 0 or params.project.grid_loss_pct > 0.10:
         logger.warning(
             f"Unusual grid loss: {params.project.grid_loss_pct*100:.2f}% "
             "(typical range: 0-10%)"
         )
-    
+
     logger.info("CFADS parameters validated successfully")
 ```
 
@@ -31160,50 +31160,50 @@ def build_annual_cfads_v2(
     interest_expense_series: Optional[List[float]] = None,
 ) -> CfadsResult:
     """Build complete CFADS result with all breakdowns.
-    
+
     This is the new main entry point, replacing build_annual_cfads and build_annual_rows.
-    
+
     Args:
         cfg: Scenario configuration dictionary
         capex_total_lkr: Total CAPEX in LKR (optional, derived if None)
         interest_expense_series: Annual interest expenses in LKR (optional)
-    
+
     Returns:
         CfadsResult with annual series and detailed breakdowns
-    
+
     Raises:
         ValueError: If required parameters missing or invalid
     """
     # Extract and validate parameters
     params = extract_cfads_params(cfg)  # From cashflow_extractors
     validate_cfads_params(params)  # From cashflow_validation
-    
+
     # Override capex if provided
     if capex_total_lkr is not None:
         params.financing.capex_total_lkr = capex_total_lkr
-    
+
     # Default interest series to zeros
     years = params.project.project_life_years
     if interest_expense_series is None:
         interest_expense_series = [0.0] * years
-    
+
     # Pre-compute depreciation schedule (calculate once, reuse)
     depr_schedule = _compute_depreciation_schedule(
         params.financing.capex_total_lkr,
         params.tax.depreciation_years,
         params.tax.enhanced_capital_allowance_pct,
     )
-    
+
     # Calculate annual rows
     annual_rows: List[YearlyBreakdown] = []
     annual_cfads_lkr: List[float] = []
     annual_cfads_usd: List[float] = []
-    
+
     for year in range(years):
         fx_rate = params.financing.fx_curve[year] if year < len(params.financing.fx_curve) else params.financing.fx_curve[-1]
         interest_lkr = interest_expense_series[year] if year < len(interest_expense_series) else 0.0
         depr_for_year = depr_schedule[year] if year < len(depr_schedule) else 0.0
-        
+
         # Calculate production
         gross_kwh, net_kwh = _calculate_net_production(
             params.project.capacity_mw,
@@ -31212,10 +31212,10 @@ def build_annual_cfads_v2(
             params.project.grid_loss_pct,
             year,
         )
-        
+
         # Calculate revenue
         revenue_lkr = _calculate_revenue_lkr(net_kwh, params.revenue.tariff_lkr_per_kwh)
-        
+
         # Statutory deductions
         statutory = _calculate_statutory_deductions(
             revenue_lkr,
@@ -31223,16 +31223,16 @@ def build_annual_cfads_v2(
             params.statutory.env_surcharge_pct,
             params.statutory.social_levy_pct,
         )
-        
+
         # OPEX
         opex_lkr = _calculate_opex_lkr(params.financing.opex_usd_per_year, fx_rate)
-        
+
         # Pretax CFADS
         pretax_cfads = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
-        
+
         # Tax (using pre-computed depreciation)
         taxable_income = max(0.0, pretax_cfads - depr_for_year - interest_lkr)
-        
+
         # Check tax holiday
         current_year = year + 1
         in_holiday = False
@@ -31240,15 +31240,15 @@ def build_annual_cfads_v2(
             start = params.tax.tax_holiday_start_year
             end = start + params.tax.tax_holiday_years - 1
             in_holiday = start <= current_year <= end
-        
+
         tax = 0.0 if in_holiday else (taxable_income * params.tax.corporate_tax_rate)
-        
+
         # Posttax CFADS
         posttax_cfads = pretax_cfads - tax
-        
+
         # Risk haircut
         cfads_final_lkr = _apply_risk_haircut(posttax_cfads, params.risk.risk_haircut_pct)
-        
+
         # Build row
         row = YearlyBreakdown(
             year=year + 1,
@@ -31274,11 +31274,11 @@ def build_annual_cfads_v2(
             revenue_usd=revenue_lkr / fx_rate if fx_rate > 0 else 0.0,
             cfads_usd=cfads_final_lkr / fx_rate if fx_rate > 0 else 0.0,
         )
-        
+
         annual_rows.append(row)
         annual_cfads_lkr.append(cfads_final_lkr)
         annual_cfads_usd.append(row.cfads_usd)
-    
+
     logger.info(
         "CFADS calculated for %d years: LKR %.0f-%.0f M, USD %.0f-%.0f M",
         years,
@@ -31287,7 +31287,7 @@ def build_annual_cfads_v2(
         min(annual_cfads_usd) / 1e6 if annual_cfads_usd else 0,
         max(annual_cfads_usd) / 1e6 if annual_cfads_usd else 0,
     )
-    
+
     return CfadsResult(
         annual_cfads_lkr=annual_cfads_lkr,
         annual_cfads_usd=annual_cfads_usd,
@@ -31312,7 +31312,7 @@ def build_annual_cfads(
     verbose: bool = False,
 ) -> List[float]:
     """Legacy function — returns list of CFADS values only.
-    
+
     DEPRECATED: Use build_annual_cfads_v2() for full results.
     """
     result = build_annual_cfads_v2(p, capex_total, interest_expense_series)
@@ -31326,7 +31326,7 @@ def build_annual_rows(
     interest_expense_series: Optional[List[float]] = None,
 ) -> List[Dict[str, float]]:
     """Legacy function — returns list of dict rows.
-    
+
     DEPRECATED: Use build_annual_cfads_v2() for typed results.
     """
     result = build_annual_cfads_v2(p, capex_total, interest_expense_series)
@@ -31417,7 +31417,7 @@ def test_build_annual_cfads_v2_full_scenario():
     """Test complete CFADS calculation with realistic scenario."""
     cfg = load_scenario("scenarios/dutchbay_lendercase_2025Q4.yaml")
     result = build_annual_cfads_v2(cfg)
-    
+
     assert len(result.annual_cfads_lkr) == 25
     assert all(cfads > 0 for cfads in result.annual_cfads_lkr)
     assert result.params.project.capacity_mw == 150
@@ -31457,14 +31457,14 @@ def test_build_annual_cfads_v2_full_scenario():
 
 ## Go With The Flow Compliance
 
-✅ **Type-safe:** All dataclasses properly annotated  
-✅ **Tested:** Unit tests for each extractor + integration tests  
-✅ **Modular:** No file > 400 lines after refactoring  
-✅ **Contracts:** Cross-module data uses dataclasses  
-✅ **Validated:** Parameters checked before calculation  
-✅ **Documented:** Docstrings with examples  
-✅ **Copy-paste-ready:** Complete, working code  
-✅ **No regressions:** Legacy wrappers maintain compatibility  
+✅ **Type-safe:** All dataclasses properly annotated
+✅ **Tested:** Unit tests for each extractor + integration tests
+✅ **Modular:** No file > 400 lines after refactoring
+✅ **Contracts:** Cross-module data uses dataclasses
+✅ **Validated:** Parameters checked before calculation
+✅ **Documented:** Docstrings with examples
+✅ **Copy-paste-ready:** Complete, working code
+✅ **No regressions:** Legacy wrappers maintain compatibility
 ✅ **Production-grade:** Would pass lender review
 
 ---
@@ -31556,8 +31556,8 @@ FILE: docs/ANALYTICS_SETUP_COMPLETE.md
 ---BEGIN:md---
 # Analytics Master Suite - Setup Complete ✓
 
-**Date:** November 17, 2025  
-**Project:** DutchBay EPC Model v14  
+**Date:** November 17, 2025
+**Project:** DutchBay EPC Model v14
 **Location:** `/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/`
 
 ---
@@ -31909,16 +31909,16 @@ If charts don't embed in Excel:
 
 ## Key Features Summary
 
-✅ **Batch Processing**: Process multiple scenarios in one run  
-✅ **Comprehensive KPIs**: NPV, IRR, DSCR, debt, CFADS metrics  
-✅ **Excel Export**: Multi-sheet workbook with professional formatting  
-✅ **Visualization**: Embedded charts for DSCR, debt, NPV, IRR  
-✅ **QC Diagnostics**: Automated checks for violations and outliers  
-✅ **CSV Backups**: Long and wide format for external analysis  
-✅ **CLI Interface**: Full command-line control with argparse  
-✅ **Extensible**: Easy to add new KPIs, charts, or modules  
-✅ **Documentation**: Complete README and inline docstrings  
-✅ **Backward Compatible**: Existing scripts still work  
+✅ **Batch Processing**: Process multiple scenarios in one run
+✅ **Comprehensive KPIs**: NPV, IRR, DSCR, debt, CFADS metrics
+✅ **Excel Export**: Multi-sheet workbook with professional formatting
+✅ **Visualization**: Embedded charts for DSCR, debt, NPV, IRR
+✅ **QC Diagnostics**: Automated checks for violations and outliers
+✅ **CSV Backups**: Long and wide format for external analysis
+✅ **CLI Interface**: Full command-line control with argparse
+✅ **Extensible**: Easy to add new KPIs, charts, or modules
+✅ **Documentation**: Complete README and inline docstrings
+✅ **Backward Compatible**: Existing scripts still work
 
 ---
 
@@ -31995,9 +31995,9 @@ FILE: docs/debt_v14.py — Comprehensive Code Review.md
 ---BEGIN:md---
 # debt_v14.py — Comprehensive Code Review
 
-**Date:** November 23, 2025  
-**Module:** `finance/debt_v14.py`  
-**Lines of Code:** ~550 lines  
+**Date:** November 23, 2025
+**Module:** `finance/debt_v14.py`
+**Lines of Code:** ~550 lines
 **Status:** Production-ready with refactoring opportunities
 
 ***
@@ -32062,7 +32062,7 @@ finance/debt_v14.py (550 lines)
 ```python
 class Tranche:
     __slots__ = ("name", "rate", "principal", "years_io")
-    
+
     def __init__(self, name: str, rate: float, principal: float, years_io: int) -> None:
         self.name = name
         self.rate = float(rate)
@@ -32138,7 +32138,7 @@ class Tranche:
     rate: float  # Annual interest rate (decimal)
     principal: float  # Initial principal (before IDC)
     years_io: int  # Interest-only (grace) years
-    
+
     def __post_init__(self) -> None:
         """Validate tranche parameters."""
         if self.rate < 0:
@@ -32221,7 +32221,7 @@ class DebtResult:
     debt_service_total: List[float]
     debt_outstanding: List[float]
     balloon_remaining: float
-    
+
     # Construction & timeline
     construction_periods: int
     construction_schedule: List[float]
@@ -32229,13 +32229,13 @@ class DebtResult:
     timeline_periods: int
     tenor_years: int
     cfads_extended: List[float]
-    
+
     # IDC calculations
     idc_calculation: IDCCalculation
-    
+
     # Debt schedules
     debt_schedules: Dict[str, List[Tuple[float, float, float]]]
-    
+
     # Tranche breakdowns
     lkr_principal: float
     usd_principal: float
@@ -32244,13 +32244,13 @@ class DebtResult:
     usd_idc: float
     dfi_idc: float
     total_idc_capitalized: float
-    
+
     # Validation
     audit_status: str  # "PASS", "REVIEW", "FAIL"
     validation_warnings: List[str]
     dscr_violations: List[int]  # Period indices where DSCR < threshold
     balloon_warnings: List[str]
-    
+
     # Legacy compatibility (deprecated)
     lkr: Optional[Dict[str, float]] = None
     usd: Optional[Dict[str, float]] = None
@@ -32347,20 +32347,20 @@ def calculate_base_allocation(
     mix: TrancheMix,
 ) -> Dict[str, float]:
     """Calculate initial tranche allocation based on max constraints.
-    
+
     Returns:
         Dict mapping tranche name to amount
     """
     # LKR first (up to max)
     lkr_amt = min(total_debt * mix.lkr_max, total_debt)
-    
+
     # DFI second (up to max of remaining)
     remaining_after_lkr = max(0.0, total_debt - lkr_amt)
     dfi_amt = min(total_debt * mix.dfi_max, remaining_after_lkr)
-    
+
     # USD gets the rest
     usd_amt = max(0.0, total_debt - lkr_amt - dfi_amt)
-    
+
     return {
         TRANCHE_LKR: lkr_amt,
         TRANCHE_USD: usd_amt,
@@ -32374,41 +32374,41 @@ def enforce_usd_minimum(
     usd_min: float,
 ) -> Dict[str, float]:
     """Enforce USD commercial minimum by pulling from LKR and DFI.
-    
+
     Args:
         allocation: Current allocation
         total_debt: Total debt amount
         usd_min: Minimum USD as fraction of total debt
-    
+
     Returns:
         Adjusted allocation
     """
     min_usd_amt = total_debt * usd_min
     current_usd = allocation[TRANCHE_USD]
-    
+
     if current_usd >= min_usd_amt:
         return allocation  # Already compliant
-    
+
     shortfall = min_usd_amt - current_usd
     logger.info(f"USD minimum enforcement: need ${shortfall:.2f}M more")
-    
+
     # Pull from LKR first
     pull_from_lkr = min(shortfall, allocation[TRANCHE_LKR])
     allocation[TRANCHE_LKR] -= pull_from_lkr
     shortfall -= pull_from_lkr
-    
+
     # Then pull from DFI if needed
     if shortfall > 0:
         pull_from_dfi = min(shortfall, allocation[TRANCHE_DFI])
         allocation[TRANCHE_DFI] -= pull_from_dfi
         shortfall -= pull_from_dfi
-    
+
     # Recalculate USD as residual
     allocation[TRANCHE_USD] = total_debt - allocation[TRANCHE_LKR] - allocation[TRANCHE_DFI]
-    
+
     if shortfall > 1e-6:  # Still short after pulling from others
         logger.warning(f"Cannot fully satisfy USD minimum: ${shortfall:.2f}M short")
-    
+
     return allocation
 
 
@@ -32417,24 +32417,24 @@ def validate_allocation(
     total_debt: float,
 ) -> list[str]:
     """Validate tranche allocation and return warnings.
-    
+
     Returns:
         List of validation warnings (empty if all good)
     """
     warnings: list[str] = []
-    
+
     total_allocated = sum(allocation.values())
     if abs(total_allocated - total_debt) > 1e-6:
         warnings.append(
             f"Allocation sum ${total_allocated:.2f}M != total debt ${total_debt:.2f}M"
         )
-    
+
     for tranche_name, amount in allocation.items():
         if amount < 0:
             warnings.append(f"{tranche_name} allocation is negative: ${amount:.2f}M")
         elif amount < 1.0 and amount > 0:
             warnings.append(f"{tranche_name} allocation is very small: ${amount:.2f}M")
-    
+
     return warnings
 
 
@@ -32445,41 +32445,41 @@ def solve_tranche_mix(
     years_io: int,
 ) -> TrancheAllocation:
     """Solve complete tranche mix allocation.
-    
+
     This is the main entry point, replacing _solve_mix().
-    
+
     Args:
         total_debt: Total debt amount
         mix: Tranche mix constraints
         rates: Interest rates per tranche
         years_io: Interest-only years
-    
+
     Returns:
         TrancheAllocation with tranches and warnings
     """
     # Step 1: Base allocation
     allocation = calculate_base_allocation(total_debt, mix)
-    
+
     # Step 2: Enforce USD minimum
     allocation = enforce_usd_minimum(allocation, total_debt, mix.usd_commercial_min)
-    
+
     # Step 3: Validate
     warnings = validate_allocation(allocation, total_debt)
-    
+
     # Step 4: Create Tranche objects
     tranches = {
         TRANCHE_LKR: Tranche(TRANCHE_LKR, rates.lkr_nominal, allocation[TRANCHE_LKR], years_io),
         TRANCHE_USD: Tranche(TRANCHE_USD, rates.usd_nominal, allocation[TRANCHE_USD], years_io),
         TRANCHE_DFI: Tranche(TRANCHE_DFI, rates.dfi_nominal, allocation[TRANCHE_DFI], years_io),
     }
-    
+
     logger.info(
         "Tranche mix: LKR $%.2fM (%.1f%%), USD $%.2fM (%.1f%%), DFI $%.2fM (%.1f%%)",
         allocation[TRANCHE_LKR], allocation[TRANCHE_LKR] / total_debt * 100,
         allocation[TRANCHE_USD], allocation[TRANCHE_USD] / total_debt * 100,
         allocation[TRANCHE_DFI], allocation[TRANCHE_DFI] / total_debt * 100,
     )
-    
+
     return TrancheAllocation(
         tranches=tranches,
         total_debt=total_debt,
@@ -32513,47 +32513,47 @@ logger = logging.getLogger(__name__)
 
 def validate_construction_params(params: ConstructionParams) -> None:
     """Validate construction period parameters.
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
     if params.construction_periods < 0:
         raise ValueError(f"Construction periods cannot be negative: {params.construction_periods}")
-    
+
     if params.construction_periods > MAX_CONSTRUCTION_PERIODS:
         logger.warning(
             f"Unusual construction period: {params.construction_periods} years "
             f"(typical: 1-{MAX_CONSTRUCTION_PERIODS})"
         )
-    
+
     if len(params.construction_schedule) != params.construction_periods:
         raise ValueError(
             f"Construction schedule length ({len(params.construction_schedule)}) "
             f"!= construction periods ({params.construction_periods})"
         )
-    
+
     if len(params.drawdown_pct_per_year) != params.construction_periods:
         raise ValueError(
             f"Drawdown schedule length ({len(params.drawdown_pct_per_year)}) "
             f"!= construction periods ({params.construction_periods})"
         )
-    
+
     # Check drawdown percentages
     total_drawdown = sum(params.drawdown_pct_per_year)
     if total_drawdown > 1.0 + 1e-6:
         raise ValueError(
             f"Drawdown percentages sum to {total_drawdown*100:.1f}% (> 100%)"
         )
-    
+
     if total_drawdown < 0.95:
         logger.warning(
             f"Drawdown percentages sum to {total_drawdown*100:.1f}% (< 95%), "
             "debt may not be fully drawn"
         )
-    
+
     if params.grace_years < 0:
         raise ValueError(f"Grace years cannot be negative: {params.grace_years}")
-    
+
     if params.grace_years > MAX_GRACE_YEARS:
         logger.warning(
             f"Unusual grace period: {params.grace_years} years "
@@ -32563,7 +32563,7 @@ def validate_construction_params(params: ConstructionParams) -> None:
 
 def validate_debt_params(params: DebtParams) -> None:
     """Validate core debt structure parameters.
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
@@ -32572,30 +32572,30 @@ def validate_debt_params(params: DebtParams) -> None:
             f"Debt ratio {params.debt_ratio*100:.1f}% outside typical range "
             f"({MIN_DEBT_RATIO*100:.0f}%-{MAX_DEBT_RATIO*100:.0f}%)"
         )
-    
+
     if params.tenor_years <= 0:
         raise ValueError(f"Tenor must be positive: {params.tenor_years}")
-    
+
     if params.tenor_years > MAX_TENOR_YEARS:
         logger.warning(
             f"Unusual tenor: {params.tenor_years} years (typical: 10-{MAX_TENOR_YEARS})"
         )
-    
+
     if params.interest_only_years < 0:
         raise ValueError(f"Interest-only years cannot be negative: {params.interest_only_years}")
-    
+
     if params.interest_only_years >= params.tenor_years:
         raise ValueError(
             f"Interest-only period ({params.interest_only_years}) "
             f"must be < tenor ({params.tenor_years})"
         )
-    
+
     if params.amortization_style not in ("annuity", "sculpted", "fixed"):
         raise ValueError(f"Invalid amortization style: '{params.amortization_style}'")
-    
+
     if params.target_dscr < 1.0:
         logger.warning(f"Target DSCR {params.target_dscr:.2f} is below 1.0 (risky)")
-    
+
     if params.capex_total <= 0:
         raise ValueError(f"Capex must be positive: {params.capex_total}")
 
@@ -32607,18 +32607,18 @@ def validate_timeline_consistency(
     timeline_periods: int,
 ) -> None:
     """Validate that timeline components are consistent.
-    
+
     Raises:
         ValueError: If timeline is inconsistent
     """
     min_timeline = construction_periods + 1 + tenor_years  # +1 for transition
-    
+
     if timeline_periods < min_timeline:
         raise ValueError(
             f"Timeline periods ({timeline_periods}) < "
             f"construction ({construction_periods}) + transition (1) + tenor ({tenor_years})"
         )
-    
+
     logger.info(
         f"Timeline validated: {construction_periods} construction + 1 transition "
         f"+ {tenor_years} operations = {timeline_periods} total periods"
@@ -32638,16 +32638,16 @@ def apply_debt_layer_v2(
 ) -> DebtResult:
     """
     Apply debt financing layer with V14 construction support (refactored).
-    
+
     This is the new main entry point using typed contracts.
-    
+
     Args:
         config: Scenario configuration
         annual_rows: Annual cashflow rows from cashflow_v14
-    
+
     Returns:
         DebtResult with complete debt planning results
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
@@ -32659,26 +32659,26 @@ def apply_debt_layer_v2(
     )
     from finance.debt_tranche_allocation import solve_tranche_mix
     from finance.debt_constants import DEFAULT_TIMELINE_PERIODS
-    
+
     # Extract parameters
     construction_params, debt_params, mix, rates = extract_debt_params(config)
-    
+
     # Validate
     validate_construction_params(construction_params)
     validate_debt_params(debt_params)
-    
+
     # Solve tranche mix
     total_debt = debt_params.capex_total * debt_params.debt_ratio
     tranche_allocation = solve_tranche_mix(
         total_debt, mix, rates, debt_params.interest_only_years
     )
-    
+
     # Calculate IDC
     idc_calc = calculate_idc_for_tranches(
         tranche_allocation.tranches,
         construction_params,
     )
-    
+
     # Extend CFADS timeline
     cfads_extended = extend_cfads_timeline(
         annual_rows,
@@ -32686,7 +32686,7 @@ def apply_debt_layer_v2(
         construction_params.transition_cfads_factor,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Build debt schedules
     schedules = build_debt_schedules(
         tranche_allocation.tranches,
@@ -32694,7 +32694,7 @@ def apply_debt_layer_v2(
         cfads_extended[construction_params.construction_periods:],
         construction_params.construction_periods,
     )
-    
+
     # Calculate metrics
     metrics = calculate_debt_metrics(
         schedules,
@@ -32702,7 +32702,7 @@ def apply_debt_layer_v2(
         construction_params.construction_periods,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Validate timeline
     validate_timeline_consistency(
         construction_params.construction_periods,
@@ -32710,7 +32710,7 @@ def apply_debt_layer_v2(
         debt_params.tenor_years,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Build result
     return DebtResult(
         # Time-series metrics
@@ -32719,7 +32719,7 @@ def apply_debt_layer_v2(
         debt_service_total=metrics.debt_service_total,
         debt_outstanding=metrics.debt_outstanding,
         balloon_remaining=metrics.balloon_remaining,
-        
+
         # Construction & timeline
         construction_periods=construction_params.construction_periods,
         construction_schedule=construction_params.construction_schedule,
@@ -32727,28 +32727,28 @@ def apply_debt_layer_v2(
         timeline_periods=DEFAULT_TIMELINE_PERIODS,
         tenor_years=debt_params.tenor_years,
         cfads_extended=cfads_extended,
-        
+
         # IDC
         idc_calculation=idc_calc,
         lkr_idc=idc_calc.idc_by_tranche.get(TRANCHE_LKR, 0.0),
         usd_idc=idc_calc.idc_by_tranche.get(TRANCHE_USD, 0.0),
         dfi_idc=idc_calc.idc_by_tranche.get(TRANCHE_DFI, 0.0),
         total_idc_capitalized=idc_calc.total_idc_capitalized,
-        
+
         # Tranches
         lkr_principal=idc_calc.principal_after_idc.get(TRANCHE_LKR, 0.0),
         usd_principal=idc_calc.principal_after_idc.get(TRANCHE_USD, 0.0),
         dfi_principal=idc_calc.principal_after_idc.get(TRANCHE_DFI, 0.0),
-        
+
         # Schedules
         debt_schedules=schedules,
-        
+
         # Validation
         audit_status=metrics.audit_status,
         validation_warnings=tranche_allocation.allocation_warnings + metrics.warnings,
         dscr_violations=metrics.dscr_violations,
         balloon_warnings=metrics.balloon_warnings,
-        
+
         # Legacy compatibility (deprecated, will be removed in v15)
         lkr={
             "principal": idc_calc.principal_after_idc.get(TRANCHE_LKR, 0.0),
@@ -32768,7 +32768,7 @@ def apply_debt_layer_v2(
 # Legacy wrapper for backward compatibility
 def apply_debt_layer(params: Dict[str, Any], annual_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Legacy function — returns dict.
-    
+
     DEPRECATED: Use apply_debt_layer_v2() for typed results.
     """
     result = apply_debt_layer_v2(params, annual_rows)
@@ -32824,7 +32824,7 @@ def test_base_allocation_respects_max():
     """Test that base allocation respects max constraints."""
     mix = TrancheMix(lkr_max=0.4, dfi_max=0.3, usd_commercial_min=0.0)
     allocation = calculate_base_allocation(100.0, mix)
-    
+
     assert allocation[TRANCHE_LKR] == 40.0
     assert allocation[TRANCHE_DFI] == 30.0
     assert allocation[TRANCHE_USD] == 30.0
@@ -32834,7 +32834,7 @@ def test_usd_minimum_pulls_from_lkr_first():
     """Test USD minimum enforcement pulls from LKR before DFI."""
     allocation = {TRANCHE_LKR: 40.0, TRANCHE_USD: 10.0, TRANCHE_DFI: 50.0}
     adjusted = enforce_usd_minimum(allocation, 100.0, usd_min=0.30)
-    
+
     assert adjusted[TRANCHE_USD] == 30.0
     assert adjusted[TRANCHE_LKR] == 20.0  # Pulled 20 from LKR
     assert adjusted[TRANCHE_DFI] == 50.0  # Unchanged
@@ -32844,7 +32844,7 @@ def test_allocation_validation_detects_negative():
     """Test that negative allocations are flagged."""
     allocation = {TRANCHE_LKR: -10.0, TRANCHE_USD: 60.0, TRANCHE_DFI: 50.0}
     warnings = validate_allocation(allocation, 100.0)
-    
+
     assert len(warnings) > 0
     assert any("negative" in w.lower() for w in warnings)
 ```
@@ -32885,9 +32885,9 @@ def test_apply_debt_layer_v2_full_scenario():
     """Test complete debt layer with realistic scenario."""
     cfg = load_scenario("scenarios/dutchbay_lendercase_2025Q4.yaml")
     annual_rows = build_annual_rows(cfg)
-    
+
     result = apply_debt_layer_v2(cfg, annual_rows)
-    
+
     assert isinstance(result, DebtResult)
     assert result.construction_periods == 2
     assert result.timeline_periods == 23
@@ -32929,14 +32929,14 @@ def test_apply_debt_layer_v2_full_scenario():
 
 ## Go With The Flow Compliance
 
-✅ **Type-safe:** Dataclasses for all contracts  
-✅ **Tested:** Unit tests for each allocation function  
-✅ **Modular:** Functions < 50 lines each  
-✅ **Contracts:** All cross-module data typed  
-✅ **Validated:** Parameters checked upfront  
-✅ **Constants:** Magic numbers eliminated  
-✅ **Copy-paste-ready:** Complete working code  
-✅ **No regressions:** Legacy wrappers maintained  
+✅ **Type-safe:** Dataclasses for all contracts
+✅ **Tested:** Unit tests for each allocation function
+✅ **Modular:** Functions < 50 lines each
+✅ **Contracts:** All cross-module data typed
+✅ **Validated:** Parameters checked upfront
+✅ **Constants:** Magic numbers eliminated
+✅ **Copy-paste-ready:** Complete working code
+✅ **No regressions:** Legacy wrappers maintained
 ✅ **Production-grade:** Lender-ready
 
 ***
@@ -32995,8 +32995,8 @@ finance/
 
 **Key Decision:** Should we refactor **debt** and **cashflow** together or sequentially?
 
-**Option A:** Refactor both simultaneously (1.5 weeks)  
-**Option B:** Debt first, then cashflow (2 weeks)  
+**Option A:** Refactor both simultaneously (1.5 weeks)
+**Option B:** Debt first, then cashflow (2 weeks)
 **Option C:** Cashflow first, then debt (2 weeks)
 
 **My Recommendation:** Option A (parallel refactoring)
@@ -33019,8 +33019,8 @@ FILE: docs/9c3cb031.md
 # GIT COMMIT RECORD - SESSION COMPLETE
 ## DutchBay V13 Project: Architecture Audit & Cashflow Refactoring
 
-**Commit Date:** 2025-11-15 00:28 IST  
-**Session Duration:** ~6 hours  
+**Commit Date:** 2025-11-15 00:28 IST
+**Session Duration:** ~6 hours
 **Status:** ✓ COMPLETE & VERIFIED
 
 ---
@@ -33264,7 +33264,7 @@ CFADS = Revenue (USD) - OPEX (USD)
 
 ### What Is Now Correct
 ```
-CFADS = Revenue (LKR) 
+CFADS = Revenue (LKR)
         - Success Fee (1% of revenue)
         - Env Surcharge (0.5% of revenue)
         - Social Levy (2.5% of revenue)
@@ -33354,7 +33354,7 @@ This session successfully:
 
 **Status:** ✓ SESSION COMPLETE - READY FOR COMMIT
 
-**Date:** 2025-11-15 00:28 IST  
+**Date:** 2025-11-15 00:28 IST
 **Author:** Aruna Kulatunga
 ---END:md---
 
@@ -33365,9 +33365,9 @@ FILE: docs/thread migration readiness.md
 ---BEGIN:md---
 # DutchBay EPC Model - Thread Migration Package
 
-**Project:** DutchBay 150MW Wind Farm Financial Model  
-**Repository:** dutchbay-epc-model (GitHub)  
-**Environment:** Python 3.11 (.venv311), macOS  
+**Project:** DutchBay 150MW Wind Farm Financial Model
+**Repository:** dutchbay-epc-model (GitHub)
+**Environment:** Python 3.11 (.venv311), macOS
 **Migration Date:** November 23, 2025
 
 ---
@@ -33375,7 +33375,7 @@ FILE: docs/thread migration readiness.md
 ## 🎯 Quick Context Snippet (Copy/Paste to New Thread)
 
 ```
-I'm continuing work on the DutchBay EPC Model—a production-grade DFI/Lender/EPC financial modeling suite for a 150MW wind farm in Sri Lanka. The project uses Python 3.11, YAML-driven configuration, and follows "Go With The Flow" standards: build once, build right, mypy-clean, AST-safe, lint-compliant. 
+I'm continuing work on the DutchBay EPC Model—a production-grade DFI/Lender/EPC financial modeling suite for a 150MW wind farm in Sri Lanka. The project uses Python 3.11, YAML-driven configuration, and follows "Go With The Flow" standards: build once, build right, mypy-clean, AST-safe, lint-compliant.
 
 Active Sprint: Phase 1-5 pipeline hardening (YAML validation, batch processing, board-pack exports).
 
@@ -33470,7 +33470,7 @@ def calculate_wacc(
     """Calculate weighted average cost of capital."""
     if not abs(equity_ratio + debt_ratio - 1.0) < 0.0001:
         raise ValueError("Equity + Debt ratios must equal 1.0")
-    return (equity_ratio * cost_of_equity + 
+    return (equity_ratio * cost_of_equity +
             debt_ratio * cost_of_debt * (1 - tax_rate))
 
 # Test
@@ -33520,21 +33520,21 @@ def export_board_pack(
 ) -> None:
     """Generate board-ready document with cover page."""
     doc = Document()
-    
+
     # Cover page with metadata
     doc.add_heading(f"Project: {metadata['project_name']}", 0)
     doc.add_paragraph(f"Scenario: {scenario_result.name}")
     doc.add_paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     doc.add_paragraph(f"Version: {metadata['version']}")
-    
+
     # Financial summary
     doc.add_heading("Executive Summary", 1)
     add_financial_table(doc, scenario_result.financials)
-    
+
     # Pre-save validation
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True)
-    
+
     doc.save(output_path)
     logger.info(f"✓ Exported board pack: {output_path}")
 
@@ -33557,18 +33557,18 @@ scenario:
   capacity_mw: 150
   turbine_count: 30
   turbine_model: "Vestas V150-5.0"
-  
+
 financial:
   capex:
     turbines_usd_per_kw: 850
     bop_usd_per_kw: 200
     grid_connection_usd: 15000000
-  
+
   revenue:
     ppa_price_usd_per_mwh: 65
     annual_aep_gwh: 450
     degradation_rate: 0.005
-  
+
   financing:
     equity_ratio: 0.70
     debt_ratio: 0.30
@@ -33586,21 +33586,21 @@ def load_scenario_config(path: Path) -> dict[str, Any]:
     """Load and validate scenario YAML configuration."""
     if not path.exists():
         raise FileNotFoundError(f"Scenario file not found: {path}")
-    
+
     with open(path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Validate required sections
     required_sections = ['scenario', 'financial']
     for section in required_sections:
         if section not in config:
             raise ValueError(f"Missing required section: {section}")
-    
+
     # Validate numeric ranges
     scenario = config['scenario']
     if scenario.get('capacity_mw', 0) <= 0:
         raise ValueError("capacity_mw must be positive")
-    
+
     return config
 ```
 
@@ -33615,34 +33615,34 @@ logger = logging.getLogger(__name__)
 
 class BatchScenarioProcessor:
     """Process multiple scenarios with robust error handling."""
-    
+
     def __init__(self, config_dir: Path, output_dir: Path):
         self.config_dir = config_dir
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def discover_scenarios(self) -> list[Path]:
         """Find all YAML scenario files."""
         return sorted(self.config_dir.glob("*.yaml"))
-    
+
     def process_batch(self) -> dict[str, Any]:
         """Process all scenarios, continue on failures."""
         scenarios = self.discover_scenarios()
         logger.info(f"Found {len(scenarios)} scenarios")
-        
+
         results = {
             'successful': [],
             'failed': [],
             'summary': {}
         }
-        
+
         for scenario_path in scenarios:
             scenario_name = scenario_path.stem
             try:
                 config = load_scenario_config(scenario_path)
                 result = self.run_scenario(config)
                 self.export_results(scenario_name, result)
-                
+
                 results['successful'].append(scenario_name)
                 results['summary'][scenario_name] = {
                     'status': 'success',
@@ -33650,7 +33650,7 @@ class BatchScenarioProcessor:
                     'irr': result.irr
                 }
                 logger.info(f"✓ {scenario_name}: NPV=${result.npv:,.0f} IRR={result.irr:.2%}")
-                
+
             except Exception as e:
                 results['failed'].append(scenario_name)
                 results['summary'][scenario_name] = {
@@ -33658,15 +33658,15 @@ class BatchScenarioProcessor:
                     'error': str(e)
                 }
                 logger.error(f"✗ {scenario_name}: {e}")
-        
+
         self.generate_batch_report(results)
         return results
-    
+
     def run_scenario(self, config: dict[str, Any]) -> ScenarioResult:
         """Run financial model for single scenario."""
         # Implementation here
         pass
-    
+
     def export_results(self, name: str, result: ScenarioResult) -> None:
         """Export individual scenario results."""
         output_path = self.output_dir / f"{name}_results.json"
@@ -33688,7 +33688,7 @@ def calculate_npv(
     """Calculate Net Present Value."""
     if discount_rate < 0:
         raise ValueError("Discount rate must be non-negative")
-    
+
     pv_cash_flows = sum(
         cf / (1 + discount_rate) ** (i + 1)
         for i, cf in enumerate(cash_flows)
@@ -33738,26 +33738,26 @@ from datetime import datetime
 
 class BoardPackGenerator:
     """Generate professional board-ready documents."""
-    
+
     def __init__(self, template_path: Optional[Path] = None):
         self.doc = Document(template_path) if template_path else Document()
-    
+
     def add_cover_page(self, metadata: dict[str, str]) -> None:
         """Add professional cover page with metadata."""
         # Title
         title = self.doc.add_heading(metadata['project_name'], 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
+
         # Subtitle
         subtitle = self.doc.add_paragraph(metadata['scenario_name'])
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle.runs[0].font.size = Pt(16)
-        
+
         # Metadata table
         self.doc.add_paragraph()  # Spacer
         table = self.doc.add_table(rows=5, cols=2)
         table.style = 'Light Grid Accent 1'
-        
+
         metadata_rows = [
             ('Generated', datetime.now().strftime('%Y-%m-%d %H:%M')),
             ('Version', metadata.get('version', '1.0')),
@@ -33765,22 +33765,22 @@ class BoardPackGenerator:
             ('Status', metadata.get('status', 'Draft')),
             ('Confidentiality', 'Restricted')
         ]
-        
+
         for i, (key, value) in enumerate(metadata_rows):
             table.rows[i].cells[0].text = key
             table.rows[i].cells[1].text = value
-        
+
         self.doc.add_page_break()
-    
+
     def add_executive_summary(self, result: ScenarioResult) -> None:
         """Add executive summary with key metrics."""
         self.doc.add_heading('Executive Summary', 1)
-        
+
         # Key metrics in styled table
         self.doc.add_paragraph('Key Financial Metrics', style='Heading 2')
         table = self.doc.add_table(rows=6, cols=2)
         table.style = 'Medium Shading 1 Accent 1'
-        
+
         metrics = [
             ('NPV (USD)', f"${result.npv:,.0f}"),
             ('IRR', f"{result.irr:.2%}"),
@@ -33789,27 +33789,27 @@ class BoardPackGenerator:
             ('LCOE', f"${result.lcoe:.2f}/MWh"),
             ('Equity IRR', f"{result.equity_irr:.2%}")
         ]
-        
+
         for i, (metric, value) in enumerate(metrics):
             table.rows[i].cells[0].text = metric
             table.rows[i].cells[1].text = value
-    
+
     def add_cash_flow_table(self, cash_flows: list[dict]) -> None:
         """Add detailed cash flow waterfall table."""
         self.doc.add_heading('Project Cash Flows', 1)
-        
+
         # Create table with proper headers
         num_years = len(cash_flows)
         table = self.doc.add_table(rows=num_years + 1, cols=7)
         table.style = 'Light Grid'
-        
+
         # Headers
         headers = ['Year', 'Revenue', 'OpEx', 'EBITDA', 'Debt Service', 'Tax', 'FCF']
         for i, header in enumerate(headers):
             cell = table.rows[0].cells[i]
             cell.text = header
             cell.paragraphs[0].runs[0].font.bold = True
-        
+
         # Data rows
         for i, cf in enumerate(cash_flows):
             row = table.rows[i + 1]
@@ -33820,7 +33820,7 @@ class BoardPackGenerator:
             row.cells[4].text = f"${cf['debt_service']:,.0f}"
             row.cells[5].text = f"${cf['tax']:,.0f}"
             row.cells[6].text = f"${cf['fcf']:,.0f}"
-    
+
     def save(self, output_path: Path) -> None:
         """Save document with validation."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -34026,10 +34026,10 @@ def safe_export(result: ScenarioResult, path: Path) -> None:
     # Validate data completeness
     if result.npv is None:
         raise ValueError("NPV not calculated")
-    
+
     # Ensure directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate document
     try:
         doc = generate_document(result)
@@ -34151,7 +34151,7 @@ I'm continuing work on DutchBay EPC Model. Please review the complete migration 
 
 **Option B: Quick Start (Focused Tasks)**
 ```
-I'm working on DutchBay EPC Model using Python 3.11 on macOS. 
+I'm working on DutchBay EPC Model using Python 3.11 on macOS.
 
 Context:
 - Production-grade financial modeling suite (150MW wind farm)
@@ -34220,8 +34220,8 @@ As your project evolves, update this migration package:
 
 ## 🎯 END OF MIGRATION PACKAGE
 
-**Document Version:** 1.0  
-**Last Updated:** November 23, 2025  
+**Document Version:** 1.0
+**Last Updated:** November 23, 2025
 **Maintained By:** DutchBay Project Team
 
 **Usage Note:** This document represents the collective knowledge, standards, and working context accumulated through intensive development on the DutchBay EPC Model. It is designed to be pasted into new AI threads to instantly restore full project understanding and ensure consistent, production-quality code generation.
@@ -43328,7 +43328,7 @@ FILE: scenarios/_scrtch/zz_bad.yaml
 ---BEGIN:yaml---
 name: test_bad
 unknown_key: 123
- life_years: 25 
+ life_years: 25
 ---END:yaml---
 
 ------------------------------------------------
@@ -47049,25 +47049,25 @@ FILE: _regression/report.txt
 === DutchBay v13 Regression Smoke @ 2025-11-21T15:29:57+05:30 (rev: 18494e1) ===
 
 --- finance.irr module tests ---
-CMD: bash CMD: scripts/test_one_module.sh CMD: irr 
+CMD: bash CMD: scripts/test_one_module.sh CMD: irr
 FAIL  finance.irr module tests (exit 1)
 
 --- finance.debt module tests ---
-CMD: bash CMD: scripts/test_one_module.sh CMD: debt 
+CMD: bash CMD: scripts/test_one_module.sh CMD: debt
 FAIL  finance.debt module tests (exit 2)
 
 --- cli smoke (direct) ---
-CMD: pytest CMD: -q CMD: tests/test_cli_v14_smoke.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_cli_v14_smoke.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  cli smoke (direct) (exit 1)
 
 --- scenarios (multi-file emit) ---
-CMD: pytest CMD: -q CMD: tests/test_cli_scenarios_more.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_cli_scenarios_more.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  scenarios (multi-file emit) (exit 4)
 
 --- matrix + validator ---
-CMD: pytest CMD: -q CMD: tests/test_scenarios_jsonl_and_validator.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1 
+CMD: pytest CMD: -q CMD: tests/test_scenarios_jsonl_and_validator.py CMD: --override-ini=addopts=-q\ --cov=dutchbay_v13\ --cov-report=term-missing\ --cov-fail-under=1
 FAIL  matrix + validator (exit 2)
--e 
+-e
 === Summary ===
 Total: 5 | Failures: 5
  - finance.irr module tests: FAIL (1.0s)
@@ -47158,8 +47158,8 @@ FILE: outputs/investment_committee_summary_20251114.md
 # INVESTMENT COMMITTEE SUMMARY
 ## P0-1C: Enhanced Coverage Metrics Implementation
 
-**Date:** November 14, 2025  
-**Project:** Dutch Bay 150MW Wind Farm  
+**Date:** November 14, 2025
+**Project:** Dutch Bay 150MW Wind Farm
 **Phase:** P0-1C Complete
 
 ---
@@ -47217,9 +47217,9 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 ## RISK ASSESSMENT
 
 ### Strengths:
-✅ All metrics significantly exceed minimums  
-✅ Conservative debt structure  
-✅ Strong downside protection for equity  
+✅ All metrics significantly exceed minimums
+✅ Conservative debt structure
+✅ Strong downside protection for equity
 ✅ DFI-compliant methodology and reporting
 
 ### Considerations:
@@ -47256,13 +47256,13 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 
 ---
 
-**Prepared by:** Financial Modeling Team  
-**Date:** November 14, 2025  
+**Prepared by:** Financial Modeling Team
+**Date:** November 14, 2025
 **Status:** For Committee Review
 
 ---
 
-*Generated by DutchBay V13 Financial Model - P0-1C*  
+*Generated by DutchBay V13 Financial Model - P0-1C*
 *Report ID: IC-20251114-002814*
 ---END:md---
 
@@ -47316,8 +47316,8 @@ FILE: outputs/executive_summary.md
 ## Coverage Summary
 
 - **Minimum DSCR:** 1.30x
-- **Minimum LLCR:** 1.74x 
-- **Minimum PLCR:** 1.74x 
+- **Minimum LLCR:** 1.74x
+- **Minimum PLCR:** 1.74x
 
 ---
 
@@ -47365,8 +47365,8 @@ FILE: outputs/P0-1C_Investment_Committee_Summary.md
 # INVESTMENT COMMITTEE SUMMARY
 ## P0-1C: Enhanced Coverage Metrics Implementation
 
-**Date:** November 14, 2025  
-**Project:** Dutch Bay 150MW Wind Farm  
+**Date:** November 14, 2025
+**Project:** Dutch Bay 150MW Wind Farm
 **Phase:** P0-1C Complete
 
 ---
@@ -47414,9 +47414,9 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 ## RISK ASSESSMENT
 
 ### Strengths:
-✅ All metrics significantly exceed minimums  
-✅ Conservative debt structure (fully amortizing)  
-✅ Strong downside protection for equity  
+✅ All metrics significantly exceed minimums
+✅ Conservative debt structure (fully amortizing)
+✅ Strong downside protection for equity
 ✅ DFI-compliant methodology and reporting
 
 ### Considerations:
@@ -47465,8 +47465,8 @@ The Dutch Bay financial model has been enhanced with institutional-grade coverag
 
 ---
 
-**Prepared by:** Financial Modeling Team  
-**Date:** November 14, 2025  
+**Prepared by:** Financial Modeling Team
+**Date:** November 14, 2025
 **Status:** For Committee Review
 ---END:md---
 
@@ -47518,9 +47518,9 @@ FILE: outputs/dfi_lender_pack.md
 ## Minimum/Mean Coverage
 
 - **Minimum DSCR:** 1.30x
-- **Minimum LLCR:** 1.74x 
+- **Minimum LLCR:** 1.74x
 - **LLCR Avg:** 3.25x
-- **Minimum PLCR:** 1.74x 
+- **Minimum PLCR:** 1.74x
 - **PLCR Avg:** 3.25x
 
 ---
@@ -47583,9 +47583,9 @@ FILE: outputs/covenant_compliance_certificate_20251114.md
 # COVENANT COMPLIANCE CERTIFICATE
 ## Dutch Bay 150MW Wind Farm Project
 
-**Reporting Period:** Q4 2025  
-**Report Date:** November 14, 2025  
-**Prepared By:** Envision Energy / Financial Team  
+**Reporting Period:** Q4 2025
+**Report Date:** November 14, 2025
+**Prepared By:** Envision Energy / Financial Team
 **Lender:** International Finance Corporation (IFC)
 
 ---
@@ -47657,8 +47657,8 @@ I hereby certify that:
 
 **Authorized Signatory:**
 
-Name: ______________________  
-Title: Chief Financial Officer  
+Name: ______________________
+Title: Chief Financial Officer
 Date: November 14, 2025
 
 ---
@@ -47671,7 +47671,7 @@ Date: November 14, 2025
 
 ---
 
-*Generated by DutchBay V13 Financial Model - P0-1C*  
+*Generated by DutchBay V13 Financial Model - P0-1C*
 *Report ID: COV-20251114-002814*
 ---END:md---
 
@@ -47683,9 +47683,9 @@ FILE: outputs/covenant_compliance_certificate_template.md
 # COVENANT COMPLIANCE CERTIFICATE
 ## Dutch Bay 150MW Wind Farm Project
 
-**Reporting Period:** [Quarter/Year]  
-**Report Date:** [Date]  
-**Prepared By:** [Your Company]  
+**Reporting Period:** [Quarter/Year]
+**Report Date:** [Date]
+**Prepared By:** [Your Company]
 **Lender:** [DFI/Commercial Bank Name]
 
 ---
@@ -47763,8 +47763,8 @@ I hereby certify that:
 
 **Authorized Signatory:**
 
-Name: ______________________  
-Title: ______________________  
+Name: ______________________
+Title: ______________________
 Date: ______________________
 
 ---
@@ -51883,7 +51883,7 @@ FILE: analytics/README.md
 ---BEGIN:md---
 # DutchBay v14 Analytics Layer
 
-Status: Stable (v0.2.x)  
+Status: Stable (v0.2.x)
 Maintained by: DutchBay EPC Model Core Team
 
 This package contains the **v14 analytics layer** for the DutchBay EPC model.
@@ -51973,7 +51973,7 @@ Final “shape and naming” normaliser.
   - Apply any per-scenario KPI renames or shims so that:
     - The executive workbook
     - The CLI
-    - The tests  
+    - The tests
     all see a consistent schema.
 
 ### `analytics/export_helpers.py`
@@ -56924,4 +56924,3 @@ FILE: reports/pre_fix_analysis.json
 ---END:json---
 
 ------------------------------------------------
-

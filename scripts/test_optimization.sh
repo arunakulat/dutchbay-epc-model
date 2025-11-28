@@ -37,5 +37,5 @@ PY
 pytest -q tests/heavy/test_optimization_smoke.py \
   --override-ini="addopts=-q --cov=dutchbay_v13.optimization --cov-report=term-missing --cov-fail-under=1"
 
-  
+
 # EOF

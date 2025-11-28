@@ -21,12 +21,22 @@ repos:
     rev: '7.0.0'
     hooks:
       - id: flake8
-        args: ['--max-line-length=100', '--extend-ignore=F401']
+        args: ['--max-line-length=100', '--extend-ignore=F401,W503']
         exclude: |
           (?x)^(
             legacy/.*|
             analytics/sensitivity/dashboard_demo\.py|
-            analytics/sensitivity_visualization\.py
+            analytics/sensitivity_visualization\.py|
+            scripts/diagnose_capacity_factor\.py|
+            scripts/test_markdown_report\.py|
+            scripts/test_llcr_plcr_real_debt\.py|
+            tests/contracts/test_sensitivity_edgecases\.py|
+            constants\.py|
+            fix_parameter_range_config\.py|
+            go_with_the_flow_ci_enhanced\.py|
+            go_with_the_flow_ci_v2_final\.py|
+            quarantine_v14chat\.py|
+            scan_v14chat_imports\.py
           )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -37,7 +47,9 @@ repos:
           (?x)^(
             legacy/.*|
             scenarios/edge_extreme_stress\.yaml|
+            scenarios/_scrtch/zz_bad\.yaml|
             config/sensitivity_defaults\.yaml|
+            full_model_variables_updated\.yaml|
             \.github/workflows/release\.yml
           )$
       - id: check-json

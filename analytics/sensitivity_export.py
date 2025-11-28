@@ -19,10 +19,13 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from analytics.contracts_v14 import (BreakevenResult,
-                                     MultiMetricSensitivitySuite,
-                                     MultiMetricTornadoResult,
-                                     SensitivitySuite, TornadoResult)
+from analytics.contracts_v14 import (
+    BreakevenResult,
+    MultiMetricSensitivitySuite,
+    MultiMetricTornadoResult,
+    SensitivitySuite,
+    TornadoResult,
+)
 
 # ---------------------------------------------------------------------------
 # Tornado (single-metric) export

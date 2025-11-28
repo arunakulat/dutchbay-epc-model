@@ -1,6 +1,6 @@
 # DutchBay v14 Analytics Layer
 
-Status: Stable (v0.2.x)  
+Status: Stable (v0.2.x)
 Maintained by: DutchBay EPC Model Core Team
 
 This package contains the **v14 analytics layer** for the DutchBay EPC model.
@@ -90,7 +90,7 @@ Final “shape and naming” normaliser.
   - Apply any per-scenario KPI renames or shims so that:
     - The executive workbook
     - The CLI
-    - The tests  
+    - The tests
     all see a consistent schema.
 
 ### `analytics/export_helpers.py`
@@ -184,4 +184,3 @@ Current coverage (v0.2.x):
 	•	Overall: ~75%
 	•	Analytics modules: substantially covered, with remaining gaps focused on
 workbook/charts “nice-to-have” paths rather than core lender flows.
-

@@ -45,4 +45,3 @@ This tornado analysis quantifies the impact of key parameter variations on proje
 - Low Case: 0.1757 (Impact: +0.0001)
 - High Case: 0.1754 (Impact: -0.0002)
 - Total Swing: 0.0003
-

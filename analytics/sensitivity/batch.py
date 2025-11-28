@@ -22,8 +22,7 @@ import os
 from itertools import combinations
 
 from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity_heatmap import (plot_two_way_heatmap,
-                                           run_two_way_sensitivity)
+from analytics.sensitivity_heatmap import plot_two_way_heatmap, run_two_way_sensitivity
 
 
 def batch_heatmap_grid(

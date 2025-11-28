@@ -6,7 +6,7 @@ This script automatically adds the missing @field_validator to enforce base_valu
 
 Usage:
     python fix_parameter_range_config.py
-    
+
 Result:
     - analytics/contractsv14.py is modified in-place
     - Backup created as analytics/contractsv14.py.backup
@@ -30,7 +30,7 @@ from pathlib import Path
 TARGET_FILE = Path(__file__).parent / "analytics" / "contractsv14.py"
 
 # The validator we're adding (will be inserted after the base_value field)
-NEW_VALIDATOR = '''    
+NEW_VALIDATOR = '''
     @field_validator('base_value')
     @classmethod
     def validate_base_value(cls, v):
@@ -42,15 +42,13 @@ NEW_VALIDATOR = '''
 # Pattern to find: the base_value field definition
 # We look for the line where base_value is defined with Field(..., gt=0)
 BASE_VALUE_PATTERN = re.compile(
-    r'(\s+base_value:\s*float\s*=\s*Field\([^)]*gt=0[^)]*\))',
-    re.MULTILINE
+    r"(\s+base_value:\s*float\s*=\s*Field\([^)]*gt=0[^)]*\))", re.MULTILINE
 )
 
 # We need to find where to insert the validator (right after the base_value field)
 # Pattern to find the end of base_value field (looking for the next non-indented or field definition)
 INSERT_PATTERN = re.compile(
-    r'(base_value:\s*float\s*=\s*Field\([^)]*gt=0[^)]*\))\s*\n',
-    re.MULTILINE
+    r"(base_value:\s*float\s*=\s*Field\([^)]*gt=0[^)]*\))\s*\n", re.MULTILINE
 )
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -70,7 +68,7 @@ def check_file_exists() -> bool:
 
 def check_validator_already_exists(content: str) -> bool:
     """Check if the validator is already present."""
-    if 'validate_base_value' in content:
+    if "validate_base_value" in content:
         print("✓ Validator 'validate_base_value' already exists in file")
         return True
     return False
@@ -79,7 +77,7 @@ def check_validator_already_exists(content: str) -> bool:
 def find_base_value_field(content: str) -> tuple[int, int] | None:
     """
     Find the position of the base_value field definition.
-    
+
     Returns: (start_pos, end_pos) tuple or None if not found
     """
     match = INSERT_PATTERN.search(content)
@@ -87,7 +85,7 @@ def find_base_value_field(content: str) -> tuple[int, int] | None:
         print("❌ ERROR: Could not find 'base_value' field definition")
         print("   Expected pattern: base_value: float = Field(..., gt=0)")
         return None
-    
+
     # Return positions: start of match and end of the line (where newline is)
     return (match.start(), match.end())
 
@@ -95,25 +93,25 @@ def find_base_value_field(content: str) -> tuple[int, int] | None:
 def apply_fix(content: str) -> tuple[str, bool]:
     """
     Apply the fix by inserting the validator after base_value field.
-    
+
     Returns: (modified_content, success) tuple
     """
     # Find where to insert
     positions = find_base_value_field(content)
     if not positions:
         return (content, False)
-    
+
     start_pos, end_pos = positions
-    
+
     # Insert the validator after the base_value field
-    modified_content = content[:end_pos] + NEW_VALIDATOR + '\n' + content[end_pos:]
-    
+    modified_content = content[:end_pos] + NEW_VALIDATOR + "\n" + content[end_pos:]
+
     return (modified_content, True)
 
 
 def create_backup(file_path: Path) -> Path:
     """Create a backup of the original file."""
-    backup_path = file_path.with_suffix(file_path.suffix + '.backup')
+    backup_path = file_path.with_suffix(file_path.suffix + ".backup")
     shutil.copy2(file_path, backup_path)
     return backup_path
 
@@ -121,7 +119,7 @@ def create_backup(file_path: Path) -> Path:
 def write_file(file_path: Path, content: str) -> bool:
     """Write content to file."""
     try:
-        file_path.write_text(content, encoding='utf-8')
+        file_path.write_text(content, encoding="utf-8")
         return True
     except Exception as e:
         print(f"❌ ERROR writing to file: {e}")
@@ -130,22 +128,25 @@ def write_file(file_path: Path, content: str) -> bool:
 
 def verify_fix(file_path: Path) -> bool:
     """Verify that the fix was applied correctly."""
-    content = file_path.read_text(encoding='utf-8')
-    
+    content = file_path.read_text(encoding="utf-8")
+
     # Check that validator exists
-    if 'validate_base_value' not in content:
+    if "validate_base_value" not in content:
         print("❌ Verification FAILED: Validator not found in file")
         return False
-    
+
     # Check that the validator has the correct logic
-    if 'if v <= 0:' not in content:
+    if "if v <= 0:" not in content:
         print("❌ Verification FAILED: Validator logic not found")
         return False
-    
-    if 'raise ValueError' not in content or 'base_value must be positive' not in content:
+
+    if (
+        "raise ValueError" not in content
+        or "base_value must be positive" not in content
+    ):
         print("❌ Verification FAILED: Error message not found")
         return False
-    
+
     print("✓ Verification PASSED: All validator components present")
     return True
 
@@ -153,7 +154,7 @@ def verify_fix(file_path: Path) -> bool:
 def main() -> int:
     """
     Main execution flow.
-    
+
     Returns: Exit code (0 = success, 1 = failure)
     """
     print("╔" + "═" * 76 + "╗")
@@ -172,7 +173,7 @@ def main() -> int:
     # Step 2: Read file
     print("[2/6] Reading file...")
     try:
-        content = TARGET_FILE.read_text(encoding='utf-8')
+        content = TARGET_FILE.read_text(encoding="utf-8")
         print(f"✓ Read {len(content)} characters")
     except Exception as e:
         print(f"❌ ERROR reading file: {e}")
@@ -219,7 +220,9 @@ def main() -> int:
     print("[VERIFY] Verifying the fix...")
     if not verify_fix(TARGET_FILE):
         print("❌ Verification failed - restoring backup")
-        shutil.copy2(TARGET_FILE.with_suffix(TARGET_FILE.suffix + '.backup'), TARGET_FILE)
+        shutil.copy2(
+            TARGET_FILE.with_suffix(TARGET_FILE.suffix + ".backup"), TARGET_FILE
+        )
         return 1
     print()
 
@@ -234,7 +237,9 @@ def main() -> int:
     print(f"  • Added: @field_validator('base_value') with logic to enforce > 0")
     print()
     print("🧪 Next steps:")
-    print("  1. Run tests: pytest tests/finance/test_contracts.py::TestParameterRangeConfig -v")
+    print(
+        "  1. Run tests: pytest tests/finance/test_contracts.py::TestParameterRangeConfig -v"
+    )
     print("  2. Verify all tests pass")
     print("  3. Commit the change:")
     print("     git add analytics/contractsv14.py")

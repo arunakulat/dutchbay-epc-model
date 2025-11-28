@@ -7,7 +7,7 @@
 
 parameters:
   # ===== COST PARAMETERS (±20% typical range) =====
-  
+
   - variable_name: "project.capex_usd_per_kw"
     base_value: 850.0
     low_pct: -20.0
@@ -15,9 +15,9 @@ parameters:
     steps: 5
     # Range: $680-1020/kW
     # Comment: Capital expenditure is typically the highest impact driver
-  
+
   # ===== REVENUE PARAMETERS (±15% typical range) =====
-  
+
   - variable_name: "financial.tariff_lkr_per_kwh"
     base_value: 65.0
     low_pct: -15.0
@@ -25,9 +25,9 @@ parameters:
     steps: 5
     # Range: LKR 55.25-74.75/kWh
     # Comment: Tariff is second-highest impact driver for merchant projects
-  
+
   # ===== GENERATION PARAMETERS (±10% typical range) =====
-  
+
   - variable_name: "generation.capacity_factor_pct"
     base_value: 45.0
     low_pct: -10.0
@@ -35,9 +35,9 @@ parameters:
     steps: 5
     # Range: 40.5%-49.5%
     # Comment: Wind resource uncertainty (P50, P75, P90 scenarios)
-  
+
   # ===== FINANCIAL PARAMETERS (±2-3 percentage points) =====
-  
+
   - variable_name: "financial.discount_rate_pct"
     base_value: 8.0
     low_pct: -3.0
@@ -45,7 +45,7 @@ parameters:
     steps: 5
     # Range: 5.0%-11.0%
     # Comment: WACC sensitivity for different capital structures
-  
+
   - variable_name: "financial.debt_interest_rate_pct"
     base_value: 9.0
     low_pct: -2.0
@@ -53,9 +53,9 @@ parameters:
     steps: 5
     # Range: 7.0%-11.0%
     # Comment: Senior debt pricing sensitivity
-  
+
   # ===== SCHEDULE PARAMETERS (±6 months typical) =====
-  
+
   - variable_name: "project.construction_months"
     base_value: 24.0
     low_pct: -6.0
@@ -63,9 +63,9 @@ parameters:
     steps: 5
     # Range: 22.56-25.44 months
     # Comment: Construction delay risk (IDC impact)
-  
+
   # ===== OPERATING PARAMETERS (±5% typical) =====
-  
+
   - variable_name: "operating.opex_pct_revenue"
     base_value: 2.5
     low_pct: -5.0
@@ -73,9 +73,9 @@ parameters:
     steps: 5
     # Range: 2.375%-2.625% of revenue
     # Comment: O&M cost efficiency
-  
+
   # ===== TECHNICAL PARAMETERS (±2% typical) =====
-  
+
   - variable_name: "technical.grid_loss_pct"
     base_value: 3.0
     low_pct: -2.0
@@ -113,7 +113,7 @@ base_values:
 
 parameters:
   # ===== COST PARAMETERS (±20% typical range) =====
-  
+
   - variable_name: "project.capex_usd_per_kw"
     base_value: 850.0
     low_pct: -20.0
@@ -121,9 +121,9 @@ parameters:
     steps: 5
     # Range: $680-1020/kW
     # Comment: Capital expenditure is typically the highest impact driver
-  
+
   # ===== REVENUE PARAMETERS (±15% typical range) =====
-  
+
   - variable_name: "financial.tariff_lkr_per_kwh"
     base_value: 65.0
     low_pct: -15.0
@@ -131,9 +131,9 @@ parameters:
     steps: 5
     # Range: LKR 55.25-74.75/kWh
     # Comment: Tariff is second-highest impact driver for merchant projects
-  
+
   # ===== GENERATION PARAMETERS (±10% typical range) =====
-  
+
   - variable_name: "generation.capacity_factor_pct"
     base_value: 45.0
     low_pct: -10.0
@@ -141,9 +141,9 @@ parameters:
     steps: 5
     # Range: 40.5%-49.5%
     # Comment: Wind resource uncertainty (P50, P75, P90 scenarios)
-  
+
   # ===== FINANCIAL PARAMETERS (±2-3 percentage points) =====
-  
+
   - variable_name: "financial.discount_rate_pct"
     base_value: 8.0
     low_pct: -3.0
@@ -151,7 +151,7 @@ parameters:
     steps: 5
     # Range: 5.0%-11.0%
     # Comment: WACC sensitivity for different capital structures
-  
+
   - variable_name: "financial.debt_interest_rate_pct"
     base_value: 9.0
     low_pct: -2.0
@@ -159,9 +159,9 @@ parameters:
     steps: 5
     # Range: 7.0%-11.0%
     # Comment: Senior debt pricing sensitivity
-  
+
   # ===== SCHEDULE PARAMETERS (±6 months typical) =====
-  
+
   - variable_name: "project.construction_months"
     base_value: 24.0
     low_pct: -6.0
@@ -169,9 +169,9 @@ parameters:
     steps: 5
     # Range: 22.56-25.44 months
     # Comment: Construction delay risk (IDC impact)
-  
+
   # ===== OPERATING PARAMETERS (±5% typical) =====
-  
+
   - variable_name: "operating.opex_pct_revenue"
     base_value: 2.5
     low_pct: -5.0
@@ -179,9 +179,9 @@ parameters:
     steps: 5
     # Range: 2.375%-2.625% of revenue
     # Comment: O&M cost efficiency
-  
+
   # ===== TECHNICAL PARAMETERS (±2% typical) =====
-  
+
   - variable_name: "technical.grid_loss_pct"
     base_value: 3.0
     low_pct: -2.0

@@ -34,5 +34,5 @@ pytest -c /dev/null -q tests/imports/test_api_cov_smoke.py \
   --cov-report=term-missing --cov-fail-under=1 \
   --no-header --no-summary
 
-  
+
 # EOF

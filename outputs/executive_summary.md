@@ -43,8 +43,8 @@
 ## Coverage Summary
 
 - **Minimum DSCR:** 1.30x
-- **Minimum LLCR:** 1.74x 
-- **Minimum PLCR:** 1.74x 
+- **Minimum LLCR:** 1.74x
+- **Minimum PLCR:** 1.74x
 
 ---
 

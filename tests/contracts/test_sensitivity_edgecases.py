@@ -102,7 +102,9 @@ def test_bad_params_are_caught_by_schema_guard(edge_case: str) -> None:
     logger.debug(f"Project block: {config.get('project', {})}")
 
     # Use the canonical defensive layer (schema_guard)
-    logger.info(f"Calling validate_config_for_v14 with modules=['cashflow', 'debt']")  # noqa: F541
+    logger.info(
+        f"Calling validate_config_for_v14 with modules=['cashflow', 'debt']"
+    )  # noqa: F541
 
     raised_error = False
     error_msg = None

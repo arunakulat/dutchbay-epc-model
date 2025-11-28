@@ -1,9 +1,9 @@
 # COVENANT COMPLIANCE CERTIFICATE
 ## Dutch Bay 150MW Wind Farm Project
 
-**Reporting Period:** [Quarter/Year]  
-**Report Date:** [Date]  
-**Prepared By:** [Your Company]  
+**Reporting Period:** [Quarter/Year]
+**Report Date:** [Date]
+**Prepared By:** [Your Company]
 **Lender:** [DFI/Commercial Bank Name]
 
 ---
@@ -81,8 +81,8 @@ I hereby certify that:
 
 **Authorized Signatory:**
 
-Name: ______________________  
-Title: ______________________  
+Name: ______________________
+Title: ______________________
 Date: ______________________
 
 ---

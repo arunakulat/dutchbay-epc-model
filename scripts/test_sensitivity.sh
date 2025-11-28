@@ -34,5 +34,5 @@ PY
 pytest -q tests/heavy/test_sensitivity_smoke.py \
   --override-ini="addopts=-q --cov=dutchbay_v13.sensitivity --cov-report=term-missing --cov-fail-under=1"
 
-  
+
 # EOF

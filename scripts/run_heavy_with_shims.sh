@@ -11,5 +11,5 @@ echo "→ Running the heavy suite (MC, Sensitivity, Optimization, Metrics)…"
 pytest -q tests/heavy \
   --override-ini="addopts=-q --cov=dutchbay_v13 --cov-report=term-missing --cov-fail-under=1"
 
-  
+
 # EOF

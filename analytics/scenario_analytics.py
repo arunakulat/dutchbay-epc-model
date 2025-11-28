@@ -22,8 +22,7 @@ import logging
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
-                    Tuple)
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -372,7 +371,7 @@ class ScenarioAnalytics:
             else:
                 logger.warning(
                     f"Could not derive DSCR column:"
-                    "cfads_col={cfads_col}, debt_candidates={debt_candidates}"
+                    f"cfads_col={cfads_col}, debt_candidates={debt_candidates}"
                 )
 
         summary_df, timeseries_df = normalise_kpis_for_export(

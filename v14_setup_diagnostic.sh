@@ -28,7 +28,7 @@ echo "────────────────────────�
 
 if [ -d .git ]; then
     echo "✓ Git repository exists"
-    
+
     # Current branch
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
     if [ $? -eq 0 ]; then
@@ -36,7 +36,7 @@ if [ -d .git ]; then
     else
         echo "  ⚠ Cannot determine current branch"
     fi
-    
+
     # Check for uncommitted changes
     if git diff --quiet && git diff --staged --quiet; then
         echo "  ✓ No uncommitted changes"
@@ -46,12 +46,12 @@ if [ -d .git ]; then
         echo "  Modified files:"
         git status --short
     fi
-    
+
     # List all branches
     echo ""
     echo "  Existing branches:"
     git branch -a
-    
+
 else
     echo "❌ No Git repository found"
     echo "   Run: git init"
@@ -68,15 +68,15 @@ echo "────────────────────────�
 
 if [ -d .venv311 ]; then
     echo "✓ Virtual environment folder exists: .venv311"
-    
+
     # Check if it has Python
     if [ -f .venv311/bin/python ]; then
         echo "  ✓ Python executable found"
-        
+
         # Check Python version
         VENV_PYTHON=$(.venv311/bin/python --version 2>&1)
         echo "  Version: $VENV_PYTHON"
-        
+
         # Check if activated
         if [ -n "$VIRTUAL_ENV" ]; then
             echo "  ✓ Virtual environment is ACTIVATED"
@@ -105,14 +105,14 @@ echo "────────────────────────�
 
 if [ -f requirements.txt ]; then
     echo "✓ requirements.txt found"
-    
+
     if [ -f .venv311/bin/pip ]; then
         echo ""
         echo "  Checking installed packages..."
-        
+
         # Check key packages
         PACKAGES=("numpy" "pandas" "scipy" "pyyaml" "pytest")
-        
+
         for pkg in "${PACKAGES[@]}"; do
             if .venv311/bin/pip list 2>/dev/null | grep -i "^$pkg " > /dev/null; then
                 VERSION=$(.venv311/bin/pip show "$pkg" 2>/dev/null | grep Version | awk '{print $2}')

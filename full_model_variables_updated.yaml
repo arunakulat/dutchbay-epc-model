@@ -79,18 +79,18 @@ irr_validation:
   # Project-level IRR bounds (used by analytics, scenario evaluation)
   irr_lower_bound: -0.70          # -70% loss cap (wind resource worst case)
   irr_upper_bound: 0.35            # 35% annual return cap (conservative DFI)
-  
+
   # Date-aware XIRR bounds (for irregular cashflows)
   xirr_lower_bound: -0.70
   xirr_upper_bound: 0.25           # More conservative for irregular timing
-  
+
   # Role-specific overrides (optional)
   equity_irr_lower_bound: -0.50   # Equity can absorb more downside
   equity_irr_upper_bound: 0.50     # Equity can target higher returns
-  
+
   debt_irr_lower_bound: -0.20     # Debt less tolerant of loss
   debt_irr_upper_bound: 0.15       # Debt capped at conservative returns
-  
+
   # Audit trail / rationale (documentation)
   irr_upper_bound_rationale: "Conservative cap per ADB financing guidelines for renewable energy projects in Sri Lanka"
   irr_lower_bound_rationale: "Based on worst-case wind resource assessment (P90) with 30% grid curtailment scenario"
@@ -103,12 +103,12 @@ Financing_Terms:
   interest_only_years: 2
   amortization_style: auto
   interest_rate_nominal: 0.08
-  
+
   mix:
     lkr_max: 0.45
     dfi_max: 0.10
     usd_commercial_min: 0.45
-  
+
   rates:
     lkr_nominal: 0.08
     lkr_min: 0.08
@@ -116,22 +116,22 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075
     usd_commercial_min: 0.075
-  
+
   target_dscr: 1.30
   min_dscr: 1.20
   min_dscr_covenant: 1.20
-  
+
   reserves:
     dsra_months: 6
     receivables_guarantee_months: 9
-  
+
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
-  
+
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
-  
+
   enforce_hard_covenants: false
 
 metrics:
@@ -216,4 +216,3 @@ meta
     - version: "2.4"
       date: "2025-11-23"
       changes: "Added irr_validation section for YAML-driven IRR bounds configuration"
-

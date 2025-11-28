@@ -13,8 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import yaml
-from dutchbay_v13.finance.cashflow import (_availability, _capacity_mw,
-                                           _loss_factor, kwh_per_year)
+from dutchbay_v13.finance.cashflow import (
+    _availability,
+    _capacity_mw,
+    _loss_factor,
+    kwh_per_year,
+)
 
 print("=" * 80)
 print("DUTCHBAY V13 - WIND PRODUCTION LOGIC DIAGNOSTIC")

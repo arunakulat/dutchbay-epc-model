@@ -284,7 +284,9 @@ def diagnose_environment() -> None:
                 text=True,
                 check=True,
             )
-            version_line = [l for l in result.stdout.split("\n") if l.startswith("Version")]
+            version_line = [
+                l for l in result.stdout.split("\n") if l.startswith("Version")
+            ]
             if version_line:
                 version = version_line[0].split(": ")[1]
                 typer.echo(f"  ✅ {pkg}: {version}")
@@ -350,7 +352,9 @@ def diagnose_environment() -> None:
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def stage_black(targets: list[str], verbose: bool = False, fix: bool = False) -> StepResult:
+def stage_black(
+    targets: list[str], verbose: bool = False, fix: bool = False
+) -> StepResult:
     """Stage 1: Code formatting with black."""
     cmd = [sys.executable, "-m", "black", "--line-length=100"]
     if fix:
@@ -363,7 +367,9 @@ def stage_black(targets: list[str], verbose: bool = False, fix: bool = False) ->
     )
 
 
-def stage_isort(targets: list[str], verbose: bool = False, fix: bool = False) -> StepResult:
+def stage_isort(
+    targets: list[str], verbose: bool = False, fix: bool = False
+) -> StepResult:
     """Stage 2: Import organization with isort."""
     cmd = [sys.executable, "-m", "isort"]
     if fix:
@@ -603,7 +609,11 @@ def print_timing_breakdown(stats: PipelineStats) -> None:
 
     if stats.stage_timings:
         # Find slowest stage
-        slowest = max(stats.stage_timings.items(), key=lambda x: x[1]) if stats.stage_timings else None
+        slowest = (
+            max(stats.stage_timings.items(), key=lambda x: x[1])
+            if stats.stage_timings
+            else None
+        )
 
         for stage, elapsed in stats.stage_timings.items():
             is_slowest = " ⚠️ (slowest)" if slowest and stage == slowest[0] else ""
@@ -742,7 +752,9 @@ def main(
     if selected_files:
         code_files, test_files = split_code_and_tests(selected_files)
         black_targets = code_files or selected_files
-        pytest_targets = test_files or [f for f in selected_files if f.startswith("tests")]
+        pytest_targets = test_files or [
+            f for f in selected_files if f.startswith("tests")
+        ]
     else:
         black_targets = list(BLACK_TARGETS)
         pytest_targets = list(FAST_PYTEST_TARGETS if fast else FULL_PYTEST_TARGETS)
@@ -751,21 +763,29 @@ def main(
         typer.echo("\n📋 Configuration:")
         typer.echo(f"  Black targets: {', '.join(black_targets)}")
         typer.echo(f"  Test targets: {', '.join(pytest_targets)}")
-        typer.echo(f"  Stages: black={not no_black}, isort={not no_isort}, " +
-                   f"compile={not no_compile}, pytest={not no_pytest}, mypy={not no_mypy}")
+        typer.echo(
+            f"  Stages: black={not no_black}, isort={not no_isort}, "
+            + f"compile={not no_compile}, pytest={not no_pytest}, mypy={not no_mypy}"
+        )
 
     if dry_run:
         typer.echo("\n[DRY RUN] Pipeline stages that would execute:")
         estimated_total = 0
 
         if not no_black:
-            typer.echo(f"  • black {' '.join(black_targets)} (~{TIMING_ESTIMATES['black']}s)")
+            typer.echo(
+                f"  • black {' '.join(black_targets)} (~{TIMING_ESTIMATES['black']}s)"
+            )
             estimated_total += TIMING_ESTIMATES["black"]
         if not no_isort:
-            typer.echo(f"  • isort {' '.join(black_targets)} (~{TIMING_ESTIMATES['isort']}s)")
+            typer.echo(
+                f"  • isort {' '.join(black_targets)} (~{TIMING_ESTIMATES['isort']}s)"
+            )
             estimated_total += TIMING_ESTIMATES["isort"]
         if not no_compile:
-            typer.echo(f"  • compileall {' '.join(COMPILE_TARGETS)} (~{TIMING_ESTIMATES['compileall']}s)")
+            typer.echo(
+                f"  • compileall {' '.join(COMPILE_TARGETS)} (~{TIMING_ESTIMATES['compileall']}s)"
+            )
             estimated_total += TIMING_ESTIMATES["compileall"]
         if not no_pytest:
             pytest_time = TIMING_ESTIMATES["pytest_fast" if fast else "pytest_full"]
@@ -774,7 +794,9 @@ def main(
             typer.echo(f"  • pytest {' '.join(pytest_targets)} (~{pytest_time}s)")
             estimated_total += pytest_time
         if not no_mypy:
-            typer.echo(f"  • mypy {' '.join(MYPY_TARGETS)} (~{TIMING_ESTIMATES['mypy']}s)")
+            typer.echo(
+                f"  • mypy {' '.join(MYPY_TARGETS)} (~{TIMING_ESTIMATES['mypy']}s)"
+            )
             estimated_total += TIMING_ESTIMATES["mypy"]
         if coverage:
             typer.echo(f"  • coverage (~{TIMING_ESTIMATES['coverage']}s)")
@@ -847,10 +869,10 @@ def main(
 
         # Stage 5: mypy
         if not no_mypy:
-            mypy_targets_list = (
-                code_files if selected_files else list(MYPY_TARGETS)
+            mypy_targets_list = code_files if selected_files else list(MYPY_TARGETS)
+            result = stage_mypy(
+                mypy_targets_list or list(MYPY_TARGETS), verbose=verbose
             )
-            result = stage_mypy(mypy_targets_list or list(MYPY_TARGETS), verbose=verbose)
             results.append(result)
             stats.stage_timings["mypy"] = result.elapsed_time
             stats.stages_run += 1
@@ -960,7 +982,9 @@ def info() -> None:
 
     typer.echo("\n⚡ QUICK START:")
     typer.echo("  Full suite: python scripts/go_with_the_flow_ci.py")
-    typer.echo("  Fast + parallel: python scripts/go_with_the_flow_ci.py --fast --parallel")
+    typer.echo(
+        "  Fast + parallel: python scripts/go_with_the_flow_ci.py --fast --parallel"
+    )
     typer.echo("  Auto-format: python scripts/go_with_the_flow_ci.py --fix")
     typer.echo("  Setup hooks: python scripts/go_with_the_flow_ci.py --init-git-hooks")
     typer.echo("  Diagnose: python scripts/go_with_the_flow_ci.py --diagnose")
