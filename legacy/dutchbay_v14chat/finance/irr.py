@@ -6,12 +6,7 @@ working while delegating all logic to finance.irr.
 
 from __future__ import annotations
 
-from finance.irr import (
-    npv,
-    irr,
-    xnpv,
-    xirr,
-)
+from finance.irr import irr, npv, xirr, xnpv
 
 __all__ = [
     "npv",

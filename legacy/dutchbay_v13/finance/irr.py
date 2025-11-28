@@ -10,8 +10,9 @@ Standards: CFA Institute, IFC Project Finance Guidelines
 """
 
 from __future__ import annotations
-from typing import Sequence, Optional
+
 from datetime import datetime
+from typing import Optional, Sequence
 
 # Try numpy-financial if available
 try:

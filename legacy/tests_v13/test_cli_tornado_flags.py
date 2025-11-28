@@ -1,6 +1,6 @@
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_tornado_metric_and_sort(tmp_path: Path):

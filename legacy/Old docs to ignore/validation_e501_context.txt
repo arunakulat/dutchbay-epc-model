@@ -9,11 +9,11 @@ Total violation sites: 3
 LINE 5
 ================================================================================
        2: validation.py – Parameter Range QA Checker for v14+ Sensitivity Pipelines
-       3: 
+       3:
        4: PURPOSE:
 >>>    5:     Quickly checks that every lift-lower parameter sweep yields reasonable output values.
        6:     Detects config/model errors (negative IRR, crazy outliers) and surface issues early in tests/CI.
-       7: 
+       7:
        8: USAGE:
 
     Length: 89 characters (limit: 88)
@@ -22,11 +22,11 @@ LINE 5
 ================================================================================
 LINE 6
 ================================================================================
-       3: 
+       3:
        4: PURPOSE:
        5:     Quickly checks that every lift-lower parameter sweep yields reasonable output values.
 >>>    6:     Detects config/model errors (negative IRR, crazy outliers) and surface issues early in tests/CI.
-       7: 
+       7:
        8: USAGE:
        9:     from analytics.sensitivity.validation import validate_parameter_ranges
 

@@ -8,23 +8,25 @@ Usage:
 
 """
 
-import os
-import sys
+import argparse
 import glob
 import json
-import yaml
-import argparse
+import os
+import sys
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
+import yaml
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dutchbay_v14chat.finance.cashflow import build_annual_rows_v14
 from dutchbay_v14chat.finance.debt import apply_debt_layer
+
 from analytics.core.metrics import calculate_scenario_kpis, format_kpi_summary
-from analytics.export_helpers import ExcelExporter, ChartGenerator
+from analytics.export_helpers import ChartGenerator, ExcelExporter
 
 
 class ScenarioAnalytics:
@@ -416,10 +418,10 @@ class ScenarioAnalytics:
     Examples:
       # Basic usage
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx
-      
+
       # With custom discount rate and DSCR threshold
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --discount 0.10 --dscr 1.30
-      
+
       # Skip charts for faster processing
       python analytics/scenario_analytics.py --dir ./scenarios --output ./exports/report.xlsx --no-charts
             """,

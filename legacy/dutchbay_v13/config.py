@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
-import os
 import io
+import os
+from typing import Any, Dict, Tuple
+
 import yaml
 
 
@@ -82,6 +83,7 @@ def load_config(path_or_dict):
         return dict(path_or_dict)
     try:
         from pathlib import Path
+
         import yaml  # optional; if missing, use a naive parser
 
         p = Path(path_or_dict)

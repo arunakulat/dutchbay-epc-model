@@ -1,5 +1,6 @@
-from dutchbay_v13.scenario_runner import load_config, run_single_scenario
 import os
+
+from dutchbay_v13.scenario_runner import load_config, run_single_scenario
 
 
 def test_run_single_scenario():

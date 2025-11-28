@@ -1,6 +1,6 @@
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_optimize_pareto_outputs(tmp_path: Path):

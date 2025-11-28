@@ -1,4 +1,7 @@
-import subprocess, sys, pytest
+import subprocess
+import sys
+
+import pytest
 
 
 def test_cli_help_runs_nonfatally():

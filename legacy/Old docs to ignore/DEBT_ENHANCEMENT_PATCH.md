@@ -60,26 +60,26 @@ for i in range(years):
     # Total outstanding at start of this year
     total_outstanding = sum(outstanding_balances.values())
     debt_outstanding_series.append(total_outstanding)  # NEW
-    
+
     # Debt service for this year
     total_service = 0.0
     total_principal_paid = 0.0
-    
+
     for k in schedules:
         if i < len(schedules[k]):
             interest, principal, service = schedules[k][i]
             total_service += service
             total_principal_paid += principal
-            
+
             # Update outstanding balance for this tranche
             outstanding_balances[k] = max(0.0, outstanding_balances[k] - principal)
         else:
             total_service += 0.0
-    
+
     # DSCR calculation
     opcf = cfads[i] if i < len(cfads) else 0.0
     dscr = opcf / total_service if total_service > 0 else float('inf')
-    
+
     dscr_series.append(dscr)
     debt_service_total.append(total_service)
 ```

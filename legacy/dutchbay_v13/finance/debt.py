@@ -47,8 +47,9 @@ Version: 2.0 (LKR Output Currency Fix)
 """
 
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Tuple
+
 import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

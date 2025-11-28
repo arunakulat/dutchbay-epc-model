@@ -1,6 +1,6 @@
+import pathlib
 import subprocess
 import sys
-import pathlib
 
 
 def test_cli_smoke(tmp_path: pathlib.Path):

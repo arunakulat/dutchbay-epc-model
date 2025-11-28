@@ -75,10 +75,10 @@ Imports:
 
 #### Helper functions
 
-- `_safe_float(value, default=0.0) -> float`  
+- `_safe_float(value, default=0.0) -> float`
   Defensive float conversion (rarely needed outside this module).
 
-- `_summary_stats(values) -> dict`  
+- `_summary_stats(values) -> dict`
   Returns `{min, max, mean, median}` for a numeric series, with all fields `None` on empty input.
 
 #### `calculate_scenario_kpis(...)`
@@ -286,11 +286,11 @@ sa = ScenarioAnalytics(
 
 Core methods:
 
-- `discover_scenarios() -> List[Path]`  
-  - Scans `scenarios_dir` for `*.yaml`, `*.yml`, `*.json`.  
+- `discover_scenarios() -> List[Path]`
+  - Scans `scenarios_dir` for `*.yaml`, `*.yml`, `*.json`.
   - Raises `FileNotFoundError` if the directory itself is missing.
 
-- `process_scenario(config_path: Path) -> ScenarioResult`  
+- `process_scenario(config_path: Path) -> ScenarioResult`
   For a single scenario:
   1. Loads and normalises the config via `load_scenario_config`.
   2. Builds annual cashflows via `build_annual_rows(config)`.
@@ -300,12 +300,12 @@ Core methods:
   6. Merges EPC breakdown into the KPI dict (if available).
   7. Returns a `ScenarioResult` with all artefacts attached.
 
-- `_build_dataframes(results)` (internal)  
+- `_build_dataframes(results)` (internal)
   - Builds:
     - **summary_df**: one row per scenario, essentially `result.kpis` plus `scenario_name`.
     - **timeseries_df**: flattens each `annual_rows` list into long form with scenario labels.
 
-- `run(export_excel=True, export_charts=False)`  
+- `run(export_excel=True, export_charts=False)`
   - Discovers all scenarios under `scenarios_dir`.
   - Runs `process_scenario` for each, capturing any failures.
   - Logs a multi‑scenario summary, including a list of failures if any.

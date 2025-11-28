@@ -7,10 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence
 
-from finance.debt_v14 import (
-    apply_debt_layer as _apply_debt_layer_impl,
-    plan_debt as _plan_debt_impl,
-)
+from finance.debt_v14 import apply_debt_layer as _apply_debt_layer_impl
+from finance.debt_v14 import plan_debt as _plan_debt_impl
 
 
 def apply_debt_layer(

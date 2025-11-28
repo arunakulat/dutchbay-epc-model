@@ -1,5 +1,5 @@
-from pathlib import Path
 from glob import glob
+from pathlib import Path
 
 # Import the runner directly so coverage can track imports
 from dutchbay_v13.scenario_runner import run_dir

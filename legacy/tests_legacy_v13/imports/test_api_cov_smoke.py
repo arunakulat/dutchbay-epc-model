@@ -1,4 +1,8 @@
-import importlib, subprocess, sys, pytest
+import importlib
+import subprocess
+import sys
+
+import pytest
 
 
 def test_import_api():

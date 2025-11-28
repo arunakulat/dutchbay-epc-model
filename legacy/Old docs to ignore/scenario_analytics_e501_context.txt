@@ -8,12 +8,12 @@ Total violation sites (line numbers): 5
 ================================================================================
 LINE 67
 ================================================================================
-      64: 
+      64:
       65: class ScenarioAnalytics:
       66:     """
 >>>   67:     V14-style orchestrator for batch scenario analytics with full Go With The Flow features.
       68:     """
-      69: 
+      69:
       70:     def __init__(
 
     Length: 92 characters (limit: 88)
@@ -50,12 +50,12 @@ LINE 120
 ================================================================================
 LINE 230
 ================================================================================
-     227: 
+     227:
      228:         batch_run = self.parallel and len(scenario_paths) > 4
      229:         logger.info(
 >>>  230:             f"Running {len(scenario_paths)} scenario(s) {'in parallel' if batch_run else 'serially'}."
      231:         )
-     232: 
+     232:
      233:         if batch_run:
 
     Length: 102 characters (limit: 88)
@@ -69,7 +69,7 @@ LINE 368
      367:                 logger.warning(
 >>>  368:                     f"Could not derive DSCR column: cfads_col={cfads_col}, debt_candidates={debt_candidates}"
      369:                 )
-     370: 
+     370:
      371:         summary_df, timeseries_df = normalise_kpis_for_export(
 
     Length: 109 characters (limit: 88)

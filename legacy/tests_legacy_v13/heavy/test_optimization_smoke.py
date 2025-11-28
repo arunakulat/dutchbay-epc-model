@@ -1,4 +1,7 @@
-import importlib, types, pytest
+import importlib
+import types
+
+import pytest
 
 CANDIDATES = ("solve_tariff", "optimize_tariff_for_target_irr", "solve", "optimize")
 

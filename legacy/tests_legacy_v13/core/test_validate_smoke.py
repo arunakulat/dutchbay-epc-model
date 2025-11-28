@@ -1,4 +1,6 @@
-import importlib, pytest
+import importlib
+
+import pytest
 
 
 def _find(m, names):

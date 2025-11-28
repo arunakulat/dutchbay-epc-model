@@ -1,4 +1,5 @@
 import unittest
+
 from dutchbay_v13.finance.metrics import irr_bisection, npv
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 from typing import Any, Dict, Iterable, List, Optional
+
+from .finance.debt import apply_debt_layer
 
 # Core finance primitives live in finance/*
 from .finance.irr import irr, npv
-from .finance.debt import apply_debt_layer
 
 
 # -----------------------

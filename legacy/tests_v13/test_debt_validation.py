@@ -10,6 +10,7 @@ Run from project root:
 
 import sys
 from pathlib import Path
+
 import yaml
 
 # Add parent directory to path

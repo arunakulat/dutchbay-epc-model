@@ -10,6 +10,7 @@ All values are parameterized from YAML config.
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from dutchbay_v13.finance.metrics import calculate_llcr, calculate_plcr
 
 
@@ -109,8 +110,8 @@ def generate_executive_summary(
 ## Coverage Summary
 
 - **Minimum DSCR:** {_format_ratio(dscr_min)}
-- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])} 
-- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])} 
+- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])}
+- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])}
 
 ---
 
@@ -212,9 +213,9 @@ def generate_dfi_lender_pack(
 ## Minimum/Mean Coverage
 
 - **Minimum DSCR:** {_format_ratio(dscr_min)}
-- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])} 
+- **Minimum LLCR:** {_format_ratio(llcr_summary['llcr_min'])}
 - **LLCR Avg:** {_format_ratio(llcr_summary['llcr_avg'])}
-- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])} 
+- **Minimum PLCR:** {_format_ratio(plcr_summary['plcr_min'])}
 - **PLCR Avg:** {_format_ratio(plcr_summary['plcr_avg'])}
 
 ---

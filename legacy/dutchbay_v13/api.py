@@ -1,19 +1,21 @@
 from __future__ import annotations
-from typing import Dict, Any, Generator
-from pathlib import Path
+
 import json
+from pathlib import Path
+from typing import Any, Dict, Generator
+
 import yaml
 
 try:
-    from fastapi import FastAPI, Request
-    from fastapi.responses import StreamingResponse, HTMLResponse
     import uvicorn
+    from fastapi import FastAPI, Request
+    from fastapi.responses import HTMLResponse, StreamingResponse
 except Exception:  # pragma: no cover
     FastAPI = None  # type: ignore
 
 from .core import build_financial_model
-from .scenario_runner import run_scenario, _validate_params_dict, _validate_debt_dict
-from .schema import SCHEMA, DEBT_SCHEMA
+from .scenario_runner import _validate_debt_dict, _validate_params_dict, run_scenario
+from .schema import DEBT_SCHEMA, SCHEMA
 
 HTML_TMPL = """
 <!doctype html>

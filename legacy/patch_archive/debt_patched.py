@@ -20,12 +20,12 @@ Author: DutchBay V14 Team, Nov 2025
 Version: 3.0 (V14 construction period support)
 """
 
-import math
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from finance.utils import as_float, as_int, get_nested
 from constants import HOURS_PER_YEAR
+from finance.utils import as_float, as_int, get_nested
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("dutchbay.v14chat.finance.debt")

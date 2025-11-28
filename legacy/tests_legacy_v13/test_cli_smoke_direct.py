@@ -1,5 +1,5 @@
-from pathlib import Path
 from glob import glob
+from pathlib import Path
 
 import dutchbay_v13.cli as cli
 

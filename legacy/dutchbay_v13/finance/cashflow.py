@@ -22,8 +22,9 @@ Version: 2.2 (BOI + enhanced depreciation, strict typing)
 """
 
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Tuple
+
 import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -374,8 +375,9 @@ if __name__ == "__main__":
     print("=" * 100)
     print("CASHFLOW MODULE v2.2 (BOI-Ready) - SELF-TEST")
     print("=" * 100)
-    import yaml
     from pathlib import Path
+
+    import yaml
 
     yaml_path = (
         Path(__file__).parent.parent.parent / "full_model_variables_updated.yaml"

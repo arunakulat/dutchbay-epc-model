@@ -255,5 +255,3 @@ $defs:
   _alias_hints:
     # Soft guidance section (no hard cross-field logic; engine resolves precedence)
     type: object
-
-    

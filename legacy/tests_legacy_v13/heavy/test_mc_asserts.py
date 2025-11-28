@@ -1,4 +1,5 @@
-import importlib, math
+import importlib
+import math
 
 
 def test_mc_generate_and_run():

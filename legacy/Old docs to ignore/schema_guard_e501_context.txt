@@ -9,7 +9,7 @@ Total violation sites: 2
 LINE 61
 ================================================================================
       58:     Example (CLI style)::
-      59: 
+      59:
       60:         try:
 >>>   61:             validate_config_for_v14(raw_config=cfg, config_path=config_path, modules=["cashflow", "debt"])
       62:         except ConfigValidationError as exc:
@@ -27,8 +27,8 @@ LINE 279
      278:         raise ConfigValidationError(
 >>>  279:             f"Config '{config_path}' is missing or has invalid required fields: {details}"
      280:         )
-     281: 
-     282: 
+     281:
+     282:
 
     Length: 90 characters (limit: 88)
     Excess: 2 characters

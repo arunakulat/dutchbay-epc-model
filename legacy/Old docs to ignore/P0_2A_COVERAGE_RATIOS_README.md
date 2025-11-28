@@ -225,7 +225,7 @@ return {
 
 ### 2. Test Data vs Real Model
 
-Current `generate_reports.py` uses simplified test 
+Current `generate_reports.py` uses simplified test
 ```python
 annual_rows = [
     {
@@ -334,7 +334,7 @@ python scripts/generate_reports.py
 **P0-2A Coverage Ratios: ✅ COMPLETE**
 
 - LLCR calculation: ✅ Implemented
-- PLCR calculation: ✅ Implemented  
+- PLCR calculation: ✅ Implemented
 - Covenant monitoring: ✅ Implemented
 - Report generation: ✅ Working
 - Test suite: ✅ Created

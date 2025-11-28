@@ -1,4 +1,9 @@
-import importlib, pytest, tempfile, textwrap, pathlib
+import importlib
+import pathlib
+import tempfile
+import textwrap
+
+import pytest
 
 
 def _find(m, names):

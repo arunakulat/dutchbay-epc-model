@@ -1,5 +1,6 @@
-import unittest
 import os
+import unittest
+
 from dutchbay_v13.scenario_runner import load_config, run_single_scenario
 
 

@@ -1,4 +1,7 @@
-import importlib, types, pytest
+import importlib
+import types
+
+import pytest
 
 CANDIDATES = ("run_sensitivity", "sensitivity_sweep", "one_way_sensitivity")
 

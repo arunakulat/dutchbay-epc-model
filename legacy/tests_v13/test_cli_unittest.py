@@ -1,8 +1,8 @@
-import unittest
+import json
+import os
 import subprocess
 import sys
-import os
-import json
+import unittest
 
 
 class TestCLI(unittest.TestCase):

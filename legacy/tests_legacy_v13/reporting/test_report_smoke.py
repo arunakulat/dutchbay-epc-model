@@ -1,4 +1,8 @@
-import importlib, pytest, tempfile, pathlib
+import importlib
+import pathlib
+import tempfile
+
+import pytest
 
 
 def _find(m, names):

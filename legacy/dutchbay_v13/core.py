@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
-
 __all__ = [
     "equity_only_cashflows",
     "compute_irr",

@@ -22,10 +22,10 @@ finance/equity_v14.py - E501/B950 violation
 Line: 39
 
       36:     """
-      37: 
+      37:
       38:     cashflows: List[Number]
 >>>   39:     """Full equity cashflow series (negative = contributions, positive = distributions)."""
-      40: 
+      40:
       41:     total_invested: float
       42:     """Total equity contributed (absolute value of negative cashflows)."""
 
@@ -40,9 +40,9 @@ Line: 291
 
      288: ) -> Optional[float]:
      289:     """Date-adjusted Internal Rate of Return (XIRR) with configurable bounds.
-     290: 
+     290:
 >>>  291:     Uses bisection method directly (more reliable than library XIRR for irregular dates).
-     292: 
+     292:
      293:     Parameters
      294:     ----------
 

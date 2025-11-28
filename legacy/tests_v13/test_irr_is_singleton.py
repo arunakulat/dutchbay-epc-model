@@ -1,5 +1,7 @@
 # tests/architecture/test_irr_is_singleton.py
-import pathlib, re, sys
+import pathlib
+import re
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]  # repo root
 IRR = ROOT / "dutchbay_v13" / "finance" / "irr.py"

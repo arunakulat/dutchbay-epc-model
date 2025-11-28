@@ -1,4 +1,8 @@
-import importlib, types, pytest, math
+import importlib
+import math
+import types
+
+import pytest
 
 
 def test_import_metrics():

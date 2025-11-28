@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 __all__ = ["render_pdf"]
 

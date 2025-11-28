@@ -11,7 +11,7 @@ Centralized parameter loader and accessors.
 No business policy defaults here: floors, caps, rates must live in YAML.
 """
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Union, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 try:  # Light dependency; present in this repo
     import yaml  # type: ignore

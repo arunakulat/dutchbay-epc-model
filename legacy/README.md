@@ -58,7 +58,7 @@ rg "import dutchbay_v14chat" analytics/ finance/ || echo "✅ No v14chat imports
 
 ## Note
 
-FX/risk analytics modules (`fx_data_processor_dual_regime.py`, `risk_metrics.py`, `returns.py`) 
+FX/risk analytics modules (`fx_data_processor_dual_regime.py`, `risk_metrics.py`, `returns.py`)
 will be moved to `analytics/fx/` as part of Task 2 (modularization sprint).
 
 ## Go with the Flow Script Standards (Updated 2025-11-25)
@@ -122,13 +122,13 @@ echo "🔖 Adding EOF markers to scripts..."
 # Function to add EOF marker if missing
 add_eof_if_missing() {
     local file="$1"
-    
+
     # Check if file already ends with # EOF
     if tail -1 "$file" | grep -q "^# EOF$"; then
         echo "   ✓ Already has EOF: $(basename "$file")"
         return 0
     fi
-    
+
     # Add EOF marker
     echo "" >> "$file"
     echo "# EOF" >> "$file"

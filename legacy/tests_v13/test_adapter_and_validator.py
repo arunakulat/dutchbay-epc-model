@@ -1,5 +1,5 @@
-from dutchbay_v13.validate import validate_params_dict
 from dutchbay_v13.adapters import run_irr
+from dutchbay_v13.validate import validate_params_dict
 
 
 def test_adapter_and_validator():

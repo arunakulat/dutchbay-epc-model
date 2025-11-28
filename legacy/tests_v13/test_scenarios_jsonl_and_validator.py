@@ -1,6 +1,7 @@
-from pathlib import Path
 import json
-from dutchbay_v13.scenario_runner import run_matrix, run_dir
+from pathlib import Path
+
+from dutchbay_v13.scenario_runner import run_dir, run_matrix
 
 
 def test_matrix_writes_jsonl(tmp_path: Path):

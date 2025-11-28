@@ -8,7 +8,7 @@ FILE: analytics/fx/returns.py | LINE: 163
 ================================================================================
      160:     # Newton-Raphson method
      161:     rate = initial_guess
-     162: 
+     162:
 >>>  163:     for iteration in range(max_iterations):
      164:         # Calculate NPV and derivative (NPV')
      165:         npv_val = 0.0
@@ -52,20 +52,20 @@ FILE: tests/test_export_smoke.py | LINE: 58
 ================================================================================
       55:     assert hasattr(batch_report, "successful")
       56:     assert hasattr(batch_report, "failed")
-      57: 
+      57:
 >>>   58:     successful = getattr(batch_report, "successful")
       59:     failed = getattr(batch_report, "failed")
-      60: 
+      60:
       61:     # These are currently lists of scenario_ids / error dicts
 
 ================================================================================
 FILE: tests/test_export_smoke.py | LINE: 59
 ================================================================================
       56:     assert hasattr(batch_report, "failed")
-      57: 
+      57:
       58:     successful = getattr(batch_report, "successful")
 >>>   59:     failed = getattr(batch_report, "failed")
-      60: 
+      60:
       61:     # These are currently lists of scenario_ids / error dicts
       62:     assert isinstance(successful, list)
 
@@ -74,20 +74,20 @@ FILE: tests/test_scenario_analytics_smoke.py | LINE: 57
 ================================================================================
       54:     assert hasattr(batch_report, "successful")
       55:     assert hasattr(batch_report, "failed")
-      56: 
+      56:
 >>>   57:     successful = getattr(batch_report, "successful")
       58:     failed = getattr(batch_report, "failed")
-      59: 
+      59:
       60:     assert isinstance(successful, list)
 
 ================================================================================
 FILE: tests/test_scenario_analytics_smoke.py | LINE: 58
 ================================================================================
       55:     assert hasattr(batch_report, "failed")
-      56: 
+      56:
       57:     successful = getattr(batch_report, "successful")
 >>>   58:     failed = getattr(batch_report, "failed")
-      59: 
+      59:
       60:     assert isinstance(successful, list)
       61:     assert isinstance(failed, list)
 
@@ -95,7 +95,7 @@ FILE: tests/test_scenario_analytics_smoke.py | LINE: 58
 FILE: analytics/fx/risk.py | LINE: 83
 ================================================================================
       80:         }
-      81: 
+      81:
       82:     def percentile_analysis(
 >>>   83:         self, returns: np.ndarray, percentiles: List[int] = [10, 25, 50, 75, 90]
       84:     ) -> Dict[str, float]:

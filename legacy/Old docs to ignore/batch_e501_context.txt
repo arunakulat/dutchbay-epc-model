@@ -8,11 +8,11 @@ Total violation sites: 3
 ================================================================================
 LINE 6
 ================================================================================
-       3: 
+       3:
        4: PURPOSE:
        5:     For a given scenario/param set, generates PNG heatmaps for all param pairs.
 >>>    6:     Useful for investigator/developer speed, board or IC slide decks, and automated model validation.
-       7: 
+       7:
        8: USAGE:
        9:     from analytics.sensitivity.batch import batch_heatmap_grid
 
@@ -23,10 +23,10 @@ LINE 6
 LINE 13
 ================================================================================
       10:     batch_heatmap_grid(config_path, params)
-      11: 
+      11:
       12: OUTPUT:
 >>>   13:     Exports all heatmaps to "exports/heatmaps/" as PNG files for inclusion in PowerPoint, docs, or dashboard.
-      14: 
+      14:
       15: EXAMPLE:
       16:     batch_heatmap_grid("scenarios/basecase.yaml", params, steps=4)
 

@@ -1,6 +1,6 @@
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_pareto_plot_and_yaml_batch(tmp_path: Path):

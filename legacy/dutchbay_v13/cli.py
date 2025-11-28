@@ -5,9 +5,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .scenario_runner import (
+from .scenario_runner import (  # run_dir(config, out_dir, mode="irr", fmt="csv", save_annual=False)
     run_dir,
-)  # run_dir(config, out_dir, mode="irr", fmt="csv", save_annual=False)
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:

@@ -1,4 +1,8 @@
-import importlib, math, types, pytest
+import importlib
+import math
+import types
+
+import pytest
 
 CANDIDATES = ("run_monte_carlo", "run", "simulate", "monte_carlo", "run_simulation")
 PARAMS = ("generate_mc_parameters", "generate_parameters")

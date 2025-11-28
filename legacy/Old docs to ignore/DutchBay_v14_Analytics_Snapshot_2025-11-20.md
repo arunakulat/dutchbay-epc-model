@@ -1,7 +1,7 @@
 # DutchBay_EPC_Model – v14 Analytics & Executive Report Snapshot
 
-**Snapshot date:** 2025-11-20 16:58:27  
-**Branch:** `v14chat-upgrade`  
+**Snapshot date:** 2025-11-20 16:58:27
+**Branch:** `v14chat-upgrade`
 **Context:** Hardening the v14 analytics layer, exports, and executive report wrapper (`make_executive_report.py`).
 
 ---
@@ -14,8 +14,8 @@
   - `analytics/scenario_loader.py` is now the canonical entry for configs (YAML/JSON).
   - FX config tightened:
     - Scalar `fx: 300.0` is **explicitly rejected**.
-    - Required mapping structure:  
-      `fx: { start_lkr_per_usd: <float>, annual_depr: <float> }`  
+    - Required mapping structure:
+      `fx: { start_lkr_per_usd: <float>, annual_depr: <float> }`
     - Clear error messaging enforced via `tests/test_fx_config_strictness.py`:
       - Asserts `"Invalid FX configuration"` and mapping vs scalar guidance.
   - `load_scenario_config(path)` is the single, test‑covered loader used by the analytics layer.
@@ -29,10 +29,10 @@
 - **ExcelExporter**
   - Lazily creates a `pandas.ExcelWriter` using `openpyxl` (no empty files).
   - Key methods:
-    - `add_dataframe_sheet(sheet_name, df, freeze_panes=None, format_headers=True, auto_filter=True)`  
+    - `add_dataframe_sheet(sheet_name, df, freeze_panes=None, format_headers=True, auto_filter=True)`
       - Writes a DataFrame to a sheet.
       - Optional header bolding, auto-filter, and freeze panes.
-    - `export_summary_and_timeseries(summary_df, timeseries_df, summary_sheet="Summary", timeseries_sheet="Timeseries", add_board_views=True)`  
+    - `export_summary_and_timeseries(summary_df, timeseries_df, summary_sheet="Summary", timeseries_sheet="Timeseries", add_board_views=True)`
       - Main high‑level entry for ScenarioAnalytics.
       - Writes summary + timeseries sheets.
       - Optionally adds board‑friendly views.
@@ -51,7 +51,7 @@
 
 - **ChartExporter**
   - Chart‑only helper that **does not touch Excel**.
-  - Constructed with an **output directory**, e.g.  
+  - Constructed with an **output directory**, e.g.
     `ChartExporter(output_dir="exports/Executive_..._charts")`
   - Methods:
     - `_get_plt()` – lazy `matplotlib` import; logs and returns `None` if unavailable.
@@ -97,8 +97,8 @@
   - Workflow:
     1. Resolve `config_path`, `scenario_id` (= stem of config), and `scenarios_dir` (= parent of config).
     2. Instantiate `ScenarioAnalytics` with:
-       - `scenarios_dir=str(scenarios_dir)`  
-       - `output_path=None`  
+       - `scenarios_dir=str(scenarios_dir)`
+       - `output_path=None`
        - `strict=args.strict_fx_config`
     3. Run analytics: `summary_df, timeseries_df = analytics.run()`.
     4. Filter both DataFrames **by `scenario_id` if `scenario_name` exists**; else log warnings and fall back to unfiltered DataFrames.
@@ -111,7 +111,7 @@
        - `ChartExporter(output_dir=charts_dir)`
        - Call low‑level chart methods (`export_dscr_chart`, `export_irr_histogram`).
   - Result (current run):
-    - Excel is successfully generated:  
+    - Excel is successfully generated:
       `exports/Executive_dutchbay_lendercase_2025Q4.xlsx`
     - Chart exporter currently logs that DSCR/IRR columns are missing, so no PNGs yet (see TODOs).
 
@@ -139,8 +139,8 @@
     - `tests/api/test_v14_lender_suite.py`
     - `tests/test_cli_v14_smoke.py`
     - `tests/test_v14_pipeline_smoke.py`
-- **Coverage snapshot (last full run)**  
-  - Total coverage ≈ **69%** with a required threshold of **60%** (per `pytest.ini`).  
+- **Coverage snapshot (last full run)**
+  - Total coverage ≈ **69%** with a required threshold of **60%** (per `pytest.ini`).
   - v14 analytics and export helpers are covered by multiple smokes and API tests.
 
 - **CI / fast-lane**
@@ -305,7 +305,7 @@ This is the state you observed in the latest run of `make_executive_report.py`:
 ### P1 – Chart exporter ergonomics & executive wrapper clean-up
 
 4. **Add a high-level `export_charts` method to ChartExporter**
-   - Signature idea:  
+   - Signature idea:
      `export_charts(summary_df, timeseries_df, scenario_id=None)`
    - Responsibilities:
      - Resolve which IRR column to use:
@@ -318,8 +318,8 @@ This is the state you observed in the latest run of `make_executive_report.py`:
 
 5. **Update `make_executive_report.py` to use `export_charts`**
    - Replace the direct calls:
-     - `chart_exporter.export_dscr_chart(filtered_timeseries)`  
-     - `chart_exporter.export_irr_histogram(filtered_summary)`  
+     - `chart_exporter.export_dscr_chart(filtered_timeseries)`
+     - `chart_exporter.export_irr_histogram(filtered_summary)`
    - With a single call:
      - `chart_exporter.export_charts(filtered_summary, filtered_timeseries, scenario_id=scenario_id)`
    - This keeps the wrapper wafer-thin and pushes the KPI detection logic into the export helper.
@@ -358,10 +358,10 @@ This is the state you observed in the latest run of `make_executive_report.py`:
   - New smokes and API tests under `tests/` and `tests/api/`.
 
 **Suggested tagging pattern after commit & push:**
-- Commit message: e.g.  
+- Commit message: e.g.
   `feat(v14): analytics/export layer + executive report wrapper`
-- Tag (annotated): e.g.  
-  `git tag -a v14-analytics-0.1.0 -m "v14 analytics + export + executive report alpha"`  
+- Tag (annotated): e.g.
+  `git tag -a v14-analytics-0.1.0 -m "v14 analytics + export + executive report alpha"`
   `git push origin v14chat-upgrade --tags`
 
 You can now re-upload this document into a fresh ChatGPT thread and treat it as the authoritative “state of play” for the v14 analytics/export/executive layer.
