@@ -1,7 +1,7 @@
 # 🚦 DutchBay EPC Model Thread Migration Package
 
-**Version:** 1.0  
-**Last Updated:** November 24, 2025  
+**Version:** 1.0
+**Last Updated:** November 24, 2025
 **Purpose:** Restore full project context and quality standards for any AI assistant or collaborator
 
 ---
@@ -91,7 +91,7 @@ def validate_parameter_ranges(
     params: Dict[str, float]
 ) -> pd.DataFrame:
     """Validate parameters against defined ranges.
-    
+
     Returns:
         DataFrame with validation results (errors if any)
     """
@@ -104,7 +104,7 @@ def validate_parameter_ranges(
                 'value': value
             })
             continue
-        
+
         range_def = config['parameter_ranges'][name]
         if not (range_def['min'] <= value <= range_def['max']):
             errors.append({
@@ -112,7 +112,7 @@ def validate_parameter_ranges(
                 'error': f"Value {value} outside range [{range_def['min']}, {range_def['max']}]",
                 'value': value
             })
-    
+
     return pd.DataFrame(errors)
 ```
 
@@ -139,9 +139,9 @@ def main() -> int:
         default=Path('exports'),
         help='Output directory for results'
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         config = load_config(args.config)
         results = run_analytics(config)
@@ -167,22 +167,22 @@ def save_results(
     run_name: Optional[str] = None
 ) -> Path:
     """Save results with unique timestamped filename.
-    
+
     Never overwrites existing files.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if run_name is None:
         run_name = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
+
     output_path = output_dir / f"results_{run_name}.csv"
-    
+
     # Ensure unique filename
     counter = 1
     while output_path.exists():
         output_path = output_dir / f"results_{run_name}_{counter}.csv"
         counter += 1
-    
+
     results.to_csv(output_path, index=False)
     return output_path
 ```
@@ -198,7 +198,7 @@ def save_results(
 
 #### Phase 2: Interactive Analytics (IN PROGRESS 🔄)
 - [ ] Make tornado/sensitivity available via Streamlit
-- [ ] Make Monte Carlo available via Streamlit  
+- [ ] Make Monte Carlo available via Streamlit
 - [ ] Validation (guard) available as REST API
 - [ ] Basic Streamlit dashboard with parameter inputs
 
@@ -405,7 +405,7 @@ from typing import Dict
 @dataclass
 class Config:
     parameters: Dict[str, float]
-    
+
     @classmethod
     def from_yaml(cls, path: Path) -> 'Config':
         data = yaml.safe_load(open(path))

@@ -117,7 +117,7 @@ def run_monte_carlo_equity(config, n_scenarios=1000):
     results = []
     for scenario in range(n_scenarios):
         simulated_cashflows = simulate_equity_cashflows(config)
-        
+
         # ✅ Use existing equity_v14 functions directly
         perf = calculate_equity_performance(
             simulated_cashflows,
@@ -125,7 +125,7 @@ def run_monte_carlo_equity(config, n_scenarios=1000):
             current_nav=config.terminal_nav,
         )
         results.append(perf)
-    
+
     # Aggregate distributions
     irr_p10 = percentile([r.equity_irr for r in results], 10)
     irr_p50 = percentile([r.equity_irr for r in results], 50)

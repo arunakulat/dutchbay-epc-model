@@ -1,6 +1,6 @@
 # DutchBay v14 Architecture – Finance & Analytics
 
-Status: v14 stable (0.2.x)  
+Status: v14 stable (0.2.x)
 Scope: Cashflow, debt, KPIs, analytics, exports
 
 This document describes the **canonical v14 pipeline** used by the DutchBay EPC
@@ -222,4 +222,3 @@ CI (GitHub Actions):
 	•	Runs ./scripts/regression_smoke.sh with coverage.
 	•	Coverage threshold:
 	•	Currently set around 65%, with actual coverage > 75%.
-

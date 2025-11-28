@@ -1,8 +1,8 @@
 # cashflow_v14.py — Comprehensive Code Review
 
-**Date:** November 23, 2025  
-**Module:** `finance/cashflow_v14.py`  
-**Lines of Code:** ~700 lines  
+**Date:** November 23, 2025
+**Module:** `finance/cashflow_v14.py`
+**Lines of Code:** ~700 lines
 **Status:** Production-ready with optimization opportunities
 
 ---
@@ -219,7 +219,7 @@ logger = logging.getLogger(__name__)
 
 def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     """Extract and validate project technical parameters.
-    
+
     Raises:
         ValueError: If required fields missing or invalid.
     """
@@ -229,9 +229,9 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         _pct_to_decimal,
         _extract_project_life_years,
     )
-    
+
     project_life_years = _extract_project_life_years(cfg)
-    
+
     capacity_mw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -243,7 +243,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     )
     if capacity_mw is None or capacity_mw <= 0:
         raise ValueError(f"Invalid capacity_mw: {capacity_mw}")
-    
+
     capacity_factor_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -256,7 +256,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
     capacity_factor = _pct_to_decimal(capacity_factor_raw)
     if capacity_factor is None or not (0 < capacity_factor <= 1):
         raise ValueError(f"Invalid capacity_factor: {capacity_factor_raw}")
-    
+
     degradation_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -267,7 +267,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         )
     )
     degradation = _pct_to_decimal(degradation_raw) or 0.0
-    
+
     grid_loss_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -277,7 +277,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
         )
     )
     grid_loss_pct = _pct_to_decimal(grid_loss_raw) or 0.0
-    
+
     return ProjectParams(
         capacity_mw=capacity_mw,
         capacity_factor=capacity_factor,
@@ -290,7 +290,7 @@ def _extract_project_params(cfg: Dict[str, Any]) -> ProjectParams:
 def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> FinancingParams:
     """Extract and validate financing parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, get_nested, as_float
-    
+
     opex_usd_per_year = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -302,13 +302,13 @@ def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> Fin
     )
     if opex_usd_per_year is None or opex_usd_per_year < 0:
         raise ValueError(f"Invalid opex_usd_per_year: {opex_usd_per_year}")
-    
+
     # Capex in LKR (optional, can be computed from debt module)
     capex_usd = as_float(get_nested(cfg, ["capex", "usd_total"], None))
     capex_total_lkr = None
     if capex_usd is not None and fx_curve:
         capex_total_lkr = capex_usd * fx_curve[0]
-    
+
     return FinancingParams(
         opex_usd_per_year=opex_usd_per_year,
         capex_total_lkr=capex_total_lkr,
@@ -319,7 +319,7 @@ def _extract_financing_params(cfg: Dict[str, Any], fx_curve: List[float]) -> Fin
 def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
     """Extract and validate tax and BOI parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal, as_int
-    
+
     corporate_tax_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -332,7 +332,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
     corporate_tax_rate = _pct_to_decimal(corporate_tax_raw)
     if corporate_tax_rate is None or not (0 <= corporate_tax_rate <= 1):
         raise ValueError(f"Invalid corporate_tax_rate: {corporate_tax_raw}")
-    
+
     depreciation_years = as_int(
         _resolve_first(
             cfg,
@@ -342,10 +342,10 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=20,
     ) or 20
-    
+
     if depreciation_years <= 0:
         raise ValueError(f"depreciation_years must be > 0, got {depreciation_years}")
-    
+
     tax_holiday_years = as_int(
         _resolve_first(
             cfg,
@@ -355,7 +355,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=0,
     ) or 0
-    
+
     tax_holiday_start_year = as_int(
         _resolve_first(
             cfg,
@@ -365,7 +365,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         ),
         default=1,
     ) or 1
-    
+
     eca_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -378,7 +378,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
         enhanced_capital_allowance_pct = eca_raw / 100.0
     else:
         enhanced_capital_allowance_pct = eca_raw or 1.0
-    
+
     return TaxParams(
         corporate_tax_rate=corporate_tax_rate,
         depreciation_years=depreciation_years,
@@ -391,7 +391,7 @@ def _extract_tax_params(cfg: Dict[str, Any]) -> TaxParams:
 def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
     """Extract statutory deduction parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal
-    
+
     success_fee_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -401,7 +401,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     success_fee_pct = _pct_to_decimal(success_fee_raw) or 0.0
-    
+
     env_surcharge_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -411,7 +411,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     env_surcharge_pct = _pct_to_decimal(env_surcharge_raw) or 0.0
-    
+
     social_levy_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -421,7 +421,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
         )
     )
     social_levy_pct = _pct_to_decimal(social_levy_raw) or 0.0
-    
+
     return StatutoryParams(
         success_fee_pct=success_fee_pct,
         env_surcharge_pct=env_surcharge_pct,
@@ -432,7 +432,7 @@ def _extract_statutory_params(cfg: Dict[str, Any]) -> StatutoryParams:
 def _extract_revenue_params(cfg: Dict[str, Any]) -> RevenueParams:
     """Extract revenue parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none
-    
+
     tariff_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -444,14 +444,14 @@ def _extract_revenue_params(cfg: Dict[str, Any]) -> RevenueParams:
     )
     if tariff_raw is None or tariff_raw <= 0:
         raise ValueError(f"Invalid tariff_lkr_per_kwh: {tariff_raw}")
-    
+
     return RevenueParams(tariff_lkr_per_kwh=tariff_raw)
 
 
 def _extract_risk_params(cfg: Dict[str, Any]) -> RiskParams:
     """Extract risk adjustment parameters."""
     from finance.cashflow_v14 import _resolve_first, _as_float_or_none, _pct_to_decimal
-    
+
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
             cfg,
@@ -461,31 +461,31 @@ def _extract_risk_params(cfg: Dict[str, Any]) -> RiskParams:
         )
     )
     risk_haircut_pct = _pct_to_decimal(risk_haircut_raw) or 0.0
-    
+
     return RiskParams(risk_haircut_pct=risk_haircut_pct)
 
 
 def extract_cfads_params(cfg: Dict[str, Any]) -> CfadsParams:
     """Extract all CFADS parameters (orchestrator).
-    
+
     This is the main entry point for parameter extraction.
     Replaces the large _extract_parameters() function.
     """
     from finance.cashflow_v14 import _fx_curve
-    
+
     # Extract project params first (includes project_life_years)
     project_params = _extract_project_params(cfg)
-    
+
     # Build FX curve
     fx_curve = _fx_curve(cfg, project_params.project_life_years)
-    
+
     # Extract other parameter groups
     financing_params = _extract_financing_params(cfg, fx_curve)
     tax_params = _extract_tax_params(cfg)
     statutory_params = _extract_statutory_params(cfg)
     revenue_params = _extract_revenue_params(cfg)
     risk_params = _extract_risk_params(cfg)
-    
+
     return CfadsParams(
         project=project_params,
         financing=financing_params,
@@ -515,27 +515,27 @@ logger = logging.getLogger(__name__)
 
 def validate_fx_curve(fx_curve: List[float], project_life_years: int) -> None:
     """Validate FX curve for realistic values.
-    
+
     Raises:
         ValueError: If FX curve is invalid.
     """
     if not fx_curve:
         raise ValueError("FX curve is empty")
-    
+
     if len(fx_curve) < project_life_years:
         logger.warning(
             f"FX curve length ({len(fx_curve)}) < project life ({project_life_years}), "
             "last rate will be extended"
         )
-    
+
     for i, rate in enumerate(fx_curve):
         # LKR/USD typically 100-500 range
         if rate < 100 or rate > 500:
             logger.warning(f"Unusual FX rate at year {i+1}: {rate} LKR/USD")
-        
+
         if rate <= 0:
             raise ValueError(f"Invalid FX rate at year {i+1}: {rate} (must be positive)")
-    
+
     # Check for unrealistic annual changes
     for i in range(1, len(fx_curve)):
         annual_change = (fx_curve[i] / fx_curve[i-1]) - 1.0
@@ -552,16 +552,16 @@ def validate_tax_holiday(
     project_life_years: int,
 ) -> None:
     """Validate tax holiday parameters.
-    
+
     Raises:
         ValueError: If tax holiday configuration is invalid.
     """
     if tax_holiday_years < 0:
         raise ValueError(f"tax_holiday_years cannot be negative: {tax_holiday_years}")
-    
+
     if tax_holiday_start_year < 1:
         raise ValueError(f"tax_holiday_start_year must be >= 1: {tax_holiday_start_year}")
-    
+
     end_year = tax_holiday_start_year + tax_holiday_years - 1
     if end_year > project_life_years:
         logger.warning(
@@ -572,9 +572,9 @@ def validate_tax_holiday(
 
 def validate_cfads_params(params: CfadsParams) -> None:
     """Validate complete CFADS parameter set.
-    
+
     Performs cross-parameter validation checks.
-    
+
     Raises:
         ValueError: If parameters are invalid or inconsistent.
     """
@@ -583,27 +583,27 @@ def validate_cfads_params(params: CfadsParams) -> None:
         params.financing.fx_curve,
         params.project.project_life_years,
     )
-    
+
     # Tax holiday validation
     validate_tax_holiday(
         params.tax.tax_holiday_years,
         params.tax.tax_holiday_start_year,
         params.project.project_life_years,
     )
-    
+
     # Bounds checks
     if params.project.degradation < 0 or params.project.degradation > 0.03:
         logger.warning(
             f"Unusual degradation rate: {params.project.degradation*100:.2f}% "
             "(typical range: 0-3%)"
         )
-    
+
     if params.project.grid_loss_pct < 0 or params.project.grid_loss_pct > 0.10:
         logger.warning(
             f"Unusual grid loss: {params.project.grid_loss_pct*100:.2f}% "
             "(typical range: 0-10%)"
         )
-    
+
     logger.info("CFADS parameters validated successfully")
 ```
 
@@ -620,50 +620,50 @@ def build_annual_cfads_v2(
     interest_expense_series: Optional[List[float]] = None,
 ) -> CfadsResult:
     """Build complete CFADS result with all breakdowns.
-    
+
     This is the new main entry point, replacing build_annual_cfads and build_annual_rows.
-    
+
     Args:
         cfg: Scenario configuration dictionary
         capex_total_lkr: Total CAPEX in LKR (optional, derived if None)
         interest_expense_series: Annual interest expenses in LKR (optional)
-    
+
     Returns:
         CfadsResult with annual series and detailed breakdowns
-    
+
     Raises:
         ValueError: If required parameters missing or invalid
     """
     # Extract and validate parameters
     params = extract_cfads_params(cfg)  # From cashflow_extractors
     validate_cfads_params(params)  # From cashflow_validation
-    
+
     # Override capex if provided
     if capex_total_lkr is not None:
         params.financing.capex_total_lkr = capex_total_lkr
-    
+
     # Default interest series to zeros
     years = params.project.project_life_years
     if interest_expense_series is None:
         interest_expense_series = [0.0] * years
-    
+
     # Pre-compute depreciation schedule (calculate once, reuse)
     depr_schedule = _compute_depreciation_schedule(
         params.financing.capex_total_lkr,
         params.tax.depreciation_years,
         params.tax.enhanced_capital_allowance_pct,
     )
-    
+
     # Calculate annual rows
     annual_rows: List[YearlyBreakdown] = []
     annual_cfads_lkr: List[float] = []
     annual_cfads_usd: List[float] = []
-    
+
     for year in range(years):
         fx_rate = params.financing.fx_curve[year] if year < len(params.financing.fx_curve) else params.financing.fx_curve[-1]
         interest_lkr = interest_expense_series[year] if year < len(interest_expense_series) else 0.0
         depr_for_year = depr_schedule[year] if year < len(depr_schedule) else 0.0
-        
+
         # Calculate production
         gross_kwh, net_kwh = _calculate_net_production(
             params.project.capacity_mw,
@@ -672,10 +672,10 @@ def build_annual_cfads_v2(
             params.project.grid_loss_pct,
             year,
         )
-        
+
         # Calculate revenue
         revenue_lkr = _calculate_revenue_lkr(net_kwh, params.revenue.tariff_lkr_per_kwh)
-        
+
         # Statutory deductions
         statutory = _calculate_statutory_deductions(
             revenue_lkr,
@@ -683,16 +683,16 @@ def build_annual_cfads_v2(
             params.statutory.env_surcharge_pct,
             params.statutory.social_levy_pct,
         )
-        
+
         # OPEX
         opex_lkr = _calculate_opex_lkr(params.financing.opex_usd_per_year, fx_rate)
-        
+
         # Pretax CFADS
         pretax_cfads = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
-        
+
         # Tax (using pre-computed depreciation)
         taxable_income = max(0.0, pretax_cfads - depr_for_year - interest_lkr)
-        
+
         # Check tax holiday
         current_year = year + 1
         in_holiday = False
@@ -700,15 +700,15 @@ def build_annual_cfads_v2(
             start = params.tax.tax_holiday_start_year
             end = start + params.tax.tax_holiday_years - 1
             in_holiday = start <= current_year <= end
-        
+
         tax = 0.0 if in_holiday else (taxable_income * params.tax.corporate_tax_rate)
-        
+
         # Posttax CFADS
         posttax_cfads = pretax_cfads - tax
-        
+
         # Risk haircut
         cfads_final_lkr = _apply_risk_haircut(posttax_cfads, params.risk.risk_haircut_pct)
-        
+
         # Build row
         row = YearlyBreakdown(
             year=year + 1,
@@ -734,11 +734,11 @@ def build_annual_cfads_v2(
             revenue_usd=revenue_lkr / fx_rate if fx_rate > 0 else 0.0,
             cfads_usd=cfads_final_lkr / fx_rate if fx_rate > 0 else 0.0,
         )
-        
+
         annual_rows.append(row)
         annual_cfads_lkr.append(cfads_final_lkr)
         annual_cfads_usd.append(row.cfads_usd)
-    
+
     logger.info(
         "CFADS calculated for %d years: LKR %.0f-%.0f M, USD %.0f-%.0f M",
         years,
@@ -747,7 +747,7 @@ def build_annual_cfads_v2(
         min(annual_cfads_usd) / 1e6 if annual_cfads_usd else 0,
         max(annual_cfads_usd) / 1e6 if annual_cfads_usd else 0,
     )
-    
+
     return CfadsResult(
         annual_cfads_lkr=annual_cfads_lkr,
         annual_cfads_usd=annual_cfads_usd,
@@ -772,7 +772,7 @@ def build_annual_cfads(
     verbose: bool = False,
 ) -> List[float]:
     """Legacy function — returns list of CFADS values only.
-    
+
     DEPRECATED: Use build_annual_cfads_v2() for full results.
     """
     result = build_annual_cfads_v2(p, capex_total, interest_expense_series)
@@ -786,7 +786,7 @@ def build_annual_rows(
     interest_expense_series: Optional[List[float]] = None,
 ) -> List[Dict[str, float]]:
     """Legacy function — returns list of dict rows.
-    
+
     DEPRECATED: Use build_annual_cfads_v2() for typed results.
     """
     result = build_annual_cfads_v2(p, capex_total, interest_expense_series)
@@ -877,7 +877,7 @@ def test_build_annual_cfads_v2_full_scenario():
     """Test complete CFADS calculation with realistic scenario."""
     cfg = load_scenario("scenarios/dutchbay_lendercase_2025Q4.yaml")
     result = build_annual_cfads_v2(cfg)
-    
+
     assert len(result.annual_cfads_lkr) == 25
     assert all(cfads > 0 for cfads in result.annual_cfads_lkr)
     assert result.params.project.capacity_mw == 150
@@ -917,14 +917,14 @@ def test_build_annual_cfads_v2_full_scenario():
 
 ## Go With The Flow Compliance
 
-✅ **Type-safe:** All dataclasses properly annotated  
-✅ **Tested:** Unit tests for each extractor + integration tests  
-✅ **Modular:** No file > 400 lines after refactoring  
-✅ **Contracts:** Cross-module data uses dataclasses  
-✅ **Validated:** Parameters checked before calculation  
-✅ **Documented:** Docstrings with examples  
-✅ **Copy-paste-ready:** Complete, working code  
-✅ **No regressions:** Legacy wrappers maintain compatibility  
+✅ **Type-safe:** All dataclasses properly annotated
+✅ **Tested:** Unit tests for each extractor + integration tests
+✅ **Modular:** No file > 400 lines after refactoring
+✅ **Contracts:** Cross-module data uses dataclasses
+✅ **Validated:** Parameters checked before calculation
+✅ **Documented:** Docstrings with examples
+✅ **Copy-paste-ready:** Complete, working code
+✅ **No regressions:** Legacy wrappers maintain compatibility
 ✅ **Production-grade:** Would pass lender review
 
 ---

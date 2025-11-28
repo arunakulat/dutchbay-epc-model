@@ -1,8 +1,8 @@
 # debt_v14.py — Comprehensive Code Review
 
-**Date:** November 23, 2025  
-**Module:** `finance/debt_v14.py`  
-**Lines of Code:** ~550 lines  
+**Date:** November 23, 2025
+**Module:** `finance/debt_v14.py`
+**Lines of Code:** ~550 lines
 **Status:** Production-ready with refactoring opportunities
 
 ***
@@ -67,7 +67,7 @@ finance/debt_v14.py (550 lines)
 ```python
 class Tranche:
     __slots__ = ("name", "rate", "principal", "years_io")
-    
+
     def __init__(self, name: str, rate: float, principal: float, years_io: int) -> None:
         self.name = name
         self.rate = float(rate)
@@ -143,7 +143,7 @@ class Tranche:
     rate: float  # Annual interest rate (decimal)
     principal: float  # Initial principal (before IDC)
     years_io: int  # Interest-only (grace) years
-    
+
     def __post_init__(self) -> None:
         """Validate tranche parameters."""
         if self.rate < 0:
@@ -226,7 +226,7 @@ class DebtResult:
     debt_service_total: List[float]
     debt_outstanding: List[float]
     balloon_remaining: float
-    
+
     # Construction & timeline
     construction_periods: int
     construction_schedule: List[float]
@@ -234,13 +234,13 @@ class DebtResult:
     timeline_periods: int
     tenor_years: int
     cfads_extended: List[float]
-    
+
     # IDC calculations
     idc_calculation: IDCCalculation
-    
+
     # Debt schedules
     debt_schedules: Dict[str, List[Tuple[float, float, float]]]
-    
+
     # Tranche breakdowns
     lkr_principal: float
     usd_principal: float
@@ -249,13 +249,13 @@ class DebtResult:
     usd_idc: float
     dfi_idc: float
     total_idc_capitalized: float
-    
+
     # Validation
     audit_status: str  # "PASS", "REVIEW", "FAIL"
     validation_warnings: List[str]
     dscr_violations: List[int]  # Period indices where DSCR < threshold
     balloon_warnings: List[str]
-    
+
     # Legacy compatibility (deprecated)
     lkr: Optional[Dict[str, float]] = None
     usd: Optional[Dict[str, float]] = None
@@ -352,20 +352,20 @@ def calculate_base_allocation(
     mix: TrancheMix,
 ) -> Dict[str, float]:
     """Calculate initial tranche allocation based on max constraints.
-    
+
     Returns:
         Dict mapping tranche name to amount
     """
     # LKR first (up to max)
     lkr_amt = min(total_debt * mix.lkr_max, total_debt)
-    
+
     # DFI second (up to max of remaining)
     remaining_after_lkr = max(0.0, total_debt - lkr_amt)
     dfi_amt = min(total_debt * mix.dfi_max, remaining_after_lkr)
-    
+
     # USD gets the rest
     usd_amt = max(0.0, total_debt - lkr_amt - dfi_amt)
-    
+
     return {
         TRANCHE_LKR: lkr_amt,
         TRANCHE_USD: usd_amt,
@@ -379,41 +379,41 @@ def enforce_usd_minimum(
     usd_min: float,
 ) -> Dict[str, float]:
     """Enforce USD commercial minimum by pulling from LKR and DFI.
-    
+
     Args:
         allocation: Current allocation
         total_debt: Total debt amount
         usd_min: Minimum USD as fraction of total debt
-    
+
     Returns:
         Adjusted allocation
     """
     min_usd_amt = total_debt * usd_min
     current_usd = allocation[TRANCHE_USD]
-    
+
     if current_usd >= min_usd_amt:
         return allocation  # Already compliant
-    
+
     shortfall = min_usd_amt - current_usd
     logger.info(f"USD minimum enforcement: need ${shortfall:.2f}M more")
-    
+
     # Pull from LKR first
     pull_from_lkr = min(shortfall, allocation[TRANCHE_LKR])
     allocation[TRANCHE_LKR] -= pull_from_lkr
     shortfall -= pull_from_lkr
-    
+
     # Then pull from DFI if needed
     if shortfall > 0:
         pull_from_dfi = min(shortfall, allocation[TRANCHE_DFI])
         allocation[TRANCHE_DFI] -= pull_from_dfi
         shortfall -= pull_from_dfi
-    
+
     # Recalculate USD as residual
     allocation[TRANCHE_USD] = total_debt - allocation[TRANCHE_LKR] - allocation[TRANCHE_DFI]
-    
+
     if shortfall > 1e-6:  # Still short after pulling from others
         logger.warning(f"Cannot fully satisfy USD minimum: ${shortfall:.2f}M short")
-    
+
     return allocation
 
 
@@ -422,24 +422,24 @@ def validate_allocation(
     total_debt: float,
 ) -> list[str]:
     """Validate tranche allocation and return warnings.
-    
+
     Returns:
         List of validation warnings (empty if all good)
     """
     warnings: list[str] = []
-    
+
     total_allocated = sum(allocation.values())
     if abs(total_allocated - total_debt) > 1e-6:
         warnings.append(
             f"Allocation sum ${total_allocated:.2f}M != total debt ${total_debt:.2f}M"
         )
-    
+
     for tranche_name, amount in allocation.items():
         if amount < 0:
             warnings.append(f"{tranche_name} allocation is negative: ${amount:.2f}M")
         elif amount < 1.0 and amount > 0:
             warnings.append(f"{tranche_name} allocation is very small: ${amount:.2f}M")
-    
+
     return warnings
 
 
@@ -450,41 +450,41 @@ def solve_tranche_mix(
     years_io: int,
 ) -> TrancheAllocation:
     """Solve complete tranche mix allocation.
-    
+
     This is the main entry point, replacing _solve_mix().
-    
+
     Args:
         total_debt: Total debt amount
         mix: Tranche mix constraints
         rates: Interest rates per tranche
         years_io: Interest-only years
-    
+
     Returns:
         TrancheAllocation with tranches and warnings
     """
     # Step 1: Base allocation
     allocation = calculate_base_allocation(total_debt, mix)
-    
+
     # Step 2: Enforce USD minimum
     allocation = enforce_usd_minimum(allocation, total_debt, mix.usd_commercial_min)
-    
+
     # Step 3: Validate
     warnings = validate_allocation(allocation, total_debt)
-    
+
     # Step 4: Create Tranche objects
     tranches = {
         TRANCHE_LKR: Tranche(TRANCHE_LKR, rates.lkr_nominal, allocation[TRANCHE_LKR], years_io),
         TRANCHE_USD: Tranche(TRANCHE_USD, rates.usd_nominal, allocation[TRANCHE_USD], years_io),
         TRANCHE_DFI: Tranche(TRANCHE_DFI, rates.dfi_nominal, allocation[TRANCHE_DFI], years_io),
     }
-    
+
     logger.info(
         "Tranche mix: LKR $%.2fM (%.1f%%), USD $%.2fM (%.1f%%), DFI $%.2fM (%.1f%%)",
         allocation[TRANCHE_LKR], allocation[TRANCHE_LKR] / total_debt * 100,
         allocation[TRANCHE_USD], allocation[TRANCHE_USD] / total_debt * 100,
         allocation[TRANCHE_DFI], allocation[TRANCHE_DFI] / total_debt * 100,
     )
-    
+
     return TrancheAllocation(
         tranches=tranches,
         total_debt=total_debt,
@@ -518,47 +518,47 @@ logger = logging.getLogger(__name__)
 
 def validate_construction_params(params: ConstructionParams) -> None:
     """Validate construction period parameters.
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
     if params.construction_periods < 0:
         raise ValueError(f"Construction periods cannot be negative: {params.construction_periods}")
-    
+
     if params.construction_periods > MAX_CONSTRUCTION_PERIODS:
         logger.warning(
             f"Unusual construction period: {params.construction_periods} years "
             f"(typical: 1-{MAX_CONSTRUCTION_PERIODS})"
         )
-    
+
     if len(params.construction_schedule) != params.construction_periods:
         raise ValueError(
             f"Construction schedule length ({len(params.construction_schedule)}) "
             f"!= construction periods ({params.construction_periods})"
         )
-    
+
     if len(params.drawdown_pct_per_year) != params.construction_periods:
         raise ValueError(
             f"Drawdown schedule length ({len(params.drawdown_pct_per_year)}) "
             f"!= construction periods ({params.construction_periods})"
         )
-    
+
     # Check drawdown percentages
     total_drawdown = sum(params.drawdown_pct_per_year)
     if total_drawdown > 1.0 + 1e-6:
         raise ValueError(
             f"Drawdown percentages sum to {total_drawdown*100:.1f}% (> 100%)"
         )
-    
+
     if total_drawdown < 0.95:
         logger.warning(
             f"Drawdown percentages sum to {total_drawdown*100:.1f}% (< 95%), "
             "debt may not be fully drawn"
         )
-    
+
     if params.grace_years < 0:
         raise ValueError(f"Grace years cannot be negative: {params.grace_years}")
-    
+
     if params.grace_years > MAX_GRACE_YEARS:
         logger.warning(
             f"Unusual grace period: {params.grace_years} years "
@@ -568,7 +568,7 @@ def validate_construction_params(params: ConstructionParams) -> None:
 
 def validate_debt_params(params: DebtParams) -> None:
     """Validate core debt structure parameters.
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
@@ -577,30 +577,30 @@ def validate_debt_params(params: DebtParams) -> None:
             f"Debt ratio {params.debt_ratio*100:.1f}% outside typical range "
             f"({MIN_DEBT_RATIO*100:.0f}%-{MAX_DEBT_RATIO*100:.0f}%)"
         )
-    
+
     if params.tenor_years <= 0:
         raise ValueError(f"Tenor must be positive: {params.tenor_years}")
-    
+
     if params.tenor_years > MAX_TENOR_YEARS:
         logger.warning(
             f"Unusual tenor: {params.tenor_years} years (typical: 10-{MAX_TENOR_YEARS})"
         )
-    
+
     if params.interest_only_years < 0:
         raise ValueError(f"Interest-only years cannot be negative: {params.interest_only_years}")
-    
+
     if params.interest_only_years >= params.tenor_years:
         raise ValueError(
             f"Interest-only period ({params.interest_only_years}) "
             f"must be < tenor ({params.tenor_years})"
         )
-    
+
     if params.amortization_style not in ("annuity", "sculpted", "fixed"):
         raise ValueError(f"Invalid amortization style: '{params.amortization_style}'")
-    
+
     if params.target_dscr < 1.0:
         logger.warning(f"Target DSCR {params.target_dscr:.2f} is below 1.0 (risky)")
-    
+
     if params.capex_total <= 0:
         raise ValueError(f"Capex must be positive: {params.capex_total}")
 
@@ -612,18 +612,18 @@ def validate_timeline_consistency(
     timeline_periods: int,
 ) -> None:
     """Validate that timeline components are consistent.
-    
+
     Raises:
         ValueError: If timeline is inconsistent
     """
     min_timeline = construction_periods + 1 + tenor_years  # +1 for transition
-    
+
     if timeline_periods < min_timeline:
         raise ValueError(
             f"Timeline periods ({timeline_periods}) < "
             f"construction ({construction_periods}) + transition (1) + tenor ({tenor_years})"
         )
-    
+
     logger.info(
         f"Timeline validated: {construction_periods} construction + 1 transition "
         f"+ {tenor_years} operations = {timeline_periods} total periods"
@@ -643,16 +643,16 @@ def apply_debt_layer_v2(
 ) -> DebtResult:
     """
     Apply debt financing layer with V14 construction support (refactored).
-    
+
     This is the new main entry point using typed contracts.
-    
+
     Args:
         config: Scenario configuration
         annual_rows: Annual cashflow rows from cashflow_v14
-    
+
     Returns:
         DebtResult with complete debt planning results
-    
+
     Raises:
         ValueError: If parameters are invalid
     """
@@ -664,26 +664,26 @@ def apply_debt_layer_v2(
     )
     from finance.debt_tranche_allocation import solve_tranche_mix
     from finance.debt_constants import DEFAULT_TIMELINE_PERIODS
-    
+
     # Extract parameters
     construction_params, debt_params, mix, rates = extract_debt_params(config)
-    
+
     # Validate
     validate_construction_params(construction_params)
     validate_debt_params(debt_params)
-    
+
     # Solve tranche mix
     total_debt = debt_params.capex_total * debt_params.debt_ratio
     tranche_allocation = solve_tranche_mix(
         total_debt, mix, rates, debt_params.interest_only_years
     )
-    
+
     # Calculate IDC
     idc_calc = calculate_idc_for_tranches(
         tranche_allocation.tranches,
         construction_params,
     )
-    
+
     # Extend CFADS timeline
     cfads_extended = extend_cfads_timeline(
         annual_rows,
@@ -691,7 +691,7 @@ def apply_debt_layer_v2(
         construction_params.transition_cfads_factor,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Build debt schedules
     schedules = build_debt_schedules(
         tranche_allocation.tranches,
@@ -699,7 +699,7 @@ def apply_debt_layer_v2(
         cfads_extended[construction_params.construction_periods:],
         construction_params.construction_periods,
     )
-    
+
     # Calculate metrics
     metrics = calculate_debt_metrics(
         schedules,
@@ -707,7 +707,7 @@ def apply_debt_layer_v2(
         construction_params.construction_periods,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Validate timeline
     validate_timeline_consistency(
         construction_params.construction_periods,
@@ -715,7 +715,7 @@ def apply_debt_layer_v2(
         debt_params.tenor_years,
         DEFAULT_TIMELINE_PERIODS,
     )
-    
+
     # Build result
     return DebtResult(
         # Time-series metrics
@@ -724,7 +724,7 @@ def apply_debt_layer_v2(
         debt_service_total=metrics.debt_service_total,
         debt_outstanding=metrics.debt_outstanding,
         balloon_remaining=metrics.balloon_remaining,
-        
+
         # Construction & timeline
         construction_periods=construction_params.construction_periods,
         construction_schedule=construction_params.construction_schedule,
@@ -732,28 +732,28 @@ def apply_debt_layer_v2(
         timeline_periods=DEFAULT_TIMELINE_PERIODS,
         tenor_years=debt_params.tenor_years,
         cfads_extended=cfads_extended,
-        
+
         # IDC
         idc_calculation=idc_calc,
         lkr_idc=idc_calc.idc_by_tranche.get(TRANCHE_LKR, 0.0),
         usd_idc=idc_calc.idc_by_tranche.get(TRANCHE_USD, 0.0),
         dfi_idc=idc_calc.idc_by_tranche.get(TRANCHE_DFI, 0.0),
         total_idc_capitalized=idc_calc.total_idc_capitalized,
-        
+
         # Tranches
         lkr_principal=idc_calc.principal_after_idc.get(TRANCHE_LKR, 0.0),
         usd_principal=idc_calc.principal_after_idc.get(TRANCHE_USD, 0.0),
         dfi_principal=idc_calc.principal_after_idc.get(TRANCHE_DFI, 0.0),
-        
+
         # Schedules
         debt_schedules=schedules,
-        
+
         # Validation
         audit_status=metrics.audit_status,
         validation_warnings=tranche_allocation.allocation_warnings + metrics.warnings,
         dscr_violations=metrics.dscr_violations,
         balloon_warnings=metrics.balloon_warnings,
-        
+
         # Legacy compatibility (deprecated, will be removed in v15)
         lkr={
             "principal": idc_calc.principal_after_idc.get(TRANCHE_LKR, 0.0),
@@ -773,7 +773,7 @@ def apply_debt_layer_v2(
 # Legacy wrapper for backward compatibility
 def apply_debt_layer(params: Dict[str, Any], annual_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Legacy function — returns dict.
-    
+
     DEPRECATED: Use apply_debt_layer_v2() for typed results.
     """
     result = apply_debt_layer_v2(params, annual_rows)
@@ -829,7 +829,7 @@ def test_base_allocation_respects_max():
     """Test that base allocation respects max constraints."""
     mix = TrancheMix(lkr_max=0.4, dfi_max=0.3, usd_commercial_min=0.0)
     allocation = calculate_base_allocation(100.0, mix)
-    
+
     assert allocation[TRANCHE_LKR] == 40.0
     assert allocation[TRANCHE_DFI] == 30.0
     assert allocation[TRANCHE_USD] == 30.0
@@ -839,7 +839,7 @@ def test_usd_minimum_pulls_from_lkr_first():
     """Test USD minimum enforcement pulls from LKR before DFI."""
     allocation = {TRANCHE_LKR: 40.0, TRANCHE_USD: 10.0, TRANCHE_DFI: 50.0}
     adjusted = enforce_usd_minimum(allocation, 100.0, usd_min=0.30)
-    
+
     assert adjusted[TRANCHE_USD] == 30.0
     assert adjusted[TRANCHE_LKR] == 20.0  # Pulled 20 from LKR
     assert adjusted[TRANCHE_DFI] == 50.0  # Unchanged
@@ -849,7 +849,7 @@ def test_allocation_validation_detects_negative():
     """Test that negative allocations are flagged."""
     allocation = {TRANCHE_LKR: -10.0, TRANCHE_USD: 60.0, TRANCHE_DFI: 50.0}
     warnings = validate_allocation(allocation, 100.0)
-    
+
     assert len(warnings) > 0
     assert any("negative" in w.lower() for w in warnings)
 ```
@@ -890,9 +890,9 @@ def test_apply_debt_layer_v2_full_scenario():
     """Test complete debt layer with realistic scenario."""
     cfg = load_scenario("scenarios/dutchbay_lendercase_2025Q4.yaml")
     annual_rows = build_annual_rows(cfg)
-    
+
     result = apply_debt_layer_v2(cfg, annual_rows)
-    
+
     assert isinstance(result, DebtResult)
     assert result.construction_periods == 2
     assert result.timeline_periods == 23
@@ -934,14 +934,14 @@ def test_apply_debt_layer_v2_full_scenario():
 
 ## Go With The Flow Compliance
 
-✅ **Type-safe:** Dataclasses for all contracts  
-✅ **Tested:** Unit tests for each allocation function  
-✅ **Modular:** Functions < 50 lines each  
-✅ **Contracts:** All cross-module data typed  
-✅ **Validated:** Parameters checked upfront  
-✅ **Constants:** Magic numbers eliminated  
-✅ **Copy-paste-ready:** Complete working code  
-✅ **No regressions:** Legacy wrappers maintained  
+✅ **Type-safe:** Dataclasses for all contracts
+✅ **Tested:** Unit tests for each allocation function
+✅ **Modular:** Functions < 50 lines each
+✅ **Contracts:** All cross-module data typed
+✅ **Validated:** Parameters checked upfront
+✅ **Constants:** Magic numbers eliminated
+✅ **Copy-paste-ready:** Complete working code
+✅ **No regressions:** Legacy wrappers maintained
 ✅ **Production-grade:** Lender-ready
 
 ***
@@ -1000,8 +1000,8 @@ finance/
 
 **Key Decision:** Should we refactor **debt** and **cashflow** together or sequentially?
 
-**Option A:** Refactor both simultaneously (1.5 weeks)  
-**Option B:** Debt first, then cashflow (2 weeks)  
+**Option A:** Refactor both simultaneously (1.5 weeks)
+**Option B:** Debt first, then cashflow (2 weeks)
 **Option C:** Cashflow first, then debt (2 weeks)
 
 **My Recommendation:** Option A (parallel refactoring)

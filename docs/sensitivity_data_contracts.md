@@ -1,4 +1,4 @@
-Absolutely! Here’s a robust “Go with the Flow” approach for **automatic documentation generation** and **test scaffolding** for your advanced sensitivity data contracts and pipeline. This is best-in-class analytics practice:  
+Absolutely! Here’s a robust “Go with the Flow” approach for **automatic documentation generation** and **test scaffolding** for your advanced sensitivity data contracts and pipeline. This is best-in-class analytics practice:
 - **Documentation**: full summary/inventory of every sensitivity-related dataclass/type, usable as Markdown or reStructuredText for Sphinx/Docs.
 - **Test scaffolding**: a template test file that validates all contracts—instantiates with minimal valid dummy data, checks field defaults, basic logic, and type compliance.
 
@@ -12,7 +12,7 @@ Absolutely! Here’s a robust “Go with the Flow” approach for **automatic do
 
 ## Sensitivity and Analytics Data Contracts (autosummary, v14+)
 
-This document summarizes all data contracts (dataclasses, Pydantic models) used by the advanced sensitivity, tornado, MC, and optimizer analytics pipeline.  
+This document summarizes all data contracts (dataclasses, Pydantic models) used by the advanced sensitivity, tornado, MC, and optimizer analytics pipeline.
 **Always update this as the definitive source for results/data shapes as you add new models.**
 
 ***
@@ -22,13 +22,13 @@ This document summarizes all data contracts (dataclasses, Pydantic models) used 
 Validated config for any tornado driver sweep or MC distribution.
 
 - **Type:** `Pydantic BaseModel`
-- **Fields:**  
+- **Fields:**
   - `variable_name: str` — dot path (e.g., project.capex_usd_per_kw)
   - `base_value: float` — base case value
   - `low_pct: float` — e.g., -20.0
   - `high_pct: float` — e.g., 20.0
   - `steps: int` — (default 5)
-- **Properties:**  
+- **Properties:**
   - `.low_value`, `.high_value` for automatic sweep endpoints
 
 ***
@@ -38,7 +38,7 @@ Validated config for any tornado driver sweep or MC distribution.
 One row of a tornado sensitivity analysis; can be used as dict for tables.
 
 - **Type:** `@dataclass`
-- **Fields:**  
+- **Fields:**
   - `variable: str` — parameter
   - `label: str` — human-friendly name
   - `base_value: float`, `low_value: float`, `high_value: float`
@@ -49,10 +49,10 @@ One row of a tornado sensitivity analysis; can be used as dict for tables.
 
 ### 3. **SensitivitySuite**
 
-Encapsulates a full tornado analysis for a metric/config.  
+Encapsulates a full tornado analysis for a metric/config.
 Best for export, ranking, and reporting.
 
-- **Fields:**  
+- **Fields:**
   - `tornado_results: List[TornadoResult]`
   - `base_metric: float`
   - `base_config_path: str`
@@ -64,7 +64,7 @@ Best for export, ranking, and reporting.
 
 Output from breakeven optimizer.
 
-- **Fields:**  
+- **Fields:**
   - `variable: str`
   - `breakeven_value: Optional[float]`
   - `bracket: Tuple[float, float]`

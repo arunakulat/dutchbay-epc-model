@@ -1,8 +1,8 @@
 # DutchBay EPC Model - Thread Migration Package
 
-**Project:** DutchBay 150MW Wind Farm Financial Model  
-**Repository:** dutchbay-epc-model (GitHub)  
-**Environment:** Python 3.11 (.venv311), macOS  
+**Project:** DutchBay 150MW Wind Farm Financial Model
+**Repository:** dutchbay-epc-model (GitHub)
+**Environment:** Python 3.11 (.venv311), macOS
 **Migration Date:** November 23, 2025
 
 ---
@@ -10,7 +10,7 @@
 ## 🎯 Quick Context Snippet (Copy/Paste to New Thread)
 
 ```
-I'm continuing work on the DutchBay EPC Model—a production-grade DFI/Lender/EPC financial modeling suite for a 150MW wind farm in Sri Lanka. The project uses Python 3.11, YAML-driven configuration, and follows "Go With The Flow" standards: build once, build right, mypy-clean, AST-safe, lint-compliant. 
+I'm continuing work on the DutchBay EPC Model—a production-grade DFI/Lender/EPC financial modeling suite for a 150MW wind farm in Sri Lanka. The project uses Python 3.11, YAML-driven configuration, and follows "Go With The Flow" standards: build once, build right, mypy-clean, AST-safe, lint-compliant.
 
 Active Sprint: Phase 1-5 pipeline hardening (YAML validation, batch processing, board-pack exports).
 
@@ -105,7 +105,7 @@ def calculate_wacc(
     """Calculate weighted average cost of capital."""
     if not abs(equity_ratio + debt_ratio - 1.0) < 0.0001:
         raise ValueError("Equity + Debt ratios must equal 1.0")
-    return (equity_ratio * cost_of_equity + 
+    return (equity_ratio * cost_of_equity +
             debt_ratio * cost_of_debt * (1 - tax_rate))
 
 # Test
@@ -155,21 +155,21 @@ def export_board_pack(
 ) -> None:
     """Generate board-ready document with cover page."""
     doc = Document()
-    
+
     # Cover page with metadata
     doc.add_heading(f"Project: {metadata['project_name']}", 0)
     doc.add_paragraph(f"Scenario: {scenario_result.name}")
     doc.add_paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     doc.add_paragraph(f"Version: {metadata['version']}")
-    
+
     # Financial summary
     doc.add_heading("Executive Summary", 1)
     add_financial_table(doc, scenario_result.financials)
-    
+
     # Pre-save validation
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True)
-    
+
     doc.save(output_path)
     logger.info(f"✓ Exported board pack: {output_path}")
 
@@ -192,18 +192,18 @@ scenario:
   capacity_mw: 150
   turbine_count: 30
   turbine_model: "Vestas V150-5.0"
-  
+
 financial:
   capex:
     turbines_usd_per_kw: 850
     bop_usd_per_kw: 200
     grid_connection_usd: 15000000
-  
+
   revenue:
     ppa_price_usd_per_mwh: 65
     annual_aep_gwh: 450
     degradation_rate: 0.005
-  
+
   financing:
     equity_ratio: 0.70
     debt_ratio: 0.30
@@ -221,21 +221,21 @@ def load_scenario_config(path: Path) -> dict[str, Any]:
     """Load and validate scenario YAML configuration."""
     if not path.exists():
         raise FileNotFoundError(f"Scenario file not found: {path}")
-    
+
     with open(path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Validate required sections
     required_sections = ['scenario', 'financial']
     for section in required_sections:
         if section not in config:
             raise ValueError(f"Missing required section: {section}")
-    
+
     # Validate numeric ranges
     scenario = config['scenario']
     if scenario.get('capacity_mw', 0) <= 0:
         raise ValueError("capacity_mw must be positive")
-    
+
     return config
 ```
 
@@ -250,34 +250,34 @@ logger = logging.getLogger(__name__)
 
 class BatchScenarioProcessor:
     """Process multiple scenarios with robust error handling."""
-    
+
     def __init__(self, config_dir: Path, output_dir: Path):
         self.config_dir = config_dir
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def discover_scenarios(self) -> list[Path]:
         """Find all YAML scenario files."""
         return sorted(self.config_dir.glob("*.yaml"))
-    
+
     def process_batch(self) -> dict[str, Any]:
         """Process all scenarios, continue on failures."""
         scenarios = self.discover_scenarios()
         logger.info(f"Found {len(scenarios)} scenarios")
-        
+
         results = {
             'successful': [],
             'failed': [],
             'summary': {}
         }
-        
+
         for scenario_path in scenarios:
             scenario_name = scenario_path.stem
             try:
                 config = load_scenario_config(scenario_path)
                 result = self.run_scenario(config)
                 self.export_results(scenario_name, result)
-                
+
                 results['successful'].append(scenario_name)
                 results['summary'][scenario_name] = {
                     'status': 'success',
@@ -285,7 +285,7 @@ class BatchScenarioProcessor:
                     'irr': result.irr
                 }
                 logger.info(f"✓ {scenario_name}: NPV=${result.npv:,.0f} IRR={result.irr:.2%}")
-                
+
             except Exception as e:
                 results['failed'].append(scenario_name)
                 results['summary'][scenario_name] = {
@@ -293,15 +293,15 @@ class BatchScenarioProcessor:
                     'error': str(e)
                 }
                 logger.error(f"✗ {scenario_name}: {e}")
-        
+
         self.generate_batch_report(results)
         return results
-    
+
     def run_scenario(self, config: dict[str, Any]) -> ScenarioResult:
         """Run financial model for single scenario."""
         # Implementation here
         pass
-    
+
     def export_results(self, name: str, result: ScenarioResult) -> None:
         """Export individual scenario results."""
         output_path = self.output_dir / f"{name}_results.json"
@@ -323,7 +323,7 @@ def calculate_npv(
     """Calculate Net Present Value."""
     if discount_rate < 0:
         raise ValueError("Discount rate must be non-negative")
-    
+
     pv_cash_flows = sum(
         cf / (1 + discount_rate) ** (i + 1)
         for i, cf in enumerate(cash_flows)
@@ -373,26 +373,26 @@ from datetime import datetime
 
 class BoardPackGenerator:
     """Generate professional board-ready documents."""
-    
+
     def __init__(self, template_path: Optional[Path] = None):
         self.doc = Document(template_path) if template_path else Document()
-    
+
     def add_cover_page(self, metadata: dict[str, str]) -> None:
         """Add professional cover page with metadata."""
         # Title
         title = self.doc.add_heading(metadata['project_name'], 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
+
         # Subtitle
         subtitle = self.doc.add_paragraph(metadata['scenario_name'])
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle.runs[0].font.size = Pt(16)
-        
+
         # Metadata table
         self.doc.add_paragraph()  # Spacer
         table = self.doc.add_table(rows=5, cols=2)
         table.style = 'Light Grid Accent 1'
-        
+
         metadata_rows = [
             ('Generated', datetime.now().strftime('%Y-%m-%d %H:%M')),
             ('Version', metadata.get('version', '1.0')),
@@ -400,22 +400,22 @@ class BoardPackGenerator:
             ('Status', metadata.get('status', 'Draft')),
             ('Confidentiality', 'Restricted')
         ]
-        
+
         for i, (key, value) in enumerate(metadata_rows):
             table.rows[i].cells[0].text = key
             table.rows[i].cells[1].text = value
-        
+
         self.doc.add_page_break()
-    
+
     def add_executive_summary(self, result: ScenarioResult) -> None:
         """Add executive summary with key metrics."""
         self.doc.add_heading('Executive Summary', 1)
-        
+
         # Key metrics in styled table
         self.doc.add_paragraph('Key Financial Metrics', style='Heading 2')
         table = self.doc.add_table(rows=6, cols=2)
         table.style = 'Medium Shading 1 Accent 1'
-        
+
         metrics = [
             ('NPV (USD)', f"${result.npv:,.0f}"),
             ('IRR', f"{result.irr:.2%}"),
@@ -424,27 +424,27 @@ class BoardPackGenerator:
             ('LCOE', f"${result.lcoe:.2f}/MWh"),
             ('Equity IRR', f"{result.equity_irr:.2%}")
         ]
-        
+
         for i, (metric, value) in enumerate(metrics):
             table.rows[i].cells[0].text = metric
             table.rows[i].cells[1].text = value
-    
+
     def add_cash_flow_table(self, cash_flows: list[dict]) -> None:
         """Add detailed cash flow waterfall table."""
         self.doc.add_heading('Project Cash Flows', 1)
-        
+
         # Create table with proper headers
         num_years = len(cash_flows)
         table = self.doc.add_table(rows=num_years + 1, cols=7)
         table.style = 'Light Grid'
-        
+
         # Headers
         headers = ['Year', 'Revenue', 'OpEx', 'EBITDA', 'Debt Service', 'Tax', 'FCF']
         for i, header in enumerate(headers):
             cell = table.rows[0].cells[i]
             cell.text = header
             cell.paragraphs[0].runs[0].font.bold = True
-        
+
         # Data rows
         for i, cf in enumerate(cash_flows):
             row = table.rows[i + 1]
@@ -455,7 +455,7 @@ class BoardPackGenerator:
             row.cells[4].text = f"${cf['debt_service']:,.0f}"
             row.cells[5].text = f"${cf['tax']:,.0f}"
             row.cells[6].text = f"${cf['fcf']:,.0f}"
-    
+
     def save(self, output_path: Path) -> None:
         """Save document with validation."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -661,10 +661,10 @@ def safe_export(result: ScenarioResult, path: Path) -> None:
     # Validate data completeness
     if result.npv is None:
         raise ValueError("NPV not calculated")
-    
+
     # Ensure directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate document
     try:
         doc = generate_document(result)
@@ -786,7 +786,7 @@ I'm continuing work on DutchBay EPC Model. Please review the complete migration 
 
 **Option B: Quick Start (Focused Tasks)**
 ```
-I'm working on DutchBay EPC Model using Python 3.11 on macOS. 
+I'm working on DutchBay EPC Model using Python 3.11 on macOS.
 
 Context:
 - Production-grade financial modeling suite (150MW wind farm)
@@ -855,8 +855,8 @@ As your project evolves, update this migration package:
 
 ## 🎯 END OF MIGRATION PACKAGE
 
-**Document Version:** 1.0  
-**Last Updated:** November 23, 2025  
+**Document Version:** 1.0
+**Last Updated:** November 23, 2025
 **Maintained By:** DutchBay Project Team
 
 **Usage Note:** This document represents the collective knowledge, standards, and working context accumulated through intensive development on the DutchBay EPC Model. It is designed to be pasted into new AI threads to instantly restore full project understanding and ensure consistent, production-quality code generation.

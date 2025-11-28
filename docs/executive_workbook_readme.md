@@ -1,6 +1,6 @@
 # Executive Workbook (v14) – Overview
 
-Status: v14 stable (0.2.x)  
+Status: v14 stable (0.2.x)
 Owner: Analytics & Reporting
 
 The **Executive Workbook** is the main Excel artifact produced by the v14
@@ -198,4 +198,3 @@ then you must:
 	1.	Update this document.
 	2.	Update tests (tests/test_export_smoke.py, related API tests).
 	3.	Confirm CI (ci-v14.yml) is green.
-

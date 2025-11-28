@@ -1,7 +1,7 @@
 # Analytics Master Suite - Setup Complete ✓
 
-**Date:** November 17, 2025  
-**Project:** DutchBay EPC Model v14  
+**Date:** November 17, 2025
+**Project:** DutchBay EPC Model v14
 **Location:** `/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/`
 
 ---
@@ -353,16 +353,16 @@ If charts don't embed in Excel:
 
 ## Key Features Summary
 
-✅ **Batch Processing**: Process multiple scenarios in one run  
-✅ **Comprehensive KPIs**: NPV, IRR, DSCR, debt, CFADS metrics  
-✅ **Excel Export**: Multi-sheet workbook with professional formatting  
-✅ **Visualization**: Embedded charts for DSCR, debt, NPV, IRR  
-✅ **QC Diagnostics**: Automated checks for violations and outliers  
-✅ **CSV Backups**: Long and wide format for external analysis  
-✅ **CLI Interface**: Full command-line control with argparse  
-✅ **Extensible**: Easy to add new KPIs, charts, or modules  
-✅ **Documentation**: Complete README and inline docstrings  
-✅ **Backward Compatible**: Existing scripts still work  
+✅ **Batch Processing**: Process multiple scenarios in one run
+✅ **Comprehensive KPIs**: NPV, IRR, DSCR, debt, CFADS metrics
+✅ **Excel Export**: Multi-sheet workbook with professional formatting
+✅ **Visualization**: Embedded charts for DSCR, debt, NPV, IRR
+✅ **QC Diagnostics**: Automated checks for violations and outliers
+✅ **CSV Backups**: Long and wide format for external analysis
+✅ **CLI Interface**: Full command-line control with argparse
+✅ **Extensible**: Easy to add new KPIs, charts, or modules
+✅ **Documentation**: Complete README and inline docstrings
+✅ **Backward Compatible**: Existing scripts still work
 
 ---
 
