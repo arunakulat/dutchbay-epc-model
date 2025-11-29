@@ -90,3 +90,17 @@ tmp/
 !.gitkeep
 
 # EOF
+outputs/concatenated_scripts_v14.py
+outputs/*.ipynb
+outputs/*.py
+outputs/concatenated_scripts_v14.py
+outputs/*.ipynb
+outputs/*.py
+DutchBay_EPC_*.txt
+DutchBay_EPC_*
+DutchBay_EPC_*.txt
+DutchBay_EPC_*
+
+# Large output files
+DutchBay_EPC_*.txt
+DutchBay_EPC_20*

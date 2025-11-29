@@ -56,6 +56,10 @@ def test_schema_guard_detects_missing_corporate_tax_rate():
 
     # Minimal "good" config with all cashflow-required fields present
     good_cfg = {
+        "fx": {
+            "start_lkr_per_usd": 375.0,
+            "annual_depr": 0.03,
+        },
         "Financing_Terms": {
             "tenor_years": 20,
         },

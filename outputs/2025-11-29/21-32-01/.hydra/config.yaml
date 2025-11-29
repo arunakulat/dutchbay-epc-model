@@ -1,0 +1,3 @@
+config: scenarios/example_a.yaml
+validation_mode: strict
+validation_modules: null

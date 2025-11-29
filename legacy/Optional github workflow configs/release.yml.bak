@@ -1,0 +1,20 @@
+[pytest]
+pythonpath = .
+
+testpaths =
+    tests
+
+python_files =
+    test_*.py
+
+addopts =
+    --ignore=legacy
+    --tb=short
+    --maxfail=2
+
+markers =
+    slow: run slower, full-matrix/heatmap/montecarlo tests
+    ci: default to only fast/smoke tests in CI builds
+
+filterwarnings =
+    ignore::UserWarning

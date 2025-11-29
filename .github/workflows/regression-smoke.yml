@@ -1,0 +1,36 @@
+name: Regression Smoke
+
+on:
+  push:
+    branches: [ v14chat-upgrade, main ]
+  pull_request:
+    branches: [ v14chat-upgrade, main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Type check
+        run: |
+          python -m mypy analytics finance api config run_full_pipeline_v14.py
+
+      - name: Smoke tests
+        run: |
+          pytest -m smoke
+
+      - name: Full suite + coverage
+        run: |
+          pytest

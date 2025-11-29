@@ -1,0 +1,27 @@
+line-length = 88
+target-version = "py311"
+
+# We rely on tests and runtime to guard these; Ruff is for library/core sanity.
+extend-exclude = [
+  "legacy",
+  "scripts",
+  "tests",
+  "analytics/fx",
+  "api",
+  "analytics/sensitivity/dashboard_demo.py",
+  "analytics/sensitivity_visualization.py",
+  "constants.py",
+  "fix_parameter_range_config.py",
+  "go_with_the_flow_ci_enhanced.py",
+  "go_with_the_flow_ci_v2_final.py",
+]
+
+[lint]
+# Only error-level and fatal stuff.
+select = ["E", "F"]
+
+# Ignore long lines and the Black/E203 mismatch.
+ignore = [
+  "E203",
+  "E501",
+]

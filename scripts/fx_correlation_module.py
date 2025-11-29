@@ -10,10 +10,11 @@ Date: 2025-11-14
 Author: DutchBay EPC Team
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, Optional
 from datetime import datetime
+from typing import Dict, Optional
+
+import numpy as np
+import pandas as pd
 
 
 class FXCorrelationModule:
@@ -41,46 +42,56 @@ class FXCorrelationModule:
         self.monthly_fx = monthly_fx_df.copy()
 
         # Normalize column names (handle both formats from YAML)
-        if 'date' in self.monthly_fx.columns:
-            self.monthly_fx.rename(columns={'date': 'Year-Month'}, inplace=True)
-        if 'avg_rate' in self.monthly_fx.columns:
-            self.monthly_fx.rename(columns={'avg_rate': 'Avg FX Rate'}, inplace=True)
-        if 'monthly_change_pct' in self.monthly_fx.columns:
-            self.monthly_fx.rename(columns={'monthly_change_pct': 'Monthly Change (%)'}, inplace=True)
-        if 'rolling_12m_vol_pct' in self.monthly_fx.columns:
-            self.monthly_fx.rename(columns={'rolling_12m_vol_pct': 'Rolling 12M Vol (%)'}, inplace=True)
+        if "date" in self.monthly_fx.columns:
+            self.monthly_fx.rename(columns={"date": "Year-Month"}, inplace=True)
+        if "avg_rate" in self.monthly_fx.columns:
+            self.monthly_fx.rename(columns={"avg_rate": "Avg FX Rate"}, inplace=True)
+        if "monthly_change_pct" in self.monthly_fx.columns:
+            self.monthly_fx.rename(
+                columns={"monthly_change_pct": "Monthly Change (%)"}, inplace=True
+            )
+        if "rolling_12m_vol_pct" in self.monthly_fx.columns:
+            self.monthly_fx.rename(
+                columns={"rolling_12m_vol_pct": "Rolling 12M Vol (%)"}, inplace=True
+            )
 
         # Ensure datetime
-        if 'Year-Month' in self.monthly_fx.columns:
-            self.monthly_fx['Year-Month'] = pd.to_datetime(self.monthly_fx['Year-Month'])
-            self.monthly_fx = self.monthly_fx.sort_values('Year-Month')
+        if "Year-Month" in self.monthly_fx.columns:
+            self.monthly_fx["Year-Month"] = pd.to_datetime(
+                self.monthly_fx["Year-Month"]
+            )
+            self.monthly_fx = self.monthly_fx.sort_values("Year-Month")
 
         # Calculate core statistics
-        self.mean_rate = self.monthly_fx['Avg FX Rate'].mean()
-        self.std_rate = self.monthly_fx['Avg FX Rate'].std()
-        self.min_rate = self.monthly_fx['Avg FX Rate'].min()
-        self.max_rate = self.monthly_fx['Avg FX Rate'].max()
+        self.mean_rate = self.monthly_fx["Avg FX Rate"].mean()
+        self.std_rate = self.monthly_fx["Avg FX Rate"].std()
+        self.min_rate = self.monthly_fx["Avg FX Rate"].min()
+        self.max_rate = self.monthly_fx["Avg FX Rate"].max()
 
         # Autocorrelation
-        self.autocorr_lag1 = self.monthly_fx['Avg FX Rate'].autocorr(lag=1)
-        self.autocorr_lag12 = self.monthly_fx['Avg FX Rate'].autocorr(lag=12)
+        self.autocorr_lag1 = self.monthly_fx["Avg FX Rate"].autocorr(lag=1)
+        self.autocorr_lag12 = self.monthly_fx["Avg FX Rate"].autocorr(lag=12)
 
         # Monthly change statistics
-        self.pct_change = self.monthly_fx['Monthly Change (%)'].replace(
-            [np.inf, -np.inf], np.nan
-        ).dropna()
+        self.pct_change = (
+            self.monthly_fx["Monthly Change (%)"]
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
         self.mean_monthly_change = self.pct_change.mean()
         self.std_monthly_change = self.pct_change.std()
         self.max_monthly_move = self.pct_change.max()
         self.min_monthly_move = self.pct_change.min()
 
         # Volatility
-        self.rolling_vol_12m = self.monthly_fx['Rolling 12M Vol (%)'].mean()
+        self.rolling_vol_12m = self.monthly_fx["Rolling 12M Vol (%)"].mean()
 
         # Configuration
         self.config = config_yaml or {}
 
-    def generate_fx_scenarios(self, base_rate: float, months_ahead: int = 60) -> Dict[str, np.ndarray]:
+    def generate_fx_scenarios(
+        self, base_rate: float, months_ahead: int = 60
+    ) -> Dict[str, np.ndarray]:
         """
         Generate 6 FX scenario paths for stress testing
 
@@ -98,12 +109,18 @@ class FXCorrelationModule:
             - mean_reversion: Long-term reversion to historical mean
         """
         return {
-            'base_case': self._generate_base_scenario(base_rate, months_ahead),
-            'upside_5pct': self._generate_shock_scenario(base_rate, months_ahead, 0.05),
-            'downside_5pct': self._generate_shock_scenario(base_rate, months_ahead, -0.05),
-            'stress_10pct': self._generate_shock_scenario(base_rate, months_ahead, -0.10),
-            'crisis_scenario': self._generate_crisis_scenario(base_rate, months_ahead),
-            'mean_reversion': self._generate_mean_reversion_scenario(base_rate, months_ahead)
+            "base_case": self._generate_base_scenario(base_rate, months_ahead),
+            "upside_5pct": self._generate_shock_scenario(base_rate, months_ahead, 0.05),
+            "downside_5pct": self._generate_shock_scenario(
+                base_rate, months_ahead, -0.05
+            ),
+            "stress_10pct": self._generate_shock_scenario(
+                base_rate, months_ahead, -0.10
+            ),
+            "crisis_scenario": self._generate_crisis_scenario(base_rate, months_ahead),
+            "mean_reversion": self._generate_mean_reversion_scenario(
+                base_rate, months_ahead
+            ),
         }
 
     def _generate_base_scenario(self, base_rate: float, months: int) -> np.ndarray:
@@ -127,20 +144,27 @@ class FXCorrelationModule:
             shock = np.random.normal(0, self.std_monthly_change / 100)
 
             # Autocorrelation component (mean reversion)
-            correlation = self.autocorr_lag1 * 0.5 * (path[t-1] - self.mean_rate) / self.mean_rate
+            correlation = (
+                self.autocorr_lag1
+                * 0.5
+                * (path[t - 1] - self.mean_rate)
+                / self.mean_rate
+            )
 
             # Combined percentage change
             pct_change = drift + shock + correlation * 0.01
 
             # Update rate
-            path[t] = path[t-1] * (1 + pct_change)
+            path[t] = path[t - 1] * (1 + pct_change)
 
             # Apply bounds
             path[t] = np.clip(path[t], lower_bound, upper_bound)
 
         return path
 
-    def _generate_shock_scenario(self, base_rate: float, months: int, shock: float) -> np.ndarray:
+    def _generate_shock_scenario(
+        self, base_rate: float, months: int, shock: float
+    ) -> np.ndarray:
         """
         Shock scenario with exponential decay back to base case
 
@@ -174,13 +198,13 @@ class FXCorrelationModule:
 
         # Phase 1: Sharp depreciation (months 1-6)
         for t in range(1, min(7, months)):
-            shock = self.max_monthly_move / 100 * (1 - t/7)
-            path[t] = path[t-1] * (1 + shock)
+            shock = self.max_monthly_move / 100 * (1 - t / 7)
+            path[t] = path[t - 1] * (1 + shock)
 
         # Phase 2: Stabilization (months 7-18)
         for t in range(7, min(19, months)):
             shock = -self.max_monthly_move / 100 * ((t - 7) / 12)
-            path[t] = path[t-1] * (1 + shock)
+            path[t] = path[t - 1] * (1 + shock)
 
         # Phase 3: Gradual recovery (months 19+)
         if months > 19:
@@ -188,7 +212,9 @@ class FXCorrelationModule:
 
         return path
 
-    def _generate_mean_reversion_scenario(self, base_rate: float, months: int) -> np.ndarray:
+    def _generate_mean_reversion_scenario(
+        self, base_rate: float, months: int
+    ) -> np.ndarray:
         """
         Mean reversion scenario - rate gradually returns to historical mean
 
@@ -202,16 +228,16 @@ class FXCorrelationModule:
 
         for t in range(1, months):
             # Mean reversion component
-            reversion = reversion_speed * (self.mean_rate - path[t-1])
+            reversion = reversion_speed * (self.mean_rate - path[t - 1])
 
             # Random shock
             shock = np.random.normal(0, self.std_monthly_change / 100)
 
             # Combined percentage change
-            pct_change = reversion / path[t-1] + shock
+            pct_change = reversion / path[t - 1] + shock
 
             # Update rate
-            path[t] = path[t-1] * (1 + pct_change)
+            path[t] = path[t - 1] * (1 + pct_change)
 
         return path
 
@@ -220,7 +246,7 @@ class FXCorrelationModule:
         annual_usd_revenue: float,
         annual_lkr_debt_service: float,
         base_rate: float,
-        scenario_path: np.ndarray
+        scenario_path: np.ndarray,
     ) -> Dict:
         """
         Assess revenue-debt currency mismatch for a given FX scenario
@@ -254,18 +280,20 @@ class FXCorrelationModule:
         coverage = revenue_lkr / monthly_debt
 
         # Deficit calculation
-        deficit = np.where(monthly_debt - revenue_lkr > 0, monthly_debt - revenue_lkr, 0)
+        deficit = np.where(
+            monthly_debt - revenue_lkr > 0, monthly_debt - revenue_lkr, 0
+        )
 
         return {
-            'mean_coverage_ratio': float(np.nanmean(coverage)),
-            'min_coverage_ratio': float(np.nanmin(coverage)),
-            'months_below_100pct': int((coverage < 1.0).sum()),
-            'months_below_dscr_req': int((coverage < 1.5).sum()),
-            'total_deficit_lkr': float(deficit.sum()),
-            'worst_month_deficit_lkr': float((monthly_debt - revenue_lkr).max()),
-            'mean_fx_scenario': float(scenario_path.mean()),
-            'min_fx_scenario': float(scenario_path.min()),
-            'max_fx_scenario': float(scenario_path.max())
+            "mean_coverage_ratio": float(np.nanmean(coverage)),
+            "min_coverage_ratio": float(np.nanmin(coverage)),
+            "months_below_100pct": int((coverage < 1.0).sum()),
+            "months_below_dscr_req": int((coverage < 1.5).sum()),
+            "total_deficit_lkr": float(deficit.sum()),
+            "worst_month_deficit_lkr": float((monthly_debt - revenue_lkr).max()),
+            "mean_fx_scenario": float(scenario_path.mean()),
+            "min_fx_scenario": float(scenario_path.min()),
+            "max_fx_scenario": float(scenario_path.max()),
         }
 
     def monte_carlo_var_analysis(
@@ -274,7 +302,7 @@ class FXCorrelationModule:
         annual_lkr_debt_service: float,
         base_rate: float,
         num_simulations: int = 1000,
-        confidence_level: float = 0.95
+        confidence_level: float = 0.95,
     ) -> Dict:
         """
         Monte Carlo VaR/CVaR analysis for FX risk
@@ -334,16 +362,16 @@ class FXCorrelationModule:
         cvar_val = float(cvar_vals.mean()) if len(cvar_vals) > 0 else var_val
 
         return {
-            'var_deficit_lkr': var_val,
-            'cvar_deficit_lkr': cvar_val,
-            'mean_deficit_lkr': float(deficits.mean()),
-            'std_deficit_lkr': float(deficits.std()),
-            'max_deficit_lkr': float(deficits.max()),
-            'prob_deficit': float((deficits > 0).sum() / num_simulations),
-            'mean_coverage_ratio': float(np.nanmean(coverages)),
-            'percentile_5_coverage': float(np.nanpercentile(coverages, 5)),
-            'percentile_95_coverage': float(np.nanpercentile(coverages, 95)),
-            'num_simulations': num_simulations
+            "var_deficit_lkr": var_val,
+            "cvar_deficit_lkr": cvar_val,
+            "mean_deficit_lkr": float(deficits.mean()),
+            "std_deficit_lkr": float(deficits.std()),
+            "max_deficit_lkr": float(deficits.max()),
+            "prob_deficit": float((deficits > 0).sum() / num_simulations),
+            "mean_coverage_ratio": float(np.nanmean(coverages)),
+            "percentile_5_coverage": float(np.nanpercentile(coverages, 5)),
+            "percentile_95_coverage": float(np.nanpercentile(coverages, 95)),
+            "num_simulations": num_simulations,
         }
 
     def generate_audit_report(self) -> Dict:
@@ -360,20 +388,20 @@ class FXCorrelationModule:
             - statistics: Core statistics dictionary
         """
         return {
-            'module': 'FX_Correlation_P0_2D',
-            'version': '1.0.0-production',
-            'timestamp': datetime.now().isoformat(),
-            'data_observations': len(self.monthly_fx),
-            'date_range': f"{self.monthly_fx['Year-Month'].min()} to {self.monthly_fx['Year-Month'].max()}",
-            'statistics': {
-                'mean_rate': round(self.mean_rate, 4),
-                'std_rate': round(self.std_rate, 4),
-                'min_rate': round(self.min_rate, 4),
-                'max_rate': round(self.max_rate, 4),
-                'autocorr_lag1': round(self.autocorr_lag1, 4),
-                'autocorr_lag12': round(self.autocorr_lag12, 4),
-                'mean_monthly_change': round(self.mean_monthly_change, 4),
-                'std_monthly_change': round(self.std_monthly_change, 4),
-                'rolling_vol_12m': round(self.rolling_vol_12m, 2)
-            }
+            "module": "FX_Correlation_P0_2D",
+            "version": "1.0.0-production",
+            "timestamp": datetime.now().isoformat(),
+            "data_observations": len(self.monthly_fx),
+            "date_range": f"{self.monthly_fx['Year-Month'].min()} to {self.monthly_fx['Year-Month'].max()}",
+            "statistics": {
+                "mean_rate": round(self.mean_rate, 4),
+                "std_rate": round(self.std_rate, 4),
+                "min_rate": round(self.min_rate, 4),
+                "max_rate": round(self.max_rate, 4),
+                "autocorr_lag1": round(self.autocorr_lag1, 4),
+                "autocorr_lag12": round(self.autocorr_lag12, 4),
+                "mean_monthly_change": round(self.mean_monthly_change, 4),
+                "std_monthly_change": round(self.std_monthly_change, 4),
+                "rolling_vol_12m": round(self.rolling_vol_12m, 2),
+            },
         }

@@ -1,0 +1,18 @@
+# Base Hydra config for run_full_pipeline_v14.py
+
+# Path to YAML/JSON scenario file.
+# Override on the CLI, e.g.:
+#   python run_full_pipeline_v14.py config=scenarios/example_a.yaml
+config: ""
+
+# Pre-flight schema validation mode.
+#   strict : run schema_guard before evaluation
+#   off    : skip schema_guard
+validation_mode: strict
+
+# Modules to validate in schema_guard.
+# You can override as either:
+#   validation_modules=cashflow,debt
+# or:
+#   validation_modules=[cashflow,debt]
+validation_modules: null

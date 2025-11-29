@@ -1,0 +1,38 @@
+# v14 Scenario Analytics – Hydra base config
+# This is the primary config Hydra was complaining about.
+
+# Directory containing scenario YAML/JSON configs
+scenarios_dir: scenarios
+
+# Default Excel export path (can be overridden via CLI)
+output: exports/v14_analytics.xlsx
+
+# Run schema guard in strict mode by default
+strict: true
+
+# Parallel execution toggle (ScenarioAnalytics decides how to use this)
+parallel: false
+
+# Whether to export charts alongside the Excel workbook
+charts: true
+
+# Optional substring filter for scenario names; null => include all
+filter: null
+
+# Default discount rate (as a decimal) if scenario's own rate is missing
+default_discount_rate: 0.12
+
+# Optional JSON summary file written by ScenarioAnalytics.run()
+# Set to a path (e.g. "exports/v14_analytics_summary.json") or null to disable
+summary_json: null
+
+# Hydra runtime behaviour: keep working dir stable, no spammy output dirs
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

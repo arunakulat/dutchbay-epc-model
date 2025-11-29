@@ -1,0 +1,71 @@
+{
+  "timestamp": "2025-11-29T20:21:23.465356",
+  "run_id": "ci_20251129_202123",
+  "pipeline_version": "go_with_the_flow_v2",
+  "host_info": {
+    "platform": "darwin",
+    "python_version": "3.11.14",
+    "repo_root": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model"
+  },
+  "execution": {
+    "total_elapsed_seconds": 3.91,
+    "steps_executed": 7,
+    "overall_status": "PASSED",
+    "steps": [
+      {
+        "step_name": "black",
+        "status": "PASSED",
+        "elapsed_seconds": 0.75,
+        "exit_code": 0
+      },
+      {
+        "step_name": "isort",
+        "status": "PASSED",
+        "elapsed_seconds": 0.42,
+        "exit_code": 0
+      },
+      {
+        "step_name": "compileall[analytics]",
+        "status": "PASSED",
+        "elapsed_seconds": 0.06,
+        "exit_code": 0
+      },
+      {
+        "step_name": "compileall[finance]",
+        "status": "PASSED",
+        "elapsed_seconds": 0.04,
+        "exit_code": 0
+      },
+      {
+        "step_name": "compileall[run_full_pipeline_v14.py]",
+        "status": "PASSED",
+        "elapsed_seconds": 0.04,
+        "exit_code": 0
+      },
+      {
+        "step_name": "pytest",
+        "status": "PASSED",
+        "elapsed_seconds": 1.86,
+        "exit_code": 0
+      },
+      {
+        "step_name": "mypy",
+        "status": "PASSED",
+        "elapsed_seconds": 0.74,
+        "exit_code": 0
+      }
+    ]
+  },
+  "code_quality": {
+    "formatting": "COMPLIANT",
+    "imports": "ORGANIZED",
+    "syntax": "VALID",
+    "tests": "PASSING",
+    "type_safety": "CLEAN"
+  },
+  "recommendations": [
+    "\u2705 All quality gates passed",
+    "Ready for commit and push",
+    "\ud83d\udca1 Consider running: python scripts/go_with_the_flow_ci.py generate-artifacts"
+  ]
+}
