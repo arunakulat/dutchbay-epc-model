@@ -208,7 +208,7 @@ def validate_params_dict(
     if schema and jsonschema is not None:
         try:
             jsonschema.validate(instance=d, schema=schema)  # type: ignore
-        except Exception as e:
+        except Exception:
             if not strict:
                 # In relaxed mode, only re-raise structural errors; unknown fields are allowed.
                 raise

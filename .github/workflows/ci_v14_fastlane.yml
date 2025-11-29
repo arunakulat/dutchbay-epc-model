@@ -1,33 +1,59 @@
-true:
-  pull_request:
-    branches: [main, v14-upgrade]
+name: "CI – v14 fastlane"
+
+on:
   push:
-    branches: [main, v14-upgrade]
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   fastlane:
     runs-on: ubuntu-latest
+
     steps:
-    - {name: Checkout repo, uses: actions/checkout@v4}
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with: {python-version: '3.11'}
-    - name: Cache pip
-      uses: actions/cache@v4
-      with: {key: '${{ runner.os }}-pip-${{ hashFiles(''requirements*.txt'') }}',
-        path: ~/.cache/pip, restore-keys: '${{ runner.os }}-pip-
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          '}
-    - {name: Install dependencies, run: 'python -m pip install --upgrade pip
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt;
-        fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
-        '}
-    - {name: "Mypy \u2013 canonical v14 surfaces", run: "python -m mypy \\\n  analytics\
-        \ \\\n  finance \\\n  run_full_pipeline_v14.py\n"}
-    - {name: "Pytest \u2013 API + analytics_layer fast lane", run: "pytest \\\n  tests/api\
-        \ \\\n  tests/analytics_layer \\\n  --disable-warnings \\\n  -m \"not slow\"\
-        \ \\\n  --maxfail=1 \\\n  --tb=short"}
-name: "CI \u2013 v14 fastlane"
+      - name: Ruff – lint core project
+        run: |
+          ruff check .
+
+      - name: Mypy – canonical v14 surfaces
+        run: |
+          python -m mypy \
+            analytics \
+            finance \
+            run_full_pipeline_v14.py
+
+      - name: Pytest – fast lane
+        run: |
+          pytest \
+            tests/api \
+            tests/analytics_layer \
+            tests/finance \
+            tests/contracts \
+            tests/smoke \
+            --maxfail=1 \
+            --disable-warnings \
+            --tb=short

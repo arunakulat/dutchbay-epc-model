@@ -36,7 +36,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 class QuarantineError(Exception):
@@ -209,7 +209,7 @@ def execute_quarantine(
     dest_dir = dest_parent / source_dir.name
 
     if dry_run:
-        print(f"[DRY-RUN] Would move:")
+        print("[DRY-RUN] Would move:")
         print(f"  Source: {source_dir}")
         print(f"  Dest:   {dest_dir}")
         return dest_dir
@@ -233,10 +233,10 @@ def execute_quarantine(
             print(f"🔄 Rolling back: {temp_dest} → {source_dir}...", file=sys.stderr)
             try:
                 shutil.move(str(temp_dest), str(source_dir))
-                print(f"✅ Rollback successful", file=sys.stderr)
+                print("✅ Rollback successful", file=sys.stderr)
             except Exception as rollback_error:
                 print(f"❌ ROLLBACK FAILED: {rollback_error}", file=sys.stderr)
-                print(f"   Manual recovery needed!", file=sys.stderr)
+                print("   Manual recovery needed!", file=sys.stderr)
 
         raise QuarantineError(f"Quarantine failed: {e}")
 

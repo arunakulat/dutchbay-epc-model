@@ -5,8 +5,7 @@ Minimal FastAPI REST endpoint for analytics.sensitivity tornado analysis.
 Accepts JSON POST with scenario and driver parameters, returns tornado DataFrame in JSON.
 """
 
-import pandas as pd
-from fastapi import Body, FastAPI
+from fastapi import FastAPI
 from pydantic import BaseModel
 
 from analytics.contracts_v14 import ParameterRangeConfig

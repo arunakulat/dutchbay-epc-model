@@ -35,13 +35,13 @@ def main():
     ft["construction_periods"] = prompt_int("Construction periods", 2)
     cs = []
     print("Enter construction schedule per year (%) as comma-separated (e.g. 60, 60):")
-    cs_inp = input(f"Construction Schedule (default: 60,60): ")
+    cs_inp = input("Construction Schedule (default: 60,60): ")
     ft["construction_schedule"] = (
         [float(x) for x in cs_inp.split(",")] if cs_inp.strip() else [60.0, 60.0]
     )
     ddd = []
     print("Enter debt drawdown per year (%) as comma-separated (e.g. 0.5,0.5):")
-    dd_inp = input(f"Debt drawdown schedule (default: 0.5,0.5): ")
+    dd_inp = input("Debt drawdown schedule (default: 0.5,0.5): ")
     ft["debt_drawdown_pct"] = (
         [float(x) for x in dd_inp.split(",")] if dd_inp.strip() else [0.5, 0.5]
     )

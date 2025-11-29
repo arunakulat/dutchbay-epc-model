@@ -93,7 +93,7 @@ def patch_pytest_ini(repo_root: Path) -> None:
         print(f"[patch] Updated {ini_path} to ignore legacy/")
         ini_path.write_text("".join(new_lines), encoding="utf-8")
     else:
-        print(f"[info] pytest.ini already ignoring legacy/, no change")
+        print("[info] pytest.ini already ignoring legacy/, no change")
 
 
 def patch_mypy_ini(repo_root: Path) -> None:

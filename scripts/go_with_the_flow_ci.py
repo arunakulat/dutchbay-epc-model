@@ -573,11 +573,11 @@ def generate_artifacts() -> None:
 
         all_imports.extend(imports)
         all_code.append(
-            f"\n# ══════════════════════════════════════════════════════════════════════════════\n"
+            "\n# ══════════════════════════════════════════════════════════════════════════════\n"
         )
         all_code.append(f"# {module_path}\n")
         all_code.append(
-            f"# ══════════════════════════════════════════════════════════════════════════════\n"
+            "# ══════════════════════════════════════════════════════════════════════════════\n"
         )
         all_code.extend(code)
 
@@ -612,7 +612,7 @@ EOF
     typer.echo()
     typer.echo(f"✅ Generated: {artifact_file}")
     typer.echo(f"   Size: {size_kb:.1f} KB ({len(module_contents)} modules)")
-    typer.echo(f"   Use for: Review, audit, distribution to stakeholders")
+    typer.echo("   Use for: Review, audit, distribution to stakeholders")
 
 
 @app.command

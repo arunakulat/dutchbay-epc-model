@@ -1,69 +1,60 @@
 # Pre-commit hooks configuration (Go-With-The-Flow CI)
-# Install: pre-commit install
-# Run: pre-commit run --all-files
 
 repos:
   - repo: https://github.com/psf/black
-    rev: '24.1.1'
+    rev: "25.11.0"
     hooks:
       - id: black
-        language_version: python3
+        language_version: python3.11
+        args: ["--line-length=88"]
         exclude: ^legacy/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.8.3"
+    hooks:
+      - id: ruff
+        # Ruff will read configuration from ruff.toml
+        args: ["--fix"]
+        # Let ruff.toml handle which files/rules we care about.
 
   - repo: https://github.com/pycqa/isort
-    rev: '5.13.2'
+    rev: "7.0.0"
     hooks:
       - id: isort
-        args: ['--profile=black']
+        args: ["--profile=black"]
         exclude: ^legacy/
-
-  - repo: https://github.com/PyCQA/flake8
-    rev: '7.0.0'
-    hooks:
-      - id: flake8
-        args: ['--max-line-length=100', '--extend-ignore=F401,W503']
-        exclude: |
-          (?x)^(
-            legacy/.*|
-            analytics/sensitivity/dashboard_demo\.py|
-            analytics/sensitivity_visualization\.py|
-            scripts/diagnose_capacity_factor\.py|
-            scripts/test_markdown_report\.py|
-            scripts/test_llcr_plcr_real_debt\.py|
-            tests/contracts/test_sensitivity_edgecases\.py|
-            constants\.py|
-            fix_parameter_range_config\.py|
-            go_with_the_flow_ci_enhanced\.py|
-            go_with_the_flow_ci_v2_final\.py|
-            quarantine_v14chat\.py|
-            scan_v14chat_imports\.py
-          )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: "v5.0.0"
     hooks:
-      - id: check-yaml
-        exclude: |
-          (?x)^(
-            legacy/.*|
-            scenarios/edge_extreme_stress\.yaml|
-            scenarios/_scrtch/zz_bad\.yaml|
-            config/sensitivity_defaults\.yaml|
-            full_model_variables_updated\.yaml|
-            \.github/workflows/release\.yml
-          )$
-      - id: check-json
-        exclude: ^legacy/
+      - id: check-added-large-files
+      - id: check-ast
       - id: check-toml
-        exclude: ^legacy/
+      - id: check-yaml
       - id: end-of-file-fixer
         exclude: ^legacy/
       - id: trailing-whitespace
         exclude: ^legacy/
-      - id: check-added-large-files
-        args: ['--maxkb=100']
-        exclude: ^legacy/
       - id: check-merge-conflict
       - id: debug-statements
         exclude: ^legacy/
+
+  # Mypy disabled for Sprint Day N – runs in CI instead.
+  # Re-enable when you want mypy on every commit:
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: "v1.18.2"
+  #   hooks:
+  #     - id: mypy
+  #       args:
+  #         - "--config-file=mypy.ini"
+  #       additional_dependencies:
+  #         - pydantic
+  #         - pydantic-settings
+  #         - pydantic[mypy]
+  #         - types-PyYAML
+  #         - pandas-stubs
+  #         - types-openpyxl
+  #         - numpy-financial
+  #         - scipy-stubs
+
 # EOF

@@ -197,7 +197,7 @@ def main() -> int:
             for issue in issues:
                 print(f"     • {issue}")
         else:
-            print(f"  ✅ Pass")
+            print("  ✅ Pass")
         print()
 
     # Summary

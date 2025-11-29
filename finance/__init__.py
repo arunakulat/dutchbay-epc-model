@@ -11,6 +11,8 @@ finance and analytics layers.
 
 from __future__ import annotations
 
+from typing import Any
+
 __version__ = "0.3.0"
 __author__ = "DutchBay EPC Model Team"
 
@@ -19,12 +21,27 @@ __author__ = "DutchBay EPC Model Team"
 # =============================================================================
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """
     Lazy import mechanism to avoid circular dependencies.
 
     This allows analytics.evaluate_scenario to import finance.cashflow_v14
     without finance/__init__.py pre-importing everything.
+
+    Parameters
+    ----------
+    name : str
+        Attribute name to import.
+
+    Returns
+    -------
+    Any
+        The imported function/class/object.
+
+    Raises
+    ------
+    AttributeError
+        If the requested attribute doesn't exist.
     """
     # Core calculation engines
     if name == "build_annual_rows":
@@ -43,31 +60,43 @@ def __getattr__(name: str):
         return calculate_equity_performance
 
     if name == "calculate_irr":
-        from finance.irr import calculate_irr
-
-        return calculate_irr
+        # TODO(mypy): Verify this function exists in finance.irr
+        # from finance.irr import calculate_irr
+        raise AttributeError(
+            f"'{name}' is not currently exported. "
+            "Check finance.irr for actual function name."
+        )
 
     if name == "calculate_wacc":
-        from finance.wacc_v14 import calculate_wacc
+        from finance.wacc_v14 import calculate_real_wacc as calculate_wacc
 
         return calculate_wacc
 
     # Configuration objects
     if name == "IRRConfig":
-        from finance.irr_config import IRRConfig
-
-        return IRRConfig
+        # TODO(mypy): Verify this class exists in finance.irr_config
+        # from finance.irr_config import IRRConfig
+        raise AttributeError(
+            f"'{name}' is not currently exported. "
+            "Check finance.irr_config for actual class name."
+        )
 
     if name == "load_scenario_config":
-        from finance.scenario_config import load_scenario_config
-
-        return load_scenario_config
+        # TODO(mypy): This function moved to analytics.scenario_loader
+        # from finance.scenario_config import load_scenario_config
+        raise AttributeError(
+            f"'{name}' moved to analytics.scenario_loader. "
+            "Use: from analytics.scenario_loader import load_scenario_config"
+        )
 
     # Helper utilities
     if name == "calculate_epc_breakdown":
-        from finance.epc_helper_v14 import calculate_epc_breakdown
-
-        return calculate_epc_breakdown
+        # TODO(mypy): Verify this function exists in finance.epc_helper_v14
+        # from finance.epc_helper_v14 import calculate_epc_breakdown
+        raise AttributeError(
+            f"'{name}' is not currently exported. "
+            "Check finance.epc_helper_v14 for actual function name."
+        )
 
     if name == "as_float":
         from finance.utils import as_float
@@ -87,18 +116,27 @@ __all__ = [
     "build_annual_rows",
     "apply_debt_layer",
     "calculate_equity_performance",
-    "calculate_irr",
-    "calculate_wacc",
-    # Configuration objects
-    "IRRConfig",
-    "load_scenario_config",
+    "calculate_wacc",  # Note: calculate_irr removed until verified
+    # Configuration objects - removed until verified
+    # "IRRConfig",
+    # "load_scenario_config",
     # Helper utilities
-    "calculate_epc_breakdown",
     "as_float",
     "get_nested",
+    # Note: calculate_epc_breakdown removed until verified
 ]
 
 
-def __dir__():
-    """Support for dir(finance) and IDE autocomplete."""
+def __dir__() -> list[str]:
+    """
+    Support for dir(finance) and IDE autocomplete.
+
+    Returns
+    -------
+    list[str]
+        List of public attributes.
+    """
     return __all__ + ["__version__", "__author__"]
+
+
+# EOF

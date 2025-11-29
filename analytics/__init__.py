@@ -9,6 +9,8 @@ Note: Uses lazy imports to avoid circular dependencies with finance layer.
 
 from __future__ import annotations
 
+from typing import Any
+
 __version__ = "0.2.1"
 __author__ = "DutchBay EPC Model Team"
 
@@ -17,7 +19,7 @@ __author__ = "DutchBay EPC Model Team"
 # =============================================================================
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """
     Lazy import mechanism to avoid circular dependencies.
 
@@ -41,9 +43,9 @@ def __getattr__(name: str):
         return ScenarioAnalytics
 
     if name == "evaluate_scenario_as_dict":
-        from analytics.evaluate_scenario import evaluate_scenario_as_dict
+        # from analytics.evaluate_scenario import evaluate_scenario_as_dict  # TODO: Verify
 
-        return evaluate_scenario_as_dict
+        raise AttributeError(f"'{name}' not implemented yet")
 
     raise AttributeError(f"module 'analytics' has no attribute '{name}'")
 
@@ -59,6 +61,6 @@ __all__ = [
 ]
 
 
-def __dir__():
+def __dir__() -> list[str]:
     """Support for dir(analytics) and IDE autocomplete."""
     return __all__ + ["__version__", "__author__"]

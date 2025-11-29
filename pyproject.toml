@@ -33,3 +33,17 @@ test = [
 
 [tool.setuptools.packages.find]
 include = ["dutchbay_v13*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.venv311
+  | legacy
+  | __pycache__
+)/
+'''
+# EOF

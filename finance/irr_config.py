@@ -13,7 +13,7 @@ Version: 1.0
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import yaml
 
@@ -54,7 +54,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         )
 
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 def get_irr_bounds(

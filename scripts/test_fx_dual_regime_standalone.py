@@ -10,7 +10,6 @@ Usage: python3 test_fx_dual_regime_standalone.py
 
 from datetime import datetime
 from glob import glob
-from pathlib import Path
 from typing import Dict, Optional
 
 import numpy as np
@@ -356,7 +355,7 @@ def main():
     print("Primary model for lender presentation")
     print("â–ˆ" * 90)
 
-    print(f"\nâœ“ Recent regime data:")
+    print("\nâœ“ Recent regime data:")
     print(f"  Total records: {len(recent_df)} months")
     print(
         f"  Date range: {recent_df['Year-Month'].min().strftime('%Y-%m')} to {recent_df['Year-Month'].max().strftime('%Y-%m')}"
@@ -422,7 +421,7 @@ def main():
     print("Overlay for extreme scenario calibration")
     print("â–ˆ" * 90)
 
-    print(f"\nâœ“ Historical regime data:")
+    print("\nâœ“ Historical regime data:")
     print(f"  Total records: {len(historical_df)} months")
     print(
         f"  Date range: {historical_df['Year-Month'].min().strftime('%Y-%m')} to {historical_df['Year-Month'].max().strftime('%Y-%m')}"

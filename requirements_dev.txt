@@ -66,3 +66,12 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.2
 unittest2==1.1.0
+
+# Mypy dependencies (added 2025-11-28)
+numpy-financial
+scipy-stubs
+SALib
+multiprocess
+streamlit
+matplotlib
+# EOF

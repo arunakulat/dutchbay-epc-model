@@ -1,5 +1,3 @@
-import sys
-
 import yaml
 
 # Path to scenario YAML actually used by failing test

@@ -8,7 +8,6 @@ Usage: python3 test_fx_dual_regime_standalone_fixed.py
 
 from datetime import datetime
 from glob import glob
-from pathlib import Path
 from typing import Dict, Optional
 
 import numpy as np
@@ -368,7 +367,7 @@ def main():
 
     try:
         module_recent = FXCorrelationModule(recent_df)
-        print(f"  âœ“ Module initialized successfully")
+        print("  âœ“ Module initialized successfully")
     except Exception as e:
         print(f"  âœ— ERROR: {e}")
         return 1
@@ -414,7 +413,7 @@ def main():
 
     try:
         module_historical = FXCorrelationModule(historical_df)
-        print(f"  âœ“ Module initialized successfully")
+        print("  âœ“ Module initialized successfully")
     except Exception as e:
         print(f"  âœ— ERROR: {e}")
         return 1
@@ -450,10 +449,10 @@ def main():
     recent_base = recent_results["base_case"]["mean_coverage_ratio"]
     historical_base = historical_results["base_case"]["mean_coverage_ratio"]
 
-    print(f"\nBase Case Coverage:")
+    print("\nBase Case Coverage:")
     print(f"  Recent (2016-2025):      {recent_base:.2f}x")
     print(f"  Historical (Full period): {historical_base:.2f}x")
-    print(f"\nRECOMMENDATION FOR LENDERS:")
+    print("\nRECOMMENDATION FOR LENDERS:")
     print(f"  Primary (Recent):        {recent_base:.2f}x")
     print(f"  Conservative (Historical): {historical_base:.2f}x")
     print(f"  Debt Covenant Assumption: {min(recent_base, historical_base):.2f}x")

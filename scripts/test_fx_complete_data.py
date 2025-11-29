@@ -9,7 +9,6 @@ Data: Complete 50-year USD/LKR dataset (110 monthly records)
 Usage: python3 test_fx_complete_data.py
 """
 
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -64,7 +63,7 @@ def main():
     if fx_df is None:
         return 1
 
-    print(f"\n✓ Data loaded successfully!")
+    print("\n✓ Data loaded successfully!")
     print(f"  Total records: {len(fx_df)} months")
     print(
         f"  Date range: {fx_df['Year-Month'].min().strftime('%Y-%m')} to {fx_df['Year-Month'].max().strftime('%Y-%m')}"
@@ -116,7 +115,7 @@ def main():
         assert all(p[0] == 305.0 for p in scenarios.values()), "Start rate mismatch"
         assert all(np.all(p > 0) for p in scenarios.values()), "Negative rates detected"
 
-        print(f"  ✓ Scenarios generated: 6 paths x 60 months")
+        print("  ✓ Scenarios generated: 6 paths x 60 months")
         for name, path in scenarios.items():
             print(
                 f"    {name:.<25} min={path.min():>7.2f}, mean={path.mean():>7.2f}, max={path.max():>7.2f}"
@@ -161,7 +160,7 @@ def main():
 
         # Assess viability
         base_case = results["base_case"]
-        print(f"\n  Base Case Assessment:")
+        print("\n  Base Case Assessment:")
         print(
             f"    Mean coverage: {base_case['mean_coverage_ratio']:.2f}x (Lender requirement: ≥1.5x)"
         )

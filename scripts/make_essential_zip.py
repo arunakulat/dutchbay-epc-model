@@ -80,16 +80,16 @@ def make_essential_zip(root: Path, output_name: str) -> None:
 
     zip_size = output.stat().st_size
 
-    print(f"\n✓ Essential zip created!")
+    print("\n✓ Essential zip created!")
     print(f"  Files: {files_added}")
     print(f"  Uncompressed: {total_size:,} bytes ({total_size/1024/1024:.2f} MB)")
     print(f"  Compressed: {zip_size:,} bytes ({zip_size/1024/1024:.2f} MB)")
     print(f"  Compression: {(1 - zip_size/total_size)*100:.1f}%")
 
     # Clean attributes immediately
-    print(f"\n  Removing extended attributes...")
+    print("\n  Removing extended attributes...")
     os.system(f'xattr -c "{output}"')
-    print(f"  ✓ Clean zip ready for upload")
+    print("  ✓ Clean zip ready for upload")
 
 
 if __name__ == "__main__":

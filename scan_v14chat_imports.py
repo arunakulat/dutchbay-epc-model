@@ -200,7 +200,7 @@ def print_summary(report: ScanReport) -> None:
     print(f"\n📁 Files scanned: {report.total_files_scanned}")
     print(f"⚠️  Files with imports: {report.files_with_imports}")
     print(f"📌 Total import statements: {report.total_import_statements}")
-    print(f"\n🔍 Unique modules imported:")
+    print("\n🔍 Unique modules imported:")
     for module in sorted(report.unique_modules_imported):
         print(f"   - {module}")
 

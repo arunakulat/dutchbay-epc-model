@@ -8,7 +8,7 @@ Version: 1.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 
 def get_scenario(
@@ -49,14 +49,14 @@ def get_scenario(
             f"Available scenarios: {available}"
         )
 
-    return scenarios[scenario_name]
+    return cast(dict[str, Any], scenarios[scenario_name])
 
 
 def get_scenario_irr_bounds(
     config: Dict[str, Any],
     scenario_name: str = "base_case",
     role: Optional[str] = None,
-) -> tuple:
+) -> tuple[str, ...]:
     """Extract IRR bounds for a specific scenario and role.
 
     Parameters
@@ -88,7 +88,7 @@ def get_scenario_irr_bounds(
     raise ValueError(f"Unknown role: {role}")
 
 
-def list_scenarios(config: Dict[str, Any]) -> list:
+def list_scenarios(config: Dict[str, Any]) -> list[dict[str, Any]]:
     """List all available scenarios.
 
     Returns

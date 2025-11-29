@@ -36,7 +36,6 @@ class EquityCashflowSummary:
     """
 
     cashflows: List[Number]
-    cashflows: List[Number]
     """Full equity cashflow series.
         Negative = contributions, positive = distributions.
     """

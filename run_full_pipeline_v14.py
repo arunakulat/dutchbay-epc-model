@@ -2,47 +2,38 @@
 """
 v14 full-pipeline runner – config in, KPIs out.
 
-This script is the simplest “one-liner” entry point for the v14 engine:
+This script is the simplest entry point for the v14 engine::
 
     python run_full_pipeline_v14.py scenarios/example_a.yaml
 
-What it actually does under the hood:
+What it does
+------------
+1. Loads YAML/JSON config via analytics.scenario_loader
+2. Runs pre-flight schema validation (optional)
+3. Calls analytics.evaluate_scenario.evaluate_with_overrides
+4. Returns flat dict of KPIs suitable for CLI/CI/JSON export
 
-1. Loads the YAML/JSON config using the central loader
-   (analytics.scenario_loader.load_scenario_config).
-2. Optionally runs a schema guard over the raw config to catch missing or
-   obviously broken fields before any heavy finance logic runs.
-3. Calls analytics.evaluate_scenario.evaluate_with_overrides, which:
-   - Re-loads the config for safety,
-   - Runs the v14 finance stack under finance.cashflow_v14 / finance.debt_v14 /
-     finance.wacc_v14 / analytics.core.metrics, and
-   - Returns a flat dict of KPIs suitable for CLI/CI/JSON export.
+Typical usage
+-------------
+CLI::
 
-Typical usage patterns
-----------------------
+    python run_full_pipeline_v14.py scenarios/example_a.yaml
 
-CLI (human):
-
-    python run_full_pipeline_v14.py scenarios/full_model_variables_updated.yaml
-
-CI / programmatic:
+Programmatic::
 
     from run_full_pipeline_v14 import run_v14_pipeline
 
     result = run_v14_pipeline(
-        config="scenarios/full_model_variables_updated.yaml",
+        config="scenarios/example_a.yaml",
         validation_mode="strict",
     )
     project_irr = result["kpis"]["project_irr"]
-
-The cost of loading the config twice (schema guard + evaluation) is tiny
-compared to a full analytics run and keeps the pre-flight validation logic
-explicit at this boundary.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import typer
@@ -51,10 +42,12 @@ from analytics.evaluate_scenario import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 
+logger = logging.getLogger(__name__)
+
 app = typer.Typer(
     help=(
-        "Run the v14 Dutch Bay EPC finance engine on a single scenario config "
-        "and emit KPIs as JSON."
+        "Run the v14 Dutch Bay EPC finance engine on a single scenario "
+        "config and emit KPIs as JSON."
     ),
     no_args_is_help=True,
 )
@@ -63,83 +56,96 @@ app = typer.Typer(
 def run_v14_pipeline(
     config: str,
     validation_mode: str = "strict",
+    validation_modules: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Run the v14 engine for a single scenario config path.
 
-    This is the function that tests and CI should import.
+    Parameters
+    ----------
+    config : str
+        Path to YAML/JSON scenario file, e.g.,
+        "scenarios/full_model_variables_updated.yaml".
+    validation_mode : {"strict", "off"}, default="strict"
+        Pre-flight schema validation mode.
+        - "strict": run schema guard before evaluation
+        - "off": skip schema guard
+    validation_modules : list[str] or None, optional
+        Modules to validate. Defaults to ["cashflow", "debt"].
 
-    Args:
-        config:
-            Path to the YAML/JSON scenario file, e.g.
-            "scenarios/full_model_variables_updated.yaml".
-        validation_mode:
-            - "strict": run a pre-flight schema guard over the raw config
-              before doing *any* finance work.
-            - "off": skip the schema guard and go straight to evaluation.
+    Returns
+    -------
+    dict[str, Any]
+        ScenarioResult-like dict with keys:
+        - validation_mode: effective mode used
+        - config_path: config path string
+        - config: loaded raw config dict
+        - annual_rows: list of annual cashflow rows
+        - debt_result: dict of debt metrics
+        - kpis: dict of KPI fields (project_npv, project_irr, etc.)
 
-    Returns:
-        A dict shaped like a ScenarioResult-like surface, including:
-
-        - validation_mode: the effective mode used ("strict" or "off")
-        - config_path: the config path string
-        - config: the loaded raw config dict
-        - annual_rows: list of annual cashflow rows (may be empty)
-        - debt_result: dict of debt metrics/results (may be empty)
-        - kpis: dict of KPI fields (e.g. project_npv, project_irr, dscr_min, ...)
+    Raises
+    ------
+    ValueError
+        If validation_mode is not "strict" or "off".
+    ConfigValidationError
+        If strict mode and config fails validation.
     """
     mode = validation_mode.lower()
     if mode not in {"strict", "off"}:
         raise ValueError(
-            f"validation_mode must be 'strict' or 'off', got: {validation_mode!r}"
+            f"validation_mode must be 'strict' or 'off', got: " f"{validation_mode!r}"
         )
 
-    # 1) Pre-flight: light-weight schema validation on the raw config
+    # 1. Load config
     cfg = load_scenario_config(config)
 
+    # 2. Pre-flight validation
     if mode == "strict":
-        # For now we always validate the cashflow surface. You can extend the
-        # modules list later (e.g. ["cashflow", "debt", "wacc"]) once those
-        # modules register their own RequiredFieldSpecs.
+        modules = validation_modules or ["cashflow", "debt"]
         validate_config_for_v14(
             raw_config=cfg,
             config_path=config,
-            modules=["cashflow"],
+            modules=modules,
         )
+        logger.info("Schema validation passed for modules: %s", ", ".join(modules))
 
-    # 2) Full evaluation: this will reload the config and run the v14 stacks
-    #    under finance.cashflow_v14 / finance.debt_v14 / analytics.core.metrics.
+    # 3. Full evaluation
     raw_result = evaluate_with_overrides(config, {})
 
-    # Normalise to a dict and capture the KPI payload *before* we add metadata.
-    if isinstance(raw_result, dict):
-        kpis_payload: dict[str, Any] = dict(raw_result)
-        result: dict[str, Any] = dict(raw_result)
-    else:
-        # Extremely defensive: if the core ever returns a non-dict, we still
-        # provide a sensible surface for callers and tests.
-        kpis_payload = {"value": raw_result}
-        result = {"result": raw_result}
+    # 4. Normalize result to dict
+    if not isinstance(raw_result, dict):
+        raise TypeError(
+            f"evaluate_with_overrides must return dict, "
+            f"got {type(raw_result).__name__}"
+        )
 
-    # Attach config + metadata the tests (and downstream tooling) expect.
+    result: dict[str, Any] = dict(raw_result)
+
+    # 5. Attach metadata
     result.setdefault("config", cfg)
     result.setdefault("config_path", config)
     result["validation_mode"] = mode
 
-    # Ensure structural keys from a ScenarioResult-like surface are always present
-    # so that callers can rely on them without extra guards.
+    # 6. Ensure structural keys
     result.setdefault("annual_rows", [])
     result.setdefault("debt_result", {})
 
-    # kpis: if the core already produced a nested "kpis" dict, keep it.
-    # Otherwise, treat the flat raw_result as the KPI dictionary.
-    existing_kpis = result.get("kpis")
-    if isinstance(existing_kpis, dict) and existing_kpis:
-        kpis = existing_kpis
-    else:
-        kpis = kpis_payload
-
-    result["kpis"] = kpis
+    # 7. Normalize KPIs
+    if "kpis" not in result or not isinstance(result["kpis"], dict):
+        # If no nested kpis dict, treat entire result as KPIs
+        result["kpis"] = {
+            k: v
+            for k, v in result.items()
+            if k
+            not in {
+                "config",
+                "config_path",
+                "validation_mode",
+                "annual_rows",
+                "debt_result",
+            }
+        }
 
     return result
 
@@ -157,28 +163,42 @@ def main(
         case_sensitive=False,
         help=(
             "Pre-flight schema validation mode. "
-            "'strict' (default) runs analytics.schema_guard.validate_config_for_v14 "
-            "before evaluation; 'off' skips the guard."
+            "'strict' (default) runs schema guard; 'off' skips it."
+        ),
+    ),
+    validation_modules: str = typer.Option(
+        None,
+        "--modules",
+        help=(
+            "Comma-separated list of modules to validate, e.g. "
+            "'cashflow,debt'. Defaults to 'cashflow,debt'."
         ),
     ),
 ) -> None:
     """
     CLI entry point.
 
-    Example:
-        $ python run_full_pipeline_v14.py scenarios/example_a.yaml \\
-              --validation-mode strict
+    Example
+    -------
+    $ python run_full_pipeline_v14.py scenarios/example_a.yaml \\
+          --validation-mode strict --modules cashflow,debt
     """
+    modules_list = (
+        [m.strip() for m in validation_modules.split(",")]
+        if validation_modules
+        else None
+    )
+
     result = run_v14_pipeline(
         config=config,
         validation_mode=validation_mode,
+        validation_modules=modules_list,
     )
 
-    # Emit deterministic, machine-friendly JSON for CI and downstream tools.
+    # Emit JSON for CI/tooling
     typer.echo(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
     app()
-
 # EOF

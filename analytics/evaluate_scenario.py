@@ -1,23 +1,8 @@
 from __future__ import annotations
 
-"""
-analytics.evaluate_scenario
-
-Go-with-the-Flow v14 evaluation gateway.
-
-Responsibility:
-- Load base scenario config from YAML
-- Apply nested overrides (dot-path style handled upstream)
-- Run cashflow + debt stack
-- Delegate KPI aggregation to analytics.core.metrics.calculate_scenario_kpis
-- Return a flat dict of KPIs for Monte Carlo / sensitivity layers
-
-This module is intentionally thin: it does NOT reimplement finance math.
-"""
-
 import logging
 from pathlib import Path
-from typing import Any, Dict, Mapping, MutableMapping, Sequence
+from typing import Any
 
 from analytics.contracts_v14 import ScenarioResult
 from analytics.core.metrics import calculate_scenario_kpis
@@ -27,34 +12,51 @@ from finance.debt_v14 import apply_debt_layer
 
 logger = logging.getLogger(__name__)
 
+"""
+analytics.evaluate_scenario
 
+Central orchestrator for evaluating a full scenario (cashflow + debt + metrics).
+Coordinates finance.cashflow_v14, finance.debt_v14, analytics.core.metrics.
+
+This is the recommended entry point for scenario analytics.
+Outputs: ScenarioResult (dataclass) with cashflows, kpis, metadata.
+"""
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _deep_update(
-    base: MutableMapping[str, Any], overrides: Mapping[str, Any]
-) -> MutableMapping[str, Any]:
+    base: dict[str, Any],
+    overrides: dict[str, Any],
+) -> dict[str, Any]:
     """
     Recursively update a nested dict with overrides.
 
     Only merges dicts; all other types overwrite.
     Mutates `base` and also returns it for convenience.
+
+    Parameters
+    ----------
+    base : dict[str, Any]
+        Base configuration dictionary to update.
+    overrides : dict[str, Any]
+        Overrides to apply recursively.
+
+    Returns
+    -------
+    dict[str, Any]
+        The updated base dictionary (same object, mutated).
     """
     for key, value in overrides.items():
-        if (
-            key in base
-            and isinstance(base[key], MutableMapping)
-            and isinstance(value, Mapping)
-        ):
-            _deep_update(base[key], value)  # type: ignore[arg-type]
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_update(base[key], value)
         else:
             base[key] = value
     return base
 
 
-def _normalise_kpi_result(obj: Any) -> Dict[str, Any]:
+def _normalise_kpi_result(obj: Any) -> dict[str, Any]:
     """
     Normalise the output of calculate_scenario_kpis into a plain dict.
 
@@ -62,11 +64,23 @@ def _normalise_kpi_result(obj: Any) -> Dict[str, Any]:
     - ScenarioResult (contracts_v14)
     - dict-like returns (already normalised upstream)
 
-    Raises:
-        TypeError if the return type is not understood.
+    Parameters
+    ----------
+    obj : Any
+        KPI result object from calculate_scenario_kpis.
+
+    Returns
+    -------
+    dict[str, Any]
+        Normalized KPI dictionary.
+
+    Raises
+    ------
+    TypeError
+        If the return type is not understood.
     """
     if isinstance(obj, ScenarioResult):
-        kpis: Dict[str, Any] = {
+        kpis: dict[str, Any] = {
             "scenario_name": obj.scenario_name,
             "project_npv": obj.project_npv,
             "project_irr": obj.project_irr,
@@ -101,8 +115,8 @@ def _normalise_kpi_result(obj: Any) -> Dict[str, Any]:
 
 def evaluate_with_overrides(
     base_config_path: str,
-    overrides: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Evaluate a single scenario given a base YAML config and optional overrides.
 
@@ -111,16 +125,24 @@ def evaluate_with_overrides(
     - Sensitivity / tornado (analytics.sensitivity_v14)
     - Tail-risk overlays
 
-    Args:
-        base_config_path:
-            Path to the base scenario YAML used as the starting point.
-        overrides:
-            Nested dict of overrides applied on top of the loaded config.
-            Keys are expected to already be "expanded" into nested dicts
-            (dot-path expansion is handled by callers such as sensitivity_v14).
+    Parameters
+    ----------
+    base_config_path : str
+        Path to the base scenario YAML used as the starting point.
+    overrides : dict[str, Any] or None, optional
+        Nested dict of overrides applied on top of the loaded config.
+        Keys are expected to already be "expanded" into nested dicts
+        (dot-path expansion is handled by callers such as sensitivity_v14).
 
-    Returns:
+    Returns
+    -------
+    dict[str, Any]
         Flat dict of KPI values (e.g. project_irr, project_npv, dscr_min).
+
+    Raises
+    ------
+    TypeError
+        If loaded config is not a dictionary.
     """
     config_path = Path(base_config_path)
     logger.info("Evaluating scenario: %s", config_path)
@@ -142,11 +164,11 @@ def evaluate_with_overrides(
         _deep_update(config, overrides)
 
     # 3) Build annual cashflow rows from config
-    annual_rows: Sequence[Dict[str, Any]] = build_annual_rows(config)
+    annual_rows: list[dict[str, Any]] = build_annual_rows(config)
 
     # 4) Apply debt layer
     # NOTE: apply_debt_layer expects (params/config, annual_rows)
-    debt_result: Dict[str, Any] = apply_debt_layer(config, annual_rows)
+    debt_result: dict[str, Any] = apply_debt_layer(config, annual_rows)
 
     # 5) Aggregate KPIs using the canonical metrics module
     # IMPORTANT: argument order is (annual_rows, debt_result, config)
@@ -177,5 +199,4 @@ def evaluate_with_overrides(
 
 
 __all__ = ["evaluate_with_overrides"]
-
 # EOF
