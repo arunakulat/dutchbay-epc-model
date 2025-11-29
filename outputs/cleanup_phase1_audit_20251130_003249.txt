@@ -1,0 +1,46 @@
+PHASE 1: BACKUP FILE DELETION AUDIT LOG
+================================================================================
+Timestamp: 2025-11-30T00:32:49.845915
+Dry Run: False
+Total Files: 10
+================================================================================
+
+File: scripts/export_scenario_timeseries.py.bak
+  Git Tracked: True
+  Size: 2844 bytes
+
+File: scripts/export_scenario_timeseries.py.bak
+  Git Tracked: True
+  Size: 2844 bytes
+
+File: scripts/go_with_the_flow_ci.py.backup
+  Git Tracked: True
+  Size: 39249 bytes
+
+File: scripts/go_with_the_flow_ci.py.backup
+  Git Tracked: True
+  Size: 39249 bytes
+
+File: scripts/plot_scenarios.py.bak
+  Git Tracked: True
+  Size: 2844 bytes
+
+File: scripts/plot_scenarios.py.bak
+  Git Tracked: True
+  Size: 2844 bytes
+
+File: scripts/test_full_v14_chain.py.bak
+  Git Tracked: True
+  Size: 1525 bytes
+
+File: scripts/test_full_v14_chain.py.bak
+  Git Tracked: True
+  Size: 1525 bytes
+
+File: scripts/v14_debt_test.py.bak
+  Git Tracked: True
+  Size: 1121 bytes
+
+File: scripts/v14_debt_test.py.bak
+  Git Tracked: True
+  Size: 1121 bytes
