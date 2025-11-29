@@ -1,3 +1,12 @@
+from __future__ import annotations
+
+# fmt: off
+from typing import Any
+
+# fmt: on
+__version__ = "0.2.1"
+__author__ = "DutchBay EPC Model Team"
+
 #!/usr/bin/env python3
 """
 DutchBay v14 Analytics Layer - Production Release
@@ -6,14 +15,6 @@ Scenario analysis, sensitivity, Monte Carlo, and reporting for v14 finance engin
 
 Note: Uses lazy imports to avoid circular dependencies with finance layer.
 """
-
-from __future__ import annotations
-
-from typing import Any
-
-__version__ = "0.2.1"
-__author__ = "DutchBay EPC Model Team"
-
 # =============================================================================
 # Public API - Lazy Imports to Avoid Circular Dependencies
 # =============================================================================
