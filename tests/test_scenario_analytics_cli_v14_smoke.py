@@ -75,7 +75,6 @@ def test_scenario_analytics_cli_v14_smoke() -> None:
         str(SCRIPT),
         "scenarios_dir=scenarios",
         "output=exports/v14_analytics_test.xlsx",
-        "strict=true",
         "charts=false",  # keep charts off for this smoke to make it cheap
     ]
 

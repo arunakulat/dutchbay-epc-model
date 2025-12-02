@@ -1,11 +1,14 @@
-"""Smoke test for CLI invocation of run_full_pipeline_v14.py."""
-
+#!/usr/bin/env python3
+"""Smoke test for run_full_pipeline_v14.py CLI."""
 import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path("run_full_pipeline_v14.py")
-LENDERCASE_CONFIG = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT = REPO_ROOT / "run_full_pipeline_v14.py"
+LENDERCASE_CONFIG = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 
 def test_cli_v14_pipeline_invocation():
@@ -16,20 +19,13 @@ def test_cli_v14_pipeline_invocation():
         [
             sys.executable,
             str(SCRIPT),
-            "--mode",
-            "base",
-            "--config",
-            str(LENDERCASE_CONFIG),
+            f"config={LENDERCASE_CONFIG}",
         ],
         capture_output=True,
         text=True,
         check=True,
     )
 
-    assert result.returncode == 0
-    # Check that pipeline completed - output goes to logs, not stdout in this mode
     assert (
-        len(result.stderr) > 0
-        or "completed" in result.stdout.lower()
-        or result.returncode == 0
-    )
+        result.returncode == 0
+    ), f"CLI failed:\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"

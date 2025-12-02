@@ -1,58 +1,44 @@
 project:
-  name: DutchBay Edge Extreme Stress
-  capacity_mw: 150
-  capacity_factor_pct: 15
+  capacity_mw: 100
+  capacity_factor_pct: 45
   degradation_pct: 0.5
-  grid_loss_pct: 3.0
+  grid_loss_pct: 2.0
   life_years: 20
-parameters:
-  project_life_years: 20
 tariff:
-  tariff_lkr_per_kwh: 6.5
-opex:
-  usd_per_year: 2500000
-capex:
-  usd_total: 225000000
-  epc_usd: 225000000
-tax:
-  corporate_tax_rate_pct: 28
-  depreciation_years: 20
-  holiday_years: 0
-  enhanced_capital_allowance_pct: 100
-statutory:
-  success_fee_pct: 0.5
-  env_surcharge_pct: 0.2
-  social_levy_pct: 0.0
+  lkr_per_kwh: 50
 fx:
-  start_lkr_per_usd: 375.0
-  annual_depr_pct: 3.0
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+opex:
+  usd_per_year: 10000000
+capex:
+  usd_total: 120000000
+tax:
+  corporate_tax_rate_pct: 24
+  tax_holiday_years: 10
+  tax_holiday_start_year: 1
+  depreciation_years: 20
+  enhanced_capital_allowance_pct: 150
 risk:
-  haircut_pct: 0.0
-construction_periods: 2
-construction_schedule:
-- 40.0
-- 60.0
+  haircut_pct: 10
 Financing_Terms:
-  debt_amount_lkr: 180000000
-  tenor_years: 15
-  margin_pct: 2.5
-  base_rate_pct: 5.0
-  idc_pct: 75
-covenants:
-  dscr_minimum: 1.2
-  dscr_stress: 1.1
-returns:
-  project_life_years: 20
-discount_rate: 0.12
-Financing_Terms:
-  debt_amount_lkr: 180000000
-  tenor_years: 15
-  margin_pct: 2.5
-  base_rate_pct: 5.0
-  idc_pct: 75
-  # >>> ADD THIS BLOCK <<<
+  debt_ratio: 0.75
+  tenor_years: 17
+  construction_periods: 2
+  construction_schedule:
+  - 60.0
+  - 60.0
+  debt_drawdown_pct:
+  - 0.6
+  - 0.4
+  grace_years: 2
+  interest_only_years: 0
+  amortization_style: annuity
+  target_dscr: 1.35
   mix:
-    lkr_max: 0.44      # fill as per intended test expectation/proportion
-    usd_commercial_min: 0.20
-    dfi_max: 0.36
-  # <<< END >>>
+    lkr_max: 0.0
+    dfi_max: 0.0
+    usd_commercial_min: 1.0
+  rates:
+    usd_nominal: 0.07
+discount_rate: 0.12

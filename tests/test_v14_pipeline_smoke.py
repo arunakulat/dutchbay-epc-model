@@ -203,12 +203,16 @@ def test_run_v14_pipeline_annual_rows_not_empty(
         first_row = annual_rows[0]
         assert isinstance(first_row, dict), "Each annual row should be a dict"
 
-        # Common expected keys in cashflow rows
-        expected_keys = {"year", "revenue", "opex", "ebitda"}
+        # Common expected keys in v14 cashflow rows
+        # v14 uses: revenue_usd, revenue_lkr, cfads_usd, opex_usd, etc.
+        expected_keys = {"year", "revenue_usd", "cfads_usd", "opex_usd"}
         present_keys = expected_keys & first_row.keys()
-        assert (
-            len(present_keys) >= 2
-        ), f"Annual rows missing common keys. Found: {list(first_row.keys())}"
+        assert len(present_keys) >= 2, (
+            f"Annual rows missing v14 keys. "
+            f"Expected at least 2 of {expected_keys}, "
+            f"found {len(present_keys)} ({present_keys}). "
+            f"Actual keys: {list(first_row.keys())}"
+        )
 
 
 @pytest.mark.integration

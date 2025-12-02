@@ -16,7 +16,25 @@ from analytics.schema_guard import ConfigValidationError, validate_config_for_v1
 
 # Test fixtures
 MINIMAL_VALID_CONFIG: dict[str, Any] = {
-    "project": {"name": "test_project"},
+    "project": {
+        "name": "test_project",
+        "capacity_factor": 0.40,
+        "capacity_mw": 100,
+        "life_years": 20,
+        "corporate_tax_rate": 0.30,
+    },
+    "capex": {
+        "usd_total": 100_000_000.0,
+    },
+    "opex": {
+        "usd_per_year": 5_000_000.0,
+    },
+    "tax": {
+        "corporate_tax_rate": 0.30,
+    },
+    "tariff": {
+        "lkr_per_kwh": 20.30,
+    },
     "fx": {
         "start_lkr_per_usd": 375.0,
         "annual_depr": 0.03,
@@ -116,14 +134,14 @@ class TestFXValidationAcceptance:
     """Tests for configs that should be ACCEPTED."""
 
     def test_structured_fx_is_accepted(self) -> None:
-        """Standard v14 FX config with both required keys."""
-        cfg: dict[str, Any] = {
-            "project": {"name": "good_fx"},
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": 0.03,
-            },
-        }
+        """
+        Standard v14 FX config with both required keys and minimal cashflow fields.
+
+        This uses MINIMAL_VALID_CONFIG, which satisfies all required
+        cashflow fields (capacity, capex, opex, tax, tariff, life_years)
+        plus a structured FX block.
+        """
+        cfg: dict[str, Any] = dict(MINIMAL_VALID_CONFIG)
 
         # Should NOT raise
         validate_config_for_v14(
@@ -134,12 +152,10 @@ class TestFXValidationAcceptance:
 
     def test_fx_with_zero_depr_is_accepted(self) -> None:
         """Zero depreciation (pegged currency regime)."""
-        cfg: dict[str, Any] = {
-            "project": {"name": "zero_depr"},
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": 0.0,
-            },
+        cfg: dict[str, Any] = dict(MINIMAL_VALID_CONFIG)
+        cfg["fx"] = {
+            "start_lkr_per_usd": 375.0,
+            "annual_depr": 0.0,
         }
 
         # Should NOT raise
@@ -147,12 +163,10 @@ class TestFXValidationAcceptance:
 
     def test_fx_with_negative_depr_is_accepted(self) -> None:
         """Negative depreciation (currency appreciation)."""
-        cfg: dict[str, Any] = {
-            "project": {"name": "appreciation"},
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": -0.02,  # Appreciation scenario
-            },
+        cfg: dict[str, Any] = dict(MINIMAL_VALID_CONFIG)
+        cfg["fx"] = {
+            "start_lkr_per_usd": 375.0,
+            "annual_depr": -0.02,  # Appreciation scenario
         }
 
         # Should NOT raise
@@ -160,14 +174,12 @@ class TestFXValidationAcceptance:
 
     def test_fx_with_extra_keys_is_accepted(self) -> None:
         """Extra keys in FX config should not cause rejection."""
-        cfg: dict[str, Any] = {
-            "project": {"name": "extra_keys"},
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": 0.03,
-                "historical_volatility": 0.12,  # Extra key
-                "regime": "floating",  # Extra key
-            },
+        cfg: dict[str, Any] = dict(MINIMAL_VALID_CONFIG)
+        cfg["fx"] = {
+            "start_lkr_per_usd": 375.0,
+            "annual_depr": 0.03,
+            "historical_volatility": 0.12,  # Extra key
+            "regime": "floating",  # Extra key
         }
 
         # Should NOT raise

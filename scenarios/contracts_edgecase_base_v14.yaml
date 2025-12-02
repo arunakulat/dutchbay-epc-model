@@ -1,0 +1,67 @@
+meta:
+  id: contracts_edgecase_base_v14
+  name: "Contracts Edgecase Base v14"
+  version: "2025Q4"
+  description: "Minimal v14-compliant base scenario for contracts sensitivity edgecase tests."
+
+project:
+  technology: "wind"
+  capacity_mw: 150
+  project_life_years: 25
+  cod_year: 2027
+
+fx:
+  # Strict v14 mapping shape (NO scalar fx allowed)
+  start_lkr_per_usd: 375.0
+  annual_depr: 0.03
+
+tax:
+  corporate_tax_rate: 0.24        # Baseline; tests will flip to zero
+  loss_carryforward_years: 6
+  depreciation_method: "straight_line"
+
+debt:
+  leverage_ratio: 0.70            # 70% debt / 30% equity to mirror lender suite
+  tenor_years: 15
+  grace_period_years: 3
+  interest_rate: 0.07             # nominal USD example
+  base_currency: "USD"
+  repayment_profile: "sculpted"
+  dscr_min_covenant: 1.20
+  dscr_lockup_level: 1.15
+  dsra_months: 6
+
+capex:
+  total_capex_usd: 250_000_000
+  construction_years: 2
+  contingency_pct: 0.05
+
+opex:
+  fixed_opex_usd_per_year: 6_000_000
+  variable_opex_pct_of_revenue: 0.02
+  escalation_rate: 0.02
+
+revenue:
+  tariff_currency: "LKR"
+  base_tariff_lkr_per_kwh: 20.30
+  annual_indexation_pct: 0.00
+  net_capacity_factor: 0.40
+  curtailment_pct: 0.00
+
+annual:
+  # This block is where your strict schema guard typically insists on structure.
+  # Adjust field names to your real v14 schema expectations.
+  energy_yield:
+    expected_gwh: 525.0
+  inflation:
+    general_inflation_rate: 0.05
+  indexing:
+    apply_tariff_indexation: false
+
+valuation:
+  discount_rate: 0.10             # Align with DEFAULT_DISCOUNT_RATE used in KPIs/WACC
+  prudential_discount_rate: 0.12  # For prudential metrics where applicable
+
+equity:
+  equity_contribution_pct: 0.30
+  required_irr_target: 0.16

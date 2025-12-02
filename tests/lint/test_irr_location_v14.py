@@ -44,9 +44,25 @@ class IrrLocationVisitor(cst.CSTVisitor):
                 self.bad_defs.append(node.name.value)
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
-        module = node.module.value if node.module is not None else ""
-        if not module:
+        # Build full module path from CST node
+        if node.module is None:
             return
+
+        # Get the full dotted module name
+        module_parts = []
+        current = node.module
+        while current is not None:
+            if isinstance(current, cst.Name):
+                module_parts.insert(0, current.value)
+                break
+            elif isinstance(current, cst.Attribute):
+                module_parts.insert(0, current.attr.value)
+                current = current.value
+            else:
+                break
+
+        module = ".".join(module_parts)
+
         names = {
             alias.name.value
             for alias in node.names

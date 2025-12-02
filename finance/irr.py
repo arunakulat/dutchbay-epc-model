@@ -42,11 +42,7 @@ _DEFAULT_XIRR_UPPER_BOUND = 2.0  # 200% p.a. cap for dated cashflows
 
 
 def _normalize_cashflows(cashflows: Iterable[float]) -> List[float]:
-    """Return cashflows as a list of floats, filtering out trivial noise.
-
-    This keeps all values, only coercing numerics to float. It does NOT
-    modify the economic content (no rounding, no thresholding).
-    """
+    """Return cashflows as a list of floats, coercing numerics to float."""
     return [float(x) for x in cashflows]
 
 
@@ -125,16 +121,6 @@ def irr(
     Optional[float]
         IRR as a decimal (e.g. 0.12 for 12%) or None if no valid root exists.
 
-    Examples
-    --------
-    With module defaults:
-    >>> irr([-100, 30, 30, 30, 30])
-    0.07155
-
-    With project-specific bounds from YAML:
-    >>> irr([-100, 30, 30, 30, 30], lower_bound=-0.50, upper_bound=0.30)
-    0.07155
-
     Notes
     -----
     - Returns 0.0 for economically flat series (all cashflows ≈ 0)
@@ -171,26 +157,7 @@ def _irr_bisect(
     lower_bound: float = _DEFAULT_IRR_LOWER_BOUND,
     upper_bound: float = _DEFAULT_IRR_UPPER_BOUND,
 ) -> Optional[float]:
-    """Bisection solver for IRR with configurable bounds. Internal use only.
-
-    Ensures:
-    - Search interval is [lower_bound, upper_bound]
-    - Returns None if NPV does not change sign over the interval.
-
-    Parameters
-    ----------
-    cashflows:
-        Normalized cashflow series.
-    lower_bound:
-        Lower search bound.
-    upper_bound:
-        Upper search bound.
-
-    Returns
-    -------
-    Optional[float]
-        IRR or None if no root exists in the interval.
-    """
+    """Bisection solver for IRR with configurable bounds. Internal use only."""
     if not cashflows:
         return None
 
@@ -289,36 +256,6 @@ def xirr(
     """Date-adjusted Internal Rate of Return (XIRR) with configurable bounds.
 
     Uses bisection method for reliability with irregular dates.
-
-
-    Parameters
-    ----------
-    cashflows:
-        Cashflow series (negative = investment, positive = return).
-    dates:
-        Matching sequence of datetime objects; must be same length as cashflows.
-    lower_bound:
-        Minimum acceptable XIRR (default: -0.9999).
-        Override from YAML config for project-specific risk tolerance.
-    upper_bound:
-        Maximum acceptable XIRR (default: 2.0).
-        Override from YAML config for project-specific return caps.
-        Note: Default is more conservative than periodic IRR (2.0 vs 5.0).
-
-    Returns
-    -------
-    Optional[float]
-        Annualized XIRR as a decimal or None if no valid root exists.
-
-    Raises
-    ------
-    ValueError:
-        If cashflows and dates have different lengths.
-
-    Note
-    ----
-    XIRR upper bound defaults to 2.0 (200% p.a.) which is more conservative
-    than periodic IRR (5.0) due to date arithmetic being less precise.
     """
     if len(cashflows) != len(dates):
         raise ValueError("Cashflows and dates must have same length")
@@ -345,24 +282,7 @@ def _xirr_bisect(
     lower_bound: float = _DEFAULT_IRR_LOWER_BOUND,
     upper_bound: float = _DEFAULT_XIRR_UPPER_BOUND,
 ) -> Optional[float]:
-    """Bisection solver for XIRR with configurable bounds. Internal use only.
-
-    Parameters
-    ----------
-    cashflows:
-        Normalized cashflow series.
-    dates:
-        Matching datetime sequence.
-    lower_bound:
-        Lower search bound.
-    upper_bound:
-        Upper search bound.
-
-    Returns
-    -------
-    Optional[float]
-        XIRR or None if no root exists in the interval.
-    """
+    """Bisection solver for XIRR with configurable bounds. Internal use only."""
     lo, hi = float(lower_bound), float(upper_bound)
 
     npv_lo = xnpv(lo, cashflows, dates)
@@ -395,9 +315,103 @@ def _xirr_bisect(
     return (lo + hi) / 2.0
 
 
+# ============================================================================
+# Project-Level IRR/NPV Helpers (R7: Singleton Pattern)
+# ============================================================================
+# These helpers are used by analytics.core.metrics but must be defined here
+# per R7 singleton contract: all IRR/NPV calculation logic lives in finance.irr
+
+
+def project_npv_from_cfads(
+    rate: float,
+    cfads_series: Sequence[float],
+    capex_total: float,
+) -> float:
+    """Compute project NPV as NPV(CFADS) - capex_total.
+
+    This is the canonical project NPV calculation where:
+    - NPV(CFADS) represents discounted value of all CFADS over project life.
+    - capex_total is the upfront capital investment (positive value).
+
+    Higher capex reduces project NPV (holding CFADS and discount rate constant).
+    """
+    try:
+        npv_cfads = float(npv(rate, cfads_series))
+    except Exception:
+        # Defensive: if NPV calculation fails, treat as neutral.
+        return 0.0
+
+    try:
+        capex = float(capex_total)
+    except (TypeError, ValueError):
+        capex = 0.0
+
+    return npv_cfads - capex
+
+
+def approx_project_irr(
+    cfads_series: Sequence[float],
+    capex_total: float,
+    *,
+    r_low: float = 0.0,
+    r_high: float = 0.5,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> float:
+    """Approximate project IRR where NPV(CFADS) - capex_total ≈ 0.
+
+    Uses bisection method to find the discount rate that makes project NPV ~ 0.
+
+    Returns 0.0 if:
+    - capex_total <= 0
+    - cfads_series is empty
+    - no sign change / no sensible root can be found.
+    """
+    try:
+        capex = float(capex_total)
+    except (TypeError, ValueError):
+        capex = 0.0
+
+    if capex <= 0.0 or not cfads_series:
+        return 0.0
+
+    def npv_gap(rate: float) -> float:
+        return project_npv_from_cfads(rate, cfads_series, capex)
+
+    try:
+        f_low = npv_gap(r_low)
+        f_high = npv_gap(r_high)
+    except Exception:
+        return 0.0
+
+    # If no sign change, bail out – report 0.0 IRR
+    if f_low == 0.0:
+        return float(r_low)
+    if f_high == 0.0:
+        return float(r_high)
+    if not _have_opposite_signs(f_low, f_high):
+        return 0.0
+
+    a, b = float(r_low), float(r_high)
+    fa = f_low
+    for _ in range(int(max_iter)):
+        mid = 0.5 * (a + b)
+        fm = npv_gap(mid)
+        if abs(fm) < tol:
+            return mid
+        if _have_opposite_signs(fa, fm):
+            b = mid
+        else:
+            a, fa = mid, fm
+
+    return 0.5 * (a + b)
+
+
 __all__ = [
     "npv",
     "irr",
     "xnpv",
     "xirr",
+    "project_npv_from_cfads",
+    "approx_project_irr",
 ]

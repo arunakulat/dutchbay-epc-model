@@ -10,6 +10,7 @@ Enhancements (Go With The Flow):
 - Robust DSCR/CFADS inference (resistant to legacy or new schema)
 - Parallel batch support (toggle for large scenario sets)
 - Structured logging of progress and failures
+- CLI compatibility with a `strict` flag (plumbed in but behaviour owned by schema guard)
 
 All previous features retained (EPC breakdown, Excel/charts, robust error handling).
 
@@ -79,23 +80,24 @@ class BatchResultSummary:
 
 class ScenarioAnalytics:
     """
-      V14-style orchestrator for batch scenario analytics
-      with full Go With The Flow features.
+    V14-style orchestrator for batch scenario analytics
+    with full Go With The Flow features.
 
-      Responsibilities:
-      - Discover scenario config files under a directory.
-      - Load configs via the shared loader.
-      - Enforce v14 schema guard on each config (validate_config_for_v14).
-      - Run cashflow_v14 + debt_v14 for each scenario.
-      - Compute KPIs via analytics.core.metrics.
-      - Aggregate per-scenario summary_df and timeseries_df.
-      - Optionally export Excel/charts/JSON via export_helpers.
+    Responsibilities:
+    - Discover scenario config files under a directory.
+    - Load configs via the shared loader.
+    - Enforce v14 schema guard on each config (validate_config_for_v14).
+    - Run cashflow_v14 + debt_v14 for each scenario.
+    - Compute KPIs via analytics.core.metrics.
+    - Aggregate per-scenario summary_df and timeseries_df.
+    - Optionally export Excel/charts/JSON via export_helpers.
 
-      Notes on schema validation (R5, R22):
-      - validate_config_for_v14 is always applied; scenarios that violate v14
-        schema (e.g. missing FX mapping) are considered invalid and will fail.
-    - Tests must supply v14-compliant configs per R22; there is no mechanism
-      to bypass schema validation.
+    Notes on schema validation (R5, R22):
+    - validate_config_for_v14 is always applied; scenarios that violate v14
+      schema (e.g. missing FX mapping) are considered invalid and will fail.
+    - The `strict` flag is accepted for CLI compatibility and may be used
+      by callers to select validation modes; this class itself does not
+      reinterpret schema_guard defaults.
     """
 
     def __init__(
@@ -105,12 +107,15 @@ class ScenarioAnalytics:
         scenario_filter: Optional[Callable[[str], bool]] = None,
         parallel: bool = False,
         global_default_discount_rate: float = 0.10,
+        strict: bool = True,
     ) -> None:
         self.scenarios_dir = Path(scenarios_dir)
         self.output_path = Path(output_path) if output_path is not None else None
         self.parallel = bool(parallel)
         self.global_default_discount_rate = float(global_default_discount_rate)
         self._scenario_filter = scenario_filter
+        # Keep a strict flag for callers / CLIs; schema_guard owns semantics.
+        self.strict = bool(strict)
 
     # ------------------------------------------------------------------
     # Scenario discovery and filters
@@ -301,9 +306,10 @@ class ScenarioAnalytics:
 
         batch_run = self.parallel and len(scenario_paths) > 4
         logger.info(
-            "Running %d scenario(s) %s.",
+            "Running %d scenario(s) %s. strict=%s",
             len(scenario_paths),
             "in parallel" if batch_run else "serially",
+            self.strict,
         )
 
         if batch_run:

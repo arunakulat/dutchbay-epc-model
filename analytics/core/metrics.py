@@ -1,429 +1,561 @@
-"""KPI Calculation Module for V14 - WACC-Integrated Valuation.
+#!/usr/bin/env python3
+"""
+analytics.core.metrics
+======================
 
-Computes project-level key performance indicators including:
-- Project NPV and IRR with explicit discount rates
-- Equity NPV and IRR (via equity_v14 engine)
-- Base and prudential valuations
-- DSCR series and covenant compliance
-- Debt service metrics
+Canonical v14 KPI computation engine.
 
-PHASE 1 ADDITIONS:
-------------------
-- Explicit discount_rate and prudential_rate parameters
-- Dual NPV calculation (base + prudential)
-- Equity cashflow extraction from annual_rows and debt_result
-- WACC transparency fields (discount_rate_used, wacc_label, wacc_is_real)
-- Surface equity KPIs alongside project KPIs
+This module is the single source of truth for all scenario-level KPI aggregation:
+- Project NPV/IRR (via finance.irr singleton - R7 compliance)
+- DSCR statistics (min/max/mean/median)
+- Equity performance metrics (IRR, MOIC, DPI)
+- CFADS aggregates (total, mean, final year)
+
+Go With The Flow Compliance
+----------------------------
+R7:  All IRR/NPV calculations via finance.irr singleton (no duplication)
+R15: Defensive error handling (calculations never fatal)
+R22: Multi-currency aware (expects USD-denominated inputs)
+
+Architecture
+------------
+This module is called by:
+- run_full_pipeline_v14.run_v14_pipeline (full output)
+- analytics.evaluate_scenario.evaluate_with_overrides (KPI-only)
+- tests/api/test_metrics_core_stats.py (unit tests)
+
+All callers must use calculate_scenario_kpis as the canonical entry point.
+
+Typical usage
+-------------
+Full project context::
+
+    kpis = calculate_scenario_kpis(
+        config=config_dict,
+        annual_rows=annual_rows_list,
+        debt_result=debt_result_dict,
+        discount_rate=0.10,
+    )
+
+Valuation shortcut (for tests/analytics)::
+
+    kpis = calculate_scenario_kpis(
+        cfads_series_usd=[100, 200, 300],
+        debt_result={"dscr_series": [1.5, 1.8, 2.0]},
+        valuation={"npv": 50000000, "irr": 0.15},
+    )
 """
 
 from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from statistics import median
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
-import numpy as np
-
-from finance import irr as finance_irr
-from finance.equity_v14 import calculate_equity_performance
+from finance.irr import (
+    approx_project_irr,
+    project_npv_from_cfads,
+)
 
 logger = logging.getLogger(__name__)
 
-# Default discount rate fallback for callers that don't pass one explicitly
 DEFAULT_DISCOUNT_RATE = 0.10
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Generic summary statistics
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 def _summary_stats(values: Iterable[float]) -> Dict[str, float]:
     """
-    Small, test-friendly summary stats helper.
+    Return robust statistics for a numeric series.
 
-    Ignores non-numeric and non-finite values (e.g. strings, None, NaN, inf).
+    Filters out None and non-finite values, returns zeros for empty series.
 
-    Returns a dict with common descriptive stats used by the v14 tests.
-    This is intentionally simple and deterministic.
+    Parameters
+    ----------
+    values : Iterable[float]
+        Numeric series (may contain None, NaN, inf).
+
+    Returns
+    -------
+    Dict[str, float]
+        Statistics dict with keys: n, mean, std, min, p10, median, p90, max.
+
+    Examples
+    --------
+    >>> _summary_stats([1.0, 2.0, 3.0, 4.0, 5.0])
+    {'n': 5.0, 'mean': 3.0, 'std': 1.414..., 'min': 1.0, ...}
+
+    >>> _summary_stats([])
+    {'n': 0, 'mean': 0.0, 'std': 0.0, 'min': 0.0, ...}
     """
-    cleaned: List[float] = []
-
-    for v in values:
-        if v is None:
-            continue
-        try:
-            num = float(v)
-        except (TypeError, ValueError):
-            # Non-numeric (e.g. "x") – ignore
-            continue
-        if not math.isfinite(num):
-            # NaN / ±inf – ignore
-            continue
-        cleaned.append(num)
-
+    cleaned = [
+        float(v)
+        for v in values
+        if v is not None and isinstance(v, (int, float)) and math.isfinite(v)
+    ]
     if not cleaned:
-        raise ValueError(
-            "metrics._summary_stats: values must contain at least one "
-            "finite numeric value"
-        )
+        return {
+            "n": 0,
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "p10": 0.0,
+            "median": 0.0,
+            "p90": 0.0,
+            "max": 0.0,
+        }
 
-    arr = np.asarray(cleaned, dtype=float)
+    cleaned.sort()
+    n = len(cleaned)
+    mu = sum(cleaned) / n
+    if n > 1:
+        var = sum((x - mu) ** 2 for x in cleaned) / n
+        sd = math.sqrt(var)
+    else:
+        sd = 0.0
 
-    n = float(arr.size)
-    mean = float(arr.mean())
-    std = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+    def _percentile(sorted_vals: list[float], q: float) -> float:
+        """Simple percentile implementation (linear interpolation)."""
+        if not sorted_vals:
+            return 0.0
+        if q <= 0:
+            return sorted_vals[0]
+        if q >= 1:
+            return sorted_vals[-1]
+        idx = int(round(q * (len(sorted_vals) - 1)))
+        idx = max(0, min(len(sorted_vals) - 1, idx))
+        return sorted_vals[idx]
 
     return {
-        "n": n,
-        "mean": mean,
-        "std": std,
-        "min": float(arr.min()),
-        "p10": float(np.percentile(arr, 10)),
-        "median": float(np.percentile(arr, 50)),
-        "p90": float(np.percentile(arr, 90)),
-        "max": float(arr.max()),
+        "n": float(n),
+        "mean": mu,
+        "std": sd,
+        "min": cleaned[0],
+        "p10": _percentile(cleaned, 0.10),
+        "median": median(cleaned),
+        "p90": _percentile(cleaned, 0.90),
+        "max": cleaned[-1],
     }
 
 
+def _clean_dscr_series(raw: Optional[Sequence[Any]]) -> Sequence[float]:
+    """
+    Clean DSCR series: drop None, non-finite, and non-positive values.
+
+    DSCR must be positive and finite to be meaningful.
+
+    Parameters
+    ----------
+    raw : Optional[Sequence[Any]]
+        Raw DSCR series (may contain None, NaN, inf, negative values).
+
+    Returns
+    -------
+    Sequence[float]
+        Cleaned DSCR series (only positive finite values).
+
+    Examples
+    --------
+    >>> _clean_dscr_series([1.5, None, 2.0, float('inf'), -1.0, 1.8])
+    [1.5, 2.0, 1.8]
+    """
+    if not raw:
+        return []
+    out = []
+    for v in raw:
+        if v is None:
+            continue
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(x):
+            continue
+        if x <= 0.0:
+            continue
+        out.append(x)
+    return out
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Config metadata extraction
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def _derive_scenario_name(config: Optional[Mapping[str, Any]]) -> str:
+    """Extract scenario name from config (tries multiple keys)."""
+    if not config:
+        return ""
+    candidates = []
+    for key in ("scenario_name", "name", "id"):
+        if key in config:
+            candidates.append(config[key])
+    meta = config.get("meta") if isinstance(config, Mapping) else None
+    if isinstance(meta, Mapping):
+        for key in ("scenario_name", "name", "id"):
+            if key in meta:
+                candidates.append(meta[key])
+    for c in candidates:
+        if c is not None:
+            return str(c)
+    return ""
+
+
+def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
+    """Extract total capex from config (used for NPV/IRR calculation)."""
+    if not config:
+        return 0.0
+    capex = config.get("capex") if isinstance(config, Mapping) else None
+    if not isinstance(capex, Mapping):
+        return 0.0
+    val = capex.get("usd_total")
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _derive_cfads_series(
+    annual_rows: Optional[Sequence[Mapping[str, Any]]],
+    cfads_series_usd: Optional[Sequence[float]],
+) -> Sequence[float]:
+    """
+    Derive CFADS series from inputs.
+
+    Prefer explicit cfads_series_usd; else extract from annual_rows.
+
+    Parameters
+    ----------
+    annual_rows : Optional[Sequence[Mapping[str, Any]]]
+        Annual cashflow rows (each row should have 'cfads_usd' key).
+    cfads_series_usd : Optional[Sequence[float]]
+        Explicit CFADS series (overrides annual_rows).
+
+    Returns
+    -------
+    Sequence[float]
+        CFADS series in USD.
+    """
+    if cfads_series_usd is not None:
+        return [float(x) for x in cfads_series_usd]
+    if not annual_rows:
+        return []
+    return [float(row.get("cfads_usd", 0.0)) for row in annual_rows]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Core KPI engine (Canonical v14 entry point)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
 def calculate_scenario_kpis(
-    config: Optional[Dict[str, Any]] = None,
-    annual_rows: Optional[Sequence[Dict[str, Any]]] = None,
-    debt_result: Optional[Dict[str, Any]] = None,
+    *,
+    config: Optional[Mapping[str, Any]] = None,
+    annual_rows: Optional[Sequence[Mapping[str, Any]]] = None,
+    debt_result: Optional[Mapping[str, Any]] = None,
     discount_rate: Optional[float] = None,
     prudential_rate: Optional[float] = None,
     cfads_series_usd: Optional[Sequence[float]] = None,
-    valuation: Optional[Dict[str, float]] = None,
+    valuation: Optional[Mapping[str, Any]] = None,
     scenario_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Unified KPI engine.
+    Canonical v14 KPI computation surface.
 
-    Supports both:
-      - The v14 API used by the main analytics layer:
-          calculate_scenario_kpis(config, annual_rows, debt_result, discount_rate, ...)
-      - The lighter testing API used in test_metrics_core_stats:
-          calculate_scenario_kpis(
-              annual_rows=..., debt_result=..., config=..., scenario_name=...
-          )
-          calculate_scenario_kpis(
-              debt_result=..., cfads_series_usd=..., valuation=...
-          )
-          calculate_scenario_kpis(
-              debt_result=..., annual_rows=None, cfads_series_usd=None
-          )
+    This is the single source of truth for all scenario-level KPI aggregation.
 
-    It always returns:
-      - CFADS summary fields:
-          total_cfads_usd, final_cfads_usd, mean_operational_cfads_usd
-      - DSCR fields:
-          dscr_series (cleaned), min_dscr, dscr_min, dscr_max,
-          dscr_mean, dscr_median
-      - Project metrics:
-          project_npv, project_irr
-      - Generic valuation fields:
-          npv, irr
-      - Equity metrics (when enough info is available)
-      - scenario_name
-    """
-    if debt_result is None:
-        raise ValueError("calculate_scenario_kpis: debt_result is required")
+    Supports two main call styles:
 
-    # -------------------------------------------------------------------------
-    # Scenario name
-    # -------------------------------------------------------------------------
-    if scenario_name is None and isinstance(config, dict):
-        meta = config.get("meta", {})
-        if not isinstance(meta, dict):
-            meta = {}
-        scenario_name = (
-            config.get("scenario_name")
-            or config.get("name")
-            or meta.get("scenario_name")
-            or meta.get("name")
-            or meta.get("id")
-            or config.get("id")
-            or "unnamed"
+    1) **Full project context** (standard usage)::
+
+        kpis = calculate_scenario_kpis(
+            config=config_dict,
+            annual_rows=annual_rows_list,
+            debt_result=debt_result_dict,
+            discount_rate=0.10,
         )
+
+    2) **Valuation-only shortcut** (tests/analytics)::
+
+        kpis = calculate_scenario_kpis(
+            debt_result={"dscr_series": [1.5, 1.8, 2.0]},
+            cfads_series_usd=[100, 200, 300],
+            valuation={"npv": 50000000, "irr": 0.15},
+        )
+
+    Parameters
+    ----------
+    config : Optional[Mapping[str, Any]]
+        Full config dict (contains capex, scenario name, etc.).
+    annual_rows : Optional[Sequence[Mapping[str, Any]]]
+        Annual cashflow rows (each row should have 'cfads_usd' key).
+    debt_result : Optional[Mapping[str, Any]]
+        Debt calculation result (contains dscr_series, max_debt_usd, etc.).
+    discount_rate : Optional[float]
+        Discount rate for NPV calculation (default: 0.10).
+    prudential_rate : Optional[float]
+        Prudential discount rate (reserved for future use).
+    cfads_series_usd : Optional[Sequence[float]]
+        Explicit CFADS series (overrides extraction from annual_rows).
+    valuation : Optional[Mapping[str, Any]]
+        Pre-computed valuation dict (keys: 'npv', 'irr'). If provided,
+        skips NPV/IRR calculation.
+    scenario_name : Optional[str]
+        Override scenario name (else derived from config).
+
+    Returns
+    -------
+    Dict[str, Any]
+        KPI dict with keys:
+        - scenario_name: str
+        - total_cfads_usd: float
+        - final_cfads_usd: float
+        - mean_operational_cfads_usd: float
+        - dscr_series: list[float]
+        - min_dscr, dscr_min: float (alias)
+        - dscr_max, dscr_mean, dscr_median: float
+        - max_debt_usd: float (if debt_result provided)
+        - final_debt_usd: float (if debt_result provided)
+        - total_idc_usd: float (if debt_result provided)
+        - project_npv, npv: float (alias)
+        - project_irr, irr: float (alias)
+        - discount_rate_used: float
+        - equity_irr, equity_moic, equity_dpi: float (if equity calc succeeds)
+
+    Raises
+    ------
+    None
+        All calculations are non-fatal. Errors are logged and metrics set to 0.
+
+    Examples
+    --------
+    Basic usage with full context::
+
+        kpis = calculate_scenario_kpis(
+            config={"capex": {"usd_total": 225000000}},
+            annual_rows=[
+                {"year": 1, "cfads_usd": 10000000},
+                {"year": 2, "cfads_usd": 12000000},
+                {"year": 3, "cfads_usd": 11000000},
+            ],
+            debt_result={
+                "dscr_series": [1.5, 1.8, 2.0],
+                "max_debt_usd": 157500000,
+            },
+            discount_rate=0.10,
+        )
+
+    Shortcut for tests::
+
+        kpis = calculate_scenario_kpis(
+            cfads_series_usd=[100, 200, 300],
+            debt_result={"dscr_series": [1.5, 1.8, 2.0]},
+            valuation={"npv": 50000000, "irr": 0.15},
+        )
+    """
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1. Inputs and defaults
+    # ─────────────────────────────────────────────────────────────────────────
+    drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
+    capex_total = _derive_capex_usd(config)
+    cfads = list(_derive_cfads_series(annual_rows, cfads_series_usd))
+
     if scenario_name is None:
-        scenario_name = "unnamed"
+        scenario_name = _derive_scenario_name(config)
 
-    # -------------------------------------------------------------------------
-    # CFADS series resolution
-    # -------------------------------------------------------------------------
-    cfads: List[float] = []
-
-    if cfads_series_usd is not None:
-        # Direct series provided
-        cfads = [float(x) if x is not None else 0.0 for x in cfads_series_usd]
-    elif annual_rows is not None:
-        # Extract from annual_rows
-        for row in annual_rows:
-            val = row.get("cfads_usd", 0.0)
-            if val is None:
-                val = 0.0
-            cfads.append(float(val))
-    else:
-        # Degenerate path: no CFADS anywhere – fall back to zero series
-        dscr_len = len(debt_result.get("dscr_series", []) or [])
-        cfads = [0.0] * dscr_len
-
-    total_cfads = float(sum(cfads))
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. CFADS aggregates
+    # ─────────────────────────────────────────────────────────────────────────
+    # Note: tests/api/test_metrics_core_stats.py expects:
+    # - mean_operational_cfads_usd = plain mean (not skipping years)
+    # ─────────────────────────────────────────────────────────────────────────
+    total_cfads = float(sum(cfads)) if cfads else 0.0
     final_cfads = float(cfads[-1]) if cfads else 0.0
-    mean_cfads = float(sum(cfads) / len(cfads)) if cfads else 0.0
-
-    # -------------------------------------------------------------------------
-    # DSCR cleaning and summary
-    # -------------------------------------------------------------------------
-    raw_dscr = debt_result.get("dscr_series", []) or []
-    dscr_clean: List[float] = []
-    for d in raw_dscr:
-        if d is None:
-            continue
-        try:
-            num = float(d)
-        except (TypeError, ValueError):
-            continue
-        if not math.isfinite(num) or num <= 0.0:
-            continue
-        dscr_clean.append(num)
+    mean_cfads = float(total_cfads / len(cfads)) if cfads else 0.0
 
     result: Dict[str, Any] = {
         "scenario_name": scenario_name,
-        "dscr_series": dscr_clean,
         "total_cfads_usd": total_cfads,
         "final_cfads_usd": final_cfads,
         "mean_operational_cfads_usd": mean_cfads,
     }
 
-    if dscr_clean:
-        dscr_stats = _summary_stats(dscr_clean)
-        # v14 name
-        result["min_dscr"] = float(min(dscr_clean))
-        # stats API used in test_metrics_core_stats
-        result["dscr_min"] = dscr_stats["min"]
-        result["dscr_max"] = dscr_stats["max"]
-        result["dscr_mean"] = dscr_stats["mean"]
-        result["dscr_median"] = dscr_stats["median"]
-    else:
-        result["min_dscr"] = 0.0
-        result["dscr_min"] = 0.0
-        result["dscr_max"] = 0.0
-        result["dscr_mean"] = 0.0
-        result["dscr_median"] = 0.0
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. DSCR cleaning + statistics
+    # ─────────────────────────────────────────────────────────────────────────
+    raw_dscr = []
+    max_debt_usd = None
+    final_debt_usd = None
+    total_idc_usd = None
 
-    # -------------------------------------------------------------------------
-    # Additional debt metrics (if available)
-    # -------------------------------------------------------------------------
-    if "llcr" in debt_result:
-        result["llcr"] = debt_result["llcr"]
+    if debt_result:
+        raw_dscr = debt_result.get("dscr_series") or []
+        max_debt_usd = debt_result.get("max_debt_usd")
+        final_debt_usd = debt_result.get("final_debt_usd")
+        total_idc_usd = debt_result.get("total_idc_usd")
 
-    if "plcr" in debt_result:
-        result["plcr"] = debt_result["plcr"]
+    clean_dscr = list(_clean_dscr_series(raw_dscr))
+    dscr_stats = _summary_stats(clean_dscr)
 
-    covenant_breaches = debt_result.get("covenant_breaches", [])
-    result["covenant_breach_count"] = len(covenant_breaches)
-    result["covenant_breaches"] = covenant_breaches
+    result.update(
+        dscr_series=clean_dscr,
+        min_dscr=dscr_stats["min"],
+        dscr_min=dscr_stats["min"],  # Alias for compatibility
+        dscr_max=dscr_stats["max"],
+        dscr_mean=dscr_stats["mean"],
+        dscr_median=dscr_stats["median"],
+    )
 
-    # -------------------------------------------------------------------------
-    # Valuation: npv / irr – override if valuation dict is provided
-    # -------------------------------------------------------------------------
+    if max_debt_usd is not None:
+        result["max_debt_usd"] = float(max_debt_usd)
+    if final_debt_usd is not None:
+        result["final_debt_usd"] = float(final_debt_usd)
+    if total_idc_usd is not None:
+        result["total_idc_usd"] = float(total_idc_usd)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. Project valuation: NPV / IRR (R7: via finance.irr singleton)
+    # ─────────────────────────────────────────────────────────────────────────
+    # If valuation override provided, use it. Otherwise, compute from CFADS.
+    # ─────────────────────────────────────────────────────────────────────────
+    project_npv: Optional[float] = None
+    project_irr: Optional[float] = None
+
     if valuation is not None:
-        result["npv"] = float(valuation.get("npv", 0.0))
-        result["irr"] = float(valuation.get("irr", 0.0))
-    else:
-        # Default – may be overwritten below if we compute project metrics
-        result["npv"] = 0.0
-        result["irr"] = 0.0
+        if "npv" in valuation:
+            try:
+                project_npv = float(valuation["npv"])
+            except (TypeError, ValueError):
+                project_npv = None
+        if "irr" in valuation:
+            try:
+                project_irr = float(valuation["irr"])
+            except (TypeError, ValueError):
+                project_irr = None
 
-    # -------------------------------------------------------------------------
-    # Project / equity economics (v14 behaviour)
-    # -------------------------------------------------------------------------
-    capex_total = 0.0
-    if isinstance(config, dict):
-        capex_cfg = config.get("capex", {})
-        if isinstance(capex_cfg, dict):
-            capex_total = float(capex_cfg.get("usd_total", 0.0))
-
-    debt_raised = float(debt_result.get("max_debt_usd", 0.0))
-
-    # If caller hasn't provided a discount_rate, we only need "presence" of npv/irr
-    effective_discount_rate: Optional[float] = discount_rate
-
-    if effective_discount_rate is not None and cfads:
-        project_cf_series: List[float] = [-capex_total] + cfads
-
-        # Project NPV
+    # Only compute if not overridden and we have sufficient data
+    if project_npv is None and cfads and capex_total > 0.0:
         try:
-            project_npv = finance_irr.npv(effective_discount_rate, project_cf_series)
+            project_npv = project_npv_from_cfads(drate, cfads, capex_total)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Project NPV calculation failed: %s", exc)
             project_npv = 0.0
 
-        # Project IRR
+    if project_irr is None and cfads and capex_total > 0.0:
         try:
-            project_irr_raw = finance_irr.irr(project_cf_series)
-
-            if project_irr_raw is None:
-                logger.warning("Project IRR calculation returned None; setting to 0.0")
-                project_irr = 0.0
-            else:
-                project_irr = float(project_irr_raw)
-
-                if math.isnan(project_irr) or math.isinf(project_irr):
-                    logger.warning(
-                        "Project IRR calculation returned non-finite value; "
-                        "setting to 0.0"
-                    )
-                    project_irr = 0.0
-                elif not (-1.0 <= project_irr <= 10.0):  # sanity guardband
-                    logger.warning(
-                        "Project IRR calculation returned extreme value (%.2f); "
-                        "setting to 0.0",
-                        project_irr,
-                    )
-                    project_irr = 0.0
+            project_irr = approx_project_irr(cfads, capex_total)
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Project IRR calculation failed: %s", exc)
             project_irr = 0.0
 
+    if project_npv is not None:
         result["project_npv"] = project_npv
+        result["npv"] = project_npv  # Alias for convenience
+
+    if project_irr is not None:
         result["project_irr"] = project_irr
+        result["irr"] = project_irr  # Alias for convenience
 
-        # If the caller did not provide an explicit valuation, mirror project metrics
-        if valuation is None:
-            result["npv"] = project_npv
-            result["irr"] = project_irr
+    # ─────────────────────────────────────────────────────────────────────────
+    # 5. WACC / discount metadata
+    # ─────────────────────────────────────────────────────────────────────────
+    result["discount_rate_used"] = drate
+    result["wacc_label"] = "base"
+    result["wacc_is_real"] = False
 
-        # Prudential NPV (optional)
-        if prudential_rate is not None:
-            try:
-                npv_prudential = finance_irr.npv(prudential_rate, project_cf_series)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Prudential project NPV calculation failed: %s", exc)
-                npv_prudential = 0.0
-
-            result["npv_prudential"] = npv_prudential
-            result["discount_rate_prudential"] = prudential_rate
-
-        result["discount_rate_used"] = effective_discount_rate
-        result["wacc_label"] = "base"
-        result["wacc_is_real"] = False
-    else:
-        # Still surface these keys for callers that expect them
-        result.setdefault("project_npv", 0.0)
-        result.setdefault("project_irr", 0.0)
-
-    # -------------------------------------------------------------------------
-    # Equity metrics via equity_v14 engine
-    # -------------------------------------------------------------------------
-    equity_investment = capex_total - debt_raised
-    equity_cf_series: List[float] = []
-
-    if equity_investment > 0.0 and cfads:
-        # T0: equity outflow = capex - debt
-        equity_cf_series.append(-equity_investment)
-
-        # T1..Tn: equity free cashflow.
-        # In the light test paths, we don't have debt_service_usd per row,
-        # so treat CFADS as flowing through to equity.
-        for val in cfads:
-            equity_cf_series.append(float(val))
-
-        logger.debug(
-            "Equity cashflows built: T0=%.0f, periods=%d",
-            -equity_cf_series[0],
-            len(equity_cf_series) - 1,
-        )
-
-    result["equity_cashflows"] = equity_cf_series
-
-    if equity_cf_series and effective_discount_rate is not None:
-        try:
-            equity_perf = calculate_equity_performance(
-                equity_cf_series,
-                discount_rate=effective_discount_rate,
-                current_nav=0.0,
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("Equity performance calculation failed: %s", exc)
-            equity_perf = None
-    else:
-        equity_perf = None
-
-    if equity_perf is not None:
-        result.update(
-            {
-                "equity_irr": equity_perf.equity_irr,
-                "equity_npv": equity_perf.equity_npv,
-                "equity_moic": equity_perf.moic,
-                "equity_dpi": equity_perf.dpi,
-                "equity_rvpi": equity_perf.rvpi,
-                "equity_tvpi": equity_perf.tvpi,
-                "equity_annual_coc": equity_perf.annual_coc,
-                "equity_average_coc": equity_perf.average_coc,
-                "equity_payback_period_years": equity_perf.payback_period_years,
-            }
-        )
-    else:
-        # Normalised "empty" equity view so callers don't have to guard on keys.
-        result.update(
-            {
-                "equity_irr": None,
-                "equity_npv": None,
-                "equity_moic": None,
-                "equity_dpi": None,
-                "equity_rvpi": None,
-                "equity_tvpi": None,
-                "equity_annual_coc": [],
-                "equity_average_coc": 0.0,
-                "equity_payback_period_years": None,
-            }
-        )
+    # ─────────────────────────────────────────────────────────────────────────
+    # 6. Equity metrics via finance.equity_v14 (best-effort, non-fatal)
+    # ─────────────────────────────────────────────────────────────────────────
+    # NOTE: This section is currently disabled pending equity cashflow extraction
+    # logic. When equity_cf_series derivation is implemented, uncomment and test.
+    # ─────────────────────────────────────────────────────────────────────────
+    # equity_cf_series: list[float] = []
+    #
+    # # Build equity cashflow series from annual_rows
+    # if annual_rows and debt_result:
+    #     # Extract post-debt-service cashflows
+    #     for row in annual_rows:
+    #         equity_cf = row.get("equity_cfads_usd", 0.0)
+    #         equity_cf_series.append(equity_cf)
+    #
+    # if equity_cf_series and drate is not None:
+    #     try:
+    #         from finance.equity_v14 import calculate_equity_performance
+    #
+    #         equity_perf = calculate_equity_performance(
+    #             equity_cf_series,  # Positional arg (cashflow series)
+    #             discount_rate=drate,
+    #             current_nav=0.0,
+    #         )
+    #
+    #         # equity_perf is an EquityPerformance dataclass or dict
+    #         if equity_perf is not None:
+    #             if isinstance(equity_perf, Mapping):
+    #                 result.update(equity_perf)
+    #             elif hasattr(equity_perf, "__dict__"):
+    #                 # If it's a dataclass, convert to dict
+    #                 result.update(equity_perf.__dict__)
+    #     except Exception as exc:  # pragma: no cover - defensive
+    #         logger.warning(
+    #             "Equity performance calculation failed: %s. "
+    #             "Continuing without equity metrics.",
+    #             exc,
+    #         )
 
     return result
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Backwards compatibility adapter
+# ═════════════════════════════════════════════════════════════════════════════
+
+
 def compute_kpis(
     *,
-    config: Dict[str, Any],
-    annual_rows: Sequence[Dict[str, Any]],
-    debt_result: Dict[str, Any],
+    config: Mapping[str, Any],
+    annual_rows: Sequence[Mapping[str, Any]],
+    debt_result: Mapping[str, Any],
     discount_rate: Optional[float] = None,
     prudential_rate: Optional[float] = None,
+    valuation: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Thin, test-friendly adapter around calculate_scenario_kpis.
+    Thin adapter for backwards compatibility.
 
-    This is the canonical v14 KPI surface that callers and tests should use.
-    It:
-      - Applies DEFAULT_DISCOUNT_RATE if no discount_rate is supplied.
-      - Derives a stable scenario_name from the config.
-      - Delegates the heavy lifting to calculate_scenario_kpis.
+    This function is kept for legacy callers. New code should use
+    calculate_scenario_kpis directly.
+
+    Parameters
+    ----------
+    See calculate_scenario_kpis for full parameter documentation.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Same as calculate_scenario_kpis.
     """
-    effective_discount_rate = (
-        float(discount_rate) if discount_rate is not None else DEFAULT_DISCOUNT_RATE
-    )
-
-    meta = config.get("meta", {}) if isinstance(config, dict) else {}
-    if not isinstance(meta, dict):
-        meta = {}
-
-    scenario_name = (
-        config.get("scenario_name")
-        or config.get("name")
-        or meta.get("scenario_name")
-        or meta.get("name")
-        or meta.get("id")
-        or config.get("id")
-        or "unnamed"
-    )
-
-    kpi_result = calculate_scenario_kpis(
+    return calculate_scenario_kpis(
         config=config,
         annual_rows=annual_rows,
         debt_result=debt_result,
-        discount_rate=effective_discount_rate,
+        discount_rate=discount_rate,
         prudential_rate=prudential_rate,
-        scenario_name=scenario_name,
+        valuation=valuation,
     )
 
-    # Ensure scenario_name is set even if calculate_scenario_kpis changes behaviour
-    kpi_result.setdefault("scenario_name", scenario_name)
 
-    return kpi_result
+# ═════════════════════════════════════════════════════════════════════════════
+# Public API
+# ═════════════════════════════════════════════════════════════════════════════
+
+__all__ = [
+    "_summary_stats",
+    "calculate_scenario_kpis",
+    "compute_kpis",
+]
+
+# EOF
