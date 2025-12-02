@@ -41,11 +41,34 @@ fi
 # shellcheck disable=SC1090
 . "$_activator"
 
-# optional hygiene
+# ---- optional hygiene: keep it, but don't explode on failure ----
 python -m pip install --upgrade pip >/dev/null 2>&1 || true
-[ -f requirements.txt ] && pip install -r requirements.txt || true
-[ -f pyproject.toml ] && pip install -e . || true
+[ -f requirements.txt ] && pip install -r requirements.txt >/dev/null 2>&1 || true
+[ -f pyproject.toml ] && pip install -e . >/dev/null 2>&1 || true
 
-echo "✓ venv active: $VIRTUAL_ENV"
+# ---- Go with the Flow ruleset bootstrap ------------------------------------
+# Canonical rules CSV in repo root. Adjust name if you change it.
+RULESET_SRC="${_REPO_ROOT}/go_with_the_flow_rules_v3_0_merged_with_v14.csv"
+
+if [ -f "$RULESET_SRC" ]; then
+  # Put a copy inside the venv so it's hermetic to this environment
+  RULESET_DIR="${VIRTUAL_ENV}/share/dutchbay"
+  mkdir -p "$RULESET_DIR"
+
+  RULESET_DST="${RULESET_DIR}/go_with_the_flow_rules.csv"
+
+  # Cheap idempotent copy – if content is the same, this is effectively a no-op
+  cp "$RULESET_SRC" "$RULESET_DST"
+
+  # Export an env var so Python / scripts can find it trivially
+  export DUTCHBAY_FLOW_RULESET_CSV="$RULESET_DST"
+
+  echo "✓ venv active: $VIRTUAL_ENV"
+  echo "✓ Go-with-the-Flow ruleset loaded: $DUTCHBAY_FLOW_RULESET_CSV"
+else
+  echo "✓ venv active: $VIRTUAL_ENV"
+  echo "⚠ Go-with-the-Flow ruleset not found at: $RULESET_SRC"
+  echo "  (env var DUTCHBAY_FLOW_RULESET_CSV not set)"
+fi
 
 # EOF
