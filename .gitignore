@@ -110,3 +110,19 @@ release_manifest.json
 *.sublime-project
 *.sublime-build
 _archive/
+
+# Hydra outputs (generated at runtime)
+outputs/
+multirun/
+.hydra/
+
+# Backup files (already cleaned)
+**/*.bak
+**/*.oops.*
+_archive/
+
+# Bootstrap reports
+.dutchbay_bootstrap_report.json
+
+# Scenario backups
+scenarios/**/*.bak
