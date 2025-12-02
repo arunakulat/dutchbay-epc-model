@@ -24,9 +24,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import numpy as np
 
+from finance import irr as finance_irr
 from finance.equity_v14 import calculate_equity_performance
-from finance.irr import irr as calc_irr
-from finance.irr import npv as calc_npv
 
 logger = logging.getLogger(__name__)
 
@@ -251,14 +250,14 @@ def calculate_scenario_kpis(
 
         # Project NPV
         try:
-            project_npv = calc_npv(effective_discount_rate, project_cf_series)
+            project_npv = finance_irr.npv(effective_discount_rate, project_cf_series)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Project NPV calculation failed: %s", exc)
             project_npv = 0.0
 
         # Project IRR
         try:
-            project_irr_raw = calc_irr(project_cf_series)
+            project_irr_raw = finance_irr.irr(project_cf_series)
 
             if project_irr_raw is None:
                 logger.warning("Project IRR calculation returned None; setting to 0.0")
@@ -294,7 +293,7 @@ def calculate_scenario_kpis(
         # Prudential NPV (optional)
         if prudential_rate is not None:
             try:
-                npv_prudential = calc_npv(prudential_rate, project_cf_series)
+                npv_prudential = finance_irr.npv(prudential_rate, project_cf_series)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Prudential project NPV calculation failed: %s", exc)
                 npv_prudential = 0.0

@@ -1,10 +1,10 @@
-"""Smoke test for CLI invocation of run_full_pipeline.py."""
+"""Smoke test for CLI invocation of run_full_pipeline_v14.py."""
 
 import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path("run_full_pipeline.py")
+SCRIPT = Path("run_full_pipeline_v14.py")
 LENDERCASE_CONFIG = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
 
