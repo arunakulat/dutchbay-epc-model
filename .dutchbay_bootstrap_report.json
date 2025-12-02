@@ -1,0 +1,67 @@
+[
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model",
+    "name": "repo_root",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/.venv311",
+    "name": "venv:.venv311",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scripts/venv_up.sh",
+    "name": "venv:script",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/pyproject.toml",
+    "name": "file:pyproject.toml",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/pytest.ini",
+    "name": "file:pytest.ini",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/.pre-commit-config.yaml",
+    "name": "file:.pre-commit-config.yaml",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/ruff.toml",
+    "name": "file:ruff.toml",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/run_full_pipeline_v14.py",
+    "name": "entrypoint:run_full_pipeline_v14.py",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/run_scenario_analytics_v14.py",
+    "name": "entrypoint:run_scenario_analytics_v14.py",
+    "ok": true
+  },
+  {
+    "details": "45 unique rule_id values across 45 rows in go_with_the_flow_rules_v3_0_clean.csv.",
+    "name": "ruleset:rule_id_unique",
+    "ok": true
+  },
+  {
+    "details": "go_with_the_flow_rules_v3_0_clean.csv: 1 version tag(s), latest=v3.0",
+    "name": "ruleset:versions",
+    "ok": true
+  },
+  {
+    "details": "/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/go_with_the_flow_rules_v3_0_clean.csv",
+    "name": "ruleset:path",
+    "ok": true
+  },
+  {
+    "details": "path=/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/go_with_the_flow_rules_v3_0_clean.csv, latest_version=v3.0, n_rules=45, versions=v3.0",
+    "name": "ruleset:helper",
+    "ok": true
+  }
+]

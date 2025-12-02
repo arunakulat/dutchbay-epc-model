@@ -104,3 +104,9 @@ DutchBay_EPC_*
 # Large output files
 DutchBay_EPC_*.txt
 DutchBay_EPC_20*
+coverage.xml
+audit_report.json
+release_manifest.json
+*.sublime-project
+*.sublime-build
+_archive/
