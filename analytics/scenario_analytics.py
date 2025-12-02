@@ -4,25 +4,27 @@ Batch scenario analytics orchestrator for v14 cashflow and debt modules.
 
 Enhancements (Go With The Flow):
 --------------------------------
-- Dynamic per-scenario discount rate (from YAML: scenarios, wacc, or global default)
-- Scenario name filtering (run only base_case, all *wind*, etc. via CLI or param)
-- CLI arg to output run summary/metadata JSON
-- More robust DSCR/CFADS column inference (resistant to legacy or new schema)
+- Dynamic per-scenario discount rate (from YAML: scenario override, WACC, or global default)
+- Scenario name filtering (via injected filter callable)
+- Optional JSON batch summary/metadata
+- Robust DSCR/CFADS inference (resistant to legacy or new schema)
 - Parallel batch support (toggle for large scenario sets)
-- CLI args to control/warn on batch-wide schema column clashes
-- All logging consistently structured; progress and failures logged in detail
+- Structured logging of progress and failures
 
 All previous features retained (EPC breakdown, Excel/charts, robust error handling).
+
+Note:
+- CLI concerns are handled by run_scenario_analytics_v14.py (Hydra-based).
+- This module is a library-only orchestrator in line with Go-with-the-Flow v3.0.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -35,9 +37,15 @@ from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    logger.addHandler(_handler)
 logger.setLevel(logging.INFO)
-console_handler = logging.StreamHandler()
-logger.addHandler(console_handler)
+
+
+# ---------------------------------------------------------------------------
+# Data containers
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -55,6 +63,8 @@ class ScenarioResult:
 
 @dataclass
 class BatchResultSummary:
+    """Summary and metadata for a batch ScenarioAnalytics run."""
+
     successful: List[str]
     failed: List[str]
     n_success: int
@@ -62,10 +72,30 @@ class BatchResultSummary:
     batch_summary: Dict[str, Any]
 
 
+# ---------------------------------------------------------------------------
+# Core orchestrator
+# ---------------------------------------------------------------------------
+
+
 class ScenarioAnalytics:
     """
-    V14-style orchestrator for batch scenario analytics
-    with full Go With The Flow features.
+      V14-style orchestrator for batch scenario analytics
+      with full Go With The Flow features.
+
+      Responsibilities:
+      - Discover scenario config files under a directory.
+      - Load configs via the shared loader.
+      - Enforce v14 schema guard on each config (validate_config_for_v14).
+      - Run cashflow_v14 + debt_v14 for each scenario.
+      - Compute KPIs via analytics.core.metrics.
+      - Aggregate per-scenario summary_df and timeseries_df.
+      - Optionally export Excel/charts/JSON via export_helpers.
+
+      Notes on schema validation (R5, R22):
+      - validate_config_for_v14 is always applied; scenarios that violate v14
+        schema (e.g. missing FX mapping) are considered invalid and will fail.
+    - Tests must supply v14-compliant configs per R22; there is no mechanism
+      to bypass schema validation.
     """
 
     def __init__(
@@ -73,15 +103,13 @@ class ScenarioAnalytics:
         scenarios_dir: Path,
         output_path: Optional[Path] = None,
         scenario_filter: Optional[Callable[[str], bool]] = None,
-        strict: bool = True,
         parallel: bool = False,
         global_default_discount_rate: float = 0.10,
     ) -> None:
         self.scenarios_dir = Path(scenarios_dir)
         self.output_path = Path(output_path) if output_path is not None else None
-        self.strict = bool(strict)
-        self.parallel = parallel
-        self.global_default_discount_rate = global_default_discount_rate
+        self.parallel = bool(parallel)
+        self.global_default_discount_rate = float(global_default_discount_rate)
         self._scenario_filter = scenario_filter
 
     # ------------------------------------------------------------------
@@ -97,13 +125,13 @@ class ScenarioAnalytics:
             )
 
         candidates: List[Path] = []
-        for ext in ("*.yaml", "*.yml", "*.json"):
-            candidates.extend(self.scenarios_dir.glob(ext))
+        for ext in (".yaml", ".yml", ".json"):
+            candidates.extend(self.scenarios_dir.rglob(f"*{ext}"))
 
         all_candidates = sorted(candidates)
         if self._scenario_filter:
             filtered = [p for p in all_candidates if self._scenario_filter(p.stem)]
-            logger.info(f"Filtered {len(filtered)} scenario(s) using scenario_filter")
+            logger.info("Filtered %d scenario(s) using scenario_filter", len(filtered))
             return filtered
         return all_candidates
 
@@ -120,41 +148,69 @@ class ScenarioAnalytics:
     # Discount rate logic
     # ------------------------------------------------------------------
     def _effective_discount_rate(self, config: Dict[str, Any]) -> float:
-        """Extract discount rate per scenario using
-        precedence: scenario > wacc > global default."""
-        # 1. Scenario override
-        scenario = config.get("scenario", {})  # legacy field
-        scenario_overrides = scenario.get("override", {}) if scenario else {}
+        """
+        Extract discount rate per scenario.
 
-        # Support nested "discount_rate" in scenario
-        if "discount_rate" in config:
-            return float(config["discount_rate"])
+        Precedence:
+        1. config["scenario"]["override"]["discount_rate"] (if present & valid)
+        2. config["wacc"]["project_discount_rate"] (if present & valid)
+        3. config["discount_rate"] at top-level (if present & valid)
+        4. global_default_discount_rate
+
+        In line with FIN-02, this routine does NOT attempt to infer whether
+        values are in percent vs fraction; configs are expected to use
+        fraction form (e.g. 0.10 for 10%) or explicitly-named *_pct fields
+        elsewhere.
+        """
+        # 1. Scenario override (legacy but explicit)
+        scenario = config.get("scenario", {})
+        scenario_overrides = (
+            scenario.get("override", {}) if isinstance(scenario, dict) else {}
+        )
+
         if "discount_rate" in scenario_overrides:
-            return float(scenario_overrides["discount_rate"])
-
-        # 2. WACC block
-        wacc_cfg = config.get("wacc", {})
-        if wacc_cfg and wacc_cfg.get("discount_rate") is not None:
             try:
-                return float(wacc_cfg["discount_rate"]) / (
-                    100.0 if wacc_cfg["discount_rate"] > 1.0 else 1.0
+                return float(scenario_overrides["discount_rate"])
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid discount_rate in scenario.override; falling back.",
                 )
-            except Exception:
-                pass
 
-        # 3. Global default
+        # 2. WACC block (canonical v14 naming)
+        wacc_cfg = config.get("wacc", {})
+        if isinstance(wacc_cfg, dict) and "project_discount_rate" in wacc_cfg:
+            try:
+                return float(wacc_cfg["project_discount_rate"])
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid project_discount_rate in wacc; falling back.",
+                )
+
+        # 3. Top-level discount_rate (if present, treat as fraction)
+        if "discount_rate" in config:
+            try:
+                return float(config["discount_rate"])
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid top-level discount_rate; falling back to default.",
+                )
+
+        # 4. Global default
         return self.global_default_discount_rate
 
+    # ------------------------------------------------------------------
+    # Single-scenario execution
+    # ------------------------------------------------------------------
     def _run_single(self, config_path: Path) -> ScenarioResult:
         """Run the full v14 pipeline for a single scenario."""
         name = self._scenario_name_from_path(config_path)
         logger.info("Processing scenario: %s", name)
-        discount_rate = None
+        discount_rate: Optional[float] = None
         try:
             # Load config
             config = self.load_config(config_path)
 
-            # Schema guard
+            # Schema guard – always enforced (R5, R22)
             validate_config_for_v14(
                 raw_config=config,
                 config_path=str(config_path),
@@ -163,13 +219,15 @@ class ScenarioAnalytics:
 
             # Determine discount rate (scenario, config, global)
             discount_rate = self._effective_discount_rate(config)
-            logger.info(f"  Using discount rate: {discount_rate:.3%}")
+            logger.info("  Using discount rate: %.3f%%", discount_rate * 100.0)
 
             # Annual cashflow rows
             annual_rows = build_annual_rows(config)
+
             # Debt layer (may mutate annual_rows in-place)
             debt_result = apply_debt_layer(config, annual_rows)
-            # KPIs, using WACC (Go With The Flow): always prefer config > default
+
+            # KPIs, using WACC: always prefer config > default
             kpis = calculate_scenario_kpis(
                 config=config,
                 annual_rows=annual_rows,
@@ -180,9 +238,11 @@ class ScenarioAnalytics:
             # EPC breakdown, optional non-blocking
             try:
                 epc_breakdown = epc_breakdown_from_config(config)
+                # epc_breakdown is expected to be a flat mapping of EPC-related
+                # metrics; we merge it into the KPI surface.
                 kpis.update(epc_breakdown)
-            except Exception as e:  # pragma: no cover
-                logger.warning("EPC breakdown derivation failed for %s: %s", name, e)
+            except Exception as exc:  # pragma: no cover
+                logger.warning("EPC breakdown derivation failed for %s: %s", name, exc)
 
             return ScenarioResult(
                 name=name,
@@ -192,8 +252,8 @@ class ScenarioAnalytics:
                 debt_result=debt_result,
                 discount_rate=discount_rate,
             )
-        except Exception as e:
-            logger.error(f"Scenario {name} failed: {e}")
+        except Exception as exc:
+            logger.error("Scenario %s failed: %s", name, exc)
             return ScenarioResult(
                 name=name,
                 config_path=config_path,
@@ -205,7 +265,7 @@ class ScenarioAnalytics:
                     if discount_rate is not None
                     else self.global_default_discount_rate
                 ),
-                fail_reason=str(e),
+                fail_reason=str(exc),
             )
 
     # ------------------------------------------------------------------
@@ -217,8 +277,18 @@ class ScenarioAnalytics:
         export_charts: bool = False,
         output_summary_json: Optional[Path] = None,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, BatchResultSummary]:
-        """Run analytics across all scenarios in scenarios_dir.
-        Returns: (summary_df, timeseries_df, batch_metadata)
+        """
+        Run analytics across all scenarios in scenarios_dir.
+
+        Returns:
+            summary_df: per-scenario summary (index: scenario_name)
+            timeseries_df: annual rows (column: scenario_name)
+            batch_metadata: BatchResultSummary with success/failure lists
+
+        Behaviour:
+        - Bad scenarios do not crash the batch; they are logged and included
+          in batch_metadata.failed but excluded from result DataFrames.
+        - If *all* scenarios fail, raises RuntimeError.
         """
         scenario_paths = self.discover_scenarios()
         if not scenario_paths:
@@ -231,8 +301,9 @@ class ScenarioAnalytics:
 
         batch_run = self.parallel and len(scenario_paths) > 4
         logger.info(
-            f"Running {len(scenario_paths)} scenario(s)"
-            " {'in parallel' if batch_run else 'serially'}."
+            "Running %d scenario(s) %s.",
+            len(scenario_paths),
+            "in parallel" if batch_run else "serially",
         )
 
         if batch_run:
@@ -256,10 +327,13 @@ class ScenarioAnalytics:
                     failures.append(res)
 
         if not results:
+            # All scenarios invalid → hard failure (VAL-02)
             raise RuntimeError("All scenarios failed; no results to summarise")
 
+        # Build DataFrames
         summary_df, timeseries_df = self._build_dataframes(results)
 
+        # Build batch metadata with explicit per-scenario failure reasons
         batch_metadata = BatchResultSummary(
             successful=[r.name for r in results],
             failed=[r.name for r in failures],
@@ -283,18 +357,21 @@ class ScenarioAnalytics:
         )
         if failures:
             for r in failures:
-                logger.info(f"    - {r.name}: {r.fail_reason}")
+                logger.info("    - %s: %s", r.name, r.fail_reason)
 
+        # Exports
         if export_excel and self.output_path is not None:
             self._export_to_excel(summary_df, timeseries_df)
 
         if export_charts and self.output_path is not None:
             self._export_charts(summary_df, timeseries_df)
 
-        if output_summary_json:
-            with open(output_summary_json, "w") as f:
+        if output_summary_json is not None:
+            output_summary_json = Path(output_summary_json)
+            output_summary_json.parent.mkdir(parents=True, exist_ok=True)
+            with output_summary_json.open("w", encoding="utf-8") as f:
                 json.dump(asdict(batch_metadata), f, indent=2)
-            logger.info(f"Batch metadata written to {output_summary_json}")
+            logger.info("Batch metadata written to %s", output_summary_json)
 
         return summary_df, timeseries_df, batch_metadata
 
@@ -308,14 +385,12 @@ class ScenarioAnalytics:
         """Build summary and timeseries DataFrames from results."""
         summary_records: List[Dict[str, Any]] = []
         timeseries_records: List[Dict[str, Any]] = []
-        all_kpi_keys: set[str] = set()
 
         for result in results:
             rec: Dict[str, Any] = dict(result.kpis)
             rec["scenario_name"] = result.name
             rec["discount_rate_used"] = result.discount_rate
             summary_records.append(rec)
-            all_kpi_keys.update(rec.keys())
 
             dscr_scalar: Optional[float] = None
             for key in ("dscr_min", "dscr", "min_dscr"):
@@ -344,7 +419,8 @@ class ScenarioAnalytics:
         if "dscr" not in timeseries_df.columns:
             cols = list(timeseries_df.columns)
             cfads_candidates = [c for c in cols if "cfads" in c.lower()]
-            cfads_col = None
+            cfads_col: Optional[str] = None
+
             for pref in ("cfads_final_lkr", "cfads_final", "posttax_cfads"):
                 for c in cfads_candidates:
                     if pref in c.lower():
@@ -352,10 +428,10 @@ class ScenarioAnalytics:
                         break
                 if cfads_col:
                     break
+
             if not cfads_col and cfads_candidates:
                 cfads_col = cfads_candidates[0]
 
-            # Debt-service inference (broader, as per minor notes)
             debt_candidates = [
                 c
                 for c in cols
@@ -364,16 +440,19 @@ class ScenarioAnalytics:
             ]
             if not debt_candidates:
                 debt_candidates = [c for c in cols if "debt" in c.lower()]
+
             if cfads_col and len(debt_candidates) == 1:
                 debt_col = debt_candidates[0]
                 denom = timeseries_df[debt_col].replace({0: pd.NA})
                 timeseries_df["dscr"] = timeseries_df[cfads_col] / denom
             else:
                 logger.warning(
-                    f"Could not derive DSCR column:"
-                    f"cfads_col={cfads_col}, debt_candidates={debt_candidates}"
+                    "Could not derive DSCR column: cfads_col=%s, debt_candidates=%s",
+                    cfads_col,
+                    debt_candidates,
                 )
 
+        # Normalise KPIs for export (both summary and timeseries)
         summary_df, timeseries_df = normalise_kpis_for_export(
             summary_df=summary_df,
             timeseries_df=timeseries_df,
@@ -412,7 +491,7 @@ class ScenarioAnalytics:
             with pd.ExcelWriter(self.output_path) as writer:
                 summary_df.to_excel(writer, sheet_name="Summary")
                 timeseries_df.to_excel(writer, sheet_name="Timeseries")
-        logger.info(f"Excel exported to {self.output_path}")
+        logger.info("Excel exported to %s", self.output_path)
 
     def _export_charts(
         self,
@@ -436,104 +515,9 @@ class ScenarioAnalytics:
                     chart_exporter.export_dscr_chart(timeseries_df)
                 if hasattr(chart_exporter, "export_irr_histogram"):
                     chart_exporter.export_irr_histogram(summary_df)
-            logger.info(f"Charts exported to {charts_dir}")
+            logger.info("Charts exported to %s", charts_dir)
         except Exception:
             logger.warning("ChartExporter not available; skipping chart export")
 
 
-# ----------------------------------------------------------------------
-# CLI entrypoint (pattern-rich, Go With The Flow)
-# ----------------------------------------------------------------------
-def parse_filter(expr: Optional[str]) -> Optional[Callable[[str], bool]]:
-    """Create scenario filter function from expr (supports "*" or comma)."""
-    if not expr:
-        return None
-    if "*" in expr:
-        # Glob-style wildcard
-        import fnmatch
-
-        expr = expr.strip()
-        return lambda name: fnmatch.fnmatch(name, expr)
-    expr_list = [x.strip() for x in expr.split(",") if x.strip()]
-    return lambda name: name in expr_list
-
-
-def main(argv: Iterable[str]) -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Run v14 scenario analytics (Go With The Flow edition)."
-    )
-    parser.add_argument(
-        "--scenarios-dir",
-        default="scenarios",
-        help="Directory containing scenario YAML/JSON files.",
-    )
-    parser.add_argument(
-        "--output", default="exports/v14_analytics.xlsx", help="Excel output path."
-    )
-    parser.add_argument(
-        "--no-excel", action="store_true", help="Do not export Excel, only print logs."
-    )
-    parser.add_argument(
-        "--charts", action="store_true", help="Export charts alongside Excel workbook."
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=True,
-        help="Raise on first scenario failure.",
-    )
-    parser.add_argument(
-        "--parallel", action="store_true", help="Process scenarios in parallel if >4."
-    )
-    parser.add_argument(
-        "--filter",
-        type=str,
-        default=None,
-        help="Only run scenarios matching filter (glob or comma-list).",
-    )
-    parser.add_argument(
-        "--summary-json",
-        type=str,
-        default=None,
-        help="Write run summary/metadata here.",
-    )
-    parser.add_argument(
-        "--default-discount-rate",
-        type=float,
-        default=0.10,
-        help="Global fallback discount rate.",
-    )
-
-    args = parser.parse_args(list(argv))
-
-    scenario_filter = parse_filter(args.filter)
-    sa = ScenarioAnalytics(
-        scenarios_dir=Path(args.scenarios_dir),
-        output_path=Path(args.output) if not args.no_excel else None,
-        scenario_filter=scenario_filter,
-        strict=args.strict,
-        parallel=args.parallel,
-        global_default_discount_rate=args.default_discount_rate,
-    )
-
-    summary_df, timeseries_df, batch_meta = sa.run(
-        export_excel=not args.no_excel,
-        export_charts=args.charts,
-        output_summary_json=Path(args.summary_json) if args.summary_json else None,
-    )
-    logger.info("Summary head:\n%s", summary_df.head(3))
-    logger.info("Timeseries head:\n%s", timeseries_df.head(3))
-    if batch_meta.failed:
-        logger.warning("Failed scenarios: %s", batch_meta.failed)
-    logger.info(
-        "Scenario analytics complete. %d success | %d failed",
-        batch_meta.n_success,
-        batch_meta.n_failed,
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+# EOF

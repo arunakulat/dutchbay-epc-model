@@ -102,7 +102,7 @@ def test_scenario_analytics_labels_and_shapes(tmp_path):
     sa = ScenarioAnalytics(
         scenarios_dir=scenarios_dir,
         output_path=output_path,
-        strict=False,
+        # strict removed per R5
     )
 
     # CANONICAL API: unpack all three return values
@@ -156,7 +156,7 @@ def test_scenario_analytics_runs_multiple_scenarios(tmp_path):
     sa = ScenarioAnalytics(
         scenarios_dir=scenarios_dir,
         output_path=output_path,
-        strict=False,
+        # strict removed per R5
     )
 
     summary_df, timeseries_df, batch_metadata = sa.run(export_excel=False)

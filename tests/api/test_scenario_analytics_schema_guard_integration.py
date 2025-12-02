@@ -1,91 +1,69 @@
+#!/usr/bin/env python3
 """
-Scenario Analytics schema guard integration tests - v14 compatible.
+Integration tests for ScenarioAnalytics with schema guard enforcement.
 
-Purpose: Validate that ScenarioAnalytics properly validates configs and
-handles schema errors gracefully.
-
-Key: configs must include FX section (v14 requirement) and tax section.
+Go with the Flow Compliance (v3.0):
+  - R5: Schema guard always enforced (no bypass mechanism)
+  - R22: All scenarios must be v14-compliant
+  - Batch runner reports failures in metadata, not via exceptions
 """
-
-from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 from analytics.scenario_analytics import ScenarioAnalytics
 
-# ============================================================================
-# Test config builders
-# ============================================================================
 
-
-def _make_good_config() -> dict[str, Any]:
-    """
-    Minimal 'good' config for ScenarioAnalytics + v14 schema_guard.
-
-    - Includes FX (mandatory for v14).
-    - Includes a corporate tax rate so cashflow schema passes.
-    - Other fields are kept intentionally small but structurally valid.
-    """
+def _make_good_config():
+    """Minimal v14-compliant config."""
     return {
-        "fx": {
-            "start_lkr_per_usd": 375.0,
-            "annual_depr": 0.03,
-        },
-        "Financing_Terms": {
-            "tenor_years": 15,
-            "debt_ratio": 0.70,
-        },
         "project": {
-            "capacity_mw": 150.0,
-            "capacity_factor_pct": 40.0,
-        },
-        "tariff": {
-            "lkr_per_kwh": 20.30,
-        },
-        "opex": {
-            "usd_per_year": 2_400_000.0,
+            "capacity_mw": 150,
+            "capacity_factor_pct": 30.0,
+            "life_years": 20,
         },
         "capex": {
-            "usd_total": 225_000_000.0,
+            "epc_usd": 225_000_000,
         },
         "tax": {
-            "corporate_tax_rate_pct": 24.0,
+            "corporate_tax_rate_pct": 28,  # ✅ Required field
         },
+        "opex": {
+            "usd_per_year": 2_500_000,
+        },
+        "tariff": {
+            "tariff_lkr_per_kwh": 6.5,
+        },
+        "Financing_Terms": {
+            "debt_ratio": 0.70,
+            "tenor_years": 15,
+        },
+        "fx": {
+            "start_lkr_per_usd": 300.0,
+            "annual_depr": 0.03,
+        },
+        "parameters": {},
     }
 
 
-def _make_bad_config() -> dict[str, Any]:
-    """
-    Same as good config but *without* a corporate tax block.
-
-    FX stays present so the failure reason is clearly:
-    'corporate_tax_rate missing' rather than 'missing fx + tax'.
-    """
+def _make_bad_config():
+    """Config missing required tax field (violates R5)."""
     cfg = _make_good_config()
-    cfg.pop("tax", None)
+    del cfg["tax"]  # ❌ Schema guard will reject this
     return cfg
-
-
-# ============================================================================
-# Tests
-# ============================================================================
 
 
 def test_scenario_analytics_stops_on_missing_corporate_tax(tmp_path):
     """
-    Go With The Flow: Confirm schema validation catches missing tax during batch run.
+    Go With The Flow R5/R22: Schema guard catches missing tax during batch run.
 
-    The batch runner processes all scenarios and reports failures in batch_metadata,
-    not via direct exceptions (when strict=False).
+    The batch runner processes all scenarios and reports failures in batch_metadata.
+    Good scenarios pass through; bad ones are logged and excluded from results.
 
     Expected:
     - good_case passes schema guard and flows through to analytics
-    - bad_missing_tax fails on corporate_tax_rate only, recorded in batch_metadata
-    - batch doesn't raise RuntimeError; instead returns results from good_case
+    - bad_missing_tax fails schema validation, recorded in batch_metadata.failed
+    - Batch returns results from good_case only
     """
     scenarios_dir = tmp_path / "scenarios"
     scenarios_dir.mkdir()
@@ -98,31 +76,35 @@ def test_scenario_analytics_stops_on_missing_corporate_tax(tmp_path):
     good_path.write_text(json.dumps(good_cfg), encoding="utf-8")
     bad_path.write_text(json.dumps(bad_cfg), encoding="utf-8")
 
+    # ✅ R5: Schema validation always enforced (no strict parameter)
     sa = ScenarioAnalytics(
         scenarios_dir=scenarios_dir,
         output_path=None,
-        strict=False,  # Allow partial failure in batch
     )
 
-    # With strict=False, should return results for valid configs and skip bad ones
-    summary_df, timeseries_df, batch_metadata = sa.run()
+    # Run batch - bad scenario should fail gracefully
+    summary_df, timeseries_df, batch_meta = sa.run(export_excel=False)
 
-    # At minimum, we should have processed the good config
-    assert summary_df is not None
-    assert len(summary_df) >= 1, "Should have at least one successful scenario"
+    # Assertions
+    assert batch_meta.n_success == 1, "Expected 1 successful scenario"
+    assert batch_meta.n_failed == 1, "Expected 1 failed scenario"
+    assert "good_case" in batch_meta.successful
+    assert "bad_missing_tax" in batch_meta.failed
+
+    # Good scenario should have results
+    assert len(summary_df) == 1, "Expected 1 row in summary"
     assert (
-        "good_case" in summary_df.index.values
-        or "good_case" in summary_df.get("scenario_name", []).values
+        "good_case" in summary_df.index
+        or "good_case" in summary_df["scenario_name"].values
     )
 
-    # Metadata should report that bad_missing_tax was skipped
-    assert batch_metadata is not None
-    assert len(batch_metadata.failed) >= 1, "bad_missing_tax should be in failures"
 
-
-def test_scenario_analytics_strict_mode_raises_on_missing_tax(tmp_path):
+def test_scenario_analytics_all_bad_scenarios_raises(tmp_path):
     """
-    Go With The Flow: Confirm strict=True raises on schema violations.
+    Go With The Flow R5: Batch with all invalid scenarios raises RuntimeError.
+
+    Per VAL-02, if ALL scenarios fail schema validation, the batch should
+    raise RuntimeError since there are no results to summarize.
     """
     scenarios_dir = tmp_path / "scenarios"
     scenarios_dir.mkdir()
@@ -134,9 +116,14 @@ def test_scenario_analytics_strict_mode_raises_on_missing_tax(tmp_path):
     sa = ScenarioAnalytics(
         scenarios_dir=scenarios_dir,
         output_path=None,
-        strict=True,  # Raise on any validation error
     )
 
-    # strict=True should raise RuntimeError when validation fails
-    with pytest.raises(RuntimeError):
-        sa.run()
+    # Expected: RuntimeError when all scenarios fail
+    try:
+        sa.run(export_excel=False)
+        assert False, "Expected RuntimeError when all scenarios fail"
+    except RuntimeError as e:
+        assert "All scenarios failed" in str(e)
+
+
+# EOF

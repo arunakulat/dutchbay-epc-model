@@ -1,9 +1,3 @@
-"""Debt Planning Module for DutchBay V14 Project Finance.
-
-Author: DutchBay V14 Team, Nov 2025
-Version: 3.0 (V14 construction period support)
-"""
-
 from __future__ import annotations
 
 import logging
@@ -12,6 +6,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from finance.utils import as_float, get_nested
 
 logger = logging.getLogger("dutchbay.v14chat.finance.debt")
+
+"""Debt Planning Module for DutchBay V14 Project Finance.
+
+Author: DutchBay V14 Team, Nov 2025
+Version: 3.0 (V14 construction period support)
+"""
 
 
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
@@ -265,7 +265,26 @@ def plan_debt(
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
+    """
+    Plan debt for the project using the v14 engine.
+
+    Returns a dict with:
+    - timeline_periods, construction_years, tenor_years
+    - tranche-level summaries at top-level keys "lkr", "usd", "dfi"
+      exposing both legacy ("principal", "idc") and _m aliases ("principal_m", "idc_m")
+    - covenant-critical time series: debt_outstanding, debt_service_total,
+      dscr_series, balloon_remaining
+    - aggregate IDC and by-tranche breakdowns
+
+    This surface is pinned by tests in:
+      - tests/api/test_covenants_v14.py
+      - tests/api/test_debt_construction_idc_regression.py
+
+    and should be treated as a stable API contract.
+    """
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
+
+    # Normalise tranche summaries (keys like "LKR"/"USD"/"DFI" → lower-cased)
     principal_by = {
         k.lower(): float(v)
         for k, v in (core.get("principal_after_idc", {}) or {}).items()
@@ -273,27 +292,49 @@ def plan_debt(
     idc_by = {
         k.lower(): float(v) for k, v in (core.get("idc_by_tranche", {}) or {}).items()
     }
+
+    timeline = core.get("timeline_periods", 0)
+    debt_outstanding = core.get("debt_outstanding", []) or []
+    debt_service_total = core.get("debt_service_total", []) or []
+
     return {
+        # Timeline metadata
         "construction_years": core.get("construction_periods", 0),
         "tenor_years": core.get("tenor_years", 0),
-        "timeline_periods": core.get("timeline_periods", 0),
+        "timeline_periods": timeline,
+        # Tranche-level details (with _m aliases for backward compatibility)
         "lkr": {
             "principal": principal_by.get("lkr", 0.0),
+            "principal_m": principal_by.get("lkr", 0.0),
             "idc": idc_by.get("lkr", 0.0),
+            "idc_m": idc_by.get("lkr", 0.0),
         },
         "usd": {
             "principal": principal_by.get("usd", 0.0),
+            "principal_m": principal_by.get("usd", 0.0),
             "idc": idc_by.get("usd", 0.0),
+            "idc_m": idc_by.get("usd", 0.0),
         },
         "dfi": {
             "principal": principal_by.get("dfi", 0.0),
+            "principal_m": principal_by.get("dfi", 0.0),
             "idc": idc_by.get("dfi", 0.0),
+            "idc_m": idc_by.get("dfi", 0.0),
         },
+        # Aggregates
         "total_idc": core.get("total_idc_capitalized", 0.0),
+        "total_idc_m": core.get("total_idc_capitalized", 0.0),
         "min_dscr": core.get("dscr_min", 0.0),
         "principal_by_tranche": principal_by,
         "idc_by_tranche": idc_by,
         "audit_status": core.get("audit_status", "REVIEW"),
+        # Covenant-critical time series
+        "debt_outstanding": debt_outstanding,
+        "debt_service_total": debt_service_total,
+        # Cheap alias in case any legacy caller expects this name
+        "total_service": debt_service_total,
+        "dscr_series": core.get("dscr_series", []),
+        "balloon_remaining": core.get("balloon_remaining", 0.0),
     }
 
 

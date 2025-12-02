@@ -4,6 +4,11 @@ Unit tests for Scenario Analytics dataframe construction (Go With The Flow editi
 
 Tests the canonical API contract:
   sa.run() returns (summary_df, timeseries_df, batch_metadata)
+
+Go with the Flow Compliance:
+  - R5: Schema guard validation enforced
+  - R6: FX configuration as mapping (not scalar)
+  - All test configs must be v14-compliant (R22)
 """
 
 from analytics.scenario_analytics import ScenarioAnalytics
@@ -17,11 +22,16 @@ def test_scenario_analytics_labels_and_shapes(tmp_path):
       summary_df: per-scenario summary with scenario_name index/column
       timeseries_df: annual rows with scenario_name column
       batch_metadata: BatchResultSummary with successful/failed lists
+
+    Schema Compliance (v3.0):
+      - Includes FX mapping per R6 (start_lkr_per_usd, annual_depr)
+      - All required fields present per R5 schema guard
+      - Minimal but valid v14 configuration (R22)
     """
     scenarios_dir = tmp_path / "scenarios"
     scenarios_dir.mkdir()
 
-    # Use a real scenario if available; for test, use minimal valid config
+    # ✅ Minimal v14-compliant config (includes required FX section)
     lendercase_config = {
         "project": {
             "capacity_mw": 150,
@@ -44,6 +54,11 @@ def test_scenario_analytics_labels_and_shapes(tmp_path):
             "debt_ratio": 0.70,
             "tenor_years": 15,
         },
+        # ✅ R6 COMPLIANCE: FX as mapping with required keys
+        "fx": {
+            "start_lkr_per_usd": 300.0,
+            "annual_depr": 0.03,
+        },
         "parameters": {},
     }
 
@@ -54,10 +69,10 @@ def test_scenario_analytics_labels_and_shapes(tmp_path):
 
     output_path = tmp_path / "analytics_output.xlsx"
 
+    # ✅ R5 COMPLIANCE: strict removed - validation always enforced
     sa = ScenarioAnalytics(
         scenarios_dir=scenarios_dir,
         output_path=output_path,
-        strict=False,
     )
 
     # CANONICAL API: unpack all three return values
@@ -100,3 +115,6 @@ def test_scenario_analytics_labels_and_shapes(tmp_path):
     assert (
         "dutchbay_lendercase_2025Q4" in batch_metadata.successful
     ), f"Expected scenario in successful list, got {batch_metadata.successful}"
+
+
+# EOF
