@@ -53,10 +53,7 @@ import math
 from statistics import median
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
-from finance.irr import (
-    approx_project_irr,
-    project_npv_from_cfads,
-)
+from finance.irr import approx_project_irr, project_npv_from_cfads
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +96,7 @@ def _summary_stats(values: Iterable[float]) -> Dict[str, float]:
     ]
     if not cleaned:
         return {
-            "n": 0,
+            "n": 0.0,
             "mean": 0.0,
             "std": 0.0,
             "min": 0.0,
@@ -165,7 +162,7 @@ def _clean_dscr_series(raw: Optional[Sequence[Any]]) -> Sequence[float]:
     """
     if not raw:
         return []
-    out = []
+    out: list[float] = []
     for v in raw:
         if v is None:
             continue
@@ -181,16 +178,16 @@ def _clean_dscr_series(raw: Optional[Sequence[Any]]) -> Sequence[float]:
     return out
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 # Config metadata extraction
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 
 
 def _derive_scenario_name(config: Optional[Mapping[str, Any]]) -> str:
     """Extract scenario name from config (tries multiple keys)."""
     if not config:
         return ""
-    candidates = []
+    candidates: list[Any] = []
     for key in ("scenario_name", "name", "id"):
         if key in config:
             candidates.append(config[key])
@@ -206,13 +203,21 @@ def _derive_scenario_name(config: Optional[Mapping[str, Any]]) -> str:
 
 
 def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
-    """Extract total capex from config (used for NPV/IRR calculation)."""
+    """
+    Extract total capex from config (used for NPV/IRR calculation).
+
+    Ensures mypy-safe coercion by removing ``None`` from the type space
+    before calling ``float(...)`` and falling back cleanly on invalid
+    values.
+    """
     if not config:
         return 0.0
     capex = config.get("capex") if isinstance(config, Mapping) else None
     if not isinstance(capex, Mapping):
         return 0.0
     val = capex.get("usd_total")
+    if val is None:
+        return 0.0
     try:
         return float(val)
     except (TypeError, ValueError):
@@ -247,9 +252,9 @@ def _derive_cfads_series(
     return [float(row.get("cfads_usd", 0.0)) for row in annual_rows]
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 # Core KPI engine (Canonical v14 entry point)
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 
 
 def calculate_scenario_kpis(
@@ -258,7 +263,7 @@ def calculate_scenario_kpis(
     annual_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     debt_result: Optional[Mapping[str, Any]] = None,
     discount_rate: Optional[float] = None,
-    prudential_rate: Optional[float] = None,
+    prudential_rate: Optional[float] = None,  # Reserved for future use
     cfads_series_usd: Optional[Sequence[float]] = None,
     valuation: Optional[Mapping[str, Any]] = None,
     scenario_name: Optional[str] = None,
@@ -330,39 +335,14 @@ def calculate_scenario_kpis(
     ------
     None
         All calculations are non-fatal. Errors are logged and metrics set to 0.
-
-    Examples
-    --------
-    Basic usage with full context::
-
-        kpis = calculate_scenario_kpis(
-            config={"capex": {"usd_total": 225000000}},
-            annual_rows=[
-                {"year": 1, "cfads_usd": 10000000},
-                {"year": 2, "cfads_usd": 12000000},
-                {"year": 3, "cfads_usd": 11000000},
-            ],
-            debt_result={
-                "dscr_series": [1.5, 1.8, 2.0],
-                "max_debt_usd": 157500000,
-            },
-            discount_rate=0.10,
-        )
-
-    Shortcut for tests::
-
-        kpis = calculate_scenario_kpis(
-            cfads_series_usd=[100, 200, 300],
-            debt_result={"dscr_series": [1.5, 1.8, 2.0]},
-            valuation={"npv": 50000000, "irr": 0.15},
-        )
     """
     # ─────────────────────────────────────────────────────────────────────────
     # 1. Inputs and defaults
     # ─────────────────────────────────────────────────────────────────────────
     drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
     capex_total = _derive_capex_usd(config)
-    cfads = list(_derive_cfads_series(annual_rows, cfads_series_usd))
+    cfads_series = _derive_cfads_series(annual_rows, cfads_series_usd)
+    cfads: list[float] = [float(x) for x in cfads_series]
 
     if scenario_name is None:
         scenario_name = _derive_scenario_name(config)
@@ -387,16 +367,38 @@ def calculate_scenario_kpis(
     # ─────────────────────────────────────────────────────────────────────────
     # 3. DSCR cleaning + statistics
     # ─────────────────────────────────────────────────────────────────────────
-    raw_dscr = []
-    max_debt_usd = None
-    final_debt_usd = None
-    total_idc_usd = None
+    raw_dscr: Sequence[Any] = []
+    max_debt_usd: Optional[float] = None
+    final_debt_usd: Optional[float] = None
+    total_idc_usd: Optional[float] = None
 
     if debt_result:
-        raw_dscr = debt_result.get("dscr_series") or []
-        max_debt_usd = debt_result.get("max_debt_usd")
-        final_debt_usd = debt_result.get("final_debt_usd")
-        total_idc_usd = debt_result.get("total_idc_usd")
+        series = debt_result.get("dscr_series")
+        if isinstance(series, Sequence):
+            raw_dscr = series
+        else:
+            raw_dscr = []
+        max_debt_usd_raw = debt_result.get("max_debt_usd")
+        final_debt_usd_raw = debt_result.get("final_debt_usd")
+        total_idc_usd_raw = debt_result.get("total_idc_usd")
+
+        if max_debt_usd_raw is not None:
+            try:
+                max_debt_usd = float(max_debt_usd_raw)
+            except (TypeError, ValueError):
+                max_debt_usd = None
+
+        if final_debt_usd_raw is not None:
+            try:
+                final_debt_usd = float(final_debt_usd_raw)
+            except (TypeError, ValueError):
+                final_debt_usd = None
+
+        if total_idc_usd_raw is not None:
+            try:
+                total_idc_usd = float(total_idc_usd_raw)
+            except (TypeError, ValueError):
+                total_idc_usd = None
 
     clean_dscr = list(_clean_dscr_series(raw_dscr))
     dscr_stats = _summary_stats(clean_dscr)
@@ -411,16 +413,14 @@ def calculate_scenario_kpis(
     )
 
     if max_debt_usd is not None:
-        result["max_debt_usd"] = float(max_debt_usd)
+        result["max_debt_usd"] = max_debt_usd
     if final_debt_usd is not None:
-        result["final_debt_usd"] = float(final_debt_usd)
+        result["final_debt_usd"] = final_debt_usd
     if total_idc_usd is not None:
-        result["total_idc_usd"] = float(total_idc_usd)
+        result["total_idc_usd"] = total_idc_usd
 
     # ─────────────────────────────────────────────────────────────────────────
     # 4. Project valuation: NPV / IRR (R7: via finance.irr singleton)
-    # ─────────────────────────────────────────────────────────────────────────
-    # If valuation override provided, use it. Otherwise, compute from CFADS.
     # ─────────────────────────────────────────────────────────────────────────
     project_npv: Optional[float] = None
     project_irr: Optional[float] = None
@@ -480,25 +480,22 @@ def calculate_scenario_kpis(
     #     # Extract post-debt-service cashflows
     #     for row in annual_rows:
     #         equity_cf = row.get("equity_cfads_usd", 0.0)
-    #         equity_cf_series.append(equity_cf)
+    #         equity_cf_series.append(float(equity_cf))
     #
-    # if equity_cf_series and drate is not None:
+    # if equity_cf_series:
     #     try:
     #         from finance.equity_v14 import calculate_equity_performance
     #
     #         equity_perf = calculate_equity_performance(
-    #             equity_cf_series,  # Positional arg (cashflow series)
+    #             equity_cf_series,
     #             discount_rate=drate,
     #             current_nav=0.0,
     #         )
     #
-    #         # equity_perf is an EquityPerformance dataclass or dict
-    #         if equity_perf is not None:
-    #             if isinstance(equity_perf, Mapping):
-    #                 result.update(equity_perf)
-    #             elif hasattr(equity_perf, "__dict__"):
-    #                 # If it's a dataclass, convert to dict
-    #                 result.update(equity_perf.__dict__)
+    #         if isinstance(equity_perf, Mapping):
+    #             result.update(equity_perf)
+    #         elif hasattr(equity_perf, "__dict__"):
+    #             result.update(equity_perf.__dict__)
     #     except Exception as exc:  # pragma: no cover - defensive
     #         logger.warning(
     #             "Equity performance calculation failed: %s. "
@@ -509,9 +506,9 @@ def calculate_scenario_kpis(
     return result
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 # Backwards compatibility adapter
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 
 
 def compute_kpis(
@@ -548,9 +545,9 @@ def compute_kpis(
     )
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 # Public API
-# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════====
 
 __all__ = [
     "_summary_stats",

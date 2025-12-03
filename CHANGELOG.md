@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v2.5.0 - 2025-12-04
+
+- Sprint 7 – v14 pipeline + sensitivity + metrics typing
+
+
+
 ## v0.2.3 - 2025-11-26
 
 - v14 pipeline surface frozen; CLI shim wired
