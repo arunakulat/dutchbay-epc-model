@@ -384,18 +384,16 @@ class TornadoResult:
     @property
     def impact_abs(self) -> float:
         """
-        Absolute impact: |high_irr - low_irr|.
+        Absolute magnitude of IRR movement.
 
-        - Always non-negative when inputs are finite.
-        - Propagates NaN if either low_irr or high_irr is NaN.
+        Rounded to 10 decimal places to avoid tiny floating-point artefacts
+        (tests compare this value with strict equality, e.g. 0.04).
         """
         delta = self.high_irr - self.low_irr
-
-        # NaN check without extra imports
-        if delta != delta:  # NaN is not equal to itself
+        if delta != delta:
+            # NaN check: delta != delta is True only for NaN
             return float("nan")
-
-        return float(abs(delta))
+        return round(abs(delta), 10)
 
     @property
     def impact_pct(self) -> float:
