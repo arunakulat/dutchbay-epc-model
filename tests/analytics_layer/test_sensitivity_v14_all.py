@@ -253,8 +253,8 @@ def test_run_breakeven_parameter_integration_full_flow():
     result = run_breakeven_parameter(
         base_config_path="scenarios/test/base_scenario.yaml",
         variable_name="tariff.tariff_lkr_per_kwh",
-        target_metric="dscr_min",
-        target_value=1.2,  # Target DSCR minimum covenant
+        target_metric="project_irr",
+        target_value=0.12,  # Target 12% IRR
         low_pct=-50.0,  # -50% of base value
         high_pct=50.0,  # +50% of base value
     )

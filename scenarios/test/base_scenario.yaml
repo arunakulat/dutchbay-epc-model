@@ -7,31 +7,25 @@ project:
   project_life_years: 25
   capacity_factor_pct: 25.0
 
-# CAPEX section (required by epc_helper_v14.py schema)
 capex:
   usd_total: 10000000.0
   freight_pct: 0.0
   contingency_pct: 0.0
 
-# Opex section
 opex:
   usd_per_year: 200000.0
 
-# Tariff section
 tariff:
   tariff_lkr_per_kwh: 25.0
 
-# Debt section
 debt:
   principal_usd: 6000000.0
   interest_rate: 0.08
   tenor_years: 10
 
-# FX section (required for v14)
 fx:
   start_lkr_per_usd: 320.0
   annual_depr: 0.03
 
-# Tax section
 tax:
   corporate_tax_rate: 0.24
