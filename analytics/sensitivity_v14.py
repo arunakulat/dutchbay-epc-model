@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # fmt: off
+import copy
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,8 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
 )
-from analytics.evaluate_scenario import evaluate_with_overrides
+from analytics.scenario_loader import load_scenario_config
+from run_full_pipeline_v14 import run_v14_pipeline
 
 #!/usr/bin/env python3
 
@@ -123,6 +125,58 @@ class SensitivityRequest:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _deep_merge_config(
+    base: dict[str, Any], override: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Deep merge override dict into base config, preserving nested structure.
+
+    This is needed because sensitivity analysis perturbs specific nested
+    parameters (e.g. "finance.tariff") while keeping the rest of the
+    config intact.
+
+    Parameters
+    ----------
+    base : dict[str, Any]
+        Base configuration dictionary (from YAML).
+    override : dict[str, Any]
+        Override dictionary with nested structure (from _build_nested_override).
+
+    Returns
+    -------
+    dict[str, Any]
+        New config dict with overrides applied.
+
+    Examples
+    --------
+    >>> base = {"finance": {"capex": 100, "tariff": 0.10}, "debt": {}}
+    >>> override = {"finance": {"tariff": 0.12}}
+    >>> result = _deep_merge_config(base, override)
+    >>> result["finance"]["tariff"]
+    0.12
+    >>> result["finance"]["capex"]  # Preserved
+    100
+    """
+    result = copy.deepcopy(base)
+
+    def _merge(target: dict[str, Any], source: dict[str, Any]) -> None:
+        """Recursive merge helper."""
+        for key, value in source.items():
+            if (
+                isinstance(value, dict)
+                and key in target
+                and isinstance(target[key], dict)
+            ):
+                # Recurse into nested dicts
+                _merge(target[key], value)
+            else:
+                # Overwrite leaf value
+                target[key] = value
+
+    _merge(result, override)
+    return result
+
+
 def _build_nested_override(
     path: str | list[str],
     value: Any,
@@ -227,6 +281,8 @@ def _analyze_single_parameter(
     Run low/high shocks for single parameter and return TornadoResult.
 
     This is the core inner-loop helper used by ``run_tornado_sensitivity``.
+    Now uses the canonical v14 pipeline (run_v14_pipeline) instead of the
+    deprecated evaluate_with_overrides wrapper.
 
     Parameters
     ----------
@@ -260,16 +316,32 @@ def _analyze_single_parameter(
         high_pct,
     )
 
-    low_result = evaluate_with_overrides(base_config_path, overrides_low)
-    high_result = evaluate_with_overrides(base_config_path, overrides_high)
+    # Load base config and apply overrides
+    base_config = load_scenario_config(base_config_path)
+    low_config = _deep_merge_config(base_config, overrides_low)
+    high_config = _deep_merge_config(base_config, overrides_high)
+
+    # Run v14 pipeline for low and high cases
+    low_pipeline_result = run_v14_pipeline(
+        config=low_config,
+        validation_mode="strict",
+    )
+    high_pipeline_result = run_v14_pipeline(
+        config=high_config,
+        validation_mode="strict",
+    )
+
+    # Extract KPIs from pipeline results
+    low_kpis = low_pipeline_result["kpis"]
+    high_kpis = high_pipeline_result["kpis"]
 
     try:
-        low_metric = float(low_result[metric_name])
-        high_metric = float(high_result[metric_name])
+        low_metric = float(low_kpis[metric_name])
+        high_metric = float(high_kpis[metric_name])
     except KeyError as exc:
         raise KeyError(
             f"Metric {metric_name!r} not found in KPI dict for variable "
-            f"{variable_name!r}. Available keys: {list(low_result.keys())}"
+            f"{variable_name!r}. Available keys: {list(low_kpis.keys())}"
         ) from exc
 
     impact_abs = max(
@@ -398,15 +470,23 @@ def run_tornado_sensitivity(
         params=params,
     )
 
-    # Evaluate base scenario once
-    base_result = evaluate_with_overrides(base_config_path, {})
-    if metric_name not in base_result:
+    # Evaluate base scenario once using v14 pipeline
+    base_config = load_scenario_config(base_config_path)
+    base_pipeline_result = run_v14_pipeline(
+        config=base_config,
+        validation_mode="strict",
+    )
+
+    # Extract KPIs from pipeline result
+    base_kpis = base_pipeline_result["kpis"]
+
+    if metric_name not in base_kpis:
         raise KeyError(
             f"Metric {metric_name!r} not found in base KPI dict. "
-            f"Available keys: {list(base_result.keys())}"
+            f"Available keys: {list(base_kpis.keys())}"
         )
 
-    base_metric_value = float(base_result[metric_name])
+    base_metric_value = float(base_kpis[metric_name])
 
     results: list[TornadoResult] = []
     for param in params:
@@ -530,9 +610,15 @@ def run_multi_metric_tornado(
         params=params,
     )
 
-    # Evaluate base case once for all metrics
-    base_result = evaluate_with_overrides(base_config_path, {})
-    base_kpis = base_result
+    # Evaluate base case once for all metrics using v14 pipeline
+    base_config = load_scenario_config(base_config_path)
+    base_pipeline_result = run_v14_pipeline(
+        config=base_config,
+        validation_mode="strict",
+    )
+
+    # Extract KPIs from pipeline result
+    base_kpis = base_pipeline_result["kpis"]
 
     missing_metrics = [m for m in metrics if m not in base_kpis]
     if missing_metrics:
@@ -553,11 +639,23 @@ def run_multi_metric_tornado(
         overrides_low = _build_nested_override(variable_name, (1.0 + low_pct))
         overrides_high = _build_nested_override(variable_name, (1.0 + high_pct))
 
-        low_result = evaluate_with_overrides(base_config_path, overrides_low)
-        high_result = evaluate_with_overrides(base_config_path, overrides_high)
+        # Apply overrides to base config
+        low_config = _deep_merge_config(base_config, overrides_low)
+        high_config = _deep_merge_config(base_config, overrides_high)
 
-        low_kpis = low_result
-        high_kpis = high_result
+        # Run v14 pipeline for low and high cases
+        low_pipeline_result = run_v14_pipeline(
+            config=low_config,
+            validation_mode="strict",
+        )
+        high_pipeline_result = run_v14_pipeline(
+            config=high_config,
+            validation_mode="strict",
+        )
+
+        # Extract KPIs
+        low_kpis = low_pipeline_result["kpis"]
+        high_kpis = high_pipeline_result["kpis"]
 
         # Ensure all metrics exist in both low/high cases
         for m in metrics:
@@ -673,17 +771,21 @@ def run_breakeven_parameter(
     TypeError
         If variable is not a numeric scalar.
     """
-    # Get base parameter value first by evaluating base case
-    base_result = evaluate_with_overrides(base_config_path, {})
+    # Get base parameter value first by evaluating base case using v14 pipeline
+    base_config = load_scenario_config(base_config_path)
+    base_pipeline_result = run_v14_pipeline(
+        config=base_config,
+        validation_mode="strict",
+    )
 
-    if target_metric not in base_result:
+    base_kpis = base_pipeline_result["kpis"]
+    if target_metric not in base_kpis:
         raise KeyError(
             f"Target metric {target_metric!r} not found in base KPI dict. "
-            f"Available keys: {list(base_result.keys())}"
+            f"Available keys: {list(base_kpis.keys())}"
         )
 
     # Fetch current parameter value from config by re-loading
-    from analytics.scenario_loader import load_scenario_config
 
     cfg = load_scenario_config(base_config_path)
 
@@ -718,13 +820,25 @@ def run_breakeven_parameter(
 
     def objective(x: float) -> float:
         overrides = _build_nested_override(variable_name, x / base_param_value)
-        result = evaluate_with_overrides(base_config_path, overrides)
-        if target_metric not in result:
+
+        # Load base config and apply override
+        base_config = load_scenario_config(base_config_path)
+        override_config = _deep_merge_config(base_config, overrides)
+
+        # Run v14 pipeline
+        pipeline_result = run_v14_pipeline(
+            config=override_config,
+            validation_mode="strict",
+        )
+
+        # Extract KPI
+        kpis = pipeline_result["kpis"]
+        if target_metric not in kpis:
             raise KeyError(
                 f"Target metric {target_metric!r} missing in KPI dict "
-                f"during breakeven evaluation. Keys: {list(result.keys())}"
+                f"during breakeven evaluation. Keys: {list(kpis.keys())}"
             )
-        value = float(result[target_metric])
+        value = float(kpis[target_metric])
         logger.debug(
             "Breakeven objective for %s: param=%s metric=%s value=%s target=%s",
             variable_name,
