@@ -14,7 +14,7 @@ Django==5.2.8
 -e git+https://github.com/arunakulat/dutchbay-epc-model.git@2fb6ea38bae8f9dd0aefa442f64b41c174f7c62e#egg=dutchbay_v13
 fastapi==0.121.2
 flake8==7.3.0
-fonttools==4.60.1
+fonttools==4.61.0
 hypothesis==6.147.0
 idna==3.11
 iniconfig==2.3.0
