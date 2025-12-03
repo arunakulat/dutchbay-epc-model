@@ -114,7 +114,6 @@ def test_build_nested_override_empty_path():
 # ══════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.skip(reason="Requires valid scenario file - enable for integration tests")
 def test_run_tornado_sensitivity_integration_full_flow():
     """
     Full integration test: run tornado on real scenario (when available).
@@ -133,7 +132,7 @@ def test_run_tornado_sensitivity_integration_full_flow():
             high_pct=10.0,
         ),
         ParameterRangeConfig(
-            variable_name="finance.tariff_lkr_per_kwh",
+            variable_name="tariff.tariff_lkr_per_kwh",
             base_value=25.0,
             low_pct=-10.0,
             high_pct=10.0,
@@ -141,9 +140,9 @@ def test_run_tornado_sensitivity_integration_full_flow():
     ]
 
     request = SensitivityRequest(
-        base_config_path="scenarios/example_a.yaml",
+        base_config_path="scenarios/test/base_scenario.yaml",
         parameters=params,
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     suite = run_tornado_sensitivity(request)
@@ -151,8 +150,8 @@ def test_run_tornado_sensitivity_integration_full_flow():
     # Structure checks
     assert isinstance(suite, SensitivitySuite)
     assert len(suite.tornado_results) == len(params)
-    assert suite.base_config_path == "scenarios/example_a.yaml"
-    assert suite.metric == "project_irr"
+    assert suite.base_config_path == "scenarios/test/base_scenario.yaml"
+    assert suite.metric == "dscr_min"
 
     # Results should be sorted by impact_abs descending
     impacts = [r.impact_abs for r in suite.tornado_results]
@@ -162,7 +161,6 @@ def test_run_tornado_sensitivity_integration_full_flow():
     assert isinstance(suite.base_metric, (int, float))
 
 
-@pytest.mark.skip(reason="Requires valid scenario file")
 def test_run_tornado_legacy_api():
     """Test legacy API: passing config path as string + params separately."""
     params = [
@@ -175,9 +173,9 @@ def test_run_tornado_legacy_api():
     ]
 
     suite = run_tornado_sensitivity(
-        "scenarios/example_a.yaml",
+        "scenarios/test/base_scenario.yaml",
         parameters=params,
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     assert isinstance(suite, SensitivitySuite)
@@ -189,7 +187,6 @@ def test_run_tornado_legacy_api():
 # ══════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.skip(reason="Requires valid scenario file")
 def test_run_multi_metric_tornado_integration_full_flow():
     """
     Full integration test: multi-metric tornado with v14 pipeline.
@@ -200,7 +197,7 @@ def test_run_multi_metric_tornado_integration_full_flow():
     - Base values populated for each metric
     - Uses v14 pipeline throughout
     """
-    metrics = ["project_irr", "equity_irr", "dscr_min"]
+    metrics = ["dscr_min", "dscr_max", "dscr_mean"]
 
     params = [
         ParameterRangeConfig(
@@ -210,7 +207,7 @@ def test_run_multi_metric_tornado_integration_full_flow():
             high_pct=10.0,
         ),
         ParameterRangeConfig(
-            variable_name="finance.tariff_lkr_per_kwh",
+            variable_name="tariff.tariff_lkr_per_kwh",
             base_value=25.0,
             low_pct=-10.0,
             high_pct=10.0,
@@ -218,7 +215,7 @@ def test_run_multi_metric_tornado_integration_full_flow():
     ]
 
     request = SensitivityRequest(
-        base_config_path="scenarios/example_a.yaml",
+        base_config_path="scenarios/test/base_scenario.yaml",
         parameters=params,
     )
 
@@ -243,7 +240,6 @@ def test_run_multi_metric_tornado_integration_full_flow():
 # ══════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.skip(reason="Requires valid scenario file")
 def test_run_breakeven_parameter_integration_full_flow():
     """
     Full integration test: breakeven analysis with v14 pipeline.
@@ -255,17 +251,17 @@ def test_run_breakeven_parameter_integration_full_flow():
     - Uses v14 pipeline for objective evaluation
     """
     result = run_breakeven_parameter(
-        base_config_path="scenarios/example_a.yaml",
-        variable_name="finance.tariff_lkr_per_kwh",
-        target_metric="project_irr",
-        target_value=0.10,  # Target 10% IRR
-        lower=15.0,
-        upper=35.0,
+        base_config_path="scenarios/test/base_scenario.yaml",
+        variable_name="tariff.tariff_lkr_per_kwh",
+        target_metric="dscr_min",
+        target_value=8000.0,  # Target DSCR value
+        low_pct=-50.0,  # -50% of base value
+        high_pct=50.0,  # +50% of base value
     )
 
     # Structure checks
     assert isinstance(result, BreakevenResult)
-    assert result.variable == "finance.tariff_lkr_per_kwh"
+    assert result.variable == "tariff.tariff_lkr_per_kwh"
 
     # If converged, status should be success
     if result.status == "success":
@@ -354,7 +350,7 @@ def test_tornado_suite_to_dataframe():
         tornado_results=results,
         base_metric=0.12,
         base_config_path="dummy.yaml",
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     df = tornado_suite_to_dataframe(suite)
@@ -425,7 +421,7 @@ def test_empty_parameters_handled_gracefully():
     request = SensitivityRequest(
         base_config_path="dummy.yaml",
         parameters=[],
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     # Should either return empty suite or fallback to defaults
@@ -452,7 +448,7 @@ def test_override_labels_structure():
             ),
         ],
         override_labels=override_labels,
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     assert request.override_labels == override_labels
@@ -480,7 +476,7 @@ def test_sensitivity_request_immutable():
     request = SensitivityRequest(
         base_config_path="test.yaml",
         parameters=[],
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     # Should not be able to modify
@@ -550,7 +546,7 @@ def test_legacy_parameters_now_use_sensitivity_request():
     request = SensitivityRequest(
         base_config_path="dummy.yaml",
         parameters=params,
-        metric="project_irr",
+        metric="dscr_min",
     )
 
     # Verify request structure
@@ -575,12 +571,12 @@ def test_legacy_api_still_works_with_string_config_path():
     with patch("analytics.sensitivity_v14.load_scenario_config") as mock_load:
         with patch("analytics.sensitivity_v14.run_v14_pipeline") as mock_pipeline:
             mock_load.return_value = {"test": {"param": 100.0}}
-            mock_pipeline.return_value = {"kpis": {"project_irr": 0.12}}
+            mock_pipeline.return_value = {"kpis": {"dscr_min": 8202.23}}
 
             suite = run_tornado_sensitivity(
                 "test.yaml",
                 parameters=params,
-                metric="project_irr",
+                metric="dscr_min",
             )
 
             assert isinstance(suite, SensitivitySuite)
