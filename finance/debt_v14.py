@@ -10,7 +10,7 @@ logger = logging.getLogger("dutchbay.v14chat.finance.debt")
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.0 (V14 construction period support)
+Version: 3.1 (V14 construction period support + LLCR/PLCR/FX surfaces)
 """
 
 
@@ -28,6 +28,28 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
     if rate == 0:
         return pv / nper if nper > 0 else 0.0
     return pv * (rate * (1 + rate) ** nper) / ((1 + rate) ** nper - 1)
+
+
+def _npv(cashflows: Sequence[float], rate: float) -> float:
+    """
+    Simple NPV helper (no IRR logic here – IRR stays in finance.irr).
+
+    cashflows: sequence of CFADS values by year (t = 1..N)
+    rate: discount rate (e.g. cost of senior debt)
+
+    NPV = sum_t CF_t / (1 + r)^t
+    """
+    if not cashflows:
+        return 0.0
+    if rate <= -1.0:
+        # Defensive: avoid negative (1 + r) bases blowing up.
+        return 0.0
+
+    df = 1.0 + rate
+    pv = 0.0
+    for t, cf in enumerate(cashflows, start=1):
+        pv += float(cf) / (df**t)
+    return pv
 
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
@@ -164,7 +186,13 @@ def apply_debt_layer(
     params: Dict[str, Any],
     annual_rows: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """
+    Core v14 debt engine.
+
+    Returns a rich dict used internally by plan_debt and the analytics layer.
+    """
     p = params.get("Financing_Terms", params.get("financing", params))
+
     construction_periods = int(_as_float(p.get("construction_periods"), 2))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
     drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
@@ -174,8 +202,10 @@ def apply_debt_layer(
     years_io = int(_as_float(p.get("interest_only_years"), 0))
     amortization = (p.get("amortization_style", "sculpted") or "sculpted").lower()
     target_dscr = _as_float(p.get("target_dscr"), 1.30)
+
     capex = _extract_capex_usd(params)
     debt_total = capex * debt_ratio
+
     logger.info(
         "V14 Debt: %d-yr construction, %d-yr tenor, CAPEX=%.2f, debt=%.2f",
         construction_periods,
@@ -183,9 +213,12 @@ def apply_debt_layer(
         capex,
         debt_total,
     )
+
+    # ── Tranche mix and IDC ────────────────────────────────────────────────
     tranches = _solve_mix(p, debt_total)
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
+
     for name, tr in tranches.items():
         drawn = calculate_construction_drawdowns(
             tr.principal, construction_schedule, drawdown_pct
@@ -194,14 +227,21 @@ def apply_debt_layer(
         idc_schedule[name] = idc_list
         total_idc_by_tranche[name] = idc_cap
         tr.principal += idc_cap
+
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
-    cfads = [a.get("cfads_usd", 0.0) for a in annual_rows]
+
+    # ── CFADS / DSCR profile ──────────────────────────────────────────────
+    cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
+
+    # Extended CFADS series used by legacy DSCR schedule (fixed horizon = 23)
     cfads_ext = (
         [0.0] * construction_periods + [cfads[0] * 0.5 if cfads else 0.0] + cfads
     )
     while len(cfads_ext) < 23:
         cfads_ext.append(cfads[-1] if cfads else 0.0)
     cfads_ext = cfads_ext[:23]
+
+    # ── Amortisation schedule by tranche ──────────────────────────────────
     if amortization in ("annuity", "fixed"):
         schedules = {
             k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
@@ -213,12 +253,16 @@ def apply_debt_layer(
             cfads_ext[construction_periods:],
             target_dscr,
         )
+
     for k in schedules:
         schedules[k] = [(0.0, 0.0, 0.0)] * construction_periods + schedules[k]
+
     dscr_series: List[float] = []
     debt_service_total: List[float] = []
     debt_outstanding: List[float] = []
+
     out_bals = {k: t.principal for k, t in tranches.items()}
+
     for period in range(23):
         debt_outstanding.append(sum(out_bals.values()))
         svc = 0.0
@@ -233,12 +277,63 @@ def apply_debt_layer(
             dscr_series.append(cf / svc)
         else:
             dscr_series.append(float("inf"))
+
     dscr_op = [
         d
         for i, d in enumerate(dscr_series)
         if i >= construction_periods and d < float("inf")
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
+
+    # ── LLCR / PLCR + FX covenant surfaces ────────────────────────────────
+    debt_principal_total = sum(principal_after_idc.values())
+
+    # Weighted average cost of debt (post-IDC)
+    if debt_principal_total > 0:
+        weighted_rate_num = 0.0
+        for name, tr in tranches.items():
+            principal = principal_after_idc.get(name, tr.principal)
+            weighted_rate_num += principal * tr.rate
+        avg_debt_rate = weighted_rate_num / debt_principal_total
+    else:
+        avg_debt_rate = 0.0
+
+    cov_cfg = (p.get("covenants") or {}) if isinstance(p, dict) else {}
+    llcr_discount_rate = _as_float(cov_cfg.get("llcr_discount_rate"), avg_debt_rate)
+    plcr_discount_rate = _as_float(cov_cfg.get("plcr_discount_rate"), avg_debt_rate)
+
+    # Use CFADS over debt life vs project life
+    project_cfads = (
+        cfads[construction_periods:] if construction_periods < len(cfads) else []
+    )
+    cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
+
+    llcr = (
+        _npv(cfads_for_llcr, llcr_discount_rate) / debt_principal_total
+        if debt_principal_total > 0 and cfads_for_llcr
+        else 0.0
+    )
+    plcr = (
+        _npv(project_cfads, plcr_discount_rate) / debt_principal_total
+        if debt_principal_total > 0 and project_cfads
+        else 0.0
+    )
+
+    # FX profile (for FX-related covenant diagnostics)
+    fx_values: List[float] = []
+    for row in annual_rows:
+        fx_val = row.get("fx_rate")
+        if fx_val is not None:
+            try:
+                fx_values.append(float(fx_val))
+            except (TypeError, ValueError):
+                continue
+
+    fx_min = min(fx_values) if fx_values else None
+    fx_max = max(fx_values) if fx_values else None
+    fx_avg = sum(fx_values) / len(fx_values) if fx_values else None
+
+    # ── Final core surface ────────────────────────────────────────────────
     return {
         "dscr_series": dscr_series,
         "dscr_min": dscr_min,
@@ -256,7 +351,15 @@ def apply_debt_layer(
         "tenor_years": tenor,
         "cfads_extended": cfads_ext,
         "debt_schedules": schedules,
-        "audit_status": "PASS" if dscr_min >= 1.30 else "REVIEW",
+        "audit_status": "PASS" if dscr_min >= target_dscr else "REVIEW",
+        # New covenant surfaces
+        "debt_total": debt_total,
+        "avg_debt_rate": avg_debt_rate,
+        "llcr": llcr,
+        "plcr": plcr,
+        "fx_min": fx_min,
+        "fx_max": fx_max,
+        "fx_avg": fx_avg,
     }
 
 
@@ -271,16 +374,18 @@ def plan_debt(
     Returns a dict with:
     - timeline_periods, construction_years, tenor_years
     - tranche-level summaries at top-level keys "lkr", "usd", "dfi"
-      exposing both legacy ("principal", "idc") and _m aliases ("principal_m", "idc_m")
+      exposing both legacy ("principal", "idc") and _m aliases
     - covenant-critical time series: debt_outstanding, debt_service_total,
       dscr_series, balloon_remaining
     - aggregate IDC and by-tranche breakdowns
+    - LLCR/PLCR and FX covenant surfaces
 
     This surface is pinned by tests in:
       - tests/api/test_covenants_v14.py
-      - tests/api/test_debt_construction_idc_regression.py
+      - tests/api/test_debt_construction_idc_regression_v14.py
+      - tests/api/test_covenants_ring_fence_smoke_v14.py
 
-    and should be treated as a stable API contract.
+    and should be treated as a stable API contract (only additive changes).
     """
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
 
@@ -335,6 +440,14 @@ def plan_debt(
         "total_service": debt_service_total,
         "dscr_series": core.get("dscr_series", []),
         "balloon_remaining": core.get("balloon_remaining", 0.0),
+        # New covenant surfaces
+        "debt_total": core.get("debt_total", 0.0),
+        "avg_debt_rate": core.get("avg_debt_rate", 0.0),
+        "llcr": core.get("llcr", 0.0),
+        "plcr": core.get("plcr", 0.0),
+        "fx_min": core.get("fx_min"),
+        "fx_max": core.get("fx_max"),
+        "fx_avg": core.get("fx_avg"),
     }
 
 

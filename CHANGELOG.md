@@ -7,6 +7,30 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v2.5.2 - 2025-12-04
+
+- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
+
+
+
+## v2.5.2 - 2025-12-04
+
+- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
+
+
+
+## v2.5.2 - 2025-12-04
+
+- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
+
+
+
+## v2.5.2 - 2025-12-04
+
+- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
+
+
+
 ## v2.5.0 - 2025-12-04
 
 - Sprint 7 – v14 pipeline + sensitivity + metrics typing

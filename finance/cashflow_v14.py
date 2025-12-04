@@ -1,21 +1,24 @@
-"""Cash Flow Module for DutchBay V14 Project
-Finance (BOI Tax Holiday/Enhancement Compliant)
+"""Cash flow engine for DutchBay V14 (CFADS and annual rows).
 
-COMPLIANCE:
------------
-- IFC/DFI/World Bank project finance standards
-- Sri Lanka Inland Revenue Act (interest expense deductibility, BOI incentives)
-- YAML-driven configuration (sourced from full_model_variables_updated.yaml)
-- Complete statutory, regulatory, and risk deduction framework
-- Audit-ready: full calculation trail and parameter validation
+This module is the **canonical** place where project CFADS is defined
+for the v14 finance stack. It is designed to be:
 
-FEATURES & TAX/DEPRECIATION LOGIC:
-----------------------------------
-- Multi-year, FX-aware, grid-loss-adjusted, statutorily correct LKR cashflows
-- CFADS reflects correct order: post all deductions, post-tax, pre-debt service
-- Interest expense is deductible for tax calculation (with BOI-compliant tax shield)
-- Tax holiday and enhanced capital allowance handling
-- Straight-line depreciation by default across specified depreciation years
+- Lender-grade (DFI / World Bank / IFC compatible)
+- Statute-aware for Sri Lanka BOI / Inland Revenue Act (interest shield,
+  tax holidays, enhanced capital allowances)
+- YAML-driven (scenarios feed a single config dict)
+- Stable and schema-guard-friendly for the v14 pipeline.
+
+Public surface
+--------------
+- validate_parameters(config)  -> [] or raises ValueError
+- build_annual_cfads(config, ...) -> list[float]
+- build_annual_rows(config, ...) -> list[dict[str, float]]
+- calculate_single_year_cfads(...) -> dict[str, float]
+
+`build_annual_rows` is the primary feedstock for:
+- debt_v14.plan_debt (DSCR / covenants)
+- contracts_v14.build_cashflow_result_from_annual_rows (CashflowResult)
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from analytics.config_schema import RequiredFieldSpec, register_required_fields
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Helper utilities
+# Generic helpers
 # =============================================================================
 
 
@@ -86,9 +89,12 @@ def _as_float_or_none(value: Any) -> Optional[float]:
 
 def _pct_to_decimal(raw: Optional[float]) -> Optional[float]:
     """
-    Interpret a numeric as a percentage if > 1.0, otherwise as a decimal:
-      24   -> 0.24
-      0.24 -> 0.24
+    Interpret a numeric as a percentage if > 1.0, otherwise as a decimal.
+
+    Examples
+    --------
+    24   -> 0.24
+    0.24 -> 0.24
     """
     if raw is None:
         return None
@@ -116,7 +122,7 @@ def _resolve_first(cfg: dict[str, Any], *candidates: Any) -> Any:
 
 
 # =============================================================================
-# Core CFADS calculations
+# Core production / CFADS helpers
 # =============================================================================
 
 
@@ -129,9 +135,22 @@ def _calculate_net_production(
 ) -> tuple[float, float]:
     """
     Calculate gross and net kWh for a given year.
+
+    Parameters
+    ----------
+    capacity_mw :
+        Installed capacity (MW).
+    capacity_factor :
+        Net capacity factor (decimal).
+    degradation :
+        Annual degradation rate (decimal).
+    grid_loss_pct :
+        Grid losses (decimal share of gross).
+    year :
+        Zero-based year index (0 = first operating year).
     """
-    hours_per_year = 8760
-    effective_cf = capacity_factor * ((1 - degradation) ** year)
+    hours_per_year = 8760.0
+    effective_cf = capacity_factor * ((1.0 - degradation) ** year)
     gross_kwh = capacity_mw * 1e3 * hours_per_year * effective_cf
     grid_loss = gross_kwh * grid_loss_pct
     net_kwh = gross_kwh - grid_loss
@@ -151,6 +170,8 @@ def _calculate_statutory_deductions(
 ) -> dict[str, float]:
     """
     Calculate statutory charges as percentages of revenue.
+
+    All arguments are decimals (e.g. 0.01 = 1%).
     """
     success_fee = revenue_lkr * success_fee_pct
     env_surcharge = revenue_lkr * env_surcharge_pct
@@ -171,7 +192,7 @@ def _calculate_opex_lkr(opex_usd_per_year: float, fx_rate: float) -> float:
 
 def _apply_risk_haircut(cfads_lkr: float, risk_haircut_pct: float) -> float:
     """Apply risk haircut: CFADS * (1 - haircut)."""
-    return cfads_lkr * (1 - risk_haircut_pct)
+    return cfads_lkr * (1.0 - risk_haircut_pct)
 
 
 # =============================================================================
@@ -186,11 +207,14 @@ def _compute_depreciation_schedule(
 ) -> list[float]:
     """
     Build a straight-line depreciation schedule over depreciation_years.
+
+    If capex_total is None or depreciation_years <= 0, an empty schedule
+    is returned.
     """
     if capex_total is None or depreciation_years <= 0:
         return []
     total_depreciable = capex_total * enhanced_capital_allowance_pct
-    annual = total_depreciable / depreciation_years
+    annual = total_depreciable / float(depreciation_years)
     return [annual] * depreciation_years
 
 
@@ -208,7 +232,31 @@ def calculate_tax_with_interest_shield(
     """
     Calculate BOI-compliant tax with interest shield for a given year.
 
-    Returns (tax_lkr, depreciation_for_year_lkr).
+    Parameters
+    ----------
+    pretax_cfads :
+        CFADS before tax and interest shield.
+    corporate_tax_rate :
+        Headline corporate tax rate (decimal; 0.24 = 24%).
+        If <= 0, no tax is applied.
+    capex_total :
+        Total depreciable capex in LKR (or None to disable depreciation).
+    depreciation_years :
+        Straight-line depreciation horizon in years.
+    interest_expense_lkr :
+        Interest expense for the year (LKR).
+    year_index :
+        Zero-based year index.
+    tax_holiday_years :
+        Number of tax holiday years (0 = none).
+    tax_holiday_start_year :
+        1-based start year of the tax holiday.
+    enhanced_capital_allowance_pct :
+        Factor for enhanced capital allowance (e.g. 1.2 for 120%).
+
+    Returns
+    -------
+    (tax_lkr, depreciation_for_year_lkr)
     """
     if corporate_tax_rate <= 0.0:
         return 0.0, 0.0
@@ -247,13 +295,22 @@ def calculate_tax_with_interest_shield(
 
 
 # =============================================================================
-# Parameter extraction & FX
+# FX and project life extraction
 # =============================================================================
 
 
 def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
     """
     Build an FX curve (LKR per USD) for `years`.
+
+    Supports:
+      fx:
+        curve: [ .. ]
+      fx:
+        curve_lkr_per_usd: [ .. ]
+      fx:
+        start_lkr_per_usd: 375
+        annual_depr_pct: 3   # or 0.03
     """
     years = max(1, int(years))
     fx_cfg = p.get("fx")
@@ -313,6 +370,8 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
 def _extract_project_life_years(raw: dict[str, Any]) -> int:
     """
     Robust extraction of project life (in years) for v14.
+
+    Tries explicit fields first, then falls back to a heuristic scan.
     """
     explicit_candidates: list[tuple[tuple[str, ...], str]] = [
         (("project", "life_years"), "project.life_years"),
@@ -328,9 +387,9 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
             logger.info("Project life resolved from %s = %d years", label, v)
             return v
 
-    hits: list[tuple[str, int]] = []
-
     from collections.abc import Mapping, Sequence
+
+    hits: list[tuple[str, int]] = []
 
     def walk(node: Any, path: tuple[str, ...]) -> None:
         if isinstance(node, Mapping):
@@ -356,8 +415,8 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
     if hits:
         chosen_path, chosen_val = hits[0]
         logger.warning(
-            "Project life not found in explicit fields;"
-            " using heuristic match %r = %d years",
+            "Project life not found in explicit fields; "
+            "using heuristic match %r = %d years",
             chosen_path,
             chosen_val,
         )
@@ -371,11 +430,21 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
     )
 
 
+# =============================================================================
+# Parameter extraction
+# =============================================================================
+
+
 def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
     """
     Extract and normalize parameters required for v14 CFADS calculation.
-    """
 
+    Returns
+    -------
+    dict[str, Any]
+        Normalized parameters. Raises ValueError if required fields are
+        missing or invalid.
+    """
     # Project life (hard fail if absent)
     project_life_years = _extract_project_life_years(raw)
 
@@ -605,17 +674,24 @@ def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
     )
     _check_required(
         "capacity_factor",
-        lambda v: isinstance(v, (int, float)) and 0 < v <= 1,
+        lambda v: isinstance(v, (int, float))
+        and v is not None
+        and 0.0 < float(v) <= 1.0,
     )
     _check_required(
         "tariff_lkr_per_kwh",
-        lambda v: isinstance(v, (int, float)) and v >= 0,
+        lambda v: isinstance(v, (int, float)) and v is not None and v >= 0,
     )
     _check_required(
         "opex_usd_per_year",
-        lambda v: isinstance(v, (int, float)) and v >= 0,
+        lambda v: isinstance(v, (int, float)) and v is not None and v >= 0,
     )
-    _check_required("corporate_tax_rate", lambda v: isinstance(v, (int, float)) and v)
+    _check_required(
+        "corporate_tax_rate",
+        lambda v: isinstance(v, (int, float))
+        and v is not None
+        and 0.0 <= float(v) <= 1.0,
+    )
 
     if missing_or_invalid:
         raise ValueError(
@@ -634,39 +710,18 @@ def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
 def validate_parameters(config: dict[str, Any]) -> list[str]:
     """Validate cashflow parameters from configuration.
 
-    Performs comprehensive validation of all required and optional parameters
-    used in v14 CFADS calculation. Raises ValueError with detailed message
-    if validation fails.
+    This is a human-readable guard that complements schema_guard.
 
-    Args:
-        config: Full configuration dictionary (YAML-loaded scenario config)
+    Raises ValueError with detailed message if validation fails; returns an
+    empty list on success (backward compatible).
 
-    Returns:
-        Empty list if validation passes (backward compatible)
-
-    Raises:
-        ValueError: If required parameters missing or values out of valid range
-
-    Validation Rules:
-        Required Fields:
-          - corporate_tax_rate: 0.0 <= rate <= 1.0 (or 0-100% if > 1)
-          - project_life_years: >= 1 year (typically 5-60)
-          - capacity_mw: > 0
-          - capacity_factor: 0 < cf <= 1.0 (or 0-100% if > 1)
-          - tariff_lkr_per_kwh: >= 0 (allow zero for edge case testing)
-          - opex_usd_per_year: >= 0
-
-        Optional Fields (validated if present):
-          - degradation: 0 <= deg < 1.0
-          - grid_loss_pct: 0 <= loss < 1.0
-          - risk_haircut_pct: 0 <= risk < 1.0
-          - depreciation_years: >= 1
-          - tax_holiday_years: >= 0
-
-    Example:
-        >>> config = load_scenario("scenario.yaml")
-        >>> validate_parameters(config)  # Raises ValueError if invalid
-        >>> cfads = build_annual_cfads(config)  # Proceeds safely
+    Key rules (decimals after normalization):
+      - 0.0 <= corporate_tax_rate <= 1.0
+      - project_life_years >= 1
+      - capacity_mw > 0
+      - 0 < capacity_factor <= 1.0
+      - tariff_lkr_per_kwh >= 0
+      - opex_usd_per_year >= 0
     """
     errors: list[str] = []
 
@@ -818,6 +873,58 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
 
 
 # =============================================================================
+# Internal context preparation
+# =============================================================================
+
+
+def _prepare_cashflow_context(
+    p: dict[str, Any],
+    fx_curve: Optional[list[float]],
+    capex_total: Optional[float],
+    interest_expense_series: Optional[list[float]],
+) -> tuple[dict[str, Any], list[float], Optional[float], list[float], int]:
+    """
+    Shared context builder for build_annual_cfads and build_annual_rows.
+
+    Returns
+    -------
+    (params, fx_curve_resolved, capex_total_resolved, interest_series, years)
+    """
+    # Validate parameters before expensive calculations
+    validate_parameters(p)
+
+    params = _extract_parameters(p)
+    years = int(params["project_life_years"])
+
+    if fx_curve is None:
+        fx_curve = _fx_curve(p, years)
+    else:
+        # Ensure we have at least `years` FX points; extend with last known.
+        if len(fx_curve) < years and fx_curve:
+            fx_curve = fx_curve + [fx_curve[-1]] * (years - len(fx_curve))
+        elif not fx_curve:
+            fx_curve = _fx_curve(p, years)
+
+    if capex_total is None:
+        capex_usd = as_float(get_nested(p, ["capex", "usd_total"], None))
+        if capex_usd is not None:
+            capex_total = capex_usd * fx_curve[0]
+
+    if interest_expense_series is None:
+        interest_expense_series = [0.0] * years
+    else:
+        # Pad or trim to project life
+        if len(interest_expense_series) < years:
+            interest_expense_series = interest_expense_series + [0.0] * (
+                years - len(interest_expense_series)
+            )
+        elif len(interest_expense_series) > years:
+            interest_expense_series = interest_expense_series[:years]
+
+    return params, fx_curve, capex_total, interest_expense_series, years
+
+
+# =============================================================================
 # Public CFADS API
 # =============================================================================
 
@@ -830,7 +937,29 @@ def calculate_single_year_cfads(
     interest_expense_lkr: float = 0.0,
     verbose: bool = False,
 ) -> dict[str, float]:
-    """Compute detailed CFADS breakdown for a single year."""
+    """Compute detailed CFADS breakdown for a single year.
+
+    Parameters
+    ----------
+    params :
+        Normalized parameter dict from _extract_parameters.
+    fx_rate :
+        LKR per USD FX rate for the given year.
+    year :
+        Zero-based year index.
+    capex_total :
+        Total capex in LKR (used for depreciation).
+    interest_expense_lkr :
+        Interest expense in LKR for the year.
+    verbose :
+        If True, log the per-year CFADS breakdown.
+
+    Returns
+    -------
+    dict[str, float]
+        Per-year breakdown, including `cfads_final_lkr` which is the
+        canonical CFADS used by debt_v14 and CashflowResult.
+    """
     gross_kwh, net_kwh = _calculate_net_production(
         float(params["capacity_mw"]),
         float(params["capacity_factor"]),
@@ -900,35 +1029,21 @@ def build_annual_cfads(
 ) -> list[float]:
     """Return list of CFADS (LKR) for each project year.
 
-    Validates parameters before calculation to ensure data integrity.
+    This is the primary numeric surface used by debt_v14 and covenant tests.
     """
-    # Validate parameters before expensive calculations
-    validate_parameters(p)
-
-    params = _extract_parameters(p)
-    years = int(params["project_life_years"])
-    if fx_curve is None:
-        fx_curve = _fx_curve(p, years)
-    if capex_total is None:
-        capex_usd = as_float(get_nested(p, ["capex", "usd_total"], None))
-        if capex_usd is not None:
-            capex_total = capex_usd * fx_curve[0]
-    if interest_expense_series is None:
-        interest_expense_series = [0.0] * years
+    params, fx_curve_resolved, capex_total_resolved, interest_series, years = (
+        _prepare_cashflow_context(p, fx_curve, capex_total, interest_expense_series)
+    )
 
     cfads_list: list[float] = []
     for year in range(years):
-        fx_rate = fx_curve[year] if year < len(fx_curve) else fx_curve[-1]
-        interest_lkr = (
-            interest_expense_series[year]
-            if year < len(interest_expense_series)
-            else 0.0
-        )
+        fx_rate = fx_curve_resolved[year]
+        interest_lkr = interest_series[year]
         result = calculate_single_year_cfads(
             params=params,
             fx_rate=fx_rate,
             year=year,
-            capex_total=capex_total,
+            capex_total=capex_total_resolved,
             interest_expense_lkr=interest_lkr,
             verbose=verbose,
         )
@@ -951,47 +1066,40 @@ def build_annual_rows(
 ) -> list[dict[str, float]]:
     """Return list of per-year breakdown rows including CFADS in USD.
 
-    Validates parameters before calculation to ensure data integrity.
+    This is the canonical *row-wise* surface for:
+      - debt_v14.plan_debt (DSCR / covenants)
+      - CashflowResult (via contracts_v14)
+      - analytics exports and dashboards.
     """
-    # Validate parameters before expensive calculations
-    validate_parameters(p)
-
-    params = _extract_parameters(p)
-    years = int(params["project_life_years"])
-    if fx_curve is None:
-        fx_curve = _fx_curve(p, years)
-    if capex_total is None:
-        capex_usd = as_float(get_nested(p, ["capex", "usd_total"], None))
-        if capex_usd is not None:
-            capex_total = capex_usd * fx_curve[0]
-    if interest_expense_series is None:
-        interest_expense_series = [0.0] * years
+    params, fx_curve_resolved, capex_total_resolved, interest_series, years = (
+        _prepare_cashflow_context(p, fx_curve, capex_total, interest_expense_series)
+    )
 
     rows: list[dict[str, float]] = []
     for year in range(years):
-        fx_rate = fx_curve[year] if year < len(fx_curve) else fx_curve[-1]
-        interest_lkr = (
-            interest_expense_series[year]
-            if year < len(interest_expense_series)
-            else 0.0
-        )
+        fx_rate = fx_curve_resolved[year]
+        interest_lkr = interest_series[year]
+
         result = calculate_single_year_cfads(
             params=params,
             fx_rate=fx_rate,
             year=year,
-            capex_total=capex_total,
+            capex_total=capex_total_resolved,
             interest_expense_lkr=interest_lkr,
             verbose=False,
         )
         revenue_lkr = result["revenue_lkr"]
         cfads_final_lkr = result["cfads_final_lkr"]
-        if fx_rate > 0:
+
+        if fx_rate > 0.0:
             result["revenue_usd"] = revenue_lkr / fx_rate
             result["cfads_usd"] = cfads_final_lkr / fx_rate
         else:
             result["revenue_usd"] = 0.0
             result["cfads_usd"] = 0.0
+
         rows.append(result)
+
     return rows
 
 
@@ -1121,7 +1229,13 @@ def _register_cashflow_schema() -> None:
 try:  # pragma: no cover
     _register_cashflow_schema()
 except Exception:
-    # Never allow schema registration to break the core finance engine
+    # Never allow schema registration to break the core finance engine.
     pass
 
+__all__ = [
+    "validate_parameters",
+    "calculate_single_year_cfads",
+    "build_annual_cfads",
+    "build_annual_rows",
+]
 # EOF

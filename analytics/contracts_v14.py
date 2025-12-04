@@ -5,13 +5,13 @@
 ║                  (Fully Refactored with Validators)                         ║
 ║                                                                              ║
 ║  All canonical data structures (dataclasses, pydantic models) used for:      ║
-║  - Valuation, WACC, and scenario results                                    ║
-║  - Equity metrics, downside risk                                            ║
-║  - Sensitivity/tornado/optimizer/Monte Carlo surfaces for analytics         ║
-║  - Ready for export, reporting, dashboard use                               ║
+║  - Valuation, WACC, and scenario results                                     ║
+║  - Equity metrics, downside risk                                             ║
+║  - Sensitivity/tornado/optimizer/Monte Carlo surfaces for analytics          ║
+║  - Ready for export, reporting, dashboard use                                ║
 ║                                                                              ║
-║  ALWAYS update comments and docstrings in this file for future maintainers. ║
-║  All pipeline modules must import *analytics results* only from here.       ║
+║  ALWAYS update comments and docstrings in this file for future maintainers.  ║
+║  All pipeline modules must import *analytics results* only from here.        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -19,7 +19,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -65,12 +74,436 @@ class WaccResult:
     meta: Dict[str, Any] = field(default_factory=dict)
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Debt profile & covenant snapshot (Phase 1 – lender view)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class TrancheDebtProfile:
+    """
+    Aggregate per-tranche debt profile for a scenario.
+
+    This is the *lender-facing* snapshot that sits on ScenarioResult and
+    feeds dashboards / credit memos. It is intentionally summary-level and
+    currency-agnostic in structure, while still exposing LKR / USD / DFI
+    breakdowns that match the v14 debt engine.
+
+    All values are expected to be in scenario base currency (e.g. USD),
+    with LKR/DFI components converted upstream where appropriate.
+    """
+
+    # Timeline
+    construction_years: int = 0
+    tenor_years: int = 0
+    timeline_periods: int = 0
+
+    # Aggregate totals
+    total_debt: float = 0.0
+    total_idc: float = 0.0
+
+    # Per-tranche principals (after IDC capitalisation)
+    lkr_principal: float = 0.0
+    usd_principal: float = 0.0
+    dfi_principal: float = 0.0
+
+    # Per-tranche IDC capitalised during construction
+    lkr_idc: float = 0.0
+    usd_idc: float = 0.0
+    dfi_idc: float = 0.0
+
+    # Optional cost-of-debt inputs (nominal, after fees; decimals)
+    lkr_rate: Optional[float] = None
+    usd_rate: Optional[float] = None
+    dfi_rate: Optional[float] = None
+
+    # Optional structure metadata
+    interest_only_years: int = 0
+    amortization_style: str = "sculpted"  # or "annuity", "fixed"
+    dscr_target: Optional[float] = None
+
+
+@dataclass
+class DebtCovenantSnapshot:
+    """
+    Covenant snapshot for a single debt case.
+
+    This is the CFA / lender-facing summary used in dashboards and reports.
+    It captures:
+
+    - DSCR profile vs minimum covenant threshold
+    - Balloon risk
+    - LLCR / PLCR vs target thresholds
+    - FX profile for FX-related covenant diagnostics
+    """
+
+    # DSCR profile
+    dscr_min: float
+    dscr_threshold: float
+    years_below_threshold: int
+    first_breach_year: Optional[int]
+    last_breach_year: Optional[int]
+
+    # Balloon / residual
+    balloon_flag: bool
+    balloon_remaining: float
+
+    # Coverage ratios
+    llcr: Optional[float] = None
+    plcr: Optional[float] = None
+    llcr_threshold: Optional[float] = None
+    plcr_threshold: Optional[float] = None
+
+    # FX profile
+    fx_min: Optional[float] = None
+    fx_max: Optional[float] = None
+    fx_avg: Optional[float] = None
+
+    # Meta
+    notes: str = ""
+    audit_status: str = "REVIEW"
+
+    @classmethod
+    def from_debt_result(
+        cls,
+        *,
+        debt_result: Mapping[str, Any],
+        dscr_threshold: float,
+        llcr_threshold: Optional[float] = None,
+        plcr_threshold: Optional[float] = None,
+    ) -> "DebtCovenantSnapshot":
+        """
+        Build snapshot from the v14 debt surface (plan_debt output).
+        """
+        dscr_min = float(
+            debt_result.get("min_dscr") or debt_result.get("dscr_min") or 0.0
+        )
+
+        dscr_series = list(debt_result.get("dscr_series") or [])
+        years_below = 0
+        first_breach: Optional[int] = None
+        last_breach: Optional[int] = None
+
+        for idx, value in enumerate(dscr_series):
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                continue
+            if v == float("inf") or v != v:  # inf / NaN
+                continue
+            if v < dscr_threshold:
+                years_below += 1
+                if first_breach is None:
+                    first_breach = idx
+                last_breach = idx
+
+        balloon_remaining = float(debt_result.get("balloon_remaining") or 0.0)
+        balloon_flag = balloon_remaining > 1e-6
+
+        # LLCR / PLCR from debt surface
+        llcr_val_raw = debt_result.get("llcr")
+        plcr_val_raw = debt_result.get("plcr")
+
+        llcr_val = float(llcr_val_raw) if llcr_val_raw is not None else None
+        plcr_val = float(plcr_val_raw) if plcr_val_raw is not None else None
+
+        # FX surfaces
+        fx_min_raw = debt_result.get("fx_min")
+        fx_max_raw = debt_result.get("fx_max")
+        fx_avg_raw = debt_result.get("fx_avg")
+
+        fx_min = float(fx_min_raw) if fx_min_raw is not None else None
+        fx_max = float(fx_max_raw) if fx_max_raw is not None else None
+        fx_avg = float(fx_avg_raw) if fx_avg_raw is not None else None
+
+        audit_status = str(debt_result.get("audit_status") or "REVIEW")
+
+        notes_parts: List[str] = []
+        if years_below > 0:
+            notes_parts.append(
+                f"DSCR breaches in {years_below} period(s) "
+                f"(first={first_breach}, last={last_breach})."
+            )
+        if (
+            llcr_val is not None
+            and llcr_threshold is not None
+            and llcr_val < llcr_threshold
+        ):
+            notes_parts.append(
+                f"LLCR {llcr_val:.2f} below threshold {llcr_threshold:.2f}."
+            )
+        if (
+            plcr_val is not None
+            and plcr_threshold is not None
+            and plcr_val < plcr_threshold
+        ):
+            notes_parts.append(
+                f"PLCR {plcr_val:.2f} below threshold {plcr_threshold:.2f}."
+            )
+
+        notes = " ".join(notes_parts)
+
+        # If everything looks fine but debt engine labelled REVIEW, we can
+        # conservatively promote to PASS here based on covenant view.
+        if not notes and audit_status == "REVIEW":
+            audit_status = "PASS"
+
+        return cls(
+            dscr_min=dscr_min,
+            dscr_threshold=dscr_threshold,
+            years_below_threshold=years_below,
+            first_breach_year=first_breach,
+            last_breach_year=last_breach,
+            balloon_flag=balloon_flag,
+            balloon_remaining=balloon_remaining,
+            llcr=llcr_val,
+            plcr=plcr_val,
+            llcr_threshold=llcr_threshold,
+            plcr_threshold=plcr_threshold,
+            fx_min=fx_min,
+            fx_max=fx_max,
+            fx_avg=fx_avg,
+            notes=notes,
+            audit_status=audit_status,
+        )
+
+    def as_dict(self) -> Dict[str, Any]:
+        """
+        JSON/CLI friendly view. Used by run_full_pipeline_v14 when building
+        scenario_result["debt_covenants"].
+        """
+        return {
+            "dscr_min": self.dscr_min,
+            "dscr_threshold": self.dscr_threshold,
+            "years_below_threshold": self.years_below_threshold,
+            "first_breach_year": self.first_breach_year,
+            "last_breach_year": self.last_breach_year,
+            "balloon_flag": self.balloon_flag,
+            "balloon_remaining": self.balloon_remaining,
+            "llcr": self.llcr,
+            "plcr": self.plcr,
+            "llcr_threshold": self.llcr_threshold,
+            "plcr_threshold": self.plcr_threshold,
+            "fx_min": self.fx_min,
+            "fx_max": self.fx_max,
+            "fx_avg": self.fx_avg,
+            "notes": self.notes,
+            "audit_status": self.audit_status,
+        }
+
+
+def _build_debt_covenant_snapshot(
+    config: Mapping[str, Any],
+    debt_result: Mapping[str, Any],
+) -> DebtCovenantSnapshot:
+    """
+    Convenience wrapper: read thresholds from config, then build snapshot
+    from the v14 debt surface (plan_debt output).
+    """
+    financing_cfg = (
+        config.get("Financing_Terms")
+        or config.get("financing")
+        or config.get("finance")
+        or {}
+    )
+    cov_cfg = (
+        (financing_cfg.get("covenants") or {})
+        if isinstance(financing_cfg, dict)
+        else {}
+    )
+
+    dscr_threshold = float(
+        cov_cfg.get("min_dscr")
+        or financing_cfg.get("target_dscr")
+        or debt_result.get("dscr_threshold")
+        or 1.30
+    )
+
+    llcr_threshold_raw = cov_cfg.get("llcr_min")
+    plcr_threshold_raw = cov_cfg.get("plcr_min")
+
+    llcr_threshold = (
+        float(llcr_threshold_raw) if llcr_threshold_raw is not None else None
+    )
+    plcr_threshold = (
+        float(plcr_threshold_raw) if plcr_threshold_raw is not None else None
+    )
+
+    return DebtCovenantSnapshot.from_debt_result(
+        debt_result=debt_result,
+        dscr_threshold=dscr_threshold,
+        llcr_threshold=llcr_threshold,
+        plcr_threshold=plcr_threshold,
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CashflowResult – canonical cashflow surface (Phase 1.5)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class CashflowResult:
+    """
+    Canonical multi-year project cashflow surface in LKR for a single v14 run.
+
+    This is the *only* place that should define how the cashflow engine is
+    exposed to lenders, dashboards, and analytics. It wraps the raw
+    `annual_rows` table from `cashflow_v14` and provides series that are
+    explicitly labelled and easy to audit.
+
+    All series are aligned by `years` and correspond to operating periods.
+    Construction-phase flows should be handled separately by the debt engine.
+    """
+
+    # Core axis
+    years: List[int]
+
+    # Raw table from cashflow_v14.build_annual_rows (one dict per year)
+    annual_rows: List[Dict[str, float]]
+
+    # Generation
+    gross_generation_kwh: List[float]
+    net_generation_kwh: List[float]
+
+    # Top-line and deductions
+    revenue_lkr: List[float]
+    statutory_deductions_lkr: List[float]
+    opex_lkr: List[float]
+
+    # Tax and CFADS
+    pretax_cfads_lkr: List[float]
+    tax_lkr: List[float]
+    posttax_cfads_lkr: List[float]
+    cfads_final_lkr: List[float]
+
+    # Structural internals
+    depreciation_lkr: List[float]
+    interest_expense_lkr: List[float]
+    taxable_income_lkr: List[float]
+
+    # Risk haircut metadata
+    risk_haircut_pct: float
+    risk_haircut_amount_lkr: List[float]
+
+    # FX metadata (optional: depends on config shape)
+    fx_curve_lkr_per_usd: Optional[List[float]] = None
+
+    # Hooks for diagnostics and flags
+    notes: List[str] = field(default_factory=list)
+    flags: Dict[str, bool] = field(default_factory=dict)
+
+    def as_dict_rows(self) -> List[Dict[str, float]]:
+        """
+        Return a shallow copy of the underlying annual rows for tabular export.
+
+        This is intentionally simple: dashboards and Excel exporters can use
+        this when they want the familiar year-by-year table.
+        """
+        return list(self.annual_rows)
+
+
+def build_cashflow_result_from_annual_rows(
+    config: Mapping[str, Any],
+    annual_rows: Sequence[Mapping[str, Any]],
+    fx_curve_lkr_per_usd: Optional[Sequence[float]] = None,
+) -> CashflowResult:
+    """
+    Construct a CashflowResult from the raw annual_rows table produced by
+    the cashflow engine, plus the original config.
+
+    This keeps the contracts layer independent of the finance module
+    (no direct import of cashflow_v14) and avoids recomputing cashflows.
+    """
+    # Years
+    years: List[int] = [
+        int(row.get("year", i + 1)) for i, row in enumerate(annual_rows)
+    ]
+
+    # Generation
+    gross_generation_kwh = [float(row.get("gross_kwh", 0.0)) for row in annual_rows]
+    net_generation_kwh = [float(row.get("net_kwh", 0.0)) for row in annual_rows]
+
+    # Top-line and deductions
+    revenue_lkr = [float(row.get("revenue_lkr", 0.0)) for row in annual_rows]
+    statutory_deductions_lkr = [
+        float(row.get("total_statutory_deductions", 0.0)) for row in annual_rows
+    ]
+    opex_lkr = [float(row.get("opex_lkr", 0.0)) for row in annual_rows]
+
+    # Tax and CFADS
+    pretax_cfads_lkr = [float(row.get("pretax_cfads", 0.0)) for row in annual_rows]
+    tax_lkr = [float(row.get("tax", 0.0)) for row in annual_rows]
+    posttax_cfads_lkr = [float(row.get("posttax_cfads", 0.0)) for row in annual_rows]
+    cfads_final_lkr = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
+
+    # Structural internals
+    depreciation_lkr = [
+        float(row.get("total_depreciation", 0.0)) for row in annual_rows
+    ]
+    interest_expense_lkr = [
+        float(row.get("interest_expense_lkr", 0.0)) for row in annual_rows
+    ]
+    taxable_income_lkr = [float(row.get("taxable_income", 0.0)) for row in annual_rows]
+
+    # Risk haircut
+    risk_cfg = config.get("risk_adjustment") or config.get("risk") or {}
+    risk_haircut_pct = float(
+        risk_cfg.get("cfads_haircut_pct") or risk_cfg.get("risk_haircut_pct") or 0.0
+    )
+    risk_haircut_amount_lkr = [
+        float(row.get("risk_haircut_amount", 0.0)) for row in annual_rows
+    ]
+
+    fx_list: Optional[List[float]] = (
+        list(fx_curve_lkr_per_usd) if fx_curve_lkr_per_usd is not None else None
+    )
+
+    return CashflowResult(
+        years=years,
+        annual_rows=[dict(row) for row in annual_rows],
+        gross_generation_kwh=gross_generation_kwh,
+        net_generation_kwh=net_generation_kwh,
+        revenue_lkr=revenue_lkr,
+        statutory_deductions_lkr=statutory_deductions_lkr,
+        opex_lkr=opex_lkr,
+        pretax_cfads_lkr=pretax_cfads_lkr,
+        tax_lkr=tax_lkr,
+        posttax_cfads_lkr=posttax_cfads_lkr,
+        cfads_final_lkr=cfads_final_lkr,
+        depreciation_lkr=depreciation_lkr,
+        interest_expense_lkr=interest_expense_lkr,
+        taxable_income_lkr=taxable_income_lkr,
+        risk_haircut_pct=risk_haircut_pct,
+        risk_haircut_amount_lkr=risk_haircut_amount_lkr,
+        fx_curve_lkr_per_usd=fx_list,
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ScenarioResult – canonical scenario surface
+# ═════════════════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class ScenarioResult:
     """
     Complete scenario evaluation result with WACC and full outputs.
+
+    This is the canonical, lender/deck-facing result contract for a single
+    v14 scenario. It combines:
+
+    - Core project metrics (NPV, IRR, DSCR profile, max debt)
+    - WACC result (including prudential rate)
+    - Equity performance overlay (when available)
+    - Debt profile (tranche-level) and covenant snapshot
+    - Raw engine outputs (config, annual rows, debt_result, kpis)
+
+    Downstream consumers (dashboards, Excel exporters, lender reports) should
+    prefer this struct rather than poking into raw dicts.
     """
 
+    # Core ID / KPIs
     scenario_name: str
     config_path: str
     project_npv: float
@@ -78,15 +511,25 @@ class ScenarioResult:
     dscr_series: List[float]
     min_dscr: float
     max_debt_usd: float
+
+    # WACC / discounting
     wacc: Optional[WaccResult] = None
     discount_rate_used: Optional[float] = None
     wacc_label: Optional[str] = None
     wacc_is_real: Optional[bool] = None
+
+    # Engine + validation context
     validation_mode: str = "strict"
     config: Dict[str, Any] = field(default_factory=dict)
     annual_rows: Sequence[Dict[str, Any]] = field(default_factory=list)
     debt_result: Dict[str, Any] = field(default_factory=dict)
     kpis: Dict[str, Any] = field(default_factory=dict)
+    cashflow: Optional["CashflowResult"] = None
+
+    # Overlays (Phase 2 / 3)
+    equity_performance: Optional["EquityPerformance"] = None
+    debt_profile: Optional["TrancheDebtProfile"] = None
+    debt_covenants: Optional["DebtCovenantSnapshot"] = None
 
     def as_dict(self) -> Dict[str, Any]:
         """
@@ -155,34 +598,6 @@ class ParameterRangeConfig(BaseModel):
     Uses Pydantic v2 for robust input validation at config boundaries.
 
     Used by tornado, two-way, optimization, MC parameter loaders, etc.
-
-    Attributes:
-        variable_name: Dot-separated parameter path (e.g., project.capex_usd_per_kw)
-        base_value: Base case value for the parameter (must be > 0)
-        low_pct: Lower bound as percentage change (-50 to 0)
-        high_pct: Upper bound as percentage change (0 to 100)
-        steps: Number of steps in sensitivity sweep (3 to 20)
-
-    Example:
-        >>> config = ParameterRangeConfig(
-        ...     variable_name="project.capex_usd_per_kw",
-        ...     base_value=850.0,
-        ...     low_pct=-20.0,
-        ...     high_pct=20.0,
-        ...     steps=5
-        ... )
-        >>> config.low_value
-        680.0
-        >>> config.high_value
-        1020.0
-
-    Validation Rules:
-        - variable_name: Non-empty string
-        - base_value: Must be strictly positive (> 0)
-        - low_pct: Between -50 and 0 (inclusive)
-        - high_pct: Between 0 and 100 (inclusive)
-        - high_pct must be >= abs(low_pct) for meaningful range
-        - steps: Between 3 and 20 (inclusive)
     """
 
     model_config = ConfigDict(
@@ -195,8 +610,9 @@ class ParameterRangeConfig(BaseModel):
     variable_name: str = Field(
         ...,
         min_length=1,
-        description="Parameter to sweep (dot-separated path,"
-        "e.g. project.capex_usd_per_kw)",
+        description=(
+            "Parameter to sweep (dot-separated path, " "e.g. project.capex_usd_per_kw)"
+        ),
     )
 
     base_value: float = Field(
@@ -209,21 +625,6 @@ class ParameterRangeConfig(BaseModel):
     def validate_base_value(cls, v: float) -> float:
         """
         Ensure base_value is strictly positive (> 0).
-
-        For financial models, zero or negative base values break sensitivity analysis:
-            low_value = base_value * (1 + low_pct/100)
-            high_value = base_value * (1 + high_pct/100)
-
-        If base_value <= 0, the range becomes degenerate and meaningless.
-
-        Args:
-            v: The base_value to validate
-
-        Returns:
-            The validated value (unchanged)
-
-        Raises:
-            ValueError: If v <= 0
         """
         if v <= 0:
             raise ValueError(f"base_value must be positive (> 0), got {v}")
@@ -255,21 +656,6 @@ class ParameterRangeConfig(BaseModel):
     def validate_high_exceeds_low(cls, v: float, info: Any) -> float:
         """
         Ensure high_pct is at least as large as abs(low_pct).
-
-        This ensures the sensitivity range is meaningful and symmetric.
-        For example, high_pct=-20 and low_pct=-30 would be inverted and rejected.
-
-        Allows symmetric ranges like low_pct=-20, high_pct=20.
-
-        Args:
-            v: The high_pct value
-            info: Validation context with other field values
-
-        Returns:
-            The validated value (unchanged)
-
-        Raises:
-            ValueError: If v < abs(low_pct)
         """
         low_pct = info.data.get("low_pct")
         if low_pct is not None and v < abs(low_pct):
@@ -285,16 +671,6 @@ class ParameterRangeConfig(BaseModel):
         Calculate absolute low value from base and low_pct.
 
         Formula: base_value * (1 + low_pct/100)
-
-        Example:
-            >>> config = ParameterRangeConfig(
-            ...     variable_name="test",
-            ...     base_value=100.0,
-            ...     low_pct=-20.0,
-            ...     high_pct=20.0
-            ... )
-            >>> config.low_value
-            80.0
         """
         return self.base_value * (1 + self.low_pct / 100.0)
 
@@ -304,16 +680,6 @@ class ParameterRangeConfig(BaseModel):
         Calculate absolute high value from base and high_pct.
 
         Formula: base_value * (1 + high_pct/100)
-
-        Example:
-            >>> config = ParameterRangeConfig(
-            ...     variable_name="test",
-            ...     base_value=100.0,
-            ...     low_pct=-20.0,
-            ...     high_pct=20.0
-            ... )
-            >>> config.high_value
-            120.0
         """
         return self.base_value * (1 + self.high_pct / 100.0)
 
@@ -325,55 +691,6 @@ class TornadoResult:
 
     Stores sensitivity analysis results for one parameter.
     Uses dataclass for performance (no validation overhead on results).
-
-    Attributes:
-        variable: Parameter name/identifier (e.g., "capex_usd_per_kw")
-        base_irr: Base case IRR (or other metric)
-        low_irr: IRR when parameter at low bound
-        high_irr: IRR when parameter at high bound
-
-    Properties:
-        impact_abs: Absolute impact (|high_irr - low_irr|)
-        impact_pct: Signed percentage impact relative to base
-
-    Examples:
-        >>> result = TornadoResult(
-        ...     variable="capex",
-        ...     base_irr=0.10,
-        ...     low_irr=0.08,
-        ...     high_irr=0.12,
-        ... )
-        >>> result.impact_abs
-        0.04
-        >>> result.impact_pct
-        40.0
-
-        Inverted case (high < low):
-
-        >>> inv = TornadoResult(
-        ...     variable="test",
-        ...     base_irr=0.10,
-        ...     low_irr=0.12,
-        ...     high_irr=0.08,
-        ... )
-        >>> inv.impact_abs
-        0.04          # magnitude stays positive
-        >>> inv.impact_pct
-        -40.0         # direction is negative
-
-        NaN handling:
-
-        >>> import numpy as np
-        >>> nan_case = TornadoResult(
-        ...     variable="test",
-        ...     base_irr=0.10,
-        ...     low_irr=np.nan,
-        ...     high_irr=0.12,
-        ... )
-        >>> math.isnan(nan_case.impact_abs)
-        True
-        >>> math.isnan(nan_case.impact_pct)
-        True
     """
 
     variable: str
@@ -384,14 +701,10 @@ class TornadoResult:
     @property
     def impact_abs(self) -> float:
         """
-        Absolute magnitude of IRR movement.
-
-        Rounded to 10 decimal places to avoid tiny floating-point artefacts
-        (tests compare this value with strict equality, e.g. 0.04).
+        Absolute magnitude of IRR movement, rounded for test stability.
         """
         delta = self.high_irr - self.low_irr
-        if delta != delta:
-            # NaN check: delta != delta is True only for NaN
+        if delta != delta:  # NaN check
             return float("nan")
         return round(abs(delta), 10)
 
@@ -399,12 +712,6 @@ class TornadoResult:
     def impact_pct(self) -> float:
         """
         Signed percentage impact relative to base_irr.
-
-        - Direction comes from (high_irr - low_irr):
-            * positive when high_irr > low_irr
-            * negative when high_irr < low_irr
-        - Returns 0.0 when base_irr == 0.0 (avoid division by zero).
-        - Propagates NaN if any of base_irr, low_irr, high_irr is NaN.
         """
         # NaN propagation
         for v in (self.base_irr, self.low_irr, self.high_irr):
@@ -422,9 +729,6 @@ class TornadoResult:
 class SensitivitySuite:
     """
     Complete tornado/sensitivity table, for export/analytics.
-
-    Aggregates tornado analysis results for multiple parameters,
-    ranks them by impact, and identifies top risk drivers.
     """
 
     tornado_results: List[TornadoResult]
@@ -437,8 +741,6 @@ class SensitivitySuite:
 class BreakevenResult:
     """
     Result from breakeven solver ("what capex for IRR=12%?").
-
-    Stores the solution and bracketing information.
     """
 
     variable: str
@@ -451,9 +753,6 @@ class BreakevenResult:
 class MultiMetricTornadoResult:
     """
     Multi-metric spider/radar tornado result (all KPI deltas for a driver).
-
-    Extends single-metric tornado to track impact on multiple metrics
-    (e.g., IRR, NPV, DSCR) for same parameter sweep.
     """
 
     variable: str
@@ -481,8 +780,6 @@ class MultiMetricSensitivitySuite:
 class ParetoFrontierResult:
     """
     Results of multi-objective optimizer grid search (for efficient frontier/Pareto).
-
-    Stores frontier points and objectives for Pareto optimization.
     """
 
     frontier_points: List[Dict[str, Any]]
@@ -493,8 +790,6 @@ class ParetoFrontierResult:
 class TailRiskMetrics:
     """
     Used by risk_metrics/stochastic overlays (VaR/CVaR/tail).
-
-    Captures downside tail risk quantiles and breach probabilities.
     """
 
     var: float
@@ -514,29 +809,6 @@ class TailRiskMetrics:
 class Distribution:
     """
     Probability distribution for MC—used in both MC config and derived parameter tools.
-
-    This is intentionally a *thin* config object; all the heavy lifting happens
-    in analytics.monte_carlo_v14._transform_to_distribution.
-
-    Validation rules (mirrored in tests/analytics_layer/test_monte_carlo_v14.py):
-
-    - dist_type == "normal":
-        * std must be > 0
-        * if std <= 0, raise ValueError with message containing
-          "requires std > 0"
-
-    - dist_type == "triangular":
-        * min_val, mode, max_val must all be provided (not None)
-        * must satisfy: min_val <= mode <= max_val
-        * if not, raise ValueError with message containing
-          "requires min <= mode <= max"
-
-    - dist_type == "uniform":
-        * min_val and max_val must be provided
-        * must satisfy: min_val < max_val
-
-    - dist_type == "lognormal":
-        * std must be > 0 (same shape as normal)
     """
 
     variable_name: str
@@ -567,7 +839,6 @@ class Distribution:
         if dt == "triangular":
             if self.min_val is None or self.mode is None or self.max_val is None:
                 raise ValueError("triangular distribution requires min <= mode <= max")
-
             if not (self.min_val <= self.mode <= self.max_val):
                 raise ValueError("triangular distribution requires min <= mode <= max")
             return
@@ -580,8 +851,7 @@ class Distribution:
                 raise ValueError("uniform distribution requires min < max")
             return
 
-        # Defensive: if someone ever adds a new dist_type without updating
-        # this method, fail loudly rather than silently accepting bad shapes.
+        # Defensive
         raise ValueError(f"Unsupported distribution type: {dt!r}")
 
 
@@ -589,16 +859,6 @@ class Distribution:
 class DerivedParameter:
     """
     Configuration for a *derived* MC parameter.
-
-    Example: "solve for capex such that project_irr ~= target_distribution".
-
-    Fields mirror what analytics.monte_carlo_v14 expects:
-    - variable_name: dot-path in the scenario config to set
-    - derive_from: identifier for the solver to use (registered via get_solver)
-    - target_distribution: Distribution describing the target metric
-    - solver_config: free-form dict passed to the solver
-    - enabled: whether this derived parameter is active
-    - description: human-readable note for docs/dashboards
     """
 
     variable_name: str
@@ -613,13 +873,6 @@ class DerivedParameter:
 class MonteCarloScenario:
     """
     Monte Carlo scenario configuration.
-
-    Each scenario bundles:
-    - A friendly name
-    - Optional description
-    - A list of standard parameter Distributions
-    - A list of DerivedParameters
-    - An enabled flag (used when filtering scenarios to run)
     """
 
     name: str
@@ -633,10 +886,6 @@ class MonteCarloScenario:
 class MonteCarloResult:
     """
     Aggregated Monte Carlo output for a single scenario.
-
-    This matches the expectations in:
-    - tests/analytics_layer/test_monte_carlo_v14.py
-    - analytics.monte_carlo_v14._aggregate_results
     """
 
     iterations: int
@@ -658,9 +907,6 @@ class MonteCarloResult:
     def success_rate(self) -> float:
         """
         Percentage of iterations that produced a usable result.
-
-        The tests treat this as:
-            100 * (iterations - failed_iterations) / iterations
         """
         if self.iterations <= 0:
             return 0.0
@@ -670,10 +916,6 @@ class MonteCarloResult:
     def probability_above_threshold(self, metric: str, threshold: float) -> float:
         """
         Percentage of raw_results where raw_result[metric] >= threshold.
-
-        tests/analytics_layer/test_monte_carlo_v14.py builds a MonteCarloResult
-        with a small raw_results list and expects a percentage based ONLY on
-        that list, not on `iterations`.
         """
         if not self.raw_results:
             return 0.0
@@ -733,4 +975,4 @@ class ScenarioDescriptor:
 # 5. Keep this file focused on contracts only - no business logic
 #
 # ═════════════════════════════════════════════════════════════════════════════
-# EOF - analytics/contractsv14.py
+# EOF - analytics/contracts_v14.py

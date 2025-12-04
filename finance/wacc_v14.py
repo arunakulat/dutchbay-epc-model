@@ -1,45 +1,57 @@
 """WACC Calculation Module for DutchBay V14 Project Finance.
 
-COMPLIANCE:
------------
-- Project-specific WACC using CAPM for cost of equity.
+COMPLIANCE / DESIGN GOALS
+-------------------------
+- Project-specific WACC using CAPM for the cost of equity.
 - Asset beta de-levering and re-levering at target capital structure.
 - Nominal and real after-tax WACC.
-- Prudential WACC for conservative valuation.
-- Full component breakdown for lender/equity disclosure.
+- Prudential WACC for conservative valuation / IC cases.
+- Full component breakdown for lender / equity disclosure.
+- YAML-driven, with a small, explicit config surface.
 
-FEATURES:
----------
-- CAPM cost of equity: Rf + β_equity × MRP.
-- Beta re-levering: β_equity = β_asset × [1 + (1 - T) × D/E].
-- After-tax WACC: (E/V × Ke) + (D/V × Kd × (1 - T)).
-- Real WACC: [(1 + WACC_nominal) / (1 + inflation)] - 1.
-- Prudential adjustment: WACC + X bps for conservative NPV.
+FEATURES
+--------
+- CAPM cost of equity: Ke = Rf + β_equity × MRP.
+- Beta re-levering:   β_equity = β_asset × [1 + (1 - T) × (D/E)].
+- After-tax WACC:     WACC = (E/V × Ke) + (D/V × Kd × (1 - T)).
+- Real WACC:          WACC_real = [(1 + WACC_nominal) / (1 + inflation)] - 1.
+- Prudential bump:    WACC_prudential = WACC_nominal + X bps.
 
-MODES:
-------
-- Simple / fixed:
-  wacc:
-    discount_rate: 12.0  # percent or decimal
-    prudential_spread_bps: 100  # default 100 bps
+CONFIG MODES
+------------
+Simple / fixed:
+    wacc:
+      discount_rate: 12.0              # percent or decimal
+      prudential_spread_bps: 100       # default 100 bps
 
-- CAPM:
-  wacc:
-    mode: capm
-    risk_free: 5.0  # or risk_free_rate
-    market_premium: 6.0  # or market_risk_premium
-    beta: 0.8  # or asset_beta
-    # Capital structure:
-    gearing: 60.0  # D/V, percent or decimal
-    # or
-    target_debt_to_equity: 1.5  # D/E
-    # Cost of debt:
-    cost_of_debt: 8.0  # or base_rate + margin
-    # Tax:
-    tax_rate: 24.0  # or tax.corporate_tax_rate(_pct)
-    # Optional:
-    inflation_rate: 2.0
-    prudential_spread_bps: 100
+CAPM (canonical project-finance mode):
+    wacc:
+      mode: capm
+      risk_free: 5.0                   # or risk_free_rate
+      market_premium: 6.0              # or market_risk_premium
+      beta: 0.8                        # or asset_beta
+
+      # Capital structure (choose ONE of the following):
+      gearing: 60.0                    # D/V, percent or decimal
+      # or
+      target_debt_to_equity: 1.5       # D/E
+
+      # Cost of debt:
+      cost_of_debt: 8.0                # or (base_rate + margin)
+
+      # Tax:
+      tax_rate: 24.0                   # or tax.corporate_tax_rate(_pct)
+
+      # Optional:
+      inflation_rate: 2.0              # for real WACC
+      prudential_spread_bps: 100       # bps added to nominal WACC
+
+EXTERNAL CONTRACT
+-----------------
+- `compute_wacc_from_config(config)` returns a dict compatible with
+  `analytics.contracts_v14.WaccComponents`.
+- We keep that dict surface stable so that analytics / lenders can
+  depend on a predictable JSON / dataclass contract.
 """
 
 from __future__ import annotations
@@ -64,24 +76,29 @@ class WaccComponents:
     Callers that prefer dicts can use dataclasses.asdict().
     """
 
+    # High-level mode / headline outputs
     mode: str
     wacc_nominal: float
     wacc_real: Optional[float]
     wacc_prudential: float
 
+    # CAPM inputs / drivers
     risk_free_rate: float
     market_risk_premium: float
     asset_beta: float
 
+    # Capital structure
     target_debt_to_equity: float
     target_debt_to_value: float
     target_equity_to_value: float
 
+    # Debt / equity pricing
     cost_of_debt_pretax: float
     cost_of_debt_aftertax: float
     equity_beta_levered: float
     cost_of_equity: float
 
+    # Tax and ancillary parameters
     tax_rate: float
     inflation_rate: Optional[float]
     prudential_spread_bps: int
@@ -93,7 +110,7 @@ class WaccComponents:
 
 
 def _as_float_or_none(value: Any) -> Optional[float]:
-    """Return float(value) or None."""
+    """Return float(value) or None for non-castable inputs."""
     try:
         if value is None:
             return None
@@ -104,9 +121,13 @@ def _as_float_or_none(value: Any) -> Optional[float]:
 
 def _pct_to_decimal(raw: Optional[float]) -> Optional[float]:
     """
-    Interpret a numeric as a percentage if > 1.0, otherwise as a decimal:
-        24   -> 0.24
-        0.24 -> 0.24
+    Interpret a numeric as a percentage if > 1.0, otherwise as a decimal.
+
+    Examples
+    --------
+    24      -> 0.24
+    0.24    -> 0.24
+    None    -> None
     """
     if raw is None:
         return None
@@ -116,7 +137,17 @@ def _pct_to_decimal(raw: Optional[float]) -> Optional[float]:
 
 
 def get_nested(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
-    """Safely navigate nested dictionaries by list of keys."""
+    """Safely navigate nested dictionaries by list of keys.
+
+    Parameters
+    ----------
+    d:
+        Root dict (e.g. scenario config).
+    keys:
+        Sequence of keys, e.g. ["tax", "corporate_tax_rate_pct"].
+    default:
+        Value returned if the path is missing or shape is not a dict chain.
+    """
     current: Any = d
     for key in keys:
         if not isinstance(current, dict):
@@ -130,11 +161,22 @@ def get_nested(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
 def _parse_prudential_spread_bps(raw: Any, default_bps: int = 100) -> int:
     """Parse prudential spread expressed in basis points.
 
-    Accepts:
-    - int / float: interpreted directly as bps (e.g. 100 -> 100)
-    - str: e.g. "100", "+75bps", "50bp", "  +25  " etc.
+    Accepts
+    -------
+    - int / float:
+        Interpreted directly as bps (e.g. 100 -> 100).
+    - str:
+        e.g. "100", "+75bps", "50bp", "  +25  " etc.
 
-    Returns an integer number of basis points or raises ValueError on invalid input.
+    Returns
+    -------
+    int
+        Integer number of basis points.
+
+    Raises
+    ------
+    ValueError
+        If the input cannot be interpreted as a numeric bps value.
     """
     if raw is None:
         return int(default_bps)
@@ -173,7 +215,10 @@ def calculate_cost_of_equity_capm(
     beta: float,
     market_risk_premium: float,
 ) -> float:
-    """Ke = Rf + β × MRP."""
+    """CAPM cost of equity.
+
+    Ke = Rf + β × MRP
+    """
     return risk_free_rate + (beta * market_risk_premium)
 
 
@@ -182,7 +227,10 @@ def relever_beta(
     debt_to_equity: float,
     tax_rate: float,
 ) -> float:
-    """β_equity = β_asset × [1 + (1 - T) × D/E]."""
+    """Re-lever asset beta to equity beta at target capital structure.
+
+    β_equity = β_asset × [1 + (1 - T) × (D/E)]
+    """
     return asset_beta * (1.0 + (1.0 - tax_rate) * debt_to_equity)
 
 
@@ -198,7 +246,10 @@ def calculate_after_tax_wacc(
     debt_to_value: float,
     tax_rate: float,
 ) -> float:
-    """WACC = (E/V × Ke) + (D/V × Kd × (1 - T))."""
+    """After-tax WACC in nominal terms.
+
+    WACC = (E/V × Ke) + (D/V × Kd × (1 - T))
+    """
     equity_component = equity_to_value * cost_of_equity
     debt_component = debt_to_value * cost_of_debt * (1.0 - tax_rate)
     return equity_component + debt_component
@@ -208,12 +259,15 @@ def calculate_real_wacc(
     wacc_nominal: float,
     inflation_rate: float,
 ) -> float:
-    """WACC_real = [(1 + WACC_nominal) / (1 + inflation)] - 1."""
+    """Convert nominal WACC to real WACC via Fisher relationship.
+
+    WACC_real = [(1 + WACC_nominal) / (1 + inflation)] - 1
+    """
     return ((1.0 + wacc_nominal) / (1.0 + inflation_rate)) - 1.0
 
 
 # =============================================================================
-# Pure WACC builder
+# Pure WACC builder (explicit inputs)
 # =============================================================================
 
 
@@ -247,7 +301,7 @@ def build_wacc(
     inflation_rate : Optional[float]
         Expected inflation (decimal).
     prudential_spread_bps : int
-        Prudential bump in basis points.
+        Prudential bump in basis points applied to nominal WACC.
 
     Returns
     -------
@@ -263,17 +317,17 @@ def build_wacc(
 
     equity_beta = relever_beta(asset_beta, d_to_e, tax_rate)
     cost_of_equity = calculate_cost_of_equity_capm(
-        risk_free_rate,
-        equity_beta,
-        market_risk_premium,
+        risk_free_rate=risk_free_rate,
+        beta=equity_beta,
+        market_risk_premium=market_risk_premium,
     )
 
     wacc_nominal = calculate_after_tax_wacc(
-        cost_of_equity,
-        cost_of_debt,
-        equity_to_value,
-        debt_to_value,
-        tax_rate,
+        cost_of_equity=cost_of_equity,
+        cost_of_debt=cost_of_debt,
+        equity_to_value=equity_to_value,
+        debt_to_value=debt_to_value,
+        tax_rate=tax_rate,
     )
 
     wacc_real: Optional[float] = None
@@ -311,16 +365,17 @@ def build_wacc(
 
 def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Compute project-specific WACC from scenario config.
+    Compute project-specific WACC from a v14 scenario config.
 
     Returns
     -------
     Dict[str, Any]
-        Dict compatible with contracts_v14.WaccComponents.
+        Dict compatible with `contracts_v14.WaccComponents`.
 
     Notes
     -----
-    - If the 'wacc' block is absent, returns {} and caller should fall back.
+    - If the 'wacc' block is absent, returns {} and caller should fall back
+      to a default discount rate (e.g. constants.DEFAULT_DISCOUNT_RATE).
     - Internally uses WaccComponents but preserves the dict surface for
       backwards compatibility with existing callers.
     """
@@ -407,7 +462,7 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     market_risk_premium: float = market_risk_premium_opt
     asset_beta: float = asset_beta_opt
 
-    # Capital structure
+    # Capital structure (D/V or D/E)
     d_to_e_raw = wacc_cfg.get("target_debt_to_equity")
     gearing_raw = wacc_cfg.get("target_gearing", wacc_cfg.get("gearing"))
 
@@ -504,3 +559,58 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     return asdict(components)
+
+
+# =============================================================================
+# Convenience helper for analytics / reporting
+# =============================================================================
+
+
+def extract_wacc_rates(config: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Convenience helper to pull headline discount rates from config.
+
+    Returns
+    -------
+    Dict[str, Optional[float]]
+        {
+          "wacc_nominal": float | None,
+          "wacc_real": float | None,
+          "wacc_prudential": float | None,
+        }
+
+    Notes
+    -----
+    - If there is no `wacc` block, all values are None.
+    - This is a thin wrapper around `compute_wacc_from_config` and is
+      intended mainly for dashboards / quick analytics where you want
+      a single call that surfaces the three key rates.
+    """
+    components = compute_wacc_from_config(config)
+    if not components:
+        return {
+            "wacc_nominal": None,
+            "wacc_real": None,
+            "wacc_prudential": None,
+        }
+
+    return {
+        "wacc_nominal": float(components.get("wacc_nominal", 0.0)),
+        "wacc_real": (
+            float(components["wacc_real"])
+            if components.get("wacc_real") is not None
+            else None
+        ),
+        "wacc_prudential": float(components.get("wacc_prudential", 0.0)),
+    }
+
+
+__all__ = [
+    "WaccComponents",
+    "calculate_cost_of_equity_capm",
+    "relever_beta",
+    "calculate_after_tax_wacc",
+    "calculate_real_wacc",
+    "build_wacc",
+    "compute_wacc_from_config",
+    "extract_wacc_rates",
+]
