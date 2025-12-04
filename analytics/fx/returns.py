@@ -1,54 +1,24 @@
-"""
-Project Returns Module - DutchBay V13 (v1.0 - Production Ready)
-
-COMPLIANCE:
------------
-- PEP484/526 strict type hints (mypy --strict compliant)
-- IFC/DFI project finance standards
-- Equity investor and lender reporting requirements
-- Full YAML-driven configuration (no hardcoding)
-
-FEATURES:
----------
-- Project IRR/NPV: Returns on entire project (CFADS stream)
-- Equity IRR/NPV: Returns to equity holders (post debt service, taxes)
-- Project MIRR: Modified IRR (reinvestment rate consideration)
-- Equity MIRR: Modified IRR for equity
-- Profitability Index (PI): NPV per unit investment
-- Payback Period: Time to recover initial investment
-- Return metrics by scenario and sensitivity
-
-INPUTS:
--------
-- CFADS series from cashflow.py (LKR, post-tax, post-deductions)
-- Debt service schedule from debt.py (LKR, interest + principal)
-- Equity/debt split and initial investment from YAML
-- Discount rates (project, equity) from YAML
-- Reinvestment rates for MIRR calculation from YAML
-
-OUTPUTS:
---------
-Comprehensive returns dictionary with:
-    - project_irr, project_npv, project_mirr
-    - equity_irr, equity_npv, equity_mirr
-    - profitability_index, payback_period
-    - irr_sensitivity to key parameters
-    - full annual cash flow breakdown
-
-Author: DutchBay V13 Team
-Version: 1.0 (Project & Equity Returns)
-"""
-
 from __future__ import annotations
+
+"""
+Project & Equity Returns Module – V14-compliant
+
+- IRR/NPV logic is delegated to finance.irr (single source of truth).
+- This module focuses on *using* IRR/NPV to produce project/equity returns,
+  not on implementing the IRR algorithm itself.
+"""
 
 import logging
 from math import isinf, isnan
 from typing import Any, Dict, List, Optional
 
+from finance.irr import irr as _irr
+from finance.irr import npv as _npv
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("dutchbay.finance.returns")
+logger = logging.getLogger("dutchbay.analytics.fx.returns")
 
 __all__ = [
     "calculate_npv",
@@ -83,7 +53,7 @@ def _as_int(x: Any, default: int = 0) -> int:
 
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
     """Safely traverse nested dictionary."""
-    cur = d
+    cur: Any = d
     for k in path:
         if not isinstance(cur, dict) or k not in cur:
             return default
@@ -92,130 +62,123 @@ def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
 
 
 # ============================================================================
-# CORE NPV & IRR CALCULATIONS
+# CORE NPV & IRR CALCULATIONS (WRAPPERS AROUND finance.irr)
 # ============================================================================
 
 
 def calculate_npv(
-    cashflows: List[float], discount_rate: float, start_period: int = 0
+    cashflows: List[float],
+    discount_rate: float,
+    start_period: int = 0,
 ) -> float:
     """
-    Calculate Net Present Value of cashflow series.
+    Calculate Net Present Value of a cashflow series.
+
+    Notes
+    -----
+    - Delegates core NPV calculation to finance.irr.npv.
+    - start_period is implemented by padding with zero-cash periods,
+      which is mathematically equivalent to shifting the discounting origin.
 
     Parameters
     ----------
     cashflows : list of float
-        Annual cashflows (positive or negative)
+        Annual cashflows (positive or negative).
     discount_rate : float
-        Annual discount rate (0-1, e.g., 0.10 for 10%)
+        Annual discount rate (0–1, e.g. 0.10 for 10%).
     start_period : int, default 0
-        Starting period for discounting
+        Starting period for discounting.
 
     Returns
     -------
     float
-        NPV of cashflows
+        NPV of cashflows.
     """
-    if not cashflows or discount_rate < -1:
+    if not cashflows or discount_rate < -1.0:
         return 0.0
 
-    npv_val = 0.0
-    for i, cf in enumerate(cashflows):
-        period = start_period + i
-        npv_val += cf / ((1 + discount_rate) ** period)
+    if start_period < 0:
+        logger.warning("start_period < 0; treating as 0 instead of %r", start_period)
+        start_period = 0
 
-    return npv_val
+    # Shift in time by inserting zero cashflows at the front.
+    # NPV(rate, [0, 0, ..., cf1, cf2, ...]) == discounted series starting later.
+    adjusted_cashflows: List[float] = [0.0] * start_period + list(cashflows)
+
+    try:
+        return float(_npv(discount_rate, adjusted_cashflows))
+    except Exception as exc:  # pragma: no cover - ultra-defensive
+        logger.error("NPV calculation failed: %s", exc)
+        return 0.0
 
 
-def calculate_irr(
-    cashflows: List[float],
-    initial_guess: float = 0.10,
-    max_iterations: int = 1000,
-    tolerance: float = 1e-6,
-) -> Optional[float]:
+def calculate_irr(cashflows: List[float]) -> Optional[float]:
     """
-    Calculate Internal Rate of Return using Newton-Raphson method.
+    Calculate Internal Rate of Return for a cashflow series.
 
-    IRR is the discount rate where NPV = 0
+    Notes
+    -----
+    - Delegates to finance.irr.irr as the single IRR implementation.
+    - Returns None if IRR cannot be computed or is not finite.
 
     Parameters
     ----------
     cashflows : list of float
-        Annual cashflows (first typically negative for investment)
-    initial_guess : float, default 0.10
-        Starting guess for IRR (10%)
-    max_iterations : int, default 1000
-        Maximum iterations for convergence
-    tolerance : float, default 1e-6
-        Convergence tolerance
+        Cashflow series, typically with a negative initial investment and
+        subsequent positive cashflows.
 
     Returns
     -------
-    float or None
-        IRR (as decimal), or None if no convergence
+    Optional[float]
+        IRR as a decimal (e.g. 0.12 for 12%), or None on failure.
     """
     if not cashflows or len(cashflows) < 2:
         return None
 
-    # Newton-Raphson method
-    rate = initial_guess
+    try:
+        value = _irr(list(cashflows))
+    except (ZeroDivisionError, OverflowError, ValueError) as exc:
+        logger.warning("IRR calculation failed for cashflows %r: %s", cashflows, exc)
+        return None
 
-    for _iteration in range(max_iterations):
-        # Calculate NPV and derivative (NPV')
-        npv_val = 0.0
-        npv_derivative = 0.0
+    if value is None:
+        return None
 
-        for i, cf in enumerate(cashflows):
-            discount_factor = (1 + rate) ** i
-            npv_val += cf / discount_factor
-            if i > 0:
-                npv_derivative -= i * cf / (discount_factor * (1 + rate))
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
 
-        # Check convergence
-        if abs(npv_val) < tolerance:
-            return rate
+    if isnan(f) or isinf(f):
+        return None
 
-        # Avoid division by zero
-        if abs(npv_derivative) < 1e-10:
-            return None
-
-        # Newton-Raphson update
-        rate_new = rate - npv_val / npv_derivative
-
-        # Prevent extreme rates
-        if rate_new < -0.99 or rate_new > 10.0:
-            return None
-
-        rate = rate_new
-
-    # Return best estimate if not converged perfectly
-    if abs(calculate_npv(cashflows, rate)) < 0.01:
-        return rate
-
-    return None
+    return f
 
 
 def calculate_mirr(
-    cashflows: List[float], finance_rate: float = 0.10, reinvest_rate: float = 0.12
+    cashflows: List[float],
+    finance_rate: float = 0.10,
+    reinvest_rate: float = 0.12,
 ) -> Optional[float]:
     """
-    Calculate Modified Internal Rate of Return.
+    Calculate Modified Internal Rate of Return (MIRR).
 
-    MIRR accounts for cost of financing (negative CF) & reinvestment rate (positive CF)
+    MIRR accounts for cost of financing (negative CF) and reinvestment rate
+    (positive CF).
 
     Parameters
     ----------
     cashflows : list of float
-        Annual cashflows
+        Annual cashflows.
     finance_rate : float, default 0.10
-        Cost of financing rate (for negative cashflows)
+        Cost of financing rate (for negative cashflows).
     reinvest_rate : float, default 0.12
-        Reinvestment rate (for positive cashflows)
+        Reinvestment rate (for positive cashflows).
 
     Returns
     -------
-    float or None
-        MIRR (as decimal), or None if unable to calculate
+    Optional[float]
+        MIRR as decimal, or None if unable to calculate.
     """
     if not cashflows or len(cashflows) < 2:
         return None
@@ -232,16 +195,15 @@ def calculate_mirr(
         else:
             fv_positive += cf * ((1 + reinvest_rate) ** (n_periods - i - 1))
 
-    # Avoid division by zero or log of negative
+    # Avoid division by zero or invalid MIRR inputs
     if pv_negative >= 0 or fv_positive <= 0:
         return None
 
-    # MIRR = (FV_positive / |PV_negative|) ^ (1/(n-1)) - 1
     try:
         mirr = (fv_positive / abs(pv_negative)) ** (1 / (n_periods - 1)) - 1
         if isnan(mirr) or isinf(mirr):
             return None
-        return mirr
+        return float(mirr)
     except Exception:
         return None
 
@@ -265,36 +227,6 @@ def calculate_project_returns(
 
     Project returns measure value creation on ALL capital invested,
     regardless of debt/equity split. Used for project-level decisions.
-
-    Parameters
-    ----------
-    cfads_series : list of float
-        Annual CFADS in LKR (post-tax, post-deductions)
-    capex_usd : float
-        Total CAPEX in USD
-    capex_fx_rate : float
-        FX rate for CAPEX conversion to LKR
-    project_discount_rate : float, default 0.10
-        Discount rate for NPV (typically WACC)
-    finance_rate : float, default 0.10
-        Cost of financing (for MIRR calculation)
-    reinvest_rate : float, optional
-        Reinvestment rate (for MIRR); defaults to project_discount_rate
-    operation_start_year : int, default 1
-        Year when operations begin (usually year 1)
-
-    Returns
-    -------
-    dict
-        {
-            'project_irr': float,
-            'project_npv': float,
-            'project_mirr': float,
-            'profitability_index': float,
-            'payback_period': int or None,
-            'cashflows_with_capex': list of float,
-            'calculations_detail': dict
-        }
     """
     if reinvest_rate is None:
         reinvest_rate = project_discount_rate
@@ -302,15 +234,15 @@ def calculate_project_returns(
     # Convert CAPEX to LKR
     capex_lkr = capex_usd * capex_fx_rate
 
-    # Build full cashflow series with CAPEX at start
-    # Year 0: -CAPEX (investment)
-    # Year 1+: +CFADS (operations)
-    full_cashflows = [-capex_lkr] + cfads_series
+    # Full cashflow series with CAPEX at t=0
+    full_cashflows: List[float] = [-capex_lkr] + list(cfads_series)
 
-    # Calculate returns
+    # Core project metrics
     project_irr = calculate_irr(full_cashflows)
     project_npv = calculate_npv(
-        cfads_series, project_discount_rate, start_period=operation_start_year
+        cfads_series,
+        project_discount_rate,
+        start_period=operation_start_year,
     )
     project_mirr = calculate_mirr(full_cashflows, finance_rate, reinvest_rate)
 
@@ -318,7 +250,7 @@ def calculate_project_returns(
     pi = project_npv / capex_lkr if capex_lkr > 0 else 0.0
 
     # Payback period: years until cumulative CFADS >= CAPEX
-    payback_period = None
+    payback_period: Optional[int] = None
     cumulative = 0.0
     for i, cf in enumerate(cfads_series):
         cumulative += cf
@@ -337,7 +269,9 @@ def calculate_project_returns(
             "capex_lkr": capex_lkr,
             "capex_usd": capex_usd,
             "cfads_total": sum(cfads_series),
-            "cfads_avg": sum(cfads_series) / len(cfads_series) if cfads_series else 0.0,
+            "cfads_avg": (
+                sum(cfads_series) / len(cfads_series) if cfads_series else 0.0
+            ),
             "project_discount_rate": project_discount_rate,
             "finance_rate": finance_rate,
             "reinvest_rate": reinvest_rate,
@@ -365,38 +299,9 @@ def calculate_equity_returns(
     Equity returns measure value creation on equity capital only.
     Used for equity investor decisions and board reporting.
 
-    Formula:
-    Equity Cashflow = CFADS - Debt Service (interest + principal)
-
-    Parameters
-    ----------
-    cfads_series : list of float
-        Annual CFADS in LKR (already post-tax)
-    debt_service_series : list of float
-        Annual debt service (interest + principal) in LKR
-    equity_investment_lkr : float
-        Equity capital invested in LKR
-    equity_discount_rate : float, default 0.12
-        Discount rate for equity NPV (typically hurdle rate)
-    finance_rate : float, default 0.10
-        Cost of financing (for MIRR)
-    reinvest_rate : float, optional
-        Reinvestment rate (for MIRR); defaults to equity_discount_rate
-    equity_start_year : int, default 1
-        Year when equity cashflows begin
-
-    Returns
+    Formula
     -------
-    dict
-        {
-            'equity_irr': float,
-            'equity_npv': float,
-            'equity_mirr': float,
-            'equity_pi': float (NPV / Equity Investment),
-            'equity_cashflows': list of float,
-            'equity_cashflows_with_investment': list of float,
-            'calculations_detail': dict
-        }
+    Equity cashflow = CFADS - Debt Service (interest + principal)
     """
     if reinvest_rate is None:
         reinvest_rate = equity_discount_rate
@@ -404,26 +309,30 @@ def calculate_equity_returns(
     if len(cfads_series) != len(debt_service_series):
         raise ValueError("CFADS and debt service series must have same length")
 
-    # Calculate equity cashflows (CFADS - Debt Service)
-    equity_cashflows = [
+    # Equity cashflows = CFADS - Debt Service
+    equity_cashflows: List[float] = [
         cfads - ds for cfads, ds in zip(cfads_series, debt_service_series)
     ]
 
-    # Build full cashflow with initial equity investment (year 0)
-    full_equity_cashflows = [-equity_investment_lkr] + equity_cashflows
+    # Initial equity at t=0
+    full_equity_cashflows: List[float] = [-equity_investment_lkr] + equity_cashflows
 
-    # Calculate equity returns
+    # Core equity metrics
     equity_irr = calculate_irr(full_equity_cashflows)
     equity_npv = calculate_npv(
-        equity_cashflows, equity_discount_rate, start_period=equity_start_year
+        equity_cashflows,
+        equity_discount_rate,
+        start_period=equity_start_year,
     )
     equity_mirr = calculate_mirr(full_equity_cashflows, finance_rate, reinvest_rate)
 
-    # Equity Profitability Index
-    equity_pi = equity_npv / equity_investment_lkr if equity_investment_lkr > 0 else 0.0
+    # Equity Profitability Index = NPV / Equity Investment
+    equity_pi = (
+        equity_npv / equity_investment_lkr if equity_investment_lkr > 0.0 else 0.0
+    )
 
     # Equity payback period
-    payback_period = None
+    payback_period: Optional[int] = None
     cumulative = 0.0
     for i, cf in enumerate(equity_cashflows):
         cumulative += cf
@@ -460,27 +369,17 @@ def calculate_equity_returns(
 
 
 def summarize_all_returns(
-    p: Dict[str, Any], cfads_series: List[float], debt_service_series: List[float]
+    p: Dict[str, Any],
+    cfads_series: List[float],
+    debt_service_series: List[float],
 ) -> Dict[str, Any]:
     """
-    Calculate all project and equity returns metrics.
-
-    Parameters
-    ----------
-    p : dict
-        Configuration from YAML
-    cfads_series : list of float
-        Annual CFADS in LKR
-    debt_service_series : list of float
-        Annual debt service in LKR
-
-    Returns
-    -------
-    dict
-        Comprehensive returns analysis
+    Calculate all project and equity returns metrics from a YAML-style config.
     """
-    # Extract parameters from YAML
-    capex_usd = _as_float(_get(p, ["capex", "usd_total"], 150000000.0)) or 150000000.0
+    # Extract parameters from YAML/config
+    capex_usd = (
+        _as_float(_get(p, ["capex", "usd_total"], 150_000_000.0)) or 150_000_000.0
+    )
     capex_fx = _as_float(_get(p, ["fx", "start_lkr_per_usd"], 300.0)) or 300.0
 
     debt_ratio = _as_float(_get(p, ["financing", "debt_ratio"], 0.70)) or 0.70
@@ -493,24 +392,24 @@ def summarize_all_returns(
 
     total_investment = capex_usd * capex_fx
     debt_investment = total_investment * debt_ratio
-    equity_investment = total_investment * (1 - debt_ratio)
+    equity_investment = total_investment * (1.0 - debt_ratio)
 
-    # Calculate project returns
+    # Project-level returns
     project_returns = calculate_project_returns(
-        cfads_series,
-        capex_usd,
-        capex_fx,
-        project_discount_rate,
+        cfads_series=cfads_series,
+        capex_usd=capex_usd,
+        capex_fx_rate=capex_fx,
+        project_discount_rate=project_discount_rate,
         finance_rate=project_discount_rate,
         reinvest_rate=equity_discount_rate,
     )
 
-    # Calculate equity returns
+    # Equity-level returns
     equity_returns = calculate_equity_returns(
-        cfads_series,
-        debt_service_series,
-        equity_investment,
-        equity_discount_rate,
+        cfads_series=cfads_series,
+        debt_service_series=debt_service_series,
+        equity_investment_lkr=equity_investment,
+        equity_discount_rate=equity_discount_rate,
         finance_rate=project_discount_rate,
         reinvest_rate=equity_discount_rate,
     )
@@ -523,77 +422,14 @@ def summarize_all_returns(
             "debt_investment_lkr": debt_investment,
             "equity_investment_lkr": equity_investment,
             "debt_ratio": debt_ratio,
-            "equity_ratio": 1 - debt_ratio,
+            "equity_ratio": 1.0 - debt_ratio,
             "project_irr": project_returns.get("project_irr"),
             "project_npv": project_returns.get("project_npv"),
             "equity_irr": equity_returns.get("equity_irr"),
             "equity_npv": equity_returns.get("equity_npv"),
-            "irr_uplift": (equity_returns.get("equity_irr", 0) or 0)
-            - (project_returns.get("project_irr", 0) or 0),
+            "irr_uplift": (
+                (equity_returns.get("equity_irr", 0.0) or 0.0)
+                - (project_returns.get("project_irr", 0.0) or 0.0)
+            ),
         },
     }
-
-
-# ============================================================================
-# SELF-TEST
-# ============================================================================
-
-if __name__ == "__main__":
-    print("=" * 100)
-    print("RETURNS MODULE v1.0 - SELF-TEST")
-    print("=" * 100)
-
-    # Sample data (from previous cashflow test)
-    sample_cfads = [8_224_231_450 * (0.98**i) for i in range(20)]
-    sample_debt_service = [8_000_000 * (1 - i / 15) if i < 15 else 0 for i in range(20)]
-
-    # Sample config
-    sample_config = {
-        "capex": {"usd_total": 150_000_000},
-        "fx": {"start_lkr_per_usd": 300},
-        "financing": {"debt_ratio": 0.70},
-        "returns": {"project_discount_rate": 0.10, "equity_discount_rate": 0.12},
-    }
-
-    print("\nTesting project returns calculation...")
-    project_ret = calculate_project_returns(
-        sample_cfads, 150_000_000, 300, 0.10, 0.10, 0.12
-    )
-    print(
-        f"  Project IRR: {project_ret['project_irr']:.2%}"
-        if project_ret["project_irr"]
-        else "  Project IRR: N/A"
-    )
-    print(f"  Project NPV: LKR {project_ret['project_npv']:,.0f}")
-    print(f"  Profitability Index: {project_ret['profitability_index']:.2f}")
-    print(f"  Payback Period: {project_ret['payback_period']} years")
-
-    print("\nTesting equity returns calculation...")
-    equity_ret = calculate_equity_returns(
-        sample_cfads, sample_debt_service, 150_000_000 * 300 * 0.30, 0.12, 0.10, 0.12
-    )
-    print(
-        f"  Equity IRR: {equity_ret['equity_irr']:.2%}"
-        if equity_ret["equity_irr"]
-        else "  Equity IRR: N/A"
-    )
-    print(f"  Equity NPV: LKR {equity_ret['equity_npv']:,.0f}")
-    print(f"  Equity PI: {equity_ret['equity_pi']:.2f}")
-
-    print("\nTesting comprehensive summary...")
-    summary = summarize_all_returns(sample_config, sample_cfads, sample_debt_service)
-    print(
-        f"  Project IRR: {summary['summary']['project_irr']:.2%}"
-        if summary["summary"]["project_irr"]
-        else "  Project IRR: N/A"
-    )
-    print(
-        f"  Equity IRR: {summary['summary']['equity_irr']:.2%}"
-        if summary["summary"]["equity_irr"]
-        else "  Equity IRR: N/A"
-    )
-    print(f"  IRR Uplift (equity vs project): {summary['summary']['irr_uplift']:.2%}")
-
-    print("\n" + "=" * 100)
-    print("SELF-TEST COMPLETE - Module ready for production use")
-    print("=" * 100)

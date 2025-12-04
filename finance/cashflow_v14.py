@@ -1,4 +1,14 @@
-"""Cash flow engine for DutchBay V14 (CFADS and annual rows).
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from analytics.config_schema import RequiredFieldSpec, register_required_fields
+
+logger = logging.getLogger(__name__)
+
+"""
+Cash flow engine for DutchBay V14 (CFADS and annual rows).
 
 This module is the **canonical** place where project CFADS is defined
 for the v14 finance stack. It is designed to be:
@@ -20,15 +30,6 @@ Public surface
 - debt_v14.plan_debt (DSCR / covenants)
 - contracts_v14.build_cashflow_result_from_annual_rows (CashflowResult)
 """
-
-from __future__ import annotations
-
-import logging
-from typing import Any, Optional
-
-from analytics.config_schema import RequiredFieldSpec, register_required_fields
-
-logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Generic helpers
@@ -311,6 +312,7 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
       fx:
         start_lkr_per_usd: 375
         annual_depr_pct: 3   # or 0.03
+        annual_depr: 0.03    # decimal form
     """
     years = max(1, int(years))
     fx_cfg = p.get("fx")
@@ -333,8 +335,15 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
         )
         if start is not None:
             start_val = float(start)
-            depr_pct = fx_cfg.get("annual_depr_pct") or fx_cfg.get("depr_pct") or 0.0
-            depr = _pct_to_decimal(_as_float_or_none(depr_pct) or 0.0) or 0.0
+
+            # Accept either annual_depr_pct (percent) or annual_depr (decimal)
+            annual_depr = fx_cfg.get("annual_depr")
+            depr_pct = fx_cfg.get("annual_depr_pct") or fx_cfg.get("depr_pct")
+
+            if annual_depr is not None:
+                depr = float(annual_depr)  # expected as decimal (0.03 = 3%)
+            else:
+                depr = _pct_to_decimal(_as_float_or_none(depr_pct) or 0.0) or 0.0
 
             out: list[float] = []
             cur = start_val
@@ -343,12 +352,17 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
                 cur *= 1.0 + depr
             return out
 
-    # Legacy nested keys
+    # Legacy nested keys (also accept annual_depr if present)
     start_nested = get_nested(p, ["fx", "start_lkr_per_usd"])
-    depr_nested = get_nested(p, ["fx", "annual_depr_pct"])
     if start_nested is not None:
         start_val = float(start_nested)
-        depr = _pct_to_decimal(_as_float_or_none(depr_nested) or 0.0) or 0.0
+        annual_depr_nested = get_nested(p, ["fx", "annual_depr"])
+        if annual_depr_nested is not None:
+            depr = float(annual_depr_nested or 0.0)
+        else:
+            depr_nested = get_nested(p, ["fx", "annual_depr_pct"])
+            depr = _pct_to_decimal(_as_float_or_none(depr_nested) or 0.0) or 0.0
+
         out2: list[float] = []
         cur2 = start_val
         for _ in range(years):
@@ -367,11 +381,23 @@ def _fx_curve(p: dict[str, Any], years: int) -> list[float]:
     return [default_fx] * years
 
 
-def _extract_project_life_years(raw: dict[str, Any]) -> int:
+def _extract_project_life_years(
+    raw: dict[str, Any],
+    *,
+    log: bool = True,
+) -> int:
     """
     Robust extraction of project life (in years) for v14.
 
     Tries explicit fields first, then falls back to a heuristic scan.
+
+    Parameters
+    ----------
+    raw :
+        Raw configuration dict.
+    log :
+        If True, emit INFO / WARNING logs when resolving project life.
+        If False, perform the same resolution silently (no logs).
     """
     explicit_candidates: list[tuple[tuple[str, ...], str]] = [
         (("project", "life_years"), "project.life_years"),
@@ -384,7 +410,8 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
     for path, label in explicit_candidates:
         v = as_int_or_none(get_nested(raw, list(path), None))
         if v is not None and 5 <= v <= 60:
-            logger.info("Project life resolved from %s = %d years", label, v)
+            if log:
+                logger.info("Project life resolved from %s = %d years", label, v)
             return v
 
     from collections.abc import Mapping, Sequence
@@ -414,12 +441,13 @@ def _extract_project_life_years(raw: dict[str, Any]) -> int:
 
     if hits:
         chosen_path, chosen_val = hits[0]
-        logger.warning(
-            "Project life not found in explicit fields; "
-            "using heuristic match %r = %d years",
-            chosen_path,
-            chosen_val,
-        )
+        if log:
+            logger.warning(
+                "Project life not found in explicit fields; "
+                "using heuristic match %r = %d years",
+                chosen_path,
+                chosen_val,
+            )
         return chosen_val
 
     raise ValueError(
@@ -446,7 +474,7 @@ def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
         missing or invalid.
     """
     # Project life (hard fail if absent)
-    project_life_years = _extract_project_life_years(raw)
+    project_life_years = _extract_project_life_years(raw, log=True)
 
     # Core project properties
     capacity_mw = _as_float_or_none(
@@ -472,7 +500,8 @@ def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
     )
     capacity_factor = _pct_to_decimal(capacity_factor_raw)
 
-    degradation_raw = _as_float_or_none(
+    # Degradation is *always* interpreted as a percentage value.
+    degradation_pct_raw = _as_float_or_none(
         _resolve_first(
             raw,
             ("project", "degradation_pct"),
@@ -483,7 +512,21 @@ def _extract_parameters(raw: dict[str, Any]) -> dict[str, Any]:
             "degradation",
         )
     )
-    degradation = _pct_to_decimal(degradation_raw) or 0.0
+    if degradation_pct_raw is None:
+        degradation = 0.0
+    else:
+        if degradation_pct_raw < 0:
+            raise ValueError(
+                f"degradation_pct: {degradation_pct_raw} invalid (must be >= 0, percent)"
+            )
+        degradation = degradation_pct_raw / 100.0  # e.g. 0.5 -> 0.005
+        if degradation > 0.05:
+            logger.warning(
+                "Unusually high degradation_pct=%.3f%% (%.4f per year). "
+                "Check if config units are correct.",
+                degradation_pct_raw,
+                degradation,
+            )
 
     grid_loss_raw = _as_float_or_none(
         _resolve_first(
@@ -748,9 +791,9 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
                 "(must be 0.0-1.0 or 0-100%)"
             )
 
-    # Extract and validate project life
+    # Extract and validate project life (silent to avoid double-logging)
     try:
-        project_life = _extract_project_life_years(config)
+        project_life = _extract_project_life_years(config, log=False)
         if project_life < 1:
             errors.append(f"project_life_years: {project_life} invalid (must be >= 1)")
     except ValueError as e:
@@ -813,6 +856,8 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
         errors.append(f"opex_usd_per_year: {opex} invalid (must be >= 0)")
 
     # Optional field validations (if present)
+
+    # Degradation is validated as a percentage (not decimal)
     degradation_raw = _as_float_or_none(
         _resolve_first(
             config,
@@ -821,9 +866,15 @@ def validate_parameters(config: dict[str, Any]) -> list[str]:
         )
     )
     if degradation_raw is not None:
-        deg = _pct_to_decimal(degradation_raw)
-        if deg and not (0.0 <= deg < 1.0):
-            errors.append(f"degradation: {deg} out of range (must be 0.0-1.0)")
+        if degradation_raw < 0:
+            errors.append(
+                f"degradation_pct: {degradation_raw} invalid (must be >= 0, percent)"
+            )
+        elif degradation_raw > 30:
+            errors.append(
+                f"degradation_pct: {degradation_raw}% implausibly high (>30%/year). "
+                "Check units."
+            )
 
     grid_loss_raw = _as_float_or_none(
         _resolve_first(
@@ -1013,6 +1064,7 @@ def calculate_single_year_cfads(
         "tax": tax,
         "posttax_cfads": posttax_cfads,
         "risk_haircut_amount": posttax_cfads - cfads_final,
+        "risk_haircut_pct": float(params["risk_haircut_pct"]),
         "cfads_final_lkr": cfads_final,
     }
     if verbose:
