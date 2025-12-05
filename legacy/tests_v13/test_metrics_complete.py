@@ -22,14 +22,10 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dutchbay_v13.finance.metrics import (
-    calculate_llcr,
-    calculate_plcr,
-    check_llcr_covenant,
-    check_plcr_covenant,
-    compute_dscr_series,
-    summarize_dscr,
-)
+from dutchbay_v13.finance.metrics import (calculate_llcr, calculate_plcr,
+                                          check_llcr_covenant,
+                                          check_plcr_covenant,
+                                          compute_dscr_series, summarize_dscr)
 
 CAPEX = 158_000_000
 DEBT_RATIO = 0.70

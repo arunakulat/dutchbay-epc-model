@@ -3,11 +3,8 @@
 
 import inspect
 
-from analytics.contracts_v14 import (
-    MultiMetricTornadoResult,
-    ParameterRangeConfig,
-    TornadoResult,
-)
+from analytics.contracts_v14 import (MultiMetricTornadoResult,
+                                     ParameterRangeConfig, TornadoResult)
 
 print("=" * 70)
 print("TornadoResult signature:")

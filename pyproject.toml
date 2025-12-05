@@ -30,6 +30,9 @@ test = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
 ]
+[tool.ruff]
+src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
+exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
 [tool.setuptools.packages.find]
 include = ["dutchbay_v13*"]

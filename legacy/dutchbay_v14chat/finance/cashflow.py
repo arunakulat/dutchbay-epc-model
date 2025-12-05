@@ -21,10 +21,7 @@ finance logic remain anchored under the main `finance/` package.
 from typing import Any, Dict, Sequence
 
 from finance.cashflow_v14 import (  # type: ignore[import-not-found]
-    _extract_parameters,
-    _extract_project_life_years,
-    build_annual_rows,
-)
+    _extract_parameters, _extract_project_life_years, build_annual_rows)
 
 __all__ = [
     "build_annual_rows",

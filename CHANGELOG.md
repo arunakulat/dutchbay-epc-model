@@ -7,6 +7,33 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.0 - 2025-12-05
+
+- feat: add PySAM sandbox module (isolated, optional, validation-first)
+
+- analytics/pysam_sandbox: Optional PySAM wrapper (mypy+ruff clean)
+- scripts/validate_pysam_offline.py: Validation script (<5% deviation gate)
+- Uses importlib.util.find_spec for PySAM availability (ruff-compliant)
+- Compliance: ARCH-01, TYPE-01, FIN-01, FIN-02, R10, R17
+
+Pre-commit: black/ruff/isort auto-formatted 36 files
+Status: Day 1 complete - ready for Day 2-3 validation phase
+
+
+
+## v0.3.0 - 2025-12-05
+
+- feat: add PySAM sandbox module (isolated, optional, validation-first)
+
+- analytics/pysam_sandbox: Optional PySAM wrapper (mypy+ruff clean)
+- scripts/validate_pysam_offline.py: Validation script (<5% deviation gate)
+- Uses importlib.util.find_spec for PySAM availability (ruff-compliant)
+- Compliance: ARCH-01, TYPE-01, FIN-01, FIN-02, R10, R17
+
+Status: Day 1 complete - ready for Day 2-3 validation phase
+
+
+
 ## v2.6.0 - 2025-12-04
 
 - Sprint 8 - IRR ring-fence + v14 sensitivity API (mypy-clean core)

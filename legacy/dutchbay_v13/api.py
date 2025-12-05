@@ -14,7 +14,8 @@ except Exception:  # pragma: no cover
     FastAPI = None  # type: ignore
 
 from .core import build_financial_model
-from .scenario_runner import _validate_debt_dict, _validate_params_dict, run_scenario
+from .scenario_runner import (_validate_debt_dict, _validate_params_dict,
+                              run_scenario)
 from .schema import DEBT_SCHEMA, SCHEMA
 
 HTML_TMPL = """

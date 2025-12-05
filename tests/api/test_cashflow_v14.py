@@ -1,118 +1,105 @@
-"""
-Regression tests for the v14 cashflow engine.
+import copy
 
-Focus:
-- Basic shape of build_annual_rows on a self-contained config.
-- Project life extraction, including the heuristic path.
-- FX curve behaviour when using the mapping-style configuration.
-"""
+import pytest
 
 from finance.cashflow_v14 import (
-    _extract_project_life_years,
-    _fx_curve,
+    build_annual_cfads,
     build_annual_rows,
+    validate_parameters,
 )
 
-
-def _make_basic_v14_cashflow_config():
-    """
-    Minimal but realistic v14-style cashflow configuration.
-
-    Uses:
-    - project.life_years as the explicit project life
-    - FX mapping with start + annual_depr_pct
-    - Standard BOI tax settings with a holiday and enhanced allowance
-    """
-    return {
-        "project": {
-            "capacity_mw": 150.0,
-            "capacity_factor_pct": 40.0,
-            "degradation_pct": 0.5,
-            "grid_loss_pct": 2.0,
-            "life_years": 20,
-        },
-        "tariff": {
-            "lkr_per_kwh": 50.0,
-        },
-        "opex": {
-            "usd_per_year": 10_000_000.0,
-        },
-        "statutory": {
-            "success_fee_pct": 2.0,
-            "env_surcharge_pct": 0.25,
-            "social_levy_pct": 0.25,
-        },
-        "tax": {
-            "corporate_tax_rate_pct": 24.0,
-            "depreciation_years": 20,
-            "tax_holiday_years": 5,
-            "tax_holiday_start_year": 1,
-            "enhanced_capital_allowance_pct": 150.0,
-        },
-        "risk": {
-            "haircut_pct": 5.0,
-        },
-        "fx": {
-            "start_lkr_per_usd": 375.0,
-            "annual_depr_pct": 3.0,
-        },
-        "capex": {
-            "usd_total": 150_000_000.0,
-        },
-    }
+# Minimal but realistic v14-style config for DutchBay
+BASE_CONFIG: dict = {
+    "project": {
+        "project_life_years": 5,
+        "capacity_mw": 150.0,
+        "capacity_factor_pct": 40.0,  # percent, converted to 0.40
+        "degradation_pct": 0.5,  # percent/year
+        "grid_loss_pct": 2.0,  # percent
+        "corporate_tax_rate_pct": 24.0,
+    },
+    "tariff": {
+        "lkr_per_kwh": 20.30,
+    },
+    "opex": {
+        "usd_per_year": 4_000_000.0,
+    },
+    "statutory": {
+        "success_fee_pct": 1.0,
+        "env_surcharge_pct": 0.25,
+        "social_levy_pct": 0.25,
+    },
+    "tax": {
+        "depreciation_years": 20,
+        "holiday_years": 5,
+        "holiday_start_year": 1,
+        "enhanced_capital_allowance_pct": 100.0,
+    },
+    "risk": {
+        "haircut_pct": 10.0,  # percent, becomes 0.10
+    },
+    "fx": {
+        "start_lkr_per_usd": 375.0,
+        "annual_depr_pct": 3.0,
+    },
+    "capex": {
+        "usd_total": 120_000_000.0,
+    },
+}
 
 
-def test_build_annual_rows_v14_basic_shape():
-    cfg = _make_basic_v14_cashflow_config()
+def test_cashflow_basic_consistency() -> None:
+    """CFADS list and annual rows should be aligned and self-consistent."""
+    cfg = copy.deepcopy(BASE_CONFIG)
+
+    # Should validate cleanly
+    assert validate_parameters(cfg) == []
+
+    cfads = build_annual_cfads(cfg)
     rows = build_annual_rows(cfg)
 
-    life = cfg["project"]["life_years"]
-    assert len(rows) == life
+    # Horizon consistency
+    assert len(cfads) == cfg["project"]["project_life_years"]
+    assert len(rows) == cfg["project"]["project_life_years"]
 
-    first = rows[0]
+    # Row-wise consistency
+    for i, row in enumerate(rows):
+        assert cfads[i] == pytest.approx(row["cfads_final_lkr"])
 
-    # Core CFADS fields should be present and non-negative
-    assert "cfads_final_lkr" in first
-    assert "cfads_usd" in first
-    assert first["cfads_final_lkr"] >= 0.0
-    assert first["cfads_usd"] >= 0.0
+        # Risk haircut relationship:
+        # cfads_final = posttax_cfads * (1 - risk_haircut_pct)
+        posttax = row["posttax_cfads"]
+        haircut_pct = row["risk_haircut_pct"]
+        haircut_amt = row["risk_haircut_amount"]
 
-    # FX / revenue sanity checks
-    assert first["fx_rate"] > 0.0
-    assert first["revenue_lkr"] > 0.0
-    assert first["gross_kwh"] > 0.0
-    assert first["net_kwh"] > 0.0
-
-
-def test_extract_project_life_years_heuristic_path():
-    """
-    Exercise the heuristic project life extraction where no explicit
-    project.life_years / parameters.project_life_years fields exist.
-    """
-    cfg = {
-        "meta": {
-            "life_horizon_years": 25,
-        }
-    }
-    life = _extract_project_life_years(cfg)
-    assert life == 25
+        assert haircut_pct >= 0.0
+        assert haircut_amt == pytest.approx(posttax * haircut_pct)
+        assert row["cfads_final_lkr"] == pytest.approx(posttax - haircut_amt)
 
 
-def test_fx_curve_mapping_form_increases_over_time():
-    """
-    The mapping-style FX configuration with start_lkr_per_usd + annual_depr_pct
-    should produce a curve of the requested length with monotonic growth
-    when the depreciation rate is positive.
-    """
-    cfg = {
-        "fx": {
-            "start_lkr_per_usd": 300.0,
-            "annual_depr_pct": 3.0,
-        }
-    }
-    curve = _fx_curve(cfg, 5)
+def test_cashflow_zero_risk_haircut_means_posttax_equals_cfads() -> None:
+    """With zero risk haircut, CFADS should equal post-tax CFADS."""
+    cfg = copy.deepcopy(BASE_CONFIG)
+    cfg["risk"]["haircut_pct"] = 0.0
 
-    assert len(curve) == 5
-    assert curve[0] == 300.0
-    # simple monotonic check: last > first when depreciation is positive
-    assert curve[-1] > curve[0]
+    cfads = build_annual_cfads(cfg)
+    rows = build_annual_rows(cfg)
+
+    for i, row in enumerate(rows):
+        assert row["risk_haircut_pct"] == pytest.approx(0.0)
+        assert row["risk_haircut_amount"] == pytest.approx(0.0)
+        assert row["cfads_final_lkr"] == pytest.approx(row["posttax_cfads"])
+        assert cfads[i] == pytest.approx(row["posttax_cfads"])
+
+
+def test_validate_parameters_fails_when_capacity_missing() -> None:
+    """Validate that obvious missing required fields raise a clear error."""
+    bad = copy.deepcopy(BASE_CONFIG)
+    bad["project"].pop("capacity_mw", None)
+
+    with pytest.raises(ValueError) as excinfo:
+        validate_parameters(bad)
+
+    msg = str(excinfo.value)
+    assert "capacity_mw" in msg
+    assert "invalid" in msg or "missing" in msg

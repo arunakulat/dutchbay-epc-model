@@ -41,9 +41,8 @@ def _resolve_run_v14_pipeline() -> Callable[..., Any]:
 
     # 2) Package-style import under dutchbay_v14chat
     try:
-        from dutchbay_v14chat.run_full_pipeline_v14 import (  # type: ignore
-            run_v14_pipeline,
-        )
+        from dutchbay_v14chat.run_full_pipeline_v14 import \
+            run_v14_pipeline  # type: ignore
 
         logger.debug(
             "Resolved run_v14_pipeline from dutchbay_v14chat.run_full_pipeline_v14"

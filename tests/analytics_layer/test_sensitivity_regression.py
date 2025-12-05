@@ -9,8 +9,8 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
 from analytics.contracts_v14 import ParameterRangeConfig  # noqa: E402
-from analytics.sensitivity import (  # noqa: E402
-    SensitivityRequest,
+from analytics.sensitivity import SensitivityRequest  # noqa: E402
+from analytics.sensitivity import (
     optimize_from_sensitivity_insights,
     run_breakeven_parameter,
     run_multi_metric_tornado,
