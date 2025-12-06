@@ -418,24 +418,24 @@ def build_cashflow_result_from_annual_rows(
     # Top-line and deductions
     revenue_lkr = [float(row.get("revenue_lkr", 0.0)) for row in annual_rows]
     statutory_deductions_lkr = [
-        float(row.get("total_statutory_deductions", 0.0)) for row in annual_rows
+        float(row.get("total_statutory_deductions_lkr", 0.0)) for row in annual_rows
     ]
     opex_lkr = [float(row.get("opex_lkr", 0.0)) for row in annual_rows]
 
     # Tax and CFADS
-    pretax_cfads_lkr = [float(row.get("pretax_cfads", 0.0)) for row in annual_rows]
-    tax_lkr = [float(row.get("tax", 0.0)) for row in annual_rows]
-    posttax_cfads_lkr = [float(row.get("posttax_cfads", 0.0)) for row in annual_rows]
+    pretax_cfads_lkr = [float(row.get("pretax_cfads_lkr", 0.0)) for row in annual_rows]
+    tax_lkr = [float(row.get("tax_lkr", 0.0)) for row in annual_rows]
+    posttax_cfads_lkr = [float(row.get("posttax_cfads_lkr", 0.0)) for row in annual_rows]
     cfads_final_lkr = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
 
     # Structural internals
     depreciation_lkr = [
-        float(row.get("total_depreciation", 0.0)) for row in annual_rows
+        float(row.get("total_depreciation_lkr", 0.0)) for row in annual_rows
     ]
     interest_expense_lkr = [
         float(row.get("interest_expense_lkr", 0.0)) for row in annual_rows
     ]
-    taxable_income_lkr = [float(row.get("taxable_income", 0.0)) for row in annual_rows]
+    taxable_income_lkr = [float(row.get("taxable_income_lkr", 0.0)) for row in annual_rows]
 
     # Risk haircut
     risk_cfg = config.get("risk_adjustment") or config.get("risk") or {}
@@ -443,7 +443,7 @@ def build_cashflow_result_from_annual_rows(
         risk_cfg.get("cfads_haircut_pct") or risk_cfg.get("risk_haircut_pct") or 0.0
     )
     risk_haircut_amount_lkr = [
-        float(row.get("risk_haircut_amount", 0.0)) for row in annual_rows
+        float(row.get("risk_haircut_amount_lkr", 0.0)) for row in annual_rows
     ]
 
     fx_list: Optional[List[float]] = (
