@@ -56,7 +56,7 @@ tax:
   enhanced_allowance_applies: false
   loss_carryforward_years: 25
   wht_on_interest_to_nonresidents: 0.1
-regulatory:
+statutory:
   success_fee_pct: 0.01
   env_surcharge_pct: 0.005
   social_services_levy_pct: 0.025
