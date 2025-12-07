@@ -16,8 +16,8 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
 )
+from analytics.pipeline_v14 import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
-from run_full_pipeline_v14 import run_v14_pipeline
 
 logger = logging.getLogger(__name__)
 """
