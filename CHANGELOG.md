@@ -7,6 +7,24 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.0 - 2025-12-07
+
+- Sprint 8 – v14 lender pipeline hardened (tests green, coverage 59.82%)
+
+
+
+## v0.3.0 - 2025-12-07
+
+- Sprint 8 – v14 lender pipeline hardened (tests green, coverage 59.82%)
+
+
+
+## v0.3.0 - 2025-12-07
+
+- Sprint 8 – v14 lender pipeline hardened (tests green, coverage 59.82%)
+
+
+
 ## v0.3.0 - 2025-12-05
 
 - feat: add PySAM sandbox module (isolated, optional, validation-first)

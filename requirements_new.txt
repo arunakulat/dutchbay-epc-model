@@ -42,7 +42,7 @@ defusedxml==0.7.1
 dill==0.4.0
 distlib==0.4.0
 distro==1.9.0
-Django>=5.2.9
+Django==5.2.9
 -e git+https://github.com/arunakulat/dutchbay-epc-model.git@6c449b95d79451369481822e12307faec07db04c#egg=dutchbay_v13
 et_xmlfile==2.0.0
 execnet==2.1.2
@@ -54,7 +54,7 @@ flake8==7.3.0
 flake8-bugbear==25.10.21
 flake8-comprehensions==3.17.0
 flake8_simplify==0.22.0
-fonttools>=4.60.2
+fonttools==4.61.0
 frozendict==2.4.7
 frozenlist==1.8.0
 fsspec==2025.10.0
@@ -96,6 +96,7 @@ mypy==1.19.0
 mypy_extensions==1.1.0
 narwhals==2.12.0
 nodeenv==1.9.1
+NREL-PySAM==5.1.0
 numpy==2.3.5
 numpy-financial==1.0.0
 numpy-typing-compat==20250818.2.3
@@ -190,7 +191,7 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.2
 unittest2==1.1.0
-urllib3>=2.6.0
+urllib3==2.6.0
 vartools==0.1.22
 virtualenv==20.35.4
 volatile==2.1.0
