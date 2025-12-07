@@ -43,7 +43,6 @@ dill==0.4.0
 distlib==0.4.0
 distro==1.9.0
 Django==5.2.9
--e git+https://github.com/arunakulat/dutchbay-epc-model.git@6c449b95d79451369481822e12307faec07db04c#egg=dutchbay_v13
 et_xmlfile==2.0.0
 execnet==2.1.2
 fastapi==0.121.2
