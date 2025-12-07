@@ -13,9 +13,9 @@ BASE_CONFIG: dict = {
     "project": {
         "project_life_years": 5,
         "capacity_mw": 150.0,
-        "capacity_factor_pct": 40.0,
-        "degradation_pct": 0.5,
-        "grid_loss_pct": 2.0,
+        "capacity_factor_pct": 40.0,  # percent, converted to 0.40
+        "degradation_pct": 0.5,  # percent/year
+        "grid_loss_pct": 2.0,  # percent
         "corporate_tax_rate_pct": 24.0,
     },
     "tariff": {
@@ -36,7 +36,7 @@ BASE_CONFIG: dict = {
         "enhanced_capital_allowance_pct": 100.0,
     },
     "risk": {
-        "haircut_pct": 10.0,
+        "haircut_pct": 10.0,  # percent, becomes 0.10
     },
     "fx": {
         "start_lkr_per_usd": 375.0,
@@ -52,20 +52,25 @@ def test_cashflow_basic_consistency() -> None:
     """CFADS list and annual rows should be aligned and self-consistent."""
     cfg = copy.deepcopy(BASE_CONFIG)
 
+    # Should validate cleanly
     assert validate_parameters(cfg) == []
 
     cfads = build_annual_cfads(cfg)
     rows = build_annual_rows(cfg)
 
+    # Horizon consistency
     assert len(cfads) == cfg["project"]["project_life_years"]
     assert len(rows) == cfg["project"]["project_life_years"]
 
+    # Row-wise consistency
     for i, row in enumerate(rows):
         assert cfads[i] == pytest.approx(row["cfads_final_lkr"])
 
-        posttax = row["posttax_cfads_lkr"]
+        # Risk haircut relationship:
+        # cfads_final = posttax_cfads * (1 - risk_haircut_pct)
+        posttax = row["posttax_cfads_lkr"]  # ✅ FIXED: _lkr suffix
         haircut_pct = row["risk_haircut_pct"]
-        haircut_amt = row["risk_haircut_amount_lkr"]
+        haircut_amt = row["risk_haircut_amount_lkr"]  # ✅ FIXED: _lkr suffix
 
         assert haircut_pct >= 0.0
         assert haircut_amt == pytest.approx(posttax * haircut_pct)
@@ -82,9 +87,15 @@ def test_cashflow_zero_risk_haircut_means_posttax_equals_cfads() -> None:
 
     for i, row in enumerate(rows):
         assert row["risk_haircut_pct"] == pytest.approx(0.0)
-        assert row["risk_haircut_amount_lkr"] == pytest.approx(0.0)
-        assert row["cfads_final_lkr"] == pytest.approx(row["posttax_cfads_lkr"])
-        assert cfads[i] == pytest.approx(row["posttax_cfads_lkr"])
+        assert row["risk_haircut_amount_lkr"] == pytest.approx(
+            0.0
+        )  # ✅ FIXED: _lkr suffix
+        assert row["cfads_final_lkr"] == pytest.approx(
+            row["posttax_cfads_lkr"]
+        )  # ✅ FIXED: _lkr suffix
+        assert cfads[i] == pytest.approx(
+            row["posttax_cfads_lkr"]
+        )  # ✅ FIXED: _lkr suffix
 
 
 def test_validate_parameters_fails_when_capacity_missing() -> None:

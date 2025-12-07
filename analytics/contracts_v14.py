@@ -425,7 +425,9 @@ def build_cashflow_result_from_annual_rows(
     # Tax and CFADS
     pretax_cfads_lkr = [float(row.get("pretax_cfads_lkr", 0.0)) for row in annual_rows]
     tax_lkr = [float(row.get("tax_lkr", 0.0)) for row in annual_rows]
-    posttax_cfads_lkr = [float(row.get("posttax_cfads_lkr", 0.0)) for row in annual_rows]
+    posttax_cfads_lkr = [
+        float(row.get("posttax_cfads_lkr", 0.0)) for row in annual_rows
+    ]
     cfads_final_lkr = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
 
     # Structural internals
@@ -435,7 +437,9 @@ def build_cashflow_result_from_annual_rows(
     interest_expense_lkr = [
         float(row.get("interest_expense_lkr", 0.0)) for row in annual_rows
     ]
-    taxable_income_lkr = [float(row.get("taxable_income_lkr", 0.0)) for row in annual_rows]
+    taxable_income_lkr = [
+        float(row.get("taxable_income_lkr", 0.0)) for row in annual_rows
+    ]
 
     # Risk haircut
     risk_cfg = config.get("risk_adjustment") or config.get("risk") or {}
