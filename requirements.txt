@@ -9,7 +9,6 @@ annotated-types==0.7.0
 antlr4-python3-runtime==4.9.3
 anyio==4.11.0
 appdirs==1.4.4
-appscript==1.4.0
 asgiref==3.10.0
 astor==0.8.1
 astroid==4.0.2
