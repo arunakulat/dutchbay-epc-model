@@ -127,3 +127,4 @@ _archive/
 # Scenario backups
 scenarios/**/*.bak
 coverage.xml
+coverage.xml
