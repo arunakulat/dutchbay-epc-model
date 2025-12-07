@@ -11,7 +11,6 @@ coverage==7.11.3
 cycler==0.12.1
 dill==0.4.0
 Django==5.2.9
--e git+https://github.com/arunakulat/dutchbay-epc-model.git@2fb6ea38bae8f9dd0aefa442f64b41c174f7c62e#egg=dutchbay_v13
 fastapi==0.121.2
 flake8==7.3.0
 fonttools==4.61.0
