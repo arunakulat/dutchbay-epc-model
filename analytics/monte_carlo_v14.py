@@ -4,7 +4,7 @@ import logging
 import math
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, cast
+from typing import Any, Iterable, List, cast
 
 import multiprocess as mp
 import numpy as np
@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Pydantic config models (schema guard for YAML)
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 class SimulationConfig(BaseModel):
@@ -67,7 +67,7 @@ class MonteCarloConfig(BaseModel):
     """
     Top-level Monte Carlo configuration schema.
 
-    Expected YAML structure (Sprint 9):
+    Expected YAML structure:
 
     simulation:
       iterations: 2000
@@ -84,50 +84,32 @@ class MonteCarloConfig(BaseModel):
         ...
 
     derived_parameters:
-      - variable_name: financial.tariff_lkr_per_kwh
+      - variable_name: debt.ratio
         derive_from: target_project_irr
         target_distribution: { ... }
         solver_config: { ... }
 
     scenarios:
-      - name: base_case
+      - name: Base
         description: "Base case"
         enabled: true
         parameter_overrides:
           standard_parameters: [ ... ]
           derived_parameters: [ ... ]
-
-    correlations:      # optional, currently accepted but not applied
-      enabled: false
-      method: cholesky
-      matrix: [...]
-
-    output:            # optional, for future VaR/CVaR/custom metrics handling
-      save_path: ...
-      save_raw_results: true
-      risk_metrics: { ... }
-      custom_metrics: [ ... ]
-
-    regression_expectations:
-      scenario_name: base_case
-      metrics: { ... }   # used only by tests, ignored by engine
     """
 
     simulation: SimulationConfig
     standard_parameters: list[dict[str, Any]]
     derived_parameters: list[dict[str, Any]] = Field(default_factory=list)
     scenarios: list[dict[str, Any]] = Field(default_factory=list)
-    correlations: dict[str, Any] | None = None
-    output: dict[str, Any] | None = None
-    regression_expectations: dict[str, Any] | None = None
 
     class Config:
         extra = "ignore"
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Validation helpers (used by tests + runtime)
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _normalise_dist_type(dist_type: str | None) -> str:
@@ -183,80 +165,12 @@ def _validate_distribution_for_sampling(distribution: Distribution) -> None:
     # If no rule applies, we simply accept the distribution.
 
 
-def _merge_param_dicts(
-    base_list: list[dict[str, Any]],
-    overrides: list[dict[str, Any]] | None,
-    *,
-    key: str = "variable_name",
-) -> list[dict[str, Any]]:
-    """Merge base + overrides keyed by `key`.
-
-    - Base list provides default entries.
-    - Overrides update matching entries by `variable_name`.
-    - For derived parameters, nested `target_distribution` and
-      `solver_config` dicts are merged rather than blindly replaced.
-    """
-    if not overrides:
-        return list(base_list)
-
-    merged: Dict[str, dict[str, Any]] = {}
-
-    # Start with base entries
-    for item in base_list:
-        name = item.get(key)
-        if not name:
-            continue
-        merged[name] = dict(item)
-
-    # Apply overrides
-    for over in overrides:
-        name = over.get(key)
-        if not name:
-            continue
-
-        base_entry = merged.get(name, {})
-        new_entry = dict(base_entry)
-
-        for field_name, value in over.items():
-            if field_name in {"target_distribution", "solver_config"} and isinstance(
-                value, dict
-            ):
-                base_sub = base_entry.get(field_name, {})
-                if isinstance(base_sub, dict):
-                    combined = {**base_sub, **value}
-                else:
-                    combined = value
-                new_entry[field_name] = combined
-            else:
-                new_entry[field_name] = value
-
-        merged[name] = new_entry
-
-    # Preserve original base order, followed by any new names at the end
-    ordered: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    for item in base_list:
-        name = item.get(key)
-        if not name or name not in merged:
-            continue
-        ordered.append(merged[name])
-        seen.add(name)
-
-    for name, item in merged.items():
-        if name not in seen:
-            ordered.append(item)
-
-    return ordered
-
-
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Public entry points
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def run_monte_carlo(
-    *,
     mc_config_path: str,
     base_config_path: str,
     scenario_name: str | None = None,
@@ -265,35 +179,33 @@ def run_monte_carlo(
     parallel_workers: int | None = None,
 ) -> dict[str, MonteCarloResult]:
     """
-    Canonical Sprint 9 public API for the v14 Monte Carlo engine.
+    Coordinator-style public API for v14 Monte Carlo runs.
 
-    This is the front door for:
-      - Tests (including the toy regression harness),
-      - CLI wrappers,
-      - Notebooks / analytics layers.
+    This is the *front door* used by tests, scripts and (eventually) the
+    CLI layer. It simply wires a Monte Carlo YAML config + base scenario
+    into the engine, with optional runtime overrides.
 
-    Parameters
-    ----------
-    mc_config_path:
-        Path to MC configuration YAML
-        (e.g. config/monte_carlo_defaults.yaml or
-              config/monte_carlo_regression_toy.yaml).
-    base_config_path:
-        Path to the base v14 scenario YAML
-        (e.g. scenarios/dutchbay_lendercase_2025Q4.yaml).
-    scenario_name:
-        Optional specific scenario name to evaluate. None = all enabled.
-    n_iterations:
-        Optional override for the iteration count in the MC config.
-    random_seed:
-        Optional override for the random seed.
-    parallel_workers:
-        Optional override for parallel workers.
+    Args:
+        mc_config_path:
+            Path to Monte Carlo YAML (typically config/monte_carlo_defaults.yaml
+            or a regression-specific variant).
+        base_config_path:
+            Path to the base v14 scenario YAML that will be evaluated under
+            sampled overrides.
+        scenario_name:
+            Optional scenario label to run. If None, all enabled scenarios
+            defined in the Monte Carlo config are executed.
+        n_iterations:
+            Optional override for the iteration count. If omitted, the value
+            in the Monte Carlo config's [simulation] block is used.
+        random_seed:
+            Optional override for the RNG seed, useful for deterministic
+            regression runs.
+        parallel_workers:
+            Optional override for the number of CPU processes.
 
-    Returns
-    -------
-    Dict[str, MonteCarloResult]
-        Mapping from scenario_name -> MonteCarloResult.
+    Returns:
+        Dict mapping scenario_name -> MonteCarloResult.
     """
     return run_monte_carlo_analysis(
         base_config_path=base_config_path,
@@ -314,9 +226,7 @@ def run_monte_carlo_analysis(
     parallel_workers: int | None = None,
 ) -> dict[str, MonteCarloResult]:
     """
-    Backwards-compatible front door for the v14 Monte Carlo engine.
-
-    New code should prefer `run_monte_carlo`, which calls this function.
+    Run Monte Carlo simulation with flexible parameter system.
 
     Supports:
     - Standard parameters (direct config overrides with distributions)
@@ -329,6 +239,21 @@ def run_monte_carlo_analysis(
     - Reproducibility: (base_config, mc_config, seed) ⇒ deterministic results
     - Common random numbers (CRN) across scenarios:
       Shared unit hypercube samples for parameters with the same variable_name.
+
+    Args:
+        base_config_path: Path to base scenario YAML
+        scenario_config_path: Path to Monte Carlo configuration YAML
+        scenario_name: Specific scenario to run (None = all enabled scenarios)
+        n_iterations: Override default iteration count
+        random_seed: Override default random seed for reproducibility
+        parallel_workers: Number of CPU cores (None = auto-detect)
+
+    Returns:
+        Dict mapping scenario names to MonteCarloResult objects
+
+    Raises:
+        FileNotFoundError: If config files not found
+        ValueError: If MC configuration invalid
     """
     logger.info("Starting Monte Carlo analysis: %s", base_config_path)
 
@@ -377,8 +302,8 @@ def run_monte_carlo_analysis(
 
         try:
             scenario_samples = _build_samples_for_scenario(
-                standard_params=scenario.standard_parameters,
-                derived_params=scenario.derived_parameters,
+                standard_params=scenario.standard_params,
+                derived_params=scenario.derived_params,
                 unit_samples=unit_samples,
                 global_param_names=global_param_names,
                 rng=rng,
@@ -407,9 +332,9 @@ def run_monte_carlo_analysis(
     return results
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Config loading
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _load_monte_carlo_config(config_path: str) -> MonteCarloConfig:
@@ -484,8 +409,8 @@ def _load_scenarios(
             MonteCarloScenario(
                 name="default",
                 description="Default scenario from standard parameters",
-                standard_parameters=standard_params,
-                derived_parameters=derived_params,
+                standard_params=standard_params,
+                derived_params=derived_params,
                 enabled=True,
             )
         ]
@@ -500,17 +425,10 @@ def _load_scenarios(
         if scenario_name and scenario_dict.get("name") != scenario_name:
             continue
 
-        overrides = scenario_dict.get("parameter_overrides", {}) or {}
+        overrides = scenario_dict.get("parameter_overrides", {})
 
-        standard_over = overrides.get("standard_parameters", []) or []
-        derived_over = overrides.get("derived_parameters", []) or []
-
-        standard_params_cfg = _merge_param_dicts(
-            base_standard_cfg, standard_over, key="variable_name"
-        )
-        derived_params_cfg = _merge_param_dicts(
-            base_derived_cfg, derived_over, key="variable_name"
-        )
+        standard_params_cfg = overrides.get("standard_parameters", base_standard_cfg)
+        derived_params_cfg = overrides.get("derived_parameters", base_derived_cfg)
 
         standard_params = _parse_distributions(standard_params_cfg)
         derived_params = _parse_derived_parameters(derived_params_cfg)
@@ -518,8 +436,8 @@ def _load_scenarios(
         scenario = MonteCarloScenario(
             name=scenario_dict["name"],
             description=scenario_dict.get("description", ""),
-            standard_parameters=standard_params,
-            derived_parameters=derived_params,
+            standard_params=standard_params,
+            derived_params=derived_params,
             enabled=True,
         )
         scenarios.append(scenario)
@@ -530,9 +448,9 @@ def _load_scenarios(
     return scenarios
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Parsing distributions and derived parameters
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _parse_distributions(params_config: list[dict[str, Any]]) -> list[Distribution]:
@@ -550,14 +468,8 @@ def _parse_distributions(params_config: list[dict[str, Any]]) -> list[Distributi
     """
     distributions: list[Distribution] = []
     for param_dict in params_config:
-        # Strip cosmetic / non-schema fields that the Distribution model
-        # does not know about (e.g. description), so that the YAML can
-        # remain human-readable without breaking the strict schema.
-        cleaned: dict[str, Any] = dict(param_dict)
-        cleaned.pop("description", None)
-
         try:
-            dist = Distribution(**cleaned)
+            dist = Distribution(**param_dict)
             # Validate upfront so bad configs fail early
             _validate_distribution_for_sampling(dist)
             distributions.append(dist)
@@ -590,24 +502,14 @@ def _parse_derived_parameters(
             continue
 
         try:
-            # Pull out the target_distribution spec and make it compatible
-            # with the Distribution schema:
-            #  - inject a variable_name if missing (use the parent variable_name)
-            #  - strip cosmetic fields like description that Distribution
-            #    does not accept.
-            td_raw = param_dict["target_distribution"]
-            if not isinstance(td_raw, dict):
-                raise ValueError("target_distribution must be a mapping")
+            # Parse target distribution – note: MonteCarlo YAML for derived
+            # parameters usually *does not* include variable_name in the
+            # target_distribution block, so we construct a Distribution
+            # with a synthetic variable_name solely for sampling.
+            target_dist_cfg = dict(param_dict["target_distribution"])
+            target_dist_cfg.setdefault("variable_name", param_dict["variable_name"])
 
-            td_clean: dict[str, Any] = dict(td_raw)
-            td_clean.pop("description", None)
-
-            if "variable_name" not in td_clean:
-                td_clean["variable_name"] = param_dict.get(
-                    "variable_name", "_target_param"
-                )
-
-            target_dist = Distribution(**td_clean)
+            target_dist = Distribution(**target_dist_cfg)
             _validate_distribution_for_sampling(target_dist)
 
             derived = DerivedParameter(
@@ -627,9 +529,9 @@ def _parse_derived_parameters(
     return derived_params
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Sampling: common random numbers (CRN) + samplers
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _compute_global_param_names(
@@ -644,7 +546,7 @@ def _compute_global_param_names(
     """
     names: set[str] = set()
     for scenario in scenarios:
-        for p in scenario.standard_parameters:
+        for p in scenario.standard_params:
             names.add(p.variable_name)
     # Stable ordering for reproducibility
     return sorted(names)
@@ -705,6 +607,60 @@ def _generate_unit_samples(
     )
     sobol_samples = np.asarray(sobol_samples, dtype=float)
     return sobol_samples[:n_samples, :]
+
+
+def _generate_lhs_samples(
+    parameters: list[Distribution],
+    derived_parameters: list[Any] | None,
+    n_samples: int,
+    random_seed: int | None = None,
+) -> list[dict[str, float]]:
+    """
+    Backwards-compatible Latin Hypercube sampler used by legacy tests.
+
+    This mirrors the older v14 signature so that tests like
+    tests/analytics_layer/test_monte_carlo_v14.py keep working.
+
+    - parameters: list of Distribution objects. We:
+        * generate LHS draws on [0, 1]^d, then
+        * map them through _transform_to_distribution per parameter.
+    - derived_parameters: accepted but ignored (signature compatibility only).
+    - n_samples: number of samples (rows) to generate.
+    - random_seed: optional seed for reproducibility.
+
+    Returns:
+        List of dicts, one per sample:
+        [
+          {"param_name_1": value_1, "param_name_2": value_2, ...},
+          ...
+        ]
+    """
+    n_dim = len(parameters)
+    if n_dim == 0:
+        # Edge case: no parameters → still return a valid list
+        return []
+
+    problem = {
+        "num_vars": n_dim,
+        "names": [p.variable_name for p in parameters],
+        "bounds": [[0.0, 1.0]] * n_dim,
+    }
+
+    seed = random_seed if random_seed is not None else None
+    lhs_samples = lhs.sample(problem, n_samples, seed=seed)
+    unit_samples = np.asarray(lhs_samples, dtype=float)
+
+    samples: list[dict[str, float]] = []
+    for i in range(n_samples):
+        row: dict[str, float] = {}
+        for j, dist in enumerate(parameters):
+            unit_value = float(unit_samples[i, j])
+            row[dist.variable_name] = float(
+                _transform_to_distribution(unit_value, dist)
+            )
+        samples.append(row)
+
+    return samples
 
 
 def _build_samples_for_scenario(
@@ -783,14 +739,24 @@ def _transform_to_distribution(
     distribution: Distribution,
 ) -> float:
     """
-    Transform unit hypercube value [0, 1] to an actual draw from the
-    specified Distribution.
+    Transform unit hypercube value [0, 1] to actual distribution.
 
     This is the *only* place where raw Distribution objects are turned into
-    numeric samples, so we keep the parameter checks tight and explicit.
+    numeric samples, so we enforce basic parameter sanity here to avoid
+    sending obviously invalid configurations into SciPy.
+
+    Args:
+        unit_value: Value in [0, 1] from the sampler
+        distribution: Target distribution specification
+
+    Returns:
+        Transformed value from specified distribution
 
     Raises:
-        ValueError: if required parameters are missing or inconsistent.
+        ValueError:
+            If distribution parameters are structurally invalid for the given
+            dist_type (e.g. normal without positive std, triangular with
+            inconsistent min/mode/max).
     """
     # Always run the shared validator so tests calling this directly see
     # the same semantics as the parsing helpers.
@@ -798,39 +764,36 @@ def _transform_to_distribution(
 
     dist_type = _normalise_dist_type(getattr(distribution, "dist_type", None))
 
-    # --- Normal -------------------------------------------------------------
+    # --- Normal distribution ------------------------------------------------
     if dist_type == "normal":
         from scipy.stats import norm
 
-        mean_raw = getattr(distribution, "mean", None)
         std_raw = getattr(distribution, "std", None)
-
-        if mean_raw is None:
-            raise ValueError("normal distribution requires 'mean' to be set")
         if std_raw is None:
-            raise ValueError("normal distribution requires 'std' to be set")
-
-        mean = float(mean_raw)
+            raise ValueError("normal distribution requires std > 0")
         std = float(std_raw)
+
+        mean_raw = getattr(distribution, "mean", None)
+        if mean_raw is None:
+            raise ValueError("normal distribution requires mean to be set")
+        mean = float(mean_raw)
 
         return float(norm.ppf(unit_value, loc=mean, scale=std))
 
-    # --- Lognormal ----------------------------------------------------------
+    # --- Lognormal distribution --------------------------------------------
     if dist_type == "lognormal":
         from scipy.stats import lognorm
 
-        mean_raw = getattr(distribution, "mean", None)
         std_raw = getattr(distribution, "std", None)
-
-        if mean_raw is None:
-            raise ValueError("lognormal distribution requires 'mean' to be set")
         if std_raw is None:
-            raise ValueError("lognormal distribution requires 'std' to be set")
-
-        mean = float(mean_raw)
+            raise ValueError("lognormal distribution requires std > 0")
         std = float(std_raw)
 
-        # Using exp(mean) as the scale parameter; std as shape (sigma)
+        mean_raw = getattr(distribution, "mean", None)
+        if mean_raw is None:
+            raise ValueError("lognormal distribution requires mean to be set")
+        mean = float(mean_raw)
+
         return float(
             lognorm.ppf(
                 unit_value,
@@ -839,22 +802,22 @@ def _transform_to_distribution(
             )
         )
 
-    # --- Triangular ---------------------------------------------------------
+    # --- Triangular distribution -------------------------------------------
     if dist_type == "triangular":
         from scipy.stats import triang
 
-        min_raw = getattr(distribution, "min_val", None)
+        min_val_raw = getattr(distribution, "min_val", None)
         mode_raw = getattr(distribution, "mode", None)
-        max_raw = getattr(distribution, "max_val", None)
+        max_val_raw = getattr(distribution, "max_val", None)
 
-        if min_raw is None or mode_raw is None or max_raw is None:
+        if min_val_raw is None or mode_raw is None or max_val_raw is None:
             raise ValueError(
                 "triangular distribution requires min_val, mode and max_val"
             )
 
-        min_val = float(min_raw)
+        min_val = float(min_val_raw)
         mode = float(mode_raw)
-        max_val = float(max_raw)
+        max_val = float(max_val_raw)
 
         span = max_val - min_val
         if span <= 0:
@@ -870,29 +833,29 @@ def _transform_to_distribution(
             )
         )
 
-    # --- Uniform ------------------------------------------------------------
+    # --- Uniform distribution ----------------------------------------------
     if dist_type == "uniform":
-        min_raw = getattr(distribution, "min_val", None)
-        max_raw = getattr(distribution, "max_val", None)
+        min_val_raw = getattr(distribution, "min_val", None)
+        max_val_raw = getattr(distribution, "max_val", None)
 
-        if min_raw is None or max_raw is None:
+        if min_val_raw is None or max_val_raw is None:
             raise ValueError("uniform distribution requires min_val and max_val")
 
-        min_val = float(min_raw)
-        max_val = float(max_raw)
+        min_val = float(min_val_raw)
+        max_val = float(max_val_raw)
         span = max_val - min_val
         if span <= 0:
-            raise ValueError("uniform distribution requires max_val > min_val")
+            raise ValueError("uniform distribution requires min < max")
 
         return float(min_val + unit_value * span)
 
-    # --- Fallback -----------------------------------------------------------
+    # --- Fallback for unknown/distinct types -------------------------------
     raise ValueError(f"Unsupported distribution type: {dist_type!r}")
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Scenario execution
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _run_single_scenario(
@@ -903,6 +866,15 @@ def _run_single_scenario(
 ) -> MonteCarloResult:
     """
     Run Monte Carlo simulation for a single scenario.
+
+    Args:
+        base_config_path: Path to base scenario YAML
+        scenario: MonteCarloScenario configuration
+        samples: List of concrete parameter samples (overrides) for each iteration
+        parallel_workers: Number of parallel processes
+
+    Returns:
+        MonteCarloResult with statistical summary
     """
     iterations = len(samples)
     logger.info(
@@ -934,17 +906,20 @@ def _run_parallel_iterations(
     scenario: MonteCarloScenario,
     samples: list[dict[str, Any]],
     n_workers: int,
-) -> list[dict[str, Any] | None]:
+) -> list[dict[str, float] | None]:
     """
     Run Monte Carlo iterations in parallel using multiprocessing.
     """
-    args_iter = ((base_config_path, scenario, sample) for sample in samples)
+    args_iter = (
+        (base_config_path, scenario, sample) for sample in samples
+    )  # generator
 
     with mp.Pool(processes=n_workers) as pool:
         raw_results = pool.map(_iteration_worker, args_iter)
 
-    # pool.map returns list[Any]; we know the worker returns dict[str, Any] | None.
-    results = cast(List[dict[str, Any] | None], list(raw_results))
+    # mypy: pool.map returns list[Any]; cast to the expected shape.
+    results = cast(list[dict[str, float] | None], raw_results)
+
     return results
 
 
@@ -981,15 +956,15 @@ def _run_single_iteration(
     base_config_path: str,
     scenario: MonteCarloScenario,
     sample: dict[str, Any],
-) -> dict[str, Any] | None:
+) -> dict[str, float] | None:
     """
     Run a single Monte Carlo iteration with given parameter sample.
     """
     try:
-        overrides = _build_overrides_from_sample(sample, scenario.standard_parameters)
+        overrides = _build_overrides_from_sample(sample, scenario.standard_params)
 
         # Handle derived parameters (solve for values given targets)
-        for derived_param in scenario.derived_parameters:
+        for derived_param in scenario.derived_params:
             if not derived_param.enabled:
                 continue
 
@@ -1027,17 +1002,17 @@ def _run_single_iteration(
 
         # Evaluate scenario with all parameter values
         kpis = evaluate_with_overrides(base_config_path, overrides)
-        # kpis is a dict[str, Any]; that matches the annotated return type.
-        return kpis
+        typed_kpis = cast(dict[str, float], kpis)
+        return typed_kpis
 
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Iteration failed: %s", exc)
         return None
 
 
-# ===========================================================================
+# ---------------------------------------------------------------------------
 # Overrides + aggregation
-# ===========================================================================
+# ---------------------------------------------------------------------------
 
 
 def _build_overrides_from_sample(
@@ -1078,7 +1053,7 @@ def _set_nested_value(
 
 
 def _aggregate_results(
-    results: list[dict[str, Any] | None],
+    results: list[dict[str, float] | None],
     total_iterations: int,
     scenario_name: str,
 ) -> MonteCarloResult:
@@ -1087,9 +1062,10 @@ def _aggregate_results(
 
     Also computes simple convergence / precision estimates for key metrics:
     standard errors (SE = std / sqrt(N_success)) for project_irr,
-    project_npv and dscr_min.
+    project_npv and dscr_min. These can be turned into approximate
+    95% confidence intervals via mean ± 1.96 * SE in downstream reports.
     """
-    successful_results: list[dict[str, Any]] = [r for r in results if r is not None]
+    successful_results = [r for r in results if r is not None]
     failed_count = total_iterations - len(successful_results)
 
     if not successful_results:
@@ -1099,18 +1075,9 @@ def _aggregate_results(
 
     logger.info("Aggregating %d successful iterations", len(successful_results))
 
-    project_irr = np.array(
-        [float(r["project_irr"]) for r in successful_results],
-        dtype=float,
-    )
-    project_npv = np.array(
-        [float(r["project_npv"]) for r in successful_results],
-        dtype=float,
-    )
-    dscr_min = np.array(
-        [float(r["dscr_min"]) for r in successful_results],
-        dtype=float,
-    )
+    project_irr = np.array([r["project_irr"] for r in successful_results], dtype=float)
+    project_npv = np.array([r["project_npv"] for r in successful_results], dtype=float)
+    dscr_min = np.array([r["dscr_min"] for r in successful_results], dtype=float)
 
     n_success = len(successful_results)
 
@@ -1129,13 +1096,13 @@ def _aggregate_results(
     dscr_p10 = float(np.percentile(dscr_min, 10))
     dscr_p50 = float(np.percentile(dscr_min, 50))
 
-    # Standard errors (precision estimates)
+    # Standard errors (simple precision estimates)
+    # Note: we use the population std here for continuity with existing
+    # behaviour; SE is still std / sqrt(N_success).
     sqrt_n = math.sqrt(n_success) if n_success > 0 else 1.0
     irr_se = irr_std / sqrt_n if n_success > 0 else 0.0
-
     npv_std = float(np.std(project_npv)) if n_success > 0 else 0.0
     npv_se = npv_std / sqrt_n if n_success > 0 else 0.0
-
     dscr_std = float(np.std(dscr_min)) if n_success > 0 else 0.0
     dscr_se = dscr_std / sqrt_n if n_success > 0 else 0.0
 
@@ -1155,6 +1122,7 @@ def _aggregate_results(
         failed_iterations=failed_count,
         raw_results=successful_results,
         scenario_name=scenario_name,
+        # New precision fields – MonteCarloResult should allow these.
         project_irr_se=irr_se,
         project_npv_se=npv_se,
         dscr_min_se=dscr_se,
@@ -1168,10 +1136,17 @@ __all__ = [
     "_load_scenarios",
     "_parse_distributions",
     "_parse_derived_parameters",
+    "_compute_global_param_names",
     "_generate_unit_samples",
+    "_generate_lhs_samples",
     "_build_samples_for_scenario",
     "_transform_to_distribution",
+    "_run_single_scenario",
+    "_run_parallel_iterations",
+    "_run_serial_iterations",
+    "_run_single_iteration",
     "_build_overrides_from_sample",
+    "_set_nested_value",
     "_aggregate_results",
 ]
 # EOF

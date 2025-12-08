@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 ║  All pipeline modules must import *analytics results* only from here.        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
+
 # ═════════════════════════════════════════════════════════════════════════════
 # WACC, Lender/Scenario Results (Phase 1)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -168,16 +169,19 @@ class DebtCovenantSnapshot:
             debt_result.get("min_dscr") or debt_result.get("dscr_min") or 0.0
         )
 
-        dscr_series = list(debt_result.get("dscr_series") or [])
+        dscr_series_raw = debt_result.get("dscr_series") or []
+        dscr_series: List[float] = []
+        for value in dscr_series_raw:
+            try:
+                dscr_series.append(float(value))
+            except (TypeError, ValueError):
+                continue
+
         years_below = 0
         first_breach: Optional[int] = None
         last_breach: Optional[int] = None
 
-        for idx, value in enumerate(dscr_series):
-            try:
-                v = float(value)
-            except (TypeError, ValueError):
-                continue
+        for idx, v in enumerate(dscr_series):
             if v == float("inf") or v != v:  # inf / NaN
                 continue
             if v < dscr_threshold:
@@ -205,7 +209,8 @@ class DebtCovenantSnapshot:
         fx_max = float(fx_max_raw) if fx_max_raw is not None else None
         fx_avg = float(fx_avg_raw) if fx_avg_raw is not None else None
 
-        audit_status = str(debt_result.get("audit_status") or "REVIEW")
+        audit_status_raw = debt_result.get("audit_status") or "REVIEW"
+        audit_status = str(audit_status_raw)
 
         notes_parts: List[str] = []
         if years_below > 0:
@@ -289,17 +294,21 @@ def _build_debt_covenant_snapshot(
     Convenience wrapper: read thresholds from config, then build snapshot
     from the v14 debt surface (plan_debt output).
     """
-    financing_cfg = (
+    financing_cfg_raw = (
         config.get("Financing_Terms")
         or config.get("financing")
         or config.get("finance")
         or {}
     )
-    cov_cfg = (
-        (financing_cfg.get("covenants") or {})
-        if isinstance(financing_cfg, dict)
-        else {}
-    )
+
+    financing_cfg: Mapping[str, Any]
+    if isinstance(financing_cfg_raw, Mapping):
+        financing_cfg = financing_cfg_raw
+    else:
+        financing_cfg = {}
+
+    cov_cfg_raw = financing_cfg.get("covenants") or {}
+    cov_cfg: Mapping[str, Any] = cov_cfg_raw if isinstance(cov_cfg_raw, Mapping) else {}
 
     dscr_threshold = float(
         cov_cfg.get("min_dscr")
@@ -406,7 +415,7 @@ def build_cashflow_result_from_annual_rows(
     """
     # Years
     years: List[int] = [
-        int(row.get("year", i + 1)) for i, row in enumerate(annual_rows)
+        int(row.get("year", index + 1)) for index, row in enumerate(annual_rows)
     ]
 
     # Generation
@@ -440,7 +449,11 @@ def build_cashflow_result_from_annual_rows(
     ]
 
     # Risk haircut
-    risk_cfg = config.get("risk_adjustment") or config.get("risk") or {}
+    risk_cfg_raw = config.get("risk_adjustment") or config.get("risk") or {}
+    risk_cfg: Mapping[str, Any] = (
+        risk_cfg_raw if isinstance(risk_cfg_raw, Mapping) else {}
+    )
+
     risk_haircut_pct = float(
         risk_cfg.get("cfads_haircut_pct") or risk_cfg.get("risk_haircut_pct") or 0.0
     )
@@ -454,7 +467,10 @@ def build_cashflow_result_from_annual_rows(
 
     return CashflowResult(
         years=years,
-        annual_rows=[dict(row) for row in annual_rows],
+        annual_rows=[
+            {k: float(v) for k, v in row.items() if isinstance(v, (int, float))}
+            for row in annual_rows
+        ],
         gross_generation_kwh=gross_generation_kwh,
         net_generation_kwh=net_generation_kwh,
         revenue_lkr=revenue_lkr,
@@ -650,10 +666,12 @@ class ParameterRangeConfig(BaseModel):
         """
         Ensure high_pct is at least as large as abs(low_pct).
         """
-        low_pct = info.data.get("low_pct")
-        if low_pct is not None and v < abs(low_pct):
+        low_pct = None
+        if hasattr(info, "data"):
+            low_pct = getattr(info, "data", {}).get("low_pct")
+        if low_pct is not None and v < abs(float(low_pct)):
             raise ValueError(
-                f"High bound ({v}%) must be at least {abs(low_pct)}% "
+                f"High bound ({v}%) must be at least {abs(float(low_pct))}% "
                 f"(abs of low bound {low_pct}%)"
             )
         return v
@@ -706,7 +724,6 @@ class TornadoResult:
         """
         Signed percentage impact relative to base_irr.
         """
-        # NaN propagation
         for v in (self.base_irr, self.low_irr, self.high_irr):
             if v != v:  # NaN check
                 return float("nan")
@@ -801,16 +818,30 @@ class TailRiskMetrics:
 @dataclass
 class Distribution:
     """
-    Probability distribution for MC—used in both MC config and derived parameter tools.
+    Probability distribution for Monte Carlo parameters.
+
+    This is the common surface used by:
+    - Monte Carlo config loaders (YAML)
+    - MC engine samplers
+    - Derived-parameter tools (e.g. tariff from target IRR)
+
+    NOTE:
+    - `description` is optional and exists purely for human-readable
+      documentation. It is allowed in YAML and safely ignored by the math.
     """
 
     variable_name: str
     dist_type: Literal["normal", "triangular", "uniform", "lognormal"]
-    mean: float = 0.0
+
+    # Core numeric parameters
+    mean: Optional[float] = None
     std: Optional[float] = None
     min_val: Optional[float] = None
     max_val: Optional[float] = None
     mode: Optional[float] = None
+
+    # Optional metadata
+    description: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate distribution parameters based on type."""
@@ -819,6 +850,7 @@ class Distribution:
         # ──── Normal ────────────────────────────────────────────────────────
         if dt == "normal":
             if self.std is None or self.std <= 0:
+                # Tests expect this substring
                 raise ValueError("normal distribution requires std > 0")
             return
 
@@ -831,6 +863,7 @@ class Distribution:
         # ──── Triangular ────────────────────────────────────────────────────
         if dt == "triangular":
             if self.min_val is None or self.mode is None or self.max_val is None:
+                # Tests expect this substring
                 raise ValueError("triangular distribution requires min <= mode <= max")
             if not (self.min_val <= self.mode <= self.max_val):
                 raise ValueError("triangular distribution requires min <= mode <= max")
@@ -839,7 +872,7 @@ class Distribution:
         # ──── Uniform ───────────────────────────────────────────────────────
         if dt == "uniform":
             if self.min_val is None or self.max_val is None:
-                raise ValueError("uniform distribution requires min and max")
+                raise ValueError("uniform distribution requires min < max")
             if not (self.min_val < self.max_val):
                 raise ValueError("uniform distribution requires min < max")
             return
@@ -851,7 +884,11 @@ class Distribution:
 @dataclass
 class DerivedParameter:
     """
-    Configuration for a *derived* MC parameter.
+    Configuration for a *derived* Monte Carlo parameter.
+
+    Examples:
+      - Tariff implied by a target project IRR.
+      - Maximum debt consistent with a DSCR covenant.
     """
 
     variable_name: str
@@ -862,22 +899,76 @@ class DerivedParameter:
     description: str = ""
 
 
-@dataclass
+@dataclass(init=False)
 class MonteCarloScenario:
     """
-    Monte Carlo scenario configuration.
+    Monte Carlo scenario configuration (engine-agnostic).
+
+    Engine-facing fields:
+      - standard_params
+      - derived_params
+
+    Test/backwards-compat fields:
+      - standard_parameters (alias for standard_params)
+      - derived_parameters (alias for derived_params)
+
+    The custom __init__ accepts *either* naming style but not both
+    at the same time, so older tests and newer engine code can coexist.
     """
 
     name: str
     description: str
-    standard_parameters: List[Distribution]
-    derived_parameters: List[DerivedParameter]
-    enabled: bool = True
+    standard_params: List[Distribution]
+    derived_params: List[DerivedParameter]
+    iterations: int
+    enabled: bool
 
+    def __init__(
+        self,
+        name: str,
+        description: str = "",
+        standard_params: Optional[List[Distribution]] = None,
+        derived_params: Optional[List[DerivedParameter]] = None,
+        *,
+        standard_parameters: Optional[List[Distribution]] = None,
+        derived_parameters: Optional[List[DerivedParameter]] = None,
+        iterations: int = 1000,
+        enabled: bool = True,
+    ) -> None:
+        # Guard against ambiguous usage
+        if standard_params is not None and standard_parameters is not None:
+            raise TypeError(
+                "Provide either 'standard_params' or 'standard_parameters', not both."
+            )
+        if derived_params is not None and derived_parameters is not None:
+            raise TypeError(
+                "Provide either 'derived_params' or 'derived_parameters', not both."
+            )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Monte Carlo result surface
-# ──────────────────────────────────────────────────────────────────────────────
+        # Prefer the new names if given; otherwise fall back to legacy kwargs
+        if standard_params is None:
+            standard_params = standard_parameters or []
+        if derived_params is None:
+            derived_params = derived_parameters or []
+
+        self.name = name
+        self.description = description
+        self.standard_params = list(standard_params)
+        self.derived_params = list(derived_params)
+        self.iterations = iterations
+        self.enabled = enabled
+
+    # --- Legacy attribute aliases for tests ---------------------------------
+
+    @property
+    def standard_parameters(self) -> List[Distribution]:
+        """Backwards-compatible alias for standard_params."""
+        return self.standard_params
+
+    @property
+    def derived_parameters(self) -> List[DerivedParameter]:
+        """Backwards-compatible alias for derived_params."""
+        return self.derived_params
 
 
 @dataclass
@@ -891,8 +982,7 @@ class MonteCarloResult:
     - No direct references to cashflow or debt internals.
     - Ready for exports, dashboards and regression tests.
 
-    New in Sprint 9:
-    - Optional standard error (SE) fields for precision reporting.
+    Optional *_se fields expose standard errors for precision reporting.
     """
 
     iterations: int
@@ -910,17 +1000,16 @@ class MonteCarloResult:
     project_npv_p50: float
     project_npv_p90: float
 
-    # DSCR distribution
+    # DSCR distribution (typically covenant-focused)
     dscr_min_p10: float
     dscr_min_p50: float
 
     # Engine housekeeping
     failed_iterations: int
-    raw_results: List[Dict[str, float]] = field(default_factory=list)
-    scenario_name: str = ""
+    raw_results: Optional[List[Dict[str, float]]] = None
+    scenario_name: Optional[str] = None
 
-    # New: precision / convergence estimates
-    # (these can be None if the engine doesn't compute them)
+    # Precision / convergence estimates (standard errors)
     project_irr_se: Optional[float] = None
     project_npv_se: Optional[float] = None
     dscr_min_se: Optional[float] = None
@@ -931,8 +1020,37 @@ class MonteCarloResult:
         """
         if self.iterations <= 0:
             return 0.0
-        successful = max(self.iterations - self.failed_iterations, 0)
+        successful = max(self.iterations - max(self.failed_iterations, 0), 0)
         return (successful / float(self.iterations)) * 100.0
+
+    def probability_above_threshold(self, metric_name: str, threshold: float) -> float:
+        """
+        Return the percentage of (non-failed) draws where the given metric is
+        greater than or equal to the supplied threshold.
+
+        Examples:
+            result.probability_above_threshold("project_irr", 0.12)
+            result.probability_above_threshold("dscr_min", 1.30)
+        """
+        if not self.raw_results:
+            return 0.0
+
+        hits = 0
+        total = 0
+
+        for row in self.raw_results:
+            value = row.get(metric_name)
+            if value is None:
+                # Some runs may not populate every metric; we ignore those here.
+                continue
+            total += 1
+            if value >= threshold:
+                hits += 1
+
+        if total == 0:
+            return 0.0
+
+        return 100.0 * hits / float(total)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -967,8 +1085,6 @@ class ScenarioDescriptor:
 # END OF CONTRACTS FILE
 # ═════════════════════════════════════════════════════════════════════════════
 #
-# MAINTENANCE NOTES:
-#
 # 1. Update docstrings and comments when extending this file
 # 2. All pipeline modules MUST import analytics results from here
 # 3. New contract types should follow established patterns:
@@ -979,5 +1095,4 @@ class ScenarioDescriptor:
 # 4. Validators use @field_validator decorator (pydantic v2 pattern)
 # 5. Keep this file focused on contracts only - no business logic
 #
-# ═════════════════════════════════════════════════════════════════════════════
 # EOF - analytics/contracts_v14.py
