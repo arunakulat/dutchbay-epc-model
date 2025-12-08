@@ -1,4 +1,11 @@
-#!/usr/bin/env python3
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     DUTCHBAY v14 DATA CONTRACTS                             ║
@@ -14,15 +21,6 @@
 ║  All pipeline modules must import *analytics results* only from here.        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 # ═════════════════════════════════════════════════════════════════════════════
 # WACC, Lender/Scenario Results (Phase 1)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -877,27 +875,55 @@ class MonteCarloScenario:
     enabled: bool = True
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Monte Carlo result surface
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 @dataclass
 class MonteCarloResult:
     """
     Aggregated Monte Carlo output for a single scenario.
+
+    This is intentionally *engine-agnostic*:
+
+    - Only high-level KPIs (IRR / NPV / DSCR p-tiles).
+    - No direct references to cashflow or debt internals.
+    - Ready for exports, dashboards and regression tests.
+
+    New in Sprint 9:
+    - Optional standard error (SE) fields for precision reporting.
     """
 
     iterations: int
+
+    # Core IRR stats
     project_irr_mean: float
     project_irr_std: float
     project_irr_p10: float
     project_irr_p50: float
     project_irr_p90: float
+
+    # Core NPV stats
     project_npv_mean: float
     project_npv_p10: float
     project_npv_p50: float
     project_npv_p90: float
+
+    # DSCR distribution
     dscr_min_p10: float
     dscr_min_p50: float
+
+    # Engine housekeeping
     failed_iterations: int
     raw_results: List[Dict[str, float]] = field(default_factory=list)
     scenario_name: str = ""
+
+    # New: precision / convergence estimates
+    # (these can be None if the engine doesn't compute them)
+    project_irr_se: Optional[float] = None
+    project_npv_se: Optional[float] = None
+    dscr_min_se: Optional[float] = None
 
     def success_rate(self) -> float:
         """
@@ -906,23 +932,7 @@ class MonteCarloResult:
         if self.iterations <= 0:
             return 0.0
         successful = max(self.iterations - self.failed_iterations, 0)
-        return 100.0 * successful / float(self.iterations)
-
-    def probability_above_threshold(self, metric: str, threshold: float) -> float:
-        """
-        Percentage of raw_results where raw_result[metric] >= threshold.
-        """
-        if not self.raw_results:
-            return 0.0
-
-        total = len(self.raw_results)
-        hits = 0
-        for record in self.raw_results:
-            value = record.get(metric)
-            if value is not None and value >= threshold:
-                hits += 1
-
-        return 100.0 * hits / float(total)
+        return (successful / float(self.iterations)) * 100.0
 
 
 # ═════════════════════════════════════════════════════════════════════════════

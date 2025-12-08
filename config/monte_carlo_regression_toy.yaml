@@ -1,10 +1,14 @@
-# DutchBay_EPC_Model – Monte Carlo default configuration (Sprint 9)
+# DutchBay_EPC_Model – Monte Carlo regression configuration (Sprint 9)
+# Purpose:
+#   - Mid-size Monte Carlo run (dev/CI) using realistic distributions.
+#   - Single base_case scenario mirroring lender base assumptions.
+#   - Optional regression_expectations block for locking IRR/NPV/DSCR bands.
 
 simulation:
-  iterations: 10000          # Total Monte Carlo iterations per scenario
-  random_seed: 42            # Global RNG seed (CRN across scenarios)
-  parallel_workers: 4        # Hint for parallel execution (if supported)
-  sampler: lhs               # {lhs | sobol | random}
+  iterations: 500             # Mid-size, CI-friendly but not "toy"
+  random_seed: 42             # Global RNG seed (CRN across scenarios)
+  parallel_workers: 4         # Hint for parallel execution (if supported)
+  sampler: lhs                # {lhs | sobol | random}
   output_percentiles:
     - 5
     - 10
@@ -76,11 +80,11 @@ derived_parameters:
     target_distribution:
       dist_type: normal
       mean: 0.12        # Target project IRR (e.g. 12%)
-      std: 0.01         # IRR volatility around the target
+      std: 0.005        # IRR volatility around the target
     solver_config:
       method: bisection
       bounds: [40.0, 100.0]   # Tariff search range in LKR/kWh
-      max_iterations: 50
+      max_iterations: 25
       tolerance: 0.0001
 
   - variable_name: financial.debt_amount_usd
@@ -102,46 +106,10 @@ derived_parameters:
 scenarios:
   - name: base_case
     description: >
-      Standard DFI base case with P50 assumptions for CAPEX, OPEX and
-      capacity factor. This is the primary lender reference case.
+      Regression base case: aligned with the lender base_case assumptions,
+      but with a mid-size iteration count suitable for CI and dev runs.
     enabled: true
     parameter_overrides: {}
-
-  - name: optimistic
-    description: >
-      Favorable case with lower CAPEX and higher capacity factor, plus a
-      slightly lower target tariff IRR band – used for upside and equity
-      upside assessment.
-    enabled: false
-    parameter_overrides:
-      standard_parameters:
-        - variable_name: project.capex_usd_per_kw
-          mean: 800.0
-          std: 60.0
-        - variable_name: generation.capacity_factor_pct
-          mode: 48.0
-      derived_parameters:
-        - variable_name: financial.tariff_lkr_per_kwh
-          target_distribution:
-            mean: 0.10    # Lower IRR floor → lower tariff requirement
-
-  - name: stress_case
-    description: >
-      Downside case with higher CAPEX and lower capacity factor, plus an
-      elevated project IRR floor for tariff solving. Used for covenant and
-      headroom testing.
-    enabled: false
-    parameter_overrides:
-      standard_parameters:
-        - variable_name: project.capex_usd_per_kw
-          mean: 950.0
-          std: 120.0
-        - variable_name: generation.capacity_factor_pct
-          mode: 42.0
-      derived_parameters:
-        - variable_name: financial.tariff_lkr_per_kwh
-          target_distribution:
-            mean: 0.14    # Higher IRR floor → higher tariff requirement
 
 correlations:
   enabled: false
@@ -151,7 +119,7 @@ correlations:
     - [generation.capacity_factor_pct, generation.availability_pct, 0.4]
 
 output:
-  save_path: outputs/monte_carlo/
+  save_path: outputs/monte_carlo_regression/
   save_raw_results: true
 
   risk_metrics:
@@ -165,3 +133,21 @@ output:
       description: Total equity cash returns divided by equity invested.
     - name: debt_service_coverage_avg
       description: Average DSCR over full senior debt tenor.
+
+# Optional regression lock – fill after first "golden run":
+#   1. Run this config once with seed=42.
+#   2. Capture P50 IRR/NPV and P10 DSCR.
+#   3. Populate the bands below and point tests at them.
+
+regression_expectations:
+  scenario_name: base_case
+  metrics:
+    project_irr_p50:
+      lower: 0.176757
+      upper: 0.180757
+    project_npv_p50_lkr:
+      lower: 54214707.37
+      upper: 56427552.57
+    dscr_min_p10:
+      lower: 1.280000
+      upper: 1.320000

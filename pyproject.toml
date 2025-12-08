@@ -32,6 +32,7 @@ test = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
 ]
+
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
@@ -51,4 +52,9 @@ exclude = '''
   | __pycache__
 )/
 '''
-# EOF
+
+[tool.mypy]
+python_version = "3.11"
+# Run mypy primarily over the typed application surface
+files = ["analytics", "finance"]
+config_file = "mypy.ini"

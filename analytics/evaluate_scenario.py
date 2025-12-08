@@ -1,95 +1,232 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
 from analytics.contracts_v14 import ScenarioResult
-from run_full_pipeline_v14 import run_v14_pipeline
+from analytics.pipeline_v14 import run_v14_pipeline
+from analytics.scenario_loader import load_scenario_config
 
 logger = logging.getLogger(__name__)
 
 """
 analytics.evaluate_scenario
 
-Central orchestrator for evaluating a full scenario (cashflow + debt + metrics)
-*via* the v14 pipeline.
+Coordinator-only entry point for evaluating a single v14 scenario.
 
-This module is the canonical entry point for:
-- Monte Carlo (analytics.monte_carlo_v14)
-- Sensitivity / tornado / Pareto (analytics.sensitivity_*)
-- Parameter solvers (analytics.parameter_solvers)
-- Any “single scenario + overrides” analytics.
+Responsibilities
+----------------
+- Load a base v14 config (YAML/JSON) via analytics.scenario_loader.
+- Apply nested overrides (used by Monte Carlo, sensitivity, what-if tools).
+- Call analytics.pipeline_v14.run_v14_pipeline(config=...) once per evaluation.
+- Normalise engine outputs into a flat KPI dict for analytics layers.
 
-It deliberately delegates the heavy lifting to `run_v14_pipeline` and then
-normalises the KPI surface for downstream tools.
+Non-responsibilities
+--------------------
+- No direct cashflow/debt/WACC calculations.
+- No CLI / Hydra concerns (those live in run_full_pipeline_v14.py).
+- No file I/O beyond base config loading.
+
+Public API
+----------
+evaluate_with_overrides(base_config_path, overrides=None, *, validation_mode="strict",
+                        validation_modules=None) -> dict[str, Any]
+
+_helper functions:
+- _merge_engine_kpis(pipeline_result_or_scenario_result) -> dict[str, Any]
+- _normalise_kpi_result(obj) -> dict[str, Any]
 """
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Public entry point
 # ---------------------------------------------------------------------------
 
 
-def _merge_engine_kpis(pipeline_result: Mapping[str, Any]) -> dict[str, Any]:
+def evaluate_with_overrides(
+    base_config_path: str | Path,
+    overrides: dict[str, Any] | None = None,
+    *,
+    validation_mode: str = "strict",
+    validation_modules: list[str] | None = None,
+) -> dict[str, Any]:
     """
-    Merge the pipeline's KPI view into a flat, analytics-friendly dict.
+    Evaluate a single v14 scenario with optional nested overrides.
+
+    Parameters
+    ----------
+    base_config_path :
+        Path to the base v14 scenario file (YAML/JSON).
+    overrides :
+        Nested dict of overrides in the same shape as the v14 config, e.g.:
+
+        {
+            "project": {"capex_usd_per_kw": 900.0},
+            "financial": {"tariff_lkr_per_kwh": 70.0},
+        }
+
+        Used by Monte Carlo, sensitivity tools, and parameter_solvers.
+    validation_mode :
+        Passed through to run_v14_pipeline (e.g. "strict" or "off").
+    validation_modules :
+        Optional list of modules to validate (["cashflow", "debt"], etc.).
+
+    Returns
+    -------
+    dict[str, Any]
+        Flat KPI dict suitable for analytics layers, containing at least:
+        - scenario_name
+        - project_irr
+        - project_npv
+        - min_dscr
+        - dscr_min (alias for min_dscr)
+        - max_debt_usd (if available)
+        - discount_rate_used (if available)
+        - wacc_label (if available)
+        - wacc_is_real (if available)
+    """
+    base_path = Path(base_config_path)
+    logger.info("Evaluating scenario via v14 pipeline: %s", base_path)
+
+    # 1. Load base v14 config via the canonical loader.
+    raw_cfg = load_scenario_config(base_path)
+
+    # 2. Apply nested overrides (if any).
+    merged_cfg = _deep_merge_dicts(raw_cfg, overrides or {}) if overrides else raw_cfg
+
+    # 3. Call the canonical v14 pipeline.
+    pipeline_result = run_v14_pipeline(
+        config=merged_cfg,
+        validation_mode=validation_mode,
+        validation_modules=validation_modules or ["cashflow", "debt"],
+    )
+
+    # 4. Flatten / normalise KPIs for analytics consumers.
+    kpi_dict = _merge_engine_kpis(pipeline_result)
+
+    # 5. Logging: lender-friendly one-liner.
+    scenario_name = kpi_dict.get("scenario_name", base_path.stem)
+    logger.info(
+        "Scenario evaluated: %s | IRR=%s | NPV=%s | DSCR_min=%s",
+        scenario_name,
+        kpi_dict.get("project_irr"),
+        kpi_dict.get("project_npv"),
+        kpi_dict.get("dscr_min"),
+    )
+
+    return kpi_dict
+
+
+# ---------------------------------------------------------------------------
+# Merge helpers
+# ---------------------------------------------------------------------------
+
+
+def _deep_merge_dicts(
+    base: Mapping[str, Any],
+    overrides: Mapping[str, Any],
+) -> dict[str, Any]:
+    """
+    Deep-merge two nested mappings, returning a new dict.
+
+    - Values from `overrides` win over `base`.
+    - Dicts are merged recursively.
+    - Non-dict leaves are replaced outright.
+
+    This is used to apply MC / sensitivity overrides on top of a loaded
+    v14 config before feeding it into run_v14_pipeline.
+    """
+    result: dict[str, Any] = dict(base)
+    for key, override_value in overrides.items():
+        if (
+            key in result
+            and isinstance(result[key], Mapping)
+            and isinstance(override_value, Mapping)
+        ):
+            result[key] = _deep_merge_dicts(result[key], override_value)
+        else:
+            result[key] = override_value
+    return result
+
+
+# ---------------------------------------------------------------------------
+# KPI normalisation
+# ---------------------------------------------------------------------------
+
+
+def _merge_engine_kpis(obj: Mapping[str, Any] | ScenarioResult) -> dict[str, Any]:
+    """
+    Merge v14 engine outputs into a lender-friendly KPI dict.
+
+    Accepts either:
+    - The full pipeline result dict returned by run_v14_pipeline, or
+    - A ScenarioResult dataclass instance.
 
     Behaviour:
-    - Start from the `kpis` block if present.
-    - Prefer the *top-level* scenario_name when present.
-    - For core metrics (IRR, NPV, DSCR, max_debt_usd), fall back to
-      top-level values when the KPI block omits them.
-
-    This function does NOT create alias fields like `dscr_min` – that is
-    handled by `evaluate_with_overrides` so the tests can clearly separate
-    concerns.
+    - Start from engine 'kpis' block if present.
+    - Overlay scenario_name and core metrics from scenario-level fields:
+      project_irr, project_npv, min_dscr, max_debt_usd.
+    - Expose metadata (discount_rate_used, wacc_label, wacc_is_real) if set.
+    - Provide a dscr_min alias for min_dscr to stabilise analytics callers.
     """
-    base: dict[str, Any] = {}
+    # If we get a dataclass, convert to a mapping first.
+    if isinstance(obj, ScenarioResult):
+        struct = asdict(obj)
+        pipeline_like: dict[str, Any] = {
+            "kpis": struct.get("kpis") or {},
+            "scenario_result": struct,
+        }
+    else:
+        pipeline_like = dict(obj)
 
-    # Start from KPI block, if provided.
-    kpis = pipeline_result.get("kpis")
-    if isinstance(kpis, Mapping):
-        base.update(kpis)
+    kpis: dict[str, Any] = dict(pipeline_like.get("kpis") or {})
 
-    # Prefer the top-level scenario_name label when present.
-    if "scenario_name" in pipeline_result:
-        base["scenario_name"] = pipeline_result["scenario_name"]
+    # Scenario-level metadata
+    scenario_meta = pipeline_like.get("scenario_result") or pipeline_like
 
-    # Core numeric metrics we care about for most analytics flows.
-    for key in ("project_irr", "project_npv", "min_dscr", "max_debt_usd"):
-        if key not in base and key in pipeline_result:
-            base[key] = pipeline_result[key]
+    scenario_name = scenario_meta.get("scenario_name")
+    if scenario_name is not None:
+        kpis.setdefault("scenario_name", scenario_name)
 
-    return base
+    # Core metrics: fill from scenario_result if missing in kpis.
+    for field in ("project_irr", "project_npv", "min_dscr", "max_debt_usd"):
+        if field not in kpis and field in scenario_meta:
+            kpis[field] = scenario_meta[field]
+
+    # Metadata: discount rate / WACC flavour.
+    if (
+        "discount_rate_used" in scenario_meta
+        and scenario_meta["discount_rate_used"] is not None
+    ):
+        kpis.setdefault("discount_rate_used", scenario_meta["discount_rate_used"])
+
+    if "wacc_label" in scenario_meta and scenario_meta["wacc_label"] is not None:
+        kpis.setdefault("wacc_label", scenario_meta["wacc_label"])
+
+    if "wacc_is_real" in scenario_meta and scenario_meta["wacc_is_real"] is not None:
+        kpis.setdefault("wacc_is_real", scenario_meta["wacc_is_real"])
+
+    # Alias: dscr_min for min_dscr (many analytics bits expect dscr_min).
+    if "dscr_min" not in kpis and "min_dscr" in kpis:
+        kpis["dscr_min"] = kpis["min_dscr"]
+
+    return kpis
 
 
 def _normalise_kpi_result(obj: Any) -> dict[str, Any]:
     """
-    Backwards-compatible normaliser in case callers ever pass a ScenarioResult
-    (or similar) instead of a pipeline dict.
+    Normalise different KPI container types into a flat dict.
 
-    In day-to-day v14 usage, we mostly feed `_merge_engine_kpis` with the
-    raw dict returned by `run_v14_pipeline`, but keeping this helper around
-    avoids surprises when refactoring.
+    Accepted inputs:
+    - ScenarioResult dataclass → flattened via _merge_engine_kpis(...)
+    - Mapping (e.g. already-merged KPIs) → shallow-copied dict
+
+    Anything else raises TypeError to keep failures loud and early.
     """
     if isinstance(obj, ScenarioResult):
-        kpis: dict[str, Any] = {
-            "scenario_name": obj.scenario_name,
-            "project_npv": obj.project_npv,
-            "project_irr": obj.project_irr,
-            "min_dscr": obj.min_dscr,
-            "max_debt_usd": obj.max_debt_usd,
-        }
-        if obj.discount_rate_used is not None:
-            kpis["discount_rate_used"] = obj.discount_rate_used
-        if obj.wacc_label is not None:
-            kpis["wacc_label"] = obj.wacc_label
-        if obj.wacc_is_real is not None:
-            kpis["wacc_is_real"] = obj.wacc_is_real
-        if obj.kpis:
-            kpis.update(obj.kpis)
-        return kpis
+        return _merge_engine_kpis(obj)
 
     if isinstance(obj, Mapping):
         return dict(obj)
@@ -99,75 +236,5 @@ def _normalise_kpi_result(obj: Any) -> dict[str, Any]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Public gateway
-# ---------------------------------------------------------------------------
-
-
-def evaluate_with_overrides(
-    base_config_path: str,
-    overrides: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """
-    Evaluate a single scenario via the v14 pipeline, with optional overrides.
-
-    This is the canonical, engine-facing entry point for Monte Carlo,
-    sensitivity, parameter solvers, and any “what-if” tooling.
-
-    Parameters
-    ----------
-    base_config_path : str
-        Path to the base scenario YAML.
-    overrides : dict[str, Any] | None
-        Nested dict of overrides applied on top of the loaded config.
-        Callers are expected to have already expanded dotted paths into
-        nested dicts where relevant.
-
-    Returns
-    -------
-    dict[str, Any]
-        Flat dict of KPI values (e.g. project_irr, project_npv, min_dscr,
-        max_debt_usd, plus any extra KPIs), with a `dscr_min` alias added
-        for DSCR-based workflows.
-
-    Raises
-    ------
-    TypeError
-        If the pipeline result is not a mapping.
-    """
-    config_path = Path(base_config_path)
-    logger.info("Evaluating scenario via v14 pipeline: %s", config_path)
-
-    # Delegate the heavy lifting to the canonical v14 pipeline.
-    # The tests monkeypatch this symbol directly.
-    pipeline_result = run_v14_pipeline(
-        config=str(config_path),
-        overrides=overrides or None,
-    )
-
-    if not isinstance(pipeline_result, Mapping):
-        raise TypeError(
-            "run_v14_pipeline must return a mapping-like result; "
-            f"got {type(pipeline_result)!r}"
-        )
-
-    # Merge top-level and KPI block into a single view.
-    kpi_dict = _merge_engine_kpis(pipeline_result)
-
-    # Add a stable alias for DSCR so downstream code can rely on either name.
-    if "min_dscr" in kpi_dict and "dscr_min" not in kpi_dict:
-        kpi_dict["dscr_min"] = kpi_dict["min_dscr"]
-
-    logger.info(
-        "Scenario evaluated: %s | IRR=%s | NPV=%s | DSCR_min=%s",
-        kpi_dict.get("scenario_name", config_path.name),
-        kpi_dict.get("project_irr"),
-        kpi_dict.get("project_npv"),
-        kpi_dict.get("dscr_min"),
-    )
-
-    return kpi_dict
-
-
-__all__ = ["evaluate_with_overrides", "_merge_engine_kpis"]
+__all__ = ["evaluate_with_overrides", "_merge_engine_kpis", "_normalise_kpi_result"]
 # EOF

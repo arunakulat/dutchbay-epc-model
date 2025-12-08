@@ -16,7 +16,7 @@ USAGE:
 
 INPUTS:
     - suite, suite_a, suite_b: SensitivitySuite as defined in contracts_v14.
-    - input_conf_map: dict mapping param variable name → float weighting (volatility, scenario probability, etc.).
+    - input_conf_map: dict[str, float] mapping param variable name → float weighting (volatility, scenario probability, etc.).
 """
 
 import pandas as pd
@@ -26,7 +26,7 @@ from analytics.sensitivity_export import tornado_suite_to_dataframe
 
 
 def top_drivers_with_confidence(
-    suite: SensitivitySuite, input_conf_map: dict
+    suite: SensitivitySuite, input_conf_map: dict[str, float]
 ) -> pd.DataFrame:
     """
     Weights each tornado driver by confidence/uncertainty/prioritization factor.

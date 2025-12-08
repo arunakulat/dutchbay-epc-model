@@ -14,14 +14,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Iterator, Optional, Sequence, Tuple
+from typing import Dict, Iterator, Optional, Sequence
 
 from analytics.scenario_loader import load_scenario_config
 
 logger = logging.getLogger(__name__)
-
-ScenarioConfig = Dict[str, object]
-ScenarioPair = Tuple[str, ScenarioConfig]
 
 
 class ScenarioManager:
@@ -88,8 +85,8 @@ class ScenarioManager:
 
     def iter_scenarios(
         self,
-        patterns: Sequence[str] | None = None,
-    ) -> Iterator[ScenarioPair]:
+        patterns: Optional[Sequence[str]] = None,
+    ) -> Iterator[tuple[str, Dict[str, object]]]:
         """Yield (scenario_name, config) pairs for matching configs.
 
         Parameters
@@ -104,14 +101,11 @@ class ScenarioManager:
         (scenario_name, config) tuples:
             scenario_name:
                 The filename stem, e.g. "dutchbay_lendercase_2025Q4".
-                This is what tests and analytics code expect.
             config:
-                The loaded config dict as returned by load_scenario_config().
+                The loaded config mapping as returned by load_scenario_config().
         """
         allowed_names: Optional[set[str]] = None
-        if patterns:
-            # Match *filenames* exactly (including extension), because tests
-            # pass "dutchbay_lendercase_2025Q4.yaml" as a pattern.
+        if patterns is not None:
             allowed_names = set(patterns)
 
         for path in self._iter_config_paths():
@@ -119,11 +113,6 @@ class ScenarioManager:
                 continue
 
             logger.info("ScenarioManager: loading scenario config from %s", path)
-            config = load_scenario_config(str(path))
-
-            # The public scenario name is the stem (no extension), e.g.
-            # "dutchbay_lendercase_2025Q4". Tests assert on this value.
-            scenario_name = path.stem
-
-            # Yield as (name, config) pair; no Path objects leak out.
-            yield scenario_name, config
+            cfg: Dict[str, object] = load_scenario_config(str(path))
+            scenario_name: str = path.stem
+            yield scenario_name, cfg

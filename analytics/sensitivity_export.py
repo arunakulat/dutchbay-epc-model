@@ -9,8 +9,7 @@ analytics contracts into tabular DataFrames suitable for:
 - Plots (matplotlib / seaborn / Plotly)
 - Dashboards (Streamlit, Dash, etc.)
 
-It is intentionally thin: the *semantics* live in analytics.contracts_v14
-and analytics.sensitivity_v14; this file is just formatting glue.
+The semantics live in analytics.contracts_v14; this file is just formatting glue.
 """
 
 from __future__ import annotations
@@ -36,8 +35,8 @@ def _tornado_row_to_dict(row: TornadoResult) -> Dict[str, Any]:
     """
     Convert a TornadoResult into a flat dict for DataFrame construction.
 
-    We support both the legacy field names (base_irr / low_irr / high_irr)
-    and any newer, more generic naming (base_metric / low_metric / high_metric).
+    Supports both legacy field names (base_irr / low_irr / high_irr)
+    and generic naming (base_metric / low_metric / high_metric).
     """
     base = getattr(row, "base_irr", None)
     low = getattr(row, "low_irr", None)
@@ -72,26 +71,21 @@ def tornado_suite_to_dataframe(suite: SensitivitySuite) -> pd.DataFrame:
     """
     Convert a SensitivitySuite (single-metric tornado) into a DataFrame.
 
-    Columns (by design):
-
-    - Variable   : human-readable variable label
-    - Base       : base-case KPI value
-    - Low        : KPI value at low shock
-    - High       : KPI value at high shock
-    - Impact     : absolute impact |High - Low|
-    - Direction  : +1 if High >= Low, -1 otherwise
-
-    The DataFrame is sorted descending by Impact.
+    Columns:
+    - Variable : human-readable variable label
+    - Base     : base-case KPI value
+    - Low      : KPI value at low shock
+    - High     : KPI value at high shock
+    - Impact   : absolute impact |High - Low|
+    - Direction: +1 if High >= Low, -1 otherwise
     """
     rows: List[Dict[str, Any]] = [
         _tornado_row_to_dict(r) for r in suite.tornado_results
     ]
-
     df = pd.DataFrame(rows)
 
     if not df.empty:
         if "Impact" not in df.columns:
-            # Defensive, but should not happen given _tornado_row_to_dict
             df["Impact"] = (df["High"] - df["Low"]).abs()
         df = df.sort_values("Impact", ascending=False).reset_index(drop=True)
 
@@ -103,15 +97,14 @@ def tornado_suite_to_dataframe(suite: SensitivitySuite) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def _multi_metric_row_to_dict(row: MultiMetricTornadoResult) -> Dict[str, Any]:
+def _multi_metric_row_to_dict(row: MultiMetricTornadoResult) -> List[Dict[str, Any]]:
     """
-    Flatten a MultiMetricTornadoResult into a dict keyed by metric name.
+    Flatten a MultiMetricTornadoResult into one dict per metric.
 
-    The resulting dict is shaped for pivoting / plotting, e.g.:
-
+    Example output rows:
         {
             "Variable": "Tariff (LKR/kWh)",
-            "metric": "project_irr",
+            "Metric": "project_irr",
             "Base": 0.14,
             "Low": 0.12,
             "High": 0.16,
@@ -144,13 +137,7 @@ def _multi_metric_row_to_dict(row: MultiMetricTornadoResult) -> Dict[str, Any]:
             }
         )
 
-    # For compatibility with callers expecting a flat dict per metric,
-    # the caller (multi_metric_suite_to_dataframe) will flatten this list.
-    # Here we just return the first element if needed.
-    # This function is used as a helper; see below.
-    # To keep API simple, we do not expose it directly.
-    # We return the list and let the caller flatten.
-    return out  # type: ignore[return-value]
+    return out
 
 
 def multi_metric_suite_to_dataframe(
@@ -160,19 +147,19 @@ def multi_metric_suite_to_dataframe(
     Convert a MultiMetricSensitivitySuite into a long-form DataFrame.
 
     Columns:
-
-    - Variable   : parameter label
-    - Metric     : KPI name (e.g. 'project_irr', 'equity_irr')
-    - Base       : base-case KPI
-    - Low        : KPI at low shock
-    - High       : KPI at high shock
-    - Impact     : |High - Low|
-    - Direction  : +1/-1 (sign of High - Low)
+    - Variable : parameter label
+    - Metric   : KPI name (e.g. 'project_irr', 'equity_irr')
+    - Base     : base-case KPI
+    - Low      : KPI at low shock
+    - High     : KPI at high shock
+    - Impact   : |High - Low|
+    - Direction: +1/-1 (sign of High - Low)
     """
     rows: List[Dict[str, Any]] = []
+
     for r in suite.tornado_results:
         metric_rows = _multi_metric_row_to_dict(r)
-        rows.extend(metric_rows)  # type: ignore[arg-type]
+        rows.extend(metric_rows)
 
     df = pd.DataFrame(rows)
 
@@ -191,8 +178,9 @@ def multi_metric_suite_to_dataframe(
 
 def breakeven_results_to_dataframe(results: List[BreakevenResult]) -> pd.DataFrame:
     """
-    Convert a list of BreakevenResult objects into a DataFrame with columns:
+    Convert a list of BreakevenResult objects into a DataFrame.
 
+    Columns:
     - Variable
     - BreakevenValue
     - BracketLow
