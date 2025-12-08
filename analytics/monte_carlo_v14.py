@@ -9,7 +9,7 @@ from typing import Any, Iterable, List, cast
 import multiprocess as mp
 import numpy as np
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from SALib.sample import latin as lhs
 from SALib.sample import sobol
 
@@ -54,13 +54,12 @@ class SimulationConfig(BaseModel):
         Number of CPU processes. None = auto-detect (mp.cpu_count()).
     """
 
+    model_config = ConfigDict(extra="ignore")
+
     iterations: int = Field(default=MONTE_CARLO_ITERATIONS, ge=1)
     random_seed: int | None = None
     parallel_workers: int | None = Field(default=None, ge=1)
     sampler: str = Field(default="lhs")
-
-    class Config:
-        extra = "ignore"
 
 
 class MonteCarloConfig(BaseModel):
@@ -98,13 +97,12 @@ class MonteCarloConfig(BaseModel):
           derived_parameters: [ ... ]
     """
 
+    model_config = ConfigDict(extra="ignore")
+
     simulation: SimulationConfig
     standard_parameters: list[dict[str, Any]]
     derived_parameters: list[dict[str, Any]] = Field(default_factory=list)
     scenarios: list[dict[str, Any]] = Field(default_factory=list)
-
-    class Config:
-        extra = "ignore"
 
 
 # ---------------------------------------------------------------------------
