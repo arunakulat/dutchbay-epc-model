@@ -1,0 +1,5 @@
+config: scenarios/dutchbay_lendercase_2025Q4.yaml
+validation_mode: strict
+validation_modules:
+- cashflow
+- debt

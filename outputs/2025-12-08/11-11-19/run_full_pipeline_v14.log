@@ -1,0 +1,6 @@
+[2025-12-08 11:11:19,353][analytics.pipeline_v14][INFO] - Schema validation passed for modules: cashflow, debt
+[2025-12-08 11:11:19,353][finance.cashflow_v14][INFO] - Project life resolved from project.life_years = 20 years
+[2025-12-08 11:11:19,353][finance.cashflow_v14][INFO] - Built annual cashflow rows for 20 years, CFADS range: 5451432057 to 8408603520
+[2025-12-08 11:11:19,353][dutchbay.v14chat.finance.debt][INFO] - V14 Debt: 2-yr construction, 15-yr tenor, CAPEX=150000000.00, debt=105000000.00
+[2025-12-08 11:11:19,353][finance.wacc_v14][WARNING] - No 'wacc' block in config; evaluator will use default rate.
+[2025-12-08 11:11:19,355][analytics.pipeline_v14][INFO] - Pipeline complete: config_path=/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scenarios/dutchbay_lendercase_2025Q4.yaml, annual_rows=20, kpis=17, min_dscr=1.30, project_irr=0.1788

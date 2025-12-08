@@ -1,0 +1,4 @@
+[2025-12-05 23:24:09,030][__main__][INFO] - Schema validation passed for modules: cashflow, debt
+[2025-12-05 23:24:09,030][finance.cashflow_v14][INFO] - Project life resolved from project.life_years = 20 years
+[2025-12-05 23:24:09,030][finance.cashflow_v14][INFO] - Built annual cashflow rows for 20 years, CFADS range: 5720001640 to 8792712000
+[2025-12-05 23:24:09,030][dutchbay.v14chat.finance.debt][INFO] - V14 Debt: 2-yr construction, 15-yr tenor, CAPEX=150000000.00, debt=105000000.00

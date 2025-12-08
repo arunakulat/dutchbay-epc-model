@@ -1,9 +1,0 @@
-scenarios_dir: scenarios
-output: exports/v14_analytics.xlsx
-no_excel: false
-charts: true
-strict: true
-parallel: false
-filter: null
-default_discount_rate: null
-summary_json: null

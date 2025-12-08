@@ -1,76 +1,38 @@
-"""Scenario discovery and loading for the v14 pipeline.
-
-This module provides a single, authoritative way to:
-- Discover scenario config files under a scenarios/ directory
-- Load them via the shared analytics.scenario_loader.load_scenario_config
-
-Design rules (Go with the Flow):
-- YAML/JSON config–driven (no hardcoded scenario lists)
-- Stateless and batch/CLI friendly
-- No dependencies on dutchbay_v14chat or legacy code
-"""
+"""Scenario discovery and loading for the v14 pipeline."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Iterator, Optional, Sequence
+from typing import Dict, Iterator, Optional, Sequence, Tuple
 
 from analytics.scenario_loader import load_scenario_config
 
 logger = logging.getLogger(__name__)
 
+ScenarioPair = Tuple[str, Dict[str, object]]
+
 
 class ScenarioManager:
-    """Discover and load scenario configs for the v14 pipeline.
-
-    This is the *only* module that should know about the on-disk layout of
-    scenario configs. All callers (CLI, analytics, dashboards) should go
-    through ScenarioManager instead of globbing the scenarios/ folder
-    themselves.
-
-    A "scenario" is a single YAML or JSON config file living directly under
-    a scenarios/ directory (non-recursive by design).
-    """
+    """Discover and load scenario configs for the v14 pipeline."""
 
     def __init__(self, scenarios_dir: str | Path) -> None:
-        """Create a manager for the given scenarios directory.
-
-        Parameters
-        ----------
-        scenarios_dir:
-            Path to the directory containing scenario config files. This
-            must exist and be a directory; otherwise FileNotFoundError is
-            raised.
-        """
         self.scenarios_dir = Path(scenarios_dir)
         if not self.scenarios_dir.is_dir():
             raise FileNotFoundError(f"Scenarios dir not found: {self.scenarios_dir}")
-
         logger.info("ScenarioManager initialised for: %s", self.scenarios_dir)
 
-    # ------------------------------------------------------------------
-    # Low-level path discovery
-    # ------------------------------------------------------------------
-
     def _iter_config_paths(self) -> Iterator[Path]:
-        """Yield all YAML/JSON config paths in scenarios_dir (non-recursive).
-
-        This is a low-level helper used by higher-level APIs. Callers should
-        prefer iter_scenarios() unless they explicitly need raw Paths.
-
-        The returned paths are sorted by filename to keep ordering stable.
-        """
+        """Yield all YAML/JSON config paths in scenarios_dir (non-recursive)."""
         exts = {".yaml", ".yml", ".json"}
-
         try:
             entries = sorted(self.scenarios_dir.iterdir())
         except FileNotFoundError:
-            # Should not happen after __init__ guard, but keep it defensive.
+            # Directory was removed between construction and use; log and yield nothing.
             logger.error(
                 "ScenarioManager: scenarios dir disappeared: %s", self.scenarios_dir
             )
-            return iter(())
+            return iter(())  # type: ignore[return-value]
 
         for path in entries:
             if not path.is_file():
@@ -79,34 +41,20 @@ class ScenarioManager:
                 continue
             yield path
 
-    # ------------------------------------------------------------------
-    # High-level scenario iteration
-    # ------------------------------------------------------------------
-
     def iter_scenarios(
         self,
         patterns: Optional[Sequence[str]] = None,
-    ) -> Iterator[tuple[str, Dict[str, object]]]:
+    ) -> Iterator[ScenarioPair]:
         """Yield (scenario_name, config) pairs for matching configs.
 
-        Parameters
-        ----------
-        patterns:
-            Optional list/tuple of filenames to include, e.g.
-            ("dutchbay_lendercase_2025Q4.yaml", "example_a.yaml").
-            If None, all scenario configs in the directory are included.
-
-        Yields
-        ------
-        (scenario_name, config) tuples:
-            scenario_name:
-                The filename stem, e.g. "dutchbay_lendercase_2025Q4".
-            config:
-                The loaded config mapping as returned by load_scenario_config().
+        Args:
+            patterns:
+                Optional list of file names (e.g. ["dutchbay_lendercase_2025Q4.yaml"])
+                to include. If None, all YAML/JSON configs in the directory are yielded.
         """
-        allowed_names: Optional[set[str]] = None
-        if patterns is not None:
-            allowed_names = set(patterns)
+        allowed_names: Optional[set[str]] = (
+            set(patterns) if patterns is not None else None
+        )
 
         for path in self._iter_config_paths():
             if allowed_names is not None and path.name not in allowed_names:
@@ -114,5 +62,4 @@ class ScenarioManager:
 
             logger.info("ScenarioManager: loading scenario config from %s", path)
             cfg: Dict[str, object] = load_scenario_config(str(path))
-            scenario_name: str = path.stem
-            yield scenario_name, cfg
+            yield path.stem, cfg

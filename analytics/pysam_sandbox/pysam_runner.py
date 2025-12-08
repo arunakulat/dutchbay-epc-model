@@ -50,7 +50,7 @@ class PySAMRunner:
 
         self.resource_file = str(path)
         self.capacity_mw = float(capacity_mw)
-        self._model: Optional[wp.Windpower] = None  # type: ignore[name-defined]
+        self._model: Optional[wp.Windpower] = None
 
     def get_annual_profile(
         self,
@@ -87,7 +87,7 @@ class PySAMRunner:
             self._execute_pysam()
 
         assert self._model is not None  # for mypy
-        base_aep = float(self._model.Outputs.annual_energy)  # type: ignore[attr-defined]
+        base_aep = float(self._model.Outputs.annual_energy)
 
         return [
             base_aep * ((1.0 - degradation_rate) ** (year - 1))
@@ -103,16 +103,16 @@ class PySAMRunner:
             FileNotFoundError: If the resource file cannot be used by PySAM.
         """
         try:
-            wind = wp.default("WindPowerNone")  # type: ignore[attr-defined]
+            wind = wp.default("WindPowerNone")
 
             # Resource file
-            wind.Resource.wind_resource_filename = self.resource_file  # type: ignore[attr-defined]
+            wind.Resource.wind_resource_filename = self.resource_file
 
             # Capacity (convert MW → kW for PySAM)
-            wind.Turbine.system_capacity = self.capacity_mw * 1000.0  # type: ignore[attr-defined]
+            wind.Turbine.system_capacity = self.capacity_mw * 1000.0
 
             # Execute PySAM
-            wind.execute()  # type: ignore[attr-defined]
+            wind.execute()
             self._model = wind
         except FileNotFoundError:
             # Re-raise file errors explicitly

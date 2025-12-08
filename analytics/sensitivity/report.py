@@ -33,7 +33,7 @@ def generate_report(
     Returns:
         Markdown document as a string.
     """
-    req = SensitivityRequest(config_path=config_path, parameters=list(params))
+    req = SensitivityRequest(base_config_path=config_path, parameters=list(params))
     suite = run_tornado_sensitivity(req)
     df = tornado_suite_to_dataframe(suite)
 
