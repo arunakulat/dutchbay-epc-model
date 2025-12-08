@@ -112,7 +112,9 @@ def _build_nested_override(variable_name: str, value: Any) -> Dict[str, Any]:
         -> {"project": {"tariff": {"lkr_per_kwh": 1.05}}}
     """
     keys = variable_name.split(".")
-    d: Any = value
-    for key in reversed(keys):
-        d = {key: d}
-    return d
+    result: Dict[str, Any] = {keys[-1]: value}
+
+    for key in reversed(keys[:-1]):
+        result = {key: result}
+
+    return result

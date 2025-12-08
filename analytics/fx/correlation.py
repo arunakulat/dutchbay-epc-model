@@ -201,9 +201,9 @@ class FXCorrelationModule:
         if paydown_scenarios is None:
             paydown_scenarios = {
                 "Current (55% USD)": 0.00,
-                "Phase 1 (25% USD)": 0.55,  # reduce to ~25% of original
-                "Phase 2 (10% USD)": 0.82,  # reduce to ~10% of original
-                "Full Payoff (0% USD)": 1.00,  # eliminate USD debt
+                "Phase 1 (25% USD)": 0.55,
+                "Phase 2 (10% USD)": 0.82,
+                "Full Payoff (0% USD)": 1.00,
             }
 
         results: Dict[str, List[Dict[str, float]]] = {}
@@ -363,14 +363,16 @@ class FXCorrelationModule:
                 else ""
             )
 
-            results["paydown_recommendations"][
-                f"{paydown_speed*100:.0f}% USD reduction"
-            ] = {
-                "paydown_speed": paydown_speed,
-                "breach_probability": breach_probability,
-                "min_dscr_observed": min_dscr,
+            paydown_key = f"{paydown_speed*100:.0f}% USD reduction"
+            rec_row: Dict[str, float | str] = {
+                "paydown_speed": float(paydown_speed),
+                "breach_probability": float(breach_probability),
+                "min_dscr_observed": float(min_dscr),
                 "recommendation": recommendation,
             }
+            cast_dict = results["paydown_recommendations"]
+            assert isinstance(cast_dict, dict)
+            cast_dict[paydown_key] = rec_row
 
         return results
 

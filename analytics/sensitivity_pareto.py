@@ -73,9 +73,14 @@ def optimize_from_sensitivity_insights(
     df = pd.DataFrame(results)
     mask = _is_nondominated(df[list(objectives)].values)
 
-    frontier_points = df[mask].to_dict(orient="records")
+    raw_points = df[mask].to_dict(orient="records")
+    frontier_points: List[Dict[str, Any]] = [
+        {str(k): v for k, v in rec.items()} for rec in raw_points
+    ]
+
     return ParetoFrontierResult(
-        frontier_points=frontier_points, objectives=list(objectives)
+        frontier_points=frontier_points,
+        objectives=list(objectives),
     )
 
 
@@ -133,7 +138,9 @@ def _build_nested_override(variable_name: str, value: Any) -> Dict[str, Any]:
         -> {"project": {"tariff": {"lkr_per_kwh": 1.05}}}
     """
     keys = variable_name.split(".")
-    d: Any = value
-    for key in reversed(keys):
-        d = {key: d}
-    return d
+    result: Dict[str, Any] = {keys[-1]: value}
+
+    for key in reversed(keys[:-1]):
+        result = {key: result}
+
+    return result
