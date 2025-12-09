@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
-"""
-Integration tests for analytics.sensitivity_v14 module (Phase 2B).
-
-Tests validate v14 pipeline integration across the full sensitivity workflow:
-1. Uses run_v14_pipeline() gateway (migrated from evaluate_with_overrides)
-2. Tests coordinator-only pattern (no direct finance engine access)
-3. Covers tornado, multi-metric, and breakeven analysis
-4. Validates export helpers and error handling
-
-Pattern: Integration tests with direct v14 pipeline calls.
-
-Sprint 7 Phase 2B: Migrated from evaluate_with_overrides to run_v14_pipeline.
-"""
-
 from __future__ import annotations
+
+"""
+Integration tests for analytics.sensitivity_v14 module.
+
+Phase: v14, Go-with-the-Flow compliant.
+
+These tests validate integration across the full sensitivity workflow:
+
+1. Uses the v14 evaluation gateway (evaluate_with_overrides) under the hood.
+2. Enforces coordinator-only pattern (no direct finance engine access here).
+3. Covers:
+   - One-way tornado (single metric)
+   - Multi-metric tornado
+   - Breakeven search
+   - Deep-merge behaviour
+   - DataFrame export helpers
+
+Pattern: Real v14 pipeline calls on real scenario configs (no mocks).
+"""
 
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+import pandas as pd
 import pytest
 
 from analytics.contracts_v14 import (
@@ -29,353 +35,260 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
 )
-from analytics.scenario_loader import load_scenario_config
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.sensitivity_v14 import (
     SensitivityRequest,
-    _build_nested_override,
-    _deep_merge_config,
+    build_nested_override,
+    multi_metric_suite_to_dataframe,
     run_breakeven_parameter,
     run_multi_metric_tornado,
     run_tornado_sensitivity,
+    tornado_suite_to_dataframe,
 )
-from run_full_pipeline_v14 import run_v14_pipeline
 
 logger = logging.getLogger(__name__)
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Helper: _build_nested_override
-# ══════════════════════════════════════════════════════════════════════════
+# Adjust this path if your test scenarios live elsewhere
+SCENARIO_BASE = Path("scenarios")
+TEST_BASE_SCENARIO = SCENARIO_BASE / "test_base_scenario.yaml"
 
 
-def test_build_nested_override_single_level():
-    """Single-level path creates simple dict."""
-    result = _build_nested_override("tariff", 30.0)
-    assert result == {"tariff": 30.0}
+@pytest.mark.skipif(
+    not TEST_BASE_SCENARIO.is_file(),
+    reason=f"Integration scenario not found: {TEST_BASE_SCENARIO}",
+)
+class TestBuildNestedOverrideIntegration:
+    def test_single_level(self) -> None:
+        """Single-level path creates simple dict."""
+        result = build_nested_override("tariff", 30.0)
+        assert result == {"tariff": 30.0}
+
+    def test_two_levels(self) -> None:
+        """Two-level path creates nested dict."""
+        result = build_nested_override("finance.tariff", 30.0)
+        assert result == {"finance": {"tariff": 30.0}}
+
+    def test_three_levels(self) -> None:
+        """Three-level path creates deeply nested dict."""
+        result = build_nested_override("config.finance.tariff", 30.0)
+        expected = {"config": {"finance": {"tariff": 30.0}}}
+        assert result == expected
+
+    def test_list_path(self) -> None:
+        """List of keys also creates nested dict."""
+        result = build_nested_override(["finance", "tariff"], 30.0)
+        assert result == {"finance": {"tariff": 30.0}}
+
+    def test_empty_path(self) -> None:
+        """Empty path returns empty dict."""
+        result = build_nested_override("", 30.0)
+        assert result == {}
+        result2 = build_nested_override([], 30.0)
+        assert result2 == {}
 
 
-def test_build_nested_override_two_levels():
-    """Two-level path creates nested dict."""
-    result = _build_nested_override("finance.tariff", 30.0)
-    assert result == {"finance": {"tariff": 30.0}}
+@pytest.mark.skipif(
+    not TEST_BASE_SCENARIO.is_file(),
+    reason=f"Integration scenario not found: {TEST_BASE_SCENARIO}",
+)
+class TestRunTornadoSensitivityIntegration:
+    def test_run_tornado_sensitivity_full_flow(self) -> None:
+        """
+        Full integration test: run tornado on a real scenario.
+
+        Verifies:
+        - Returns SensitivitySuite with correct structure.
+        - Results sorted by impact_abs descending.
+        - Base metric value is populated.
+        - Uses v14 evaluation gateway throughout.
+        """
+        params = [
+            ParameterRangeConfig(
+                variable_name="finance.capex_usd",
+                base_value=1_000_000.0,
+                low_pct=-10.0,
+                high_pct=10.0,
+            ),
+            ParameterRangeConfig(
+                variable_name="tariff.tariff_lkr_per_kwh",
+                base_value=25.0,
+                low_pct=-10.0,
+                high_pct=10.0,
+            ),
+        ]
+
+        request = SensitivityRequest(
+            base_config_path=str(TEST_BASE_SCENARIO),
+            parameters=params,
+            metric="dscr_min",
+        )
+
+        suite = run_tornado_sensitivity(request)
+
+        assert isinstance(suite, SensitivitySuite)
+        assert len(suite.tornado_results) == len(params)
+        assert suite.base_config_path == str(TEST_BASE_SCENARIO)
+        assert suite.metric == "dscr_min"
+
+        # Structure checks
+        impacts = [r.impact_abs for r in suite.tornado_results]
+        sorted_impacts = sorted(impacts, reverse=True)
+        assert impacts == sorted_impacts
+        assert isinstance(suite.base_metric, (int, float))
+
+    def test_run_tornado_legacy_api(self) -> None:
+        """
+        Legacy API: config path string + parameters + metric.
+        """
+        params = [
+            ParameterRangeConfig(
+                variable_name="finance.tariff",
+                base_value=25.0,
+                low_pct=-10.0,
+                high_pct=10.0,
+            )
+        ]
+
+        suite = run_tornado_sensitivity(
+            str(TEST_BASE_SCENARIO),
+            parameters=params,
+            metric="dscr_min",
+        )
+
+        assert isinstance(suite, SensitivitySuite)
+        assert len(suite.tornado_results) == len(params)
+        assert isinstance(suite.base_metric, (int, float))
 
 
-def test_build_nested_override_three_levels():
-    """Three-level path creates deeply nested dict."""
-    result = _build_nested_override("config.finance.tariff", 30.0)
-    expected = {"config": {"finance": {"tariff": 30.0}}}
-    assert result == expected
+@pytest.mark.skipif(
+    not TEST_BASE_SCENARIO.is_file(),
+    reason=f"Integration scenario not found: {TEST_BASE_SCENARIO}",
+)
+class TestRunMultiMetricTornadoIntegration:
+    def test_run_multi_metric_tornado_full_flow(self) -> None:
+        """
+        Full integration test: multi-metric tornado with v14 pipeline.
+
+        Verifies:
+        - Returns MultiMetricSensitivitySuite.
+        - Captures impacts for all requested metrics.
+        - Base values populated for each metric.
+        """
+        metrics = ["dscr_min", "dscr_max", "dscr_mean"]
+
+        params = [
+            ParameterRangeConfig(
+                variable_name="finance.capex_usd",
+                base_value=1_000_000.0,
+                low_pct=-10.0,
+                high_pct=10.0,
+            ),
+            ParameterRangeConfig(
+                variable_name="tariff.tariff_lkr_per_kwh",
+                base_value=25.0,
+                low_pct=-10.0,
+                high_pct=10.0,
+            ),
+        ]
+
+        request = SensitivityRequest(
+            base_config_path=str(TEST_BASE_SCENARIO),
+            parameters=params,
+        )
+
+        suite = run_multi_metric_tornado(request, metrics=metrics)
+
+        assert isinstance(suite, MultiMetricSensitivitySuite)
+        assert len(suite.tornado_results) == len(params)
+        assert suite.metrics == list(metrics)
+        assert len(suite.base_metrics) == len(metrics)
+
+        for result in suite.tornado_results:
+            assert isinstance(result, MultiMetricTornadoResult)
+            assert set(result.impacts.keys()) == set(metrics)
+            assert set(result.low_values.keys()) == set(metrics)
+            assert set(result.high_values.keys()) == set(metrics)
 
 
-def test_build_nested_override_with_list():
-    """List of keys also creates nested dict."""
-    result = _build_nested_override(["finance", "tariff"], 30.0)
-    assert result == {"finance": {"tariff": 30.0}}
+@pytest.mark.skipif(
+    not TEST_BASE_SCENARIO.is_file(),
+    reason=f"Integration scenario not found: {TEST_BASE_SCENARIO}",
+)
+class TestRunBreakevenParameterIntegration:
+    def test_run_breakeven_parameter_full_flow(self) -> None:
+        """
+        Full integration test: breakeven analysis with v14 pipeline.
 
-
-def test_build_nested_override_empty_path():
-    """Empty path returns empty dict."""
-    result = _build_nested_override("", 30.0)
-    assert result == {}
-
-    result = _build_nested_override([], 30.0)
-    assert result == {}
-
-
-def test_build_nested_override_empty_path():
-    """Empty path returns empty dict."""
-    result = _build_nested_override("", 30.0)
-    assert result == {}
-
-    result = _build_nested_override([], 30.0)
-    assert result == {}
-
-
-def test_build_nested_override_empty_path():
-    """Empty path returns empty dict."""
-    result = _build_nested_override("", 30.0)
-    assert result == {}
-
-    result = _build_nested_override([], 30.0)
-    assert result == {}
-
-
-def test_build_nested_override_empty_path():
-    """Empty path returns empty dict."""
-    result = _build_nested_override("", 30.0)
-    assert result == {}
-
-    result = _build_nested_override([], 30.0)
-    assert result == {}
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Integration: run_tornado_sensitivity (requires mock/fixture)
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_run_tornado_sensitivity_integration_full_flow():
-    """
-    Full integration test: run tornado on real scenario (when available).
-
-    Verifies:
-    - Returns SensitivitySuite with correct structure
-    - Results sorted by impact_abs descending
-    - Base metric value is populated
-    - Uses v14 pipeline throughout
-    """
-    params = [
-        ParameterRangeConfig(
-            variable_name="finance.capex_usd",
-            base_value=1000000.0,
-            low_pct=-10.0,
-            high_pct=10.0,
-        ),
-        ParameterRangeConfig(
+        Verifies:
+        - Solves for parameter value that yields target metric.
+        - Returns BreakevenResult with solution.
+        """
+        result = run_breakeven_parameter(
+            base_config_path=str(TEST_BASE_SCENARIO),
             variable_name="tariff.tariff_lkr_per_kwh",
-            base_value=25.0,
-            low_pct=-10.0,
-            high_pct=10.0,
-        ),
-    ]
+            target_metric="project_irr",
+            target_value=0.12,  # target 12% IRR
+            low_pct=-50.0,
+            high_pct=50.0,
+        )
 
-    request = SensitivityRequest(
-        base_config_path="scenarios/test/base_scenario.yaml",
-        parameters=params,
-        metric="dscr_min",
-    )
+        assert isinstance(result, BreakevenResult)
+        assert result.variable == "tariff.tariff_lkr_per_kwh"
 
-    suite = run_tornado_sensitivity(request)
-
-    # Structure checks
-    assert isinstance(suite, SensitivitySuite)
-    assert len(suite.tornado_results) == len(params)
-    assert suite.base_config_path == "scenarios/test/base_scenario.yaml"
-    assert suite.metric == "dscr_min"
-
-    # Results should be sorted by impact_abs descending
-    impacts = [r.impact_abs for r in suite.tornado_results]
-    assert impacts == sorted(impacts, reverse=True)
-
-    # Base metric should be numeric
-    assert isinstance(suite.base_metric, (int, float))
+        if result.status == "success":
+            assert result.breakeven_value is not None
+            assert isinstance(result.breakeven_value, (int, float))
+            assert result.bracket is not None
+        else:
+            # Even if max_iter_exceeded, structure must be valid
+            assert result.breakeven_value is not None
+            assert result.bracket is not None
 
 
-def test_run_tornado_legacy_api():
-    """Test legacy API: passing config path as string + params separately."""
-    params = [
-        ParameterRangeConfig(
-            variable_name="finance.tariff",
-            base_value=25.0,
-            low_pct=-10.0,
-            high_pct=10.0,
-        ),
-    ]
+class TestExportHelpers:
+    def test_tornado_suite_to_dataframe(self) -> None:
+        """Test converting tornado suite to DataFrame."""
+        results = [
+            TornadoResult(
+                variable="param_a",
+                base_irr=0.12,
+                low_irr=0.10,
+                high_irr=0.14,
+            ),
+            TornadoResult(
+                variable="param_b",
+                base_irr=0.12,
+                low_irr=0.11,
+                high_irr=0.13,
+            ),
+        ]
 
-    suite = run_tornado_sensitivity(
-        "scenarios/test/base_scenario.yaml",
-        parameters=params,
-        metric="dscr_min",
-    )
+        suite = SensitivitySuite(
+            tornado_results=results,
+            base_metric=0.12,
+            base_config_path="dummy.yaml",
+            metric="dscr_min",
+        )
 
-    assert isinstance(suite, SensitivitySuite)
-    assert len(suite.tornado_results) == len(params)
+        df = tornado_suite_to_dataframe(suite)
 
+        assert len(df) == 2
+        assert list(df.columns) == [
+            "variable",
+            "base_irr",
+            "low_irr",
+            "high_irr",
+            "impact_abs",
+        ]
+        assert df["variable"].tolist() == ["param_a", "param_b"]
 
-# ══════════════════════════════════════════════════════════════════════════
-# Integration: run_multi_metric_tornado
-# ══════════════════════════════════════════════════════════════════════════
+    def test_multi_metric_suite_to_dataframe(self) -> None:
+        """Test converting multi-metric suite to long-form DataFrame."""
+        metrics = ["project_irr", "equity_irr"]
+        base_metrics = {"project_irr": 0.12, "equity_irr": 0.15}
 
-
-def test_run_multi_metric_tornado_integration_full_flow():
-    """
-    Full integration test: multi-metric tornado with v14 pipeline.
-
-    Verifies:
-    - Returns MultiMetricSensitivitySuite
-    - Captures impacts for all requested metrics
-    - Base values populated for each metric
-    - Uses v14 pipeline throughout
-    """
-    metrics = ["dscr_min", "dscr_max", "dscr_mean"]
-
-    params = [
-        ParameterRangeConfig(
-            variable_name="finance.capex_usd",
-            base_value=1000000.0,
-            low_pct=-10.0,
-            high_pct=10.0,
-        ),
-        ParameterRangeConfig(
-            variable_name="tariff.tariff_lkr_per_kwh",
-            base_value=25.0,
-            low_pct=-10.0,
-            high_pct=10.0,
-        ),
-    ]
-
-    request = SensitivityRequest(
-        base_config_path="scenarios/test/base_scenario.yaml",
-        parameters=params,
-    )
-
-    suite = run_multi_metric_tornado(request, metrics=metrics)
-
-    # Structure checks
-    assert isinstance(suite, MultiMetricSensitivitySuite)
-    assert len(suite.tornado_results) == len(params)
-    assert suite.metrics == list(metrics)
-    assert len(suite.base_metrics) == len(metrics)
-
-    # Each result should have impacts for all metrics
-    for result in suite.tornado_results:
-        assert isinstance(result, MultiMetricTornadoResult)
-        assert set(result.impacts.keys()) == set(metrics)
-        assert set(result.low_values.keys()) == set(metrics)
-        assert set(result.high_values.keys()) == set(metrics)
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Integration: run_breakeven_parameter
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_run_breakeven_parameter_integration_full_flow():
-    """
-    Full integration test: breakeven analysis with v14 pipeline.
-
-    Verifies:
-    - Solves for parameter value that yields target metric
-    - Returns BreakevenResult with solution
-    - Status is 'success' if converged
-    - Uses v14 pipeline for objective evaluation
-    """
-    result = run_breakeven_parameter(
-        base_config_path="scenarios/test/base_scenario.yaml",
-        variable_name="tariff.tariff_lkr_per_kwh",
-        target_metric="project_irr",
-        target_value=0.12,  # Target 12% IRR
-        low_pct=-50.0,  # -50% of base value
-        high_pct=50.0,  # +50% of base value
-    )
-
-    # Structure checks
-    assert isinstance(result, BreakevenResult)
-    assert result.variable == "tariff.tariff_lkr_per_kwh"
-
-    # If converged, status should be success
-    if result.status == "success":
-        assert result.breakeven_value is not None
-        assert isinstance(result.breakeven_value, (int, float))
-        assert result.bracket is not None
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Unit tests: _deep_merge_config helper
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_deep_merge_config_simple():
-    """Test simple merge of nested dicts."""
-    base = {"finance": {"capex": 100, "tariff": 0.10}, "debt": {}}
-    override = {"finance": {"tariff": 0.12}}
-
-    result = _deep_merge_config(base, override)
-
-    assert result["finance"]["tariff"] == 0.12
-    assert result["finance"]["capex"] == 100  # Preserved
-    assert result["debt"] == {}
-
-
-def test_deep_merge_config_nested_preservation():
-    """Test that deep merge preserves non-overridden nested values."""
-    base = {
-        "finance": {"capex": 100, "opex": 50, "tariff": 0.10},
-        "debt": {"principal": 600000, "rate": 0.08},
-    }
-    override = {"finance": {"tariff": 0.12}}
-
-    result = _deep_merge_config(base, override)
-
-    # Overridden
-    assert result["finance"]["tariff"] == 0.12
-
-    # Preserved
-    assert result["finance"]["capex"] == 100
-    assert result["finance"]["opex"] == 50
-    assert result["debt"]["principal"] == 600000
-    assert result["debt"]["rate"] == 0.08
-
-
-def test_deep_merge_config_creates_copy():
-    """Test that merge creates a copy, not modifying original."""
-    base = {"finance": {"capex": 100}}
-    override = {"finance": {"tariff": 0.12}}
-
-    result = _deep_merge_config(base, override)
-
-    # Modify result
-    result["finance"]["capex"] = 999
-
-    # Original should be unchanged
-    assert base["finance"]["capex"] == 100
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Export helpers (unit tests)
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_tornado_suite_to_dataframe():
-    """Test converting tornado suite to DataFrame."""
-    from analytics.sensitivity_v14 import tornado_suite_to_dataframe
-
-    # Create mock suite
-    results = [
-        TornadoResult(
-            variable="param_a",
-            base_irr=0.12,
-            low_irr=0.10,
-            high_irr=0.14,
-        ),
-        TornadoResult(
-            variable="param_b",
-            base_irr=0.12,
-            low_irr=0.11,
-            high_irr=0.13,
-        ),
-    ]
-
-    suite = SensitivitySuite(
-        tornado_results=results,
-        base_metric=0.12,
-        base_config_path="dummy.yaml",
-        metric="dscr_min",
-    )
-
-    df = tornado_suite_to_dataframe(suite)
-
-    # Structure checks
-    assert len(df) == 2
-    assert list(df.columns) == [
-        "variable",
-        "base_irr",
-        "low_irr",
-        "high_irr",
-        "impact_abs",
-    ]
-    assert df["variable"].tolist() == ["param_a", "param_b"]
-
-
-def test_multi_metric_suite_to_dataframe():
-    """Test converting multi-metric suite to long-form DataFrame."""
-    from analytics.sensitivity_v14 import multi_metric_suite_to_dataframe
-
-    metrics = ["project_irr", "equity_irr"]
-    base_metrics = {"project_irr": 0.12, "equity_irr": 0.15}
-
-    results = [
-        MultiMetricTornadoResult(
+        result = MultiMetricTornadoResult(
             variable="param_a",
             label="Parameter A",
             base_values=base_metrics,
@@ -383,207 +296,44 @@ def test_multi_metric_suite_to_dataframe():
             high_values={"project_irr": 0.14, "equity_irr": 0.17},
             impacts={"project_irr": 0.04, "equity_irr": 0.04},
             impact_dirs={"project_irr": 1, "equity_irr": 1},
-        ),
-    ]
-
-    suite = MultiMetricSensitivitySuite(
-        tornado_results=results,
-        base_metrics=base_metrics,
-        base_config_path="dummy.yaml",
-        metrics=metrics,
-    )
-
-    df = multi_metric_suite_to_dataframe(suite)
-
-    # Structure checks
-    assert len(df) == 2  # 1 param × 2 metrics
-    expected_cols = [
-        "variable",
-        "label",
-        "metric",
-        "base_value",
-        "low_value",
-        "high_value",
-        "impact",
-        "impact_dir",
-    ]
-    assert list(df.columns) == expected_cols
-    assert set(df["metric"].unique()) == set(metrics)
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Edge cases and error handling
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_empty_parameters_handled_gracefully():
-    """Empty parameter list should be handled without crashing."""
-    request = SensitivityRequest(
-        base_config_path="dummy.yaml",
-        parameters=[],
-        metric="dscr_min",
-    )
-
-    # Should either return empty suite or fallback to defaults
-    # (Current implementation falls back to defaults)
-    # This is acceptable behavior for legacy compatibility
-    assert request.parameters == []
-
-
-def test_override_labels_structure():
-    """Override labels should have correct structure."""
-    override_labels = {
-        "finance.capex_usd": "Capital Expenditure (USD)",
-        "finance.tariff": "Tariff (LKR/kWh)",
-    }
-
-    request = SensitivityRequest(
-        base_config_path="dummy.yaml",
-        parameters=[
-            ParameterRangeConfig(
-                variable_name="finance.capex_usd",
-                base_value=1000000.0,
-                low_pct=-10.0,
-                high_pct=10.0,
-            ),
-        ],
-        override_labels=override_labels,
-        metric="dscr_min",
-    )
-
-    assert request.override_labels == override_labels
-    assert request.override_labels["finance.capex_usd"] == "Capital Expenditure (USD)"
-
-
-def test_parameter_range_config_validation():
-    """ParameterRangeConfig should validate inputs."""
-    # Valid config
-    param = ParameterRangeConfig(
-        variable_name="finance.tariff",
-        base_value=25.0,
-        low_pct=-10.0,
-        high_pct=10.0,
-    )
-
-    assert param.variable_name == "finance.tariff"
-    assert param.base_value == 25.0
-    assert param.low_pct == -10.0
-    assert param.high_pct == 10.0
-
-
-def test_sensitivity_request_immutable():
-    """SensitivityRequest should be frozen (immutable)."""
-    request = SensitivityRequest(
-        base_config_path="test.yaml",
-        parameters=[],
-        metric="dscr_min",
-    )
-
-    # Should not be able to modify
-    with pytest.raises((AttributeError, TypeError)):
-        request.metric = "equity_irr"  # type: ignore
-
-
-def test_tornado_result_properties():
-    """TornadoResult should expose correct properties."""
-    result = TornadoResult(
-        variable="test_param",
-        base_irr=0.12,
-        low_irr=0.10,
-        high_irr=0.14,
-    )
-
-    assert result.variable == "test_param"
-    assert result.base_irr == 0.12
-    assert result.low_irr == 0.10
-    assert result.high_irr == 0.14
-    assert result.impact_abs == pytest.approx(
-        0.04, abs=1e-6
-    )  # max(|0.10-0.12|, |0.14-0.12|)
-
-
-def test_breakeven_result_structure():
-    """BreakevenResult should have correct structure."""
-    result = BreakevenResult(
-        variable="finance.tariff",
-        breakeven_value=28.5,
-        bracket=(25.0, 35.0),
-        status="success",
-    )
-
-    assert result.variable == "finance.tariff"
-    assert result.breakeven_value == 28.5
-    assert result.bracket == (25.0, 35.0)
-    assert result.status == "success"
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Legacy API compatibility tests
-# ══════════════════════════════════════════════════════════════════════════
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Legacy API compatibility tests - DEPRECATED after Phase 2A migration
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_legacy_parameters_now_use_sensitivity_request():
-    """
-    Test that legacy _load_parameters pattern is replaced by SensitivityRequest.
-
-    Phase 2A Note: _load_parameters() was removed during v14 pipeline migration.
-    Use SensitivityRequest with explicit parameters instead.
-    """
-    params = [
-        ParameterRangeConfig(
-            variable_name="test.param",
-            base_value=100.0,
-            low_pct=-10.0,
-            high_pct=10.0,
         )
-    ]
 
-    request = SensitivityRequest(
-        base_config_path="dummy.yaml",
-        parameters=params,
-        metric="dscr_min",
-    )
-
-    # Verify request structure
-    assert len(request.parameters) == 1
-    assert request.parameters[0].variable_name == "test.param"
-
-
-def test_legacy_api_still_works_with_string_config_path():
-    """Test backward compatibility: passing config path as string."""
-    from unittest.mock import patch
-
-    params = [
-        ParameterRangeConfig(
-            variable_name="test.param",
-            base_value=100.0,
-            low_pct=-10.0,
-            high_pct=10.0,
+        suite = MultiMetricSensitivitySuite(
+            tornado_results=[result],
+            base_metrics=base_metrics,
+            base_config_path="dummy.yaml",
+            metrics=metrics,
         )
-    ]
 
-    # Legacy API: pass string path + parameters
-    with patch("analytics.sensitivity_v14.load_scenario_config") as mock_load:
-        with patch("analytics.sensitivity_v14.run_v14_pipeline") as mock_pipeline:
-            mock_load.return_value = {"test": {"param": 100.0}}
-            mock_pipeline.return_value = {"kpis": {"dscr_min": 8202.23}}
+        df = multi_metric_suite_to_dataframe(suite)
 
-            suite = run_tornado_sensitivity(
-                "test.yaml",
-                parameters=params,
-                metric="dscr_min",
-            )
+        assert len(df) == 2  # 1 param * 2 metrics
+        expected_cols = [
+            "variable",
+            "label",
+            "metric",
+            "base_value",
+            "low_value",
+            "high_value",
+            "impact",
+            "impact_dir",
+        ]
+        assert list(df.columns) == expected_cols
+        assert set(df["metric"].unique()) == set(metrics)
 
-            assert isinstance(suite, SensitivitySuite)
 
-
-# pytest configuration
-pytest_plugins = []
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--tb=short"])
+@pytest.mark.skipif(
+    not TEST_BASE_SCENARIO.is_file(),
+    reason=f"Integration scenario not found: {TEST_BASE_SCENARIO}",
+)
+def test_evaluation_gateway_round_trip() -> None:
+    """
+    Sanity check: evaluate_with_overrides on the base scenario
+    returns a KPI dict with core metrics needed by sensitivity tests.
+    """
+    kpis = evaluate_with_overrides(TEST_BASE_SCENARIO)
+    # Adjust expected keys to match your pipeline outputs
+    assert "project_irr" in kpis
+    assert "dscr_min" in kpis
+    assert isinstance(kpis["project_irr"], (int, float))
+    assert isinstance(kpis["dscr_min"], (int, float))

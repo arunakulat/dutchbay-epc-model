@@ -1,0 +1,51 @@
+# scenarios/test_base_scenario.yaml
+#
+# Minimal-but-realistic v14 test scenario for integration tests.
+# Based on base_scenario.yaml, with field naming aligned to example_a.yaml
+# and dutchbay_master_config_v14.yaml.
+
+project:
+  name: "Test Solar Project"
+  capacity_mw: 10.0
+  cod_year: 2024
+  project_life_years: 25
+  capacity_factor_pct: 25.0
+  degradation_pct: 0.5
+  grid_loss_pct: 2.0
+
+capex:
+  usd_total: 10000000.0
+  freight_pct: 0.0
+  contingency_pct: 0.0
+
+opex:
+  usd_per_year: 200000.0
+
+tariff:
+  tariff_lkr_per_kwh: 25.0
+
+debt:
+  principal_usd: 6000000.0
+  interest_rate: 0.08
+  tenor_years: 10
+
+fx:
+  start_lkr_per_usd: 320.0
+  annual_depr: 0.03
+
+tax:
+  corporate_tax_rate: 0.30
+
+Financing_Terms:
+  debt_ratio: 0.60
+  tenor_years: 10
+  amortization_style: annuity
+  interest_only_years: 0
+  target_dscr: 1.30
+  mix:
+    lkr_max: 0.0
+    dfi_max: 0.0
+    usd_commercial_min: 1.0
+  rates:
+    usd_nominal: 0.08
+    discount_rate: 0.10

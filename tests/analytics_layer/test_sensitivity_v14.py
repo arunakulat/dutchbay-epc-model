@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Mapping
 from unittest.mock import patch
 
 import pytest
@@ -8,45 +9,15 @@ import pytest
 from analytics.contracts_v14 import ParameterRangeConfig, TornadoResult
 from analytics.sensitivity_v14 import (
     SensitivityRequest,
-    _analyze_single_parameter,
-    _build_nested_override,
-    _load_parameters_from_yaml,
+    analyze_single_parameter,
+    build_nested_override,
+    load_parameters_from_yaml,
     run_tornado_sensitivity,
 )
 
-"""
-Unit tests for analytics.sensitivity_v14 module (v14 coordinator layer).
 
-Scope
------
-These tests focus on the *analytics* sensitivity coordinator, not the
-finance engine itself. The finance engine is exercised by dedicated
-integration tests in test_sensitivity_v14_all.py.
-
-Design principles validated here:
-
-1. Sensitivity layer acts as a coordinator only:
-   - No direct access to cashflow/debt engines.
-   - Talks only to run_v14_pipeline + scenario loader.
-
-2. All base / shocked evaluations go through run_v14_pipeline.
-
-3. Helper utilities behave predictably and fail fast:
-   - _build_nested_override
-   - _load_parameters_from_yaml
-   - _analyze_single_parameter
-
-4. Backwards-compatible calling styles:
-   - New: SensitivityRequest
-   - Legacy: string config path + parameters + metric
-"""
-# ═══════════════════════════════════════════════════════════════════════
-# Helpers / fixtures
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def _make_param(
-    name: str = "project.capex",
+def make_param(
+    name: str = "project.capex_usd_per_kw",
     base: float = 850.0,
     low_pct: float = -0.2,
     high_pct: float = 0.2,
@@ -60,67 +31,56 @@ def _make_param(
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# _build_nested_override
-# ═══════════════════════════════════════════════════════════════════════
-
-
 class TestBuildNestedOverride:
-    """Unit tests for _build_nested_override helper."""
+    """Unit tests for build_nested_override helper."""
 
-    def test_single_level(self):
-        result = _build_nested_override("param", 100.0)
+    def test_single_level(self) -> None:
+        result = build_nested_override("param", 100.0)
         assert result == {"param": 100.0}
 
-    def test_two_levels(self):
-        result = _build_nested_override("project.capex", 850.0)
+    def test_two_levels(self) -> None:
+        result = build_nested_override("project.capex", 850.0)
         assert result == {"project": {"capex": 850.0}}
 
-    def test_three_levels(self):
-        result = _build_nested_override("a.b.c", 42.0)
+    def test_three_levels(self) -> None:
+        result = build_nested_override("a.b.c", 42.0)
         assert result == {"a": {"b": {"c": 42.0}}}
 
-    def test_list_path(self):
-        result = _build_nested_override(["project", "capex"], 850.0)
+    def test_list_path(self) -> None:
+        result = build_nested_override(["project", "capex"], 850.0)
         assert result == {"project": {"capex": 850.0}}
 
-    def test_empty_string_path(self):
-        result = _build_nested_override("", 30.0)
+    def test_empty_string_path(self) -> None:
+        result = build_nested_override("", 30.0)
         assert result == {}
 
-    def test_empty_list_path(self):
-        result = _build_nested_override([], 30.0)
+    def test_empty_list_path(self) -> None:
+        result = build_nested_override([], 30.0)
         assert result == {}
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# _load_parameters_from_yaml
-# ═══════════════════════════════════════════════════════════════════════
+class TestYamlErrorHandling:
+    """YAML structure and error-handling tests for load_parameters_from_yaml."""
 
-
-class TestYAMLErrorHandling:
-    """YAML structure and error-handling tests for _load_parameters_from_yaml."""
-
-    def test_missing_file_raises_file_not_found(self, tmp_path: Path):
+    def test_missing_file_raises_file_not_found(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "does_not_exist.yaml"
         with pytest.raises(FileNotFoundError):
-            _load_parameters_from_yaml(yaml_file)
+            load_parameters_from_yaml(yaml_file)
 
-    def test_empty_yaml_raises_value_error(self, tmp_path: Path):
+    def test_empty_yaml_raises_value_error(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "empty.yaml"
-        yaml_file.write_text("")
-        with pytest.raises(ValueError):
-            _load_parameters_from_yaml(yaml_file)
+        yaml_file.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="empty or null"):
+            load_parameters_from_yaml(yaml_file)
 
-    def test_invalid_yaml_structure(self, tmp_path: Path):
-        """Top-level dict instead of list should raise ValueError."""
+    def test_invalid_yaml_structure_raises_value_error(self, tmp_path: Path) -> None:
+        """Syntactically valid but structurally wrong: top-level dict."""
         yaml_file = tmp_path / "bad.yaml"
-        yaml_file.write_text("invalid: structure\nno: parameters")
+        yaml_file.write_text("invalid: structure", encoding="utf-8")
+        with pytest.raises(ValueError, match="must be a list"):
+            load_parameters_from_yaml(yaml_file)
 
-        with pytest.raises(ValueError):
-            _load_parameters_from_yaml(yaml_file)
-
-    def test_valid_parameter_list(self, tmp_path: Path):
+    def test_valid_parameter_list(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "good.yaml"
         yaml_file.write_text(
             """
@@ -128,110 +88,114 @@ class TestYAMLErrorHandling:
               base_value: 850.0
               low_pct: -0.1
               high_pct: 0.1
-            """
+            """,
+            encoding="utf-8",
         )
 
-        params = _load_parameters_from_yaml(yaml_file)
+        params = load_parameters_from_yaml(yaml_file)
         assert isinstance(params, list)
         assert len(params) == 1
+
         p = params[0]
         assert isinstance(p, ParameterRangeConfig)
         assert p.variable_name == "project.capex"
-        assert p.base_value == 850.0
+        assert p.base_value == pytest.approx(850.0)
         assert p.low_pct == pytest.approx(-0.1)
         assert p.high_pct == pytest.approx(0.1)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# _analyze_single_parameter
-# ═══════════════════════════════════════════════════════════════════════
 
 
 class TestAnalyzeSingleParameter:
     """Unit tests for single-parameter analysis helper."""
 
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
-    def test_basic_analysis(self, mock_load, mock_pipeline):
+    @patch("analytics.sensitivity_v14.evaluate_with_overrides")
+    def test_basic_analysis(
+        self,
+        mock_eval,
+        tmp_path: Path,
+    ) -> None:
         """Low/high calls should produce consistent TornadoResult."""
-        mock_load.return_value = {"project": {"capex": 850.0}}
 
-        call_count = [0]
+        # Two calls: low then high
+        def _side_effect(*args: Any, **kwargs: Any) -> Mapping[str, Any]:
+            # analyze_single_parameter calls evaluate_with_overrides(base_config_path, overrides)
+            overrides = args[1] if len(args) > 1 else kwargs.get("overrides", {})
+            capex = overrides["project"]["capex_usd_per_kw"]
+            if capex < 850.0:
+                return {"project_irr": 0.10}
+            return {"project_irr": 0.14}
 
-        def mock_pipeline_eval(*_, **__):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                # Low case
-                return {"kpis": {"project_irr": 0.10}}
-            else:
-                # High case
-                return {"kpis": {"project_irr": 0.14}}
+        mock_eval.side_effect = _side_effect
 
-        mock_pipeline.side_effect = mock_pipeline_eval
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text("dummy: true", encoding="utf-8")
 
-        param = _make_param("project.capex", 850.0, -0.20, 0.20)
+        param = make_param("project.capex_usd_per_kw", 850.0, -0.20, 0.20)
 
-        result = _analyze_single_parameter(
-            base_config_path="test.yaml",
+        result = analyze_single_parameter(
+            base_config_path=config_path,
             base_metric_value=0.12,
             metric_name="project_irr",
             param=param,
+            override_labels=None,
         )
 
         assert isinstance(result, TornadoResult)
-        assert result.variable == "project.capex"
+        assert result.variable == "project.capex_usd_per_kw"
         assert result.base_irr == pytest.approx(0.12)
         assert result.low_irr == pytest.approx(0.10)
         assert result.high_irr == pytest.approx(0.14)
         assert result.impact_abs == pytest.approx(0.04, abs=1e-8)
 
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
-    def test_missing_metric_raises_key_error(self, mock_load, mock_pipeline):
-        """If KPI dict does not contain the requested metric, KeyError is raised."""
-        mock_load.return_value = {"project": {"capex": 850.0}}
-        mock_pipeline.return_value = {"kpis": {"other_metric": 123.0}}
+    @patch("analytics.sensitivity_v14.evaluate_with_overrides")
+    def test_missing_metric_raises_key_error(
+        self,
+        mock_eval,
+        tmp_path: Path,
+    ) -> None:
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text("dummy: true", encoding="utf-8")
 
-        param = _make_param()
+        mock_eval.return_value = {"other_metric": 123.0}
+        param = make_param()
 
-        with pytest.raises(KeyError):
-            _analyze_single_parameter(
-                base_config_path="test.yaml",
+        with pytest.raises(KeyError, match="Metric 'project_irr'"):
+            analyze_single_parameter(
+                base_config_path=config_path,
                 base_metric_value=0.0,
                 metric_name="project_irr",
                 param=param,
+                override_labels=None,
             )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# run_tornado_sensitivity – new and legacy APIs
-# ═══════════════════════════════════════════════════════════════════════
 
 
 class TestRunTornadoSensitivity:
     """Tests for main coordinator function run_tornado_sensitivity."""
 
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
-    def test_happy_path_with_request(self, mock_load, mock_pipeline):
+    @patch("analytics.sensitivity_v14.evaluate_with_overrides")
+    def test_happy_path_with_request(
+        self,
+        mock_eval,
+        tmp_path: Path,
+    ) -> None:
         """New API: SensitivityRequest with explicit parameters and metric."""
-        mock_load.return_value = {
-            "finance": {"capex": 850.0, "tariff": 65.0},
-        }
+        cfg_path = tmp_path / "config.yaml"
+        cfg_path.write_text("dummy: true", encoding="utf-8")
 
-        def mock_pipeline_eval(*_, **kwargs):
-            cfg = kwargs.get("config", {})
-            capex = cfg.get("finance", {}).get("capex", 850.0)
-            # Base case 0.12; perturb capex slightly for clarity
-            if capex != 850.0:
-                return {"kpis": {"project_irr": 0.11}}
-            return {"kpis": {"project_irr": 0.12}}
+        # First call: base KPIs; subsequent calls: shocks
+        def _side_effect(*args: Any, **kwargs: Any) -> Mapping[str, Any]:
+            overrides = args[1] if len(args) > 1 else kwargs.get("overrides")
+            if overrides is None:
+                return {"project_irr": 0.12}
+            capex = overrides["finance"]["capex_usd"]
+            if capex < 850.0:
+                return {"project_irr": 0.11}
+            return {"project_irr": 0.13}
 
-        mock_pipeline.side_effect = mock_pipeline_eval
+        mock_eval.side_effect = _side_effect
 
         params = [
             ParameterRangeConfig(
-                variable_name="finance.capex",
+                variable_name="finance.capex_usd",
                 base_value=850.0,
                 low_pct=-0.20,
                 high_pct=0.20,
@@ -239,25 +203,37 @@ class TestRunTornadoSensitivity:
         ]
 
         request = SensitivityRequest(
-            base_config_path="test_config.yaml",
+            base_config_path=str(cfg_path),
             parameters=params,
             metric="project_irr",
         )
 
         suite = run_tornado_sensitivity(request)
 
-        assert suite.base_config_path == "test_config.yaml"
+        assert suite.base_config_path == str(cfg_path)
         assert suite.metric == "project_irr"
         assert suite.base_metric == pytest.approx(0.12)
         assert len(suite.tornado_results) == 1
         assert all(isinstance(r, TornadoResult) for r in suite.tornado_results)
 
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
-    def test_legacy_api_with_string_config_path(self, mock_load, mock_pipeline):
-        """Legacy API: config path string + parameters + metric."""
-        mock_load.return_value = {"test": {"param": 100.0}}
-        mock_pipeline.return_value = {"kpis": {"project_irr": 0.12}}
+    @patch("analytics.sensitivity_v14.evaluate_with_overrides")
+    def test_legacy_api_with_string_config_path(
+        self,
+        mock_eval,
+        tmp_path: Path,
+    ) -> None:
+        """Legacy API: config path string, parameters, metric."""
+        cfg_path = tmp_path / "config.yaml"
+        cfg_path.write_text("dummy: true", encoding="utf-8")
+
+        # Base + two shock evaluations
+        def _side_effect(*args: Any, **kwargs: Any) -> Mapping[str, Any]:
+            overrides = args[1] if len(args) > 1 else kwargs.get("overrides")
+            if overrides is None:
+                return {"project_irr": 0.12}
+            return {"project_irr": 0.13}
+
+        mock_eval.side_effect = _side_effect
 
         params = [
             ParameterRangeConfig(
@@ -269,49 +245,31 @@ class TestRunTornadoSensitivity:
         ]
 
         suite = run_tornado_sensitivity(
-            "test.yaml",
+            str(cfg_path),
             parameters=params,
             metric="project_irr",
         )
 
-        assert suite.base_config_path == "test.yaml"
+        assert suite.base_config_path == str(cfg_path)
         assert suite.metric == "project_irr"
         assert len(suite.tornado_results) == 1
         assert suite.tornado_results[0].variable == "test.param"
 
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
-    def test_legacy_api_metric_default(self, mock_load, mock_pipeline):
-        """Legacy API should default metric to project_irr when not provided."""
-        mock_load.return_value = {"test": {"param": 100.0}}
-        mock_pipeline.return_value = {"kpis": {"project_irr": 0.12}}
-
-        params = [_make_param("test.param", 100.0)]
-
-        suite = run_tornado_sensitivity("test.yaml", parameters=params)
-
-        assert suite.metric == "project_irr"
-
-    @patch("analytics.sensitivity_v14.run_v14_pipeline")
-    @patch("analytics.sensitivity_v14.load_scenario_config")
+    @patch("analytics.sensitivity_v14.evaluate_with_overrides")
     def test_metric_missing_in_base_kpis_raises_key_error(
-        self, mock_load, mock_pipeline
-    ):
-        mock_load.return_value = {"test": {"param": 100.0}}
-        mock_pipeline.return_value = {"kpis": {"other": 1.23}}
+        self,
+        mock_eval,
+        tmp_path: Path,
+    ) -> None:
+        cfg_path = tmp_path / "config.yaml"
+        cfg_path.write_text("dummy: true", encoding="utf-8")
 
-        params = [_make_param("test.param", 100.0)]
+        mock_eval.return_value = {"other": 1.23}
+        params = [make_param("test.param", 100.0)]
 
-        with pytest.raises(KeyError):
+        with pytest.raises(KeyError, match="Metric 'project_irr' not found"):
             run_tornado_sensitivity(
-                "test.yaml",
+                str(cfg_path),
                 parameters=params,
                 metric="project_irr",
             )
-
-
-# Note: Multi-metric tornado and breakeven parameter flows are covered in
-# the integration suite (test_sensitivity_v14_all.py) against the real
-# run_v14_pipeline implementation and scenario configs. This file keeps
-# their pure-unit coverage limited to helpers and the single-metric
-# coordinator path.

@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.0 - 2025-12-09
+
+- Sprint 9: Complete Integration Analysis & Design (CASPER/GWTF Compliant)
+
+
+
 ## v0.3.x - 2025-12-08
 
 - Sprint 9 – v14 Monte Carlo front door + regression guard

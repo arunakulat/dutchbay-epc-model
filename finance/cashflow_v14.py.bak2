@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
 
@@ -38,33 +38,31 @@ for the v14 finance stack. It is designed to be:
 
 Public surface
 --------------
-
-- validate_parameters(config) -> [] or raises ValueError
+- validate_parameters(config)  -> [] or raises ValueError
 - build_annual_cfads(config, ...) -> list[float]
 - build_annual_rows(config, ...) -> list[dict[str, float]]
 - calculate_single_year_cfads(params, ...) -> dict[str, float]
 
 `build_annual_rows` is the primary feedstock for:
-
 - debt_v14.plan_debt (DSCR / covenants)
 - contracts_v14.build_cashflow_result_from_annual_rows (CashflowResult)
 
 CFADS DEFINITION (v14)
 ----------------------
-
 For each year t, this engine defines CFADS as:
 
-cfads_final_lkr[t] =
-    revenue_lkr
-    - statutory_deductions
-    - opex_lkr
-    - tax_lkr(pretax_cfads, interest_shield, depreciation)
-    - risk_haircut
+    cfads_final_lkr[t] =
+        revenue_lkr
+      - statutory_deductions
+      - opex_lkr
+      - tax_lkr(pretax_cfads, interest_shield, depreciation)
+      - risk_haircut
 
 This is the only definition that debt_v14 and the analytics stack are
-allowed to rely on. Any alternative "CFADS" views must be derived from
+allowed to rely on. Any alternative “CFADS” views must be derived from
 the row-wise breakdown returned here.
 """
+
 
 # =============================================================================
 # Internal context preparation
@@ -83,36 +81,32 @@ def _prepare_cashflow_context(
     Returns
     -------
     (params_dict, fx_curve_resolved, capex_depreciable_resolved,
-    interest_series, years, depreciation_schedule)
+     interest_series, years, depreciation_schedule)
     """
     # Validate parameters before expensive calculations
     validate_parameters(config)
 
     params_obj: CashflowParams = _build_cashflow_params(config)
     params_dict: Dict[str, Any] = asdict(params_obj)
-
     years = int(params_obj.project_life_years)
 
     if fx_curve is None:
         fx_curve_resolved = _fx_curve(config, years)
     else:
         fx_curve_resolved = list(fx_curve)
-
-    # Ensure we have at least `years` FX points; extend with last known.
-    if len(fx_curve_resolved) < years and fx_curve_resolved:
-        fx_curve_resolved = fx_curve_resolved + [fx_curve_resolved[-1]] * (
-            years - len(fx_curve_resolved)
-        )
-    elif not fx_curve_resolved:
-        fx_curve_resolved = _fx_curve(config, years)
+        # Ensure we have at least `years` FX points; extend with last known.
+        if len(fx_curve_resolved) < years and fx_curve_resolved:
+            fx_curve_resolved = fx_curve_resolved + [fx_curve_resolved[-1]] * (
+                years - len(fx_curve_resolved)
+            )
+        elif not fx_curve_resolved:
+            fx_curve_resolved = _fx_curve(config, years)
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr
-
     if capex_dep_resolved is None:
         # 1) Explicit tax base if provided
         dep_lkr = as_float(get_nested(config, ["tax", "depreciable_capex_lkr"], None))
-
         if dep_lkr is None:
             dep_lkr = as_float(get_nested(config, ["tax", "dep_base_lkr"], None))
 
@@ -121,13 +115,11 @@ def _prepare_cashflow_context(
         else:
             # 2) Project-wide LKR capex
             capex_lkr = as_float(get_nested(config, ["capex", "lkr_total"], None))
-
             if capex_lkr is not None:
                 capex_dep_resolved = capex_lkr
             else:
                 # 3) USD capex translated at year-0 FX
                 capex_usd = as_float(get_nested(config, ["capex", "usd_total"], None))
-
                 if capex_usd is not None:
                     capex_dep_resolved = capex_usd * fx_curve_resolved[0]
 
@@ -136,14 +128,13 @@ def _prepare_cashflow_context(
         interest_series = [0.0] * years
     else:
         interest_series = list(interest_expense_series)
+        # Pad or trim to project life
+        if len(interest_series) < years:
+            interest_series = interest_series + [0.0] * (years - len(interest_series))
+        elif len(interest_series) > years:
+            interest_series = interest_series[:years]
 
-    # Pad or trim to project life
-    if len(interest_series) < years:
-        interest_series = interest_series + [0.0] * (years - len(interest_series))
-    elif len(interest_series) > years:
-        interest_series = interest_series[:years]
-
-    # Pre-compute depreciation schedule once for efficiency (performance optimization)
+    # Pre-compute depreciation schedule for the whole project life for efficiency.
     if capex_dep_resolved is not None and params_obj.depreciation_years > 0:
         base_schedule = _compute_depreciation_schedule(
             capex_dep_resolved,
@@ -153,7 +144,6 @@ def _prepare_cashflow_context(
     else:
         base_schedule = []
 
-    # Ensure depreciation schedule is padded to full project life
     if len(base_schedule) < years:
         depreciation_schedule = base_schedule + [0.0] * (years - len(base_schedule))
     else:
@@ -181,7 +171,7 @@ def calculate_single_year_cfads(
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_lkr: float = 0.0,
     verbose: bool = False,
-    depreciation_schedule: Optional[List[float]] = None,
+    depreciation_schedule: Optional[Sequence[float]] = None,
 ) -> Dict[str, float]:
     """Compute detailed CFADS breakdown for a single year.
 
@@ -189,22 +179,16 @@ def calculate_single_year_cfads(
     ----------
     params :
         Normalized parameter dict from _extract_parameters.
-
     fx_rate :
         LKR per USD FX rate for the given year.
-
     year :
         Zero-based year index.
-
     capex_depreciable_lkr :
         Depreciable capex base in LKR (used for depreciation).
-
     interest_expense_lkr :
         Interest expense in LKR for the year.
-
     verbose :
         If True, log the per-year CFADS breakdown.
-
     depreciation_schedule :
         Optional pre-computed depreciation schedule for the whole project life.
         When provided, it is passed through to the tax calculator to avoid
@@ -216,7 +200,6 @@ def calculate_single_year_cfads(
         Per-year breakdown, including `cfads_final_lkr` which is the
         canonical CFADS used by debt_v14 and CashflowResult.
     """
-
     # --- Production and revenue ------------------------------------------------
     gross_kwh, net_kwh = _calculate_net_production(
         float(params["capacity_mw"]),
@@ -225,7 +208,6 @@ def calculate_single_year_cfads(
         float(params["grid_loss_pct"]),
         year,
     )
-
     revenue_lkr = _calculate_revenue_lkr(net_kwh, float(params["tariff_lkr_per_kwh"]))
 
     # --- Statutory charges and OPEX -------------------------------------------
@@ -235,12 +217,10 @@ def calculate_single_year_cfads(
         float(params["env_surcharge_pct"]),
         float(params["social_levy_pct"]),
     )
-
     opex_lkr = _calculate_opex_lkr(float(params["opex_usd_per_year"]), fx_rate)
 
     # For this engine, EBITDA and pretax CFADS coincide (no other non-cash items)
     ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
-
     pretax_cfads = ebitda_lkr
 
     # --- Tax and depreciation (with interest shield) --------------------------
@@ -263,9 +243,7 @@ def calculate_single_year_cfads(
 
     # --- Risk haircut on post-tax CFADS (v14 definition) ----------------------
     risk_haircut_pct = float(params.get("risk_haircut_pct", 0.0))
-
     cfads_final_lkr = _apply_risk_haircut(posttax_cfads, risk_haircut_pct)
-
     risk_haircut_amount = posttax_cfads - cfads_final_lkr
 
     # --- USD views ------------------------------------------------------------
@@ -325,7 +303,6 @@ def build_annual_cfads(
 
     This is the primary numeric surface used by debt_v14 and covenant tests.
     """
-
     (
         params,
         fx_curve_resolved,
@@ -341,11 +318,9 @@ def build_annual_cfads(
     )
 
     cfads_list: List[float] = []
-
     for year in range(years):
         fx_rate = fx_curve_resolved[year]
         interest_lkr = interest_series[year]
-
         result = calculate_single_year_cfads(
             params=params,
             fx_rate=fx_rate,
@@ -355,7 +330,6 @@ def build_annual_cfads(
             verbose=verbose,
             depreciation_schedule=depreciation_schedule,
         )
-
         cfads_list.append(result["cfads_final_lkr"])
 
     if cfads_list:
@@ -381,12 +355,10 @@ def build_annual_rows(
     Return list of per-year breakdown rows including CFADS in LKR and USD.
 
     This is the canonical *row-wise* surface for:
-
-    - debt_v14.plan_debt (DSCR / covenants)
-    - CashflowResult (via contracts_v14)
-    - analytics exports and dashboards.
+      - debt_v14.plan_debt (DSCR / covenants)
+      - CashflowResult (via contracts_v14)
+      - analytics exports and dashboards.
     """
-
     (
         params,
         fx_curve_resolved,
@@ -402,7 +374,6 @@ def build_annual_rows(
     )
 
     rows: List[Dict[str, float]] = []
-
     for year in range(years):
         fx_rate = fx_curve_resolved[year]
         interest_lkr = interest_series[year]
@@ -416,7 +387,6 @@ def build_annual_rows(
             verbose=False,
             depreciation_schedule=depreciation_schedule,
         )
-
         rows.append(row)
 
     if rows:
@@ -444,7 +414,6 @@ def _register_cashflow_schema() -> None:
 
     This gives schema_guard a precise view of what cashflow_v14 expects.
     """
-
     specs = [
         RequiredFieldSpec(
             module="cashflow",
@@ -553,6 +522,7 @@ def _register_cashflow_schema() -> None:
             and v is not None
             and 0.0 <= float(v) <= 100.0,
         ),
+        # FX structure alignment – require a structured FX block for cashflow.
         RequiredFieldSpec(
             module="cashflow",
             name="fx_start_lkr_per_usd",

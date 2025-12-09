@@ -1,0 +1,748 @@
+Alright, mansion tour time. 🏗️ CASPER brain fully loaded; last batch is in.
+
+I’ll first slot this final batch into the map, then tell you **exactly what’s missing and how to finish** Sprint 9 Phase 1 in a way that doesn’t fight your tests or GWTF.
+
+---
+
+## 1. Final batch — where each piece sits
+
+### `constants.py`
+
+* Global **defaults + guardrails**:
+
+  * FX, project life, cap-factor/degradation bounds.
+  * Debt ratio / tenor defaults, min/max IRR, DSCR thresholds.
+* New bit: `SENSITIVITY_RANGES: Final[Dict[str, tuple[float, float]]]` for CFA/DFI-standard ranges:
+
+  * `capex_usd_per_kw`, `tariff_lkr_per_kwh`, `capacity_factor_pct`, etc.
+
+🔧 CASPER:
+
+* **C/P**: this is the standard “if you don’t say otherwise” surface for parameters and validation ranges.
+* Analytics / UI should not hardcode ranges; they should lean on `SENSITIVITY_RANGES` where possible.
+
+---
+
+### `cashflow_v14_contracts.py`
+
+* Defines `CashflowParams` – the **canonical numeric surface** for CFADS:
+
+  * project life, capacity MW, cap-factor (decimal), degradation, grid loss
+  * tariff, opex, capex, FX curve link
+  * tax parameters (rates, holidays, enhanced allowance)
+  * risk haircut, etc.
+
+🔧 CASPER:
+
+* **E**: this is the “clean” engine surface you *want* everything to normalize into.
+* Any future multi-tech generation stuff plugs in here via:
+
+  * extra fields (e.g. solar derate chain), or
+  * a nested `GenerationParams` used by `CashflowParams`.
+
+---
+
+### `cashflow_v14.py`
+
+* Imports:
+
+  * `CashflowParams` + `_build_cashflow_params`, `validate_parameters` from `cashflow_v14_params`, `_fx_curve` from `cashflow_v14_fx`.
+  * `register_required_fields` to expose required fields to `schema_guard`.
+* Public surface (as per header + tests):
+
+  * `validate_parameters(config) -> None | raises`
+  * `build_annual_cfads(config, ...) -> list[float]`
+  * `build_annual_rows(config, ...) -> list[dict[str, float]]`
+  * `calculate_single_year_cfads(params, ...) -> dict[str, float]`
+
+Tests (`test_v14_lender_suite.py`) assert:
+
+* `build_annual_rows(config)` returns non-empty list of dicts.
+* Each row has some CFADS key (`cfads_usd`/`cfads_final_lkr`/`cfads`).
+* `debt_v14.apply_debt_layer(config, annual_rows)` works on that output.
+
+🔧 CASPER / GWTF:
+
+* **E**: this is the only legitimate CFADS engine.
+* **C**: required fields exposed via `register_required_fields` are what `schema_guard` enforces when `modules=["cashflow"]`.
+* **R**: annual_rows → `CashflowResult` via `contracts_v14` → `ScenarioResult`.
+
+Nothing in Sprint 9 should bypass this or try to compute CFADS anywhere else.
+
+---
+
+### Tests in this batch
+
+These are your **contract police**.
+
+#### `test_sensitivity_v14_all.py`
+
+* Hits:
+
+  * `run_tornado_sensitivity`
+  * `run_multi_metric_tornado`
+  * `run_breakeven_parameter`
+  * DF exports.
+* Confirms:
+
+  * All evaluation goes through `evaluate_with_overrides`.
+  * Sensitivity surfaces are structurally sound.
+
+#### `test_sensitivity_v14_behavioral_imports.py`
+
+* LibCST visitor that enforces:
+
+  1. ✅ **Must** import `analytics.evaluation_v14`.
+  2. ✅ May import `analytics.scenario_loader`.
+  3. ❌ May **not** import `run_v14_pipeline` directly.
+  4. ❌ May **not** call `run_v14_pipeline(...)` anywhere.
+
+You’re already compliant with the sensitivity code you pasted.
+
+#### `test_scenario_analytics_schema_guard_integration.py`
+
+* Uses `ScenarioAnalytics` to:
+
+  * Run batches with `schema_guard` always on.
+  * Check that **bad configs** are reported in metadata instead of hard crashes.
+* GWTF: schema guard is not optional; it’s **part of the contract**.
+
+#### `test_evaluate_scenario_v14.py`
+
+* Enforces `analytics.evaluate_scenario` semantics:
+
+  * `evaluate_with_overrides(config_path, overrides=None)` wraps `run_v14_pipeline`.
+  * `_merge_engine_kpis` flattens `pipeline_result["kpis"]` into the top-level dict.
+  * Fallbacks: if some KPIs missing from the `kpis` block, they’re inferred/left alone from the engine result.
+  * This is the **single canonical KPI dict** surface for analytics.
+
+#### `test_v14_lender_suite.py`
+
+* Guards the **core lender pipeline**:
+
+  1. Load YAML via `load_scenario_config`.
+  2. Run `validate_config_for_v14(..., modules=["cashflow","debt"])`.
+  3. Run `cashflow_v14.build_annual_rows(...)`.
+  4. Run `debt_v14.apply_debt_layer(config, annual_rows)`.
+  5. Assert sensible outputs (rows non-empty, CFADS keys exist, DSCRs make sense).
+
+This test is why you really *don’t* want CASPER or Sprint 9 changes to touch cashflow/debt internals lightly.
+
+---
+
+## 2. Where the mansion stands today
+
+You basically have:
+
+* **CASPER C – Config:**
+
+  * `config_schema.py` + `schema_guard.py` + `register_required_fields` from engine modules.
+  * `scenario_loader.py` + `scenario_config.py`.
+  * YAML:
+
+    * `dutchbay_master_config_v14.yaml`
+    * `dutchbay_lendercase_2025Q4.yaml` (v13-ish heritage)
+    * `run_full_pipeline_v14.yaml`, `run_scenario_analytics_v14.yaml`, `scenario_analytics_v14.yaml`
+    * `monte_carlo_defaults.yaml`, `monte_carlo_regression_toy.yaml`
+    * `sensitivity_defaults.yaml`.
+
+* **CASPER A – Aggregation:**
+
+  * `pipeline_v14.run_v14_pipeline` → engine dicts + `ScenarioResult`/`CashflowResult`/debt contracts.
+  * `kpi_normalizer.py` + `metrics.py` for KPI naming and consistency.
+  * `scenario_analytics.py` for multi-scenario batch analytics.
+  * `executive_workbook.py` + `export_helpers.py` for Excel/exports.
+
+* **CASPER S – Scenario:**
+
+  * `scenario_manager.py` + `scenario_config.py`.
+  * `dutchbay_master_config_v14.yaml` “scenarios” block (base/conservative/hybrid/PE).
+  * `ScenarioDescriptor` in `contracts_v14`.
+
+* **CASPER P – Parameters:**
+
+  * `parameter_solvers.py` (tariff/debt/DSCR solvers).
+  * `sensitivity_defaults.yaml` + `constants.SENSITIVITY_RANGES`.
+  * Monte Carlo distributions + `DerivedParameter` in `monte_carlo_defaults.yaml`.
+
+* **CASPER E – Engine:**
+
+  * `cashflow_v14` (+ params/fx submodules) → CFADS rows.
+  * `debt_v14` → DSCR, schedules, covenants.
+  * `wacc_v14`, `equity_v14`, `irr.py`.
+  * `analytics.pipeline_v14.run_v14_pipeline` bridging to contracts_v14.
+  * `monte_carlo_v14` as risk engine.
+  * `sensitivity_v14` as deterministic risk engine.
+
+* **CASPER R – Results:**
+
+  * `contracts_v14`:
+
+    * `ScenarioResult`, `CashflowResult`, `WaccResult`, `TrancheDebtProfile`, `DebtCovenantSnapshot`.
+    * `SensitivitySuite`, `MultiMetricSensitivitySuite`, `BreakevenResult`.
+    * `MonteCarloScenario`, `MonteCarloResult`.
+  * `evaluate_with_overrides` → **flat KPI dict** view.
+  * Tests above, anchoring the public behaviours.
+
+So: **foundation and most columns are already there.** What’s missing is the **front façade** and the wiring that presents all of this as one clean “CASPER result” without breaking the existing tests.
+
+---
+
+## 3. What’s actually missing to “finish the mansion”
+
+### 3.1 A single CASPER result contract
+
+Right now, you have many good results:
+
+* Engine dict from `run_v14_pipeline`.
+* `ScenarioResult` dataclass.
+* `SensitivitySuite` / `MultiMetricSensitivitySuite`.
+* `MonteCarloResult`.
+* ScenarioAnalytics batch frames.
+* Executive workbook exports.
+
+What you *don’t* have is one canonical “this is what a full analysis looks like” object.
+
+**Opinionated solution:**
+
+Add a **`CasperResult`** dataclass in `contracts_v14.py`:
+
+```python
+@dataclass(frozen=True)
+class CasperResult:
+    scenario: ScenarioResult              # core engine view
+    kpis: dict[str, float]                # flattened KPI dict (evaluate_scenario)
+    sensitivity: SensitivitySuite | None  # or MultiMetricSensitivitySuite, or both
+    monte_carlo: MonteCarloResult | None
+    analytics_summary: dict[str, Any] | None  # scenario_analytics / summary_json
+    metadata: dict[str, Any]              # run timestamp, config_path, version, etc.
+```
+
+You don’t have to *use* it everywhere immediately, but this becomes the anchor for CASPER “R”.
+
+---
+
+### 3.2 A CASPER orchestrator (analytics side), not engine side
+
+Currently:
+
+* Engine orchestrator: `pipeline_v14.run_v14_pipeline(config, ...)`.
+* KPI façade: `evaluate_with_overrides(config_path, overrides)`.
+
+What you need is a **top-level analytics orchestrator** that:
+
+* Lives in `analytics` (not finance).
+* Talks only to:
+
+  * `run_v14_pipeline` **indirectly** via `evaluate_scenario` / `evaluate_with_overrides`, or
+  * a well-defined narrow engine bridge if necessary.
+* Aggregates CASPER pillars into a `CasperResult`.
+
+**Where to put it?**
+
+* Either:
+
+  * `analytics/evaluation_v14.py` (extend it), or
+  * a new `analytics/casper_v14.py` or `analytics/full_analysis_v14.py`.
+
+I’d keep `evaluation_v14` as “KPI façade over pipeline” and create a **new module**:
+
+```python
+# analytics/casper_v14.py
+
+def run_casper_analysis(
+    config_path: str | Path,
+    *,
+    include_sensitivity: bool = True,
+    include_monte_carlo: bool = False,
+    include_scenario_analytics: bool = False,
+    sensitivity_params: list[ParameterRangeConfig] | None = None,
+    mc_config_path: str | Path | None = None,
+) -> CasperResult:
+    ...
+```
+
+Internally:
+
+1. Use `evaluate_with_overrides(config_path, None)` → `kpis`.
+2. Use `run_v14_pipeline(config_path, validation_mode="strict", validation_modules=["cashflow","debt"])` to get the engine dict + `ScenarioResult`.
+3. If `include_sensitivity`:
+
+   * Build `SensitivityRequest`:
+
+     * `base_config_path=config_path`
+     * `parameters` from:
+
+       * `sensitivity_params`, or
+       * `sensitivity_defaults.yaml`, or
+       * `constants.SENSITIVITY_RANGES` mapped via `base_values`.
+   * Call `run_tornado_sensitivity(request)` (or `run_multi_metric_tornado`).
+4. If `include_monte_carlo`:
+
+   * Load `monte_carlo_defaults.yaml` or an explicit file.
+   * Call `run_monte_carlo_analysis(...)` → `MonteCarloResult`.
+5. If `include_scenario_analytics`:
+
+   * Use `ScenarioAnalytics` to run the suite configured in `scenario_analytics_v14.yaml`.
+   * Collect summary JSON / aggregated KPIs into `analytics_summary`.
+
+Return a `CasperResult`. That’s your mansion completed: engine, deterministic risk, stochastic risk, batch analytics, plus flat kpi dict.
+
+**Critical GWTF point:**
+This orchestrator **must not** import cashflow/debt directly. It should use:
+
+* `evaluate_with_overrides` / `evaluate_scenario` for KPI views.
+* `run_v14_pipeline` from `analytics.pipeline_v14` for engine dicts.
+* Sensitivity / Monte Carlo / ScenarioAnalytics as high-level engines.
+
+---
+
+### 3.3 Fix the one structural wart: sensitivity `run()` facade
+
+Right now:
+
+* `sensitivity_api.py` expects `analytics.sensitivity_v14.run`.
+* `sensitivity_v14.py` does **not** define `run`.
+
+To make the mansion coherent and CASPER-friendly:
+
+* Add this to `sensitivity_v14.py`:
+
+  ```python
+  def run(request: SensitivityRequest) -> SensitivitySuite:
+      """Canonical single-entry tornado runner for API and CASPER."""
+      return run_tornado_sensitivity(request)
+  ```
+
+* Add `"run"` to `__all__`.
+
+This gives:
+
+* Clean API for the FastAPI adapter.
+* Clean hook for `CasperResult` if you decide CASPER should always have at least a single-metric tornado slice.
+
+No behavioural change to tests; they don’t care about `run`, but the API layer and any external callers will stop tripping.
+
+---
+
+### 3.4 Decide what to do with `SensitivityResult`
+
+You’ve defined:
+
+```python
+@dataclass(slots=True)
+class SensitivityResult:
+    base_kpis: dict[str, float]
+    shocked_kpis: dict[str, dict[str, dict[str, float]]]
+```
+
+And then never use it.
+
+You have two choices:
+
+1. **Use it as CASPER’s internal surface**:
+
+   * Implement a helper in `sensitivity_v14`:
+
+     ```python
+     def run_full_sensitivity_surface(request: SensitivityRequest) -> SensitivityResult:
+         ...
+     ```
+
+   * CASPER orchestrator can then attach both:
+
+     * `SensitivitySuite` (for charts/exports).
+     * `SensitivityResult` (for optimizers, tail risk, etc.).
+
+2. **Admit it’s dead weight (for now)**:
+
+   * Leave it as a “Phase 2” item and ignore in Sprint 9.
+   * Or delete it when you’re ready to remove cruft.
+
+My view: **don’t touch it in Sprint 9**. Focus on CASPERResult + orchestrator + `run()` façade. Use `SensitivitySuite` as your primary R-surface; come back for `SensitivityResult` later if you need optimizer work.
+
+---
+
+### 3.5 CASPER-aware CLI shells (but minimal changes)
+
+You don’t need to blow up the CLIs, just extend them carefully.
+
+* **`run_full_pipeline_v14.py`**:
+
+  * Keep current behaviour as default (for tests and backward compat).
+  * Add an optional Hydra flag, e.g. `mode: "pipeline" | "casper"`.
+  * When `mode == "casper"`, call `run_casper_analysis` instead and dump a JSON-friendly dict version of `CasperResult`.
+
+* **`run_scenario_analytics_v14.py`**:
+
+  * Can remain mostly as-is; it’s already a batch runner.
+  * Later, if you want, you can make it consume `CasperResult` slices rather than direct `evaluate_scenario` calls.
+
+Point is: **don’t** tangle CASPER logic into the finance CLI. Keep all CASPER wiring in analytics-side modules and just add a “mode” to the existing entrypoint.
+
+---
+
+## 4. How I’d stage the finish (Sprint 9 Phase 1)
+
+No code now, just a battle plan:
+
+1. **Freeze what we’ve just ingested** as the Sprint 9 Phase 1 baseline:
+
+   * sensitivity_v14 (your pasted version),
+   * pipeline_v14,
+   * contracts_v14,
+   * constants, cashflow_v14*, monte_carlo_v14,
+   * tests we just inspected.
+
+2. **Design the CASPERResult dataclass** (on paper, or as a tiny PR) in `contracts_v14.py`.
+
+3. **Add `run()` to sensitivity_v14** and fix `sensitivity_api.py` to use it without `# type: ignore`.
+
+4. **Create `analytics/casper_v14.py`**:
+
+   * Implement `run_casper_analysis(config_path, ...) -> CasperResult` using only:
+
+     * `evaluate_with_overrides`
+     * `run_v14_pipeline`
+     * `run_tornado_sensitivity` / `run_multi_metric_tornado`
+     * `run_monte_carlo_analysis`
+     * `ScenarioAnalytics` (optional).
+
+5. **Wire a CASPER mode into `run_full_pipeline_v14.py`**, but keep default as current “pipeline JSON dump” so no tests break.
+
+6. **Add a small test file** (`test_casper_v14_smoke.py`) that:
+
+   * Uses a toy scenario (`dutchbay_lendercase_2025Q4.yaml` or a tiny YAML).
+   * Calls `run_casper_analysis(...)`.
+   * Asserts:
+
+     * `CasperResult.scenario.scenario_name` is set.
+     * `project_irr` present in `kpis`.
+     * Optional: `sensitivity` is `None` or has at least 1 row.
+   * No deep numeric expectations yet; just structure.
+
+That finishes the mansion structurally: CASPER is a first-class citizen and all existing tests still guard the foundations.
+
+---
+
+If you’re happy with this blueprint, the next step *after* this discussion is you say “proceed”, and we start actually drafting:
+
+* `CasperResult` in `contracts_v14.py`,
+* `casper_v14.py` orchestrator,
+* `run()` façade in sensitivity_v14,
+* minimal CLI tweak.
+
+Good, this is the right pause point. Let’s turn the mansion sketch into a **concrete, assignable to-do list**.
+
+I’ll keep it **stepwise, file-specific, and test-linked**, so you can literally hand bits to devs.
+
+---
+
+## 0️⃣ Baseline freeze (one-time sanity)
+
+**Goal:** Make sure everyone is working off the same Sprint 9 Phase 1 baseline.
+
+1. **Tag/branch the current repo**
+
+   * Create a branch or tag, e.g. `sprint9_phase1_baseline`.
+   * Commit all current files:
+
+     * `analytics/` (including `sensitivity_v14.py`, `pipeline_v14.py`, `evaluation_v14.py`, `scenario_analytics.py`, `scenario_loader.py`, `schema_guard.py`, `parameter_solvers.py`, `scenario_manager.py`, `export_helpers.py`, `executive_workbook.py`, `contracts_v14.py`, `constants.py`, etc.)
+     * `finance/` (`cashflow_v14.py` + submodules, `debt_v14.py`, `wacc_v14.py`, `equity_v14.py`, `irr.py`, `cashflow_v14_contracts.py`)
+     * All YAML configs (`dutchbay_master_config_v14.yaml`, `dutchbay_lendercase_2025Q4.yaml`, `monte_carlo_defaults.yaml`, `sensitivity_defaults.yaml`, `run_full_pipeline_v14.yaml`, `scenario_analytics_v14.yaml`, `run_scenario_analytics_v14.yaml`, etc.)
+     * Tests you uploaded.
+   * **Acceptance:** `pytest` and `mypy` already green in this state.
+
+---
+
+## 1️⃣ Contracts layer: define the CASPER result shell
+
+**Goal:** Introduce a *single* top-level analysis result structure without breaking anything.
+
+**File:** `analytics/contracts_v14.py`
+
+2. **Add a `CasperResult` dataclass**
+
+   * Suggested minimal structure:
+
+     ```python
+     @dataclass(frozen=True)
+     class CasperResult:
+         scenario: ScenarioResult
+         kpis: dict[str, float]
+         sensitivity: SensitivitySuite | None = None
+         monte_carlo: MonteCarloResult | None = None
+         analytics_summary: dict[str, Any] | None = None
+         metadata: dict[str, Any] = field(default_factory=dict)
+     ```
+
+   * Import `Any`, `dict`, `field`, and the relevant contract types from the same module.
+
+   * Add `"CasperResult"` to `__all__`.
+
+3. **Check that nothing imports this yet**
+
+   * No existing code should depend on `CasperResult` in this step.
+   * **Acceptance:** `mypy analytics/contracts_v14.py` passes; full `pytest` still green.
+
+(*If devs are nervous, they can add it but leave completely unused in Sprint 9 Phase 1.*)
+
+---
+
+## 2️⃣ Fix the sensitivity API wart (`run()` façade)
+
+**Goal:** Make `sensitivity_v14` compatible with `sensitivity_api.py` and future CASPER orchestration.
+
+**File:** `analytics/sensitivity_v14.py`
+
+4. **Add a `run()` wrapper**
+
+   * At the bottom of the file (before `__all__`):
+
+     ```python
+     def run(request: SensitivityRequest) -> SensitivitySuite:
+         """
+         Canonical entry point for tornado sensitivity.
+
+         This is a thin wrapper preserved for API compatibility and
+         CASPER-style orchestration. It delegates directly to
+         run_tornado_sensitivity(request).
+         """
+         return run_tornado_sensitivity(request)
+     ```
+
+   * Add `"run"` to `__all__`.
+
+5. **Remove any `# type: ignore[attr-defined]` in `sensitivity_api.py`**
+
+   * Ensure `from analytics.sensitivity_v14 import run as run_sensitivity` is now clean.
+
+6. **Run tests specifically for sensitivity**
+
+   * `pytest tests/test_sensitivity_v14_all.py -q`
+   * `pytest tests/test_sensitivity_v14_behavioral_imports.py -q`
+   * **Acceptance:** both pass; `mypy analytics/sensitivity_v14.py analytics/sensitivity_api.py` clean.
+
+---
+
+## 3️⃣ Orchestrator: create CASPER entrypoint module (analytics side)
+
+**Goal:** Add a **single analytics-side “full analysis” entrypoint** that stitches pipeline + sensitivity + MC.
+
+**New file:** `analytics/casper_v14.py` (name can be whatever you like, but keep it in `analytics/`)
+
+7. **Create `run_casper_analysis`**
+
+   * Function signature (initial version):
+
+     ```python
+     def run_casper_analysis(
+         config_path: str | Path,
+         *,
+         include_sensitivity: bool = True,
+         include_monte_carlo: bool = False,
+         include_scenario_analytics: bool = False,
+         sensitivity_params: list[ParameterRangeConfig] | None = None,
+         monte_carlo_config_path: str | Path | None = None,
+     ) -> CasperResult:
+         ...
+     ```
+
+   * **Dependencies:**
+
+     * Import:
+
+       * `evaluate_with_overrides` (and/or `evaluate_scenario`) from `analytics.evaluation_v14`.
+       * `run_v14_pipeline` from `analytics.pipeline_v14`.
+       * `run` (or `run_tornado_sensitivity`) from `analytics.sensitivity_v14`.
+       * `run_monte_carlo_analysis` (or equivalent) from `analytics.monte_carlo_v14`.
+       * `ScenarioAnalytics` (or orchestrator) from `analytics.scenario_analytics` (if you want `include_scenario_analytics`).
+       * `CasperResult`, `SensitivitySuite`, `MonteCarloResult`, `ParameterRangeConfig` from `analytics.contracts_v14`.
+       * `sensitivity_defaults.yaml` and `monte_carlo_defaults.yaml` loader helpers (either via a small helper function in this module or reusing existing config loaders).
+
+   * **Implementation outline:**
+
+     1. Normalise `config_path` to `Path`.
+
+     2. **KPI view:**
+
+        ```python
+        kpis = evaluate_with_overrides(config_path, None)
+        ```
+
+     3. **Engine view:**
+
+        ```python
+        pipeline_result = run_v14_pipeline(
+            config=str(config_path),
+            validation_mode="strict",
+            validation_modules=["cashflow", "debt"],
+        )
+        # Extract ScenarioResult from pipeline_result if needed,
+        # or reconstruct it via a helper if pipeline returns dict only.
+        scenario_result = ...  # based on your current pipeline_v14 surface
+        ```
+
+     4. **Sensitivity (optional):**
+
+        * If `include_sensitivity`:
+
+          * If `sensitivity_params` is None:
+
+            * Load from `sensitivity_defaults.yaml` and build `List[ParameterRangeConfig]`.
+          * Build `SensitivityRequest(base_config_path=str(config_path), parameters=params, metric="project_irr")`.
+          * Call `sensitivity_run(request)` (the new `run` wrapper).
+        * Else: `sensitivity = None`.
+
+     5. **Monte Carlo (optional):**
+
+        * If `include_monte_carlo`:
+
+          * Use `monte_carlo_config_path or Path("config/monte_carlo_defaults.yaml")`.
+          * Call `run_monte_carlo_analysis(...)` with that config and scenario descriptor.
+        * Else: `monte_carlo = None`.
+
+     6. **Scenario analytics (optional):**
+
+        * If `include_scenario_analytics`:
+
+          * Use `scenario_analytics_v14.yaml` via `ScenarioAnalytics` helper.
+          * Produce a **lightweight dictionary summary** (e.g., by calling the existing `to_summary_dict()` or equivalent).
+        * Else: `analytics_summary = None`.
+
+     7. **Metadata:**
+
+        * Build `metadata = {"config_path": str(config_path), "include_sensitivity": include_sensitivity, "include_monte_carlo": include_monte_carlo, ...}`.
+
+     8. Return `CasperResult(...)`.
+
+   * **Strict rule:**
+     `casper_v14.py` **must not** import any `finance.*` modules directly. Only analytics gateways.
+
+8. **Add minimal smoke test for CASPER**
+
+   **New file:** `tests/test_casper_v14_smoke.py`
+
+   * Simple test:
+
+     ```python
+     def test_casper_smoke():
+         result = run_casper_analysis("scenarios/dutchbay_lendercase_2025Q4.yaml",
+                                      include_sensitivity=False,
+                                      include_monte_carlo=False,
+                                      include_scenario_analytics=False)
+         assert result.scenario is not None
+         assert "project_irr" in result.kpis
+         assert result.sensitivity is None
+         assert result.monte_carlo is None
+     ```
+
+   * Later you can add more checks, but don’t overdo it in Phase 1.
+
+   * **Acceptance:** `pytest tests/test_casper_v14_smoke.py -q` passes; full `pytest` and `mypy analytics/casper_v14.py` clean.
+
+---
+
+## 4️⃣ Extend CLI with CASPER mode (but don’t break anything)
+
+**Goal:** Let power users (and CI later) call full CASPER analysis from the same `run_full_pipeline_v14.py` without affecting existing behaviour.
+
+**File:** `run_full_pipeline_v14.py` (Hydra entrypoint)
+
+9. **Add a `mode` parameter in the Hydra config + CLI**
+
+   * In `run_full_pipeline_v14.yaml`, add:
+
+     ```yaml
+     mode: pipeline  # or "casper"
+     ```
+
+   * In `run_full_pipeline_v14.py`, extend the Hydra config dataclass / function signature to include `mode: str = "pipeline"`.
+
+10. **Branch behaviour in main()**
+
+* Pseudocode:
+
+  ```python
+  if mode == "pipeline":
+      result = run_v14_pipeline(...)
+  elif mode == "casper":
+      from analytics.casper_v14 import run_casper_analysis
+      casper = run_casper_analysis(config, include_sensitivity=True, include_monte_carlo=False)
+      result = dataclasses.asdict(casper)  # or a safe JSONable dict
+  else:
+      raise ValueError(f"Unknown mode: {mode}")
+  ```
+
+* **Important:** keep the default `mode: pipeline` so that:
+
+  * Existing tests that expect raw pipeline JSON are unchanged.
+  * CI jobs using `run_full_pipeline_v14.py` keep working.
+
+11. **Add a tiny CLI test (optional but good)**
+
+* New test or extension of an existing CLI smoke test:
+
+  * Run `run_full_pipeline_v14.py` with `mode=casper` in a subprocess, parse JSON, assert that `scenario` and `kpis` keys exist.
+
+* **Acceptance:** All existing tests pass; new test passes; running:
+
+  ```bash
+  python run_full_pipeline_v14.py \
+    'config=scenarios/dutchbay_lendercase_2025Q4.yaml' \
+    'mode=casper'
+  ```
+
+  returns sane JSON.
+
+---
+
+## 5️⃣ Documentation and GWTF guardrails
+
+**Goal:** Align docs and lint tests with new CASPER layer.
+
+12. **Update architecture doc / Go-with-the-Flow note**
+
+* In your v14 architecture / Go-with-the-Flow docs:
+
+  * Add `CasperResult` as the “full analysis surface”.
+  * Add `analytics.casper_v14.run_casper_analysis` as the top-level orchestrator.
+  * Clarify that:
+
+    * `evaluate_with_overrides` remains KPI façade.
+    * `run_v14_pipeline` remains engine façade.
+    * CASPER orchestrator may call both, but still never imports `finance.*`.
+
+13. **Optional: new lint/architecture test**
+
+* Add a LibCST-based test (similar to `test_sensitivity_v14_behavioral_imports.py`) that asserts:
+
+  * `analytics/casper_v14.py` does **not** import any `finance.*` modules.
+  * `casper_v14` uses only `analytics.*` gateways.
+
+* **Acceptance:** new lint test passes; ensures future devs don’t drag finance imports into CASPER.
+
+---
+
+## 6️⃣ Who does what (suggested split)
+
+So you can brief local devs cleanly:
+
+* **Local devs (heavy lifting):**
+
+  * Step 0: Baseline tag/branch and ensure tests green.
+  * Step 2: Implement `run()` in sensitivity + clean `sensitivity_api.py`.
+  * Step 3: Implement `analytics/casper_v14.py` and its smoke test.
+  * Step 4: Wire `mode=casper` into `run_full_pipeline_v14.py` + YAML, and add any CLI tests.
+  * Step 5: Update docs, write/extend lint tests.
+
+* **You + me (design/spec):**
+
+  * Step 1: Finalise `CasperResult` structure (fields, naming).
+  * Fine-tune how much sensitivity / MC should be on by default in CASPER.
+  * Decide when to start using `CasperResult` downstream (e.g., executive workbook) in later sprints.
+
+---
+
+If you want, next we can **freeze the exact `CasperResult` fields and JSON shape** so your devs aren’t guessing when they implement `casper_v14.py` and the CASPER mode.
+
