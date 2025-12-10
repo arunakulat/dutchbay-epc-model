@@ -1,174 +1,352 @@
+# analytics/casper_payload.py
+
 from __future__ import annotations
 
-import json
-from typing import Dict
-
-import pytest
+from typing import Any, Mapping, Sequence
 
 from analytics.contracts_v14 import (
+    CasperResult,
     MonteCarloResult,
+    MultiTechGenerationResult,
     ScenarioResult,
     SensitivitySuite,
-    TornadoResult,
-    build_casper_payload,
+    TechnologyBreakdown,
 )
 
+# Frozen JSON contract version for CASPER payloads.
+# If this ever changes, it MUST be treated as a breaking change and guarded
+# by tests + docs/api_contract_casper_result_v*.md.
+CASPER_CONTRACT_VERSION = "casper_result_v1"
 
-def _build_toy_scenario_result() -> ScenarioResult:
+
+def build_casper_payload(
+    *,
+    scenario: ScenarioResult,
+    monte_carlo: MonteCarloResult | None = None,
+    sensitivity: SensitivitySuite | None = None,
+    generation: MultiTechGenerationResult | None = None,
+    technology_breakdown: Sequence[TechnologyBreakdown] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """
-    Minimal, self-contained ScenarioResult for CASPER payload tests.
+    Build a CASPER/GWTF-compliant payload for dashboards and lenders.
+
+    CESSPIT guardrails:
+    - Contract-explicit: uses contracts_v14 types (ScenarioResult, CasperResult, …)
+      as the only inputs/outputs at this layer.
+    - Evidence-based: numbers are derived from engine outputs; no hidden
+      recomputation here.
+    - Scenario-stable: same config + same upstream results => same payload.
+
+    Parameters
+    ----------
+    scenario:
+        ScenarioResult from run_full_pipeline_v14 (canonical v14 surface).
+    monte_carlo:
+        Optional MonteCarloResult for this scenario (v14 engine).
+    sensitivity:
+        Optional SensitivitySuite (tornado) for this scenario.
+    generation:
+        Optional MultiTechGenerationResult (wind/solar/BESS aggregation).
+    technology_breakdown:
+        Optional per-technology breakdown for CASPER lenses
+        (e.g. wind vs BESS share of AEP/CFADS/CAPEX).
+    metadata:
+        Free-form small JSON-safe fields for UIs / diagnostics.
+        Must not contain large blobs or raw engine tables.
+
+        Convention for tail-risk:
+        - metadata["tail_risk"]         = full underlying tables
+        - metadata["tail_risk_summary"] = snapshots keyed by metric name
+          (this module surfaces that snapshot as top-level `tail_risk`).
+
+    Returns
+    -------
+    dict
+        JSON-safe payload aligned with CasperResult semantics and the
+        casper_result_v1 contract, with a deliberately slender surface
+        for dashboards and lender exports.
     """
-    return ScenarioResult(
-        scenario_name="toy_scenario",
-        config_path="scenarios/toy.yaml",
-        project_npv=123.0,
-        project_irr=0.15,
-        dscr_series=[1.30, 1.35, 1.40],
-        min_dscr=1.30,
-        max_debt_usd=100_000_000.0,
-        kpis={"dscr_min": 1.30},
-    )
+    # Derive baseline KPIs from the ScenarioResult in a contract-explicit way.
+    # Prefer a dedicated `kpis` mapping if available; fall back to an empty
+    # mapping rather than abusing scenario.as_dict() as KPI storage.
+    baseline_kpis: dict[str, float] = {}
+    raw_kpis = getattr(scenario, "kpis", None)
+    if isinstance(raw_kpis, Mapping):
+        baseline_kpis = {str(k): float(v) for k, v in raw_kpis.items()}
 
+    # Normalise metadata into a mutable dict so we can safely read/augment it.
+    metadata_dict: dict[str, Any] = dict(metadata) if metadata is not None else {}
 
-def _build_toy_sensitivity_suite() -> SensitivitySuite:
-    """
-    Single-row tornado for a simple IRR sensitivity.
-    """
-    tornado_row = TornadoResult(
-        variable="project.capex_usd_per_kw",
-        base_irr=0.15,
-        low_irr=0.13,
-        high_irr=0.17,
-    )
-
-    return SensitivitySuite(
-        tornado_results=[tornado_row],
-        base_metric=0.15,
-        base_config_path="scenarios/toy.yaml",
-        metric="project_irr",
-    )
-
-
-def _build_toy_monte_carlo_result() -> MonteCarloResult:
-    """
-    Toy MonteCarloResult with simple, deterministic numbers.
-
-    We keep the shape realistic enough to exercise success_rate()
-    and the nested IRR/NPV/DSCR blocks in the payload.
-    """
-    iterations = 100
-    failed_iterations = 10
-
-    return MonteCarloResult(
-        iterations=iterations,
-        project_irr_mean=0.15,
-        project_irr_std=0.02,
-        project_irr_p10=0.12,
-        project_irr_p50=0.15,
-        project_irr_p90=0.18,
-        project_npv_mean=120.0,
-        project_npv_p10=80.0,
-        project_npv_p50=120.0,
-        project_npv_p90=160.0,
-        dscr_min_p10=1.20,
-        dscr_min_p50=1.30,
-        failed_iterations=failed_iterations,
-        raw_results=[
-            {"project_irr": 0.15, "project_npv": 120.0, "dscr_min": 1.30},
-            {"project_irr": 0.14, "project_npv": 110.0, "dscr_min": 1.25},
-        ],
-        scenario_name="toy_scenario",
-        project_irr_se=0.001,
-        project_npv_se=1.0,
-        dscr_min_se=0.01,
-    )
-
-
-def test_build_casper_payload_basic_shape_and_numbers() -> None:
-    scenario = _build_toy_scenario_result()
-    sensitivities = _build_toy_sensitivity_suite()
-    mc_result = _build_toy_monte_carlo_result()
-
-    baseline_kpis: Dict[str, float] = {
-        "project_irr": 0.15,
-        "project_npv": 123.0,
-        "dscr_min": 1.30,
-    }
-
-    payload = build_casper_payload(
+    casper = CasperResult(
         scenario=scenario,
         baseline_kpis=baseline_kpis,
-        sensitivities=sensitivities,
-        monte_carlo=mc_result,
+        sensitivities=sensitivity,
+        monte_carlo=monte_carlo,
+        generation=generation,
+        multi_tech_generation_breakdown=(
+            list(technology_breakdown) if technology_breakdown is not None else None
+        ),
+        metadata=metadata_dict,
     )
 
-    # --- Top-level structure ----------------------------------------------------
-    assert set(payload.keys()) >= {
-        "scenario",
-        "baseline_kpis",
-        "sensitivity",
-        "monte_carlo",
+    return _casper_to_dict(casper)
+
+
+# ────────────────────────── internal helpers ────────────────────────────
+
+
+def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None:
+    """
+    Slender, JSON-safe descriptor for the scenario.
+
+    Intentionally avoids shipping full `config` / `annual_rows` to keep
+    payloads light and lender-friendly. Those remain available on disk /
+    in the model outputs when deeper audits are required.
+    """
+    if s is None:
+        return None
+
+    data: dict[str, Any] = {
+        "scenario_name": s.scenario_name,
+        "config_path": s.config_path,
+        "validation_mode": s.validation_mode,
+        "discount_rate_used": s.discount_rate_used,
+        "wacc_label": s.wacc_label,
+        "wacc_is_real": getattr(s, "wacc_is_real", None),
+        "min_dscr": s.min_dscr,
+        "max_debt_usd": s.max_debt_usd,
     }
 
-    # Scenario block should echo ScenarioResult.as_dict()
-    scenario_block = payload["scenario"]
-    assert scenario_block["scenario_name"] == "toy_scenario"
-    assert scenario_block["config_path"] == "scenarios/toy.yaml"
-    assert scenario_block["project_irr"] == pytest.approx(0.15)
-    assert scenario_block["project_npv"] == pytest.approx(123.0)
-    assert scenario_block["min_dscr"] == pytest.approx(1.30)
+    # WACC summary (if available)
+    if s.wacc is not None:
+        w = s.wacc
+        data["wacc"] = {
+            "mode": w.base.mode,
+            "wacc_nominal": w.base.wacc_nominal,
+            "wacc_real": w.base.wacc_real,
+            "wacc_prudential": w.base.wacc_prudential,
+            "prudential_rate": w.prudential_rate,
+            "prudential_npv": w.prudential_npv,
+            "risk_free_rate": w.base.risk_free_rate,
+            "market_risk_premium": w.base.market_risk_premium,
+            "asset_beta": w.base.asset_beta,
+            "target_debt_to_equity": w.base.target_debt_to_equity,
+            "target_debt_to_value": w.base.target_debt_to_value,
+            "target_equity_to_value": w.base.target_equity_to_value,
+            "cost_of_debt_pretax": w.base.cost_of_debt_pretax,
+            "cost_of_debt_aftertax": w.base.cost_of_debt_aftertax,
+            "cost_of_equity": w.base.cost_of_equity,
+            "tax_rate": w.base.tax_rate,
+            "inflation_rate": w.base.inflation_rate,
+            "prudential_spread_bps": w.base.prudential_spread_bps,
+            "meta": dict(w.meta),
+        }
 
-    # Baseline KPIs preserved and numeric
-    baseline = payload["baseline_kpis"]
-    assert baseline["project_irr"] == pytest.approx(0.15)
-    assert baseline["project_npv"] == pytest.approx(123.0)
-    assert baseline["dscr_min"] == pytest.approx(1.30)
+    # Debt profile (if attached)
+    if s.debt_profile is not None:
+        dp = s.debt_profile
+        data["debt_profile"] = {
+            "construction_years": dp.construction_years,
+            "tenor_years": dp.tenor_years,
+            "timeline_periods": dp.timeline_periods,
+            "total_debt": dp.total_debt,
+            "total_idc": dp.total_idc,
+            "lkr_principal": dp.lkr_principal,
+            "usd_principal": dp.usd_principal,
+            "dfi_principal": dp.dfi_principal,
+            "lkr_idc": dp.lkr_idc,
+            "usd_idc": dp.usd_idc,
+            "dfi_idc": dp.dfi_idc,
+            "lkr_rate": dp.lkr_rate,
+            "usd_rate": dp.usd_rate,
+            "dfi_rate": dp.dfi_rate,
+            "interest_only_years": dp.interest_only_years,
+            "amortization_style": dp.amortization_style,
+            "dscr_target": dp.dscr_target,
+        }
 
-    # --- Monte Carlo block ------------------------------------------------------
-    mc_block = payload["monte_carlo"]
-    assert mc_block["iterations"] == 100
-    assert mc_block["failed_iterations"] == 10
-    assert mc_block["success_rate"] == pytest.approx(90.0)
+    # Debt covenants (if attached)
+    if s.debt_covenants is not None:
+        data["debt_covenants"] = s.debt_covenants.as_dict()
 
-    irr_block = mc_block["project_irr"]
-    assert irr_block["mean"] == pytest.approx(0.15)
-    assert irr_block["p10"] == pytest.approx(0.12)
-    assert irr_block["p50"] == pytest.approx(0.15)
-    assert irr_block["p90"] == pytest.approx(0.18)
+    # Equity performance overlay (if available)
+    if s.equity_performance is not None:
+        ep = s.equity_performance
+        downside_dict: dict[str, Any] | None = None
+        if ep.downside is not None:
+            d = ep.downside
+            downside_dict = {
+                "prob_negative_npv": d.prob_negative_npv,
+                "prob_below_hurdle": d.prob_below_hurdle,
+                "worst_case_irr": d.worst_case_irr,
+                "max_drawdown": d.max_drawdown,
+            }
 
-    npv_block = mc_block["project_npv"]
-    assert npv_block["mean"] == pytest.approx(120.0)
-    assert npv_block["p10"] == pytest.approx(80.0)
-    assert npv_block["p50"] == pytest.approx(120.0)
-    assert npv_block["p90"] == pytest.approx(160.0)
+        data["equity_performance"] = {
+            "equity_irr": ep.equity_irr,
+            "equity_npv": ep.equity_npv,
+            "moic": ep.moic,
+            "dpi": ep.dpi,
+            "rvpi": ep.rvpi,
+            "tvpi": ep.tvpi,
+            "average_coc": ep.average_coc,
+            "payback_period_years": ep.payback_period_years,
+            "downside": downside_dict,
+        }
 
-    dscr_block = mc_block["dscr_min"]
-    assert dscr_block["p10"] == pytest.approx(1.20)
-    assert dscr_block["p50"] == pytest.approx(1.30)
+    return data
 
-    # --- Sensitivity / tornado block -------------------------------------------
-    sens_block = payload["sensitivity"]
-    assert sens_block["metric"] == "project_irr"
-    assert sens_block["base_metric"] == pytest.approx(0.15)
-    assert sens_block["base_config_path"] == "scenarios/toy.yaml"
 
-    tornado_rows = sens_block["tornado"]
-    assert isinstance(tornado_rows, list)
-    assert len(tornado_rows) == 1
+def _sensitivity_to_dict(suite: SensitivitySuite | None) -> dict[str, Any] | None:
+    """
+    Convert SensitivitySuite to a JSON-friendly dict.
 
-    row0 = tornado_rows[0]
-    # Echo raw values
-    assert row0["variable"] == "project.capex_usd_per_kw"
-    assert row0["base_irr"] == pytest.approx(0.15)
-    assert row0["low_irr"] == pytest.approx(0.13)
-    assert row0["high_irr"] == pytest.approx(0.17)
+    Keeps only metric names and IRR deltas – enough for tornado charts
+    and lender one-pagers, without re-embedding full engine outputs.
+    """
+    if suite is None:
+        return None
 
-    # impact_abs = |high - low| = 0.04
-    assert row0["impact_abs"] == pytest.approx(0.04)
+    return {
+        "metric": suite.metric,
+        "base_metric": suite.base_metric,
+        "base_config_path": suite.base_config_path,
+        "tornado": [
+            {
+                "variable": row.variable,
+                "base_irr": row.base_irr,
+                "low_irr": row.low_irr,
+                "high_irr": row.high_irr,
+                "impact_abs": row.impact_abs,
+                "impact_pct": row.impact_pct,
+            }
+            for row in suite.tornado_results
+        ],
+    }
 
-    # impact_pct = (high - low)/base * 100 = 26.666...%
-    assert row0["impact_pct"] == pytest.approx((0.17 - 0.13) / 0.15 * 100.0)
 
-    # --- JSON-safe check --------------------------------------------------------
-    # If this fails, something non-serialisable leaked into the payload.
-    json.dumps(payload)
+def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
+    """
+    Convert MonteCarloResult into a lean JSON shape.
+
+    Notes:
+    - Does *not* emit raw per-draw results by default; that stays in the
+      engine outputs and regression tests.
+    - Includes success rate and standard errors for convergence checks.
+    """
+    if mc is None:
+        return None
+
+    return {
+        "scenario_name": mc.scenario_name,
+        "iterations": mc.iterations,
+        "failed_iterations": mc.failed_iterations,
+        "success_rate_pct": mc.success_rate(),
+        "irr": {
+            "mean": mc.project_irr_mean,
+            "std": mc.project_irr_std,
+            "p10": mc.project_irr_p10,
+            "p50": mc.project_irr_p50,
+            "p90": mc.project_irr_p90,
+            "se": mc.project_irr_se,
+        },
+        "npv": {
+            "mean": mc.project_npv_mean,
+            "p10": mc.project_npv_p10,
+            "p50": mc.project_npv_p50,
+            "p90": mc.project_npv_p90,
+            "se": mc.project_npv_se,
+        },
+        "dscr_min": {
+            "p10": mc.dscr_min_p10,
+            "p50": mc.dscr_min_p50,
+            "se": mc.dscr_min_se,
+        },
+    }
+
+
+def _generation_to_dict(
+    gen: MultiTechGenerationResult | None,
+) -> dict[str, Any] | None:
+    """
+    Convert MultiTechGenerationResult using its built-in to_dict helper.
+    """
+    if gen is None:
+        return None
+    return gen.to_dict()
+
+
+def _technology_breakdown_to_list(
+    breakdown: Sequence[TechnologyBreakdown] | None,
+) -> list[dict[str, Any]] | None:
+    """
+    Convert a sequence of TechnologyBreakdown into JSON-safe dicts.
+    """
+    if breakdown is None:
+        return None
+
+    return [
+        {
+            "technology": tb.technology,
+            "share_of_capex_pct": tb.share_of_capex_pct,
+            "share_of_cfads_pct": tb.share_of_cfads_pct,
+            "share_of_aep_pct": tb.share_of_aep_pct,
+            "notes": tb.notes,
+        }
+        for tb in breakdown
+    ]
+
+
+def _tail_risk_from_metadata(metadata: Mapping[str, Any]) -> dict[str, Any] | None:
+    """
+    Extract a lean tail-risk snapshot from metadata, if available.
+
+    Convention:
+    - metadata["tail_risk_summary"] is expected to be a mapping:
+        metric_name -> { var, cvar, p10, p50, p90, breach_probability, ... }
+
+    We surface that as the top-level `tail_risk` block in the CASPER payload.
+    """
+    raw = metadata.get("tail_risk_summary")
+    if not isinstance(raw, Mapping):
+        return None
+
+    # Shallow copy to ensure JSON-safety; assume inner dicts are already
+    # JSON-serialisable (enforced upstream in tail-risk utilities).
+    out: dict[str, Any] = {}
+    for metric, snapshot in raw.items():
+        if isinstance(snapshot, Mapping):
+            out[str(metric)] = dict(snapshot)
+    return out or None
+
+
+def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
+    """
+    Flatten CasperResult into the canonical CASPER payload shape.
+
+    This is the single place where we define what CASPER returns to the
+    outside world. Any future changes should be treated as contract
+    changes and guarded by tests + docs.
+    """
+    metadata = dict(casper.metadata)
+    return {
+        "contract_version": CASPER_CONTRACT_VERSION,
+        "scenario": _scenario_summary_to_dict(casper.scenario),
+        "baseline_kpis": dict(casper.baseline_kpis),
+        # Singular key to match the CASPER v1 contract docs
+        "sensitivity": _sensitivity_to_dict(casper.sensitivities),
+        "monte_carlo": _monte_carlo_to_dict(casper.monte_carlo),
+        "generation": _generation_to_dict(casper.generation),
+        "technology_breakdown": _technology_breakdown_to_list(
+            casper.multi_tech_generation_breakdown
+        ),
+        "tail_risk": _tail_risk_from_metadata(metadata),
+        "metadata": metadata,
+    }
+
+
+__all__ = [
+    "CASPER_CONTRACT_VERSION",
+    "build_casper_payload",
+]

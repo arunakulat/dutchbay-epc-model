@@ -499,6 +499,29 @@ def analyze_single_parameter(
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+def run(request: SensitivityRequest) -> SensitivitySuite:
+    """
+    Unified front-door API for v14 sensitivity (v14+ CASPER-ready).
+
+    This is a thin wrapper around run_tornado_sensitivity that only accepts
+    the canonical SensitivityRequest input. CASPER, dashboards, and other
+    external callers should prefer this entry point instead of the legacy
+    multi-argument run_tornado_sensitivity signature.
+
+    All scenario evaluation still flows through the analytics.evaluation_v14
+    evaluate_with_overrides() gateway; this function does not talk directly
+    to finance or pipeline modules.
+    """
+    if not isinstance(request, SensitivityRequest):
+        raise TypeError(
+            "sensitivity_v14.run expects a SensitivityRequest instance. "
+            "For legacy calling styles, use run_tornado_sensitivity(...) "
+            "directly."
+        )
+
+    return run_tornado_sensitivity(request)
+
+
 def run_tornado_sensitivity(
     request: SensitivityRequest | str,
     parameters: list[ParameterRangeConfig] | None = None,
@@ -1309,6 +1332,7 @@ def plot_two_way_heatmap(
 __all__ = [
     "SensitivityResult",
     "SensitivityRequest",
+    "run",
     "run_tornado_sensitivity",
     "run_multi_metric_tornado",
     "run_breakeven_parameter",

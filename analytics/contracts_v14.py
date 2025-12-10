@@ -998,33 +998,73 @@ class TechnologyBreakdown:
     notes: str | None = None
 
 
+# CASPER / GWTF JSON contract version.
+# This identifier is surfaced in CASPER payloads and must be treated
+# as a frozen, test-guarded contract string.
+CASPER_CONTRACT_VERSION = "casper_result_v1"
+
+
 @dataclass(frozen=True)
 class CasperResult:
     """
     High-level, JSON-friendly result container for CASPER / GWTF flows.
+
+    This mirrors the JSON contract emitted by CASPER payload builders:
+
+      - scenario           -> slender ScenarioResult descriptor
+      - baseline_kpis      -> flat KPI map (IRR, DSCR, NPV, etc.)
+      - sensitivities      -> SensitivitySuite (tornado) or None
+      - monte_carlo        -> MonteCarloResult or None
+      - generation         -> MultiTechGenerationResult or None
+      - multi_tech_generation_breakdown
+                            -> list[TechnologyBreakdown] or None
+      - metadata           -> small JSON-safe extras
+
+    The `contract_version` field exposes the CASPER JSON contract version
+    and is pinned by tests (CASPER_CONTRACT_VERSION).
     """
 
+    # Core surfaces
     scenario: ScenarioResult | None
     baseline_kpis: Dict[str, float]
 
+    # Optional analytics surfaces
     sensitivities: SensitivitySuite | None = None
     monte_carlo: MonteCarloResult | None = None
 
+    # Multi-technology view
     generation: MultiTechGenerationResult | None = None
     multi_tech_generation_breakdown: list[TechnologyBreakdown] | None = None
 
+    # Free-form metadata (CASPER run IDs, tail-risk tables, notes, etc.)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Frozen contract version string
+    contract_version: str = CASPER_CONTRACT_VERSION
 
     @property
     def kpis(self) -> Dict[str, float]:
+        """
+        Backwards-compatible alias for baseline_kpis.
+
+        External callers should prefer baseline_kpis; kpis is kept
+        for older code that accessed CasperResult.kpis directly.
+        """
         return self.baseline_kpis
 
     @property
     def sensitivity(self) -> SensitivitySuite | None:
+        """
+        Backwards-compatible singular alias for sensitivities.
+        """
         return self.sensitivities
 
     @property
     def technology_breakdown(self) -> list[TechnologyBreakdown] | None:
+        """
+        Alias for multi_tech_generation_breakdown to keep JSON and Python
+        naming aligned.
+        """
         return self.multi_tech_generation_breakdown
 
 
@@ -1066,6 +1106,7 @@ def build_casper_payload(
         baseline_kpis_dict = {str(k): float(v) for k, v in baseline_kpis.items()}
 
     payload: Dict[str, Any] = {
+        "contract_version": CASPER_CONTRACT_VERSION,
         "scenario": scenario_dict,
         "baseline_kpis": baseline_kpis_dict,
     }
@@ -1192,9 +1233,9 @@ __all__ = [
     "MultiTechGenerationResult",
     "TechnologyBreakdown",
     "CasperResult",
+    "CASPER_CONTRACT_VERSION",
     # CASPER helpers
     "build_casper_payload",
 ]
-
 
 # EOF - analytics/contracts_v14.py

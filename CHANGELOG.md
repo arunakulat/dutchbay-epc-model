@@ -7,6 +7,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.x - 2025-12-10
+
+- Sprint 9 – CASPER v1 contract freeze + sensitivity_v14.run façade
+
+
+
 ## v0.3.1 - 2025-12-10
 
 - Sprint 9 – CASPER tail-risk wiring (v14 MC snapshots + payload)
