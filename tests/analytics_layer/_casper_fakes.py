@@ -46,56 +46,57 @@ def fake_run_monte_carlo_analysis(
     *,
     base_config_path: str,
     scenario_name: str,
-    monte_carlo_config_path: str | None = None,
-    overrides: Mapping[str, Any] | None = None,
+    scenario_config_path: str | None = None,
 ) -> Dict[str, MonteCarloResult]:
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    The real engine currently only requires:
-      - base_config_path
-      - scenario_name
-
-    but the public contract is future-proofed to accept:
-      - monte_carlo_config_path
-      - overrides
-
-    This fake therefore accepts all four keyword-only arguments, with the latter
-    two optional, so that:
-
-    - evaluation_v14 can call it with just base_config_path + scenario_name
-    - tests can still exercise the full CASPER signature without breaking.
+    Now accepts scenario_config_path to match the real function signature.
+    Includes raw_results for tail-risk analysis compatibility.
     """
-    _ = (base_config_path, monte_carlo_config_path, overrides)
+    # Ignore the paths - this is a fake
+    _ = base_config_path
+    _ = scenario_config_path
+
+    # Generate fake Monte Carlo samples for tail-risk analysis
+    # These must match the summary statistics (p10, p50, p90, mean, etc.)
+    raw_results = [
+        {"project_irr": 0.11, "project_npv": 900000.0, "dscr_min": 1.25},
+        {"project_irr": 0.115, "project_npv": 950000.0, "dscr_min": 1.27},
+        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
+        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
+        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
+        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
+        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
+        {"project_irr": 0.125, "project_npv": 1050000.0, "dscr_min": 1.32},
+        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
+        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
+    ]
 
     mc = MonteCarloResult(
+        scenario_name=scenario_name,
         iterations=10,
+        failed_iterations=0,
         # IRR stats
         project_irr_mean=0.12,
         project_irr_std=0.01,
         project_irr_p10=0.11,
         project_irr_p50=0.12,
         project_irr_p90=0.13,
+        project_irr_se=0.001,
         # NPV stats
-        project_npv_mean=1_000_000.0,
-        project_npv_p10=900_000.0,
-        project_npv_p50=1_000_000.0,
-        project_npv_p90=1_100_000.0,
-        # DSCR distribution
+        project_npv_mean=1000000.0,
+        project_npv_p10=900000.0,
+        project_npv_p50=1000000.0,
+        project_npv_p90=1100000.0,
+        project_npv_se=10000.0,
+        # DSCR stats
         dscr_min_p10=1.25,
-        dscr_min_p50=1.35,
-        # Engine bookkeeping
-        failed_iterations=0,
-        raw_results=[
-            {"project_irr": 0.11, "project_npv": 900_000.0, "dscr_min": 1.25},
-            {"project_irr": 0.12, "project_npv": 1_000_000.0, "dscr_min": 1.35},
-            {"project_irr": 0.13, "project_npv": 1_100_000.0, "dscr_min": 1.45},
-        ],
-        scenario_name=scenario_name,
-        # SEs – just non-zero toy values for downstream maths
-        project_irr_se=0.002,
-        project_npv_se=10_000.0,
-        dscr_min_se=0.02,
+        dscr_min_p50=1.30,
+        dscr_min_se=0.01,
+        # Raw results for tail-risk analysis
+        raw_results=raw_results,
     )
 
+    # Return dict keyed by scenario name
     return {scenario_name: mc}

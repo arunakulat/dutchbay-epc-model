@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Dutch Bay EPC - Lender Case Monte Carlo Configuration (2025Q4)
+# CESSPIT v14 / CASPER-GWTF Compliant
+# ══════════════════════════════════════════════════════════════════════════════
+
+simulation:
+  iterations: 1000
+  random_seed: 42
+  parallel_workers: 4
+  sampler: lhs
+
+standard_parameters:
+  - variable_name: generation.capacity_factor_pct
+    dist_type: normal
+    mean: 35.0
+    std: 2.5
+    min_val: 28.0
+    max_val: 42.0
+    description: "Lender-grade capacity factor distribution"
+
+  - variable_name: project.capex_usd_per_kw
+    dist_type: triangular
+    min_val: 1400
+    mode: 1550
+    max_val: 1750
+    description: "Total installed CAPEX per kW"
+
+  - variable_name: opex.fixed_om_usd_per_kw_year
+    dist_type: uniform
+    min_val: 28
+    max_val: 35
+    description: "Fixed O&M cost variation"
+
+derived_parameters: []
+
+scenarios:
+  - name: dutchbay_lendercase_2025Q4
+    description: "Dutch Bay 150MW - Lender base case with conservative assumptions"
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 35.0
+          std: 2.5
+          min_val: 28.0
+          max_val: 42.0
+          description: "Net capacity factor after all losses"

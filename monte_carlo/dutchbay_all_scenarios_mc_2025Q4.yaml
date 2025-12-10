@@ -1,0 +1,157 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# DutchBay EPC Monte Carlo Configuration - ALL SCENARIOS 2025Q4
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# CESSPIT Compliance:
+#   - Contract-explicit: All distributions use analytics.contracts_v14 types
+#   - Evidence-based: Parameter ranges from historical Sri Lankan wind data
+#   - Scenario-stable: Reproducible with fixed random seed
+#   - Traceable: All assumptions documented inline
+#
+# This file consolidates Lender, Optimistic, and Pessimistic scenarios
+# into a single MC config for comparative analysis.
+#
+# Usage:
+#   python -c "
+#   from analytics.monte_carlo_v14 import run_monte_carlo_analysis
+#   results = run_monte_carlo_analysis(
+#       base_config_path='scenarios/dutchbay_lendercase_2025Q4.yaml',
+#       scenario_config_path='monte_carlo/dutchbay_all_scenarios_mc_2025Q4.yaml',
+#   )
+#   "
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Global MC Settings
+# ──────────────────────────────────────────────────────────────────────────────
+simulation:
+  iterations: 1000
+  convergence_threshold: 0.01
+  random_seed: 42
+  parallel_workers: 4
+  sampler: lhs
+
+# Standard Parameters (Shared Across Scenarios)
+# ──────────────────────────────────────────────────────────────────────────────
+standard_parameters: []  # Each scenario will override this
+
+# Derived Parameters (Not used in current scenarios)
+# ──────────────────────────────────────────────────────────────────────────────
+derived_parameters: []
+
+# Scenario Registry
+# ──────────────────────────────────────────────────────────────────────────────
+scenarios:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Scenario 1: Lender Case (Base)
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: dutchbay_lendercase_2025Q4
+    description: >
+      Lender-grade Monte Carlo for Dutch Bay 150MW onshore wind project.
+      Risk parameters calibrated to Sri Lankan wind resource + grid conditions.
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 35.0
+          std: 2.5
+          min_val: 28.0
+          max_val: 42.0
+          description: "Net capacity factor after wake losses"
+
+        - variable_name: project.capex_usd_per_kw
+          dist_type: triangular
+          min_val: 1400
+          mode: 1550
+          max_val: 1750
+          description: "Total installed cost per kW"
+
+        - variable_name: opex.fixed_om_usd_per_kw_year
+          dist_type: uniform
+          min_val: 28
+          max_val: 35
+          description: "Fixed O&M cost"
+
+        - variable_name: tariff.tariff_lkr_per_kwh
+          dist_type: normal
+          mean: 16.50
+          std: 0.75
+          min_val: 15.00
+          max_val: 18.50
+          description: "PPA tariff in LKR/kWh"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Scenario 2: Optimistic Case
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: dutchbay_optimistic_2025Q4
+    description: >
+      Best-case upside scenario for Dutch Bay 150MW wind project.
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 38.5
+          std: 1.5
+          min_val: 35.0
+          max_val: 43.0
+          description: "Optimistic net capacity factor"
+
+        - variable_name: project.capex_usd_per_kw
+          dist_type: triangular
+          min_val: 1350
+          mode: 1450
+          max_val: 1550
+          description: "Best-case CAPEX"
+
+        - variable_name: opex.fixed_om_usd_per_kw_year
+          dist_type: uniform
+          min_val: 26
+          max_val: 30
+          description: "Fixed O&M under long-term contract"
+
+        - variable_name: tariff.tariff_lkr_per_kwh
+          dist_type: normal
+          mean: 17.50
+          std: 0.50
+          min_val: 16.50
+          max_val: 19.00
+          description: "Strong PPA pricing"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Scenario 3: Pessimistic Case
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: dutchbay_pessimistic_2025Q4
+    description: >
+      Worst-case stress scenario for Dutch Bay 150MW wind project.
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 31.5
+          std: 3.5
+          min_val: 25.0
+          max_val: 37.0
+          description: "Pessimistic net capacity factor"
+
+        - variable_name: project.capex_usd_per_kw
+          dist_type: triangular
+          min_val: 1550
+          mode: 1700
+          max_val: 1950
+          description: "Construction overruns"
+
+        - variable_name: opex.fixed_om_usd_per_kw_year
+          dist_type: uniform
+          min_val: 33
+          max_val: 42
+          description: "Spot market O&M pricing"
+
+        - variable_name: tariff.tariff_lkr_per_kwh
+          dist_type: normal
+          mean: 15.25
+          std: 1.00
+          min_val: 13.50
+          max_val: 16.50
+          description: "Weak PPA / renegotiation risk"

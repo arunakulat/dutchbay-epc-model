@@ -1,0 +1,41 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Dutch Bay EPC - Optimistic Case Monte Carlo Configuration (2025Q4)
+# CESSPIT v14 / CASPER-GWTF Compliant
+# ══════════════════════════════════════════════════════════════════════════════
+
+simulation:
+  iterations: 1000
+  random_seed: 42
+  parallel_workers: 4
+  sampler: lhs
+
+standard_parameters:
+  - variable_name: generation.capacity_factor_pct
+    dist_type: normal
+    mean: 38.5
+    std: 1.5
+    min_val: 35.0
+    max_val: 43.0
+    description: "Optimistic capacity factor (better wind resource)"
+
+  - variable_name: project.capex_usd_per_kw
+    dist_type: triangular
+    min_val: 1350
+    mode: 1450
+    max_val: 1550
+    description: "Optimistic CAPEX with economies of scale"
+
+derived_parameters: []
+
+scenarios:
+  - name: dutchbay_optimistic_2025Q4
+    description: "Best-case upside scenario with favorable conditions"
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 38.5
+          std: 1.5
+          min_val: 35.0
+          max_val: 43.0

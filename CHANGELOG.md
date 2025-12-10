@@ -7,6 +7,32 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v14.2.1 - 2025-12-11
+
+- Fix Sprint 9 CASPER tail-risk integration
+
+- Add scenario_config_path parameter to fake_run_monte_carlo_analysis
+- Remove invalid success_rate constructor argument
+- Add raw_results with Monte Carlo samples for tail-risk analysis
+- Fix Monte Carlo config path in test_casper_v14_smoke_iteration1
+- All CASPER tail-risk tests now passing (335/345 total)
+- Coverage: 66.51% (above 55% threshold)
+
+
+
+## v14.2.1 - 2025-12-11
+
+- Fix Sprint 9 CASPER tail-risk integration
+
+- Add scenario_config_path parameter to fake_run_monte_carlo_analysis
+- Remove invalid success_rate constructor argument
+- Add raw_results with Monte Carlo samples for tail-risk analysis
+- Fix Monte Carlo config path in test_casper_v14_smoke_iteration1
+- All CASPER tail-risk tests now passing (335/345 total)
+- Coverage: 66.51% (above 55% threshold)
+
+
+
 ## v0.3.x - 2025-12-10
 
 - Sprint 9 – CASPER v1 contract freeze + sensitivity_v14.run façade

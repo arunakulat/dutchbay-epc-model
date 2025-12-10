@@ -288,6 +288,9 @@ def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
     changes and guarded by tests.
     """
     return {
+        # Explicit contract version at the top level so downstream APIs
+        # and dashboards can route / evolve behavior safely.
+        "contract_version": casper.contract_version,
         "scenario": _scenario_summary_to_dict(casper.scenario),
         "baseline_kpis": dict(casper.baseline_kpis),
         "sensitivities": _sensitivity_to_dict(casper.sensitivities),

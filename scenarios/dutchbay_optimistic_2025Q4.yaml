@@ -1,0 +1,310 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# DutchBay Wind Project - OPTIMISTIC SCENARIO (2025Q4)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# CESSPIT v14 / CASPER-GWTF Compliant
+# This scenario represents the OPTIMISTIC case with:
+#   - Higher capacity factor (43% vs 40% base)
+#   - Lower CAPEX ($1,400/kW vs $1,500/kW base)
+#   - P50 wind resource assumption
+#   - Same DFI financing structure as lender case
+#
+# Expected P50 IRR: ~21.5% (vs ~17.9% lender base)
+#
+# Author: CESSPIT Integration Team
+# Date: 2025-12-10
+# Version: 14.2
+# ══════════════════════════════════════════════════════════════════════════════
+
+scenario_result:
+  scenario_name: "dutchbay_optimistic_2025Q4"
+  description: "Optimistic scenario - P50 wind resource, lower CAPEX, higher capacity factor"
+  project_type: "wind"
+  financing_type: "DFI-led with commercial co-financing"
+  resource_assumption: "P50 wind resource (43% CF), 0.6% annual degradation"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Project Configuration (OPTIMISTIC CASE)
+# ──────────────────────────────────────────────────────────────────────────────
+
+project:
+  name: "Dutch Bay Wind Project - Optimistic Case"
+  capacity_mw: 150
+  capacity_factor: 0.43                    # ← OPTIMISTIC: 43% vs 40% base
+  degradation: 0.006                       # 0.6% annual degradation
+  life_years: 20
+  boi_approved: true
+  boi_agreement_date: "2025-01-15"
+  location: "Puttlam District, North Western Province"
+  jurisdiction: "Sri Lanka"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Returns & Discount Rates
+# ──────────────────────────────────────────────────────────────────────────────
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.10              # 10% WACC
+  equity_discount_rate: 0.12               # 12% equity hurdle
+
+discount_rate: 0.12
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Timeline
+# ──────────────────────────────────────────────────────────────────────────────
+
+timeline:
+  ppa_to_fc_years: 0
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tariff Configuration (Same as lender case)
+# ──────────────────────────────────────────────────────────────────────────────
+
+tariff:
+  lkr_per_kwh: 20.3
+  tariff_type: "fixed"
+  ppa_term_years: 20
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Foreign Exchange
+# ──────────────────────────────────────────────────────────────────────────────
+
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03                        # 3% annual LKR depreciation
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CAPEX Configuration (OPTIMISTIC: Lower costs)
+# ──────────────────────────────────────────────────────────────────────────────
+
+capex:
+  usd_total: 140000000                     # ← OPTIMISTIC: $140M vs $150M base
+  breakdown:
+    epc_usd: 131000000                     # Lower EPC costs
+    development_usd: 4500000               # Lower development costs
+    financing_fees_usd: 2800000            # Lower financing fees
+    contingency_usd: 1700000               # Lower contingency
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OPEX Configuration (Same as lender case)
+# ──────────────────────────────────────────────────────────────────────────────
+
+opex:
+  usd_per_year: 3000000
+  breakdown:
+    om_contract_usd: 2000000
+    insurance_usd: 500000
+    land_lease_usd: 300000
+    admin_usd: 200000
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tax Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+tax:
+  corporate_tax_rate: 0.30                 # 30% corporate tax
+  tax_holiday_years: 12
+  tax_holiday_start_year: 1
+  depreciation_method: "straight_line"
+  depreciation_years: 15
+  depreciation_start_year: 1
+  enhanced_capital_allowance_pct: 1.5
+  enhanced_allowance_applies: true
+  loss_carryforward_years: 25
+  wht_on_interest_to_nonresidents: 0.10    # 10% WHT
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Statutory Charges
+# ──────────────────────────────────────────────────────────────────────────────
+
+regulatory:
+  success_fee_pct: 0.01                    # 1% success fee
+  env_surcharge_pct: 0.005                 # 0.5% environmental surcharge
+  social_services_levy_pct: 0.025          # 2.5% social services levy
+  grid_loss_pct: 0.02                      # 2% grid losses
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Risk Adjustments
+# ──────────────────────────────────────────────────────────────────────────────
+
+risk_adjustment:
+  cfads_haircut_pct: 0.10                  # 10% CFADS haircut for sizing
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Financing Terms (Same DFI structure as lender case)
+# ──────────────────────────────────────────────────────────────────────────────
+
+Financing_Terms:
+  debt_ratio: 0.70                         # 70% debt
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: "auto"
+  interest_rate_nominal: 0.08              # 8% blended rate
+
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.10
+    usd_commercial_min: 0.45
+
+  rates:
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+
+  target_dscr: 1.30
+  min_dscr: 1.20
+  min_dscr_covenant: 1.20
+
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
+
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+
+  enforce_hard_covenants: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metrics & Covenants
+# ──────────────────────────────────────────────────────────────────────────────
+
+metrics:
+  llcr_min_covenant: 1.20
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.10
+  plcr_min_covenant: 1.40
+  plcr_target: 1.60
+  plcr_discount_rate: 0.10
+  dscr_min_covenant: 1.30
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Constraints
+# ──────────────────────────────────────────────────────────────────────────────
+
+constraints:
+  max_debt_ratio: 0.80
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.30
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.10
+  warn_balloon_pct: 0.05
+
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.10
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.00
+  lender_type: "DFI"
+  jurisdiction: "Sri Lanka"
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IRR Validation Bounds (Optimistic Case)
+# ──────────────────────────────────────────────────────────────────────────────
+
+irr_validation:
+  irr_lower_bound: -0.5                    # More optimistic lower bound
+  irr_upper_bound: 0.50                    # Higher upper bound (50%)
+  irr_lower_bound_rationale: "Optimistic P50 wind resource with minimal curtailment"
+  irr_upper_bound_rationale: "Upper bound allows for better-than-expected wind performance"
+
+  equity_irr_lower_bound: -0.3
+  equity_irr_upper_bound: 0.65
+  equity_bounds_rationale: "Higher equity returns expected with P50 wind resource"
+
+  debt_irr_lower_bound: -0.15
+  debt_irr_upper_bound: 0.18
+  debt_bounds_rationale: "Debt returns within DFI policy limits"
+
+  xirr_lower_bound: -0.5
+  xirr_upper_bound: 0.35
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Monte Carlo Configuration (Optimistic Parameters)
+# ──────────────────────────────────────────────────────────────────────────────
+
+monte_carlo:
+  n_scenarios: 100000
+  seed: 42
+
+  parameters:
+    capacity_factor_std: 0.035             # ← Lower variance (3.5% vs 5% base)
+    tariff_lkr_std: 0.08                   # ← Lower tariff uncertainty
+    opex_usd_std: 0.12                     # ← Lower OPEX variance
+    capex_usd_std: 0.06                    # ← Lower CAPEX variance
+
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+
+  percentiles:
+    - 10
+    - 25
+    - 50
+    - 75
+    - 90
+
+  min_dscr_covenant: 1.20
+  min_llcr_covenant: 1.25
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sensitivity Analysis Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.04                       # ± 4% (tighter than base)
+      high_pct: 0.04
+
+    tariff_lkr_per_kwh:
+      low_pct: -0.08
+      high_pct: 0.08
+
+    opex_usd_per_year:
+      low_pct: -0.12
+      high_pct: 0.12
+
+    capex_usd_total:
+      low_pct: -0.06
+      high_pct: 0.06
+
+    grid_loss_pct:
+      low_pct: -0.01
+      high_pct: 0.02
+
+  analysis:
+    tornado_chart_title: "DutchBay 150MW - Optimistic Scenario Sensitivity"
+    dpi: 300
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metadata
+# ──────────────────────────────────────────────────────────────────────────────
+
+metadata:
+  version: "14.2"
+  last_updated: "2025-12-10"
+  author: "CESSPIT Integration Team"
+  review_status: "CCCDIR - Ready for Monte Carlo Analysis"
+  assumptions_source: "P50 Wind Resource Assessment + Lower EPC Costs"
+  changelog:
+    - version: "14.2"
+      date: "2025-12-10"
+      changes: "Created optimistic scenario with 43% CF and $140M CAPEX"

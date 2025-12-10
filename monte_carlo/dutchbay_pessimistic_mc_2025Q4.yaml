@@ -1,0 +1,41 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Dutch Bay EPC - Pessimistic Case Monte Carlo Configuration (2025Q4)
+# CESSPIT v14 / CASPER-GWTF Compliant
+# ══════════════════════════════════════════════════════════════════════════════
+
+simulation:
+  iterations: 1000
+  random_seed: 42
+  parallel_workers: 4
+  sampler: lhs
+
+standard_parameters:
+  - variable_name: generation.capacity_factor_pct
+    dist_type: normal
+    mean: 31.5
+    std: 3.5
+    min_val: 25.0
+    max_val: 37.0
+    description: "Pessimistic capacity factor (wake losses, curtailment)"
+
+  - variable_name: project.capex_usd_per_kw
+    dist_type: triangular
+    min_val: 1550
+    mode: 1700
+    max_val: 1950
+    description: "Stress-test CAPEX with construction delays"
+
+derived_parameters: []
+
+scenarios:
+  - name: dutchbay_pessimistic_2025Q4
+    description: "Worst-case downside scenario with adverse conditions"
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: normal
+          mean: 31.5
+          std: 3.5
+          min_val: 25.0
+          max_val: 37.0
