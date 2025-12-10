@@ -1,0 +1,305 @@
+# analytics/casper_payload.py
+
+from __future__ import annotations
+
+from typing import Any, Mapping, Sequence
+
+from analytics.contracts_v14 import (
+    CasperResult,
+    MonteCarloResult,
+    MultiTechGenerationResult,
+    ScenarioResult,
+    SensitivitySuite,
+    TechnologyBreakdown,
+)
+
+
+def build_casper_payload(
+    *,
+    scenario: ScenarioResult,
+    monte_carlo: MonteCarloResult | None = None,
+    sensitivity: SensitivitySuite | None = None,
+    generation: MultiTechGenerationResult | None = None,
+    technology_breakdown: Sequence[TechnologyBreakdown] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Build a CASPER/GWTF-compliant payload for dashboards and lenders.
+
+    CESSPIT guardrails:
+    - Contract-explicit: uses contracts_v14 types (ScenarioResult, CasperResult, …)
+      as the only inputs/outputs at this layer.
+    - Evidence-based: numbers are derived from engine outputs; no hidden
+      recomputation here.
+    - Scenario-stable: same config + same upstream results => same payload.
+
+    Parameters
+    ----------
+    scenario:
+        ScenarioResult from run_full_pipeline_v14 (canonical v14 surface).
+    monte_carlo:
+        Optional MonteCarloResult for this scenario (v14 engine).
+    sensitivity:
+        Optional SensitivitySuite (tornado) for this scenario.
+    generation:
+        Optional MultiTechGenerationResult (wind/solar/BESS aggregation).
+    technology_breakdown:
+        Optional per-technology breakdown for CASPER lenses
+        (e.g. wind vs BESS share of AEP/CFADS/CAPEX).
+    metadata:
+        Free-form small JSON-safe fields for UIs / diagnostics.
+        Must not contain large blobs or raw engine tables.
+
+    Returns
+    -------
+    dict
+        JSON-safe payload aligned with CasperResult semantics, with a
+        deliberately slender surface for dashboards and lender exports.
+    """
+    baseline_kpis = scenario.as_dict()
+    metadata_dict: dict[str, Any] = dict(metadata) if metadata is not None else {}
+
+    casper = CasperResult(
+        scenario=scenario,
+        baseline_kpis=baseline_kpis,
+        sensitivities=sensitivity,
+        monte_carlo=monte_carlo,
+        generation=generation,
+        multi_tech_generation_breakdown=(
+            list(technology_breakdown) if technology_breakdown is not None else None
+        ),
+        metadata=metadata_dict,
+    )
+
+    return _casper_to_dict(casper)
+
+
+# ────────────────────────── internal helpers ────────────────────────────
+
+
+def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None:
+    """
+    Slender, JSON-safe descriptor for the scenario.
+
+    Intentionally avoids shipping full `config` / `annual_rows` to keep
+    payloads light and lender-friendly. Those remain available on disk /
+    in the model outputs when deeper audits are required.
+    """
+    if s is None:
+        return None
+
+    data: dict[str, Any] = {
+        "scenario_name": s.scenario_name,
+        "config_path": s.config_path,
+        "validation_mode": s.validation_mode,
+        "discount_rate_used": s.discount_rate_used,
+        "wacc_label": s.wacc_label,
+        "wacc_is_real": s.wacc_is_real,
+        "min_dscr": s.min_dscr,
+        "max_debt_usd": s.max_debt_usd,
+    }
+
+    # WACC summary (if available)
+    if s.wacc is not None:
+        w = s.wacc
+        data["wacc"] = {
+            "mode": w.base.mode,
+            "wacc_nominal": w.base.wacc_nominal,
+            "wacc_real": w.base.wacc_real,
+            "wacc_prudential": w.base.wacc_prudential,
+            "prudential_rate": w.prudential_rate,
+            "prudential_npv": w.prudential_npv,
+            "risk_free_rate": w.base.risk_free_rate,
+            "market_risk_premium": w.base.market_risk_premium,
+            "asset_beta": w.base.asset_beta,
+            "target_debt_to_equity": w.base.target_debt_to_equity,
+            "target_debt_to_value": w.base.target_debt_to_value,
+            "target_equity_to_value": w.base.target_equity_to_value,
+            "cost_of_debt_pretax": w.base.cost_of_debt_pretax,
+            "cost_of_debt_aftertax": w.base.cost_of_debt_aftertax,
+            "cost_of_equity": w.base.cost_of_equity,
+            "tax_rate": w.base.tax_rate,
+            "inflation_rate": w.base.inflation_rate,
+            "prudential_spread_bps": w.base.prudential_spread_bps,
+            "meta": dict(w.meta),
+        }
+
+    # Debt profile (if attached)
+    if s.debt_profile is not None:
+        dp = s.debt_profile
+        data["debt_profile"] = {
+            "construction_years": dp.construction_years,
+            "tenor_years": dp.tenor_years,
+            "timeline_periods": dp.timeline_periods,
+            "total_debt": dp.total_debt,
+            "total_idc": dp.total_idc,
+            "lkr_principal": dp.lkr_principal,
+            "usd_principal": dp.usd_principal,
+            "dfi_principal": dp.dfi_principal,
+            "lkr_idc": dp.lkr_idc,
+            "usd_idc": dp.usd_idc,
+            "dfi_idc": dp.dfi_idc,
+            "lkr_rate": dp.lkr_rate,
+            "usd_rate": dp.usd_rate,
+            "dfi_rate": dp.dfi_rate,
+            "interest_only_years": dp.interest_only_years,
+            "amortization_style": dp.amortization_style,
+            "dscr_target": dp.dscr_target,
+        }
+
+    # Debt covenants (if attached)
+    if s.debt_covenants is not None:
+        data["debt_covenants"] = s.debt_covenants.as_dict()
+
+    # Equity performance overlay (if available)
+    if s.equity_performance is not None:
+        ep = s.equity_performance
+        downside_dict: dict[str, Any] | None = None
+        if ep.downside is not None:
+            d = ep.downside
+            downside_dict = {
+                "prob_negative_npv": d.prob_negative_npv,
+                "prob_below_hurdle": d.prob_below_hurdle,
+                "worst_case_irr": d.worst_case_irr,
+                "max_drawdown": d.max_drawdown,
+            }
+
+        data["equity_performance"] = {
+            "equity_irr": ep.equity_irr,
+            "equity_npv": ep.equity_npv,
+            "moic": ep.moic,
+            "dpi": ep.dpi,
+            "rvpi": ep.rvpi,
+            "tvpi": ep.tvpi,
+            "average_coc": ep.average_coc,
+            "payback_period_years": ep.payback_period_years,
+            "downside": downside_dict,
+        }
+
+    return data
+
+
+def _sensitivity_to_dict(suite: SensitivitySuite | None) -> dict[str, Any] | None:
+    """
+    Convert SensitivitySuite to a JSON-friendly dict.
+
+    Keeps only metric names and IRR deltas – enough for tornado charts
+    and lender one-pagers, without re-embedding full engine outputs.
+    """
+    if suite is None:
+        return None
+
+    return {
+        "metric": suite.metric,
+        "base_metric": suite.base_metric,
+        "base_config_path": suite.base_config_path,
+        "tornado": [
+            {
+                "variable": row.variable,
+                "base_irr": row.base_irr,
+                "low_irr": row.low_irr,
+                "high_irr": row.high_irr,
+                "impact_abs": row.impact_abs,
+                "impact_pct": row.impact_pct,
+            }
+            for row in suite.tornado_results
+        ],
+    }
+
+
+def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
+    """
+    Convert MonteCarloResult into a lean JSON shape.
+
+    Notes:
+    - Does *not* emit raw per-draw results by default; that stays in the
+      engine outputs and regression tests.
+    - Includes success rate and standard errors for convergence checks.
+    """
+    if mc is None:
+        return None
+
+    return {
+        "scenario_name": mc.scenario_name,
+        "iterations": mc.iterations,
+        "failed_iterations": mc.failed_iterations,
+        "success_rate_pct": mc.success_rate(),
+        "irr": {
+            "mean": mc.project_irr_mean,
+            "std": mc.project_irr_std,
+            "p10": mc.project_irr_p10,
+            "p50": mc.project_irr_p50,
+            "p90": mc.project_irr_p90,
+            "se": mc.project_irr_se,
+        },
+        "npv": {
+            "mean": mc.project_npv_mean,
+            "p10": mc.project_npv_p10,
+            "p50": mc.project_npv_p50,
+            "p90": mc.project_npv_p90,
+            "se": mc.project_npv_se,
+        },
+        "dscr_min": {
+            "p10": mc.dscr_min_p10,
+            "p50": mc.dscr_min_p50,
+            "se": mc.dscr_min_se,
+        },
+    }
+
+
+def _generation_to_dict(
+    gen: MultiTechGenerationResult | None,
+) -> dict[str, Any] | None:
+    """
+    Convert MultiTechGenerationResult using its built-in to_dict helper.
+    """
+    if gen is None:
+        return None
+    return gen.to_dict()
+
+
+def _technology_breakdown_to_list(
+    breakdown: Sequence[TechnologyBreakdown] | None,
+) -> list[dict[str, Any]] | None:
+    """
+    Convert a sequence of TechnologyBreakdown into JSON-safe dicts.
+    """
+    if breakdown is None:
+        return None
+
+    return [
+        {
+            "technology": tb.technology,
+            "share_of_capex_pct": tb.share_of_capex_pct,
+            "share_of_cfads_pct": tb.share_of_cfads_pct,
+            "share_of_aep_pct": tb.share_of_aep_pct,
+            "notes": tb.notes,
+        }
+        for tb in breakdown
+    ]
+
+
+def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
+    """
+    Flatten CasperResult into the canonical CASPER payload shape.
+
+    This is the single place where we define what CASPER returns to the
+    outside world. Any future changes should be treated as contract
+    changes and guarded by tests.
+    """
+    return {
+        "scenario": _scenario_summary_to_dict(casper.scenario),
+        "baseline_kpis": dict(casper.baseline_kpis),
+        "sensitivities": _sensitivity_to_dict(casper.sensitivities),
+        "monte_carlo": _monte_carlo_to_dict(casper.monte_carlo),
+        "generation": _generation_to_dict(casper.generation),
+        "technology_breakdown": _technology_breakdown_to_list(
+            casper.multi_tech_generation_breakdown
+        ),
+        "metadata": dict(casper.metadata),
+    }
+
+
+__all__ = [
+    "build_casper_payload",
+]

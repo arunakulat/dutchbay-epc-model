@@ -1,5 +1,27 @@
 from __future__ import annotations
 
+import copy
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+import pandas as pd
+import yaml
+
+from analytics.contracts_v14 import (
+    BreakevenResult,
+    MultiMetricSensitivitySuite,
+    MultiMetricTornadoResult,
+    ParameterRangeConfig,
+    SensitivitySuite,
+    TornadoResult,
+)
+from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.scenarioloader import load_scenario_config
+
+logger = logging.getLogger(__name__)
+
 """
 analytics.sensitivity_v14
 
@@ -36,29 +58,6 @@ Public Surface
 - tornado_suite_to_dataframe
 - multi_metric_suite_to_dataframe
 """
-
-import copy
-import logging
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Mapping
-
-import pandas as pd
-import yaml
-
-from analytics.contracts_v14 import (
-    BreakevenResult,
-    MultiMetricSensitivitySuite,
-    MultiMetricTornadoResult,
-    ParameterRangeConfig,
-    SensitivitySuite,
-    TornadoResult,
-)
-from analytics.evaluation_v14 import evaluate_with_overrides
-from analytics.scenarioloader import load_scenario_config
-
-logger = logging.getLogger(__name__)
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Phase 1: Canonical Result Surface
 # ═══════════════════════════════════════════════════════════════════════════

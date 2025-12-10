@@ -1,0 +1,35 @@
+### CASPER + Tail-Risk Orchestration (v14)
+
+For lender / CASPER flows, v14 exposes a single high-level entry point that
+combines the pipeline, Monte Carlo, and tornado-based tail-risk:
+
+- `analytics.evaluation_v14.evaluate_with_casper_tail_risk(...)`
+
+This orchestrator:
+
+1. Runs the v14 lender pipeline (cashflow + debt + metrics).
+2. Rebuilds the canonical `ScenarioResult` contract.
+3. Runs Monte Carlo for the same scenario.
+4. Optionally enriches a `SensitivitySuite` tornado with tail-risk metrics.
+
+The CASPER-facing tail-risk outputs are attached to `CasperResult.metadata`:
+
+- `metadata["tail_risk"]`
+  Full, row-wise tail-risk table (tornado × Monte Carlo), including:
+  VaR, CVaR, P10/P90, and breach probabilities per driver.
+  This is intended for deep-dive dashboards and analyst views.
+
+- `metadata["tail_risk_summary"]`
+  Compact, per-metric `TailRiskSnapshot` set (e.g. for
+  `"project_irr"` and `"dscr_min"`), containing VaR, CVaR, P10/P50/P90 and
+  breach probability.
+  This is the lender-facing summary that UIs and APIs should feed directly
+  into `analytics.contracts_v14.build_casper_payload(...)`.
+
+Typical CASPER flow:
+
+1. Call `evaluate_with_casper_tail_risk(...)` to obtain a `CasperResult`.
+2. Read `casper.metadata["tail_risk_summary"]` for per-metric snapshots.
+3. Pass `scenario`, `baseline_kpis`, analytics layers, and metadata into
+   `build_casper_payload(...)` to produce a JSON-safe payload for dashboards
+   and IC memos.

@@ -745,4 +745,3 @@ So you can brief local devs cleanly:
 ---
 
 If you want, next we can **freeze the exact `CasperResult` fields and JSON shape** so your devs aren’t guessing when they implement `casper_v14.py` and the CASPER mode.
-

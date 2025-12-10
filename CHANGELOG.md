@@ -7,6 +7,18 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.1 - 2025-12-10
+
+- Sprint 9 – CASPER tail-risk wiring (v14 MC snapshots + payload)
+
+
+
+## v0.3.1 - 2025-12-10
+
+- Sprint 9 – CASPER tail-risk wiring (v14 MC snapshots + payload)
+
+
+
 ## v0.3.0 - 2025-12-09
 
 - Sprint 9: Complete Integration Analysis & Design (CASPER/GWTF Compliant)

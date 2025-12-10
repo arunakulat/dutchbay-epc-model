@@ -33,13 +33,13 @@ def validate_parameter_ranges(
     for suspicious outputs (negative IRR, >50%, etc.).
     """
     from analytics.evaluate_scenario import evaluate_with_overrides
-    from analytics.sensitivity_v14 import _build_nested_override
+    from analytics.sensitivity_v14 import build_nested_override
 
     errors = []
     for p in parameters:
         for pct in (p.low_pct, p.high_pct):
             val = p.base_value * (1 + pct / 100)
-            ovr = _build_nested_override(p.variable_name, val)
+            ovr = build_nested_override(p.variable_name, val)
             try:
                 out = evaluate_with_overrides(base_config_path, ovr)
                 met = out[metric]

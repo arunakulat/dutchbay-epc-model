@@ -1,3 +1,8 @@
+# zz_bad.yaml
+# Scratch scenario used for local experiments.
+# Kept as valid YAML so pre-commit check-yaml passes.
+# Not used by any pipelines or tests.
+
 name: test_bad
 unknown_key: 123
- life_years: 25
+life_years: 25

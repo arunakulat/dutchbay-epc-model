@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
@@ -237,8 +237,6 @@ class DebtCovenantSnapshot:
 
         notes = " ".join(notes_parts)
 
-        # If everything looks fine but debt engine labelled REVIEW, we can
-        # conservatively promote to PASS here based on covenant view.
         if not notes and audit_status == "REVIEW":
             audit_status = "PASS"
 
@@ -344,60 +342,36 @@ def _build_debt_covenant_snapshot(
 class CashflowResult:
     """
     Canonical multi-year project cashflow surface in LKR for a single v14 run.
-
-    This is the *only* place that should define how the cashflow engine is
-    exposed to lenders, dashboards, and analytics. It wraps the raw
-    `annual_rows` table from `cashflow_v14` and provides series that are
-    explicitly labelled and easy to audit.
-
-    All series are aligned by `years` and correspond to operating periods.
-    Construction-phase flows should be handled separately by the debt engine.
     """
 
-    # Core axis
     years: List[int]
-
-    # Raw table from cashflow_v14.build_annual_rows (one dict per year)
     annual_rows: List[Dict[str, float]]
 
-    # Generation
     gross_generation_kwh: List[float]
     net_generation_kwh: List[float]
 
-    # Top-line and deductions
     revenue_lkr: List[float]
     statutory_deductions_lkr: List[float]
     opex_lkr: List[float]
 
-    # Tax and CFADS
     pretax_cfads_lkr: List[float]
     tax_lkr: List[float]
     posttax_cfads_lkr: List[float]
     cfads_final_lkr: List[float]
 
-    # Structural internals
     depreciation_lkr: List[float]
     interest_expense_lkr: List[float]
     taxable_income_lkr: List[float]
 
-    # Risk haircut metadata
     risk_haircut_pct: float
     risk_haircut_amount_lkr: List[float]
 
-    # FX metadata (optional: depends on config shape)
     fx_curve_lkr_per_usd: Optional[List[float]] = None
 
-    # Hooks for diagnostics and flags
     notes: List[str] = field(default_factory=list)
     flags: Dict[str, bool] = field(default_factory=dict)
 
     def as_dict_rows(self) -> List[Dict[str, float]]:
-        """
-        Return a shallow copy of the underlying annual rows for tabular export.
-
-        This is intentionally simple: dashboards and Excel exporters can use
-        this when they want the familiar year-by-year table.
-        """
         return list(self.annual_rows)
 
 
@@ -406,30 +380,19 @@ def build_cashflow_result_from_annual_rows(
     annual_rows: Sequence[Mapping[str, Any]],
     fx_curve_lkr_per_usd: Optional[Sequence[float]] = None,
 ) -> CashflowResult:
-    """
-    Construct a CashflowResult from the raw annual_rows table produced by
-    the cashflow engine, plus the original config.
-
-    This keeps the contracts layer independent of the finance module
-    (no direct import of cashflow_v14) and avoids recomputing cashflows.
-    """
-    # Years
     years: List[int] = [
         int(row.get("year", index + 1)) for index, row in enumerate(annual_rows)
     ]
 
-    # Generation
     gross_generation_kwh = [float(row.get("gross_kwh", 0.0)) for row in annual_rows]
     net_generation_kwh = [float(row.get("net_kwh", 0.0)) for row in annual_rows]
 
-    # Top-line and deductions
     revenue_lkr = [float(row.get("revenue_lkr", 0.0)) for row in annual_rows]
     statutory_deductions_lkr = [
         float(row.get("total_statutory_deductions_lkr", 0.0)) for row in annual_rows
     ]
     opex_lkr = [float(row.get("opex_lkr", 0.0)) for row in annual_rows]
 
-    # Tax and CFADS
     pretax_cfads_lkr = [float(row.get("pretax_cfads_lkr", 0.0)) for row in annual_rows]
     tax_lkr = [float(row.get("tax_lkr", 0.0)) for row in annual_rows]
     posttax_cfads_lkr = [
@@ -437,7 +400,6 @@ def build_cashflow_result_from_annual_rows(
     ]
     cfads_final_lkr = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
 
-    # Structural internals
     depreciation_lkr = [
         float(row.get("total_depreciation_lkr", 0.0)) for row in annual_rows
     ]
@@ -448,7 +410,6 @@ def build_cashflow_result_from_annual_rows(
         float(row.get("taxable_income_lkr", 0.0)) for row in annual_rows
     ]
 
-    # Risk haircut
     risk_cfg_raw = config.get("risk_adjustment") or config.get("risk") or {}
     risk_cfg: Mapping[str, Any] = (
         risk_cfg_raw if isinstance(risk_cfg_raw, Mapping) else {}
@@ -498,21 +459,8 @@ def build_cashflow_result_from_annual_rows(
 class ScenarioResult:
     """
     Complete scenario evaluation result with WACC and full outputs.
-
-    This is the canonical, lender/deck-facing result contract for a single
-    v14 scenario. It combines:
-
-    - Core project metrics (NPV, IRR, DSCR profile, max debt)
-    - WACC result (including prudential rate)
-    - Equity performance overlay (when available)
-    - Debt profile (tranche-level) and covenant snapshot
-    - Raw engine outputs (config, annual rows, debt_result, kpis)
-
-    Downstream consumers (dashboards, Excel exporters, lender reports) should
-    prefer this struct rather than poking into raw dicts.
     """
 
-    # Core ID / KPIs
     scenario_name: str
     config_path: str
     project_npv: float
@@ -521,13 +469,11 @@ class ScenarioResult:
     min_dscr: float
     max_debt_usd: float
 
-    # WACC / discounting
     wacc: Optional[WaccResult] = None
     discount_rate_used: Optional[float] = None
     wacc_label: Optional[str] = None
     wacc_is_real: Optional[bool] = None
 
-    # Engine + validation context
     validation_mode: str = "strict"
     config: Dict[str, Any] = field(default_factory=dict)
     annual_rows: Sequence[Dict[str, Any]] = field(default_factory=list)
@@ -535,18 +481,11 @@ class ScenarioResult:
     kpis: Dict[str, Any] = field(default_factory=dict)
     cashflow: Optional["CashflowResult"] = None
 
-    # Overlays (Phase 2 / 3)
     equity_performance: Optional["EquityPerformance"] = None
     debt_profile: Optional["TrancheDebtProfile"] = None
     debt_covenants: Optional["DebtCovenantSnapshot"] = None
 
     def as_dict(self) -> Dict[str, Any]:
-        """
-        Normalise the result into a flat KPI dict.
-
-        This is intentionally conservative – we expose core KPIs plus any
-        extra kpis dict that has been populated by the metrics layer.
-        """
         data: Dict[str, Any] = {
             "scenario_name": self.scenario_name,
             "config_path": self.config_path,
@@ -602,11 +541,6 @@ class EquityPerformance:
 class ParameterRangeConfig(BaseModel):
     """
     Sensitivity parameter range configuration.
-
-    Validates parameter sweep configurations loaded from YAML files.
-    Uses Pydantic v2 for robust input validation at config boundaries.
-
-    Used by tornado, two-way, optimization, MC parameter loaders, etc.
     """
 
     model_config = ConfigDict(
@@ -620,7 +554,7 @@ class ParameterRangeConfig(BaseModel):
         ...,
         min_length=1,
         description=(
-            "Parameter to sweep (dot-separated path, " "e.g. project.capex_usd_per_kw)"
+            "Parameter to sweep (dot-separated path, e.g. project.capex_usd_per_kw)"
         ),
     )
 
@@ -632,9 +566,6 @@ class ParameterRangeConfig(BaseModel):
     @field_validator("base_value")
     @classmethod
     def validate_base_value(cls, v: float) -> float:
-        """
-        Ensure base_value is strictly positive (> 0).
-        """
         if v <= 0:
             raise ValueError(f"base_value must be positive (> 0), got {v}")
         return v
@@ -663,9 +594,6 @@ class ParameterRangeConfig(BaseModel):
     @field_validator("high_pct")
     @classmethod
     def validate_high_exceeds_low(cls, v: float, info: Any) -> float:
-        """
-        Ensure high_pct is at least as large as abs(low_pct).
-        """
         low_pct = None
         if hasattr(info, "data"):
             low_pct = getattr(info, "data", {}).get("low_pct")
@@ -678,20 +606,10 @@ class ParameterRangeConfig(BaseModel):
 
     @property
     def low_value(self) -> float:
-        """
-        Calculate absolute low value from base and low_pct.
-
-        Formula: base_value * (1 + low_pct/100)
-        """
         return self.base_value * (1 + self.low_pct / 100.0)
 
     @property
     def high_value(self) -> float:
-        """
-        Calculate absolute high value from base and high_pct.
-
-        Formula: base_value * (1 + high_pct/100)
-        """
         return self.base_value * (1 + self.high_pct / 100.0)
 
 
@@ -699,9 +617,6 @@ class ParameterRangeConfig(BaseModel):
 class TornadoResult:
     """
     Single tornado sweep result row (for tables, export, ranking).
-
-    Stores sensitivity analysis results for one parameter.
-    Uses dataclass for performance (no validation overhead on results).
     """
 
     variable: str
@@ -711,26 +626,18 @@ class TornadoResult:
 
     @property
     def impact_abs(self) -> float:
-        """
-        Absolute magnitude of IRR movement, rounded for test stability.
-        """
         delta = self.high_irr - self.low_irr
-        if delta != delta:  # NaN check
+        if delta != delta:
             return float("nan")
         return round(abs(delta), 10)
 
     @property
     def impact_pct(self) -> float:
-        """
-        Signed percentage impact relative to base_irr.
-        """
         for v in (self.base_irr, self.low_irr, self.high_irr):
-            if v != v:  # NaN check
+            if v != v:
                 return float("nan")
-
         if self.base_irr == 0.0:
             return 0.0
-
         delta = self.high_irr - self.low_irr
         return float(delta / self.base_irr * 100.0)
 
@@ -799,7 +706,7 @@ class ParetoFrontierResult:
 @dataclass
 class TailRiskMetrics:
     """
-    Used by risk_metrics/stochastic overlays (VaR/CVaR/tail).
+    Tail-risk metrics for a single distribution (metric, scenario, or covenant).
     """
 
     var: float
@@ -808,6 +715,22 @@ class TailRiskMetrics:
     p50: float
     p90: float
     breach_prob: float
+
+
+@dataclass(frozen=True)
+class TailRiskSnapshot:
+    """
+    Aggregated tail-risk view for a single KPI and confidence level.
+    """
+
+    metric: str
+    confidence: float
+    var: float
+    cvar: float
+    p10: float
+    p50: float
+    p90: float
+    breach_probability: float
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -819,57 +742,38 @@ class TailRiskMetrics:
 class Distribution:
     """
     Probability distribution for Monte Carlo parameters.
-
-    This is the common surface used by:
-    - Monte Carlo config loaders (YAML)
-    - MC engine samplers
-    - Derived-parameter tools (e.g. tariff from target IRR)
-
-    NOTE:
-    - `description` is optional and exists purely for human-readable
-      documentation. It is allowed in YAML and safely ignored by the math.
     """
 
     variable_name: str
     dist_type: Literal["normal", "triangular", "uniform", "lognormal"]
 
-    # Core numeric parameters
     mean: Optional[float] = None
     std: Optional[float] = None
     min_val: Optional[float] = None
     max_val: Optional[float] = None
     mode: Optional[float] = None
-
-    # Optional metadata
     description: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Validate distribution parameters based on type."""
         dt = self.dist_type
 
-        # ──── Normal ────────────────────────────────────────────────────────
         if dt == "normal":
             if self.std is None or self.std <= 0:
-                # Tests expect this substring
                 raise ValueError("normal distribution requires std > 0")
             return
 
-        # ──── Lognormal ─────────────────────────────────────────────────────
         if dt == "lognormal":
             if self.std is None or self.std <= 0:
                 raise ValueError("lognormal distribution requires std > 0")
             return
 
-        # ──── Triangular ────────────────────────────────────────────────────
         if dt == "triangular":
             if self.min_val is None or self.mode is None or self.max_val is None:
-                # Tests expect this substring
                 raise ValueError("triangular distribution requires min <= mode <= max")
             if not (self.min_val <= self.mode <= self.max_val):
                 raise ValueError("triangular distribution requires min <= mode <= max")
             return
 
-        # ──── Uniform ───────────────────────────────────────────────────────
         if dt == "uniform":
             if self.min_val is None or self.max_val is None:
                 raise ValueError("uniform distribution requires min < max")
@@ -877,7 +781,6 @@ class Distribution:
                 raise ValueError("uniform distribution requires min < max")
             return
 
-        # Defensive
         raise ValueError(f"Unsupported distribution type: {dt!r}")
 
 
@@ -885,10 +788,6 @@ class Distribution:
 class DerivedParameter:
     """
     Configuration for a *derived* Monte Carlo parameter.
-
-    Examples:
-      - Tariff implied by a target project IRR.
-      - Maximum debt consistent with a DSCR covenant.
     """
 
     variable_name: str
@@ -903,17 +802,6 @@ class DerivedParameter:
 class MonteCarloScenario:
     """
     Monte Carlo scenario configuration (engine-agnostic).
-
-    Engine-facing fields:
-      - standard_params
-      - derived_params
-
-    Test/backwards-compat fields:
-      - standard_parameters (alias for standard_params)
-      - derived_parameters (alias for derived_params)
-
-    The custom __init__ accepts *either* naming style but not both
-    at the same time, so older tests and newer engine code can coexist.
     """
 
     name: str
@@ -935,7 +823,6 @@ class MonteCarloScenario:
         iterations: int = 1000,
         enabled: bool = True,
     ) -> None:
-        # Guard against ambiguous usage
         if standard_params is not None and standard_parameters is not None:
             raise TypeError(
                 "Provide either 'standard_params' or 'standard_parameters', not both."
@@ -945,7 +832,6 @@ class MonteCarloScenario:
                 "Provide either 'derived_params' or 'derived_parameters', not both."
             )
 
-        # Prefer the new names if given; otherwise fall back to legacy kwargs
         if standard_params is None:
             standard_params = standard_parameters or []
         if derived_params is None:
@@ -958,16 +844,12 @@ class MonteCarloScenario:
         self.iterations = iterations
         self.enabled = enabled
 
-    # --- Legacy attribute aliases for tests ---------------------------------
-
     @property
     def standard_parameters(self) -> List[Distribution]:
-        """Backwards-compatible alias for standard_params."""
         return self.standard_params
 
     @property
     def derived_parameters(self) -> List[DerivedParameter]:
-        """Backwards-compatible alias for derived_params."""
         return self.derived_params
 
 
@@ -975,63 +857,39 @@ class MonteCarloScenario:
 class MonteCarloResult:
     """
     Aggregated Monte Carlo output for a single scenario.
-
-    This is intentionally *engine-agnostic*:
-
-    - Only high-level KPIs (IRR / NPV / DSCR p-tiles).
-    - No direct references to cashflow or debt internals.
-    - Ready for exports, dashboards and regression tests.
-
-    Optional *_se fields expose standard errors for precision reporting.
     """
 
     iterations: int
 
-    # Core IRR stats
     project_irr_mean: float
     project_irr_std: float
     project_irr_p10: float
     project_irr_p50: float
     project_irr_p90: float
 
-    # Core NPV stats
     project_npv_mean: float
     project_npv_p10: float
     project_npv_p50: float
     project_npv_p90: float
 
-    # DSCR distribution (typically covenant-focused)
     dscr_min_p10: float
     dscr_min_p50: float
 
-    # Engine housekeeping
     failed_iterations: int
     raw_results: Optional[List[Dict[str, float]]] = None
     scenario_name: Optional[str] = None
 
-    # Precision / convergence estimates (standard errors)
     project_irr_se: Optional[float] = None
     project_npv_se: Optional[float] = None
     dscr_min_se: Optional[float] = None
 
     def success_rate(self) -> float:
-        """
-        Percentage of iterations that produced a usable result.
-        """
         if self.iterations <= 0:
             return 0.0
         successful = max(self.iterations - max(self.failed_iterations, 0), 0)
         return (successful / float(self.iterations)) * 100.0
 
     def probability_above_threshold(self, metric_name: str, threshold: float) -> float:
-        """
-        Return the percentage of (non-failed) draws where the given metric is
-        greater than or equal to the supplied threshold.
-
-        Examples:
-            result.probability_above_threshold("project_irr", 0.12)
-            result.probability_above_threshold("dscr_min", 1.30)
-        """
         if not self.raw_results:
             return 0.0
 
@@ -1041,7 +899,6 @@ class MonteCarloResult:
         for row in self.raw_results:
             value = row.get(metric_name)
             if value is None:
-                # Some runs may not populate every metric; we ignore those here.
                 continue
             total += 1
             if value >= threshold:
@@ -1061,7 +918,7 @@ class MonteCarloResult:
 @dataclass(frozen=True)
 class ScenarioDescriptor:
     """
-    Canonical descriptor for a config/scenario. Used by analytics pipeline & reporting.
+    Canonical descriptor for a config/scenario.
     """
 
     scenario_name: str
@@ -1069,11 +926,9 @@ class ScenarioDescriptor:
     config: Dict[str, Any]
 
     def path(self) -> Path:
-        """Return config_path as a Path object."""
         return Path(self.config_path)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert descriptor to plain dict for serialization."""
         return {
             "scenario_name": self.scenario_name,
             "config_path": self.config_path,
@@ -1082,17 +937,264 @@ class ScenarioDescriptor:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# END OF CONTRACTS FILE
+# Generation & CASPER Aggregation Contracts
 # ═════════════════════════════════════════════════════════════════════════════
-#
-# 1. Update docstrings and comments when extending this file
-# 2. All pipeline modules MUST import analytics results from here
-# 3. New contract types should follow established patterns:
-#    - Use @dataclass for performance-critical types
-#    - Use BaseModel for config validation (pydantic v2)
-#    - Add comprehensive docstrings with examples
-#    - Include validation rules and error handling
-# 4. Validators use @field_validator decorator (pydantic v2 pattern)
-# 5. Keep this file focused on contracts only - no business logic
-#
+
+
+@dataclass(frozen=True)
+class GenerationProfile:
+    """
+    Single-technology generation and CFADS snapshot.
+    """
+
+    technology: str
+    annual_aep_kwh: float
+    annual_cfads_usd: float
+    availability_pct: float | None = None
+    losses_breakdown: Mapping[str, float] | None = None
+
+
+@dataclass(frozen=True)
+class MultiTechGenerationResult:
+    """
+    Aggregated generation view across multiple technologies.
+    """
+
+    total_aep_kwh: float
+    total_cfads_usd: float
+    technologies: Mapping[str, GenerationProfile]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_aep_kwh": self.total_aep_kwh,
+            "total_cfads_usd": self.total_cfads_usd,
+            "technologies": {
+                tech: {
+                    "technology": profile.technology,
+                    "annual_aep_kwh": profile.annual_aep_kwh,
+                    "annual_cfads_usd": profile.annual_cfads_usd,
+                    "availability_pct": profile.availability_pct,
+                    "losses_breakdown": (
+                        dict(profile.losses_breakdown)
+                        if profile.losses_breakdown is not None
+                        else None
+                    ),
+                }
+                for tech, profile in self.technologies.items()
+            },
+        }
+
+
+@dataclass(frozen=True)
+class TechnologyBreakdown:
+    """
+    Per-technology KPI breakdown for lender / investor visibility.
+    """
+
+    technology: str
+    share_of_capex_pct: float | None = None
+    share_of_cfads_pct: float | None = None
+    share_of_aep_pct: float | None = None
+    notes: str | None = None
+
+
+@dataclass(frozen=True)
+class CasperResult:
+    """
+    High-level, JSON-friendly result container for CASPER / GWTF flows.
+    """
+
+    scenario: ScenarioResult | None
+    baseline_kpis: Dict[str, float]
+
+    sensitivities: SensitivitySuite | None = None
+    monte_carlo: MonteCarloResult | None = None
+
+    generation: MultiTechGenerationResult | None = None
+    multi_tech_generation_breakdown: list[TechnologyBreakdown] | None = None
+
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def kpis(self) -> Dict[str, float]:
+        return self.baseline_kpis
+
+    @property
+    def sensitivity(self) -> SensitivitySuite | None:
+        return self.sensitivities
+
+    @property
+    def technology_breakdown(self) -> list[TechnologyBreakdown] | None:
+        return self.multi_tech_generation_breakdown
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CASPER payload helper (JSON-safe)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def build_casper_payload(
+    *,
+    scenario: ScenarioResult,
+    baseline_kpis: Mapping[str, float] | None = None,
+    sensitivities: SensitivitySuite | None = None,
+    monte_carlo: MonteCarloResult | None = None,
+    multi_tech_generation_breakdown: MultiTechGenerationResult | None = None,
+    technology_breakdown: Sequence[TechnologyBreakdown] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    tail_risk_snapshots: Mapping[str, TailRiskSnapshot] | None = None,
+) -> Dict[str, Any]:
+    """
+    Build a JSON-safe CASPER payload for dashboards and lender reports.
+
+    This is the *only* function that should be used by UIs / APIs when they
+    want a serialisable view of a v14 scenario + analytics stack.
+
+    All numbers are left in native units; callers are responsible for any
+    currency/scale transformations they need.
+
+    CESSPIT / CASPER notes
+    ----------------------
+    - Contract-explicit: tail-risk summaries flow through TailRiskSnapshot.
+    - Evidenced: summaries are expected to be derived from Monte Carlo samples.
+    - Scenario-stable: same config + seed => same TailRiskSnapshot.
+    """
+    # --- Scenario / baseline KPIs ------------------------------------------------
+    scenario_dict = scenario.as_dict()
+    baseline_kpis_dict: Dict[str, float] = {}
+    if baseline_kpis is not None:
+        baseline_kpis_dict = {str(k): float(v) for k, v in baseline_kpis.items()}
+
+    payload: Dict[str, Any] = {
+        "scenario": scenario_dict,
+        "baseline_kpis": baseline_kpis_dict,
+    }
+
+    # --- Sensitivity / tornado (optional) ----------------------------------------
+    if sensitivities is not None:
+        tornado_rows: list[Dict[str, Any]] = []
+        for row in sensitivities.tornado_results:
+            tornado_rows.append(
+                {
+                    "variable": row.variable,
+                    "base_irr": float(row.base_irr),
+                    "low_irr": float(row.low_irr),
+                    "high_irr": float(row.high_irr),
+                    "impact_abs": float(row.impact_abs),
+                    "impact_pct": float(row.impact_pct),
+                }
+            )
+
+        payload["sensitivity"] = {
+            "metric": sensitivities.metric,
+            "base_metric": float(sensitivities.base_metric),
+            "base_config_path": sensitivities.base_config_path,
+            "tornado": tornado_rows,
+        }
+
+    # --- Monte Carlo (optional) --------------------------------------------------
+    if monte_carlo is not None:
+        mc = monte_carlo
+        payload["monte_carlo"] = {
+            "iterations": int(mc.iterations),
+            "failed_iterations": int(mc.failed_iterations),
+            "success_rate": float(mc.success_rate()),
+            "project_irr": {
+                "mean": float(mc.project_irr_mean),
+                "std": float(mc.project_irr_std),
+                "p10": float(mc.project_irr_p10),
+                "p50": float(mc.project_irr_p50),
+                "p90": float(mc.project_irr_p90),
+                "se": None if mc.project_irr_se is None else float(mc.project_irr_se),
+            },
+            "project_npv": {
+                "mean": float(mc.project_npv_mean),
+                "p10": float(mc.project_npv_p10),
+                "p50": float(mc.project_npv_p50),
+                "p90": float(mc.project_npv_p90),
+                "se": None if mc.project_npv_se is None else float(mc.project_npv_se),
+            },
+            "dscr_min": {
+                "p10": float(mc.dscr_min_p10),
+                "p50": float(mc.dscr_min_p50),
+                "se": None if mc.dscr_min_se is None else float(mc.dscr_min_se),
+            },
+        }
+
+    # --- Generation / technology breakdown (optional) ----------------------------
+    if multi_tech_generation_breakdown is not None:
+        payload["generation"] = multi_tech_generation_breakdown.to_dict()
+
+    if technology_breakdown is not None:
+        payload["technology_breakdown"] = [asdict(tb) for tb in technology_breakdown]
+
+    # --- Tail-risk summary (optional, CASPER / lender-facing) --------------------
+    # Expectation: tail_risk_snapshots is built from MC samples via a dedicated
+    # helper (e.g. in sensitivity_tail_risk) and passed in explicitly.
+    if tail_risk_snapshots is not None:
+        tail_risk_block: Dict[str, Any] = {}
+        for metric, snapshot in tail_risk_snapshots.items():
+            tail_risk_block[metric] = {
+                "metric": snapshot.metric,
+                "confidence": float(snapshot.confidence),
+                "var": float(snapshot.var),
+                "cvar": float(snapshot.cvar),
+                "p10": float(snapshot.p10),
+                "p50": float(snapshot.p50),
+                "p90": float(snapshot.p90),
+                "breach_probability": float(snapshot.breach_probability),
+            }
+
+        if tail_risk_block:
+            payload["tail_risk"] = tail_risk_block
+
+    # --- Metadata (optional, including full tail-risk tables) --------------------
+    if metadata is not None:
+        payload["metadata"] = {str(k): v for k, v in metadata.items()}
+
+    return payload
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Public export surface
+# ═════════════════════════════════════════════════════════════════════════════
+
+__all__ = [
+    # WACC / lender stack
+    "WaccComponents",
+    "WaccResult",
+    "TrancheDebtProfile",
+    "DebtCovenantSnapshot",
+    # Cashflow + scenario
+    "CashflowResult",
+    "ScenarioResult",
+    "ScenarioDescriptor",
+    # Equity / downside
+    "DownsideMetrics",
+    "EquityPerformance",
+    # Sensitivity / analytics
+    "ParameterRangeConfig",
+    "TornadoResult",
+    "SensitivitySuite",
+    "BreakevenResult",
+    "MultiMetricTornadoResult",
+    "MultiMetricSensitivitySuite",
+    "ParetoFrontierResult",
+    "TailRiskMetrics",
+    "TailRiskSnapshot",
+    # Monte Carlo
+    "Distribution",
+    "DerivedParameter",
+    "MonteCarloScenario",
+    "MonteCarloResult",
+    # Generation / CASPER
+    "GenerationProfile",
+    "MultiTechGenerationResult",
+    "TechnologyBreakdown",
+    "CasperResult",
+    # CASPER helpers
+    "build_casper_payload",
+]
+
+
 # EOF - analytics/contracts_v14.py
