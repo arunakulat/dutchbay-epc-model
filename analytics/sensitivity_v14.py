@@ -18,7 +18,7 @@ from analytics.contracts_v14 import (
     TornadoResult,
 )
 from analytics.evaluation_v14 import evaluate_with_overrides
-from analytics.scenarioloader import load_scenario_config
+from analytics.scenarioloader import loadscenarioconfig as load_scenario_config
 
 logger = logging.getLogger(__name__)
 

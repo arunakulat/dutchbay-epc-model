@@ -189,9 +189,13 @@ def _resolve_low_metric_column(tornado_df: pd.DataFrame) -> str:
     """
     Determine which column in the tornado DataFrame represents the "low" metric.
 
-    Supports a few canonical spellings and falls back to a heuristic that
-    looks for a column name containing both 'low' and 'metric' (case-insensitive).
+    Supports both metric-specific names and generic "Low" column.
     """
+    # Try generic "Low" column first (standard from sensitivity_export)
+    if "Low" in tornado_df.columns:
+        return "Low"
+
+    # Try metric-specific names
     preferred_names = [
         "Low Metric",
         "low_metric",
@@ -202,15 +206,19 @@ def _resolve_low_metric_column(tornado_df: pd.DataFrame) -> str:
         if name in tornado_df.columns:
             return name
 
-    # Heuristic fallback: first column matching both "low" and "metric".
+    # Fallback: case-insensitive "low"
     lowered = {col.lower(): col for col in tornado_df.columns}
+    if "low" in lowered:
+        return lowered["low"]
+
+    # Legacy: columns with both "low" and "metric"
     for key, original in lowered.items():
         if "low" in key and "metric" in key:
             return original
 
     msg = (
-        "Could not resolve 'low metric' column in tornado DataFrame. "
-        f"Available columns: {list(tornado_df.columns)!r}"
+        f"Could not resolve 'low metric' column in tornado DataFrame. "
+        f"Available columns: {list(tornado_df.columns)}"
     )
     raise ValueError(msg)
 

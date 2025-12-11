@@ -4,7 +4,7 @@ import logging
 import math
 import warnings
 from pathlib import Path
-from typing import Any, Iterable, List, cast
+from typing import Any, Iterable, List, Mapping, cast
 
 import multiprocess as mp
 import numpy as np
@@ -19,7 +19,7 @@ from analytics.contracts_v14 import (
     MonteCarloResult,
     MonteCarloScenario,
 )
-from analytics.evaluate_scenario import evaluate_with_overrides
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.parameter_solvers import get_solver
 from constants import MONTE_CARLO_ITERATIONS
 
@@ -951,56 +951,104 @@ def _run_serial_iterations(
 
 
 def _run_single_iteration(
-    base_config_path: str,
-    scenario: MonteCarloScenario,
-    sample: dict[str, Any],
+    base_config_path: str | Path,
+    scenario: Any,
+    sample: Mapping[str, float],
 ) -> dict[str, float] | None:
     """
-    Run a single Monte Carlo iteration with given parameter sample.
+    Run a single Monte Carlo iteration.
+
+    Contract (CCCDIR-aligned):
+
+    - Takes a base config path, a MonteCarloScenario-like object, and a sample
+      mapping (param_path -> sampled value).
+    - Builds overrides by combining scenario-level overrides and the sample.
+    - Optionally applies derived-parameter solvers (tariff / DSCR, etc.).
+    - Evaluates the scenario via `evaluate_with_overrides`.
+    - Returns a dict[str, float] of KPIs, or None if the iteration fails.
     """
     try:
-        overrides = _build_overrides_from_sample(sample, scenario.standard_params)
+        # ------------------------------------------------------------------
+        # 1) Start with scenario-level base overrides (if present)
+        # ------------------------------------------------------------------
+        overrides: dict[str, Any] = {}
 
-        # Handle derived parameters (solve for values given targets)
-        for derived_param in scenario.derived_params:
-            if not derived_param.enabled:
-                continue
+        base_overrides = getattr(scenario, "base_overrides", None)
+        if isinstance(base_overrides, Mapping):
+            overrides.update(base_overrides)
 
-            target_key = f"_target_{derived_param.variable_name}"
-            target_value = sample.get(target_key)
-            if target_value is None:
-                logger.warning(
-                    "Missing target for derived parameter: %s",
-                    derived_param.variable_name,
-                )
-                return None
+        # ------------------------------------------------------------------
+        # 2) Apply sample overrides (param_path -> value)
+        # ------------------------------------------------------------------
+        for dotted_key, value in sample.items():
+            path_parts = dotted_key.split(".")
+            _set_nested_value(overrides, path_parts, value)
 
+        # ------------------------------------------------------------------
+        # 3) Apply derived-parameter solvers (optional)
+        #    - Use either `derived_params` or legacy `derived_parameters`
+        # ------------------------------------------------------------------
+        derived_params = getattr(scenario, "derived_params", None)
+        if derived_params is None:
+            derived_params = getattr(scenario, "derived_parameters", [])
+
+        for derived_param in derived_params:
             try:
+                # Try to fetch a target value from the sample, keyed by derive_from
+                raw_target = sample.get(derived_param.derive_from)
+                target_value: float | None
+                if raw_target is None:
+                    target_value = None
+                else:
+                    target_value = float(raw_target)
+
                 solver = get_solver(derived_param.derive_from)
+
                 derived_value = solver(
                     base_config_path=base_config_path,
                     base_overrides=overrides,
                     target_irr=(
-                        target_value if "irr" in derived_param.derive_from else None
+                        target_value
+                        if (
+                            target_value is not None
+                            and "irr" in derived_param.derive_from
+                        )
+                        else None
                     ),
                     target_dscr=(
-                        target_value if "dscr" in derived_param.derive_from else None
+                        target_value
+                        if (
+                            target_value is not None
+                            and "dscr" in derived_param.derive_from
+                        )
+                        else None
                     ),
                     **derived_param.solver_config,
                 )
+
                 path_parts = derived_param.variable_name.split(".")
                 _set_nested_value(overrides, path_parts, derived_value)
+
             except Exception as exc:  # pragma: no cover - rare path
+                # **IMPORTANT CHANGE**:
+                # Do NOT drop the whole iteration if the solver fails.
+                # Log the failure and continue with existing overrides.
                 logger.warning(
-                    "Solver failed for %s: %s. Skipping this iteration.",
-                    derived_param.variable_name,
+                    "Solver failed for %s: %s. Continuing without derived update.",
+                    getattr(derived_param, "variable_name", "<unknown>"),
                     exc,
                 )
-                return None
+                # Break out of the derived-param loop for this iteration to
+                # avoid repeated failures on the same misconfigured solver.
+                break
 
-        # Evaluate scenario with all parameter values
+        # ------------------------------------------------------------------
+        # 4) Evaluate scenario with all parameter values via evaluation_v14
+        # ------------------------------------------------------------------
         kpis = evaluate_with_overrides(base_config_path, overrides)
-        typed_kpis = cast(dict[str, float], kpis)
+
+        # Make the type explicit and keep a shallow copy in case callers mutate it
+        typed_kpis: dict[str, float] = dict(kpis)
         return typed_kpis
 
     except Exception as exc:  # pragma: no cover - defensive

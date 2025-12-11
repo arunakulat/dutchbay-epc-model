@@ -167,3 +167,9 @@ metadata:
   review_status: Draft - Pending Board Approval
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
 discount_rate: 0.12
+wacc:
+  mode: fixed
+  discount_rate: 12.0
+  prudential_spread_bps: 100
+  description: Fixed discount rate for lender base case (12% nominal + 1% prudential
+    = 13% stressed)

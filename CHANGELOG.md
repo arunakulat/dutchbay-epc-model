@@ -7,6 +7,18 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v0.3.1 - 2025-12-11
+
+- Sprint 10 – evaluation_v14 + Monte Carlo gateway hardened (CASPER & tail-risk green)
+
+
+
+## v0.3.1 - 2025-12-11
+
+- Sprint 10 – evaluation_v14 + Monte Carlo gateway hardened (CASPER & tail-risk green)
+
+
+
 ## v14.2.1 - 2025-12-11
 
 - Fix Sprint 9 CASPER tail-risk integration

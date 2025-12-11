@@ -1,0 +1,12 @@
+# Minimal Monte Carlo config
+seed: 42
+n_scenarios: 1000
+parameters:
+  - name: capacity_factor
+    distribution: normal
+    mean: 0.40
+    std: 0.05
+  - name: tariff_lkr_per_kwh
+    distribution: normal
+    mean: 20.3
+    std: 2.0

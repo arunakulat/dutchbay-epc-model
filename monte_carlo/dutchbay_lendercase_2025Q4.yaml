@@ -1,0 +1,23 @@
+scenario_name: dutchbay_lendercase_2025Q4
+seed: 42
+n_scenarios: 1000
+solver: lhs
+parameters:
+  - name: capacity_factor
+    distribution: normal
+    mean: 0.40
+    std: 0.05
+  - name: tariff_lkr_per_kwh
+    distribution: normal
+    mean: 20.3
+    std: 2.03
+  - name: capex.usd_total
+    distribution: normal
+    mean: 150000000
+    std: 12000000
+  - name: opex.usd_per_year
+    distribution: normal
+    mean: 3000000
+    std: 450000
+percentiles: [10, 25, 50, 75, 90]
+metrics: [project_irr, project_npv, min_dscr]
