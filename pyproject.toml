@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dutchbay-v13"
-version = "13.1.0"
-description = "Dutch Bay EPC Model"
+name = "dutchbay-epc-model"
+version = "14.0.0"
+description = "DutchBay EPC Model - Sprint 10 Stable Release"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -38,7 +38,7 @@ src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
 [tool.setuptools.packages.find]
-include = ["dutchbay_v13*"]
+include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*"]
 
 [tool.black]
 line-length = 88
@@ -58,3 +58,7 @@ python_version = "3.11"
 # Run mypy primarily over the typed application surface
 files = ["analytics", "finance"]
 config_file = "mypy.ini"
+
+[tool.pytest.ini_options]
+addopts = "--cov=. --cov-report=term-missing --cov-fail-under=20"
+testpaths = ["tests"]
