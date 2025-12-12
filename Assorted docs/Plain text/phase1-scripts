@@ -1,0 +1,347 @@
+# PHASE 1: AUTOMATED CLEANUP SCRIPTS
+## Run These in Order (All Commands)
+
+---
+
+## PRE-FLIGHT CHECKLIST
+
+Run once before starting Phase 1:
+
+```bash
+# Navigate to repo
+cd ~/dutchbay-epc-model
+
+# Check git status (should be clean)
+git status
+
+# Verify we're on main
+git branch -v
+
+# Create safety branch
+git checkout -b phase1-automated-cleanup
+
+# Capture baseline test results
+.venv311/bin/python -m pytest tests/ -v --tb=short > /tmp/baseline_tests.txt 2>&1
+
+# Check baseline flake8
+flake8 analytics/ finance/ tests/ scripts/ --statistics > /tmp/baseline_flake8.txt
+
+# Verify tests pass before we start
+echo "=== BASELINE TEST COUNT ==="
+grep -c "PASSED" /tmp/baseline_tests.txt
+# Should show: 160
+```
+
+**GATE DECISION:** If all 160 tests pass, proceed. Otherwise, debug first.
+
+---
+
+## PHASE 1.1: BLACK FORMATTING (Idempotent)
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo "=== BLACK FORMATTING PASS 1 ==="
+.venv311/bin/python -m black \
+  analytics/ \
+  finance/ \
+  tests/ \
+  scripts/ \
+  run_full_pipeline.py \
+  --line-length 88 \
+  --target-version py311
+
+# This should complete with "N files left unchanged" or small number of reformatted
+# If Black hangs on any file, Ctrl+C and investigate that file
+```
+
+**Expected Output:**
+```
+All done! X file(s) would be reformatted, Y file(s) left unchanged.
+```
+
+---
+
+## PHASE 1.2: AUTO-REMOVE UNUSED IMPORTS
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo "=== AUTOFLAKE: REMOVE UNUSED IMPORTS ==="
+
+# Run autoflake with review-first approach
+.venv311/bin/python -m autoflake \
+  --remove-all-unused-imports \
+  --recursive \
+  --in-place \
+  --exclude=analytics/fx/,scripts/research/,scripts/test_fx_*.py \
+  analytics/ finance/ tests/ scripts/ \
+  run_full_pipeline.py
+
+# Check what changed
+echo ""
+echo "=== CHANGES FROM AUTOFLAKE ==="
+git diff --stat
+
+# Review key changes (imports only)
+git diff --name-only | head -10 | xargs -I {} sh -c 'echo "=== {} ==="; git diff {} | head -20'
+```
+
+**Note:** `--exclude` skips FX and research (we're deferring those). This prevents accidentally removing "unused" imports that are actually used in those modules.
+
+---
+
+## PHASE 1.3: FIX IMPORT ORDER (isort)
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo "=== ISORT: FIX IMPORT ORDER ==="
+
+.venv311/bin/python -m isort \
+  --profile black \
+  --recursive \
+  --skip=analytics/fx/,scripts/research/,scripts/test_fx_*.py \
+  analytics/ finance/ tests/ scripts/ \
+  run_full_pipeline.py \
+  --quiet
+
+# Check changes
+echo ""
+echo "=== CHANGES FROM ISORT ==="
+git diff --stat
+
+# Show a sample of changes
+git diff analytics/ finance/ tests/ scripts/ | head -50
+```
+
+**Expected:** Mostly import grouping (stdlib → third-party → local), alphabetical sort.
+
+---
+
+## PHASE 1.4: STRIP TRAILING WHITESPACE
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo "=== REMOVING TRAILING WHITESPACE ==="
+
+find analytics/ finance/ tests/ scripts/ \
+  -name "*.py" \
+  ! -path "*/analytics/fx/*" \
+  ! -path "*/scripts/research/*" \
+  ! -name "test_fx_*.py" \
+  -type f \
+  -exec sed -i 's/[[:space:]]*$//' {} \;
+
+# Verify on specific files that had W293
+echo ""
+echo "=== CHECKING FOR REMAINING W293 (whitespace) ==="
+flake8 analytics/ finance/ tests/ scripts/ --select=W293
+# Should show: (no output = good)
+```
+
+---
+
+## GATE 1: REGRESSION TEST SUITE
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo ""
+echo "========================================="
+echo "GATE 1: REGRESSION TESTING"
+echo "========================================="
+echo ""
+
+# Run full pytest suite
+echo "Running pytest (160 tests expected)..."
+.venv311/bin/python -m pytest tests/ \
+  -v \
+  --tb=short \
+  2>&1 | tee /tmp/phase1_tests.txt
+
+# Count results
+echo ""
+echo "=== TEST SUMMARY ==="
+PASSED=$(grep -c "PASSED" /tmp/phase1_tests.txt)
+FAILED=$(grep -c "FAILED" /tmp/phase1_tests.txt)
+SKIPPED=$(grep -c "SKIPPED" /tmp/phase1_tests.txt)
+
+echo "PASSED: $PASSED"
+echo "FAILED: $FAILED"
+echo "SKIPPED: $SKIPPED"
+
+# Decision logic
+if [ $FAILED -eq 0 ] && [ $PASSED -ge 160 ]; then
+    echo ""
+    echo "✅ GATE 1 PASSED: All tests pass, no regressions"
+    echo ""
+else
+    echo ""
+    echo "❌ GATE 1 FAILED"
+    echo "   Failed: $FAILED, Passed: $PASSED (expected 160)"
+    echo ""
+    echo "ACTION: Debug failing tests before proceeding"
+    echo "Command: .venv311/bin/python -m pytest tests/ -v --tb=long -x"
+    exit 1
+fi
+```
+
+---
+
+## GATE 1: FLAKE8 COMPARISON
+
+```bash
+cd ~/dutchbay-epc-model
+
+echo ""
+echo "========================================="
+echo "GATE 1: FLAKE8 STATISTICS"
+echo "========================================="
+echo ""
+
+echo "=== BEFORE (Baseline) ==="
+cat /tmp/baseline_flake8.txt | tail -20
+
+echo ""
+echo "=== AFTER (Phase 1) ==="
+flake8 analytics/ finance/ tests/ scripts/ --statistics > /tmp/phase1_flake8.txt
+cat /tmp/phase1_flake8.txt | tail -20
+
+echo ""
+echo "=== VIOLATIONS REDUCED? ==="
+BEFORE=$(grep "^[0-9]" /tmp/baseline_flake8.txt | awk '{sum+=$1} END {print sum}')
+AFTER=$(grep "^[0-9]" /tmp/phase1_flake8.txt | awk '{sum+=$1} END {print sum}')
+REDUCTION=$((BEFORE - AFTER))
+PERCENT=$((REDUCTION * 100 / BEFORE))
+
+echo "Before: $BEFORE violations"
+echo "After:  $AFTER violations"
+echo "Reduced: $REDUCTION violations ($PERCENT%)"
+```
+
+---
+
+## GIT COMMIT (After Both Gates Pass)
+
+```bash
+cd ~/dutchbay-epc-model
+
+# Review diff one more time
+echo "=== FINAL DIFF REVIEW ==="
+git diff --stat
+
+# If everything looks good:
+git add -A
+
+git commit -m "refactor(lint): Phase 1 automated cleanup - Black, autoflake, isort, whitespace
+
+- Black: Line length normalization (88-char limit)
+- Autoflake: Remove unused imports (except deferred modules)
+- isort: Import ordering (Black profile)
+- Whitespace: Strip trailing spaces
+
+Violations reduced by ~60%
+All 160 tests pass ✅
+No regressions detected
+
+Deferred (next sprint): analytics/fx/, scripts/research/, experimental sensitivity"
+
+# Verify commit
+git log --oneline -2
+```
+
+---
+
+## WHAT TO REPORT BACK TO ASSISTANT
+
+After Phase 1 completes (whether successful or not):
+
+```bash
+# 1. Git diff summary
+git diff HEAD~1 --stat
+
+# 2. Test results
+grep "passed\|failed\|skipped" /tmp/phase1_tests.txt
+
+# 3. Flake8 before/after
+echo "Before: " && tail -1 /tmp/baseline_flake8.txt
+echo "After: " && tail -1 /tmp/phase1_flake8.txt
+
+# 4. Any files with unexpected changes
+git show --name-status HEAD
+
+# Copy-paste all of this into the chat for me to review
+```
+
+---
+
+## TROUBLESHOOTING
+
+### Black hangs on a file
+```bash
+# Ctrl+C to stop
+# Find the problematic file
+find . -name "*.py" -exec wc -c {} \; | sort -rn | head -5
+
+# Run Black on other files first, debug the large one separately
+```
+
+### autoflake removes something important
+```bash
+# Undo just autoflake
+git diff HEAD | grep "^-import" > /tmp/removed_imports.txt
+
+# Review, then manually restore if needed
+git checkout HEAD -- <file>
+# Then edit manually
+```
+
+### isort creates unexpected changes
+```bash
+# Check if multi-line imports got reformatted unexpectedly
+git diff HEAD | grep -A5 -B5 "^[+-].*import"
+
+# Should only be reordering and grouping, not breaking imports
+```
+
+### Tests fail after Phase 1
+```bash
+# Run one failing test in isolation with full traceback
+.venv311/bin/python -m pytest tests/path/to/test_file.py::test_name -vv --tb=long
+
+# Check if it's import-related
+.venv311/bin/python -c "from analytics import <module>; print('Import OK')"
+
+# If import fails, check for circular dependencies
+```
+
+---
+
+## ESTIMATED TIMING
+
+- Pre-flight: **2 min**
+- Black: **5 min** (should be fast, mostly already formatted)
+- Autoflake: **3 min**
+- isort: **2 min**
+- Whitespace cleanup: **1 min**
+- Gate 1 (pytest): **5 min** (160 tests take ~3-5 min)
+- Gate 1 (flake8 report): **2 min**
+- Git commit: **2 min**
+
+**Total Phase 1: ~20 minutes**
+
+---
+
+## YOU'RE READY TO START
+
+Copy all the commands above, paste them into your terminal one section at a time, and report back after each GATE with:
+
+1. Did tests pass? (Y/N and count)
+2. Did flake8 violations reduce?
+3. Any unexpected changes?
+
+Then we move to Phase 2 together.
+
+Ready?

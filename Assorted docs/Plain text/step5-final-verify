@@ -1,0 +1,140 @@
+# STEP 5: FINAL VERIFICATION & COMMIT
+## All Quick Fixes Complete
+
+---
+
+## Run All Verifications
+
+```bash
+cd ~/dutchbay-epc-model
+
+# 1. Verify syntax of all fixed files
+echo "=== SYNTAX CHECK ==="
+python3 -m py_compile fix_parameter_range_config.py
+python3 -m py_compile go_with_the_flow_ci_enhanced.py
+python3 -m py_compile go_with_the_flow_ci_v2_final.py
+python3 -m py_compile scripts/test_markdown_report.py
+python3 -m py_compile tests/api/test_scenario_analytics_schema_guard_integration.py
+python3 -m py_compile tests/api/test_scenario_analytics_unit.py
+python3 -m py_compile tests/api/test_scenario_analytics_unit_scenario_name.py
+python3 -m py_compile tests/contracts/test_sensitivity_edgecases.py
+python3 -m py_compile scripts/diagnose_capacity_factor.py
+
+echo "✓ All files have valid Python syntax"
+echo ""
+
+# 2. Run Black to ensure consistent formatting
+echo "=== BLACK FORMATTING ==="
+.venv311/bin/python -m black \
+  fix_parameter_range_config.py \
+  go_with_the_flow_ci_enhanced.py \
+  go_with_the_flow_ci_v2_final.py \
+  scripts/test_markdown_report.py \
+  tests/api/test_scenario_analytics_schema_guard_integration.py \
+  tests/api/test_scenario_analytics_unit.py \
+  tests/api/test_scenario_analytics_unit_scenario_name.py \
+  tests/contracts/test_sensitivity_edgecases.py \
+  scripts/diagnose_capacity_factor.py
+
+echo ""
+
+# 3. Run flake8 on ALL 9 files to verify all violations are gone
+echo "=== FLAKE8 CHECK (Should be EMPTY) ==="
+flake8 \
+  fix_parameter_range_config.py \
+  go_with_the_flow_ci_enhanced.py \
+  go_with_the_flow_ci_v2_final.py \
+  scripts/test_markdown_report.py \
+  tests/api/test_scenario_analytics_schema_guard_integration.py \
+  tests/api/test_scenario_analytics_unit.py \
+  tests/api/test_scenario_analytics_unit_scenario_name.py \
+  tests/contracts/test_sensitivity_edgecases.py \
+  scripts/diagnose_capacity_factor.py
+
+# If flake8 outputs nothing, all violations are fixed ✅
+echo ""
+echo "✓ Flake8 check complete (no output = all clean)"
+echo ""
+
+# 4. Review git diff to confirm changes are correct
+echo "=== GIT DIFF REVIEW ==="
+git diff --stat | head -20
+echo ""
+
+# 5. Run full test suite to ensure no regressions
+echo "=== FULL TEST SUITE ==="
+.venv311/bin/python -m pytest tests/ -v --tb=short 2>&1 | tail -20
+# Count passed tests
+PASSED=$(.venv311/bin/python -m pytest tests/ -v --tb=short 2>&1 | grep -c "PASSED")
+echo ""
+echo "Tests passed: $PASSED (expected: 160)"
+```
+
+---
+
+## If All Checks Pass ✅
+
+```bash
+cd ~/dutchbay-epc-model
+
+# Add all fixed files
+git add \
+  fix_parameter_range_config.py \
+  go_with_the_flow_ci_enhanced.py \
+  go_with_the_flow_ci_v2_final.py \
+  scripts/test_markdown_report.py \
+  tests/api/test_scenario_analytics_schema_guard_integration.py \
+  tests/api/test_scenario_analytics_unit.py \
+  tests/api/test_scenario_analytics_unit_scenario_name.py \
+  tests/contracts/test_sensitivity_edgecases.py \
+  scripts/diagnose_capacity_factor.py
+
+# Commit with message
+git commit -m "feat(v14): Add CI enhancements, lint fixes, and new test suites
+
+New/Modified:
+- fix_parameter_range_config.py: Parameter range validation
+- go_with_the_flow_ci_enhanced.py: Enhanced CI runner
+- go_with_the_flow_ci_v2_final.py: CI v2 final implementation
+- run_full_pipeline.py: Updated entry point
+- scripts/fix_experimental_lint.py: Experimental module lint fixer
+- scripts/diagnose_capacity_factor.py: Capacity factor diagnostics
+- scripts/test_llcr_plcr_real_debt.py: LLCR/PLCR debt tests
+- scripts/test_markdown_report.py: Markdown report generation tests
+- tests/api/test_scenario_analytics_schema_guard_integration.py
+- tests/api/test_scenario_analytics_unit.py
+- tests/api/test_scenario_analytics_unit_scenario_name.py
+- tests/api/test_v14_lender_suite.py
+- tests/contracts/test_sensitivity_edgecases.py
+
+All 160 tests pass ✅
+Flake8 violations fixed (56 violations → 0)
+Ready for Phase 1 sprint"
+
+# Verify commit
+git log --oneline -2
+```
+
+---
+
+## If Any Check Fails ❌
+
+**Report back:**
+1. Which check failed (syntax, Black, flake8, or tests)
+2. The exact error message
+3. The file it failed on
+
+Then we'll debug and fix!
+
+---
+
+## Next Steps (After Commit Success)
+
+Once this commit is done and pushed, we proceed to:
+
+1. ✅ Switch to main
+2. ✅ Run Phase 1 automated cleanup (Black, autoflake, isort, whitespace)
+3. ✅ Run GATE 1 (pytest + flake8 check)
+4. ✅ Continue to Phase 2 manual fixes if needed
+
+**You're almost there!** Run the verification script above and report the results.

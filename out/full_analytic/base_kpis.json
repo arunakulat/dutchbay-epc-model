@@ -1,0 +1,18 @@
+{
+  "total_cfads_usd": 376496012.79645514,
+  "final_cfads_usd": 10362918.428216645,
+  "mean_operational_cfads_usd": 18824800.63982276,
+  "min_dscr": 1.2999999999999998,
+  "dscr_min": 1.2999999999999998,
+  "dscr_max": 3.132196291002096,
+  "dscr_mean": 1.508634208535547,
+  "dscr_median": 1.3000000000000003,
+  "project_npv": 55321129.967708915,
+  "npv": 55321129.967708915,
+  "project_irr": 0.17875744702652696,
+  "irr": 0.17875744702652696,
+  "discount_rate_used": 0.1,
+  "wacc_is_real": 0.0,
+  "wacc_proxy": 0.1,
+  "equity_irr": 0.17875744702652696
+}

@@ -1,0 +1,112 @@
+# DUTCHBAY V13 - Financial Configuration Template
+# Use this to provide actual financial parameters to test_fx_corrected_parameterized.py
+
+# Save as: full_model_variables_updated.yaml (or project_config.yaml)
+# The test script will automatically load and use these values
+
+# ==================================================================================
+# FINANCIAL STRUCTURE
+# ==================================================================================
+
+financial_structure:
+  # REVENUE (fixed in LKR from PPA tariff)
+  annual_lkr_revenue: 1220000000        # Annual revenue in LKR
+                                         # Should NOT change with FX
+                                         # From fixed LKR tariff agreement
+
+  # DEBT SERVICE - LKR PORTION (fixed in LKR)
+  annual_lkr_debt: 1080000000           # Annual LKR debt service
+                                         # From local bank financing
+                                         # Fixed in LKR terms
+
+  # DEBT SERVICE - USD PORTION (fixed in USD)
+  annual_usd_debt: 2200000              # Annual USD debt service in USD
+                                         # From international lenders
+                                         # Fixed in USD terms
+
+  # DERIVED RATIOS (calculated from above)
+  usd_debt_ratio: 0.55                  # USD debt as % of total at origination
+                                         # Will be recalculated by module
+
+  # BASELINE FX RATE (optional - if not provided, uses latest from FX data)
+  # base_fx_rate: 305.0                  # Current FX rate LKR/USD
+                                         # Module will use latest from fx_data_*.yaml
+
+# ==================================================================================
+# PROJECT PARAMETERS (optional, for reference)
+# ==================================================================================
+
+project_info:
+  name: "DutchBay 150MW Wind Farm"
+  capacity_mw: 150
+  country: "Sri Lanka"
+  currency_revenue: "LKR"
+  currency_debt_lkr: "LKR"
+  currency_debt_usd: "USD"
+
+# ==================================================================================
+# DEBT PAYDOWN PARAMETERS (optional, for optimization)
+# ==================================================================================
+
+paydown_strategy:
+  # Phase targets (what % reduction of original USD debt)
+  phase_1_target_years: 5               # Years to reach Phase 1
+  phase_1_target_reduction: 0.50        # Reduce USD debt by 50%
+
+  phase_2_target_years: 10              # Years to reach Phase 2
+  phase_2_target_reduction: 0.75        # Reduce USD debt by 75%
+
+  final_payoff_years: 15                # Years to full payoff
+  final_payoff_reduction: 1.00          # 100% reduction (0% USD debt)
+
+  # Allocation from cash flow
+  cash_flow_allocation_to_usd_repayment: 0.40  # 40-50% of cash flow
+  minimum_dscr_covenant: 1.25           # Maintain this minimum
+
+# ==================================================================================
+# RISK PARAMETERS (optional, for Monte Carlo)
+# ==================================================================================
+
+risk_analysis:
+  monte_carlo_simulations: 1000         # Number of FX path simulations
+  projection_years: 15                  # Years to project
+  target_confidence_level: 0.95          # 95% confidence for VaR
+
+  # Stress test FX rates (can be custom or use auto-calculated from data)
+  stress_test_fx_rates:
+    - 220    # Strong LKR scenario
+    - 250    # Conservative scenario
+    - 305    # Current
+    - 350    # Weak LKR scenario
+    - 365    # 2022 crisis level
+    - 396    # Extreme scenario
+
+# ==================================================================================
+# NOTES
+# ==================================================================================
+
+notes:
+  - "All LKR amounts in annual basis"
+  - "All USD amounts in annual basis"
+  - "FX rates in LKR/USD"
+  - "DSCR = LKR Revenue / [LKR Debt + USD Debt × FX]"
+  - "Target minimum DSCR: 1.25x (above 1.0x minimum)"
+  - "Current structure (55% USD) shows 0.70x - below minimum"
+  - "Accelerated USD paydown required for viability"
+
+# ==================================================================================
+# HOW TO USE
+# ==================================================================================
+
+usage: |
+  1. Fill in the financial_structure section with actual values
+  2. Save as full_model_variables_updated.yaml in your project directory
+  3. Run: python3 test_fx_corrected_parameterized.py
+
+  The test script will:
+    • Load this configuration automatically
+    • Extract FX data from fx_data_*.yaml
+    • Run all analyses with actual parameters
+    • Generate parameterized results
+
+  No hardcoded assumptions - all data driven!

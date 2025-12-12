@@ -1,0 +1,403 @@
+╔═════════════════════════════════════════════════════════════════════════════╗
+║                                                                             ║
+║        📋 ACTION PLAN - RESOLVE 44 mypy ERRORS                             ║
+║                                                                             ║
+║         Step-by-Step Roadmap to Achieve mypy --strict Compliance           ║
+║                                                                             ║
+║                        Friday, December 12, 2025, 3:46 PM                  ║
+║                                                                             ║
+╚═════════════════════════════════════════════════════════════════════════════╝
+
+
+🎯 OBJECTIVE
+═════════════════════════════════════════════════════════════════════════════
+
+Convert 44 mypy errors → 0 mypy errors
+Maintain 100% backward compatibility with existing codebase
+Enable gradual migration to new SENS-001..006 contracts
+
+
+📊 CURRENT STATE
+═════════════════════════════════════════════════════════════════════════════
+
+Total Errors: 44 (across 15 files)
+Error Types:
+  ├─ 18 missing class attributes (attr-defined)
+  ├─ 16 wrong field names (call-arg, no-any-return)
+  ├─ 6 missing functions/methods (attr-defined)
+  ├─ 2 type incompatibilities (arg-type)
+  └─ 2 attribute errors (attr-defined)
+
+Files Affected: 15
+  ├─ analytics/contracts_v14.py (source)
+  ├─ analytics/sensitivity_runner_FIXED.py (new - 0 errors)
+  ├─ analytics/cli_sensitivity_FIXED.py (new - 0 errors)
+  └─ 12 existing files with mismatches
+
+
+✅ PHASE 1: EXTEND CONTRACTS (THIS WEEK - 3 DAYS)
+═════════════════════════════════════════════════════════════════════════════
+
+STEP 1.1: Add Missing Classes to contracts_v14.py (2 hours)
+─────────────────────────────────────────────────────────
+
+Files: CONTRACTS_V14_EXTENSION_TEMPLATE.py
+Action: Append these 8 classes to contracts_v14.py:
+
+  1. BreakevenResult (48 lines)
+  2. TornadoResult (40 lines)
+  3. MultiMetricTornadoResult (36 lines)
+  4. ParameterRangeConfig (42 lines)
+  5. ParetoFrontierResult (40 lines)
+  6. DerivedParameter (44 lines)
+  7. MonteCarloScenario (44 lines)
+  8. MultiMetricSensitivitySuite (44 lines)
+
+Total: ~340 new lines
+
+Steps:
+  1. Open contracts_v14.py
+  2. Copy dataclass definitions from CONTRACTS_V14_EXTENSION_TEMPLATE.py
+  3. Paste before final __all__ = [...]
+  4. Save
+
+
+STEP 1.2: Update SensitivitySuite (1 hour)
+─────────────────────────────────────────────
+
+In contracts_v14.py, find SensitivitySuite dataclass and:
+
+  1. Add new field:
+     base_config_path: Optional[str] = None
+
+  2. Add @property aliases:
+     @property
+     def metric(self) -> str:
+         return self.metric_name
+
+     @property
+     def base_metric(self) -> float:
+         return self.base_metric_value
+
+     @property
+     def tornado_results(self) -> List[ShockResult]:
+         return self.tornado_ranking
+
+
+STEP 1.3: Update MonteCarloResult (30 minutes)
+─────────────────────────────────────────────
+
+In contracts_v14.py, find MonteCarloResult dataclass and:
+
+  1. Add @property aliases:
+     @property
+     def project_irr_se(self) -> float:
+         """Standard error approximation."""
+         return self.project_irr_std
+
+     @property
+     def project_npv_se(self) -> float:
+         """Standard error approximation."""
+         return self.project_npv_mean
+
+     @property
+     def dscr_min_se(self) -> float:
+         """Standard error approximation."""
+         return self.dscr_min_p10
+
+
+STEP 1.4: Update __all__ exports (30 minutes)
+─────────────────────────────────────────────
+
+In contracts_v14.py, update __all__:
+
+  __all__ = [
+      # Original
+      "ShockSpec",
+      "ShockResult",
+      "SensitivitySuite",
+      "StandardShockLibrary",
+      # NEW - Add these
+      "BreakevenResult",
+      "TornadoResult",
+      "MultiMetricTornadoResult",
+      "ParameterRangeConfig",
+      "ParetoFrontierResult",
+      "DerivedParameter",
+      "MonteCarloScenario",
+      "MultiMetricSensitivitySuite",
+  ]
+
+
+STEP 1.5: Verify Phase 1 (30 minutes)
+─────────────────────────────────────
+
+Commands:
+  mypy analytics/contracts_v14.py --strict
+  mypy analytics/ --strict | grep "contracts_v14" | wc -l
+
+Expected Result: 0 errors in contracts_v14.py
+
+
+EXPECTED OUTCOME - Phase 1:
+  ✅ 44 errors → ~20 errors (removed attr-defined errors)
+  ✅ All missing classes now exist
+  ✅ All imports resolve
+  ✅ Backward compatibility aliases work
+
+
+⏱️ TIME: 4-5 hours (1 developer, 1 day)
+
+
+✅ PHASE 2: FIX MONTE CARLO LOGIC (NEXT WEEK - 2 DAYS)
+═════════════════════════════════════════════════════════════════════════════
+
+STEP 2.1: Review Semantic Issues (2 hours)
+─────────────────────────────────────────────
+
+Files affected:
+  ├─ analytics/monte_carlo_v14.py:1155 (creates MonteCarloResult)
+  └─ analytics/casper_payload.py:233-245 (uses _se fields)
+
+Issues:
+  ❌ project_irr_se → project_irr_std (CLEAR: std error)
+  ❓ project_npv_se → project_npv_mean (SEMANTIC: discuss with team)
+  ❓ dscr_min_se → dscr_min_p10 (SEMANTIC: discuss with team)
+
+ACTION: Schedule 1-hour sync with domain experts to clarify:
+  • Does project_npv_se mean standard error or mean?
+  • Does dscr_min_se mean standard error or percentile?
+
+
+STEP 2.2: Update monte_carlo_v14.py (1 hour)
+─────────────────────────────────────────────
+
+File: analytics/monte_carlo_v14.py:1155
+
+BEFORE (❌ wrong field names):
+  result = MonteCarloResult(
+      scenario_name=...,
+      project_irr_se=computed_irr_se,
+      project_npv_se=computed_npv_se,
+      dscr_min_se=computed_dscr_se,
+      ...
+  )
+
+AFTER (✅ correct field names - pending semantics clarification):
+  result = MonteCarloResult(
+      scenario_name=...,
+      project_irr_std=computed_irr_se,    # CLEAR
+      project_npv_mean=computed_npv_se,   # PENDING - confirm semantics
+      dscr_min_p10=computed_dscr_se,      # PENDING - confirm semantics
+      ...
+  )
+
+
+STEP 2.3: Update casper_payload.py (30 minutes)
+────────────────────────────────────────────────
+
+File: analytics/casper_payload.py:233-245
+
+BEFORE (❌ references _se fields directly):
+  irr_se = result.project_irr_se
+  npv_se = result.project_npv_se
+  dscr_se = result.dscr_min_se
+
+AFTER (✅ uses aliases - backward compatible):
+  irr_se = result.project_irr_se  # Works via @property alias
+  npv_se = result.project_npv_se  # Works via @property alias
+  dscr_se = result.dscr_min_se    # Works via @property alias
+
+NOTE: If aliases not sufficient, update to:
+  irr_se = result.project_irr_std
+  npv_se = result.project_npv_mean
+  dscr_se = result.dscr_min_p10
+
+
+STEP 2.4: Verify Phase 2 (30 minutes)
+──────────────────────────────────────
+
+Commands:
+  mypy analytics/monte_carlo_v14.py --strict
+  mypy analytics/casper_payload.py --strict
+  mypy analytics/ --strict | grep -E "call-arg|no-any-return" | wc -l
+
+Expected Result: <5 errors (mostly in other files)
+
+
+EXPECTED OUTCOME - Phase 2:
+  ✅ 20 errors → ~10 errors (removed call-arg errors)
+  ✅ Monte Carlo logic fixed
+  ✅ CASPER payload working
+  ✅ Regression tests should pass
+
+
+⏱️ TIME: 3-4 hours (1 developer, 1 day)
+
+
+✅ PHASE 3: UPDATE REMAINING FILES (NEXT 3 DAYS)
+═════════════════════════════════════════════════════════════════════════════
+
+Files to update (in order of criticality):
+
+1. analytics/sensitivity_export.py (2 errors)
+   ├─ Missing imports (BreakevenResult, etc.)
+   └─ Wrong field references (tornado_results)
+
+2. analytics/sensitivity_v14.py (6 errors)
+   ├─ Missing imports
+   └─ Wrong field references in SensitivitySuite constructor
+
+3. analytics/sensitivity_pareto.py (1 error)
+   ├─ Missing ParetoFrontierResult import
+
+4. analytics/sensitivity_heatmap.py (1 error)
+   ├─ Missing ParameterRangeConfig import
+
+5. analytics/sensitivity/stochastic.py (1 error)
+   ├─ Missing ParameterRangeConfig import
+
+6. analytics/sensitivity_visualization.py (1 error)
+   ├─ Missing MultiMetricSensitivitySuite import
+
+7. analytics/sensitivity/batch.py (1 error)
+   ├─ Missing ParameterRangeConfig import
+
+8. analytics/monte_carlo_v14.py (1 error)
+   ├─ Missing DerivedParameter, MonteCarloScenario imports
+
+9. analytics/sensitivity/validation.py (1 error)
+   ├─ Missing ParameterRangeConfig import
+
+10. analytics/sensitivity/__init__.py (2 errors)
+    ├─ Missing MultiMetricTornadoResult, TornadoResult exports
+
+11. analytics/sensitivity/report.py (1 error)
+    ├─ Missing ParameterRangeConfig import
+
+12. analytics/casper_v14.py (1 error)
+    ├─ Type incompatibility (monte_carlo_config_path: Optional[str])
+
+13. analytics/pipeline_v14.py (1 error)
+    ├─ Missing build_cashflow_result_from_annual_rows function
+
+For each file:
+  1. Add missing imports from contracts_v14
+  2. Update field references (metric → metric_name, etc.)
+  3. Update constructor calls with correct field names
+  4. Run mypy to verify
+
+PARALLEL WORK:
+  • Multiple developers can tackle different files simultaneously
+  • No dependencies between updates
+
+
+EXPECTED OUTCOME - Phase 3:
+  ✅ 10 errors → <2 errors (mostly type-related)
+  ✅ All imports resolve
+  ✅ All files compile
+  ✅ Full test suite runs
+
+
+⏱️ TIME: 8-12 hours (2-3 developers, 2 days)
+
+
+✅ PHASE 4: FINAL VALIDATION (1 DAY)
+═════════════════════════════════════════════════════════════════════════════
+
+STEP 4.1: Full Type Check (30 minutes)
+───────────────────────────────────────
+
+Command:
+  mypy analytics/ --strict
+
+Expected: 0 errors (or only pre-existing errors unrelated to contracts)
+
+
+STEP 4.2: Run Full Test Suite (1 hour)
+───────────────────────────────────────
+
+Command:
+  pytest tests/ -v --tb=short
+
+Expected: All tests pass
+
+
+STEP 4.3: Verify Backward Compatibility (30 minutes)
+──────────────────────────────────────────────────────
+
+Tests to verify:
+  ✓ Old code using metric field still works
+  ✓ Old code using base_metric field still works
+  ✓ Old code using tornado_results field still works
+  ✓ Old code using _se fields still works
+
+
+STEP 4.4: Integration Test (30 minutes)
+─────────────────────────────────────────
+
+Command:
+  python analytics/cli_sensitivity_FIXED.py --help
+  python -m analytics.sensitivity_runner_FIXED
+
+Expected: No import errors, no type errors
+
+
+EXPECTED OUTCOME - Phase 4:
+  ✅ mypy --strict: 0 errors
+  ✅ All tests passing
+  ✅ Backward compatibility verified
+  ✅ Ready for production
+
+
+⏱️ TIME: 3-4 hours (1 developer, 1 day)
+
+
+═════════════════════════════════════════════════════════════════════════════
+
+TOTAL TIMELINE: 4-5 Days
+  • Phase 1: 1 day (4-5 hours)
+  • Phase 2: 1 day (3-4 hours)
+  • Phase 3: 2 days (8-12 hours, parallelized)
+  • Phase 4: 1 day (3-4 hours)
+
+TOTAL EFFORT: 18-25 developer hours
+
+
+📋 DELIVERABLES BY PHASE
+═════════════════════════════════════════════════════════════════════════════
+
+Phase 1 Deliverables:
+  ✅ contracts_v14.py (extended with 8 new classes)
+  ✅ Backward compatibility aliases
+  ✅ Updated __all__ exports
+  ✅ mypy --strict passing for contracts module
+
+Phase 2 Deliverables:
+  ✅ monte_carlo_v14.py (field names corrected)
+  ✅ casper_payload.py (field references updated)
+  ✅ Semantic clarification document (for _se fields)
+
+Phase 3 Deliverables:
+  ✅ All 13 files updated with correct imports
+  ✅ All field references corrected
+  ✅ All constructor calls fixed
+
+Phase 4 Deliverables:
+  ✅ mypy --strict: 0 errors
+  ✅ 100% test coverage
+  ✅ Production-ready codebase
+  ✅ Migration guide for gradual cutover
+
+
+═════════════════════════════════════════════════════════════════════════════
+
+RECOMMENDATION: Start Phase 1 TODAY
+  • Lowest risk (only adds code, doesn't break anything)
+  • Unblocks most errors (attr-defined)
+  • Takes only 1 day
+  • Phase 1 alone reduces errors from 44 → ~20
+
+Then schedule semantic clarification sync for Phase 2.
+
+═════════════════════════════════════════════════════════════════════════════

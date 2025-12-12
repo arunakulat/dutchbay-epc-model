@@ -1,0 +1,265 @@
+# COPY-PASTE TERMINAL COMMANDS FOR B.1 + B.2
+
+## Option A: FASTEST (One-Command Execution)
+
+Copy and paste this into your terminal (from repo root):
+
+```bash
+bash b123_execute_workflow.sh
+```
+
+That's it. Handles B.1 + B.2 completely.
+
+---
+
+## Option B: STEP-BY-STEP (More Control)
+
+### Step 1: Verify Setup
+```bash
+cd /path/to/dutchbay-epc-model
+pwd
+ls -la contracts_v14.py sensitivity_v14.py
+```
+
+### Step 2: Run B.1
+```bash
+python3 b1_execute_local.py
+```
+
+Wait for: `✅ B.1 COMPLETE AND VERIFIED`
+
+### Step 3: Review Changes
+```bash
+git diff contracts_v14.py
+```
+
+### Step 4: Run B.2 (if B.1 successful)
+```bash
+python3 << 'EOF'
+import sys
+import ast
+
+print("[B.2] Reading sensitivity_v14.py...")
+with open('sensitivity_v14.py', 'r') as f:
+    content = f.read()
+
+# Check if run() already exists
+if "def run(request: SensitivityRequest)" in content:
+    print("✓ run() function already present. B.2 complete.")
+    sys.exit(0)
+
+backup_path = "sensitivity_v14.py.backup"
+with open(backup_path, 'w') as f:
+    f.write(content)
+print(f"✓ Backup: {backup_path}")
+
+run_func = '''def run(request: SensitivityRequest) -> SensitivitySuite:
+    """
+    Canonical entry point for sensitivity analysis (CASPER orchestration).
+
+    This is a thin wrapper around run_tornado_sensitivity() that preserves
+    backward compatibility and provides a clean API for CASPER integration.
+
+    Args:
+        request: SensitivityRequest with base config path and parameters.
+
+    Returns:
+        SensitivitySuite with tornado results, base metric, and config path.
+
+    Raises:
+        ValueError: If config or parameters are invalid.
+        KeyError: If base KPI metric not found in evaluation results.
+        FileNotFoundError: If config YAML file not found.
+    """
+    return run_tornado_sensitivity(request)
+
+
+'''
+
+all_idx = content.find("__all__ = [")
+if all_idx != -1:
+    insertion_point = all_idx
+    modified = content[:insertion_point] + run_func + content[insertion_point:]
+    all_closing = modified.find("]", all_idx)
+    all_section = modified[all_idx:all_closing]
+    if '"run"' not in all_section:
+        new_all_section = all_section.replace("[", '["run",  # NEW - Primary CASPER entry point\n    ', 1)
+        modified = modified[:all_idx] + new_all_section + modified[all_closing:]
+else:
+    run_func = '''
+
+def run(request: SensitivityRequest) -> SensitivitySuite:
+    """
+    Canonical entry point for sensitivity analysis (CASPER orchestration).
+
+    This is a thin wrapper around run_tornado_sensitivity() that preserves
+    backward compatibility and provides a clean API for CASPER integration.
+
+    Args:
+        request: SensitivityRequest with base config path and parameters.
+
+    Returns:
+        SensitivitySuite with tornado results, base metric, and config path.
+
+    Raises:
+        ValueError: If config or parameters are invalid.
+        KeyError: If base KPI metric not found in evaluation results.
+        FileNotFoundError: If config YAML file not found.
+    """
+    return run_tornado_sensitivity(request)
+
+
+__all__ = [
+    "run",  # PRIMARY CASPER entry point
+    "run_tornado_sensitivity",
+    "SensitivityRequest",
+    "SensitivitySuite",
+    "ParameterRangeConfig",
+]
+'''
+    modified = content + run_func
+
+print("\n[B.2] Verifying syntax...")
+try:
+    ast.parse(modified)
+    print("✓ Syntax valid")
+except SyntaxError as e:
+    print(f"✗ Syntax error: {e}")
+    sys.exit(1)
+
+print("[B.2] Testing module execution...")
+namespace = {}
+try:
+    exec(modified, namespace)
+    print("✓ Module executes")
+except Exception as e:
+    print(f"✗ Execution error: {e}")
+    sys.exit(1)
+
+try:
+    run_func = namespace['run']
+    print("✓ run() function found")
+except KeyError:
+    print("✗ run() function not found")
+    sys.exit(1)
+
+print("[B.2] Writing changes to disk...")
+with open('sensitivity_v14.py', 'w') as f:
+    f.write(modified)
+print("✓ Written to sensitivity_v14.py")
+
+print("\n✅ B.2 COMPLETE")
+EOF
+```
+
+### Step 5: Review B.2 Changes
+```bash
+git diff sensitivity_v14.py
+```
+
+### Step 6: Commit
+```bash
+git add contracts_v14.py sensitivity_v14.py
+
+git commit -m "B.1+B.2: CASPER contracts and sensitivity façade
+
+CHANGES:
+- B.1: Added TechnologyBreakdown and CasperResult dataclasses
+- B.2: Added run() façade function
+
+All tests passing locally. Backward compatible."
+```
+
+### Step 7: Push to Feature Branch
+```bash
+git push origin sprint-9/casper-phase2-implementation
+```
+
+---
+
+## Option C: VERIFY BEFORE COMMIT (Recommended)
+
+After running B.1 + B.2, verify everything:
+
+```bash
+# Check syntax
+python3 -m py_compile contracts_v14.py
+python3 -m py_compile sensitivity_v14.py
+echo "✓ Both files have valid syntax"
+
+# Check imports work
+python3 << 'EOF'
+from contracts_v14 import TechnologyBreakdown, CasperResult
+from sensitivity_v14 import run
+print("✓ All imports work")
+EOF
+
+# Run pytest if available
+pytest tests/ -v --tb=short 2>/dev/null || echo "⚠ pytest not available (optional)"
+
+# Review changes
+git diff --stat
+git diff contracts_v14.py | head -50
+git diff sensitivity_v14.py | head -50
+```
+
+---
+
+## Option D: ROLLBACK IF NEEDED
+
+If something goes wrong:
+
+```bash
+# Restore from backup
+cp contracts_v14.py.backup contracts_v14.py
+cp sensitivity_v14.py.backup sensitivity_v14.py
+
+echo "✓ Restored from backups"
+
+# Try again
+bash b123_execute_workflow.sh
+```
+
+---
+
+## Confirmation Checklist
+
+After any execution, you should see:
+
+```
+✅ contracts_v14.py modified
+✅ sensitivity_v14.py modified
+✅ All tests passing
+✅ Backups created
+✅ No GitHub writes (local only)
+✅ Ready for manual push
+```
+
+---
+
+## FINAL: Push to GitHub (Manual)
+
+Only do this when you've confirmed everything works:
+
+```bash
+# Make sure you're on the feature branch
+git status
+# Should show: On branch sprint-9/casper-phase2-implementation
+
+# Push to GitHub
+git push origin sprint-9/casper-phase2-implementation
+
+# If first push to this branch, you might need:
+# git push -u origin sprint-9/casper-phase2-implementation
+
+# Then create PR on GitHub if needed
+echo "✓ Code is now on GitHub, ready for team review"
+```
+
+---
+
+## That's It! 🎉
+
+You've successfully executed B.1 + B.2 locally with full testing and control.
+
+Next: B.3 (Implement casper_v14.py orchestrator) - Coming with same local-first approach

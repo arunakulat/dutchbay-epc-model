@@ -1,0 +1,18 @@
+Phase,Task_ID,Task,File,Priority,Estimated_Hours,Dependencies,Status,Owner,Notes
+Phase 1: FX Foundation,FX-001,Create finance/fx_v14.py with build_fx_curve(),finance/fx_v14.py,P0,4,None,Pending,TBD,Support scalar and structured modes
+Phase 1: FX Foundation,FX-002,Add _validate_fx_block() to schema_guard,validation/schema_guard.py,P0,3,None,Pending,TBD,"CESSPIT compliance, validate scalar and structured"
+Phase 1: FX Foundation,FX-003,Create tests/finance/test_fx_v14.py,tests/finance/test_fx_v14.py,P0,4,"FX-001, FX-002",Pending,TBD,"15+ tests, 100% coverage target"
+Phase 1: FX Foundation,FX-004,Create integration tests for FX,tests/integration/test_fx_integration.py,P1,2,"FX-001, FX-002, FX-003",Pending,TBD,Test FX flows through full pipeline
+Phase 1: FX Foundation,FX-005,Run regression tests on all scenarios,N/A,P0,2,"FX-001, FX-002, FX-003",Pending,QA,Ensure no breaking changes
+Phase 2: Sensitivity Rebuild,SENS-001,Add ShockSpec and ShockResult to contracts_v14,analytics/contracts_v14.py,P0,2,None,Pending,TBD,CCCDIR-compliant contracts
+Phase 2: Sensitivity Rebuild,SENS-002,Refactor sensitivity_v14.py (remove finance imports),analytics/sensitivity_v14.py,P0,8,SENS-001,Pending,TBD,"GWTF compliance, use evaluate_with_overrides() only"
+Phase 2: Sensitivity Rebuild,SENS-003,Implement _build_standard_shocks(),analytics/sensitivity_v14.py,P1,4,SENS-001,Pending,TBD,"Standard shock library (CAPEX, OPEX, CF, FX, etc.)"
+Phase 2: Sensitivity Rebuild,SENS-004,Create import lint test,tests/lint/test_sensitivity_imports.py,P0,2,SENS-002,Pending,TBD,Enforce GWTF gateway pattern
+Phase 2: Sensitivity Rebuild,SENS-005,Update/extend test_sensitivity_v14.py,tests/analytics_layer/test_sensitivity_v14.py,P0,6,"SENS-002, SENS-003",Pending,TBD,"20+ tests, 80%+ coverage"
+Phase 2: Sensitivity Rebuild,SENS-006,Validate tornado outputs match previous format,N/A,P0,3,"SENS-002, SENS-005",Pending,QA,Backward compatibility check
+Phase 3: Capital Risk Layer,CRL-001,Add CapitalRiskBundle to contracts_v14,analytics/contracts_v14.py,P1,2,SENS-001,Pending,TBD,Unified risk bundle contract
+Phase 3: Capital Risk Layer,CRL-002,Create analytics/capital_risk_layer_v14.py,analytics/capital_risk_layer_v14.py,P1,8,"CRL-001, SENS-002",Pending,TBD,Implement build_capital_risk_bundle()
+Phase 3: Capital Risk Layer,CRL-003,"Implement export functions (Excel, JSON, CSV)",analytics/capital_risk_layer_v14.py,P1,6,CRL-002,Pending,TBD,export_capital_risk_bundle() with format options
+Phase 3: Capital Risk Layer,CRL-004,Create test_capital_risk_layer.py,tests/analytics_layer/test_capital_risk_layer.py,P1,5,"CRL-002, CRL-003",Pending,TBD,"10+ tests, 80%+ coverage"
+Phase 3: Capital Risk Layer,CRL-005,Integrate with Swimlane 1 (WACC/Equity/Optimization),analytics/capital_risk_layer_v14.py,P2,4,"CRL-002, Swimlane1-Complete",Blocked,TBD,"Optional, depends on Swimlane 1 completion"
+Phase 3: Capital Risk Layer,CRL-006,Create DFI export template,N/A,P2,3,CRL-003,Pending,TBD,Lender-ready export format

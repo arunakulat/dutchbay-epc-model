@@ -1,0 +1,6 @@
+task_id,task_name,status,hours,priority,current_gwtf,dependencies,acceptance_count
+SENS-001,Add ShockSpec and ShockResult to analytics/contracts_v14.py,pending,2,P0,OK,none,4
+SENS-002,"Refactor analytics/sensitivity_v14.py (remove finance imports, use gateway only)",pending,8,P0,OK,SENS-001,5
+SENS-004,Create tests/lint/test_sensitivity_imports.py,pending,2,P0,OK,SENS-002,3
+SENS-005,Extend tests/analytics_layer/test_sensitivity_v14.py,pending,6,P0,OK,"SENS-001, SENS-002",4
+SENS-006,Validate tornado outputs match previous format/magnitudes (QA),pending,3,P0,OK,"SENS-001, SENS-002, SENS-005",4

@@ -1,0 +1,80 @@
+Category,Rule,Detail,Sprint,Status
+Architecture,YAML/config-driven first,All scenarios parameters and pipelines are driven by YAML configs with environment overlays; no hardcoded values.,Original,Active
+Architecture,Defensive programming,Validate configs and parameter ranges before compute; fail fast with clear errors.,Original,Active
+Architecture,Batch/CLI friendly,No hardcoded paths or state; all inputs/outputs via args or env vars to support headless/batch use.,Original,Active
+Architecture,Stateless APIs,"Analytics must be stateless and reproducible; same inputs yield same outputs, suitable for REST and scripts.",Original,Active
+Quality,Test-first design,Every analytic has contract tests and edge/fuzz coverage; tests live in tests/ with clear contracts.,Original,Active
+Quality,Type hints + mypy clean,"Full type annotations with mypy-clean code; no unchecked Any without justification. Use Python 3.11+ syntax.",Original,Active
+Quality,Lint/format clean,"flake8, black, isort must all pass; code style is automated and enforced.",Original,Active
+Design,Mutation-averse,Prefer immutable data structures and pure functions; minimize shared mutable state.,Original,Active
+Design,Frozen dataclasses,Use frozen=True for immutable configuration objects; no shared mutable state by default.,Sprint Day 5,New
+I/O,Explicit exports,All reports/exports go to explicit target folders with unique names; no silent overwrites.,Original,Active
+I/O,No magic paths,Never rely on implicit current working directory or hardcoded user-specific paths.,Original,Active
+Refactoring,LibCST for code transforms,Use LibCST for all non-trivial code rewrites to preserve formatting comments and semantics.,Original,Active
+Refactoring,No ast/astunparse,Avoid AST + astunparse for refactors due to formatting and comment loss; use LibCST/Bowler/Rope instead.,Original,Active
+Refactoring,Bowler for bulk refactors,Use Bowler (Meta/Facebook) for large-scale declarative refactoring with AST safety.,Sprint Day 5,New
+Refactoring,Rope optional,Rope for project-aware refactoring and IDE integration when needed; optional.,Sprint Day 5,New
+Dependencies,Stdlib detection via hardcoded list,Maintain a complete versioned stdlib module list (3.10-3.14); do not rely solely on pkgutil.iter_modules().,Original,Active
+Dependencies,Exclude internal modules from requirements,Never write internal packages (analytics finance api config scenarios legacy etc.) into requirements.txt/pyproject.,Original,Active
+Dependencies,Permanent blacklist,Permanently blacklist: pyarrow legacy redis bare yaml. Use pyyaml and vetted versions instead.,Sprint Day 5,Enhanced
+Dependencies,No git+ URLs,Do not use git+https URLs in requirements or pyproject dependencies to avoid resolver and deployment issues.,Original,Active
+Layout,Src/ layout preferred,Use a src/ package layout for new libraries; keep code under src/package_name with tests scripts docs at top level.,Original,Active
+Layout,Auto-generate __init__.py,Ensure every package has an __init__.py ideally generated to re-export public APIs using LibCST-based symbol extraction.,Original,Active
+Layout,Module version suffix,Use v14 suffix for DutchBay modules: cashflow_v14.py debt_v14.py tax_v14.py (not v15 not no suffix).,Sprint Day 5,New
+Imports,Absolute imports only,No relative imports. Use: from analytics.fx.processor import FXProcessor (not from ..fx.processor),Sprint Day 5,New
+Imports,LibCST-based import rewriting,Rewrite imports with LibCST transformer that preserves formatting and only alters targeted import nodes.,Original,Active
+Imports,Import organization,Use isort: stdlib - third-party - local. All imports alphabetized within groups.,Sprint Day 5,New
+Git,Comprehensive .gitignore,Maintain modern Python .gitignore: venvs caches build artifacts IDE files logs project-specific noise.,Original,Active
+Git,Checkpoint commits,Before and after major refactors create git checkpoints for easy rollback.,Original,Active
+Git,Heredoc for multi-line commits,Use heredoc for multi-line commit messages: git commit -F- <<'EOF' ... EOF (avoids quote/emoji issues).,Sprint Day 5,New
+Git,NO EMOJIS in commits,Never include emojis in git commit messages or shell commands. Use plain ASCII only. Emojis cause dquote>/parse errors.,Sprint Day 5,New
+Git,EOF markers on scripts,All Python scripts must end with: # EOF (Go with the Flow standard).,Sprint Day 5,New
+CLI,typer library RECOMMENDED,Use typer for CLI scripts (type-hint native). Use @app.callback(invoke_without_command=True) for default command pattern.,Sprint Day 5,New
+CLI,Banned: argparse,NEVER use argparse. Too verbose too much boilerplate. Use typer or simple sys.argv instead.,Sprint Day 5,New
+CLI,sys.argv for simple cases,For scripts with <5 flags simple sys.argv parsing acceptable: fast = '--fast' in sys.argv[1:],Sprint Day 5,New
+CLI,click acceptable,click is acceptable (typer is built on it) but typer preferred for new code.,Sprint Day 5,New
+Formatting,black mandatory,Run black on all Python code: black analytics/ finance/ scripts/,Sprint Day 5,New
+Formatting,isort mandatory,Run isort on all Python code: isort analytics/ finance/ scripts/,Sprint Day 5,New
+Formatting,mypy strict mode,Type check with mypy in strict mode; all function signatures fully typed.,Sprint Day 5,New
+Formatting,pytest runner,Use pytest for all tests. Fail fast on first error.,Sprint Day 5,New
+CI/CD,Go-with-the-Flow CI script,Location: scripts/go_with_the_flow_ci.py. Orchestrates: black → isort → compileall → pytest → mypy (in order fail-fast).,Sprint Day 5,New
+CI/CD,Fast mode option,python scripts/go_with_the_flow_ci.py --fast (targeted smoke tests),Sprint Day 5,New
+CI/CD,Skip flags available,--no-black --no-isort --no-pytest --no-mypy for selective skipping.,Sprint Day 5,New
+CI/CD,File-scoped mode,python scripts/go_with_the_flow_ci.py --files 'path1,path2' to restrict CI to specific files.,Sprint Day 5,New
+CI/CD,Subcommands,info (show config) fire-warning (show emergency tools) main (default pipeline).,Sprint Day 5,New
+Emergency Tools,Bowler standing by,Bowler + LibCST ready for large-scale refactoring battles. Deploy when migrations needed.,Sprint Day 5,New
+Emergency Tools,Fire migration scripts,python scripts/fire_migration.py <migration_name> for bulk refactoring ops.,Sprint Day 5,New
+Validation,Import/compile validation,After refactors py_compile or compileall should succeed for all modules; run tests and mypy as part of validation.,Original,Active
+Validation,Contract-first design,Define API contract (inputs/outputs/types) before implementation; tests encode the contract.,Sprint Day 5,New
+Workflow,Refactor sequence,Always: checkpoint → clean deps → move modules → generate __init__ → rewrite imports → install -e → validate → checkpoint → push.,Original,Active
+Workflow,Pre-commit checklist,Type hints present no relative imports docstrings complete EOF marker no TODOs black+isort applied tests pass mypy clean no emojis.,Sprint Day 5,New
+Workflow,Daily workflow,1. Make changes 2. python scripts/go_with_the_flow_ci.py --fast 3. git add + commit 4. git push,Sprint Day 5,New
+Rollback,Git-based rollback,On failure prefer git reset --hard HEAD~1 or stash-based rollback rather than manual file surgery.,Original,Active
+DutchBay,analytics/ + finance/ are v14 truth,These two folders contain authoritative v14 implementation; everything else defers to them.,Original,Active
+DutchBay,Quarantine dutchbay_v14chat/,dutchbay_v14chat/ is legacy; no new code should depend on it. Move to legacy/ as soon as imports cleaned.,Original,Active
+DutchBay,No dutchbay_v14* imports,All imports must target analytics.* and finance.* directly. Remove any from dutchbay_v14* or dutchbay_v14chat.*,Original,Active
+DutchBay,Test conftest enforcement,tests/conftest.py ensures repo root's analytics package is used not nested tests/analytics or legacy.,Original,Active
+DutchBay,Backups before cleanup,Before moving/deleting many files (e.g. v14 cleanup) take timestamped backup or git checkpoint.,Original,Active
+Mindset,Config-driven not code-driven,No sneaky hardcoded knobs in analytics or finance; everything goes through YAML configs with explicit validation.,Original,Active
+Mindset,Stateless = safe for any interface,Same config in → same KPIs out. Must work identically in REST CLI batch without hidden state.,Original,Active
+Mindset,Explicit paths only,Anything touching files takes explicit path args; never assumes CWD or user-specific paths. No magic.,Original,Active
+Mindset,Build Once Build Right,Production-grade code from day one. No placeholders no TODOs no 'fix later'. Copy-paste ready.,Sprint Day 5,New
+Mindset,Type hints non-negotiable,Full type annotations + mypy-clean is the bar not 'nice-to-have'. Every function signature typed.,Sprint Day 5,Enhanced
+Documentation,Module docstrings complete,Include features/capabilities examples and purpose. No placeholder docstrings.,Sprint Day 5,New
+Documentation,Function docstrings with examples,Args Returns Raises and Example sections required. Example should be copy-pasteable.,Sprint Day 5,New
+Documentation,EOF markers on scripts,All scripts end with: # EOF (enforced standard).,Sprint Day 5,New
+Sprint Day 5,FX Subpackage created,analytics/fx/ module with processor correlation risk returns fx_contracts fx_loader (independent or core-integrated).,Sprint Day 5,New
+Sprint Day 5,Tax Calculator extracted,finance/tax_v14.py created as canonical location with validate_parameters() and BOI tax holiday support.,Sprint Day 5,New
+Sprint Day 5,Legacy Quarantine,dutchbay_v14chat → legacy/v14chat/; clear deprecation policy; zero legacy imports in production.,Sprint Day 5,New
+Sprint Day 5,Test Import Migration,13 test files updated; 18 forbidden imports removed; 100% mapping verification completed.,Sprint Day 5,New
+Sprint Day 5,Repo Hygiene Complete,Enhanced .gitignore CI Structure Check housekeeping script EOF guard implementation all deployed.,Sprint Day 5,New
+Sprint Day 5,Pre-existing fixes,test_config_schema_guard + test_debt_construction now passing; all pre-existing failures resolved.,Sprint Day 5,New
+Monte Carlo,Distribution validation contracts,All Monte Carlo distributions must be defined via analytics.contracts_v14.Distribution with __post_init__ enforcing std>0 for normal/lognormal, min<=mode<=max for triangular, and min<max for uniform; tests in tests/analytics_layer/test_monte_carlo_v14.py must stay green on any change.,Sprint Day 5,Active
+Monte Carlo,Coordinator-only design,analytics.monte_carlo_v14 is a coordinator-only surface that calls evaluate_with_overrides and analytics.parameter_solvers.get_solver; it must never import finance.irr, finance.wacc_v14 or other low-level finance math directly.,Sprint Day 5,Active
+Monte Carlo,LHS as canonical sampler,Latin Hypercube sampling via SALib.sample.latin is the canonical engine for Monte Carlo; alternative engines must be wired as explicit strategies with tests, not ad-hoc np.random loops in calling code.,Sprint Day 5,Active
+Monte Carlo,Derived parameter solver discipline,DerivedParameter flows must pass target_irr/target_dscr explicitly into analytics.parameter_solvers; iterations where the solver fails must be counted as failed (and excluded from stats), never silently patched.,Sprint Day 5,Active
+Monte Carlo,MonteCarloResult as single surface,Monte Carlo callers and dashboards should consume MonteCarloResult (iterations, IRR/NPV/DSCR stats, raw_results) as the single structured output; no external code should rely on internal list shapes without going through the dataclass.,Sprint Day 5,Active
+Monte Carlo,Unsupported distribution guard,analytics.monte_carlo_v14._transform_to_distribution must raise ValueError on unknown dist_type instead of falling back to any default; new distribution types must be added explicitly and covered by tests.,Sprint Day 5,Active
+Sensitivity,Sensitivity entrypoints,analytics.sensitivity_v14.run_tornado_sensitivity and run_multi_metric_tornado are the only public v14 sensitivity entrypoints; new code must call these instead of rolling custom tornado loops.,Sprint Day 5,Active
+Sensitivity,ParameterRangeConfig canonical,All new sensitivity/tornado drivers must use ParameterRangeConfig from analytics.contracts_v14 for low/high/steps; no bespoke dict shapes for sensitivity ranges.,Sprint Day 5,Active
+Sensitivity,Tail-risk overlay contract,Tail-risk and P10/P90 style overlays (analytics.sensitivity_tail_risk) must consume MonteCarloResult objects and must not implement their own Monte Carlo engines.,Sprint Day 5,Active

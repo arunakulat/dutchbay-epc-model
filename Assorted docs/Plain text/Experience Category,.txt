@@ -1,0 +1,6 @@
+Experience Category	Requirement	Documentation
+General Construction Experience	7 years continuous construction activity	"Contract agreements, completion certificates"
+Specific Similar Projects	3 projects each valued LKR 250M+ in last 5 years	"Contract agreements, completion certificates, client references"
+Multi-Site Experience	2 projects involving minimum 10 different locations within tight timelines (12 months or less)	"Project descriptions, client references"
+Government Sector	3 government contracts in last 5 years	"Contract agreements, client references"
+Emergency Facilities	1 disaster management/emergency facility project	"Project descriptions, technical specifications, client references"

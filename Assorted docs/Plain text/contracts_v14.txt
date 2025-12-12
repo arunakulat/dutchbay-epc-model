@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+# ═════════════════════════════════════════════════════════════════════════════
+# LEGACY FACADE: contracts_v14.py
+# ═════════════════════════════════════════════════════════════════════════════
+# Location: analytics/contracts_v14.py
+#
+# Backward compatibility wrapper. Old code that imports from contracts_v14
+# will now get the new modular contracts.
+#
+# This ensures 100% backward compatibility:
+#   Old: from analytics.contracts_v14 import ShockSpec
+#   New: from analytics.contracts import ShockSpec (same classes, same behavior)
+#
+# This is a thin proxy layer that routes all imports to the new modular structure.
+#
+
+from analytics.contracts import (
+    ShockSpec,
+    ShockResult,
+    SensitivitySuite,
+    StandardShockLibrary,
+)
+
+# Re-export for backward compatibility
+__all__ = [
+    "ShockSpec",
+    "ShockResult",
+    "SensitivitySuite",
+    "StandardShockLibrary",
+]

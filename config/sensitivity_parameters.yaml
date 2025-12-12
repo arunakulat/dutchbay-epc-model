@@ -1,0 +1,74 @@
+# Lender-case baseline tornado parameters for v14
+# One-way +/- shocks around base values, CASPER-ready
+#
+# NOTE:
+# - All variable_name paths match the v14 scenario schema
+#   as loaded by analytics.scenario_loader.load_scenario_config.
+# - Percentages are in "whole-number" format (e.g. -10 => -10%).
+
+# ──────────────────────────────────────────────────────────────
+# CAPEX (USD)
+# ──────────────────────────────────────────────────────────────
+- variable_name: "capex.usd_total"
+  base_value: 150000000         # update if lender case CAPEX differs
+  low_pct: -10                  # -10% CAPEX
+  high_pct: 10                  # +10% CAPEX
+
+# ──────────────────────────────────────────────────────────────
+# ENERGY YIELD / AEP PROXY (Capacity factor)
+# ──────────────────────────────────────────────────────────────
+- variable_name: "project.capacity_factor"
+  base_value: 0.40              # 40% capacity factor (decimal, not %)
+  low_pct: -25                  # -25% relative to base (0.30)
+  high_pct: 25                  # +25% relative to base (0.50)
+
+# ──────────────────────────────────────────────────────────────
+# OPEX (USD per year)
+# ──────────────────────────────────────────────────────────────
+- variable_name: "opex.usd_per_year"
+  base_value: 6000000           # update to your actual opex baseline
+  low_pct: -25                  # -25% opex
+  high_pct: 25                  # +25% opex
+
+# ──────────────────────────────────────────────────────────────
+# GEARING / DEBT RATIO
+# ──────────────────────────────────────────────────────────────
+# This is the schema-correct path in the scenario config:
+# Financing_Terms.debt_ratio
+- variable_name: "Financing_Terms.debt_ratio"
+  base_value: 0.70
+  low_pct: -5                   # -5% relative → 0.665
+  high_pct: 5                   # +5% relative → 0.735
+
+# ──────────────────────────────────────────────────────────────
+# TARIFF (LKR/kWh)
+# ──────────────────────────────────────────────────────────────
+# This is the schema-correct path: tariff.lkr_per_kwh
+- variable_name: "tariff.lkr_per_kwh"
+  base_value: 20.3              # or 18.0, set to your lender-case tariff
+  low_pct: -15                  # -15% tariff
+  high_pct: 15                  # +15% tariff
+
+# ──────────────────────────────────────────────────────────────
+# FX: STARTING LKR/USD RATE
+# ──────────────────────────────────────────────────────────────
+# Structured FX block per v14 rules:
+#   fx:
+#     start_lkr_per_usd: <float>
+#     annual_depr: <float>   # usually 0.0x as decimal
+#
+# Adjust base_value to your actual lender case (e.g. 350 or 400).
+- variable_name: "fx.start_lkr_per_usd"
+  base_value: 350.0            # TODO: set to actual base fx in scenario
+  low_pct: -10                 # -10% weaker LKR (lower rate)
+  high_pct: 10                 # +10% weaker LKR (higher rate)
+
+# ──────────────────────────────────────────────────────────────
+# FX: ANNUAL DEPRECIATION (DECIMAL)
+# ──────────────────────────────────────────────────────────────
+# Typical value: 0.03 => 3% per year depreciation.
+# Here we shock it ±50% relative (1.5x / 0.5x).
+- variable_name: "fx.annual_depr"
+  base_value: 0.03             # 3% annual depreciation
+  low_pct: -50                 # 0.03 * (1 - 0.5) = 0.015
+  high_pct: 50                 # 0.03 * (1 + 0.5) = 0.045

@@ -1,0 +1,8 @@
+"Document","Purpose","Read Time","Audience"
+"Complete_Package_Summary.md","Master index, what to read first","10 min","Everyone"
+"Final_Decision_Guide_Choose_Your_Path.md⭐","Decision framework, 3 paths compared","20 min","Decision makers"
+"Streamlit_Dashboard_Alternative.md","PATH 1: MVP in 2-3 days (Python-only)","30 min","Backend engineer"
+"UI_Backend_Integration_Strategy.md","PATH 2: Production app in 2-3 weeks","45 min","Full team"
+"API_Contract_Specifications.md","15+ endpoints, request/response specs","30 min","Engineers (ref)"
+"Implementation_Code_Examples.md","Ready-to-use code: FastAPI, JS, Docker","20 min","Engineers (copy)"
+"START_HERE_Integration_Overview.md","Quick reference, FAQ, document guide","15 min","Everyone"

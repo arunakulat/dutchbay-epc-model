@@ -1,0 +1,161 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, List, Dict
+
+# ═════════════════════════════════════════════════════════════════════════════
+# IMPORT FROM MODULAR CONTRACTS
+# ═════════════════════════════════════════════════════════════════════════════
+
+# In production, import from analytics.contracts (which re-exports from _phase_3_sensitivity)
+# For now, we show the structure. In your codebase:
+# from analytics.contracts import ShockSpec, ShockResult, SensitivitySuite
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CORE SENSITIVITY ANALYSIS ENGINE [SENS-002]
+# ═════════════════════════════════════════════════════════════════════════════
+
+def analyze_sensitivity_refactored(
+    config_path: str,
+    scenario_name: str,
+    shocks: List,  # List[ShockSpec] - import from analytics.contracts
+    metric_name: str = "project_irr"
+):
+    """[SENS-002] Run sensitivity analysis on a given scenario configuration.
+
+    Gateway function for all sensitivity analysis logic.
+    - Loads the base scenario config and computes the base metric.
+    - Applies each ShockSpec (low and high values) to compute outcome metrics.
+    - Aggregates results into a SensitivitySuite dataclass.
+    - Returns tornado-ranked results.
+
+    Args:
+        config_path: Path to scenario configuration file
+        scenario_name: Name of the scenario being analyzed
+        shocks: List[ShockSpec] - shock specifications to apply
+        metric_name: Metric to analyze (default: "project_irr")
+
+    Returns:
+        SensitivitySuite: Aggregated results with tornado ranking
+    """
+    # Step 1: Load base scenario and compute baseline metric
+    base_metric_value = _evaluate_metric_from_config(config_path, metric_name)
+
+    # Step 2: Apply each shock (low and high) and compute metrics
+    shock_results: List = []  # List[ShockResult]
+    for shock in shocks:
+        low_metric = _evaluate_metric_from_config(
+            config_path, metric_name, overrides={shock.variable_name: shock.low_value}
+        )
+        high_metric = _evaluate_metric_from_config(
+            config_path, metric_name, overrides={shock.variable_name: shock.high_value}
+        )
+
+        # Compute impact and direction
+        impact = abs(high_metric - low_metric)
+        direction = "positive" if high_metric >= low_metric else "negative"
+        sensitivity = (impact / abs(base_metric_value)) if base_metric_value != 0 else 0.0
+        label = shock.label or shock.variable_name
+
+        # Create ShockResult (would use: from analytics.contracts import ShockResult)
+        shock_result = {
+            "variable_name": shock.variable_name,
+            "label": label,
+            "base_metric": base_metric_value,
+            "low_metric": low_metric,
+            "high_metric": high_metric,
+            "impact": round(impact, 6),
+            "direction": direction,
+            "sensitivity": round(sensitivity, 6)
+        }
+        shock_results.append(shock_result)
+
+    # Step 3: Rank by impact (tornado ranking)
+    tornado_ranking = sorted(shock_results, key=lambda s: abs(s["impact"]), reverse=True)
+
+    # Step 4: Aggregate into SensitivitySuite
+    suite = {
+        "scenario_name": scenario_name,
+        "metric_name": metric_name,
+        "base_metric_value": base_metric_value,
+        "shock_results": shock_results,
+        "tornado_ranking": tornado_ranking,
+        "analysis_timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    return suite
+
+
+def get_tornado_chart_data(suite: Dict[str, Any]) -> Dict[str, Any]:
+    """[SENS-002] Get tornado chart data from a SensitivitySuite.
+
+    Extracts tornado ranking into format suitable for plotting.
+    """
+    data = {"variables": [], "low": [], "high": [], "impact": [], "direction": []}
+    for shock in suite["tornado_ranking"]:
+        data["variables"].append(shock["label"] or shock["variable_name"])
+        data["low"].append(shock["base_metric"] - shock["low_metric"])
+        data["high"].append(shock["high_metric"] - shock["base_metric"])
+        data["impact"].append(shock["impact"])
+        data["direction"].append(shock["direction"])
+    return data
+
+
+def compare_with_baseline(new_suite: Dict[str, Any], baseline_suite: Dict[str, Any]) -> Dict[str, Any]:
+    """[SENS-002] Compare sensitivity results with a baseline suite.
+
+    Validates that new engine produces equivalent results to old engine.
+    Used for regression testing (SENS-005).
+    """
+    differences = {"impact_deltas": [], "order_mismatch": []}
+
+    # Check if shock counts match
+    if len(new_suite["shock_results"]) != len(baseline_suite["shock_results"]):
+        differences["count_mismatch"] = True
+
+    # Check if tornado ranking order matches
+    for i, (new_res, old_res) in enumerate(zip(new_suite["tornado_ranking"], baseline_suite["tornado_ranking"])):
+        if new_res["variable_name"] != old_res["variable_name"]:
+            differences["order_mismatch"].append(
+                f"Rank {i+1}: NEW={new_res['variable_name']}, OLD={old_res['variable_name']}"
+            )
+
+    # Check if impacts match (to 6 decimal places)
+    old_results_map = {res["variable_name"]: res for res in baseline_suite["shock_results"]}
+    for res in new_suite["shock_results"]:
+        var = res["variable_name"]
+        if var in old_results_map:
+            delta = abs(res["impact"] - old_results_map[var]["impact"])
+            if delta > 1e-6:
+                differences["impact_deltas"].append({"variable": var, "delta": round(delta, 6)})
+
+    return differences
+
+
+def _evaluate_metric_from_config(config_path: str, metric_name: str, overrides: Dict[str, Any] | None = None) -> float:
+    """Load scenario config, apply overrides, compute metric.
+
+    This is a placeholder. In production, this integrates with:
+    - analytics.evaluation_v14 (or similar scenario evaluation module)
+    - Config loading (YAML/JSON)
+    - EPC model calculations
+
+    For now, returns placeholder value for testing.
+    """
+    # TODO: Implement actual metric evaluation
+    # Example: load config_path, apply overrides, run EPC model, return result
+    return 0.15  # Placeholder IRR
+
+
+def _load_base_values(config_path: str) -> Dict[str, Any]:
+    """Load base input values from scenario config.
+
+    Placeholder for scenario loader integration.
+    """
+    return {}
+
+
+__all__ = [
+    "analyze_sensitivity_refactored",
+    "get_tornado_chart_data",
+    "compare_with_baseline",
+]

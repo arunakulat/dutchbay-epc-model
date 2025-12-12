@@ -1,0 +1,30 @@
+lets go for this now. --  CCCDIR to me - (double check abbreviation meanings please. --  GWTF is our Go with the Flow ruleset - GWTF, CESSPIT, CASPER compliant) clean, correct, complete, refactored and recasted script. 
+
+
+
+
+python scripts/run_full_analytics_v14.py \
+  --config scenarios/dutchbay_lendercase_2025Q4.yaml \
+  --sensitivity-params config/sensitivity_parameters.yaml \
+  --metrics project_irr dscr_min discount_rate_used \
+  --monte-carlo-config config/monte_carlo_defaults.yaml \
+  --out-dir out/full_analytic
+
+
+python scripts/make_clean_zip.py DutchBay_EPC_$(date +%Y%m%d_%H%M)
+
+
+uploading the canonical codebase current state .json and .txt all_scripts codebase - ingress, index, memorize, add to datalake, dedupe datalake, get rid of old artifacts from datalake, replace or build new dataframe to include all the relevant scripts, their calls, their exports and imports from the analytics and finance folders and any other related, relevant folders. Relevant folders are those folders where some scripts may reside, where those scripts are linked to the analytics and or finance main scripts. From now till next upload, this will be the canonical codebase
+
+
+1. The Big Picture (Architecture and Design)
+System Architecture: Understanding the high-level organization of the software, how different services or layers communicate, and the overarching architectural patterns (e.g., microservices, monolithic, client-server) [1].
+Design Principles: Recognizing the core philosophies, design patterns, and engineering trade-offs that guided the initial development (e.g., adherence to SOLID principles, use of specific design patterns, decisions around performance versus maintainability) [1].
+Dependencies and Interactions: Mapping out how different components, internal libraries, and external services rely on one another [1]. A change in one area might have ripple effects across the system, which this view helps anticipate. 
+2. The Granular Details (Code and Implementation)
+Code-Level Logic: The ability to dive into specific functions, classes, and lines of code to understand exactly how a particular feature is implemented, including edge cases and error handling [1].
+Code Quality and Style: Observing consistency in coding standards, the clarity of the code, presence of technical debt, and adherence to established style guides [1]. 
+3. Operational and Non-Functional Aspects
+Data Flow and Storage: Understanding where data originates, how it is processed, and where it is persistently stored (databases, caching layers, file systems) [1].
+Operational Health: Knowing how the application is monitored, how it handles errors in production, where logs are generated, and its deployment process (CI/CD pipelines) [1].
+Historical Context: Understanding why the code is the way it is—knowing the history of past changes, bug fixes, and feature additions helps distinguish intentional design from legacy debt [1]. 

@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""CLI interface for sensitivity analysis.
+
+Provides command-line access to sensitivity analysis for local development/testing.
+
+Usage:
+    python cli_sensitivity.py --config config/base_case.yaml --shocks capex,opex,rates
+    python cli_sensitivity.py --config config/base_case.yaml --shocks all (runs 7 standard shocks)
+"""
+
+from __future__ import annotations
+import sys
+import json
+from typing import List, Dict, Any
+
+# In production, these imports would be:
+# from analytics.contracts import StandardShockLibrary, ShockSpec
+# from analytics.sensitivity_runner import analyze_sensitivity_refactored
+# from analytics.sensitivity_tornado_charts import (
+#     validate_tornado_ranking,
+#     prepare_tornado_for_plotly,
+#     prepare_tornado_for_dashboard,
+# )
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CLI INTERFACE
+# ═════════════════════════════════════════════════════════════════════════════
+
+def main():
+    """Main CLI entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Sensitivity Analysis CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run 7 standard DFI shocks
+  python cli_sensitivity.py --config config/base_case.yaml
+
+  # Run specific shocks
+  python cli_sensitivity.py --config config/base_case.yaml --shocks capex,opex
+
+  # Export to JSON
+  python cli_sensitivity.py --config config/base_case.yaml --output results.json
+
+  # Export tornado chart for Plotly
+  python cli_sensitivity.py --config config/base_case.yaml --format plotly
+        """
+    )
+
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to scenario configuration file (YAML/JSON)"
+    )
+
+    parser.add_argument(
+        "--scenario",
+        default="BaseCase",
+        help="Scenario name (default: BaseCase)"
+    )
+
+    parser.add_argument(
+        "--metric",
+        default="project_irr",
+        help="Metric to analyze (default: project_irr)"
+    )
+
+    parser.add_argument(
+        "--shocks",
+        default="all",
+        help="Comma-separated shock names or 'all' for standard suite. Options: "
+             "capex, opex, rates, inflation, production, tariff, delay"
+    )
+
+    parser.add_argument(
+        "--output",
+        help="Output file path (if not specified, prints to stdout)"
+    )
+
+    parser.add_argument(
+        "--format",
+        choices=["json", "plotly", "dashboard", "text"],
+        default="text",
+        help="Output format (default: text)"
+    )
+
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate results (tornado ranking, directionality, etc)"
+    )
+
+    args = parser.parse_args()
+
+    try:
+        # Parse shocks
+        shocks_list = _parse_shocks(args.shocks)
+
+        # Run analysis
+        print(f"🔄 Running sensitivity analysis...")
+        print(f"   Config: {args.config}")
+        print(f"   Scenario: {args.scenario}")
+        print(f"   Metric: {args.metric}")
+        print(f"   Shocks: {len(shocks_list)} ({', '.join(s['label'] for s in shocks_list)})")
+        print()
+
+        # TODO: Uncomment when imports available
+        # from analytics.sensitivity_runner import analyze_sensitivity_refactored
+        # suite = analyze_sensitivity_refactored(
+        #     args.config,
+        #     args.scenario,
+        #     shocks_list,
+        #     metric_name=args.metric
+        # )
+
+        # For now, show what would be run:
+        suite = _mock_sensitivity_run(args.scenario, args.metric, shocks_list)
+
+        # Validate if requested
+        if args.validate:
+            print("✅ Validating results...")
+            # TODO: Uncomment when imports available
+            # from analytics.sensitivity_tornado_charts import (
+            #     validate_tornado_ranking,
+            #     validate_directionality
+            # )
+            # ranking_valid = validate_tornado_ranking(suite)
+            # if not ranking_valid["is_valid"]:
+            #     print("   ❌ Tornado ranking validation failed:")
+            #     for error in ranking_valid["errors"]:
+            #         print(f"      - {error}")
+            # else:
+            #     print("   ✅ Tornado ranking valid")
+            print()
+
+        # Format output
+        output = _format_output(suite, args.format)
+
+        # Write output
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(output)
+            print(f"✅ Results written to {args.output}")
+        else:
+            print(output)
+
+        return 0
+
+    except Exception as e:
+        print(f"❌ Error: {str(e)}", file=sys.stderr)
+        return 1
+
+
+def _parse_shocks(shocks_str: str) -> List[Dict[str, Any]]:
+    """Parse shock specification string into ShockSpec objects.
+
+    Examples:
+        "all" -> [capex, opex, rates, inflation, production, tariff, delay]
+        "capex,opex" -> [capex, opex]
+        "capex" -> [capex]
+    """
+    if shocks_str.lower() == "all":
+        # Return all 7 standard shocks with reasonable defaults
+        return [
+            {"variable_name": "capex_total", "low_value": 135e6, "high_value": 165e6, "label": "CAPEX ±10%"},
+            {"variable_name": "opex_annual", "low_value": 27e6, "high_value": 33e6, "label": "OPEX ±10%"},
+            {"variable_name": "interest_rate", "low_value": 0.04, "high_value": 0.06, "label": "Interest Rate ±1%"},
+            {"variable_name": "inflation_rate", "low_value": 0.01, "high_value": 0.03, "label": "Inflation ±1%"},
+            {"variable_name": "annual_output", "low_value": 90, "high_value": 110, "label": "Production ±10%"},
+            {"variable_name": "tariff_rate", "low_value": 0.09, "high_value": 0.11, "label": "Tariff ±10%"},
+            {"variable_name": "construction_period", "low_value": 0.0, "high_value": 6.0, "label": "Construction Delay ±6mo"},
+        ]
+
+    # Parse individual shocks
+    shock_map = {
+        "capex": {"variable_name": "capex_total", "low_value": 135e6, "high_value": 165e6, "label": "CAPEX ±10%"},
+        "opex": {"variable_name": "opex_annual", "low_value": 27e6, "high_value": 33e6, "label": "OPEX ±10%"},
+        "rates": {"variable_name": "interest_rate", "low_value": 0.04, "high_value": 0.06, "label": "Interest Rate ±1%"},
+        "inflation": {"variable_name": "inflation_rate", "low_value": 0.01, "high_value": 0.03, "label": "Inflation ±1%"},
+        "production": {"variable_name": "annual_output", "low_value": 90, "high_value": 110, "label": "Production ±10%"},
+        "tariff": {"variable_name": "tariff_rate", "low_value": 0.09, "high_value": 0.11, "label": "Tariff ±10%"},
+        "delay": {"variable_name": "construction_period", "low_value": 0.0, "high_value": 6.0, "label": "Construction Delay ±6mo"},
+    }
+
+    selected = []
+    for name in shocks_str.lower().split(","):
+        name = name.strip()
+        if name in shock_map:
+            selected.append(shock_map[name])
+        else:
+            print(f"⚠️  Unknown shock: {name}", file=sys.stderr)
+
+    return selected
+
+
+def _format_output(suite: Dict[str, Any], format_type: str) -> str:
+    """Format output based on requested format."""
+    if format_type == "json":
+        return json.dumps(suite, indent=2)
+
+    elif format_type == "plotly":
+        # Would call prepare_tornado_for_plotly
+        return json.dumps({
+            "title": f"Tornado Chart: {suite['scenario_name']}",
+            "variables": [r["label"] for r in suite["tornado_ranking"]],
+            "impacts": [r["impact"] for r in suite["tornado_ranking"]],
+        }, indent=2)
+
+    elif format_type == "dashboard":
+        # Would call prepare_tornado_for_dashboard
+        return json.dumps({
+            "scenario": suite["scenario_name"],
+            "metric": suite["metric_name"],
+            "baseline": suite["base_metric_value"],
+            "drivers": [
+                {
+                    "rank": i + 1,
+                    "label": r["label"],
+                    "impact": r["impact"],
+                    "direction": r["direction"],
+                }
+                for i, r in enumerate(suite["tornado_ranking"])
+            ],
+        }, indent=2)
+
+    else:  # text
+        lines = [
+            f"═" * 80,
+            f"SENSITIVITY ANALYSIS: {suite['scenario_name']}",
+            f"Metric: {suite['metric_name']} | Baseline: {suite['base_metric_value']:.4f}",
+            f"Timestamp: {suite['analysis_timestamp']}",
+            f"═" * 80,
+            "",
+            "TORNADO RANKING",
+            f"─" * 80,
+        ]
+
+        for i, result in enumerate(suite["tornado_ranking"], 1):
+            lines.append(
+                f"{i}. {result['label']:30s} Impact: {result['impact']:10.6f} ({result['direction']})"
+            )
+
+        return "\n".join(lines)
+
+
+def _mock_sensitivity_run(scenario: str, metric: str, shocks: List[Dict]) -> Dict[str, Any]:
+    """Mock sensitivity run for testing (until real integration available)."""
+    import random
+
+    shock_results = []
+    base_value = 0.15  # Mock IRR
+
+    for shock in shocks:
+        impact = random.uniform(0.001, 0.05)
+        shock_results.append({
+            "variable_name": shock["variable_name"],
+            "label": shock["label"],
+            "base_metric": base_value,
+            "low_metric": base_value - impact / 2,
+            "high_metric": base_value + impact / 2,
+            "impact": round(impact, 6),
+            "direction": random.choice(["positive", "negative"]),
+            "sensitivity": round(impact / base_value, 6),
+        })
+
+    # Sort by impact (tornado ranking)
+    tornado_ranking = sorted(shock_results, key=lambda x: abs(x["impact"]), reverse=True)
+
+    return {
+        "scenario_name": scenario,
+        "metric_name": metric,
+        "base_metric_value": base_value,
+        "shock_results": shock_results,
+        "tornado_ranking": tornado_ranking,
+        "analysis_timestamp": "2025-12-12T14:45:00",
+    }
+
+
+if __name__ == "__main__":
+    sys.exit(main())
