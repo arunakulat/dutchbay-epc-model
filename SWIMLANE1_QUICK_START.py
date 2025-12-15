@@ -137,9 +137,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
     with open(report_file) as f:
         report = json.load(f)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("📊 SWIMLANE 1 INSPECTION SUMMARY")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     # WACC Results
     print("🔹 SL-1.1: WACC ENGINE")
@@ -159,7 +159,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         tests = report["wacc_test_coverage"]
         pct = tests["coverage_percentage"]
         status = "✅" if pct >= 80 else "⚠️" if pct >= 60 else "❌"
-        print(f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}")
+        print(
+            f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}"
+        )
         print(f"  Coverage: {pct:.1f}%")
         if tests["edge_case_test_names"]:
             print(f"  Edge Cases: {len(tests['edge_case_test_names'])} tests")
@@ -167,7 +169,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
     if report.get("wacc_performance"):
         perf = report["wacc_performance"]
         sla = "✅" if perf["is_within_sla"] else "❌"
-        print(f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}")
+        print(
+            f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}"
+        )
 
     # Equity Results
     print("\n🔹 SL-1.2: EQUITY ANALYTICS")
@@ -187,7 +191,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         tests = report["equity_test_coverage"]
         pct = tests["coverage_percentage"]
         status = "✅" if pct >= 80 else "⚠️" if pct >= 60 else "❌"
-        print(f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}")
+        print(
+            f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}"
+        )
         print(f"  Coverage: {pct:.1f}%")
         if tests["edge_case_test_names"]:
             print(f"  Edge Cases: {len(tests['edge_case_test_names'])} tests")
@@ -195,7 +201,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
     if report.get("equity_performance"):
         perf = report["equity_performance"]
         sla = "✅" if perf["is_within_sla"] else "❌"
-        print(f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}")
+        print(
+            f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}"
+        )
 
     # Governance
     print("\n🛡️  GOVERNANCE COMPLIANCE")
@@ -207,9 +215,9 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
 
     all_ok = all(checks.values())
     if all_ok:
-        print(f"\n  ✅ ALL GOVERNANCE CHECKS PASSED")
+        print("\n  ✅ ALL GOVERNANCE CHECKS PASSED")
     else:
-        print(f"\n  ❌ GOVERNANCE ISSUES DETECTED (see below)")
+        print("\n  ❌ GOVERNANCE ISSUES DETECTED (see below)")
 
     # Issues & Recommendations
     print("\n📋 ISSUES FOUND")
@@ -231,7 +239,7 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         print("  ✅ No recommendations (ready for Phase 3)")
 
     # Final Status
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     wacc_ok = (
         report.get("wacc_contract")
         and report.get("wacc_test_coverage", {}).get("coverage_percentage", 0) >= 80
@@ -247,7 +255,7 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         print("⚠️  READY WITH MINOR ACTIONS (see recommendations)")
     else:
         print("❌ NOT READY - ADDRESS ISSUES BEFORE PHASE 3")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":

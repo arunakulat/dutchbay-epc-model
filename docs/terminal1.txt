@@ -8,7 +8,7 @@ hypothesis profile 'default'
 rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
 configfile: pytest.ini (WARNING: ignoring pytest config in tox.ini!)
 plugins: anyio-4.11.0, xdist-3.8.0, hydra-core-1.3.2, hypothesis-6.148.5, cov-7.0.0
-collected 30 items                                                                                                                 
+collected 30 items
 
 tests/test_schema_guard_fx.py::TestFXValidationRejections::test_scalar_fx_is_rejected PASSED                                 [  3%]
 tests/test_schema_guard_fx.py::TestFXValidationRejections::test_missing_fx_section_is_rejected PASSED                        [  6%]
@@ -125,7 +125,7 @@ hypothesis profile 'default'
 rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
 configfile: pytest.ini (WARNING: ignoring pytest config in tox.ini!)
 plugins: anyio-4.11.0, xdist-3.8.0, hydra-core-1.3.2, hypothesis-6.148.5, cov-7.0.0
-collected 417 items / 268 deselected / 149 selected                                                                                
+collected 417 items / 268 deselected / 149 selected
 
 tests/analytics_layer/test_schema_guard_fx.py::test_fx_block_missing PASSED                                                  [  0%]
 tests/analytics_layer/test_schema_guard_fx.py::test_fx_block_not_a_dict PASSED                                               [  1%]
@@ -354,4 +354,4 @@ TOTAL                                      5134   3622  29.45%
 Coverage XML written to file coverage.xml
 FAIL Required test coverage of 55% not reached. Total coverage: 29.45%
 ========================================= 149 passed, 268 deselected, 25 warnings in 2.86s =========================================
-(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model % 
+(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model %

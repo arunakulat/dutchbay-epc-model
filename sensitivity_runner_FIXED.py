@@ -26,9 +26,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from analytics.contracts import (
+    SensitivitySuite,
     ShockResult,
     ShockSpec,
-    SensitivitySuite,
 )
 
 
@@ -88,9 +88,7 @@ def analyze_sensitivity_refactored(
         )
         shock_results.append(shock_result)
 
-    tornado_ranking = sorted(
-        shock_results, key=lambda s: abs(s.impact), reverse=True
-    )
+    tornado_ranking = sorted(shock_results, key=lambda s: abs(s.impact), reverse=True)
 
     suite = SensitivitySuite(
         scenario_name=scenario_name,

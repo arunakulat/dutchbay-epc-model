@@ -40,7 +40,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-
 # ═════════════════════════════════════════════════════════════════════════════
 # CCCDIR: CONTRACT DEFINITIONS FOR INSPECTION RESULTS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -149,9 +148,7 @@ class PerformanceBenchmark:
     input_scale: int
     output_size: int
     is_within_sla: bool
-    benchmark_timestamp: str = field(
-        default_factory=lambda: datetime.now().isoformat()
-    )
+    benchmark_timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 @dataclass
@@ -176,9 +173,7 @@ class InspectionReport:
     """
 
     report_title: str = "Swimlane 1 (SL-1.1 & SL-1.2) Inspection Report"
-    report_timestamp: str = field(
-        default_factory=lambda: datetime.now().isoformat()
-    )
+    report_timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     # SL-1.1: WACC Engine
     wacc_contract: Optional[ContractInspection] = None
@@ -238,9 +233,7 @@ class ContractFieldExtractor:
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef) and node.name == class_name:
-                    return ContractFieldExtractor._parse_class(
-                        node, module_path, path
-                    )
+                    return ContractFieldExtractor._parse_class(node, module_path, path)
         except Exception as e:
             print(f"❌ Error parsing {module_path}: {e}")
 
@@ -360,8 +353,8 @@ class TestCoverageAnalyzer:
         edge_case_tests = []
 
         if test_file:
-            passing, failing, total, edge_case_tests = (
-                TestCoverageAnalyzer._run_pytest(test_file)
+            passing, failing, total, edge_case_tests = TestCoverageAnalyzer._run_pytest(
+                test_file
             )
 
         return TestCoverageMetrics(
@@ -515,17 +508,11 @@ class GovernanceVerifier:
                     content = f.read()
 
                 # Check for forbidden imports (GWTF)
-                if (
-                    "from finance." in content
-                    and "evaluation_v14" not in module_path
-                ):
+                if "from finance." in content and "evaluation_v14" not in module_path:
                     checks["GWTF:no_forbidden_imports"] = False
 
                 # Check for dict passing (CCCDIR)
-                if (
-                    "Dict[str, Any]" in content
-                    and "contracts_v14" not in module_path
-                ):
+                if "Dict[str, Any]" in content and "contracts_v14" not in module_path:
                     checks["CCCDIR:no_dict_passthrough"] = False
 
                 # Check for frozen dataclasses (CCCDIR)
@@ -533,10 +520,7 @@ class GovernanceVerifier:
                     checks["CCCDIR:dataclass_frozen"] = False
 
                 # Check for validation calls (CESSPIT)
-                if (
-                    "schema_guard" not in content
-                    and "validation" in module_path
-                ):
+                if "schema_guard" not in content and "validation" in module_path:
                     checks["CESSPIT:schema_guard_calls"] = False
 
             except Exception as e:
@@ -621,9 +605,7 @@ class Swimlane1Inspector:
         )
 
         if self.report.equity_contract:
-            print(
-                f"✅ Contract extracted: {self.report.equity_contract.class_name}"
-            )
+            print(f"✅ Contract extracted: {self.report.equity_contract.class_name}")
             print(f"   Fields: {len(self.report.equity_contract.fields)}")
             for field in self.report.equity_contract.fields:
                 print(f"     • {field.name}: {field.type_annotation}")
@@ -651,9 +633,7 @@ class Swimlane1Inspector:
             print(f"{status} {check_name}: {is_compliant}")
 
             if not is_compliant:
-                self.report.issues_found.append(
-                    f"Governance violation: {check_name}"
-                )
+                self.report.issues_found.append(f"Governance violation: {check_name}")
 
         return self
 

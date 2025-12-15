@@ -72,18 +72,18 @@ The current repo state for Swimlane 2 work is best taken from what is already in
 
 ## Top-level architecture
 
-- `analytics/`  
+- `analytics/`
   - `evaluation_v14.py`: Canonical gateway (evaluate_with_overrides, CASPER tail-risk entry points).[20]
   - `schema_guard.py`: Central config validation; now includes FX validation hooks used by v14.[19]
   - `contracts_v14.py`: Contract hub for CCCDIR dataclasses; Phase 2 will add ShockSpec/ShockResult here.[19]
   - `sensitivity_v14.py`: Existing sensitivity engine; still has forbidden direct `finance.*` imports that Phase 2 must remove (GWTF violation today).[19]
 
-- `finance/`  
+- `finance/`
   - `cashflow_v14.py` (+ `*_params`, `*_fx`, `*_tax`, `*_production`, `*_utils`, `*_contracts`): v14 cashflow engine is working and well tested.[25]
   - `fx_v14.py`: New FX engine with scalar and structured modes; unit tests are passing and coverage is high.
   - Other modules (debt_v14, equity_v14, wacc_v14, irr, etc.) are present; not directly touched by Swimlane 2 Phase 2 but used via `evaluation_v14`.
 
-- `tests/`  
+- `tests/`
   - `tests/analytics_layer/test_schema_guard_fx.py` and `tests/test_schema_guard_fx.py`: FX validation tests for analytics-layer and full schema_guard front door; all passing after recent refactor.[21]
   - `tests/finance/test_fx_v14.py`: Thorough unit tests for FX scalar/structured curves and config builder; all green.
   - `tests/api/…`: Integration tests for cashflow_v14, risk haircut, FX resolver, schema_guard FX validation, etc., all passing.

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from ._phase_3_sensitivity import (
+    SensitivitySuite,
+    ShockResult,
+    ShockSpec,
+    StandardShockLibrary,
+)
+
 # ═════════════════════════════════════════════════════════════════════════════
 # CONTRACTS PACKAGE __init__.py
 # ═════════════════════════════════════════════════════════════════════════════
@@ -11,12 +18,6 @@ from __future__ import annotations
 #   from analytics.contracts import ShockSpec, ShockResult, SensitivitySuite, StandardShockLibrary
 #
 
-from ._phase_3_sensitivity import (
-    ShockSpec,
-    ShockResult,
-    SensitivitySuite,
-    StandardShockLibrary,
-)
 
 __all__ = [
     "ShockSpec",

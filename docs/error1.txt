@@ -9,7 +9,7 @@ hypothesis profile 'default'
 rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
 configfile: pytest.ini (WARNING: ignoring pytest config in tox.ini!)
 plugins: anyio-4.11.0, xdist-3.8.0, hydra-core-1.3.2, hypothesis-6.148.5, cov-7.0.0
-collected 1 item                                                                                                                   
+collected 1 item
 
 tests/api/test_cashflow_module.py::test_build_annual_cfads_minimal_valid_params PASSED                                       [100%]
 ERROR: Coverage failure: total of 7.56 is less than fail-under=55.00
@@ -97,7 +97,7 @@ hypothesis profile 'default'
 rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
 configfile: pytest.ini (WARNING: ignoring pytest config in tox.ini!)
 plugins: anyio-4.11.0, xdist-3.8.0, hydra-core-1.3.2, hypothesis-6.148.5, cov-7.0.0
-collected 1 item                                                                                                                   
+collected 1 item
 
 tests/api/test_cashflow_risk_haircut_v14.py::test_cfads_risk_haircut_applied_to_posttax_cfads[scenarios/dutchbay_lendercase_2025Q4.yaml-0.1] PASSED [100%]
 ERROR: Coverage failure: total of 8.04 is less than fail-under=55.00
@@ -185,7 +185,7 @@ hypothesis profile 'default'
 rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
 configfile: pytest.ini (WARNING: ignoring pytest config in tox.ini!)
 plugins: anyio-4.11.0, xdist-3.8.0, hydra-core-1.3.2, hypothesis-6.148.5, cov-7.0.0
-collected 404 items / 268 deselected / 136 selected                                                                                
+collected 404 items / 268 deselected / 136 selected
 
 tests/analytics_layer/test_schema_guard_fx.py::test_fx_block_missing PASSED                                                  [  0%]
 tests/analytics_layer/test_schema_guard_fx.py::test_fx_block_not_a_dict PASSED                                               [  1%]
@@ -320,7 +320,7 @@ self = <test_schema_guard_fx.TestFXValidationRejections object at 0x116efab90>
             "project": {"name": "bad_fx"},
             "fx": 375.0,  # Scalar instead of mapping
         }
-    
+
         with pytest.raises(
             ConfigValidationError,
             match="scalar `fx` is no longer supported",
@@ -331,8 +331,8 @@ self = <test_schema_guard_fx.TestFXValidationRejections object at 0x116efab90>
                 modules=["cashflow"],
             )
 
-tests/test_schema_guard_fx.py:59: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_schema_guard_fx.py:59:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 raw_config = {'fx': 375.0, 'project': {'name': 'bad_fx'}}, config_path = 'bad_scalar_fx.yaml', modules = ['cashflow']
 
@@ -343,37 +343,37 @@ raw_config = {'fx': 375.0, 'project': {'name': 'bad_fx'}}, config_path = 'bad_sc
     ) -> None:
         """
         Validate raw config against registered field specs for v14.
-    
+
         This is the MAIN validation entry point for the v14 stack. It:
         1. Validates FX configuration (always required)
         2. Imports requested modules to trigger schema registration
         3. Validates registered required fields
         4. Raises ConfigValidationError if any checks fail
-    
+
         Parameters
         ----------
         raw_config : Mapping[str, Any]
             Configuration dictionary produced by scenario_loader.
-    
+
         config_path : str | None, optional
             Human-friendly identifier for errors (filename or label).
-    
+
         modules : Sequence[str] | None, optional
             Logical module names to validate against.
             Examples: ["cashflow"], ["cashflow", "debt"]
             If None, only FX validation is performed.
-    
+
         Raises
         ------
         ConfigValidationError
             If required fields are missing or invalid.
-    
+
         Examples
         --------
         >>> config = load_scenario_config("scenario.yaml")
         >>> validate_config_for_v14(config, "scenario.yaml", ["cashflow", "debt"])
         # Raises ConfigValidationError if validation fails
-    
+
         Notes
         -----
         - FX validation is ALWAYS performed (required for v14)
@@ -381,49 +381,49 @@ raw_config = {'fx': 375.0, 'project': {'name': 'bad_fx'}}, config_path = 'bad_sc
         - Only ERROR-severity fields are enforced (warnings are logged)
         """
         errors: list[str] = []
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 1: Validate FX section (always required for v14)
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         _validate_fx_section(raw_config, errors)
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 2: Ensure modules are imported so they can register field specs
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         module_list = list(modules) if modules is not None else []
-    
+
         for name in module_list:
             _ensure_module_registered(name)
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 3: Collect and validate registered specs for requested modules
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         specs: list[Any] = []
         for name in module_list:
             specs.extend(get_required_fields(name))
-    
+
         for spec in specs:
             logical_name: str = str(getattr(spec, "name", ""))
             paths: Sequence[PathSpec] = getattr(spec, "paths", ()) or ()
             required: bool = bool(getattr(spec, "required", True))
             validator = getattr(spec, "validator", None)
             severity: str = str(getattr(spec, "severity", SEVERITY_ERROR)).lower()
-    
+
             # Only hard-enforce error-level fields here
             if severity != SEVERITY_ERROR:
                 continue
-    
+
             value = _first_resolved_value(raw_config, paths)
-    
+
             ok = True
-    
+
             # Check if required field is missing
             if required and value is None:
                 ok = False
-    
+
             # Run custom validator if present
             if ok and validator is not None:
                 try:
@@ -437,16 +437,16 @@ raw_config = {'fx': 375.0, 'project': {'name': 'bad_fx'}}, config_path = 'bad_sc
                         e,
                     )
                     ok = False
-    
+
             # Record error if validation failed
             if not ok:
                 path_labels = [".".join(p) for p in paths] or ["<unknown>"]
                 errors.append(f"{logical_name} (paths: {', '.join(path_labels)})")
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 4: Raise aggregate error if any checks failed
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         if errors:
             header = (
                 f"Config '{config_path}' is missing or has invalid required fields: "
@@ -469,7 +469,7 @@ self = <test_schema_guard_fx.TestFXValidationRejections object at 0x116efab90>
             "project": {"name": "bad_fx"},
             "fx": 375.0,  # Scalar instead of mapping
         }
-    
+
 >       with pytest.raises(
             ConfigValidationError,
             match="scalar `fx` is no longer supported",
@@ -489,15 +489,15 @@ self = <test_schema_guard_fx.TestFXValidationRejections object at 0x116ee8f90>
             "project": {"name": "no_fx"},
             # No 'fx' key at all
         }
-    
+
         with pytest.raises(
             ConfigValidationError,
             match="Missing `fx` section",
         ):
 >           validate_config_for_v14(cfg, "no_fx.yaml", modules=["cashflow"])
 
-tests/test_schema_guard_fx.py:76: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_schema_guard_fx.py:76:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 raw_config = {'project': {'name': 'no_fx'}}, config_path = 'no_fx.yaml', modules = ['cashflow']
 
@@ -508,37 +508,37 @@ raw_config = {'project': {'name': 'no_fx'}}, config_path = 'no_fx.yaml', modules
     ) -> None:
         """
         Validate raw config against registered field specs for v14.
-    
+
         This is the MAIN validation entry point for the v14 stack. It:
         1. Validates FX configuration (always required)
         2. Imports requested modules to trigger schema registration
         3. Validates registered required fields
         4. Raises ConfigValidationError if any checks fail
-    
+
         Parameters
         ----------
         raw_config : Mapping[str, Any]
             Configuration dictionary produced by scenario_loader.
-    
+
         config_path : str | None, optional
             Human-friendly identifier for errors (filename or label).
-    
+
         modules : Sequence[str] | None, optional
             Logical module names to validate against.
             Examples: ["cashflow"], ["cashflow", "debt"]
             If None, only FX validation is performed.
-    
+
         Raises
         ------
         ConfigValidationError
             If required fields are missing or invalid.
-    
+
         Examples
         --------
         >>> config = load_scenario_config("scenario.yaml")
         >>> validate_config_for_v14(config, "scenario.yaml", ["cashflow", "debt"])
         # Raises ConfigValidationError if validation fails
-    
+
         Notes
         -----
         - FX validation is ALWAYS performed (required for v14)
@@ -546,49 +546,49 @@ raw_config = {'project': {'name': 'no_fx'}}, config_path = 'no_fx.yaml', modules
         - Only ERROR-severity fields are enforced (warnings are logged)
         """
         errors: list[str] = []
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 1: Validate FX section (always required for v14)
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         _validate_fx_section(raw_config, errors)
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 2: Ensure modules are imported so they can register field specs
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         module_list = list(modules) if modules is not None else []
-    
+
         for name in module_list:
             _ensure_module_registered(name)
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 3: Collect and validate registered specs for requested modules
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         specs: list[Any] = []
         for name in module_list:
             specs.extend(get_required_fields(name))
-    
+
         for spec in specs:
             logical_name: str = str(getattr(spec, "name", ""))
             paths: Sequence[PathSpec] = getattr(spec, "paths", ()) or ()
             required: bool = bool(getattr(spec, "required", True))
             validator = getattr(spec, "validator", None)
             severity: str = str(getattr(spec, "severity", SEVERITY_ERROR)).lower()
-    
+
             # Only hard-enforce error-level fields here
             if severity != SEVERITY_ERROR:
                 continue
-    
+
             value = _first_resolved_value(raw_config, paths)
-    
+
             ok = True
-    
+
             # Check if required field is missing
             if required and value is None:
                 ok = False
-    
+
             # Run custom validator if present
             if ok and validator is not None:
                 try:
@@ -602,16 +602,16 @@ raw_config = {'project': {'name': 'no_fx'}}, config_path = 'no_fx.yaml', modules
                         e,
                     )
                     ok = False
-    
+
             # Record error if validation failed
             if not ok:
                 path_labels = [".".join(p) for p in paths] or ["<unknown>"]
                 errors.append(f"{logical_name} (paths: {', '.join(path_labels)})")
-    
+
         # ──────────────────────────────────────────────────────────────────────────
         # Step 4: Raise aggregate error if any checks failed
         # ──────────────────────────────────────────────────────────────────────────
-    
+
         if errors:
             header = (
                 f"Config '{config_path}' is missing or has invalid required fields: "
@@ -634,7 +634,7 @@ self = <test_schema_guard_fx.TestFXValidationRejections object at 0x116ee8f90>
             "project": {"name": "no_fx"},
             # No 'fx' key at all
         }
-    
+
 >       with pytest.raises(
             ConfigValidationError,
             match="Missing `fx` section",
@@ -649,4 +649,4 @@ FAILED tests/test_schema_guard_fx.py::TestFXValidationRejections::test_scalar_fx
 FAILED tests/test_schema_guard_fx.py::TestFXValidationRejections::test_missing_fx_section_is_rejected - AssertionError: Regex pattern did not match.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 2 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ==================================== 2 failed, 119 passed, 268 deselected, 25 warnings in 2.21s ====================================
-(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model % 
+(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model %

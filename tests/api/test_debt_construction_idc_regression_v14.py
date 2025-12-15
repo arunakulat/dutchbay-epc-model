@@ -197,12 +197,20 @@ def test_edge_stress_idc_totals_pinned() -> None:
     usd_principal = float(usd.get("principal_m", 0.0))
     dfi_principal = float(dfi.get("principal_m", 0.0))
 
-    assert lkr_principal >= 0, f"LKR principal should be non-negative, got {lkr_principal}"
-    assert usd_principal >= 0, f"USD principal should be non-negative, got {usd_principal}"
-    assert dfi_principal >= 0, f"DFI principal should be non-negative, got {dfi_principal}"
+    assert (
+        lkr_principal >= 0
+    ), f"LKR principal should be non-negative, got {lkr_principal}"
+    assert (
+        usd_principal >= 0
+    ), f"USD principal should be non-negative, got {usd_principal}"
+    assert (
+        dfi_principal >= 0
+    ), f"DFI principal should be non-negative, got {dfi_principal}"
 
     total_principal = lkr_principal + usd_principal + dfi_principal
-    assert total_principal > 0, f"Total principal should be positive, got {total_principal}"
+    assert (
+        total_principal > 0
+    ), f"Total principal should be positive, got {total_principal}"
 
     # Validate that IDC values exist and are reasonable
     lkr_idc = float(lkr.get("idc_m", 0.0))
@@ -218,4 +226,6 @@ def test_edge_stress_idc_totals_pinned() -> None:
 
     # DSCR sanity band – extreme stress scenario so wider bounds
     min_dscr = float(result.get("min_dscr"))
-    assert -100.0 < min_dscr < 100.0, f"DSCR should be in reasonable band, got {min_dscr}"
+    assert (
+        -100.0 < min_dscr < 100.0
+    ), f"DSCR should be in reasonable band, got {min_dscr}"

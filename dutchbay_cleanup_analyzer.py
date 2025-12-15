@@ -18,7 +18,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 
 class CleanupAnalyzer:
@@ -227,9 +227,7 @@ class CleanupAnalyzer:
 
     def generate_summary(self) -> None:
         """Generate summary statistics."""
-        total_files = sum(
-            len(items) for items in self.report["categories"].values()
-        )
+        total_files = sum(len(items) for items in self.report["categories"].values())
         total_size_kb = sum(
             item.get("size_kb", 0) + item.get("file_count", 0) * 0.5
             for items in self.report["categories"].values()

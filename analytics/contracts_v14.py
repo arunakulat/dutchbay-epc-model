@@ -754,7 +754,9 @@ class ShockSpec:
     def __post_init__(self) -> None:
         """CESSPIT Fail-Fast Validation."""
         if self.base_value <= 0:
-            raise ValueError(f"ShockSpec: base_value must be > 0, got {self.base_value}")
+            raise ValueError(
+                f"ShockSpec: base_value must be > 0, got {self.base_value}"
+            )
         if self.low_pct > 0:
             raise ValueError(f"ShockSpec: low_pct must be <= 0, got {self.low_pct}")
         if self.high_pct < 0:

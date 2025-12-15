@@ -53,7 +53,7 @@ fx.annual_depr,fx.annual_depr,discount_rate_used,0.1,0.1,0.1,0.0,0
 fx.annual_depr,fx.annual_depr,wacc_proxy,0.1,0.1,0.1,0.0,0
 
 
-WACC only ? 
+WACC only ?
 
 variable,label,metric,base_value,low_value,high_value,impact,impact_dir
 capex.usd_total,capex.usd_total,project_irr,0.17875744702652696,0.21243130957744683,0.15186294953428003,0.06056836004316679,-1
@@ -80,7 +80,7 @@ fx.annual_depr,fx.annual_depr,discount_rate_used,0.1,0.1,0.1,0.0,0
 ____
 
 
-And then we have this error 
+And then we have this error
 
 
 (.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model % # 1) Sanity check: syntax only
@@ -104,7 +104,7 @@ _____________________________________________ test_run_multi_metric_tornado_end_
     def test_run_multi_metric_tornado_end_to_end() -> None:
         """
         Contract test for run_multi_metric_tornado:
-    
+
         - Accepts SensitivityRequest
         - Returns MultiMetricSensitivitySuite
         - Produces at least one row per parameter/metric combination.
@@ -127,14 +127,14 @@ _____________________________________________ test_run_multi_metric_tornado_end_
             ],
             metric="project_irr",  # still used by plain run(...)
         )
-    
+
         metrics = ["project_irr", "equity_irr"]
-    
+
 >       suite = run_multi_metric_tornado(req, metrics=metrics)
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-tests/analytics_layer/test_sensitivity_v14_contracts.py:105: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/analytics_layer/test_sensitivity_v14_contracts.py:105:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 request = SensitivityRequest(base_config_path='scenarios/dutchbay_lendercase_2025Q4.yaml', parameters=[ParameterRangeConfig(vari...pacity_factor_pct', base_value=35.0, low_pct=-5.0, high_pct=5.0, steps=5)], override_labels=None, metric='project_irr')
 metrics = ['project_irr', 'equity_irr'], parameters = None
@@ -146,62 +146,62 @@ metrics = ['project_irr', 'equity_irr'], parameters = None
     ) -> MultiMetricSensitivitySuite:
         """
         Run tornado over multiple KPI metrics at once.
-    
+
         GWTF Compliance
         ---------------
         All evaluation flows through evaluate_with_overrides() gateway.
-    
+
         CESSPIT Compliance
         ------------------
         Pre-shock sanitization prevents invalid parameter values.
-    
+
         CASPER Compliance
         -----------------
         Multi-metric tornado for portfolio risk analysis and board reporting.
         Useful for lender scenarios where multiple KPIs must be tracked
         (e.g., project_irr, equity_irr, dscr_min, lcoe_usd_per_kwh).
-    
+
         Phase 1 Note
         ------------
         Base metric values are exposed via MultiMetricSensitivitySuite.base_metrics
         and are also included in each MultiMetricTornadoResult.base_values for
         convenience, even though this duplicates data per row. Future phases may
         optimise JSON payload size while keeping the contract stable.
-    
+
         Two Supported Calling Styles
         -----------------------------
         1. Canonical API (preferred)::
-    
+
             req = SensitivityRequest(
                 base_config_path="scenarios/example_a.yaml",
                 parameters=[...],
             )
             suite = run_multi_metric_tornado(req, metrics=["project_irr", "equity_irr"])
-    
+
         2. Legacy style (for tests/old CI)::
-    
+
             suite = run_multi_metric_tornado(
                 "scenarios/example_a.yaml",
                 metrics=["project_irr", "equity_irr"],
                 parameters=[...],
             )
-    
+
         Parameters
         ----------
         request : SensitivityRequest | str
             Either a SensitivityRequest instance or base config path string.
-    
+
         metrics : list[str]
             KPI metric names to evaluate (e.g., ["project_irr", "equity_irr"]).
-    
+
         parameters : list[ParameterRangeConfig] | None, optional
             Optional explicit parameter list (used only in legacy mode).
-    
+
         Returns
         -------
         MultiMetricSensitivitySuite
             Bundle including per-metric tornado data.
-    
+
         Raises
         ------
         ValueError
@@ -211,7 +211,7 @@ metrics = ['project_irr', 'equity_irr'], parameters = None
         """
         if not metrics:
             raise ValueError("run_multi_metric_tornado: metrics must be non-empty")
-    
+
         if isinstance(request, SensitivityRequest):
             base_config_path = request.base_config_path
             params: list[ParameterRangeConfig] = list(request.parameters)
@@ -223,7 +223,7 @@ metrics = ['project_irr', 'equity_irr'], parameters = None
                 params = list(parameters)
             else:
                 params = list(_load_parameters())
-    
+
         if not params:
             logger.warning(
                 "run_multi_metric_tornado: resolved empty parameters for %s; "
@@ -231,25 +231,25 @@ metrics = ['project_irr', 'equity_irr'], parameters = None
                 base_config_path,
             )
             params = list(_load_parameters())
-    
+
         logger.info(
             "Starting multi-metric tornado for %s on metrics=%s",
             base_config_path,
             list(metrics),
         )
-    
+
         _debug_log_parameters(
             where="run_multi_metric_tornado",
             base_config_path=base_config_path,
             metric_names=list(metrics),
             params=params,
         )
-    
+
         # ════════════════════════════════════════════════════════════════════
         # GWTF ENFORCEMENT: Use _evaluate_base_kpis() gateway
         # ════════════════════════════════════════════════════════════════════
         base_kpis = _evaluate_base_kpis(base_config_path)
-    
+
         missing_metrics = [m for m in metrics if m not in base_kpis]
         if missing_metrics:
 >           raise KeyError(
@@ -265,7 +265,7 @@ __________________________________________ test_run_breakeven_parameter_smoke_ta
     def test_run_breakeven_parameter_smoke_tariff_irr() -> None:
         """
         Breakeven contract smoke test.
-    
+
         Verifies that:
         - run_breakeven_parameter(...) executes successfully
         - returns a numeric breakeven_value
@@ -283,63 +283,63 @@ __________________________________________ test_run_breakeven_parameter_smoke_ta
             max_iter=30,
         )
 
-tests/analytics_layer/test_sensitivity_v14_contracts.py:142: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/analytics_layer/test_sensitivity_v14_contracts.py:142:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 analytics/sensitivity_v14.py:1399: in run_breakeven_parameter
     base_param_value = _get_base_param_value(base_config_path, variable_name)
                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 config_path = 'scenarios/dutchbay_lendercase_2025Q4.yaml', variable_name = 'tariff.tariff_lkr_per_kwh'
 
     def _get_base_param_value(config_path: str, variable_name: str) -> float:
         """
         Look up the scalar base parameter value for a dot-separated variable path.
-    
+
         This helper extracts the true base parameter value from the scenario config,
         allowing breakeven bracketing to use real parameter ranges instead of
         hard-coded nominal values.
-    
+
         GWTF Compliance
         ---------------
         Uses scenarioloader (allowed config utility) rather than direct YAML parsing.
         Does not bypass validation or talk directly to finance modules.
-    
+
         Phase 1 Key Use
         ---------------
         Used by run_breakeven_parameter() to derive real base values instead of
         hard-coding nominal 1.0, so ±50% shocks actually vary the parameter correctly.
-    
+
         Sanitization Notes
         ------------------
         Converts numeric-like values to float but rejects:
         - Non-numeric values (e.g., "high", objects)
         - Badly formatted strings (e.g., comma-formatted numbers) via TypeError
-    
+
         Invalid formats should ideally be caught by CESSPIT schema_guard before
         reaching sensitivity analysis.
-    
+
         Examples
         --------
         >>> _get_base_param_value("scenarios/lendercase.yaml", "tariff.tariff_lkr_per_kwh")
         12.5
-    
+
         >>> _get_base_param_value("scenarios/lendercase.yaml", "finance.capex_usd")
         150000000.0
-    
+
         Parameters
         ----------
         config_path : str
             Path to the v14 scenario config.
-    
+
         variable_name : str
             Dot-separated path to the parameter (e.g., "finance.capex_usd").
-    
+
         Returns
         -------
         float
             The numeric base value of the parameter.
-    
+
         Raises
         ------
         KeyError
@@ -374,4 +374,4 @@ python scripts/run_tornado_from_cli.py \
   --output out/tornado_projectirr_dscr_wacc.csv
 
 [run_tornado_from_cli] Wrote CSV to out/tornado_projectirr_dscr_wacc.csv
-(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model % 
+(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model %

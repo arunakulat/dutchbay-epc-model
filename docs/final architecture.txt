@@ -113,6 +113,3 @@ If you want me to push this over the line next, the obvious “next concrete mov
 
 But from a record-keeper point of view:
 ✅ contracts architecture is now fully captured, indexed, and treated as canonical in the DutchBay EPC data-lake.
-
-
-

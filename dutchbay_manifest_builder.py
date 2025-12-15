@@ -18,8 +18,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
-
+from typing import Any, Dict, List, Optional, Set
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -276,7 +275,9 @@ def print_console_summary(manifest: Dict[str, List[Dict[str, Any]]]) -> None:
     print("─" * 80)
     test_dirs = sorted(set(Path(f["path"]).parent for f in manifest["test"]))
     for test_dir in list(test_dirs)[:10]:  # First 10 dirs
-        tests_in_dir = [f for f in manifest["test"] if f["path"].startswith(str(test_dir))]
+        tests_in_dir = [
+            f for f in manifest["test"] if f["path"].startswith(str(test_dir))
+        ]
         print(f"  {test_dir}/ ({len(tests_in_dir)} files)")
     if len(test_dirs) > 10:
         print(f"  ... and {len(test_dirs) - 10} more directories")
@@ -285,9 +286,7 @@ def print_console_summary(manifest: Dict[str, List[Dict[str, Any]]]) -> None:
     print("=" * 80)
 
 
-def save_manifest(
-    manifest: Dict[str, List[Dict[str, Any]]], output_path: Path
-) -> None:
+def save_manifest(manifest: Dict[str, List[Dict[str, Any]]], output_path: Path) -> None:
     """Save manifest to JSON file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

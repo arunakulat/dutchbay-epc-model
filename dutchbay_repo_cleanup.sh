@@ -96,14 +96,14 @@ get_file_size() {
 move_file() {
   local src="$1"
   local dest="$2"
-  
+
   if [[ ! -e "$src" ]]; then
     return 0
   fi
-  
+
   local size=$(get_file_size "$src")
   TOTAL_SIZE_KB=$((TOTAL_SIZE_KB + size / 1024))
-  
+
   if [[ $DRY_RUN -eq 1 ]]; then
     log "  [DRY-RUN] Would move: $src → $dest ($(( size / 1024 )) KB)"
   else
@@ -115,15 +115,15 @@ move_file() {
 
 delete_file() {
   local file="$1"
-  
+
   if [[ ! -e "$file" ]]; then
     return 0
   fi
-  
+
   local size=$(get_file_size "$file")
   TOTAL_SIZE_KB=$((TOTAL_SIZE_KB + size / 1024))
   FILES_DELETED=$((FILES_DELETED + 1))
-  
+
   if [[ $DRY_RUN -eq 1 ]]; then
     log "  [DRY-RUN] Would delete: $file ($(( size / 1024 )) KB)"
   else
@@ -197,7 +197,7 @@ fi
 
 if [[ $MODE == "archive" ]]; then
   log_section "PHASE 1: Creating Archive Directories"
-  
+
   if [[ $DRY_RUN -eq 0 ]]; then
     mkdir -p "$LEGACY_SCRIPTS_DIR/archive"
     mkdir -p "$LEGACY_DOCS_DIR/archive"
@@ -352,12 +352,12 @@ done
 
 if [[ $MODE == "archive" ]] && [[ $DRY_RUN -eq 0 ]]; then
   log_section "PHASE 6: Creating Archive Documentation"
-  
+
   # legacy_scripts README
   cat > "$LEGACY_SCRIPTS_DIR/README.md" << 'EOF'
 # Legacy Scripts Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -378,15 +378,15 @@ For v14 production work, use the canonical files in:
 
 ## If You Need Something
 
-Check if the file exists in the main directories first. If you genuinely need a legacy version, 
+Check if the file exists in the main directories first. If you genuinely need a legacy version,
 restore from git history: `git log --all --full-history -- <filename>`
 EOF
-  
+
   # legacy_docs README
   cat > "$LEGACY_DOCS_DIR/README.md" << 'EOF'
 # Legacy Documentation Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -404,12 +404,12 @@ For v14 documentation, see:
 - `docs/Dev_workflow_v14.md` - v14 development workflow
 - `docs/PRE-FLIGHT CHECKLIST.md` - Pre-flight validation checklist
 EOF
-  
+
   # legacy_tests README
   cat > "$LEGACY_TESTS_DIR/README.md" << 'EOF'
 # Legacy Tests Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -419,19 +419,19 @@ This directory contains:
 
 ## Status
 
-These tests are kept for **historical reference only**. 
+These tests are kept for **historical reference only**.
 
 For v14 test suite, use tests in:
 - `tests/api/` - API/contract tests
 - `tests/analytics_layer/` - Analytics layer tests
 - `tests/finance/` - Finance module tests
 EOF
-  
+
   # legacy_scenarios README
   cat > "$LEGACY_SCENARIOS_DIR/README.md" << 'EOF'
 # Legacy Scenarios Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -448,7 +448,7 @@ For v14 production work, use current scenarios:
 - `scenarios/dutchbay_optimistic_2025Q4.yaml` - Upside scenario
 - `scenarios/dutchbay_pessimistic_2025Q4.yaml` - Downside scenario
 EOF
-  
+
   log "✓ Created archive README files"
 fi
 
@@ -501,11 +501,11 @@ if [[ $DRY_RUN -eq 1 ]]; then
   echo "To execute cleanup, run: $0 --$MODE"
 else
   success "CLEANUP COMPLETE"
-  
+
   # Git commit if in archive mode
   if [[ $MODE == "archive" ]]; then
     log_section "GIT COMMIT"
-    
+
     if [[ $CONFIRM -eq 0 ]]; then
       read -p "Commit changes to git? (y/n) " -r
       echo
@@ -516,7 +516,7 @@ else
         exit 0
       fi
     fi
-    
+
     git add -A
     git commit -m "chore: Archive legacy/experimental files (v14 cleanup) - $(( TOTAL_SIZE_KB / 1024 )) MB freed"
     git push origin main

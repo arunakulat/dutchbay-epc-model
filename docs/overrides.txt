@@ -133,4 +133,4 @@ finance/cashflow_v14_params.py:404:      - tariff_lkr_per_kwh >= 0
 finance/cashflow_v14_params.py:472:    # Validate tariff (allow zero for edge case testing)
 finance/cashflow_v14_params.py:473:    tariff = _as_float_or_none(
 finance/cashflow_v14_params.py:476:            ("tariff", "lkr_per_kwh"),
-(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model % 
+(.venv311) aruna@Arunas-Mac-mini DutchBay_EPC_Model %

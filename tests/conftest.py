@@ -114,18 +114,18 @@ def test_iteration_config(fast_test_mode: bool) -> dict[str, int]:
     """
     if fast_test_mode:
         return {
-            "monte_carlo_iterations": 20,           # 500x faster (was 10,000+)
-            "sensitivity_parameters": 3,            # Limit to 3 params (was 8+)
-            "sensitivity_steps": 3,                 # 3-point sensitivity (was 5)
-            "timeout_seconds": 30,                  # Short timeout for dev
+            "monte_carlo_iterations": 20,  # 500x faster (was 10,000+)
+            "sensitivity_parameters": 3,  # Limit to 3 params (was 8+)
+            "sensitivity_steps": 3,  # 3-point sensitivity (was 5)
+            "timeout_seconds": 30,  # Short timeout for dev
             "mode": "fast",
         }
     else:
         return {
-            "monte_carlo_iterations": 100000,       # Full production runs
-            "sensitivity_parameters": 12,           # All parameters
-            "sensitivity_steps": 5,                 # Full 5-point tornado
-            "timeout_seconds": 300,                 # 5 min timeout
+            "monte_carlo_iterations": 100000,  # Full production runs
+            "sensitivity_parameters": 12,  # All parameters
+            "sensitivity_steps": 5,  # Full 5-point tornado
+            "timeout_seconds": 300,  # 5 min timeout
             "mode": "full",
         }
 

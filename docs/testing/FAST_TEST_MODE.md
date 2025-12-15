@@ -64,12 +64,12 @@ def test_monte_carlo_basic(fast_test_mode):
     """Test Monte Carlo analysis with configurable iterations."""
     # Adjust iterations based on test mode
     n_iterations = 20 if fast_test_mode else 100000
-    
+
     result = run_monte_carlo_analysis(
         config_path="scenarios/test_mc.yaml",
         n_iterations=n_iterations,
     )
-    
+
     assert result.success_rate > 0.95
     assert "p50" in result.percentiles
 ```
@@ -82,18 +82,18 @@ import pytest
 def test_sensitivity_analysis(test_iteration_config):
     """Test sensitivity with configurable parameters."""
     config = test_iteration_config
-    
+
     # Access specific configuration
     n_params = config["sensitivity_parameters"]  # 3 in fast, 12 in full
     n_steps = config["sensitivity_steps"]        # 3 in fast, 5 in full
-    
+
     # Run sensitivity with appropriate complexity
     result = run_tornado_sensitivity(
         base_config="scenarios/lender.yaml",
         parameters=parameter_list[:n_params],
         steps=n_steps,
     )
-    
+
     assert len(result.impacts) > 0
 ```
 
@@ -103,22 +103,22 @@ def test_sensitivity_analysis(test_iteration_config):
 def test_comprehensive_analysis(test_iteration_config):
     """Use full configuration dict for complex tests."""
     config = test_iteration_config
-    
+
     print(f"Running in {config['mode']} mode")
-    
+
     # All available config keys:
     # - monte_carlo_iterations: int (20 or 100000)
     # - sensitivity_parameters: int (3 or 12)
     # - sensitivity_steps: int (3 or 5)
     # - timeout_seconds: int (30 or 300)
     # - mode: str ("fast" or "full")
-    
+
     result = run_analysis(
         n_iterations=config["monte_carlo_iterations"],
         max_params=config["sensitivity_parameters"],
         timeout=config["timeout_seconds"],
     )
-    
+
     assert result is not None
 ```
 
@@ -144,7 +144,7 @@ def test_monte_carlo_old():
 def test_monte_carlo_new(fast_test_mode):
     """New test with configurable iterations."""
     n = 20 if fast_test_mode else 100000  # ✅ Fast in dev!
-    
+
     result = run_monte_carlo(
         config="test.yaml",
         n_iterations=n,
@@ -158,8 +158,8 @@ def test_monte_carlo_new(fast_test_mode):
 
 ### `fast_test_mode` (bool)
 
-**Scope**: Session  
-**Default**: `True` (fast mode)  
+**Scope**: Session
+**Default**: `True` (fast mode)
 **Type**: `bool`
 
 ```python
@@ -172,8 +172,8 @@ def test_example(fast_test_mode):
 
 ### `test_iteration_config` (dict)
 
-**Scope**: Session  
-**Default**: Fast mode configuration  
+**Scope**: Session
+**Default**: Fast mode configuration
 **Type**: `dict[str, int]`
 
 **Fast Mode Config**:
@@ -234,7 +234,7 @@ def test_run_monte_carlo_analysis_toy_config():
         config_path="scenarios/test_monte_carlo.yaml",
         n_iterations=100000,  # Takes 2-3 minutes
     )
-    
+
     assert result.status == "success"
     assert result.n_successful > 95000
     assert "p50" in result.percentiles
@@ -249,15 +249,15 @@ def test_run_monte_carlo_analysis_toy_config():
 def test_run_monte_carlo_analysis_toy_config(test_iteration_config):
     """Test MC analysis with toy config - FAST in dev, FULL in CI."""
     config = test_iteration_config
-    
+
     result = run_monte_carlo_analysis(
         config_path="scenarios/test_monte_carlo.yaml",
         n_iterations=config["monte_carlo_iterations"],  # 20 or 100k
     )
-    
+
     # Adjust assertions for fast mode
     min_successful = 18 if config["mode"] == "fast" else 95000
-    
+
     assert result.status == "success"
     assert result.n_successful > min_successful
     assert "p50" in result.percentiles
@@ -362,7 +362,7 @@ Before (fixed iterations):
 
 After (fast mode):
 - Developer runs tests: 30 seconds wait
-- Test, fix, retest cycle: 2-3 minutes  
+- Test, fix, retest cycle: 2-3 minutes
 - Productivity: MASSIVELY IMPROVED 🚀
 ```
 

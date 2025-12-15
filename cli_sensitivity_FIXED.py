@@ -141,9 +141,7 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
             with open(path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except ImportError:
-            raise ImportError(
-                "PyYAML required for YAML support: pip install pyyaml"
-            )
+            raise ImportError("PyYAML required for YAML support: pip install pyyaml")
     else:
         raise ValueError(f"Unsupported config format: {suffix}")
 

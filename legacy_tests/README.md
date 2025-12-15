@@ -1,6 +1,6 @@
 # Legacy Tests Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -10,7 +10,7 @@ This directory contains:
 
 ## Status
 
-These tests are kept for **historical reference only**. 
+These tests are kept for **historical reference only**.
 
 For v14 test suite, use tests in:
 - `tests/api/` - API/contract tests

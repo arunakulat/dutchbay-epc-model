@@ -3,9 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, List, Optional
 
-from analytics.contracts_v14 import ShockSpec, SensitivitySuite, StandardShockLibrary, ShockResult
+from analytics.contracts_v14 import (
+    SensitivitySuite,
+    ShockResult,
+    ShockSpec,
+    StandardShockLibrary,
+)
 from analytics.evaluate_scenario import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
+
 
 def run_sensitivity_analysis(
     base_config_path: str | Path,
@@ -34,6 +40,7 @@ def run_sensitivity_analysis(
     if shock_specs is None:
         shock_specs = []
         cfg = base_cfg
+
         def _get_cfg_value(keys: List[str]) -> Optional[float]:
             """Get nested config value by list of keys (case-insensitive)."""
             d = cfg
@@ -49,6 +56,7 @@ def run_sensitivity_analysis(
                 if d is None:
                     return None
             return float(d) if isinstance(d, (int, float)) else None
+
         # Standard shock base values
         capex_base = _get_cfg_value(["project", "capex_usd_per_kw"])
         if capex_base is not None:

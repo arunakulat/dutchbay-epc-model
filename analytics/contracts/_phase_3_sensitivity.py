@@ -1,19 +1,21 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 3: SENSITIVITY ANALYSIS - Core Data Contracts
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass(frozen=True)
 class ShockSpec:
     """Specification for a single sensitivity shock.
-    
+
     Defines the low and high values for a variable to test its impact on metrics.
     Immutable (frozen=True) ensures contracts cannot be accidentally modified.
     """
+
     variable_name: str
     low_value: float
     high_value: float
@@ -23,10 +25,11 @@ class ShockSpec:
 @dataclass(frozen=True)
 class ShockResult:
     """Result of applying a shock to a variable.
-    
+
     Contains computed properties like impact and direction.
     Immutable to prevent accidental modification after calculation.
     """
+
     variable_name: str
     label: str
     base_metric: float
@@ -41,13 +44,15 @@ class ShockResult:
 # AGGREGATION CONTRACT: SensitivitySuite
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass(frozen=True)
 class SensitivitySuite:
     """Aggregate results of sensitivity analysis.
-    
+
     Contains all shock results, tornado ranking, and metadata.
     Single source of truth for sensitivity analysis output.
     """
+
     scenario_name: str
     metric_name: str
     base_metric_value: float
@@ -110,9 +115,10 @@ class SensitivitySuite:
 # STANDARD SHOCK LIBRARY: Pre-defined common shocks
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class StandardShockLibrary:
     """Library of standard sensitivity shocks for DFI/Lender analysis.
-    
+
     Provides 7 standard shock types commonly used in project finance:
     1. CAPEX Overrun
     2. OPEX Overrun
@@ -121,7 +127,7 @@ class StandardShockLibrary:
     5. Production Shortfall
     6. Tariff Reduction
     7. Construction Delay
-    
+
     All shocks use ±10% or ±1% (for rates) changes.
     """
 
@@ -132,7 +138,7 @@ class StandardShockLibrary:
             variable_name="capex_total",
             low_value=base_capex * 0.90,
             high_value=base_capex * 1.10,
-            label="CAPEX ±10%"
+            label="CAPEX ±10%",
         )
 
     @staticmethod
@@ -142,7 +148,7 @@ class StandardShockLibrary:
             variable_name="opex_annual",
             low_value=base_opex * 0.90,
             high_value=base_opex * 1.10,
-            label="OPEX ±10%"
+            label="OPEX ±10%",
         )
 
     @staticmethod
@@ -152,7 +158,7 @@ class StandardShockLibrary:
             variable_name="interest_rate",
             low_value=base_rate - 0.01,
             high_value=base_rate + 0.01,
-            label="Interest Rate ±1%"
+            label="Interest Rate ±1%",
         )
 
     @staticmethod
@@ -162,7 +168,7 @@ class StandardShockLibrary:
             variable_name="inflation_rate",
             low_value=base_inflation - 0.01,
             high_value=base_inflation + 0.01,
-            label="Inflation ±1%"
+            label="Inflation ±1%",
         )
 
     @staticmethod
@@ -172,7 +178,7 @@ class StandardShockLibrary:
             variable_name="annual_output",
             low_value=base_output * 0.90,
             high_value=base_output * 1.10,
-            label="Production ±10%"
+            label="Production ±10%",
         )
 
     @staticmethod
@@ -182,7 +188,7 @@ class StandardShockLibrary:
             variable_name="tariff_rate",
             low_value=base_tariff * 0.90,
             high_value=base_tariff * 1.10,
-            label="Tariff ±10%"
+            label="Tariff ±10%",
         )
 
     @staticmethod
@@ -192,7 +198,7 @@ class StandardShockLibrary:
             variable_name="construction_period",
             low_value=0.0 if months_delay > 0 else months_delay,
             high_value=months_delay,
-            label=f"Construction Delay ±{months_delay} months"
+            label=f"Construction Delay ±{months_delay} months",
         )
 
 

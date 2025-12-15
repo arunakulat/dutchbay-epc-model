@@ -1,6 +1,6 @@
 # Legacy Documentation Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:

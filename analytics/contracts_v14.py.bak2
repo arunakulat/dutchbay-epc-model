@@ -254,11 +254,11 @@ class ShockResult:
     base_value: float    # Input parameter base
     low_value: float     # Input parameter low
     high_value: float    # Input parameter high
-    
+
     base_metric: float   # Output metric base (e.g., IRR 12%)
     low_metric: float    # Output metric at low input
     high_metric: float   # Output metric at high input
-    
+
     label: str | None = None
 
     @property
@@ -271,10 +271,10 @@ class ShockResult:
         """Direction of correlation between Input and Output."""
         delta_input = self.high_value - self.low_value
         delta_metric = self.high_metric - self.low_metric
-        
+
         if abs(delta_metric) < 1e-9:
             return "neutral"
-        
+
         # If input increases and metric increases -> positive correlation
         return "positive" if (delta_metric * delta_input) > 0 else "negative"
 
@@ -283,13 +283,13 @@ class ShockResult:
         """Elasticity: % change in metric / % change in input."""
         if self.base_value == 0 or self.base_metric == 0:
             return 0.0
-        
+
         pct_change_input = (self.high_value - self.low_value) / self.base_value
         pct_change_metric = (self.high_metric - self.low_metric) / self.base_metric
-        
+
         if abs(pct_change_input) < 1e-9:
             return 0.0
-            
+
         return pct_change_metric / pct_change_input
 
 @dataclass(frozen=True)
@@ -314,7 +314,7 @@ class StandardShockLibrary:
     [SENS-001] Lender-Grade Standard Shocks (Factory).
     Returns ready-to-use ShockSpec objects.
     """
-    
+
     @staticmethod
     def capex_overrun(base: float, pct: float = 10.0) -> ShockSpec:
         return ShockSpec("project.capex_usd_per_kw", base, -pct, pct, "CAPEX Sensitivity")
@@ -486,14 +486,14 @@ def build_casper_payload(
         "scenario": scenario.as_dict(),
         "baseline_kpis": dict(baseline_kpis) if baseline_kpis else {},
     }
-    
+
     if sensitivities:
         payload["sensitivity"] = {
             "metric": sensitivities.metric_name,
             "base_metric": sensitivities.base_metric_value,
             "tornado": [asdict(r) for r in sensitivities.tornado_ranking]
         }
-        
+
     if monte_carlo:
         payload["monte_carlo"] = asdict(monte_carlo)
 

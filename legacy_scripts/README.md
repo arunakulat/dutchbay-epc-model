@@ -1,6 +1,6 @@
 # Legacy Scripts Archive
 
-**Date:** 2025-12-13  
+**Date:** 2025-12-13
 **Reason:** Cleanup for v14 focus
 
 This directory contains:
@@ -21,5 +21,5 @@ For v14 production work, use the canonical files in:
 
 ## If You Need Something
 
-Check if the file exists in the main directories first. If you genuinely need a legacy version, 
+Check if the file exists in the main directories first. If you genuinely need a legacy version,
 restore from git history: `git log --all --full-history -- <filename>`

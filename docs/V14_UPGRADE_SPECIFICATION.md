@@ -116,7 +116,7 @@ class ScenarioManagerV14:
     def __init__(self, config: Dict):
         self.base_config = config
         self.scenarios = config['scenarios']
-    
+
     def apply_scenario(self, scenario_name: str) -> Dict:
         """Apply tax scenario overlay to base config"""
         pass
@@ -193,13 +193,13 @@ def sculpt_with_grace(
 def generate_timeline_v14(config: Dict) -> List[int]:
     """
     Generate full project timeline including construction.
-    
+
     Returns: [-2, -1, 0, 1, 2, ..., 20]
     Total periods: 23
     """
     construction_years = config['construction']['duration_years']
     operational_years = config['project']['operational_life_years']
-    
+
     timeline = list(range(-construction_years, 0))  # [-2, -1]
     timeline += list(range(operational_years + 1))  # [0, 1, ..., 20]
     return timeline
@@ -214,7 +214,7 @@ def calculate_cfads_with_construction(
 ) -> List[float]:
     """
     Calculate CFADS including construction period.
-    
+
     Construction years: Negative CFADS (capex outflows)
     Operational years: Positive CFADS (revenue - opex - tax)
     """
@@ -282,7 +282,7 @@ def calculate_depreciation_schedule(
 ) -> List[float]:
     """
     Calculate annual depreciation.
-    
+
     Args:
         method: 'straight_line' or 'accelerated'
         enhanced_pct: Multiplier for enhanced capital allowance
@@ -290,7 +290,7 @@ def calculate_depreciation_schedule(
     if method == 'straight_line':
         annual = (asset_value / years) * enhanced_pct
         return [annual] * years + [0] * (20 - years)
-    
+
     elif method == 'accelerated':
         # Double declining balance or similar
         schedule = []
@@ -312,7 +312,7 @@ def apply_tax_holiday(
 ) -> List[float]:
     """
     Apply tax holiday to operational years.
-    
+
     Returns: List of tax amounts
     """
     tax = []
@@ -333,21 +333,21 @@ def calculate_tax_with_scenario(
 ) -> Tuple[List[float], List[float]]:
     """
     Full tax calculation with scenario parameters.
-    
+
     Returns: (tax_paid, taxable_income)
     """
     taxable_income = []
     for i in range(len(ebitda)):
         ti = ebitda[i] - depreciation[i] - interest[i]
         taxable_income.append(ti)
-    
+
     tax_paid = apply_tax_holiday(
         taxable_income,
         scenario_config['tax']['corporate_rate'],
         scenario_config['tax']['tax_holiday_years'],
         scenario_config['tax']['tax_holiday_start_year']
     )
-    
+
     return tax_paid, taxable_income
 ```
 
@@ -364,52 +364,52 @@ class ScenarioManagerV14:
     """
     Manage and apply tax/depreciation scenarios for v14.
     """
-    
+
     def __init__(self, config_path: str):
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         self.base_config = deepcopy(self.config)
-    
+
     def list_scenarios(self) -> List[str]:
         """Return available scenario names."""
         return list(self.config['scenarios'].keys())
-    
+
     def get_scenario_info(self, scenario_name: str) -> Dict:
         """Get scenario description and parameters."""
         if scenario_name not in self.config['scenarios']:
             raise ValueError(f"Scenario '{scenario_name}' not found")
         return self.config['scenarios'][scenario_name]
-    
+
     def apply_scenario(self, scenario_name: str) -> Dict[str, Any]:
         """
         Apply scenario overlay to base configuration.
-        
+
         Returns: Updated configuration with scenario parameters
         """
         if scenario_name not in self.config['scenarios']:
             raise ValueError(f"Scenario '{scenario_name}' not found")
-        
+
         # Deep copy base config
         updated_config = deepcopy(self.base_config)
-        
+
         # Get scenario parameters
         scenario = self.config['scenarios'][scenario_name]
-        
+
         # Merge tax parameters
         if 'tax' in scenario:
             for key, value in scenario['tax'].items():
                 updated_config['tax'][key] = value
-        
+
         # Add scenario metadata
         updated_config['_active_scenario'] = scenario_name
         updated_config['_scenario_description'] = scenario['description']
-        
+
         return updated_config
-    
+
     def compare_scenarios(self, scenarios: List[str]) -> Dict:
         """
         Generate comparison matrix for scenarios.
-        
+
         Returns: Dict with key metrics by scenario
         """
         comparison = {}
@@ -449,42 +449,42 @@ def generate_comprehensive_equity_table_v14(
     """
     Generate the comprehensive 20-year equity analysis table
     from v2.4.2 thread specifications.
-    
+
     Returns: DataFrame with all equity metrics
     """
     # Split equity commitment
     usd_equity_lkr = equity_commitment_lkr * usd_equity_pct
     lkr_equity_lkr = equity_commitment_lkr * lkr_equity_pct
     usd_equity_usd = usd_equity_lkr / usd_fx_rates[0]
-    
+
     # Calculate declining balance
     declining_balance = []
     balance = equity_commitment_lkr
     for div in equity_dividend:
         balance = max(balance - div, 0)
         declining_balance.append(balance)
-    
+
     # Split dividends by currency
     usd_equity_div_lkr = [div * usd_equity_pct for div in equity_dividend]
     lkr_equity_div_lkr = [div * lkr_equity_pct for div in equity_dividend]
-    
+
     # Convert USD dividend to USD
     usd_equity_div_usd = [
-        usd_equity_div_lkr[i] / usd_fx_rates[i] 
+        usd_equity_div_lkr[i] / usd_fx_rates[i]
         for i in range(len(usd_equity_div_lkr))
     ]
-    
+
     # Calculate bank-equivalent rates
     usd_bank_rate = [
-        (usd_equity_div_usd[i] / usd_equity_usd * 100) 
+        (usd_equity_div_usd[i] / usd_equity_usd * 100)
         for i in range(len(usd_equity_div_usd))
     ]
-    
+
     lkr_bank_rate = [
         (lkr_equity_div_lkr[i] / lkr_equity_lkr * 100)
         for i in range(len(lkr_equity_div_lkr))
     ]
-    
+
     # Build DataFrame (operational years only)
     operational_years = [i for i in timeline if i > 0]
     df = pd.DataFrame({
@@ -502,7 +502,7 @@ def generate_comprehensive_equity_table_v14(
         'LKR Bank Rate (%)': lkr_bank_rate[:len(operational_years)],
         'USD Spot Rate (LKR/USD)': usd_fx_rates[:len(operational_years)]
     })
-    
+
     return df
 
 def calculate_payback_period(

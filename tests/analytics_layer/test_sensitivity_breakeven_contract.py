@@ -63,8 +63,8 @@ def test_run_breakeven_parameter_uses_absolute_overrides_and_converges(
         variable_name="tariff.tariff_lkr_per_kwh",
         target_metric="project_irr",
         target_value=0.02,
-        low_pct=-0.5,   # -50% ⇒ 5.0
-        high_pct=0.5,   # +50% ⇒ 15.0
+        low_pct=-0.5,  # -50% ⇒ 5.0
+        high_pct=0.5,  # +50% ⇒ 15.0
         tol=1e-6,
         max_iter=30,
     )
@@ -87,4 +87,3 @@ def test_run_breakeven_parameter_uses_absolute_overrides_and_converges(
     # Bracket should be [5.0, 15.0] from ±50% of base=10
     assert min(shocked_values) >= 5.0 - 1e-9
     assert max(shocked_values) <= 15.0 + 1e-9
-

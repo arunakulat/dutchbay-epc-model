@@ -110,14 +110,14 @@ new_code = '''
 @dataclass(frozen=True)
 class TechnologyBreakdown:
     """Per-technology KPI breakdown for lender/investor visibility."""
-    
+
     technology: str  # "wind", "solar", "battery", etc.
     annual_aep_kwh: float  # Annual energy production (kWh)
     annual_cfads_usd: float  # Annual cash flow after debt service (USD)
     dscr_min: Optional[float]  # Minimum DSCR for this technology
     capex_usd: float  # Total capital expenditure (USD)
     capex_per_mw: float  # CAPEX per MW (USD/MW)
-    
+
     def __post_init__(self) -> None:
         """Validate technology breakdown data."""
         if self.annual_aep_kwh < 0:
@@ -132,21 +132,21 @@ class TechnologyBreakdown:
 class CasperResult:
     """
     Unified CASPER analysis result - canonical output from run_casper_analysis().
-    
+
     All top-level fields are present; optional fields may be None.
     This is a versioned API contract (casper_version in metadata).
     """
-    
+
     # Core fields (always present)
     scenario: ScenarioResult
     kpis: Dict[str, float]
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Optional analytical results
     sensitivity: Optional['SensitivitySuite'] = None
     monte_carlo: Optional[MonteCarloResult] = None
     analytics_summary: Optional[Dict[str, Any]] = None
-    
+
     # NEW (Sprint 10): Multi-technology support
     generation: Optional['MultiTechGenerationResult'] = None
     technology_breakdown: Optional[List[TechnologyBreakdown]] = None
@@ -202,7 +202,7 @@ try:
         capex_usd=150e6,
         capex_per_mw=1.5e6,
     )
-    
+
     scenario = ScenarioResult(
         scenario_name="test",
         config_path="test.yaml",
@@ -212,13 +212,13 @@ try:
         min_dscr=1.2,
         max_debt_usd=80e6,
     )
-    
+
     result = CasperResult(
         scenario=scenario,
         kpis={"project_irr": 0.135},
         metadata={"casper_version": "v1"}
     )
-    
+
     assert result.generation is None
     assert result.technology_breakdown is None
     print("✓ Instantiation works")
@@ -283,16 +283,16 @@ if all_idx != -1:
     run_func = '''def run(request: SensitivityRequest) -> SensitivitySuite:
     """
     Canonical entry point for sensitivity analysis (CASPER orchestration).
-    
+
     This is a thin wrapper around run_tornado_sensitivity() that preserves
     backward compatibility and provides a clean API for CASPER integration.
-    
+
     Args:
         request: SensitivityRequest with base config path and parameters.
-    
+
     Returns:
         SensitivitySuite with tornado results, base metric, and config path.
-    
+
     Raises:
         ValueError: If config or parameters are invalid.
         KeyError: If base KPI metric not found in evaluation results.
@@ -303,7 +303,7 @@ if all_idx != -1:
 
 '''
     modified = content[:insertion_point] + run_func + content[insertion_point:]
-    
+
     # Update __all__ to include "run"
     all_closing = modified.find("]", all_idx)
     all_section = modified[all_idx:all_closing]
@@ -317,16 +317,16 @@ else:
 def run(request: SensitivityRequest) -> SensitivitySuite:
     """
     Canonical entry point for sensitivity analysis (CASPER orchestration).
-    
+
     This is a thin wrapper around run_tornado_sensitivity() that preserves
     backward compatibility and provides a clean API for CASPER integration.
-    
+
     Args:
         request: SensitivityRequest with base config path and parameters.
-    
+
     Returns:
         SensitivitySuite with tornado results, base metric, and config path.
-    
+
     Raises:
         ValueError: If config or parameters are invalid.
         KeyError: If base KPI metric not found in evaluation results.

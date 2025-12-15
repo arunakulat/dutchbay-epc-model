@@ -1,7 +1,7 @@
 # Dutch Bay v2.4.4 - Setup Instructions
 
-**Version:** 2.4.4  
-**Date:** November 16, 2025  
+**Version:** 2.4.4
+**Date:** November 16, 2025
 **Purpose:** Complete setup guide for clean v2.4.4 installation
 
 ---
@@ -327,7 +327,7 @@ python scripts/parameter_validation.py --config config/config_v244.yaml
 # Scenario 1: 5-year base
 python scripts/run_full_pipeline.py --scenario five_year_tax_holiday_no_accel_dep
 
-# Scenario 2: 5-year accelerated  
+# Scenario 2: 5-year accelerated
 python scripts/run_full_pipeline.py --scenario five_year_tax_holiday_accel_dep
 
 # Scenario 3: 7-year base
