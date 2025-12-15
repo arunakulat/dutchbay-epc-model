@@ -14,6 +14,7 @@ This module provides:
 2. BaseSensitivityVisitor - Shared LibCST visitor for import/call inspection
 3. load_sensitivity_source() - Unified file loading from multiple locations
 4. Shared fixtures and configuration for all test suites
+5. TEST PERFORMANCE - Configurable iteration counts for Monte Carlo/sensitivity
 """
 
 from __future__ import annotations
@@ -48,6 +49,85 @@ analytics = importlib.import_module("analytics")
 # Optional: Uncomment for debugging path resolution
 # print("Pytest using analytics from:", analytics.__file__)
 # print("Pytest sys.path[0]:", sys.path[0])
+
+
+# =============================================================================
+# TEST PERFORMANCE CONFIGURATION
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def fast_test_mode(request) -> bool:
+    """
+    Session-scoped fixture: determine if tests should run in fast mode.
+
+    Fast mode reduces Monte Carlo and sensitivity test iterations for rapid
+    development feedback. Full iterations run in CI/CD or with --full-iterations.
+
+    Returns
+    -------
+    bool
+        True if fast mode enabled (default), False for full iterations.
+
+    Usage
+    -----
+    Command line:
+        pytest                        # Fast mode (default)
+        pytest --fast-test-mode       # Explicit fast mode
+        pytest --full-iterations      # Full iterations
+
+    In test code:
+        def test_monte_carlo(fast_test_mode):
+            n_iter = 20 if fast_test_mode else 100000
+            result = run_monte_carlo(n_iterations=n_iter)
+    """
+    # Check if --full-iterations flag is set
+    return not request.config.getoption("--full-iterations", default=False)
+
+
+@pytest.fixture(scope="session")
+def test_iteration_config(fast_test_mode: bool) -> dict[str, int]:
+    """
+    Session-scoped fixture: iteration counts for different test types.
+
+    Provides centralized configuration for test performance tuning.
+
+    Parameters
+    ----------
+    fast_test_mode : bool
+        Whether tests are running in fast mode.
+
+    Returns
+    -------
+    dict[str, int]
+        Configuration with keys:
+        - monte_carlo_iterations: Number of MC simulations
+        - sensitivity_parameters: Max parameters for sensitivity analysis
+        - sensitivity_steps: Steps per parameter in tornado charts
+        - timeout_seconds: Test timeout multiplier
+
+    Examples
+    --------
+    >>> def test_monte_carlo(test_iteration_config):
+    ...     n = test_iteration_config["monte_carlo_iterations"]
+    ...     result = run_monte_carlo(n_iterations=n)
+    """
+    if fast_test_mode:
+        return {
+            "monte_carlo_iterations": 20,           # 500x faster (was 10,000+)
+            "sensitivity_parameters": 3,            # Limit to 3 params (was 8+)
+            "sensitivity_steps": 3,                 # 3-point sensitivity (was 5)
+            "timeout_seconds": 30,                  # Short timeout for dev
+            "mode": "fast",
+        }
+    else:
+        return {
+            "monte_carlo_iterations": 100000,       # Full production runs
+            "sensitivity_parameters": 12,           # All parameters
+            "sensitivity_steps": 5,                 # Full 5-point tornado
+            "timeout_seconds": 300,                 # 5 min timeout
+            "mode": "full",
+        }
 
 
 # =============================================================================
@@ -275,6 +355,46 @@ def visitor(sensitivity_module: cst.Module) -> BaseSensitivityVisitor:
 # =============================================================================
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """
+    Add custom command-line options for test configuration.
+
+    Options:
+    --------
+    --fast-test-mode
+        Run tests with reduced iterations (20 MC, 3 params).
+        This is the DEFAULT mode.
+
+    --full-iterations
+        Run tests with full production iterations (100k MC, all params).
+        Use for pre-commit validation and CI/CD.
+
+    Examples:
+    ---------
+    # Fast development mode (default)
+    pytest
+    pytest --fast-test-mode
+
+    # Full validation mode
+    pytest --full-iterations
+
+    # Fast mode with verbose output
+    pytest -v --fast-test-mode
+    """
+    parser.addoption(
+        "--fast-test-mode",
+        action="store_true",
+        default=False,
+        help="Run tests with reduced iterations for faster development (DEFAULT)",
+    )
+    parser.addoption(
+        "--full-iterations",
+        action="store_true",
+        default=False,
+        help="Run tests with full production iterations (100k+ MC simulations)",
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers for test categorization.
 
@@ -282,6 +402,7 @@ def pytest_configure(config: pytest.Config) -> None:
     - lint: Static analysis and linting tests
     - analytics_layer: Functional/integration tests
     - sensitivity: Tests related to sensitivity_v14 module
+    - slow: Tests that take >5 seconds (can skip with -m "not slow")
     """
     config.addinivalue_line("markers", "lint: Static analysis and linting tests")
     config.addinivalue_line(
@@ -291,6 +412,23 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "sensitivity: Tests related to sensitivity_v14 module"
     )
+    config.addinivalue_line(
+        "markers",
+        "slow: Tests with long runtime (>5s, use -m 'not slow' to skip)",
+    )
+
+    # Print test mode banner
+    if config.getoption("--full-iterations"):
+        print("\n" + "=" * 78)
+        print("TEST MODE: FULL ITERATIONS (100k+ MC simulations)")
+        print("Expected runtime: 5-10 minutes for full suite")
+        print("=" * 78 + "\n")
+    else:
+        print("\n" + "=" * 78)
+        print("TEST MODE: FAST (20 iterations, 3 params)")
+        print("Expected runtime: ~30 seconds for full suite")
+        print("Use --full-iterations for production validation")
+        print("=" * 78 + "\n")
 
 
 # =============================================================================
@@ -301,12 +439,14 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_collection_modifyitems(
     config: pytest.Config, items: List[pytest.Item]
 ) -> None:
-    """Automatically apply markers based on test file location.
+    """
+    Automatically apply markers based on test file location and characteristics.
 
     Tests in:
     - tests/lint/ → lint marker
     - tests/analytics_layer/ → analytics_layer marker
     - Any test with 'sensitivity' in name → sensitivity marker
+    - Tests with 'monte_carlo' in name → slow marker (can be skipped)
     """
     for item in items:
         # Mark by directory
@@ -318,12 +458,17 @@ def pytest_collection_modifyitems(
         # Mark by name
         if "sensitivity" in item.nodeid:
             item.add_marker(pytest.mark.sensitivity)
+        if "monte_carlo" in item.nodeid.lower():
+            item.add_marker(pytest.mark.slow)
 
 
 __all__ = [
     # Path setup
     "REPO_ROOT",
     "analytics",
+    # Performance fixtures
+    "fast_test_mode",
+    "test_iteration_config",
     # Visitors
     "BaseSensitivityVisitor",
     # Utilities
