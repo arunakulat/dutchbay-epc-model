@@ -399,22 +399,58 @@ def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers for test categorization.
 
     Markers:
+    - edge_case: Edge case and boundary condition stress tests
+    - stress: Stress tests, failure scenarios, and load/performance edge cases
+    - critical_error: Critical error handling and recovery tests
+    - integration: Integration tests spanning multiple modules
+    - unit: Unit tests for individual functions and classes
+    - slow: Tests taking >5 seconds (skip with -m "not slow")
+    - regression: Regression tests with frozen/expected output
+    - monte_carlo: Monte Carlo simulation tests
+    - sensitivity: Sensitivity analysis tests
     - lint: Static analysis and linting tests
-    - analytics_layer: Functional/integration tests
-    - sensitivity: Tests related to sensitivity_v14 module
-    - slow: Tests that take >5 seconds (can skip with -m "not slow")
+    - analytics_layer: Functional/integration tests for analytics layer
     """
-    config.addinivalue_line("markers", "lint: Static analysis and linting tests")
     config.addinivalue_line(
         "markers",
-        "analytics_layer: Functional/integration tests for analytics layer",
+        "edge_case: Edge case and boundary condition stress tests",
     )
     config.addinivalue_line(
-        "markers", "sensitivity: Tests related to sensitivity_v14 module"
+        "markers",
+        "stress: Stress/failure/load scenario tests",
+    )
+    config.addinivalue_line(
+        "markers",
+        "critical_error: Critical error handling and recovery tests",
+    )
+    config.addinivalue_line(
+        "markers",
+        "integration: Integration tests spanning multiple modules",
+    )
+    config.addinivalue_line(
+        "markers",
+        "unit: Unit tests for individual functions and classes",
     )
     config.addinivalue_line(
         "markers",
         "slow: Tests with long runtime (>5s, use -m 'not slow' to skip)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "regression: Regression tests with frozen/expected output",
+    )
+    config.addinivalue_line(
+        "markers",
+        "monte_carlo: Monte Carlo simulation tests",
+    )
+    config.addinivalue_line(
+        "markers",
+        "sensitivity: Sensitivity analysis tests",
+    )
+    config.addinivalue_line("markers", "lint: Static analysis and linting tests")
+    config.addinivalue_line(
+        "markers",
+        "analytics_layer: Functional/integration tests for analytics layer",
     )
 
     # Print test mode banner
@@ -447,6 +483,7 @@ def pytest_collection_modifyitems(
     - tests/analytics_layer/ → analytics_layer marker
     - Any test with 'sensitivity' in name → sensitivity marker
     - Tests with 'monte_carlo' in name → slow marker (can be skipped)
+    - Tests with 'edge_case' or 'stress' in name → edge_case/stress markers
     """
     for item in items:
         # Mark by directory
@@ -460,6 +497,10 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.sensitivity)
         if "monte_carlo" in item.nodeid.lower():
             item.add_marker(pytest.mark.slow)
+        if "edge_case" in item.nodeid.lower():
+            item.add_marker(pytest.mark.edge_case)
+        if "stress" in item.nodeid.lower():
+            item.add_marker(pytest.mark.stress)
 
 
 __all__ = [
