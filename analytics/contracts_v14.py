@@ -734,6 +734,116 @@ class TailRiskSnapshot:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# SENS-001 Shock Contracts (Sensitivity Analysis)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class ShockSpec:
+    """
+    [SENS-001] Specification for a single variable shock.
+    CCCDIR Compliant: Immutable, Typed, Validated.
+    """
+
+    variable_name: str  # e.g., "project.capex_usd_per_kw"
+    base_value: float  # e.g., 1200.0
+    low_pct: float  # e.g., -10.0
+    high_pct: float  # e.g., +10.0
+    label: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """CESSPIT Fail-Fast Validation."""
+        if self.base_value <= 0:
+            raise ValueError(f"ShockSpec: base_value must be > 0, got {self.base_value}")
+        if self.low_pct > 0:
+            raise ValueError(f"ShockSpec: low_pct must be <= 0, got {self.low_pct}")
+        if self.high_pct < 0:
+            raise ValueError(f"ShockSpec: high_pct must be >= 0, got {self.high_pct}")
+
+    @property
+    def low_value(self) -> float:
+        return self.base_value * (1 + self.low_pct / 100.0)
+
+    @property
+    def high_value(self) -> float:
+        return self.base_value * (1 + self.high_pct / 100.0)
+
+    @property
+    def display_label(self) -> str:
+        return self.label or self.variable_name
+
+
+@dataclass(frozen=True)
+class ShockResult:
+    """
+    [SENS-001] Result of a single shock applied to a metric.
+    Stores absolute values AND computed deltas for Tornado charts.
+    """
+
+    variable_name: str
+    metric_name: str
+    base_value: float  # Input parameter base
+    low_value: float  # Input parameter low
+    high_value: float  # Input parameter high
+
+    base_metric: float  # Output metric base (e.g., IRR 12%)
+    low_metric: float  # Output metric at low input
+    high_metric: float  # Output metric at high input
+
+    label: Optional[str] = None
+
+    @property
+    def impact(self) -> float:
+        """Absolute magnitude of change (High - Low)."""
+        return abs(self.high_metric - self.low_metric)
+
+    @property
+    def direction(self) -> Literal["positive", "negative", "neutral", "mixed"]:
+        """Direction of correlation between Input and Output."""
+        delta_input = self.high_value - self.low_value
+        delta_metric = self.high_metric - self.low_metric
+
+        if abs(delta_metric) < 1e-9:
+            return "neutral"
+
+        # If input increases and metric increases -> positive correlation
+        return "positive" if (delta_metric * delta_input) > 0 else "negative"
+
+    @property
+    def sensitivity(self) -> float:
+        """Elasticity: % change in metric / % change in input."""
+        if self.base_value == 0 or self.base_metric == 0:
+            return 0.0
+
+        pct_change_input = (self.high_value - self.low_value) / self.base_value
+        pct_change_metric = (self.high_metric - self.low_metric) / self.base_metric
+
+        if abs(pct_change_input) < 1e-9:
+            return 0.0
+
+        return pct_change_metric / pct_change_input
+
+
+@dataclass(frozen=True)
+class SensitivitySuiteWithShocks:
+    """
+    [SENS-001] Collection of ShockResults for a scenario (Tornado).
+    """
+
+    metric_name: str
+    base_metric_value: float
+    scenario_name: str
+    shock_results: List[ShockResult]
+    analysis_timestamp: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def tornado_ranking(self) -> List[ShockResult]:
+        """Return shocks sorted by impact (descending)."""
+        return sorted(self.shock_results, key=lambda x: x.impact, reverse=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Monte Carlo Distribution + Scenario Contracts (Phase 3 / 4)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -1223,6 +1333,10 @@ __all__ = [
     "ParetoFrontierResult",
     "TailRiskMetrics",
     "TailRiskSnapshot",
+    # SENS-001 Shock Contracts
+    "ShockSpec",
+    "ShockResult",
+    "SensitivitySuiteWithShocks",
     # Monte Carlo
     "Distribution",
     "DerivedParameter",
