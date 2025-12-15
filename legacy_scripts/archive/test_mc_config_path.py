@@ -10,13 +10,12 @@ Date: 2025-12-10
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
-
-import logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -174,13 +173,13 @@ def main():
     """
     logger.info("")
     logger.info(
-        "╔════════════════════════════════════════════════════════════════════════════╗"
+        "╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗"
     )
     logger.info(
         "║     CESSPIT v14 Monte Carlo Config Path Integration Tests (FIXED)         ║"
     )
     logger.info(
-        "╚════════════════════════════════════════════════════════════════════════════╝"
+        "╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝"
     )
     logger.info("")
 
