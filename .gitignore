@@ -130,3 +130,15 @@ coverage.xml
 coverage.xml
 datalake/
 out/
+
+# Local data + outputs
+datalake/
+out/
+_out/
+coverage.xml
+
+# Temp / scratch
+.tmp_fix/
+*.log
+*.logpath
+pytest.ini.tmp
