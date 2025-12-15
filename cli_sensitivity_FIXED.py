@@ -43,13 +43,13 @@ def parse_arguments() -> argparse.Namespace:
 Examples:
   # Run 7 standard DFI shocks
   python cli_sensitivity.py --config config/base_case.yaml
-  
+
   # Run specific shocks
   python cli_sensitivity.py --config config/base_case.yaml --shocks capex,opex
-  
+
   # Export to JSON
   python cli_sensitivity.py --config config/base_case.yaml --output results.json
-  
+
   # Export tornado chart for Plotly
   python cli_sensitivity.py --config config/base_case.yaml --format plotly
         """,
@@ -220,7 +220,9 @@ def _format_text(results: Dict[str, Any]) -> str:
     ]
 
     shocks = results.get("shocks", [])
-    for i, shock in enumerate(sorted(shocks, key=lambda s: s.get("impact", 0), reverse=True)[:10], 1):
+    for i, shock in enumerate(
+        sorted(shocks, key=lambda s: s.get("impact", 0), reverse=True)[:10], 1
+    ):
         lines.append(
             f"{i:2d}. {shock.get('label', 'N/A'):20s} "
             f"Impact: {shock.get('impact', 0):.6f}"
@@ -271,8 +273,8 @@ def main() -> int:
     try:
         args = parse_arguments()
 
-        # Load configuration
-        config = load_config_file(args.config)
+        # Load configuration (validate file exists and is loadable)
+        _ = load_config_file(args.config)
 
         # Parse shocks
         shock_names = parse_shocks_argument(args.shocks)
