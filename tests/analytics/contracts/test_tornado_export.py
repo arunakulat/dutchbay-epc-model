@@ -38,11 +38,11 @@ MOCK_SUITE = {
             "variable_name": "opex_annual",
             "label": "OPEX ±10%",
             "base_metric": 0.15,
-            "low_metric": 0.10,
-            "high_metric": 0.20,
-            "impact": 0.10,
-            "direction": "negative",
-            "sensitivity": 0.667,
+            "low_metric": 0.18,  # ✅ FIXED: Lower OPEX → Higher IRR
+            "high_metric": 0.12,  # ✅ FIXED: Higher OPEX → Lower IRR
+            "impact": 0.06,  # ✅ FIXED: Updated to match
+            "direction": "negative",  # ✅ Correct: high < low = negative
+            "sensitivity": 0.4,  # ✅ FIXED: Updated to match
         },
         {
             "variable_name": "interest_rate",
@@ -60,11 +60,11 @@ MOCK_SUITE = {
             "variable_name": "opex_annual",
             "label": "OPEX ±10%",
             "base_metric": 0.15,
-            "low_metric": 0.10,
-            "high_metric": 0.20,
-            "impact": 0.10,
+            "low_metric": 0.18,  # ✅ FIXED
+            "high_metric": 0.12,  # ✅ FIXED
+            "impact": 0.06,  # ✅ FIXED
             "direction": "negative",
-            "sensitivity": 0.667,
+            "sensitivity": 0.4,  # ✅ FIXED
         },
         {
             "variable_name": "capex_total",
@@ -199,7 +199,7 @@ class TestTornadoExportFormats:
         assert len(rows) == 3
         assert rows[0]["rank"] == 1
         assert rows[0]["variable"] == "opex_annual"
-        assert rows[0]["impact"] == 0.1
+        assert rows[0]["impact"] == 0.06  # ✅ FIXED
         assert all("label" in r for r in rows)
 
     def test_export_json_format(self):
