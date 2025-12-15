@@ -9,14 +9,14 @@ Canonical suite (v14)
 
 Scenarios covered
 -----------------
-1) dutchbay_lendercase_2025Q4.yaml  (“Lender case”)
+1) dutchbay_lendercase_2025Q4.yaml  ("Lender case")
    - 2-year construction
    - 15-year tenor
    - Three active tranches: LKR / USD / DFI
    - Principals and IDC pinned to ACTUAL v14 values
    - Total IDC and min DSCR pinned
 
-2) edge_extreme_stress.yaml  (“Edge stress”)
+2) edge_extreme_stress.yaml  ("Edge stress")
    - 2-year construction
    - 17-year tenor
    - All debt in the USD tranche (LKR/DFI empty)
