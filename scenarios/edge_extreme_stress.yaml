@@ -1,0 +1,313 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# DutchBay Wind Project - EXTREME STRESS EDGE CASE
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# CESSPIT v14 / CASPER-GWTF Compliant
+# This scenario represents an EXTREME STRESS/EDGE case for testing limits:
+#   - Ultra-low capacity factor (28% vs 40% base)
+#   - Very high CAPEX ($1,800/kW vs $1,500/kW base)
+#   - P99 wind resource assumption (worst case)
+#   - Severe grid curtailment (10%)
+#   - Higher degradation (1.2% annual)
+#   - Used for covenant breach testing and edge case validation
+#
+# Expected P50 IRR: ~8-10% (covenant breach likely)
+#
+# Author: CESSPIT Integration Team
+# Date: 2025-12-15
+# Version: 14.3
+# ══════════════════════════════════════════════════════════════════════════════
+
+scenario_result:
+  scenario_name: "edge_extreme_stress"
+  description: "Extreme stress edge case - P99 wind, very high CAPEX, severe curtailment, covenant breach testing"
+  project_type: "wind"
+  financing_type: "DFI-led stress test"
+  resource_assumption: "P99 wind resource (28% CF), 1.2% annual degradation, 10% grid curtailment"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Project Configuration (EXTREME STRESS)
+# ──────────────────────────────────────────────────────────────────────────────
+
+project:
+  name: "Dutch Bay Wind Project - Extreme Stress Case"
+  capacity_mw: 150
+  capacity_factor: 0.28                    # ← EXTREME: 28% (P99 wind resource)
+  degradation: 0.012                       # ← SEVERE: 1.2% annual degradation
+  life_years: 20
+  boi_approved: true
+  boi_agreement_date: "2025-01-15"
+  location: "Puttlam District, North Western Province"
+  jurisdiction: "Sri Lanka"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Returns & Discount Rates
+# ──────────────────────────────────────────────────────────────────────────────
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.12              # 12% WACC (higher risk)
+  equity_discount_rate: 0.15               # 15% equity hurdle (higher risk)
+
+discount_rate: 0.15
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Timeline
+# ──────────────────────────────────────────────────────────────────────────────
+
+timeline:
+  ppa_to_fc_years: 0
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tariff Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+tariff:
+  lkr_per_kwh: 20.3
+  tariff_type: "fixed"
+  ppa_term_years: 20
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Foreign Exchange
+# ──────────────────────────────────────────────────────────────────────────────
+
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.04                        # 4% annual LKR depreciation (higher)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CAPEX Configuration (EXTREME: Very high costs)
+# ──────────────────────────────────────────────────────────────────────────────
+
+capex:
+  usd_total: 180000000                     # ← EXTREME: $180M ($1,800/kW)
+  breakdown:
+    epc_usd: 165000000                     # Very high EPC costs
+    development_usd: 6500000               # Very high development costs
+    financing_fees_usd: 4500000            # Very high financing fees
+    contingency_usd: 4000000               # High contingency (22%)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OPEX Configuration (EXTREME: Very high O&M)
+# ──────────────────────────────────────────────────────────────────────────────
+
+opex:
+  usd_per_year: 3800000                    # ← 27% higher than base
+  breakdown:
+    om_contract_usd: 2500000               # Very high O&M contract
+    insurance_usd: 680000                  # Very high insurance
+    land_lease_usd: 380000                 # Very high land lease
+    admin_usd: 240000                      # Very high admin
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tax Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+tax:
+  corporate_tax_rate: 0.30                 # 30% corporate tax
+  tax_holiday_years: 12
+  tax_holiday_start_year: 1
+  depreciation_method: "straight_line"
+  depreciation_years: 15
+  depreciation_start_year: 1
+  enhanced_capital_allowance_pct: 1.5
+  enhanced_allowance_applies: true
+  loss_carryforward_years: 25
+  wht_on_interest_to_nonresidents: 0.10    # 10% WHT
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Statutory Charges (EXTREME: Severe grid curtailment)
+# ──────────────────────────────────────────────────────────────────────────────
+
+regulatory:
+  success_fee_pct: 0.01                    # 1% success fee
+  env_surcharge_pct: 0.005                 # 0.5% environmental surcharge
+  social_services_levy_pct: 0.025          # 2.5% social services levy
+  grid_loss_pct: 0.10                      # ← EXTREME: 10% grid curtailment
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Risk Adjustments
+# ──────────────────────────────────────────────────────────────────────────────
+
+risk_adjustment:
+  cfads_haircut_pct: 0.15                  # 15% CFADS haircut (higher risk)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Financing Terms (Stress test structure)
+# ──────────────────────────────────────────────────────────────────────────────
+
+Financing_Terms:
+  debt_ratio: 0.60                         # 60% debt (lower due to risk)
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: "auto"
+  interest_rate_nominal: 0.09              # 9% blended rate (higher)
+
+  mix:
+    lkr_max: 0.40
+    dfi_max: 0.15
+    usd_commercial_min: 0.45
+
+  rates:
+    lkr_nominal: 0.09
+    lkr_min: 0.09
+    dfi_nominal: 0.075
+    dfi_min: 0.075
+    usd_nominal: 0.085
+    usd_commercial_min: 0.085
+
+  target_dscr: 1.25
+  min_dscr: 1.15
+  min_dscr_covenant: 1.15
+
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
+
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+
+  fees:
+    upfront_pct: 0.015
+    commitment_pct: 0.015
+
+  enforce_hard_covenants: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metrics & Covenants (Relaxed for stress testing)
+# ──────────────────────────────────────────────────────────────────────────────
+
+metrics:
+  llcr_min_covenant: 1.15
+  llcr_warn_threshold: 1.20
+  llcr_discount_rate: 0.12
+  plcr_min_covenant: 1.30
+  plcr_target: 1.50
+  plcr_discount_rate: 0.12
+  dscr_min_covenant: 1.20
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Constraints (Relaxed for edge case testing)
+# ──────────────────────────────────────────────────────────────────────────────
+
+constraints:
+  max_debt_ratio: 0.70
+  warn_debt_ratio: 0.65
+  min_dscr_covenant: 1.15
+  target_dscr: 1.25
+  warn_dscr: 1.18
+  max_balloon_pct: 0.15
+  warn_balloon_pct: 0.10
+
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.15
+    refinance_rate_premium: 0.03
+    refinance_tenor_years: 3
+    requires_documentation: true
+
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.00
+  lender_type: "DFI"
+  jurisdiction: "Sri Lanka"
+  fail_on_covenant_breach: false           # Allow covenant breach for testing
+  fail_on_large_balloon: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IRR Validation Bounds (Extreme Stress Case)
+# ──────────────────────────────────────────────────────────────────────────────
+
+irr_validation:
+  irr_lower_bound: -0.99                   # Very low bound for extreme stress
+  irr_upper_bound: 0.15                    # Low upper bound
+  irr_lower_bound_rationale: "Extreme stress P99 wind + 10% curtailment - project may be unviable"
+  irr_upper_bound_rationale: "Upper bound capped at 15% for worst-case scenario"
+
+  equity_irr_lower_bound: -0.90
+  equity_irr_upper_bound: 0.25
+  equity_bounds_rationale: "Equity may be wiped out in extreme stress conditions"
+
+  debt_irr_lower_bound: -0.50
+  debt_irr_upper_bound: 0.10
+  debt_bounds_rationale: "Debt may not be fully serviced"
+
+  xirr_lower_bound: -0.99
+  xirr_upper_bound: 0.12
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Monte Carlo Configuration (Extreme variance)
+# ──────────────────────────────────────────────────────────────────────────────
+
+monte_carlo:
+  n_scenarios: 100000
+  seed: 42
+
+  parameters:
+    capacity_factor_std: 0.10              # ← Very high variance
+    tariff_lkr_std: 0.15                   # ← Very high tariff uncertainty
+    opex_usd_std: 0.22                     # ← Very high OPEX variance
+    capex_usd_std: 0.12                    # ← Very high CAPEX variance
+
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+
+  percentiles:
+    - 10
+    - 25
+    - 50
+    - 75
+    - 90
+
+  min_dscr_covenant: 1.15
+  min_llcr_covenant: 1.20
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sensitivity Analysis Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.10                       # Very wide range
+      high_pct: 0.10
+
+    tariff_lkr_per_kwh:
+      low_pct: -0.15
+      high_pct: 0.15
+
+    opex_usd_per_year:
+      low_pct: -0.20
+      high_pct: 0.20
+
+    capex_usd_total:
+      low_pct: -0.12
+      high_pct: 0.12
+
+    grid_loss_pct:
+      low_pct: -0.05
+      high_pct: 0.08
+
+  analysis:
+    tornado_chart_title: "DutchBay 150MW - Extreme Stress Edge Case"
+    dpi: 300
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metadata
+# ──────────────────────────────────────────────────────────────────────────────
+
+metadata:
+  version: "14.3"
+  last_updated: "2025-12-15"
+  author: "CESSPIT Integration Team"
+  review_status: "TEST ONLY - Extreme stress edge case for validation"
+  assumptions_source: "P99 Wind Resource + Very High EPC Costs + Severe Grid Curtailment"
+  test_purpose: "Covenant breach testing, debt sizing edge cases, extreme stress validation"
+  changelog:
+    - version: "14.3"
+      date: "2025-12-15"
+      changes: "Created extreme stress scenario for edge case testing (28% CF, $180M CAPEX, 10% curtailment)"
