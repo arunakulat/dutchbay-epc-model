@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Suppress numpy warnings during parallel execution
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+# ===== P1.1 OPTIMIZATION: Config Caching =====
+# Module-level cache to avoid reloading YAML files per iteration
+_CONFIG_CACHE: dict[str, "MonteCarloConfig"] = {}
+
 
 # ---------------------------------------------------------------------------
 # Pydantic config models (schema guard for YAML)
@@ -255,8 +259,14 @@ def run_monte_carlo_analysis(
     """
     logger.info("Starting Monte Carlo analysis: %s", base_config_path)
 
-    # Load + validate Monte Carlo configuration
-    mc_config = _load_monte_carlo_config(scenario_config_path)
+    # ===== P1.1 OPTIMIZATION: Load from cache if available =====
+    if scenario_config_path in _CONFIG_CACHE:
+        logger.info("Loading MC config from cache: %s", scenario_config_path)
+        mc_config = _CONFIG_CACHE[scenario_config_path]
+    else:
+        # Load + validate Monte Carlo configuration
+        mc_config = _load_monte_carlo_config(scenario_config_path)
+        _CONFIG_CACHE[scenario_config_path] = mc_config
 
     # Simulation settings
     sim_cfg = mc_config.simulation
