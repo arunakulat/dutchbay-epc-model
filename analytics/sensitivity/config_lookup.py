@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
-def _flatten_dict(d: Mapping[str, Any], parent_key: str = "", sep: str = ".") -> dict[str, Any]:
+def _flatten_dict(
+    d: Mapping[str, Any], parent_key: str = "", sep: str = "."
+) -> dict[str, Any]:
     """Flatten a nested mapping using dot-separated keys.
 
     Example:
