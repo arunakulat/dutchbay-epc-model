@@ -640,8 +640,13 @@ class TestErrorHandling:
         with pytest.raises(FileNotFoundError):
             _load_monte_carlo_config("nonexistent_config.yaml")
 
+    @pytest.mark.edge_case
     def test_invalid_distribution_in_config(self) -> None:
-        """Test that invalid distribution config raises ValueError."""
+        """Test that invalid distribution config raises ValueError.
+
+        Edge case: Invalid standard deviation (must be > 0) in distribution config.
+        This tests boundary validation for distribution parameters.
+        """
         params_config = [
             {
                 "variable_name": "test.param",
@@ -654,8 +659,15 @@ class TestErrorHandling:
         with pytest.raises(ValueError):
             _parse_distributions(params_config)
 
+    @pytest.mark.stress
+    @pytest.mark.critical_error
     def test_all_iterations_failed(self) -> None:
-        """Test handling when all iterations fail."""
+        """Test handling when all iterations fail.
+
+        Stress test: Complete failure scenario where every Monte Carlo iteration
+        returns None (failure). Tests error handling and recovery when aggregating
+        results with no successful outcomes.
+        """
         results: list[dict[str, float] | None] = [None, None, None, None]
 
         with pytest.raises(ValueError, match="All Monte Carlo iterations failed"):
