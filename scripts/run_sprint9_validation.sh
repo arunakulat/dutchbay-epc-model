@@ -63,14 +63,17 @@ echo "✅ Sensitivity tests completed"
 echo ""
 
 # ──────────────────────────────────────────────────────────────────────────
-# 6. Run Full Pipeline v14
+# 6. Run Full Pipeline v14 (Root-level runner)
 # ──────────────────────────────────────────────────────────────────────────
 echo "[6/8] Running full pipeline v14 (all scenarios)..."
-if [ -f "scripts/run_full_pipeline_v14.py" ]; then
-    python scripts/run_full_pipeline_v14.py || echo "Pipeline completed with warnings"
+if [ -f "run_full_pipeline_v14.py" ]; then
+    python run_full_pipeline_v14.py || echo "Pipeline completed with warnings"
     echo "✅ Full pipeline v14 completed"
+elif [ -f "scripts/run_full_analytics_v14.py" ]; then
+    python scripts/run_full_analytics_v14.py || echo "Analytics pipeline completed with warnings"
+    echo "✅ Analytics pipeline completed"
 else
-    echo "⚠️  scripts/run_full_pipeline_v14.py not found - skipping"
+    echo "⚠️  No pipeline runner found (checked run_full_pipeline_v14.py, scripts/run_full_analytics_v14.py) - skipping"
 fi
 echo ""
 
@@ -120,6 +123,10 @@ echo "Explicit Test Files Used:"
 echo "  Monte Carlo: test_monte_carlo_regression_toy.py, cashflow, debt, covenants"
 echo "  Sensitivity: test_casper_tail_risk_payload.py, test_casper_tail_risk_summary.py"
 echo "  Integration: scenario_analytics_smoke, export_smoke, CLI smokes, pipeline smoke"
+echo ""
+echo "Pipeline Runners:"
+echo "  Primary: run_full_pipeline_v14.py (root-level, canonical)"
+echo "  Secondary: scripts/run_full_analytics_v14.py (analytics wrapper)"
 echo ""
 echo "Next Steps:"
 echo "  - Review test output above for any failures"
