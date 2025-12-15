@@ -79,9 +79,11 @@ def test_monte_carlo_toy_regression_is_stable() -> None:
     Any silent drift in the finance engine, evaluator, or MC wiring should
     trip this test once you've tuned the bands above.
     """
+    # ===== P1.2 OPTIMIZATION: Skip CSV writes during tests =====
     results = run_monte_carlo(
         mc_config_path=str(MC_CONFIG_PATH),
         base_config_path=str(BASE_SCENARIO_CONFIG),
+        write_output=False,
     )
 
     # 1) We expect at least one scenario and specifically 'base_case'.
@@ -133,9 +135,11 @@ def test_monte_carlo_toy_precisions_are_reported() -> None:
     - they are finite (not NaN / inf),
     - and non-negative.
     """
+    # ===== P1.2 OPTIMIZATION: Skip CSV writes during tests =====
     results = run_monte_carlo(
         mc_config_path=str(MC_CONFIG_PATH),
         base_config_path=str(BASE_SCENARIO_CONFIG),
+        write_output=False,
     )
 
     assert results, "Monte Carlo returned no scenario results"
