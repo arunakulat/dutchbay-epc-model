@@ -128,3 +128,5 @@ _archive/
 scenarios/**/*.bak
 coverage.xml
 coverage.xml
+datalake/
+out/
