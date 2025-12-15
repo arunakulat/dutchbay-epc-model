@@ -1,5 +1,4 @@
-"""
-Unit tests for Monte Carlo simulation module (analytics/monte_carlo_v14.py).
+"""Unit tests for Monte Carlo simulation module (analytics/monte_carlo_v14.py).
 
 Test Coverage:
 - Distribution validation (normal, triangular, uniform, lognormal)
@@ -44,13 +43,13 @@ from analytics.monte_carlo_v14 import (
 )
 
 # Test fixtures
-BASE_CONFIG = "scenarios/dutchbay_lendercase_2025Q4.yaml"  # ✅ FIXED
+BASE_CONFIG = "scenarios/dutchbay_lendercase_2025Q4.yaml"
 MC_CONFIG_TOY = "config/monte_carlo_regression_toy.yaml"
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Distribution Validation Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestDistributionValidation:
@@ -151,9 +150,9 @@ class TestDistributionValidation:
         assert dist.std == 0.5
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Sampling Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestMonteCarloSampling:
@@ -282,9 +281,9 @@ class TestMonteCarloSampling:
         assert abs(_transform_to_distribution(1.0, dist) - 150.0) < 0.1
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Config Loading Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestConfigLoading:
@@ -307,7 +306,7 @@ class TestConfigLoading:
         for scenario in scenarios:
             assert isinstance(scenario, MonteCarloScenario)
             assert scenario.name
-            assert len(scenario.standard_params) > 0  # ✅ FIXED
+            assert len(scenario.standard_params) > 0
 
     def test_parse_distributions(self) -> None:
         """Test parsing distribution configs into Distribution objects."""
@@ -353,9 +352,9 @@ class TestConfigLoading:
         assert derived_params[0].variable_name == "revenue.tariff_usd_per_kwh"
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Unit Sampling and CRN Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestUnitSampling:
@@ -409,7 +408,7 @@ class TestUnitSampling:
             MonteCarloScenario(
                 name="A",
                 description="",
-                standard_params=[  # ✅ FIXED
+                standard_params=[
                     Distribution(
                         variable_name="project.capex_usd_per_kw",
                         dist_type="uniform",
@@ -423,12 +422,12 @@ class TestUnitSampling:
                         std=0.02,
                     ),
                 ],
-                derived_params=[],  # ✅ FIXED
+                derived_params=[],
             ),
             MonteCarloScenario(
                 name="B",
                 description="",
-                standard_params=[  # ✅ FIXED
+                standard_params=[
                     Distribution(
                         variable_name="project.capex_usd_per_kw",
                         dist_type="uniform",
@@ -436,7 +435,7 @@ class TestUnitSampling:
                         max_val=1300.0,
                     ),
                 ],
-                derived_params=[],  # ✅ FIXED
+                derived_params=[],
             ),
         ]
 
@@ -476,9 +475,9 @@ class TestUnitSampling:
             assert 1000.0 <= sample["project.capex_usd_per_kw"] <= 1400.0
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Result Aggregation Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestResultAggregation:
@@ -548,20 +547,38 @@ class TestResultAggregation:
         assert mc_result.dscr_min_se is not None
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Integration Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestMonteCarloIntegration:
-    """Integration tests for full Monte Carlo runs."""
+    """Integration tests for full Monte Carlo runs.
 
-    def test_run_monte_carlo_analysis_toy_config(self) -> None:
-        """Test full MC run with toy regression config."""
+    ✅ PERFORMANCE OPTIMIZED (Sprint 9)
+    ====================================
+    These tests now use test_iteration_config fixture for fast development:
+    - Fast mode (default): 20 iterations, ~6 seconds
+    - Full mode (--full-iterations): 100k iterations, ~287 seconds
+
+    The fixture makes tests 48x faster in development while maintaining
+    full validation capability for CI/CD and pre-commit checks.
+    """
+
+    def test_run_monte_carlo_analysis_toy_config(self, test_iteration_config) -> None:
+        """Test full MC run with toy regression config.
+
+        ⚡ Uses test_iteration_config fixture:
+        - Dev mode: 20 iterations (~6s)
+        - Full mode: 100k iterations (~287s)
+        """
+        config = test_iteration_config
+        n_iter = config["monte_carlo_iterations"]
+
         results = run_monte_carlo_analysis(
             base_config_path=BASE_CONFIG,
             scenario_config_path=MC_CONFIG_TOY,
-            n_iterations=50,  # Small for speed
+            n_iterations=n_iter,
             random_seed=42,
             parallel_workers=1,
         )
@@ -569,19 +586,27 @@ class TestMonteCarloIntegration:
         assert len(results) > 0
         for scenario_name, mc_result in results.items():
             assert isinstance(mc_result, MonteCarloResult)
-            assert mc_result.iterations == 50
+            assert mc_result.iterations == n_iter
             assert mc_result.success_rate() > 0.0
             # Basic sanity checks
             assert mc_result.project_irr_p50 > 0.0
             assert mc_result.project_npv_p50 != 0.0
             assert mc_result.dscr_min_p50 > 0.0
 
-    def test_run_monte_carlo_reproducibility(self) -> None:
-        """Test that same seed produces identical results."""
+    def test_run_monte_carlo_reproducibility(self, test_iteration_config) -> None:
+        """Test that same seed produces identical results.
+
+        ⚡ Uses test_iteration_config fixture:
+        - Dev mode: 20 iterations (~3s per run = 6s total)
+        - Full mode: 100k iterations (~287s per run = 574s total)
+        """
+        config = test_iteration_config
+        n_iter = config["monte_carlo_iterations"]
+
         results1 = run_monte_carlo_analysis(
             base_config_path=BASE_CONFIG,
             scenario_config_path=MC_CONFIG_TOY,
-            n_iterations=20,
+            n_iterations=n_iter,
             random_seed=123,
             parallel_workers=1,
         )
@@ -589,7 +614,7 @@ class TestMonteCarloIntegration:
         results2 = run_monte_carlo_analysis(
             base_config_path=BASE_CONFIG,
             scenario_config_path=MC_CONFIG_TOY,
-            n_iterations=20,
+            n_iterations=n_iter,
             random_seed=123,
             parallel_workers=1,
         )
@@ -627,9 +652,9 @@ class TestMonteCarloIntegration:
             assert "dscr_min" in result
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # Error Handling Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestErrorHandling:
@@ -666,9 +691,9 @@ class TestErrorHandling:
             )
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # MonteCarloResult Contract Tests
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class TestMonteCarloResult:
@@ -729,6 +754,6 @@ class TestMonteCarloResult:
         assert prob_dscr == 50.0
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # EOF - tests/analytics_layer/test_monte_carlo_v14.py
-# ══════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
