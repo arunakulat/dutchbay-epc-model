@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = PROJECT_ROOT / "tests"
 QUAR_DIR = TESTS_DIR / "_quarantine"
@@ -40,11 +39,11 @@ ABS_IRR_PATTERNS = (
 )
 
 BAD_ASSUMPTION_PATTERNS = (
-    re.compile(r"\bproject_irr\s*\]"),               # suspicious indexing
+    re.compile(r"\bproject_irr\s*\]"),  # suspicious indexing
     re.compile(r"\bkpis\s*\[\s*['\"]project_irr['\"]\s*\]"),
-    re.compile(r"\brun_monte_carlo_analysis\s*\(.*config_path\s*=",
-               re.DOTALL),
+    re.compile(r"\brun_monte_carlo_analysis\s*\(.*config_path\s*=", re.DOTALL),
 )
+
 
 @dataclass(frozen=True)
 class Hit:
@@ -75,15 +74,21 @@ def _scan(path: Path) -> Hit | None:
     # Absolute IRR bands
     if any(p.search(text) for p in ABS_IRR_PATTERNS):
         if not _is_frozen(text):
-            reasons.append("absolute IRR band assertions without frozen/regression labeling")
+            reasons.append(
+                "absolute IRR band assertions without frozen/regression labeling"
+            )
 
     # Old assumptions
-    if BAD_ASSUMPTION_PATTERNS[0].search(text) or BAD_ASSUMPTION_PATTERNS[1].search(text):
+    if BAD_ASSUMPTION_PATTERNS[0].search(text) or BAD_ASSUMPTION_PATTERNS[1].search(
+        text
+    ):
         reasons.append("assumes project_irr is top-level KPI (legacy expectation)")
 
     # config_path argument into MC
     if BAD_ASSUMPTION_PATTERNS[2].search(text):
-        reasons.append("passes config_path= into run_monte_carlo_analysis (legacy signature)")
+        reasons.append(
+            "passes config_path= into run_monte_carlo_analysis (legacy signature)"
+        )
 
     if not reasons:
         return None
