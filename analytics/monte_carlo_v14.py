@@ -180,6 +180,7 @@ def run_monte_carlo(
     n_iterations: int | None = None,
     random_seed: int | None = None,
     parallel_workers: int | None = None,
+    write_output: bool = True,
 ) -> dict[str, MonteCarloResult]:
     """
     Coordinator-style public API for v14 Monte Carlo runs.
@@ -206,6 +207,9 @@ def run_monte_carlo(
             regression runs.
         parallel_workers:
             Optional override for the number of CPU processes.
+        write_output:
+            Whether to write CSV/JSONL output files. Default True for production,
+            False for testing to skip I/O overhead.
 
     Returns:
         Dict mapping scenario_name -> MonteCarloResult.
@@ -217,6 +221,7 @@ def run_monte_carlo(
         n_iterations=n_iterations,
         random_seed=random_seed,
         parallel_workers=parallel_workers,
+        write_output=write_output,
     )
 
 
@@ -227,6 +232,7 @@ def run_monte_carlo_analysis(
     n_iterations: int | None = None,
     random_seed: int | None = None,
     parallel_workers: int | None = None,
+    write_output: bool = True,
 ) -> dict[str, MonteCarloResult]:
     """
     Run Monte Carlo simulation with flexible parameter system.
@@ -250,6 +256,7 @@ def run_monte_carlo_analysis(
         n_iterations: Override default iteration count
         random_seed: Override default random seed for reproducibility
         parallel_workers: Number of CPU cores (None = auto-detect)
+        write_output: Whether to write output files (default True)
 
     Returns:
         Dict mapping scenario names to MonteCarloResult objects
@@ -278,11 +285,12 @@ def run_monte_carlo_analysis(
     sampler = (sim_cfg.sampler or "lhs").strip().lower()
 
     logger.info(
-        "Simulation: %s iterations, seed=%s, workers=%s, sampler=%s",
+        "Simulation: %s iterations, seed=%s, workers=%s, sampler=%s, write_output=%s",
         iterations,
         seed,
         workers,
         sampler,
+        write_output,
     )
 
     # Single RNG for the whole run (LHS/Sobol seeds + derived targets).
@@ -323,6 +331,7 @@ def run_monte_carlo_analysis(
                 scenario=scenario,
                 samples=scenario_samples,
                 parallel_workers=workers,
+                write_output=write_output,
             )
             results[scenario.name] = result
 
@@ -872,6 +881,7 @@ def _run_single_scenario(
     scenario: MonteCarloScenario,
     samples: list[dict[str, Any]],
     parallel_workers: int,
+    write_output: bool = True,
 ) -> MonteCarloResult:
     """
     Run Monte Carlo simulation for a single scenario.
@@ -881,6 +891,7 @@ def _run_single_scenario(
         scenario: MonteCarloScenario configuration
         samples: List of concrete parameter samples (overrides) for each iteration
         parallel_workers: Number of parallel processes
+        write_output: Whether to write CSV/JSONL output files
 
     Returns:
         MonteCarloResult with statistical summary
@@ -899,12 +910,14 @@ def _run_single_scenario(
             scenario=scenario,
             samples=samples,
             n_workers=parallel_workers,
+            write_output=write_output,
         )
     else:
         results = _run_serial_iterations(
             base_config_path=base_config_path,
             scenario=scenario,
             samples=samples,
+            write_output=write_output,
         )
 
     return _aggregate_results(results, iterations, scenario.name)
@@ -916,6 +929,7 @@ def _thread_safe_iteration_worker(
     base_config_path: str,
     scenario: MonteCarloScenario,
     sample: dict[str, Any],
+    write_output: bool = True,
 ) -> tuple[int, dict[str, float] | None]:
     """
     Thread-safe Monte Carlo iteration worker.
@@ -930,6 +944,7 @@ def _thread_safe_iteration_worker(
         base_config_path: Path to base scenario YAML
         scenario: MonteCarloScenario configuration
         sample: Parameter sample for this iteration
+        write_output: Whether to write output files
 
     Returns:
         Tuple of (iteration_idx, result_dict_or_none) for order preservation
@@ -939,6 +954,7 @@ def _thread_safe_iteration_worker(
             base_config_path=base_config_path,
             scenario=scenario,
             sample=sample,
+            write_output=write_output,
         )
         return (iteration_idx, result)
     except Exception as exc:
@@ -951,6 +967,7 @@ def _run_parallel_iterations(
     scenario: MonteCarloScenario,
     samples: list[dict[str, Any]],
     n_workers: int,
+    write_output: bool = True,
 ) -> list[dict[str, float] | None]:
     """
     Run Monte Carlo iterations in parallel using ThreadPoolExecutor.
@@ -977,6 +994,7 @@ def _run_parallel_iterations(
                 base_config_path,
                 scenario,
                 samples[idx],
+                write_output,
             ): idx
             for idx in range(total_iterations)
         }
@@ -1007,6 +1025,7 @@ def _run_serial_iterations(
     base_config_path: str,
     scenario: MonteCarloScenario,
     samples: list[dict[str, Any]],
+    write_output: bool = True,
 ) -> list[dict[str, float] | None]:
     """
     Run Monte Carlo iterations serially (single-threaded).
@@ -1016,7 +1035,7 @@ def _run_serial_iterations(
     for idx, sample in enumerate(samples, start=1):
         if idx % 100 == 0 or idx == total:
             logger.info("  Progress: %d/%d iterations", idx, total)
-        result = _run_single_iteration(base_config_path, scenario, sample)
+        result = _run_single_iteration(base_config_path, scenario, sample, write_output)
         results.append(result)
     return results
 
@@ -1025,6 +1044,7 @@ def _run_single_iteration(
     base_config_path: str | Path,
     scenario: Any,
     sample: Mapping[str, float],
+    write_output: bool = True,
 ) -> dict[str, float] | None:
     """
     Run a single Monte Carlo iteration.
