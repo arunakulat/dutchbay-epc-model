@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import json
+from pathlib import Path
+
 """
 QUICK REFERENCE: Running the Swimlane 1 Inspector
 ==================================================
@@ -25,7 +28,7 @@ EXECUTION:
 OUTPUT:
   • Console: Summary with ✅/❌ status
   • File: swimlane1_inspection_report.json (detailed results)
-  
+
 TIME: ~5-10 minutes
 """
 
@@ -64,19 +67,19 @@ WHAT IT DOES:
 
 CODE:
   from swimlane1_inspector import Swimlane1Inspector
-  
+
   # Run inspection
   inspector = Swimlane1Inspector()
   report = inspector.run_full_inspection()
-  
+
   # Access results programmatically
   wacc_fields = [f.name for f in report.wacc_contract.fields]
   equity_coverage = report.equity_test_coverage.coverage_percentage
   governance_ok = all(report.governance_checks.values())
-  
+
   # Export
   inspector.export_report_json("my_report.json")
-  
+
   # Make decisions
   if governance_ok and equity_coverage >= 80:
       print("✅ Ready for Phase 3 integration")
@@ -94,7 +97,7 @@ WHAT IT DOES:
 
 CODE - WACC Only:
   from swimlane1_inspector import Swimlane1Inspector
-  
+
   inspector = Swimlane1Inspector()
   inspector.inspect_wacc_engine()
   inspector.verify_governance()
@@ -103,7 +106,7 @@ CODE - WACC Only:
 
 CODE - Equity Only:
   from swimlane1_inspector import Swimlane1Inspector
-  
+
   inspector = Swimlane1Inspector()
   inspector.inspect_equity_analytics()
   inspector.verify_governance()
@@ -122,24 +125,22 @@ WHAT IT DOES:
 PYTHON SCRIPT (save as summarize_report.py):
 """
 
-import json
-from pathlib import Path
 
 def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.json"):
     """Pretty-print Swimlane 1 inspection report."""
-    
+
     if not Path(report_file).exists():
         print(f"❌ Report not found: {report_file}")
         print("   Run: python swimlane1_inspector.py")
         return
-    
+
     with open(report_file) as f:
         report = json.load(f)
-    
+
     print("\n" + "="*80)
     print("📊 SWIMLANE 1 INSPECTION SUMMARY")
     print("="*80 + "\n")
-    
+
     # WACC Results
     print("🔹 SL-1.1: WACC ENGINE")
     print("-" * 80)
@@ -147,27 +148,27 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         wacc = report["wacc_contract"]
         print(f"  Contract: {wacc['class_name']}")
         print(f"  Fields: {len(wacc['fields'])}")
-        for field in wacc['fields']:
-            optional = " (optional)" if field['is_optional'] else ""
+        for field in wacc["fields"]:
+            optional = " (optional)" if field["is_optional"] else ""
             print(f"    • {field['name']}: {field['type_annotation']}{optional}")
         print(f"  Frozen: {wacc['is_frozen']}")
     else:
         print("  ❌ Contract not found")
-    
+
     if report.get("wacc_test_coverage"):
         tests = report["wacc_test_coverage"]
-        pct = tests['coverage_percentage']
+        pct = tests["coverage_percentage"]
         status = "✅" if pct >= 80 else "⚠️" if pct >= 60 else "❌"
         print(f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}")
         print(f"  Coverage: {pct:.1f}%")
-        if tests['edge_case_test_names']:
+        if tests["edge_case_test_names"]:
             print(f"  Edge Cases: {len(tests['edge_case_test_names'])} tests")
-    
+
     if report.get("wacc_performance"):
         perf = report["wacc_performance"]
-        sla = "✅" if perf['is_within_sla'] else "❌"
+        sla = "✅" if perf["is_within_sla"] else "❌"
         print(f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}")
-    
+
     # Equity Results
     print("\n🔹 SL-1.2: EQUITY ANALYTICS")
     print("-" * 80)
@@ -175,27 +176,27 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
         equity = report["equity_contract"]
         print(f"  Contract: {equity['class_name']}")
         print(f"  Fields: {len(equity['fields'])}")
-        for field in equity['fields']:
-            optional = " (optional)" if field['is_optional'] else ""
+        for field in equity["fields"]:
+            optional = " (optional)" if field["is_optional"] else ""
             print(f"    • {field['name']}: {field['type_annotation']}{optional}")
         print(f"  Frozen: {equity['is_frozen']}")
     else:
         print("  ❌ Contract not found")
-    
+
     if report.get("equity_test_coverage"):
         tests = report["equity_test_coverage"]
-        pct = tests['coverage_percentage']
+        pct = tests["coverage_percentage"]
         status = "✅" if pct >= 80 else "⚠️" if pct >= 60 else "❌"
         print(f"  Tests: {tests['passing_tests']}/{tests['total_tests']} passing {status}")
         print(f"  Coverage: {pct:.1f}%")
-        if tests['edge_case_test_names']:
+        if tests["edge_case_test_names"]:
             print(f"  Edge Cases: {len(tests['edge_case_test_names'])} tests")
-    
+
     if report.get("equity_performance"):
         perf = report["equity_performance"]
-        sla = "✅" if perf['is_within_sla'] else "❌"
+        sla = "✅" if perf["is_within_sla"] else "❌"
         print(f"  Performance: {perf['execution_time_ms']:.0f}ms (1000 scenarios) {sla}")
-    
+
     # Governance
     print("\n🛡️  GOVERNANCE COMPLIANCE")
     print("-" * 80)
@@ -203,13 +204,13 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
     for check, is_ok in checks.items():
         status = "✅" if is_ok else "❌"
         print(f"  {status} {check}")
-    
+
     all_ok = all(checks.values())
     if all_ok:
         print(f"\n  ✅ ALL GOVERNANCE CHECKS PASSED")
     else:
         print(f"\n  ❌ GOVERNANCE ISSUES DETECTED (see below)")
-    
+
     # Issues & Recommendations
     print("\n📋 ISSUES FOUND")
     print("-" * 80)
@@ -219,7 +220,7 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
             print(f"  ⚠️  {issue}")
     else:
         print("  ✅ No issues found")
-    
+
     print("\n💡 RECOMMENDATIONS")
     print("-" * 80)
     recs = report.get("recommendations", [])
@@ -228,14 +229,18 @@ def summarize_swimlane1_report(report_file: str = "swimlane1_inspection_report.j
             print(f"  📌 {rec}")
     else:
         print("  ✅ No recommendations (ready for Phase 3)")
-    
+
     # Final Status
     print("\n" + "="*80)
-    wacc_ok = (report.get("wacc_contract") and 
-               report.get("wacc_test_coverage", {}).get("coverage_percentage", 0) >= 80)
-    equity_ok = (report.get("equity_contract") and 
-                 report.get("equity_test_coverage", {}).get("coverage_percentage", 0) >= 80)
-    
+    wacc_ok = (
+        report.get("wacc_contract")
+        and report.get("wacc_test_coverage", {}).get("coverage_percentage", 0) >= 80
+    )
+    equity_ok = (
+        report.get("equity_contract")
+        and report.get("equity_test_coverage", {}).get("coverage_percentage", 0) >= 80
+    )
+
     if wacc_ok and equity_ok and all_ok and not issues:
         print("✅ READY FOR PHASE 3 INTEGRATION")
     elif wacc_ok and equity_ok and all_ok:
@@ -263,9 +268,9 @@ WHAT IT DOES:
   Add inspection to your CI/CD pipeline (GitHub Actions example)
 
 GITHUB ACTIONS WORKFLOW (.github/workflows/swimlane1-check.yml):
-  
+
   name: Swimlane 1 Inspection
-  
+
   on:
     push:
       paths:
@@ -273,7 +278,7 @@ GITHUB ACTIONS WORKFLOW (.github/workflows/swimlane1-check.yml):
         - 'finance/equity_v14.py'
         - 'tests/finance/test_wacc_*.py'
         - 'tests/finance/test_equity_*.py'
-  
+
   jobs:
     inspect:
       runs-on: ubuntu-latest
