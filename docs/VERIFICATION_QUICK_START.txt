@@ -1,0 +1,181 @@
+================================================================================
+              PHASE 1-2: PACKAGE VERIFICATION QUICK START
+================================================================================
+
+Date: December 13, 2025 | 8:30 PM IST
+Location: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
+
+================================================================================
+ONE-COMMAND EXECUTION (RECOMMENDED)
+================================================================================
+
+Run this to verify everything:
+
+    chmod +x VERIFY_PACKAGES.sh
+    ./VERIFY_PACKAGES.sh
+
+This will:
+  ✅ Activate Python 3.11 venv
+  ✅ Run mypy on all core modules (type checking)
+  ✅ Run pytest on Phase 1-2 tests
+  ✅ Run pytest on finance/analytics tests
+  ✅ Generate summary report
+
+Expected time: 2-3 minutes
+Expected result: Green checkmarks for Phase 1-2 code
+
+================================================================================
+MANUAL COMMANDS (IF NEEDED)
+================================================================================
+
+1. SETUP
+   cd /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
+   source .venv311/bin/activate
+
+2. MYPY TYPE CHECKING
+
+   Phase 1-2 Core (MUST PASS):
+     mypy finance/tax_profile.py --show-error-codes
+     mypy finance/wacc_integration.py --show-error-codes
+
+   Finance Core (SHOULD PASS):
+     mypy finance/cashflow/__init__.py
+     mypy finance/debt/__init__.py
+     mypy finance/equity/__init__.py
+     mypy finance/core/epc_helper.py
+
+   Analytics Core (CHECK FOR ISSUES):
+     mypy analytics/core/metrics.py
+     mypy analytics/contracts/contracts_types_v14.py
+
+3. PYTEST EXECUTION
+
+   Phase 1-2 Tests (MUST PASS - 14/14):
+     pytest tests/test_phase_1_2_refactoring.py -v --no-cov
+
+   Finance Tests:
+     pytest tests/ -k finance -v --no-cov
+
+   Analytics Tests:
+     pytest tests/ -k analytics -v --no-cov
+
+   All Tests Summary:
+     pytest tests/ -q --tb=no
+
+================================================================================
+WHAT TO LOOK FOR
+================================================================================
+
+GREEN (✅ GOOD):
+  ✅ Phase 1-2: 14 passed
+  ✅ mypy: success: no issues found
+  ✅ Import errors: NONE
+  ✅ Type errors in tax_profile.py: NONE
+  ✅ Type errors in wacc_integration.py: NONE
+
+YELLOW (⚠️ WARNING):
+  ⚠️ Warnings on legacy code: OK (being refactored)
+  ⚠️ Some analytics tests skipped: OK (not critical)
+  ⚠️ Coverage warning about other modules: OK (expected)
+
+RED (❌ STOP):
+  ❌ Phase 1-2 tests FAILED: INVESTIGATE
+  ❌ Import errors in finance/tax_profile.py: FIX FIRST
+  ❌ Type errors in Phase 1-2 code: FIX FIRST
+  ❌ mypy errors in tax_profile or wacc_integration: FIX FIRST
+
+================================================================================
+FILES BEING VERIFIED
+================================================================================
+
+Phase 1-2 Code (New - HIGH PRIORITY):
+  finance/tax_profile.py          (246 lines)
+  finance/wacc_integration.py     (312 lines)
+  tests/test_phase_1_2_refactoring.py (380 lines)
+
+Finance Core (Existing - MEDIUM PRIORITY):
+  finance/cashflow/cashflow_v14.py
+  finance/debt/debt_v14.py
+  finance/equity/equity_v14.py
+  finance/core/epc_helper.py
+
+Analytics Core (Existing - MEDIUM PRIORITY):
+  analytics/core/metrics.py
+  analytics/core/config_schema.py
+  analytics/contracts/contracts_types_v14.py
+
+================================================================================
+IF EVERYTHING PASSES ✅
+================================================================================
+
+Next steps to integration phase:
+
+1. Document any findings
+2. Update PHASE_1_2_INTEGRATION_SUMMARY.md
+3. Begin integration into main financial model:
+   - Update cashflow_v14.py to use TaxProfile
+   - Wire WACC into KPI calculations
+   - Inject interest from debt module
+4. Run full pipeline test
+5. Deploy to production
+
+================================================================================
+IF ISSUES FOUND ⚠️
+================================================================================
+
+1. Identify the issue:
+   - What test failed?
+   - What line number?
+   - What's the error message?
+
+2. Fix the issue:
+   - Update the code
+   - Run specific test again
+   - Verify fix works
+
+3. Re-run verification:
+   - Run the specific test again
+   - Run full verification
+   - Ensure all green before proceeding
+
+================================================================================
+USEFUL TIPS
+================================================================================
+
+1. Run specific test class:
+   pytest tests/test_phase_1_2_refactoring.py::TestPhase1TaxProfile -v
+
+2. Run specific test method:
+   pytest tests/test_phase_1_2_refactoring.py::TestPhase1TaxProfile::test_calculate_tax_basic -v
+
+3. See full error details:
+   pytest tests/test_phase_1_2_refactoring.py -v --tb=long
+
+4. Skip coverage to speed up:
+   pytest tests/test_phase_1_2_refactoring.py -v --no-cov
+
+5. Run mypy on entire directory:
+   mypy finance/ --show-error-codes
+
+6. Save results to file:
+   ./VERIFY_PACKAGES.sh 2>&1 | tee verification_results.txt
+
+================================================================================
+QUESTIONS?
+================================================================================
+
+Refer to:
+  - VERIFICATION_PLAN.md (detailed plan)
+  - PHASE_1_2_INTEGRATION_SUMMARY.md (integration guide)
+  - PHASE_1_2_VERIFICATION_CHECKLIST.md (full status)
+
+================================================================================
+STATUS: READY TO EXECUTE
+================================================================================
+
+Action: Run VERIFY_PACKAGES.sh
+Command: ./VERIFY_PACKAGES.sh
+Time: ~2-3 minutes
+Expected: Phase 1-2 tests all PASS ✅
+
+================================================================================

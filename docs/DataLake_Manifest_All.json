@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "project": "DutchBay_DataLake",
+  "entries": [
+    {
+      "id": "DB-ARC2-0001",
+      "title": "Archive 2 ingest (expanded) \u2013 docs/config/design/finance bundle",
+      "category": "IngestBundle",
+      "tags": [
+        "ingest",
+        "archive2",
+        "swimlanes"
+      ],
+      "file_path": "Raw/",
+      "sha256": null,
+      "bytes": null,
+      "ingest_date": "2025-12-13",
+      "source": "Archive 2.zip",
+      "notes": "Expanded Archive 2.zip into swimlane folders under Raw. AppleDouble (__MACOSX) moved to Archive/__MACOSX; byte-identical duplicates moved to Archive/Duplicates."
+    },
+    {
+      "id": "DB-CAT-ARC2-0001",
+      "title": "Archive 2 catalog (CSV)",
+      "category": "Catalog",
+      "tags": [
+        "catalog",
+        "archive2"
+      ],
+      "file_path": "Curated/Catalogs/DutchBay_Archive2_Catalog_20251213.csv",
+      "sha256": "cc10582f62a9d32883315219e2de88c349c49f7e639f97aff51a3f4fd4488ded",
+      "bytes": 27279,
+      "ingest_date": "2025-12-13",
+      "source": "Archive 2.zip"
+    },
+    {
+      "id": "DB-CAT-ARC2-0002",
+      "title": "Archive 2 catalog (XLSX)",
+      "category": "Catalog",
+      "tags": [
+        "catalog",
+        "archive2",
+        "xlsx"
+      ],
+      "file_path": "Curated/Catalogs/DutchBay_Archive2_Catalog_20251213.xlsx",
+      "sha256": "3fd61f1ffedfbe41ccb0266de57b56808ff6396cafbdc821f39b1e74992f4c8f",
+      "bytes": 20392,
+      "ingest_date": "2025-12-13",
+      "source": "Archive 2.zip"
+    }
+  ],
+  "updated_at": "2025-12-13T02:38:55.883921Z"
+}

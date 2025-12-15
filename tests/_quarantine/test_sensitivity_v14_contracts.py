@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from analytics.contracts_v14 import (
-    ParameterRangeConfig,
     MultiMetricSensitivitySuite,
+    ParameterRangeConfig,
     SensitivitySuite,
 )
 from analytics.sensitivity_v14 import (

@@ -1,0 +1,236 @@
+================================================================================
+        PHASE 1-2 INTEGRATION: QUICK REFERENCE CARD
+================================================================================
+
+DATE: December 13, 2025 | 9:02 PM IST
+STATUS: Ready for execution
+DURATION: ~2-3 hours (both phases)
+
+================================================================================
+PHASE 1: TAX LAYER INTEGRATION
+================================================================================
+
+FILE: finance/cashflow/cashflow_v14.py
+
+STEP 1: Add imports
+--------
+from finance.tax_profile import (
+    TaxProfile,
+    DepreciationSchedule,
+    build_tax_series,
+)
+
+STEP 2: Create TaxProfile from config
+--------
+tax_profile = TaxProfile(
+    tax_rate=float(tax_cfg.get("tax_rate", 0.25)),
+    interest_deductible=True,
+    depreciation_method="straight_line",
+    asset_base=float(config["capex"]["usd_total"]),
+    depreciation_years=20,
+    tax_holiday_years=0,
+)
+
+STEP 3: Get interest from debt module
+--------
+from debt_result: interest_usd = debt_result.get("interest_expense_series", [])
+Convert to LKR: interest_lkr = [amt * fx_rate for amt in interest_usd]
+
+STEP 4: Build tax series
+--------
+tax_series = build_tax_series(
+    tax_profile=tax_profile,
+    taxable_income_series=ebit_series,
+    interest_expense_series=interest_lkr,
+    depreciation_schedule=depreciation_schedule,
+    years=num_years,
+)
+
+STEP 5: Apply to annual rows
+--------
+for idx, tax_result in enumerate(tax_series):
+    annual_rows[idx]["tax_lkr"] = tax_result.tax_liability
+    annual_rows[idx]["interest_expense_lkr"] = interest_lkr[idx]
+    annual_rows[idx]["depreciation_lkr"] = tax_result.depreciation
+    annual_rows[idx]["posttax_cfads_lkr"] = pretax - tax_result.tax_liability
+
+VERIFY:
+  ✓ Phase 1-2 tests still pass (14/14)
+  ✓ Tax calculations match test values
+  ✓ Interest deductibility working
+  ✓ Depreciation applied correctly
+
+================================================================================
+PHASE 2: WACC INTEGRATION
+================================================================================
+
+FILE: finance/equity/equity_v14.py or KPI module
+
+STEP 1: Add imports
+--------
+from finance.wacc_integration import (
+    WaccResult,
+    calculate_wacc,
+)
+
+STEP 2: Create WACC initialization function
+--------
+def initialize_wacc(config, debt_result):
+    wacc_result = calculate_wacc(
+        risk_free_rate=0.05,
+        market_risk_premium=0.06,
+        asset_beta=0.8,
+        target_debt_to_value=0.6,
+        cost_of_debt=0.06,
+        tax_rate=0.25,
+        inflation_rate=0.04,
+    )
+    return wacc_result
+
+STEP 3: Extract discount rate
+--------
+wacc_result = initialize_wacc(config, debt_result)
+discount_rate = wacc_result.base.wacc_nominal
+
+STEP 4: Use in all discount rate operations
+--------
+# OLD: DEFAULT_DISCOUNT_RATE = 0.10
+# NEW: Use discount_rate from WACC
+
+equity_irr = calculate_equity_irr(cashflows, discount_rate)
+equity_npv = calculate_equity_npv(cashflows, discount_rate)
+project_npv = calculate_project_npv(cashflows, discount_rate)
+
+STEP 5: Wire into KPIs
+--------
+kpis = {
+    "equity_irr": calculate_equity_irr(eq_cf, discount_rate),
+    "project_irr": calculate_project_irr(proj_cf, discount_rate),
+    "equity_npv": calculate_equity_npv(eq_cf, discount_rate),
+    "wacc_nominal": wacc_result.base.wacc_nominal,
+    "wacc_prudential": wacc_result.base.wacc_prudential,
+}
+
+VERIFY:
+  ✓ Phase 2 tests still pass (5/5)
+  ✓ WACC matches CAPM formula
+  ✓ All NPV/IRR use WACC
+  ✓ KPI calculations correct
+
+================================================================================
+TESTING & VALIDATION
+================================================================================
+
+QUICK TESTS:
+
+1. Phase 1-2 unit tests
+   pytest tests/test_phase_1_2_refactoring.py -v
+   Expected: 14 passed ✓
+
+2. Tax calculation (Phase 1)
+   pytest tests/test_phase_1_2_refactoring.py::TestPhase1TaxProfile -v
+   Expected: 7 passed ✓
+
+3. WACC calculation (Phase 2)
+   pytest tests/test_phase_1_2_refactoring.py::TestPhase2WaccIntegration -v
+   Expected: 5 passed ✓
+
+4. End-to-end pipeline
+   python -m analytics.orchestrators.scenario_analytics
+   Expected: No errors, reasonable KPIs
+
+5. Backward compatibility
+   Test with old config (no tax, default rates)
+   Expected: Still works
+
+================================================================================
+KEY FILES TO MODIFY
+================================================================================
+
+1. finance/cashflow/cashflow_v14.py
+   - Import Phase 1 components
+   - Create TaxProfile from config
+   - Extract interest from debt
+   - Call build_tax_series()
+   - Apply results to annual_rows
+
+2. finance/equity/equity_v14.py or KPI module
+   - Import Phase 2 components
+   - Create initialize_wacc() function
+   - Replace hardcoded discount rate (0.10)
+   - Use WACC in all discount rate operations
+   - Wire into KPI calculations
+
+3. Potentially: analytics/core/metrics.py
+   - Update KPI functions if they exist separately
+   - Wire WACC into all NPV/IRR calculations
+
+================================================================================
+EXECUTION ORDER
+================================================================================
+
+1. Phase 1 Integration (Tax Layer)
+   Time: ~45 minutes
+   Deliverable: build_annual_rows() uses TaxProfile
+
+2. Phase 2 Integration (WACC)
+   Time: ~45 minutes
+   Deliverable: KPIs use WACC calculation
+
+3. Integration Testing
+   Time: ~30 minutes
+   Deliverable: All tests pass, end-to-end works
+
+4. Verification & Cleanup
+   Time: ~15 minutes
+   Deliverable: Code committed, ready for legacy mypy cleanup
+
+Total: ~2.5 hours
+
+================================================================================
+FINAL CHECKLIST
+================================================================================
+
+Before starting:
+  ✓ Phase 1-2 code complete (14/14 tests passing)
+  ✓ Integration plan reviewed
+  ✓ Files identified
+  ✓ Have this quick reference
+
+Phase 1 (Tax):
+  ☐ Imports added
+  ☐ TaxProfile created
+  ☐ Interest extracted
+  ☐ Tax series built
+  ☐ Results applied to rows
+  ☐ Phase 1-2 tests: 14/14 PASS
+
+Phase 2 (WACC):
+  ☐ Imports added
+  ☐ WACC function created
+  ☐ Discount rate extracted
+  ☐ NPV/IRR updated
+  ☐ KPIs wired
+  ☐ Phase 1-2 tests: 14/14 PASS
+
+Testing:
+  ☐ Unit tests pass
+  ☐ End-to-end pipeline works
+  ☐ Sample scenario KPIs reasonable
+  ☐ Backward compatible
+  ☐ Ready for deployment
+
+================================================================================
+GO TIME! 🚀
+================================================================================
+
+You've got this. Start with Phase 1, get it working and tested,
+then move to Phase 2. Both should take ~2.5 hours total.
+
+If you get stuck:
+  1. Check the detailed INTEGRATION_STEP_BY_STEP.md
+  2. Re-run Phase 1-2 tests to verify nothing broke
+  3. Print debug output to understand what's happening
+  4. Read the docstrings in tax_profile.py and wacc_integration.py
+
+Good luck!

@@ -1,0 +1,255 @@
+project:
+  name: Dutch Bay Wind Project (Equity Case 2025Q4)
+  capacity_mw: 150
+  capacity_factor: 0.4
+  degradation: 0.6  # percent; 0.6 => 0.006/yr
+  grid_loss_pct: 0.02  # decimal; 2% grid loss
+  life_years: 20
+  boi_approved: false
+  boi_agreement_date: '2025-01-15'
+  location: Puttlam District, North Western Province
+  jurisdiction: Sri Lanka
+  corporate_tax_rate: 0.3
+  depreciation_years: 15
+  depreciation_start_year: 1
+  tax_holiday_years: 12
+  tax_holiday_start_year: 1
+  enhanced_capital_allowance_pct: 1.5
+  loss_carryforward_years: 25
+
+tax:
+  enable_pipeline_overlay: true
+  corporate_tax_rate: 0.30
+  depreciation_method: "straight_line"
+  depreciation_start_year: 1
+  depreciation_years: 15
+  enhanced_allowance_applies: false
+  enhanced_capital_allowance_pct: 1.5
+  loss_carryforward_years: 25
+  tax_holiday_start_year: 1
+  tax_holiday_years: 12
+  wht_on_interest_to_nonresidents: 0.10
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+
+statutory:
+  env_surcharge_pct: 0.005
+  grid_loss_pct: 0.02
+  success_fee_pct: 0.01
+  social_services_levy_pct: 0.025
+  sscl_enabled: true
+  sscl_pct: 0.025
+  sscl_base: "gross_revenue"    # or "net_revenue_after_grid_loss"
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.15
+
+# KPI switches (GWTF: explicit opt-in only)
+kpis:
+  use_posttax_cfads: true
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+tariff:
+  lkr_per_kwh: 20.3
+  tariff_type: fixed
+  ppa_term_years: 20
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+capex:
+  usd_total: 150000000
+  breakdown:
+    epc_usd: 140000000
+    development_usd: 5000000
+    financing_fees_usd: 3000000
+    contingency_usd: 2000000
+opex:
+  usd_per_year: 3000000
+  breakdown:
+    om_contract_usd: 2000000
+    insurance_usd: 500000
+    land_lease_usd: 300000
+    admin_usd: 200000
+
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+
+
+Financing_Terms:
+  debt_ratio: 0.4
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.1
+    usd_commercial_min: 0.45
+  rates:
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  target_dscr: 1.4
+  min_dscr: 1.2
+  min_dscr_covenant: 1.2
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+  enforce_hard_covenants: false
+metrics:
+  llcr_min_covenant: 1.2
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.1
+  plcr_min_covenant: 1.4
+  plcr_target: 1.6
+  plcr_discount_rate: 0.1
+  dscr_min_covenant: 1.2
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.45
+  min_dscr_covenant: 1.3
+  target_dscr: 1.45
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.1
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: Equity
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+monte_carlo:
+  n_scenarios: 100000
+  seed: 42
+  parameters:
+    capacity_factor_std: 0.05
+    tariff_lkr_std: 0.1
+    opex_usd_std: 0.15
+    capex_usd_std: 0.08
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles:
+  - 10
+  - 25
+  - 50
+  - 75
+  - 90
+  min_dscr_covenant: 1.2
+  min_llcr_covenant: 1.25
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.05
+      high_pct: 0.05
+    tariff_lkr_per_kwh:
+      low_pct: -0.1
+      high_pct: 0.1
+    opex_usd_per_year:
+      low_pct: -0.15
+      high_pct: 0.15
+    capex_usd_total:
+      low_pct: -0.08
+      high_pct: 0.08
+    grid_loss_pct:
+      low_pct: -0.01
+      high_pct: 0.03
+  analysis:
+    tornado_chart_title: DutchBay 150MW - Parameter Sensitivity (Equity IRR)
+    dpi: 300
+metadata:
+  version: '2.4'
+  last_updated: '2025-11-22'
+  author: DutchBay V13 Financial Modeling Team
+  review_status: Draft - Pending Board Approval
+  assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
+wacc:
+  # ---------------------------------------------------------------------------
+  # CAPM / WACC calculation (documented)
+  #
+  # Inputs:
+  # - Target capital structure: D/V = 0.70, E/V = 0.30  =>  D/E = 0.70/0.30 = 2.3333
+  # - Tax rate (Tc): 0.30
+  # - Comparable levered beta (Bl_comp): 1.30
+  # - Comparable D/E: 0.50
+  # - Risk-free rate (Rf): 0.13
+  # - Market risk premium (MRP): 0.05
+  # - Pre-tax cost of debt (Kd): 0.08
+  #
+  # Step 1) Unlever comparable beta to asset beta (Bu):
+  #   Bu = Bl_comp / [1 + (1 - Tc) * (D/E)_comp]
+  #      = 1.30 / [1 + (1 - 0.30) * 0.50]
+  #      = 1.30 / [1 + 0.70 * 0.50]
+  #      = 1.30 / 1.35
+  #      = 0.962963...
+  #
+  # Step 2) Relever asset beta to project equity beta (Be):
+  #   Be = Bu * [1 + (1 - Tc) * (D/E)_proj]
+  #      = 0.962963 * [1 + 0.70 * 2.333333]
+  #      = 0.962963 * 2.633333
+  #      = 2.534...
+  #
+  # Step 3) CAPM cost of equity (Ke):
+  #   Ke = Rf + Be * MRP
+  #      = 0.13 + 2.534 * 0.05
+  #      = 0.2567  (~25.7%)
+  #
+  # Step 4) After-tax WACC (nominal):
+  #   WACC = (E/V * Ke) + (D/V * Kd * (1 - Tc))
+  #        = (0.30 * 0.2567) + (0.70 * 0.08 * 0.70)
+  #        = 0.0770 + 0.0392
+  #        = 0.1162 (~11.6%)
+  #
+  # Step 5) Prudential WACC (nominal):
+  #   WACC_prudential = WACC + 100 bps = 0.1162 + 0.0100 = 0.1262 (~12.6%)
+  # ---------------------------------------------------------------------------
+
+  mode: capm
+
+  # CAPM inputs (nominal decimals)
+  risk_free_rate: 0.13
+  market_risk_premium: 0.05
+
+  # Use asset_beta so the engine can compute/reporter equity_beta_levered
+  asset_beta: 0.962963
+
+  # Capital structure (choose D/E or gearing; D/E is explicit here)
+  target_debt_to_equity: 0.6667
+
+  # Cost of debt (pre-tax nominal)
+  cost_of_debt: 0.08
+
+  # Tax (explicit; otherwise engine may fall back to tax paths)
+  tax_rate: 0.30
+
+  # Optional (only matters if you also want real WACC reported)
+  inflation_rate: 0.03
+
+  # Prudential overlay
+  prudential_spread_bps: 100
+
+  # GWTF opt-in: let pipeline use WACC nominal for NPV discounting
+  apply_to_npv: true
+
+  description: CAPM WACC (Sri Lanka) with beta unlever/relever from comparable and 70:30 D/V; includes 100 bps prudential uplift

@@ -1,0 +1,152 @@
+id,swimlane,title,file_path,bytes,sha256,source,ingest_date
+DB-A2-0001,1-Config,66ce4e61.yaml,Raw/Config/YAML/66ce4e61.yaml,4783,6de8158bf408ab1408dacebfcf303bfc42e935e10a5e3174d5ff0f2e7305e68f,Archive 2.zip,20251213
+DB-A2-0002,1-Config,a9f81e32.yaml,Raw/Config/YAML/a9f81e32.yaml,16676,2dddabf9d38b2124b3907b032d911b6527925e0531f26d4941006ecf0e7992d5,Archive 2.zip,20251213
+DB-A2-0003,1-Config,dbe00078.yaml,Raw/Config/YAML/dbe00078.yaml,3932,b07e1976a26a0a285537e099b3f3b70a8609abb4ebaade932766fdab854ba31e,Archive 2.zip,20251213
+DB-A2-0004,1-FinanceInputs,Current cost for dutch bay.xlsx,Raw/Finance/Current cost for dutch bay.xlsx,12473,c0c6341ad84f838fe2c1c353157eb8292e9516981d3aea84347d63a2fd7f0952,Archive 2.zip,20251213
+DB-A2-0005,1-FinanceInputs,Current cost for dutch bay[1].xlsx,Raw/Finance/Current cost for dutch bay[1].xlsx,11464,11e897329959264638f3e442c9a29a85b5f34e815b9201d6cae320544ea93d18,Archive 2.zip,20251213
+DB-A2-0006,2-Analytics-Risk,Committed State of the Sensitivity Module.pdf,Raw/Docs/Committed State of the Sensitivity Module.pdf,102270,92f2f4be548030023c74e2895b44c32e72989ac3c951de3f24f85efaf5e06040,Archive 2.zip,20251213
+DB-A2-0007,2-Analytics-Risk,FAILED tests_analytics_layer_test_sensitivity_v14_.md,Raw/Docs/FAILED tests_analytics_layer_test_sensitivity_v14_.md,2338,289db359348d78e43bd68b9075cab2098777f8e9eaa00c9147ef116763df28c7,Archive 2.zip,20251213
+DB-A2-0008,2-Analytics-Risk,SENS-001-completion.md,Raw/Docs/SENS-001-completion.md,14798,55bb0dee57ee82c1f189cdf90ab1337c84caf684f725ee772c84dc56a5a2309f,Archive 2.zip,20251213
+DB-A2-0009,2-Analytics-Risk,SENS-001-delivery.md,Raw/Docs/SENS-001-delivery.md,10418,707de6de1575a2a1431c6bf8224b86d9a66618dfd4ff98213c1a8e7013042f55,Archive 2.zip,20251213
+DB-A2-0010,2-Analytics-Risk,SENS-001-quick-ref.md,Raw/Docs/SENS-001-quick-ref.md,8633,ec6b85dd65cb080fc4a299188355861683ef59fd6aadece9afdafe4514de2bdb,Archive 2.zip,20251213
+DB-A2-0011,2-Analytics-Risk,SENS-001-summary.md,Raw/Docs/SENS-001-summary.md,11096,bf114c4c338bb635eedea27d8c4c2abb33fa6931349dd170347beb0ec4b924aa,Archive 2.zip,20251213
+DB-A2-0012,2-Analytics-Risk,SENS-001-verification.md,Raw/Docs/SENS-001-verification.md,11603,bcdc568a4c3c92b204138a7cff8d388ae092196b8f35f7c864995802ab1370ec,Archive 2.zip,20251213
+DB-A2-0013,2-Analytics-Risk,SENSITIVITY_INTEGRATION_STRATEGY.md,Raw/Docs/SENSITIVITY_INTEGRATION_STRATEGY.md,18527,9041d2e4689077432139b668f4b9ab94cfdadc5d4bd3fd7ed1d0ec63e2b66bf9,Archive 2.zip,20251213
+DB-A2-0014,2-Analytics-Risk,SENS_002_DELIVERY_SUMMARY.txt,Raw/Docs/SENS_002_DELIVERY_SUMMARY.txt,15166,7a37371e934b7b851c8635702e51ba8e4afebdfffa00ffe475cd38bb6dc89503,Archive 2.zip,20251213
+DB-A2-0015,2-Analytics-Risk,SENS_COMPLETE_FINAL_SUMMARY.txt,Raw/Docs/SENS_COMPLETE_FINAL_SUMMARY.txt,17542,c3e13e5d6c0d87996fbdf2106ccb3f80098e7ce6202d5c9253ada5680ebf6933,Archive 2.zip,20251213
+DB-A2-0016,2-Analytics-Risk,cli_sensitivity.txt,Raw/Docs/cli_sensitivity.txt,10374,05f446451fd8c61fbdca4d5653f5f6dafb3819a170cd229e8e6bc78dca841492,Archive 2.zip,20251213
+DB-A2-0017,2-Analytics-Risk,phase_3_sensitivity.txt,Raw/Docs/phase_3_sensitivity.txt,7604,2b309af1046efa72460a87bdfcf006117a4e42a2a665a0b28b964a9d98e2c2f2,Archive 2.zip,20251213
+DB-A2-0018,2-Analytics-Risk,sensitivity_runner.txt,Raw/Docs/sensitivity_runner.txt,7133,db3e6313afd8a041cb2eb44e937ffa06139db4003ed16a9fa5d60a3faf93436a,Archive 2.zip,20251213
+DB-A2-0019,2-Analytics-Risk,test_tornado_export.txt,Raw/Docs/test_tornado_export.txt,12184,480768cc1c5b92ffac0333bc50a29786a1e895ee599e8f94871c2c97b508493e,Archive 2.zip,20251213
+DB-A2-0020,2-Contracts,API_Contract_Specifications.md,Raw/Docs/API_Contract_Specifications.md,14951,71f30bbf7c9fca411075605a9fecb3945b9eb0a11529dce12a5d869abdda3709,Archive 2.zip,20251213
+DB-A2-0021,2-Contracts,Contracts V14 Refactor Analysis.pdf,Raw/Docs/Contracts V14 Refactor Analysis.pdf,654236,d1a816be633fbcbc98ab4d9ff856161c11b455696454cfe935ceaa1f08f15dc6,Archive 2.zip,20251213
+DB-A2-0022,2-Contracts,contracts__init__.txt,Raw/Docs/contracts__init__.txt,1019,4ea0b5f97356dac8c54f6b1bccc92c2701de327df5e660b5d8ff20755d9a5ad7,Archive 2.zip,20251213
+DB-A2-0023,2-Contracts,contracts_v14.txt,Raw/Docs/contracts_v14.txt,1224,630001883e21c15e06f49602ba6c0028d2bcca140d90648bac44e1e8d4d66dba,Archive 2.zip,20251213
+DB-A2-0024,2-Contracts,modular-contracts-plan.md,Raw/Docs/modular-contracts-plan.md,12567,aa213e3a771a7f5219b2d74c2ec360f6f46bb841edf5e9214bd15f15eb43af15,Archive 2.zip,20251213
+DB-A2-0025,2-Governance-Rules,GO_WITH_THE_FLOW_AI_COLLABORATION_CONTRACT.md,Raw/Docs/GO_WITH_THE_FLOW_AI_COLLABORATION_CONTRACT.md,11950,8eeca824b7bfca94536deaea7a348bbd608b011e5a2a610df5a9f3f0ad776ffc,Archive 2.zip,20251213
+DB-A2-0026,2-Governance-Rules,GO_WITH_THE_FLOW_GOLD_STANDARD.md,Raw/Docs/GO_WITH_THE_FLOW_GOLD_STANDARD.md,20544,0ae67c7223784144dc99e19efab7981a5b0422f3712154b2e4cea590fbd9a23b,Archive 2.zip,20251213
+DB-A2-0027,2-Governance-Rules,GO_WITH_THE_FLOW_INTEGRATION_GUIDE.md,Raw/Docs/GO_WITH_THE_FLOW_INTEGRATION_GUIDE.md,12095,b92bd3922aea1fc556605ac60e5f6250cc986d2fc30fd3b6d13429b0223c34ed,Archive 2.zip,20251213
+DB-A2-0028,2-Governance-Rules,GWTF-CORRECTION.md,Raw/Docs/GWTF-CORRECTION.md,10632,52ca459a8a2fb893db3cb18622963d6c6a78e2d8fc56a4172713f1468baee136,Archive 2.zip,20251213
+DB-A2-0029,2-Governance-Rules,GWTF_COMPLIANCE_VERIFICATION.md,Raw/Docs/GWTF_COMPLIANCE_VERIFICATION.md,11692,9f43f7108fb5e8701734b0cf9b250d6d1b3f6b055afea991f06254da59a060c9,Archive 2.zip,20251213
+DB-A2-0030,3-UI-Design,DutchBay_Design_System.css,Raw/Design/DutchBay_Design_System.css,46871,d55697b28852fd753529a5901aec8bcc5b7f930303701e34ef453201bd61247b,Archive 2.zip,20251213
+DB-A2-0031,3-UI-Design,DutchBay_Prototype.html,Raw/Design/DutchBay_Prototype.html,54709,e4b970adccc568151d381c7616d3f580c1f5306db00463d293f88efb80c0e763,Archive 2.zip,20251213
+DB-A2-0032,4-Docs,00_START_HERE_INDEX.md,Raw/Docs/00_START_HERE_INDEX.md,8390,204226ec4adfcc765371e6e961e262abeee6624b5ac7500598d819ad7e50b219,Archive 2.zip,20251213
+DB-A2-0033,4-Docs,085565d0.docx,Raw/Docs/085565d0.docx,40138,bba0c95e2eeb59c028d95fe143b9a657ee1d95c021905dddc827048abd5fddf5,Archive 2.zip,20251213
+DB-A2-0034,4-Docs,1d71e48a.docx,Raw/Docs/1d71e48a.docx,46349,efb0e8134466aefc5f9e86b3230a7e6b9ed39f7fb0a0b23634f598faacbedaa3,Archive 2.zip,20251213
+DB-A2-0035,4-Docs,383aa8c0.docx,Raw/Docs/383aa8c0.docx,41000,10becadd2d59ce8a4cbdae1911fb559b74247f779df8f5eb5b4a7666581a962b,Archive 2.zip,20251213
+DB-A2-0036,4-Docs,3f5ee695.docx,Raw/Docs/3f5ee695.docx,313940,dcdc624f4b971dfa65675246bb4dda2f9413e393e92c79d1336a7e20458daa69,Archive 2.zip,20251213
+DB-A2-0037,4-Docs,9e72eb67.docx,Raw/Docs/9e72eb67.docx,40317,113532cc63f74b57c2af95f37f0524844fde60636a2efff4189bcb35b6207f9f,Archive 2.zip,20251213
+DB-A2-0038,4-Docs,=================================== FAILURES =====.md,Raw/Docs/=================================== FAILURES =====.md,11291,b512855682010984ac19d6e73aeb56e375e366c97403a8a38fdf1a31d1866663,Archive 2.zip,20251213
+DB-A2-0039,4-Docs,ACTION_PLAN_44_ERRORS.txt,Raw/Docs/ACTION_PLAN_44_ERRORS.txt,14994,9f867b4f1e17b6927f32c144cae1cea754aa1a83753417981d777da1d3413493,Archive 2.zip,20251213
+DB-A2-0040,4-Docs,ARCHITECTURE_LAYERS.md,Raw/Docs/ARCHITECTURE_LAYERS.md,24622,0a964d620ecfa8303a19ebb681390ec8f5c27767ede0cc597063b8335ae92620,Archive 2.zip,20251213
+DB-A2-0041,4-Docs,B1-B2-B3-Execution-Log.md,Raw/Docs/B1-B2-B3-Execution-Log.md,4896,e04e03b317349fb9ec9bc89d4c9156840cda6d5000ec984eb55803e83401b8ce,Archive 2.zip,20251213
+DB-A2-0042,4-Docs,B1-Execution-Complete-Summary.md,Raw/Docs/B1-Execution-Complete-Summary.md,5430,69790fa022fc2a38971b5e163e3ac0ca54429f102144b305bb4644952c4173e5,Archive 2.zip,20251213
+DB-A2-0043,4-Docs,BESS_Analysis_Complete.md,Raw/Docs/BESS_Analysis_Complete.md,33826,6f51a32c829c6a797ecd8dd224f003f688b254a9516b2ad369c60965e329615f,Archive 2.zip,20251213
+DB-A2-0044,4-Docs,BESS_Quick_Decision.md,Raw/Docs/BESS_Quick_Decision.md,12759,4a155bfea3f99a271034cb9a2203effd48e16e16b1f9d0a7b163ff8b1739cfdf,Archive 2.zip,20251213
+DB-A2-0045,4-Docs,CANONICAL_CODEBASE_SNAPSHOT.md,Raw/Docs/CANONICAL_CODEBASE_SNAPSHOT.md,19360,aa69f4dca5120e2ad3e70c9df193dda29dacc2b6d81a21cf27b4bbe6689807a9,Archive 2.zip,20251213
+DB-A2-0046,4-Docs,CODEBASE_INGESTION_SUMMARY.txt,Raw/Docs/CODEBASE_INGESTION_SUMMARY.txt,9811,2b8698e9c74ef2aef12d0dd8d4d991a03df0af39d5795f9cff62278b08a4240d,Archive 2.zip,20251213
+DB-A2-0047,4-Docs,COMPLETE_DELIVERABLES.md,Raw/Docs/COMPLETE_DELIVERABLES.md,11683,cddf980570398ecc682b054e13b4082bcd4ef4dfc706c81df428a4afdbeb6d94,Archive 2.zip,20251213
+DB-A2-0048,4-Docs,COMPLETE_DEPLOYMENT_PACKAGE.md,Raw/Docs/COMPLETE_DEPLOYMENT_PACKAGE.md,8063,7c39f1707b8d05928417530136ee98449351570290a435b851dd1c166e0adf54,Archive 2.zip,20251213
+DB-A2-0049,4-Docs,Canonical stack overview.docx,Raw/Docs/Canonical stack overview.docx,20543,ccf81b5809a20b2ad003a4dd43e22667935f0be37b6ce7906b98f5e377bde929,Archive 2.zip,20251213
+DB-A2-0050,4-Docs,Cashflow v14 Refactoring Package.docx,Raw/Docs/Cashflow v14 Refactoring Package.docx,108914,6e2a3d27d45175c4b80eb778500bbd587ec89a609f8a3ed28554f5b840a96cfc,Archive 2.zip,20251213
+DB-A2-0051,4-Docs,Complete_Package_Summary.md,Raw/Docs/Complete_Package_Summary.md,10109,f06e9da47ce6fef57eaa8250847d4fb41e7dbf799ba8c3f45a732999396c10f0,Archive 2.zip,20251213
+DB-A2-0052,4-Docs,DECISION_FRAMEWORK.md,Raw/Docs/DECISION_FRAMEWORK.md,12914,dc6b451e41d23e54edb59685cce5d578c67792ec532349abf757d499b1a21bd1,Archive 2.zip,20251213
+DB-A2-0053,4-Docs,DELIVERABLES-INDEX.md,Raw/Docs/DELIVERABLES-INDEX.md,14537,242d39b0ac78f85e01d9f249c90531a60a79918bffea0dc96e840336e76a1ec2,Archive 2.zip,20251213
+DB-A2-0054,4-Docs,DELIVERABLES_INDEX.txt,Raw/Docs/DELIVERABLES_INDEX.txt,13956,f30eb2325b3ea776b42e43b75656d403b93a0ddd8c8157820d8a886aeee706e4,Archive 2.zip,20251213
+DB-A2-0055,4-Docs,DELIVERY_SUMMARY.txt,Raw/Docs/DELIVERY_SUMMARY.txt,16625,c37586a13d9ed9361fceb089ec7e6b18981308a6994bd6ba2f83ab337d5c498a,Archive 2.zip,20251213
+DB-A2-0056,4-Docs,Dual_Technology_Solar_Wind_Analysis.md,Raw/Docs/Dual_Technology_Solar_Wind_Analysis.md,31291,e52f5685267f56b29a174c83616274c2ba2c36b957584d0b0510967232c586d2,Archive 2.zip,20251213
+DB-A2-0057,4-Docs,DutchBay Cashflow v14 Refactoring Package (Complete) (1).docx,Raw/Docs/DutchBay Cashflow v14 Refactoring Package (Complete) (1).docx,108892,4477933b7a9e163729ba58cb9dbe1d6f37faf9307a936485eaf85fe03c89d5af,Archive 2.zip,20251213
+DB-A2-0058,4-Docs,DutchBay_Comprehensive_Feasibility_LenderBoard_FullReport.docx,Raw/Docs/DutchBay_Comprehensive_Feasibility_LenderBoard_FullReport.docx,39213,99eb52a05f35f08a58fff4ab9716c196904bbdcd1e410745f112ea7ee82883a4,Archive 2.zip,20251213
+DB-A2-0059,4-Docs,DutchBay_Design_System_v1.md,Raw/Docs/DutchBay_Design_System_v1.md,35439,f0c41b2a2a92e743f8022154604a60c92ce92ac88af642e0e1164d592b6160fa,Archive 2.zip,20251213
+DB-A2-0060,4-Docs,DutchBay_Feasibility_LenderBoard_Report.docx,Raw/Docs/DutchBay_Feasibility_LenderBoard_Report.docx,37497,42d27474f9cae6d9686e13eb8892dc2ae8539c5a04ae7250b38bb0ab346629cb,Archive 2.zip,20251213
+DB-A2-0061,4-Docs,DutchBay_Figma_Spec.md,Raw/Docs/DutchBay_Figma_Spec.md,22829,87d65182569838a4c662d387f6b83827c5563192fcbd289df1229c30d6ac3d24,Archive 2.zip,20251213
+DB-A2-0062,4-Docs,EXECUTIVE_SUMMARY.txt,Raw/Docs/EXECUTIVE_SUMMARY.txt,16344,0c310d28e94f4884501ee4ab0db46e6a154e7d6fbd79a3d2642af50d7f406cd1,Archive 2.zip,20251213
+DB-A2-0063,4-Docs,Envision Memo.docx,Raw/Docs/Envision Memo.docx,17619,7dc5f82f5284314408fcd50a04624046c72e72583ff9c175ec1388bf3567ae3b,Archive 2.zip,20251213
+DB-A2-0064,4-Docs,Executive_Summary_Integration_Roadmap.md,Raw/Docs/Executive_Summary_Integration_Roadmap.md,11452,447ed771b794080ee2d39cfd65ef222fb2e58b3ca998068ce372e89c1329d7d9,Archive 2.zip,20251213
+DB-A2-0065,4-Docs,"Experience Category,.txt","Raw/Docs/Experience Category,.txt",707,7ab4c01cef6f03cca9013d598fa29cd60dafc0e1ae725d2b21addcfdb11892d5,Archive 2.zip,20251213
+DB-A2-0066,4-Docs,FINAL_DELIVERY_SUMMARY.md,Raw/Docs/FINAL_DELIVERY_SUMMARY.md,9829,6a4791c6ebad29126fda51afd6319b22f489eeeef433ab1492b647ea0086fb2a,Archive 2.zip,20251213
+DB-A2-0067,4-Docs,FINAL_SUMMARY.md,Raw/Docs/FINAL_SUMMARY.md,23855,3569fdfb54c33b38d09def73a511ac271665dc2e4271215788405fbd3f054ddd,Archive 2.zip,20251213
+DB-A2-0068,4-Docs,FINAL_SUMMARY.txt,Raw/Docs/FINAL_SUMMARY.txt,11037,1b7e4f6e1d6739a714b833c4da4e7dc97c4682a926e4b7c8e25e5ae146b6b0be,Archive 2.zip,20251213
+DB-A2-0069,4-Docs,Figma_Component_Specs.md,Raw/Docs/Figma_Component_Specs.md,15796,01eba7e8586d3369f83def8dbf688a6a67d6fb7678841f54da7c4a84caf96f8a,Archive 2.zip,20251213
+DB-A2-0070,4-Docs,Final_Decision_Guide_Choose_Your_Path.md,Raw/Docs/Final_Decision_Guide_Choose_Your_Path.md,15181,b291ae3923c4e53914510a1582a298eec80816b33016a54240ca7802fe203347,Archive 2.zip,20251213
+DB-A2-0071,4-Docs,"Financial Metric,Requirement.txt","Raw/Docs/Financial Metric,Requirement.txt",1314,3ecf48a9ec327f7e556b6274155e7183fa4d0177adac3971d7ed28df90261495,Archive 2.zip,20251213
+DB-A2-0072,4-Docs,Full Investment Report - Dutch Bay ver 2.pdf,Raw/Docs/Full Investment Report - Dutch Bay ver 2.pdf,637540,c146ea70a843e015aea7f7f0d9480e6a3301dd2fc0444da84db3f48cf0997da2,Archive 2.zip,20251213
+DB-A2-0073,4-Docs,GOLDEN_REFERENCE_GUIDE.md,Raw/Docs/GOLDEN_REFERENCE_GUIDE.md,12877,b2806ab8112642fd1e72bb4fdfe69cebb563b0c242a5aedd3340c7842c50e605,Archive 2.zip,20251213
+DB-A2-0074,4-Docs,Great. Lets park this for sprint 10. Remember to r.md,Raw/Docs/Great. Lets park this for sprint 10. Remember to r.md,1735,ab39bc61766db683f7043e3f6096454fcfba72617fa568cd056b6371bdc7ebf4,Archive 2.zip,20251213
+DB-A2-0075,4-Docs,Great. Lets park this for sprint 10. Remember to r.pdf,Raw/Docs/Great. Lets park this for sprint 10. Remember to r.pdf,242116,25ada564e9c993ddd96dc0898f27afe4d92ec6997c60e6c08618266c6f6ed9f6,Archive 2.zip,20251213
+DB-A2-0076,4-Docs,HANDOFF_TO_NEW_THREAD.md,Raw/Docs/HANDOFF_TO_NEW_THREAD.md,7107,538ec71004cc4a7751553ff3e0258a909ddfaddaa2d41fe69d0724adf4809400,Archive 2.zip,20251213
+DB-A2-0077,4-Docs,IMPLEMENTATION_GUIDE.md,Raw/Docs/IMPLEMENTATION_GUIDE.md,17181,c16abc0e95296d28616bb6f12cf2ad6ead6765875ad7926cd75a99219cc26b58,Archive 2.zip,20251213
+DB-A2-0078,4-Docs,IMPLEMENTATION_ROADMAP.md,Raw/Docs/IMPLEMENTATION_ROADMAP.md,17646,3a722dfc5cd134cfa712cef53eca920abf7444fa1174dfd9fc871fb4aa7ba254,Archive 2.zip,20251213
+DB-A2-0079,4-Docs,INTEGRATION_GUIDE.txt,Raw/Docs/INTEGRATION_GUIDE.txt,13777,1463cc55f530e400aab9871de0ec386b166587650ef7231917896e2cb492cb4d,Archive 2.zip,20251213
+DB-A2-0080,4-Docs,Implementation_Code_Examples.md,Raw/Docs/Implementation_Code_Examples.md,23374,bc8fdb78ecd713508bd507d3225266e2eec1765132cef21a19db1ed7efaaa158,Archive 2.zip,20251213
+DB-A2-0081,4-Docs,Integrated-Pipeline-Analysis.md,Raw/Docs/Integrated-Pipeline-Analysis.md,5655,3cbdbc506ba338565025226aaff3adac8032dd28f35fec6fb8063fa24512877f,Archive 2.zip,20251213
+DB-A2-0082,4-Docs,LINT_PREVENTION_STRATEGY.md,Raw/Docs/LINT_PREVENTION_STRATEGY.md,19398,6b1182572291ae58f848687f346eee28d70a6f18b031853cb77e8b72025cb37b,Archive 2.zip,20251213
+DB-A2-0083,4-Docs,MASTER_INTEGRATION_ROADMAP.md,Raw/Docs/MASTER_INTEGRATION_ROADMAP.md,33013,5338c77504dbbfb78f2e2285a0373a64f909a9b995439bc211cccae825f50061,Archive 2.zip,20251213
+DB-A2-0084,4-Docs,Mobile_App_Deployment_Pathway.md,Raw/Docs/Mobile_App_Deployment_Pathway.md,29104,3d2808d0e911e2d2e4b5a10ce7a6bfd2d31eb48566c91efa65b802f19c8337dc,Archive 2.zip,20251213
+DB-A2-0085,4-Docs,Mobile_App_Quick_Guide.md,Raw/Docs/Mobile_App_Quick_Guide.md,10754,e30a246158e1f47cd59c0a22bbbe49d158bc5029191336e187308004c03b27c6,Archive 2.zip,20251213
+DB-A2-0086,4-Docs,Multi-Technology Wind + Solar Modeling Platform_ Technical and Financial Review.docx,Raw/Docs/Multi-Technology Wind + Solar Modeling Platform_ Technical and Financial Review.docx,51311,9eac98b7c61c11629d427af2f77e1ec9960532041adcc3bd47ee7c18ff549216,Archive 2.zip,20251213
+DB-A2-0087,4-Docs,Multi_Tech_Feasibility_Verdict.md,Raw/Docs/Multi_Tech_Feasibility_Verdict.md,14017,10736afa180af9d29ee3cfa759492bd55e93d3b8523d63b61ad80e880dfd2172,Archive 2.zip,20251213
+DB-A2-0088,4-Docs,PACKAGE_SUMMARY.md,Raw/Docs/PACKAGE_SUMMARY.md,13460,47bcca534a5fd0809394d2143ab9dcf38cb0bdf0be1350d39bae12f1a4918d7b,Archive 2.zip,20251213
+DB-A2-0089,4-Docs,PATCH_SET_1_CHECKLIST.md,Raw/Docs/PATCH_SET_1_CHECKLIST.md,9059,5c62165bf2fe40097b72877f2ebfcdb78922617d4651631c67a30f4d2bc75964,Archive 2.zip,20251213
+DB-A2-0090,4-Docs,PATCH_SET_1_INSTRUCTIONS.md,Raw/Docs/PATCH_SET_1_INSTRUCTIONS.md,10773,d8f7e9b22872b0cb8bfdf5457f940c3656bf94a2e4cc87d71a72f128a7ff412b,Archive 2.zip,20251213
+DB-A2-0091,4-Docs,PHASE_1_MASTER_REFERENCE.md,Raw/Docs/PHASE_1_MASTER_REFERENCE.md,12237,2549aedfbff228ac24754e46b17e54fae1078d93723019d73f406e9937badae8,Archive 2.zip,20251213
+DB-A2-0092,4-Docs,PHASE_3_CLOSURE_SUMMARY.md,Raw/Docs/PHASE_3_CLOSURE_SUMMARY.md,8849,930aaff8941c37d13d2cd7143dc98c057658d14a3d7bc3b8bc80016840f56491,Archive 2.zip,20251213
+DB-A2-0093,4-Docs,PHASE_3_SUMMARY.md,Raw/Docs/PHASE_3_SUMMARY.md,4184,88dc0e8a64d2839e28921b89e66c0360e092388f485c83e40606d42c29acc63e,Archive 2.zip,20251213
+DB-A2-0094,4-Docs,PHASE_3_TEAM_REPORT.md,Raw/Docs/PHASE_3_TEAM_REPORT.md,16425,d4bab2678ca0852368dd06e9f17eba6890503275f4fcff950a6a48ef4356af78,Archive 2.zip,20251213
+DB-A2-0095,4-Docs,PIN_UPDATE_GUIDE.md,Raw/Docs/PIN_UPDATE_GUIDE.md,3030,6bd2fce8eaa0ab9f72520d91372c022f5512a171dad96b5713e8d57f34b9ec4b,Archive 2.zip,20251213
+DB-A2-0096,4-Docs,POST_PUSH_CLEANUP_PLAN.md,Raw/Docs/POST_PUSH_CLEANUP_PLAN.md,6729,ebb8ce6e9ad30797f9014b4638766861585848902a4bc43b382caf99f9db4f0f,Archive 2.zip,20251213
+DB-A2-0097,4-Docs,QUICK_COPY_PASTE.txt,Raw/Docs/QUICK_COPY_PASTE.txt,6268,1c5ccf2b8f99d2b63a0c2705e79d446629b307b1d315d77e44667aa3a1a612e7,Archive 2.zip,20251213
+DB-A2-0098,4-Docs,QUICK_REFERENCE.md,Raw/Docs/QUICK_REFERENCE.md,11143,f6a4312ef621ec053b45cbcae405579fd479e030e6b8f484c3988c888d8ca3ea,Archive 2.zip,20251213
+DB-A2-0099,4-Docs,QUICK_REFERENCE.txt,Raw/Docs/QUICK_REFERENCE.txt,10710,d18ef67647aba7208aaa785654f26d481829860ec8900beb46566090bb185d14,Archive 2.zip,20251213
+DB-A2-0100,4-Docs,README.md,Raw/Docs/README.md,23926,1d2fb80231b05e1077bb8ea7f417b4794df09cd067b8b2b7ca41af87c049f26d,Archive 2.zip,20251213
+DB-A2-0101,4-Docs,README_INDEX.md,Raw/Docs/README_INDEX.md,10733,dcf760df4f2c1acb39997cab268d73847f590093890cb8522b5c33dbff6bc3c1,Archive 2.zip,20251213
+DB-A2-0102,4-Docs,README_Local_Execution.md,Raw/Docs/README_Local_Execution.md,9385,aa65ca8b60f6179e54e0d998c57d480512bb08c57167c64dfcc8df5845eed906,Archive 2.zip,20251213
+DB-A2-0103,4-Docs,README_risk_haircut_patch.txt,Raw/Docs/README_risk_haircut_patch.txt,3357,5b0b7d538b0a257e9ccc85824b488d36a6f51cc68c1a7b68d4d8c0e8489f3b6e,Archive 2.zip,20251213
+DB-A2-0104,4-Docs,SCHEMA_MISMATCH_ANALYSIS.txt,Raw/Docs/SCHEMA_MISMATCH_ANALYSIS.txt,16748,af3d9b9754d25793c252e320bca7c3b6ba198b261e01a5e72f9d7440e857dcf8,Archive 2.zip,20251213
+DB-A2-0105,4-Docs,SPRINT_4_ROADMAP.md,Raw/Docs/SPRINT_4_ROADMAP.md,16408,5fb6f0f2bb887281f8e02ac213300e47b7c354c0f9c91b3d5ab1de1073cc3ba4,Archive 2.zip,20251213
+DB-A2-0106,4-Docs,START_HERE_Integration_Overview.md,Raw/Docs/START_HERE_Integration_Overview.md,12509,8db3189b6588c136de0188129bfbe9ae3b0fda4dd7406f02488b6117eeb89bb9,Archive 2.zip,20251213
+DB-A2-0107,4-Docs,Solar_Wind_Quick_Guide.md,Raw/Docs/Solar_Wind_Quick_Guide.md,9644,99a60dfdd59f494190cdd829716898e044c4efc7befa22fa09fa07a29ef2e74e,Archive 2.zip,20251213
+DB-A2-0108,4-Docs,Sprint 9 Phase 1 Final Report.docx,Raw/Docs/Sprint 9 Phase 1 Final Report.docx,73040,f7366fcbf90614aadb901fb6737a9f21b35b909d8771b7188782f4f601315f40,Archive 2.zip,20251213
+DB-A2-0109,4-Docs,Sprint-10-Implementation-Plan.md,Raw/Docs/Sprint-10-Implementation-Plan.md,5343,4fcf095f021d2a1017f972ce393758669d561dbc35741665bfeecf23c97a7ba1,Archive 2.zip,20251213
+DB-A2-0110,4-Docs,Sprint-10-Multi-Tech-Backlog.md,Raw/Docs/Sprint-10-Multi-Tech-Backlog.md,50169,df0e62ec81c622728e77e61c412eb9d315ab2dc62d2ed958193da8ac03282862,Archive 2.zip,20251213
+DB-A2-0111,4-Docs,Sprint-9-10-Typed-Todo-List.md,Raw/Docs/Sprint-9-10-Typed-Todo-List.md,38571,ec10472f7e9f9ffa8125db3c597558db07016ac64a62a40d4691130adcb8806e,Archive 2.zip,20251213
+DB-A2-0112,4-Docs,Sprint-9-Code-Reference.md,Raw/Docs/Sprint-9-Code-Reference.md,20689,f909a8ba6d3b70040c0b18524b74fd5e36d169737b2a9ef18ff54e430a80f584,Archive 2.zip,20251213
+DB-A2-0113,4-Docs,Sprint-9-Final-Code-Wrapper.md,Raw/Docs/Sprint-9-Final-Code-Wrapper.md,8877,7ff338a702a8e097429ce45bdcd1b525371dc41041de7617ea62b66c0263015d,Archive 2.zip,20251213
+DB-A2-0114,4-Docs,Sprint-9-Integration-Strategy.md,Raw/Docs/Sprint-9-Integration-Strategy.md,17910,899f8c8b29e1d2cf5900632b67a0788e9807c7306efd6c514ca79d94594c6175,Archive 2.zip,20251213
+DB-A2-0115,4-Docs,Streamlit_Dashboard_Alternative.md,Raw/Docs/Streamlit_Dashboard_Alternative.md,16926,2ab5dd8ce530c9b36f0467d622350f001743144f8fb647eade1c6c20d02ad718,Archive 2.zip,20251213
+DB-A2-0116,4-Docs,This is my roadmap forseveral advanced enhancement.pdf,Raw/Docs/This is my roadmap forseveral advanced enhancement.pdf,3077282,01777962e96e6b46a7a2d0be07d3c18b1f90984fac693ed040595886b081da1e,Archive 2.zip,20251213
+DB-A2-0117,4-Docs,This is the comet browser. What are my search limi.md,Raw/Docs/This is the comet browser. What are my search limi.md,221,bd87d4824d25a126014bf8fef40b63dbc937c3dc8a3d4f48a799149146f04634,Archive 2.zip,20251213
+DB-A2-0118,4-Docs,UI_Backend_Integration_Strategy.md,Raw/Docs/UI_Backend_Integration_Strategy.md,31777,80c470fabf2572bd767b146b047dd770d5c1108b1f3c5115890f3e65615534dd,Archive 2.zip,20251213
+DB-A2-0119,4-Docs,V14_TEST_REFACTOR_COMMIT.md,Raw/Docs/V14_TEST_REFACTOR_COMMIT.md,6525,b8cd1e5dabb4d78cba4dda40cfd421f2a16a09c7fdba8447a1ebcc561173aa20,Archive 2.zip,20251213
+DB-A2-0120,4-Docs,V14_TEST_REFACTOR_GUIDE.md,Raw/Docs/V14_TEST_REFACTOR_GUIDE.md,8214,3718ecb93fdbaff1c4f0fd38d4752c8b67c9f2bd364adc234980eb0d9abbca9b,Archive 2.zip,20251213
+DB-A2-0121,4-Docs,V14_UPGRADE_SPECIFICATION.md,Raw/Docs/V14_UPGRADE_SPECIFICATION.md,17503,0d3b6274d102d3430d834d8d5c5ea55cae0bc0cc1032c859deab955a61841505,Archive 2.zip,20251213
+DB-A2-0122,4-Docs,VISUAL_STEP_BY_STEP.md,Raw/Docs/VISUAL_STEP_BY_STEP.md,12179,ea8c6924502474f81e9b9ac4ab9cbcb63f2001bf932fc0e72b3e40a51dd3fe1e,Archive 2.zip,20251213
+DB-A2-0123,4-Docs,cc088116.md,Raw/Docs/cc088116.md,11409,46b60b428fa35c9cedacd17f787aafa65d1c0b0ee6381b1d3bbb017c5b25e581,Archive 2.zip,20251213
+DB-A2-0124,4-Docs,d225c2fe-2.docx,Raw/Docs/d225c2fe-2.docx,43926,4a7a228cee1658d4abff1ea584a4b4b4033c24412f02710de2d4d58d55bcd5e7,Archive 2.zip,20251213
+DB-A2-0125,4-Docs,d225c2fe-3.docx,Raw/Docs/d225c2fe-3.docx,48133,b020a891bcc8f2084be1aaaf5f13afa4369c97febdc4ffa51084571b42507588,Archive 2.zip,20251213
+DB-A2-0126,4-Docs,d225c2fe-4.docx,Raw/Docs/d225c2fe-4.docx,55191,6195f3fe7e0c631cbe0121380f52ad6b74ada53a3d8299da055e56e8d7a45434,Archive 2.zip,20251213
+DB-A2-0127,4-Docs,d225c2fe.docx,Raw/Docs/d225c2fe.docx,40876,f42fa6ff98ad78ad0856b531dac7178480365e4127109d7f15997b84a55d999d,Archive 2.zip,20251213
+DB-A2-0128,4-Docs,d74e8886.docx,Raw/Docs/d74e8886.docx,62412,ea19be6a643b86b62fd7339d18b7d1eeba993453e0c6936542cd8d7b43432026,Archive 2.zip,20251213
+DB-A2-0129,4-Docs,deferred-violations-registry.md,Raw/Docs/deferred-violations-registry.md,3852,2921eeff79168f8352545e22611bf45e29748a1d17535722e875b8b4472ba48c,Archive 2.zip,20251213
+DB-A2-0130,4-Docs,document.docx,Raw/Docs/document.docx,16909,f2e8548d6b5ca4fced62bfc5c5890a44c32d3e373acb96bbd4d7b8b6577787c2,Archive 2.zip,20251213
+DB-A2-0131,4-Docs,dutchbay-thread-migration.md,Raw/Docs/dutchbay-thread-migration.md,26642,d25c061263194cc8435f7764b949a45c4afe18dc46a88adf218406201900d46c,Archive 2.zip,20251213
+DB-A2-0132,4-Docs,executive-summary.md,Raw/Docs/executive-summary.md,11622,4df79bc17775f939e332bcc9569cef52863c3b9bc4fb89c78c00549fa4d500f5,Archive 2.zip,20251213
+DB-A2-0133,4-Docs,governance-compliance.md,Raw/Docs/governance-compliance.md,15176,82dccf4586f7dee511d66432dd971bcd8d4938601f5eab21a77e23ed68ff7aa1,Archive 2.zip,20251213
+DB-A2-0134,4-Docs,implementation-guide.md,Raw/Docs/implementation-guide.md,15489,54f9a62fbde6a3786fbcf5b5c33e6f3a4b1e0e7d83ad1c1ef10aec15c3905f2e,Archive 2.zip,20251213
+DB-A2-0135,4-Docs,keystroke on mac os x to reveal hidden files.md,Raw/Docs/keystroke on mac os x to reveal hidden files.md,248842,17995f436f279b2349c27fb295016f54ba55f1c6a4981fda53e60523caca8a6f,Archive 2.zip,20251213
+DB-A2-0136,4-Docs,metrics-refactored.md,Raw/Docs/metrics-refactored.md,15283,9b88de02a6b695787344c2860bbbec603bcd7752d35c95ff8c106203a12ceb80,Archive 2.zip,20251213
+DB-A2-0137,4-Docs,phase2-final-summary.md,Raw/Docs/phase2-final-summary.md,6004,44947c02f1686de3b80bad38eb494f0ec5b6a867b688ced2e209fe4bd659f85f,Archive 2.zip,20251213
+DB-A2-0138,4-Docs,process-improvements-nov27.md,Raw/Docs/process-improvements-nov27.md,6163,43c30e79e5003e59468d1bb843ced55692d02155538958dd26509a44607487ef,Archive 2.zip,20251213
+DB-A2-0139,4-Docs,root directory structure.md,Raw/Docs/root directory structure.md,15983,e74e1dbea50f9b4e7711ab2eb870d767472df35705c603c84fa9847adb07fcfc,Archive 2.zip,20251213
+DB-A2-0140,4-Docs,some issue with dquote heredoc.... check your cat.md,Raw/Docs/some issue with dquote heredoc.... check your cat.md,2363,02de1102d897ff541109bbd60436e1d3b70b3f774683dfe1d2528f4e9f501cb0,Archive 2.zip,20251213
+DB-A2-0141,4-Docs,sprint9-executive-summary.md,Raw/Docs/sprint9-executive-summary.md,8878,9521dc448e83d4f1891a877556c000762a5b24433c13712589efab07a478d97c,Archive 2.zip,20251213
+DB-A2-0142,4-Docs,sprint9-final-test-report.md,Raw/Docs/sprint9-final-test-report.md,11800,0df2b1861d4c74a283e25ea3099cea6bfb3bc4210075144585ab96f2c04201aa,Archive 2.zip,20251213
+DB-A2-0143,4-Docs,test_failure_fix.md,Raw/Docs/test_failure_fix.md,4680,c51c6d97a95df62b0baa0de23a11a287a266b5dc146e952af8bc36b9f4930aa4,Archive 2.zip,20251213
+DB-A2-0144,4-Docs,v14 continuation tasks.mhtml,Raw/Docs/v14 continuation tasks.mhtml,5678454,ec3de0d42b7624dd72d96cb66d4b499afb8b0db9289c13c642ce95f8b424967b,Archive 2.zip,20251213
+DB-A2-0145,4-Docs,yep..  got you.. lets put BESS for sprint 12_.md,Raw/Docs/yep..  got you.. lets put BESS for sprint 12_.md,5967,a09a2d56db1b6aa412b5053f19f227690b53e8f6533e80465ae32b9bd1618be0,Archive 2.zip,20251213
+DB-A2-0146,4-Operations-Swimlanes,SWIMLANE-2-BOOTSTRAP-v1.0.md,Raw/Docs/SWIMLANE-2-BOOTSTRAP-v1.0.md,71203,44f2f3c0a185df0dbc89c6fc48f0903af3a192959deda942e651496caa49d7a0,Archive 2.zip,20251213
+DB-A2-0147,4-Operations-Swimlanes,SWIMLANE-2-QUICK-REF.md,Raw/Docs/SWIMLANE-2-QUICK-REF.md,8886,dc25c4c09e51304c8296930a055f8a68bef7b87a2def18843cf498deb830bf0c,Archive 2.zip,20251213
+DB-A2-0148,4-Operations-Swimlanes,SWIMLANE1_FILE_INDEX.md,Raw/Docs/SWIMLANE1_FILE_INDEX.md,9453,1f729cf253fe41349526b21191bdd1fbf474d2e8beb9b404b47ee71d20990c1c,Archive 2.zip,20251213
+DB-A2-0149,4-Operations-Swimlanes,SWIMLANE1_INSPECTOR_GUIDE.md,Raw/Docs/SWIMLANE1_INSPECTOR_GUIDE.md,12149,c837ee21ce1d48245b6647f4daa2be35886da1eb183d8131726decec3212c67d,Archive 2.zip,20251213
+DB-A2-0150,4-Operations-Swimlanes,SWIMLANE_2_ROADMAP.md,Raw/Docs/SWIMLANE_2_ROADMAP.md,21815,1f17719e293be706835c2fe533d0d9a18fb2f75b9fcf675c3622093c9ccb1257,Archive 2.zip,20251213
+DB-A2-0151,4-Operations-Swimlanes,swimlane-2-strategy.md,Raw/Docs/swimlane-2-strategy.md,20701,6476a1f9a08b3d69afb56601be727cc8173b3e15c42c6670febe542bd59546e8,Archive 2.zip,20251213
