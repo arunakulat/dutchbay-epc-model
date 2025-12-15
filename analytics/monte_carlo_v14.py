@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Iterable, List, Mapping, cast
 
@@ -909,6 +910,42 @@ def _run_single_scenario(
     return _aggregate_results(results, iterations, scenario.name)
 
 
+# ===== P1.3 OPTIMIZATION: ThreadPoolExecutor =====
+def _thread_safe_iteration_worker(
+    iteration_idx: int,
+    base_config_path: str,
+    scenario: MonteCarloScenario,
+    sample: dict[str, Any],
+) -> tuple[int, dict[str, float] | None]:
+    """
+    Thread-safe Monte Carlo iteration worker.
+
+    Each thread:
+    1. Gets unique iteration_idx
+    2. Executes iteration independently
+    3. Returns (iteration_idx, result) to maintain order
+
+    Args:
+        iteration_idx: Unique iteration number (0 to N-1) for determinism
+        base_config_path: Path to base scenario YAML
+        scenario: MonteCarloScenario configuration
+        sample: Parameter sample for this iteration
+
+    Returns:
+        Tuple of (iteration_idx, result_dict_or_none) for order preservation
+    """
+    try:
+        result = _run_single_iteration(
+            base_config_path=base_config_path,
+            scenario=scenario,
+            sample=sample,
+        )
+        return (iteration_idx, result)
+    except Exception as exc:
+        logger.debug("Thread %d failed: %s", iteration_idx, exc)
+        return (iteration_idx, None)
+
+
 def _run_parallel_iterations(
     base_config_path: str,
     scenario: MonteCarloScenario,
@@ -916,30 +953,54 @@ def _run_parallel_iterations(
     n_workers: int,
 ) -> list[dict[str, float] | None]:
     """
-    Run Monte Carlo iterations in parallel using multiprocessing.
+    Run Monte Carlo iterations in parallel using ThreadPoolExecutor.
+
+    ===== P1.3 OPTIMIZATION =====
+    Replaced multiprocessing.Pool with concurrent.futures.ThreadPoolExecutor
+    for faster task spawning and better interoperability with I/O-bound operations.
     """
-    args_iter = (
-        (base_config_path, scenario, sample) for sample in samples
-    )  # generator
+    total_iterations = len(samples)
+    results: list[dict[str, float] | None] = [None] * total_iterations
 
-    with mp.Pool(processes=n_workers) as pool:
-        raw_results = pool.map(_iteration_worker, args_iter)
+    logger.info(
+        "Running %d iterations with %d threads (ThreadPoolExecutor)",
+        total_iterations,
+        n_workers,
+    )
 
-    # mypy: pool.map returns list[Any]; cast to the expected shape.
-    results = cast(list[dict[str, float] | None], raw_results)
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        # Submit all tasks
+        futures = {
+            executor.submit(
+                _thread_safe_iteration_worker,
+                idx,
+                base_config_path,
+                scenario,
+                samples[idx],
+            ): idx
+            for idx in range(total_iterations)
+        }
+
+        # Collect results as they complete
+        completed = 0
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                iteration_idx, result = future.result()
+                results[iteration_idx] = result
+                completed += 1
+
+                if completed % 100 == 0 or completed == total_iterations:
+                    logger.info(
+                        "  Thread progress: %d/%d iterations",
+                        completed,
+                        total_iterations,
+                    )
+            except Exception as exc:
+                logger.error("Thread iteration %d failed: %s", idx, exc)
+                results[idx] = None
 
     return results
-
-
-def _iteration_worker(
-    args: tuple[str, MonteCarloScenario, dict[str, Any]],
-) -> dict[str, float] | None:
-    """
-    Top-level worker for multiprocessing. Required to avoid nested function
-    pickling issues on some platforms.
-    """
-    base_config_path, scenario, sample = args
-    return _run_single_iteration(base_config_path, scenario, sample)
 
 
 def _run_serial_iterations(
@@ -1197,6 +1258,7 @@ __all__ = [
     "_generate_lhs_samples",
     "_build_samples_for_scenario",
     "_transform_to_distribution",
+    "_thread_safe_iteration_worker",
     "_run_single_scenario",
     "_run_parallel_iterations",
     "_run_serial_iterations",
