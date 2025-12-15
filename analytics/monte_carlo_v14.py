@@ -360,7 +360,7 @@ def _load_monte_carlo_config(config_path: str) -> MonteCarloConfig:
         raise ValueError(f"Monte Carlo config at {config_path} must be a mapping")
 
     try:
-        mc_config = MonteCarloConfig.parse_obj(raw)
+        mc_config = MonteCarloConfig.model_validate(raw)
     except ValidationError as exc:
         logger.error("Monte Carlo config validation failed: %s", exc)
         raise ValueError(f"Monte Carlo config validation failed: {exc}") from exc
