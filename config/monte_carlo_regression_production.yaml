@@ -1,0 +1,230 @@
+# DutchBay_EPC_Model – Monte Carlo PRODUCTION-SCALE configuration (Sprint 10)
+# Purpose:
+#   - Full-scale Monte Carlo validation (~3000 iterations).
+#   - For lender approval, risk assessment and final project analysis.
+#   - Use monte_carlo_regression_toy.yaml for rapid dev/CI feedback.
+#   - Realistic distributions across all key project parameters.
+#   - Two scenarios: base_case and upside case.
+
+simulation:
+  iterations: 3000            # PRODUCTION: Full statistical validity
+  random_seed: 42             # Global RNG seed (CRN across scenarios) - reproducibility
+  parallel_workers: 8         # Production: max out available CPU cores
+  sampler: lhs                # Latin Hypercube for better coverage than random
+  output_percentiles:
+    - 1                        # Worst case
+    - 5
+    - 10
+    - 25
+    - 50                       # Median (P50)
+    - 75
+    - 90
+    - 95
+    - 99                       # Best case
+
+standard_parameters:
+  - variable_name: project.capex_usd_per_kw
+    description: >
+      All-in EPC + development + contingency capital cost per kW (USD/kW).
+      This drives CAPEX, IDC and ultimately tariff and IRR.
+      Mean: $850/kW (realistic for 250MW wind farm).
+      Std Dev: $85/kW (~10% uncertainty).
+    dist_type: normal
+    mean: 850.0
+    std: 85.0
+
+  - variable_name: operating.opex_usd_per_kw_per_year
+    description: >
+      Annual fixed + variable O&M costs per kW of installed capacity
+      (USD/kW/year), including LTSA and site operating overheads.
+      Triangular: $15-22/kW/year with mode at $18/kW/year.
+    dist_type: triangular
+    min_val: 15.0
+    mode: 18.0
+    max_val: 22.0
+
+  - variable_name: generation.capacity_factor_pct
+    description: >
+      Net plant capacity factor (P50) after technical losses, wake effects
+      and typical curtailment. Expressed as a percentage (%).
+      Wind site: 40-50% with mode 45% (realistic for South Asian monsoon wind).
+    dist_type: triangular
+    min_val: 40.0
+    mode: 45.0
+    max_val: 50.0
+
+  - variable_name: generation.availability_pct
+    description: >
+      Mechanical and electrical availability of the wind farm (excluding
+      grid outages and transmission constraints). Percentage (%).
+      Mature turbines: 95-99% with mode 97.5% (typical LTSA guarantee).
+    dist_type: triangular
+    min_val: 95.0
+    mode: 97.5
+    max_val: 99.0
+
+  - variable_name: financial.debt_interest_rate_pct
+    description: >
+      Senior debt all-in interest rate (margin + base rate), nominal,
+      expressed as a percentage (%).
+      Mean: 9.0% (development bank + 250bps margin typical).
+      Std Dev: 0.5% (rate volatility over commitment period).
+    dist_type: normal
+    mean: 9.0
+    std: 0.5
+
+  - variable_name: financial.construction_period_months
+    description: >
+      EPC construction duration in months (affects IDC and COD timing).
+      Longer timelines increase IDC and reduce project IRR.
+      Lognormal: mean 24mo, with tail risk for delays (up to 40+ months).
+    dist_type: lognormal
+    mean: 24.0
+    std: 3.0
+
+derived_parameters:
+  - variable_name: financial.tariff_lkr_per_kwh
+    derive_from: target_project_irr
+    enabled: true
+    description: >
+      PPA tariff in LKR/kWh required to achieve the target project IRR,
+      given sampled CAPEX, OPEX and operating performance.
+      Solved using bisection over tariff range [40, 100] LKR/kWh.
+    target_distribution:
+      dist_type: normal
+      mean: 0.12        # Target project IRR: 12% (investor requirement)
+      std: 0.005        # IRR volatility around target: ±0.5%
+    solver_config:
+      method: bisection
+      bounds: [40.0, 100.0]   # Tariff search range in LKR/kWh
+      max_iterations: 25      # Typically converges in 10-15 iterations
+      tolerance: 0.0001       # Precision: $0.0001/kWh
+
+  - variable_name: financial.debt_amount_usd
+    derive_from: dscr_covenant
+    enabled: false              # Disabled - debt fixed by lender, not solved
+    description: >
+      Maximum senior debt quantum (USD) consistent with the DSCR covenant
+      band implied by the target distribution.
+      NOTE: Typically disabled in PPA-backed structures where debt is fixed.
+    target_distribution:
+      dist_type: uniform
+      min_val: 1.25     # Lower bound of target DSCR covenant
+      max_val: 1.35     # Upper bound of target DSCR covenant
+    solver_config:
+      method: bisection
+      bounds: [1000000.0, 500000000.0]  # Debt search range (USD)
+      max_iterations: 50
+      tolerance: 10000.0
+
+scenarios:
+  - name: base_case
+    description: >
+      PRODUCTION base case: lender base assumptions with full distribution.
+      3000 iterations for statistical validity (P10/P50/P90 confidence).
+      Random seed fixed at 42 for reproducibility across runs.
+    enabled: true
+    parameter_overrides: {}
+
+  - name: upside_case
+    description: >
+      PRODUCTION upside scenario: improved operating assumptions.
+      - Capacity factor: mode 48% (better site selection)
+      - OPEX: mode $17/kW/year (improved LTSA terms)
+      - Construction: mean 22 months (accelerated schedule)
+    enabled: true
+    parameter_overrides:
+      standard_parameters:
+        - variable_name: generation.capacity_factor_pct
+          dist_type: triangular
+          min_val: 42.0
+          mode: 48.0
+          max_val: 52.0
+        
+        - variable_name: operating.opex_usd_per_kw_per_year
+          dist_type: triangular
+          min_val: 14.0
+          mode: 17.0
+          max_val: 20.0
+        
+        - variable_name: financial.construction_period_months
+          dist_type: lognormal
+          mean: 22.0
+          std: 2.5
+
+correlations:
+  enabled: true
+  method: cholesky
+  matrix:
+    # Positive correlation: longer construction → higher CAPEX
+    - [project.capex_usd_per_kw, financial.construction_period_months, 0.6]
+    
+    # Positive correlation: good wind sites have high capacity factor AND availability
+    - [generation.capacity_factor_pct, generation.availability_pct, 0.4]
+    
+    # Negative correlation: improved capex usually means delayed delivery
+    - [project.capex_usd_per_kw, generation.capacity_factor_pct, -0.3]
+
+output:
+  save_path: outputs/monte_carlo_regression_production/
+  save_raw_results: true
+  save_percentile_breakdown: true
+
+  risk_metrics:
+    var_confidence: 0.95       # Value at Risk (95% confidence)
+    cvar_confidence: 0.95      # Conditional VaR (beyond 95%)
+
+  custom_metrics:
+    - name: payback_years
+      description: Years to positive cumulative project cashflow (unlevered).
+    
+    - name: equity_multiple
+      description: Total equity cash returns divided by equity invested.
+    
+    - name: debt_service_coverage_avg
+      description: Average DSCR over full senior debt tenor.
+    
+    - name: equity_irr_breakeven_tariff
+      description: Minimum tariff required to achieve equity IRR breakeven.
+    
+    - name: tariff_sensitivity_impact
+      description: IRR change per 1% tariff adjustment.
+
+# Production regression expectations (to be populated after first golden run)
+regression_expectations:
+  scenario_name: base_case
+  metrics:
+    project_irr_p10:
+      lower: 0.10
+      upper: 0.14
+    project_irr_p50:
+      lower: 0.16
+      upper: 0.20
+    project_irr_p90:
+      lower: 0.20
+      upper: 0.24
+    
+    project_npv_p50_lkr:
+      lower: 50000000.0
+      upper: 70000000.0
+    
+    dscr_min_p10:
+      lower: 1.20
+      upper: 1.40
+    
+    dscr_min_p50:
+      lower: 1.35
+      upper: 1.55
+
+# Metadata for audit and version control
+metadata:
+  version: 1.0
+  created: 2025-12-16
+  sprint: Sprint 10
+  purpose: "Production-scale Monte Carlo validation (3000 iterations)"
+  author: "DutchBay Finance Analytics"
+  notes: |
+    - Use for lender submissions and risk board presentations
+    - Requires ~10-15 minutes runtime (depends on machine specs)
+    - Reproducible with seed=42
+    - See monte_carlo_regression_toy.yaml for FAST (~30s) test runs
