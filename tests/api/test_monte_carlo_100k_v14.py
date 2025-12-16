@@ -13,7 +13,7 @@ Purpose:
 - Support board presentations and lender submissions
 
 Design:
-- Leverages existing analytics.sensitivity_tail_risk.TailRiskAnalyzer
+- Leverages existing analytics.sensitivity_tail_risk functions
 - Uses Hydra/OmegaConf for configuration (GWTF v3.0)
 - Pydantic validation on all inputs/outputs
 - Comprehensive error handling and logging
@@ -29,17 +29,23 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+import numpy as np
 import pytest
 
 from analytics.monte_carlo_v14 import run_monte_carlo
-from analytics.sensitivity_tail_risk import TailRiskAnalyzer, TailRiskStats
+from analytics.sensitivity_tail_risk import (
+    TailRiskStats,
+    _compute_tail_risk_stats,
+    build_tail_risk_snapshot,
+    compute_tail_risk_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 # Configuration
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 
 MC_CONFIG_PATH = Path("config/monte_carlo_regression_production.yaml")
 BASE_SCENARIO_CONFIG = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
@@ -52,9 +58,9 @@ CONFIDENCE_LEVEL_95 = 0.95
 CONFIDENCE_LEVEL_99 = 0.99
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 # Helper Functions
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 
 
 def _result_to_dict(mc_result: Any) -> Dict[str, Any]:
@@ -91,10 +97,10 @@ def _format_risk_report(
         Formatted report string
     """
     report = f"""
-╔════════════════════════════════════════════════════════════════╗
-║ 100K MONTE CARLO RISK METRICS REPORT                           ║
-║ Metric: {metric_name:<49} ║
-╚════════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════════════════╗
+║ 100K MONTE CARLO RISK METRICS REPORT                                      ║
+║ Metric: {metric_name:<59} ║
+╚═══════════════════════════════════════════════════════════════════════════╝
 
 EXECUTION METRICS
   Runtime: {runtime_seconds:.2f} seconds
@@ -111,14 +117,14 @@ EXECUTION METRICS
   VaR (1% worst case):   {risk_stats_99.var:>12.4f}
   CVaR (expected tail):  {risk_stats_99.cvar:>12.4f}
 
-════════════════════════════════════════════════════════════════
+───────────────────────────────────────────────────────────────────────────────
 """
     return report
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 # Production Tests
-# ────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.slow
@@ -160,15 +166,13 @@ def test_monte_carlo_100k_production_scale_irr() -> None:
         f"IRR samples not found in result. Available: {list(result_dict.keys())}"
 
     irr_samples = result_dict.get("irr_samples") or result_dict.get("project_irr_samples")
-    assert len(irr_samples) == PRODUCTION_ITERATIONS_100K, \
-        f"Expected {PRODUCTION_ITERATIONS_100K} samples, got {len(irr_samples)}"
+    irr_array = np.asarray(irr_samples, dtype=float)
+    assert len(irr_array) == PRODUCTION_ITERATIONS_100K, \
+        f"Expected {PRODUCTION_ITERATIONS_100K} samples, got {len(irr_array)}"
 
     # Calculate risk metrics at 95% and 99% confidence
-    analyzer_95 = TailRiskAnalyzer(confidence_level=CONFIDENCE_LEVEL_95)
-    analyzer_99 = TailRiskAnalyzer(confidence_level=CONFIDENCE_LEVEL_99)
-
-    risk_stats_95 = analyzer_95.calculate_var_cvar(irr_samples, return_type="project_irr")
-    risk_stats_99 = analyzer_99.calculate_var_cvar(irr_samples, return_type="project_irr")
+    risk_stats_95 = _compute_tail_risk_stats(irr_array, confidence=CONFIDENCE_LEVEL_95)
+    risk_stats_99 = _compute_tail_risk_stats(irr_array, confidence=CONFIDENCE_LEVEL_99)
 
     # Validate risk metrics structure
     assert isinstance(risk_stats_95, TailRiskStats), "Invalid risk stats type at 95%"
@@ -188,7 +192,7 @@ def test_monte_carlo_100k_production_scale_irr() -> None:
         f"Runtime {elapsed_time:.1f}s exceeds 5-minute (300s) target"
 
     # Sanity checks on IRR values
-    mean_irr = sum(irr_samples) / len(irr_samples)
+    mean_irr = float(np.mean(irr_array))
     assert 0.10 <= mean_irr <= 0.30, \
         f"Mean IRR {mean_irr:.2%} out of reasonable range [10%, 30%]"
 
@@ -235,11 +239,11 @@ def test_monte_carlo_100k_production_scale_dscr() -> None:
         "DSCR samples not found in result"
 
     dscr_samples = result_dict.get("dscr_min_samples") or result_dict.get("min_dscr_samples")
-    assert len(dscr_samples) == PRODUCTION_ITERATIONS_100K
+    dscr_array = np.asarray(dscr_samples, dtype=float)
+    assert len(dscr_array) == PRODUCTION_ITERATIONS_100K
 
     # Calculate risk metrics
-    analyzer = TailRiskAnalyzer(confidence_level=CONFIDENCE_LEVEL_95)
-    risk_stats = analyzer.calculate_var_cvar(dscr_samples, return_type="min_dscr")
+    risk_stats = _compute_tail_risk_stats(dscr_array, confidence=CONFIDENCE_LEVEL_95)
 
     # Validate risk metrics
     assert isinstance(risk_stats, TailRiskStats)
@@ -247,8 +251,8 @@ def test_monte_carlo_100k_production_scale_dscr() -> None:
 
     # Calculate covenant breach probability (DSCR < 1.20 = breach threshold)
     covenant_threshold = 1.20
-    breach_count = sum(1 for d in dscr_samples if d < covenant_threshold)
-    breach_probability = breach_count / len(dscr_samples)
+    breach_count = float(np.sum(dscr_array < covenant_threshold))
+    breach_probability = breach_count / len(dscr_array)
 
     # Sanity check
     assert 0.0 <= breach_probability <= 1.0, \
@@ -306,11 +310,14 @@ def test_monte_carlo_100k_convergence_validation() -> None:
     irr_samples_1 = result_dict_1.get("irr_samples") or result_dict_1.get("project_irr_samples")
     irr_samples_2 = result_dict_2.get("irr_samples") or result_dict_2.get("project_irr_samples")
 
-    # Calculate medians
-    p50_1 = sorted(irr_samples_1)[len(irr_samples_1) // 2]
-    p50_2 = sorted(irr_samples_2)[len(irr_samples_2) // 2]
+    irr_array_1 = np.asarray(irr_samples_1, dtype=float)
+    irr_array_2 = np.asarray(irr_samples_2, dtype=float)
 
-    variation = abs(p50_1 - p50_2) / ((p50_1 + p50_2) / 2)
+    # Calculate medians
+    p50_1 = float(np.percentile(irr_array_1, 50))
+    p50_2 = float(np.percentile(irr_array_2, 50))
+
+    variation = abs(p50_1 - p50_2) / ((p50_1 + p50_2) / 2) if (p50_1 + p50_2) > 0 else 0.0
 
     logger.info(
         f"Convergence Check: P50_1={p50_1:.4f}, P50_2={p50_2:.4f}, "
