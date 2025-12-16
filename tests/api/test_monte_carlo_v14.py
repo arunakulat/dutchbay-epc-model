@@ -78,6 +78,8 @@ def stress_config() -> DictConfig:
     return OmegaConf.create(cfg_dict)
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_config_creation() -> None:
     """Test MonteCarloConfig dataclass creation."""
     cfg = MonteCarloConfig(
@@ -101,6 +103,8 @@ def test_monte_carlo_config_creation() -> None:
     assert cfg.success is True
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_schema_guard_raises_on_bad_config() -> None:
     """Test schema guard catches missing required fields."""
     from analytics.schema_guard import validate_config_for_v14
@@ -115,6 +119,8 @@ def test_schema_guard_raises_on_bad_config() -> None:
         validate_config_for_v14(bad_cfg, config_path='bad', modules=['cashflow', 'debt'])
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_engine_init(base_config: DictConfig) -> None:
     """Test MonteCarloEngine initialization."""
     engine = MonteCarloEngine(base_config, n_iterations=100)
@@ -127,6 +133,8 @@ def test_monte_carlo_engine_init(base_config: DictConfig) -> None:
     assert engine.logger is not None
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_engine_init_missing_config() -> None:
     """Test MonteCarloEngine raises on missing monte_carlo config."""
     bad_cfg = OmegaConf.create({
@@ -141,6 +149,9 @@ def test_monte_carlo_engine_init_missing_config() -> None:
         MonteCarloEngine(bad_cfg)
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.regression
 def test_simulate_iteration(base_config: DictConfig) -> None:
     """Test single Monte Carlo iteration using finance.irr (R7) (TEST-01)."""
     engine = MonteCarloEngine(base_config, n_iterations=1)
@@ -164,6 +175,9 @@ def test_simulate_iteration(base_config: DictConfig) -> None:
     assert result['fx_rate'] > 0
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.regression
 def test_simulate_iterations_distribution(base_config: DictConfig) -> None:
     """Test multiple iterations produce expected distribution (TEST-01)."""
     engine = MonteCarloEngine(base_config, n_iterations=200)
@@ -186,6 +200,8 @@ def test_simulate_iterations_distribution(base_config: DictConfig) -> None:
     assert std_npv >= 0
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_engine_run(base_config: DictConfig) -> None:
     """Test MonteCarloEngine.run() execution (R7 compliant)."""
     engine = MonteCarloEngine(base_config, n_iterations=50)
@@ -206,6 +222,9 @@ def test_monte_carlo_engine_run(base_config: DictConfig) -> None:
     assert 'irr_mean_pct' in stats
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.stress
 def test_monte_carlo_engine_run_stress(stress_config: DictConfig) -> None:
     """Test MonteCarloEngine.run() with stress scenario."""
     engine = MonteCarloEngine(stress_config, n_iterations=100)
@@ -218,6 +237,9 @@ def test_monte_carlo_engine_run_stress(stress_config: DictConfig) -> None:
     assert 'statistics' in result
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.regression
 def test_monte_carlo_statistics_consistency(base_config: DictConfig) -> None:
     """Test statistics are internally consistent (TEST-01)."""
     engine = MonteCarloEngine(base_config, n_iterations=150)
@@ -237,6 +259,8 @@ def test_monte_carlo_statistics_consistency(base_config: DictConfig) -> None:
     assert stats['irr_median_pct'] < stats['irr_p90_pct']
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_result_json_serializable(base_config: DictConfig) -> None:
     """Test result is JSON serializable (CLI-03)."""
     import json
@@ -253,6 +277,9 @@ def test_monte_carlo_result_json_serializable(base_config: DictConfig) -> None:
     assert deserialized['discount_rate_pct'] == 8.0
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.edge_case
 def test_monte_carlo_edge_case_single_iteration(base_config: DictConfig) -> None:
     """Test FIN-01: Graceful handling with single iteration."""
     engine = MonteCarloEngine(base_config, n_iterations=1)
@@ -264,6 +291,8 @@ def test_monte_carlo_edge_case_single_iteration(base_config: DictConfig) -> None
     assert result['n_iterations'] == 1
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
 def test_monte_carlo_type_hints() -> None:
     """Test TYPE-01: Functions have type hints."""
     from analytics.monte_carlo_v14 import MonteCarloEngine
@@ -275,6 +304,9 @@ def test_monte_carlo_type_hints() -> None:
     assert callable(getattr(MonteCarloEngine, 'run'))
 
 
+@pytest.mark.unit
+@pytest.mark.monte_carlo
+@pytest.mark.critical_error
 def test_r7_compliance_uses_finance_irr(base_config: DictConfig) -> None:
     """Test R7 compliance: uses finance.irr.npv() and finance.irr.irr() (CRITICAL)."""
     # This test verifies that the engine uses finance.irr module
