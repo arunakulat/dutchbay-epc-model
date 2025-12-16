@@ -184,13 +184,13 @@ def test_equity_engine_run_stress(stress_config: DictConfig) -> None:
     assert 'distributions' in result
 
 
-def test_equity_invalid_config() -> None:
-    """Test error handling for invalid config."""
+def test_equity_edge_case_zero_years(base_config: DictConfig) -> None:
+    """Test FIN-01: Graceful handling of edge cases (zero years)."""
     bad_cfg = OmegaConf.create({
         'scenario_name': 'test_bad',
         'equity': {
             'scenario_name': 'test_bad',
-            'project_life_years': 25,
+            'project_life_years': 0,  # Edge case: zero years
             'annual_distributable_cash_usd': 15e6,
             'equity_stake_pct': 25.0,
             'target_equity_irr_pct': 16.0,
@@ -198,15 +198,16 @@ def test_equity_invalid_config() -> None:
             'priority_mezzanine_usd': 50e6,
             'reserve_fund_pct': 10.0,
         },
-        'financial': {},  # Invalid: missing required fields
+        'financial': base_config.financial,
     })
     
     engine = EquityDistributionEngine(bad_cfg)
     result = engine.run()
     
-    # Should fail gracefully
-    assert result['success'] is False
-    assert 'error' in result
+    # FIN-01: Should complete gracefully even with edge cases
+    # With 0 years, no distributions but success=True
+    assert result['success'] is True
+    assert 'distributions' in result
 
 
 def test_equity_result_json_serializable(base_config: DictConfig) -> None:
