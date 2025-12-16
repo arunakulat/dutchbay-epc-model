@@ -39,6 +39,7 @@ Specifications:
     - No AST: Config via YAML (ARCH-01)
     - IRR/NPV: Imported from finance.irr only (R7, ARCH-02)
     - Output: JSON to stdout (CLI-03)
+    - ALL parameters from YAML config (no hardcoding)
 
 Examples:
     >>> from analytics.monte_carlo_v14 import MonteCarloEngine
@@ -50,7 +51,7 @@ Examples:
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -75,6 +76,7 @@ class MonteCarloConfig:
     fx_mean_rate: float
     fx_std_pct: float
     project_life_years: int
+    discount_rate_pct: float  # From YAML config, not hardcoded
     success: bool = True
 
 
@@ -120,6 +122,7 @@ class MonteCarloEngine:
             fx_mean_rate=config.monte_carlo.get('fx_mean_rate', 325.5),
             fx_std_pct=config.monte_carlo.get('fx_std_pct', 5.0),
             project_life_years=config.monte_carlo.get('project_life_years', 25),
+            discount_rate_pct=config.monte_carlo.get('discount_rate_pct', 8.0),  # From YAML
         )
         self.logger.info(f"Initialized MonteCarloEngine: {self.mc_config.scenario_name}")
     
@@ -149,8 +152,8 @@ class MonteCarloEngine:
             annual_cf for _ in range(self.mc_config.project_life_years)
         ]
         
-        # Calculate NPV (assume 8% discount rate)
-        discount_rate = 0.08
+        # Calculate NPV using discount rate from config
+        discount_rate = self.mc_config.discount_rate_pct / 100.0
         project_npv = sum(
             cf / ((1 + discount_rate) ** t)
             for t, cf in enumerate(cf_array)
@@ -173,6 +176,7 @@ class MonteCarloEngine:
         """Execute Monte Carlo simulation."""
         try:
             self.logger.info(f"Starting MC simulation: {self.mc_config.scenario_name} ({self.mc_config.n_iterations} iterations)")
+            self.logger.info(f"Discount rate: {self.mc_config.discount_rate_pct}% (from config)")
             
             iterations = []
             npv_values = []
@@ -208,6 +212,7 @@ class MonteCarloEngine:
                 'scenario_name': self.mc_config.scenario_name,
                 'n_iterations': self.mc_config.n_iterations,
                 'project_life_years': self.mc_config.project_life_years,
+                'discount_rate_pct': self.mc_config.discount_rate_pct,
                 'statistics': statistics,
                 'iterations': iterations if self.mc_config.n_iterations <= 100 else [],  # Only keep if small
                 'success': True,
