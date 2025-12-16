@@ -24,8 +24,9 @@ Action:
     3. Initialize simulation parameters from config
     4. Run n Monte Carlo iterations:
        - Sample random variables (revenue, costs, FX)
-       - Calculate NPV for each iteration
-       - Track IRR and payback period
+       - Build cashflow array
+       - Calculate NPV using finance.irr.npv (R7: singleton pattern)
+       - Calculate IRR using finance.irr.irr (R7: singleton pattern)
        - Accumulate results
     5. Compute statistics (mean, std, percentiles)
     6. Export results (JSON, summary, distribution)
@@ -37,7 +38,7 @@ Specifications:
     - Schema guard: via modules=["cashflow", "debt"] (R5, R22)
     - No argparse: Hydra only (R3, CLI-01)
     - No AST: Config via YAML (ARCH-01)
-    - IRR/NPV: Imported from finance.irr only (R7, ARCH-02)
+    - IRR/NPV: Imported from finance.irr ONLY (R7, ARCH-02) *** CRITICAL ***
     - Output: JSON to stdout (CLI-03)
     - ALL parameters from YAML config (no hardcoding)
 
@@ -58,7 +59,7 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from analytics.schema_guard import validate_config_for_v14
-from finance.irr import irr, npv  # R7: IRR/NPV from finance.irr only
+from finance.irr import irr, npv  # R7: IRR/NPV from finance.irr ONLY *** CRITICAL ***
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class MonteCarloConfig:
     """Configuration for Monte Carlo simulation."""
     scenario_name: str
     n_iterations: int
-    base_npv_usd: float
+    capex_total_usd: float  # Initial capital investment
     revenue_mean_usd: float
     revenue_std_pct: float
     cost_mean_usd: float
@@ -114,7 +115,7 @@ class MonteCarloEngine:
         self.mc_config = MonteCarloConfig(
             scenario_name=config.monte_carlo.get('scenario_name', 'default'),
             n_iterations=n_iterations,
-            base_npv_usd=config.monte_carlo.get('base_npv_usd', 50e6),
+            capex_total_usd=config.monte_carlo.get('capex_total_usd', 50e6),  # From config
             revenue_mean_usd=config.monte_carlo.get('revenue_mean_usd', 100e6),
             revenue_std_pct=config.monte_carlo.get('revenue_std_pct', 10.0),
             cost_mean_usd=config.monte_carlo.get('cost_mean_usd', 60e6),
@@ -127,7 +128,7 @@ class MonteCarloEngine:
         self.logger.info(f"Initialized MonteCarloEngine: {self.mc_config.scenario_name}")
     
     def simulate_iteration(self) -> dict[str, Any]:
-        """Simulate single Monte Carlo iteration."""
+        """Simulate single Monte Carlo iteration using finance.irr (R7)."""
         # Sample random variables with normal distribution
         revenue_factor = np.random.normal(
             loc=1.0,
@@ -147,24 +148,23 @@ class MonteCarloEngine:
         annual_cost = self.mc_config.cost_mean_usd * cost_factor
         annual_cf = annual_revenue - annual_cost
         
-        # Build cash flow array for NPV calculation
-        cf_array = [-self.mc_config.base_npv_usd] + [
+        # Build cash flow array: [-capex_at_t0, cf_t1, cf_t2, ..., cf_tn]
+        # This is the standard format for NPV/IRR calculations
+        cf_array = [-self.mc_config.capex_total_usd] + [
             annual_cf for _ in range(self.mc_config.project_life_years)
         ]
         
-        # Calculate NPV using discount rate from config
+        # Calculate NPV using R7: finance.irr.npv() ONLY *** CRITICAL R7 ***
         discount_rate = self.mc_config.discount_rate_pct / 100.0
-        project_npv = sum(
-            cf / ((1 + discount_rate) ** t)
-            for t, cf in enumerate(cf_array)
-        )
+        project_npv = npv(discount_rate, cf_array)  # R7: SINGLETON PATTERN
         
-        # Approximate IRR using base rate + spread
-        project_irr = discount_rate + (project_npv / self.mc_config.base_npv_usd) * 0.05
+        # Calculate IRR using R7: finance.irr.irr() ONLY *** CRITICAL R7 ***
+        project_irr_decimal = irr(cf_array)  # R7: SINGLETON PATTERN
+        project_irr_pct = (project_irr_decimal * 100.0) if project_irr_decimal is not None else 0.0
         
         result = {
             'npv_usd': project_npv,
-            'irr_pct': project_irr * 100,
+            'irr_pct': project_irr_pct,
             'revenue_usd': annual_revenue,
             'cost_usd': annual_cost,
             'fx_rate': self.mc_config.fx_mean_rate * fx_factor,
@@ -177,6 +177,7 @@ class MonteCarloEngine:
         try:
             self.logger.info(f"Starting MC simulation: {self.mc_config.scenario_name} ({self.mc_config.n_iterations} iterations)")
             self.logger.info(f"Discount rate: {self.mc_config.discount_rate_pct}% (from config)")
+            self.logger.info(f"Capex: ${self.mc_config.capex_total_usd/1e6:.1f}M (from config)")
             
             iterations = []
             npv_values = []
@@ -213,6 +214,7 @@ class MonteCarloEngine:
                 'n_iterations': self.mc_config.n_iterations,
                 'project_life_years': self.mc_config.project_life_years,
                 'discount_rate_pct': self.mc_config.discount_rate_pct,
+                'capex_total_usd': self.mc_config.capex_total_usd,
                 'statistics': statistics,
                 'iterations': iterations if self.mc_config.n_iterations <= 100 else [],  # Only keep if small
                 'success': True,
@@ -220,6 +222,7 @@ class MonteCarloEngine:
             
             self.logger.info(f"MC simulation completed: {self.mc_config.scenario_name}")
             self.logger.info(f"  NPV Mean: ${statistics['npv_mean_usd']/1e6:.2f}M")
+            self.logger.info(f"  NPV P10-P90: ${statistics['npv_p10_usd']/1e6:.2f}M to ${statistics['npv_p90_usd']/1e6:.2f}M")
             self.logger.info(f"  IRR Mean: {statistics['irr_mean_pct']:.2f}%")
             
             return result
