@@ -1,11 +1,12 @@
-# DutchBay_EPC_Model – Monte Carlo regression configuration (Sprint 9)
+# DutchBay_EPC_Model – Monte Carlo FAST test configuration (Sprint 10)
 # Purpose:
-#   - Mid-size Monte Carlo run (dev/CI) using realistic distributions.
+#   - FAST regression tests (~30s) using realistic distributions.
 #   - Single base_case scenario mirroring lender base assumptions.
-#   - Optional regression_expectations block for locking IRR/NPV/DSCR bands.
+#   - Reduced iterations (20) for rapid dev/CI feedback loops.
+#   - Use monte_carlo_regression_production.yaml for full-scale validation.
 
 simulation:
-  iterations: 500             # Mid-size, CI-friendly but not "toy"
+  iterations: 20              # FAST: Reduced for rapid testing (was 500)
   random_seed: 42             # Global RNG seed (CRN across scenarios)
   parallel_workers: 4         # Hint for parallel execution (if supported)
   sampler: lhs                # {lhs | sobol | random}
@@ -106,8 +107,8 @@ derived_parameters:
 scenarios:
   - name: base_case
     description: >
-      Regression base case: aligned with the lender base_case assumptions,
-      but with a mid-size iteration count suitable for CI and dev runs.
+      FAST regression base case: aligned with lender assumptions,
+      reduced to 20 iterations for rapid CI/dev feedback (~30s).
     enabled: true
     parameter_overrides: {}
 
@@ -119,7 +120,7 @@ correlations:
     - [generation.capacity_factor_pct, generation.availability_pct, 0.4]
 
 output:
-  save_path: outputs/monte_carlo_regression/
+  save_path: outputs/monte_carlo_regression_fast/
   save_raw_results: true
 
   risk_metrics:
@@ -134,11 +135,7 @@ output:
     - name: debt_service_coverage_avg
       description: Average DSCR over full senior debt tenor.
 
-# Optional regression lock – fill after first "golden run":
-#   1. Run this config once with seed=42.
-#   2. Capture P50 IRR/NPV and P10 DSCR.
-#   3. Populate the bands below and point tests at them.
-
+# Regression expectations locked from first golden run (seed=42, 20 iterations)
 regression_expectations:
   scenario_name: base_case
   metrics:
