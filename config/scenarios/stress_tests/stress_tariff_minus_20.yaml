@@ -1,0 +1,44 @@
+# config/scenarios/stress_tests/stress_tariff_minus_20.yaml
+# 
+# Sprint 12 Phase 3: Stress Test Scenario
+# Adverse Tariff: -20% reduction from base case
+#
+# Purpose: Model downside risk from tariff deterioration
+# Applies: Revenue reduction across entire project life
+# Use: Monte Carlo stress testing, covenant analysis, board risk reporting
+#
+# Contract: Sprint 12 Phase 3 - Enhanced Sensitivity Analysis
+
+inherit_from: scenarios/dutchbay_lendercase_2025Q4.yaml
+
+# Tariff adjustment: -20% from baseline
+revenue:
+  base_tariff_adjustment_pct: -0.20
+  tariff_escalation_pct_annual: 0.02  # Unchanged from base
+
+# Debt remains unchanged (lender worst-case)
+debt:
+  enabled: true
+
+# Refinancing disabled in stress (baseline debt only)
+refinancing:
+  enabled: false
+
+# Distributions still apply if covenant maintained
+equity:
+  distribution_policy: passive
+
+# Scenario metadata for reporting
+scenario:
+  name: "Stress Test: Tariff -20%"
+  description: "Revenue stress from tariff reduction 20% below base case"
+  category: "downside_risk"
+  severity: "high"
+  likelihood: "medium"  # Possible but not expected
+  duration: "project_life"  # Permanent reduction
+
+# Expected outcomes (for validation)
+expected_outcomes:
+  irr_reduction_pct_range: [10, 25]  # IRR falls 10-25% from base
+  min_dscr_reduction_range: [0.05, 0.15]  # DSCR falls 0.05-0.15 points
+  covenant_breach_probability_pct_range: [5, 25]  # 5-25% chance of DSCR < 1.20
