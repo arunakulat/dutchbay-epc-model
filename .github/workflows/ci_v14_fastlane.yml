@@ -46,7 +46,7 @@ jobs:
             finance \
             run_full_pipeline_v14.py
 
-      - name: Pytest – fast lane
+      - name: Pytest – fast lane (including Sprint 11 compliance tests)
         run: |
           pytest \
             tests/api \
@@ -54,6 +54,7 @@ jobs:
             tests/finance \
             tests/contracts \
             tests/smoke \
+            tests/lint \
             --maxfail=1 \
             --disable-warnings \
             --tb=short
