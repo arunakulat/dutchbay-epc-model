@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, cast
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,6 @@ def build_tax_profile(
         tax_holiday_years = int(config_tax.tax_holiday_years)
         tax_holiday_start_year = int(config_tax.tax_holiday_start_year)
         depreciation_years = int(config_tax.depreciation_years)
-        depreciation_start_year = int(config_tax.depreciation_start_year)
         enhanced_cap_allowance_pct = float(config_tax.enhanced_capital_allowance_pct)
         enhanced_allowance_applies = bool(config_tax.get("enhanced_allowance_applies", False))
         depreciation_method = str(config_tax.get("depreciation_method", "straight_line"))

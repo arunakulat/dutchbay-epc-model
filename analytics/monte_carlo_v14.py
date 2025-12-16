@@ -5,7 +5,7 @@ import math
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Iterable, List, Mapping, cast
+from typing import Any, Iterable, List, Mapping
 
 import multiprocess as mp
 import numpy as np
