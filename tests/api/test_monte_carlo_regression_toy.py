@@ -1,4 +1,5 @@
 # tests/api/test_monte_carlo_regression_toy.py
+# Sprint 10: FAST regression tests using reduced-scale toy config
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ import pytest
 from analytics.monte_carlo_v14 import run_monte_carlo
 
 # ---------------------------------------------------------------------------
-# Paths – adjust BASE_SCENARIO_CONFIG if your canonical v14 scenario differs
+# FAST test configs (20 iterations, ~30 seconds)
 # ---------------------------------------------------------------------------
 
 MC_CONFIG_PATH = Path("config/monte_carlo_regression_toy.yaml")
@@ -46,7 +47,7 @@ def _result_to_dict(mc_result: Any) -> Dict[str, Any]:
 # lender-sensible (e.g. ±0.5–1.0 percentage point on IRR, ±5–10% on NPV).
 #
 # The idea is:
-#   seed=42 + toy config + v14 engine + MC wiring → deterministic band.
+#   seed=42 + toy config (20 iterations) + v14 engine + MC wiring → deterministic band.
 #
 # ---------------------------------------------------------------------------
 
@@ -62,22 +63,26 @@ DSCR_P10_HIGH = 1.60  # TODO: update to actual ~P10 DSCR + margin
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# FAST Tests (20 iterations, ~30 seconds total)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.slow
 def test_monte_carlo_toy_regression_is_stable() -> None:
     """
-    Fast-but-meaningful regression check for the v14 Monte Carlo engine.
+    FAST regression check for the v14 Monte Carlo engine.
 
-    - Uses a small toy config (e.g. 200 iterations, seed=42) defined in
-      config/monte_carlo_regression_toy.yaml.
-    - Expects a single 'base_case' scenario result.
-    - Locks P50 IRR, P50 NPV and P10 DSCR into narrow-ish bands.
+    Configuration:
+    - 20 iterations (reduced from 500 for rapid testing)
+    - Single 'base_case' scenario
+    - Seed fixed at 42 for reproducibility
+    - Expected runtime: ~20-30 seconds
 
+    This test locks P50 IRR, P50 NPV and P10 DSCR into regression bands.
     Any silent drift in the finance engine, evaluator, or MC wiring should
     trip this test once you've tuned the bands above.
+
+    Production validation: see monte_carlo_regression_production.yaml
     """
     # ===== P1.2 OPTIMIZATION: Skip CSV writes during tests =====
     results = run_monte_carlo(
@@ -128,12 +133,15 @@ def test_monte_carlo_toy_regression_is_stable() -> None:
 
 def test_monte_carlo_toy_precisions_are_reported() -> None:
     """
-    Guard that the new SE fields are wired and non-pathological.
+    Guard that the new SE (standard error) fields are wired and non-pathological.
 
     We don't fix exact SE values here, but we require:
     - project_irr_se, project_npv_se, dscr_min_se are present,
     - they are finite (not NaN / inf),
     - and non-negative.
+
+    These fields enable confidence interval reporting:
+      E.g., P50 IRR ± 1.96 * SE → 95% CI
     """
     # ===== P1.2 OPTIMIZATION: Skip CSV writes during tests =====
     results = run_monte_carlo(
