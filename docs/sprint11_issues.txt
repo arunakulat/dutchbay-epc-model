@@ -1,9 +1,0 @@
-Integrate canonical WACC_v14 into pipeline_v14 (single entry point)
-Implement and integrate EquityResult into ScenarioResult
-Implement optimization_v14 using evaluate_with_overrides
-Replace scalar FX with structured FX block + schema guard enforcement
-Rebuild sensitivity_v14 to exclusively use evaluation_v14
-Implement capital_risk_layer_v14 facade
-Update documentation for FX/WACC/Equity integration
-Add minimal example configs for new modules
-Add CI guard ensuring no analytics module imports pipeline/finance directly
