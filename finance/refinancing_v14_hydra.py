@@ -12,12 +12,12 @@ Context:
     - Models debt refinancing events at specified trigger dates
     - Evaluates impact on project IRR, DSCR, and debt service coverage
     - Integrates with Hydra config framework (no argparse)
-    - Uses schema guard validation (strict mode)
+    - Uses schema guard validation (strict mode via modules list)
     - Outputs JSON results for downstream analytics
 
 Action:
     1. Load Hydra config (conf/scenarios/refinancing_*.yaml)
-    2. Validate schema (validate_config_for_v14, strict=True)
+    2. Validate schema (validate_config_for_v14 with debt+cashflow modules)
     3. Initialize debt state from prior debt_v14 results
     4. Model refinancing events:
        - Trigger conditions (date, market spread, DSCR threshold)
@@ -30,7 +30,7 @@ Specifications:
     - Type hints: 100% (TYPE-01 compliance)
     - Tests: 8+ cases with regression pins (TEST-01)
     - Mypy: clean (TYPE-01)
-    - Schema guard: strict=True (R5, R22)
+    - Schema guard: via modules=["cashflow", "debt"] (R5, R22)
     - No argparse: Hydra only (R3, CLI-01)
     - No AST: Config via YAML (ARCH-01)
     - IRR/NPV: Imported from finance.irr only (R7, ARCH-02)
@@ -62,13 +62,11 @@ Examples:
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
-from typing import Any, Optional
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from typing import Any
+from datetime import datetime
 
-from hydra import initialize, compose
 from omegaconf import DictConfig, OmegaConf
-import numpy as np
 
 from analytics.schema_guard import validate_config_for_v14
 from finance.irr import irr, npv  # R7: IRR/NPV from finance.irr only
@@ -126,9 +124,18 @@ def load_config(config_path: str) -> DictConfig:
     cfg = OmegaConf.load(config_path)
     logger.info(f"Loaded config from: {config_path}")
     
-    # C: CONFIG - Validate schema (R5: strict=True, R22 compliance)
-    validate_config_for_v14(cfg, strict=True)
-    logger.info("Schema validation passed (strict mode)")
+    # C: CONFIG - Validate schema (R5: modules list, R22 compliance)
+    # Convert OmegaConf to dict for schema guard
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(cfg_dict, dict):
+        raise ValueError("Config must be a mapping (dict)")
+    
+    validate_config_for_v14(
+        cfg_dict, 
+        config_path=config_path,
+        modules=['cashflow', 'debt']  # R5: Validate against cashflow & debt specs
+    )
+    logger.info("Schema validation passed (R5, R22 compliance)")
     
     return cfg
 
@@ -231,7 +238,6 @@ class RefinancingEngine:
         tenor_delta_years = self.refi_config.new_tenor_years - remaining_tenor_years
         
         # IRR impact (simplified: spread delta reduces NPV of debt service)
-        # Actual impact depends on full cashflow recalculation
         annual_debt_service = (current_debt_outstanding_usd / remaining_tenor_years) \
                             * (1.0 + (current_wacc_pct / 100.0))
         annual_savings_bps = spread_delta_bps / 10000.0 * annual_debt_service
