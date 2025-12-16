@@ -180,17 +180,22 @@ def test_refinancing_impact_calculation(base_config: DictConfig) -> None:
     
     Validates: Metric calculation, unit suffixes (FIN-02),
     regression pins (TEST-01)
+    
+    Calculations:
+        - refi_cost_usd: 1.5% of 100M = 1.5M ✓
+        - spread_delta_bps: new_spread_bps (250) - (current_wacc_pct * 100) = 250 - 950 = -700 bps
+        - tenor_delta_years: new_tenor (10) - current_tenor (5) = 5 years ✓
     """
     engine = RefinancingEngine(base_config)
     impact = engine.calculate_refinancing_impact(
         current_debt_outstanding_usd=100e6,
-        current_wacc_pct=9.5,
+        current_wacc_pct=9.5,  # 9.5% = 950 basis points
         remaining_tenor_years=5,
     )
     
     # REGRESSION PIN (TEST-01): Expected values for base scenario
     assert impact['refi_cost_usd'] == 1.5e6  # 1.5% of 100M
-    assert impact['spread_delta_bps'] == 50.0  # 250 - (9.5 * 100)
+    assert impact['spread_delta_bps'] == -700.0  # 250 - 950 (9.5% * 100)
     assert impact['tenor_delta_years'] == 5.0  # 10 - 5
     assert impact['success'] is True
     assert 'irr_delta_bps' in impact
@@ -200,17 +205,22 @@ def test_refinancing_impact_stress(stress_config: DictConfig) -> None:
     """Test impact calculation with stress scenario.
     
     Validates: Stress scenario handling, higher spreads
+    
+    Calculations:
+        - refi_cost_usd: 2.0% of 100M = 2.0M ✓
+        - spread_delta_bps: new_spread_bps (400) - (current_wacc_pct * 100) = 400 - 950 = -550 bps
+        - tenor_delta_years: new_tenor (8) - current_tenor (8) = 0 years ✓
     """
     engine = RefinancingEngine(stress_config)
     impact = engine.calculate_refinancing_impact(
         current_debt_outstanding_usd=100e6,
-        current_wacc_pct=9.5,
+        current_wacc_pct=9.5,  # 9.5% = 950 basis points
         remaining_tenor_years=8,
     )
     
     # REGRESSION PIN (TEST-01): Stress scenario
     assert impact['refi_cost_usd'] == 2.0e6  # 2.0% of 100M (higher fee)
-    assert impact['spread_delta_bps'] == 200.0  # 400 - (9.5 * 100)
+    assert impact['spread_delta_bps'] == -550.0  # 400 - 950 (9.5% * 100)
     assert impact['tenor_delta_years'] == 0.0  # 8 - 8
     assert impact['success'] is True
 
