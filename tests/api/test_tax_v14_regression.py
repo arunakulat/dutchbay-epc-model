@@ -92,7 +92,7 @@ class TestTaxCalculations:
         # Year 1 (index 0) should be in holiday
         tax, dep = calculate_tax_for_year(
             profile,
-            pretax_cfads_lkr=50_000_000,
+            pretax_cfads_lkr=500_000_000,  # Much larger CFADS
             interest_expense_lkr=10_000_000,
             year_index=0,
         )
@@ -113,17 +113,22 @@ class TestTaxCalculations:
         )
 
         # Year 13 (index 12) should NOT be in 12-year holiday
+        # holiday_end = 1 + 12 - 1 = 12, so year 13 is outside
         tax, dep = calculate_tax_for_year(
             profile,
-            pretax_cfads_lkr=50_000_000,
+            pretax_cfads_lkr=500_000_000,  # Much larger CFADS
             interest_expense_lkr=10_000_000,
             year_index=12,
         )
 
+        # Verify year 13 is NOT in holiday
+        assert profile.is_in_tax_holiday(12) is False, "Year 13 should NOT be in holiday"
+        
         # Tax should be > 0 (after holiday)
         assert tax > 0.0, f"Year 13 tax should be > 0, got {tax}"
-        # Calculation: (50M - dep - 10M) * 0.3
-        expected_tax = (50_000_000 - dep - 10_000_000) * 0.3
+        
+        # Calculation: (500M - dep - 10M) * 0.3
+        expected_tax = (500_000_000 - dep - 10_000_000) * 0.3
         assert tax == pytest.approx(expected_tax), f"Tax mismatch: {tax} vs {expected_tax}"
 
     def test_tax_calculation_depreciation_consistency(self, lender_case_config):
@@ -137,9 +142,9 @@ class TestTaxCalculations:
         )
 
         # Get depreciation for multiple years
-        _, dep_y1 = calculate_tax_for_year(profile, 50_000_000, 10_000_000, 0)
-        _, dep_y2 = calculate_tax_for_year(profile, 50_000_000, 10_000_000, 1)
-        _, dep_y13 = calculate_tax_for_year(profile, 50_000_000, 10_000_000, 12)
+        _, dep_y1 = calculate_tax_for_year(profile, 500_000_000, 10_000_000, 0)
+        _, dep_y2 = calculate_tax_for_year(profile, 500_000_000, 10_000_000, 1)
+        _, dep_y13 = calculate_tax_for_year(profile, 500_000_000, 10_000_000, 12)
 
         # All should be equal (straight-line depreciation)
         assert dep_y1 == pytest.approx(dep_y2)
@@ -155,19 +160,19 @@ class TestTaxCalculations:
             config_source="test",
         )
 
-        # Year 13 (after holiday)
-        pretax_cfads = 50_000_000
-        interest = 10_000_000
+        # Year 13 (after holiday) with large CFADS
+        pretax_cfads = 500_000_000
+        interest = 50_000_000
 
         tax, dep = calculate_tax_for_year(
             profile, pretax_cfads, interest, 12  # Year 13 (index 12)
         )
 
-        # With interest shield: (50M - dep - 10M) * 0.3
+        # With interest shield: (500M - dep - 50M) * 0.3
         expected_with_shield = (pretax_cfads - dep - interest) * 0.3
-        assert tax == pytest.approx(expected_with_shield)
+        assert tax == pytest.approx(expected_with_shield), f"Tax mismatch: {tax} vs {expected_with_shield}"
 
-        # Without interest shield: (50M - dep) * 0.3 (should be larger)
+        # Without interest shield: (500M - dep) * 0.3 (should be larger)
         expected_without_shield = (pretax_cfads - dep) * 0.3
         assert expected_without_shield > expected_with_shield
         assert tax < expected_without_shield
