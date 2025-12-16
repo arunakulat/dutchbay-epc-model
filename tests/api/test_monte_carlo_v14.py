@@ -4,7 +4,7 @@
 Test suite for monte_carlo_v14 module.
 Includes statistical validation (TEST-01), regression pins.
 
-Run with: pytest tests/api/test_monte_carlo_v14.py --no-cov
+Run with: pytest tests/api/test_monte_carlo_v14.py --no-cov -v
 """
 
 import pytest
@@ -33,6 +33,7 @@ def base_config() -> DictConfig:
             'fx_mean_rate': 325.5,
             'fx_std_pct': 5.0,
             'project_life_years': 25,
+            'discount_rate_pct': 8.0,  # From YAML config
         },
         'financial': {
             'debt': {'principal_usd': 105e6},
@@ -62,6 +63,7 @@ def stress_config() -> DictConfig:
             'fx_mean_rate': 330.0,
             'fx_std_pct': 8.0,
             'project_life_years': 25,
+            'discount_rate_pct': 10.0,  # Higher rate for stress
         },
         'financial': {
             'debt': {'principal_usd': 105e6},
@@ -88,10 +90,12 @@ def test_monte_carlo_config_creation() -> None:
         fx_mean_rate=325.5,
         fx_std_pct=5.0,
         project_life_years=25,
+        discount_rate_pct=8.0,
     )
     
     assert cfg.scenario_name == 'test'
     assert cfg.n_iterations == 1000
+    assert cfg.discount_rate_pct == 8.0
     assert cfg.success is True
 
 
@@ -116,6 +120,7 @@ def test_monte_carlo_engine_init(base_config: DictConfig) -> None:
     assert engine.config is not None
     assert engine.mc_config.scenario_name == 'test_base'
     assert engine.n_iterations == 100
+    assert engine.mc_config.discount_rate_pct == 8.0
     assert engine.logger is not None
 
 
@@ -185,6 +190,7 @@ def test_monte_carlo_engine_run(base_config: DictConfig) -> None:
     assert result['success'] is True
     assert result['scenario_name'] == 'test_base'
     assert result['n_iterations'] == 50
+    assert result['discount_rate_pct'] == 8.0
     assert 'statistics' in result
     
     stats = result['statistics']
@@ -202,6 +208,7 @@ def test_monte_carlo_engine_run_stress(stress_config: DictConfig) -> None:
     
     assert result['success'] is True
     assert result['scenario_name'] == 'test_stress'
+    assert result['discount_rate_pct'] == 10.0  # Stress uses 10%
     assert 'statistics' in result
 
 
@@ -237,6 +244,7 @@ def test_monte_carlo_result_json_serializable(base_config: DictConfig) -> None:
     
     assert deserialized['success'] is True
     assert deserialized['scenario_name'] == 'test_base'
+    assert deserialized['discount_rate_pct'] == 8.0
 
 
 def test_monte_carlo_edge_case_single_iteration(base_config: DictConfig) -> None:
