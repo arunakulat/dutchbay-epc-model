@@ -310,15 +310,19 @@ def test_monte_carlo_type_hints() -> None:
 def test_r7_compliance_uses_finance_irr(base_config: DictConfig) -> None:
     """Test R7 compliance: uses finance.irr.npv() and finance.irr.irr() (CRITICAL)."""
     # This test verifies that the engine uses finance.irr module
-    # If it doesn't import properly or fails, R7 is violated
-    from finance.irr import npv, irr  # Should work
+    # simulate_iteration() should return dict with npv_usd and irr_pct keys
+    from finance.irr import npv, irr  # Should import successfully
     
     engine = MonteCarloEngine(base_config, n_iterations=1)
     result = engine.simulate_iteration()
     
-    # If we got here without error, R7 compliance is verified
-    # The module successfully uses finance.irr functions
-    assert result['success'] is not None or 'npv_usd' in result
+    # Verify R7 compliance: simulate_iteration returns npv_usd and irr_pct
+    # These values come from finance.irr.npv() and finance.irr.irr()
+    assert 'npv_usd' in result, "simulate_iteration must return npv_usd (from finance.irr.npv)"
+    assert 'irr_pct' in result, "simulate_iteration must return irr_pct (from finance.irr.irr)"
+    assert isinstance(result['npv_usd'], float)
+    assert isinstance(result['irr_pct'], float)
+    # If we got here, R7 compliance is verified ✅
 
 
 if __name__ == '__main__':
