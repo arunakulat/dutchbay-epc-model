@@ -12,8 +12,7 @@ Version: 14
 Date: December 16, 2025
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 import logging
 
@@ -248,7 +247,7 @@ if __name__ == "__main__":
     """Test basic functionality."""
     config = RefinancingConfig()
     calculator = RefinancingV14(config)
-    print(f"✅ Refinancing module initialized with config:")
+    print("✅ Refinancing module initialized with config:")
     print(f"   Enabled: {config.enabled}")
     print(f"   Min trigger year: {config.trigger_year_min}")
     print(f"   New rate: {config.new_rate}%")
