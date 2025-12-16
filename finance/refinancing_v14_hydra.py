@@ -13,8 +13,8 @@ Date: December 16, 2025
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
-from pydantic import BaseModel, Field, validator
+from typing import Dict, List, Optional, Tuple, Any
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,8 @@ class RefinancingConfig(BaseModel):
         refinancing_cost_pct: Refinancing fees as % of new amount
         prepayment_penalty_pct: Penalty on old debt as % of balance
     """
+    model_config = ConfigDict(validate_assignment=True)
+    
     enabled: bool = Field(default=True, description="Enable refinancing analysis")
     trigger_year_min: int = Field(default=8, description="Minimum year for refinancing")
     dscr_threshold: float = Field(default=1.25, description="Minimum DSCR to refinance")
@@ -44,30 +46,29 @@ class RefinancingConfig(BaseModel):
     refinancing_cost_pct: float = Field(default=2.0, description="Refinancing fees (%)")
     prepayment_penalty_pct: float = Field(default=1.0, description="Prepayment penalty (%)")
     
-    @validator('dscr_threshold')
+    @field_validator('dscr_threshold')
+    @classmethod
     def validate_dscr(cls, v: float) -> float:
         """DSCR threshold must be positive and reasonable."""
         if v <= 0 or v > 3.0:
             raise ValueError(f"DSCR threshold {v} not in valid range (0, 3.0]")
         return v
     
-    @validator('new_rate')
+    @field_validator('new_rate')
+    @classmethod
     def validate_rate(cls, v: float) -> float:
         """Interest rate must be between 0% and 20%."""
         if v < 0 or v > 20:
             raise ValueError(f"Interest rate {v}% not in valid range (0-20%)")
         return v
     
-    @validator('new_tenor')
+    @field_validator('new_tenor')
+    @classmethod
     def validate_tenor(cls, v: int) -> int:
         """Tenor must be between 1 and 30 years."""
         if v < 1 or v > 30:
             raise ValueError(f"Tenor {v} years not in valid range (1-30)")
         return v
-    
-    class Config:
-        """Pydantic config."""
-        validate_assignment = True
 
 
 class RefinancingTrigger:
@@ -108,7 +109,7 @@ class RefinancingTrigger:
             Tuple of (should_refinance: bool, condition_results: Dict)
                 Each condition evaluated independently for diagnostics
         """
-        conditions = {}
+        conditions: Dict[str, bool] = {}
         
         # Condition 1: Minimum year
         conditions['year_threshold'] = year >= self.config.trigger_year_min
@@ -204,7 +205,7 @@ class RefinancingV14:
         annual_data: Dict[str, List[float]],
         debt_schedule: Dict[str, List[float]],
         current_rate: float,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Calculate refinancing impact.
         
         Args:
@@ -221,7 +222,7 @@ class RefinancingV14:
                 - interest_savings: float (total savings)
                 - dscr_impact: float (change in DSCR)
         """
-        result = {
+        result: Dict[str, Any] = {
             'refinanced': False,
             'trigger_year': None,
             'new_schedule': [],
