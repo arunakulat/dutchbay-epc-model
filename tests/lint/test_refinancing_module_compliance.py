@@ -33,13 +33,11 @@ class TestTypeHints:
         config = RefinancingConfig()
         trigger = RefinancingTrigger(config)
         
-        # Check __init__ signature
-        init_sig = signature(RefinancingTrigger.__init__)
-        assert init_sig.return_annotation is not None
-        
-        # Check should_refinance signature
+        # Check should_refinance signature has return annotation
         method_sig = signature(trigger.should_refinance)
         assert method_sig.return_annotation is not None
+        # Return type should be Tuple[bool, Dict[str, bool]]
+        assert 'Tuple' in str(method_sig.return_annotation)
     
     def test_refinancing_v14_methods_typed(self) -> None:
         """Test RefinancingV14 methods have type hints."""
@@ -48,6 +46,8 @@ class TestTypeHints:
         
         method_sig = signature(calc.calculate)
         assert method_sig.return_annotation is not None
+        # Return type should be Dict[str, Any]
+        assert 'Dict' in str(method_sig.return_annotation)
 
 
 class TestDocstrings:
