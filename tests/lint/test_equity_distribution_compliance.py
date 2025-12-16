@@ -207,10 +207,11 @@ class TestGWTFCompliance:
         content = MODULE_PATH.read_text(encoding="utf-8")
         lines = content.split('\n')
         
-        # Check first few lines for future import
-        first_20_lines = '\n'.join(lines[:20])
-        assert "from __future__ import annotations" in first_20_lines, (
-            "Module should import annotations from __future__ (CST-01)"
+        # Check first 30 lines for future import (accommodate longer docstrings)
+        first_30_lines = '\n'.join(lines[:30])
+        assert "from __future__ import annotations" in first_30_lines, (
+            "Module should import annotations from __future__ (CST-01). "
+            "Import should appear in first 30 lines (after docstring)."
         )
     
     def test_no_hardcoded_magic_numbers(self) -> None:
