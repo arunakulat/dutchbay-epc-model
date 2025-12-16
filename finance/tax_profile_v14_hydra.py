@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, cast
 
 from omegaconf import DictConfig, OmegaConf
 
@@ -293,13 +293,13 @@ def extract_tax_config_from_full_config(full_config: DictConfig) -> DictConfig:
         ValueError: If tax section not found or invalid
     """
     if "tax" in full_config:
-        return full_config.tax
+        return cast(DictConfig, full_config.tax)
 
     if "project" in full_config:
         logger.warning(
             "Tax config not found in config.tax; falling back to config.project"
         )
-        return full_config.project
+        return cast(DictConfig, full_config.project)
 
     raise ValueError(
         "Tax configuration not found in config.tax or config.project. "
