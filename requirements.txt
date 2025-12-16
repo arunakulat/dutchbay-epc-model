@@ -45,7 +45,7 @@ Django==5.2.9
 et_xmlfile==2.0.0
 execnet==2.1.2
 fastapi==0.121.2
-filelock==3.20.0
+filelock==3.20.1
 finmodels==2.0.4
 fissix==24.4.24
 flake8==7.3.0
