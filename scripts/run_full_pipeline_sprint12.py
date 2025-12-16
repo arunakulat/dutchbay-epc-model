@@ -45,7 +45,7 @@ logging.basicConfig(
 try:
     from hydra import compose, initialize_config_dir
     from hydra.core.config_store import ConfigStore
-from omegaconf import OmegaConf, DictConfig
+    from omegaconf import OmegaConf, DictConfig
     from pathlib import Path
     import yaml
 except ImportError as e:
