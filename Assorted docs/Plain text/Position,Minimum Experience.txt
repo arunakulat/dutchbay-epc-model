@@ -1,7 +1,0 @@
-Position,Minimum Experience,Required Qualifications,Commitment Level
-Project Manager,"15 years total, 5 years similar multi-site projects","Bachelor Engineering + PMP/equivalent","Full-time entire duration"
-Civil Engineer,"12 years total, 3 years government buildings","Bachelor Civil Engineering + Professional registration","Full-time construction phase"
-Architect,"10 years total, 2 years institutional buildings with modular design","Bachelor Architecture + Professional registration","Part-time design review"
-MEP Engineer,"8 years total, 2 years commercial/institutional","Bachelor Mechanical/Electrical Engineering","Part-time MEP phases"
-Safety Manager,"7 years total, 2 years construction safety across multiple sites","Degree + Safety certifications (OSHA/equivalent)","Full-time entire duration"
-Environmental Specialist,"5 years total, 2 years construction projects with ESHS focus","Environmental Engineering/Science degree","Part-time monitoring"

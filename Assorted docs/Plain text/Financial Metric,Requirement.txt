@@ -1,8 +1,0 @@
-Financial Metric	Requirement	Calculation Method	Documentation
-Average Annual Turnover	"LKR 1,237M"	1.5Xproject cost	"Certified receipts of income average over last 3 years (2021-2024) (Total certified payments received for completed/ongoing contracts - Audited financial statements, client completion certificates)"
-Cash Flow Requirements	LKR 206.25M	25% of project value	"Liquid assets, unencumbered real assets, credit lines, excluding advance payments, Current as of bid submission date, Bank guarantee letters, credit facility agreements, cash flow statements, Bank guarantee letters, credit facility agreements, cash flow statements"
-Working Capital Requirements	Ratio of 1.5 (Current Assets/Current Liabilities)	Latest audited financial year (2024)	Latest audited balance sheet with detailed breakdown
-Net Worth	Minimum LKR 426M	50% of project value	Latest audited financial year (2024)
-Debt-to-Equity Ratio	Maximum 2.0	Latest audited financial year (2024)	Audited financial statements
-Current Contract Commitments	Not exceeding 80% of demonstrated annual capacity	Based on ongoing contracts as of bid submission	Contract agreements and financial capacity statements
-Financial Statement Requirements	Independently audited statements for 3 consecutive years		Audited financial statements for 2022-2024

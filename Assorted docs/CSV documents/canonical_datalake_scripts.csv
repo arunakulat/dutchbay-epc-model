@@ -1,8 +1,0 @@
-filepath,folder,tier,exports,imports_finance,imports_analytics,status,phase,gwtf_notes,key_purpose
-finance/cashflow_v14.py,finance,core_engine,"build_annual_cfads, build_annual_rows, validate_parameters, CashflowResult","cashflow_v14_params, cashflow_v14_fx, cashflow_v14_tax",,stable,complete,compliant,core module
-finance/cashflow_v14_fx.py,finance,core_engine,_fx_curve,fx_v14,,deprecated_adapter,phase1_complete,compliant,Thin adapter over fx_v14; routes to new FX engine
-finance/fx_v14.py,finance,core_engine,"build_fx_curve_scalar, build_fx_curve_structured, build_fx_curve_from_config, get_fx_rate",,,stable,phase1_complete,compliant,core module
-analytics/evaluation_v14.py,analytics,gateway,"evaluate_with_overrides, evaluate_with_casper_tail_risk, evaluate_scenario","cashflow_v14, debt_v14, equity_v14, wacc_v14, irr","contracts_v14, schema_guard",stable,complete,compliant,Single entry point for all external callers to finance layer
-analytics/sensitivity_v14.py,analytics,analytics_engine,"analyze_sensitivity, build_tornado_chart, calculate_shock_impact",TODO: remove in Phase2,"evaluation_v14, contracts_v14",needs_refactor,phase2_pending,VIOLATION: still has direct finance imports,core module
-analytics/contracts_v14.py,analytics,contracts,"ScenarioDescriptor, CashflowResult, EvaluationResult, CapitalRiskBundle, ShockSpec, ShockResult",,,stable + phase2_expansion_pending,phase1_complete + phase2_partial,compliant,core module
-analytics/schema_guard.py,analytics,validation,"validate_config_for_v14, validate_fx_block, ConfigValidationError",,contracts_v14,stable,phase1_complete,compliant,core module
