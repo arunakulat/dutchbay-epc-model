@@ -495,21 +495,24 @@ def evaluate_with_casper_tail_risk(
         if isinstance(mc_result, dict):
             # Check if it's a dict of scenarios or a single result
             if "statistics" in mc_result:
-                # Direct result format
+                # Direct result format - create MonteCarloResult with correct field names
                 from analytics.contracts_v14 import MonteCarloResult
 
                 monte_carlo = MonteCarloResult(
                     scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
-                    n_iterations=mc_result.get("n_iterations", 1000),
-                    project_irr_p10=mc_result["statistics"].get("irr_p10_pct", 0.0)
-                    / 100.0,
-                    project_irr_p50=mc_result["statistics"].get("irr_median_pct", 0.0)
-                    / 100.0,
-                    project_irr_p90=mc_result["statistics"].get("irr_p90_pct", 0.0)
-                    / 100.0,
-                    npv_p10=mc_result["statistics"].get("npv_p10_usd", 0.0),
-                    npv_p50=mc_result["statistics"].get("npv_median_usd", 0.0),
-                    npv_p90=mc_result["statistics"].get("npv_p90_usd", 0.0),
+                    iterations=mc_result.get("n_iterations", 1000),  # ← FIXED: Use 'iterations' not 'n_iterations'
+                    failed_iterations=mc_result.get("failed_iterations", 0),
+                    project_irr_mean=mc_result["statistics"].get("irr_mean_pct", 0.0) / 100.0,
+                    project_irr_std=mc_result["statistics"].get("irr_std_pct", 0.0) / 100.0,
+                    project_irr_p10=mc_result["statistics"].get("irr_p10_pct", 0.0) / 100.0,
+                    project_irr_p50=mc_result["statistics"].get("irr_median_pct", 0.0) / 100.0,
+                    project_irr_p90=mc_result["statistics"].get("irr_p90_pct", 0.0) / 100.0,
+                    project_npv_mean=mc_result["statistics"].get("npv_mean_usd", 0.0),
+                    project_npv_p10=mc_result["statistics"].get("npv_p10_usd", 0.0),
+                    project_npv_p50=mc_result["statistics"].get("npv_median_usd", 0.0),
+                    project_npv_p90=mc_result["statistics"].get("npv_p90_usd", 0.0),
+                    dscr_min_p10=0.0,  # Placeholder - not in base MC result
+                    dscr_min_p50=0.0,  # Placeholder - not in base MC result
                 )
             elif scenario_name_for_mc in mc_result:
                 monte_carlo = mc_result[scenario_name_for_mc]
