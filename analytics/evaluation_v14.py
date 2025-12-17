@@ -472,26 +472,49 @@ def evaluate_with_casper_tail_risk(
         scenario_name_for_mc,
     )
 
+    # Load Monte Carlo config and run engine
+    from omegaconf import OmegaConf
+    mc_config = OmegaConf.load(monte_carlo_config_path)
+    
     mc_kwargs: Dict[str, Any] = {
-        "base_config_path": config_path,
-        "scenario_name": scenario_name_for_mc,
+        "config": mc_config,
+        "n_iterations": mc_config.monte_carlo.get("n_iterations", 1000),
     }
 
-    # Pass Monte Carlo config path using correct parameter name
-    if monte_carlo_config_path is not None:
-        mc_kwargs["scenario_config_path"] = monte_carlo_config_path
-
     # Call via the local proxy so tests can monkeypatch
-    mc_results_by_name = run_monte_carlo_analysis(**mc_kwargs)
+    mc_result = run_monte_carlo_analysis(**mc_kwargs)
 
-    monte_carlo = mc_results_by_name.get(scenario_name_for_mc)
+    if mc_result is None or not mc_result.get("success", False):
+        msg = (
+            f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'. "
+            f"Result: {mc_result}"
+        )
+        raise ValueError(msg)
+
+    # Extract Monte Carlo result - handle both direct result and dict-by-scenario format
+    monte_carlo = None
+    if isinstance(mc_result, dict):
+        # Check if it's a dict of scenarios or a single result
+        if "statistics" in mc_result:
+            # Direct result format
+            from analytics.contracts_v14 import MonteCarloResult
+            monte_carlo = MonteCarloResult(
+                scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
+                n_iterations=mc_result.get("n_iterations", 1000),
+                project_irr_p10=mc_result["statistics"].get("irr_p10_pct", 0.0) / 100.0,
+                project_irr_p50=mc_result["statistics"].get("irr_median_pct", 0.0) / 100.0,
+                project_irr_p90=mc_result["statistics"].get("irr_p90_pct", 0.0) / 100.0,
+                npv_p10=mc_result["statistics"].get("npv_p10_usd", 0.0),
+                npv_p50=mc_result["statistics"].get("npv_median_usd", 0.0),
+                npv_p90=mc_result["statistics"].get("npv_p90_usd", 0.0),
+            )
+        elif scenario_name_for_mc in mc_result:
+            monte_carlo = mc_result[scenario_name_for_mc]
+
     if monte_carlo is None:
         msg = (
-            "run_monte_carlo_analysis did not produce a result for "
-            f"scenario '{scenario_name_for_mc}'. "
-            f"Available keys: {list(mc_results_by_name.keys())!r}\n"
-            f"Hint: Check that the MC config at {monte_carlo_config_path} "
-            f"contains a scenario named '{scenario_name_for_mc}' with enabled=true"
+            "run_monte_carlo_analysis did not produce a usable result for "
+            f"scenario '{scenario_name_for_mc}'. Got: {mc_result!r}"
         )
         raise ValueError(msg)
 
