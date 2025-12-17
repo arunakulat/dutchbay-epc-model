@@ -43,17 +43,18 @@ Specifications:
     - ALL parameters from YAML config (no hardcoding)
 
 Examples:
-    >>> from analytics.monte_carlo_v14 import MonteCarloEngine
+    >>> from analytics.monte_carlo_v14 import MonteCarloEngine, run_monte_carlo_analysis
     >>> engine = MonteCarloEngine(config=cfg, n_iterations=1000)
     >>> result = engine.run()
     >>> result['statistics']['npv_mean_usd']
     45.2e6
+    >>> result = run_monte_carlo_analysis(config=cfg, n_iterations=1000)
 """
 
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
@@ -234,6 +235,42 @@ class MonteCarloEngine:
                 'success': False,
                 'error': str(e),
             }
+
+
+def run_monte_carlo_analysis(**kwargs: Any) -> Optional[dict[str, Any]]:
+    """
+    Compatibility wrapper for evaluation_v14.py (legacy integration).
+    
+    Called by analytics.evaluation_v14.run_monte_carlo_analysis().
+    Accepts flexible kwargs and returns Monte Carlo results.
+    
+    This function maintains backward compatibility with existing code
+    while the module transitions to the new MonteCarloEngine.
+    
+    Args:
+        **kwargs: Flexible arguments (config, n_iterations, etc.)
+        
+    Returns:
+        Dictionary with Monte Carlo results or None if evaluation fails
+    """
+    try:
+        # Extract config and iterations from kwargs
+        config = kwargs.get('config')
+        n_iterations = kwargs.get('n_iterations', 1000)
+        
+        if config is None:
+            logger.warning("run_monte_carlo_analysis: config not provided, returning None")
+            return None
+        
+        # Initialize and run engine
+        engine = MonteCarloEngine(config, n_iterations=n_iterations)
+        result = engine.run()
+        
+        return result if result.get('success', False) else None
+        
+    except Exception as e:
+        logger.error(f"run_monte_carlo_analysis failed: {str(e)}")
+        return None
 
 
 def main(config_path: str = 'conf/scenarios/mc_base.yaml', n_iterations: int = 1000) -> None:
