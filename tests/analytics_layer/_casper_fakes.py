@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Sequence
 
-from analytics.contracts_v14 import MonteCarloResult
+from omegaconf import DictConfig
 
 
 def fake_run_v14_pipeline(
@@ -44,59 +44,98 @@ def fake_run_v14_pipeline(
 
 def fake_run_monte_carlo_analysis(
     *,
-    base_config_path: str,
-    scenario_name: str,
-    scenario_config_path: str | None = None,
-) -> Dict[str, MonteCarloResult]:
+    config: DictConfig | Mapping[str, Any],
+    n_iterations: int = 1000,
+    **kwargs: Any,
+) -> Dict[str, Any]:
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    Now accepts scenario_config_path to match the real function signature.
-    Includes raw_results for tail-risk analysis compatibility.
+    CRITICAL FIX v5: Returns populated 'iterations' list.
+    The tail risk analysis (analytics.sensitivity_tail_risk) requires raw samples
+    to compute percentiles and enrich tornado plots.
+
+    Real function (analytics.monte_carlo_v14.MonteCarloEngine.run()) returns:
+        {
+            'scenario_name': str,
+            'n_iterations': int,
+            'statistics': {...},
+            'iterations': [
+                {'project_irr': 0.11, 'project_npv': 900000.0, ...},
+                ...
+            ],
+            'success': True,
+            ...
+        }
     """
-    # Ignore the paths - this is a fake
-    _ = base_config_path
-    _ = scenario_config_path
+    # Extract scenario name from config - check multiple locations
+    scenario_name = "default_scenario"
 
-    # Generate fake Monte Carlo samples for tail-risk analysis
-    # These must match the summary statistics (p10, p50, p90, mean, etc.)
-    raw_results = [
-        {"project_irr": 0.11, "project_npv": 900000.0, "dscr_min": 1.25},
-        {"project_irr": 0.115, "project_npv": 950000.0, "dscr_min": 1.27},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.125, "project_npv": 1050000.0, "dscr_min": 1.32},
-        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
-        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
-    ]
+    if isinstance(config, DictConfig):
+        # Try monte_carlo.scenario_name first
+        if (
+            hasattr(config, "monte_carlo")
+            and hasattr(config.monte_carlo, "scenario_name")
+        ):
+            scenario_name = config.monte_carlo.scenario_name
+        # Try scenario.scenario_name
+        elif hasattr(config, "scenario") and hasattr(config.scenario, "scenario_name"):
+            scenario_name = config.scenario.scenario_name
+        # Try project.name (test configs use this)
+        elif hasattr(config, "project") and hasattr(config.project, "name"):
+            scenario_name = str(config.project.name)
 
-    mc = MonteCarloResult(
-        scenario_name=scenario_name,
-        iterations=10,
-        failed_iterations=0,
-        # IRR stats
-        project_irr_mean=0.12,
-        project_irr_std=0.01,
-        project_irr_p10=0.11,
-        project_irr_p50=0.12,
-        project_irr_p90=0.13,
-        project_irr_se=0.001,
-        # NPV stats
-        project_npv_mean=1000000.0,
-        project_npv_p10=900000.0,
-        project_npv_p50=1000000.0,
-        project_npv_p90=1100000.0,
-        project_npv_se=10000.0,
-        # DSCR stats
-        dscr_min_p10=1.25,
-        dscr_min_p50=1.30,
-        dscr_min_se=0.01,
-        # Raw results for tail-risk analysis
-        raw_results=raw_results,
-    )
+    elif isinstance(config, dict):
+        # Try monte_carlo.scenario_name first
+        mc_cfg = config.get("monte_carlo", {})
+        if isinstance(mc_cfg, dict) and "scenario_name" in mc_cfg:
+            scenario_name = mc_cfg["scenario_name"]
+        # Try scenario.scenario_name
+        else:
+            scenario_cfg = config.get("scenario", {})
+            if isinstance(scenario_cfg, dict) and "scenario_name" in scenario_cfg:
+                scenario_name = scenario_cfg["scenario_name"]
+            # Fallback to project.name (test configs store scenario name here)
+            else:
+                project_cfg = config.get("project", {})
+                if isinstance(project_cfg, dict) and "name" in project_cfg:
+                    scenario_name = str(project_cfg["name"])
 
-    # Return dict keyed by scenario name
-    return {scenario_name: mc}
+    # Generate fake Monte Carlo statistics matching real engine output
+    statistics = {
+        "npv_mean_usd": 1_000_000.0,
+        "npv_std_usd": 100_000.0,
+        "npv_median_usd": 1_000_000.0,
+        "npv_p10_usd": 900_000.0,
+        "npv_p90_usd": 1_100_000.0,
+        "irr_mean_pct": 12.0,
+        "irr_std_pct": 1.0,
+        "irr_median_pct": 12.0,
+        "irr_p10_pct": 11.0,
+        "irr_p90_pct": 13.0,
+    }
+
+    # Generate fake raw iterations (samples)
+    # 10 samples is enough for the fake to pass validation
+    # Real Monte Carlo would return n_iterations samples
+    iterations = []
+    for i in range(10):
+        # Create a spread of values
+        factor = i / 10.0  # 0.0 to 0.9
+        iterations.append({
+            "project_irr": 0.11 + (0.02 * factor),  # 11% to 12.8%
+            "project_npv": 900_000.0 + (200_000.0 * factor),
+            "dscr_min": 1.25 + (0.10 * factor),
+        })
+
+    # Return EXACT structure that real MonteCarloEngine.run() returns
+    return {
+        "scenario_name": scenario_name,
+        "n_iterations": n_iterations,
+        "project_life_years": 25,
+        "discount_rate_pct": 8.0,
+        "capex_total_usd": 50_000_000.0,
+        "statistics": statistics,
+        "iterations": iterations,  # ← Populated list of samples
+        "success": True,
+    }
