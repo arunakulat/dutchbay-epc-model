@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Sequence
 
-from analytics.contracts_v14 import MonteCarloResult
 from omegaconf import DictConfig
 
 
@@ -52,15 +51,23 @@ def fake_run_monte_carlo_analysis(
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    CRITICAL FIX v3: Returns same structure as real monte_carlo_v14.MonteCarloEngine.run()
-    which includes 'success' key at TOP LEVEL.
+    CRITICAL FIX v4: Returns SAME structure as real monte_carlo_v14.MonteCarloEngine.run()
+    which includes 'success' key and matches expected field names.
 
-    Real function returns:
+    Real function (analytics.monte_carlo_v14.MonteCarloEngine.run()) returns:
         {
             'scenario_name': str,
-            'n_iterations': int,
-            'statistics': {...},
-            'success': True,  # ← REQUIRED by evaluation_v14.py:492
+            'n_iterations': int,  ← NOTE: 'n_iterations', NOT 'iterations'
+            'statistics': {
+                'irr_p10_pct': float,
+                'irr_median_pct': float,
+                'irr_p90_pct': float,
+                'npv_p10_usd': float,
+                'npv_median_usd': float,
+                'npv_p90_usd': float,
+                ...
+            },
+            'success': True,  ← CRITICAL: checked by evaluation_v14.py:492
             ...
         }
 
@@ -101,6 +108,7 @@ def fake_run_monte_carlo_analysis(
                     scenario_name = str(project_cfg["name"])
 
     # Generate fake Monte Carlo statistics matching real engine output
+    # Note: Field names match exactly what real engine returns in 'statistics' dict
     statistics = {
         "npv_mean_usd": 1_000_000.0,
         "npv_std_usd": 100_000.0,
@@ -114,15 +122,15 @@ def fake_run_monte_carlo_analysis(
         "irr_p90_pct": 13.0,
     }
 
-    # Return structure matching real MonteCarloEngine.run() output
-    # CRITICAL: evaluation_v14.py:492 checks mc_result.get("success", False)
+    # Return EXACT structure that real MonteCarloEngine.run() returns
+    # This is what evaluation_v14.py expects when calling run_monte_carlo_analysis()
     return {
         "scenario_name": scenario_name,
-        "n_iterations": n_iterations,
+        "n_iterations": n_iterations,  # ← Must be 'n_iterations' (real engine field)
         "project_life_years": 25,
         "discount_rate_pct": 8.0,
         "capex_total_usd": 50_000_000.0,
-        "statistics": statistics,
+        "statistics": statistics,  # ← evaluation_v14.py uses this to build MonteCarloResult
         "iterations": [],  # Empty for fake
-        "success": True,  # ← CRITICAL: Must be present for evaluation_v14.py validation
+        "success": True,  # ← CRITICAL: must be present for evaluation_v14.py validation
     }
