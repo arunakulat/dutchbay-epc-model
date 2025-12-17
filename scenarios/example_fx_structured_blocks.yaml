@@ -1,0 +1,185 @@
+# Example Scenario: FX Structured Blocks (v14R6 Compliant)
+# ============================================================
+#
+# This scenario demonstrates the v14 FX structured block format.
+# All scenarios MUST use structured FX blocks (not scalar values).
+#
+# Refs:
+#   - v14R6: FX mapping requirement
+#   - analytics/fx/README_STRUCTURED_BLOCKS.md
+#
+# Last Updated: Sprint 9 Day 5, December 2025
+
+# Project Configuration
+project:
+  name: "DutchBay 150MW Wind - FX Structured Example"
+  capacity_mw: 150
+  capacity_factor: 0.40
+  life_years: 20
+  corporate_tax_rate: 0.30
+  construction_years: 2
+  cod_year: 2026
+
+# FX Structured Block (v14R6 Compliant)
+# ======================================
+fx:
+  # Required Fields
+  # ---------------
+  start_lkr_per_usd: 375.0
+    # Initial exchange rate at COD (Year 0)
+    # Units: LKR per USD
+    # Source: Central Bank spot rate as of COD
+
+  annual_depr: 0.03
+    # Annual depreciation rate (compound)
+    # Units: Decimal (0.03 = 3% per year)
+    # Negative values represent appreciation
+    # Example: Year 1 rate = 375.0 * (1 + 0.03) = 386.25
+
+  # Optional Fields (with v14 defaults shown)
+  # ------------------------------------------
+  base_currency: "USD"
+    # Base currency for project revenues/costs
+    # Default: "USD"
+
+  target_currency: "LKR"
+    # Target currency for conversion
+    # Default: "LKR"
+
+  regime: "recent"
+    # FX regime classification
+    # Valid options: "historical" | "recent" | "stressed"
+    # Default: "recent"
+
+  volatility: 0.10
+    # Annual volatility (standard deviation of log returns)
+    # Units: Decimal (0.10 = 10% annual vol)
+    # Used for Monte Carlo and confidence intervals
+    # Default: 0.10
+
+  correlation_with_revenue: 0.0
+    # Correlation between FX rate and project revenue
+    # Range: [-1.0, 1.0]
+    #   -1.0 = Perfect negative correlation
+    #    0.0 = No correlation
+    #   +1.0 = Perfect positive correlation
+    # Default: 0.0
+
+  hedge_ratio: 0.0
+    # Proportion of FX exposure hedged
+    # Range: [0.0, 1.0]
+    #   0.0 = No hedging (full exposure)
+    #   0.5 = 50% hedged
+    #   1.0 = Fully hedged (no exposure)
+    # Default: 0.0
+
+  metadata:
+    source: "Central Bank of Sri Lanka"
+    data_period: "2020-2023"
+    regime_classification: "Recent floating regime"
+    notes: "Post-2020 floating rate regime with moderate volatility"
+    last_updated: "2025-12-17"
+
+# CAPEX Configuration
+capex:
+  usd_total: 300_000_000.0
+    # Total CAPEX in USD
+  year_0_pct: 0.6
+  year_1_pct: 0.4
+
+# OPEX Configuration
+opex:
+  usd_per_year: 5_000_000.0
+    # Annual OPEX in USD
+  escalation_rate: 0.02
+
+# Tariff Configuration
+tariff:
+  lkr_per_kwh: 20.30
+    # Tariff in LKR/kWh (local currency)
+
+# Tax Configuration
+tax:
+  corporate_tax_rate: 0.30
+  depreciation_method: "straight_line"
+  depreciation_years: 10
+
+# Debt Configuration
+debt:
+  loan_amount_usd: 210_000_000.0
+  interest_rate: 0.065
+  tenor_years: 15
+  grace_period_years: 2
+
+---
+# Example: Multi-Regime Scenario (Optional)
+# ==========================================
+# Uncomment to enable multi-regime analysis
+
+# fx_scenarios:
+#   - scenario_name: "Base Case"
+#     probability: 0.6
+#     years: 20
+#     apply_shock: false
+#     fx:
+#       start_lkr_per_usd: 375.0
+#       annual_depr: 0.03
+#       volatility: 0.10
+#
+#   - scenario_name: "Optimistic"
+#     probability: 0.3
+#     years: 20
+#     apply_shock: false
+#     fx:
+#       start_lkr_per_usd: 375.0
+#       annual_depr: 0.01  # Slower depreciation
+#       volatility: 0.08   # Lower volatility
+#       regime: "historical"
+#
+#   - scenario_name: "Stressed"
+#     probability: 0.1
+#     years: 20
+#     apply_shock: true
+#     shock_magnitude: 0.15  # 15% shock in Year 1
+#     fx:
+#       start_lkr_per_usd: 375.0
+#       annual_depr: 0.06  # Faster depreciation
+#       volatility: 0.20   # Higher volatility
+#       regime: "stressed"
+
+---
+# Example: Sensitivity Analysis (Optional)
+# =========================================
+# Uncomment to enable FX sensitivity/tornado analysis
+
+# fx_sensitivity:
+#   parameter_name: "annual_depr"
+#   low_value: 0.01   # 1% annual depreciation
+#   high_value: 0.05  # 5% annual depreciation
+#   num_steps: 5
+#   base_fx:
+#     start_lkr_per_usd: 375.0
+#     annual_depr: 0.03
+#     volatility: 0.10
+
+---
+# Example: Monte Carlo Configuration (Optional)
+# ==============================================
+# Uncomment to enable 100k Monte Carlo simulations
+
+# fx_monte_carlo:
+#   num_simulations: 100_000
+#   time_horizon_years: 20
+#   volatility_method: "historical_std"  # Options: historical_std | garch | implied | monte_carlo
+#   seed: 42  # For reproducibility
+#   base_fx:
+#     start_lkr_per_usd: 375.0
+#     annual_depr: 0.03
+#     volatility: 0.10
+#   # Optional: Multi-currency correlation matrix
+#   # correlation_matrix:
+#   #   - [1.00, 0.75, 0.60]  # USD/LKR, USD/INR, USD/BDT
+#   #   - [0.75, 1.00, 0.80]
+#   #   - [0.60, 0.80, 1.00]
+
+# EOF
