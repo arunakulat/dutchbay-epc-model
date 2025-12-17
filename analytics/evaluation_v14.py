@@ -207,8 +207,23 @@ def evaluate_with_casper_tail_risk(
         mc_config = OmegaConf.load(monte_carlo_config_path)
         scenario_name_for_mc = base_config.get("project", {}).get("name", cfg_path.stem)
 
+        # Extract n_iterations safely from config (could be 'iterations' or 'n_iterations')
+        mc_iterations = 1000  # default
+        try:
+            # Try monte_carlo.iterations first (common pattern)
+            if hasattr(mc_config, "monte_carlo"):
+                if hasattr(mc_config.monte_carlo, "iterations"):
+                    mc_iterations = int(mc_config.monte_carlo.iterations)
+                elif hasattr(mc_config.monte_carlo, "n_iterations"):
+                    mc_iterations = int(mc_config.monte_carlo.n_iterations)
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "Could not extract iterations from MC config; using default %d",
+                mc_iterations,
+            )
+
         mc_result = run_monte_carlo_analysis(
-            config=mc_config, n_iterations=mc_config.monte_carlo.n_iterations
+            config=mc_config, n_iterations=mc_iterations
         )
 
         if not mc_result or not mc_result.get("success"):
@@ -218,17 +233,12 @@ def evaluate_with_casper_tail_risk(
             )
 
         stats = mc_result.get("statistics", {})
-        # Extract raw_results from MC output; this should be a list of dicts
-        # with metric keys like {'project_irr': 0.12, 'project_npv': 1000000, 'dscr_min': 1.3}
-        raw_results_from_mc = mc_result.get("raw_results") or mc_result.get("iterations", [])
-        
-        # Ensure raw_results is a list of dicts (not raw values)
-        if raw_results_from_mc and isinstance(raw_results_from_mc, list):
-            if raw_results_from_mc and isinstance(raw_results_from_mc[0], dict):
-                raw_results = raw_results_from_mc
-            else:
-                # Fallback: if raw_results has scalar values, skip it
-                raw_results = None
+        # Extract raw_results; this should be list of dicts with metric keys
+        raw_results = mc_result.get("raw_results") or mc_result.get("iterations", [])
+
+        # Ensure raw_results is populated and well-formed
+        if raw_results and isinstance(raw_results, list) and isinstance(raw_results[0], dict):
+            pass  # raw_results is valid
         else:
             raw_results = None
 
@@ -236,7 +246,7 @@ def evaluate_with_casper_tail_risk(
             scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
             iterations=mc_result.get("n_iterations", 0),
             failed_iterations=mc_result.get("failed_iterations", 0),
-            raw_results=raw_results,  # Structured list of dicts with metrics
+            raw_results=raw_results,  # List of dicts with metrics
             project_irr_mean=stats.get("irr_mean_pct", 0.0) / 100.0,
             project_irr_std=stats.get("irr_std_pct", 0.0) / 100.0,
             project_irr_p10=stats.get("irr_p10_pct", 0.0) / 100.0,
