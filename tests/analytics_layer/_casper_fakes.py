@@ -48,21 +48,24 @@ def fake_run_monte_carlo_analysis(
     config: DictConfig | Mapping[str, Any],
     n_iterations: int = 1000,
     **kwargs: Any,
-) -> Dict[str, MonteCarloResult]:
+) -> Dict[str, Any]:
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    FIXED v2: Now correctly extracts scenario name from test configs.
-    The test config stores scenario name in config["project"]["name"].
+    CRITICAL FIX v3: Returns same structure as real monte_carlo_v14.MonteCarloEngine.run()
+    which includes 'success' key at TOP LEVEL.
 
-    This matches the real function signature in evaluation_v14.py line 485:
-        mc_kwargs: Dict[str, Any] = {
-            "config": mc_config,
-            "n_iterations": mc_config.monte_carlo.get("n_iterations", 1000),
+    Real function returns:
+        {
+            'scenario_name': str,
+            'n_iterations': int,
+            'statistics': {...},
+            'success': True,  # ← REQUIRED by evaluation_v14.py:492
+            ...
         }
-        mc_result = run_monte_carlo_analysis(**mc_kwargs)
 
-    Includes raw_results for tail-risk analysis compatibility.
+    Test config stores scenario name in config["project"]["name"].
+    This matches the real function signature in evaluation_v14.py line 485.
     """
     # Extract scenario name from config - check multiple locations
     scenario_name = "default_scenario"
@@ -97,45 +100,29 @@ def fake_run_monte_carlo_analysis(
                 if isinstance(project_cfg, dict) and "name" in project_cfg:
                     scenario_name = str(project_cfg["name"])
 
-    # Generate fake Monte Carlo samples for tail-risk analysis
-    # These must match the summary statistics (p10, p50, p90, mean, etc.)
-    raw_results = [
-        {"project_irr": 0.11, "project_npv": 900000.0, "dscr_min": 1.25},
-        {"project_irr": 0.115, "project_npv": 950000.0, "dscr_min": 1.27},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.12, "project_npv": 1000000.0, "dscr_min": 1.30},
-        {"project_irr": 0.125, "project_npv": 1050000.0, "dscr_min": 1.32},
-        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
-        {"project_irr": 0.13, "project_npv": 1100000.0, "dscr_min": 1.35},
-    ]
+    # Generate fake Monte Carlo statistics matching real engine output
+    statistics = {
+        "npv_mean_usd": 1_000_000.0,
+        "npv_std_usd": 100_000.0,
+        "npv_median_usd": 1_000_000.0,
+        "npv_p10_usd": 900_000.0,
+        "npv_p90_usd": 1_100_000.0,
+        "irr_mean_pct": 12.0,
+        "irr_std_pct": 1.0,
+        "irr_median_pct": 12.0,
+        "irr_p10_pct": 11.0,
+        "irr_p90_pct": 13.0,
+    }
 
-    mc = MonteCarloResult(
-        scenario_name=scenario_name,
-        iterations=n_iterations,
-        failed_iterations=0,
-        # IRR stats
-        project_irr_mean=0.12,
-        project_irr_std=0.01,
-        project_irr_p10=0.11,
-        project_irr_p50=0.12,
-        project_irr_p90=0.13,
-        project_irr_se=0.001,
-        # NPV stats
-        project_npv_mean=1000000.0,
-        project_npv_p10=900000.0,
-        project_npv_p50=1000000.0,
-        project_npv_p90=1100000.0,
-        project_npv_se=10000.0,
-        # DSCR stats
-        dscr_min_p10=1.25,
-        dscr_min_p50=1.30,
-        dscr_min_se=0.01,
-        # Raw results for tail-risk analysis
-        raw_results=raw_results,
-    )
-
-    # Return dict keyed by scenario name (matching real function behavior)
-    return {scenario_name: mc}
+    # Return structure matching real MonteCarloEngine.run() output
+    # CRITICAL: evaluation_v14.py:492 checks mc_result.get("success", False)
+    return {
+        "scenario_name": scenario_name,
+        "n_iterations": n_iterations,
+        "project_life_years": 25,
+        "discount_rate_pct": 8.0,
+        "capex_total_usd": 50_000_000.0,
+        "statistics": statistics,
+        "iterations": [],  # Empty for fake
+        "success": True,  # ← CRITICAL: Must be present for evaluation_v14.py validation
+    }
