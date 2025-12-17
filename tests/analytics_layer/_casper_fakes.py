@@ -52,8 +52,8 @@ def fake_run_monte_carlo_analysis(
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    FIXED: Now accepts config (DictConfig or dict) and n_iterations parameters
-    instead of base_config_path, scenario_name, and scenario_config_path.
+    FIXED v2: Now correctly extracts scenario name from test configs.
+    The test config stores scenario name in config["project"]["name"].
 
     This matches the real function signature in evaluation_v14.py line 485:
         mc_kwargs: Dict[str, Any] = {
@@ -64,23 +64,38 @@ def fake_run_monte_carlo_analysis(
 
     Includes raw_results for tail-risk analysis compatibility.
     """
-    # Extract scenario name from config if available
+    # Extract scenario name from config - check multiple locations
     scenario_name = "default_scenario"
+
     if isinstance(config, DictConfig):
+        # Try monte_carlo.scenario_name first
         if (
             hasattr(config, "monte_carlo")
             and hasattr(config.monte_carlo, "scenario_name")
         ):
             scenario_name = config.monte_carlo.scenario_name
+        # Try scenario.scenario_name
         elif hasattr(config, "scenario") and hasattr(config.scenario, "scenario_name"):
             scenario_name = config.scenario.scenario_name
+        # Try project.name (test configs use this)
+        elif hasattr(config, "project") and hasattr(config.project, "name"):
+            scenario_name = str(config.project.name)
+
     elif isinstance(config, dict):
+        # Try monte_carlo.scenario_name first
         mc_cfg = config.get("monte_carlo", {})
-        if isinstance(mc_cfg, dict):
-            scenario_name = mc_cfg.get("scenario_name", "default_scenario")
-        scenario_cfg = config.get("scenario", {})
-        if isinstance(scenario_cfg, dict):
-            scenario_name = scenario_cfg.get("scenario_name", scenario_name)
+        if isinstance(mc_cfg, dict) and "scenario_name" in mc_cfg:
+            scenario_name = mc_cfg["scenario_name"]
+        # Try scenario.scenario_name
+        else:
+            scenario_cfg = config.get("scenario", {})
+            if isinstance(scenario_cfg, dict) and "scenario_name" in scenario_cfg:
+                scenario_name = scenario_cfg["scenario_name"]
+            # Fallback to project.name (test configs store scenario name here)
+            else:
+                project_cfg = config.get("project", {})
+                if isinstance(project_cfg, dict) and "name" in project_cfg:
+                    scenario_name = str(project_cfg["name"])
 
     # Generate fake Monte Carlo samples for tail-risk analysis
     # These must match the summary statistics (p10, p50, p90, mean, etc.)
