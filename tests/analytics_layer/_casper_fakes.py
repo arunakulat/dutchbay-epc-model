@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping, Sequence
 
 from analytics.contracts_v14 import MonteCarloResult
+from omegaconf import DictConfig
 
 
 def fake_run_v14_pipeline(
@@ -44,19 +45,42 @@ def fake_run_v14_pipeline(
 
 def fake_run_monte_carlo_analysis(
     *,
-    base_config_path: str,
-    scenario_name: str,
-    scenario_config_path: str | None = None,
+    config: DictConfig | Mapping[str, Any],
+    n_iterations: int = 1000,
+    **kwargs: Any,
 ) -> Dict[str, MonteCarloResult]:
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    Now accepts scenario_config_path to match the real function signature.
+    FIXED: Now accepts config (DictConfig or dict) and n_iterations parameters
+    instead of base_config_path, scenario_name, and scenario_config_path.
+
+    This matches the real function signature in evaluation_v14.py line 485:
+        mc_kwargs: Dict[str, Any] = {
+            "config": mc_config,
+            "n_iterations": mc_config.monte_carlo.get("n_iterations", 1000),
+        }
+        mc_result = run_monte_carlo_analysis(**mc_kwargs)
+
     Includes raw_results for tail-risk analysis compatibility.
     """
-    # Ignore the paths - this is a fake
-    _ = base_config_path
-    _ = scenario_config_path
+    # Extract scenario name from config if available
+    scenario_name = "default_scenario"
+    if isinstance(config, DictConfig):
+        if (
+            hasattr(config, "monte_carlo")
+            and hasattr(config.monte_carlo, "scenario_name")
+        ):
+            scenario_name = config.monte_carlo.scenario_name
+        elif hasattr(config, "scenario") and hasattr(config.scenario, "scenario_name"):
+            scenario_name = config.scenario.scenario_name
+    elif isinstance(config, dict):
+        mc_cfg = config.get("monte_carlo", {})
+        if isinstance(mc_cfg, dict):
+            scenario_name = mc_cfg.get("scenario_name", "default_scenario")
+        scenario_cfg = config.get("scenario", {})
+        if isinstance(scenario_cfg, dict):
+            scenario_name = scenario_cfg.get("scenario_name", scenario_name)
 
     # Generate fake Monte Carlo samples for tail-risk analysis
     # These must match the summary statistics (p10, p50, p90, mean, etc.)
@@ -75,7 +99,7 @@ def fake_run_monte_carlo_analysis(
 
     mc = MonteCarloResult(
         scenario_name=scenario_name,
-        iterations=10,
+        iterations=n_iterations,
         failed_iterations=0,
         # IRR stats
         project_irr_mean=0.12,
@@ -98,5 +122,5 @@ def fake_run_monte_carlo_analysis(
         raw_results=raw_results,
     )
 
-    # Return dict keyed by scenario name
+    # Return dict keyed by scenario name (matching real function behavior)
     return {scenario_name: mc}
