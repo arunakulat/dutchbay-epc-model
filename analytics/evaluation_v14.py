@@ -213,17 +213,30 @@ def evaluate_with_casper_tail_risk(
 
         if not mc_result or not mc_result.get("success"):
             raise ValueError(
-                f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'"
+                f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'. "
+                f"Result: {mc_result}"
             )
 
         stats = mc_result.get("statistics", {})
-        raw_iterations = mc_result.get("iterations", [])
+        # Extract raw_results from MC output; this should be a list of dicts
+        # with metric keys like {'project_irr': 0.12, 'project_npv': 1000000, 'dscr_min': 1.3}
+        raw_results_from_mc = mc_result.get("raw_results") or mc_result.get("iterations", [])
+        
+        # Ensure raw_results is a list of dicts (not raw values)
+        if raw_results_from_mc and isinstance(raw_results_from_mc, list):
+            if raw_results_from_mc and isinstance(raw_results_from_mc[0], dict):
+                raw_results = raw_results_from_mc
+            else:
+                # Fallback: if raw_results has scalar values, skip it
+                raw_results = None
+        else:
+            raw_results = None
 
         monte_carlo = MonteCarloResult(
             scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
             iterations=mc_result.get("n_iterations", 0),
             failed_iterations=mc_result.get("failed_iterations", 0),
-            raw_results=raw_iterations,  # Pass the raw samples
+            raw_results=raw_results,  # Structured list of dicts with metrics
             project_irr_mean=stats.get("irr_mean_pct", 0.0) / 100.0,
             project_irr_std=stats.get("irr_std_pct", 0.0) / 100.0,
             project_irr_p10=stats.get("irr_p10_pct", 0.0) / 100.0,
