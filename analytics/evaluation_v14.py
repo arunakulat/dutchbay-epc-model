@@ -299,7 +299,7 @@ def evaluate_with_overrides(
 def evaluate_with_casper_tail_risk(
     *,
     config_path: str,
-    monte_carlo_config_path: str,
+    monte_carlo_config_path: str | None = None,
     sensitivity_suite: SensitivitySuite | None = None,
     metric: str = "project_irr",
     confidence: float = 0.9,
@@ -316,19 +316,6 @@ def evaluate_with_casper_tail_risk(
     cfg_path = Path(config_path)
     if not cfg_path.is_file():
         raise FileNotFoundError(f"Scenario config not found: {cfg_path}")
-
-    if monte_carlo_config_path is None:
-        mc_cfg_path = Path("config/monte_carlo_defaults.yaml")
-    else:
-        mc_cfg_path = Path(monte_carlo_config_path)
-
-    if not mc_cfg_path.is_file():
-        raise FileNotFoundError(
-            f"Monte Carlo config not found: {mc_cfg_path}\n"
-            f"Resolved path: {mc_cfg_path.resolve()}\n"
-            "Hint: Ensure the monte_carlo/ directory contains YAML files "
-            "matching your scenario naming convention."
-        )
 
     logger.info(
         "CASPER evaluation: config_path=%s, mc_config=%s",
@@ -440,90 +427,108 @@ def evaluate_with_casper_tail_risk(
     )
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Step 2: Run Monte Carlo for the same config/scenario
+    # Step 2: Run Monte Carlo for the same config/scenario (if config provided)
     # ──────────────────────────────────────────────────────────────────────────
 
     logger.info("Step 2/4: Running Monte Carlo analysis...")
 
-    scenario_name_for_mc: str | None = None
+    monte_carlo = None
 
-    scenario_result_block = base_config.get("scenario_result")
-    if isinstance(scenario_result_block, Mapping):
-        name = scenario_result_block.get("scenario_name")
-        if isinstance(name, str):
-            scenario_name_for_mc = name
+    if monte_carlo_config_path is not None:
+        mc_cfg_path = Path(monte_carlo_config_path)
+        if not mc_cfg_path.is_file():
+            raise FileNotFoundError(
+                f"Monte Carlo config not found: {mc_cfg_path}\n"
+                f"Resolved path: {mc_cfg_path.resolve()}\n"
+                "Hint: Ensure the monte_carlo/ directory contains YAML files "
+                "matching your scenario naming convention."
+            )
 
-    if not scenario_name_for_mc:
-        scenario_block = base_config.get("scenario")
-        if isinstance(scenario_block, Mapping):
-            name = scenario_block.get("scenario_name")
+        scenario_name_for_mc: str | None = None
+
+        scenario_result_block = base_config.get("scenario_result")
+        if isinstance(scenario_result_block, Mapping):
+            name = scenario_result_block.get("scenario_name")
             if isinstance(name, str):
                 scenario_name_for_mc = name
 
-    if not scenario_name_for_mc or scenario_name_for_mc == "<inline_config>":
-        scenario_name_for_mc = cfg_path.stem
-        logger.debug(
-            "CASPER: falling back to filename stem for scenario_name_for_mc=%s",
+        if not scenario_name_for_mc:
+            scenario_block = base_config.get("scenario")
+            if isinstance(scenario_block, Mapping):
+                name = scenario_block.get("scenario_name")
+                if isinstance(name, str):
+                    scenario_name_for_mc = name
+
+        if not scenario_name_for_mc or scenario_name_for_mc == "<inline_config>":
+            scenario_name_for_mc = cfg_path.stem
+            logger.debug(
+                "CASPER: falling back to filename stem for scenario_name_for_mc=%s",
+                scenario_name_for_mc,
+            )
+
+        logger.info(
+            "  Resolved scenario name for MC: '%s' (will use for result lookup)",
             scenario_name_for_mc,
         )
 
-    logger.info(
-        "  Resolved scenario name for MC: '%s' (will use for result lookup)",
-        scenario_name_for_mc,
-    )
+        # Load Monte Carlo config and run engine
+        from omegaconf import OmegaConf
 
-    # Load Monte Carlo config and run engine
-    from omegaconf import OmegaConf
-    mc_config = OmegaConf.load(monte_carlo_config_path)
-    
-    mc_kwargs: Dict[str, Any] = {
-        "config": mc_config,
-        "n_iterations": mc_config.monte_carlo.get("n_iterations", 1000),
-    }
+        mc_config = OmegaConf.load(monte_carlo_config_path)
 
-    # Call via the local proxy so tests can monkeypatch
-    mc_result = run_monte_carlo_analysis(**mc_kwargs)
+        mc_kwargs: Dict[str, Any] = {
+            "config": mc_config,
+            "n_iterations": mc_config.monte_carlo.get("n_iterations", 1000),
+        }
 
-    if mc_result is None or not mc_result.get("success", False):
-        msg = (
-            f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'. "
-            f"Result: {mc_result}"
-        )
-        raise ValueError(msg)
+        # Call via the local proxy so tests can monkeypatch
+        mc_result = run_monte_carlo_analysis(**mc_kwargs)
 
-    # Extract Monte Carlo result - handle both direct result and dict-by-scenario format
-    monte_carlo = None
-    if isinstance(mc_result, dict):
-        # Check if it's a dict of scenarios or a single result
-        if "statistics" in mc_result:
-            # Direct result format
-            from analytics.contracts_v14 import MonteCarloResult
-            monte_carlo = MonteCarloResult(
-                scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
-                n_iterations=mc_result.get("n_iterations", 1000),
-                project_irr_p10=mc_result["statistics"].get("irr_p10_pct", 0.0) / 100.0,
-                project_irr_p50=mc_result["statistics"].get("irr_median_pct", 0.0) / 100.0,
-                project_irr_p90=mc_result["statistics"].get("irr_p90_pct", 0.0) / 100.0,
-                npv_p10=mc_result["statistics"].get("npv_p10_usd", 0.0),
-                npv_p50=mc_result["statistics"].get("npv_median_usd", 0.0),
-                npv_p90=mc_result["statistics"].get("npv_p90_usd", 0.0),
+        if mc_result is None or not mc_result.get("success", False):
+            msg = (
+                f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'. "
+                f"Result: {mc_result}"
             )
-        elif scenario_name_for_mc in mc_result:
-            monte_carlo = mc_result[scenario_name_for_mc]
+            raise ValueError(msg)
 
-    if monte_carlo is None:
-        msg = (
-            "run_monte_carlo_analysis did not produce a usable result for "
-            f"scenario '{scenario_name_for_mc}'. Got: {mc_result!r}"
+        # Extract Monte Carlo result - handle both direct result and dict-by-scenario format
+        if isinstance(mc_result, dict):
+            # Check if it's a dict of scenarios or a single result
+            if "statistics" in mc_result:
+                # Direct result format
+                from analytics.contracts_v14 import MonteCarloResult
+
+                monte_carlo = MonteCarloResult(
+                    scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
+                    n_iterations=mc_result.get("n_iterations", 1000),
+                    project_irr_p10=mc_result["statistics"].get("irr_p10_pct", 0.0)
+                    / 100.0,
+                    project_irr_p50=mc_result["statistics"].get("irr_median_pct", 0.0)
+                    / 100.0,
+                    project_irr_p90=mc_result["statistics"].get("irr_p90_pct", 0.0)
+                    / 100.0,
+                    npv_p10=mc_result["statistics"].get("npv_p10_usd", 0.0),
+                    npv_p50=mc_result["statistics"].get("npv_median_usd", 0.0),
+                    npv_p90=mc_result["statistics"].get("npv_p90_usd", 0.0),
+                )
+            elif scenario_name_for_mc in mc_result:
+                monte_carlo = mc_result[scenario_name_for_mc]
+
+        if monte_carlo is None:
+            msg = (
+                "run_monte_carlo_analysis did not produce a usable result for "
+                f"scenario '{scenario_name_for_mc}'. Got: {mc_result!r}"
+            )
+            raise ValueError(msg)
+
+        logger.info(
+            "  ✓ Monte Carlo complete: P50_IRR=%.2f%%, P10=%.2f%%, P90=%.2f%%",
+            monte_carlo.project_irr_p50 * 100.0,
+            monte_carlo.project_irr_p10 * 100.0,
+            monte_carlo.project_irr_p90 * 100.0,
         )
-        raise ValueError(msg)
-
-    logger.info(
-        "  ✓ Monte Carlo complete: P50_IRR=%.2f%%, P10=%.2f%%, P90=%.2f%%",
-        monte_carlo.project_irr_p50 * 100.0,
-        monte_carlo.project_irr_p10 * 100.0,
-        monte_carlo.project_irr_p90 * 100.0,
-    )
+    else:
+        logger.info("  ⊘ Monte Carlo config not provided; skipping MC analysis")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Step 3: Optional tail-risk enrichment (SensitivitySuite + MC → full table)
@@ -531,7 +536,7 @@ def evaluate_with_casper_tail_risk(
 
     logger.info("Step 3/4: Building tail-risk enrichments...")
     tail_risk_block: Dict[str, Any] | None = None
-    if sensitivity_suite is not None:
+    if sensitivity_suite is not None and monte_carlo is not None:
         tail_df = enrich_tornado_with_tail_risk(
             tornado_suite=sensitivity_suite,
             mc_result=monte_carlo,
@@ -544,19 +549,29 @@ def evaluate_with_casper_tail_risk(
             "rows": tail_df.to_dict(orient="records"),
         }
         logger.info("  ✓ Tornado enriched with %d tail-risk rows", len(tail_df))
+    elif sensitivity_suite is None:
+        logger.info("  ⊘ No sensitivity suite provided; skipping tail-risk enrichment")
+    elif monte_carlo is None:
+        logger.info(
+            "  ⊘ No Monte Carlo result available; skipping tail-risk enrichment"
+        )
 
     # ──────────────────────────────────────────────────────────────────────────
     # Step 3b: Tail-risk summary snapshots for key metrics (MC → TailRiskSnapshot)
     # ──────────────────────────────────────────────────────────────────────────
 
-    tail_risk_snapshots: Dict[str, Any] = build_tail_risk_snapshots_for_metrics(
-        mc_result=monte_carlo,
-        metrics=("project_irr", "dscr_min"),
-        confidence=confidence,
-    )
-    logger.info(
-        "  ✓ Built tail-risk snapshots for %d metrics", len(tail_risk_snapshots)
-    )
+    tail_risk_snapshots: Dict[str, Any] = {}
+    if monte_carlo is not None:
+        tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
+            mc_result=monte_carlo,
+            metrics=("project_irr", "dscr_min"),
+            confidence=confidence,
+        )
+        logger.info(
+            "  ✓ Built tail-risk snapshots for %d metrics", len(tail_risk_snapshots)
+        )
+    else:
+        logger.info("  ⊘ No Monte Carlo result; skipping tail-risk snapshots")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Step 4: Build CASPER result surface
