@@ -51,28 +51,22 @@ def fake_run_monte_carlo_analysis(
     """
     Lightweight fake for run_monte_carlo_analysis used in CASPER/tail-risk tests.
 
-    CRITICAL FIX v4: Returns SAME structure as real monte_carlo_v14.MonteCarloEngine.run()
-    which includes 'success' key and matches expected field names.
+    CRITICAL FIX v5: Returns populated 'iterations' list.
+    The tail risk analysis (analytics.sensitivity_tail_risk) requires raw samples
+    to compute percentiles and enrich tornado plots.
 
     Real function (analytics.monte_carlo_v14.MonteCarloEngine.run()) returns:
         {
             'scenario_name': str,
-            'n_iterations': int,  ← NOTE: 'n_iterations', NOT 'iterations'
-            'statistics': {
-                'irr_p10_pct': float,
-                'irr_median_pct': float,
-                'irr_p90_pct': float,
-                'npv_p10_usd': float,
-                'npv_median_usd': float,
-                'npv_p90_usd': float,
+            'n_iterations': int,
+            'statistics': {...},
+            'iterations': [
+                {'project_irr': 0.11, 'project_npv': 900000.0, ...},
                 ...
-            },
-            'success': True,  ← CRITICAL: checked by evaluation_v14.py:492
+            ],
+            'success': True,
             ...
         }
-
-    Test config stores scenario name in config["project"]["name"].
-    This matches the real function signature in evaluation_v14.py line 485.
     """
     # Extract scenario name from config - check multiple locations
     scenario_name = "default_scenario"
@@ -108,7 +102,6 @@ def fake_run_monte_carlo_analysis(
                     scenario_name = str(project_cfg["name"])
 
     # Generate fake Monte Carlo statistics matching real engine output
-    # Note: Field names match exactly what real engine returns in 'statistics' dict
     statistics = {
         "npv_mean_usd": 1_000_000.0,
         "npv_std_usd": 100_000.0,
@@ -122,15 +115,27 @@ def fake_run_monte_carlo_analysis(
         "irr_p90_pct": 13.0,
     }
 
+    # Generate fake raw iterations (samples)
+    # 10 samples is enough for the fake to pass validation
+    # Real Monte Carlo would return n_iterations samples
+    iterations = []
+    for i in range(10):
+        # Create a spread of values
+        factor = i / 10.0  # 0.0 to 0.9
+        iterations.append({
+            "project_irr": 0.11 + (0.02 * factor),  # 11% to 12.8%
+            "project_npv": 900_000.0 + (200_000.0 * factor),
+            "dscr_min": 1.25 + (0.10 * factor),
+        })
+
     # Return EXACT structure that real MonteCarloEngine.run() returns
-    # This is what evaluation_v14.py expects when calling run_monte_carlo_analysis()
     return {
         "scenario_name": scenario_name,
-        "n_iterations": n_iterations,  # ← Must be 'n_iterations' (real engine field)
+        "n_iterations": n_iterations,
         "project_life_years": 25,
         "discount_rate_pct": 8.0,
         "capex_total_usd": 50_000_000.0,
-        "statistics": statistics,  # ← evaluation_v14.py uses this to build MonteCarloResult
-        "iterations": [],  # Empty for fake
-        "success": True,  # ← CRITICAL: must be present for evaluation_v14.py validation
+        "statistics": statistics,
+        "iterations": iterations,  # ← Populated list of samples
+        "success": True,
     }
