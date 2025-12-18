@@ -62,8 +62,8 @@ Examples:
 
 import json
 import logging
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Dict, Tuple, Optional
 from datetime import datetime
 
 from omegaconf import DictConfig, OmegaConf
@@ -84,22 +84,51 @@ class RefinancingConfig:
     
     Attributes:
         scenario_name: Name of refinancing scenario
+        enabled: Whether refinancing is enabled
+        trigger_year_min: Minimum year to consider refinancing
         trigger_date: Date to evaluate refinancing (YYYY-MM-DD format)
         trigger_dscr_threshold: DSCR threshold to trigger refinancing
         refi_structure: str, one of 'extend', 'reprice', 'restructure'
         new_spread_bps: New debt spread (basis points)
+        new_rate: New interest rate (percentage)
         new_tenor_years: New debt tenor if extending
+        new_tenor: New tenor in years (alias for new_tenor_years)
         upfront_fee_pct: Upfront fee for refinancing (percentage)
+        dscr_threshold: DSCR threshold (for trigger)
         success: Whether to model refinancing (boolean)
     """
-    scenario_name: str
-    trigger_date: str
-    trigger_dscr_threshold: float
-    refi_structure: str
-    new_spread_bps: float
-    new_tenor_years: int
-    upfront_fee_pct: float
+    scenario_name: str = 'default'
+    enabled: bool = True
+    trigger_year_min: int = 5
+    trigger_date: str = '2028-01-01'
+    trigger_dscr_threshold: float = 1.25
+    refi_structure: str = 'extend'
+    new_spread_bps: float = 250.0
+    new_rate: float = 8.5  # New interest rate (%)
+    new_tenor_years: int = 10
+    new_tenor: Optional[int] = None  # Alias
+    upfront_fee_pct: float = 1.5
+    dscr_threshold: float = 1.25
+    refinancing_amount_usd: float = 100e6  # Default refinancing amount
     success: bool = True
+    
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        # Validate new_rate
+        if self.new_rate < 0 or self.new_rate > 50:
+            raise ValueError(f"new_rate must be between 0 and 50, got {self.new_rate}")
+        
+        # Validate dscr_threshold
+        if self.dscr_threshold < 1.0:
+            raise ValueError(f"dscr_threshold must be >= 1.0, got {self.dscr_threshold}")
+        
+        # Validate new_tenor
+        if self.new_tenor_years < 1 or self.new_tenor_years > 50:
+            raise ValueError(f"new_tenor_years must be between 1 and 50, got {self.new_tenor_years}")
+        
+        # Set new_tenor alias
+        if self.new_tenor is not None:
+            self.new_tenor_years = self.new_tenor
 
 
 def load_config(config_path: str) -> DictConfig:
@@ -141,6 +170,144 @@ def load_config(config_path: str) -> DictConfig:
 
 
 # ============================================================================
+# REFINANCING TRIGGER (E: EXECUTE)
+# ============================================================================
+
+class RefinancingTrigger:
+    """Evaluates conditions for refinancing trigger.
+    
+    Models trigger logic based on year, rate, DSCR, and debt balance.
+    """
+    
+    def __init__(self, config: RefinancingConfig) -> None:
+        """Initialize refinancing trigger.
+        
+        Args:
+            config: RefinancingConfig instance
+        """
+        self.config = config
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def should_refinance(
+        self,
+        year: int,
+        current_rate: float,
+        dscr: float,
+        debt_balance: float,
+    ) -> Tuple[bool, Dict[str, bool]]:
+        """Determine if refinancing should occur.
+        
+        Args:
+            year: Current year
+            current_rate: Current interest rate (%)
+            dscr: Debt Service Coverage Ratio
+            debt_balance: Outstanding debt balance (USD)
+            
+        Returns:
+            Tuple of (should_refinance: bool, conditions: Dict[str, bool])
+        """
+        # E: EXECUTE - Evaluate trigger conditions
+        conditions: Dict[str, bool] = {}
+        
+        # Year threshold
+        conditions['year_threshold'] = year >= self.config.trigger_year_min
+        
+        # DSCR threshold
+        conditions['dscr_threshold'] = dscr >= self.config.dscr_threshold
+        
+        # Rate savings (new rate < current rate)
+        conditions['rate_savings'] = self.config.new_rate < current_rate
+        
+        # Debt balance check (must have debt to refinance)
+        conditions['debt_available'] = debt_balance > 1e6  # Min 1M to refinance
+        
+        # All conditions must be met
+        should_refi = all(conditions.values())
+        
+        return should_refi, conditions
+
+
+# ============================================================================
+# REFINANCING CALCULATOR (E: EXECUTE)
+# ============================================================================
+
+class RefinancingV14:
+    """Calculator for refinancing economics (v14).
+    
+    Computes refinancing impact on project returns and debt metrics.
+    """
+    
+    def __init__(self, config: RefinancingConfig) -> None:
+        """Initialize refinancing calculator.
+        
+        Args:
+            config: RefinancingConfig instance
+        """
+        self.config = config
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def calculate(
+        self,
+        current_debt_outstanding_usd: float = 100e6,
+        current_wacc_pct: float = 9.5,
+        remaining_tenor_years: int = 5,
+    ) -> Dict[str, Any]:
+        """Calculate refinancing impact on debt economics.
+        
+        Args:
+            current_debt_outstanding_usd: Current debt balance (USD)
+            current_wacc_pct: Current WACC (percentage)
+            remaining_tenor_years: Years remaining on current debt
+            
+        Returns:
+            Dictionary with refinancing metrics:
+            - 'refi_cost_usd': Upfront cost of refinancing
+            - 'spread_delta_bps': Change in spread (basis points)
+            - 'tenor_delta_years': Change in tenor
+            - 'irr_delta_bps': Impact on project IRR (basis points)
+            - 'success': Whether refinancing occurred
+            
+        Example:
+            >>> calc = RefinancingV14(config)
+            >>> result = calc.calculate(100e6, 9.5, 5)
+            >>> result['refi_cost_usd']
+            1500000.0
+        """
+        # E: EXECUTE - Calculate refinancing metrics
+        
+        # Upfront cost (FIN-02: explicit units)
+        refi_cost_usd = current_debt_outstanding_usd * (self.config.upfront_fee_pct / 100.0)
+        
+        # Spread delta (basis points, FIN-02 unit suffix)
+        current_spread_bps = current_wacc_pct * 100  # Assume current = WACC
+        spread_delta_bps = self.config.new_spread_bps - current_spread_bps
+        
+        # Tenor delta (years)
+        tenor_delta_years = self.config.new_tenor_years - remaining_tenor_years
+        
+        # IRR impact (simplified: spread delta reduces NPV of debt service)
+        annual_debt_service = (current_debt_outstanding_usd / remaining_tenor_years) \
+                            * (1.0 + (current_wacc_pct / 100.0))
+        annual_savings_bps = spread_delta_bps / 10000.0 * annual_debt_service
+        irr_delta_bps = annual_savings_bps * remaining_tenor_years * 100 / current_debt_outstanding_usd
+        
+        result = {
+            'refi_cost_usd': refi_cost_usd,  # FIN-02: unit suffix
+            'spread_delta_bps': spread_delta_bps,  # FIN-02: unit suffix
+            'tenor_delta_years': tenor_delta_years,  # FIN-02: unit suffix
+            'irr_delta_bps': irr_delta_bps,  # FIN-02: unit suffix
+            'success': self.config.success,
+        }
+        
+        # S: STATUS - Log results
+        self.logger.info(f"Refinancing impact: cost={refi_cost_usd/1e6:.2f}M, "
+                        f"spread_delta={spread_delta_bps:.0f}bps, "
+                        f"irr_impact={irr_delta_bps:.0f}bps")
+        
+        return result
+
+
+# ============================================================================
 # REFINANCING ENGINE (E: EXECUTE, P: PROCESS)
 # ============================================================================
 
@@ -174,10 +341,13 @@ class RefinancingEngine:
         
         self.refi_config = RefinancingConfig(
             scenario_name=config.refinancing.get('scenario_name', 'default'),
+            enabled=config.refinancing.get('enabled', True),
+            trigger_year_min=config.refinancing.get('trigger_year_min', 5),
             trigger_date=config.refinancing.get('trigger_date', '2028-01-01'),
             trigger_dscr_threshold=config.refinancing.get('trigger_dscr_threshold', 1.25),
             refi_structure=config.refinancing.get('refi_structure', 'extend'),
             new_spread_bps=config.refinancing.get('new_spread_bps', 250.0),
+            new_rate=config.refinancing.get('new_rate', 8.5),
             new_tenor_years=config.refinancing.get('new_tenor_years', 10),
             upfront_fee_pct=config.refinancing.get('upfront_fee_pct', 1.5),
         )
@@ -199,66 +369,7 @@ class RefinancingEngine:
             self.logger.error(f"Invalid trigger_date format: {self.refi_config.trigger_date}")
             raise
     
-    def calculate_refinancing_impact(
-        self,
-        current_debt_outstanding_usd: float,
-        current_wacc_pct: float,
-        remaining_tenor_years: int,
-    ) -> dict[str, Any]:
-        """Calculate refinancing impact on debt economics.
-        
-        Args:
-            current_debt_outstanding_usd: Current debt balance (USD)
-            current_wacc_pct: Current WACC (percentage)
-            remaining_tenor_years: Years remaining on current debt
-            
-        Returns:
-            Dictionary with refinancing metrics:
-            - 'refi_cost_usd': Upfront cost of refinancing
-            - 'spread_delta_bps': Change in spread (basis points)
-            - 'tenor_delta_years': Change in tenor
-            - 'irr_delta_bps': Impact on project IRR (basis points)
-            - 'success': Whether refinancing occurred
-            
-        Example:
-            >>> impact = engine.calculate_refinancing_impact(100e6, 9.5, 5)
-            >>> impact['refi_cost_usd']
-            1500000.0
-        """
-        # E: EXECUTE - Calculate refinancing metrics
-        
-        # Upfront cost (FIN-02: explicit units)
-        refi_cost_usd = current_debt_outstanding_usd * (self.refi_config.upfront_fee_pct / 100.0)
-        
-        # Spread delta (basis points, FIN-02 unit suffix)
-        current_spread_bps = current_wacc_pct * 100  # Assume current = WACC
-        spread_delta_bps = self.refi_config.new_spread_bps - current_spread_bps
-        
-        # Tenor delta (years)
-        tenor_delta_years = self.refi_config.new_tenor_years - remaining_tenor_years
-        
-        # IRR impact (simplified: spread delta reduces NPV of debt service)
-        annual_debt_service = (current_debt_outstanding_usd / remaining_tenor_years) \
-                            * (1.0 + (current_wacc_pct / 100.0))
-        annual_savings_bps = spread_delta_bps / 10000.0 * annual_debt_service
-        irr_delta_bps = annual_savings_bps * remaining_tenor_years * 100 / current_debt_outstanding_usd
-        
-        result = {
-            'refi_cost_usd': refi_cost_usd,  # FIN-02: unit suffix
-            'spread_delta_bps': spread_delta_bps,  # FIN-02: unit suffix
-            'tenor_delta_years': tenor_delta_years,  # FIN-02: unit suffix
-            'irr_delta_bps': irr_delta_bps,  # FIN-02: unit suffix
-            'success': self.refi_config.success,
-        }
-        
-        # S: STATUS - Log results
-        self.logger.info(f"Refinancing impact: cost={refi_cost_usd/1e6:.2f}M, "
-                        f"spread_delta={spread_delta_bps:.0f}bps, "
-                        f"irr_impact={irr_delta_bps:.0f}bps")
-        
-        return result
-    
-    def run(self) -> dict[str, Any]:
+    def run(self) -> Dict[str, Any]:
         """Execute refinancing scenario (P: PROCESS).
         
         Returns:
@@ -283,16 +394,16 @@ class RefinancingEngine:
             trigger_dt = self._parse_trigger_date()
             self.logger.info(f"Trigger date: {trigger_dt.date()}")
             
-            # E: EXECUTE - Calculate impact for each tranche
-            # Simplified: assume LKR tranche with these parameters
-            lkr_impact = self.calculate_refinancing_impact(
+            # E: EXECUTE - Calculate impact using RefinancingV14
+            calc = RefinancingV14(self.refi_config)
+            lkr_impact = calc.calculate(
                 current_debt_outstanding_usd=100e6,  # Example: 100M USD equiv
                 current_wacc_pct=9.5,
                 remaining_tenor_years=5,
             )
             
             # S: SUMMARY - Aggregate results
-            result: dict[str, Any] = {
+            result: Dict[str, Any] = {
                 'scenario_name': self.refi_config.scenario_name,
                 'trigger_date': self.refi_config.trigger_date,
                 'tranches': {
