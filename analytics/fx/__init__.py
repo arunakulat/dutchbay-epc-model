@@ -35,15 +35,18 @@ Part of: Sprint Day 5, Task 2 - FX-Risk Analytics Subpackage
 
 from __future__ import annotations
 
+# Import contracts first (no dependencies)
 from .fx_contracts import FXCorrelationMatrix, FXCurveOutput, FXRegimeConfig
+
+# Import loaders second (depends on contracts)
 from .fx_loader import build_fx_curve, discover_fx_files, load_fx_regime
 
 __all__ = [
-    # Contracts
+    # Contracts - Type-safe dataclasses
     "FXRegimeConfig",
     "FXCurveOutput",
     "FXCorrelationMatrix",
-    # Loaders
+    # Loaders - FX configuration and curve building
     "load_fx_regime",
     "discover_fx_files",
     "build_fx_curve",
