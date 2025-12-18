@@ -17,8 +17,13 @@ from .cashflow_v14_production import (
     _calculate_statutory_deductions,
 )
 from .cashflow_v14_tax import (
-    _compute_depreciation_schedule,
-    calculate_tax_with_interest_shield,
+    TaxConfig,
+    TaxProfile,
+    TaxResult,
+    DepreciationSchedule,
+    build_tax_profile,
+    build_tax_series,
+    calculate_tax,
 )
 from .cashflow_v14_utils import as_float, get_nested
 
@@ -42,6 +47,7 @@ Public surface
 - validate_parameters(config) -> [] or raises ValueError
 - build_annual_cfads(config, ...) -> list[float]
 - build_annual_rows(config, ...) -> list[dict[str, float]]
+- build_annual_rows_efficient(config, ...) -> list[dict[str, float]] (NEW: with loss carry-forward)
 - calculate_single_year_cfads(params, ...) -> dict[str, float]
 
 `build_annual_rows` is the primary feedstock for:
@@ -58,12 +64,30 @@ cfads_final_lkr[t] =
     revenue_lkr
     - statutory_deductions
     - opex_lkr
-    - tax_lkr(pretax_cfads, interest_shield, depreciation)
+    - tax_lkr(pretax_cfads, interest_shield, depreciation, loss_carryforward)
     - risk_haircut
 
 This is the only definition that debt_v14 and the analytics stack are
 allowed to rely on. Any alternative "CFADS" views must be derived from
 the row-wise breakdown returned here.
+
+Tax Engine (v14)
+----------------
+
+The new TaxProfile engine provides:
+
+1. TaxConfig: YAML contract (immutable)
+2. TaxProfile: Execution-ready config (with pre-computed depreciation schedule)
+3. TaxResult: Per-year result (immutable)
+4. build_tax_series: Batch processing with loss carry-forward tracking
+5. calculate_tax: Per-year calculation (for single-year views)
+
+Key improvements over v13:
+- Loss carry-forward correctly accumulated across years
+- Tax holiday years explicit (no ambiguity)
+- Interest deductibility config-driven
+- WHT separated from CIT (correct cash flow modeling)
+- All tax parameters unified in TaxProfile (not scattered across calls)
 """
 
 # =============================================================================
@@ -76,14 +100,26 @@ def _prepare_cashflow_context(
     fx_curve: Optional[List[float]],
     capex_depreciable_lkr: Optional[float],
     interest_expense_series: Optional[List[float]],
-) -> Tuple[Dict[str, Any], List[float], Optional[float], List[float], int, List[float]]:
+) -> Tuple[
+    Dict[str, Any],
+    List[float],
+    Optional[float],
+    List[float],
+    int,
+    TaxProfile,
+    DepreciationSchedule,
+]:
     """
     Shared context builder for build_annual_cfads and build_annual_rows.
 
     Returns
     -------
     (params_dict, fx_curve_resolved, capex_depreciable_resolved,
-    interest_series, years, depreciation_schedule)
+     interest_series, years, tax_profile, depreciation_schedule)
+
+    The TaxProfile and DepreciationSchedule are now built upfront and
+    reused for all years, avoiding repeated computation and ensuring
+    consistent loss carry-forward tracking.
     """
     # Validate parameters before expensive calculations
     validate_parameters(config)
@@ -143,21 +179,39 @@ def _prepare_cashflow_context(
     elif len(interest_series) > years:
         interest_series = interest_series[:years]
 
-    # Pre-compute depreciation schedule once for efficiency (performance optimization)
-    if capex_dep_resolved is not None and params_obj.depreciation_years > 0:
-        base_schedule = _compute_depreciation_schedule(
-            capex_dep_resolved,
-            params_obj.depreciation_years,
-            params_obj.enhanced_capital_allowance_pct,
+    # === NEW: Build TaxConfig and TaxProfile upfront ===
+    # This avoids repeated computation and ensures consistent tax modeling
+    # across all years (especially important for loss carry-forward).
+
+    tax_config = TaxConfig.from_yaml(config)
+
+    # Build depreciation schedule
+    if capex_dep_resolved is not None and tax_config.depreciation_years > 0:
+        # Apply enhancement factor if enabled
+        capex_for_depreciation = capex_dep_resolved * (
+            tax_config.enhanced_capital_allowance_pct
+            if tax_config.enhanced_allowance_applies
+            else 1.0
+        )
+        depreciation_schedule = DepreciationSchedule.build_straight_line(
+            capex_lkr=capex_for_depreciation,
+            useful_life=tax_config.depreciation_years,
+            project_life=years,
         )
     else:
-        base_schedule = []
+        # No depreciation: all-zero schedule
+        depreciation_schedule = DepreciationSchedule.build_straight_line(
+            capex_lkr=0.0,
+            useful_life=1,
+            project_life=years,
+        )
 
-    # Ensure depreciation schedule is padded to full project life
-    if len(base_schedule) < years:
-        depreciation_schedule = base_schedule + [0.0] * (years - len(base_schedule))
-    else:
-        depreciation_schedule = base_schedule[:years]
+    # Build execution-ready TaxProfile
+    tax_profile = build_tax_profile(
+        config=tax_config,
+        depreciation_schedule=depreciation_schedule,
+        project_life_years=years,
+    )
 
     return (
         params_dict,
@@ -165,6 +219,7 @@ def _prepare_cashflow_context(
         capex_dep_resolved,
         interest_series,
         years,
+        tax_profile,
         depreciation_schedule,
     )
 
@@ -178,12 +233,14 @@ def calculate_single_year_cfads(
     params: Dict[str, Any],
     fx_rate: float,
     year: int,
-    capex_depreciable_lkr: Optional[float] = None,
+    tax_profile: TaxProfile,
+    depreciation_schedule: DepreciationSchedule,
     interest_expense_lkr: float = 0.0,
     verbose: bool = False,
-    depreciation_schedule: Optional[List[float]] = None,
+    prior_year_losses: float = 0.0,
 ) -> Dict[str, float]:
-    """Compute detailed CFADS breakdown for a single year.
+    """
+    Compute detailed CFADS breakdown for a single year.
 
     Parameters
     ----------
@@ -194,10 +251,13 @@ def calculate_single_year_cfads(
         LKR per USD FX rate for the given year.
 
     year :
-        Zero-based year index.
+        Project year (1-based, matching tax_profile.tax_holidays_by_year keys).
 
-    capex_depreciable_lkr :
-        Depreciable capex base in LKR (used for depreciation).
+    tax_profile :
+        Pre-built TaxProfile with unified tax config and depreciation schedule.
+
+    depreciation_schedule :
+        Pre-computed DepreciationSchedule (includes annual amounts and metadata).
 
     interest_expense_lkr :
         Interest expense in LKR for the year.
@@ -205,25 +265,30 @@ def calculate_single_year_cfads(
     verbose :
         If True, log the per-year CFADS breakdown.
 
-    depreciation_schedule :
-        Optional pre-computed depreciation schedule for the whole project life.
-        When provided, it is passed through to the tax calculator to avoid
-        re-building the schedule on every year.
+    prior_year_losses :
+        Losses carried from prior year (for multi-year loss tracking).
 
     Returns
     -------
     dict[str, float]
-        Per-year breakdown, including `cfads_final_lkr` which is the
-        canonical CFADS used by debt_v14 and CashflowResult.
+        Per-year breakdown, including:
+        - `cfads_final_lkr`: Canonical CFADS (used by debt_v14)
+        - `effective_tax_rate`: Actual tax rate (for transparency)
+        - `tax_holiday_applied`: 1.0 or 0.0 (for audit)
+        - `carried_forward_losses`: Losses for next year (for tracking)
+        - `wht_on_interest`: Withholding tax on interest AIT (for lender reporting)
     """
 
     # --- Production and revenue ------------------------------------------------
+    # Year is 1-based; production calculation expects 0-based index
+    year_index = year - 1
+
     gross_kwh, net_kwh = _calculate_net_production(
         float(params["capacity_mw"]),
         float(params["capacity_factor"]),
         float(params["degradation"]),
         float(params["grid_loss_pct"]),
-        year,
+        year_index,
     )
 
     revenue_lkr = _calculate_revenue_lkr(net_kwh, float(params["tariff_lkr_per_kwh"]))
@@ -238,28 +303,29 @@ def calculate_single_year_cfads(
 
     opex_lkr = _calculate_opex_lkr(float(params["opex_usd_per_year"]), fx_rate)
 
-    # For this engine, EBITDA and pretax CFADS coincide (no other non-cash items)
+    # For this engine, EBITDA and EBIT coincide (no other non-cash items)
+    # Depreciation is NOT in EBIT; it's a tax deduction
     ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
+    ebit = ebitda_lkr
 
-    pretax_cfads = ebitda_lkr
+    # --- Tax and depreciation (with loss carry-forward) ----------------------
+    # Use new calculate_tax with unified TaxProfile
+    depreciation_for_year = depreciation_schedule.annual_amounts[year_index]
 
-    # --- Tax and depreciation (with interest shield) --------------------------
-    tax, total_depr = calculate_tax_with_interest_shield(
-        pretax_cfads=pretax_cfads,
-        corporate_tax_rate=float(params["corporate_tax_rate"]),
-        capex_depreciable_lkr=capex_depreciable_lkr,
-        depreciation_years=int(params["depreciation_years"]),
-        interest_expense_lkr=interest_expense_lkr,
-        year_index=year,
-        tax_holiday_years=int(params.get("tax_holiday_years", 0)),
-        tax_holiday_start_year=int(params.get("tax_holiday_start_year", 1)),
-        enhanced_capital_allowance_pct=float(
-            params.get("enhanced_capital_allowance_pct", 1.0)
-        ),
-        precomputed_depr_schedule=depreciation_schedule,
+    tax_result: TaxResult = calculate_tax(
+        year=year,  # 1-based (matches tax_profile.tax_holidays_by_year keys)
+        ebit=ebit,
+        interest_expense=interest_expense_lkr,
+        depreciation=depreciation_for_year,
+        tax_profile=tax_profile,
+        prior_year_losses=prior_year_losses,
     )
 
-    posttax_cfads = pretax_cfads - tax
+    tax = tax_result.tax_liability
+    total_depr = tax_result.depreciation
+    wht_on_interest = tax_result.wht_on_interest
+
+    posttax_cfads = ebit - tax
 
     # --- Risk haircut on post-tax CFADS (v14 definition) ----------------------
     risk_haircut_pct = float(params.get("risk_haircut_pct", 0.0))
@@ -277,7 +343,7 @@ def calculate_single_year_cfads(
         cfads_usd = 0.0
 
     result: Dict[str, float] = {
-        "year": float(year + 1),
+        "year": float(year),
         "gross_kwh": gross_kwh,
         "grid_loss": gross_kwh - net_kwh,
         "net_kwh": net_kwh,
@@ -290,12 +356,10 @@ def calculate_single_year_cfads(
         "fx_rate": fx_rate,
         "opex_lkr": opex_lkr,
         "ebitda_lkr": ebitda_lkr,
-        "pretax_cfads_lkr": pretax_cfads,
+        "pretax_cfads_lkr": ebit,
         "total_depreciation_lkr": total_depr,
         "interest_expense_lkr": interest_expense_lkr,
-        "taxable_income_lkr": max(
-            0.0, pretax_cfads - total_depr - interest_expense_lkr
-        ),
+        "taxable_income_lkr": tax_result.taxable_income,
         "tax_lkr": tax,
         "posttax_cfads_lkr": posttax_cfads,
         "risk_haircut_pct": risk_haircut_pct,
@@ -306,10 +370,15 @@ def calculate_single_year_cfads(
         "cfads_risk_adjusted_lkr": cfads_final_lkr,
         "revenue_usd": revenue_usd,
         "cfads_usd": cfads_usd,
+        # === NEW: Enhanced transparency fields ===
+        "effective_tax_rate": tax_result.effective_tax_rate,
+        "tax_holiday_applied": float(tax_result.tax_holiday_applied),  # 1.0 or 0.0
+        "carried_forward_losses": tax_result.carried_forward_losses,
+        "wht_on_interest": wht_on_interest,
     }
 
     if verbose:
-        logger.info("Year %d CFADS: %s", year + 1, result)
+        logger.info("Year %d CFADS: %s", year, result)
 
     return result
 
@@ -321,7 +390,8 @@ def build_annual_cfads(
     interest_expense_series: Optional[List[float]] = None,
     verbose: bool = False,
 ) -> List[float]:
-    """Return list of CFADS (LKR) for each project year.
+    """
+    Return list of CFADS (LKR) for each project year.
 
     This is the primary numeric surface used by debt_v14 and covenant tests.
     """
@@ -332,6 +402,7 @@ def build_annual_cfads(
         capex_dep_resolved,
         interest_series,
         years,
+        tax_profile,
         depreciation_schedule,
     ) = _prepare_cashflow_context(
         config,
@@ -341,22 +412,26 @@ def build_annual_cfads(
     )
 
     cfads_list: List[float] = []
+    carried_losses = 0.0
 
-    for year in range(years):
-        fx_rate = fx_curve_resolved[year]
-        interest_lkr = interest_series[year]
+    for year in range(1, years + 1):
+        year_index = year - 1
+        fx_rate = fx_curve_resolved[year_index]
+        interest_lkr = interest_series[year_index]
 
         result = calculate_single_year_cfads(
             params=params,
             fx_rate=fx_rate,
             year=year,
-            capex_depreciable_lkr=capex_dep_resolved,
+            tax_profile=tax_profile,
+            depreciation_schedule=depreciation_schedule,
             interest_expense_lkr=interest_lkr,
             verbose=verbose,
-            depreciation_schedule=depreciation_schedule,
+            prior_year_losses=carried_losses,
         )
 
         cfads_list.append(result["cfads_final_lkr"])
+        carried_losses = result["carried_forward_losses"]
 
     if cfads_list:
         logger.info(
@@ -385,6 +460,8 @@ def build_annual_rows(
     - debt_v14.plan_debt (DSCR / covenants)
     - CashflowResult (via contracts_v14)
     - analytics exports and dashboards.
+
+    NOTE: This function now correctly tracks loss carry-forward across years.
     """
 
     (
@@ -393,6 +470,7 @@ def build_annual_rows(
         capex_dep_resolved,
         interest_series,
         years,
+        tax_profile,
         depreciation_schedule,
     ) = _prepare_cashflow_context(
         config,
@@ -402,32 +480,200 @@ def build_annual_rows(
     )
 
     rows: List[Dict[str, float]] = []
+    carried_losses = 0.0
 
-    for year in range(years):
-        fx_rate = fx_curve_resolved[year]
-        interest_lkr = interest_series[year]
+    for year in range(1, years + 1):
+        year_index = year - 1
+        fx_rate = fx_curve_resolved[year_index]
+        interest_lkr = interest_series[year_index]
 
         row = calculate_single_year_cfads(
             params=params,
             fx_rate=fx_rate,
             year=year,
-            capex_depreciable_lkr=capex_dep_resolved,
+            tax_profile=tax_profile,
+            depreciation_schedule=depreciation_schedule,
             interest_expense_lkr=interest_lkr,
             verbose=False,
-            depreciation_schedule=depreciation_schedule,
+            prior_year_losses=carried_losses,
         )
 
         rows.append(row)
+        carried_losses = row["carried_forward_losses"]
 
     if rows:
         logger.info(
-            "Built annual cashflow rows for %d years, CFADS range: %.0f to %.0f",
+            "Built annual cashflow rows for %d years, CFADS range: %.0f to %.0f, "
+            "with loss carry-forward tracking",
             years,
             min(r["cfads_final_lkr"] for r in rows),
             max(r["cfads_final_lkr"] for r in rows),
         )
     else:
         logger.info("Built annual cashflow rows for 0 years")
+
+    return rows
+
+
+def build_annual_rows_efficient(
+    config: Dict[str, Any],
+    fx_curve: Optional[List[float]] = None,
+    capex_depreciable_lkr: Optional[float] = None,
+    interest_expense_series: Optional[List[float]] = None,
+) -> List[Dict[str, float]]:
+    """
+    Build annual rows using batch tax calculation (build_tax_series).
+
+    This version processes all taxes at once using build_tax_series(),
+    ensuring consistent loss carry-forward across the entire project life.
+    It is slightly more efficient than build_annual_rows() for large projects.
+
+    Returns
+    -------
+    List[Dict[str, float]]
+        Identical structure to build_annual_rows().
+    """
+
+    (
+        params,
+        fx_curve_resolved,
+        capex_dep_resolved,
+        interest_series,
+        years,
+        tax_profile,
+        depreciation_schedule,
+    ) = _prepare_cashflow_context(
+        config,
+        fx_curve,
+        capex_depreciable_lkr,
+        interest_expense_series,
+    )
+
+    # Step 1: Compute all production/revenue/opex data
+    ebit_series: List[float] = []
+    production_data: List[Dict[str, float]] = []
+
+    for year_index in range(years):
+        year = year_index + 1
+        fx_rate = fx_curve_resolved[year_index]
+
+        gross_kwh, net_kwh = _calculate_net_production(
+            float(params["capacity_mw"]),
+            float(params["capacity_factor"]),
+            float(params["degradation"]),
+            float(params["grid_loss_pct"]),
+            year_index,
+        )
+
+        revenue_lkr = _calculate_revenue_lkr(
+            net_kwh,
+            float(params["tariff_lkr_per_kwh"])
+        )
+
+        statutory = _calculate_statutory_deductions(
+            revenue_lkr,
+            float(params["success_fee_pct"]),
+            float(params["env_surcharge_pct"]),
+            float(params["social_levy_pct"]),
+        )
+
+        opex_lkr = _calculate_opex_lkr(
+            float(params["opex_usd_per_year"]),
+            fx_rate
+        )
+
+        ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
+
+        production_data.append({
+            "year": float(year),
+            "gross_kwh": gross_kwh,
+            "grid_loss": gross_kwh - net_kwh,
+            "net_kwh": net_kwh,
+            "revenue_lkr": revenue_lkr,
+            "success_fee_lkr": statutory["success_fee"],
+            "env_surcharge_lkr": statutory["environmental_surcharge"],
+            "social_levy_lkr": statutory["social_services_levy"],
+            "total_statutory_deductions_lkr": statutory["total_statutory_deductions"],
+            "opex_usd": float(params["opex_usd_per_year"]),
+            "fx_rate": fx_rate,
+            "opex_lkr": opex_lkr,
+            "ebitda_lkr": ebitda_lkr,
+        })
+
+        ebit_series.append(ebitda_lkr)
+
+    # Step 2: Compute all taxes at once (with loss carry-forward)
+    years_list = list(range(1, years + 1))
+    tax_results = build_tax_series(
+        years=years_list,
+        ebit_series=ebit_series,
+        interest_series=interest_series,
+        depreciation_schedule=depreciation_schedule,
+        tax_profile=tax_profile,
+    )
+
+    # Step 3: Combine production + tax data
+    rows: List[Dict[str, float]] = []
+
+    for year_index, (prod_data, tax_result) in enumerate(
+        zip(production_data, tax_results)
+    ):
+        fx_rate = fx_curve_resolved[year_index]
+
+        # Start with production data
+        row = prod_data.copy()
+
+        # Add tax data
+        row.update({
+            "pretax_cfads_lkr": tax_result.ebit,
+            "total_depreciation_lkr": tax_result.depreciation,
+            "interest_expense_lkr": tax_result.interest_expense,
+            "taxable_income_lkr": tax_result.taxable_income,
+            "tax_lkr": tax_result.tax_liability,
+            "effective_tax_rate": tax_result.effective_tax_rate,
+            "tax_holiday_applied": float(tax_result.tax_holiday_applied),
+            "carried_forward_losses": tax_result.carried_forward_losses,
+            "wht_on_interest": tax_result.wht_on_interest,
+        })
+
+        # Post-tax CFADS
+        posttax_cfads = tax_result.ebit - tax_result.tax_liability
+        risk_haircut_pct = float(params.get("risk_haircut_pct", 0.0))
+        cfads_final_lkr = _apply_risk_haircut(posttax_cfads, risk_haircut_pct)
+        risk_haircut_amount = posttax_cfads - cfads_final_lkr
+
+        row.update({
+            "posttax_cfads_lkr": posttax_cfads,
+            "risk_haircut_pct": risk_haircut_pct,
+            "risk_haircut_amount_lkr": risk_haircut_amount,
+            "cfads_final_lkr": cfads_final_lkr,
+            "cfads_risk_adjusted_lkr": cfads_final_lkr,
+        })
+
+        # USD views
+        if fx_rate > 0.0:
+            row.update({
+                "revenue_usd": row["revenue_lkr"] / fx_rate,
+                "cfads_usd": cfads_final_lkr / fx_rate,
+            })
+        else:
+            row.update({
+                "revenue_usd": 0.0,
+                "cfads_usd": 0.0,
+            })
+
+        rows.append(row)
+
+    if rows:
+        logger.info(
+            "Built annual cashflow rows (efficient) for %d years, "
+            "CFADS range: %.0f to %.0f, with loss carry-forward tracking",
+            years,
+            min(r["cfads_final_lkr"] for r in rows),
+            max(r["cfads_final_lkr"] for r in rows),
+        )
+    else:
+        logger.info("Built annual cashflow rows (efficient) for 0 years")
 
     return rows
 
@@ -584,4 +830,5 @@ __all__ = [
     "calculate_single_year_cfads",
     "build_annual_cfads",
     "build_annual_rows",
+    "build_annual_rows_efficient",
 ]
