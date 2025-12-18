@@ -25,3 +25,9 @@ ignore = [
   "E203",
   "E501",
 ]
+
+# Per-file exceptions for intentional patterns
+[lint.per-file-ignores]
+# analytics/__init__.py: Public API gateway - re-exports are intentional
+# F401: Module imported but unused (allowed for public API surface)
+"analytics/__init__.py" = ["F401"]
