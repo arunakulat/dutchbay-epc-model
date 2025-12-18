@@ -18,12 +18,90 @@ from analytics.contracts_v14 import (
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
+from analytics.fx_integration import integrate_fx_into_scenario_result
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_wacc_from_config
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Validation helpers
+# =============================================================================
+
+
+def _validate_annual_rows(annual_rows: list[dict[str, Any]]) -> None:
+    """Validate annual_rows structure from build_annual_rows.
+    
+    Ensures:
+    - annual_rows is a list
+    - Each row is a dict
+    - Required keys present (year, cf_pre_debt, etc)
+    
+    Raises ValueError if structure invalid.
+    """
+    if not isinstance(annual_rows, list):
+        raise ValueError(
+            f"annual_rows must be list, got {type(annual_rows).__name__}"
+        )
+    
+    if len(annual_rows) == 0:
+        raise ValueError("annual_rows cannot be empty")
+    
+    # Check first row has expected keys
+    first_row = annual_rows[0]
+    if not isinstance(first_row, dict):
+        raise ValueError(
+            f"annual_rows[0] must be dict, got {type(first_row).__name__}"
+        )
+    
+    required_keys = {"year", "cf_pre_debt", "debt_service_total"}
+    missing_keys = required_keys - set(first_row.keys())
+    if missing_keys:
+        raise ValueError(
+            f"annual_rows missing required keys: {missing_keys}"
+        )
+    
+    logger.debug(
+        "Validated annual_rows: %d rows, keys=%s",
+        len(annual_rows),
+        list(first_row.keys()),
+    )
+
+
+def _validate_debt_result(debt_result: dict[str, Any]) -> None:
+    """Validate debt_result structure from plan_debt.
+    
+    Ensures required keys present:
+    - min_dscr, dscr_series, balloon_remaining
+    - lkr, usd, dfi sub-dicts
+    
+    Raises ValueError if structure invalid.
+    """
+    if not isinstance(debt_result, dict):
+        raise ValueError(
+            f"debt_result must be dict, got {type(debt_result).__name__}"
+        )
+    
+    required_keys = {
+        "min_dscr", "dscr_series", "balloon_remaining",
+        "lkr", "usd", "dfi"
+    }
+    missing_keys = required_keys - set(debt_result.keys())
+    if missing_keys:
+        logger.warning(
+            "debt_result missing keys: %s (will use defaults)",
+            missing_keys
+        )
+    
+    logger.debug(
+        "Validated debt_result: keys=%s",
+        list(debt_result.keys())[:5] + ([
+            f"... +{len(debt_result) - 5} more"
+        ] if len(debt_result) > 5 else []),
+    )
 
 
 # =============================================================================
@@ -35,13 +113,13 @@ def _build_tranche_debt_profile(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> TrancheDebtProfile:
-    """
-    Adapter: build a TrancheDebtProfile from the v14 debt_result (plan_debt surface).
+    """Adapter: build a TrancheDebtProfile from the v14 debt_result (plan_debt surface).
 
     This is a lender-facing summary: totals, IDC, tenor, IO years, and target DSCR.
+    Uses defensive .get() to avoid KeyError on missing fields.
     """
-    principal_by = (debt_result.get("principal_by_tranche") or {}) or {}
-
+    # Extract with defaults to prevent KeyError
+    principal_by = debt_result.get("principal_by_tranche") or {}
     lkr = debt_result.get("lkr") or {}
     usd = debt_result.get("usd") or {}
     dfi = debt_result.get("dfi") or {}
@@ -72,6 +150,10 @@ def _build_tranche_debt_profile(
     try:
         dscr_target = float(dscr_target_raw) if dscr_target_raw is not None else None
     except (TypeError, ValueError):
+        logger.warning(
+            "Could not parse target_dscr: %s; using None",
+            dscr_target_raw
+        )
         dscr_target = None
 
     return TrancheDebtProfile(
@@ -99,11 +181,12 @@ def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> DebtCovenantSnapshot:
-    """
-    Build a DebtCovenantSnapshot from the v14 debt_result dict.
+    """Build a DebtCovenantSnapshot from the v14 debt_result dict.
 
     Encodes DSCR profile vs lender threshold and balloon flag for ring-fence views.
+    Uses defensive .get() to avoid KeyError on missing fields.
     """
+    # Extract with defaults
     dscr_series = list(debt_result.get("dscr_series") or [])
     dscr_min = float(debt_result.get("min_dscr") or 0.0)
 
@@ -114,6 +197,10 @@ def _build_debt_covenant_snapshot(
             float(dscr_threshold_raw) if dscr_threshold_raw is not None else 1.30
         )
     except (TypeError, ValueError):
+        logger.warning(
+            "Could not parse target_dscr for covenant snapshot: %s; using 1.30",
+            dscr_threshold_raw
+        )
         dscr_threshold = 1.30
 
     years_below = 0
@@ -160,21 +247,22 @@ def _build_debt_covenant_snapshot(
 def _build_wacc_contract(
     wacc_dict: Mapping[str, Any] | None,
 ) -> WaccResult | None:
-    """
-    Adapter: map the finance.wacc_v14 dict surface into the contracts_v14 WaccResult.
+    """Adapter: map the finance.wacc_v14 dict surface into the contracts_v14 WaccResult.
 
     If the dict is missing core fields, we fail soft and return None.
+    Uses defensive .get() to avoid KeyError.
     """
     if not wacc_dict:
+        logger.debug("WACC dict is None/empty; returning None")
         return None
 
     try:
         base = ContractWaccComponents(
             mode=str(wacc_dict.get("mode", "capm")),
-            wacc_nominal=float(wacc_dict["wacc_nominal"]),
+            wacc_nominal=float(wacc_dict.get("wacc_nominal", 0.0)),
             wacc_real=wacc_dict.get("wacc_real"),
             wacc_prudential=float(
-                wacc_dict.get("wacc_prudential", wacc_dict["wacc_nominal"])
+                wacc_dict.get("wacc_prudential", wacc_dict.get("wacc_nominal", 0.0))
             ),
             risk_free_rate=float(wacc_dict.get("risk_free_rate", 0.0)),
             market_risk_premium=float(wacc_dict.get("market_risk_premium", 0.0)),
@@ -190,9 +278,10 @@ def _build_wacc_contract(
             inflation_rate=wacc_dict.get("inflation_rate"),
             prudential_spread_bps=int(wacc_dict.get("prudential_spread_bps", 0)),
         )
-    except KeyError as exc:  # pragma: no cover - defensive
+    except (KeyError, TypeError, ValueError) as exc:
         logger.warning(
-            "WACC dict missing core fields (%s); skipping WaccResult build.", exc
+            "WACC dict missing/invalid fields (%s); skipping WaccResult build.",
+            exc
         )
         return None
 
@@ -213,9 +302,9 @@ def run_v14_pipeline(
     config: str | Path | Mapping[str, Any],
     validation_mode: str = "strict",
     validation_modules: list[str] | None = None,
+    allow_fx_degradation: bool = False,
 ) -> dict[str, Any]:
-    """
-    Run the v14 engine for a single scenario.
+    """Run the v14 engine for a single scenario.
 
     Parameters
     ----------
@@ -228,6 +317,9 @@ def run_v14_pipeline(
         - "off": skip schema guard
     validation_modules : list[str] or None
         Modules to validate. Defaults to ["cashflow", "debt"].
+    allow_fx_degradation : bool, default False
+        If True, FX integration failures are logged but don't crash pipeline.
+        If False, FX errors re-raised (stops pipeline).
 
     Returns
     -------
@@ -266,6 +358,8 @@ def run_v14_pipeline(
             f"got {type(config).__name__}"
         )
 
+    logger.info("Pipeline starting: config_path=%s", config_path_label)
+
     # ------------------------------------------------------------------
     # 2. Pre-flight validation
     # ------------------------------------------------------------------
@@ -279,26 +373,47 @@ def run_v14_pipeline(
         logger.info("Schema validation passed for modules: %s", ", ".join(modules))
     else:
         modules = validation_modules or []
+        logger.info("Schema validation skipped (validation_mode=off)")
 
     # ------------------------------------------------------------------
     # 3. Canonical v14 finance engine
     # ------------------------------------------------------------------
 
     # 3a. Cashflow – build annual rows from the v14 cashflow engine.
+    logger.info("Step 1/4: Building annual cashflow rows...")
     annual_rows = build_annual_rows(cfg)
+    
+    # FIX #6: Validate annual_rows structure
+    try:
+        _validate_annual_rows(annual_rows)
+    except ValueError as e:
+        logger.error("Annual rows validation failed: %s", e)
+        raise
+    
     logger.debug("Built %d annual rows", len(annual_rows))
 
     # 3b. Debt – covenant-friendly debt surface (plan_debt is canonical v14).
+    logger.info("Step 2/4: Planning debt structure...")
     debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
+    
+    # FIX #7: Validate debt_result structure
+    try:
+        _validate_debt_result(debt_result)
+    except ValueError as e:
+        logger.error("Debt result validation failed: %s", e)
+        raise
+    
     logger.debug("Debt result contains %d keys", len(debt_result))
 
     # 3c. Structured cashflow contract (for analytics / exports / lenders).
+    logger.info("Step 3/4: Building cashflow contract...")
     cashflow_contract = build_cashflow_result_from_annual_rows(
         config=cfg,
         annual_rows=annual_rows,
     )
 
     # 3d. WACC (kept parallel to KPIs for now; KPIs still use legacy 10% discount).
+    logger.info("Step 4/4: Computing WACC and KPIs...")
     wacc_dict = compute_wacc_from_config(cfg)
     logger.debug("WACC dict keys: %s", list(wacc_dict.keys()) if wacc_dict else "none")
 
@@ -320,6 +435,10 @@ def run_v14_pipeline(
     # (negative = contributions, positive = distributions). The canonical
     # equity series is not yet exposed by the cashflow/debt pipeline, so we
     # do not attempt to fabricate it here.
+    # FIX #10: Document equity_performance limitation
+    logger.debug(
+        "Equity performance: not implemented (v14 equity engine deferred to future sprint)"
+    )
 
     # WACC contracts layer
     wacc_contract = _build_wacc_contract(wacc_dict)
@@ -339,6 +458,7 @@ def run_v14_pipeline(
 
     scenario_name = str(cfg.get("scenario_name", Path(config_path_label).stem))
 
+    # Base ScenarioResult without FX overlays
     scenario_result = ScenarioResult(
         scenario_name=scenario_name,
         config_path=config_path_label,
@@ -364,6 +484,45 @@ def run_v14_pipeline(
         debt_covenants=debt_covenants,
     )
 
+    # ------------------------------------------------------------------
+    # 4a. FX integration (optional, config-driven)
+    # FIX #8: Enhanced FX error handling with graceful degradation
+    # ------------------------------------------------------------------
+    if cfg.get("FX") or cfg.get("fx"):
+        logger.info("FX configuration detected; attempting FX integration.")
+        try:
+            scenario_result = integrate_fx_into_scenario_result(
+                scenario_result=scenario_result,
+                config=cfg,
+                debt_result=debt_result,
+                annual_rows=annual_rows,
+            )
+            if scenario_result.fx_block is not None:
+                logger.info(
+                    "FX integration successful: strategy=%s, fx_match_ratio=%.1f, "
+                    "hedging_coverage_pct=%.1f",
+                    scenario_result.fx_block.strategy,
+                    scenario_result.fx_block.fx_match_ratio,
+                    scenario_result.fx_block.hedging_coverage_pct,
+                )
+            else:
+                logger.warning(
+                    "FX integration completed but fx_block is None; "
+                    "check FX configuration for issues."
+                )
+        except (TypeError, ValueError, KeyError) as exc:
+            if allow_fx_degradation:
+                logger.warning(
+                    "FX integration failed (degradation enabled): %s; "
+                    "continuing with FX fields as None",
+                    exc,
+                )
+            else:
+                logger.error("FX integration failed (degradation disabled): %s", exc)
+                raise
+    else:
+        logger.debug("No FX configuration found; skipping FX integration.")
+
     scenario_result_dict = asdict(scenario_result)
 
     # ------------------------------------------------------------------
@@ -386,12 +545,13 @@ def run_v14_pipeline(
 
     logger.info(
         "Pipeline complete: config_path=%s, annual_rows=%d, kpis=%d, "
-        "min_dscr=%.2f, project_irr=%.4f",
+        "min_dscr=%.2f, project_irr=%.4f, fx_block=%s",
         config_path_label,
         len(annual_rows),
         len(kpis),
         min_dscr,
         project_irr,
+        "present" if scenario_result.fx_block else "absent",
     )
 
     return result

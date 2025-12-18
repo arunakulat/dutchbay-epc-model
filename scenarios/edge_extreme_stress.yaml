@@ -117,6 +117,9 @@ tax:
   enhanced_allowance_applies: true
   loss_carryforward_years: 25
   wht_on_interest_to_nonresidents: 0.10    # 10% WHT
+  wht_on_interest_enabled: true            # ← ADDED: Enable WHT calculation
+  wht_gross_up: false                      # ← ADDED: Don't gross up for WHT
+  interest_deductibility: true             # ← ADDED: Allow interest deduction
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Statutory Charges (EXTREME: Severe grid curtailment)

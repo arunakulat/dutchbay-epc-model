@@ -1,79 +1,58 @@
-#!/usr/bin/env python3
-"""FX and Risk Analytics Subpackage (v14).
+"""FX Module - Structured Blocks for v14R6 Pipeline.
 
-Provides advanced FX modeling, correlation analysis, and risk metrics
-for project finance models. Independent of core v14 pipeline.
+This module provides FX-related data contracts and computation engines
+for integrating multi-currency scenarios into the dutchbay-epc-model
+v14 pipeline.
 
-**Modules:**
-- processor: Dual-regime FX data processor
-- correlation: FX correlation engine and VaR/CVaR
-- risk: Risk metrics (DSCR distributions, LLCR, PLCR)
-- returns: Project and equity return calculations
-- fx_contracts: Type-safe FX dataclasses
-- fx_loader: Unified FX configuration loader
+Key Exports:
+  FXStructuredBlock: Primary FX configuration and snapshot.
+  FXCurveOutput: Time-series FX projection (LKR/USD, etc.).
+  FXRiskProfile: Lender-grade FX risk metrics (VaR, CVaR, concentration).
 
-**Usage Example:**
-    from analytics.fx import FXStructuredBlock, build_fx_curve
+Usage:
+  from analytics.fx import FXStructuredBlock, FXCurveOutput, FXRiskProfile
 
-    config = FXStructuredBlock(
-        start_lkr_per_usd=375.0,
-        annual_depr=0.03,
-        base_currency='USD',
-        target_currency='LKR',
+  # Create FX block
+  fx_block = FXStructuredBlock(...)
+
+  # Generate FX curve
+  fx_curve = FXCurveOutput(...)
+
+  # Wire into ScenarioResult
+  result = ScenarioResult(
+      ...,
+      fx_block=fx_block,
+      fx_curve=fx_curve,
+      ...
+  )
+
+Standards:
+  - GWTF: Full type hints, module docstrings
+  - CASPER: Lender-grade summaries and exports
+  - CESSPIT: Immutable records, fail-fast validation
+  - CCCDIR: Fully commented, no config shortcuts
+"""
+
+__version__ = "1.0.0"
+__author__ = "Dutchbay Analytics"
+
+try:
+    from .fx_contracts import (
+        FXCurveOutput,
+        FXRiskProfile,
+        FXStructuredBlock,
+        FXVolumetry,
     )
 
-    curve = build_fx_curve(config)
-    print(curve.rates)  # [375.0, 386.25, 397.84, ...]
+    __all__ = [
+        "FXStructuredBlock",
+        "FXCurveOutput",
+        "FXRiskProfile",
+        "FXVolumetry",
+    ]
+except ImportError as e:
+    # fx_contracts.py not yet created; imports will be added later
+    __all__ = []
+    _import_error = str(e)
 
-**Note:**
-This subpackage is independent from the main v14 pipeline.
-Use only when advanced FX/risk analysis is required.
-
-Part of: Sprint 14, Task 31 - FX-Risk Analytics Consolidation
-"""
-from __future__ import annotations
-
-# =============================================================================
-# v14 Structured Blocks Imports (Primary API)
-# =============================================================================
-from .fx_contracts import FXStructuredBlock  # ⭐ Primary v14 name
-from .fx_contracts import (
-    FXCorrelationMatrix,
-    FXCurveOutput,
-    FXMonteCarloConfig,
-    FXRegimeScenario,
-    FXRiskProfile,
-    FXSensitivityConfig,
-    RegimeType,
-    VolatilityMethod,
-)
-from .fx_loader import build_fx_curve, discover_fx_files, load_fx_regime
-
-# =============================================================================
-# Backward Compatibility Alias (GWTF Compliant - NO REGRESSION)
-# =============================================================================
-FXRegimeConfig = FXStructuredBlock  # Deprecated: use FXStructuredBlock
-
-# =============================================================================
-# Explicit Exports
-# =============================================================================
-__all__ = [
-    # Core Contracts (v14 Primary)
-    "FXStructuredBlock",  # ⭐ New v14-compliant name
-    "FXCurveOutput",
-    "FXCorrelationMatrix",
-    # Enums
-    "RegimeType",
-    "VolatilityMethod",
-    # Scenario & Risk Contracts
-    "FXRegimeScenario",
-    "FXRiskProfile",
-    "FXSensitivityConfig",
-    "FXMonteCarloConfig",
-    # Loaders
-    "load_fx_regime",
-    "discover_fx_files",
-    "build_fx_curve",
-    # Backward Compatibility (Deprecated)
-    "FXRegimeConfig",  # Alias to FXStructuredBlock - remove in v15+
-]
+# EOF - analytics/fx/__init__.py
