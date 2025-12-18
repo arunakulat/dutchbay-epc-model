@@ -113,10 +113,37 @@ class MonteCarloEngine:
         if not hasattr(config, 'monte_carlo') or config.monte_carlo is None:
             raise ValueError("Config missing 'monte_carlo' section (R22)")
         
+        # FIX #3 (HIGH): MC discount_rate from config, not hardcoded
+        # Extract discount_rate_pct from config; fallback to default
+        configured_discount = None
+        try:
+            if hasattr(config, 'monte_carlo'):
+                configured_discount = config.monte_carlo.get('discount_rate_pct')
+        except (AttributeError, TypeError):
+            pass
+        
+        if configured_discount is not None:
+            try:
+                discount_rate_pct = float(configured_discount)
+                self.logger.info(
+                    f"Using discount_rate_pct from config: {discount_rate_pct}%"
+                )
+            except (ValueError, TypeError):
+                self.logger.warning(
+                    f"Invalid discount_rate_pct in config: {configured_discount}; "
+                    f"using default 8.0%"
+                )
+                discount_rate_pct = 8.0
+        else:
+            self.logger.info(
+                "No discount_rate_pct in config; using default 8.0%"
+            )
+            discount_rate_pct = 8.0
+        
         self.mc_config = MonteCarloConfig(
             scenario_name=config.monte_carlo.get('scenario_name', 'default'),
             n_iterations=n_iterations,
-            capex_total_usd=config.monte_carlo.get('capex_total_usd', 50e6),  # From config
+            capex_total_usd=config.monte_carlo.get('capex_total_usd', 50e6),
             revenue_mean_usd=config.monte_carlo.get('revenue_mean_usd', 100e6),
             revenue_std_pct=config.monte_carlo.get('revenue_std_pct', 10.0),
             cost_mean_usd=config.monte_carlo.get('cost_mean_usd', 60e6),
@@ -124,7 +151,7 @@ class MonteCarloEngine:
             fx_mean_rate=config.monte_carlo.get('fx_mean_rate', 325.5),
             fx_std_pct=config.monte_carlo.get('fx_std_pct', 5.0),
             project_life_years=config.monte_carlo.get('project_life_years', 25),
-            discount_rate_pct=config.monte_carlo.get('discount_rate_pct', 8.0),  # From YAML
+            discount_rate_pct=discount_rate_pct,  # From config or default
         )
         self.logger.info(f"Initialized MonteCarloEngine: {self.mc_config.scenario_name}")
     
@@ -144,10 +171,29 @@ class MonteCarloEngine:
             scale=self.mc_config.fx_std_pct / 100.0
         )
         
-        # Calculate annual cash flow
-        annual_revenue = self.mc_config.revenue_mean_usd * revenue_factor
-        annual_cost = self.mc_config.cost_mean_usd * cost_factor
-        annual_cf = annual_revenue - annual_cost
+        # FIX #5 (HIGH): Apply FX sampling to revenue/cashflows
+        # Check if FX is enabled in config
+        fx_enabled = False
+        try:
+            fx_config = self.config.get('FX') or self.config.get('fx')
+            fx_enabled = isinstance(fx_config, dict)
+        except (AttributeError, TypeError):
+            pass
+        
+        if fx_enabled:
+            # Apply FX factor to revenue (if foreign-currency revenue)
+            annual_revenue_usd = (
+                self.mc_config.revenue_mean_usd * revenue_factor * fx_factor
+            )
+            self.logger.debug(
+                f"FX enabled: applying FX factor {fx_factor:.3f} to revenue"
+            )
+        else:
+            # No FX; use revenue factor only
+            annual_revenue_usd = self.mc_config.revenue_mean_usd * revenue_factor
+        
+        annual_cost_usd = self.mc_config.cost_mean_usd * cost_factor
+        annual_cf = annual_revenue_usd - annual_cost_usd
         
         # Build cash flow array: [-capex_at_t0, cf_t1, cf_t2, ..., cf_tn]
         # This is the standard format for NPV/IRR calculations
@@ -161,13 +207,16 @@ class MonteCarloEngine:
         
         # Calculate IRR using R7: finance.irr.irr() ONLY *** CRITICAL R7 ***
         project_irr_decimal = irr(cf_array)  # R7: SINGLETON PATTERN
-        project_irr_pct = (project_irr_decimal * 100.0) if project_irr_decimal is not None else 0.0
+        project_irr_pct = (
+            (project_irr_decimal * 100.0) if project_irr_decimal is not None
+            else 0.0
+        )
         
         result = {
             'npv_usd': project_npv,
             'irr_pct': project_irr_pct,
-            'revenue_usd': annual_revenue,
-            'cost_usd': annual_cost,
+            'revenue_usd': annual_revenue_usd,
+            'cost_usd': annual_cost_usd,
             'fx_rate': self.mc_config.fx_mean_rate * fx_factor,
         }
         
@@ -176,9 +225,16 @@ class MonteCarloEngine:
     def run(self) -> dict[str, Any]:
         """Execute Monte Carlo simulation."""
         try:
-            self.logger.info(f"Starting MC simulation: {self.mc_config.scenario_name} ({self.mc_config.n_iterations} iterations)")
-            self.logger.info(f"Discount rate: {self.mc_config.discount_rate_pct}% (from config)")
-            self.logger.info(f"Capex: ${self.mc_config.capex_total_usd/1e6:.1f}M (from config)")
+            self.logger.info(
+                f"Starting MC simulation: {self.mc_config.scenario_name} "
+                f"({self.mc_config.n_iterations} iterations)"
+            )
+            self.logger.info(
+                f"Discount rate: {self.mc_config.discount_rate_pct}% (from config)"
+            )
+            self.logger.info(
+                f"Capex: ${self.mc_config.capex_total_usd/1e6:.1f}M (from config)"
+            )
             
             iterations = []
             npv_values = []
@@ -191,7 +247,9 @@ class MonteCarloEngine:
                 irr_values.append(iteration['irr_pct'])
                 
                 if (i + 1) % max(1, self.mc_config.n_iterations // 5) == 0:
-                    self.logger.info(f"  Completed {i + 1}/{self.mc_config.n_iterations} iterations")
+                    self.logger.info(
+                        f"  Completed {i + 1}/{self.mc_config.n_iterations} iterations"
+                    )
             
             # Calculate statistics
             npv_array = np.array(npv_values)
@@ -217,13 +275,18 @@ class MonteCarloEngine:
                 'discount_rate_pct': self.mc_config.discount_rate_pct,
                 'capex_total_usd': self.mc_config.capex_total_usd,
                 'statistics': statistics,
-                'iterations': iterations if self.mc_config.n_iterations <= 100 else [],  # Only keep if small
+                'iterations': (
+                    iterations if self.mc_config.n_iterations <= 100 else []
+                ),  # Only keep if small
                 'success': True,
             }
             
             self.logger.info(f"MC simulation completed: {self.mc_config.scenario_name}")
             self.logger.info(f"  NPV Mean: ${statistics['npv_mean_usd']/1e6:.2f}M")
-            self.logger.info(f"  NPV P10-P90: ${statistics['npv_p10_usd']/1e6:.2f}M to ${statistics['npv_p90_usd']/1e6:.2f}M")
+            self.logger.info(
+                f"  NPV P10-P90: ${statistics['npv_p10_usd']/1e6:.2f}M to "
+                f"${statistics['npv_p90_usd']/1e6:.2f}M"
+            )
             self.logger.info(f"  IRR Mean: {statistics['irr_mean_pct']:.2f}%")
             
             return result
@@ -259,7 +322,9 @@ def run_monte_carlo_analysis(**kwargs: Any) -> Optional[dict[str, Any]]:
         n_iterations = kwargs.get('n_iterations', 1000)
         
         if config is None:
-            logger.warning("run_monte_carlo_analysis: config not provided, returning None")
+            logger.warning(
+                "run_monte_carlo_analysis: config not provided, returning None"
+            )
             return None
         
         # Initialize and run engine
@@ -273,7 +338,9 @@ def run_monte_carlo_analysis(**kwargs: Any) -> Optional[dict[str, Any]]:
         return None
 
 
-def main(config_path: str = 'conf/scenarios/mc_base.yaml', n_iterations: int = 1000) -> None:
+def main(
+    config_path: str = 'conf/scenarios/mc_base.yaml', n_iterations: int = 1000
+) -> None:
     """Main entry point."""
     logging.basicConfig(
         level=logging.INFO,
