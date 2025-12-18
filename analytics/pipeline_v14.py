@@ -18,6 +18,7 @@ from analytics.contracts_v14 import (
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
+from analytics.fx_integration import integrate_fx_into_scenario_result
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
 from finance.utils import get_nested
@@ -35,8 +36,7 @@ def _build_tranche_debt_profile(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> TrancheDebtProfile:
-    """
-    Adapter: build a TrancheDebtProfile from the v14 debt_result (plan_debt surface).
+    """Adapter: build a TrancheDebtProfile from the v14 debt_result (plan_debt surface).
 
     This is a lender-facing summary: totals, IDC, tenor, IO years, and target DSCR.
     """
@@ -99,8 +99,7 @@ def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> DebtCovenantSnapshot:
-    """
-    Build a DebtCovenantSnapshot from the v14 debt_result dict.
+    """Build a DebtCovenantSnapshot from the v14 debt_result dict.
 
     Encodes DSCR profile vs lender threshold and balloon flag for ring-fence views.
     """
@@ -160,8 +159,7 @@ def _build_debt_covenant_snapshot(
 def _build_wacc_contract(
     wacc_dict: Mapping[str, Any] | None,
 ) -> WaccResult | None:
-    """
-    Adapter: map the finance.wacc_v14 dict surface into the contracts_v14 WaccResult.
+    """Adapter: map the finance.wacc_v14 dict surface into the contracts_v14 WaccResult.
 
     If the dict is missing core fields, we fail soft and return None.
     """
@@ -214,8 +212,7 @@ def run_v14_pipeline(
     validation_mode: str = "strict",
     validation_modules: list[str] | None = None,
 ) -> dict[str, Any]:
-    """
-    Run the v14 engine for a single scenario.
+    """Run the v14 engine for a single scenario.
 
     Parameters
     ----------
@@ -339,6 +336,7 @@ def run_v14_pipeline(
 
     scenario_name = str(cfg.get("scenario_name", Path(config_path_label).stem))
 
+    # Base ScenarioResult without FX overlays
     scenario_result = ScenarioResult(
         scenario_name=scenario_name,
         config_path=config_path_label,
@@ -363,6 +361,37 @@ def run_v14_pipeline(
         debt_profile=debt_profile,
         debt_covenants=debt_covenants,
     )
+
+    # ------------------------------------------------------------------
+    # 4a. FX integration (optional, config-driven)
+    # ------------------------------------------------------------------
+    if cfg.get("FX") or cfg.get("fx"):
+        logger.debug("FX configuration detected; starting FX integration.")
+        try:
+            scenario_result = integrate_fx_into_scenario_result(
+                scenario_result=scenario_result,
+                config=cfg,
+                debt_result=debt_result,
+                annual_rows=annual_rows,
+            )
+            if scenario_result.fx_block is not None:
+                logger.info(
+                    "FX integration complete: strategy=%s, fx_match_ratio=%.1f, "
+                    "hedging_coverage_pct=%.1f",
+                    scenario_result.fx_block.strategy,
+                    scenario_result.fx_block.fx_match_ratio,
+                    scenario_result.fx_block.hedging_coverage_pct,
+                )
+            else:
+                logger.info(
+                    "FX integration completed but fx_block is None; "
+                    "check FX configuration."
+                )
+        except (TypeError, ValueError) as exc:
+            logger.error("FX integration failed: %s", exc)
+            raise
+    else:
+        logger.debug("No FX configuration found; skipping FX integration.")
 
     scenario_result_dict = asdict(scenario_result)
 
