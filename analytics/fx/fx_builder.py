@@ -41,8 +41,7 @@ def compute_fx_structured_block(
     debt_result: Mapping[str, Any],
     annual_rows: Sequence[Mapping[str, Any]],
 ) -> FXStructuredBlock:
-    """
-    Build FXStructuredBlock from scenario configuration and debt output.
+    """Build FXStructuredBlock from scenario configuration and debt output.
     
     Args:
         config: Project config dict (includes FX settings under 'FX' or 'fx').
@@ -135,8 +134,7 @@ def compute_fx_curve(
     config: Mapping[str, Any],
     annual_rows: Sequence[Mapping[str, Any]],
 ) -> FXCurveOutput:
-    """
-    Generate FX rate curve from configuration and scenario timeline.
+    """Generate FX rate curve from configuration and scenario timeline.
     
     Args:
         config: Project config (includes FX curve assumptions).
@@ -190,6 +188,13 @@ def compute_fx_curve(
     source = str(curve_config.get("source", "base_case"))
     notes = str(curve_config.get("notes", ""))
 
+    # Basic validation: ensure primary curve length matches years
+    if len(lkr_usd) != len(years):
+        raise ValueError(
+            "compute_fx_curve: lkr_usd length "
+            f"{len(lkr_usd)} does not match years length {len(years)}."
+        )
+
     return FXCurveOutput(
         years=years,
         lkr_usd=lkr_usd,
@@ -206,8 +211,7 @@ def compute_fx_risk_profile(
     fx_block: FXStructuredBlock,
     fx_curve: FXCurveOutput,
 ) -> FXRiskProfile:
-    """
-    Calculate FX risk metrics (VaR, CVaR, concentration).
+    """Calculate FX risk metrics (VaR, CVaR, concentration).
     
     Args:
         fx_block: FXStructuredBlock with volumetry.
