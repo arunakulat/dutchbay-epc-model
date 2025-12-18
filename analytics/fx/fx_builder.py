@@ -5,6 +5,7 @@ and scenario data. All functions follow GWTF and CESSPIT standards:
 - Full type hints and docstrings
 - Immutable outputs (frozen dataclasses)
 - Fail-fast validation
+- Comprehensive logging for debugging
 - No internal state or side effects
 
 Pipeline Integration:
@@ -25,6 +26,7 @@ Usage:
   )
 """
 
+import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from analytics.fx.fx_contracts import (
@@ -33,6 +35,8 @@ from analytics.fx.fx_contracts import (
     FXRiskProfile,
     FXVolumetry,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def compute_fx_structured_block(
@@ -83,6 +87,13 @@ def compute_fx_structured_block(
             if isinstance(tranche_data, Mapping):
                 currency = str(tranche_data.get("currency", "USD"))
                 debt_tranches[str(tranche_name)] = currency
+    
+    # CESSPIT: Warn if no debt tranches found
+    if not debt_tranches:
+        logger.warning(
+            "compute_fx_structured_block: No debt tranches found in debt_result; "
+            "FX block will have empty tranches dict. Check debt_result structure."
+        )
 
     # Revenue currencies (default: LKR)
     revenue_currencies_raw = fx_config.get("revenue_currencies") or ["LKR"]
@@ -109,6 +120,11 @@ def compute_fx_structured_block(
             )
         except (ValueError, TypeError) as e:
             # CESSPIT: Fail-fast on malformed row
+            logger.error(
+                "compute_fx_structured_block: Row %d malformed: %s",
+                idx,
+                e,
+            )
             raise ValueError(
                 f"compute_fx_structured_block: Row {idx} malformed: {e}"
             ) from e
@@ -116,7 +132,7 @@ def compute_fx_structured_block(
     # Build FXStructuredBlock
     fx_notes = str(fx_config.get("notes", ""))
 
-    return FXStructuredBlock(
+    fx_block = FXStructuredBlock(
         strategy=strategy_str,  # type: ignore
         base_currency=base_currency,
         reporting_currency=reporting_currency,
@@ -127,6 +143,21 @@ def compute_fx_structured_block(
         hedging_coverage_pct=hedging_coverage_pct,
         notes=fx_notes,
     )
+
+    logger.debug(
+        "compute_fx_structured_block: strategy=%s, base_ccy=%s, "
+        "reporting_ccy=%s, tranches=%d, volumetry_periods=%d, "
+        "fx_match_ratio=%.1f, hedging_coverage=%.1f",
+        strategy_str,
+        base_currency,
+        reporting_currency,
+        len(debt_tranches),
+        len(volumetry),
+        fx_match_ratio,
+        hedging_coverage_pct,
+    )
+
+    return fx_block
 
 
 def compute_fx_curve(
@@ -169,6 +200,10 @@ def compute_fx_curve(
         # Default: flat curve at spot rate
         spot = float(curve_config.get("spot_lkr_usd", 300.0))
         lkr_usd = [spot] * len(years)
+        logger.debug(
+            "compute_fx_curve: No lkr_usd provided; using flat curve at %.2f",
+            spot,
+        )
     else:
         lkr_usd = [float(x) for x in lkr_usd_raw]
 
@@ -188,12 +223,70 @@ def compute_fx_curve(
     source = str(curve_config.get("source", "base_case"))
     notes = str(curve_config.get("notes", ""))
 
-    # Basic validation: ensure primary curve length matches years
+    # Validation: Ensure primary curve length matches years
     if len(lkr_usd) != len(years):
+        logger.error(
+            "compute_fx_curve: lkr_usd length %d does not match years length %d",
+            len(lkr_usd),
+            len(years),
+        )
         raise ValueError(
             "compute_fx_curve: lkr_usd length "
             f"{len(lkr_usd)} does not match years length {len(years)}."
         )
+
+    # Validation: Optional curves must also match years length (if present)
+    if lkr_cny is not None and len(lkr_cny) != len(years):
+        logger.error(
+            "compute_fx_curve: lkr_cny length %d does not match years length %d",
+            len(lkr_cny),
+            len(years),
+        )
+        raise ValueError(
+            "compute_fx_curve: lkr_cny length "
+            f"{len(lkr_cny)} does not match years length {len(years)}."
+        )
+
+    if lkr_eur is not None and len(lkr_eur) != len(years):
+        logger.error(
+            "compute_fx_curve: lkr_eur length %d does not match years length %d",
+            len(lkr_eur),
+            len(years),
+        )
+        raise ValueError(
+            "compute_fx_curve: lkr_eur length "
+            f"{len(lkr_eur)} does not match years length {len(years)}."
+        )
+
+    if lkr_gbp is not None and len(lkr_gbp) != len(years):
+        logger.error(
+            "compute_fx_curve: lkr_gbp length %d does not match years length %d",
+            len(lkr_gbp),
+            len(years),
+        )
+        raise ValueError(
+            "compute_fx_curve: lkr_gbp length "
+            f"{len(lkr_gbp)} does not match years length {len(years)}."
+        )
+
+    # Count available pairs
+    num_pairs = 1  # lkr_usd always present
+    if lkr_cny is not None:
+        num_pairs += 1
+    if lkr_eur is not None:
+        num_pairs += 1
+    if lkr_gbp is not None:
+        num_pairs += 1
+
+    logger.debug(
+        "compute_fx_curve: years=%d, pairs=%d, source=%s, "
+        "lkr_usd[0]=%.2f, lkr_usd[-1]=%.2f",
+        len(years),
+        num_pairs,
+        source,
+        lkr_usd[0] if lkr_usd else float("nan"),
+        lkr_usd[-1] if lkr_usd else float("nan"),
+    )
 
     return FXCurveOutput(
         years=years,
@@ -225,6 +318,10 @@ def compute_fx_risk_profile(
     """
     if not fx_block.volumetry:
         # No volumetry; return minimal profile
+        logger.warning(
+            "compute_fx_risk_profile: No volumetry in fx_block; "
+            "returning minimal profile."
+        )
         return FXRiskProfile(
             var_95_usd_million=0.0,
             cvar_95_usd_million=0.0,
@@ -244,6 +341,11 @@ def compute_fx_risk_profile(
 
     # Avoid division by zero
     if total_debt <= 0:
+        logger.warning(
+            "compute_fx_risk_profile: Total debt is zero or negative (%.2f); "
+            "returning minimal profile.",
+            total_debt,
+        )
         return FXRiskProfile(
             var_95_usd_million=0.0,
             cvar_95_usd_million=0.0,
@@ -279,7 +381,7 @@ def compute_fx_risk_profile(
         + (debt_cny_pct / 100.0) ** 2
     )
 
-    return FXRiskProfile(
+    fx_risk = FXRiskProfile(
         var_95_usd_million=var_95_usd,
         cvar_95_usd_million=cvar_95_usd,
         debt_lkr_pct=debt_lkr_pct,
@@ -291,6 +393,22 @@ def compute_fx_risk_profile(
         worst_case_year=None,
         recovery_years_to_1x_llcr=None,
     )
+
+    logger.debug(
+        "compute_fx_risk_profile: var_95=%.3f USD_M, cvar_95=%.3f USD_M, "
+        "hhi=%.3f, debt_composition: lkr=%.1f%%, usd=%.1f%%, cny=%.1f%%, "
+        "spot_rate=%.2f, total_debt=%.2f",
+        var_95_usd,
+        cvar_95_usd,
+        hhi,
+        debt_lkr_pct,
+        debt_usd_pct,
+        debt_cny_pct,
+        spot_lkr_usd,
+        total_debt,
+    )
+
+    return fx_risk
 
 
 __all__ = [
