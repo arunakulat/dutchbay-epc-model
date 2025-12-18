@@ -205,20 +205,38 @@ def evaluate_with_casper_tail_risk(
         from omegaconf import OmegaConf
 
         mc_config = OmegaConf.load(monte_carlo_config_path)
-        scenario_name_for_mc = base_config.get("project", {}).get("name", cfg_path.stem)
+        scenario_name_for_mc = base_config.get("project", {}).get(
+            "name", cfg_path.stem
+        )
 
-        # Extract n_iterations safely from config (could be 'iterations' or 'n_iterations')
+        # FIX #1 (CRITICAL): MC config key standardization
+        # STANDARDIZE: Always use "iterations" (not "n_iterations")
         mc_iterations = 1000  # default
         try:
-            # Try monte_carlo.iterations first (common pattern)
+            # Try monte_carlo.iterations first (standard pattern)
             if hasattr(mc_config, "monte_carlo"):
                 if hasattr(mc_config.monte_carlo, "iterations"):
                     mc_iterations = int(mc_config.monte_carlo.iterations)
+                    logger.info(
+                        "MC iterations from config: %d (using 'iterations' key)",
+                        mc_iterations,
+                    )
                 elif hasattr(mc_config.monte_carlo, "n_iterations"):
+                    # Fallback for backward compat
                     mc_iterations = int(mc_config.monte_carlo.n_iterations)
-        except (AttributeError, TypeError, ValueError):
+                    logger.info(
+                        "MC iterations from config: %d (using 'n_iterations' key)",
+                        mc_iterations,
+                    )
+                else:
+                    logger.warning(
+                        "No 'iterations' or 'n_iterations' in config; using default %d",
+                        mc_iterations,
+                    )
+        except (AttributeError, TypeError, ValueError) as e:
             logger.warning(
-                "Could not extract iterations from MC config; using default %d",
+                "Could not extract iterations from MC config (%s); using default %d",
+                str(e),
                 mc_iterations,
             )
 
@@ -233,20 +251,45 @@ def evaluate_with_casper_tail_risk(
             )
 
         stats = mc_result.get("statistics", {})
-        # Extract raw_results; this should be list of dicts with metric keys
+
+        # FIX #2 (CRITICAL): MC raw_results None handling
+        # Extract raw_results; should be list of dicts with metric keys
         raw_results = mc_result.get("raw_results") or mc_result.get("iterations", [])
 
-        # Ensure raw_results is populated and well-formed
-        if raw_results and isinstance(raw_results, list) and isinstance(raw_results[0], dict):
-            pass  # raw_results is valid
+        # Validate raw_results before using in tail risk analysis
+        if not raw_results or len(raw_results) == 0:
+            logger.error(
+                "MC raw_results empty or missing; tail risk analysis will be skipped"
+            )
+            # Don't crash; set raw_results to empty list
+            raw_results = []
+            tail_risk_block = None
+            tail_risk_snapshots = {}
+        elif not isinstance(raw_results, list):
+            logger.error(
+                "MC raw_results not a list; got %s; tail risk analysis will be skipped",
+                type(raw_results).__name__,
+            )
+            raw_results = []
+            tail_risk_block = None
+            tail_risk_snapshots = {}
+        elif len(raw_results) > 0 and not isinstance(raw_results[0], dict):
+            logger.error(
+                "MC raw_results entries not dicts; tail risk analysis will be skipped"
+            )
+            raw_results = []
+            tail_risk_block = None
+            tail_risk_snapshots = {}
         else:
-            raw_results = None
+            # raw_results is valid; will be used in tail risk
+            tail_risk_block = None
+            tail_risk_snapshots = {}
 
         monte_carlo = MonteCarloResult(
             scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
             iterations=mc_result.get("n_iterations", 0),
             failed_iterations=mc_result.get("failed_iterations", 0),
-            raw_results=raw_results,  # List of dicts with metrics
+            raw_results=raw_results if raw_results else None,  # None only if empty
             project_irr_mean=stats.get("irr_mean_pct", 0.0) / 100.0,
             project_irr_std=stats.get("irr_std_pct", 0.0) / 100.0,
             project_irr_p10=stats.get("irr_p10_pct", 0.0) / 100.0,
@@ -261,27 +304,42 @@ def evaluate_with_casper_tail_risk(
         )
 
     logger.info("Step 3/4: Building tail-risk enrichments...")
-    tail_risk_block = None
-    if sensitivity_suite and monte_carlo:
-        tail_df = enrich_tornado_with_tail_risk(
-            tornado_suite=sensitivity_suite,
-            mc_result=monte_carlo,
-            metric=metric,
-            confidence=confidence,
-        )
-        tail_risk_block = {
-            "metric": metric,
-            "confidence": confidence,
-            "rows": tail_df.to_dict(orient="records"),
-        }
+    if tail_risk_block is None:  # Not set by MC handling above
+        tail_risk_block = None
 
-    tail_risk_snapshots = {}
-    if monte_carlo:
-        tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
-            mc_result=monte_carlo,
-            metrics=("project_irr", "dscr_min"),
-            confidence=confidence,
-        )
+    if tail_risk_snapshots is None:  # Not set by MC handling above
+        tail_risk_snapshots = {}
+
+    if sensitivity_suite and monte_carlo and raw_results:
+        try:
+            tail_df = enrich_tornado_with_tail_risk(
+                tornado_suite=sensitivity_suite,
+                mc_result=monte_carlo,
+                metric=metric,
+                confidence=confidence,
+            )
+            tail_risk_block = {
+                "metric": metric,
+                "confidence": confidence,
+                "rows": tail_df.to_dict(orient="records"),
+            }
+        except (ValueError, KeyError) as e:
+            logger.warning(
+                "Could not enrich tornado with tail risk: %s; skipping", str(e)
+            )
+
+    if monte_carlo and raw_results:
+        try:
+            tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
+                mc_result=monte_carlo,
+                metrics=("project_irr", "dscr_min"),
+                confidence=confidence,
+            )
+        except (ValueError, KeyError) as e:
+            logger.warning(
+                "Could not build tail risk snapshots: %s; skipping", str(e)
+            )
+            tail_risk_snapshots = {}
 
     logger.info("Step 4/4: Assembling CASPER result...")
     metadata: Dict[str, Any] = {}
