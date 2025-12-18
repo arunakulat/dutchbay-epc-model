@@ -13,6 +13,11 @@ from analytics.contracts_v14 import (
     TechnologyBreakdown,
 )
 
+# Frozen JSON contract version for CASPER payloads.
+# If this ever changes, it MUST be treated as a breaking change and guarded
+# by tests + docs/api_contract_casper_result_v*.md.
+CASPER_CONTRACT_VERSION = "casper_result_v1"
+
 
 def build_casper_payload(
     *,
@@ -50,13 +55,27 @@ def build_casper_payload(
         Free-form small JSON-safe fields for UIs / diagnostics.
         Must not contain large blobs or raw engine tables.
 
+        Convention for tail-risk:
+        - metadata["tail_risk"]         = full underlying tables
+        - metadata["tail_risk_summary"] = snapshots keyed by metric name
+          (this module surfaces that snapshot as top-level `tail_risk`).
+
     Returns
     -------
     dict
-        JSON-safe payload aligned with CasperResult semantics, with a
-        deliberately slender surface for dashboards and lender exports.
+        JSON-safe payload aligned with CasperResult semantics and the
+        casper_result_v1 contract, with a deliberately slender surface
+        for dashboards and lender exports.
     """
-    baseline_kpis = scenario.as_dict()
+    # Derive baseline KPIs from the ScenarioResult in a contract-explicit way.
+    # Prefer a dedicated `kpis` mapping if available; fall back to an empty
+    # mapping rather than abusing scenario.as_dict() as KPI storage.
+    baseline_kpis: dict[str, float] = {}
+    raw_kpis = getattr(scenario, "kpis", None)
+    if isinstance(raw_kpis, Mapping):
+        baseline_kpis = {str(k): float(v) for k, v in raw_kpis.items()}
+
+    # Normalise metadata into a mutable dict so we can safely read/augment it.
     metadata_dict: dict[str, Any] = dict(metadata) if metadata is not None else {}
 
     casper = CasperResult(
@@ -94,35 +113,43 @@ def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None
         "validation_mode": s.validation_mode,
         "discount_rate_used": s.discount_rate_used,
         "wacc_label": s.wacc_label,
-        "wacc_is_real": s.wacc_is_real,
+        "wacc_is_real": getattr(s, "wacc_is_real", None),
         "min_dscr": s.min_dscr,
         "max_debt_usd": s.max_debt_usd,
     }
 
     # WACC summary (if available)
+    # CRITICAL FIX: Handle both WaccResult objects AND dict representations
     if s.wacc is not None:
         w = s.wacc
-        data["wacc"] = {
-            "mode": w.base.mode,
-            "wacc_nominal": w.base.wacc_nominal,
-            "wacc_real": w.base.wacc_real,
-            "wacc_prudential": w.base.wacc_prudential,
-            "prudential_rate": w.prudential_rate,
-            "prudential_npv": w.prudential_npv,
-            "risk_free_rate": w.base.risk_free_rate,
-            "market_risk_premium": w.base.market_risk_premium,
-            "asset_beta": w.base.asset_beta,
-            "target_debt_to_equity": w.base.target_debt_to_equity,
-            "target_debt_to_value": w.base.target_debt_to_value,
-            "target_equity_to_value": w.base.target_equity_to_value,
-            "cost_of_debt_pretax": w.base.cost_of_debt_pretax,
-            "cost_of_debt_aftertax": w.base.cost_of_debt_aftertax,
-            "cost_of_equity": w.base.cost_of_equity,
-            "tax_rate": w.base.tax_rate,
-            "inflation_rate": w.base.inflation_rate,
-            "prudential_spread_bps": w.base.prudential_spread_bps,
-            "meta": dict(w.meta),
-        }
+
+        # Check if w is a dict (legacy/serialized format) or WaccResult object
+        if isinstance(w, dict):
+            # Already serialized - use as-is
+            data["wacc"] = dict(w)
+        else:
+            # WaccResult object - serialize it
+            data["wacc"] = {
+                "mode": w.base.mode,
+                "wacc_nominal": w.base.wacc_nominal,
+                "wacc_real": w.base.wacc_real,
+                "wacc_prudential": w.base.wacc_prudential,
+                "prudential_rate": w.prudential_rate,
+                "prudential_npv": w.prudential_npv,
+                "risk_free_rate": w.base.risk_free_rate,
+                "market_risk_premium": w.base.market_risk_premium,
+                "asset_beta": w.base.asset_beta,
+                "target_debt_to_equity": w.base.target_debt_to_equity,
+                "target_debt_to_value": w.base.target_debt_to_value,
+                "target_equity_to_value": w.base.target_equity_to_value,
+                "cost_of_debt_pretax": w.base.cost_of_debt_pretax,
+                "cost_of_debt_aftertax": w.base.cost_of_debt_aftertax,
+                "cost_of_equity": w.base.cost_of_equity,
+                "tax_rate": w.base.tax_rate,
+                "inflation_rate": w.base.inflation_rate,
+                "prudential_spread_bps": w.base.prudential_spread_bps,
+                "meta": dict(w.meta),
+            }
 
     # Debt profile (if attached)
     if s.debt_profile is not None:
@@ -279,30 +306,55 @@ def _technology_breakdown_to_list(
     ]
 
 
+def _tail_risk_from_metadata(metadata: Mapping[str, Any]) -> dict[str, Any] | None:
+    """
+    Extract a lean tail-risk snapshot from metadata, if available.
+
+    Convention:
+    - metadata["tail_risk_summary"] is expected to be a mapping:
+        metric_name -> { var, cvar, p10, p50, p90, breach_probability, ... }
+
+    We surface that as the top-level `tail_risk` block in the CASPER payload.
+    """
+    raw = metadata.get("tail_risk_summary")
+    if not isinstance(raw, Mapping):
+        return None
+
+    # Shallow copy to ensure JSON-safety; assume inner dicts are already
+    # JSON-serialisable (enforced upstream in tail-risk utilities).
+    out: dict[str, Any] = {}
+    for metric, snapshot in raw.items():
+        if isinstance(snapshot, Mapping):
+            out[str(metric)] = dict(snapshot)
+    return out or None
+
+
 def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
     """
     Flatten CasperResult into the canonical CASPER payload shape.
 
     This is the single place where we define what CASPER returns to the
     outside world. Any future changes should be treated as contract
-    changes and guarded by tests.
+    changes and guarded by tests + docs.
     """
+    metadata = dict(casper.metadata)
     return {
-        # Explicit contract version at the top level so downstream APIs
-        # and dashboards can route / evolve behavior safely.
-        "contract_version": casper.contract_version,
+        "contract_version": CASPER_CONTRACT_VERSION,
         "scenario": _scenario_summary_to_dict(casper.scenario),
         "baseline_kpis": dict(casper.baseline_kpis),
-        "sensitivities": _sensitivity_to_dict(casper.sensitivities),
+        # Singular key to match the CASPER v1 contract docs
+        "sensitivity": _sensitivity_to_dict(casper.sensitivities),
         "monte_carlo": _monte_carlo_to_dict(casper.monte_carlo),
         "generation": _generation_to_dict(casper.generation),
         "technology_breakdown": _technology_breakdown_to_list(
             casper.multi_tech_generation_breakdown
         ),
-        "metadata": dict(casper.metadata),
+        "tail_risk": _tail_risk_from_metadata(metadata),
+        "metadata": metadata,
     }
 
 
 __all__ = [
+    "CASPER_CONTRACT_VERSION",
     "build_casper_payload",
 ]

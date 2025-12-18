@@ -37,7 +37,7 @@ Specifications:
     - Output: JSON to stdout (CLI-03)
 
 Examples:
-    >>> from finance.refinancing_v14_hydra import RefinancingEngine
+    >>> from finance.refinancing_v14_hydra import RefinancingEngine, RefinancingV14
     >>> engine = RefinancingEngine(config=cfg)
     >>> result = engine.run()
     >>> result['tranches']['lkr']['irr_delta_bps']
@@ -317,6 +317,15 @@ class RefinancingEngine:
                 'success': False,
                 'error': str(e),
             }
+
+
+# ============================================================================
+# BACKWARD COMPATIBILITY ALIASES (R23-ALIAS compliance)
+# ============================================================================
+
+# R23-ALIAS: Provide RefinancingV14 as canonical name for test modules
+# Tests import RefinancingV14, canonical class is RefinancingEngine
+RefinancingV14 = RefinancingEngine
 
 
 # ============================================================================

@@ -43,7 +43,7 @@ Specifications:
     - ALL parameters from YAML config (no hardcoding)
 
 Examples:
-    >>> from analytics.monte_carlo_v14 import MonteCarloEngine, run_monte_carlo_analysis
+    >>> from analytics.monte_carlo_v14 import MonteCarloEngine, run_monte_carlo_analysis, MonteCarloResult
     >>> engine = MonteCarloEngine(config=cfg, n_iterations=1000)
     >>> result = engine.run()
     >>> result['statistics']['npv_mean_usd']
@@ -80,6 +80,95 @@ class MonteCarloConfig:
     project_life_years: int
     discount_rate_pct: float  # From YAML config, not hardcoded
     success: bool = True
+
+
+@dataclass
+class MonteCarloResult:
+    """Result object from Monte Carlo simulation (R23-OBJECT compliance).
+    
+    Attributes:
+        scenario_name: Name of Monte Carlo scenario
+        n_iterations: Number of iterations executed
+        project_life_years: Project life in years
+        discount_rate_pct: Discount rate used (from config)
+        capex_total_usd: Total capex in USD
+        statistics: Dictionary of statistical measures (mean, std, percentiles)
+        iterations: List of iteration results (if small n_iterations)
+        success: Whether simulation succeeded
+        error: Error message if simulation failed
+    """
+    scenario_name: str
+    n_iterations: int
+    project_life_years: int
+    discount_rate_pct: float
+    capex_total_usd: float
+    statistics: dict[str, float]
+    iterations: list[dict[str, Any]]
+    success: bool
+    error: Optional[str] = None
+    
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'scenario_name': self.scenario_name,
+            'n_iterations': self.n_iterations,
+            'project_life_years': self.project_life_years,
+            'discount_rate_pct': self.discount_rate_pct,
+            'capex_total_usd': self.capex_total_usd,
+            'statistics': self.statistics,
+            'iterations': self.iterations,
+            'success': self.success,
+            'error': self.error,
+        }
+
+
+def _aggregate_results(npv_values: list[float], irr_values: list[float]) -> dict[str, float]:
+    """Aggregate Monte Carlo iteration results into statistics (R23-FUNCTION compliance).
+    
+    Computes mean, std, median, and percentiles for NPV and IRR distributions.
+    Used internally by MonteCarloEngine and testable by analytics layer tests.
+    
+    Args:
+        npv_values: List of NPV values from iterations (in USD)
+        irr_values: List of IRR values from iterations (in percent)
+        
+    Returns:
+        Dictionary with aggregated statistics:
+        - npv_mean_usd: Mean NPV
+        - npv_std_usd: Standard deviation of NPV
+        - npv_median_usd: Median NPV
+        - npv_p10_usd: 10th percentile
+        - npv_p90_usd: 90th percentile
+        - irr_mean_pct: Mean IRR
+        - irr_std_pct: Standard deviation of IRR
+        - irr_median_pct: Median IRR
+        - irr_p10_pct: 10th percentile
+        - irr_p90_pct: 90th percentile
+        
+    Example:
+        >>> stats = _aggregate_results([1e7, 2e7, 3e7], [8.5, 9.0, 10.2])
+        >>> stats['npv_mean_usd']
+        2000000.0
+        >>> stats['irr_median_pct']
+        9.0
+    """
+    npv_array = np.array(npv_values, dtype=np.float64)
+    irr_array = np.array(irr_values, dtype=np.float64)
+    
+    statistics = {
+        'npv_mean_usd': float(np.mean(npv_array)),
+        'npv_std_usd': float(np.std(npv_array)),
+        'npv_median_usd': float(np.median(npv_array)),
+        'npv_p10_usd': float(np.percentile(npv_array, 10)),
+        'npv_p90_usd': float(np.percentile(npv_array, 90)),
+        'irr_mean_pct': float(np.mean(irr_array)),
+        'irr_std_pct': float(np.std(irr_array)),
+        'irr_median_pct': float(np.median(irr_array)),
+        'irr_p10_pct': float(np.percentile(irr_array, 10)),
+        'irr_p90_pct': float(np.percentile(irr_array, 90)),
+    }
+    
+    return statistics
 
 
 def load_config(config_path: str) -> DictConfig:
@@ -193,22 +282,8 @@ class MonteCarloEngine:
                 if (i + 1) % max(1, self.mc_config.n_iterations // 5) == 0:
                     self.logger.info(f"  Completed {i + 1}/{self.mc_config.n_iterations} iterations")
             
-            # Calculate statistics
-            npv_array = np.array(npv_values)
-            irr_array = np.array(irr_values)
-            
-            statistics = {
-                'npv_mean_usd': float(np.mean(npv_array)),
-                'npv_std_usd': float(np.std(npv_array)),
-                'npv_median_usd': float(np.median(npv_array)),
-                'npv_p10_usd': float(np.percentile(npv_array, 10)),
-                'npv_p90_usd': float(np.percentile(npv_array, 90)),
-                'irr_mean_pct': float(np.mean(irr_array)),
-                'irr_std_pct': float(np.std(irr_array)),
-                'irr_median_pct': float(np.median(irr_array)),
-                'irr_p10_pct': float(np.percentile(irr_array, 10)),
-                'irr_p90_pct': float(np.percentile(irr_array, 90)),
-            }
+            # Calculate statistics using R23-FUNCTION _aggregate_results
+            statistics = _aggregate_results(npv_values, irr_values)
             
             result: dict[str, Any] = {
                 'scenario_name': self.mc_config.scenario_name,
