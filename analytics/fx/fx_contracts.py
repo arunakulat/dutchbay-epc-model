@@ -1,484 +1,383 @@
-"""FX Structured Blocks - v14 Type-safe contracts for FX analytics.
+"""FX Structured Block Contracts (v14R6).
 
-Provides comprehensive FX data structures following v14 governance:
-- FXStructuredBlock: Core FX configuration (v14R6 compliant)
-- FXRegimeScenario: Multi-regime analysis support
-- FXRiskProfile: Lender-grade FX risk metrics
-- FXSensitivityConfig: Sensitivity/tornado inputs
-- FXMonteCarloConfig: Monte Carlo simulation parameters
-- FXCurveOutput: Time-series FX projections
-- FXCorrelationMatrix: Multi-currency correlation
+Provides canonical FX data structures for multi-currency project scenarios.
+All structures follow CESSPIT (immutable, validated) and CCCDIR (fully commented)
+standards for production use.
 
-All dataclasses are frozen (immutable) per v2.3V239.
-Full type hints and mypy-strict per v2.3V236/V2368.
+Key Structures:
+  - FXStructuredBlock: Configuration and snapshot of FX strategy.
+  - FXCurveOutput: Time-series FX rates (LKR/USD, LKR/CNY, etc.).
+  - FXRiskProfile: Lender-grade FX risk metrics (VaR, CVaR, concentration).
+  - FXVolumetry: Debt and revenue exposure by currency and time.
 
-Example
--------
->>> config = FXStructuredBlock(
-...     start_lkr_per_usd=375.0,
-...     annual_depr=0.03,
-...     base_currency="USD",
-...     target_currency="LKR",
-... )
->>> print(f"{config.start_lkr_per_usd:.2f} LKR/USD")
-375.00 LKR/USD
+Integration:
+  Wired into ScenarioResult.fx_block, ScenarioResult.fx_curve,
+  and ScenarioResult.fx_risk_profile during pipeline_v14 execution.
 
-Part of: analytics/fx/ subpackage
-Specs: v14R6 (FX mapping requirement), v2.3V239 (frozen dataclasses)
+Usage Pattern (GWTF):
+  1. Create FXStructuredBlock from config or default strategy
+  2. Run compute_fx_curve() to generate time-series projection
+  3. Compute risk metrics via compute_fx_risk_profile()
+  4. Attach all three to ScenarioResult for export/dashboarding
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
 
-class RegimeType(str, Enum):
-    """FX regime classification for analysis."""
-
-    HISTORICAL = "historical"
-    RECENT = "recent"
-    STRESSED = "stressed"
-
-
-class VolatilityMethod(str, Enum):
-    """Method for calculating FX volatility."""
-
-    HISTORICAL_STD = "historical_std"
-    GARCH = "garch"
-    IMPLIED = "implied"
-    MONTE_CARLO = "monte_carlo"
+# ═════════════════════════════════════════════════════════════════════════════
+# FXVolumetry – Debt and Revenue Exposure by Currency and Time
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 @dataclass(frozen=True)
-class FXStructuredBlock:
-    """Core FX configuration per v14R6 structured blocks requirement.
-
-    This is the canonical v14 FX config structure. All scenarios must
-    provide an FX mapping (not scalar) with these mandatory fields.
-
-    Attributes
-    ----------
-    start_lkr_per_usd : float
-        Initial exchange rate (LKR per USD) at COD or Year 0.
-    annual_depr : float
-        Annual depreciation rate (decimal, e.g. 0.03 = 3%).
-        Negative values represent appreciation.
-    base_currency : str
-        Base currency code (typically 'USD').
-    target_currency : str
-        Target currency code (typically 'LKR').
-    regime : RegimeType
-        Regime classification for this FX projection.
-    volatility : float
-        Annual volatility (std dev of log returns), default 0.10.
-    correlation_with_revenue : float
-        Correlation between FX and project revenue, range [-1, 1].
-    hedge_ratio : float
-        Proportion of FX exposure hedged, range [0, 1].
-    metadata : dict[str, Any]
-        Additional regime-specific metadata.
-
-    Raises
-    ------
-    ValueError
-        If start_rate <= 0, volatility < 0, or correlations/ratios
-        are outside valid ranges.
-
-    Example
-    -------
-    >>> fx = FXStructuredBlock(
-    ...     start_lkr_per_usd=375.0,
-    ...     annual_depr=0.03,
-    ...     base_currency="USD",
-    ...     target_currency="LKR",
-    ... )
-    >>> fx.start_lkr_per_usd
-    375.0
+class FXVolumetry:
+    """Per-period (annual) FX exposure snapshot.
+    
+    Captures total debt and revenue exposure by currency for a given period.
+    Used to compute portfolio-level FX risk (VaR, CVaR, concentration).
+    
+    Fields:
+        period: Period index (0 = Year 0, 1 = Year 1, etc.)
+        total_debt_lkr: Total debt outstanding in LKR at end of period.
+        total_debt_usd: Total debt outstanding in USD at end of period.
+        total_debt_cny: Total debt outstanding in CNY at end of period (if applicable).
+        revenue_lkr: Annual revenue in LKR during period.
+        revenue_usd: Annual revenue in USD during period (if any).
+        interest_lkr: Annual interest expense in LKR.
+        principal_lkr: Annual principal repayment in LKR.
     """
 
-    start_lkr_per_usd: float
-    annual_depr: float
-    base_currency: str = "USD"
-    target_currency: str = "LKR"
-    regime: RegimeType = RegimeType.RECENT
-    volatility: float = 0.10
-    correlation_with_revenue: float = 0.0
-    hedge_ratio: float = 0.0
-    metadata: dict[str, Any] | None = None
+    period: int
+    total_debt_lkr: float
+    total_debt_usd: float
+    total_debt_cny: float = 0.0
+    revenue_lkr: float = 0.0
+    revenue_usd: float = 0.0
+    interest_lkr: float = 0.0
+    principal_lkr: float = 0.0
 
-    def __post_init__(self) -> None:
-        """Validate FX structured block parameters."""
-        if self.start_lkr_per_usd <= 0:
-            raise ValueError(
-                f"start_lkr_per_usd must be > 0, got "
-                f"{self.start_lkr_per_usd}"
-            )
-
-        if self.volatility < 0:
-            raise ValueError(
-                f"volatility must be >= 0, got {self.volatility}"
-            )
-
-        if not -1.0 <= self.correlation_with_revenue <= 1.0:
-            raise ValueError(
-                f"correlation_with_revenue must be in [-1, 1], "
-                f"got {self.correlation_with_revenue}"
-            )
-
-        if not 0.0 <= self.hedge_ratio <= 1.0:
-            raise ValueError(
-                f"hedge_ratio must be in [0, 1], got {self.hedge_ratio}"
-            )
+    @property
+    def total_usd_exposure_equivalent(self) -> float:
+        """Sum of all debt and debt service (interest + principal) in USD equiv.
+        
+        Approximation: assumes all LKR denominations remain at spot rate
+        (not risk-adjusted). For risk analysis, use FXRiskProfile instead.
+        """
+        # Assume ~300 LKR/USD at computation time; actual rates from fx_curve
+        assumed_spot_lkr_usd = 300.0
+        lkr_in_usd = (self.total_debt_lkr + self.interest_lkr) / assumed_spot_lkr_usd
+        return self.total_debt_usd + lkr_in_usd
 
 
-@dataclass(frozen=True)
-class FXRegimeScenario:
-    """Multi-regime FX scenario for sensitivity/tornado analysis.
-
-    Attributes
-    ----------
-    scenario_name : str
-        Descriptive name (e.g., 'Base', 'Stressed', 'Optimistic').
-    structured_block : FXStructuredBlock
-        Core FX configuration for this regime.
-    probability : float
-        Probability weight for this scenario (0-1).
-    years : int
-        Number of projection years.
-    apply_shock : bool
-        Whether to apply a one-time shock in Year 1.
-    shock_magnitude : float
-        Magnitude of one-time shock (if apply_shock=True).
-
-    Raises
-    ------
-    ValueError
-        If probability not in [0, 1], years < 1.
-
-    Example
-    -------
-    >>> base_fx = FXStructuredBlock(
-    ...     start_lkr_per_usd=375.0, annual_depr=0.03
-    ... )
-    >>> scenario = FXRegimeScenario(
-    ...     scenario_name="Base Case",
-    ...     structured_block=base_fx,
-    ...     probability=0.6,
-    ...     years=20,
-    ... )
-    >>> scenario.scenario_name
-    'Base Case'
-    """
-
-    scenario_name: str
-    structured_block: FXStructuredBlock
-    probability: float
-    years: int
-    apply_shock: bool = False
-    shock_magnitude: float = 0.0
-
-    def __post_init__(self) -> None:
-        """Validate regime scenario parameters."""
-        if not 0.0 <= self.probability <= 1.0:
-            raise ValueError(
-                f"probability must be in [0, 1], got {self.probability}"
-            )
-
-        if self.years < 1:
-            raise ValueError(f"years must be >= 1, got {self.years}")
-
-
-@dataclass(frozen=True)
-class FXRiskProfile:
-    """Lender-grade FX risk analytics output.
-
-    Attributes
-    ----------
-    scenario_name : str
-        Associated scenario name.
-    var_95 : float
-        Value at Risk at 95% confidence (currency units).
-    var_99 : float
-        Value at Risk at 99% confidence (currency units).
-    expected_shortfall : float
-        Conditional VaR (CVaR) beyond 95th percentile.
-    max_drawdown_pct : float
-        Maximum drawdown as percentage of start rate.
-    sharpe_ratio : float
-        Risk-adjusted return metric.
-    volatility_realized : float
-        Realized annual volatility (historical or simulated).
-    correlation_matrix : tuple[tuple[float, ...], ...] | None
-        Multi-currency correlation matrix if applicable.
-
-    Example
-    -------
-    >>> risk = FXRiskProfile(
-    ...     scenario_name="Base",
-    ...     var_95=15.0,
-    ...     var_99=22.5,
-    ...     expected_shortfall=18.0,
-    ...     max_drawdown_pct=12.5,
-    ...     sharpe_ratio=0.85,
-    ...     volatility_realized=0.10,
-    ... )
-    >>> risk.var_95
-    15.0
-    """
-
-    scenario_name: str
-    var_95: float
-    var_99: float
-    expected_shortfall: float
-    max_drawdown_pct: float
-    sharpe_ratio: float
-    volatility_realized: float
-    correlation_matrix: tuple[tuple[float, ...], ...] | None = None
-
-
-@dataclass(frozen=True)
-class FXSensitivityConfig:
-    """FX sensitivity/tornado analysis configuration.
-
-    Attributes
-    ----------
-    base_block : FXStructuredBlock
-        Baseline FX configuration.
-    parameter_name : str
-        Parameter to vary ('annual_depr', 'volatility', etc.).
-    low_value : float
-        Low-end parameter value for sensitivity.
-    high_value : float
-        High-end parameter value for sensitivity.
-    num_steps : int
-        Number of steps between low and high (default 5).
-
-    Raises
-    ------
-    ValueError
-        If num_steps < 2.
-
-    Example
-    -------
-    >>> base = FXStructuredBlock(
-    ...     start_lkr_per_usd=375.0, annual_depr=0.03
-    ... )
-    >>> sens = FXSensitivityConfig(
-    ...     base_block=base,
-    ...     parameter_name="annual_depr",
-    ...     low_value=0.01,
-    ...     high_value=0.05,
-    ...     num_steps=5,
-    ... )
-    >>> sens.parameter_name
-    'annual_depr'
-    """
-
-    base_block: FXStructuredBlock
-    parameter_name: str
-    low_value: float
-    high_value: float
-    num_steps: int = 5
-
-    def __post_init__(self) -> None:
-        """Validate sensitivity configuration."""
-        if self.num_steps < 2:
-            raise ValueError(
-                f"num_steps must be >= 2, got {self.num_steps}"
-            )
-
-
-@dataclass(frozen=True)
-class FXMonteCarloConfig:
-    """Monte Carlo simulation configuration for FX.
-
-    Attributes
-    ----------
-    base_block : FXStructuredBlock
-        Baseline FX configuration.
-    num_simulations : int
-        Number of Monte Carlo paths (recommend 100k).
-    time_horizon_years : int
-        Projection horizon in years.
-    volatility_method : VolatilityMethod
-        Method for generating volatility.
-    correlation_matrix : tuple[tuple[float, ...], ...] | None
-        Correlation matrix for multi-variate simulations.
-    seed : int | None
-        Random seed for reproducibility.
-
-    Raises
-    ------
-    ValueError
-        If num_simulations < 1000 or time_horizon_years < 1.
-
-    Example
-    -------
-    >>> base = FXStructuredBlock(
-    ...     start_lkr_per_usd=375.0, annual_depr=0.03
-    ... )
-    >>> mc = FXMonteCarloConfig(
-    ...     base_block=base,
-    ...     num_simulations=100_000,
-    ...     time_horizon_years=20,
-    ... )
-    >>> mc.num_simulations
-    100000
-    """
-
-    base_block: FXStructuredBlock
-    num_simulations: int
-    time_horizon_years: int
-    volatility_method: VolatilityMethod = VolatilityMethod.HISTORICAL_STD
-    correlation_matrix: tuple[tuple[float, ...], ...] | None = None
-    seed: int | None = None
-
-    def __post_init__(self) -> None:
-        """Validate Monte Carlo configuration."""
-        if self.num_simulations < 1000:
-            raise ValueError(
-                f"num_simulations must be >= 1000, "
-                f"got {self.num_simulations}"
-            )
-
-        if self.time_horizon_years < 1:
-            raise ValueError(
-                f"time_horizon_years must be >= 1, "
-                f"got {self.time_horizon_years}"
-            )
+# ═════════════════════════════════════════════════════════════════════════════
+# FXCurveOutput – Time-Series FX Rates
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 @dataclass(frozen=True)
 class FXCurveOutput:
-    """Time-series FX rate projection output.
-
-    Attributes
-    ----------
-    years : Sequence[int]
-        Year indices (0, 1, 2, ..., N).
-    rates : Sequence[float]
-        FX rates for each year (LKR/USD or other pair).
-    regime : RegimeType
-        Regime used for this projection.
-    confidence_interval_lower : Sequence[float] | None
-        Lower bound of 95% confidence interval (if available).
-    confidence_interval_upper : Sequence[float] | None
-        Upper bound of 95% confidence interval (if available).
-    metadata : dict[str, Any]
-        Additional metadata (source, method, etc.).
-
-    Raises
-    ------
-    ValueError
-        If length of years != length of rates.
-
-    Example
-    -------
-    >>> output = FXCurveOutput(
-    ...     years=[0, 1, 2],
-    ...     rates=[375.0, 386.25, 397.84],
-    ...     regime=RegimeType.RECENT,
-    ...     metadata={"method": "geometric"},
-    ... )
-    >>> len(output.rates)
-    3
+    """Time-series FX rate projections (canonical format).
+    
+    Stores annual FX rates for each currency pair required by the model.
+    All rates are spot rates (not forward); used for P&L conversion and risk.
+    
+    Fields:
+        years: Annual year labels [0, 1, 2, ..., n_periods-1].
+        lkr_usd: Annual LKR/USD rates (e.g., [300, 302, 305, ...]).
+        lkr_cny: Annual LKR/CNY rates (optional, for DFI tranches).
+        lkr_eur: Annual LKR/EUR rates (optional, if EUR debt exists).
+        lkr_gbp: Annual LKR/GBP rates (optional).
+        source: Description of curve source ('base_case', 'stress', 'ppp_adjusted').
+        notes: Free-form documentation (e.g., 'historical_avg_volatility_15pct').
     """
 
-    years: Sequence[int]
-    rates: Sequence[float]
-    regime: RegimeType
-    confidence_interval_lower: Sequence[float] | None = None
-    confidence_interval_upper: Sequence[float] | None = None
-    metadata: dict[str, Any] | None = None
+    years: List[int]
+    lkr_usd: List[float]  # LKR per USD
+    lkr_cny: Optional[List[float]] = None
+    lkr_eur: Optional[List[float]] = None
+    lkr_gbp: Optional[List[float]] = None
+    source: str = "base_case"
+    notes: str = ""
 
     def __post_init__(self) -> None:
-        """Validate curve output consistency."""
-        if len(self.years) != len(self.rates):
+        """CESSPIT Validation: Ensure curve consistency."""
+        if len(self.years) != len(self.lkr_usd):
             raise ValueError(
-                f"Length mismatch: years ({len(self.years)}) != "
-                f"rates ({len(self.rates)})"
+                f"FXCurveOutput: years and lkr_usd must have same length. "
+                f"Got len(years)={len(self.years)}, len(lkr_usd)={len(self.lkr_usd)}"
             )
 
-        if self.confidence_interval_lower is not None:
-            if len(self.confidence_interval_lower) != len(self.years):
+        # Validate optional curves if present
+        for curve_name, curve_data in [
+            ("lkr_cny", self.lkr_cny),
+            ("lkr_eur", self.lkr_eur),
+            ("lkr_gbp", self.lkr_gbp),
+        ]:
+            if curve_data is not None:
+                if len(curve_data) != len(self.years):
+                    raise ValueError(
+                        f"FXCurveOutput: {curve_name} must have same length as years. "
+                        f"Got len({curve_name})={len(curve_data)}, len(years)={len(self.years)}"
+                    )
+
+        # Validate all rates are positive
+        for idx, rate in enumerate(self.lkr_usd):
+            if rate <= 0:
                 raise ValueError(
-                    "confidence_interval_lower length mismatch"
+                    f"FXCurveOutput: lkr_usd[{idx}]={rate} must be > 0"
                 )
 
-        if self.confidence_interval_upper is not None:
-            if len(self.confidence_interval_upper) != len(self.years):
-                raise ValueError(
-                    "confidence_interval_upper length mismatch"
-                )
+    def get_rate(self, year: int, pair: str = "lkr_usd") -> float:
+        """Retrieve FX rate for a given year and currency pair.
+        
+        Args:
+            year: Year index (0-based).
+            pair: Currency pair name ('lkr_usd', 'lkr_cny', 'lkr_eur', 'lkr_gbp').
+        
+        Returns:
+            Float rate (e.g., 300.5 for LKR/USD).
+        
+        Raises:
+            IndexError if year not in curve.
+            ValueError if pair not available.
+        """
+        if year not in self.years:
+            raise IndexError(f"FXCurveOutput: year {year} not in curve {self.years}")
+
+        idx = self.years.index(year)
+
+        if pair == "lkr_usd":
+            return self.lkr_usd[idx]
+        elif pair == "lkr_cny":
+            if self.lkr_cny is None:
+                raise ValueError(f"FXCurveOutput: pair '{pair}' not available in curve")
+            return self.lkr_cny[idx]
+        elif pair == "lkr_eur":
+            if self.lkr_eur is None:
+                raise ValueError(f"FXCurveOutput: pair '{pair}' not available in curve")
+            return self.lkr_eur[idx]
+        elif pair == "lkr_gbp":
+            if self.lkr_gbp is None:
+                raise ValueError(f"FXCurveOutput: pair '{pair}' not available in curve")
+            return self.lkr_gbp[idx]
+        else:
+            raise ValueError(f"FXCurveOutput: unknown currency pair '{pair}'")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dict for export/dashboarding."""
+        return {
+            "years": self.years,
+            "lkr_usd": self.lkr_usd,
+            "lkr_cny": self.lkr_cny,
+            "lkr_eur": self.lkr_eur,
+            "lkr_gbp": self.lkr_gbp,
+            "source": self.source,
+            "notes": self.notes,
+        }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FXRiskProfile – Lender-Grade FX Risk Metrics
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 @dataclass(frozen=True)
-class FXCorrelationMatrix:
-    """Multi-currency correlation structure.
-
-    Attributes
-    ----------
-    currencies : Sequence[str]
-        Currency pair labels (e.g., ['USD/LKR', 'USD/INR']).
-    correlation_matrix : tuple[tuple[float, ...], ...]
-        NxN correlation matrix (frozen tuple of tuples).
-    regime : RegimeType
-        Regime used for correlation calculation.
-    metadata : dict[str, Any]
-        Additional metadata (data source, time period, etc.).
-
-    Raises
-    ------
-    ValueError
-        If matrix dimensions don't match number of currencies.
-
-    Example
-    -------
-    >>> corr = FXCorrelationMatrix(
-    ...     currencies=["USD/LKR", "USD/INR"],
-    ...     correlation_matrix=((1.0, 0.75), (0.75, 1.0)),
-    ...     regime=RegimeType.HISTORICAL,
-    ...     metadata={"period": "2020-2023"},
-    ... )
-    >>> len(corr.currencies)
-    2
+class FXRiskProfile:
+    """Lender-grade FX risk assessment (CASPER output).
+    
+    Provides VaR, CVaR, and portfolio concentration metrics for:
+    - Debt service (principal + interest) by currency
+    - Revenue exposure by currency
+    - Correlation break risk (e.g., LKR weakening while local rates rise)
+    
+    Used in credit memos and covenant dashboards to communicate FX risk
+    to lenders and equity investors.
+    
+    Fields:
+        var_95_usd_million: 95% VaR of portfolio (USD millions).
+        cvar_95_usd_million: 95% CVaR (expected shortfall) of portfolio.
+        debt_lkr_pct: Percentage of debt in LKR.
+        debt_usd_pct: Percentage of debt in USD.
+        debt_cny_pct: Percentage of debt in CNY (if applicable).
+        debt_concentration_hhi: Herfindahl index of debt concentration (0 = uniform, 1 = all in one).
+        revenues_lkr_pct: Percentage of revenues in LKR.
+        correlation_shock_scenario: Description of stress test applied (e.g., 'LKR -15% with rate shock').
+        worst_case_year: Year of maximum stress (from simulation).
+        recovery_years_to_1x_llcr: Years until LLCR recovers to 1.0x (from stress year).
     """
 
-    currencies: Sequence[str]
-    correlation_matrix: tuple[tuple[float, ...], ...]
-    regime: RegimeType = RegimeType.RECENT
-    metadata: dict[str, Any] | None = None
+    var_95_usd_million: float
+    cvar_95_usd_million: float
+    debt_lkr_pct: float
+    debt_usd_pct: float
+    debt_cny_pct: float = 0.0
+    debt_concentration_hhi: float = 0.5  # Default: moderate concentration
+    revenues_lkr_pct: float = 100.0
+    correlation_shock_scenario: str = ""
+    worst_case_year: Optional[int] = None
+    recovery_years_to_1x_llcr: Optional[int] = None
 
     def __post_init__(self) -> None:
-        """Validate correlation matrix structure."""
-        n_currencies = len(self.currencies)
-        n_rows = len(self.correlation_matrix)
-
-        if n_rows != n_currencies:
+        """CESSPIT Validation: Ensure risk profile coherence."""
+        # Check debt percentages sum to ~100%
+        debt_sum = self.debt_lkr_pct + self.debt_usd_pct + self.debt_cny_pct
+        if not (95.0 <= debt_sum <= 105.0):
             raise ValueError(
-                f"Matrix rows ({n_rows}) != currencies "
-                f"({n_currencies})"
+                f"FXRiskProfile: debt percentages must sum to ~100%. "
+                f"Got {debt_sum}% (LKR={self.debt_lkr_pct}, USD={self.debt_usd_pct}, CNY={self.debt_cny_pct})"
             )
 
-        for idx, row in enumerate(self.correlation_matrix):
-            if len(row) != n_currencies:
-                raise ValueError(
-                    f"Row {idx} has {len(row)} elements, expected "
-                    f"{n_currencies}"
-                )
+        # Check VaR < CVaR
+        if self.var_95_usd_million > self.cvar_95_usd_million:
+            raise ValueError(
+                f"FXRiskProfile: VaR ({self.var_95_usd_million}) must be <= CVaR ({self.cvar_95_usd_million})"
+            )
+
+        # Check HHI in valid range [0, 1]
+        if not (0.0 <= self.debt_concentration_hhi <= 1.0):
+            raise ValueError(
+                f"FXRiskProfile: debt_concentration_hhi must be in [0, 1]. Got {self.debt_concentration_hhi}"
+            )
+
+    def is_high_risk(self, var_threshold_usd_million: float = 5.0) -> bool:
+        """Convenience flag: True if VaR exceeds risk threshold."""
+        return self.var_95_usd_million > var_threshold_usd_million
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dict for dashboards."""
+        return {
+            "var_95_usd_million": round(self.var_95_usd_million, 3),
+            "cvar_95_usd_million": round(self.cvar_95_usd_million, 3),
+            "debt_lkr_pct": round(self.debt_lkr_pct, 1),
+            "debt_usd_pct": round(self.debt_usd_pct, 1),
+            "debt_cny_pct": round(self.debt_cny_pct, 1),
+            "debt_concentration_hhi": round(self.debt_concentration_hhi, 3),
+            "revenues_lkr_pct": round(self.revenues_lkr_pct, 1),
+            "correlation_shock_scenario": self.correlation_shock_scenario,
+            "worst_case_year": self.worst_case_year,
+            "recovery_years_to_1x_llcr": self.recovery_years_to_1x_llcr,
+            "is_high_risk": self.is_high_risk(),
+        }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FXStructuredBlock – Primary FX Configuration and Snapshot
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class FXStructuredBlock:
+    """Complete FX strategy and execution snapshot for a scenario.
+    
+    Combines configuration (how FX risk is managed) with volumetry
+    (actual debt/revenue by currency) and risk metrics.
+    
+    This is the PRIMARY FX artifact attached to ScenarioResult;
+    FXCurveOutput and FXRiskProfile provide supporting detail.
+    
+    Fields:
+        strategy: FX risk management approach ('natural_hedge', 'fixed_ccy', 'hedged', 'blended').
+        base_currency: Scenario base currency (usually 'USD' for NPV).
+        reporting_currency: Currency for P&L reporting (usually same as base_currency).
+        volumetry: List of FXVolumetry snapshots (one per period).
+        debt_tranches: Dict mapping tranche name to currency (e.g., {'LKR_Tranche': 'LKR'}).
+        revenue_currencies: List of currencies in which revenues are generated.
+        fx_match_ratio: Percentage of debt matched to revenue currency (0-100).
+        hedging_coverage_pct: Percentage of FX exposure covered via forwards/hedges.
+        notes: Documentation of any special FX assumptions.
+    """
+
+    strategy: Literal["natural_hedge", "fixed_ccy", "hedged", "blended"] = "blended"
+    base_currency: str = "USD"
+    reporting_currency: str = "USD"
+    volumetry: List[FXVolumetry] = field(default_factory=list)
+    debt_tranches: Dict[str, str] = field(default_factory=dict)
+    revenue_currencies: List[str] = field(default_factory=lambda: ["LKR"])
+    fx_match_ratio: float = 0.0  # Percentage [0, 100]
+    hedging_coverage_pct: float = 0.0  # Percentage [0, 100]
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        """CESSPIT Validation: Ensure FX block coherence."""
+        # Validate percentages
+        if not (0.0 <= self.fx_match_ratio <= 100.0):
+            raise ValueError(
+                f"FXStructuredBlock: fx_match_ratio must be in [0, 100]. Got {self.fx_match_ratio}"
+            )
+
+        if not (0.0 <= self.hedging_coverage_pct <= 100.0):
+            raise ValueError(
+                f"FXStructuredBlock: hedging_coverage_pct must be in [0, 100]. Got {self.hedging_coverage_pct}"
+            )
+
+        # Validate base and reporting currencies
+        valid_currencies = {"USD", "LKR", "CNY", "EUR", "GBP"}
+        if self.base_currency not in valid_currencies:
+            raise ValueError(
+                f"FXStructuredBlock: base_currency '{self.base_currency}' not in {valid_currencies}"
+            )
+
+        if self.reporting_currency not in valid_currencies:
+            raise ValueError(
+                f"FXStructuredBlock: reporting_currency '{self.reporting_currency}' not in {valid_currencies}"
+            )
+
+    def total_periods(self) -> int:
+        """Return number of periods in volumetry."""
+        return len(self.volumetry)
+
+    def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float = 300.0) -> float:
+        """Approximate total debt in USD equivalent at spot rate.
+        
+        Args:
+            spot_rate_lkr_usd: Exchange rate for LKR/USD (default: 300.0).
+        
+        Returns:
+            Sum of all debt in USD equivalent (approx).
+        """
+        if not self.volumetry:
+            return 0.0
+
+        # Use final period debt (end of loan tenor)
+        final_period = self.volumetry[-1]
+        lkr_in_usd = final_period.total_debt_lkr / spot_rate_lkr_usd
+        return final_period.total_debt_usd + lkr_in_usd + final_period.total_debt_cny
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dict for export/dashboarding."""
+        return {
+            "strategy": self.strategy,
+            "base_currency": self.base_currency,
+            "reporting_currency": self.reporting_currency,
+            "volumetry": [
+                {
+                    "period": v.period,
+                    "total_debt_lkr": round(v.total_debt_lkr, 2),
+                    "total_debt_usd": round(v.total_debt_usd, 2),
+                    "total_debt_cny": round(v.total_debt_cny, 2),
+                    "revenue_lkr": round(v.revenue_lkr, 2),
+                    "revenue_usd": round(v.revenue_usd, 2),
+                    "interest_lkr": round(v.interest_lkr, 2),
+                    "principal_lkr": round(v.principal_lkr, 2),
+                }
+                for v in self.volumetry
+            ],
+            "debt_tranches": self.debt_tranches,
+            "revenue_currencies": self.revenue_currencies,
+            "fx_match_ratio": round(self.fx_match_ratio, 1),
+            "hedging_coverage_pct": round(self.hedging_coverage_pct, 1),
+            "notes": self.notes,
+        }
 
 
 __all__ = [
-    "RegimeType",
-    "VolatilityMethod",
-    "FXStructuredBlock",
-    "FXRegimeScenario",
-    "FXRiskProfile",
-    "FXSensitivityConfig",
-    "FXMonteCarloConfig",
+    "FXVolumetry",
     "FXCurveOutput",
-    "FXCorrelationMatrix",
+    "FXRiskProfile",
+    "FXStructuredBlock",
 ]
-# EOF
+
+# EOF - analytics/fx/fx_contracts.py
