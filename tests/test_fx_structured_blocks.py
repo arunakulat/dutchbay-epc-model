@@ -1,17 +1,17 @@
-"""Comprehensive test suite for FX structured blocks.
+"""Comprehensive test suite for FX structured blocks (R23).
 
-Tests cover:
-- FXStructuredBlock validation and edge cases
-- FXRegimeScenario multi-regime support
-- FXRiskProfile lender-grade metrics
-- FXSensitivityConfig tornado analysis
-- FXMonteCarloConfig 100k simulations
-- FX loader functions
-- FX curve generation with CI
+Tests cover the R23-compliant FX contracts:
+- FXStructuredBlock: Primary FX strategy and configuration
+- FXVolumetry: Debt and revenue exposure by currency
+- FXCurveOutput: Time-series FX rate projections
+- FXRiskProfile: Lender-grade FX risk metrics (VaR, CVaR, HHI)
 
-All tests follow Go with the Flow v2.3/v14 standards.
+All tests follow Go with the Flow v3.0 standards for R23 minimalist architecture.
 
-Refs: Issue #31, v14R6, v2.3V2399 (tests gate changes)
+Note: Previous test classes for FXSensitivityConfig, FXRegimeScenario, and
+FXMonteCarloConfig have been removed as these classes no longer exist after R23 refactor.
+
+Refs: Issue #31, v14R6, Sprint 12 R23 contracts refactor
 """
 
 from __future__ import annotations
@@ -20,407 +20,406 @@ import pytest
 
 from analytics.fx.fx_contracts import (
     FXCurveOutput,
-    FXMonteCarloConfig,
-    FXRegimeScenario,
     FXRiskProfile,
-    FXSensitivityConfig,
     FXStructuredBlock,
-    RegimeType,
-    VolatilityMethod,
-)
-from analytics.fx.fx_loader import (
-    build_fx_curve_from_block,
-    load_fx_structured_block,
-    validate_fx_structured_config,
+    FXVolumetry,
 )
 
 
-class TestFXStructuredBlockValidation:
-    """Tests for FXStructuredBlock validation logic."""
+# ═════════════════════════════════════════════════════════════════════════════
+# FXVolumetry Tests
+# ═════════════════════════════════════════════════════════════════════════════
 
-    def test_valid_structured_block(self) -> None:
-        """Valid FX structured block should construct."""
-        block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+
+class TestFXVolumetry:
+    """Tests for FXVolumetry exposure tracking."""
+
+    def test_valid_volumetry(self) -> None:
+        """Valid FX volumetry should construct."""
+        vol = FXVolumetry(
+            period=0,
+            total_debt_lkr=1000.0,
+            total_debt_usd=50.0,
+            total_debt_cny=20.0,
+            revenue_lkr=500.0,
         )
 
-        assert block.start_lkr_per_usd == 375.0
-        assert block.annual_depr == 0.03
-        assert block.base_currency == "USD"
-        assert block.target_currency == "LKR"
-        assert block.regime == RegimeType.RECENT
+        assert vol.period == 0
+        assert vol.total_debt_lkr == 1000.0
+        assert vol.total_debt_usd == 50.0
+        assert vol.total_debt_cny == 20.0
+        assert vol.revenue_lkr == 500.0
 
-    def test_zero_start_rate_rejected(self) -> None:
-        """Start rate must be > 0."""
-        with pytest.raises(ValueError, match="start_lkr_per_usd"):
-            FXStructuredBlock(
-                start_lkr_per_usd=0.0,
-                annual_depr=0.03,
+    def test_volumetry_usd_exposure(self) -> None:
+        """Test USD exposure equivalent calculation."""
+        vol = FXVolumetry(
+            period=1,
+            total_debt_lkr=6000.0,  # ~20 USD at 300 LKR/USD
+            total_debt_usd=100.0,
+            interest_lkr=1500.0,  # ~5 USD
+        )
+
+        # Should be approx 100 (USD debt) + 20 (LKR debt equiv) + 5 (interest equiv) = 125
+        exposure = vol.total_usd_exposure_equivalent
+        assert 120.0 < exposure < 130.0  # Approximate due to spot rate assumption
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FXCurveOutput Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestFXCurveOutput:
+    """Tests for FX curve time-series outputs."""
+
+    def test_valid_fx_curve(self) -> None:
+        """Valid FX curve should construct."""
+        curve = FXCurveOutput(
+            years=[0, 1, 2],
+            lkr_usd=[300.0, 310.0, 320.0],
+            source="base_case",
+        )
+
+        assert curve.years == [0, 1, 2]
+        assert curve.lkr_usd == [300.0, 310.0, 320.0]
+        assert curve.source == "base_case"
+
+    def test_curve_length_mismatch_rejected(self) -> None:
+        """Years and rates must have same length."""
+        with pytest.raises(ValueError, match="same length"):
+            FXCurveOutput(
+                years=[0, 1, 2],
+                lkr_usd=[300.0, 310.0],  # Mismatch!
             )
 
-    def test_negative_start_rate_rejected(self) -> None:
-        """Negative start rate rejected."""
-        with pytest.raises(ValueError, match="start_lkr_per_usd"):
-            FXStructuredBlock(
-                start_lkr_per_usd=-10.0,
-                annual_depr=0.03,
+    def test_negative_rate_rejected(self) -> None:
+        """Rates must be positive."""
+        with pytest.raises(ValueError, match="must be > 0"):
+            FXCurveOutput(
+                years=[0, 1],
+                lkr_usd=[300.0, -10.0],  # Negative rate!
             )
 
-    def test_negative_volatility_rejected(self) -> None:
-        """Volatility must be >= 0."""
-        with pytest.raises(ValueError, match="volatility"):
-            FXStructuredBlock(
-                start_lkr_per_usd=375.0,
-                annual_depr=0.03,
-                volatility=-0.1,
+    def test_zero_rate_rejected(self) -> None:
+        """Zero rates not allowed."""
+        with pytest.raises(ValueError, match="must be > 0"):
+            FXCurveOutput(
+                years=[0, 1],
+                lkr_usd=[300.0, 0.0],  # Zero rate!
             )
 
-    @pytest.mark.parametrize(
-        "correlation",
-        [-1.5, 1.5, 2.0],
-        ids=["too_low", "too_high", "way_too_high"],
-    )
-    def test_invalid_correlation_rejected(
-        self, correlation: float
-    ) -> None:
-        """Correlation must be in [-1, 1]."""
-        with pytest.raises(ValueError, match="correlation_with_revenue"):
-            FXStructuredBlock(
-                start_lkr_per_usd=375.0,
-                annual_depr=0.03,
-                correlation_with_revenue=correlation,
-            )
-
-    @pytest.mark.parametrize(
-        "hedge",
-        [-0.1, 1.1, 2.0],
-        ids=["negative", "over_100pct", "way_over"],
-    )
-    def test_invalid_hedge_ratio_rejected(self, hedge: float) -> None:
-        """Hedge ratio must be in [0, 1]."""
-        with pytest.raises(ValueError, match="hedge_ratio"):
-            FXStructuredBlock(
-                start_lkr_per_usd=375.0,
-                annual_depr=0.03,
-                hedge_ratio=hedge,
-            )
-
-    def test_appreciation_scenario_accepted(self) -> None:
-        """Negative depreciation (appreciation) is valid."""
-        block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=-0.02,
+    def test_get_rate_lkr_usd(self) -> None:
+        """Retrieve rate for specific year and pair."""
+        curve = FXCurveOutput(
+            years=[0, 1, 2],
+            lkr_usd=[300.0, 310.0, 320.0],
         )
 
-        assert block.annual_depr == -0.02
+        assert curve.get_rate(0, "lkr_usd") == 300.0
+        assert curve.get_rate(1, "lkr_usd") == 310.0
+        assert curve.get_rate(2, "lkr_usd") == 320.0
 
-
-class TestFXRegimeScenarios:
-    """Tests for multi-regime scenario support."""
-
-    def test_valid_regime_scenario(self) -> None:
-        """Valid scenario should construct."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+    def test_get_rate_year_not_found(self) -> None:
+        """Raise IndexError if year not in curve."""
+        curve = FXCurveOutput(
+            years=[0, 1, 2],
+            lkr_usd=[300.0, 310.0, 320.0],
         )
 
-        scenario = FXRegimeScenario(
-            scenario_name="Base Case",
-            structured_block=base_block,
-            probability=0.6,
-            years=20,
+        with pytest.raises(IndexError, match="not in curve"):
+            curve.get_rate(5, "lkr_usd")
+
+    def test_get_rate_optional_currency(self) -> None:
+        """Retrieve rate for optional currency pairs."""
+        curve = FXCurveOutput(
+            years=[0, 1],
+            lkr_usd=[300.0, 310.0],
+            lkr_cny=[45.0, 46.0],
         )
 
-        assert scenario.scenario_name == "Base Case"
-        assert scenario.probability == 0.6
-        assert scenario.years == 20
+        assert curve.get_rate(0, "lkr_cny") == 45.0
+        assert curve.get_rate(1, "lkr_cny") == 46.0
 
-    def test_invalid_probability_rejected(self) -> None:
-        """Probability must be in [0, 1]."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+    def test_get_rate_unavailable_currency(self) -> None:
+        """Raise ValueError if optional currency not in curve."""
+        curve = FXCurveOutput(
+            years=[0, 1],
+            lkr_usd=[300.0, 310.0],
         )
 
-        with pytest.raises(ValueError, match="probability"):
-            FXRegimeScenario(
-                scenario_name="Bad",
-                structured_block=base_block,
-                probability=1.5,
-                years=20,
-            )
+        with pytest.raises(ValueError, match="not available"):
+            curve.get_rate(0, "lkr_cny")
 
-    def test_zero_years_rejected(self) -> None:
-        """Years must be >= 1."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+    def test_fx_curve_to_dict(self) -> None:
+        """FXCurveOutput serializes to dict."""
+        curve = FXCurveOutput(
+            years=[0, 1],
+            lkr_usd=[300.0, 310.0],
+            source="test",
+            notes="test curve",
         )
 
-        with pytest.raises(ValueError, match="years"):
-            FXRegimeScenario(
-                scenario_name="Bad",
-                structured_block=base_block,
-                probability=0.5,
-                years=0,
-            )
+        result = curve.to_dict()
 
-    def test_shock_scenario(self) -> None:
-        """Shock scenario with magnitude."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        scenario = FXRegimeScenario(
-            scenario_name="Stressed",
-            structured_block=base_block,
-            probability=0.1,
-            years=20,
-            apply_shock=True,
-            shock_magnitude=0.15,
-        )
-
-        assert scenario.apply_shock is True
-        assert scenario.shock_magnitude == 0.15
+        assert result["years"] == [0, 1]
+        assert result["lkr_usd"] == [300.0, 310.0]
+        assert result["source"] == "test"
+        assert result["notes"] == "test curve"
 
 
-class TestFXRiskProfiles:
-    """Tests for lender-grade risk profile outputs."""
+# ═════════════════════════════════════════════════════════════════════════════
+# FXRiskProfile Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestFXRiskProfile:
+    """Tests for lender-grade FX risk metrics."""
 
     def test_valid_risk_profile(self) -> None:
         """Valid risk profile should construct."""
         risk = FXRiskProfile(
-            scenario_name="Base",
-            var_95=15.0,
-            var_99=22.5,
-            expected_shortfall=18.0,
-            max_drawdown_pct=12.5,
-            sharpe_ratio=0.85,
-            volatility_realized=0.10,
+            var_95_usd_million=5.0,
+            cvar_95_usd_million=7.5,
+            debt_lkr_pct=60.0,
+            debt_usd_pct=40.0,
+            debt_concentration_hhi=0.52,
         )
 
-        assert risk.scenario_name == "Base"
-        assert risk.var_95 == 15.0
-        assert risk.var_99 == 22.5
+        assert risk.var_95_usd_million == 5.0
+        assert risk.cvar_95_usd_million == 7.5
+        assert risk.debt_lkr_pct == 60.0
+        assert risk.debt_usd_pct == 40.0
 
-    def test_risk_profile_with_correlation_matrix(self) -> None:
-        """Risk profile with multi-currency correlation."""
-        corr_matrix = ((1.0, 0.75), (0.75, 1.0))
+    def test_debt_percentages_must_sum_to_100(self) -> None:
+        """Debt percentages must sum to ~100%."""
+        with pytest.raises(ValueError, match="sum to ~100%"):
+            FXRiskProfile(
+                var_95_usd_million=5.0,
+                cvar_95_usd_million=7.5,
+                debt_lkr_pct=60.0,
+                debt_usd_pct=20.0,  # Only 80% total!
+            )
 
+    def test_var_must_be_less_than_cvar(self) -> None:
+        """VaR must be <= CVaR."""
+        with pytest.raises(ValueError, match="VaR .* must be <= CVaR"):
+            FXRiskProfile(
+                var_95_usd_million=10.0,  # VaR > CVaR!
+                cvar_95_usd_million=7.5,
+                debt_lkr_pct=60.0,
+                debt_usd_pct=40.0,
+            )
+
+    def test_hhi_out_of_range_rejected(self) -> None:
+        """HHI must be in [0, 1]."""
+        with pytest.raises(ValueError, match="debt_concentration_hhi"):
+            FXRiskProfile(
+                var_95_usd_million=5.0,
+                cvar_95_usd_million=7.5,
+                debt_lkr_pct=60.0,
+                debt_usd_pct=40.0,
+                debt_concentration_hhi=1.5,  # Out of range!
+            )
+
+    def test_is_high_risk_flag(self) -> None:
+        """is_high_risk flag returns True if VaR exceeds threshold."""
         risk = FXRiskProfile(
-            scenario_name="Multi-currency",
-            var_95=20.0,
-            var_99=30.0,
-            expected_shortfall=25.0,
-            max_drawdown_pct=15.0,
-            sharpe_ratio=0.70,
-            volatility_realized=0.12,
-            correlation_matrix=corr_matrix,
+            var_95_usd_million=8.0,  # Above default 5.0 threshold
+            cvar_95_usd_million=10.0,
+            debt_lkr_pct=60.0,
+            debt_usd_pct=40.0,
         )
 
-        assert risk.correlation_matrix == corr_matrix
+        assert risk.is_high_risk() is True
 
-
-class TestFXSensitivityConfig:
-    """Tests for sensitivity/tornado configuration."""
-
-    def test_valid_sensitivity_config(self) -> None:
-        """Valid sensitivity config should construct."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+    def test_is_not_high_risk(self) -> None:
+        """is_high_risk flag returns False if VaR below threshold."""
+        risk = FXRiskProfile(
+            var_95_usd_million=3.0,  # Below default 5.0 threshold
+            cvar_95_usd_million=4.5,
+            debt_lkr_pct=60.0,
+            debt_usd_pct=40.0,
         )
 
-        sens = FXSensitivityConfig(
-            base_block=base_block,
-            parameter_name="annual_depr",
-            low_value=0.01,
-            high_value=0.05,
-            num_steps=5,
+        assert risk.is_high_risk() is False
+
+    def test_risk_profile_to_dict(self) -> None:
+        """FXRiskProfile serializes to dict."""
+        risk = FXRiskProfile(
+            var_95_usd_million=5.0,
+            cvar_95_usd_million=7.5,
+            debt_lkr_pct=60.0,
+            debt_usd_pct=40.0,
+            correlation_shock_scenario="LKR -15% shock",
+            worst_case_year=7,
         )
 
-        assert sens.parameter_name == "annual_depr"
-        assert sens.low_value == 0.01
-        assert sens.high_value == 0.05
+        result = risk.to_dict()
 
-    def test_num_steps_too_low_rejected(self) -> None:
-        """num_steps must be >= 2."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        with pytest.raises(ValueError, match="num_steps"):
-            FXSensitivityConfig(
-                base_block=base_block,
-                parameter_name="annual_depr",
-                low_value=0.01,
-                high_value=0.05,
-                num_steps=1,
-            )
+        assert result["var_95_usd_million"] == 5.0
+        assert result["cvar_95_usd_million"] == 7.5
+        assert result["debt_lkr_pct"] == 60.0
+        assert result["debt_usd_pct"] == 40.0
+        assert result["correlation_shock_scenario"] == "LKR -15% shock"
+        assert result["worst_case_year"] == 7
+        assert "is_high_risk" in result
 
 
-class TestFXMonteCarloConfig:
-    """Tests for Monte Carlo simulation configuration."""
-
-    def test_valid_monte_carlo_config(self) -> None:
-        """Valid MC config with 100k simulations."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        mc_config = FXMonteCarloConfig(
-            base_block=base_block,
-            num_simulations=100_000,
-            time_horizon_years=20,
-        )
-
-        assert mc_config.num_simulations == 100_000
-        assert mc_config.time_horizon_years == 20
-
-    def test_too_few_simulations_rejected(self) -> None:
-        """num_simulations must be >= 1000."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        with pytest.raises(ValueError, match="num_simulations"):
-            FXMonteCarloConfig(
-                base_block=base_block,
-                num_simulations=500,
-                time_horizon_years=20,
-            )
-
-    def test_zero_time_horizon_rejected(self) -> None:
-        """time_horizon_years must be >= 1."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        with pytest.raises(ValueError, match="time_horizon_years"):
-            FXMonteCarloConfig(
-                base_block=base_block,
-                num_simulations=10_000,
-                time_horizon_years=0,
-            )
-
-    def test_monte_carlo_with_seed(self) -> None:
-        """MC config with seed for reproducibility."""
-        base_block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-        )
-
-        mc_config = FXMonteCarloConfig(
-            base_block=base_block,
-            num_simulations=100_000,
-            time_horizon_years=20,
-            seed=42,
-        )
-
-        assert mc_config.seed == 42
+# ═════════════════════════════════════════════════════════════════════════════
+# FXStructuredBlock Tests
+# ═════════════════════════════════════════════════════════════════════════════
 
 
-class TestFXLoader:
-    """Tests for FX loader functions."""
+class TestFXStructuredBlock:
+    """Tests for FXStructuredBlock primary configuration."""
 
-    def test_load_valid_structured_block(self) -> None:
-        """Load valid FX structured block from dict."""
-        config = {
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": 0.03,
-            }
-        }
-
-        block = load_fx_structured_block(config)
-
-        assert block.start_lkr_per_usd == 375.0
-        assert block.annual_depr == 0.03
-
-    def test_load_missing_fx_key_raises(self) -> None:
-        """Missing 'fx' key should raise KeyError."""
-        config = {"project": {"name": "test"}}
-
-        with pytest.raises(KeyError, match="fx"):
-            load_fx_structured_block(config)
-
-    def test_load_scalar_fx_raises(self) -> None:
-        """Scalar FX config should raise ValueError."""
-        config = {"fx": 375.0}
-
-        with pytest.raises(ValueError, match="Scalar 'fx' configs"):
-            load_fx_structured_block(config)
-
-    def test_validate_fx_structured_config_valid(self) -> None:
-        """Validation should pass for valid config."""
-        config = {
-            "fx": {
-                "start_lkr_per_usd": 375.0,
-                "annual_depr": 0.03,
-            }
-        }
-
-        assert validate_fx_structured_config(config) is True
-
-    def test_validate_fx_missing_keys_fails(self) -> None:
-        """Validation should fail for missing keys."""
-        config = {"fx": {"start_lkr_per_usd": 375.0}}
-
-        assert validate_fx_structured_config(config) is False
-
-
-class TestFXCurveGeneration:
-    """Tests for FX curve generation from structured blocks."""
-
-    def test_build_fx_curve_basic(self) -> None:
-        """Build basic FX curve from structured block."""
+    def test_valid_structured_block(self) -> None:
+        """Valid FX structured block should construct."""
         block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
+            strategy="natural_hedge",
+            base_currency="USD",
+            fx_match_ratio=75.0,
+            hedging_coverage_pct=25.0,
         )
 
-        curve = build_fx_curve_from_block(block, years=3)
+        assert block.strategy == "natural_hedge"
+        assert block.base_currency == "USD"
+        assert block.fx_match_ratio == 75.0
+        assert block.hedging_coverage_pct == 25.0
 
-        assert len(curve.rates) == 3
-        assert curve.years == [0, 1, 2]
-        # Year 0: 375.0 * 1.03^0 = 375.0
-        assert abs(curve.rates[0] - 375.0) < 0.01
-        # Year 1: 375.0 * 1.03^1 = 386.25
-        assert abs(curve.rates[1] - 386.25) < 0.01
-
-    def test_build_fx_curve_with_confidence_interval(self) -> None:
-        """Build FX curve with 95% confidence intervals."""
-        block = FXStructuredBlock(
-            start_lkr_per_usd=375.0,
-            annual_depr=0.03,
-            volatility=0.10,
-        )
-
-        curve = build_fx_curve_from_block(
-            block, years=3, include_confidence_interval=True
-        )
-
-        assert curve.confidence_interval_lower is not None
-        assert curve.confidence_interval_upper is not None
-        assert len(curve.confidence_interval_lower) == 3
-        assert len(curve.confidence_interval_upper) == 3
-
-    def test_curve_output_validation(self) -> None:
-        """FXCurveOutput validates length consistency."""
-        with pytest.raises(ValueError, match="Length mismatch"):
-            FXCurveOutput(
-                years=[0, 1, 2],
-                rates=[375.0, 386.25],  # Mismatch
-                regime=RegimeType.RECENT,
-                metadata={},
+    def test_fx_match_ratio_out_of_range_rejected(self) -> None:
+        """fx_match_ratio must be in [0, 100]."""
+        with pytest.raises(ValueError, match="fx_match_ratio"):
+            FXStructuredBlock(
+                fx_match_ratio=150.0,  # Out of range!
             )
+
+    def test_hedging_coverage_out_of_range_rejected(self) -> None:
+        """hedging_coverage_pct must be in [0, 100]."""
+        with pytest.raises(ValueError, match="hedging_coverage_pct"):
+            FXStructuredBlock(
+                hedging_coverage_pct=-10.0,  # Negative!
+            )
+
+    def test_invalid_base_currency_rejected(self) -> None:
+        """base_currency must be in valid set."""
+        with pytest.raises(ValueError, match="base_currency"):
+            FXStructuredBlock(
+                base_currency="JPY",  # Not in valid set!
+            )
+
+    def test_invalid_reporting_currency_rejected(self) -> None:
+        """reporting_currency must be in valid set."""
+        with pytest.raises(ValueError, match="reporting_currency"):
+            FXStructuredBlock(
+                reporting_currency="AUD",  # Not in valid set!
+            )
+
+    def test_total_periods_empty_volumetry(self) -> None:
+        """total_periods returns 0 if no volumetry."""
+        block = FXStructuredBlock()
+
+        assert block.total_periods() == 0
+
+    def test_total_periods_with_volumetry(self) -> None:
+        """total_periods returns length of volumetry list."""
+        vol1 = FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=50.0)
+        vol2 = FXVolumetry(period=1, total_debt_lkr=900.0, total_debt_usd=45.0)
+
+        block = FXStructuredBlock(
+            volumetry=[vol1, vol2],
+        )
+
+        assert block.total_periods() == 2
+
+    def test_total_debt_usd_equivalent(self) -> None:
+        """Calculate total debt in USD equivalent."""
+        vol1 = FXVolumetry(period=0, total_debt_lkr=3000.0, total_debt_usd=100.0, total_debt_cny=10.0)
+        vol2 = FXVolumetry(period=1, total_debt_lkr=6000.0, total_debt_usd=200.0, total_debt_cny=15.0)
+
+        block = FXStructuredBlock(
+            volumetry=[vol1, vol2],
+        )
+
+        # Uses final period: 6000 LKR / 300 = 20 USD, + 200 USD + 15 CNY = 235 USD
+        total = block.total_debt_usd_equivalent(spot_rate_lkr_usd=300.0)
+        assert abs(total - 235.0) < 1.0
+
+    def test_structured_block_to_dict(self) -> None:
+        """FXStructuredBlock serializes to dict."""
+        vol = FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=50.0)
+
+        block = FXStructuredBlock(
+            strategy="blended",
+            volumetry=[vol],
+            fx_match_ratio=60.0,
+            notes="test block",
+        )
+
+        result = block.to_dict()
+
+        assert result["strategy"] == "blended"
+        assert result["fx_match_ratio"] == 60.0
+        assert result["notes"] == "test block"
+        assert len(result["volumetry"]) == 1
+        assert result["volumetry"][0]["period"] == 0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Integration Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestFXIntegration:
+    """Integration tests combining multiple FX contracts."""
+
+    def test_complete_fx_scenario(self) -> None:
+        """Test complete FX scenario with all contracts."""
+        # Create volumetry
+        vol = FXVolumetry(
+            period=0,
+            total_debt_lkr=10000.0,
+            total_debt_usd=500.0,
+            revenue_lkr=2000.0,
+            interest_lkr=800.0,
+        )
+
+        # Create structured block
+        block = FXStructuredBlock(
+            strategy="natural_hedge",
+            volumetry=[vol],
+            fx_match_ratio=70.0,
+            debt_tranches={"LKR_Tranche": "LKR", "USD_Tranche": "USD"},
+        )
+
+        # Create FX curve
+        curve = FXCurveOutput(
+            years=[0, 1, 2],
+            lkr_usd=[300.0, 310.0, 320.0],
+            source="base_case",
+        )
+
+        # Create risk profile
+        risk = FXRiskProfile(
+            var_95_usd_million=5.0,
+            cvar_95_usd_million=7.5,
+            debt_lkr_pct=65.0,
+            debt_usd_pct=35.0,
+        )
+
+        # Validate all constructed correctly
+        assert block.strategy == "natural_hedge"
+        assert len(curve.years) == 3
+        assert risk.is_high_risk() is False
+
+        # Validate serialization
+        block_dict = block.to_dict()
+        curve_dict = curve.to_dict()
+        risk_dict = risk.to_dict()
+
+        assert "volumetry" in block_dict
+        assert "lkr_usd" in curve_dict
+        assert "var_95_usd_million" in risk_dict
 
 
 # EOF
