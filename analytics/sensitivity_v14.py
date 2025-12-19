@@ -486,12 +486,12 @@ def analyze_single_parameter(
         impact_dir,
     )
 
-    return TornadoResult(
-        variable=label,
-        base_irr=base_metric_value,
-        low_irr=low_metric,
-        high_irr=high_metric,
-    )
+    return TornadoResult.model_validate({
+        "variable": label,
+        "base_irr": base_metric_value,
+        "low_irr": low_metric,
+        "high_irr": high_metric,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -992,12 +992,12 @@ def run_breakeven_parameter(
         fm = objective(mid)
 
         if abs(fm) <= tol:
-            return BreakevenResult(
-                variable=variable_name,
-                breakeven_value=mid,
-                bracket=(a, b),
-                status="success",
-            )
+            return BreakevenResult.model_validate({
+                "variable": variable_name,
+                "breakeven_value": mid,
+                "bracket": (a, b),
+                "status": "success",
+            })
 
         if fa * fm < 0:
             b, fb = mid, fm
@@ -1006,12 +1006,12 @@ def run_breakeven_parameter(
 
     # If we get here, max_iter exceeded; still return a structured result
     mid = 0.5 * (a + b)
-    return BreakevenResult(
-        variable=variable_name,
-        breakeven_value=mid,
-        bracket=(a, b),
-        status="max_iter_exceeded",
-    )
+    return BreakevenResult.model_validate({
+        "variable": variable_name,
+        "breakeven_value": mid,
+        "bracket": (a, b),
+        "status": "max_iter_exceeded",
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════

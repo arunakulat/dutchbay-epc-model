@@ -24,7 +24,7 @@ The scenario configuration must provide at least:
 
 tax:
   corporate_tax_rate: 0.30
-  depreciation_method: "straight_line"
+  depreciation_method: "straight_line"  # OPTIONAL - defaults to "straight_line"
   depreciation_start_year: 1
   depreciation_years: 15
   enhanced_allowance_applies: false
@@ -108,7 +108,10 @@ class TaxConfig:
 
         # Required keys
         corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
-        depreciation_method = str(_require_key(tax, "depreciation_method", "tax"))
+        
+        # PYDANTIC V2 FIX: Make depreciation_method optional with default
+        depreciation_method = str(tax.get("depreciation_method", "straight_line"))
+        
         depreciation_start_year = int(
             _require_key(tax, "depreciation_start_year", "tax")
         )
