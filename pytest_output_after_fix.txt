@@ -1,0 +1,2015 @@
+
+==============================================================================
+TEST MODE: FAST (20 iterations, 3 params)
+Expected runtime: ~30 seconds for full suite
+Use --full-iterations for production validation
+==============================================================================
+
+============================= test session starts ==============================
+platform darwin -- Python 3.11.14, pytest-9.0.1, pluggy-1.6.0 -- /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/.venv311/bin/python3.11
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml, tox.ini!)
+testpaths: tests
+plugins: anyio-4.11.0, hypothesis-6.147.0, xdist-3.8.0, hydra-core-1.3.2, cov-7.0.0
+collecting ... collected 580 items
+
+tests/analytics_layer/test_casper_tail_risk_payload.py::test_casper_payload_includes_tail_risk_metadata FAILED [  0%]
+tests/analytics_layer/test_casper_tail_risk_summary.py::test_build_casper_payload_includes_tail_risk_summary FAILED [  0%]
+tests/analytics_layer/test_generation_contracts_v14.py::test_technology_breakdown_snapshot FAILED [  0%]
+tests/analytics_layer/test_sensitivity_breakeven_contract.py::test_run_breakeven_parameter_uses_absolute_overrides_and_converges FAILED [  0%]
+tests/analytics_layer/test_sensitivity_regression.py::test_tornado_reproducibility SKIPPED [  0%]
+tests/analytics_layer/test_sensitivity_regression.py::test_breakeven_solution SKIPPED [  1%]
+tests/analytics_layer/test_sensitivity_regression.py::test_two_way_heatmap_shape SKIPPED [  1%]
+tests/analytics_layer/test_sensitivity_regression.py::test_pareto_feasible_points SKIPPED [  1%]
+tests/analytics_layer/test_sensitivity_regression.py::test_multi_metric_impacts SKIPPED [  1%]
+tests/analytics_layer/test_sensitivity_run_contract.py::test_run_with_sensitivity_request_uses_gateway_and_returns_suite FAILED [  1%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_compute_tail_risk_stats_basic PASSED [  1%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_resolve_low_metric_column_prefers_known_candidates PASSED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_resolve_low_metric_column_raises_when_missing PASSED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_enrich_tornado_with_tail_risk_basic PASSED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_enrich_tornado_with_tail_risk_invalid_confidence PASSED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk.py::test_enrich_tornado_with_tail_risk_missing_metric_samples PASSED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk_api.py::test_enrich_tornado_with_tail_risk_happy_path FAILED [  2%]
+tests/analytics_layer/test_sensitivity_tail_risk_api.py::test_enrich_tornado_with_tail_risk_rejects_bad_confidence FAILED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_single_level PASSED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_two_levels PASSED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_three_levels PASSED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_list_path PASSED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_empty_string_path PASSED [  3%]
+tests/analytics_layer/test_sensitivity_v14.py::TestBuildNestedOverride::test_empty_list_path PASSED [  4%]
+tests/analytics_layer/test_sensitivity_v14.py::TestYamlErrorHandling::test_missing_file_raises_file_not_found PASSED [  4%]
+tests/analytics_layer/test_sensitivity_v14.py::TestYamlErrorHandling::test_empty_yaml_raises_value_error PASSED [  4%]
+tests/analytics_layer/test_sensitivity_v14.py::TestYamlErrorHandling::test_invalid_yaml_structure_raises_value_error PASSED [  4%]
+tests/analytics_layer/test_sensitivity_v14.py::TestYamlErrorHandling::test_valid_parameter_list PASSED [  4%]
+tests/analytics_layer/test_sensitivity_v14.py::TestAnalyzeSingleParameter::test_basic_analysis FAILED [  5%]
+tests/analytics_layer/test_sensitivity_v14.py::TestAnalyzeSingleParameter::test_missing_metric_raises_key_error PASSED [  5%]
+tests/analytics_layer/test_sensitivity_v14.py::TestRunTornadoSensitivity::test_happy_path_with_request FAILED [  5%]
+tests/analytics_layer/test_sensitivity_v14.py::TestRunTornadoSensitivity::test_legacy_api_with_string_config_path FAILED [  5%]
+tests/analytics_layer/test_sensitivity_v14.py::TestRunTornadoSensitivity::test_metric_missing_in_base_kpis_raises_key_error PASSED [  5%]
+tests/analytics_layer/test_sensitivity_v14_api.py::TestSensitivityRunFacade::test_run_facade_basic FAILED [  5%]
+tests/analytics_layer/test_sensitivity_v14_api.py::TestSensitivityRunFacade::test_run_rejects_legacy_call_style PASSED [  6%]
+tests/analytics_layer/test_sensitivity_v14_behavioral_imports.py::test_sensitivity_v14_no_forbidden_imports PASSED [  6%]
+tests/analytics_layer/test_sensitivity_v14_behavioral_imports.py::test_sensitivity_v14_no_direct_pipeline_calls PASSED [  6%]
+tests/analytics_layer/test_sensitivity_v14_behavioral_imports.py::test_sensitivity_v14_has_required_evaluate_scenario PASSED [  6%]
+tests/analytics_layer/test_sensitivity_v14_behavioral_imports.py::test_sensitivity_v14_syntax_valid PASSED [  6%]
+tests/api/test_bad_missing_tax_schema_guard.py::test_bad_missing_tax_yaml_is_rejected_by_schema_guard PASSED [  6%]
+tests/api/test_cashflow_module.py::test_cashflow_module_path_is_v14chat PASSED [  7%]
+tests/api/test_cashflow_module.py::test_net_production_uses_hours_per_year_constant PASSED [  7%]
+tests/api/test_cashflow_module.py::test_build_annual_cfads_minimal_valid_params FAILED [  7%]
+tests/api/test_cashflow_risk_haircut_v14.py::test_cfads_risk_haircut_applied_to_posttax_cfads[scenarios/dutchbay_lendercase_2025Q4.yaml-0.1] PASSED [  7%]
+tests/api/test_cashflow_tax_and_life.py::test_project_life_5_vs_20_years_shapes_and_magnitude FAILED [  7%]
+tests/api/test_cashflow_tax_and_life.py::test_tax_holiday_increases_early_cfads FAILED [  7%]
+tests/api/test_cashflow_tax_and_life.py::test_enhanced_allowance_does_not_hurt_early_cfads FAILED [  8%]
+tests/api/test_cashflow_tax_and_life.py::test_high_opex_stress_reduces_cfads FAILED [  8%]
+tests/api/test_cashflow_tax_and_life.py::test_zero_tariff_collapses_cfads FAILED [  8%]
+tests/api/test_cashflow_v14.py::test_cashflow_basic_consistency FAILED   [  8%]
+tests/api/test_cashflow_v14.py::test_cashflow_zero_risk_haircut_means_posttax_equals_cfads FAILED [  8%]
+tests/api/test_cashflow_v14.py::test_validate_parameters_fails_when_capacity_missing PASSED [  8%]
+tests/api/test_cashflow_v14_regression.py::test_cfads_increases_when_tariff_increases FAILED [  9%]
+tests/api/test_cashflow_v14_regression.py::test_cfads_zero_when_tariff_zero FAILED [  9%]
+tests/api/test_cashflow_v14_regression.py::test_degradation_reduces_production_over_time FAILED [  9%]
+tests/api/test_cashflow_v14_rows.py::test_build_annual_rows_cfads_aliases_and_keys PASSED [  9%]
+tests/api/test_cashflow_v14_rows2.py::test_risk_adjustment_cfads_haircut_is_applied PASSED [  9%]
+tests/api/test_casper_v14_smoke.py::test_casper_v14_orchestrator_smoke XFAIL [ 10%]
+tests/api/test_casper_v14_smoke_iteration1.py::test_casper_smoke XFAIL   [ 10%]
+tests/api/test_casper_v14_smoke_iteration2.py::test_casper_smoke_iteration2 XFAIL [ 10%]
+tests/api/test_config_schema_guard.py::test_cashflow_fields_are_registered PASSED [ 10%]
+tests/api/test_config_schema_guard.py::test_schema_guard_detects_missing_corporate_tax_rate PASSED [ 10%]
+tests/api/test_covenants_lendercase_2025Q4.py::test_lendercase_pipeline_shapes_and_balances PASSED [ 10%]
+tests/api/test_covenants_ring_fence_smoke_v14.py::test_ring_fence_covenants_smoke FAILED [ 11%]
+tests/api/test_covenants_v14.py::test_covenants_basecase_dscr_and_balances FAILED [ 11%]
+tests/api/test_covenants_v14.py::test_covenants_stresscase_flags_review_when_cover_thin FAILED [ 11%]
+tests/api/test_debt_construction_idc_regression_v14.py::test_lendercase_construction_and_tenor_pinned PASSED [ 11%]
+tests/api/test_debt_construction_idc_regression_v14.py::test_lendercase_idc_totals_pinned PASSED [ 11%]
+tests/api/test_debt_construction_idc_regression_v14.py::test_edge_stress_construction_and_tenor_pinned PASSED [ 11%]
+tests/api/test_debt_construction_idc_regression_v14.py::test_edge_stress_idc_totals_pinned PASSED [ 12%]
+tests/api/test_debt_v14_construction.py::test_plan_debt_construction_timeline_and_idc FAILED [ 12%]
+tests/api/test_debt_v14_construction.py::test_plan_debt_dscr_and_audit_status FAILED [ 12%]
+tests/api/test_edgecases.py::test_bad_params_are_caught_by_schema_guard[negative_cf] PASSED [ 12%]
+tests/api/test_edgecases.py::test_zero_tax_rate_edge_case_passes PASSED  [ 12%]
+tests/api/test_edgecases.py::test_range_validation_edge_cases[zero_capex] SKIPPED [ 12%]
+tests/api/test_edgecases.py::test_range_validation_edge_cases[negative_capex] SKIPPED [ 13%]
+tests/api/test_epc_helper_v14.py::test_epc_breakdown_basic_with_fx_in_config PASSED [ 13%]
+tests/api/test_epc_helper_v14.py::test_epc_breakdown_uses_default_fx_when_config_missing_fx PASSED [ 13%]
+tests/api/test_equity_distribution_v14.py::test_equity_config_creation PASSED [ 13%]
+tests/api/test_equity_distribution_v14.py::test_schema_guard_raises_on_bad_config PASSED [ 13%]
+tests/api/test_equity_distribution_v14.py::test_equity_engine_init PASSED [ 13%]
+tests/api/test_equity_distribution_v14.py::test_equity_engine_init_missing_config PASSED [ 14%]
+tests/api/test_equity_distribution_v14.py::test_calculate_distributions PASSED [ 14%]
+tests/api/test_equity_distribution_v14.py::test_calculate_distributions_stress PASSED [ 14%]
+tests/api/test_equity_distribution_v14.py::test_equity_engine_run PASSED [ 14%]
+tests/api/test_equity_distribution_v14.py::test_equity_engine_run_stress PASSED [ 14%]
+tests/api/test_equity_distribution_v14.py::test_equity_edge_case_zero_years PASSED [ 15%]
+tests/api/test_equity_distribution_v14.py::test_equity_result_json_serializable PASSED [ 15%]
+tests/api/test_equity_distribution_v14.py::test_equity_type_hints PASSED [ 15%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionConfig::test_config_creation_with_defaults PASSED [ 15%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionConfig::test_config_creation_with_custom_values PASSED [ 15%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionConfig::test_config_validation_invalid_dscr PASSED [ 15%]
+tests/api/test_equity_distribution_v14_regression.py::TestCovenantGate::test_dscr_gate_pass PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestCovenantGate::test_dscr_gate_fail PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestCovenantGate::test_llcr_gate_pass PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestCovenantGate::test_all_gates_evaluation PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionCalculator::test_calculate_required_reserves PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionCalculator::test_calculate_available_for_equity_with_reserve_rebuild PASSED [ 16%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionCalculator::test_distribute_to_equity_tiers PASSED [ 17%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionIntegration::test_distribution_enabled_scenario FAILED [ 17%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionIntegration::test_distribution_disabled_early_years PASSED [ 17%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionIntegration::test_distribution_covenant_gate_fail PASSED [ 17%]
+tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionIntegration::test_distribution_output_serialization PASSED [ 17%]
+tests/api/test_equity_v14.py::test_summarise_equity_cashflows_basic PASSED [ 17%]
+tests/api/test_equity_v14.py::test_calculate_equity_irr_standard_case_matches_core_irr PASSED [ 18%]
+tests/api/test_equity_v14.py::test_calculate_equity_irr_no_sign_change_returns_none PASSED [ 18%]
+tests/api/test_equity_v14.py::test_calculate_equity_npv_respects_discount_rate PASSED [ 18%]
+tests/api/test_equity_v14.py::test_calculate_cash_on_cash_basic PASSED   [ 18%]
+tests/api/test_equity_v14.py::test_calculate_cash_on_cash_handles_zero_invested PASSED [ 18%]
+tests/api/test_equity_v14.py::test_calculate_moic_basic PASSED           [ 18%]
+tests/api/test_equity_v14.py::test_calculate_moic_invalid_invested PASSED [ 19%]
+tests/api/test_equity_v14.py::test_calculate_payback_period_fractional_year PASSED [ 19%]
+tests/api/test_equity_v14.py::test_calculate_payback_period_handles_never_payback PASSED [ 19%]
+tests/api/test_equity_v14.py::test_calculate_pe_triad_basic PASSED       [ 19%]
+tests/api/test_equity_v14.py::test_calculate_pe_triad_invalid_capital_called PASSED [ 19%]
+tests/api/test_equity_v14.py::test_calculate_equity_performance_happy_path PASSED [ 20%]
+tests/api/test_executive_workbook_import.py::test_import_executive_workbook_module PASSED [ 20%]
+tests/api/test_executive_workbook_smoke.py::test_executive_workbook_basic_structure PASSED [ 20%]
+tests/api/test_export_helpers_v14.py::test_excel_exporter_end_to_end PASSED [ 20%]
+tests/api/test_export_helpers_v14.py::test_chart_generator_dscr_and_debt_smokes PASSED [ 20%]
+tests/api/test_export_helpers_v14.py::test_chart_generator_kpi_and_distribution_smokes PASSED [ 20%]
+tests/api/test_finance_utils.py::test_get_nested_happy_path_and_missing PASSED [ 21%]
+tests/api/test_finance_utils.py::test_as_float_success_and_failure PASSED [ 21%]
+tests/api/test_finance_utils.py::test_as_int_success_and_failure PASSED  [ 21%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_missing_fx_key_raises PASSED [ 21%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_scalar_fx_rejected PASSED [ 21%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_non_mapping_rejected PASSED [ 21%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_missing_start_key_rejected PASSED [ 22%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_non_numeric_start_rejected PASSED [ 22%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_non_numeric_annual_depr_rejected PASSED [ 22%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_happy_path_defaults_annual_depr_to_zero PASSED [ 22%]
+tests/api/test_fx_resolver_unit.py::test_resolve_fx_happy_path_with_explicit_annual_depr PASSED [ 22%]
+tests/api/test_irr_core.py::test_npv_matches_doc_example PASSED          [ 22%]
+tests/api/test_irr_core.py::test_irr_matches_expected_range_for_example PASSED [ 23%]
+tests/api/test_irr_core.py::test_xnpv_two_cashflows_one_year_apart_current_baseline PASSED [ 23%]
+tests/api/test_irr_core.py::test_xirr_recovers_current_baseline_rate_for_simple_case PASSED [ 23%]
+tests/api/test_irr_core.py::test_xirr_raises_on_mismatched_lengths PASSED [ 23%]
+tests/api/test_irr_is_singleton_refactored.py::test_no_irr_npvs_in_metrics_module PASSED [ 23%]
+tests/api/test_irr_is_singleton_refactored.py::test_irr_functions_exist_in_finance_irr PASSED [ 23%]
+tests/api/test_irr_is_singleton_refactored.py::test_metrics_imports_from_finance_irr PASSED [ 24%]
+tests/api/test_irr_module.py::test_npv_basic_discounting PASSED          [ 24%]
+tests/api/test_irr_module.py::test_npv_monotonic_with_rate PASSED        [ 24%]
+tests/api/test_irr_module.py::test_npv_handles_near_minus_one_rate PASSED [ 24%]
+tests/api/test_irr_module.py::test_irr_simple_profile_matches_numpy_financial PASSED [ 24%]
+tests/api/test_irr_module.py::test_irr_all_zero_cashflows_returns_zero PASSED [ 25%]
+tests/api/test_irr_module.py::test_irr_no_sign_change_returns_none PASSED [ 25%]
+tests/api/test_irr_module.py::test_irr_falls_back_when_numpy_financial_raises PASSED [ 25%]
+tests/api/test_irr_module.py::test_xnpv_matches_periodic_npv_for_annual_steps PASSED [ 25%]
+tests/api/test_irr_module.py::test_xirr_two_point_profile PASSED         [ 25%]
+tests/api/test_irr_module.py::test_xnpv_raises_on_length_mismatch PASSED [ 25%]
+tests/api/test_irr_module.py::test_xirr_raises_on_length_mismatch PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_summary_stats_basic_series PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_summary_stats_ignores_non_finite_and_non_numeric PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_calculate_scenario_kpis_uses_annual_rows_cfads_and_cleans_dscr PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_calculate_scenario_kpis_uses_valuation_override PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_calculate_scenario_kpis_degenerate_cfads_when_missing_everywhere PASSED [ 26%]
+tests/api/test_metrics_core_stats.py::test_compute_kpis_adapter_derives_scenario_name_from_config PASSED [ 27%]
+tests/api/test_metrics_module.py::test_metrics_module_imports PASSED     [ 27%]
+tests/api/test_metrics_module.py::test_dscr_summary_keys_and_values PASSED [ 27%]
+tests/api/test_metrics_module.py::test_npv_and_irr_improve_with_higher_cfads PASSED [ 27%]
+tests/api/test_metrics_module.py::test_npv_and_irr_worsen_with_higher_capex PASSED [ 27%]
+tests/api/test_metrics_module.py::test_project_irr_nonzero_for_viable_project PASSED [ 27%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_config_creation PASSED [ 28%]
+tests/api/test_monte_carlo_v14.py::test_schema_guard_raises_on_bad_config PASSED [ 28%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_engine_init PASSED   [ 28%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_engine_init_missing_config PASSED [ 28%]
+tests/api/test_monte_carlo_v14.py::test_simulate_iteration PASSED        [ 28%]
+tests/api/test_monte_carlo_v14.py::test_simulate_iterations_distribution PASSED [ 28%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_engine_run PASSED    [ 29%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_engine_run_stress PASSED [ 29%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_statistics_consistency PASSED [ 29%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_result_json_serializable PASSED [ 29%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_edge_case_single_iteration PASSED [ 29%]
+tests/api/test_monte_carlo_v14.py::test_monte_carlo_type_hints PASSED    [ 30%]
+tests/api/test_monte_carlo_v14.py::test_r7_compliance_uses_finance_irr PASSED [ 30%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_pipeline_init PASSED [ 30%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_pipeline_run PASSED [ 30%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_refinancing_module PASSED [ 30%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_equity_module PASSED [ 30%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_monte_carlo_module PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineBasic::test_stress_tests_module PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineOutput::test_pipeline_result_to_dict PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineOutput::test_pipeline_json_serializable PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineOutput::test_pipeline_result_aggregation PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineIntegration::test_all_modules_executed PASSED [ 31%]
+tests/api/test_pipeline_sprint12.py::TestPipelineIntegration::test_module_sequence PASSED [ 32%]
+tests/api/test_pipeline_sprint12.py::TestPipelineIntegration::test_error_handling PASSED [ 32%]
+tests/api/test_pipeline_sprint12.py::TestPipelineTypeHints::test_pipeline_type_hints PASSED [ 32%]
+tests/api/test_pipeline_sprint12.py::TestPipelineTypeHints::test_pipeline_result_type_hints PASSED [ 32%]
+tests/api/test_refinancing_v14.py::test_refinancing_config_creation FAILED [ 32%]
+tests/api/test_refinancing_v14.py::test_schema_guard_raises_on_bad_config PASSED [ 32%]
+tests/api/test_refinancing_v14.py::test_refinancing_engine_init FAILED   [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_engine_init_missing_config FAILED [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_impact_calculation FAILED [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_impact_stress FAILED [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_impact_unit_suffixes FAILED [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_engine_run FAILED    [ 33%]
+tests/api/test_refinancing_v14.py::test_refinancing_engine_run_stress FAILED [ 34%]
+tests/api/test_refinancing_v14.py::test_refinancing_invalid_date_format FAILED [ 34%]
+tests/api/test_refinancing_v14.py::test_refinancing_result_json_serializable FAILED [ 34%]
+tests/api/test_refinancing_v14.py::test_refinancing_type_hints FAILED    [ 34%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingConfig::test_config_creation_with_defaults PASSED [ 34%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingConfig::test_config_creation_with_custom_values PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingConfig::test_config_validation_invalid_trigger_year PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingTrigger::test_trigger_all_conditions_pass PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingTrigger::test_trigger_year_condition_fails PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingTrigger::test_trigger_dscr_condition_fails PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingTrigger::test_trigger_rate_savings_condition_fails PASSED [ 35%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingCalculator::test_debt_service_payment_basic PASSED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingCalculator::test_debt_service_payment_zero_rate PASSED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingCalculator::test_recalculate_schedule_refinancing FAILED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingCalculator::test_recalculate_covenants PASSED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingIntegration::test_refinancing_triggered_scenario PASSED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingIntegration::test_refinancing_not_triggered_scenario PASSED [ 36%]
+tests/api/test_refinancing_v14_regression.py::TestRefinancingIntegration::test_refinancing_output_serialization PASSED [ 37%]
+tests/api/test_risk_haircut.py::test_cashflow_basic_consistency FAILED   [ 37%]
+tests/api/test_risk_haircut.py::test_cashflow_zero_risk_haircut_means_posttax_equals_cfads FAILED [ 37%]
+tests/api/test_risk_haircut.py::test_validate_parameters_fails_when_capacity_missing PASSED [ 37%]
+tests/api/test_scenario_analytics_schema_guard_integration.py::test_scenario_analytics_stops_on_missing_corporate_tax FAILED [ 37%]
+tests/api/test_scenario_analytics_schema_guard_integration.py::test_scenario_analytics_all_bad_scenarios_raises PASSED [ 37%]
+tests/api/test_scenario_analytics_unit.py::test_build_dataframes_preserves_scenario_name_and_dscr_series PASSED [ 38%]
+tests/api/test_scenario_analytics_unit_scenario_name.py::test_scenario_analytics_labels_and_shapes FAILED [ 38%]
+tests/api/test_scenario_analytics_unit_scenario_name_refactored.py::test_scenario_analytics_labels_and_shapes FAILED [ 38%]
+tests/api/test_scenario_analytics_unit_scenario_name_refactored.py::test_scenario_analytics_runs_multiple_scenarios FAILED [ 38%]
+tests/api/test_scenario_manager_smoke.py::test_iter_config_paths_includes_canonical_scenarios PASSED [ 38%]
+tests/api/test_scenario_manager_smoke.py::test_iter_scenarios_loads_lendercase_via_loader PASSED [ 38%]
+tests/api/test_schema_guard_fx_validation.py::test_schema_guard_rejects_missing_fx PASSED [ 39%]
+tests/api/test_schema_guard_fx_validation.py::test_schema_guard_rejects_scalar_fx PASSED [ 39%]
+tests/api/test_schema_guard_fx_validation.py::test_schema_guard_rejects_fx_missing_start_rate PASSED [ 39%]
+tests/api/test_schema_guard_fx_validation.py::test_schema_guard_accepts_valid_fx_mapping PASSED [ 39%]
+tests/api/test_schema_guard_fx_validation.py::test_schema_guard_accepts_fx_with_zero_depreciation PASSED [ 39%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_stress_engine_init PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_interest_rate_shock_up PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_interest_rate_shock_down PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_market_downturn PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_inflation_stress PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsBasic::test_run_single_scenario PASSED [ 40%]
+tests/api/test_stress_tests_v14.py::TestStressTestsR7Compliance::test_r7_uses_finance_irr PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_rate_shock_up_2pct PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_rate_shock_up_5pct PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_market_downturn_20pct PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_market_downturn_40pct PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_inflation_6pct PASSED [ 41%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_scenario_combined_severe PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsScenarios::test_run_all_scenarios PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsSerialization::test_stress_result_to_dict PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsSerialization::test_export_to_json PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsEdgeCases::test_edge_case_zero_cf PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsEdgeCases::test_edge_case_negative_irr PASSED [ 42%]
+tests/api/test_stress_tests_v14.py::TestStressTestsEdgeCases::test_rate_capping PASSED [ 43%]
+tests/api/test_stress_tests_v14.py::TestStressTestsTypeHints::test_type_hints_engine PASSED [ 43%]
+tests/api/test_stress_tests_v14.py::TestStressTestsTypeHints::test_type_hints_methods PASSED [ 43%]
+tests/api/test_tax_calculator_v14.py::test_calculate_depreciation_schedule_straight_line_basic PASSED [ 43%]
+tests/api/test_tax_calculator_v14.py::test_calculate_depreciation_schedule_unknown_method_returns_empty PASSED [ 43%]
+tests/api/test_tax_calculator_v14.py::test_tax_calculator_defaults_from_config PASSED [ 43%]
+tests/api/test_tax_calculator_v14.py::test_tax_calculator_respects_config_overrides PASSED [ 44%]
+tests/api/test_tax_v14_lender_golden.py::test_tax_v14_lender_golden_surface SKIPPED [ 44%]
+tests/api/test_tax_v14_regression.py::TestTaxProfileConstruction::test_tax_profile_creation_basic PASSED [ 44%]
+tests/api/test_tax_v14_regression.py::TestTaxProfileConstruction::test_tax_profile_lender_case_regression PASSED [ 44%]
+tests/api/test_tax_v14_regression.py::TestTaxProfileConstruction::test_tax_profile_immutable PASSED [ 44%]
+tests/api/test_tax_v14_regression.py::TestTaxCalculations::test_tax_calculation_year_1_in_holiday PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxCalculations::test_tax_calculation_year_13_after_holiday PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxCalculations::test_tax_calculation_depreciation_consistency PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxCalculations::test_tax_calculation_interest_shield_enabled PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxHolidayLogic::test_is_in_tax_holiday_year_1 PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxHolidayLogic::test_is_in_tax_holiday_year_12 PASSED [ 45%]
+tests/api/test_tax_v14_regression.py::TestTaxHolidayLogic::test_is_in_tax_holiday_year_13 PASSED [ 46%]
+tests/api/test_tax_v14_regression.py::TestTaxHolidayLogic::test_is_in_tax_holiday_year_20 PASSED [ 46%]
+tests/api/test_tax_v14_regression.py::TestConfigExtraction::test_extract_tax_config_from_full_config PASSED [ 46%]
+tests/api/test_v14_lender_suite.py::test_v14_pipeline_runs_end_to_end PASSED [ 46%]
+tests/api/test_v14_lender_suite.py::test_scenario_loading_and_validation PASSED [ 46%]
+tests/api/test_wacc_module.py::test_fixed_mode_percent_input_with_default_prudential PASSED [ 46%]
+tests/api/test_wacc_module.py::test_fixed_mode_decimal_input_with_string_bps PASSED [ 47%]
+tests/api/test_wacc_module.py::test_capm_mode_with_gearing_and_inflation PASSED [ 47%]
+tests/api/test_wacc_module.py::test_compute_wacc_from_config_without_block_returns_empty_dict PASSED [ 47%]
+tests/api/test_wacc_module.py::test_build_wacc_roundtrip_structure PASSED [ 47%]
+tests/contracts/test_sensitivity_contracts.py::test_parameter_range_config_minimal FAILED [ 47%]
+tests/contracts/test_sensitivity_contracts.py::test_tornado_result_properties FAILED [ 47%]
+tests/contracts/test_sensitivity_contracts.py::test_sensitivity_suite_instantiation FAILED [ 48%]
+tests/contracts/test_sensitivity_contracts.py::test_breakeven_result FAILED [ 48%]
+tests/contracts/test_sensitivity_contracts.py::test_multimetric_tornado_and_suite FAILED [ 48%]
+tests/contracts/test_sensitivity_contracts.py::test_pareto_frontier_result FAILED [ 48%]
+tests/contracts/test_sensitivity_contracts.py::test_tail_risk_metrics PASSED [ 48%]
+tests/finance/test_cashflow_v14_tax_refactored.py::test_tax_config_from_yaml_missing_required_key_raises PASSED [ 48%]
+tests/finance/test_cashflow_v14_tax_refactored.py::test_depreciation_schedule_straight_line_totals_and_tail_zeros PASSED [ 49%]
+tests/finance/test_cashflow_v14_tax_refactored.py::test_tax_holiday_map_start_end_inclusive PASSED [ 49%]
+tests/finance/test_cashflow_v14_tax_refactored.py::test_calculate_tax_holiday_zero_cit_but_wht_applies PASSED [ 49%]
+tests/finance/test_cashflow_v14_tax_refactored.py::test_loss_carryforward_offsets_future_taxable_income PASSED [ 49%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_valid_basic_configuration FAILED [ 49%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_default_steps FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_value_calculation FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_value_calculation FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_whitespace_stripping FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_empty_variable_name_rejected FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_zero_base_value_rejected FAILED [ 50%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_negative_base_value_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_pct_too_negative_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_pct_positive_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_pct_negative_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_pct_too_large_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_less_than_abs_low_rejected FAILED [ 51%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_steps_too_few_rejected FAILED [ 52%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_steps_too_many_rejected FAILED [ 52%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[1000--15-25-850-1250] FAILED [ 52%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[50--10-10-45-55] FAILED [ 52%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[200--5-15-190-230] FAILED [ 52%]
+tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[75--20-30-60-97.5] FAILED [ 52%]
+tests/finance/test_contracts.py::TestTornadoResult::test_basic_creation FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_impact_pct_calculation FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_impact_abs_calculation FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_impact_pct_zero_base FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_negative_impact FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_nan_handling FAILED [ 53%]
+tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.1-0.08-0.12-40.0-0.04] FAILED [ 54%]
+tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.15-0.1-0.2-66.67-0.1] FAILED [ 54%]
+tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.08-0.06-0.1-50.0-0.04] FAILED [ 54%]
+tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.12-0.11-0.13-16.67-0.02] FAILED [ 54%]
+tests/finance/test_contracts.py::TestTornadoResult::test_sorting_by_impact_abs FAILED [ 54%]
+tests/finance/test_contracts.py::TestIntegration::test_end_to_end_sensitivity_workflow FAILED [ 55%]
+tests/finance/test_contracts.py::TestIntegration::test_batch_parameter_configs PASSED [ 55%]
+tests/finance/test_contracts.py::TestIntegration::test_tornado_ranking FAILED [ 55%]
+tests/finance/test_wacc_v14.py::test_compute_wacc_from_config_fixed_mode_and_extract_rates PASSED [ 55%]
+tests/finance/test_wacc_v14.py::test_compute_wacc_from_config_capm_mode_matches_expected_values PASSED [ 55%]
+tests/finance/test_wacc_v14.py::test_extract_wacc_rates_without_wacc_block_returns_none PASSED [ 55%]
+tests/finance/test_wacc_v14.py::test_compute_wacc_from_config_is_compatible_with_analytics_contract PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCConfigExtraction::test_mc_iterations_key_priority PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCConfigExtraction::test_mc_fallback_to_n_iterations PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCConfigExtraction::test_mc_default_iterations PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCDiscountRate::test_discount_rate_from_config PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCDiscountRate::test_discount_rate_default PASSED [ 56%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCDiscountRate::test_discount_rate_various_values PASSED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestFXSampling::test_fx_factor_applied_to_revenue FAILED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestFXSampling::test_fx_rate_variation PASSED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCRawResults::test_raw_results_populated PASSED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCRawResults::test_raw_results_dict_format PASSED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCStatistics::test_statistics_computed PASSED [ 57%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCStatistics::test_percentiles_ordered PASSED [ 58%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCIntegrationWithEvaluation::test_mc_result_produces_monte_carlo_contract PASSED [ 58%]
+tests/integration/test_fx_monte_carlo_integration.py::TestMCIntegrationWithEvaluation::test_mc_with_config_path_loading PASSED [ 58%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_module_exists PASSED [ 58%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_no_argparse_import PASSED [ 58%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_no_typer_import PASSED [ 58%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_uses_pydantic_v2 PASSED [ 59%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_has_type_annotations PASSED [ 59%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_has_module_docstring PASSED [ 59%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_classes_have_docstrings PASSED [ 59%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_public_methods_have_docstrings PASSED [ 59%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_uses_logging_not_print FAILED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_has_field_validators PASSED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_imports_from_future FAILED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_no_hardcoded_magic_numbers FAILED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_classes_use_proper_typing PASSED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_config_uses_field_defaults PASSED [ 60%]
+tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_no_global_state PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestTypeHints::test_equity_distribution_config_type_hints PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestTypeHints::test_covenant_gate_methods_type_hints PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestTypeHints::test_main_function_type_hints PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestDocstrings::test_config_class_docstring PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestDocstrings::test_covenant_gate_docstring PASSED [ 61%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestDocstrings::test_main_function_docstring PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestDocstrings::test_calculator_methods_docstrings PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestNonHardcodedValues::test_covenant_thresholds_from_config PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestNonHardcodedValues::test_distribution_parameters_from_config PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestNonHardcodedValues::test_reserve_targets_from_config PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestConfigDriven::test_all_covenant_gates_configurable PASSED [ 62%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestConfigDriven::test_equity_returns_configurable PASSED [ 63%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestConfigDriven::test_waterfall_priority_from_config PASSED [ 63%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestCodeQuality::test_no_print_statements PASSED [ 63%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestCodeQuality::test_enums_properly_defined PASSED [ 63%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestCodeQuality::test_output_dataclass_properly_structured PASSED [ 63%]
+tests/lint/test_equity_distribution_v14_compliance.py::TestCodeQuality::test_configuration_validation PASSED [ 63%]
+tests/lint/test_equity_fence_v14.py::test_equity_metric_functions_only_defined_in_equity_v14 XFAIL [ 64%]
+tests/lint/test_irr_location_v14.py::test_irr_npz_only_in_finance_irr PASSED [ 64%]
+tests/lint/test_no_argparse_v14.py::test_no_argparse_anywhere PASSED     [ 64%]
+tests/lint/test_no_typer_v14.py::test_no_typer_in_v14_clis SKIPPED (...) [ 64%]
+tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_config_typed FAILED [ 64%]
+tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_trigger_methods_typed FAILED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_v14_methods_typed FAILED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_module_docstring PASSED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_config_class_docstring PASSED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_trigger_class_docstring PASSED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_calculator_class_docstring PASSED [ 65%]
+tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_calculator_methods_have_docstrings FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestNoHardcoding::test_trigger_uses_config_values FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_dscr_raises FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_rate_raises FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_tenor_raises FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_year_zero FAILED [ 66%]
+tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_minimum_dscr FAILED [ 67%]
+tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_zero_debt_balance FAILED [ 67%]
+tests/lint/test_refinancing_v14_compliance.py::TestTypeHints::test_refinancing_config_type_hints PASSED [ 67%]
+tests/lint/test_refinancing_v14_compliance.py::TestTypeHints::test_refinancing_calculator_methods_type_hints FAILED [ 67%]
+tests/lint/test_refinancing_v14_compliance.py::TestTypeHints::test_main_function_type_hints PASSED [ 67%]
+tests/lint/test_refinancing_v14_compliance.py::TestDocstrings::test_config_class_docstring PASSED [ 67%]
+tests/lint/test_refinancing_v14_compliance.py::TestDocstrings::test_trigger_class_docstring PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestDocstrings::test_main_function_docstring PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestDocstrings::test_calculator_methods_have_docstrings PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestNonHardcodedValues::test_trigger_thresholds_from_config PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestNonHardcodedValues::test_calculator_parameters_from_config PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestConfigDriven::test_all_thresholds_configurable PASSED [ 68%]
+tests/lint/test_refinancing_v14_compliance.py::TestConfigDriven::test_debt_schedule_uses_config FAILED [ 69%]
+tests/lint/test_refinancing_v14_compliance.py::TestCodeQuality::test_no_print_statements PASSED [ 69%]
+tests/lint/test_refinancing_v14_compliance.py::TestCodeQuality::test_config_validation_present PASSED [ 69%]
+tests/lint/test_refinancing_v14_compliance.py::TestCodeQuality::test_return_types_validated PASSED [ 69%]
+tests/lint/test_sensitivity_v14_imports.py::test_sensitivity_v14_import_fence SKIPPED [ 69%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_hardcoded_numeric_constants PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_argparse_import PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_typer_import PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_sys_argv_parsing PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_omegaconf_import PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_proper_config_extraction PASSED [ 70%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_docstring PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_type_hints PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_frozen_dataclass PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_config_source_tracking PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_interactive_input PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_global_mutable_defaults PASSED [ 71%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_has_validation PASSED [ 72%]
+tests/lint/test_tax_module_compliance.py::TestTaxModuleCompliance::test_no_bare_except PASSED [ 72%]
+tests/test_cli_v14_smoke.py::test_cli_v14_pipeline_invocation FAILED     [ 72%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_valid_midrange_value PASSED [ 72%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_minimum_boundary_valid PASSED [ 72%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_maximum_boundary_valid PASSED [ 72%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_below_minimum_returns_warning PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_above_maximum_returns_info PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_non_numeric_returns_error PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_error_contains_remediation PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestDSCRValidation::test_dscr_error_message_format PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_valid_range_renewable PASSED [ 73%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_minimum_boundary_valid PASSED [ 74%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_maximum_boundary_valid PASSED [ 74%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_nan_returns_critical PASSED [ 74%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_infinity_returns_critical PASSED [ 74%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_negative_infinity_returns_critical PASSED [ 74%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_negative_return_allowed PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestIRRValidation::test_irr_non_numeric_returns_error PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_valid_renewable_range PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_minimum_boundary_valid PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_maximum_boundary_valid PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_below_minimum_returns_warning PASSED [ 75%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_above_maximum_returns_warning PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestWACCValidation::test_wacc_non_numeric_returns_error PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_dscr_above_threshold_no_breach PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_dscr_at_threshold_no_breach PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_dscr_below_threshold_breach_detected PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_dscr_below_one_negative_cash_flow_warning PASSED [ 76%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_breach_remediation_includes_guidance PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestCovenantBreachLogic::test_non_numeric_dscr_returns_error PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_validation_result_initialized_valid PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_validation_result_has_timestamp PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_has_critical_errors_detects_critical PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_has_errors_counts_error_and_critical PASSED [ 77%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_error_count_by_severity PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_error_count_all_when_none_specified PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_validation_error_has_context PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestValidationResultContainer::test_validation_error_str_representation PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestIntegrationValidation::test_scenario_result_with_valid_metrics PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestIntegrationValidation::test_scenario_result_with_invalid_irr_returns_errors PASSED [ 78%]
+tests/test_contracts_v14_validators.py::TestIntegrationValidation::test_scenario_result_strict_mode_raises_on_critical PASSED [ 79%]
+tests/test_contracts_v14_validators.py::TestIntegrationValidation::test_batch_validation_of_multiple_scenarios PASSED [ 79%]
+tests/test_contracts_v14_validators.py::TestEdgeCasesStress::test_validation_with_zero_values PASSED [ 79%]
+tests/test_contracts_v14_validators.py::TestEdgeCasesStress::test_validation_with_extreme_values PASSED [ 79%]
+tests/test_contracts_v14_validators.py::TestEdgeCasesStress::test_multiple_errors_aggregation PASSED [ 79%]
+tests/test_contracts_v14_validators.py::TestEdgeCasesStress::test_validation_performance_with_large_batch PASSED [ 80%]
+tests/test_export_smoke.py::test_scenario_analytics_excel_export_smoke PASSED [ 80%]
+tests/test_fx_config_strictness.py::test_fx_mapping_with_start_rate_is_accepted PASSED [ 80%]
+tests/test_fx_config_strictness.py::test_scenarios_use_mapping_fx PASSED [ 80%]
+tests/test_fx_config_strictness.py::test_scalar_fx_is_rejected_with_clear_error PASSED [ 80%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_minimal_fx_config FAILED [ 80%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_multicurrency_fx_config FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_eur_gbp_curves FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithoutConfig::test_pipeline_without_fx_config FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithoutConfig::test_pipeline_with_empty_fx_section FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_curve_length_mismatch FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_optional_curve_length_mismatch FAILED [ 81%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_malformed_config_structure FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineScenarioResultIntegration::test_scenario_result_dict_has_fx_fields FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineScenarioResultIntegration::test_fx_fields_roundtrip_through_asdict FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineLogging::test_pipeline_logs_fx_integration FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[natural_hedge-0.0-0.0] FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[fixed_ccy-50.0-100.0] FAILED [ 82%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[hedged-75.0-50.0] FAILED [ 83%]
+tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[blended-25.0-25.0] FAILED [ 83%]
+tests/test_fx_structured_blocks.py::TestFXVolumetry::test_valid_volumetry PASSED [ 83%]
+tests/test_fx_structured_blocks.py::TestFXVolumetry::test_volumetry_usd_exposure PASSED [ 83%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_valid_fx_curve PASSED [ 83%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_curve_length_mismatch_rejected PASSED [ 83%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_negative_rate_rejected PASSED [ 84%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_zero_rate_rejected PASSED [ 84%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_get_rate_lkr_usd PASSED [ 84%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_get_rate_year_not_found PASSED [ 84%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_get_rate_optional_currency PASSED [ 84%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_get_rate_unavailable_currency PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXCurveOutput::test_fx_curve_to_dict PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_valid_risk_profile PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_debt_percentages_must_sum_to_100 PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_var_must_be_less_than_cvar PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_hhi_out_of_range_rejected PASSED [ 85%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_is_high_risk_flag PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_is_not_high_risk PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXRiskProfile::test_risk_profile_to_dict PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_valid_structured_block PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_fx_match_ratio_out_of_range_rejected PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_hedging_coverage_out_of_range_rejected PASSED [ 86%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_invalid_base_currency_rejected PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_invalid_reporting_currency_rejected PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_total_periods_empty_volumetry PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_total_periods_with_volumetry PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_total_debt_usd_equivalent PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXStructuredBlock::test_structured_block_to_dict PASSED [ 87%]
+tests/test_fx_structured_blocks.py::TestFXIntegration::test_complete_fx_scenario PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_valid_config_accepted PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_disabled_refinancing_skips_validation PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_missing_triggers_raises_error PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_missing_coupon_raises_error PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_invalid_coupon_raises_error PASSED [ 88%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_invalid_cost_pct_raises_error PASSED [ 89%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_invalid_principal_repayment_raises_error PASSED [ 89%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_invalid_tenor_raises_error PASSED [ 89%]
+tests/test_refinancing_v14_hardened.py::TestConfigValidation::test_config_with_all_bounds_valid PASSED [ 89%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_debt_principal_extraction PASSED [ 89%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_dscr_series_extraction PASSED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_empty_debt_result_handles_gracefully PASSED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_missing_dscr_series_handles_gracefully PASSED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_calculator_repr_shows_status FAILED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_annual_rows_length_validation PASSED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_coupon_rate_extraction PASSED [ 90%]
+tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_multiple_debt_result_formats_supported PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_refinancing_event_returns_output PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_npv_benefit_calculation PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_refinancing_cost_deducted_from_benefit PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_equity_irr_benefit_calculation PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_covenant_breach_resolution_detected PASSED [ 91%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_refinancing_disabled_returns_no_event PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_invalid_year_raises_error PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_invalid_dscr_raises_error PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestRefinancingCalculations::test_tenor_used_in_npv_calculation PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_dscr_valid_range_accepted PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_dscr_out_of_range_raises_error PASSED [ 92%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_coupon_valid_range_accepted PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_coupon_out_of_range_raises_error PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_tenor_valid_range_accepted PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_tenor_out_of_range_raises_error PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_cost_pct_valid_range_accepted PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestValidatorFunctions::test_cost_pct_out_of_range_raises_error PASSED [ 93%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_refinancing_validation_error_type PASSED [ 94%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_refinancing_config_error_type PASSED [ 94%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_refinancing_calculation_error_type PASSED [ 94%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_error_message_contains_constraint_info PASSED [ 94%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_error_message_contains_actual_value PASSED [ 94%]
+tests/test_refinancing_v14_hardened.py::TestExceptionHandling::test_type_error_for_non_numeric_dscr PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestMetadataTracking::test_output_has_timestamp PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestMetadataTracking::test_output_has_version PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestMetadataTracking::test_metadata_contains_calculation_details PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestMetadataTracking::test_covenant_tracking_in_output PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_zero_principal_handles_gracefully PASSED [ 95%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_high_dscr_values_handled FAILED [ 96%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_large_dataset_performance PASSED [ 96%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_floating_point_precision PASSED [ 96%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_minimum_annual_rows_accepted PASSED [ 96%]
+tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_negative_discount_rate_handled PASSED [ 96%]
+tests/test_scenario_analytics_cli_v14_smoke.py::test_scenario_analytics_cli_v14_smoke PASSED [ 96%]
+tests/test_scenario_analytics_smoke.py::test_scenario_analytics_smoke FAILED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_scalar_fx_is_rejected PASSED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_missing_fx_section_is_rejected PASSED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_fx_missing_start_rate_is_rejected PASSED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_fx_missing_annual_depr_is_rejected PASSED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_fx_wrong_type_is_rejected[list] PASSED [ 97%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_fx_wrong_type_is_rejected[string] PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationRejections::test_fx_wrong_type_is_rejected[int] PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationAcceptance::test_structured_fx_is_accepted PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationAcceptance::test_fx_with_zero_depr_is_accepted PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationAcceptance::test_fx_with_negative_depr_is_accepted PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationAcceptance::test_fx_with_extra_keys_is_accepted PASSED [ 98%]
+tests/test_schema_guard_fx.py::TestFXValidationModuleIndependence::test_fx_validation_always_runs[cashflow_only] PASSED [ 99%]
+tests/test_schema_guard_fx.py::TestFXValidationModuleIndependence::test_fx_validation_always_runs[debt_only] PASSED [ 99%]
+tests/test_schema_guard_fx.py::TestFXValidationModuleIndependence::test_fx_validation_always_runs[both] PASSED [ 99%]
+tests/test_schema_guard_fx.py::TestFXValidationModuleIndependence::test_fx_validation_always_runs[none] PASSED [ 99%]
+tests/test_schema_guard_fx.py::TestErrorMessageQuality::test_missing_fx_error_is_descriptive PASSED [ 99%]
+tests/test_schema_guard_fx.py::TestErrorMessageQuality::test_incomplete_fx_error_lists_missing_keys PASSED [100%]
+
+=================================== FAILURES ===================================
+_______________ test_casper_payload_includes_tail_risk_metadata ________________
+tests/analytics_layer/test_casper_tail_risk_payload.py:66: in test_casper_payload_includes_tail_risk_metadata
+    TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_____________ test_build_casper_payload_includes_tail_risk_summary _____________
+tests/analytics_layer/test_casper_tail_risk_summary.py:63: in test_build_casper_payload_includes_tail_risk_summary
+    "project_irr": TailRiskSnapshot(
+E   TypeError: TailRiskSnapshot.__init__() got an unexpected keyword argument 'metric'
+______________________ test_technology_breakdown_snapshot ______________________
+tests/analytics_layer/test_generation_contracts_v14.py:12: in test_technology_breakdown_snapshot
+    tb = TechnologyBreakdown(
+E   TypeError: TechnologyBreakdown.__init__() got an unexpected keyword argument 'technology'
+______ test_run_breakeven_parameter_uses_absolute_overrides_and_converges ______
+tests/analytics_layer/test_sensitivity_breakeven_contract.py:61: in test_run_breakeven_parameter_uses_absolute_overrides_and_converges
+    result = run_breakeven_parameter(
+analytics/sensitivity_v14.py:995: in run_breakeven_parameter
+    return BreakevenResult.model_validate({
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'BreakevenResult' has no attribute 'model_validate'
+_______ test_run_with_sensitivity_request_uses_gateway_and_returns_suite _______
+tests/analytics_layer/test_sensitivity_run_contract.py:103: in test_run_with_sensitivity_request_uses_gateway_and_returns_suite
+    suite = run(request)
+            ^^^^^^^^^^^^
+analytics/sensitivity_v14.py:522: in run
+    return run_tornado_sensitivity(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/sensitivity_v14.py:618: in run_tornado_sensitivity
+    result = analyze_single_parameter(
+analytics/sensitivity_v14.py:489: in analyze_single_parameter
+    return TornadoResult.model_validate({
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'TornadoResult' has no attribute 'model_validate'
+________________ test_enrich_tornado_with_tail_risk_happy_path _________________
+tests/analytics_layer/test_sensitivity_tail_risk_api.py:56: in test_enrich_tornado_with_tail_risk_happy_path
+    mc_result = _make_toy_monte_carlo_with_metric_samples(values)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_tail_risk_api.py:22: in _make_toy_monte_carlo_with_metric_samples
+    mc = MonteCarloResult(
+E   TypeError: MonteCarloResult.__init__() got an unexpected keyword argument 'project_irr_mean'
+__________ test_enrich_tornado_with_tail_risk_rejects_bad_confidence ___________
+tests/analytics_layer/test_sensitivity_tail_risk_api.py:108: in test_enrich_tornado_with_tail_risk_rejects_bad_confidence
+    mc_result = _make_toy_monte_carlo_with_metric_samples([0.1, 0.12, 0.14])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_tail_risk_api.py:22: in _make_toy_monte_carlo_with_metric_samples
+    mc = MonteCarloResult(
+E   TypeError: MonteCarloResult.__init__() got an unexpected keyword argument 'project_irr_mean'
+________________ TestAnalyzeSingleParameter.test_basic_analysis ________________
+tests/analytics_layer/test_sensitivity_v14.py:134: in test_basic_analysis
+    result = analyze_single_parameter(
+analytics/sensitivity_v14.py:489: in analyze_single_parameter
+    return TornadoResult.model_validate({
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'TornadoResult' has no attribute 'model_validate'
+____________ TestRunTornadoSensitivity.test_happy_path_with_request ____________
+tests/analytics_layer/test_sensitivity_v14.py:211: in test_happy_path_with_request
+    suite = run_tornado_sensitivity(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/sensitivity_v14.py:618: in run_tornado_sensitivity
+    result = analyze_single_parameter(
+analytics/sensitivity_v14.py:489: in analyze_single_parameter
+    return TornadoResult.model_validate({
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'TornadoResult' has no attribute 'model_validate'
+______ TestRunTornadoSensitivity.test_legacy_api_with_string_config_path _______
+tests/analytics_layer/test_sensitivity_v14.py:247: in test_legacy_api_with_string_config_path
+    suite = run_tornado_sensitivity(
+analytics/sensitivity_v14.py:618: in run_tornado_sensitivity
+    result = analyze_single_parameter(
+analytics/sensitivity_v14.py:489: in analyze_single_parameter
+    return TornadoResult.model_validate({
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'TornadoResult' has no attribute 'model_validate'
+________________ TestSensitivityRunFacade.test_run_facade_basic ________________
+tests/analytics_layer/test_sensitivity_v14_api.py:33: in test_run_facade_basic
+    suite = run(req)
+            ^^^^^^^^
+analytics/sensitivity_v14.py:522: in run
+    return run_tornado_sensitivity(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/sensitivity_v14.py:607: in run_tornado_sensitivity
+    base_kpis = _evaluate_base_kpis(base_config_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/sensitivity_v14.py:130: in _evaluate_base_kpis
+    return evaluate_with_overrides(config_path, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/evaluation_v14.py:145: in evaluate_with_overrides
+    return _run_pipeline_with_config(
+analytics/evaluation_v14.py:102: in _run_pipeline_with_config
+    payload: Mapping[str, Any] = run_v14_pipeline(
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+_________________ test_build_annual_cfads_minimal_valid_params _________________
+tests/api/test_cashflow_module.py:94: in test_build_annual_cfads_minimal_valid_params
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 5 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 5 years
+_____________ test_project_life_5_vs_20_years_shapes_and_magnitude _____________
+tests/api/test_cashflow_tax_and_life.py:86: in test_project_life_5_vs_20_years_shapes_and_magnitude
+    cf5 = _run_cfads(p5)
+          ^^^^^^^^^^^^^^
+tests/api/test_cashflow_tax_and_life.py:67: in _run_cfads
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 5 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 5 years
+____________________ test_tax_holiday_increases_early_cfads ____________________
+tests/api/test_cashflow_tax_and_life.py:113: in test_tax_holiday_increases_early_cfads
+    cf_no = _run_cfads(no_holiday)
+            ^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_cashflow_tax_and_life.py:67: in _run_cfads
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 20 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 20 years
+______________ test_enhanced_allowance_does_not_hurt_early_cfads _______________
+tests/api/test_cashflow_tax_and_life.py:139: in test_enhanced_allowance_does_not_hurt_early_cfads
+    cf_base = _run_cfads(baseline)
+              ^^^^^^^^^^^^^^^^^^^^
+tests/api/test_cashflow_tax_and_life.py:67: in _run_cfads
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 20 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 20 years
+_____________________ test_high_opex_stress_reduces_cfads ______________________
+tests/api/test_cashflow_tax_and_life.py:158: in test_high_opex_stress_reduces_cfads
+    cf_low = _run_cfads(base_low)
+             ^^^^^^^^^^^^^^^^^^^^
+tests/api/test_cashflow_tax_and_life.py:67: in _run_cfads
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 20 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 20 years
+_______________________ test_zero_tariff_collapses_cfads _______________________
+tests/api/test_cashflow_tax_and_life.py:173: in test_zero_tariff_collapses_cfads
+    cf = _run_cfads(zero_tariff)
+         ^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_cashflow_tax_and_life.py:67: in _run_cfads
+    cfads = cf_mod.build_annual_cfads(params)  # type: ignore[attr-defined]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+WARNING  finance.cashflow_v14_params:cashflow_v14_params.py:83 Project life not found in explicit fields; using heuristic match 'returns/project_life_years' = 20 years
+WARNING  finance.cashflow_v14_fx:cashflow_v14_fx.py:109 FX configuration missing; falling back to flat 375.00 LKR/USD for 20 years
+_______________________ test_cashflow_basic_consistency ________________________
+tests/api/test_cashflow_v14.py:57: in test_cashflow_basic_consistency
+    cfads = build_annual_cfads(cfg)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+__________ test_cashflow_zero_risk_haircut_means_posttax_equals_cfads __________
+tests/api/test_cashflow_v14.py:80: in test_cashflow_zero_risk_haircut_means_posttax_equals_cfads
+    cfads = build_annual_cfads(cfg)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+__________________ test_cfads_increases_when_tariff_increases __________________
+tests/api/test_cashflow_v14_regression.py:59: in test_cfads_increases_when_tariff_increases
+    rows_base = build_annual_rows(base_cfg)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+_______________________ test_cfads_zero_when_tariff_zero _______________________
+tests/api/test_cashflow_v14_regression.py:80: in test_cfads_zero_when_tariff_zero
+    rows = build_annual_rows(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+________________ test_degradation_reduces_production_over_time _________________
+tests/api/test_cashflow_v14_regression.py:93: in test_degradation_reduces_production_over_time
+    rows = build_annual_rows(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+_______________________ test_ring_fence_covenants_smoke ________________________
+tests/api/test_covenants_ring_fence_smoke_v14.py:56: in test_ring_fence_covenants_smoke
+    result: Dict[str, Any] = run_v14_pipeline(
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+__________________ test_covenants_basecase_dscr_and_balances ___________________
+tests/api/test_covenants_v14.py:162: in test_covenants_basecase_dscr_and_balances
+    annual_rows = build_annual_rows(config)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+____________ test_covenants_stresscase_flags_review_when_cover_thin ____________
+tests/api/test_covenants_v14.py:213: in test_covenants_stresscase_flags_review_when_cover_thin
+    base_rows = build_annual_rows(base_cfg)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+_________________ test_plan_debt_construction_timeline_and_idc _________________
+tests/api/test_debt_v14_construction.py:106: in test_plan_debt_construction_timeline_and_idc
+    annual_rows = _make_simple_annual_rows()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_debt_v14_construction.py:89: in _make_simple_annual_rows
+    return build_annual_rows(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+_____________________ test_plan_debt_dscr_and_audit_status _____________________
+tests/api/test_debt_v14_construction.py:134: in test_plan_debt_dscr_and_audit_status
+    annual_rows = _make_simple_annual_rows()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_debt_v14_construction.py:89: in _make_simple_annual_rows
+    return build_annual_rows(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:116: in from_yaml
+    _require_key(tax, "depreciation_start_year", "tax")
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.depreciation_start_year'
+_____ TestEquityDistributionIntegration.test_distribution_enabled_scenario _____
+tests/api/test_equity_distribution_v14_regression.py:200: in test_distribution_enabled_scenario
+    assert result.distribution_enabled is True
+E   AssertionError: assert False is True
+E    +  where False = EquityDistributionOutput(distribution_year=8, distribution_enabled=False, required_debt_service=20.0, available_cashflow=30.0, reserve_deficit=13.02, available_for_equity=0.0, covenant_gates_passed=False, covenant_gate_details={'dscr': (True, 'DSCR gate PASS: 1.651 >= 1.200'), 'llcr': (False, 'LLCR gate FAIL: Post-distribution LLCR 1.156 < threshold 1.500')}, distributions_to_tiers={'class_a': {'preferred_return': 0.0, 'principal_recovery': 0.0, 'total': 0.0}, 'class_b': {'preferred_return': 0.0, 'principal_recovery': 0.0, 'total': 0.0}, 'common': {'distribution': 0.0, 'total': 0.0}}, total_equity_distribution=0.0, remaining_cashflow=30.0, timestamp=datetime.datetime(2025, 12, 20, 4, 39, 43, 720281)).distribution_enabled
+------------------------------ Captured log call -------------------------------
+WARNING  finance.equity_distribution_v14:equity_distribution_v14.py:688 Covenant gates failed in year 8; distributions suppressed
+_______________________ test_refinancing_config_creation _______________________
+tests/api/test_refinancing_v14.py:104: in test_refinancing_config_creation
+    cfg = RefinancingConfig(
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'scenario_name'
+_________________________ test_refinancing_engine_init _________________________
+tests/api/test_refinancing_v14.py:148: in test_refinancing_engine_init
+    engine = RefinancingEngine(base_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+_________________ test_refinancing_engine_init_missing_config __________________
+tests/api/test_refinancing_v14.py:171: in test_refinancing_engine_init_missing_config
+    RefinancingEngine(bad_cfg)
+E   TypeError: RefinancingEngine() takes no arguments
+_____________________ test_refinancing_impact_calculation ______________________
+tests/api/test_refinancing_v14.py:189: in test_refinancing_impact_calculation
+    engine = RefinancingEngine(base_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+________________________ test_refinancing_impact_stress ________________________
+tests/api/test_refinancing_v14.py:214: in test_refinancing_impact_stress
+    engine = RefinancingEngine(stress_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+____________________ test_refinancing_impact_unit_suffixes _____________________
+tests/api/test_refinancing_v14.py:233: in test_refinancing_impact_unit_suffixes
+    engine = RefinancingEngine(base_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+_________________________ test_refinancing_engine_run __________________________
+tests/api/test_refinancing_v14.py:257: in test_refinancing_engine_run
+    engine = RefinancingEngine(base_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+______________________ test_refinancing_engine_run_stress ______________________
+tests/api/test_refinancing_v14.py:282: in test_refinancing_engine_run_stress
+    engine = RefinancingEngine(stress_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+_____________________ test_refinancing_invalid_date_format _____________________
+tests/api/test_refinancing_v14.py:316: in test_refinancing_invalid_date_format
+    engine = RefinancingEngine(bad_cfg)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+__________________ test_refinancing_result_json_serializable ___________________
+tests/api/test_refinancing_v14.py:335: in test_refinancing_result_json_serializable
+    engine = RefinancingEngine(base_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingEngine() takes no arguments
+_________________________ test_refinancing_type_hints __________________________
+tests/api/test_refinancing_v14.py:359: in test_refinancing_type_hints
+    assert hasattr(RefinancingEngine, 'calculate_refinancing_impact')
+E   AssertionError: assert False
+E    +  where False = hasattr(<class 'finance.refinancing_v14_hydra.RefinancingEngine'>, 'calculate_refinancing_impact')
+_______ TestRefinancingCalculator.test_recalculate_schedule_refinancing ________
+tests/api/test_refinancing_v14_regression.py:169: in test_recalculate_schedule_refinancing
+    result = calc.recalculate_schedule(
+E   TypeError: RefinancingCalculator.recalculate_schedule() missing 1 required positional argument: 'current_interest_rate'
+_______________________ test_cashflow_basic_consistency ________________________
+tests/api/test_risk_haircut.py:58: in test_cashflow_basic_consistency
+    cfads = build_annual_cfads(cfg)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+__________ test_cashflow_zero_risk_haircut_means_posttax_equals_cfads __________
+tests/api/test_risk_haircut.py:85: in test_cashflow_zero_risk_haircut_means_posttax_equals_cfads
+    cfads = build_annual_cfads(cfg)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:407: in build_annual_cfads
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:186: in _prepare_cashflow_context
+    tax_config = TaxConfig.from_yaml(config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:110: in from_yaml
+    corporate_tax_rate = float(_require_key(tax, "corporate_tax_rate", "tax"))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14_tax.py:66: in _require_key
+    raise KeyError(f"Missing required YAML key: {ctx}.{key}")
+E   KeyError: 'Missing required YAML key: tax.corporate_tax_rate'
+____________ test_scenario_analytics_stops_on_missing_corporate_tax ____________
+tests/api/test_scenario_analytics_schema_guard_integration.py:86: in test_scenario_analytics_stops_on_missing_corporate_tax
+    summary_df, timeseries_df, batch_meta = sa.run(export_excel=False)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/scenario_analytics.py:337: in run
+    raise RuntimeError("All scenarios failed; no results to summarise")
+E   RuntimeError: All scenarios failed; no results to summarise
+----------------------------- Captured stderr call -----------------------------
+Running 2 scenario(s) serially. strict=True
+Processing scenario: bad_missing_tax
+Scenario bad_missing_tax failed: Config '/private/var/folders/s7/bjx1cll14tl2dnwsg35cnw9w0000gn/T/pytest-of-aruna/pytest-8/test_scenario_analytics_stops_0/scenarios/bad_missing_tax.json' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+Processing scenario: good_case
+  Using discount rate: 10.000%
+Scenario good_case failed: 'Missing required YAML key: tax.corporate_tax_rate'
+------------------------------ Captured log call -------------------------------
+INFO     analytics.scenario_analytics:scenario_analytics.py:308 Running 2 scenario(s) serially. strict=True
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: bad_missing_tax
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario bad_missing_tax failed: Config '/private/var/folders/s7/bjx1cll14tl2dnwsg35cnw9w0000gn/T/pytest-of-aruna/pytest-8/test_scenario_analytics_stops_0/scenarios/bad_missing_tax.json' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: good_case
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario good_case failed: 'Missing required YAML key: tax.corporate_tax_rate'
+__________________ test_scenario_analytics_labels_and_shapes ___________________
+tests/api/test_scenario_analytics_unit_scenario_name.py:79: in test_scenario_analytics_labels_and_shapes
+    summary_df, timeseries_df, batch_metadata = sa.run(export_excel=False)
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/scenario_analytics.py:337: in run
+    raise RuntimeError("All scenarios failed; no results to summarise")
+E   RuntimeError: All scenarios failed; no results to summarise
+----------------------------- Captured stderr call -----------------------------
+Running 1 scenario(s) serially. strict=True
+Processing scenario: dutchbay_lendercase_2025Q4
+  Using discount rate: 10.000%
+Scenario dutchbay_lendercase_2025Q4 failed: 'Missing required YAML key: tax.corporate_tax_rate'
+------------------------------ Captured log call -------------------------------
+INFO     analytics.scenario_analytics:scenario_analytics.py:308 Running 1 scenario(s) serially. strict=True
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_lendercase_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario dutchbay_lendercase_2025Q4 failed: 'Missing required YAML key: tax.corporate_tax_rate'
+__________________ test_scenario_analytics_labels_and_shapes ___________________
+tests/api/test_scenario_analytics_unit_scenario_name_refactored.py:109: in test_scenario_analytics_labels_and_shapes
+    summary_df, timeseries_df, batch_metadata = sa.run(export_excel=False)
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/scenario_analytics.py:337: in run
+    raise RuntimeError("All scenarios failed; no results to summarise")
+E   RuntimeError: All scenarios failed; no results to summarise
+----------------------------- Captured stderr call -----------------------------
+Running 1 scenario(s) serially. strict=True
+Processing scenario: dutchbay_lendercase_2025Q4
+  Using discount rate: 10.000%
+Scenario dutchbay_lendercase_2025Q4 failed: 'Missing required YAML key: tax.corporate_tax_rate'
+------------------------------ Captured log call -------------------------------
+INFO     analytics.scenario_analytics:scenario_analytics.py:308 Running 1 scenario(s) serially. strict=True
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_lendercase_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario dutchbay_lendercase_2025Q4 failed: 'Missing required YAML key: tax.corporate_tax_rate'
+_______________ test_scenario_analytics_runs_multiple_scenarios ________________
+tests/api/test_scenario_analytics_unit_scenario_name_refactored.py:162: in test_scenario_analytics_runs_multiple_scenarios
+    summary_df, timeseries_df, batch_metadata = sa.run(export_excel=False)
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/scenario_analytics.py:337: in run
+    raise RuntimeError("All scenarios failed; no results to summarise")
+E   RuntimeError: All scenarios failed; no results to summarise
+----------------------------- Captured stderr call -----------------------------
+Running 2 scenario(s) serially. strict=True
+Processing scenario: scenario_base
+  Using discount rate: 10.000%
+Scenario scenario_base failed: 'Missing required YAML key: tax.corporate_tax_rate'
+Processing scenario: scenario_stress
+  Using discount rate: 10.000%
+Scenario scenario_stress failed: 'Missing required YAML key: tax.corporate_tax_rate'
+------------------------------ Captured log call -------------------------------
+INFO     analytics.scenario_analytics:scenario_analytics.py:308 Running 2 scenario(s) serially. strict=True
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: scenario_base
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario scenario_base failed: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: scenario_stress
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario scenario_stress failed: 'Missing required YAML key: tax.corporate_tax_rate'
+_____________________ test_parameter_range_config_minimal ______________________
+tests/contracts/test_sensitivity_contracts.py:22: in test_parameter_range_config_minimal
+    cfg = ParameterRangeConfig(
+E   TypeError: ParameterRangeConfig.__init__() got an unexpected keyword argument 'steps'
+________________________ test_tornado_result_properties ________________________
+tests/contracts/test_sensitivity_contracts.py:34: in test_tornado_result_properties
+    res = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_____________________ test_sensitivity_suite_instantiation _____________________
+tests/contracts/test_sensitivity_contracts.py:45: in test_sensitivity_suite_instantiation
+    result = TornadoResult(variable="foo", base_irr=0.1, low_irr=0.08, high_irr=0.12)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+____________________________ test_breakeven_result _____________________________
+tests/contracts/test_sensitivity_contracts.py:56: in test_breakeven_result
+    br = BreakevenResult(
+E   TypeError: BreakevenResult.__init__() got an unexpected keyword argument 'variable'
+______________________ test_multimetric_tornado_and_suite ______________________
+tests/contracts/test_sensitivity_contracts.py:66: in test_multimetric_tornado_and_suite
+    mres = MultiMetricTornadoResult(
+E   TypeError: MultiMetricTornadoResult.__init__() got an unexpected keyword argument 'variable'
+_________________________ test_pareto_frontier_result __________________________
+tests/contracts/test_sensitivity_contracts.py:86: in test_pareto_frontier_result
+    pf = ParetoFrontierResult(
+E   TypeError: ParetoFrontierResult.__init__() got an unexpected keyword argument 'objectives'
+___________ TestParameterRangeConfig.test_valid_basic_configuration ____________
+tests/finance/test_contracts.py:25: in test_valid_basic_configuration
+    config = ParameterRangeConfig(
+E   TypeError: ParameterRangeConfig.__init__() got an unexpected keyword argument 'steps'
+_________________ TestParameterRangeConfig.test_default_steps __________________
+tests/finance/test_contracts.py:45: in test_default_steps
+    assert config.steps == 5
+           ^^^^^^^^^^^^
+E   AttributeError: 'ParameterRangeConfig' object has no attribute 'steps'
+_____________ TestParameterRangeConfig.test_low_value_calculation ______________
+tests/finance/test_contracts.py:54: in test_low_value_calculation
+    assert config.low_value == 80.0
+E   AssertionError: assert None == 80.0
+E    +  where None = ParameterRangeConfig(variable_name='test', base_value=100.0, low_value=None, high_value=None, low_pct=-20.0, high_pct=20.0, label=None, shock_type='scalar').low_value
+_____________ TestParameterRangeConfig.test_high_value_calculation _____________
+tests/finance/test_contracts.py:63: in test_high_value_calculation
+    assert config.high_value == 120.0
+E   AssertionError: assert None == 120.0
+E    +  where None = ParameterRangeConfig(variable_name='test', base_value=100.0, low_value=None, high_value=None, low_pct=-20.0, high_pct=20.0, label=None, shock_type='scalar').high_value
+______________ TestParameterRangeConfig.test_whitespace_stripping ______________
+tests/finance/test_contracts.py:74: in test_whitespace_stripping
+    assert config.variable_name == "project.capex"
+E   AssertionError: assert '  project.capex  ' == 'project.capex'
+E     
+E     - project.capex
+E     +   project.capex  
+E     ? ++             ++
+__________ TestParameterRangeConfig.test_empty_variable_name_rejected __________
+tests/finance/test_contracts.py:80: in test_empty_variable_name_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+____________ TestParameterRangeConfig.test_zero_base_value_rejected ____________
+tests/finance/test_contracts.py:89: in test_zero_base_value_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+__________ TestParameterRangeConfig.test_negative_base_value_rejected __________
+tests/finance/test_contracts.py:98: in test_negative_base_value_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+_________ TestParameterRangeConfig.test_low_pct_too_negative_rejected __________
+tests/finance/test_contracts.py:107: in test_low_pct_too_negative_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+___________ TestParameterRangeConfig.test_low_pct_positive_rejected ____________
+tests/finance/test_contracts.py:119: in test_low_pct_positive_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+___________ TestParameterRangeConfig.test_high_pct_negative_rejected ___________
+tests/finance/test_contracts.py:131: in test_high_pct_negative_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+__________ TestParameterRangeConfig.test_high_pct_too_large_rejected ___________
+tests/finance/test_contracts.py:143: in test_high_pct_too_large_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+________ TestParameterRangeConfig.test_high_less_than_abs_low_rejected _________
+tests/finance/test_contracts.py:155: in test_high_less_than_abs_low_rejected
+    with pytest.raises(ValidationError) as exc_info:
+E   Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+_____________ TestParameterRangeConfig.test_steps_too_few_rejected _____________
+tests/finance/test_contracts.py:169: in test_steps_too_few_rejected
+    ParameterRangeConfig(
+E   TypeError: ParameterRangeConfig.__init__() got an unexpected keyword argument 'steps'
+____________ TestParameterRangeConfig.test_steps_too_many_rejected _____________
+tests/finance/test_contracts.py:182: in test_steps_too_many_rejected
+    ParameterRangeConfig(
+E   TypeError: ParameterRangeConfig.__init__() got an unexpected keyword argument 'steps'
+_ TestParameterRangeConfig.test_parametrized_value_calculations[1000--15-25-850-1250] _
+tests/finance/test_contracts.py:209: in test_parametrized_value_calculations
+    assert np.isclose(config.low_value, expected_low, atol=0.01)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv311/lib/python3.11/site-packages/numpy/_core/numeric.py:2496: in isclose
+    result = (less_equal(abs(x - y), atol + rtol * abs(y))
+                             ^^^^^
+E   TypeError: unsupported operand type(s) for -: 'NoneType' and 'float'
+_ TestParameterRangeConfig.test_parametrized_value_calculations[50--10-10-45-55] _
+tests/finance/test_contracts.py:209: in test_parametrized_value_calculations
+    assert np.isclose(config.low_value, expected_low, atol=0.01)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv311/lib/python3.11/site-packages/numpy/_core/numeric.py:2496: in isclose
+    result = (less_equal(abs(x - y), atol + rtol * abs(y))
+                             ^^^^^
+E   TypeError: unsupported operand type(s) for -: 'NoneType' and 'float'
+_ TestParameterRangeConfig.test_parametrized_value_calculations[200--5-15-190-230] _
+tests/finance/test_contracts.py:209: in test_parametrized_value_calculations
+    assert np.isclose(config.low_value, expected_low, atol=0.01)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv311/lib/python3.11/site-packages/numpy/_core/numeric.py:2496: in isclose
+    result = (less_equal(abs(x - y), atol + rtol * abs(y))
+                             ^^^^^
+E   TypeError: unsupported operand type(s) for -: 'NoneType' and 'float'
+_ TestParameterRangeConfig.test_parametrized_value_calculations[75--20-30-60-97.5] _
+tests/finance/test_contracts.py:209: in test_parametrized_value_calculations
+    assert np.isclose(config.low_value, expected_low, atol=0.01)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv311/lib/python3.11/site-packages/numpy/_core/numeric.py:2496: in isclose
+    result = (less_equal(abs(x - y), atol + rtol * abs(y))
+                             ^^^^^
+E   TypeError: unsupported operand type(s) for -: 'NoneType' and 'float'
+____________________ TestTornadoResult.test_basic_creation _____________________
+tests/finance/test_contracts.py:218: in test_basic_creation
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+________________ TestTornadoResult.test_impact_pct_calculation _________________
+tests/finance/test_contracts.py:229: in test_impact_pct_calculation
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+________________ TestTornadoResult.test_impact_abs_calculation _________________
+tests/finance/test_contracts.py:238: in test_impact_abs_calculation
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_________________ TestTornadoResult.test_impact_pct_zero_base __________________
+tests/finance/test_contracts.py:247: in test_impact_pct_zero_base
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+____________________ TestTornadoResult.test_negative_impact ____________________
+tests/finance/test_contracts.py:256: in test_negative_impact
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_____________________ TestTornadoResult.test_nan_handling ______________________
+tests/finance/test_contracts.py:271: in test_nan_handling
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_ TestTornadoResult.test_parametrized_impact_calculations[0.1-0.08-0.12-40.0-0.04] _
+tests/finance/test_contracts.py:292: in test_parametrized_impact_calculations
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_ TestTornadoResult.test_parametrized_impact_calculations[0.15-0.1-0.2-66.67-0.1] _
+tests/finance/test_contracts.py:292: in test_parametrized_impact_calculations
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_ TestTornadoResult.test_parametrized_impact_calculations[0.08-0.06-0.1-50.0-0.04] _
+tests/finance/test_contracts.py:292: in test_parametrized_impact_calculations
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_ TestTornadoResult.test_parametrized_impact_calculations[0.12-0.11-0.13-16.67-0.02] _
+tests/finance/test_contracts.py:292: in test_parametrized_impact_calculations
+    result = TornadoResult(
+E   TypeError: TornadoResult.__init__() got an unexpected keyword argument 'variable'
+_________________ TestTornadoResult.test_sorting_by_impact_abs _________________
+tests/finance/test_contracts.py:307: in test_sorting_by_impact_abs
+    sorted_results = sorted(results, key=lambda r: r.impact_abs, reverse=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/finance/test_contracts.py:307: in <lambda>
+    sorted_results = sorted(results, key=lambda r: r.impact_abs, reverse=True)
+                                                   ^^^^^^^^^^^^
+E   AttributeError: 'TornadoResult' object has no attribute 'impact_abs'
+_____________ TestIntegration.test_end_to_end_sensitivity_workflow _____________
+tests/finance/test_contracts.py:320: in test_end_to_end_sensitivity_workflow
+    param_config = ParameterRangeConfig(
+E   TypeError: ParameterRangeConfig.__init__() got an unexpected keyword argument 'steps'
+_____________________ TestIntegration.test_tornado_ranking _____________________
+tests/finance/test_contracts.py:384: in test_tornado_ranking
+    ranked = sorted(results, key=lambda r: r.impact_abs, reverse=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/finance/test_contracts.py:384: in <lambda>
+    ranked = sorted(results, key=lambda r: r.impact_abs, reverse=True)
+                                           ^^^^^^^^^^^^
+E   AttributeError: 'TornadoResult' object has no attribute 'impact_abs'
+_______________ TestFXSampling.test_fx_factor_applied_to_revenue _______________
+tests/integration/test_fx_monte_carlo_integration.py:177: in test_fx_factor_applied_to_revenue
+    assert unique_revenues > 1, "FX not sampled in MC iterations"
+E   AssertionError: FX not sampled in MC iterations
+E   assert 1 > 1
+________________ TestGWTFCompliance.test_uses_logging_not_print ________________
+tests/lint/test_equity_distribution_compliance.py:169: in test_uses_logging_not_print
+    assert False, (
+E   AssertionError: Found print() outside __main__ block (CST-01): print(json_output). Use logger.info/debug instead.
+E   assert False
+_________________ TestGWTFCompliance.test_imports_from_future __________________
+tests/lint/test_equity_distribution_compliance.py:212: in test_imports_from_future
+    assert "from __future__ import annotations" in first_30_lines, (
+E   AssertionError: Module should import annotations from __future__ (CST-01). Import should appear in first 30 lines (after docstring).
+E   assert 'from __future__ import annotations' in '#!/usr/bin/env python\n"""Equity Distribution Module – GWTF v3.0 Compliant.\n\nCore responsibility: Calculate equity distributions, enforce covenants,\nmanage waterfall logic for renewable energy project finance structures.\n\nComputes distributions across LKR, USD, and DFI tranches with priority rules.\n\nConfiguration Path:\n    scenarios/dutchbay_lendercase_2025Q4.yaml::equity_distribution\n\nGWTF Compliance:\n    ✓ ARCH-01: Config-first (thresholds from config, not hardcoded)\n    ✓ VAL-01: Pydantic v2 with field_validator\n    ✓ TYPE-01: Full type hints\n    ✓ CST-01: Logging, no print in lib code\n    ✓ CLI-01: Hydra-based CLI (no argparse)\n    ✓ DOC-01: Complete docstrings\n\nUsage:\n    python -m finance.equity_distribution_v14_hydra --config scenarios/equity_base.yaml\n\nAction:\n    1. Load Hydra config\n    2. Validate schema (R5, R22)\n    3. Model equity distributions:\n       - Calculate distributable cash\n       - Apply priority waterfall\n       - Compute IRR, MOIC, payback period\n    4. Export results (JSON, summary, tranches)'
+______________ TestGWTFCompliance.test_no_hardcoded_magic_numbers ______________
+tests/lint/test_equity_distribution_compliance.py:223: in test_no_hardcoded_magic_numbers
+    assert "self.config.min_dscr_threshold" in content, (
+E   AssertionError: DSCR threshold should come from config (ARCH-01)
+E   assert 'self.config.min_dscr_threshold' in '#!/usr/bin/env python\n"""Equity Distribution Module – GWTF v3.0 Compliant.\n\nCore responsibility: Calculate equity distributions, enforce covenants,\nmanage waterfall logic for renewable energy project finance structures.\n\nComputes distributions across LKR, USD, and DFI tranches with priority rules.\n\nConfiguration Path:\n    scenarios/dutchbay_lendercase_2025Q4.yaml::equity_distribution\n\nGWTF Compliance:\n    ✓ ARCH-01: Config-first (thresholds from config, not hardcoded)\n    ✓ VAL-01: Pydantic v2 with field_validator\n    ✓ TYPE-01: Full type hints\n    ✓ CST-01: Logging, no print in lib code\n    ✓ CLI-01: Hydra-based CLI (no argparse)\n    ✓ DOC-01: Complete docstrings\n\nUsage:\n    python -m finance.equity_distribution_v14_hydra --config scenarios/equity_base.yaml\n\nAction:\n    1. Load Hydra config\n    2. Validate schema (R5, R22)\n    3. Model equity distributions:\n       - Calculate distributable cash\n       - Apply priority waterfall\n       - Compute IRR, MOIC, payback period\n    4. Export results (JSON, summary, tranches)\n\nSpecifications:\n    - Type hints: 100% (TYPE-01 compliance)\n    - Tests: 8+ cases with regression pins (TEST-01)\n    - Mypy: cle...to Hydra configuration file.\n\n    Raises:\n        Exception: If execution fails.\n    """\n    logging.basicConfig(\n        level=logging.INFO,\n        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",\n    )\n    logger_main = logging.getLogger("equity_main")\n\n    try:\n        logger_main.info(f"Loading config: {config_path}")\n        cfg = load_config(config_path)\n        engine = EquityDistributionEngine(cfg)\n        result = engine.run()\n        json_output = json.dumps(result, indent=2)\n        logger_main.info("Results computed successfully")\n        print(json_output)\n        logger_main.info("Results output to stdout (JSON)")\n\n    except Exception as e:\n        logger_main.error(f"Fatal error: {str(e)}", exc_info=True)\n        error_result = {\n            "success": False,\n            "error": str(e),\n        }\n        print(json.dumps(error_result, indent=2))\n        raise\n\n\nif __name__ == "__main__":\n    from hydra import main as hydra_main\n\n    @hydra_main(config_path="conf", config_name="equity", version_base="1.1")\n    def cli(cfg: DictConfig) -> None:\n        """CLI entry point via Hydra."""\n        main()\n\n    cli()\n'
+_________________ TestTypeHints.test_refinancing_config_typed __________________
+tests/lint/test_refinancing_module_compliance.py:28: in test_refinancing_config_typed
+    assert hasattr(config, 'trigger_year_min')
+E   AssertionError: assert False
+E    +  where False = hasattr(RefinancingConfig(enabled=False, triggers=[], new_coupon_pct=None, refinancing_cost_pct=0.5, new_tenor_years=None, principal_repayment_pct=0.0, metadata={}), 'trigger_year_min')
+_____________ TestTypeHints.test_refinancing_trigger_methods_typed _____________
+tests/lint/test_refinancing_module_compliance.py:37: in test_refinancing_trigger_methods_typed
+    method_sig = signature(trigger.should_refinance)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'RefinancingTrigger' object has no attribute 'should_refinance'
+_______________ TestTypeHints.test_refinancing_v14_methods_typed _______________
+tests/lint/test_refinancing_module_compliance.py:45: in test_refinancing_v14_methods_typed
+    calc = RefinancingV14(config)
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingV14() takes no arguments
+____________ TestDocstrings.test_calculator_methods_have_docstrings ____________
+tests/lint/test_refinancing_module_compliance.py:78: in test_calculator_methods_have_docstrings
+    assert RefinancingV14.calculate.__doc__ is not None
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'RefinancingV14' has no attribute 'calculate'
+_______________ TestNoHardcoding.test_trigger_uses_config_values _______________
+tests/lint/test_refinancing_module_compliance.py:86: in test_trigger_uses_config_values
+    config1 = RefinancingConfig(trigger_year_min=8)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'trigger_year_min'
+__________________ TestErrorHandling.test_invalid_dscr_raises __________________
+tests/lint/test_refinancing_module_compliance.py:107: in test_invalid_dscr_raises
+    RefinancingConfig(dscr_threshold=-1.0)
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'dscr_threshold'
+__________________ TestErrorHandling.test_invalid_rate_raises __________________
+tests/lint/test_refinancing_module_compliance.py:112: in test_invalid_rate_raises
+    RefinancingConfig(new_rate=-5.0)
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'new_rate'
+_________________ TestErrorHandling.test_invalid_tenor_raises __________________
+tests/lint/test_refinancing_module_compliance.py:117: in test_invalid_tenor_raises
+    RefinancingConfig(new_tenor=-1)
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'new_tenor'
+_________________________ TestEdgeCases.test_year_zero _________________________
+tests/lint/test_refinancing_module_compliance.py:127: in test_year_zero
+    should_refi, conditions = trigger.should_refinance(
+                              ^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'RefinancingTrigger' object has no attribute 'should_refinance'
+_______________________ TestEdgeCases.test_minimum_dscr ________________________
+tests/lint/test_refinancing_module_compliance.py:137: in test_minimum_dscr
+    config = RefinancingConfig(dscr_threshold=1.0)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RefinancingConfig.__init__() got an unexpected keyword argument 'dscr_threshold'
+_____________________ TestEdgeCases.test_zero_debt_balance _____________________
+tests/lint/test_refinancing_module_compliance.py:152: in test_zero_debt_balance
+    should_refi, conditions = trigger.should_refinance(
+                              ^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'RefinancingTrigger' object has no attribute 'should_refinance'
+_________ TestTypeHints.test_refinancing_calculator_methods_type_hints _________
+tests/lint/test_refinancing_v14_compliance.py:41: in test_refinancing_calculator_methods_type_hints
+    assert len(calc_methods) > 0
+E   assert 0 > 0
+E    +  where 0 = len([])
+_______________ TestConfigDriven.test_debt_schedule_uses_config ________________
+tests/lint/test_refinancing_v14_compliance.py:150: in test_debt_schedule_uses_config
+    result = calc.recalculate_schedule(
+E   TypeError: RefinancingCalculator.recalculate_schedule() missing 1 required positional argument: 'current_interest_rate'
+_______________________ test_cli_v14_pipeline_invocation _______________________
+tests/test_cli_v14_smoke.py:18: in test_cli_v14_pipeline_invocation
+    result = subprocess.run(
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/subprocess.py:571: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/.venv311/bin/python3.11', '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/run_full_pipeline_v14.py', 'config=/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/scenarios/dutchbay_lendercase_2025Q4.yaml']' returned non-zero exit status 1.
+___ TestFXPipelineIntegrationWithConfig.test_pipeline_with_minimal_fx_config ___
+tests/test_fx_pipeline_integration.py:55: in test_pipeline_with_minimal_fx_config
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_ TestFXPipelineIntegrationWithConfig.test_pipeline_with_multicurrency_fx_config _
+tests/test_fx_pipeline_integration.py:114: in test_pipeline_with_multicurrency_fx_config
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+____ TestFXPipelineIntegrationWithConfig.test_pipeline_with_eur_gbp_curves _____
+tests/test_fx_pipeline_integration.py:149: in test_pipeline_with_eur_gbp_curves
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+____ TestFXPipelineIntegrationWithoutConfig.test_pipeline_without_fx_config ____
+tests/test_fx_pipeline_integration.py:180: in test_pipeline_without_fx_config
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+__ TestFXPipelineIntegrationWithoutConfig.test_pipeline_with_empty_fx_section __
+tests/test_fx_pipeline_integration.py:218: in test_pipeline_with_empty_fx_section
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+___ TestFXPipelineIntegrationErrors.test_pipeline_with_curve_length_mismatch ___
+tests/test_fx_pipeline_integration.py:251: in test_pipeline_with_curve_length_mismatch
+    run_v14_pipeline(config=config, validation_mode="off")
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+
+During handling of the above exception, another exception occurred:
+tests/test_fx_pipeline_integration.py:250: in test_pipeline_with_curve_length_mismatch
+    with pytest.raises(ValueError, match="lkr_usd length"):
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'lkr_usd length'
+E     Actual message: 'Configuration validation failed:\n  • corporate_tax_rate: missing (required field)\n  • capacity_mw: None invalid (must be > 0)\n  • capacity_factor: missing (required field)\n  • tariff_lkr_per_kwh: None invalid (must be >= 0)\n  • opex_usd_per_year: None invalid (must be >= 0)'
+_ TestFXPipelineIntegrationErrors.test_pipeline_with_optional_curve_length_mismatch _
+tests/test_fx_pipeline_integration.py:280: in test_pipeline_with_optional_curve_length_mismatch
+    run_v14_pipeline(config=config, validation_mode="off")
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+
+During handling of the above exception, another exception occurred:
+tests/test_fx_pipeline_integration.py:279: in test_pipeline_with_optional_curve_length_mismatch
+    with pytest.raises(ValueError, match="lkr_cny length"):
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'lkr_cny length'
+E     Actual message: 'Configuration validation failed:\n  • corporate_tax_rate: missing (required field)\n  • capacity_mw: None invalid (must be > 0)\n  • capacity_factor: missing (required field)\n  • tariff_lkr_per_kwh: None invalid (must be >= 0)\n  • opex_usd_per_year: None invalid (must be >= 0)'
+_ TestFXPipelineIntegrationErrors.test_pipeline_with_malformed_config_structure _
+tests/test_fx_pipeline_integration.py:309: in test_pipeline_with_malformed_config_structure
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_ TestFXPipelineScenarioResultIntegration.test_scenario_result_dict_has_fx_fields _
+tests/test_fx_pipeline_integration.py:343: in test_scenario_result_dict_has_fx_fields
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_ TestFXPipelineScenarioResultIntegration.test_fx_fields_roundtrip_through_asdict _
+tests/test_fx_pipeline_integration.py:399: in test_fx_fields_roundtrip_through_asdict
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+___________ TestFXPipelineLogging.test_pipeline_logs_fx_integration ____________
+tests/test_fx_pipeline_integration.py:439: in test_pipeline_logs_fx_integration
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+------------------------------ Captured log call -------------------------------
+INFO     analytics.pipeline_v14:pipeline_v14.py:398 Pipeline starting: config_path=<inline_config>
+INFO     analytics.pipeline_v14:pipeline_v14.py:413 Schema validation skipped (validation_mode=off)
+INFO     analytics.pipeline_v14:pipeline_v14.py:420 Step 1/4: Building annual cashflow rows...
+_____ TestFXPipelineParametrized.test_fx_strategies[natural_hedge-0.0-0.0] _____
+tests/test_fx_pipeline_integration.py:492: in test_fx_strategies
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_____ TestFXPipelineParametrized.test_fx_strategies[fixed_ccy-50.0-100.0] ______
+tests/test_fx_pipeline_integration.py:492: in test_fx_strategies
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_______ TestFXPipelineParametrized.test_fx_strategies[hedged-75.0-50.0] ________
+tests/test_fx_pipeline_integration.py:492: in test_fx_strategies
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+_______ TestFXPipelineParametrized.test_fx_strategies[blended-25.0-25.0] _______
+tests/test_fx_pipeline_integration.py:492: in test_fx_strategies
+    result = run_v14_pipeline(config=config, validation_mode="off")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/pipeline_v14.py:421: in run_v14_pipeline
+    annual_rows = build_annual_rows(cfg)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+finance/cashflow_v14.py:475: in build_annual_rows
+    ) = _prepare_cashflow_context(
+finance/cashflow_v14.py:125: in _prepare_cashflow_context
+    validate_parameters(config)
+finance/cashflow_v14_params.py:573: in validate_parameters
+    raise ValueError(error_msg)
+E   ValueError: Configuration validation failed:
+E     • corporate_tax_rate: missing (required field)
+E     • capacity_mw: None invalid (must be > 0)
+E     • capacity_factor: missing (required field)
+E     • tariff_lkr_per_kwh: None invalid (must be >= 0)
+E     • opex_usd_per_year: None invalid (must be >= 0)
+__________ TestPipelineIntegration.test_calculator_repr_shows_status ___________
+tests/test_refinancing_v14_hardened.py:305: in test_calculator_repr_shows_status
+    assert "95000000" in repr_str  # Principal
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: assert '95000000' in 'RefinancingCalculatorHardened(enabled=True, principal=USD 95,000,000, min_dscr=1.10)'
+______________ TestEdgeCasesStress.test_high_dscr_values_handled _______________
+tests/test_refinancing_v14_hardened.py:706: in test_high_dscr_values_handled
+    assert calc.min_dscr == 2.0
+E   assert 0.0 == 2.0
+E    +  where 0.0 = RefinancingCalculatorHardened(enabled=True, principal=USD 100,000,000, min_dscr=0.00).min_dscr
+________________________ test_scenario_analytics_smoke _________________________
+tests/test_scenario_analytics_smoke.py:78: in test_scenario_analytics_smoke
+    assert not missing, f"Missing expected scenarios in summary_df index: {missing}"
+E   AssertionError: Missing expected scenarios in summary_df index: {'example_a', 'example_a_old', 'example_b'}
+E   assert not {'example_a', 'example_a_old', 'example_b'}
+----------------------------- Captured stderr call -----------------------------
+Running 19 scenario(s) serially. strict=True
+Processing scenario: zz_bad
+Scenario zz_bad failed: Config 'scenarios/_scrtch/zz_bad.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+Processing scenario: bad_missing_tax
+Scenario bad_missing_tax failed: Config 'scenarios/bad_missing_tax.yaml' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+Processing scenario: contracts_edgecase_base_v14
+Scenario contracts_edgecase_base_v14 failed: Config 'scenarios/contracts_edgecase_base_v14.yaml' is missing or has invalid required fields: capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+Processing scenario: dutchbay_basecase_2025Q4
+  Using discount rate: 10.000%
+Processing scenario: dutchbay_equitycase_2025Q4
+  Using discount rate: 10.000%
+Processing scenario: dutchbay_lendercase_2025Q4
+  Using discount rate: 12.000%
+Processing scenario: dutchbay_master_config_v14
+  Using discount rate: 12.000%
+Scenario dutchbay_master_config_v14 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+Processing scenario: dutchbay_optimistic_2025Q4
+  Using discount rate: 12.000%
+Scenario dutchbay_optimistic_2025Q4 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+Processing scenario: dutchbay_pessimistic_2025Q4
+  Using discount rate: 12.000%
+Scenario dutchbay_pessimistic_2025Q4 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+Processing scenario: edge_extreme_stress
+  Using discount rate: 15.000%
+Processing scenario: example_a
+  Using discount rate: 12.000%
+Scenario example_a failed: 'Missing required YAML key: tax.corporate_tax_rate'
+Processing scenario: example_a_old
+  Using discount rate: 12.000%
+Scenario example_a_old failed: 'Missing required YAML key: tax.corporate_tax_rate'
+Processing scenario: example_b
+  Using discount rate: 10.000%
+Scenario example_b failed: Configuration validation failed:
+  • corporate_tax_rate: missing (required field)
+Processing scenario: example_b
+  Using discount rate: 12.000%
+Scenario example_b failed: 'Missing required YAML key: tax.corporate_tax_rate'
+Processing scenario: example_fx_structured_blocks
+Scenario example_fx_structured_blocks failed: expected a single document in the stream
+  in "scenarios/example_fx_structured_blocks.yaml", line 14, column 1
+but found another document
+  in "scenarios/example_fx_structured_blocks.yaml", line 114, column 1
+Processing scenario: good_unit_test
+Scenario good_unit_test failed: Config 'scenarios/good_unit_test.yaml' is missing or has invalid required fields: FX config missing required key(s): annual_depr. Expected `start_lkr_per_usd` and `annual_depr`.
+Processing scenario: sensitivity_parameters_examples
+Scenario sensitivity_parameters_examples failed: Config 'scenarios/sensitivity_parameters_examples.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+Processing scenario: base_scenario
+  Using discount rate: 10.000%
+Scenario base_scenario failed: 'Missing required YAML key: tax.depreciation_start_year'
+Processing scenario: test_base_scenario
+  Using discount rate: 10.000%
+Scenario test_base_scenario failed: 'Missing required YAML key: tax.depreciation_start_year'
+Batch analysis complete
+  Successful scenarios: 4
+  Failed scenarios:     15
+  Export path: /private/var/folders/s7/bjx1cll14tl2dnwsg35cnw9w0000gn/T/pytest-of-aruna/pytest-8/test_scenario_analytics_smoke0/dummy.xlsx
+    - zz_bad: Config 'scenarios/_scrtch/zz_bad.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+    - bad_missing_tax: Config 'scenarios/bad_missing_tax.yaml' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+    - contracts_edgecase_base_v14: Config 'scenarios/contracts_edgecase_base_v14.yaml' is missing or has invalid required fields: capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+    - dutchbay_master_config_v14: 'Missing required YAML key: tax.wht_on_interest_enabled'
+    - dutchbay_optimistic_2025Q4: 'Missing required YAML key: tax.wht_on_interest_enabled'
+    - dutchbay_pessimistic_2025Q4: 'Missing required YAML key: tax.wht_on_interest_enabled'
+    - example_a: 'Missing required YAML key: tax.corporate_tax_rate'
+    - example_a_old: 'Missing required YAML key: tax.corporate_tax_rate'
+    - example_b: Configuration validation failed:
+  • corporate_tax_rate: missing (required field)
+    - example_b: 'Missing required YAML key: tax.corporate_tax_rate'
+    - example_fx_structured_blocks: expected a single document in the stream
+  in "scenarios/example_fx_structured_blocks.yaml", line 14, column 1
+but found another document
+  in "scenarios/example_fx_structured_blocks.yaml", line 114, column 1
+    - good_unit_test: Config 'scenarios/good_unit_test.yaml' is missing or has invalid required fields: FX config missing required key(s): annual_depr. Expected `start_lkr_per_usd` and `annual_depr`.
+    - sensitivity_parameters_examples: Config 'scenarios/sensitivity_parameters_examples.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+    - base_scenario: 'Missing required YAML key: tax.depreciation_start_year'
+    - test_base_scenario: 'Missing required YAML key: tax.depreciation_start_year'
+------------------------------ Captured log call -------------------------------
+INFO     analytics.scenario_analytics:scenario_analytics.py:308 Running 19 scenario(s) serially. strict=True
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: zz_bad
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario zz_bad failed: Config 'scenarios/_scrtch/zz_bad.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: bad_missing_tax
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario bad_missing_tax failed: Config 'scenarios/bad_missing_tax.yaml' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: contracts_edgecase_base_v14
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario contracts_edgecase_base_v14 failed: Config 'scenarios/contracts_edgecase_base_v14.yaml' is missing or has invalid required fields: capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_basecase_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_equitycase_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_lendercase_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_master_config_v14
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario dutchbay_master_config_v14 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_optimistic_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario dutchbay_optimistic_2025Q4 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: dutchbay_pessimistic_2025Q4
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario dutchbay_pessimistic_2025Q4 failed: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: edge_extreme_stress
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 15.000%
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: example_a
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario example_a failed: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: example_a_old
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario example_a_old failed: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: example_b
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario example_b failed: Configuration validation failed:
+  • corporate_tax_rate: missing (required field)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: example_b
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 12.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario example_b failed: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: example_fx_structured_blocks
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario example_fx_structured_blocks failed: expected a single document in the stream
+  in "scenarios/example_fx_structured_blocks.yaml", line 14, column 1
+but found another document
+  in "scenarios/example_fx_structured_blocks.yaml", line 114, column 1
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: good_unit_test
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario good_unit_test failed: Config 'scenarios/good_unit_test.yaml' is missing or has invalid required fields: FX config missing required key(s): annual_depr. Expected `start_lkr_per_usd` and `annual_depr`.
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: sensitivity_parameters_examples
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario sensitivity_parameters_examples failed: Config 'scenarios/sensitivity_parameters_examples.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: base_scenario
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario base_scenario failed: 'Missing required YAML key: tax.depreciation_start_year'
+INFO     analytics.scenario_analytics:scenario_analytics.py:212 Processing scenario: test_base_scenario
+INFO     analytics.scenario_analytics:scenario_analytics.py:227   Using discount rate: 10.000%
+ERROR    analytics.scenario_analytics:scenario_analytics.py:261 Scenario test_base_scenario failed: 'Missing required YAML key: tax.depreciation_start_year'
+INFO     analytics.scenario_analytics:scenario_analytics.py:358 Batch analysis complete
+INFO     analytics.scenario_analytics:scenario_analytics.py:359   Successful scenarios: 4
+INFO     analytics.scenario_analytics:scenario_analytics.py:360   Failed scenarios:     15
+INFO     analytics.scenario_analytics:scenario_analytics.py:361   Export path: /private/var/folders/s7/bjx1cll14tl2dnwsg35cnw9w0000gn/T/pytest-of-aruna/pytest-8/test_scenario_analytics_smoke0/dummy.xlsx
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - zz_bad: Config 'scenarios/_scrtch/zz_bad.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - bad_missing_tax: Config 'scenarios/bad_missing_tax.yaml' is missing or has invalid required fields: corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate)
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - contracts_edgecase_base_v14: Config 'scenarios/contracts_edgecase_base_v14.yaml' is missing or has invalid required fields: capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - dutchbay_master_config_v14: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - dutchbay_optimistic_2025Q4: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - dutchbay_pessimistic_2025Q4: 'Missing required YAML key: tax.wht_on_interest_enabled'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - example_a: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - example_a_old: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - example_b: Configuration validation failed:
+  • corporate_tax_rate: missing (required field)
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - example_b: 'Missing required YAML key: tax.corporate_tax_rate'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - example_fx_structured_blocks: expected a single document in the stream
+  in "scenarios/example_fx_structured_blocks.yaml", line 14, column 1
+but found another document
+  in "scenarios/example_fx_structured_blocks.yaml", line 114, column 1
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - good_unit_test: Config 'scenarios/good_unit_test.yaml' is missing or has invalid required fields: FX config missing required key(s): annual_depr. Expected `start_lkr_per_usd` and `annual_depr`.
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - sensitivity_parameters_examples: Config 'scenarios/sensitivity_parameters_examples.yaml' is missing or has invalid required fields: Missing `fx` section. Expected mapping with keys: `start_lkr_per_usd`, `annual_depr`.; capacity_factor (paths: project.capacity_factor_pct, project.capacity_factor, parameters.capacity_factor_pct, parameters.capacity_factor, capacity_factor_pct, capacity_factor); capacity_mw (paths: project.capacity_mw, project.capacity, parameters.capacity_mw, parameters.capacity); corporate_tax_rate (paths: tax.corporate_tax_rate_pct, tax.corporate_tax_rate, project.corporate_tax_rate_pct, project.corporate_tax_rate, parameters.corporate_tax_rate_pct, parameters.corporate_tax_rate, corporate_tax_rate_pct, corporate_tax_rate); epc_usd_total (paths: capex.usd_total, capex.epc_usd, finance.capex_usd); fx_start_lkr_per_usd (paths: fx.start_lkr_per_usd); opex_usd_per_year (paths: opex.usd_per_year, opex.usd_annual, opex.annual_opex_usd, costs.opex_usd_per_year, parameters.opex_usd_per_year, opex_usd_per_year); project_life_years (paths: project.project_life_years, project.life_years, parameters.project_life_years, Financing_Terms.tenor_years); tariff_lkr_per_kwh (paths: tariff.lkr_per_kwh, tariff.lkr_kwh, tariff.tariff_lkr_per_kwh, revenue.tariff_lkr_per_kwh, parameters.tariff_lkr_per_kwh, parameters.tariff_lkr, tariff_lkr_per_kwh, tariff_lkr, tariff)
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - base_scenario: 'Missing required YAML key: tax.depreciation_start_year'
+INFO     analytics.scenario_analytics:scenario_analytics.py:366     - test_base_scenario: 'Missing required YAML key: tax.depreciation_start_year'
+=========================== short test summary info ============================
+SKIPPED [5] tests/analytics_layer/test_sensitivity_regression.py: sensitivity_v14 is parked for a future refactor; regression + helper surface not finalized yet.
+SKIPPED [2] tests/api/test_edgecases.py:198: Range validation (capex > 0, etc.) is in sensitivity layer, not schema_guard
+SKIPPED [1] tests/api/test_tax_v14_lender_golden.py:13: Missing canonical lender-case scenario at scenarios/dutchbaylendercase2025Q4.yaml
+SKIPPED [1] tests/lint/test_no_typer_v14.py:61: No v14 CLI scripts or dutchbay_v14chat modules found.
+SKIPPED [1] tests/lint/test_sensitivity_v14_imports.py:87: sensitivity_v14 not found at /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics/sensitivity_v14.py
+XFAIL tests/api/test_casper_v14_smoke.py::test_casper_v14_orchestrator_smoke - Monte Carlo scenario '<inline_config>' not found in the current monte_carlo_defaults configuration. This integration path will be aligned in a future sprint when MC scenarios are made CASPER-aware.
+XFAIL tests/api/test_casper_v14_smoke_iteration1.py::test_casper_smoke - Monte Carlo scenario '<inline_config>' not found in the current monte_carlo_defaults configuration. This integration path will be aligned in a future sprint when MC scenarios are made CASPER-aware.
+XFAIL tests/api/test_casper_v14_smoke_iteration2.py::test_casper_smoke_iteration2 - Monte Carlo scenario '<inline_config>' not found in the current monte_carlo_defaults configuration. This integration path will be aligned in a future sprint when MC scenarios are made CASPER-aware.
+XFAIL tests/lint/test_equity_fence_v14.py::test_equity_metric_functions_only_defined_in_equity_v14 - Legacy equity functions in finance/dutchbay_finmodel/core_v2_refactored.py - Sprint 10 cleanup
+FAILED tests/analytics_layer/test_casper_tail_risk_payload.py::test_casper_payload_includes_tail_risk_metadata
+FAILED tests/analytics_layer/test_casper_tail_risk_summary.py::test_build_casper_payload_includes_tail_risk_summary
+FAILED tests/analytics_layer/test_generation_contracts_v14.py::test_technology_breakdown_snapshot
+FAILED tests/analytics_layer/test_sensitivity_breakeven_contract.py::test_run_breakeven_parameter_uses_absolute_overrides_and_converges
+FAILED tests/analytics_layer/test_sensitivity_run_contract.py::test_run_with_sensitivity_request_uses_gateway_and_returns_suite
+FAILED tests/analytics_layer/test_sensitivity_tail_risk_api.py::test_enrich_tornado_with_tail_risk_happy_path
+FAILED tests/analytics_layer/test_sensitivity_tail_risk_api.py::test_enrich_tornado_with_tail_risk_rejects_bad_confidence
+FAILED tests/analytics_layer/test_sensitivity_v14.py::TestAnalyzeSingleParameter::test_basic_analysis
+FAILED tests/analytics_layer/test_sensitivity_v14.py::TestRunTornadoSensitivity::test_happy_path_with_request
+FAILED tests/analytics_layer/test_sensitivity_v14.py::TestRunTornadoSensitivity::test_legacy_api_with_string_config_path
+FAILED tests/analytics_layer/test_sensitivity_v14_api.py::TestSensitivityRunFacade::test_run_facade_basic
+FAILED tests/api/test_cashflow_module.py::test_build_annual_cfads_minimal_valid_params
+FAILED tests/api/test_cashflow_tax_and_life.py::test_project_life_5_vs_20_years_shapes_and_magnitude
+FAILED tests/api/test_cashflow_tax_and_life.py::test_tax_holiday_increases_early_cfads
+FAILED tests/api/test_cashflow_tax_and_life.py::test_enhanced_allowance_does_not_hurt_early_cfads
+FAILED tests/api/test_cashflow_tax_and_life.py::test_high_opex_stress_reduces_cfads
+FAILED tests/api/test_cashflow_tax_and_life.py::test_zero_tariff_collapses_cfads
+FAILED tests/api/test_cashflow_v14.py::test_cashflow_basic_consistency - KeyE...
+FAILED tests/api/test_cashflow_v14.py::test_cashflow_zero_risk_haircut_means_posttax_equals_cfads
+FAILED tests/api/test_cashflow_v14_regression.py::test_cfads_increases_when_tariff_increases
+FAILED tests/api/test_cashflow_v14_regression.py::test_cfads_zero_when_tariff_zero
+FAILED tests/api/test_cashflow_v14_regression.py::test_degradation_reduces_production_over_time
+FAILED tests/api/test_covenants_ring_fence_smoke_v14.py::test_ring_fence_covenants_smoke
+FAILED tests/api/test_covenants_v14.py::test_covenants_basecase_dscr_and_balances
+FAILED tests/api/test_covenants_v14.py::test_covenants_stresscase_flags_review_when_cover_thin
+FAILED tests/api/test_debt_v14_construction.py::test_plan_debt_construction_timeline_and_idc
+FAILED tests/api/test_debt_v14_construction.py::test_plan_debt_dscr_and_audit_status
+FAILED tests/api/test_equity_distribution_v14_regression.py::TestEquityDistributionIntegration::test_distribution_enabled_scenario
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_config_creation - ...
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_engine_init - Type...
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_engine_init_missing_config
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_impact_calculation
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_impact_stress - Ty...
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_impact_unit_suffixes
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_engine_run - TypeE...
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_engine_run_stress
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_invalid_date_format
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_result_json_serializable
+FAILED tests/api/test_refinancing_v14.py::test_refinancing_type_hints - Asser...
+FAILED tests/api/test_refinancing_v14_regression.py::TestRefinancingCalculator::test_recalculate_schedule_refinancing
+FAILED tests/api/test_risk_haircut.py::test_cashflow_basic_consistency - KeyE...
+FAILED tests/api/test_risk_haircut.py::test_cashflow_zero_risk_haircut_means_posttax_equals_cfads
+FAILED tests/api/test_scenario_analytics_schema_guard_integration.py::test_scenario_analytics_stops_on_missing_corporate_tax
+FAILED tests/api/test_scenario_analytics_unit_scenario_name.py::test_scenario_analytics_labels_and_shapes
+FAILED tests/api/test_scenario_analytics_unit_scenario_name_refactored.py::test_scenario_analytics_labels_and_shapes
+FAILED tests/api/test_scenario_analytics_unit_scenario_name_refactored.py::test_scenario_analytics_runs_multiple_scenarios
+FAILED tests/contracts/test_sensitivity_contracts.py::test_parameter_range_config_minimal
+FAILED tests/contracts/test_sensitivity_contracts.py::test_tornado_result_properties
+FAILED tests/contracts/test_sensitivity_contracts.py::test_sensitivity_suite_instantiation
+FAILED tests/contracts/test_sensitivity_contracts.py::test_breakeven_result
+FAILED tests/contracts/test_sensitivity_contracts.py::test_multimetric_tornado_and_suite
+FAILED tests/contracts/test_sensitivity_contracts.py::test_pareto_frontier_result
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_valid_basic_configuration
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_default_steps
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_value_calculation
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_value_calculation
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_whitespace_stripping
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_empty_variable_name_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_zero_base_value_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_negative_base_value_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_pct_too_negative_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_low_pct_positive_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_pct_negative_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_pct_too_large_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_high_less_than_abs_low_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_steps_too_few_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_steps_too_many_rejected
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[1000--15-25-850-1250]
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[50--10-10-45-55]
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[200--5-15-190-230]
+FAILED tests/finance/test_contracts.py::TestParameterRangeConfig::test_parametrized_value_calculations[75--20-30-60-97.5]
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_basic_creation
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_impact_pct_calculation
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_impact_abs_calculation
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_impact_pct_zero_base
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_negative_impact
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_nan_handling
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.1-0.08-0.12-40.0-0.04]
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.15-0.1-0.2-66.67-0.1]
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.08-0.06-0.1-50.0-0.04]
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_parametrized_impact_calculations[0.12-0.11-0.13-16.67-0.02]
+FAILED tests/finance/test_contracts.py::TestTornadoResult::test_sorting_by_impact_abs
+FAILED tests/finance/test_contracts.py::TestIntegration::test_end_to_end_sensitivity_workflow
+FAILED tests/finance/test_contracts.py::TestIntegration::test_tornado_ranking
+FAILED tests/integration/test_fx_monte_carlo_integration.py::TestFXSampling::test_fx_factor_applied_to_revenue
+FAILED tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_uses_logging_not_print
+FAILED tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_imports_from_future
+FAILED tests/lint/test_equity_distribution_compliance.py::TestGWTFCompliance::test_no_hardcoded_magic_numbers
+FAILED tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_config_typed
+FAILED tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_trigger_methods_typed
+FAILED tests/lint/test_refinancing_module_compliance.py::TestTypeHints::test_refinancing_v14_methods_typed
+FAILED tests/lint/test_refinancing_module_compliance.py::TestDocstrings::test_calculator_methods_have_docstrings
+FAILED tests/lint/test_refinancing_module_compliance.py::TestNoHardcoding::test_trigger_uses_config_values
+FAILED tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_dscr_raises
+FAILED tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_rate_raises
+FAILED tests/lint/test_refinancing_module_compliance.py::TestErrorHandling::test_invalid_tenor_raises
+FAILED tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_year_zero
+FAILED tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_minimum_dscr
+FAILED tests/lint/test_refinancing_module_compliance.py::TestEdgeCases::test_zero_debt_balance
+FAILED tests/lint/test_refinancing_v14_compliance.py::TestTypeHints::test_refinancing_calculator_methods_type_hints
+FAILED tests/lint/test_refinancing_v14_compliance.py::TestConfigDriven::test_debt_schedule_uses_config
+FAILED tests/test_cli_v14_smoke.py::test_cli_v14_pipeline_invocation - subpro...
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_minimal_fx_config
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_multicurrency_fx_config
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithConfig::test_pipeline_with_eur_gbp_curves
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithoutConfig::test_pipeline_without_fx_config
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationWithoutConfig::test_pipeline_with_empty_fx_section
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_curve_length_mismatch
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_optional_curve_length_mismatch
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineIntegrationErrors::test_pipeline_with_malformed_config_structure
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineScenarioResultIntegration::test_scenario_result_dict_has_fx_fields
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineScenarioResultIntegration::test_fx_fields_roundtrip_through_asdict
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineLogging::test_pipeline_logs_fx_integration
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[natural_hedge-0.0-0.0]
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[fixed_ccy-50.0-100.0]
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[hedged-75.0-50.0]
+FAILED tests/test_fx_pipeline_integration.py::TestFXPipelineParametrized::test_fx_strategies[blended-25.0-25.0]
+FAILED tests/test_refinancing_v14_hardened.py::TestPipelineIntegration::test_calculator_repr_shows_status
+FAILED tests/test_refinancing_v14_hardened.py::TestEdgeCasesStress::test_high_dscr_values_handled
+FAILED tests/test_scenario_analytics_smoke.py::test_scenario_analytics_smoke
+============ 120 failed, 446 passed, 10 skipped, 4 xfailed in 7.74s ============
