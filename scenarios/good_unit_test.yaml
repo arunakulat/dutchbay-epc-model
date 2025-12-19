@@ -1,41 +1,45 @@
 project:
-  name: DutchBay Good Unit Test
-  capacity_mw: 150
-  capacity_factor_pct: 20
+  capacity_mw: 50
+  capacity_factor_pct: 40
   degradation_pct: 0.5
-  grid_loss_pct: 3.0
-parameters:
-  project_life_years: 20
+  grid_loss_pct: 2.0
+  life_years: 20
 tariff:
-  tariff_lkr_per_kwh: 8.5
-opex:
-  usd_per_year: 2000000
-capex:
-  usd_total: 225000000
-  epc_usd: 225000000
-tax:
-  corporate_tax_rate_pct: 28
-  depreciation_years: 20
-  holiday_years: 0
-  enhanced_capital_allowance_pct: 100
-statutory:
-  success_fee_pct: 0.5
-  env_surcharge_pct: 0.2
-  social_levy_pct: 0.1
+  lkr_per_kwh: 45
 fx:
-  start_lkr_per_usd: 375.0
-  annual_depr_pct: 2.5
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+opex:
+  usd_per_year: 5000000
+capex:
+  usd_total: 60000000
+tax:
+  depreciation_method: "straight_line"
+  corporate_tax_rate_pct: 24
+  tax_holiday_years: 5
+  tax_holiday_start_year: 1
+  depreciation_years: 20
+  enhanced_capital_allowance_pct: 100
 risk:
-  haircut_pct: 0.0
-financing:
-  debt_amount_lkr: 170000000
+  haircut_pct: 10
+Financing_Terms:
+  debt_ratio: 0.70
   tenor_years: 15
-  margin_pct: 2.5
-  base_rate_pct: 5.0
-  idc_pct: 75
-covenants:
-  dscr_minimum: 1.2
-  dscr_stress: 1.1
-returns:
-  project_life_years: 20
+  construction_periods: 2
+  construction_schedule:
+  - 50.0
+  - 50.0
+  debt_drawdown_pct:
+  - 0.6
+  - 0.4
+  grace_years: 2
+  interest_only_years: 0
+  amortization_style: annuity
+  target_dscr: 1.25
+  mix:
+    lkr_max: 0.0
+    dfi_max: 0.0
+    usd_commercial_min: 1.0
+  rates:
+    usd_nominal: 0.08
 discount_rate: 0.12

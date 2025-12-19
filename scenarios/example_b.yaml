@@ -1,43 +1,45 @@
 project:
-  capacity_mw: 100
-  capacity_factor: 0.35
-  degradation: 0.005
+  capacity_mw: 150
+  capacity_factor_pct: 42
+  degradation_pct: 0.6
+  grid_loss_pct: 2.5
   life_years: 25
-  corporate_tax_rate: 0.24
-  depreciation_years: 20
-  tax_holiday_years: 0
-  tax_holiday_start_year: 1
-  enhanced_capital_allowance_pct: 1.0
-  risk_haircut_pct: 0.05
 tariff:
-  lkr_per_kwh: 50
+  lkr_per_kwh: 55
 fx:
-  start_lkr_per_usd: 300.0
-  annual_depr: 0.03
+  start_lkr_per_usd: 320.0
+  annual_depr: 0.025
 opex:
-  usd_per_year: 1000000
+  usd_per_year: 12000000
 capex:
-  usd_total: 120000000
+  usd_total: 150000000
+tax:
+  depreciation_method: "straight_line"
+  corporate_tax_rate_pct: 24
+  tax_holiday_years: 8
+  tax_holiday_start_year: 1
+  depreciation_years: 20
+  enhanced_capital_allowance_pct: 150
+risk:
+  haircut_pct: 12
 Financing_Terms:
-  debt_ratio: 0.75
-  tenor_years: 17
+  debt_ratio: 0.70
+  tenor_years: 15
   construction_periods: 2
   construction_schedule:
-  - 60.0
-  - 60.0
+  - 50.0
+  - 50.0
   debt_drawdown_pct:
-  - 0.6
-  - 0.4
+  - 0.5
+  - 0.5
   grace_years: 2
   interest_only_years: 0
   amortization_style: annuity
-  target_dscr: 1.35
+  target_dscr: 1.30
   mix:
     lkr_max: 0.0
     dfi_max: 0.0
     usd_commercial_min: 1.0
   rates:
-    usd_nominal: 0.07
-discount_rate: 0.12
-tax:
-  corporate_tax_rate_pct: 24.0
+    usd_nominal: 0.075
+discount_rate: 0.13
