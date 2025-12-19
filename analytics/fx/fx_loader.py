@@ -2,11 +2,10 @@
 
 Provides loaders for:
 - Structured FX blocks (v14R6 compliant)
-- Multi-regime scenarios
-- FX curves with confidence intervals
+- FX curves
 - Legacy config migration
 
-All functions follow Go with the Flow standards:
+All functions follow Go with the Flow v3.0 standards:
 - Full type hints
 - 88-char line limit
 - Comprehensive docstrings
@@ -14,15 +13,13 @@ All functions follow Go with the Flow standards:
 Example
 -------
 >>> from pathlib import Path
->>> config = load_fx_structured_block({"fx": {
-...     "start_lkr_per_usd": 375.0,
-...     "annual_depr": 0.03,
-... }})
->>> config.start_lkr_per_usd
-375.0
+>>> config = {"fx": {"strategy": "blended", "base_currency": "USD"}}
+>>> block = load_fx_structured_block(config)
+>>> block.base_currency
+'USD'
 
 Part of: analytics/fx/ subpackage
-Specs: v14R6 (FX mapping requirement), v2.3V236 (full types)
+Specs: v14R6 (FX mapping requirement), GWTF v3.0
 """
 
 from __future__ import annotations
@@ -35,12 +32,9 @@ import yaml
 
 from analytics.fx.fx_contracts import (
     FXCurveOutput,
-    FXMonteCarloConfig,
-    FXRegimeScenario,
-    FXSensitivityConfig,
+    FXRiskProfile,
     FXStructuredBlock,
-    RegimeType,
-    VolatilityMethod,
+    FXVolumetry,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,12 +66,12 @@ def load_fx_structured_block(
     -------
     >>> config = load_fx_structured_block({
     ...     "fx": {
-    ...         "start_lkr_per_usd": 375.0,
-    ...         "annual_depr": 0.03,
+    ...         "strategy": "blended",
+    ...         "base_currency": "USD",
     ...     }
     ... })
-    >>> config.start_lkr_per_usd
-    375.0
+    >>> config.base_currency
+    'USD'
     """
     fx_cfg = raw_config.get("fx")
 
@@ -87,8 +81,7 @@ def load_fx_structured_block(
     if isinstance(fx_cfg, (int, float)):
         raise ValueError(
             "Scalar 'fx' configs not supported in v14. "
-            "Use structured block with start_lkr_per_usd and "
-            "annual_depr."
+            "Use structured block with strategy and base_currency."
         )
 
     if not isinstance(fx_cfg, dict):
@@ -97,90 +90,44 @@ def load_fx_structured_block(
             "expected dict."
         )
 
-    # Extract required fields
-    start_rate = fx_cfg["start_lkr_per_usd"]
-    annual_depr = fx_cfg["annual_depr"]
-
-    # Extract optional fields with defaults
+    # Extract fields with defaults matching FXStructuredBlock
+    strategy = fx_cfg.get("strategy", "blended")
     base_currency = fx_cfg.get("base_currency", "USD")
-    target_currency = fx_cfg.get("target_currency", "LKR")
-    regime_str = fx_cfg.get("regime", "recent")
-    volatility = fx_cfg.get("volatility", 0.10)
-    corr_revenue = fx_cfg.get("correlation_with_revenue", 0.0)
-    hedge_ratio = fx_cfg.get("hedge_ratio", 0.0)
-    metadata = fx_cfg.get("metadata")
+    reporting_currency = fx_cfg.get("reporting_currency", "USD")
+    fx_match_ratio = fx_cfg.get("fx_match_ratio", 0.0)
+    hedging_coverage_pct = fx_cfg.get("hedging_coverage_pct", 0.0)
+    notes = fx_cfg.get("notes", "")
 
-    # Convert regime string to enum
-    regime = RegimeType(regime_str.lower())
+    # Build volumetry if provided
+    volumetry_list = []
+    if "volumetry" in fx_cfg:
+        for vol_data in fx_cfg["volumetry"]:
+            volumetry_list.append(
+                FXVolumetry(
+                    period=vol_data["period"],
+                    total_debt_lkr=vol_data.get("total_debt_lkr", 0.0),
+                    total_debt_usd=vol_data.get("total_debt_usd", 0.0),
+                    total_debt_cny=vol_data.get("total_debt_cny", 0.0),
+                    revenue_lkr=vol_data.get("revenue_lkr", 0.0),
+                    revenue_usd=vol_data.get("revenue_usd", 0.0),
+                    interest_lkr=vol_data.get("interest_lkr", 0.0),
+                    principal_lkr=vol_data.get("principal_lkr", 0.0),
+                )
+            )
+
+    debt_tranches = fx_cfg.get("debt_tranches", {})
+    revenue_currencies = fx_cfg.get("revenue_currencies", ["LKR"])
 
     return FXStructuredBlock(
-        start_lkr_per_usd=start_rate,
-        annual_depr=annual_depr,
+        strategy=strategy,  # type: ignore[arg-type]
         base_currency=base_currency,
-        target_currency=target_currency,
-        regime=regime,
-        volatility=volatility,
-        correlation_with_revenue=corr_revenue,
-        hedge_ratio=hedge_ratio,
-        metadata=metadata,
-    )
-
-
-def load_fx_regime_scenario(
-    raw_config: dict[str, Any],
-) -> FXRegimeScenario:
-    """Load FX regime scenario with structured block.
-
-    Args
-    ----
-    raw_config : dict[str, Any]
-        Scenario config with 'fx_scenario' section.
-
-    Returns
-    -------
-    FXRegimeScenario
-        Multi-regime scenario config.
-
-    Raises
-    ------
-    KeyError
-        If required keys missing.
-
-    Example
-    -------
-    >>> scenario = load_fx_regime_scenario({
-    ...     "fx_scenario": {
-    ...         "scenario_name": "Base Case",
-    ...         "probability": 0.6,
-    ...         "years": 20,
-    ...         "fx": {
-    ...             "start_lkr_per_usd": 375.0,
-    ...             "annual_depr": 0.03,
-    ...         },
-    ...     }
-    ... })
-    >>> scenario.scenario_name
-    'Base Case'
-    """
-    fx_scenario = raw_config["fx_scenario"]
-
-    scenario_name = fx_scenario["scenario_name"]
-    probability = fx_scenario["probability"]
-    years = fx_scenario["years"]
-    apply_shock = fx_scenario.get("apply_shock", False)
-    shock_magnitude = fx_scenario.get("shock_magnitude", 0.0)
-
-    # Load nested structured block
-    fx_block_config = {"fx": fx_scenario["fx"]}
-    structured_block = load_fx_structured_block(fx_block_config)
-
-    return FXRegimeScenario(
-        scenario_name=scenario_name,
-        structured_block=structured_block,
-        probability=probability,
-        years=years,
-        apply_shock=apply_shock,
-        shock_magnitude=shock_magnitude,
+        reporting_currency=reporting_currency,
+        volumetry=volumetry_list,
+        debt_tranches=debt_tranches,
+        revenue_currencies=revenue_currencies,
+        fx_match_ratio=fx_match_ratio,
+        hedging_coverage_pct=hedging_coverage_pct,
+        notes=notes,
     )
 
 
@@ -191,8 +138,8 @@ def build_fx_curve_from_block(
 ) -> FXCurveOutput:
     """Build FX rate curve from structured block.
 
-    Applies compound annual depreciation over specified years.
-    Optionally includes 95% confidence intervals based on volatility.
+    NOTE: This is a STUB implementation for Sprint 12.
+    Full curve generation will be implemented in Sprint 13.
 
     Args
     ----
@@ -210,155 +157,27 @@ def build_fx_curve_from_block(
 
     Example
     -------
-    >>> block = FXStructuredBlock(
-    ...     start_lkr_per_usd=375.0, annual_depr=0.03
-    ... )
+    >>> block = FXStructuredBlock(strategy="blended")
     >>> curve = build_fx_curve_from_block(block, years=3)
-    >>> len(curve.rates)
+    >>> len(curve.years)
     3
     """
+    # STUB: Generate flat curve at 300 LKR/USD
+    # TODO Sprint 13: Implement proper curve generation
     year_indices = list(range(years))
-    rates = []
-    ci_lower = [] if include_confidence_interval else None
-    ci_upper = [] if include_confidence_interval else None
-
-    for year_idx in year_indices:
-        # Compound depreciation: rate * (1 + annual_depr)^year
-        rate = block.start_lkr_per_usd * (
-            (1 + block.annual_depr) ** year_idx
-        )
-        rates.append(rate)
-
-        if include_confidence_interval:
-            # 95% CI ~ ±1.96 * sigma * sqrt(t)
-            # Approx using annual vol
-            vol_adjustment = 1.96 * block.volatility * (year_idx ** 0.5)
-            lower = rate * (1 - vol_adjustment)
-            upper = rate * (1 + vol_adjustment)
-            ci_lower.append(lower)  # type: ignore[union-attr]
-            ci_upper.append(upper)  # type: ignore[union-attr]
+    rates = [300.0] * years  # Placeholder flat rate
 
     metadata: dict[str, Any] = {
         "base_currency": block.base_currency,
-        "target_currency": block.target_currency,
-        "annual_depr": block.annual_depr,
-        "start_rate": block.start_lkr_per_usd,
-        "volatility": block.volatility,
-        "hedge_ratio": block.hedge_ratio,
+        "strategy": block.strategy,
+        "notes": "STUB curve - Sprint 13 implementation pending",
     }
 
     return FXCurveOutput(
         years=year_indices,
-        rates=rates,
-        regime=block.regime,
-        confidence_interval_lower=ci_lower,
-        confidence_interval_upper=ci_upper,
-        metadata=metadata,
-    )
-
-
-def load_fx_sensitivity_config(
-    raw_config: dict[str, Any],
-) -> FXSensitivityConfig:
-    """Load FX sensitivity/tornado configuration.
-
-    Args
-    ----
-    raw_config : dict[str, Any]
-        Config with 'fx_sensitivity' section.
-
-    Returns
-    -------
-    FXSensitivityConfig
-        Sensitivity analysis config.
-
-    Example
-    -------
-    >>> config = load_fx_sensitivity_config({
-    ...     "fx_sensitivity": {
-    ...         "parameter_name": "annual_depr",
-    ...         "low_value": 0.01,
-    ...         "high_value": 0.05,
-    ...         "num_steps": 5,
-    ...         "base_fx": {
-    ...             "start_lkr_per_usd": 375.0,
-    ...             "annual_depr": 0.03,
-    ...         },
-    ...     }
-    ... })
-    >>> config.parameter_name
-    'annual_depr'
-    """
-    sens_cfg = raw_config["fx_sensitivity"]
-
-    base_fx_config = {"fx": sens_cfg["base_fx"]}
-    base_block = load_fx_structured_block(base_fx_config)
-
-    return FXSensitivityConfig(
-        base_block=base_block,
-        parameter_name=sens_cfg["parameter_name"],
-        low_value=sens_cfg["low_value"],
-        high_value=sens_cfg["high_value"],
-        num_steps=sens_cfg.get("num_steps", 5),
-    )
-
-
-def load_fx_monte_carlo_config(
-    raw_config: dict[str, Any],
-) -> FXMonteCarloConfig:
-    """Load FX Monte Carlo simulation configuration.
-
-    Args
-    ----
-    raw_config : dict[str, Any]
-        Config with 'fx_monte_carlo' section.
-
-    Returns
-    -------
-    FXMonteCarloConfig
-        Monte Carlo simulation config.
-
-    Example
-    -------
-    >>> config = load_fx_monte_carlo_config({
-    ...     "fx_monte_carlo": {
-    ...         "num_simulations": 100000,
-    ...         "time_horizon_years": 20,
-    ...         "volatility_method": "historical_std",
-    ...         "seed": 42,
-    ...         "base_fx": {
-    ...             "start_lkr_per_usd": 375.0,
-    ...             "annual_depr": 0.03,
-    ...         },
-    ...     }
-    ... })
-    >>> config.num_simulations
-    100000
-    """
-    mc_cfg = raw_config["fx_monte_carlo"]
-
-    base_fx_config = {"fx": mc_cfg["base_fx"]}
-    base_block = load_fx_structured_block(base_fx_config)
-
-    vol_method_str = mc_cfg.get(
-        "volatility_method", "historical_std"
-    ).lower()
-    vol_method = VolatilityMethod(vol_method_str)
-
-    correlation_raw = mc_cfg.get("correlation_matrix")
-    correlation_matrix = (
-        tuple(tuple(row) for row in correlation_raw)
-        if correlation_raw
-        else None
-    )
-
-    return FXMonteCarloConfig(
-        base_block=base_block,
-        num_simulations=mc_cfg["num_simulations"],
-        time_horizon_years=mc_cfg["time_horizon_years"],
-        volatility_method=vol_method,
-        correlation_matrix=correlation_matrix,
-        seed=mc_cfg.get("seed"),
+        lkr_usd=rates,
+        source="stub_base_case",
+        notes=metadata["notes"],
     )
 
 
@@ -382,8 +201,8 @@ def validate_fx_structured_config(
     Example
     -------
     >>> config = {"fx": {
-    ...     "start_lkr_per_usd": 375.0,
-    ...     "annual_depr": 0.03,
+    ...     "strategy": "blended",
+    ...     "base_currency": "USD",
     ... }}
     >>> validate_fx_structured_config(config)
     True
@@ -400,13 +219,8 @@ def validate_fx_structured_config(
         )
         return False
 
-    required_keys = ["start_lkr_per_usd", "annual_depr"]
-    missing = [k for k in required_keys if k not in fx_cfg]
-
-    if missing:
-        logger.error(f"FX config missing keys: {missing}")
-        return False
-
+    # No required keys for current FXStructuredBlock (all have defaults)
+    # Validation succeeds if 'fx' is a dict
     return True
 
 
@@ -482,10 +296,7 @@ def load_fx_regime(
 
 __all__ = [
     "load_fx_structured_block",
-    "load_fx_regime_scenario",
     "build_fx_curve_from_block",
-    "load_fx_sensitivity_config",
-    "load_fx_monte_carlo_config",
     "validate_fx_structured_config",
     "discover_fx_files",
     "load_fx_regime",
