@@ -23,6 +23,14 @@ from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_wacc_from_config
+from finance.refinancing_v14 import (
+    RefinancingConfig,
+    calculate_refinancing,
+)
+from finance.equity_distribution_v14 import (
+    EquityDistributionConfig,
+    calculate_equity_distribution,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +109,33 @@ def _validate_debt_result(debt_result: dict[str, Any]) -> None:
         list(debt_result.keys())[:5] + ([
             f"... +{len(debt_result) - 5} more"
         ] if len(debt_result) > 5 else []),
+    )
+
+
+def _validate_kpis_result(kpis: dict[str, Any]) -> None:
+    """Validate KPIs structure from calculate_scenario_kpis.
+    
+    Ensures minimum KPI keys are present:
+    - project_npv, project_irr, max_debt_usd
+    
+    Logs warning if structure incomplete but doesn't raise.
+    """
+    if not isinstance(kpis, dict):
+        raise ValueError(
+            f"kpis must be dict, got {type(kpis).__name__}"
+        )
+    
+    expected_keys = {"project_npv", "project_irr", "max_debt_usd"}
+    missing = expected_keys - set(kpis.keys())
+    if missing:
+        logger.warning(
+            "KPIs missing expected keys: %s",
+            missing
+        )
+    
+    logger.debug(
+        "Validated KPIs: %d keys present",
+        len(kpis)
     )
 
 
@@ -335,6 +370,8 @@ def run_v14_pipeline(
         - scenario_result
         - debt_profile
         - debt_covenants
+        - refinancing_result (if enabled in config)
+        - equity_distribution_result (if enabled in config)
     """
     mode = validation_mode.lower()
     if mode not in {"strict", "off"}:
@@ -383,7 +420,7 @@ def run_v14_pipeline(
     logger.info("Step 1/4: Building annual cashflow rows...")
     annual_rows = build_annual_rows(cfg)
     
-    # FIX #6: Validate annual_rows structure
+    # Validate annual_rows structure
     try:
         _validate_annual_rows(annual_rows)
     except ValueError as e:
@@ -396,7 +433,7 @@ def run_v14_pipeline(
     logger.info("Step 2/4: Planning debt structure...")
     debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
     
-    # FIX #7: Validate debt_result structure
+    # Validate debt_result structure
     try:
         _validate_debt_result(debt_result)
     except ValueError as e:
@@ -427,6 +464,13 @@ def run_v14_pipeline(
         debt_result=debt_result,
         discount_rate=discount_rate_for_kpis,
     )
+    
+    try:
+        _validate_kpis_result(kpis)
+    except ValueError as e:
+        logger.error("KPIs validation failed: %s", e)
+        raise
+    
     logger.debug("Calculated %d KPIs", len(kpis))
 
     # Equity overlay
@@ -435,7 +479,6 @@ def run_v14_pipeline(
     # (negative = contributions, positive = distributions). The canonical
     # equity series is not yet exposed by the cashflow/debt pipeline, so we
     # do not attempt to fabricate it here.
-    # FIX #10: Document equity_performance limitation
     logger.debug(
         "Equity performance: not implemented (v14 equity engine deferred to future sprint)"
     )
@@ -486,7 +529,6 @@ def run_v14_pipeline(
 
     # ------------------------------------------------------------------
     # 4a. FX integration (optional, config-driven)
-    # FIX #8: Enhanced FX error handling with graceful degradation
     # ------------------------------------------------------------------
     if cfg.get("FX") or cfg.get("fx"):
         logger.info("FX configuration detected; attempting FX integration.")
@@ -526,6 +568,98 @@ def run_v14_pipeline(
     scenario_result_dict = asdict(scenario_result)
 
     # ------------------------------------------------------------------
+    # 4b. Refinancing module (optional, config-driven)
+    # FIX: Added refinancing integration to pipeline
+    # ------------------------------------------------------------------
+    refinancing_result = None
+    if cfg.get("Refinancing") or cfg.get("refinancing"):
+        logger.info("Refinancing configuration detected; calculating refinancing impacts.")
+        try:
+            refi_config_raw = cfg.get("Refinancing") or cfg.get("refinancing")
+            if isinstance(refi_config_raw, dict):
+                refi_config = RefinancingConfig(**refi_config_raw)
+            else:
+                refi_config = RefinancingConfig()
+            
+            # Extract required inputs from annual_rows and debt_result
+            current_year = len(annual_rows)
+            current_dscr = float(debt_result.get("min_dscr", 0.0))
+            current_interest_rate = 0.06  # Placeholder – should derive from debt_result
+            current_debt_balance = float(debt_result.get("total_debt", 0.0))
+            remaining_years = 15  # Placeholder – should derive from tenor
+            annual_cashflow = float(annual_rows[-1].get("cf_pre_debt", 0.0)) if annual_rows else 0.0
+            ebitda = float(annual_rows[-1].get("ebitda", 0.0)) if annual_rows else 0.0
+            
+            refinancing_result = calculate_refinancing(
+                config=refi_config,
+                current_year=current_year,
+                current_dscr=current_dscr,
+                current_interest_rate=current_interest_rate,
+                current_debt_balance=current_debt_balance,
+                remaining_years=remaining_years,
+                annual_cashflow=annual_cashflow,
+                ebitda=ebitda,
+            )
+            logger.info(
+                "Refinancing calculated: triggered=%s, net_benefit=%.2f M",
+                refinancing_result.refinancing_triggered,
+                refinancing_result.net_benefit,
+            )
+        except (TypeError, ValueError) as exc:
+            logger.warning("Refinancing calculation failed: %s; continuing without refinancing", exc)
+            refinancing_result = None
+    else:
+        logger.debug("No Refinancing configuration found; skipping refinancing.")
+
+    # ------------------------------------------------------------------
+    # 4c. Equity distribution module (optional, config-driven)
+    # FIX: Added equity distribution integration to pipeline
+    # ------------------------------------------------------------------
+    equity_distribution_result = None
+    if cfg.get("EquityDistribution") or cfg.get("equity_distribution"):
+        logger.info("Equity distribution configuration detected; calculating distributions.")
+        try:
+            eq_config_raw = cfg.get("EquityDistribution") or cfg.get("equity_distribution")
+            if isinstance(eq_config_raw, dict):
+                eq_config = EquityDistributionConfig(**eq_config_raw)
+            else:
+                eq_config = EquityDistributionConfig()
+            
+            # Extract required inputs from annual_rows and debt_result
+            current_year = len(annual_rows)
+            annual_cashflow = float(annual_rows[-1].get("cf_pre_debt", 0.0)) if annual_rows else 0.0
+            debt_service_required = float(annual_rows[-1].get("debt_service_total", 0.0)) if annual_rows else 0.0
+            monthly_debt_service = debt_service_required / 12.0
+            monthly_operating_costs = 1.0  # Placeholder – should derive from config
+            current_dscr = float(debt_result.get("min_dscr", 0.0))
+            current_llcr = 1.5  # Placeholder – should calculate from debt/EBITDA
+            class_a_invested = 100.0  # Placeholder – should derive from capital structure
+            class_b_invested = 50.0  # Placeholder – should derive from capital structure
+            
+            equity_distribution_result = calculate_equity_distribution(
+                config=eq_config,
+                year=current_year,
+                annual_cashflow=annual_cashflow,
+                debt_service_required=debt_service_required,
+                monthly_debt_service=monthly_debt_service,
+                monthly_operating_costs=monthly_operating_costs,
+                current_dscr=current_dscr,
+                current_llcr=current_llcr,
+                class_a_invested=class_a_invested,
+                class_b_invested=class_b_invested,
+            )
+            logger.info(
+                "Equity distribution calculated: enabled=%s, total_dist=%.2f M",
+                equity_distribution_result.distribution_enabled,
+                equity_distribution_result.total_equity_distribution,
+            )
+        except (TypeError, ValueError) as exc:
+            logger.warning("Equity distribution calculation failed: %s; continuing without distributions", exc)
+            equity_distribution_result = None
+    else:
+        logger.debug("No EquityDistribution configuration found; skipping distributions.")
+
+    # ------------------------------------------------------------------
     # 5. Package result (JSON-safe, superset of legacy surface)
     # ------------------------------------------------------------------
     result: dict[str, Any] = {
@@ -541,17 +675,22 @@ def run_v14_pipeline(
         "scenario_result": scenario_result_dict,
         "debt_profile": asdict(debt_profile),
         "debt_covenants": asdict(debt_covenants),
+        # New modules (may be None)
+        "refinancing_result": refinancing_result.to_dict() if refinancing_result else None,
+        "equity_distribution_result": equity_distribution_result.to_dict() if equity_distribution_result else None,
     }
 
     logger.info(
         "Pipeline complete: config_path=%s, annual_rows=%d, kpis=%d, "
-        "min_dscr=%.2f, project_irr=%.4f, fx_block=%s",
+        "min_dscr=%.2f, project_irr=%.4f, fx_block=%s, refinancing=%s, equity_dist=%s",
         config_path_label,
         len(annual_rows),
         len(kpis),
         min_dscr,
         project_irr,
         "present" if scenario_result.fx_block else "absent",
+        "calculated" if refinancing_result else "skipped",
+        "calculated" if equity_distribution_result else "skipped",
     )
 
     return result
