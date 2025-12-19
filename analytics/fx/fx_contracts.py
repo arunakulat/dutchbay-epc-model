@@ -27,6 +27,13 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
 # ═════════════════════════════════════════════════════════════════════════════
+# IMPORTS: Pydantic v2 Migration Support (Module-Level)
+# ═════════════════════════════════════════════════════════════════════════════
+# CRITICAL: Import Pydantic at module level to avoid E402 (module-level import not at top)
+from pydantic import BaseModel, ConfigDict
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # FXVolumetry – Debt and Revenue Exposure by Currency and Time
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -261,6 +268,35 @@ class FXRiskProfile:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# FXRegimeConfig – Base Configuration (Forward Reference Workaround)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class FXRegimeConfig:
+    """FX regime configuration for scenario modeling.
+
+    CRITICAL NOTE: This class is referenced by FXRegimeScenario below.
+    Defined here to resolve forward reference error (F821).
+
+    Fields:
+        base_currency: Base currency (e.g., 'LKR')
+        target_currency: Target currency (e.g., 'USD')
+        regime_type: Regime type ('fixed', 'floating', 'managed')
+        years: Number of years in regime
+        annual_depr: Annual depreciation rate (decimal, e.g., 0.025 for 2.5%)
+        start_rate: Starting exchange rate (e.g., 300.0 for LKR/USD)
+    """
+
+    base_currency: str
+    target_currency: str
+    regime_type: str
+    years: int
+    annual_depr: float = 0.0
+    start_rate: float = 1.0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # FXStructuredBlock – Primary FX Configuration and Snapshot
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -370,21 +406,54 @@ class FXStructuredBlock:
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Backward Compatibility Wrapper (Sprint 12 Pydantic v2 Migration)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class FXRegimeScenario:
+    """Backward compatibility wrapper for FX regime configurations.
+
+    CRITICAL: This class uses FXRegimeConfig defined above (no forward reference).
+    Used in legacy tests and transition code during Pydantic v2 migration.
+    """
+
+    config: FXRegimeConfig
+    scenario_name: str = "base"
+
+    @property
+    def regime_type(self) -> str:
+        """Extract regime type from config."""
+        return self.config.regime_type
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Pydantic v2 Stub (Backward Compatibility)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class FXMonteCarloConfig(BaseModel):
+    """Legacy stub for FX Monte Carlo test compatibility.
+
+    Supports Pydantic v2 migration (allows arbitrary types and extra fields).
+    """
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Public API Exports
+# ═════════════════════════════════════════════════════════════════════════════
+
 __all__ = [
     "FXVolumetry",
     "FXCurveOutput",
     "FXRiskProfile",
     "FXStructuredBlock",
+    "FXRegimeConfig",
+    "FXRegimeScenario",
+    "FXMonteCarloConfig",
 ]
 
 # EOF - analytics/fx/fx_contracts.py
-
-
-# Backward compatibility stub (Sprint 12 Pydantic v2 migration)
-from pydantic import BaseModel, ConfigDict
-
-
-class FXMonteCarloConfig(BaseModel):
-    """Legacy stub for FX Monte Carlo test compatibility."""
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)

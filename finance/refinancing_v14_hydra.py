@@ -223,16 +223,12 @@ class RefinancingCalculator:
     def __repr__(self) -> str:
         return f"RefinancingCalculator(enabled={self.config.enabled})"
 
-
-__all__ = [
-    "RefinancingConfig",
-    "RefinancingOutput",
-    "RefinancingCalculator",
-]
-
-# EOF - finance/refinancing_v14_hydra.py
-
-
+@dataclass(frozen=True)
+class RefinancingTrigger:
+    """Backward compatibility: Refinancing trigger configuration."""
+    dscr_threshold: float = 1.25
+    year_earliest: int = 3
+    check_enabled: bool = True
 # Backward compatibility stubs (Sprint 12 Pydantic v2 migration)
 class RefinancingEngine:
     """Legacy stub for test compatibility."""
@@ -244,3 +240,14 @@ class RefinancingV14:
     """Legacy stub for test compatibility."""
 
     pass
+
+
+__all__ = [
+    "RefinancingConfig",
+    "RefinancingOutput",
+    "RefinancingCalculator",
+]
+
+# EOF - finance/refinancing_v14_hydra.py
+
+
