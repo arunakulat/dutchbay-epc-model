@@ -23,7 +23,7 @@ Example:
 
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ParameterRangeConfig(BaseModel):
@@ -171,3 +171,325 @@ class SensitivityConfig(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Parameter variable_names must be unique")
         return self
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sensitivity Analysis Result Contracts (Pydantic V2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TornadoResult(BaseModel):
+    """Single parameter tornado sensitivity result.
+
+    Captures the impact of varying one parameter across its low/high range
+    on a target metric (typically IRR or NPV). Used by sensitivity_v14 module
+    for one-way sensitivity analysis.
+
+    Args:
+        variable: Parameter name or display label
+        base_irr: Baseline metric value (unshocked configuration)
+        low_irr: Metric value at low parameter bound
+        high_irr: Metric value at high parameter bound
+        impact_abs: Absolute impact magnitude (auto-computed)
+        impact_dir: Direction of impact: +1 or -1 (auto-computed)
+
+    Example:
+        >>> result = TornadoResult(
+        ...     variable="Tariff (USD/kWh)",
+        ...     base_irr=0.12,
+        ...     low_irr=0.10,
+        ...     high_irr=0.14
+        ... )
+        >>> result.impact_abs
+        0.02
+        >>> result.impact_dir
+        1
+    """
+
+    variable: str = Field(description="Parameter name or display label")
+    base_irr: float = Field(description="Baseline metric value")
+    low_irr: float = Field(description="Metric at low parameter bound")
+    high_irr: float = Field(description="Metric at high parameter bound")
+    impact_abs: Optional[float] = Field(default=None, description="Absolute impact")
+    impact_dir: Optional[int] = Field(default=None, description="Impact direction")
+
+    @model_validator(mode="after")
+    def compute_impact(self) -> "TornadoResult":
+        """Compute impact_abs and impact_dir from metric values.
+
+        Calculates absolute impact as the maximum deviation from base,
+        and direction based on whether high > base.
+
+        Returns:
+            Self with computed impact_abs and impact_dir
+        """
+        if self.impact_abs is None:
+            self.impact_abs = max(
+                abs(self.low_irr - self.base_irr),
+                abs(self.high_irr - self.base_irr),
+            )
+        if self.impact_dir is None:
+            self.impact_dir = 1 if self.high_irr >= self.base_irr else -1
+        return self
+
+
+class MultiMetricTornadoResult(BaseModel):
+    """Multi-metric tornado result for a single parameter.
+
+    Extends TornadoResult to track multiple KPI metrics simultaneously
+    (e.g., project_irr, equity_irr, min_dscr). Used by sensitivity_v14
+    for multi-metric tornado analysis.
+
+    Args:
+        variable: Parameter name
+        label: Display label for charts/reports
+        base_values: Dict of base metric values {metric_name: value}
+        low_values: Dict of low-bound metric values
+        high_values: Dict of high-bound metric values
+        impacts: Dict of absolute impacts per metric (auto-computed)
+        impact_dirs: Dict of impact directions per metric (auto-computed)
+
+    Example:
+        >>> result = MultiMetricTornadoResult(
+        ...     variable="tariff_usd_per_kwh",
+        ...     label="Tariff",
+        ...     base_values={"project_irr": 0.12, "equity_irr": 0.15},
+        ...     low_values={"project_irr": 0.10, "equity_irr": 0.13},
+        ...     high_values={"project_irr": 0.14, "equity_irr": 0.17}
+        ... )
+        >>> result.impacts["project_irr"]
+        0.02
+    """
+
+    variable: str
+    label: str
+    base_values: dict[str, float]
+    low_values: dict[str, float]
+    high_values: dict[str, float]
+    impacts: Optional[dict[str, float]] = None
+    impact_dirs: Optional[dict[str, int]] = None
+
+    @model_validator(mode="after")
+    def compute_multi_impacts(self) -> "MultiMetricTornadoResult":
+        """Compute impacts and directions for all metrics.
+
+        For each metric in base_values, calculates absolute impact
+        and direction based on low/high deviations.
+
+        Returns:
+            Self with computed impacts and impact_dirs
+        """
+        if self.impacts is None:
+            self.impacts = {}
+        if self.impact_dirs is None:
+            self.impact_dirs = {}
+
+        for metric in self.base_values:
+            base = self.base_values[metric]
+            low = self.low_values.get(metric, base)
+            high = self.high_values.get(metric, base)
+
+            self.impacts[metric] = max(abs(low - base), abs(high - base))
+            self.impact_dirs[metric] = 1 if high >= base else -1
+
+        return self
+
+
+class SensitivitySuite(BaseModel):
+    """Complete tornado sensitivity analysis suite for a single metric.
+
+    Bundles all tornado results for a scenario with metadata. Used as
+    return type from sensitivity_v14.run_tornado_sensitivity().
+
+    Args:
+        tornado_results: List of TornadoResult objects (one per parameter)
+        base_metric: Baseline metric value (unshocked)
+        base_config_path: Path to scenario configuration file
+        metric: Name of analyzed metric (e.g., "project_irr")
+
+    Example:
+        >>> suite = SensitivitySuite(
+        ...     tornado_results=[result1, result2, result3],
+        ...     base_metric=0.12,
+        ...     base_config_path="scenarios/example.yaml",
+        ...     metric="project_irr"
+        ... )
+    """
+
+    tornado_results: list[TornadoResult]
+    base_metric: float
+    base_config_path: str
+    metric: str = "project_irr"
+
+
+class MultiMetricSensitivitySuite(BaseModel):
+    """Multi-metric tornado sensitivity suite.
+
+    Bundles tornado results for multiple KPI metrics. Used as return
+    type from sensitivity_v14.run_multi_metric_tornado().
+
+    Args:
+        tornado_results: List of MultiMetricTornadoResult objects
+        base_metrics: Dict of base metric values {metric_name: value}
+        base_config_path: Path to scenario configuration file
+        metrics: List of analyzed metric names
+
+    Example:
+        >>> suite = MultiMetricSensitivitySuite(
+        ...     tornado_results=[result1, result2],
+        ...     base_metrics={"project_irr": 0.12, "equity_irr": 0.15},
+        ...     base_config_path="scenarios/example.yaml",
+        ...     metrics=["project_irr", "equity_irr"]
+        ... )
+    """
+
+    tornado_results: list[MultiMetricTornadoResult]
+    base_metrics: dict[str, float]
+    base_config_path: str
+    metrics: list[str]
+
+
+class BreakevenResult(BaseModel):
+    """Breakeven parameter search result.
+
+    Captures the parameter value that yields a target metric value
+    (e.g., IRR = 0 for breakeven). Used by sensitivity_v14.run_breakeven_parameter().
+
+    Args:
+        variable: Parameter name
+        breakeven_value: Solved parameter value at target
+        bracket: Search bounds tuple (low, high)
+        status: Solver status ("success", "max_iter_exceeded", etc.)
+        iterations: Number of solver iterations (optional)
+        target_value: Target metric value (optional, default 0.0)
+
+    Example:
+        >>> result = BreakevenResult(
+        ...     variable="tariff_usd_per_kwh",
+        ...     breakeven_value=0.075,
+        ...     bracket=(0.05, 0.10),
+        ...     status="success",
+        ...     target_value=0.0
+        ... )
+    """
+
+    variable: str
+    breakeven_value: float
+    bracket: tuple[float, float]
+    status: str = Field(default="success")
+    iterations: Optional[int] = None
+    target_value: Optional[float] = 0.0
+
+
+class TailRiskSnapshot(BaseModel):
+    """Tail risk metrics snapshot for a scenario.
+
+    Captures downside risk metrics like VaR and CVaR for IRR or NPV.
+    Used by casper_v14 module for tail risk analysis.
+
+    Args:
+        metric_name: Name of metric (e.g., "project_irr")
+        var_95: Value at Risk at 95% confidence level
+        cvar_95: Conditional VaR (expected shortfall) at 95%
+        var_99: Value at Risk at 99% confidence level (optional)
+        cvar_99: Conditional VaR at 99% (optional)
+        downside_prob: Probability of metric falling below threshold
+        threshold: Risk threshold value
+
+    Example:
+        >>> snapshot = TailRiskSnapshot(
+        ...     metric_name="project_irr",
+        ...     var_95=0.08,
+        ...     cvar_95=0.06,
+        ...     downside_prob=0.15,
+        ...     threshold=0.10
+        ... )
+    """
+
+    metric_name: str
+    var_95: float = Field(description="Value at Risk 95%")
+    cvar_95: float = Field(description="Conditional VaR 95%")
+    var_99: Optional[float] = None
+    cvar_99: Optional[float] = None
+    downside_prob: Optional[float] = None
+    threshold: Optional[float] = None
+
+
+class TechnologyBreakdown(BaseModel):
+    """Technology cost/performance breakdown.
+
+    Captures technology-specific metrics for hybrid or multi-technology
+    projects. Used for technology-level reporting in multi-tech scenarios.
+
+    Args:
+        technology: Technology name (e.g., "solar", "wind", "storage")
+        capacity_mw: Installed capacity in MW
+        capex_usd: Capital expenditure in USD
+        opex_annual_usd: Annual operating expense in USD
+        generation_gwh: Annual generation in GWh (optional)
+        capacity_factor_pct: Capacity factor percentage (optional)
+
+    Example:
+        >>> tech = TechnologyBreakdown(
+        ...     technology="solar",
+        ...     capacity_mw=50.0,
+        ...     capex_usd=50_000_000,
+        ...     opex_annual_usd=500_000,
+        ...     generation_gwh=120.0,
+        ...     capacity_factor_pct=27.4
+        ... )
+    """
+
+    technology: str
+    capacity_mw: float
+    capex_usd: float
+    opex_annual_usd: float
+    generation_gwh: Optional[float] = None
+    capacity_factor_pct: Optional[float] = None
+
+
+class MonteCarloResult(BaseModel):
+    """Monte Carlo simulation result.
+
+    Captures probabilistic analysis results with distribution statistics.
+    Used by monte_carlo_v14 module for stochastic analysis.
+
+    Args:
+        metric_name: Name of metric (e.g., "project_irr")
+        mean: Mean value across simulations
+        std: Standard deviation
+        percentile_05: 5th percentile (P05)
+        percentile_50: 50th percentile (P50/median)
+        percentile_95: 95th percentile (P95)
+        iterations: Number of Monte Carlo iterations
+        seed: Random seed for reproducibility (optional)
+
+    Example:
+        >>> result = MonteCarloResult(
+        ...     metric_name="project_irr",
+        ...     mean=0.12,
+        ...     std=0.02,
+        ...     p05=0.09,
+        ...     p50=0.12,
+        ...     p95=0.15,
+        ...     iterations=10000,
+        ...     seed=42
+        ... )
+
+    Note:
+        Supports both snake_case (percentile_05) and alias (p05) field names.
+    """
+
+    metric_name: str
+    mean: float
+    std: float
+    percentile_05: float = Field(alias="p05")
+    percentile_50: float = Field(alias="p50")
+    percentile_95: float = Field(alias="p95")
+    iterations: int
+    seed: Optional[int] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# EOF - finance/contracts.py
