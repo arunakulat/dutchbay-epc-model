@@ -1,133 +1,173 @@
-from typing import Optional, List
-from pydantic import BaseModel, field_validator, model_validator
-import numpy as np
+"""
+Finance module configuration contracts using Pydantic v2.
 
-class TornadoResult(BaseModel):
-    variable: str
-    base_irr: float
-    low_irr: float
-    high_irr: float
-    
-    @property
-    def impact_pct(self) -> float:
-        if self.base_irr == 0:
-            return 0.0
-        return ((self.high_irr - self.low_irr) / abs(self.base_irr)) * 100
-    
-    @property
-    def impact_abs(self) -> float:
-        return self.high_irr - self.low_irr
+This module provides type-safe configuration models for sensitivity analysis
+and other financial modeling scenarios. All models follow Pydantic v2 syntax
+with proper Field() wrappers and validators.
+
+Example:
+    >>> from finance.contracts import ParameterRangeConfig
+    >>> param = ParameterRangeConfig(
+    ...     variable_name="tariff_usd_per_kwh",
+    ...     base_value=0.085,
+    ...     low_pct=10.0,
+    ...     high_pct=15.0,
+    ...     steps=5,
+    ...     label="Tariff (USD/kWh)"
+    ... )
+    >>> param.low_value  # Automatically computed
+    0.0765
+    >>> param.high_value
+    0.09775
+"""
+
+from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
 
 class ParameterRangeConfig(BaseModel):
+    """Configuration for a single parameter's sensitivity range.
+
+    Defines how a parameter should vary across a sensitivity analysis,
+    including percentage-based ranges and step counts. Low/high values
+    are automatically computed from base_value and percentages.
+
+    Args:
+        variable_name: Name of the variable to vary (e.g., 'tariff_usd_per_kwh')
+        base_value: Base/nominal value for the parameter
+        low_pct: Percentage decrease for low bound (0-100, e.g., 10.0 = -10%)
+        high_pct: Percentage increase for high bound (0-100, e.g., 15.0 = +15%)
+        steps: Number of evaluation points across the range (2-20)
+        label: Optional human-readable label for charts/reports
+        shock_type: Type of shock application ('scalar', 'additive', 'multiplicative')
+        low_value: Computed lower bound (base_value * (1 - low_pct/100))
+        high_value: Computed upper bound (base_value * (1 + high_pct/100))
+
+    Raises:
+        ValueError: If shock_type is not one of allowed values
+        ValueError: If percentages or steps are out of valid ranges
+    """
+
     variable_name: str
     base_value: float
-    low_pct: float
-    high_pct: float
-    steps: int = 5
-    label: Optional[str] = None
-    shock_type: str = "scalar"
-    low_value: Optional[float] = None
-    high_value: Optional[float] = None
-    
-    @field_validator('variable_name', mode='before')
+    low_pct: float = Field(
+        ge=0, le=100, description="Percentage decrease for low bound"
+    )
+    high_pct: float = Field(
+        ge=0, le=100, description="Percentage increase for high bound"
+    )
+    steps: int = Field(
+        default=5, ge=2, le=20, description="Number of evaluation points"
+    )
+    label: Optional[str] = Field(default=None, description="Human-readable label")
+    shock_type: str = Field(default="scalar", description="Shock application type")
+    low_value: Optional[float] = Field(default=None, description="Computed lower bound")
+    high_value: Optional[float] = Field(
+        default=None, description="Computed upper bound"
+    )
+
+    @field_validator("shock_type")
     @classmethod
-    def validate_variable_name(cls, v):
-        v = str(v).strip()
-        if not v:
-            raise ValueError('variable_name cannot be empty')
+    def validate_shock_type(cls, v: str) -> str:
+        """Validate shock_type is one of allowed values.
+
+        Args:
+            v: Proposed shock_type value
+
+        Returns:
+            Validated shock_type
+
+        Raises:
+            ValueError: If shock_type not in allowed set
+        """
+        allowed = {"scalar", "additive", "multiplicative"}
+        if v not in allowed:
+            raise ValueError(f"shock_type must be one of {allowed}, got {v}")
         return v
-    
-    @field_validator('base_value')
-    @classmethod
-    def validate_base_value(cls, v):
-        if v <= 0:
-            raise ValueError('base_value must be positive')
-        return v
-    
-    @field_validator('low_pct')
-    @classmethod
-    def validate_low_pct(cls, v):
-        if v >= 0:
-            raise ValueError('low_pct must be negative')
-        if v < -50:
-            raise ValueError('low_pct cannot be less than -50%')
-        return v
-    
-    @field_validator('high_pct')
-    @classmethod
-    def validate_high_pct(cls, v):
-        if v <= 0:
-            raise ValueError('high_pct must be positive')
-        if v > 100:
-            raise ValueError('high_pct cannot exceed 100%')
-        return v
-    
-    @field_validator('steps')
-    @classmethod
-    def validate_steps(cls, v):
-        if v < 3:
-            raise ValueError('steps must be at least 3')
-        if v > 20:
-            raise ValueError('steps cannot exceed 20')
-        return v
-    
-    @model_validator(mode='after')
-    def compute_and_validate_range(self):
-        if self.high_pct <= abs(self.low_pct):
-            raise ValueError('high_pct must exceed abs(low_pct)')
-        self.low_value = self.base_value * (1 + self.low_pct / 100)
-        self.high_value = self.base_value * (1 + self.high_pct / 100)
+
+    @model_validator(mode="after")
+    def compute_range_values(self) -> "ParameterRangeConfig":
+        """Compute low_value and high_value from base_value and percentages.
+
+        If low_value or high_value are not explicitly provided, computes them
+        from base_value using the percentage adjustments. This ensures
+        consistency and reduces config redundancy.
+
+        Returns:
+            Self with computed low_value and high_value
+        """
+        if self.low_value is None:
+            self.low_value = self.base_value * (1 - self.low_pct / 100)
+        if self.high_value is None:
+            self.high_value = self.base_value * (1 + self.high_pct / 100)
         return self
-    
-    def generate_values(self) -> List[float]:
-        if self.low_value is None or self.high_value is None:
-            low = self.base_value * (1 + self.low_pct / 100)
-            high = self.base_value * (1 + self.high_pct / 100)
-            return list(np.linspace(low, high, self.steps))
-        return list(np.linspace(self.low_value, self.high_value, self.steps))
 
-class TornadoAnalysisResults(BaseModel):
-    results: List[TornadoResult]
-    base_case_irr: float
-    
-    def sorted_by_impact_abs(self) -> List[TornadoResult]:
-        return sorted(self.results, key=lambda r: r.impact_abs, reverse=True)
-    
-    def sorted_by_impact_pct(self) -> List[TornadoResult]:
-        return sorted(self.results, key=lambda r: r.impact_pct, reverse=True)
 
-class SensitivityScenario(BaseModel):
-    name: str
-    description: Optional[str] = None
-    parameter_configs: List[ParameterRangeConfig]
-    
-    def total_combinations(self) -> int:
-        total = 1
-        for config in self.parameter_configs:
-            total *= config.steps
-        return total
+class SensitivityConfig(BaseModel):
+    """Configuration for sensitivity analysis across multiple parameters.
 
-class TornadoMetrics(BaseModel):
-    mean_impact_pct: float
-    median_impact_pct: float
-    max_impact_pct: float
-    min_impact_pct: float
-    std_dev_impact_pct: float
-    
+    Orchestrates multi-parameter sensitivity runs by defining which parameters
+    to vary, what metrics to track, and analysis options like correlation
+    and tornado charts.
+
+    Args:
+        parameters: List of ParameterRangeConfig objects defining sensitivity ranges
+        output_metrics: Metrics to track (e.g., ["npv", "irr", "dscr_min"])
+        correlation_enabled: Whether to compute parameter correlations
+        tornado_chart: Whether to generate tornado chart visualization
+
+    Raises:
+        ValueError: If no output metrics specified
+        ValueError: If parameter variable names are not unique
+    """
+
+    parameters: list[ParameterRangeConfig]
+    output_metrics: list[str] = Field(
+        default_factory=lambda: ["npv", "irr"],
+        description="Metrics to track during sensitivity",
+    )
+    correlation_enabled: bool = Field(
+        default=False,
+        description="Compute parameter correlation matrix",
+    )
+    tornado_chart: bool = Field(
+        default=True,
+        description="Generate tornado chart visualization",
+    )
+
+    @field_validator("output_metrics")
     @classmethod
-    def from_results(cls, results: List[TornadoResult]) -> 'TornadoMetrics':
-        impacts = [r.impact_pct for r in results]
-        return cls(
-            mean_impact_pct=float(np.mean(impacts)),
-            median_impact_pct=float(np.median(impacts)),
-            max_impact_pct=float(np.max(impacts)),
-            min_impact_pct=float(np.min(impacts)),
-            std_dev_impact_pct=float(np.std(impacts))
-        )
+    def validate_metrics(cls, v: list[str]) -> list[str]:
+        """Ensure at least one output metric is specified.
 
-class ParameterImpactRanking(BaseModel):
-    variable: str
-    impact_pct_rank: int
-    impact_abs_rank: int
-    impact_pct: float
-    impact_abs: float
+        Args:
+            v: List of metric names
+
+        Returns:
+            Validated metric list
+
+        Raises:
+            ValueError: If metric list is empty
+        """
+        if not v:
+            raise ValueError("At least one output metric required")
+        return v
+
+    @model_validator(mode="after")
+    def validate_parameter_uniqueness(self) -> "SensitivityConfig":
+        """Ensure parameter variable names are unique.
+
+        Prevents configuration errors where the same parameter is varied
+        multiple times, which would create ambiguous analysis results.
+
+        Returns:
+            Self with validated unique parameters
+
+        Raises:
+            ValueError: If duplicate parameter variable names found
+        """
+        names = [p.variable_name for p in self.parameters]
+        if len(names) != len(set(names)):
+            raise ValueError("Parameter variable_names must be unique")
+        return self

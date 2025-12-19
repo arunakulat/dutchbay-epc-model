@@ -12,13 +12,13 @@ All calculation methodologies are industry-standard:
 - Standard covenant calculations (DSCR, LLCR)
 """
 
-from datetime import datetime
-from typing import Optional, List, Dict, Tuple
-from dataclasses import dataclass, field
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-import numpy as np
-from enum import Enum
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,9 @@ class RefinancingTrigger:
             config: RefinancingConfig instance
         """
         if not isinstance(config, RefinancingConfig):
-            raise TypeError(f"config must be RefinancingConfig, got {type(config).__name__}")
+            raise TypeError(
+                f"config must be RefinancingConfig, got {type(config).__name__}"
+            )
         self.config = config
 
     def evaluate(
@@ -164,9 +166,13 @@ class RefinancingTrigger:
         if current_dscr < 0:
             raise ValueError(f"current_dscr must be >= 0, got {current_dscr}")
         if current_interest_rate < 0:
-            raise ValueError(f"current_interest_rate must be >= 0, got {current_interest_rate}")
+            raise ValueError(
+                f"current_interest_rate must be >= 0, got {current_interest_rate}"
+            )
         if not isinstance(npv_benefit, (int, float)):
-            raise ValueError(f"npv_benefit must be numeric, got {type(npv_benefit).__name__}")
+            raise ValueError(
+                f"npv_benefit must be numeric, got {type(npv_benefit).__name__}"
+            )
 
         conditions = {}
         reasons: List[str] = []
@@ -191,8 +197,8 @@ class RefinancingTrigger:
                 current_interest_rate * 100,
             )
         rate_savings_bps = (
-            (current_interest_rate - self.config.new_interest_rate) * 10000
-        )
+            current_interest_rate - self.config.new_interest_rate
+        ) * 10000
         rate_ok = rate_savings_bps >= self.config.rate_savings_threshold
         conditions["rate_savings"] = rate_ok
         if rate_ok:
@@ -232,9 +238,13 @@ class DebtTerm:
     def __post_init__(self) -> None:
         """Validate debt term parameters."""
         if self.original_amount < 0:
-            raise ValueError(f"original_amount must be >= 0, got {self.original_amount}")
+            raise ValueError(
+                f"original_amount must be >= 0, got {self.original_amount}"
+            )
         if self.current_balance < 0:
-            raise ValueError(f"current_balance must be >= 0, got {self.current_balance}")
+            raise ValueError(
+                f"current_balance must be >= 0, got {self.current_balance}"
+            )
         if self.interest_rate < 0:
             raise ValueError(f"interest_rate must be >= 0, got {self.interest_rate}")
         if self.tenor_years < 1:
@@ -259,7 +269,9 @@ class RefinancingCalculator:
             config: RefinancingConfig instance
         """
         if not isinstance(config, RefinancingConfig):
-            raise TypeError(f"config must be RefinancingConfig, got {type(config).__name__}")
+            raise TypeError(
+                f"config must be RefinancingConfig, got {type(config).__name__}"
+            )
         self.config = config
 
     def calculate_debt_service_payment(
@@ -360,13 +372,19 @@ class RefinancingCalculator:
         """
         # Input validation
         if old_annual_payment < 0:
-            raise ValueError(f"old_annual_payment must be >= 0, got {old_annual_payment}")
+            raise ValueError(
+                f"old_annual_payment must be >= 0, got {old_annual_payment}"
+            )
         if new_annual_payment < 0:
-            raise ValueError(f"new_annual_payment must be >= 0, got {new_annual_payment}")
+            raise ValueError(
+                f"new_annual_payment must be >= 0, got {new_annual_payment}"
+            )
         if years <= 0:
             raise ValueError(f"years must be > 0, got {years}")
         if discount_rate < 0 or discount_rate > 0.5:
-            raise ValueError(f"discount_rate must be 0-50%, got {discount_rate*100:.1f}%")
+            raise ValueError(
+                f"discount_rate must be 0-50%, got {discount_rate*100:.1f}%"
+            )
 
         # Edge case: no difference
         annual_benefit = old_annual_payment - new_annual_payment
@@ -436,7 +454,9 @@ class RefinancingCalculator:
         if remaining_years <= 0:
             raise ValueError(f"remaining_years must be > 0, got {remaining_years}")
         if current_interest_rate < 0:
-            raise ValueError(f"current_interest_rate must be >= 0, got {current_interest_rate}")
+            raise ValueError(
+                f"current_interest_rate must be >= 0, got {current_interest_rate}"
+            )
 
         # Edge case: zero balance
         if current_balance == 0:
@@ -521,7 +541,9 @@ class RefinancingCalculator:
         """
         # Input validation
         if new_annual_debt_service < 0:
-            raise ValueError(f"new_annual_debt_service must be >= 0, got {new_annual_debt_service}")
+            raise ValueError(
+                f"new_annual_debt_service must be >= 0, got {new_annual_debt_service}"
+            )
         if annual_cashflow < 0:
             raise ValueError(f"annual_cashflow must be >= 0, got {annual_cashflow}")
         if ebitda < 0:
@@ -636,7 +658,9 @@ def calculate_refinancing(
         ValueError: If any input parameter is invalid
     """
     if not isinstance(config, RefinancingConfig):
-        raise TypeError(f"config must be RefinancingConfig, got {type(config).__name__}")
+        raise TypeError(
+            f"config must be RefinancingConfig, got {type(config).__name__}"
+        )
 
     # Create trigger and calculator
     trigger = RefinancingTrigger(config)
@@ -646,8 +670,10 @@ def calculate_refinancing(
     # FIX: Replace placeholder with actual NPV calculation
     if current_debt_balance > 0 and remaining_years > 0:
         # Estimate old rate (use actual if available, or add 100bps to new rate)
-        old_rate_estimate = current_interest_rate if current_interest_rate > 0 else (
-            config.new_interest_rate + 0.01
+        old_rate_estimate = (
+            current_interest_rate
+            if current_interest_rate > 0
+            else (config.new_interest_rate + 0.01)
         )
         old_payment = calculator.calculate_debt_service_payment(
             current_debt_balance, old_rate_estimate, remaining_years
@@ -656,7 +682,10 @@ def calculate_refinancing(
             current_debt_balance, config.new_interest_rate, remaining_years
         )
         npv_benefit = calculator.calculate_npv_savings(
-            old_payment, new_payment, min(config.new_tenor, remaining_years), config.discount_rate_for_npv
+            old_payment,
+            new_payment,
+            min(config.new_tenor, remaining_years),
+            config.discount_rate_for_npv,
         )
     else:
         npv_benefit = 0.0

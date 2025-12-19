@@ -22,7 +22,7 @@ FIN-01: Comprehensive edge case handling
 
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 class StressScenario(Enum):
     """Available stress test scenarios."""
+
     RATE_SHOCK_UP_2PCT = "rate_shock_up_2pct"
     RATE_SHOCK_UP_5PCT = "rate_shock_up_5pct"
     RATE_SHOCK_DOWN_2PCT = "rate_shock_down_2pct"
@@ -48,6 +49,7 @@ class StressScenario(Enum):
 @dataclass
 class StressResult:
     """Result of a single stress scenario (CLI-03: JSON serializable)."""
+
     scenario: str
     base_npv_usd: float
     stressed_npv_usd: float
@@ -183,7 +185,9 @@ class StressTestEngine:
 
         # Calculate risk metrics
         npv_change = stressed_npv - self.base_npv
-        npv_change_pct = (npv_change / abs(self.base_npv)) * 100 if self.base_npv != 0 else 0
+        npv_change_pct = (
+            (npv_change / abs(self.base_npv)) * 100 if self.base_npv != 0 else 0
+        )
         irr_change_bps = (stressed_irr - self.base_irr) * 100
 
         # VaR and CVaR (simplified: using stressed NPV as reference)

@@ -93,8 +93,7 @@ def load_fx_structured_block(
 
     if not isinstance(fx_cfg, dict):
         raise ValueError(
-            f"Invalid FX config type: {type(fx_cfg).__name__}, "
-            "expected dict."
+            f"Invalid FX config type: {type(fx_cfg).__name__}, " "expected dict."
         )
 
     # Extract required fields
@@ -224,15 +223,13 @@ def build_fx_curve_from_block(
 
     for year_idx in year_indices:
         # Compound depreciation: rate * (1 + annual_depr)^year
-        rate = block.start_lkr_per_usd * (
-            (1 + block.annual_depr) ** year_idx
-        )
+        rate = block.start_lkr_per_usd * ((1 + block.annual_depr) ** year_idx)
         rates.append(rate)
 
         if include_confidence_interval:
             # 95% CI ~ ±1.96 * sigma * sqrt(t)
             # Approx using annual vol
-            vol_adjustment = 1.96 * block.volatility * (year_idx ** 0.5)
+            vol_adjustment = 1.96 * block.volatility * (year_idx**0.5)
             lower = rate * (1 - vol_adjustment)
             upper = rate * (1 + vol_adjustment)
             ci_lower.append(lower)  # type: ignore[union-attr]
@@ -340,16 +337,12 @@ def load_fx_monte_carlo_config(
     base_fx_config = {"fx": mc_cfg["base_fx"]}
     base_block = load_fx_structured_block(base_fx_config)
 
-    vol_method_str = mc_cfg.get(
-        "volatility_method", "historical_std"
-    ).lower()
+    vol_method_str = mc_cfg.get("volatility_method", "historical_std").lower()
     vol_method = VolatilityMethod(vol_method_str)
 
     correlation_raw = mc_cfg.get("correlation_matrix")
     correlation_matrix = (
-        tuple(tuple(row) for row in correlation_raw)
-        if correlation_raw
-        else None
+        tuple(tuple(row) for row in correlation_raw) if correlation_raw else None
     )
 
     return FXMonteCarloConfig(
@@ -395,9 +388,7 @@ def validate_fx_structured_config(
         return False
 
     if not isinstance(fx_cfg, dict):
-        logger.error(
-            f"FX config must be dict, got {type(fx_cfg).__name__}"
-        )
+        logger.error(f"FX config must be dict, got {type(fx_cfg).__name__}")
         return False
 
     required_keys = ["start_lkr_per_usd", "annual_depr"]
@@ -472,9 +463,7 @@ def load_fx_regime(
     >>> # data = load_fx_regime(Path("scenarios/fx_base.yaml"))
     """
     if not regime_file.exists():
-        raise FileNotFoundError(
-            f"FX regime file not found: {regime_file}"
-        )
+        raise FileNotFoundError(f"FX regime file not found: {regime_file}")
 
     with open(regime_file, "r") as file_handle:
         return yaml.safe_load(file_handle) or {}

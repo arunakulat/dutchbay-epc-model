@@ -4,18 +4,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Mapping, Sequence, cast
 
-from analytics.contracts_v14 import (
-    CasperResult,
-    DebtCovenantSnapshot,
-    MonteCarloResult,
-)
+from analytics.contracts_v14 import CasperResult, MonteCarloResult
 from analytics.contracts_v14 import ScenarioResult as ScenarioResultContract
-from analytics.contracts_v14 import (
-    SensitivitySuite,
-    TrancheDebtProfile,
-    WaccComponents,
-    WaccResult,
-)
+from analytics.contracts_v14 import SensitivitySuite
 
 # from analytics.monte_carlo_v14 import run_monte_carlo_analysis
 from analytics.pipeline_v14 import run_v14_pipeline
@@ -205,9 +196,7 @@ def evaluate_with_casper_tail_risk(
         from omegaconf import OmegaConf
 
         mc_config = OmegaConf.load(monte_carlo_config_path)
-        scenario_name_for_mc = base_config.get("project", {}).get(
-            "name", cfg_path.stem
-        )
+        scenario_name_for_mc = base_config.get("project", {}).get("name", cfg_path.stem)
 
         # FIX #1 (CRITICAL): MC config key standardization
         # STANDARDIZE: Always use "iterations" (not "n_iterations")
@@ -336,9 +325,7 @@ def evaluate_with_casper_tail_risk(
                 confidence=confidence,
             )
         except (ValueError, KeyError) as e:
-            logger.warning(
-                "Could not build tail risk snapshots: %s; skipping", str(e)
-            )
+            logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
             tail_risk_snapshots = {}
 
     logger.info("Step 4/4: Assembling CASPER result...")

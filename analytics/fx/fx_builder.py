@@ -14,11 +14,11 @@ Pipeline Integration:
 
 Usage:
   from analytics.fx.fx_builder import compute_fx_structured_block
-  
+
   config = {...}  # Project config dict
   debt_result = {...}  # Output from plan_debt()
   annual_rows = [...]  # Cashflow rows from compute_cashflow()
-  
+
   fx_block = compute_fx_structured_block(
       config=config,
       debt_result=debt_result,
@@ -30,9 +30,9 @@ import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from analytics.fx.fx_contracts import (
-    FXStructuredBlock,
     FXCurveOutput,
     FXRiskProfile,
+    FXStructuredBlock,
     FXVolumetry,
 )
 
@@ -46,15 +46,15 @@ def compute_fx_structured_block(
     annual_rows: Sequence[Mapping[str, Any]],
 ) -> FXStructuredBlock:
     """Build FXStructuredBlock from scenario configuration and debt output.
-    
+
     Args:
         config: Project config dict (includes FX settings under 'FX' or 'fx').
         debt_result: Output from plan_debt() (includes debt schedules by tranche).
         annual_rows: Annual cashflow rows from compute_cashflow().
-    
+
     Returns:
         FXStructuredBlock with volumetry, debt tranches, and strategy.
-    
+
     Raises:
         ValueError: If config is malformed or debt_result missing key fields.
         TypeError: If inputs are wrong types.
@@ -63,7 +63,7 @@ def compute_fx_structured_block(
     fx_config_raw = config.get("FX") or config.get("fx") or {}
     if not isinstance(fx_config_raw, Mapping):
         fx_config_raw = {}
-    
+
     fx_config: Mapping[str, Any] = fx_config_raw
 
     # Read FX strategy (default: blended)
@@ -87,7 +87,7 @@ def compute_fx_structured_block(
             if isinstance(tranche_data, Mapping):
                 currency = str(tranche_data.get("currency", "USD"))
                 debt_tranches[str(tranche_name)] = currency
-    
+
     # CESSPIT: Warn if no debt tranches found
     if not debt_tranches:
         logger.warning(
@@ -166,14 +166,14 @@ def compute_fx_curve(
     annual_rows: Sequence[Mapping[str, Any]],
 ) -> FXCurveOutput:
     """Generate FX rate curve from configuration and scenario timeline.
-    
+
     Args:
         config: Project config (includes FX curve assumptions).
         annual_rows: Annual rows (used to determine timeline).
-    
+
     Returns:
         FXCurveOutput with annual LKR/USD, LKR/CNY, etc. rates.
-    
+
     Raises:
         ValueError: If config lacks curve data or is malformed.
     """
@@ -181,12 +181,12 @@ def compute_fx_curve(
     fx_config_raw = config.get("FX") or config.get("fx") or {}
     if not isinstance(fx_config_raw, Mapping):
         fx_config_raw = {}
-    
+
     fx_config: Mapping[str, Any] = fx_config_raw
     curve_config_raw = fx_config.get("curve") or {}
     if not isinstance(curve_config_raw, Mapping):
         curve_config_raw = {}
-    
+
     curve_config: Mapping[str, Any] = curve_config_raw
 
     # Build years array from annual_rows
@@ -305,14 +305,14 @@ def compute_fx_risk_profile(
     fx_curve: FXCurveOutput,
 ) -> FXRiskProfile:
     """Calculate FX risk metrics (VaR, CVaR, concentration).
-    
+
     Args:
         fx_block: FXStructuredBlock with volumetry.
         fx_curve: FXCurveOutput with rate projections.
-    
+
     Returns:
         FXRiskProfile with lender-grade risk summary.
-    
+
     Raises:
         ValueError: If inputs are inconsistent (e.g., mismatched periods).
     """

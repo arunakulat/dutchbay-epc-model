@@ -54,7 +54,7 @@ Examples:
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
@@ -438,6 +438,51 @@ def main(
         raise
 
 
+# analytics/monte_carlo_v14.py (append to bottom)
+
+
+def _build_samples_for_scenario(
+    config: Dict[str, Any],
+    n_iterations: int,
+    stochastic_variables: List[str],
+    seed: Optional[int] = None,
+) -> List[Dict[str, float]]:
+    """
+    Build Latin Hypercube Samples for Monte Carlo simulation.
+
+    Args:
+        config: Base configuration dictionary
+        n_iterations: Number of Monte Carlo samples
+        stochastic_variables: List of variable paths to vary
+        seed: Random seed for reproducibility
+
+    Returns:
+        List of parameter dictionaries (one per iteration)
+    """
+    import numpy as np
+    from scipy.stats import qmc
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Latin Hypercube Sampling
+    sampler = qmc.LatinHypercube(d=len(stochastic_variables), seed=seed)
+    unit_samples = sampler.random(n=n_iterations)
+
+    # Transform to parameter samples
+    samples = []
+    for unit_sample in unit_samples:
+        sample_dict = {}
+        for i, var_name in enumerate(stochastic_variables):
+            # Map [0,1] to ±20% around base value
+            base_value = config.get(var_name, 1.0)
+            variation = (unit_sample[i] - 0.5) * 0.4  # ±20%
+            sample_dict[var_name] = base_value * (1 + variation)
+        samples.append(sample_dict)
+
+    return samples
+
+
 if __name__ == "__main__":
     from hydra import main as hydra_main
 
@@ -446,3 +491,9 @@ if __name__ == "__main__":
         main()
 
     cli()
+
+    # Add to __all__ at bottom of file
+    __all__ = [
+        # ... existing exports ...
+        "_build_samples_for_scenario",
+    ]

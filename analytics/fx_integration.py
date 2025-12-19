@@ -11,7 +11,7 @@ Standards:
 
 Usage:
   from analytics.fx_integration import integrate_fx_into_scenario_result
-  
+
   scenario_result = integrate_fx_into_scenario_result(
       scenario_result=result,
       config=config,
@@ -24,9 +24,9 @@ from typing import Any, Mapping, Sequence
 
 from analytics.contracts_v14 import ScenarioResult
 from analytics.fx.fx_builder import (
-    compute_fx_structured_block,
     compute_fx_curve,
     compute_fx_risk_profile,
+    compute_fx_structured_block,
 )
 
 
@@ -39,27 +39,27 @@ def integrate_fx_into_scenario_result(
 ) -> ScenarioResult:
     """
     Wire FX blocks into an existing ScenarioResult.
-    
+
     This function is called from pipeline_v14.run_full_pipeline_v14() after
     core scenario evaluation. It:
     1. Computes FX structured block from config and debt output
     2. Generates FX curve (time-series rates)
     3. Calculates FX risk profile (VaR, CVaR, concentration)
     4. Returns new ScenarioResult with FX fields populated
-    
+
     Args:
         scenario_result: Base ScenarioResult (with NPV, IRR, etc.)
         config: Project config dict (includes FX settings).
         debt_result: Output from plan_debt() module.
         annual_rows: Annual cashflow rows from compute_cashflow().
-    
+
     Returns:
         New ScenarioResult with fx_block, fx_curve, fx_risk_profile populated.
-    
+
     Raises:
         ValueError: If FX computation fails (invalid config or data).
         TypeError: If inputs are wrong types.
-    
+
     Example:
         >>> result_with_fx = integrate_fx_into_scenario_result(
         ...     scenario_result=base_result,

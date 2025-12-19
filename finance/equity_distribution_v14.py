@@ -10,12 +10,13 @@ Provides equity distribution waterfall with:
 All calculations follow standard project finance waterfall patterns.
 """
 
-from datetime import datetime
-from typing import Optional, List, Dict, Tuple
-from dataclasses import dataclass, field
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from enum import Enum
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Dict, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,9 @@ class CovenantGate:
             TypeError: If config invalid type
         """
         if not isinstance(config, EquityDistributionConfig):
-            raise TypeError(f"config must be EquityDistributionConfig, got {type(config).__name__}")
+            raise TypeError(
+                f"config must be EquityDistributionConfig, got {type(config).__name__}"
+            )
         self.config = config
 
     def check_dscr_gate(
@@ -184,13 +187,17 @@ class CovenantGate:
         if current_dscr < 0:
             raise ValueError(f"current_dscr must be >= 0, got {current_dscr}")
         if post_distribution_dscr < 0:
-            raise ValueError(f"post_distribution_dscr must be >= 0, got {post_distribution_dscr}")
+            raise ValueError(
+                f"post_distribution_dscr must be >= 0, got {post_distribution_dscr}"
+            )
 
         threshold = self.config.min_dscr_for_distribution
 
         # FIX: Handle infinity (construction period)
         if post_distribution_dscr == float("inf"):
-            reason = f"DSCR gate PASS: Construction/grace period (inf >= {threshold:.3f})"
+            reason = (
+                f"DSCR gate PASS: Construction/grace period (inf >= {threshold:.3f})"
+            )
             return True, reason
 
         if post_distribution_dscr < threshold:
@@ -224,7 +231,9 @@ class CovenantGate:
         if current_llcr < 0:
             raise ValueError(f"current_llcr must be >= 0, got {current_llcr}")
         if post_distribution_llcr < 0:
-            raise ValueError(f"post_distribution_llcr must be >= 0, got {post_distribution_llcr}")
+            raise ValueError(
+                f"post_distribution_llcr must be >= 0, got {post_distribution_llcr}"
+            )
 
         threshold = self.config.min_llcr_for_distribution
 
@@ -293,7 +302,9 @@ class EquityDistributionCalculator:
             TypeError: If config invalid type
         """
         if not isinstance(config, EquityDistributionConfig):
-            raise TypeError(f"config must be EquityDistributionConfig, got {type(config).__name__}")
+            raise TypeError(
+                f"config must be EquityDistributionConfig, got {type(config).__name__}"
+            )
         self.config = config
         self.covenant_gate = CovenantGate(config)
 
@@ -317,13 +328,15 @@ class EquityDistributionCalculator:
         """
         # Input validation
         if monthly_debt_service < 0:
-            raise ValueError(f"monthly_debt_service must be >= 0, got {monthly_debt_service}")
+            raise ValueError(
+                f"monthly_debt_service must be >= 0, got {monthly_debt_service}"
+            )
         if monthly_operating_costs < 0:
-            raise ValueError(f"monthly_operating_costs must be >= 0, got {monthly_operating_costs}")
+            raise ValueError(
+                f"monthly_operating_costs must be >= 0, got {monthly_operating_costs}"
+            )
 
-        debt_reserve = (
-            monthly_debt_service * self.config.debt_reserve_target_months
-        )
+        debt_reserve = monthly_debt_service * self.config.debt_reserve_target_months
         operating_reserve = (
             monthly_operating_costs * self.config.operating_reserve_target_months
         )
@@ -362,7 +375,9 @@ class EquityDistributionCalculator:
         if annual_cashflow < 0:
             raise ValueError(f"annual_cashflow must be >= 0, got {annual_cashflow}")
         if debt_service_required < 0:
-            raise ValueError(f"debt_service_required must be >= 0, got {debt_service_required}")
+            raise ValueError(
+                f"debt_service_required must be >= 0, got {debt_service_required}"
+            )
         if reserve_deficit < 0:
             raise ValueError(f"reserve_deficit must be >= 0, got {reserve_deficit}")
 
@@ -418,15 +433,25 @@ class EquityDistributionCalculator:
         """
         # Input validation
         if available_cashflow < 0:
-            raise ValueError(f"available_cashflow must be >= 0, got {available_cashflow}")
+            raise ValueError(
+                f"available_cashflow must be >= 0, got {available_cashflow}"
+            )
         if class_a_invested < 0:
             raise ValueError(f"class_a_invested must be >= 0, got {class_a_invested}")
         if class_b_invested < 0:
             raise ValueError(f"class_b_invested must be >= 0, got {class_b_invested}")
 
         distributions = {
-            "class_a": {"preferred_return": 0.0, "principal_recovery": 0.0, "total": 0.0},
-            "class_b": {"preferred_return": 0.0, "principal_recovery": 0.0, "total": 0.0},
+            "class_a": {
+                "preferred_return": 0.0,
+                "principal_recovery": 0.0,
+                "total": 0.0,
+            },
+            "class_b": {
+                "preferred_return": 0.0,
+                "principal_recovery": 0.0,
+                "total": 0.0,
+            },
             "common": {"distribution": 0.0, "total": 0.0},
         }
 
@@ -464,7 +489,7 @@ class EquityDistributionCalculator:
             remaining = 0.0
         elif remaining > 0:  # No invested capital, all goes to common
             logger.warning(
-                "Principal recovery requested but no invested capital; "  
+                "Principal recovery requested but no invested capital; "
                 "allocating %.2f to common",
                 remaining,
             )
@@ -575,7 +600,9 @@ def calculate_equity_distribution(
         ValueError: If any input invalid
     """
     if not isinstance(config, EquityDistributionConfig):
-        raise TypeError(f"config must be EquityDistributionConfig, got {type(config).__name__}")
+        raise TypeError(
+            f"config must be EquityDistributionConfig, got {type(config).__name__}"
+        )
 
     # Input validation
     if year < 1:
@@ -583,7 +610,9 @@ def calculate_equity_distribution(
     if annual_cashflow < 0:
         raise ValueError(f"annual_cashflow must be >= 0, got {annual_cashflow}")
     if debt_service_required < 0:
-        raise ValueError(f"debt_service_required must be >= 0, got {debt_service_required}")
+        raise ValueError(
+            f"debt_service_required must be >= 0, got {debt_service_required}"
+        )
 
     calculator = EquityDistributionCalculator(config)
 
@@ -601,8 +630,16 @@ def calculate_equity_distribution(
             covenant_gates_passed=False,
             covenant_gate_details={},
             distributions_to_tiers={
-                "class_a": {"preferred_return": 0.0, "principal_recovery": 0.0, "total": 0.0},
-                "class_b": {"preferred_return": 0.0, "principal_recovery": 0.0, "total": 0.0},
+                "class_a": {
+                    "preferred_return": 0.0,
+                    "principal_recovery": 0.0,
+                    "total": 0.0,
+                },
+                "class_b": {
+                    "preferred_return": 0.0,
+                    "principal_recovery": 0.0,
+                    "total": 0.0,
+                },
                 "common": {"distribution": 0.0, "total": 0.0},
             },
             total_equity_distribution=0.0,
@@ -625,8 +662,8 @@ def calculate_equity_distribution(
     # DSCR impact: distribution reduces available cashflow
     if debt_service_required > 0:
         post_dist_dscr = (
-            (annual_cashflow - available_for_equity) / debt_service_required
-        )
+            annual_cashflow - available_for_equity
+        ) / debt_service_required
     else:
         post_dist_dscr = current_dscr
 

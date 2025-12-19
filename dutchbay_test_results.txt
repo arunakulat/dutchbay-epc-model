@@ -1,0 +1,487 @@
+
+==============================================================================
+TEST MODE: FAST (20 iterations, 3 params)
+Expected runtime: ~30 seconds for full suite
+Use --full-iterations for production validation
+==============================================================================
+
+============================= test session starts ==============================
+platform darwin -- Python 3.11.14, pytest-9.0.2, pluggy-1.6.0 -- /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/venv/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml, tox.ini!)
+plugins: cov-7.0.0
+collecting ... collected 295 items / 37 errors
+
+==================================== ERRORS ====================================
+_______ ERROR collecting tests/_quarantine/test_contracts_casper_v14.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_contracts_casper_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_contracts_casper_v14.py:1: in <module>
+    from analytics.contracts_v14 import CASPER_CONTRACT_VERSION, CasperResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+------------------------------- Captured stderr --------------------------------
+⚠️  Core analytics functions not available: No module named 'analytics.singles'
+    This is expected during initial setup or if singles.py is not yet implemented.
+    Run: pip install -e .[dev] to install dependencies.
+____ ERROR collecting tests/_quarantine/test_evaluation_casper_tail_risk.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_evaluation_casper_tail_risk.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_evaluation_casper_tail_risk.py:4: in <module>
+    import analytics.sensitivity_tail_risk as tr
+analytics/sensitivity_tail_risk.py:10: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'TailRiskMetrics' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+__________ ERROR collecting tests/_quarantine/test_evaluation_v14.py ___________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_evaluation_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_evaluation_v14.py:9: in <module>
+    from analytics.evaluation_v14 import (
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+____ ERROR collecting tests/_quarantine/test_monte_carlo_three_scenarios.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_monte_carlo_three_scenarios.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_monte_carlo_three_scenarios.py:23: in <module>
+    from analytics.monte_carlo_v14 import run_monte_carlo_analysis
+analytics/monte_carlo_v14.py:60: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+_ ERROR collecting tests/_quarantine/test_monte_carlo_three_scenarios_debug.py _
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_monte_carlo_three_scenarios_debug.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_monte_carlo_three_scenarios_debug.py:19: in <module>
+    from analytics.monte_carlo_v14 import run_monte_carlo_analysis
+analytics/monte_carlo_v14.py:60: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+__________ ERROR collecting tests/_quarantine/test_monte_carlo_v14.py __________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_monte_carlo_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_monte_carlo_v14.py:24: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'Distribution' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+________ ERROR collecting tests/_quarantine/test_sensitivity_v14_all.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/_quarantine/test_sensitivity_v14_all.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/_quarantine/test_sensitivity_v14_all.py:30: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+________ ERROR collecting tests/analytics_layer/test_casper_payload.py _________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_casper_payload.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_casper_payload.py:7: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+___ ERROR collecting tests/analytics_layer/test_casper_tail_risk_payload.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_casper_tail_risk_payload.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_casper_tail_risk_payload.py:6: in <module>
+    from analytics import evaluation_v14
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+___ ERROR collecting tests/analytics_layer/test_casper_tail_risk_summary.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_casper_tail_risk_summary.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_casper_tail_risk_summary.py:7: in <module>
+    from analytics.contracts_v14 import (  # noqa: F401  (kept for future use)
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+_ ERROR collecting tests/analytics_layer/test_sensitivity_breakeven_contract.py _
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_breakeven_contract.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_breakeven_contract.py:8: in <module>
+    from analytics.sensitivity_v14 import run_breakeven_parameter
+analytics/sensitivity_v14.py:12: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+____ ERROR collecting tests/analytics_layer/test_sensitivity_regression.py _____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_regression.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_regression.py:12: in <module>
+    from analytics.sensitivity import SensitivityRequest  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+analytics/sensitivity/__init__.py:3: in <module>
+    from analytics.sensitivity_v14 import (
+analytics/sensitivity_v14.py:12: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+___ ERROR collecting tests/analytics_layer/test_sensitivity_run_contract.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_run_contract.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_run_contract.py:8: in <module>
+    from analytics.sensitivity_v14 import SensitivityRequest, run
+analytics/sensitivity_v14.py:12: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+_____ ERROR collecting tests/analytics_layer/test_sensitivity_tail_risk.py _____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_tail_risk.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_tail_risk.py:9: in <module>
+    from analytics.sensitivity_tail_risk import (
+analytics/sensitivity_tail_risk.py:10: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'TailRiskMetrics' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+___ ERROR collecting tests/analytics_layer/test_sensitivity_tail_risk_api.py ___
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_tail_risk_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_tail_risk_api.py:9: in <module>
+    from analytics import sensitivity_tail_risk as tr
+analytics/sensitivity_tail_risk.py:10: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'TailRiskMetrics' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+________ ERROR collecting tests/analytics_layer/test_sensitivity_v14.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_v14.py:10: in <module>
+    from analytics.sensitivity_v14 import (
+analytics/sensitivity_v14.py:12: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+______ ERROR collecting tests/analytics_layer/test_sensitivity_v14_api.py ______
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/analytics_layer/test_sensitivity_v14_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/analytics_layer/test_sensitivity_v14_api.py:8: in <module>
+    from analytics.sensitivity_v14 import SensitivityRequest, run
+analytics/sensitivity_v14.py:12: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+_____________ ERROR collecting tests/api/test_casper_v14_smoke.py ______________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_casper_v14_smoke.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_casper_v14_smoke.py:7: in <module>
+    from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
+analytics/casper_v14.py:5: in <module>
+    from analytics import evaluation_v14
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+________ ERROR collecting tests/api/test_casper_v14_smoke_iteration1.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_casper_v14_smoke_iteration1.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_casper_v14_smoke_iteration1.py:11: in <module>
+    from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
+analytics/casper_v14.py:5: in <module>
+    from analytics import evaluation_v14
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+________ ERROR collecting tests/api/test_casper_v14_smoke_iteration2.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_casper_v14_smoke_iteration2.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_casper_v14_smoke_iteration2.py:25: in <module>
+    from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
+analytics/casper_v14.py:5: in <module>
+    from analytics import evaluation_v14
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+______ ERROR collecting tests/api/test_covenants_ring_fence_smoke_v14.py _______
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_covenants_ring_fence_smoke_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_covenants_ring_fence_smoke_v14.py:21: in <module>
+    from run_full_pipeline_v14 import run_v14_pipeline
+run_full_pipeline_v14.py:8: in <module>
+    import hydra
+E   ModuleNotFoundError: No module named 'hydra'
+__________ ERROR collecting tests/api/test_equity_distribution_v14.py __________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_equity_distribution_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_equity_distribution_v14.py:11: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+____ ERROR collecting tests/api/test_equity_distribution_v14_regression.py _____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_equity_distribution_v14_regression.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_equity_distribution_v14_regression.py:12: in <module>
+    from finance.equity_distribution_v14 import (
+finance/equity_distribution_v14.py:16: in <module>
+    from pydantic import BaseModel, Field, field_validator, ConfigDict
+E   ModuleNotFoundError: No module named 'pydantic'
+________________ ERROR collecting tests/api/test_equity_v14.py _________________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_equity_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_equity_v14.py:7: in <module>
+    from finance.equity_v14 import (
+finance/equity_v14.py:28: in <module>
+    from analytics.contracts_v14 import DownsideMetrics, EquityPerformance
+E   ImportError: cannot import name 'DownsideMetrics' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+______________ ERROR collecting tests/api/test_monte_carlo_v14.py ______________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_monte_carlo_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_monte_carlo_v14.py:13: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+_____________ ERROR collecting tests/api/test_pipeline_sprint12.py _____________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_pipeline_sprint12.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_pipeline_sprint12.py:15: in <module>
+    from omegaconf import OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+______________ ERROR collecting tests/api/test_refinancing_v14.py ______________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_refinancing_v14.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_refinancing_v14.py:15: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+________ ERROR collecting tests/api/test_refinancing_v14_regression.py _________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_refinancing_v14_regression.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_refinancing_v14_regression.py:12: in <module>
+    from finance.refinancing_v14 import (
+finance/refinancing_v14.py:18: in <module>
+    from pydantic import BaseModel, Field, field_validator, ConfigDict
+E   ModuleNotFoundError: No module named 'pydantic'
+___________ ERROR collecting tests/api/test_tax_v14_lender_golden.py ___________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_tax_v14_lender_golden.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_tax_v14_lender_golden.py:5: in <module>
+    from analytics.evaluationv14 import evaluatewithoverrides
+analytics/evaluationv14.py:19: in <module>
+    from analytics.evaluation_v14 import evaluate_with_overrides as _evaluate_with_overrides
+analytics/evaluation_v14.py:7: in <module>
+    from analytics.contracts_v14 import CasperResult, MonteCarloResult
+E   ImportError: cannot import name 'CasperResult' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+____________ ERROR collecting tests/api/test_tax_v14_regression.py _____________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/api/test_tax_v14_regression.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/api/test_tax_v14_regression.py:12: in <module>
+    from omegaconf import OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+________ ERROR collecting tests/contracts/test_sensitivity_contracts.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/contracts/test_sensitivity_contracts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/contracts/test_sensitivity_contracts.py:9: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'MultiMetricSensitivitySuite' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+_______________ ERROR collecting tests/finance/test_contracts.py _______________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/finance/test_contracts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/finance/test_contracts.py:14: in <module>
+    from pydantic import ValidationError
+E   ModuleNotFoundError: No module named 'pydantic'
+____ ERROR collecting tests/integration/test_fx_monte_carlo_integration.py _____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/integration/test_fx_monte_carlo_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integration/test_fx_monte_carlo_integration.py:22: in <module>
+    from omegaconf import DictConfig, OmegaConf
+E   ModuleNotFoundError: No module named 'omegaconf'
+____ ERROR collecting tests/lint/test_equity_distribution_v14_compliance.py ____
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/lint/test_equity_distribution_v14_compliance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/lint/test_equity_distribution_v14_compliance.py:14: in <module>
+    from finance.equity_distribution_v14 import (
+finance/equity_distribution_v14.py:16: in <module>
+    from pydantic import BaseModel, Field, field_validator, ConfigDict
+E   ModuleNotFoundError: No module named 'pydantic'
+______ ERROR collecting tests/lint/test_refinancing_module_compliance.py _______
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/lint/test_refinancing_module_compliance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/lint/test_refinancing_module_compliance.py:14: in <module>
+    from finance.refinancing_v14_hydra import (
+E   ImportError: cannot import name 'RefinancingV14' from 'finance.refinancing_v14_hydra' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/finance/refinancing_v14_hydra.py)
+________ ERROR collecting tests/lint/test_refinancing_v14_compliance.py ________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/lint/test_refinancing_v14_compliance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/lint/test_refinancing_v14_compliance.py:14: in <module>
+    from finance.refinancing_v14 import (
+finance/refinancing_v14.py:18: in <module>
+    from pydantic import BaseModel, Field, field_validator, ConfigDict
+E   ModuleNotFoundError: No module named 'pydantic'
+____________ ERROR collecting tests/test_fx_pipeline_integration.py ____________
+ImportError while importing test module '/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/tests/test_fx_pipeline_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.11/3.11.14_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_fx_pipeline_integration.py:18: in <module>
+    from analytics.pipeline_v14 import run_v14_pipeline
+analytics/pipeline_v14.py:14: in <module>
+    from analytics.contracts_v14 import (
+E   ImportError: cannot import name 'build_cashflow_result_from_annual_rows' from 'analytics.contracts_v14' (/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/analytics/contracts_v14.py)
+=========================== short test summary info ============================
+ERROR tests/_quarantine/test_contracts_casper_v14.py
+ERROR tests/_quarantine/test_evaluation_casper_tail_risk.py
+ERROR tests/_quarantine/test_evaluation_v14.py
+ERROR tests/_quarantine/test_monte_carlo_three_scenarios.py
+ERROR tests/_quarantine/test_monte_carlo_three_scenarios_debug.py
+ERROR tests/_quarantine/test_monte_carlo_v14.py
+ERROR tests/_quarantine/test_sensitivity_v14_all.py
+ERROR tests/analytics_layer/test_casper_payload.py
+ERROR tests/analytics_layer/test_casper_tail_risk_payload.py
+ERROR tests/analytics_layer/test_casper_tail_risk_summary.py
+ERROR tests/analytics_layer/test_sensitivity_breakeven_contract.py
+ERROR tests/analytics_layer/test_sensitivity_regression.py
+ERROR tests/analytics_layer/test_sensitivity_run_contract.py
+ERROR tests/analytics_layer/test_sensitivity_tail_risk.py
+ERROR tests/analytics_layer/test_sensitivity_tail_risk_api.py
+ERROR tests/analytics_layer/test_sensitivity_v14.py
+ERROR tests/analytics_layer/test_sensitivity_v14_api.py
+ERROR tests/api/test_casper_v14_smoke.py
+ERROR tests/api/test_casper_v14_smoke_iteration1.py
+ERROR tests/api/test_casper_v14_smoke_iteration2.py
+ERROR tests/api/test_covenants_ring_fence_smoke_v14.py
+ERROR tests/api/test_equity_distribution_v14.py
+ERROR tests/api/test_equity_distribution_v14_regression.py
+ERROR tests/api/test_equity_v14.py
+ERROR tests/api/test_monte_carlo_v14.py
+ERROR tests/api/test_pipeline_sprint12.py
+ERROR tests/api/test_refinancing_v14.py
+ERROR tests/api/test_refinancing_v14_regression.py
+ERROR tests/api/test_tax_v14_lender_golden.py
+ERROR tests/api/test_tax_v14_regression.py
+ERROR tests/contracts/test_sensitivity_contracts.py
+ERROR tests/finance/test_contracts.py
+ERROR tests/integration/test_fx_monte_carlo_integration.py
+ERROR tests/lint/test_equity_distribution_v14_compliance.py
+ERROR tests/lint/test_refinancing_module_compliance.py
+ERROR tests/lint/test_refinancing_v14_compliance.py
+ERROR tests/test_fx_pipeline_integration.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 37 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 37 errors in 0.76s ==============================

@@ -45,7 +45,7 @@
     "ok": true
   },
   {
-    "details": "47 unique rule_id values across 47 rows in go_with_the_flow_rules_v3_0_clean.csv.",
+    "details": "50 unique rule_id values across 50 rows in go_with_the_flow_rules_v3_0_clean.csv.",
     "name": "ruleset:rule_id_unique",
     "ok": true
   },
@@ -60,7 +60,7 @@
     "ok": true
   },
   {
-    "details": "path=/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/go_with_the_flow_rules_v3_0_clean.csv, latest_version=v3.0, n_rules=47, versions=v3.0",
+    "details": "path=/Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/go_with_the_flow_rules_v3_0_clean.csv, latest_version=v3.0, n_rules=50, versions=v3.0",
     "name": "ruleset:helper",
     "ok": true
   }

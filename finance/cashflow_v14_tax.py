@@ -51,12 +51,14 @@ from typing import Any, Dict, List, Mapping, Sequence
 # Helpers for safe config access (no magic defaults)
 # ---------------------------------------------------------------------------
 
+
 def _require_section(cfg: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     """Return a named subsection or raise if missing."""
     section = cfg.get(name)
     if not isinstance(section, Mapping):
         raise KeyError(f"Missing required YAML section: {name}")
     return section
+
 
 def _require_key(section: Mapping[str, Any], key: str, ctx: str) -> Any:
     """Return a required key from a section or raise with context."""
@@ -347,6 +349,7 @@ class TaxResult:
 # Builders: from TaxConfig to TaxProfile
 # ---------------------------------------------------------------------------
 
+
 def build_tax_holiday_map(
     config: TaxConfig,
     project_life_years: int,
@@ -360,6 +363,7 @@ def build_tax_holiday_map(
     for year in range(1, project_life_years + 1):
         holidays[year] = start <= year <= end
     return holidays
+
 
 def build_tax_profile(
     config: TaxConfig,
@@ -397,6 +401,7 @@ def build_tax_profile(
 # ---------------------------------------------------------------------------
 # Core engine (per-year + series)
 # ---------------------------------------------------------------------------
+
 
 def calculate_tax(
     year: int,
@@ -472,6 +477,7 @@ def calculate_tax(
         carried_forward_losses=new_losses,
         wht_on_interest=wht_on_interest,
     )
+
 
 def build_tax_series(
     years: Sequence[int],

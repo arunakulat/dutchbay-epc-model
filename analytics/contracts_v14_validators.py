@@ -32,7 +32,7 @@ GWTF Compliance:
 Usage:
     # Validate scenario result
     from analytics.contracts_v14_validators import validate_scenario_result
-    
+
     result = validate_scenario_result(scenario, strict=True)
     if result.is_valid:
         proceed_with_calculations(scenario)
@@ -43,10 +43,10 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ DTV_MAX = 0.85
 
 # VaR/CVaR: Value at Risk and Conditional VaR (Monte Carlo)
 VAR_MIN = -1.0  # Can't lose more than 100%
-VAR_MAX = 0.0   # VaR is typically negative (loss metric)
+VAR_MAX = 0.0  # VaR is typically negative (loss metric)
 
 # Equity Multiple: Equity investors expect 1.2-3.0x return
 EQUITY_MULTIPLE_MIN = 0.8
@@ -99,12 +99,13 @@ EQUITY_MULTIPLE_MAX = 5.0
 # ║ VALIDATION RESULT CONTAINER                                                 ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 @dataclass
 class ValidationError:
     """CESSPIT: Single validation error with full context."""
-    
+
     severity: str  # "CRITICAL", "ERROR", "WARNING"
-    field: str     # e.g., "project_irr", "min_dscr"
+    field: str  # e.g., "project_irr", "min_dscr"
     value: Any
     constraint: str  # e.g., "must be >= 0.8"
     message: str
@@ -118,7 +119,7 @@ class ValidationError:
 @dataclass
 class ValidationResult:
     """CCCDIR: Complete validation result with audit trail."""
-    
+
     is_valid: bool
     errors: List[ValidationError] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -126,18 +127,18 @@ class ValidationResult:
     validation_time_ms: float = 0.0
     contract_type: str = "unknown"
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    
+
     def has_critical_errors(self) -> bool:
         """Check if any CRITICAL errors present."""
         return any(e.severity == "CRITICAL" for e in self.errors)
-    
+
     def has_errors(self) -> bool:
         """Check if any ERROR or CRITICAL errors present."""
         return any(e.severity in {"ERROR", "CRITICAL"} for e in self.errors)
-    
+
     def error_count(self, severity: Optional[str] = None) -> int:
         """Count errors by severity.
-        
+
         Args:
             severity: If None, count all. Otherwise count specific severity.
         """
@@ -150,16 +151,17 @@ class ValidationResult:
 # ║ INDIVIDUAL FIELD VALIDATORS                                                 ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 def validate_dscr(
     value: float,
     field_name: str = "dscr",
 ) -> Optional[ValidationError]:
     """Validate DSCR value is within realistic bounds.
-    
+
     Args:
         value: DSCR value to validate
         field_name: Name of field for error message
-        
+
     Returns:
         ValidationError if invalid, None if valid
     """
@@ -168,10 +170,10 @@ def validate_dscr(
             severity="ERROR",
             field=field_name,
             value=value,
-            constraint=f"must be numeric",
+            constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     if not (DSCR_MIN <= value <= DSCR_MAX):
         return ValidationError(
             severity="WARNING" if value < 1.25 else "INFO",
@@ -181,7 +183,7 @@ def validate_dscr(
             message=f"{field_name}={value:.2f} is outside typical range [{DSCR_MIN}, {DSCR_MAX}]",
             remediation="High DSCR > 2.5 may indicate over-conservative debt. Low DSCR < 0.8 indicates distress.",
         )
-    
+
     return None
 
 
@@ -190,11 +192,11 @@ def validate_irr(
     field_name: str = "irr",
 ) -> Optional[ValidationError]:
     """Validate IRR is within project finance realistic bounds.
-    
+
     Args:
         value: IRR value (decimal, e.g., 0.15 for 15%)
         field_name: Name of field for error message
-        
+
     Returns:
         ValidationError if invalid, None if valid
     """
@@ -206,7 +208,7 @@ def validate_irr(
             constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     # Check for NaN or Infinity
     if not (-1e10 < value < 1e10):
         return ValidationError(
@@ -216,7 +218,7 @@ def validate_irr(
             constraint="must be finite",
             message=f"{field_name} is not finite: {value}",
         )
-    
+
     if not (IRR_MIN <= value <= IRR_MAX):
         return ValidationError(
             severity="WARNING",
@@ -225,7 +227,7 @@ def validate_irr(
             constraint=f"{IRR_MIN*100:.0f}% <= value <= {IRR_MAX*100:.0f}%",
             message=f"{field_name}={value*100:.1f}% is outside typical renewable project range [5%-25%]",
         )
-    
+
     return None
 
 
@@ -234,11 +236,11 @@ def validate_wacc(
     field_name: str = "wacc",
 ) -> Optional[ValidationError]:
     """Validate WACC is realistic for renewable projects.
-    
+
     Args:
         value: WACC value (decimal, e.g., 0.08 for 8%)
         field_name: Name of field for error message
-        
+
     Returns:
         ValidationError if invalid, None if valid
     """
@@ -250,7 +252,7 @@ def validate_wacc(
             constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     if not (WACC_MIN <= value <= WACC_MAX):
         return ValidationError(
             severity="WARNING",
@@ -259,7 +261,7 @@ def validate_wacc(
             constraint=f"{WACC_MIN*100:.0f}% <= value <= {WACC_MAX*100:.0f}%",
             message=f"{field_name}={value*100:.1f}% is outside typical renewable project range [3%-12%]",
         )
-    
+
     return None
 
 
@@ -268,11 +270,11 @@ def validate_covenant_breach(
     threshold: float = 1.25,
 ) -> Optional[ValidationError]:
     """Validate covenant breach logic.
-    
+
     Args:
         dscr: Debt Service Coverage Ratio
         threshold: Covenant threshold (default 1.25)
-        
+
     Returns:
         ValidationError if invalid, None if valid
     """
@@ -284,7 +286,7 @@ def validate_covenant_breach(
             constraint="must be numeric",
             message=f"DSCR must be numeric, got {type(dscr).__name__}",
         )
-    
+
     if dscr < 1.0:
         return ValidationError(
             severity="WARNING",
@@ -294,7 +296,7 @@ def validate_covenant_breach(
             message=f"DSCR={dscr:.2f} indicates project cannot cover debt service",
             remediation="Project may violate financial covenants. Consider refinancing or operational improvements.",
         )
-    
+
     if dscr < threshold:
         return ValidationError(
             severity="WARNING",
@@ -304,7 +306,7 @@ def validate_covenant_breach(
             message=f"DSCR={dscr:.2f} below lender threshold {threshold}",
             remediation="Covenant breach may trigger refinancing or equity calls.",
         )
-    
+
     return None
 
 
@@ -312,41 +314,48 @@ def validate_covenant_breach(
 # ║ CONTRACT VALIDATORS (MAIN INTERFACE)                                       ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 def validate_scenario_result(
     scenario_result: Dict[str, Any],
     strict: bool = True,
 ) -> ValidationResult:
     """CESSPIT: Validate complete ScenarioResult contract.
-    
+
     Args:
         scenario_result: ScenarioResult dict to validate
         strict: If True, raise on errors; if False, just collect
-        
+
     Returns:
         ValidationResult with all findings
     """
     result = ValidationResult(is_valid=True, contract_type="ScenarioResult")
-    
+
     # Validate key fields
     if "project_irr" in scenario_result:
         error = validate_irr(scenario_result["project_irr"], "project_irr")
         if error:
             result.errors.append(error)
             result.is_valid = False
-    
+
     if "min_dscr" in scenario_result:
         error = validate_dscr(scenario_result["min_dscr"], "min_dscr")
         if error:
             result.errors.append(error)
             if error.severity == "CRITICAL":
                 result.is_valid = False
-    
+
     if strict and result.has_critical_errors():
-        logger.error(f"Scenario validation failed: {result.error_count('CRITICAL')} critical errors")
-        raise ValueError(f"Scenario validation failed with {result.error_count('CRITICAL')} critical errors")
-    
-    logger.info(f"Scenario validation: {result.error_count()} errors, {len(result.warnings)} warnings")
-    
+        logger.error(
+            f"Scenario validation failed: {result.error_count('CRITICAL')} critical errors"
+        )
+        raise ValueError(
+            f"Scenario validation failed with {result.error_count('CRITICAL')} critical errors"
+        )
+
+    logger.info(
+        f"Scenario validation: {result.error_count()} errors, {len(result.warnings)} warnings"
+    )
+
     return result
 
 

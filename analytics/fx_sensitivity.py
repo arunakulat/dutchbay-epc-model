@@ -18,7 +18,7 @@ Usage:
         add_fx_drivers_to_tornado,
         compute_fx_sensitivity_metrics,
     )
-    
+
     # Extend tornado with FX drivers
     enhanced_tornado = add_fx_drivers_to_tornado(
         tornado_suite=base_tornado,
@@ -26,7 +26,7 @@ Usage:
         fx_curve=fx_curve,
         mc_result=mc_result,  # Optional: for MC-based metrics
     )
-    
+
     # Get FX-specific sensitivity metrics
     fx_metrics = compute_fx_sensitivity_metrics(
         fx_block=fx_block,
@@ -39,10 +39,9 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence
+from typing import Optional
 
 import numpy as np
-import pandas as pd
 from numpy.typing import NDArray
 
 from analytics.contracts_v14 import (
@@ -59,7 +58,7 @@ FloatArray = NDArray[np.float64]
 class FXSensitivityMetrics:
     """
     FX-specific sensitivity metrics (lender-grade summary).
-    
+
     Measures project sensitivity to FX rate changes, hedge ratio changes,
     and FX spread changes.
     """
@@ -81,9 +80,9 @@ def add_fx_drivers_to_tornado(
 ) -> SensitivitySuite:
     """
     Extend tornado/sensitivity analysis with FX-specific drivers.
-    
+
     Adds FX rate, hedge ratio, and spread as tornado drivers.
-    
+
     Parameters
     ----------
     tornado_suite :
@@ -94,12 +93,12 @@ def add_fx_drivers_to_tornado(
         FX curve with time-series rates
     mc_result :
         Optional MC results for volatility-based metrics
-    
+
     Returns
     -------
     SensitivitySuite
         Enhanced tornado with FX drivers added
-    
+
     CESSPIT / CASPER alignment
     --------------------------
     - Fail-fast if fx_block/fx_curve missing
@@ -152,7 +151,7 @@ def add_fx_drivers_to_tornado(
 
     # Build FX drivers dict (to be added to tornado_suite)
     # These would be added as rows to the tornado DataFrame
-    fx_drivers = {
+    {
         "fx_rate_low": fx_low,
         "fx_rate_high": fx_high,
         "fx_rate_base": base_spot_rate,
@@ -181,10 +180,10 @@ def compute_fx_sensitivity_metrics(
 ) -> FXSensitivityMetrics:
     """
     Compute FX-specific sensitivity metrics.
-    
+
     Measures project sensitivity to FX rate changes, hedge ratio changes,
     and FX spread changes.
-    
+
     Parameters
     ----------
     fx_block :
@@ -197,12 +196,12 @@ def compute_fx_sensitivity_metrics(
         Base project NPV (USD)
     fx_volatility_pct :
         Assumed FX volatility for sensitivity (default 5%)
-    
+
     Returns
     -------
     FXSensitivityMetrics
         Lender-readable sensitivity summary
-    
+
     CESSPIT / CASPER alignment
     --------------------------
     - Input validation (fx_block, fx_curve not None)

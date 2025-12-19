@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from __future__ import annotations
-
 """Equity Distribution Module – GWTF v3.0 Compliant.
 
 Core responsibility: Calculate equity distributions, enforce covenants,
@@ -40,16 +38,16 @@ Specifications:
     - IRR/NPV: Imported from finance.irr only (R7)
     - Output: JSON to stdout (CLI-03)
 """
+from __future__ import annotations
 
 import json
 import logging
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
 from omegaconf import DictConfig, OmegaConf
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from analytics.schema_guard import validate_config_for_v14
-from finance.irr import irr, npv  # R7
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,9 @@ def load_config(config_path: str) -> DictConfig:
     if not isinstance(cfg_dict, dict):
         raise ValueError("Config must be a mapping (dict)")
 
-    validate_config_for_v14(cfg_dict, config_path=config_path, modules=["cashflow", "debt"])
+    validate_config_for_v14(
+        cfg_dict, config_path=config_path, modules=["cashflow", "debt"]
+    )
     logger.info("Schema validation passed (R5, R22)")
 
     return cfg
@@ -151,17 +151,23 @@ class EquityDistributionEngine:
         self.equity_config = EquityDistributionConfig(
             scenario_name=config.equity.get("scenario_name", "default"),
             project_life_years=config.equity.get("project_life_years", 25),
-            annual_distributable_cash_usd=config.equity.get("annual_distributable_cash_usd", 5e6),
+            annual_distributable_cash_usd=config.equity.get(
+                "annual_distributable_cash_usd", 5e6
+            ),
             equity_stake_pct=config.equity.get("equity_stake_pct", 25.0),
             target_equity_irr_pct=config.equity.get("target_equity_irr_pct", 16.0),
-            priority_senior_debt_usd=config.equity.get("priority_senior_debt_usd", 100e6),
+            priority_senior_debt_usd=config.equity.get(
+                "priority_senior_debt_usd", 100e6
+            ),
             priority_mezzanine_usd=config.equity.get("priority_mezzanine_usd", 50e6),
             reserve_fund_pct=config.equity.get("reserve_fund_pct", 10.0),
             min_dscr_threshold=config.equity.get("min_dscr_threshold", 1.25),
             min_llcr_threshold=config.equity.get("min_llcr_threshold", 1.5),
             min_reserve_months=config.equity.get("min_reserve_months", 6),
         )
-        self.logger.info(f"Initialized EquityDistributionEngine: {self.equity_config.scenario_name}")
+        self.logger.info(
+            f"Initialized EquityDistributionEngine: {self.equity_config.scenario_name}"
+        )
 
     def calculate_distributions(
         self,
@@ -187,8 +193,8 @@ class EquityDistributionEngine:
         mezz_payment = min(remaining, mezzanine_balance_usd)
         remaining -= mezz_payment
 
-        reserve_requirement = (
-            total_distributable_cash_usd * (self.equity_config.reserve_fund_pct / 100.0)
+        reserve_requirement = total_distributable_cash_usd * (
+            self.equity_config.reserve_fund_pct / 100.0
         )
         reserve_funded = min(remaining, reserve_requirement)
         remaining -= reserve_funded
@@ -230,10 +236,14 @@ class EquityDistributionEngine:
                     remaining_mezz,
                 )
                 annual_distributions.append(dist)
-                remaining_senior = max(0, remaining_senior - dist["senior_debt_dist_usd"])
+                remaining_senior = max(
+                    0, remaining_senior - dist["senior_debt_dist_usd"]
+                )
                 remaining_mezz = max(0, remaining_mezz - dist["mezzanine_dist_usd"])
 
-            total_equity_dist = sum(d["equity_distribution_usd"] for d in annual_distributions)
+            total_equity_dist = sum(
+                d["equity_distribution_usd"] for d in annual_distributions
+            )
 
             result: dict[str, Any] = {
                 "scenario_name": self.equity_config.scenario_name,
@@ -285,7 +295,7 @@ def main(config_path: str = "conf/scenarios/equity_base.yaml") -> None:
         engine = EquityDistributionEngine(cfg)
         result = engine.run()
         json_output = json.dumps(result, indent=2)
-        logger_main.info(f"Results computed successfully")
+        logger_main.info("Results computed successfully")
         print(json_output)
         logger_main.info("Results output to stdout (JSON)")
 

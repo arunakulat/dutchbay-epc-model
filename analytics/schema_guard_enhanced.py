@@ -9,7 +9,7 @@ CESSPIT Pattern (Config-Enabled Schema Safety Pre-Ingress Testing):
 
 Usage:
     from analytics.schema_guard_enhanced import validate_config_enhanced
-    
+
     validate_config_enhanced(
         raw_config=config,
         config_path='scenarios/base.yaml',
@@ -23,31 +23,30 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class ValidationErrorSeverity(Enum):
     """CESSPIT: Severity levels for validation failures."""
-    
+
     CRITICAL = "CRITICAL"  # Config unusable
-    ERROR = "ERROR"        # Feature disabled
-    WARNING = "WARNING"    # Degraded mode
-    INFO = "INFO"         # Informational
+    ERROR = "ERROR"  # Feature disabled
+    WARNING = "WARNING"  # Degraded mode
+    INFO = "INFO"  # Informational
 
 
 @dataclass
 class ValidationViolation:
     """CESSPIT: Single validation violation with full context."""
-    
+
     severity: ValidationErrorSeverity
     module: str
     field_path: str  # Dot-notation path in config
     value: Any
     expected: str  # Description of expected value/type
-    actual: str    # Description of actual value/type
+    actual: str  # Description of actual value/type
     message: str
     remediation: Optional[str] = None
     timestamp: Optional[str] = None
@@ -62,7 +61,7 @@ class ValidationViolation:
 
 class SchemaGuardError(Exception):
     """CESSPIT: Raised when schema validation fails."""
-    
+
     def __init__(
         self,
         violations: list[ValidationViolation],
@@ -70,32 +69,31 @@ class SchemaGuardError(Exception):
     ):
         self.violations = violations
         self.config_path = config_path
-        
+
         critical_count = sum(
-            1 for v in violations
-            if v.severity == ValidationErrorSeverity.CRITICAL
+            1 for v in violations if v.severity == ValidationErrorSeverity.CRITICAL
         )
         error_count = sum(
             1 for v in violations if v.severity == ValidationErrorSeverity.ERROR
         )
-        
+
         message = (
             f"Schema validation failed for {config_path}: "
             f"{critical_count} CRITICAL, {error_count} ERROR violations\n"
         )
-        
+
         for v in violations[:10]:  # Show first 10
             message += f"  {v}\n"
-        
+
         if len(violations) > 10:
             message += f"  ... and {len(violations) - 10} more violations\n"
-        
+
         super().__init__(message)
 
 
 class ConfigValidator:
     """CESSPIT: Comprehensive config validation engine."""
-    
+
     def __init__(
         self,
         config_path: str,
@@ -107,13 +105,13 @@ class ConfigValidator:
         self.audit_trail = audit_trail
         self.violations: list[ValidationViolation] = []
         self.audit_log: list[str] = []
-    
+
     def _log_audit(self, message: str) -> None:
         """Log to audit trail."""
         if self.audit_trail:
             self.audit_log.append(message)
             logger.debug("[AUDIT] %s", message)
-    
+
     def _add_violation(
         self,
         severity: ValidationErrorSeverity,
@@ -136,13 +134,13 @@ class ConfigValidator:
             message=message,
             remediation=remediation,
         )
-        
+
         self.violations.append(violation)
         self._log_audit(str(violation))
-        
+
         if self.fail_fast and severity == ValidationErrorSeverity.CRITICAL:
             raise SchemaGuardError(self.violations, self.config_path)
-    
+
     def _validate_type(
         self,
         module: str,
@@ -152,7 +150,7 @@ class ConfigValidator:
         allow_none: bool = False,
     ) -> bool:
         """Validate field type.
-        
+
         Parameters
         ----------
         module : str
@@ -165,7 +163,7 @@ class ConfigValidator:
             Expected type(s)
         allow_none : bool
             If True, None is valid
-            
+
         Returns
         -------
         bool
@@ -173,13 +171,13 @@ class ConfigValidator:
         """
         if value is None and allow_none:
             return True
-        
+
         if not isinstance(value, expected_type):
             if isinstance(expected_type, tuple):
                 expected_str = " or ".join(t.__name__ for t in expected_type)
             else:
                 expected_str = expected_type.__name__
-            
+
             self._add_violation(
                 severity=ValidationErrorSeverity.ERROR,
                 module=module,
@@ -190,9 +188,9 @@ class ConfigValidator:
                 message=f"Type mismatch at {field_path}",
             )
             return False
-        
+
         return True
-    
+
     def _validate_range(
         self,
         module: str,
@@ -204,7 +202,7 @@ class ConfigValidator:
         exclusive_max: bool = False,
     ) -> bool:
         """Validate numeric range.
-        
+
         Parameters
         ----------
         module : str
@@ -221,7 +219,7 @@ class ConfigValidator:
             If True, min is exclusive (>) not inclusive (>=)
         exclusive_max : bool
             If True, max is exclusive (<) not inclusive (<=)
-            
+
         Returns
         -------
         bool
@@ -229,7 +227,7 @@ class ConfigValidator:
         """
         if not isinstance(value, (int, float)):
             return False
-        
+
         if min_val is not None:
             if exclusive_min and value <= min_val:
                 self._add_violation(
@@ -253,7 +251,7 @@ class ConfigValidator:
                     message=f"Value must be >= {min_val}",
                 )
                 return False
-        
+
         if max_val is not None:
             if exclusive_max and value >= max_val:
                 self._add_violation(
@@ -277,9 +275,9 @@ class ConfigValidator:
                     message=f"Value must be <= {max_val}",
                 )
                 return False
-        
+
         return True
-    
+
     def _get_nested(
         self,
         obj: dict[str, Any],
@@ -287,7 +285,7 @@ class ConfigValidator:
         default: Any = None,
     ) -> tuple[Any, str]:
         """Get nested value with path tracking.
-        
+
         Returns
         -------
         tuple[Any, str]
@@ -299,21 +297,21 @@ class ConfigValidator:
                 current = current[part]
             else:
                 return default, ".".join(path)
-        
+
         return current, ".".join(path)
-    
+
     def validate_cashflow_module(self, config: dict[str, Any]) -> None:
         """CESSPIT: Validate cashflow configuration.
-        
+
         Parameters
         ----------
         config : dict[str, Any]
             Raw configuration
         """
         self._log_audit("[CASHFLOW] Validation starting")
-        
+
         module = "cashflow"
-        
+
         # Project life (years)
         project_life, path = self._get_nested(config, ["Project", "life_years"])
         if project_life is not None:
@@ -330,7 +328,7 @@ class ConfigValidator:
                 message="Missing required field: Project.life_years",
                 remediation="Add Project.life_years (5-50 years)",
             )
-        
+
         # Capex
         capex, path = self._get_nested(config, ["Project", "capex_usd"])
         if capex is not None:
@@ -346,30 +344,30 @@ class ConfigValidator:
                 actual="missing",
                 message="Missing required field: Project.capex_usd",
             )
-        
+
         self._log_audit("[CASHFLOW] Validation complete")
-    
+
     def validate_debt_module(self, config: dict[str, Any]) -> None:
         """CESSPIT: Validate debt configuration.
-        
+
         Parameters
         ----------
         config : dict[str, Any]
             Raw configuration
         """
         self._log_audit("[DEBT] Validation starting")
-        
+
         module = "debt"
-        
+
         # Debt-to-capex ratio
         debt_usd, debt_path = self._get_nested(
             config, ["Financing_Terms", "total_debt_usd"]
         )
         capex_usd, capex_path = self._get_nested(config, ["Project", "capex_usd"])
-        
+
         if debt_usd is not None and capex_usd is not None:
             self._validate_type(module, debt_path, debt_usd, (int, float))
-            
+
             debt_to_capex = float(debt_usd) / float(capex_usd) if capex_usd > 0 else 0
             if debt_to_capex > 0.85:
                 self._add_violation(
@@ -382,33 +380,33 @@ class ConfigValidator:
                     message="High leverage: debt > 85% of capex",
                     remediation="Consider reducing debt or increasing capex",
                 )
-        
+
         # Tenor years
         tenor, path = self._get_nested(config, ["Financing_Terms", "tenor_years"])
         if tenor is not None:
             self._validate_type(module, path, tenor, (int, float))
             self._validate_range(module, path, tenor, min_val=5, max_val=25)
-        
+
         # Target DSCR
         dscr, path = self._get_nested(config, ["Financing_Terms", "target_dscr"])
         if dscr is not None:
             self._validate_type(module, path, dscr, (int, float))
             self._validate_range(module, path, dscr, min_val=1.0, max_val=2.0)
-        
+
         self._log_audit("[DEBT] Validation complete")
-    
+
     def validate_wacc_module(self, config: dict[str, Any]) -> None:
         """CESSPIT: Validate WACC configuration.
-        
+
         Parameters
         ----------
         config : dict[str, Any]
             Raw configuration
         """
         self._log_audit("[WACC] Validation starting")
-        
+
         module = "wacc"
-        
+
         # WACC mode
         mode, path = self._get_nested(config, ["WACC", "mode"])
         if mode is not None:
@@ -423,34 +421,34 @@ class ConfigValidator:
                     actual=str(mode),
                     message=f"Invalid WACC mode: {mode}",
                 )
-        
+
         # Risk-free rate
         rfr, path = self._get_nested(config, ["WACC", "risk_free_rate"])
         if rfr is not None:
             self._validate_type(module, path, rfr, (int, float))
             self._validate_range(module, path, rfr, min_val=0, max_val=0.05)
-        
+
         self._log_audit("[WACC] Validation complete")
-    
+
     def validate(
         self,
         config: dict[str, Any],
         modules: list[str] | None = None,
     ) -> dict[str, Any]:
         """Execute full validation.
-        
+
         Parameters
         ----------
         config : dict[str, Any]
             Raw configuration
         modules : list[str] or None
             Modules to validate. Defaults to all.
-            
+
         Returns
         -------
         dict[str, Any]
             Validation report with violations and audit log
-            
+
         Raises
         ------
         SchemaGuardError
@@ -458,41 +456,43 @@ class ConfigValidator:
         """
         if modules is None:
             modules = ["cashflow", "debt", "wacc"]
-        
+
         self._log_audit(f"Starting validation: modules={modules}")
-        
+
         # Validate each module
         if "cashflow" in modules:
             self.validate_cashflow_module(config)
-        
+
         if "debt" in modules:
             self.validate_debt_module(config)
-        
+
         if "wacc" in modules:
             self.validate_wacc_module(config)
-        
+
         self._log_audit(
             f"Validation complete: {len(self.violations)} violations, "
             f"{len(self.audit_log)} audit entries"
         )
-        
+
         # Check for critical violations
         critical_violations = [
-            v for v in self.violations
-            if v.severity == ValidationErrorSeverity.CRITICAL
+            v for v in self.violations if v.severity == ValidationErrorSeverity.CRITICAL
         ]
-        
+
         if critical_violations and self.fail_fast:
             raise SchemaGuardError(self.violations, self.config_path)
-        
+
         return {
             "status": "valid" if not critical_violations else "invalid",
             "violations": self.violations,
             "audit_log": self.audit_log,
             "critical_count": len(critical_violations),
             "error_count": len(
-                [v for v in self.violations
-                 if v.severity == ValidationErrorSeverity.ERROR]
+                [
+                    v
+                    for v in self.violations
+                    if v.severity == ValidationErrorSeverity.ERROR
+                ]
             ),
         }
 
@@ -504,7 +504,7 @@ def validate_config_enhanced(
     fail_fast: bool = True,
 ) -> dict[str, Any]:
     """CESSPIT: Enhanced config validation entry point.
-    
+
     Parameters
     ----------
     raw_config : dict[str, Any]
@@ -515,12 +515,12 @@ def validate_config_enhanced(
         Modules to validate
     fail_fast : bool
         If True, raise on CRITICAL violations
-        
+
     Returns
     -------
     dict[str, Any]
         Validation report
-        
+
     Raises
     ------
     SchemaGuardError
@@ -531,7 +531,7 @@ def validate_config_enhanced(
         fail_fast=fail_fast,
         audit_trail=True,
     )
-    
+
     return validator.validate(raw_config, modules)
 
 
