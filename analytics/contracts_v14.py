@@ -45,6 +45,107 @@ if TYPE_CHECKING:
 CASPER_CONTRACT_VERSION = "v1.0"
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Monte Carlo Contracts (Sprint 16 - Issue #43 Resolution)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class Distribution(BaseModel):
+    """
+    Distribution specification for Monte Carlo sampling.
+
+    CASPER: Contract-explicit probability distribution.
+    CESSPIT: All distribution parameters from config.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    dist_type: str = Field(
+        description="Distribution type (normal, uniform, lognormal, triangular)"
+    )
+    parameters: Dict[str, float] = Field(
+        description="Distribution parameters (mean, std, min, max, etc)"
+    )
+
+    @field_validator("dist_type")
+    @classmethod
+    def validate_dist_type(cls, v: str) -> str:
+        """Validate supported distribution types."""
+        supported = {"normal", "uniform", "lognormal", "triangular", "beta"}
+        if v.lower() not in supported:
+            raise ValueError(
+                f"Distribution type '{v}' not supported. Use: {supported}"
+            )
+        return v.lower()
+
+
+class DerivedParameter(BaseModel):
+    """
+    Derived parameter definition for Monte Carlo scenarios.
+
+    Derived parameters are computed from other sampled parameters.
+
+    CASPER: Explicit dependency tracking.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="Derived parameter name")
+    expression: str = Field(description="Python expression to compute value")
+    dependencies: List[str] = Field(
+        default_factory=list, description="List of parameter names this depends on"
+    )
+
+
+class MonteCarloScenario(BaseModel):
+    """
+    Monte Carlo scenario definition.
+
+    CASPER: Complete scenario specification for MC simulation.
+    CESSPIT: All parameters from config, no defaults.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    scenario_name: str = Field(description="Scenario identifier")
+    n_iterations: int = Field(gt=0, description="Number of MC iterations")
+    sampling_method: str = Field(
+        default="lhs", description="Sampling method (lhs, sobol, random)"
+    )
+    seed: Optional[int] = Field(default=None, description="Random seed for reproducibility")
+
+    # Stochastic variables to sample
+    distributions: Dict[str, Distribution] = Field(
+        description="Variable name -> Distribution mapping"
+    )
+
+    # Derived parameters (computed from sampled variables)
+    derived_parameters: List[DerivedParameter] = Field(
+        default_factory=list, description="Computed parameters"
+    )
+
+    # Discount rate configuration
+    discount_rate_source: str = Field(
+        default="config",
+        description="Source of discount rate (config, wacc, fixed)",
+    )
+    discount_rate_value: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Fixed discount rate if discount_rate_source='fixed'",
+    )
+
+    @field_validator("sampling_method")
+    @classmethod
+    def validate_sampling_method(cls, v: str) -> str:
+        """Validate sampling method."""
+        supported = {"lhs", "sobol", "random", "halton"}
+        if v.lower() not in supported:
+            raise ValueError(f"Sampling method '{v}' not supported. Use: {supported}")
+        return v.lower()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -199,17 +300,37 @@ class CasperResult(BaseModel):
 class MonteCarloResult(BaseModel):
     """
     Monte Carlo simulation result.
+
+    CASPER: Frozen contract for MC outputs.
+    CESSPIT: All values computed, no defaults.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    scenario_name: str
-    iterations: int
-    p10: float
-    p50: float
-    p90: float
-    mean: float
-    std: float
+    scenario_name: str = Field(description="MC scenario identifier")
+    n_iterations: int = Field(gt=0, description="Number of iterations executed")
+    
+    # Distribution statistics
+    mean: float = Field(description="Mean of metric distribution")
+    std: float = Field(ge=0.0, description="Standard deviation")
+    
+    # Percentiles
+    p10: float = Field(description="10th percentile")
+    p50: float = Field(description="50th percentile (median)")
+    p90: float = Field(description="90th percentile")
+    
+    # Extreme values
+    min_value: float = Field(description="Minimum value observed")
+    max_value: float = Field(description="Maximum value observed")
+    
+    # Risk metrics
+    var_95: Optional[float] = Field(default=None, description="Value at Risk (95%)")
+    cvar_95: Optional[float] = Field(default=None, description="Conditional VaR (95%)")
+    
+    # Metadata
+    metric_name: str = Field(description="Metric analyzed (irr, npv, dscr, etc)")
+    sampling_method: str = Field(description="Sampling method used")
+    execution_time_seconds: Optional[float] = Field(default=None, ge=0.0)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -306,19 +427,27 @@ class ScenarioResult:
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
+    # Monte Carlo (Sprint 16 - Issue #43)
+    "Distribution",
+    "DerivedParameter",
+    "MonteCarloScenario",
+    "MonteCarloResult",
+    # WACC
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
+    # FX
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
+    # Sensitivity
     "TornadoResult",
     "MultiMetricTornadoResult",
     "ParameterRangeConfig",
     "SensitivitySuite",
     "SensitivityRequest",
     "BreakevenResult",
+    # CASPER
     "CasperResult",
-    "MonteCarloResult",
     "ShockResult",
 ]
