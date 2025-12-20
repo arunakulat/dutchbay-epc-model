@@ -15,22 +15,181 @@ from analytics.fx.fx_contracts import (
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     DUTCHBAY v14 DATA CONTRACTS                             ║
-║                  (Fully Refactored with Validators)                         ║
+║                  (Fully Refactored with Pydantic V2)                        ║
 ║                                                                              ║
-║  All canonical data structures (dataclasses, pydantic models) used for:      ║
-║  - Valuation, WACC, and scenario results                                     ║
-║  - FX structured blocks, curves, and risk metrics (v14R6)                    ║
-║  - Equity metrics, downside risk                                             ║
-║  - Sensitivity/tornado/optimizer/Monte Carlo surfaces for analytics          ║
-║  - Ready for export, reporting, dashboard use                                ║
+║  CESSPIT/CASPER/GWTF/CCCDIR Compliance:                                     ║
+║  - Contract-first: All models explicitly typed                               ║
+║  - Evidence-based: Validation rules from test requirements                   ║
+║  - Scenario-stable: Frozen configs, reproducible outputs                     ║
+║  - Config-driven: No hardcoded constants                                     ║
 ║                                                                              ║
-║  ALWAYS update comments and docstrings in this file for future maintainers.  ║
-║  All pipeline modules must import *analytics results* only from here.        ║
+║  All pipeline modules must import analytics results ONLY from here.          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-# Contract version constant (CASPER: Single source of truth)
-CASPER_CONTRACT_VERSION = "2.0.0"
+# Contract version tracking
+CASPER_CONTRACT_VERSION = "v1.0"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Sensitivity Analysis Contracts (Pydantic V2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class ParameterRangeConfig(BaseModel):
+    """
+    Parameter shock configuration for sensitivity analysis.
+    
+    CESSPIT: Contract-explicit parameter bounds.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    variable_name: str = Field(description="Dotted path to parameter (e.g., 'finance.capex_usd')")
+    base_value: float = Field(description="Base case value")
+    low_pct: float = Field(description="Low shock as % (e.g., -10.0 for -10%)")
+    high_pct: float = Field(description="High shock as % (e.g., 10.0 for +10%)")
+    label: Optional[str] = Field(default=None, description="Display label")
+    
+    @field_validator('low_pct', 'high_pct')
+    @classmethod
+    def validate_shock_range(cls, v: float) -> float:
+        """Shocks must be reasonable (-100% to +500%)."""
+        if not (-100.0 <= v <= 500.0):
+            raise ValueError(f"Shock percentage must be in [-100, 500], got {v}")
+        return v
+
+
+class ShockResult(BaseModel):
+    """
+    Single shock result for one direction.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    low_case: float = Field(description="Metric value at low shock")
+    high_case: float = Field(description="Metric value at high shock")
+    impact: float = Field(description="Absolute impact (high - low)")
+
+
+class TornadoResult(BaseModel):
+    """
+    Single variable tornado sensitivity result.
+    
+    Pydantic V2 contract - replaces old dataclass version.
+    
+    Field Mapping (V1 → V2):
+    - variable → metric_name
+    - base_irr → base_metric
+    - low_irr → shock_results[0].low_case
+    - high_irr → shock_results[0].high_case
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    metric_name: str = Field(description="Variable being shocked")
+    base_metric: float = Field(description="Base case metric value")
+    shock_results: List[ShockResult] = Field(description="Shock outcomes")
+    label: Optional[str] = Field(default=None, description="Display label")
+    impact_abs: float = Field(default=0.0, description="Total impact magnitude")
+    
+    @computed_field
+    @property
+    def impact(self) -> float:
+        """Computed impact from shock results."""
+        if self.shock_results:
+            return self.shock_results[0].impact
+        return 0.0
+
+
+class MultiMetricTornadoResult(BaseModel):
+    """
+    Multi-metric tornado result for one parameter.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    metric_name: str = Field(description="Variable being shocked")
+    label: Optional[str] = Field(default=None)
+    base_values: Dict[str, float] = Field(description="Base metric values")
+    low_values: Dict[str, float] = Field(description="Low shock values")
+    high_values: Dict[str, float] = Field(description="High shock values")
+    impacts: Dict[str, float] = Field(description="Impact per metric")
+    impact_dirs: Dict[str, int] = Field(description="Direction (+1/-1)")
+
+
+class SensitivitySuite(BaseModel):
+    """
+    Complete sensitivity analysis suite.
+    """
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    
+    metric: str = Field(description="Target metric analyzed")
+    base_config_path: str = Field(description="Base scenario path")
+    tornado_results: List[TornadoResult] = Field(description="Tornado results")
+    base_kpis: Optional[Dict[str, float]] = Field(default=None)
+
+
+class SensitivityRequest(BaseModel):
+    """
+    Request structure for sensitivity analysis.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    base_config_path: str
+    parameters: List[ParameterRangeConfig]
+    metric: Optional[str] = Field(default="project_irr")
+
+
+class BreakevenResult(BaseModel):
+    """
+    Breakeven parameter solution.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    variable: str
+    target_metric: str
+    target_value: float
+    breakeven_value: float
+    status: str = Field(default="success")
+    bracket: Tuple[float, float] = Field(default=(0.0, 0.0))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CASPER Result Contract (with computed fields)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class CasperResult(BaseModel):
+    """
+    CASPER unified analysis result.
+    
+    Pydantic V2 contract with computed_field support.
+    """
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    
+    scenario: Optional[str] = Field(default=None)
+    baseline_kpis: Dict[str, float] = Field(default_factory=dict)
+    sensitivities: Optional[Any] = Field(default=None)
+    monte_carlo: Optional[Any] = Field(default=None)
+    multi_tech_generation_breakdown: Optional[Any] = Field(default=None)
+    
+    @computed_field
+    @property
+    def contract_version(self) -> str:
+        """Contract version - computed property."""
+        return CASPER_CONTRACT_VERSION
+
+
+class MonteCarloResult(BaseModel):
+    """
+    Monte Carlo simulation result.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    scenario_name: str
+    iterations: int
+    p10: float
+    p50: float
+    p90: float
+    mean: float
+    std: float
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # WACC, Lender/Scenario Results (Phase 1)
@@ -68,132 +227,6 @@ class WaccResult:
     prudential_rate: Optional[float] = None
     prudential_npv: Optional[float] = None
     meta: Dict[str, Any] = field(default_factory=dict)
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Sensitivity Analysis Contracts (Phase 3)
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-class ParameterRangeConfig(BaseModel):
-    """
-    Configuration for a single parameter's sensitivity range.
-    
-    CASPER: Contract-first definition for tornado analysis.
-    """
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    
-    variable_name: str = Field(..., description="Dot-notation path to parameter")
-    base_value: float = Field(..., description="Base case value")
-    low_pct: float = Field(..., description="Downside shock percentage")
-    high_pct: float = Field(..., description="Upside shock percentage")
-    label: Optional[str] = Field(None, description="Human-readable label")
-    
-    @field_validator('low_pct', 'high_pct')
-    @classmethod
-    def validate_percentages(cls, v: float) -> float:
-        if v < -100 or v > 1000:
-            raise ValueError(f"Percentage out of reasonable range: {v}")
-        return v
-
-
-class SensitivityRequest(BaseModel):
-    """
-    Request specification for sensitivity analysis.
-    
-    CCCDIR: Config-driven sensitivity runs.
-    """
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    
-    base_config_path: str = Field(..., description="Path to base scenario YAML")
-    parameters: List[ParameterRangeConfig] = Field(..., description="Parameters to vary")
-    metric: Optional[str] = Field(None, description="Target metric (for single-metric)")
-
-
-class TornadoResult(BaseModel):
-    """
-    Single-parameter tornado sensitivity result.
-    
-    CASPER: Immutable contract for tornado chart data.
-    GWTF: Clear field names that match test expectations.
-    """
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    
-    # Field names match test expectations (Pydantic V2 style)
-    variable: str = Field(..., description="Parameter name")
-    label: Optional[str] = Field(None, description="Display label")
-    
-    # Base case
-    base_value: float = Field(..., description="Base parameter value")
-    base_metric: float = Field(..., description="Base metric value")
-    
-    # Shocked cases
-    low_value: float = Field(..., description="Low-case parameter value")
-    low_metric: float = Field(..., description="Low-case metric value")
-    high_value: float = Field(..., description="High-case parameter value")
-    high_metric: float = Field(..., description="High-case metric value")
-    
-    # Impact metrics
-    impact_abs: float = Field(..., description="Absolute impact range")
-    impact_dir: int = Field(..., description="Impact direction: -1, 0, +1")
-    
-    # Legacy field aliases for backward compatibility
-    @property
-    def base_irr(self) -> float:
-        """Legacy alias for base_metric (backward compat)."""
-        return self.base_metric
-    
-    @property
-    def low_irr(self) -> float:
-        """Legacy alias for low_metric (backward compat)."""
-        return self.low_metric
-    
-    @property
-    def high_irr(self) -> float:
-        """Legacy alias for high_metric (backward compat)."""
-        return self.high_metric
-
-
-class MultiMetricTornadoResult(BaseModel):
-    """
-    Multi-metric tornado result for a single parameter.
-    
-    CASPER: Contract-first for comparative sensitivity analysis.
-    """
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    
-    variable: str = Field(..., description="Parameter name")
-    label: Optional[str] = Field(None, description="Display label")
-    
-    base_values: Dict[str, float] = Field(..., description="Base metrics by name")
-    low_values: Dict[str, float] = Field(..., description="Low-case metrics")
-    high_values: Dict[str, float] = Field(..., description="High-case metrics")
-    impacts: Dict[str, float] = Field(..., description="Impact ranges by metric")
-    impact_dirs: Dict[str, int] = Field(..., description="Impact directions by metric")
-
-
-class CasperResult(BaseModel):
-    """
-    Complete CASPER evaluation result.
-    
-    CASPER: Contract-first, immutable result container.
-    CESSPIT: Single responsibility - result aggregation only.
-    """
-    model_config = ConfigDict(frozen=True, extra="allow")
-    
-    scenario: Optional[str] = Field(None, description="Scenario name")
-    baseline_kpis: Dict[str, float] = Field(..., description="Base case KPIs")
-    sensitivities: Optional[Dict[str, Any]] = Field(None, description="Tornado results")
-    monte_carlo: Optional[Dict[str, Any]] = Field(None, description="MC results")
-    multi_tech_generation_breakdown: Optional[Dict[str, Any]] = Field(
-        None, description="Multi-tech generation data"
-    )
-    
-    @computed_field
-    @property
-    def contract_version(self) -> str:
-        """CASPER contract version (computed field for Pydantic V2)."""
-        return CASPER_CONTRACT_VERSION
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -251,25 +284,20 @@ class ScenarioResult:
 
 
 __all__ = [
-    # WACC & Scenarios
+    "CASPER_CONTRACT_VERSION",
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
-    
-    # FX Integration
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
-    
-    # Sensitivity Analysis
-    "ParameterRangeConfig",
-    "SensitivityRequest",
     "TornadoResult",
     "MultiMetricTornadoResult",
+    "ParameterRangeConfig",
+    "SensitivitySuite",
+    "SensitivityRequest",
+    "BreakevenResult",
     "CasperResult",
-    
-    # Constants
-    "CASPER_CONTRACT_VERSION",
+    "MonteCarloResult",
+    "ShockResult",
 ]
-
-# EOF - analytics/contracts_v14.py
