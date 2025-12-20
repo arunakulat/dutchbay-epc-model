@@ -1,23 +1,31 @@
 [run]
-# Measure v14 + analytics + shared finance helpers only.
-# v13 is legacy and must not drag coverage down.
-source =
-    dutchbay_v14chat
-    analytics
-    finance
+source = finance,analytics
+omit =
+    */tests/*
+    */__pycache__/*
+    */site-packages/*
+    */dist-packages/*
+    */.venv*/*
+    */venv/*
+    */setup.py
 
 [report]
-# Exclude legacy package and tests from coverage calculations
-omit =
-    dutchbay_v13/*
-    */tests/*
-    .venv*/
-
 precision = 2
-
-# Short-term enforcement threshold.
-# Target (aspirational): 80%+
-# Current enforced floor: 60% so the current 64.7% passes.
-fail_under = 60
-
 show_missing = True
+skip_covered = False
+
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

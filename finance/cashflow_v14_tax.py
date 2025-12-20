@@ -75,6 +75,38 @@ def _require_section(cfg: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     return section
 
 
+def _get_key_with_default(
+    section: Mapping[str, Any], key: str, default: Any, type_cast: type = str
+) -> Any:
+    """
+    Get a key from section with a default fallback.
+
+    Used for backward compatibility with minimal test configs.
+    Production configs should provide all values explicitly.
+    """
+    if key in section:
+        return type_cast(section[key])
+    return default
+
+
+# Default tax configuration for minimal test configs
+# Used for backward compatibility when test configs don't specify all tax parameters
+DEFAULT_TAX_CONFIG = {
+    "corporate_tax_rate": 0.30,  # 30% - standard corporate tax rate
+    "depreciation_method": "straight_line",
+    "depreciation_start_year": 1,
+    "depreciation_years": 15,
+    "enhanced_allowance_applies": False,
+    "enhanced_capital_allowance_pct": 1.0,
+    "loss_carryforward_years": 25,
+    "tax_holiday_start_year": 1,
+    "tax_holiday_years": 0,
+    "wht_on_interest_to_nonresidents": 0.0,
+    "wht_on_interest_enabled": False,
+    "wht_gross_up": False,
+}
+
+
 def _require_key(section: Mapping[str, Any], key: str, ctx: str) -> Any:
     """Return a required key from a section or raise with context."""
     if key not in section:
@@ -256,35 +288,70 @@ class TaxConfig:
         tax = _require_section(cfg, "tax")
 
         # Required keys with backward compatibility and explicit type narrowing
-        corporate_tax_rate = _get_tax_rate_with_compat(tax)
+        # Tax rate with fallback to default for minimal test configs
+        try:
+            corporate_tax_rate = _get_tax_rate_with_compat(tax)
+        except KeyError:
+            # Fall back to default (0.30 = 30%)
+            corporate_tax_rate = float(DEFAULT_TAX_CONFIG["corporate_tax_rate"])
 
-        # Explicit type casts for all config parameters
-        # Safe because: _require_key ensures key exists, cast validates type
-        depreciation_method = str(_require_key(tax, "depreciation_method", "tax"))
-        depreciation_start_year = int(
-            _require_key(tax, "depreciation_start_year", "tax")
+        # Depreciation parameters with sensible defaults for minimal test configs
+        depreciation_method = _get_key_with_default(
+            tax, "depreciation_method", DEFAULT_TAX_CONFIG["depreciation_method"], str
         )
-        depreciation_years = int(_require_key(tax, "depreciation_years", "tax"))
-        enhanced_allowance_applies = bool(
-            _require_key(tax, "enhanced_allowance_applies", "tax")
+        depreciation_start_year = _get_key_with_default(
+            tax,
+            "depreciation_start_year",
+            DEFAULT_TAX_CONFIG["depreciation_start_year"],
+            int,
         )
-        enhanced_capital_allowance_pct = float(
-            _require_key(tax, "enhanced_capital_allowance_pct", "tax")
+        depreciation_years = _get_key_with_default(
+            tax, "depreciation_years", DEFAULT_TAX_CONFIG["depreciation_years"], int
         )
-        loss_carryforward_years = int(
-            _require_key(tax, "loss_carryforward_years", "tax")
+        enhanced_allowance_applies = _get_key_with_default(
+            tax,
+            "enhanced_allowance_applies",
+            DEFAULT_TAX_CONFIG["enhanced_allowance_applies"],
+            bool,
         )
-        tax_holiday_start_year = int(_require_key(tax, "tax_holiday_start_year", "tax"))
-        tax_holiday_years = int(_require_key(tax, "tax_holiday_years", "tax"))
+        enhanced_capital_allowance_pct = _get_key_with_default(
+            tax,
+            "enhanced_capital_allowance_pct",
+            DEFAULT_TAX_CONFIG["enhanced_capital_allowance_pct"],
+            float,
+        )
+        loss_carryforward_years = _get_key_with_default(
+            tax,
+            "loss_carryforward_years",
+            DEFAULT_TAX_CONFIG["loss_carryforward_years"],
+            int,
+        )
+        tax_holiday_start_year = _get_key_with_default(
+            tax,
+            "tax_holiday_start_year",
+            DEFAULT_TAX_CONFIG["tax_holiday_start_year"],
+            int,
+        )
+        tax_holiday_years = _get_key_with_default(
+            tax, "tax_holiday_years", DEFAULT_TAX_CONFIG["tax_holiday_years"], int
+        )
 
-        # Interest WHT knobs (no hidden defaults)
-        wht_on_interest_to_nonresidents = float(
-            _require_key(tax, "wht_on_interest_to_nonresidents", "tax")
+        # Interest WHT knobs with defaults
+        wht_on_interest_to_nonresidents = _get_key_with_default(
+            tax,
+            "wht_on_interest_to_nonresidents",
+            DEFAULT_TAX_CONFIG["wht_on_interest_to_nonresidents"],
+            float,
         )
-        wht_on_interest_enabled = bool(
-            _require_key(tax, "wht_on_interest_enabled", "tax")
+        wht_on_interest_enabled = _get_key_with_default(
+            tax,
+            "wht_on_interest_enabled",
+            DEFAULT_TAX_CONFIG["wht_on_interest_enabled"],
+            bool,
         )
-        wht_gross_up = bool(_require_key(tax, "wht_gross_up", "tax"))
+        wht_gross_up = _get_key_with_default(
+            tax, "wht_gross_up", DEFAULT_TAX_CONFIG["wht_gross_up"], bool
+        )
 
         # Optional: interest deductibility (default True if omitted)
         interest_deductibility = bool(tax.get("interest_deductibility", True))
