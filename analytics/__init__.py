@@ -1,26 +1,115 @@
 """Analytics module for DutchBay EPC Model.
 
-Pydantic v2 Migration Status (Sprint 12):
-- contracts_v14.py: Core dataclasses (native)
-- contracts_v14_compat.py: Backward-compat stubs (temporary)
-- Full v2 migration: Sprint 13
+Pydantic v2 Migration Status (Sprint 15):
+- contracts_v14.py: Fully migrated to Pydantic V2 ✅
+- returns.py: Project & equity returns (IRR, NPV, MIRR)
+- risk_metrics.py: Tail risk analytics (VaR, CVaR)
+
+Sprint 16 Planned:
+- Add Pydantic V2 contracts for returns and risk outputs
 """
 
-# Re-export compatibility stubs for legacy tests
-from analytics.contracts_v14_compat import (
+# Core contracts (Pydantic V2) - ONLY import what exists in contracts_v14.py
+from analytics.contracts_v14 import (
+    CASPER_CONTRACT_VERSION,
+    BreakevenResult,
     CasperResult,
-    TailRiskMetrics,
-    MultiMetricSensitivitySuite,
-    Distribution,
+    MonteCarloResult,
+    MultiMetricTornadoResult,
+    ParameterRangeConfig,
+    ScenarioResult,
+    SensitivityRequest,
+    SensitivitySuite,
+    ShockResult,
+    TornadoResult,
+    WaccComponents,
+    WaccResult,
+)
+
+# Legacy compatibility stubs (temporary - Sprint 16)
+from analytics.contracts_v14_compat import (
     DownsideMetrics,
+    MultiMetricSensitivitySuite,
+    TailRiskMetrics,
     build_cashflow_result_from_annual_rows,
 )
 
+# FX contracts
+from analytics.fx.fx_contracts import (
+    FXCurveOutput,
+    FXRiskProfile,
+    FXStructuredBlock,
+)
+
+# Returns calculation module
+from analytics.returns import (
+    AllReturns,
+    EquityReturns,
+    ProjectReturns,
+    ReturnsConfig,
+    calculate_equity_returns,
+    calculate_irr,
+    calculate_mirr,
+    calculate_npv,
+    calculate_project_returns,
+    summarize_all_returns,
+)
+
+# Risk metrics module
+from analytics.risk_metrics import (
+    CovenantBreachAnalysis,
+    DownsideRisk,
+    MetricRiskSummary,
+    PercentileAnalysis,
+    RiskConfig,
+    TailRiskAnalyzer,
+    TailRiskReport,
+    VaRCVaRResult,
+)
+
 __all__ = [
+    # Contract version
+    "CASPER_CONTRACT_VERSION",
+    # Core Pydantic V2 Contracts
+    "BreakevenResult",
     "CasperResult",
-    "TailRiskMetrics",
-    "MultiMetricSensitivitySuite",
-    "Distribution",
+    "MonteCarloResult",
+    "MultiMetricTornadoResult",
+    "ParameterRangeConfig",
+    "ScenarioResult",
+    "SensitivityRequest",
+    "SensitivitySuite",
+    "ShockResult",
+    "TornadoResult",
+    "WaccComponents",
+    "WaccResult",
+    # FX contracts
+    "FXCurveOutput",
+    "FXRiskProfile",
+    "FXStructuredBlock",
+    # Legacy compatibility (Sprint 16 removal)
     "DownsideMetrics",
+    "MultiMetricSensitivitySuite",
+    "TailRiskMetrics",
     "build_cashflow_result_from_annual_rows",
+    # Returns module
+    "AllReturns",
+    "EquityReturns",
+    "ProjectReturns",
+    "ReturnsConfig",
+    "calculate_equity_returns",
+    "calculate_irr",
+    "calculate_mirr",
+    "calculate_npv",
+    "calculate_project_returns",
+    "summarize_all_returns",
+    # Risk metrics module
+    "CovenantBreachAnalysis",
+    "DownsideRisk",
+    "MetricRiskSummary",
+    "PercentileAnalysis",
+    "RiskConfig",
+    "TailRiskAnalyzer",
+    "TailRiskReport",
+    "VaRCVaRResult",
 ]
