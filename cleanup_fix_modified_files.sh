@@ -93,7 +93,7 @@ if [ -f 'tests/api/test_schema_guard_fx_validation.py' ]; then
     rm 'tests/api/test_schema_guard_fx_validation.py' && echo "  ✓ tests/api/test_schema_guard_fx_validation.py" && ((REMOVED++))
 fi
 
-# Root level broken files  
+# Root level broken files
 if [ -f 'tests/test_metrics_integration.py' ]; then
     rm 'tests/test_metrics_integration.py' && echo "  ✓ tests/test_metrics_integration.py" && ((REMOVED++))
 fi
