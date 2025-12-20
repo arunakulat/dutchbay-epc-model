@@ -3,6 +3,13 @@ Phase 2 Refactoring: Tax Profile Module (CCCDIR / CASPER / CESSPIT / GWTF)
 
 This module provides a clean, configuration-driven tax engine for DutchBay v14.
 
+**CONSOLIDATED MODULE** (v14.2+)
+---------------------------------
+This module consolidates:
+- Phase 2 TaxConfig (from cashflow_v14_tax.py)
+- Complete execution engine (from dutchbay_finmodel/tax_profile.py)
+- Wave 2 type safety enhancements
+
 Goals
 -----
 - Config-driven (CCCDIR):
@@ -17,6 +24,11 @@ Goals
   * Pure functions (no I/O, no logging, no global state).
   * Single responsibility: this module only deals with tax logic.
   * Explicit handling of tax holiday, loss carry-forward, and interest WHT.
+
+- Type Safety (Wave 2):
+  * Explicit type casts with validation
+  * Mypy justifications for all type: ignore comments
+  * Enhanced docstrings with type narrowing strategy
 
 YAML Expectations
 -----------------
@@ -53,6 +65,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 # ---------------------------------------------------------------------------
 # Helpers for safe config access (no magic defaults)
 # ---------------------------------------------------------------------------
+
 
 def _require_section(cfg: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     """Return a named subsection or raise if missing."""
@@ -175,9 +188,9 @@ def _get_tax_rate_with_compat(tax: Mapping[str, Any]) -> float:
     )
 
 
-# ---------------------------------------------------------------------------
-# Configuration-level profile (maps 1:1 to YAML)
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# CONFIGURATION LAYER - Maps 1:1 to YAML
+# ===========================================================================
 
 
 @dataclass(frozen=True)
@@ -224,15 +237,6 @@ class TaxConfig:
         1. Explicit type casts (int(), float(), bool(), str())
         2. Runtime validation in _validate()
         3. Fail-fast on missing or invalid keys
-        
-        Mypy Justification
-        ------------------
-        # type: ignore[arg-type] annotations are used for TaxConfig() constructor
-        because:
-        - YAML dict values have type Any
-        - Explicit casts narrow types (e.g., int(_require_key(...)))
-        - Runtime validation in _validate() ensures correctness
-        - Alternative would be complex type guards for each field
         
         Parameters
         ----------
@@ -288,7 +292,6 @@ class TaxConfig:
         interest_deductibility = bool(tax.get("interest_deductibility", True))
 
         # Construct validated config
-        # Note: All values are explicitly cast above, safe for dataclass
         obj = cls(
             corporate_tax_rate=corporate_tax_rate,
             depreciation_method=depreciation_method,
@@ -345,16 +348,450 @@ class TaxConfig:
             )
 
 
-# NOTE: Rest of file (TaxProfile, DepreciationSchedule, TaxResult, etc.) 
-# remains unchanged from original implementation.
-# This update focuses on type safety in the configuration layer.
+# ===========================================================================
+# EXECUTION LAYER - Derived from TaxConfig for runtime calculations
+# ===========================================================================
+
+
+@dataclass(frozen=True)
+class TaxProfile:
+    """
+    Execution-ready tax profile for annual calculations.
+
+    This is derived from TaxConfig + DepreciationSchedule and holds only the
+    values needed in the per-year engine (calculate_tax).
+    
+    Type Safety
+    -----------
+    All fields validated in __post_init__. Used by calculate_tax() which
+    expects strongly-typed, validated configuration.
+    """
+
+    tax_rate: float  # Corporate tax rate (decimal 0.0-1.0)
+    interest_deductibility: bool  # Whether interest reduces taxable income
+    depreciation_method: str  # Depreciation method used
+    depreciation_schedule: List[float]  # Annual depreciation amounts
+    allowable_losses_carryforward: bool  # Loss carryforward enabled
+    withholding_tax_rate: float  # Interest WHT rate (decimal 0.0-1.0)
+    tax_holidays_by_year: Dict[int, bool]  # {year: is_holiday}
+
+    def __post_init__(self) -> None:
+        """Validate execution-ready profile."""
+        if not (0.0 <= self.tax_rate <= 1.0):
+            raise ValueError(f"tax_rate must be in [0,1], got {self.tax_rate}")
+        if not (0.0 <= self.withholding_tax_rate <= 1.0):
+            raise ValueError(
+                f"withholding_tax_rate must be in [0,1], got {self.withholding_tax_rate}"
+            )
+        if self.depreciation_method not in (
+            "straight_line",
+            "accelerated",
+            "none",
+        ):
+            raise ValueError(f"Unknown depreciation_method: {self.depreciation_method}")
+
+
+@dataclass(frozen=True)
+class DepreciationSchedule:
+    """
+    Pre-computed depreciation schedule for project life.
+
+    Attributes
+    ----------
+    method:
+        Depreciation method used ('straight_line', 'accelerated', or 'none').
+    capex_base:
+        Total capital expenditure subject to depreciation (LKR).
+    useful_life_years:
+        Depreciation period.
+    annual_amounts:
+        Depreciation per project year (length == project_life_years).
+    accumulated_depreciation:
+        Cumulative depreciation at end of each year.
+    book_value:
+        Remaining depreciable base at end of each year.
+    """
+
+    method: str
+    capex_base: float
+    useful_life_years: int
+    annual_amounts: List[float]
+    accumulated_depreciation: List[float]
+    book_value: List[float]
+
+    @staticmethod
+    def build_straight_line(
+        capex_lkr: float,
+        useful_life: int,
+        project_life: int,
+    ) -> "DepreciationSchedule":
+        """
+        Build a straight-line depreciation schedule.
+
+        Parameters
+        ----------
+        capex_lkr:
+            Total capital expenditure (LKR).
+        useful_life:
+            Depreciation period (years).
+        project_life:
+            Project economic life (years).
+        
+        Returns
+        -------
+        DepreciationSchedule
+            Pre-computed schedule with annual amounts, accumulated, and book values.
+        
+        Raises
+        ------
+        ValueError
+            If useful_life <= 0.
+        """
+        if useful_life <= 0:
+            raise ValueError("useful_life must be > 0 for straight_line")
+
+        annual_depr: float = capex_lkr / useful_life
+
+        annual_amounts: List[float] = []
+        accumulated: List[float] = []
+        book_values: List[float] = []
+        acc: float = 0.0
+
+        for year in range(1, project_life + 1):
+            if year <= useful_life:
+                depr = annual_depr
+            else:
+                depr = 0.0
+            annual_amounts.append(depr)
+            acc += depr
+            accumulated.append(acc)
+            bv: float = max(capex_lkr - acc, 0.0)
+            book_values.append(bv)
+
+        return DepreciationSchedule(
+            method="straight_line",
+            capex_base=capex_lkr,
+            useful_life_years=useful_life,
+            annual_amounts=annual_amounts,
+            accumulated_depreciation=accumulated,
+            book_value=book_values,
+        )
+
+
+@dataclass(frozen=True)
+class TaxResult:
+    """
+    Immutable tax calculation result for a single project year.
+
+    Attributes
+    ----------
+    year:
+        Project year (1-based).
+    ebit:
+        Earnings before interest and tax (LKR).
+    interest_expense:
+        Debt interest expense (LKR), pre-WHT (gross coupon).
+    depreciation:
+        Depreciation deduction (LKR).
+    taxable_income:
+        Taxable income after deductions (LKR, floored at zero).
+    tax_liability:
+        Corporate income tax owed (LKR).
+    effective_tax_rate:
+        Actual rate paid (tax / ebit), guards against division by zero.
+    tax_holiday_applied:
+        Whether the year was treated as tax-free under holiday rules.
+    carried_forward_losses:
+        Losses carried into the next period (LKR).
+    wht_on_interest:
+        Withholding tax on interest (AIT) for this year (LKR).
+    """
+
+    year: int
+    ebit: float
+    interest_expense: float
+    depreciation: float
+    taxable_income: float
+    tax_liability: float
+    effective_tax_rate: float
+    tax_holiday_applied: bool
+    carried_forward_losses: float
+    wht_on_interest: float
+
+
+# ===========================================================================
+# BUILDERS - Convert TaxConfig to execution-ready TaxProfile
+# ===========================================================================
+
+
+def build_tax_holiday_map(
+    config: TaxConfig,
+    project_life_years: int,
+) -> Dict[int, bool]:
+    """
+    Build a {year: is_holiday} map from TaxConfig.
+    
+    Parameters
+    ----------
+    config : TaxConfig
+        Tax configuration with holiday parameters.
+    project_life_years : int
+        Total project life to generate map for.
+    
+    Returns
+    -------
+    Dict[int, bool]
+        Mapping of year (1-based) to whether it's a tax holiday year.
+    
+    Examples
+    --------
+    >>> config = TaxConfig(..., tax_holiday_start_year=2, tax_holiday_years=3, ...)
+    >>> build_tax_holiday_map(config, 5)
+    {1: False, 2: True, 3: True, 4: True, 5: False}
+    """
+    holidays: Dict[int, bool] = {}
+    start: int = config.tax_holiday_start_year
+    end: int = start + config.tax_holiday_years - 1
+    
+    for year in range(1, project_life_years + 1):
+        holidays[year] = start <= year <= end
+    
+    return holidays
+
+
+def build_tax_profile(
+    config: TaxConfig,
+    depreciation_schedule: DepreciationSchedule,
+    project_life_years: int,
+) -> TaxProfile:
+    """
+    Build an execution-ready TaxProfile from TaxConfig and DepreciationSchedule.
+    
+    Parameters
+    ----------
+    config : TaxConfig
+        YAML-level tax configuration.
+    depreciation_schedule : DepreciationSchedule
+        Pre-computed depreciation schedule.
+    project_life_years : int
+        Total project life (for tax holiday map).
+    
+    Returns
+    -------
+    TaxProfile
+        Execution-ready tax profile for calculate_tax() engine.
+    
+    Notes
+    -----
+    - Loss carryforward enabled if config.loss_carryforward_years > 0
+    - WHT rate = 0.0 if wht_on_interest_enabled is False
+    - Tax holidays pre-computed for O(1) yearly lookup
+    """
+    tax_holidays: Dict[int, bool] = build_tax_holiday_map(config, project_life_years)
+
+    # Allowable losses carryforward: enabled if horizon > 0
+    # Expiry window (25y, etc.) can be layered in later if required
+    allow_losses: bool = config.loss_carryforward_years > 0
+
+    # Withholding tax is modelled as a separate cash outflow
+    # It does not reduce taxable income (CIT) directly in this engine
+    wht_rate: float = (
+        config.wht_on_interest_to_nonresidents
+        if config.wht_on_interest_enabled
+        else 0.0
+    )
+
+    return TaxProfile(
+        tax_rate=config.corporate_tax_rate,
+        interest_deductibility=config.interest_deductibility,
+        depreciation_method=config.depreciation_method,
+        depreciation_schedule=list(depreciation_schedule.annual_amounts),
+        allowable_losses_carryforward=allow_losses,
+        withholding_tax_rate=wht_rate,
+        tax_holidays_by_year=tax_holidays,
+    )
+
+
+# ===========================================================================
+# TAX ENGINE - Per-year and multi-year calculations
+# ===========================================================================
+
+
+def calculate_tax(
+    year: int,
+    ebit: float,
+    interest_expense: float,
+    depreciation: float,
+    tax_profile: TaxProfile,
+    prior_year_losses: float = 0.0,
+) -> TaxResult:
+    """
+    Calculate corporate tax and WHT for a single year.
+
+    Logic
+    -----
+    1. Determine if year is within a tax holiday.
+    2. Start from EBIT.
+    3. Deduct interest expense if deductible.
+    4. Deduct depreciation.
+    5. Apply prior-year loss carryforward (no expiry in this engine).
+    6. Calculate CIT on positive taxable income only.
+    7. Compute interest WHT as a separate cash outflow (no offset).
+    8. Track updated loss carryforward.
+    
+    Parameters
+    ----------
+    year : int
+        Project year (1-based).
+    ebit : float
+        Earnings before interest and tax (LKR).
+    interest_expense : float
+        Debt interest expense (gross coupon, LKR).
+    depreciation : float
+        Depreciation deduction for this year (LKR).
+    tax_profile : TaxProfile
+        Execution-ready tax configuration.
+    prior_year_losses : float, optional
+        Losses carried forward from prior year (default: 0.0).
+    
+    Returns
+    -------
+    TaxResult
+        Immutable tax calculation result with all components.
+    
+    Notes
+    -----
+    - Tax holiday: tax_liability = 0.0 regardless of taxable income
+    - Negative taxable income tracked as carried_forward_losses
+    - WHT computed independently of CIT
+    - Effective rate guards against division by zero (ebit = 0)
+    """
+    # 1) Holiday flag
+    is_holiday: bool = tax_profile.tax_holidays_by_year.get(year, False)
+
+    # 2) Start from EBIT
+    taxable: float = ebit
+
+    # 3) Interest deductibility
+    if tax_profile.interest_deductibility:
+        taxable -= interest_expense
+
+    # 4) Depreciation
+    taxable -= depreciation
+
+    # 5) Prior-year losses
+    carried_forward: float = 0.0
+    if tax_profile.allowable_losses_carryforward and prior_year_losses > 0.0:
+        loss_offset: float = min(prior_year_losses, max(taxable, 0.0))
+        taxable -= loss_offset
+        carried_forward = prior_year_losses - loss_offset
+
+    # 6) CIT computation (no negative taxable income)
+    taxable_income: float = max(taxable, 0.0)
+
+    if is_holiday:
+        tax_liability: float = 0.0
+    else:
+        tax_liability = taxable_income * tax_profile.tax_rate
+
+    # New losses if taxable is negative this year
+    new_losses: float = max(-taxable, 0.0) + carried_forward
+
+    # Effective rate
+    if ebit > 0.0:
+        effective_rate: float = tax_liability / ebit
+    else:
+        effective_rate = 0.0
+
+    # 7) Interest WHT (AIT) – separate from CIT
+    wht_on_interest: float = interest_expense * tax_profile.withholding_tax_rate
+
+    return TaxResult(
+        year=year,
+        ebit=ebit,
+        interest_expense=interest_expense,
+        depreciation=depreciation,
+        taxable_income=taxable_income,
+        tax_liability=tax_liability,
+        effective_tax_rate=effective_rate,
+        tax_holiday_applied=is_holiday,
+        carried_forward_losses=new_losses,
+        wht_on_interest=wht_on_interest,
+    )
+
+
+def build_tax_series(
+    years: Sequence[int],
+    ebit_series: Sequence[float],
+    interest_series: Sequence[float],
+    depreciation_schedule: DepreciationSchedule,
+    tax_profile: TaxProfile,
+) -> List[TaxResult]:
+    """
+    Build a full series of TaxResult objects over the project life.
+
+    Parameters
+    ----------
+    years : Sequence[int]
+        Project years (1-based).
+    ebit_series : Sequence[float]
+        Annual EBIT values (length == len(years)).
+    interest_series : Sequence[float]
+        Annual interest expense (gross coupon, from debt module).
+    depreciation_schedule : DepreciationSchedule
+        Pre-computed depreciation schedule (length must cover years).
+    tax_profile : TaxProfile
+        Execution-ready TaxProfile.
+    
+    Returns
+    -------
+    List[TaxResult]
+        Complete tax calculation results for all years.
+    
+    Raises
+    ------
+    ValueError
+        If input sequences have mismatched lengths.
+    
+    Notes
+    -----
+    - Loss carryforward is tracked year-over-year
+    - Each year's calculation depends on prior year's losses
+    - WHT computed independently per year
+    """
+    if not (
+        len(years)
+        == len(ebit_series)
+        == len(interest_series)
+        == len(depreciation_schedule.annual_amounts)
+    ):
+        raise ValueError("Mismatched lengths in tax series inputs")
+
+    results: List[TaxResult] = []
+    carried_losses: float = 0.0
+
+    for idx, year in enumerate(years):
+        tax_result: TaxResult = calculate_tax(
+            year=year,
+            ebit=ebit_series[idx],
+            interest_expense=interest_series[idx],
+            depreciation=depreciation_schedule.annual_amounts[idx],
+            tax_profile=tax_profile,
+            prior_year_losses=carried_losses,
+        )
+        results.append(tax_result)
+        carried_losses = tax_result.carried_forward_losses
+
+    return results
+
 
 __all__ = [
     "TaxConfig",
-    # "TaxProfile",  # Commented out - not shown in excerpt
-    # "TaxResult",
-    # "DepreciationSchedule",
-    # "build_tax_profile",
-    # "build_tax_series",
-    # "calculate_tax",
+    "TaxProfile",
+    "TaxResult",
+    "DepreciationSchedule",
+    "build_tax_profile",
+    "build_tax_series",
+    "calculate_tax",
+    "build_tax_holiday_map",
 ]
