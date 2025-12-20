@@ -409,7 +409,7 @@ def analyze_single_parameter(
     Returns
     -------
     TornadoResult
-        Tuple-like with variable, base_irr, low_irr, high_irr fields.
+        Dataclass with metric_name, base_metric, shock_results fields.
 
     Raises
     ------
@@ -437,7 +437,7 @@ def analyze_single_parameter(
     overrides_high = build_nested_override(variable_name, high_value)
 
     logger.debug(
-        "_analyze_single_parameter: variable=%s base=%s "
+        "analyze_single_parameter: variable=%s base=%s "
         "low_pct=%s%% high_pct=%s%% → low_value=%s high_value=%s",
         variable_name,
         base_value,
@@ -475,7 +475,7 @@ def analyze_single_parameter(
     )
 
     logger.debug(
-        "_analyze_single_parameter: variable=%s label=%s "
+        "analyze_single_parameter: variable=%s label=%s "
         "base=%s low=%s high=%s impact=%s dir=%s",
         variable_name,
         label,
@@ -486,12 +486,40 @@ def analyze_single_parameter(
         impact_dir,
     )
 
-    return TornadoResult.model_validate({
-        "variable": label,
-        "base_irr": base_metric_value,
-        "low_irr": low_metric,
-        "high_irr": high_metric,
-    })
+    # ════════════════════════════════════════════════════════════════════
+    # PHASE 1 PYDANTIC V2 FIX: Proper dataclass construction
+    # ════════════════════════════════════════════════════════════════════
+    # TornadoResult is a dataclass expecting:
+    #   - metric_name: str
+    #   - base_metric: float
+    #   - shock_results: List[ShockResult]
+    #   - low_case_metric: Optional[float]
+    #   - high_case_metric: Optional[float]
+    #
+    # ShockResult is also a dataclass with all shock details.
+    # ════════════════════════════════════════════════════════════════════
+
+    from analytics.contracts_v14 import ShockResult
+
+    shock = ShockResult(
+        variable_name=variable_name,
+        base_value=base_value,
+        low_value=low_value,
+        high_value=high_value,
+        base_metric=base_metric_value,
+        low_metric=low_metric,
+        high_metric=high_metric,
+        metric_name=metric_name,
+        label=label,
+    )
+
+    return TornadoResult(
+        metric_name=metric_name,
+        base_metric=base_metric_value,
+        shock_results=[shock],
+        low_case_metric=low_metric,
+        high_case_metric=high_metric,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -992,12 +1020,16 @@ def run_breakeven_parameter(
         fm = objective(mid)
 
         if abs(fm) <= tol:
-            return BreakevenResult.model_validate({
-                "variable": variable_name,
-                "breakeven_value": mid,
-                "bracket": (a, b),
-                "status": "success",
-            })
+            pct_change = ((mid - base_param_value) / base_param_value) * 100
+            return BreakevenResult(
+                variable_name=variable_name,
+                base_value=base_param_value,
+                breakeven_value=mid,
+                breakeven_pct_change=pct_change,
+                is_positive_breakeven=(mid > base_param_value),
+                metric_name=target_metric,
+                tolerance=tol,
+            )
 
         if fa * fm < 0:
             b, fb = mid, fm
@@ -1006,17 +1038,29 @@ def run_breakeven_parameter(
 
     # If we get here, max_iter exceeded; still return a structured result
     mid = 0.5 * (a + b)
-    return BreakevenResult.model_validate({
-        "variable": variable_name,
-        "breakeven_value": mid,
-        "bracket": (a, b),
-        "status": "max_iter_exceeded",
-    })
+    pct_change = ((mid - base_param_value) / base_param_value) * 100
+
+    logger.warning(
+        "Breakeven search for %s reached max_iter=%d; "
+        "returning best estimate mid=%s (residual may exceed tolerance)",
+        variable_name,
+        max_iter,
+        mid,
+    )
+
+    return BreakevenResult(
+        variable_name=variable_name,
+        base_value=base_param_value,
+        breakeven_value=mid,
+        breakeven_pct_change=pct_change,
+        is_positive_breakeven=(mid > base_param_value),
+        metric_name=target_metric,
+        tolerance=tol,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Legacy / Compatibility Helpers
-# ═══════════════════════════════════════════════════════════════════════════
 
 
 def _load_parameters() -> list[ParameterRangeConfig]:

@@ -15,7 +15,7 @@ echo ""
 # Rollback to before Phase 2
 git checkout 39f61d2 -- tests/finance/test_contracts.py 2>/dev/null || true
 git checkout 39f61d2 -- tests/analytics_layer/ 2>/dev/null || true
-git checkout 39f61d2 -- tests/contracts/ 2>/dev/null || true  
+git checkout 39f61d2 -- tests/contracts/ 2>/dev/null || true
 git checkout 39f61d2 -- tests/_quarantine/ 2>/dev/null || true
 
 echo "✅ Reverted Phase 2 test changes"

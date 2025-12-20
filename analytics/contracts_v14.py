@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 # FX contract imports (Sprint 15 integration)
 from analytics.fx.fx_contracts import (
@@ -249,22 +249,93 @@ class MultiTechGenerationResult:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 # SECTION 6: Sensitivity & Tornado Contracts
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@dataclass
-class ParameterRangeConfig:
-    """CCCDIR: Configuration for a single sensitivity parameter."""
+class ParameterRangeConfig(BaseModel):
+    """CCCDIR: Configuration for a single sensitivity parameter with validation.
 
-    variable_name: str  # e.g., "project.capacity_factor"
+    Validates:
+    - variable_name: non-empty string (whitespace stripped)
+    - base_value: must be > 0
+    - low_pct: must be in range [-50, 0]
+    - high_pct: must be in range [0, 100]
+    - high_pct must exceed abs(low_pct)
+    - steps: must be in range [3, 20]
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    variable_name: str
     base_value: float
-    low_value: Optional[float] = None
-    high_value: Optional[float] = None
-    low_pct: Optional[float] = None  # If using percentages
-    high_pct: Optional[float] = None
+    low_pct: float
+    high_pct: float
+    steps: int = 5
     label: Optional[str] = None
-    shock_type: str = "scalar"  # "scalar" or "proportional"
+    shock_type: str = "proportional"
+
+    @field_validator("variable_name")
+    @classmethod
+    def validate_variable_name(cls, v: str) -> str:
+        """Validate variable_name is not empty."""
+        v = v.strip()
+        if not v:
+            raise ValueError("variable_name cannot be empty")
+        return v
+
+    @field_validator("base_value")
+    @classmethod
+    def validate_base_value(cls, v: float) -> float:
+        """Validate base_value is positive."""
+        if v <= 0:
+            raise ValueError(f"base_value must be > 0, got {v}")
+        return v
+
+    @field_validator("low_pct")
+    @classmethod
+    def validate_low_pct(cls, v: float) -> float:
+        """Validate low_pct is in valid range."""
+        if not (-50 <= v <= 0):
+            raise ValueError(f"low_pct must be in range [-50, 0], got {v}")
+        return v
+
+    @field_validator("high_pct")
+    @classmethod
+    def validate_high_pct(cls, v: float) -> float:
+        """Validate high_pct is in valid range."""
+        if not (0 <= v <= 100):
+            raise ValueError(f"high_pct must be in range [0, 100], got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_high_exceeds_abs_low(self) -> "ParameterRangeConfig":
+        """Validate that high_pct exceeds abs(low_pct)."""
+        if self.high_pct < abs(self.low_pct):
+            raise ValueError(
+                f"High bound {self.high_pct} must be >= absolute value of low bound {abs(self.low_pct)}"
+            )
+        return self
+
+    @field_validator("steps")
+    @classmethod
+    def validate_steps(cls, v: int) -> int:
+        """Validate steps is in valid range."""
+        if not (3 <= v <= 20):
+            raise ValueError(f"steps must be in range [3, 20], got {v}")
+        return v
+
+    @property
+    def low_value(self) -> float:
+        """Calculate low value from base and percentage."""
+        return self.base_value * (1 + self.low_pct / 100)
+
+    @property
+    def high_value(self) -> float:
+        """Calculate high value from base and percentage."""
+        return self.base_value * (1 + self.high_pct / 100)
 
 
 @dataclass
@@ -296,7 +367,7 @@ class ShockResult:
     @property
     def impact(self) -> float:
         """CASPER: Total impact (half of range to capture magnitude)."""
-        return abs(self.high_metric - self.low_metric) / 2.0
+        return abs(self.high_metric - self.low_metric)
 
     @property
     def direction(self) -> str:
@@ -314,7 +385,66 @@ class ShockResult:
 
 @dataclass
 class TornadoResult:
-    """CASPER: Tornado chart data (all shocks ranked by impact)."""
+    """CASPER: Tornado chart data (all shocks ranked by impact).
+
+    Used by sensitivity_v14.py for multi-shock tornado analysis.
+    Includes backward compatibility properties for legacy test support.
+
+    Properties:
+    - variable: First shock's variable name (backward compat)
+    - base_irr: Alias for base_metric (backward compat)
+    - low_irr: First shock's low_metric (backward compat)
+    - high_irr: First shock's high_metric (backward compat)
+    - impact_abs: First shock's absolute impact (backward compat)
+    """
+
+    metric_name: str
+    base_metric: float
+    shock_results: List[ShockResult]
+    low_case_metric: Optional[float] = None
+    high_case_metric: Optional[float] = None
+
+    # ═══════════════════════════════════════════════════════════
+    # BACKWARD COMPATIBILITY PROPERTIES (test support)
+    # ═══════════════════════════════════════════════════════════
+
+    @property
+    def variable(self) -> str:
+        """Backward compatibility: get variable name from first shock."""
+        return self.shock_results[0].variable_name if self.shock_results else ""
+
+    @property
+    def base_irr(self) -> float:
+        """Backward compatibility alias for base_metric."""
+        return self.base_metric
+
+    @property
+    def low_irr(self) -> float:
+        """Backward compatibility: get low_metric from first shock."""
+        return self.shock_results[0].low_metric if self.shock_results else 0.0
+
+    @property
+    def high_irr(self) -> float:
+        """Backward compatibility: get high_metric from first shock."""
+        return self.shock_results[0].high_metric if self.shock_results else 0.0
+
+    @property
+    def impact_abs(self) -> float:
+        """Backward compatibility: get impact from first shock."""
+        return abs(self.shock_results[0].impact) if self.shock_results else 0.0
+
+    def sorted_by_impact(self) -> List[ShockResult]:
+        """Return shocks sorted by absolute impact (descending)."""
+        return sorted(self.shock_results, key=lambda x: abs(x.impact), reverse=True)
+
+
+@dataclass
+class MultiShockTornadoResult:
+    """CASPER: Multi-parameter tornado chart data (renamed for backward compat).
+
+    This is the original TornadoResult used by sensitivity_v14.py.
+    Renamed to avoid conflict with new single-parameter TornadoResult.
+    """
 
     metric_name: str
     base_metric: float
@@ -332,7 +462,7 @@ class MultiMetricTornadoResult:
     """CCCDIR: Multi-metric tornado analysis result."""
 
     scenario_name: str
-    tornado_charts: Dict[str, TornadoResult]  # {metric_name: TornadoResult}
+    tornado_charts: Dict[str, MultiShockTornadoResult]  # {metric_name: TornadoResult}
     base_kpis: Dict[str, float]
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -370,17 +500,32 @@ class SensitivitySuite:
         return self.tornado_ranking
 
 
-@dataclass
-class BreakevenResult:
+class BreakevenResult(BaseModel):
     """CASPER: Breakeven analysis (what value makes project NPV=0)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=False)
 
     variable_name: str
     base_value: float
     breakeven_value: float
     breakeven_pct_change: float
-    is_positive_breakeven: bool  # True if higher value breaks even, False if lower
+    is_positive_breakeven: bool
     metric_name: str = "project_npv"
-    tolerance: float = 1000.0  # USD tolerance for breakeven definition
+    tolerance: float = 1000.0
+
+    @field_validator("tolerance")
+    @classmethod
+    def validate_tolerance(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"Tolerance must be positive, got {v}")
+        return v
+
+    @field_validator("breakeven_pct_change")
+    @classmethod
+    def validate_pct_change(cls, v: float) -> float:
+        if abs(v) > 500.0:
+            raise ValueError(f"Breakeven change {v}% seems unrealistic (>500%)")
+        return v
 
 
 @dataclass
@@ -400,14 +545,14 @@ class ParetoFrontierResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 # SECTION 7: Tail Risk & Monte Carlo Contracts (CASPER Core)
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@dataclass
-class TailRiskSnapshot:
+class TailRiskSnapshot(BaseModel):
     """CASPER: Tail risk metrics snapshot (VaR, CVaR, breach probabilities)."""
+
+    model_config = ConfigDict(extra="allow", frozen=False)
 
     metric_name: str
     base_value: float
@@ -435,7 +580,42 @@ class TailRiskSnapshot:
     skewness: float = 0.0
     kurtosis: float = 0.0
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = {}
+
+    @model_validator(mode="after")
+    def validate_risk_metrics(self) -> "TailRiskSnapshot":
+        # VaR ordering: var_95 <= var_99
+        if self.var_99 < self.var_95:
+            raise ValueError(
+                f"VaR 99% ({self.var_99}) must be >= VaR 95% ({self.var_95})"
+            )
+
+        # CVaR ordering: cvar_95 <= cvar_99
+        if self.cvar_99 < self.cvar_95:
+            raise ValueError(
+                f"CVaR 99% ({self.cvar_99}) must be >= CVaR 95% ({self.cvar_95})"
+            )
+
+        # Percentile ordering: p10 <= p50 <= p90
+        if not (self.p10 <= self.p50 <= self.p90):
+            raise ValueError(
+                f"Percentiles must be ordered: p10={self.p10} <= p50={self.p50} <= p90={self.p90}"
+            )
+
+        # Probability bounds
+        if self.covenant_breach_prob_pct is not None:
+            if not (0 <= self.covenant_breach_prob_pct <= 100):
+                raise ValueError(
+                    f"Covenant breach probability must be 0-100%, got {self.covenant_breach_prob_pct}"
+                )
+
+        if self.bankruptcy_prob_pct is not None:
+            if not (0 <= self.bankruptcy_prob_pct <= 100):
+                raise ValueError(
+                    f"Bankruptcy probability must be 0-100%, got {self.bankruptcy_prob_pct}"
+                )
+
+        return self
 
 
 @dataclass
