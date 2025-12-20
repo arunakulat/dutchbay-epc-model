@@ -1,0 +1,123 @@
+═══════════════════════════════════════════════════════════════════════════
+BREAKEVEN_RESULT FIX: analytics/sensitivity_v14.py lines ~1031-1050
+═══════════════════════════════════════════════════════════════════════════
+
+The current code passes a dict to BreakevenResult, but it's a Pydantic model
+that needs keyword arguments.
+
+
+FIND THIS (lines ~1025-1038):
+─────────────────────────────────────────────────────────────────────────
+    # Standard bisection loop
+    for _ in range(max_iter):
+        mid = 0.5 * (a + b)
+        fm = objective(mid)
+
+        if abs(fm) <= tol:
+            return BreakevenResult(
+                {
+                    "variable": variable_name,
+                    "breakeven_value": mid,
+                    "bracket": (a, b),
+                    "status": "success",
+                }
+            )
+
+        if fa * fm < 0:
+            b, fb = mid, fm
+        else:
+            a, fa = mid, fm
+
+    # If we get here, max_iter exceeded; still return a structured result
+    mid = 0.5 * (a + b)
+    return BreakevenResult(
+        {
+            "variable": variable_name,
+            "breakeven_value": mid,
+            "bracket": (a, b),
+            "status": "max_iter_exceeded",
+        }
+    )
+
+
+REPLACE WITH THIS:
+─────────────────────────────────────────────────────────────────────────
+    # Standard bisection loop
+    for _ in range(max_iter):
+        mid = 0.5 * (a + b)
+        fm = objective(mid)
+
+        if abs(fm) <= tol:
+            pct_change = ((mid - base_param_value) / base_param_value) * 100
+            return BreakevenResult(
+                variable_name=variable_name,
+                base_value=base_param_value,
+                breakeven_value=mid,
+                breakeven_pct_change=pct_change,
+                is_positive_breakeven=(mid > base_param_value),
+                metric_name=target_metric,
+                tolerance=tol,
+            )
+
+        if fa * fm < 0:
+            b, fb = mid, fm
+        else:
+            a, fa = mid, fm
+
+    # If we get here, max_iter exceeded; still return a structured result
+    mid = 0.5 * (a + b)
+    pct_change = ((mid - base_param_value) / base_param_value) * 100
+    
+    logger.warning(
+        "Breakeven search for %s reached max_iter=%d; "
+        "returning best estimate mid=%s (residual may exceed tolerance)",
+        variable_name,
+        max_iter,
+        mid,
+    )
+    
+    return BreakevenResult(
+        variable_name=variable_name,
+        base_value=base_param_value,
+        breakeven_value=mid,
+        breakeven_pct_change=pct_change,
+        is_positive_breakeven=(mid > base_param_value),
+        metric_name=target_metric,
+        tolerance=tol,
+    )
+
+
+WHY THIS FIX WORKS:
+─────────────────────────────────────────────────────────────────────────
+1. BreakevenResult is a Pydantic BaseModel (not a dataclass)
+2. Requires keyword arguments matching the model fields
+3. All required fields provided:
+   - variable_name: str
+   - base_value: float (from _get_base_param_value)
+   - breakeven_value: float (the solution)
+   - breakeven_pct_change: float (% change from base)
+   - is_positive_breakeven: bool (direction of breakeven)
+   - metric_name: str (default="project_npv")
+   - tolerance: float (default=1000.0, but we pass tol)
+
+4. Removed non-existent fields:
+   - "bracket" - not in BreakevenResult schema
+   - "status" - not in BreakevenResult schema
+
+5. Added proper logging for max_iter case
+
+
+AFTER APPLYING:
+─────────────────────────────────────────────────────────────────────────
+1. Save file
+2. Test:
+   pytest tests/analytics_layer/test_sensitivity_breakeven_contract.py -xvs
+
+3. Should resolve:
+   - "TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given"
+
+
+NOTE:
+─────────────────────────────────────────────────────────────────────────
+The analyze_single_parameter() function is ALREADY CORRECT in your baseline.
+This is the ONLY remaining fix needed for sensitivity_v14.py.
