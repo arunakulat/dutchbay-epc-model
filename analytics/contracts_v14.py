@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from analytics.fx.fx_contracts import (
     FXCurveOutput,
@@ -108,8 +108,6 @@ class TornadoResult(BaseModel):
     label: Optional[str] = Field(default=None, description="Display label")
     impact_abs: float = Field(default=0.0, description="Total impact magnitude")
 
-    @computed_field
-    @property
     def impact(self) -> float:
         """Computed impact from shock results."""
         if self.shock_results:
@@ -193,8 +191,6 @@ class CasperResult(BaseModel):
     monte_carlo: Optional[Any] = Field(default=None)
     multi_tech_generation_breakdown: Optional[Any] = Field(default=None)
 
-    @computed_field
-    @property
     def contract_version(self) -> str:
         """Contract version - computed property."""
         return CASPER_CONTRACT_VERSION

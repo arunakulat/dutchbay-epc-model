@@ -17,7 +17,7 @@ def _req(section: Mapping[str, Any], key: str, ctx: str) -> Any:
 def _req_section(cfg: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     if name not in cfg or not isinstance(cfg[name], Mapping):
         raise KeyError(f"Missing required YAML section: {name}")
-    return cfg[name]
+    return cfg[name]  # type: ignore[no-any-return]  # Safe: isinstance check ensures Mapping
 
 
 @dataclass(frozen=True)

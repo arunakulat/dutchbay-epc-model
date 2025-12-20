@@ -118,7 +118,7 @@ def load_fx_structured_block(
     revenue_currencies = fx_cfg.get("revenue_currencies", ["LKR"])
 
     return FXStructuredBlock(
-        strategy=strategy,  # type: ignore[arg-type]
+        strategy=strategy,
         base_currency=base_currency,
         reporting_currency=reporting_currency,
         volumetry=volumetry_list,
