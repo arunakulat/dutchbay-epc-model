@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from analytics.fx.fx_contracts import (
     FXStructuredBlock,
@@ -15,19 +15,181 @@ from analytics.fx.fx_contracts import (
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     DUTCHBAY v14 DATA CONTRACTS                             ║
-║                  (Fully Refactored with Validators)                         ║
+║                  (Fully Refactored with Pydantic V2)                        ║
 ║                                                                              ║
-║  All canonical data structures (dataclasses, pydantic models) used for:      ║
-║  - Valuation, WACC, and scenario results                                     ║
-║  - FX structured blocks, curves, and risk metrics (v14R6)                    ║
-║  - Equity metrics, downside risk                                             ║
-║  - Sensitivity/tornado/optimizer/Monte Carlo surfaces for analytics          ║
-║  - Ready for export, reporting, dashboard use                                ║
+║  CESSPIT/CASPER/GWTF/CCCDIR Compliance:                                     ║
+║  - Contract-first: All models explicitly typed                               ║
+║  - Evidence-based: Validation rules from test requirements                   ║
+║  - Scenario-stable: Frozen configs, reproducible outputs                     ║
+║  - Config-driven: No hardcoded constants                                     ║
 ║                                                                              ║
-║  ALWAYS update comments and docstrings in this file for future maintainers.  ║
-║  All pipeline modules must import *analytics results* only from here.        ║
+║  All pipeline modules must import analytics results ONLY from here.          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
+
+# Contract version tracking
+CASPER_CONTRACT_VERSION = "v1.0"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Sensitivity Analysis Contracts (Pydantic V2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class ParameterRangeConfig(BaseModel):
+    """
+    Parameter shock configuration for sensitivity analysis.
+    
+    CESSPIT: Contract-explicit parameter bounds.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    variable_name: str = Field(description="Dotted path to parameter (e.g., 'finance.capex_usd')")
+    base_value: float = Field(description="Base case value")
+    low_pct: float = Field(description="Low shock as % (e.g., -10.0 for -10%)")
+    high_pct: float = Field(description="High shock as % (e.g., 10.0 for +10%)")
+    label: Optional[str] = Field(default=None, description="Display label")
+    
+    @field_validator('low_pct', 'high_pct')
+    @classmethod
+    def validate_shock_range(cls, v: float) -> float:
+        """Shocks must be reasonable (-100% to +500%)."""
+        if not (-100.0 <= v <= 500.0):
+            raise ValueError(f"Shock percentage must be in [-100, 500], got {v}")
+        return v
+
+
+class ShockResult(BaseModel):
+    """
+    Single shock result for one direction.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    low_case: float = Field(description="Metric value at low shock")
+    high_case: float = Field(description="Metric value at high shock")
+    impact: float = Field(description="Absolute impact (high - low)")
+
+
+class TornadoResult(BaseModel):
+    """
+    Single variable tornado sensitivity result.
+    
+    Pydantic V2 contract - replaces old dataclass version.
+    
+    Field Mapping (V1 → V2):
+    - variable → metric_name
+    - base_irr → base_metric
+    - low_irr → shock_results[0].low_case
+    - high_irr → shock_results[0].high_case
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    metric_name: str = Field(description="Variable being shocked")
+    base_metric: float = Field(description="Base case metric value")
+    shock_results: List[ShockResult] = Field(description="Shock outcomes")
+    label: Optional[str] = Field(default=None, description="Display label")
+    impact_abs: float = Field(default=0.0, description="Total impact magnitude")
+    
+    @computed_field
+    @property
+    def impact(self) -> float:
+        """Computed impact from shock results."""
+        if self.shock_results:
+            return self.shock_results[0].impact
+        return 0.0
+
+
+class MultiMetricTornadoResult(BaseModel):
+    """
+    Multi-metric tornado result for one parameter.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    metric_name: str = Field(description="Variable being shocked")
+    label: Optional[str] = Field(default=None)
+    base_values: Dict[str, float] = Field(description="Base metric values")
+    low_values: Dict[str, float] = Field(description="Low shock values")
+    high_values: Dict[str, float] = Field(description="High shock values")
+    impacts: Dict[str, float] = Field(description="Impact per metric")
+    impact_dirs: Dict[str, int] = Field(description="Direction (+1/-1)")
+
+
+class SensitivitySuite(BaseModel):
+    """
+    Complete sensitivity analysis suite.
+    """
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    
+    metric: str = Field(description="Target metric analyzed")
+    base_config_path: str = Field(description="Base scenario path")
+    tornado_results: List[TornadoResult] = Field(description="Tornado results")
+    base_kpis: Optional[Dict[str, float]] = Field(default=None)
+
+
+class SensitivityRequest(BaseModel):
+    """
+    Request structure for sensitivity analysis.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    base_config_path: str
+    parameters: List[ParameterRangeConfig]
+    metric: Optional[str] = Field(default="project_irr")
+
+
+class BreakevenResult(BaseModel):
+    """
+    Breakeven parameter solution.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    variable: str
+    target_metric: str
+    target_value: float
+    breakeven_value: float
+    status: str = Field(default="success")
+    bracket: Tuple[float, float] = Field(default=(0.0, 0.0))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CASPER Result Contract (with computed fields)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class CasperResult(BaseModel):
+    """
+    CASPER unified analysis result.
+    
+    Pydantic V2 contract with computed_field support.
+    """
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    
+    scenario: Optional[str] = Field(default=None)
+    baseline_kpis: Dict[str, float] = Field(default_factory=dict)
+    sensitivities: Optional[Any] = Field(default=None)
+    monte_carlo: Optional[Any] = Field(default=None)
+    multi_tech_generation_breakdown: Optional[Any] = Field(default=None)
+    
+    @computed_field
+    @property
+    def contract_version(self) -> str:
+        """Contract version - computed property."""
+        return CASPER_CONTRACT_VERSION
+
+
+class MonteCarloResult(BaseModel):
+    """
+    Monte Carlo simulation result.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    scenario_name: str
+    iterations: int
+    p10: float
+    p50: float
+    p90: float
+    mean: float
+    std: float
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # WACC, Lender/Scenario Results (Phase 1)
@@ -122,12 +284,20 @@ class ScenarioResult:
 
 
 __all__ = [
+    "CASPER_CONTRACT_VERSION",
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
+    "TornadoResult",
+    "MultiMetricTornadoResult",
+    "ParameterRangeConfig",
+    "SensitivitySuite",
+    "SensitivityRequest",
+    "BreakevenResult",
+    "CasperResult",
+    "MonteCarloResult",
+    "ShockResult",
 ]
-
-# EOF - analytics/contracts_v14.py (minimal subset for demonstration)
