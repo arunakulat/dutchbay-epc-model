@@ -1,0 +1,99 @@
+═══════════════════════════════════════════════════════════════════════════
+EMERGENCY PATCH: analytics/sensitivity_v14.py LINE 515
+═══════════════════════════════════════════════════════════════════════════
+
+FIND THIS (lines ~512-518):
+───────────────────────────
+    logger.debug(
+        "_analyze_single_parameter: variable=%s label=%s "
+        "base=%s low=%s high=%s impact=%s dir=%s",
+        variable_name,
+        label,
+        base_metric_value,
+        low_metric,
+        high_metric,
+        impact_abs,
+        impact_dir,
+    )
+
+    return TornadoResult.model_validate({
+        "variable": label,
+        "base_irr": base_metric_value,
+        "low_irr": low_metric,
+        "high_irr": high_metric,
+    })
+
+
+REPLACE WITH THIS:
+───────────────────────────
+    logger.debug(
+        "_analyze_single_parameter: variable=%s label=%s "
+        "base=%s low=%s high=%s impact=%s dir=%s",
+        variable_name,
+        label,
+        base_metric_value,
+        low_metric,
+        high_metric,
+        impact_abs,
+        impact_dir,
+    )
+
+    # Create ShockResult object for this single parameter shock
+    from analytics.contracts_v14 import ShockResult
+    
+    shock = ShockResult(
+        variable_name=variable_name,
+        base_value=base_value,
+        low_value=low_value,
+        high_value=high_value,
+        base_metric=base_metric_value,
+        low_metric=low_metric,
+        high_metric=high_metric,
+        metric_name=metric_name,
+        label=label,
+    )
+
+    return TornadoResult(
+        metric_name=metric_name,
+        base_metric=base_metric_value,
+        shock_results=[shock],
+        low_case_metric=low_metric,
+        high_case_metric=high_metric,
+    )
+
+
+WHY THIS WORKS:
+───────────────────────────
+1. TornadoResult is a DATACLASS, not Pydantic model
+2. Uses proper dataclass instantiation (not .model_validate)
+3. Creates ShockResult object with all required fields
+4. All fields are available in scope: variable_name, base_value, low_value, 
+   high_value, base_metric_value, low_metric, high_metric, metric_name, label
+
+
+ALSO CHECK:
+───────────────────────────
+Ensure ShockResult is imported at TOP of file (around line 11):
+
+from analytics.contracts_v14 import (
+    BreakevenResult,
+    MultiMetricSensitivitySuite,
+    MultiMetricTornadoResult,
+    ParameterRangeConfig,
+    SensitivitySuite,
+    ShockResult,  # ← ADD THIS LINE
+    TornadoResult,
+)
+
+
+AFTER APPLYING:
+───────────────────────────
+1. Save file
+2. Delete .pyc files:
+   find . -type f -name '*.pyc' -delete
+   find . -type d -name '__pycache__' -exec rm -rf {} +
+
+3. Test:
+   pytest tests/analytics_layer/test_sensitivity_v14.py::TestAnalyzeSingleParameter::test_basic_analysis -xvs
+
+4. Should see PASSED not TypeError
