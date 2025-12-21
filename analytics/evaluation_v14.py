@@ -9,7 +9,8 @@ from analytics.contracts_v14 import ScenarioResult as ScenarioResultContract
 from analytics.contracts_v14 import SensitivitySuite
 
 # from analytics.monte_carlo_v14 import run_monte_carlo_analysis
-from analytics.pipeline_v14 import run_v14_pipeline
+# CRITICAL FIX: Import lender-grade pipeline (was: analytics.pipeline_v14)
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from analytics.sensitivity_tail_risk import (
     build_tail_risk_snapshots_for_metrics,
