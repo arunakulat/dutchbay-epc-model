@@ -1,0 +1,82 @@
+# DutchBay 150 MW Wind Farm - Hydra Configuration
+# Sprint 17 - Complete Wind-to-Finance Pipeline
+#
+# Usage:
+#   python analytics/pipeline_v14.py config=wind_dutchbay_150mw
+
+project:
+  name: "DutchBay Wind Farm"
+  location: "Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka"
+  capacity_mw: 150.0
+  cod_year: 2027
+  developer: "DutchBay Wind Power Pvt Ltd"
+  grid_poi: "Puttalam 220kV Substation"
+
+turbine:
+  model: "Envision 10 MW (Extrapolated)"
+  n_turbines: 15
+  rated_power_kw: 10000
+  rotor_diameter_m: 220
+  hub_height_m: 150
+  cut_in_ms: 3.0
+  cut_out_ms: 25.0
+  rated_wind_speed_ms: 11.5
+  certification_status: "PROVISIONAL"
+  notes: "Power curve extrapolated from Envision EN-171-6.5. OEM to provide certified curve."
+
+wind_resource:
+  weibull_a: 8.9  # Weibull scale parameter (m/s)
+  weibull_k: 2.1  # Weibull shape parameter
+  mean_wind_speed_ms: 8.5
+  shear_exponent: 0.14
+  air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level
+  data_source: "ECMWF ERA5 Reanalysis"
+  data_years: "2020-2024"
+
+losses:
+  wake_loss_pct: 11.0  # Improved from 15% with 15-turbine layout
+  availability_pct: 97.0
+  electrical_loss_pct: 2.0  # Cable + transformer losses
+  total_loss_pct: 16.2
+
+layout:
+  turbine_spacing_avg_m: 650
+  turbine_spacing_avg_D: 3.0
+  iec_compliant_pairs: 6
+  iec_marginal_pairs: 3
+  iec_violation_pairs: 6
+  layout_orientation: "linear_north_south_coastal"
+  coordinates_reference: "WGS84_EPSG4326"
+  utm_zone: "44N"
+
+financial:
+  ppa_price_eur_mwh: 72.5
+  ppa_term_years: 25
+  cpi_annual_pct: 2.0
+  degradation_pct_yr: 0.5
+  capex_m_usd: 260.0
+  capex_per_kw_usd: 1733
+  opex_annual_m_usd: 3.2
+  opex_per_kw_yr_usd: 21.3
+
+monte_carlo:
+  n_scenarios: 100000  # Use 1000 for testing, 100000 for production
+  weibull_uncertainty_pct: 10.0  # ±10% on A and k
+  wake_loss_std_pct: 2.0  # ±2% on wake loss
+  availability_std_pct: 1.0  # ±1% on availability
+  electrical_loss_std_pct: 0.5  # ±0.5% on electrical loss
+
+pipeline:
+  output_dir: "outputs/dutchbay_150mw"
+  seed: 42  # For reproducibility
+  export_scenarios: true
+  export_provenance: true
+
+# Expected Results (for validation)
+expected_results:
+  net_aep_p50_gwh: 563.0
+  net_aep_p90_gwh: 612.0
+  capacity_factor: 0.428
+  annual_revenue_p50_m_eur: 40.8
+  annual_revenue_p90_m_eur: 44.4
+  revenue_25yr_undiscounted_m_eur: 1020.0
