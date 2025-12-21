@@ -14,12 +14,64 @@ class ShockSpec:
 
     Defines the low and high values for a variable to test its impact on metrics.
     Immutable (frozen=True) ensures contracts cannot be accidentally modified.
+    
+    CESSPIT Validation
+    ──────────────────
+    - variable_name: Must be non-empty string
+    - low_value: Must be numeric
+    - high_value: Must be numeric and >= low_value
+    - Fails fast on contract violation
+    
+    Examples
+    ────────
+    >>> ShockSpec("capex", 180e6, 220e6, "CAPEX ±10%")  # Valid
+    >>> ShockSpec("", 180e6, 220e6)  # Raises ValueError
+    >>> ShockSpec("capex", 220e6, 180e6)  # Raises ValueError (high < low)
     """
 
     variable_name: str
     low_value: float
     high_value: float
     label: Optional[str] = None
+    
+    def __post_init__(self) -> None:
+        """Validate ShockSpec contract invariants.
+        
+        CESSPIT: Fail-fast validation catches violations at construction time.
+        
+        Raises
+        ------
+        ValueError
+            If variable_name is empty or low_value > high_value.
+        TypeError
+            If low_value or high_value are not numeric.
+        """
+        # Validation 1: Non-empty variable name
+        if not self.variable_name or not isinstance(self.variable_name, str):
+            raise ValueError(
+                f"ShockSpec.variable_name must be non-empty string, "
+                f"got: {self.variable_name!r}"
+            )
+        
+        # Validation 2: Numeric types
+        if not isinstance(self.low_value, (int, float)):
+            raise TypeError(
+                f"ShockSpec.low_value must be numeric, "
+                f"got {type(self.low_value).__name__}: {self.low_value!r}"
+            )
+        
+        if not isinstance(self.high_value, (int, float)):
+            raise TypeError(
+                f"ShockSpec.high_value must be numeric, "
+                f"got {type(self.high_value).__name__}: {self.high_value!r}"
+            )
+        
+        # Validation 3: Logical ordering (low <= high)
+        if self.low_value > self.high_value:
+            raise ValueError(
+                f"ShockSpec.low_value ({self.low_value}) cannot exceed "
+                f"high_value ({self.high_value}) for variable '{self.variable_name}'"
+            )
 
 
 @dataclass(frozen=True)
