@@ -7,7 +7,7 @@ Consolidates all IRR calculation functionality into a unified package.
 
 Public API
 ────────────────────────────────────────────────────────────────────────────────────────
-From core module (finance.irr):
+From core module (finance.irr root file):
     - npv                       # Classic periodic Net Present Value
     - irr                       # Periodic Internal Rate of Return
     - xnpv                      # Date-adjusted Net Present Value
@@ -78,16 +78,39 @@ Date-aware XIRR:
 
 from __future__ import annotations
 
-# Re-export all IRR functionality from the canonical source: finance.irr
-# Source of truth remains at root for maximum backward compatibility
-from finance.irr import (
-    approx_project_irr,
-    irr,
-    npv,
-    project_npv_from_cfads,
-    xirr,
-    xnpv,
-)
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import from finance.irr module (not package)
+_parent = Path(__file__).parent.parent
+if str(_parent) not in sys.path:
+    sys.path.insert(0, str(_parent))
+
+# Import from the irr.py file at finance root (not this package)
+# We use importlib to avoid circular import issues
+import importlib.util
+
+_irr_module_path = _parent / "irr.py"
+if not _irr_module_path.exists():
+    raise ImportError(
+        f"Cannot find finance/irr.py source file at {_irr_module_path}. "
+        "The IRR package requires finance/irr.py to exist at the parent level."
+    )
+
+_spec = importlib.util.spec_from_file_location("_finance_irr_module", _irr_module_path)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"Cannot load IRR module from {_irr_module_path}")
+
+_irr_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_irr_module)
+
+# Re-export all public functions
+npv = _irr_module.npv
+irr = _irr_module.irr
+xnpv = _irr_module.xnpv
+xirr = _irr_module.xirr
+project_npv_from_cfads = _irr_module.project_npv_from_cfads
+approx_project_irr = _irr_module.approx_project_irr
 
 __all__ = [
     "npv",
