@@ -254,9 +254,200 @@ class StandardShockLibrary:
         )
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# TAX SHOCK LIBRARY: Tax-specific sensitivity shocks
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TaxShockLibrary(StandardShockLibrary):
+    """Extended library with tax-specific sensitivity shocks.
+    
+    Provides 5 additional tax-specific shock types for enhanced tax analysis:
+    1. Corporate Tax Rate (±5%)
+    2. Depreciation Method (categorical: straight-line vs MACRS)
+    3. Distribution Delay Period (±2 years)
+    4. TLCF Carryforward Limit (±5 years)
+    5. Salvage Value (±20%)
+    
+    Integrates with tax_optimization_v14_enhanced.py for TLCF-aware analysis.
+    
+    Usage Example
+    ─────────────
+    >>> from analytics.contracts import TaxShockLibrary
+    >>> shocks = [
+    ...     TaxShockLibrary.corporate_tax_rate(0.28),
+    ...     TaxShockLibrary.depreciation_method(),
+    ...     TaxShockLibrary.distribution_delay(4),
+    ... ]
+    >>> suite = run_tax_sensitivity_analysis(shocks=shocks)
+    """
+    
+    @staticmethod
+    def corporate_tax_rate(base_rate: float = 0.28) -> ShockSpec:
+        """Corporate Tax Rate: ±5 percentage points (±500 basis points).
+        
+        DFI Compliance: OECD average corporate tax rate range 20-33%.
+        
+        Parameters
+        ----------
+        base_rate : float, default=0.28
+            Base corporate tax rate as decimal (0.28 = 28%).
+        
+        Returns
+        -------
+        ShockSpec
+            Shock with low=23%, high=33% for base_rate=28%.
+        
+        Examples
+        --------
+        >>> TaxShockLibrary.corporate_tax_rate(0.28)
+        ShockSpec(variable_name='tax.corporate_rate', low_value=0.23, high_value=0.33)
+        """
+        return ShockSpec(
+            variable_name="tax.corporate_rate",
+            low_value=max(0.0, base_rate - 0.05),  # Floor at 0%
+            high_value=min(1.0, base_rate + 0.05),  # Ceiling at 100%
+            label="Tax Rate ±5%",
+        )
+    
+    @staticmethod
+    def depreciation_method() -> ShockSpec:
+        """Depreciation Method: Categorical shock (straight-line vs MACRS).
+        
+        Categorical encoding:
+        - 0 = Straight-line depreciation (conservative)
+        - 1 = MACRS-7 (accelerated, higher early tax shields)
+        
+        Returns
+        -------
+        ShockSpec
+            Shock with low=0 (straight-line), high=1 (MACRS).
+        
+        Notes
+        -----
+        For proper evaluation, the evaluation engine must interpret:
+        - 0 → use straight-line depreciation schedule
+        - 1 → use MACRS-7 year schedule (as per IRS Rev. Proc. 2011-14)
+        
+        Examples
+        --------
+        >>> TaxShockLibrary.depreciation_method()
+        ShockSpec(variable_name='tax.depreciation_method', low_value=0.0, high_value=1.0)
+        """
+        return ShockSpec(
+            variable_name="tax.depreciation_method",
+            low_value=0.0,  # Straight-line
+            high_value=1.0,  # MACRS-7
+            label="Depreciation Method (0=SL, 1=MACRS)",
+        )
+    
+    @staticmethod
+    def distribution_delay(base_delay_years: int = 4) -> ShockSpec:
+        """Distribution Delay Period: ±2 years delay in equity distributions.
+        
+        Parameters
+        ----------
+        base_delay_years : int, default=4
+            Base distribution delay period in years.
+        
+        Returns
+        -------
+        ShockSpec
+            Shock with low=base-2 years, high=base+2 years.
+            Floors at 0 years (immediate distributions).
+            Ceilings at 10 years (extreme delay case).
+        
+        Notes
+        -----
+        Longer delays reduce equity IRR but may optimize TLCF utilization.
+        Integrates with optimize_distribution_timing_enhanced().
+        
+        Examples
+        --------
+        >>> TaxShockLibrary.distribution_delay(4)
+        ShockSpec(variable_name='tax.distribution_delay_years', low_value=2.0, high_value=6.0)
+        """
+        return ShockSpec(
+            variable_name="tax.distribution_delay_years",
+            low_value=float(max(0, base_delay_years - 2)),
+            high_value=float(min(10, base_delay_years + 2)),
+            label=f"Distribution Delay ±2yr (base={base_delay_years}yr)",
+        )
+    
+    @staticmethod
+    def tlcf_carryforward_limit(base_years: int = 20) -> ShockSpec:
+        """TLCF Carryforward Limit: ±5 years variation in carryforward period.
+        
+        Parameters
+        ----------
+        base_years : int, default=20
+            Base TLCF carryforward limit in years.
+        
+        Returns
+        -------
+        ShockSpec
+            Shock with low=base-5 years, high=base+5 years.
+            Floors at 10 years (short carryforward).
+            Ceilings at 30 years (extended carryforward).
+        
+        Notes
+        -----
+        Jurisdictions vary:
+        - US: Indefinite carryforward post-TCJA 2017 (use 30 as proxy)
+        - EU: Typically 5-10 years
+        - Emerging markets: 5-20 years
+        
+        Examples
+        --------
+        >>> TaxShockLibrary.tlcf_carryforward_limit(20)
+        ShockSpec(variable_name='tax.tlcf_carryforward_years', low_value=15.0, high_value=25.0)
+        """
+        return ShockSpec(
+            variable_name="tax.tlcf_carryforward_years",
+            low_value=float(max(10, base_years - 5)),
+            high_value=float(min(30, base_years + 5)),
+            label=f"TLCF Limit ±5yr (base={base_years}yr)",
+        )
+    
+    @staticmethod
+    def salvage_value(base_salvage: float) -> ShockSpec:
+        """Salvage Value: ±20% variation in end-of-life asset value.
+        
+        Parameters
+        ----------
+        base_salvage : float
+            Base salvage value at end of project life.
+        
+        Returns
+        -------
+        ShockSpec
+            Shock with low=80% of base, high=120% of base.
+            Floors at $0 (no salvage value).
+        
+        Notes
+        -----
+        Salvage value impacts:
+        - Terminal cash flow (equity distribution)
+        - Depreciation basis (for tax purposes)
+        - Lender recovery in stressed scenarios
+        
+        Examples
+        --------
+        >>> TaxShockLibrary.salvage_value(10e6)
+        ShockSpec(variable_name='tax.salvage_value', low_value=8000000.0, high_value=12000000.0)
+        """
+        return ShockSpec(
+            variable_name="tax.salvage_value",
+            low_value=max(0.0, base_salvage * 0.80),
+            high_value=base_salvage * 1.20,
+            label="Salvage Value ±20%",
+        )
+
+
 __all__ = [
     "ShockSpec",
     "ShockResult",
     "SensitivitySuite",
     "StandardShockLibrary",
+    "TaxShockLibrary",
 ]
