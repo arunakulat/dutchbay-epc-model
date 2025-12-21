@@ -43,6 +43,9 @@ From phase 3 (legacy):
     - ShockSpec                 # Shock specification
     - StandardShockLibrary      # Predefined shocks (7 DFI-standard)
     - TaxShockLibrary           # Tax-specific shocks (5 tax-aware)
+    - load_shock_specs_from_yaml     # OmegaConf YAML loader
+    - load_shock_specs_from_omegaconf # OmegaConf DictConfig loader
+    - build_shock_spec_from_dict     # Dict to ShockSpec converter
 
 Backward Compatibility
 ──────────────────────────────────────────────────────────────
@@ -53,7 +56,12 @@ All imports work from multiple locations:
     from analytics.contracts import ShockSpec
     
     # New way (recommended)
-    from analytics.contracts import MonteCarloScenario, ShockSpec, TaxShockLibrary
+    from analytics.contracts import (
+        MonteCarloScenario,
+        ShockSpec,
+        TaxShockLibrary,
+        load_shock_specs_from_yaml,
+    )
 
 Architecture Principles
 ──────────────────────────────────────────────────────────────
@@ -71,7 +79,14 @@ from analytics.contracts._phase_3_sensitivity import (
     ShockResult as LegacyShockResult,
     ShockSpec,
     StandardShockLibrary,
-    TaxShockLibrary,  # NEW: Tax-aware shocks
+    TaxShockLibrary,
+)
+
+# Phase 3 OmegaConf loaders (NEW)
+from analytics.contracts._phase_3_sensitivity_loaders import (
+    load_shock_specs_from_yaml,
+    load_shock_specs_from_omegaconf,
+    build_shock_spec_from_dict,
 )
 
 # Main v14 contracts (Pydantic V2)
@@ -146,7 +161,12 @@ __all__ = [
     "LegacyShockResult",
     "ShockSpec",
     "StandardShockLibrary",
-    "TaxShockLibrary",  # NEW: Tax-aware shocks
+    "TaxShockLibrary",
+    
+    # Phase 3 Loaders (NEW)
+    "load_shock_specs_from_yaml",
+    "load_shock_specs_from_omegaconf",
+    "build_shock_spec_from_dict",
 ]
 
 # EOF
