@@ -27,11 +27,11 @@ Usage:
 Output:
     JSON to stdout with:
     - status: 'success' or 'error'
-    - wind_assessment: Complete wind resource analysis
-    - aep_p50/p75/p90_mwh: Net AEP at different confidence levels
-    - revenue_annual_p75_usd: Annual revenue (lender base case)
-    - capacity_factor: Net capacity factor
-    - output_files: Paths to detailed reports
+    - scenario_result: Complete ScenarioResult with lender metrics
+    - kpis: All calculated KPIs (IRR, NPV, DSCR, LLCR, PLCR)
+    - annual_rows: Annual cashflow schedule
+    - debt_result: Debt structuring with DSCR series
+    - metrics: Pipeline execution metrics (if monitoring enabled)
 
 GWTF Compliance:
 - R3: Hydra-only (no argparse)
@@ -42,7 +42,7 @@ GWTF Compliance:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 2.0.0 (Integrated wind_resource)
+Version: 2.1.0 (Lender-Grade Pipeline)
 """
 
 from __future__ import annotations
@@ -55,7 +55,8 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 
-from analytics.pipeline_v14 import run_v14_pipeline
+# CRITICAL FIX: Import lender-grade pipeline (was: analytics.pipeline_v14)
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ _ORIG_CWD = Path.cwd()
     config_name="run_full_pipeline_v14",
 )
 def cli(cfg: DictConfig) -> None:
-    """Hydra CLI entry point for complete pipeline.
+    """Hydra CLI entry point for complete lender-grade pipeline.
     
     Args:
         cfg: Hydra configuration from conf/run_full_pipeline_v14.yaml.
@@ -85,16 +86,61 @@ def cli(cfg: DictConfig) -> None:
     Raises:
         SystemExit: If config validation fails or errors occur.
         
+    Output Structure:
+        {
+          "status": "success",
+          "config_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+          "validation_mode": "strict",
+          "scenario_result": {
+            "scenario_name": "dutchbay_lendercase_2025Q4",
+            "project_irr": 0.145,
+            "project_npv": 45000000.0,
+            "min_dscr": 1.45,
+            "dscr_series": [1.5, 1.6, 1.45, ...],
+            "max_debt_usd": 150000000.0,
+            ...
+          },
+          "kpis": {
+            "project_irr": 0.145,
+            "equity_irr": 0.185,
+            "min_dscr": 1.45,
+            "avg_dscr": 1.52,
+            "llcr": 1.85,
+            "plcr": 2.10,
+            ...
+          },
+          "annual_rows": [
+            {"year": 1, "cf_pre_debt": 15000000, "debt_service_total": 8000000, ...},
+            ...
+          ],
+          "debt_result": {
+            "min_dscr": 1.45,
+            "dscr_series": [1.5, 1.6, ...],
+            "balloon_remaining": 0.0,
+            ...
+          },
+          "metrics": {
+            "total_runtime_sec": 2.5,
+            "annual_rows_count": 25,
+            "kpis_count": 15,
+            ...
+          }
+        }
+        
     Example:
         >>> # From command line
         >>> python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
         >>> 
-        >>> # Output (JSON):
+        >>> # Output includes lender-grade metrics:
         >>> {
         >>>   "status": "success",
-        >>>   "aep_p75_mwh": 286300,
-        >>>   "revenue_annual_p75_usd": 19430000,
-        >>>   "capacity_factor_net_p75": 33.6
+        >>>   "kpis": {
+        >>>     "project_irr": 0.145,
+        >>>     "min_dscr": 1.45,
+        >>>     "llcr": 1.85
+        >>>   },
+        >>>   "annual_rows": [...],
+        >>>   "debt_result": {...}
         >>> }
     """
     # Undo Hydra's job-chdir so relative scenario paths still work from repo root.
@@ -128,7 +174,7 @@ def cli(cfg: DictConfig) -> None:
         validation_modules = list(modules_raw)
 
     try:
-        # Run the integrated pipeline
+        # Run the lender-grade pipeline (now correctly wired)
         result = run_v14_pipeline(
             config=str(config),
             validation_mode=str(validation_mode),
