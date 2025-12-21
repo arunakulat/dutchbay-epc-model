@@ -1,0 +1,137 @@
+# Project-wide default values and validation thresholds
+# All modules should load from this file instead of hardcoding values
+#
+# GWTF Compliance: CCCDIR - Configuration in Config DIRectory
+# Author: Dutch Bay EPC Model Team
+# Date: December 2025
+# Version: 1.0.0
+
+# =============================================================================
+# Currency and FX
+# =============================================================================
+fx:
+  # Default FX rate (overridden by scenarios/*.yaml)
+  start_lkr_per_usd: 375.0
+  # Annual depreciation assumptions
+  annual_depr_pct:
+    - 0.0  # Year 1 (no depr)
+    - 1.0  # Year 2 onwards
+    - 1.5
+    - 2.0
+    - 2.0
+
+# =============================================================================
+# Project Defaults
+# =============================================================================
+project:
+  life_years: 20
+  # Default capacity (overridden by scenarios)
+  capacity_mw: 97.5
+  # Wind farm specific
+  turbine_count: 15
+  turbine_rated_power_mw: 6.5
+
+# =============================================================================
+# Performance Degradation
+# =============================================================================
+degradation:
+  # Annual degradation rate (typical for wind farms)
+  annual_rate: 0.005  # 0.5% per year
+  method: "linear"  # or "exponential"
+
+# =============================================================================
+# Financial Defaults (Typical ranges - override in scenarios)
+# =============================================================================
+financial:
+  discount_rate_pct: 8.0  # WACC
+  equity_irr_target_pct: 12.0
+  
+# =============================================================================
+# Debt Defaults
+# =============================================================================
+debt:
+  # Minimum debt service coverage ratio
+  min_dscr: 1.25
+  # Typical debt ratio for wind projects
+  ratio: 0.70  # 70% debt, 30% equity
+  # Typical tenor
+  tenor_years: 15
+  # Grace period
+  grace_period_months: 18
+  # Interest rate (override in scenarios)
+  interest_rate_pct: 7.5
+
+# =============================================================================
+# Validation Thresholds
+# =============================================================================
+validation:
+  capacity_mw:
+    min: 10.0
+    max: 1000.0
+  capacity_factor:
+    min: 0.10  # 10%
+    max: 0.50  # 50%
+  wind_speed_ms:
+    min: 0.0
+    max: 35.0
+  tariff_lkr_per_kwh:
+    min: 10.0
+    max: 50.0
+
+# =============================================================================
+# Sensitivity Analysis Ranges (Industry Standard)
+# =============================================================================
+sensitivity:
+  # Format: {parameter: [low_pct, high_pct]}
+  ranges:
+    capex_usd_per_kw: [-20.0, +20.0]  # ±20% typical for Capex
+    tariff_lkr_per_kwh: [-15.0, +15.0]  # ±15% for revenue/tariff
+    capacity_factor_pct: [-10.0, +10.0]  # ±10% for generation
+    discount_rate_pct: [-3.0, +3.0]  # ±3 percentage points for WACC
+    debt_interest_rate_pct: [-2.0, +2.0]  # ±2 percentage points
+    construction_months: [-6.0, +6.0]  # ±6 months schedule risk
+    opex_pct_revenue: [-5.0, +5.0]  # ±5% for O&M costs
+    grid_loss_pct: [-2.0, +2.0]  # ±2% transmission losses
+  # Industry standard: 5 data points per sweep
+  default_steps: 5
+
+# =============================================================================
+# Monte Carlo Defaults (CFA Level III Standard)
+# =============================================================================
+monte_carlo:
+  iterations: 10000
+  seed: 42  # For reproducibility
+  confidence_levels:
+    - 0.50  # P50
+    - 0.75  # P75
+    - 0.90  # P90
+    - 0.99  # P99
+  
+# =============================================================================
+# Wind Resource Defaults (Reference values)
+# =============================================================================
+wind_resource:
+  # Default capacity factor (overridden by ERA5 data)
+  default_capacity_factor: 0.40
+  # Reference air density at sea level, 15°C
+  air_density_kgm3: 1.225
+  # Default Weibull parameters (if ERA5 unavailable)
+  default_weibull:
+    shape_k: 2.0
+    scale_c: 7.5
+
+# =============================================================================
+# Reporting Defaults
+# =============================================================================
+reporting:
+  # Number of decimal places
+  decimals:
+    currency: 2
+    percentage: 1
+    energy: 2
+    ratio: 3
+  # Export formats
+  formats:
+    - json
+    - csv
+    - excel
