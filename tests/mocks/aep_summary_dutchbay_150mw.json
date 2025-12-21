@@ -1,0 +1,95 @@
+{
+  "capacity_factor": 0.428,
+  "net_site_aep_gwh": 563.0,
+  "gross_aep_gwh": 672.0,
+  "n_turbines": 15,
+  "rated_power_kw": 10000,
+  "total_capacity_mw": 150.0,
+  "hub_height_m": 150,
+  "source_id": "ECMWF_ERA5_2020_2024_DUTCHBAY_10MW",
+  "source_type": "ECMWF",
+  "iec_standard": "IEC 61400-15-1:2025",
+  "derived_from": [
+    "OEM_ENVISION_10MW_EXTRAPOLATED_PC",
+    "ERA5_WIND_RESOURCE_DUTCHBAY",
+    "HUB_HEIGHT_EXTRAPOLATION_150M"
+  ],
+  "losses": {
+    "wake_loss_pct": 11.0,
+    "availability_pct": 97.0,
+    "electrical_loss_pct": 2.0,
+    "total_loss_pct": 16.2
+  },
+  "wind_resource": {
+    "mean_wind_speed_ms": 8.5,
+    "weibull_a": 8.9,
+    "weibull_k": 2.1,
+    "shear_exponent": 0.14,
+    "air_density_kgm3": 1.15,
+    "data_years": "2020-2024",
+    "data_source": "ECMWF ERA5 Reanalysis"
+  },
+  "turbine_config": {
+    "model": "Envision 10 MW (Extrapolated)",
+    "rated_power_kw": 10000,
+    "rotor_diameter_m": 220,
+    "hub_height_m": 150,
+    "cut_in_ms": 3.0,
+    "cut_out_ms": 25.0,
+    "rated_wind_speed_ms": 11.5,
+    "power_curve_status": "PROVISIONAL",
+    "certification_status": "AWAITING_OEM_CERTIFICATION",
+    "extrapolation_method": "cubic_power_scaling_from_EN171_65"
+  },
+  "layout": {
+    "turbine_spacing_avg_m": 650,
+    "turbine_spacing_avg_D": 3.0,
+    "iec_compliant_pairs": 6,
+    "iec_marginal_pairs": 3,
+    "iec_violation_pairs": 6,
+    "layout_orientation": "linear_north_south_coastal",
+    "coordinates_reference": "WGS84_EPSG4326",
+    "utm_zone": "44N"
+  },
+  "project_info": {
+    "name": "DutchBay Wind Farm",
+    "location": "Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka",
+    "capacity_mw": 150.0,
+    "cod_year": 2027,
+    "ppa_price_eur_mwh": 72.5,
+    "ppa_term_years": 25,
+    "grid_poi": "Puttalam 220kV Substation",
+    "developer": "DutchBay Wind Power Pvt Ltd"
+  },
+  "financial": {
+    "annual_revenue_p50_m_eur": 40.8,
+    "annual_revenue_p90_m_eur": 44.4,
+    "revenue_25yr_undiscounted_m_eur": 1020.0,
+    "capex_estimate_m_usd": 260.0,
+    "capex_per_kw_usd": 1733,
+    "opex_annual_m_usd": 3.2,
+    "opex_per_kw_yr_usd": 21.3
+  },
+  "monte_carlo": {
+    "n_scenarios": 100000,
+    "aep_p50_gwh": 563.0,
+    "aep_p75_gwh": 593.0,
+    "aep_p90_gwh": 612.0,
+    "aep_p99_gwh": 641.0,
+    "ci95_lower_gwh": 510.0,
+    "ci95_upper_gwh": 618.0,
+    "std_gwh": 27.5,
+    "cv": 0.049
+  },
+  "created_date": "2025-12-21",
+  "created_by": "analytics.loader.aep_loader",
+  "version": "2.0",
+  "notes": [
+    "10 MW turbine configuration based on 15 validated turbine locations",
+    "Power curve is PROVISIONAL (extrapolated from Envision EN-171-6.5)",
+    "OEM to provide certified 10 MW power curve for final validation",
+    "Wake losses reduced from 15% to 11% due to improved spacing with 15 turbines",
+    "Capacity factor increased from 37.5% (6.5MW×23) to 42.8% (10MW×15)",
+    "Financial model assumes PPA price of €72.5/MWh for 25 years"
+  ]
+}
