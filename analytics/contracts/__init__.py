@@ -46,6 +46,9 @@ From phase 3 (legacy):
     - load_shock_specs_from_yaml     # OmegaConf YAML loader
     - load_shock_specs_from_omegaconf # OmegaConf DictConfig loader
     - build_shock_spec_from_dict     # Dict to ShockSpec converter
+    - ScenarioSpec              # Multi-variable scenario spec
+    - ScenarioResult            # Multi-variable scenario result
+    - MultiScenarioSuite        # Collection of scenarios
 
 Backward Compatibility
 ──────────────────────────────────────────────────────────────
@@ -61,6 +64,8 @@ All imports work from multiple locations:
         ShockSpec,
         TaxShockLibrary,
         load_shock_specs_from_yaml,
+        ScenarioSpec,
+        MultiScenarioSuite,
     )
 
 Architecture Principles
@@ -80,9 +85,13 @@ from analytics.contracts._phase_3_sensitivity import (
     ShockSpec,
     StandardShockLibrary,
     TaxShockLibrary,
+    # Multi-variable scenarios (NEW)
+    ScenarioSpec,
+    ScenarioResult as Phase3ScenarioResult,
+    MultiScenarioSuite,
 )
 
-# Phase 3 OmegaConf loaders (NEW)
+# Phase 3 OmegaConf loaders
 from analytics.contracts._phase_3_sensitivity_loaders import (
     load_shock_specs_from_yaml,
     load_shock_specs_from_omegaconf,
@@ -163,10 +172,15 @@ __all__ = [
     "StandardShockLibrary",
     "TaxShockLibrary",
     
-    # Phase 3 Loaders (NEW)
+    # Phase 3 Loaders
     "load_shock_specs_from_yaml",
     "load_shock_specs_from_omegaconf",
     "build_shock_spec_from_dict",
+    
+    # Multi-variable scenarios (NEW)
+    "ScenarioSpec",
+    "Phase3ScenarioResult",
+    "MultiScenarioSuite",
 ]
 
 # EOF
