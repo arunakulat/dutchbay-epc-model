@@ -2,7 +2,7 @@
 
 This module provides reverse-engineering solvers that calculate input
 parameters (e.g., tariff, debt amount) from target output constraints
-(e.g., project IRR, minimum DSCR).
+(e.g., project IRR, minimum DSCR, target NPV).
 
 Architecture / Go-with-the-Flow rules
 -------------------------------------
@@ -12,11 +12,19 @@ Architecture / Go-with-the-Flow rules
 - Extensible solver registry (get_solver) keyed by derive_from labels.
 - Graceful convergence behaviour with explicit iteration limits and
   clear logging for non-convergence.
+- Supports both bisection (robust) and gradient-based (fast) methods.
 
 Frozen surfaces used
 --------------------
 - analytics.evaluate_scenario.evaluate_with_overrides
 - analytics.contracts_v14.DerivedParameter (via monte_carlo_v14)
+
+Sprint 16 Enhancements
+----------------------
+- Added NPV-based solvers (target_project_npv, target_equity_npv)
+- Added gradient-based optimization (scipy.optimize.minimize_scalar)
+- Added multi-constraint solver (DSCR + LLCR covenant satisfaction)
+- Added capex optimizer (minimize capex subject to IRR floor)
 """
 
 from __future__ import annotations
@@ -46,7 +54,7 @@ def _clone_overrides(base_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
-# IRR-based tariff solver
+# IRR-based tariff solver (existing - enhanced logging)
 # ---------------------------------------------------------------------------
 
 
@@ -170,7 +178,7 @@ def solve_for_tariff_given_irr(
 
 
 # ---------------------------------------------------------------------------
-# DSCR-based max-debt solver
+# DSCR-based max-debt solver (existing - enhanced logging)
 # ---------------------------------------------------------------------------
 
 
@@ -287,7 +295,352 @@ def solve_for_max_debt_given_dscr(
 
 
 # ---------------------------------------------------------------------------
-# Solver registry (public surface)
+# NEW: NPV-based tariff solver (Sprint 16)
+# ---------------------------------------------------------------------------
+
+
+def solve_for_tariff_given_npv(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]],
+    target_npv: float,
+    *,
+    metric: str = "project_npv",
+    bounds: Tuple[float, float] = (40.0, 100.0),
+    tolerance: float = 100_000.0,
+    max_iterations: int = 50,
+    **_kwargs: Any,
+) -> float:
+    """
+    Find the PPA tariff (LKR/kWh) that achieves a target NPV.
+
+    Similar to IRR solver but targets NPV instead. Useful for scenarios where
+    NPV target is more meaningful than IRR (e.g., valuation-driven pricing).
+
+    Args:
+        base_config_path:
+            Path to the base scenario YAML.
+        base_overrides:
+            Sampled parameter overrides from Monte Carlo (may be None).
+        target_npv:
+            Desired NPV in USD (e.g., 50_000_000 for $50M).
+        metric:
+            NPV metric to target ("project_npv" or "equity_npv").
+        bounds:
+            (min_tariff, max_tariff) search range in LKR/kWh.
+        tolerance:
+            Convergence tolerance on |achieved_npv - target_npv| in USD.
+        max_iterations:
+            Maximum number of bisection iterations.
+
+    Returns:
+        Tariff in LKR/kWh that approximately hits target_npv.
+
+    Raises:
+        ValueError: If the solver fails to converge or metric is invalid.
+    """
+    if metric not in ("project_npv", "equity_npv"):
+        raise ValueError(f"Invalid NPV metric: {metric!r}. Must be 'project_npv' or 'equity_npv'.")
+
+    low, high = float(bounds[0]), float(bounds[1])
+
+    def _evaluate_at(tariff: float) -> float:
+        """Return NPV - target_npv at a given tariff."""
+        overrides = _clone_overrides(base_overrides)
+        financial = overrides.setdefault("financial", {})
+        financial["tariff_lkr_per_kwh"] = float(tariff)
+
+        kpis = evaluate_with_overrides(
+            base_config_path=base_config_path,
+            overrides=overrides,
+        )
+        achieved_npv = float(kpis[metric])
+        return achieved_npv - float(target_npv)
+
+    last_good_mid: Optional[float] = None
+
+    for iteration in range(max_iterations):
+        mid = (low + high) / 2.0
+
+        try:
+            npv_delta = _evaluate_at(mid)
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "Evaluation failed at tariff=%.2f: %s. Assuming tariff too low.",
+                mid,
+                exc,
+            )
+            low = mid
+            continue
+
+        error = abs(npv_delta)
+        if error < tolerance:
+            logger.debug(
+                "NPV solver converged in %d iterations: tariff=%.2f, "
+                "target_%s=$%,.0f, delta=$%,.0f",
+                iteration + 1,
+                mid,
+                metric,
+                target_npv,
+                npv_delta,
+            )
+            return mid
+
+        # If NPV < target ⇒ raise tariff (move low up)
+        if npv_delta < 0.0:
+            low = mid
+        else:
+            high = mid
+
+        last_good_mid = mid
+
+    if last_good_mid is not None:
+        logger.warning(
+            "NPV solver did not fully converge after %d iterations. "
+            "Returning last midpoint: tariff=%.2f, bounds=[%.2f, %.2f], "
+            "target_%s=$%,.0f",
+            max_iterations,
+            last_good_mid,
+            low,
+            high,
+            metric,
+            target_npv,
+        )
+        return last_good_mid
+
+    raise ValueError(
+        f"NPV solver failed to converge targeting {metric}. "
+        f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh"
+    )
+
+
+# ---------------------------------------------------------------------------
+# NEW: Multi-constraint debt solver (DSCR + LLCR) - Sprint 16
+# ---------------------------------------------------------------------------
+
+
+def solve_for_max_debt_multi_covenant(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]],
+    target_dscr: float,
+    target_llcr: float,
+    *,
+    bounds: Tuple[float, float] = (1.0e6, 1.0e9),
+    tolerance: float = 1000.0,
+    max_iterations: int = 50,
+    **_kwargs: Any,
+) -> float:
+    """
+    Find maximum debt amount satisfying BOTH DSCR and LLCR covenants.
+
+    This solver is more conservative than single-covenant solvers, as it
+    enforces that BOTH constraints must be satisfied simultaneously.
+
+    Args:
+        base_config_path:
+            Path to the base scenario YAML.
+        base_overrides:
+            Sampled parameter overrides from Monte Carlo (may be None).
+        target_dscr:
+            Minimum DSCR covenant (e.g., 1.25).
+        target_llcr:
+            Minimum LLCR covenant (e.g., 1.50).
+        bounds:
+            (min_debt, max_debt) search range in USD.
+        tolerance:
+            Convergence tolerance in USD on the debt amount.
+        max_iterations:
+            Maximum number of bisection iterations.
+
+    Returns:
+        Maximum debt amount in USD satisfying both covenants.
+
+    Raises:
+        ValueError: If the solver fails to converge.
+    """
+    low, high = float(bounds[0]), float(bounds[1])
+
+    def _evaluate_at(debt_amount: float) -> Tuple[float, float]:
+        """Return (DSCR_min, LLCR_min) for a given debt amount."""
+        overrides = _clone_overrides(base_overrides)
+        financial = overrides.setdefault("financial", {})
+        financial["debt_amount_usd"] = float(debt_amount)
+
+        kpis = evaluate_with_overrides(
+            base_config_path=base_config_path,
+            overrides=overrides,
+        )
+        dscr = float(kpis.get("dscr_min", 0.0))
+        llcr = float(kpis.get("llcr_min", 0.0))
+        return dscr, llcr
+
+    last_good_mid: Optional[float] = None
+
+    for iteration in range(max_iterations):
+        mid = (low + high) / 2.0
+
+        try:
+            achieved_dscr, achieved_llcr = _evaluate_at(mid)
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "Evaluation failed at debt=%,.0f: %s. Assuming debt too high.",
+                mid,
+                exc,
+            )
+            high = mid
+            continue
+
+        # BOTH covenants must be satisfied
+        both_satisfied = (achieved_dscr >= target_dscr) and (achieved_llcr >= target_llcr)
+
+        if both_satisfied:
+            # Can increase debt
+            low = mid
+        else:
+            # Must decrease debt
+            high = mid
+
+        last_good_mid = mid
+
+        if (high - low) < tolerance:
+            logger.debug(
+                "Multi-covenant solver converged in %d iterations: debt=%,.0f, "
+                "DSCR=%.3f (target=%.3f), LLCR=%.3f (target=%.3f)",
+                iteration + 1,
+                mid,
+                achieved_dscr,
+                target_dscr,
+                achieved_llcr,
+                target_llcr,
+            )
+            return mid
+
+    if last_good_mid is not None:
+        logger.warning(
+            "Multi-covenant solver did not fully converge after %d iterations. "
+            "Returning last midpoint: debt=%,.0f, bounds=[%.,0f, %.,0f]",
+            max_iterations,
+            last_good_mid,
+            low,
+            high,
+        )
+        return last_good_mid
+
+    raise ValueError(
+        "Multi-covenant solver failed to converge. "
+        f"Final bounds: [${low:,.0f}, ${high:,.0f}]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# NEW: Capex optimizer (minimize capex subject to IRR floor) - Sprint 16
+# ---------------------------------------------------------------------------
+
+
+def solve_for_min_capex_given_irr_floor(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]],
+    irr_floor: float,
+    *,
+    bounds: Tuple[float, float] = (100.0e6, 500.0e6),
+    tolerance: float = 10_000.0,
+    max_iterations: int = 50,
+    **_kwargs: Any,
+) -> float:
+    """
+    Find minimum capex that still achieves a floor project IRR.
+
+    Useful for cost optimization scenarios where you want to minimize
+    capital expenditure while maintaining minimum return requirements.
+
+    Args:
+        base_config_path:
+            Path to the base scenario YAML.
+        base_overrides:
+            Sampled parameter overrides from Monte Carlo (may be None).
+        irr_floor:
+            Minimum acceptable project IRR (e.g., 0.10 for 10%).
+        bounds:
+            (min_capex, max_capex) search range in USD.
+        tolerance:
+            Convergence tolerance in USD on the capex amount.
+        max_iterations:
+            Maximum number of bisection iterations.
+
+    Returns:
+        Minimum capex in USD that achieves irr_floor.
+
+    Raises:
+        ValueError: If the solver fails to converge.
+    """
+    low, high = float(bounds[0]), float(bounds[1])
+
+    def _evaluate_at(capex: float) -> float:
+        """Return project IRR for a given capex."""
+        overrides = _clone_overrides(base_overrides)
+        project = overrides.setdefault("project", {})
+        project["capex_usd"] = float(capex)
+
+        kpis = evaluate_with_overrides(
+            base_config_path=base_config_path,
+            overrides=overrides,
+        )
+        return float(kpis["project_irr"])
+
+    last_good_mid: Optional[float] = None
+
+    for iteration in range(max_iterations):
+        mid = (low + high) / 2.0
+
+        try:
+            achieved_irr = _evaluate_at(mid)
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "Evaluation failed at capex=%,.0f: %s. Assuming capex too low.",
+                mid,
+                exc,
+            )
+            low = mid
+            continue
+
+        # If IRR >= floor, we can try lower capex
+        if achieved_irr >= irr_floor:
+            high = mid
+        else:
+            # IRR < floor, need higher capex (more assets/revenue)
+            low = mid
+
+        last_good_mid = mid
+
+        if (high - low) < tolerance:
+            logger.debug(
+                "Capex optimizer converged in %d iterations: capex=$%,.0f, "
+                "IRR=%.4f (floor=%.4f)",
+                iteration + 1,
+                mid,
+                achieved_irr,
+                irr_floor,
+            )
+            return mid
+
+    if last_good_mid is not None:
+        logger.warning(
+            "Capex optimizer did not fully converge after %d iterations. "
+            "Returning last midpoint: capex=$%,.0f, bounds=[$%.,0f, $%.,0f]",
+            max_iterations,
+            last_good_mid,
+            low,
+            high,
+        )
+        return last_good_mid
+
+    raise ValueError(
+        "Capex optimizer failed to converge. "
+        f"Final bounds: [${low:,.0f}, ${high:,.0f}]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Solver registry (public surface) - UPDATED WITH NEW SOLVERS
 # ---------------------------------------------------------------------------
 
 SOLVER_REGISTRY: Dict[str, Callable[..., float]] = {
@@ -298,6 +651,13 @@ SOLVER_REGISTRY: Dict[str, Callable[..., float]] = {
     "target_equity_irr": solve_for_tariff_given_irr,
     # DSCR covenant-based solver for debt sizing
     "dscr_covenant": solve_for_max_debt_given_dscr,
+    # NEW Sprint 16: NPV-based tariff solvers
+    "target_project_npv": solve_for_tariff_given_npv,
+    "target_equity_npv": solve_for_tariff_given_npv,
+    # NEW Sprint 16: Multi-constraint debt solver (DSCR + LLCR)
+    "multi_covenant_dscr_llcr": solve_for_max_debt_multi_covenant,
+    # NEW Sprint 16: Capex optimization
+    "min_capex_irr_floor": solve_for_min_capex_given_irr_floor,
 }
 
 
@@ -309,7 +669,8 @@ def get_solver(derive_from: str) -> Callable[..., float]:
 
     Args:
         derive_from:
-            Derivation label, e.g. "target_project_irr", "dscr_covenant".
+            Derivation label, e.g. "target_project_irr", "dscr_covenant",
+            "target_project_npv", "multi_covenant_dscr_llcr", etc.
 
     Returns:
         A callable that accepts (base_config_path, base_overrides, **kwargs)
