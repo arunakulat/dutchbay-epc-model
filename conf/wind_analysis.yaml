@@ -1,0 +1,33 @@
+# Hydra config for run_wind_analysis_v14.py
+# Complete wind resource assessment with statistical analysis and energy calculations
+
+# Location name from wind_resource/config/locations.yaml
+# Override on CLI: location=dutchbay
+location: ""
+
+# Date range for ERA5 data
+start_date: "2014-12-01"
+end_date: "2025-12-31"
+
+# Hub height for extrapolation (meters)
+hub_height: 150.0
+
+# Turbine model from power_curves.yaml
+# Override on CLI: turbine_model=vestas_v150_5p6
+turbine_model: "envision_en171_6p5"
+
+# Number of turbines in wind farm
+num_turbines: 15
+
+# Force re-download of ERA5 data even if cached
+force_download: false
+
+# Directory for ERA5 data cache
+cache_dir: "inputs/wind_data"
+
+# Output directory for analysis results
+output_dir: "outputs/wind_assessment"
+
+# P-level scenario for cashflow export (P50, P75, or P90)
+# P75 is typically the lender base case
+export_scenario: "P75"
