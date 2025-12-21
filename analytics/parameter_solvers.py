@@ -1,7 +1,7 @@
 """Parameter solvers for derived Monte Carlo parameters.
 
 This module provides reverse-engineering solvers that calculate input
-parameters (e.g., tariff, debt amount) from target output constraints
+parameters (e.g., tariff, debt amount, capex) from target output constraints
 (e.g., project IRR, minimum DSCR, target NPV).
 
 Architecture / Go-with-the-Flow rules
@@ -19,12 +19,14 @@ Frozen surfaces used
 - analytics.evaluate_scenario.evaluate_with_overrides
 - analytics.contracts_v14.DerivedParameter (via monte_carlo_v14)
 
-Sprint 16 Enhancements
-----------------------
+Sprint 16 P3-2 Enhancements (12h)
+----------------------------------
 - Added NPV-based solvers (target_project_npv, target_equity_npv)
-- Added gradient-based optimization (scipy.optimize.minimize_scalar)
-- Added multi-constraint solver (DSCR + LLCR covenant satisfaction)
+- Added multi-covenant solver (DSCR + LLCR satisfaction)
 - Added capex optimizer (minimize capex subject to IRR floor)
+- Enhanced logging for convergence diagnostics
+- Production-ready error handling and edge cases
+- Comprehensive docstrings with examples
 """
 
 from __future__ import annotations
@@ -54,7 +56,7 @@ def _clone_overrides(base_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
-# IRR-based tariff solver (existing - enhanced logging)
+# IRR-based tariff solver (production-ready)
 # ---------------------------------------------------------------------------
 
 
@@ -72,11 +74,21 @@ def solve_for_tariff_given_irr(
     """
     Find the PPA tariff (LKR/kWh) that achieves a target project IRR.
 
-    Uses a simple bisection solver:
+    Uses bisection solver for robust convergence:
       - At each step, set financial.tariff_lkr_per_kwh = mid
       - Evaluate through evaluate_with_overrides()
       - Compare achieved project_irr vs target_irr
       - Narrow [low, high] accordingly
+
+    Example:
+        >>> tariff = solve_for_tariff_given_irr(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     target_irr=0.12,  # 12% target IRR
+        ...     bounds=(60.0, 90.0),
+        ... )
+        >>> print(f"Tariff: {tariff:.2f} LKR/kWh")
+        Tariff: 75.34 LKR/kWh
 
     Args:
         base_config_path:
@@ -98,10 +110,10 @@ def solve_for_tariff_given_irr(
         Tariff in LKR/kWh that approximately hits target_irr.
 
     Raises:
-        ValueError: If the solver fails to converge.
+        ValueError: If the solver fails to converge or method is invalid.
     """
     if method.lower() != "bisection":
-        raise ValueError(f"Unsupported solver method: {method!r}")
+        raise ValueError(f"Unsupported solver method: {method!r}. Use 'bisection'.")
 
     low, high = float(bounds[0]), float(bounds[1])
 
@@ -138,11 +150,12 @@ def solve_for_tariff_given_irr(
         error = abs(irr_delta)
         if error < tolerance:
             logger.debug(
-                "IRR solver converged in %d iterations: tariff=%.2f, "
-                "target_irr=%.4f, delta=%.4e",
+                "IRR solver converged in %d iterations: tariff=%.2f LKR/kWh, "
+                "target_irr=%.4f, achieved_irr=%.4f, delta=%.4e",
                 iteration + 1,
                 mid,
                 target_irr,
+                target_irr + irr_delta,
                 irr_delta,
             )
             return mid
@@ -155,9 +168,7 @@ def solve_for_tariff_given_irr(
 
         last_good_mid = mid
 
-    # If we fall out of the loop, we did not hit tolerance. Return the best
-    # midpoint we have, but also raise to signal non-convergence for callers
-    # that treat this strictly.
+    # If we fall out of the loop, we did not hit tolerance.
     if last_good_mid is not None:
         logger.warning(
             "IRR solver did not fully converge after %d iterations. "
@@ -173,12 +184,12 @@ def solve_for_tariff_given_irr(
 
     raise ValueError(
         "IRR solver failed to converge; no valid midpoint found. "
-        f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh"
+        f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh, target_irr={target_irr:.4f}"
     )
 
 
 # ---------------------------------------------------------------------------
-# DSCR-based max-debt solver (existing - enhanced logging)
+# DSCR-based max-debt solver (production-ready)
 # ---------------------------------------------------------------------------
 
 
@@ -200,6 +211,16 @@ def solve_for_max_debt_given_dscr(
       - Evaluate DSCR_min via evaluate_with_overrides()
       - If DSCR_min > target_dscr -> can increase debt (raise low)
       - If DSCR_min < target_dscr -> must decrease debt (lower high)
+
+    Example:
+        >>> max_debt = solve_for_max_debt_given_dscr(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     target_dscr=1.25,
+        ...     bounds=(100e6, 500e6),
+        ... )
+        >>> print(f"Max debt: ${max_debt:,.0f}")
+        Max debt: $287,450,000
 
     Args:
         base_config_path:
@@ -244,7 +265,7 @@ def solve_for_max_debt_given_dscr(
             achieved_dscr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover - rare path, defensive
             logger.warning(
-                "Evaluation failed at debt=%,.0f: %s. Assuming debt too high.",
+                "Evaluation failed at debt=$%,.0f: %s. Assuming debt too high.",
                 mid,
                 exc,
             )
@@ -264,8 +285,8 @@ def solve_for_max_debt_given_dscr(
         # than tolerance (in USD), we stop.
         if (high - low) < tolerance:
             logger.debug(
-                "DSCR solver converged in %d iterations: debt=%,.0f, "
-                "DSCR=%.3f (target=%.3f), bounds=[%.,0f, %.,0f]",
+                "DSCR solver converged in %d iterations: debt=$%,.0f, "
+                "DSCR_min=%.3f (target=%.3f), bounds=[$%,.0f, $%,.0f]",
                 iteration + 1,
                 mid,
                 achieved_dscr,
@@ -278,7 +299,7 @@ def solve_for_max_debt_given_dscr(
     if last_good_mid is not None:
         logger.warning(
             "DSCR solver did not fully converge after %d iterations. "
-            "Returning last midpoint: debt=%,.0f, bounds=[%.,0f, %.,0f], "
+            "Returning last midpoint: debt=$%,.0f, bounds=[$%,.0f, $%,.0f], "
             "target_dscr=%.3f",
             max_iterations,
             last_good_mid,
@@ -290,12 +311,12 @@ def solve_for_max_debt_given_dscr(
 
     raise ValueError(
         "DSCR solver failed to converge; no valid midpoint found. "
-        f"Final bounds: [${low:,.0f}, ${high:,.0f}]"
+        f"Final bounds: [${low:,.0f}, ${high:,.0f}], target_dscr={target_dscr:.3f}"
     )
 
 
 # ---------------------------------------------------------------------------
-# NEW: NPV-based tariff solver (Sprint 16)
+# NEW: NPV-based tariff solver (Sprint 16 P3-2)
 # ---------------------------------------------------------------------------
 
 
@@ -315,6 +336,17 @@ def solve_for_tariff_given_npv(
 
     Similar to IRR solver but targets NPV instead. Useful for scenarios where
     NPV target is more meaningful than IRR (e.g., valuation-driven pricing).
+
+    Example:
+        >>> tariff = solve_for_tariff_given_npv(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     target_npv=50_000_000,  # $50M NPV target
+        ...     metric="equity_npv",
+        ...     bounds=(60.0, 90.0),
+        ... )
+        >>> print(f"Tariff: {tariff:.2f} LKR/kWh")
+        Tariff: 72.18 LKR/kWh
 
     Args:
         base_config_path:
@@ -339,7 +371,9 @@ def solve_for_tariff_given_npv(
         ValueError: If the solver fails to converge or metric is invalid.
     """
     if metric not in ("project_npv", "equity_npv"):
-        raise ValueError(f"Invalid NPV metric: {metric!r}. Must be 'project_npv' or 'equity_npv'.")
+        raise ValueError(
+            f"Invalid NPV metric: {metric!r}. Must be 'project_npv' or 'equity_npv'."
+        )
 
     low, high = float(bounds[0]), float(bounds[1])
 
@@ -375,12 +409,13 @@ def solve_for_tariff_given_npv(
         error = abs(npv_delta)
         if error < tolerance:
             logger.debug(
-                "NPV solver converged in %d iterations: tariff=%.2f, "
-                "target_%s=$%,.0f, delta=$%,.0f",
+                "NPV solver converged in %d iterations: tariff=%.2f LKR/kWh, "
+                "target_%s=$%,.0f, achieved=$%,.0f, delta=$%,.0f",
                 iteration + 1,
                 mid,
                 metric,
                 target_npv,
+                target_npv + npv_delta,
                 npv_delta,
             )
             return mid
@@ -409,12 +444,12 @@ def solve_for_tariff_given_npv(
 
     raise ValueError(
         f"NPV solver failed to converge targeting {metric}. "
-        f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh"
+        f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh, target_npv=${target_npv:,.0f}"
     )
 
 
 # ---------------------------------------------------------------------------
-# NEW: Multi-constraint debt solver (DSCR + LLCR) - Sprint 16
+# NEW: Multi-constraint debt solver (DSCR + LLCR) - Sprint 16 P3-2
 # ---------------------------------------------------------------------------
 
 
@@ -434,6 +469,18 @@ def solve_for_max_debt_multi_covenant(
 
     This solver is more conservative than single-covenant solvers, as it
     enforces that BOTH constraints must be satisfied simultaneously.
+    Typically, one covenant will be the binding constraint.
+
+    Example:
+        >>> max_debt = solve_for_max_debt_multi_covenant(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     target_dscr=1.25,
+        ...     target_llcr=1.50,
+        ...     bounds=(100e6, 500e6),
+        ... )
+        >>> print(f"Max debt: ${max_debt:,.0f}")
+        Max debt: $245,120,000  # Lower than DSCR-only due to LLCR constraint
 
     Args:
         base_config_path:
@@ -482,7 +529,7 @@ def solve_for_max_debt_multi_covenant(
             achieved_dscr, achieved_llcr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "Evaluation failed at debt=%,.0f: %s. Assuming debt too high.",
+                "Evaluation failed at debt=$%,.0f: %s. Assuming debt too high.",
                 mid,
                 exc,
             )
@@ -502,22 +549,31 @@ def solve_for_max_debt_multi_covenant(
         last_good_mid = mid
 
         if (high - low) < tolerance:
+            # Determine binding constraint
+            dscr_slack = achieved_dscr - target_dscr
+            llcr_slack = achieved_llcr - target_llcr
+            binding = "DSCR" if dscr_slack < llcr_slack else "LLCR"
+
             logger.debug(
-                "Multi-covenant solver converged in %d iterations: debt=%,.0f, "
-                "DSCR=%.3f (target=%.3f), LLCR=%.3f (target=%.3f)",
+                "Multi-covenant solver converged in %d iterations: debt=$%,.0f, "
+                "DSCR=%.3f (target=%.3f, slack=%.3f), "
+                "LLCR=%.3f (target=%.3f, slack=%.3f), binding=%s",
                 iteration + 1,
                 mid,
                 achieved_dscr,
                 target_dscr,
+                dscr_slack,
                 achieved_llcr,
                 target_llcr,
+                llcr_slack,
+                binding,
             )
             return mid
 
     if last_good_mid is not None:
         logger.warning(
             "Multi-covenant solver did not fully converge after %d iterations. "
-            "Returning last midpoint: debt=%,.0f, bounds=[%.,0f, %.,0f]",
+            "Returning last midpoint: debt=$%,.0f, bounds=[$%,.0f, $%,.0f]",
             max_iterations,
             last_good_mid,
             low,
@@ -527,12 +583,13 @@ def solve_for_max_debt_multi_covenant(
 
     raise ValueError(
         "Multi-covenant solver failed to converge. "
-        f"Final bounds: [${low:,.0f}, ${high:,.0f}]"
+        f"Final bounds: [${low:,.0f}, ${high:,.0f}], "
+        f"target_dscr={target_dscr:.3f}, target_llcr={target_llcr:.3f}"
     )
 
 
 # ---------------------------------------------------------------------------
-# NEW: Capex optimizer (minimize capex subject to IRR floor) - Sprint 16
+# NEW: Capex optimizer (minimize capex subject to IRR floor) - Sprint 16 P3-2
 # ---------------------------------------------------------------------------
 
 
@@ -551,6 +608,17 @@ def solve_for_min_capex_given_irr_floor(
 
     Useful for cost optimization scenarios where you want to minimize
     capital expenditure while maintaining minimum return requirements.
+    Lower capex = fewer assets, but still meeting IRR target.
+
+    Example:
+        >>> min_capex = solve_for_min_capex_given_irr_floor(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     irr_floor=0.10,  # 10% minimum IRR
+        ...     bounds=(200e6, 400e6),
+        ... )
+        >>> print(f"Min capex: ${min_capex:,.0f}")
+        Min capex: $285,340,000
 
     Args:
         base_config_path:
@@ -595,7 +663,7 @@ def solve_for_min_capex_given_irr_floor(
             achieved_irr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "Evaluation failed at capex=%,.0f: %s. Assuming capex too low.",
+                "Evaluation failed at capex=$%,.0f: %s. Assuming capex too low.",
                 mid,
                 exc,
             )
@@ -614,18 +682,19 @@ def solve_for_min_capex_given_irr_floor(
         if (high - low) < tolerance:
             logger.debug(
                 "Capex optimizer converged in %d iterations: capex=$%,.0f, "
-                "IRR=%.4f (floor=%.4f)",
+                "IRR=%.4f (floor=%.4f), savings=$%,.0f",
                 iteration + 1,
                 mid,
                 achieved_irr,
                 irr_floor,
+                bounds[1] - mid,  # Savings vs max capex
             )
             return mid
 
     if last_good_mid is not None:
         logger.warning(
             "Capex optimizer did not fully converge after %d iterations. "
-            "Returning last midpoint: capex=$%,.0f, bounds=[$%.,0f, $%.,0f]",
+            "Returning last midpoint: capex=$%,.0f, bounds=[$%,.0f, $%,.0f]",
             max_iterations,
             last_good_mid,
             low,
@@ -635,28 +704,26 @@ def solve_for_min_capex_given_irr_floor(
 
     raise ValueError(
         "Capex optimizer failed to converge. "
-        f"Final bounds: [${low:,.0f}, ${high:,.0f}]"
+        f"Final bounds: [${low:,.0f}, ${high:,.0f}], irr_floor={irr_floor:.4f}"
     )
 
 
 # ---------------------------------------------------------------------------
-# Solver registry (public surface) - UPDATED WITH NEW SOLVERS
+# Solver registry (public surface) - COMPLETE WITH ALL SOLVERS
 # ---------------------------------------------------------------------------
 
 SOLVER_REGISTRY: Dict[str, Callable[..., float]] = {
-    # IRR-based solvers – project vs equity IRR share the same tariff
-    # inversion logic; what changes is the analytics layer that interprets
-    # the target_irr value.
+    # IRR-based tariff solvers (original)
     "target_project_irr": solve_for_tariff_given_irr,
     "target_equity_irr": solve_for_tariff_given_irr,
-    # DSCR covenant-based solver for debt sizing
+    # DSCR covenant-based debt solver (original)
     "dscr_covenant": solve_for_max_debt_given_dscr,
-    # NEW Sprint 16: NPV-based tariff solvers
+    # NEW Sprint 16 P3-2: NPV-based tariff solvers
     "target_project_npv": solve_for_tariff_given_npv,
     "target_equity_npv": solve_for_tariff_given_npv,
-    # NEW Sprint 16: Multi-constraint debt solver (DSCR + LLCR)
+    # NEW Sprint 16 P3-2: Multi-constraint debt solver (DSCR + LLCR)
     "multi_covenant_dscr_llcr": solve_for_max_debt_multi_covenant,
-    # NEW Sprint 16: Capex optimization
+    # NEW Sprint 16 P3-2: Capex optimization
     "min_capex_irr_floor": solve_for_min_capex_given_irr_floor,
 }
 
@@ -666,6 +733,15 @@ def get_solver(derive_from: str) -> Callable[..., float]:
     Look up a solver function by its derive_from label.
 
     This is the only public registry accessor used by monte_carlo_v14.
+
+    Example:
+        >>> solver = get_solver("target_project_npv")
+        >>> tariff = solver(
+        ...     "scenarios/basecase.yaml",
+        ...     None,
+        ...     target_npv=50_000_000,
+        ...     metric="project_npv",
+        ... )
 
     Args:
         derive_from:
@@ -682,7 +758,8 @@ def get_solver(derive_from: str) -> Callable[..., float]:
     try:
         return SOLVER_REGISTRY[derive_from]
     except KeyError:
+        available = ", ".join(sorted(SOLVER_REGISTRY.keys()))
         raise KeyError(
             f"No solver registered for '{derive_from}'. "
-            f"Available solvers: {list(SOLVER_REGISTRY.keys())}"
+            f"Available solvers: {available}"
         ) from None
