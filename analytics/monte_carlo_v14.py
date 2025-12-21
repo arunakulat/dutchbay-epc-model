@@ -64,7 +64,12 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from scipy.stats import qmc  # Sprint 16: Latin Hypercube Sampling
 
-from analytics.contracts_v14 import MonteCarloResult  # Sprint 16: Use Pydantic contract
+from analytics.contracts_v14 import (
+    DerivedParameter,
+    Distribution,
+    MonteCarloResult,
+    MonteCarloScenario,
+)
 from analytics.schema_guard import validate_config_for_v14
 from finance.irr import irr, npv  # R7: IRR/NPV from finance.irr ONLY *** CRITICAL ***
 
@@ -92,6 +97,11 @@ class MonteCarloConfig:
     sampling_method: str = "lhs"  # lhs, random, sobol
     seed: Optional[int] = None
     success: bool = True
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS (Sprint 16: Issue #43 Resolution)
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 def _aggregate_results(
@@ -183,6 +193,252 @@ def _transform_to_distribution(
     
     std = mean * (std_pct / 100.0)
     return float(norm.ppf(unit_value, loc=mean, scale=std))
+
+
+def _build_samples_for_scenario(
+    config: Dict[str, Any],
+    n_iterations: int,
+    stochastic_variables: List[str],
+    seed: Optional[int] = None,
+) -> List[Dict[str, float]]:
+    """Build Latin Hypercube Samples for Monte Carlo simulation.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+
+    Args:
+        config: Base configuration dictionary
+        n_iterations: Number of Monte Carlo samples
+        stochastic_variables: List of variable paths to vary
+        seed: Random seed for reproducibility
+
+    Returns:
+        List of parameter dictionaries (one per iteration)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Latin Hypercube Sampling
+    sampler = qmc.LatinHypercube(d=len(stochastic_variables), seed=seed)
+    unit_samples = sampler.random(n=n_iterations)
+
+    # Transform to parameter samples
+    samples = []
+    for unit_sample in unit_samples:
+        sample_dict = {}
+        for i, var_name in enumerate(stochastic_variables):
+            # Map [0,1] to ±20% around base value
+            base_value = config.get(var_name, 1.0)
+            variation = (unit_sample[i] - 0.5) * 0.4  # ±20%
+            sample_dict[var_name] = base_value * (1 + variation)
+        samples.append(sample_dict)
+
+    return samples
+
+
+def _compute_global_param_names(
+    distributions: Dict[str, Distribution],
+    derived_params: List[DerivedParameter],
+) -> List[str]:
+    """Get all parameter names for Common Random Numbers (CRN).
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        distributions: Variable name -> Distribution mapping
+        derived_params: List of derived parameters
+    
+    Returns:
+        Sorted list of all parameter names (sampled + derived)
+    """
+    sampled_names = list(distributions.keys())
+    derived_names = [p.name for p in derived_params]
+    return sorted(sampled_names + derived_names)
+
+
+def _load_monte_carlo_config(config_dict: Dict[str, Any]) -> MonteCarloScenario:
+    """Load and validate MC YAML config.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        config_dict: Raw config dictionary from YAML
+    
+    Returns:
+        Validated MonteCarloScenario contract
+    
+    Raises:
+        ValueError: If required keys missing or validation fails
+    """
+    mc_section = config_dict.get("monte_carlo")
+    if not mc_section:
+        raise ValueError("Config missing 'monte_carlo' section")
+    
+    # Parse distributions
+    distributions = _parse_distributions(mc_section.get("distributions", {}))
+    
+    # Parse derived parameters
+    derived_params = _parse_derived_parameters(
+        mc_section.get("derived_parameters", [])
+    )
+    
+    return MonteCarloScenario(
+        scenario_name=mc_section.get("scenario_name", "default"),
+        n_iterations=int(mc_section.get("n_iterations", 1000)),
+        sampling_method=mc_section.get("sampling_method", "lhs"),
+        seed=mc_section.get("seed"),
+        distributions=distributions,
+        derived_parameters=derived_params,
+        discount_rate_source=mc_section.get("discount_rate_source", "config"),
+        discount_rate_value=mc_section.get("discount_rate_value"),
+    )
+
+
+def _load_scenarios(config_dict: Dict[str, Any]) -> List[MonteCarloScenario]:
+    """Load scenarios from MC config.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        config_dict: Raw config dictionary from YAML
+    
+    Returns:
+        List of validated MonteCarloScenario contracts
+    """
+    scenarios_section = config_dict.get("scenarios", [])
+    if not scenarios_section:
+        # Single scenario mode
+        return [_load_monte_carlo_config(config_dict)]
+    
+    # Multi-scenario mode
+    scenarios = []
+    for scenario_config in scenarios_section:
+        scenario = _load_monte_carlo_config(scenario_config)
+        scenarios.append(scenario)
+    
+    return scenarios
+
+
+def _parse_derived_parameters(
+    derived_config: List[Dict[str, Any]]
+) -> List[DerivedParameter]:
+    """Parse derived parameters from config.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        derived_config: List of derived parameter specifications
+    
+    Returns:
+        List of validated DerivedParameter contracts
+    """
+    derived_params = []
+    for param_spec in derived_config:
+        derived_params.append(
+            DerivedParameter(
+                name=param_spec["name"],
+                expression=param_spec["expression"],
+                dependencies=param_spec.get("dependencies", []),
+            )
+        )
+    return derived_params
+
+
+def _parse_distributions(
+    distributions_config: Dict[str, Dict[str, Any]]
+) -> Dict[str, Distribution]:
+    """Parse distributions from config.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        distributions_config: Variable name -> distribution spec mapping
+    
+    Returns:
+        Dictionary of validated Distribution contracts
+    """
+    distributions = {}
+    for var_name, dist_spec in distributions_config.items():
+        distributions[var_name] = Distribution(
+            dist_type=dist_spec["type"],
+            parameters=dist_spec.get("parameters", {}),
+        )
+    return distributions
+
+
+def _run_single_iteration(
+    config: Dict[str, Any],
+    parameter_sample: Dict[str, float],
+    discount_rate: float,
+) -> Dict[str, float]:
+    """Execute single MC iteration.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        config: Base configuration
+        parameter_sample: Sampled parameter values for this iteration
+        discount_rate: Discount rate for NPV calculation
+    
+    Returns:
+        Dictionary with NPV, IRR, and other metrics
+    """
+    # Extract parameters from sample
+    revenue = parameter_sample.get("revenue_mean_usd", config.get("revenue_mean_usd", 100e6))
+    cost = parameter_sample.get("cost_mean_usd", config.get("cost_mean_usd", 60e6))
+    capex = parameter_sample.get("capex_total_usd", config.get("capex_total_usd", 50e6))
+    project_life = int(config.get("project_life_years", 25))
+    
+    # Build cashflow
+    annual_cf = revenue - cost
+    cf_array = [-capex] + [annual_cf] * project_life
+    
+    # Calculate NPV and IRR
+    project_npv = npv(discount_rate, cf_array)
+    project_irr_decimal = irr(cf_array)
+    project_irr_pct = (project_irr_decimal * 100.0) if project_irr_decimal is not None else 0.0
+    
+    return {
+        "npv_usd": project_npv,
+        "irr_pct": project_irr_pct,
+        "revenue_usd": revenue,
+        "cost_usd": cost,
+    }
+
+
+def _validate_distribution_for_sampling(distribution: Distribution) -> bool:
+    """Validate distribution parameters.
+    
+    Sprint 16: Issue #43 - Required by test_monte_carlo_v14.py.
+    
+    Args:
+        distribution: Distribution contract to validate
+    
+    Returns:
+        True if valid for sampling, False otherwise
+    """
+    dist_type = distribution.dist_type
+    params = distribution.parameters
+    
+    if dist_type == "normal":
+        return "mean" in params and "std" in params and params["std"] > 0
+    elif dist_type == "uniform":
+        return "min" in params and "max" in params and params["min"] < params["max"]
+    elif dist_type == "lognormal":
+        return "mean" in params and "std" in params and params["std"] > 0
+    elif dist_type == "triangular":
+        return all(k in params for k in ["min", "mode", "max"])
+    elif dist_type == "beta":
+        return "alpha" in params and "beta" in params and all(
+            params[k] > 0 for k in ["alpha", "beta"]
+        )
+    
+    logger.warning(f"Unknown distribution type: {dist_type}")
+    return False
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MONTE CARLO ENGINE
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 def load_config(config_path: str) -> DictConfig:
@@ -481,7 +737,16 @@ __all__ = [
     "MonteCarloEngine",
     "MonteCarloConfig",
     "run_monte_carlo_analysis",
+    # Sprint 16: Issue #43 helper functions
     "_aggregate_results",
+    "_build_samples_for_scenario",
+    "_compute_global_param_names",
     "_generate_lhs_samples",
+    "_load_monte_carlo_config",
+    "_load_scenarios",
+    "_parse_derived_parameters",
+    "_parse_distributions",
+    "_run_single_iteration",
     "_transform_to_distribution",
+    "_validate_distribution_for_sampling",
 ]
