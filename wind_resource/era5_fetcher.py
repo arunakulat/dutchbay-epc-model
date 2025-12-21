@@ -6,6 +6,7 @@ wind data from the Copernicus Climate Data Store (CDS). It handles:
 - Hub height extrapolation using power law
 - Local caching to avoid redundant downloads
 - Metadata tracking for reproducibility
+- Full configuration via YAML files (CCCDIR compliant)
 
 Typical usage:
     >>> from wind_resource import ERA5Fetcher
@@ -19,7 +20,7 @@ Typical usage:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0
+Version: 1.1.0 (CCCDIR Compliant)
 """
 
 from __future__ import annotations
@@ -28,10 +29,11 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+import yaml
 
 try:
     import cdsapi
@@ -49,11 +51,18 @@ class ERA5Fetcher:
     
     This class manages the complete workflow of downloading ERA5 reanalysis
     wind data, converting it to useful formats, and caching results for
-    efficient reuse.
+    efficient reuse. All configuration is loaded from YAML files (CCCDIR).
     
     Attributes:
         cache_dir: Directory for storing downloaded and processed data.
         metadata_dir: Directory for download metadata and logs.
+        config: Configuration dict loaded from era5_config.yaml.
+        area_buffer: Degrees to buffer around location for download.
+        variables: List of ERA5 variables to download.
+        alpha_min: Minimum wind shear exponent.
+        alpha_max: Maximum wind shear exponent.
+        alpha_default: Default wind shear exponent.
+        reference_height: Reference height for extrapolation (m).
         
     Example:
         >>> fetcher = ERA5Fetcher()
@@ -65,15 +74,23 @@ class ERA5Fetcher:
         ... )
     """
     
-    def __init__(self, cache_dir: str = "inputs/wind_data") -> None:
-        """Initialize ERA5 fetcher.
+    def __init__(
+        self,
+        cache_dir: str = "inputs/wind_data",
+        config_path: Optional[str] = None
+    ) -> None:
+        """Initialize ERA5 fetcher with configuration loading.
         
         Args:
             cache_dir: Directory path for caching downloaded data.
                 Will be created if it doesn't exist.
+            config_path: Path to era5_config.yaml. If None, uses default
+                location at wind_resource/config/era5_config.yaml.
                 
         Raises:
             ImportError: If cdsapi or xarray packages are not installed.
+            FileNotFoundError: If config file not found.
+            KeyError: If required config keys are missing.
         """
         if not CDS_AVAILABLE:
             raise ImportError(
@@ -88,7 +105,56 @@ class ERA5Fetcher:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"ERA5Fetcher initialized with cache: {self.cache_dir}")
+        # Load configuration (CCCDIR compliance)
+        self._load_config(config_path)
+        
+        logger.info(f"ERA5Fetcher v1.1.0 initialized (CCCDIR compliant)")
+        logger.info(f"  Cache: {self.cache_dir}")
+        logger.info(f"  Config: {self._config_path}")
+    
+    def _load_config(self, config_path: Optional[str]) -> None:
+        """Load configuration from YAML file.
+        
+        Args:
+            config_path: Path to config file, or None for default.
+            
+        Raises:
+            FileNotFoundError: If config file doesn't exist.
+            KeyError: If required config sections are missing.
+        """
+        if config_path is None:
+            # Default: wind_resource/config/era5_config.yaml
+            config_path = Path(__file__).parent / "config" / "era5_config.yaml"
+        else:
+            config_path = Path(config_path)
+        
+        if not config_path.exists():
+            raise FileNotFoundError(
+                f"Config file not found: {config_path}. "
+                "Create wind_resource/config/era5_config.yaml or specify config_path."
+            )
+        
+        self._config_path = config_path
+        
+        with open(config_path) as f:
+            self.config = yaml.safe_load(f)
+        
+        # Extract config values (CCCDIR: centralized config)
+        try:
+            self.area_buffer = self.config['api']['area_buffer_degrees']
+            self.variables = self.config['variables']
+            self.alpha_min = self.config['wind_shear']['alpha_min']
+            self.alpha_max = self.config['wind_shear']['alpha_max']
+            self.alpha_default = self.config['wind_shear']['alpha_default']
+            self.reference_height = self.config['wind_shear']['reference_heights'][1]  # 100m
+        except KeyError as e:
+            raise KeyError(
+                f"Missing required config key: {e}. "
+                "Check era5_config.yaml structure."
+            ) from e
+        
+        logger.debug(f"Config loaded: area_buffer={self.area_buffer}, "
+                    f"alpha_range=[{self.alpha_min}, {self.alpha_max}]")
     
     def download_wind_data(
         self,
@@ -182,6 +248,8 @@ class ERA5Fetcher:
     ) -> Path:
         """Download raw NetCDF data from Copernicus CDS.
         
+        Uses config values for area buffer and variables (CCCDIR compliant).
+        
         Args:
             location: Location dictionary.
             start_date: Start date string.
@@ -197,12 +265,12 @@ class ERA5Fetcher:
             f"era5_{location['name'].lower()}_raw.nc"
         )
         
-        # Define area: [N, W, S, E] with 0.5° buffer
+        # Define area using config buffer (CCCDIR: no hardcoded 0.5)
         area = [
-            location['lat'] + 0.5,
-            location['lon'] - 0.5,
-            location['lat'] - 0.5,
-            location['lon'] + 0.5
+            location['lat'] + self.area_buffer,
+            location['lon'] - self.area_buffer,
+            location['lat'] - self.area_buffer,
+            location['lon'] + self.area_buffer
         ]
         
         # CDS API request
@@ -213,12 +281,7 @@ class ERA5Fetcher:
                 'reanalysis-era5-single-levels',
                 {
                     'product_type': 'reanalysis',
-                    'variable': [
-                        '10m_u_component_of_wind',
-                        '10m_v_component_of_wind',
-                        '100m_u_component_of_wind',
-                        '100m_v_component_of_wind',
-                    ],
+                    'variable': self.variables,  # CCCDIR: from config
                     'year': self._get_years(start_date, end_date),
                     'month': [f'{m:02d}' for m in range(1, 13)],
                     'day': [f'{d:02d}' for d in range(1, 32)],
@@ -238,7 +301,7 @@ class ERA5Fetcher:
         return nc_file
     
     @staticmethod
-    def _get_years(start_date: str, end_date: str) -> list[str]:
+    def _get_years(start_date: str, end_date: str) -> List[str]:
         """Extract list of years from date range.
         
         Args:
@@ -280,9 +343,10 @@ class ERA5Fetcher:
         
         return df
     
-    @staticmethod
-    def _calculate_wind_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    def _calculate_wind_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate wind speed, direction, and shear from u/v components.
+        
+        Uses config values for alpha limits (CCCDIR compliant).
         
         Args:
             df: DataFrame with u10, v10, u100, v100 columns.
@@ -305,9 +369,9 @@ class ERA5Fetcher:
         with np.errstate(divide='ignore', invalid='ignore'):
             df['alpha'] = np.log(df['ws_100m'] / df['ws_10m']) / np.log(10.0)
         
-        # Clip alpha to reasonable range
-        df['alpha'] = df['alpha'].clip(0.05, 0.40)
-        df['alpha'] = df['alpha'].fillna(0.143)  # Default for missing
+        # Clip alpha to config range (CCCDIR: no hardcoded 0.05, 0.40, 0.143)
+        df['alpha'] = df['alpha'].clip(self.alpha_min, self.alpha_max)
+        df['alpha'] = df['alpha'].fillna(self.alpha_default)
         
         return df
     
@@ -320,18 +384,19 @@ class ERA5Fetcher:
         
         Uses the power law: ws(h) = ws_ref * (h / h_ref)^alpha
         where alpha is the wind shear exponent calculated from 10m and 100m data.
+        Uses config reference height (CCCDIR compliant).
         
         Args:
             df: DataFrame with ws_100m and alpha columns.
-            hub_height: Target hub height in meters. Must be > 100m.
-                Default is 150.0.
+            hub_height: Target hub height in meters. Must be > reference_height
+                from config. Default is 150.0.
                 
         Returns:
             DataFrame with added column 'ws_{hub_height}m' containing
             extrapolated wind speeds.
             
         Raises:
-            ValueError: If hub_height <= 100m or required columns missing.
+            ValueError: If hub_height <= reference_height or required columns missing.
             
         Example:
             >>> df_extrapolated = fetcher.extrapolate_to_hub_height(
@@ -340,10 +405,11 @@ class ERA5Fetcher:
             ... )
             >>> print(df_extrapolated['ws_150m'].mean())
         """
-        if hub_height <= 100:
+        # CCCDIR: use config reference_height instead of hardcoded 100
+        if hub_height <= self.reference_height:
             raise ValueError(
-                f"hub_height must be > 100m. Got: {hub_height}m. "
-                "Use ws_100m or ws_10m for lower heights."
+                f"hub_height must be > {self.reference_height}m (config reference). "
+                f"Got: {hub_height}m. Use ws_{self.reference_height}m or ws_10m for lower heights."
             )
         
         required = ['ws_100m', 'alpha']
@@ -355,8 +421,8 @@ class ERA5Fetcher:
         
         col_name = f'ws_{int(hub_height)}m'
         
-        # Power law extrapolation from 100m
-        df[col_name] = df['ws_100m'] * (hub_height / 100.0) ** df['alpha']
+        # Power law extrapolation from reference height (CCCDIR: config value)
+        df[col_name] = df['ws_100m'] * (hub_height / self.reference_height) ** df['alpha']
         
         logger.info(
             f"Extrapolated to {hub_height}m: "
@@ -388,7 +454,17 @@ class ERA5Fetcher:
             'cache_file': str(cache_file),
             'source': 'ERA5 Reanalysis via Copernicus CDS',
             'spatial_resolution': '~31km (0.25°)',
-            'temporal_resolution': 'hourly'
+            'temporal_resolution': 'hourly',
+            'config_file': str(self._config_path),
+            'config_values': {
+                'area_buffer_degrees': self.area_buffer,
+                'variables': self.variables,
+                'alpha_min': self.alpha_min,
+                'alpha_max': self.alpha_max,
+                'alpha_default': self.alpha_default,
+                'reference_height': self.reference_height
+            },
+            'version': '1.1.0 (CCCDIR Compliant)'
         }
         
         metadata_file = self.metadata_dir / f"{cache_file.stem}_metadata.json"
