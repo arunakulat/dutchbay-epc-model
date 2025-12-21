@@ -1,0 +1,51 @@
+# ERA5 API and Wind Analysis Configuration
+
+# CDS API settings (credentials in ~/.cdsapirc)
+api:
+  timeout: 3600  # seconds
+  max_retries: 3
+  grid_resolution: 0.25  # degrees (~31km at equator)
+
+# ERA5 variables to download
+variables:
+  - 10m_u_component_of_wind
+  - 10m_v_component_of_wind
+  - 100m_u_component_of_wind
+  - 100m_v_component_of_wind
+
+# Wind shear calculation
+wind_shear:
+  reference_heights: [10, 100]
+  alpha_min: 0.05
+  alpha_max: 0.40
+  alpha_default: 0.143  # Typical offshore/coastal
+
+# Quality control thresholds
+quality_control:
+  ws_min: 0.0
+  ws_max: 50.0  # m/s - flag suspicious values
+  ws_missing_threshold: 0.01  # Flag if >1% missing
+
+# Weibull fitting
+weibull:
+  method: mle  # Maximum likelihood estimation
+
+# Loss factors (typical industry values)
+losses:
+  availability: 0.97      # 3% downtime
+  grid_curtailment: 0.98  # 2% curtailment
+  electrical: 0.98        # 2% transmission
+  wake: 0.95              # 5% wake losses
+  environmental: 0.99     # 1% degradation/icing
+
+# P-level scenarios for uncertainty
+p_levels:
+  p50: 1.00   # Base case (50% exceedance)
+  p75: 0.90   # Conservative (75% exceedance) - LENDER BASE
+  p90: 0.80   # Stress case (90% exceedance)
+
+# Revenue assumptions (can be overridden)
+revenue:
+  default_tariff_lkr_kwh: 20.30
+  default_exchange_rate_lkr_usd: 300.0
+  ppa_years: 20
