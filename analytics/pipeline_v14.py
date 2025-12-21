@@ -131,9 +131,17 @@ def _merge_debt_service_into_annual_rows(
     annual_rows: list[dict[str, Any]],
     debt_result: dict[str, Any],
 ) -> None:
-    """Merge debt service schedule from debt_result into annual_rows.
+    """Merge debt service schedule AND interest breakdown from debt_result into annual_rows.
     
-    Adds 'debt_service_usd' and 'dscr' fields to each annual row for Excel export visibility.
+    ENHANCEMENT: Now also adds 'interest_usd' and 'principal_repayment_usd' fields
+    for complete debt service visibility in Excel exports.
+    
+    Adds these fields to each annual row:
+    - debt_service_usd: Total debt service (interest + principal)
+    - interest_usd: Interest component only
+    - principal_repayment_usd: Principal repayment component only
+    - dscr: Debt Service Coverage Ratio
+    
     Modifies annual_rows in-place.
     
     Parameters
@@ -141,18 +149,51 @@ def _merge_debt_service_into_annual_rows(
     annual_rows : list[dict[str, Any]]
         Annual cashflow rows from build_annual_rows
     debt_result : dict[str, Any]
-        Debt result from plan_debt containing debt_service_total and dscr_series
+        Debt result from plan_debt containing:
+        - debt_service_total: Total service schedule
+        - dscr_series: DSCR series
+        - debt_schedules: Per-tranche schedules with (interest, principal, service) tuples
         
     Notes
     -----
     Period mapping: Year 1 → Period 2 (after 2 construction periods 0-1)
     inf DSCR values (construction years) are converted to 0.0
+    Interest is aggregated from all tranches (LKR, USD, DFI)
     """
     debt_service_schedule = debt_result.get('debt_service_total', [])
     dscr_series = debt_result.get('dscr_series', [])
+    debt_schedules = debt_result.get('debt_schedules', {})
     
-    logger.info("Merging debt service schedule into %d annual rows", len(annual_rows))
+    logger.info("Merging debt service + interest breakdown into %d annual rows", len(annual_rows))
     
+    # Build aggregated interest and principal schedules
+    # debt_schedules is dict: {'LKR': [(int, prin, svc), ...], 'USD': [...], 'DFI': [...]}
+    max_periods = max(len(sched) for sched in debt_schedules.values()) if debt_schedules else 0
+    
+    interest_schedule_usd = []
+    principal_schedule_usd = []
+    
+    for period in range(max_periods):
+        period_interest = 0.0
+        period_principal = 0.0
+        
+        for tranche_name, schedule in debt_schedules.items():
+            if period < len(schedule):
+                interest, principal, service = schedule[period]
+                period_interest += float(interest)
+                period_principal += float(principal)
+        
+        interest_schedule_usd.append(period_interest)
+        principal_schedule_usd.append(period_principal)
+    
+    logger.debug(
+        "Built interest schedule: %d periods, range $%.0f to $%.0f",
+        len(interest_schedule_usd),
+        min(interest_schedule_usd) if interest_schedule_usd else 0,
+        max(interest_schedule_usd) if interest_schedule_usd else 0,
+    )
+    
+    # Merge into annual_rows
     for idx, row in enumerate(annual_rows):
         year = int(row.get('year', idx + 1))
         # Period mapping: construction years + operational years
@@ -160,15 +201,30 @@ def _merge_debt_service_into_annual_rows(
         period = year + 1
         
         if period < len(debt_service_schedule):
+            # Debt service (already in USD)
             row['debt_service_usd'] = debt_service_schedule[period]
+            
+            # DSCR
             dscr_val = dscr_series[period] if period < len(dscr_series) else 0.0
             row['dscr'] = dscr_val if dscr_val != float('inf') else 0.0
+            
+            # ENHANCEMENT: Interest and principal breakdown
+            if period < len(interest_schedule_usd):
+                row['interest_usd'] = interest_schedule_usd[period]
+                row['principal_repayment_usd'] = principal_schedule_usd[period]
+            else:
+                row['interest_usd'] = 0.0
+                row['principal_repayment_usd'] = 0.0
         else:
             row['debt_service_usd'] = 0.0
             row['dscr'] = 0.0
+            row['interest_usd'] = 0.0
+            row['principal_repayment_usd'] = 0.0
     
     # Log statistics
     dscr_values = [r.get('dscr', 0) for r in annual_rows if r.get('dscr', 0) > 0]
+    interest_values = [r.get('interest_usd', 0) for r in annual_rows if r.get('interest_usd', 0) > 0]
+    
     if dscr_values:
         logger.info(
             "Successfully merged debt service: min DSCR=%.2f, max DSCR=%.2f, avg DSCR=%.2f",
@@ -176,8 +232,16 @@ def _merge_debt_service_into_annual_rows(
             max(dscr_values),
             sum(dscr_values) / len(dscr_values),
         )
+    
+    if interest_values:
+        logger.info(
+            "Successfully merged interest: min=$%.0f, max=$%.0f, avg=$%.0f",
+            min(interest_values),
+            max(interest_values),
+            sum(interest_values) / len(interest_values),
+        )
     else:
-        logger.warning("No positive DSCR values found after merge")
+        logger.warning("No positive interest values found after merge")
 
 
 # =============================================================================
@@ -404,7 +468,7 @@ def run_v14_pipeline(
         - validation_mode
         - config_path
         - config
-        - annual_rows (WITH debt_service_usd and dscr fields)
+        - annual_rows (WITH debt_service_usd, interest_usd, principal_repayment_usd, dscr fields)
         - debt_result
         - kpis
         - wacc
@@ -483,8 +547,8 @@ def run_v14_pipeline(
 
     logger.debug("Debt result contains %d keys", len(debt_result))
     
-    # 3b.1 FIX: Merge debt service schedule into annual_rows for Excel visibility
-    logger.info("Step 2.5/5: Merging debt service into annual rows...")
+    # 3b.1 ENHANCEMENT: Merge debt service + interest breakdown into annual_rows
+    logger.info("Step 2.5/5: Merging debt service + interest breakdown into annual rows...")
     _merge_debt_service_into_annual_rows(annual_rows, debt_result)
 
     # 3c. Structured cashflow contract (for analytics / exports / lenders).
@@ -764,7 +828,7 @@ def run_v14_pipeline(
         "config_path": config_path_label,
         "validation_mode": mode,
         "validated_modules": modules,
-        "annual_rows": annual_rows,  # NOW INCLUDES debt_service_usd and dscr
+        "annual_rows": annual_rows,  # NOW INCLUDES debt_service_usd, interest_usd, principal_repayment_usd, dscr
         "debt_result": debt_result,
         "kpis": kpis,
         # New overlays / contracts
