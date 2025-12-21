@@ -379,6 +379,7 @@ def plan_debt(
       dscr_series, balloon_remaining
     - aggregate IDC and by-tranche breakdowns
     - LLCR/PLCR and FX covenant surfaces
+    - debt_schedules: per-tranche schedules with (interest, principal, service) tuples
 
     This surface is pinned by tests in:
       - tests/api/test_covenants_v14.py
@@ -440,6 +441,8 @@ def plan_debt(
         "total_service": debt_service_total,
         "dscr_series": core.get("dscr_series", []),
         "balloon_remaining": core.get("balloon_remaining", 0.0),
+        # ENHANCEMENT: Expose debt_schedules for interest breakdown visibility
+        "debt_schedules": core.get("debt_schedules", {}),
         # New covenant surfaces
         "debt_total": core.get("debt_total", 0.0),
         "avg_debt_rate": core.get("avg_debt_rate", 0.0),
