@@ -41,7 +41,8 @@ From v14 contracts:
 From phase 3 (legacy):
     - SensitivitySuite (legacy) # Old sensitivity suite
     - ShockSpec                 # Shock specification
-    - StandardShockLibrary      # Predefined shocks
+    - StandardShockLibrary      # Predefined shocks (7 DFI-standard)
+    - TaxShockLibrary           # Tax-specific shocks (5 tax-aware)
 
 Backward Compatibility
 ──────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ All imports work from multiple locations:
     from analytics.contracts import ShockSpec
     
     # New way (recommended)
-    from analytics.contracts import MonteCarloScenario, ShockSpec
+    from analytics.contracts import MonteCarloScenario, ShockSpec, TaxShockLibrary
 
 Architecture Principles
 ──────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ from analytics.contracts._phase_3_sensitivity import (
     ShockResult as LegacyShockResult,
     ShockSpec,
     StandardShockLibrary,
+    TaxShockLibrary,  # NEW: Tax-aware shocks
 )
 
 # Main v14 contracts (Pydantic V2)
@@ -144,6 +146,7 @@ __all__ = [
     "LegacyShockResult",
     "ShockSpec",
     "StandardShockLibrary",
+    "TaxShockLibrary",  # NEW: Tax-aware shocks
 ]
 
 # EOF
