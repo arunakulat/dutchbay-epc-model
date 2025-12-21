@@ -127,6 +127,59 @@ def _validate_kpis_result(kpis: dict[str, Any]) -> None:
     logger.debug("Validated KPIs: %d keys present", len(kpis))
 
 
+def _merge_debt_service_into_annual_rows(
+    annual_rows: list[dict[str, Any]],
+    debt_result: dict[str, Any],
+) -> None:
+    """Merge debt service schedule from debt_result into annual_rows.
+    
+    Adds 'debt_service_usd' and 'dscr' fields to each annual row for Excel export visibility.
+    Modifies annual_rows in-place.
+    
+    Parameters
+    ----------
+    annual_rows : list[dict[str, Any]]
+        Annual cashflow rows from build_annual_rows
+    debt_result : dict[str, Any]
+        Debt result from plan_debt containing debt_service_total and dscr_series
+        
+    Notes
+    -----
+    Period mapping: Year 1 → Period 2 (after 2 construction periods 0-1)
+    inf DSCR values (construction years) are converted to 0.0
+    """
+    debt_service_schedule = debt_result.get('debt_service_total', [])
+    dscr_series = debt_result.get('dscr_series', [])
+    
+    logger.info("Merging debt service schedule into %d annual rows", len(annual_rows))
+    
+    for idx, row in enumerate(annual_rows):
+        year = int(row.get('year', idx + 1))
+        # Period mapping: construction years + operational years
+        # Year 1 maps to period 2 (after 2 construction periods 0-1)
+        period = year + 1
+        
+        if period < len(debt_service_schedule):
+            row['debt_service_usd'] = debt_service_schedule[period]
+            dscr_val = dscr_series[period] if period < len(dscr_series) else 0.0
+            row['dscr'] = dscr_val if dscr_val != float('inf') else 0.0
+        else:
+            row['debt_service_usd'] = 0.0
+            row['dscr'] = 0.0
+    
+    # Log statistics
+    dscr_values = [r.get('dscr', 0) for r in annual_rows if r.get('dscr', 0) > 0]
+    if dscr_values:
+        logger.info(
+            "Successfully merged debt service: min DSCR=%.2f, max DSCR=%.2f, avg DSCR=%.2f",
+            min(dscr_values),
+            max(dscr_values),
+            sum(dscr_values) / len(dscr_values),
+        )
+    else:
+        logger.warning("No positive DSCR values found after merge")
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -351,7 +404,7 @@ def run_v14_pipeline(
         - validation_mode
         - config_path
         - config
-        - annual_rows
+        - annual_rows (WITH debt_service_usd and dscr fields)
         - debt_result
         - kpis
         - wacc
@@ -405,7 +458,7 @@ def run_v14_pipeline(
     # ------------------------------------------------------------------
 
     # 3a. Cashflow – build annual rows from the v14 cashflow engine.
-    logger.info("Step 1/4: Building annual cashflow rows...")
+    logger.info("Step 1/5: Building annual cashflow rows...")
     annual_rows = build_annual_rows(cfg)
 
     # Validate annual_rows structure
@@ -418,7 +471,7 @@ def run_v14_pipeline(
     logger.debug("Built %d annual rows", len(annual_rows))
 
     # 3b. Debt – covenant-friendly debt surface (plan_debt is canonical v14).
-    logger.info("Step 2/4: Planning debt structure...")
+    logger.info("Step 2/5: Planning debt structure...")
     debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
 
     # Validate debt_result structure
@@ -429,16 +482,20 @@ def run_v14_pipeline(
         raise
 
     logger.debug("Debt result contains %d keys", len(debt_result))
+    
+    # 3b.1 FIX: Merge debt service schedule into annual_rows for Excel visibility
+    logger.info("Step 2.5/5: Merging debt service into annual rows...")
+    _merge_debt_service_into_annual_rows(annual_rows, debt_result)
 
     # 3c. Structured cashflow contract (for analytics / exports / lenders).
-    logger.info("Step 3/4: Building cashflow contract...")
+    logger.info("Step 3/5: Building cashflow contract...")
     cashflow_contract = build_cashflow_result_from_annual_rows(
         config=cfg,
         annual_rows=annual_rows,
     )
 
     # 3d. WACC (kept parallel to KPIs for now; KPIs still use legacy 10% discount).
-    logger.info("Step 4/4: Computing WACC and KPIs...")
+    logger.info("Step 4/5: Computing WACC and KPIs...")
     wacc_dict = compute_wacc_from_config(cfg)
     logger.debug("WACC dict keys: %s", list(wacc_dict.keys()) if wacc_dict else "none")
 
@@ -557,13 +614,10 @@ def run_v14_pipeline(
 
     # ------------------------------------------------------------------
     # 4b. Refinancing module (optional, config-driven)
-    # FIX: Derive actual values from debt_result and annual_rows
     # ------------------------------------------------------------------
     refinancing_result = None
     if cfg.get("Refinancing") or cfg.get("refinancing"):
-        logger.info(
-            "Refinancing configuration detected; calculating refinancing impacts."
-        )
+        logger.info("Step 5/5: Calculating refinancing impacts...")
         try:
             refi_config_raw = cfg.get("Refinancing") or cfg.get("refinancing")
             if isinstance(refi_config_raw, dict):
@@ -619,13 +673,10 @@ def run_v14_pipeline(
 
     # ------------------------------------------------------------------
     # 4c. Equity distribution module (optional, config-driven)
-    # FIX: Derive actual values from annual_rows and config
     # ------------------------------------------------------------------
     equity_distribution_result = None
     if cfg.get("EquityDistribution") or cfg.get("equity_distribution"):
-        logger.info(
-            "Equity distribution configuration detected; calculating distributions."
-        )
+        logger.info("Step 5/5: Calculating equity distributions...")
         try:
             eq_config_raw = cfg.get("EquityDistribution") or cfg.get(
                 "equity_distribution"
@@ -713,7 +764,7 @@ def run_v14_pipeline(
         "config_path": config_path_label,
         "validation_mode": mode,
         "validated_modules": modules,
-        "annual_rows": annual_rows,
+        "annual_rows": annual_rows,  # NOW INCLUDES debt_service_usd and dscr
         "debt_result": debt_result,
         "kpis": kpis,
         # New overlays / contracts
