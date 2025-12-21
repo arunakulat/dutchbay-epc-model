@@ -19,12 +19,6 @@ if TYPE_CHECKING:
     class EquityPerformance:
         pass
 
-    class TrancheDebtProfile:
-        pass
-
-    class DebtCovenantSnapshot:
-        pass
-
 
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -371,6 +365,50 @@ class WaccResult:
     meta: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class TrancheDebtProfile:
+    """Lender-facing debt tranche summary for covenant reporting.
+    
+    Sprint 16 - Required by pipeline_v14.py for debt profiling.
+    """
+
+    construction_years: int
+    tenor_years: int
+    timeline_periods: int
+    total_debt: float
+    total_idc: float
+    lkr_principal: float
+    usd_principal: float
+    dfi_principal: float
+    lkr_idc: float
+    usd_idc: float
+    dfi_idc: float
+    lkr_rate: Optional[float] = None
+    usd_rate: Optional[float] = None
+    dfi_rate: Optional[float] = None
+    interest_only_years: int = 0
+    amortization_style: str = "sculpted"
+    dscr_target: Optional[float] = None
+
+
+@dataclass
+class DebtCovenantSnapshot:
+    """Debt covenant compliance snapshot for lender reporting.
+    
+    Sprint 16 - Required by pipeline_v14.py for covenant tracking.
+    """
+
+    dscr_min: float
+    dscr_threshold: float
+    years_below_threshold: int
+    first_breach_year: Optional[int] = None
+    last_breach_year: Optional[int] = None
+    balloon_remaining: float = 0.0
+    balloon_flag: bool = False
+    audit_status: str = "REVIEW"
+    notes: str = ""
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # ScenarioResult – canonical scenario surface (with FX integration - v14R6)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -409,8 +447,8 @@ class ScenarioResult:
     cashflow: Optional["CashflowResult"] = None
 
     equity_performance: Optional["EquityPerformance"] = None
-    debt_profile: Optional["TrancheDebtProfile"] = None
-    debt_covenants: Optional["DebtCovenantSnapshot"] = None
+    debt_profile: Optional[TrancheDebtProfile] = None
+    debt_covenants: Optional[DebtCovenantSnapshot] = None
 
     def as_dict(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
@@ -425,6 +463,19 @@ class ScenarioResult:
         return data
 
 
+# Helper function for backward compatibility with cashflow contract building
+def build_cashflow_result_from_annual_rows(
+    config: Dict[str, Any], annual_rows: Sequence[Dict[str, Any]]
+) -> Optional[Any]:
+    """Build CashflowResult from annual rows.
+    
+    Placeholder for future cashflow contract implementation.
+    Currently returns None as CashflowResult is a forward reference.
+    """
+    # TODO: Implement when CashflowResult contract is defined
+    return None
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     # Monte Carlo (Sprint 16 - Issue #43)
@@ -436,6 +487,9 @@ __all__ = [
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
+    # Debt Profiling (Sprint 16 - Pipeline Integration)
+    "TrancheDebtProfile",
+    "DebtCovenantSnapshot",
     # FX
     "FXStructuredBlock",
     "FXCurveOutput",
@@ -450,4 +504,6 @@ __all__ = [
     # CASPER
     "CasperResult",
     "ShockResult",
+    # Helper functions
+    "build_cashflow_result_from_annual_rows",
 ]
