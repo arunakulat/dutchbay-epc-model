@@ -5,6 +5,7 @@ api:
   timeout: 3600  # seconds
   max_retries: 3
   grid_resolution: 0.25  # degrees (~31km at equator)
+  area_buffer_degrees: 0.5  # Buffer around location for data download
 
 # ERA5 variables to download
 variables:
