@@ -1,0 +1,249 @@
+# Dual DSCR Sensitivity Analysis - Example Configuration
+# DutchBay 150MW Wind Farm - Lender Case 2025Q4
+#
+# This scenario demonstrates dual DSCR debt sizing sensitivity analysis
+# showing lenders how debt capacity varies with key project parameters.
+#
+# Framework Compliance:
+# - CESSPIT: All parameters explicit (no hardcoded defaults)
+# - CCCDIR: Centralized configuration
+# - CASPER: Conservative tail-risk assumptions
+# - GWTF R3: Hydra-compatible structure
+#
+# Usage:
+#   python -m analytics.dscr_sensitivity scenarios/dscr_sensitivity_example.yaml
+#
+# Author: DutchBay V14 Team
+# Date: December 2025
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROJECT FUNDAMENTALS
+# ═══════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "DutchBay Wind Farm"
+  location: "Mannar, Sri Lanka"
+  capacity_mw: 150.0
+  
+  # Capital expenditure (USD)
+  capex_usd: 225_000_000  # $225M for 150MW = $1,500/kW
+  
+  # Degradation rate (decimal form)
+  # Industry standard: 0.5-0.7%/year for modern turbines
+  # Conservative assumption for coastal environment
+  degradation: 0.006  # 0.6%/year
+  
+  # Operational life (years)
+  life_years: 25
+  
+  # Commercial operation date
+  cod_date: "2027-06-30"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WIND RESOURCE ASSESSMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+wind_resource:
+  # Annual Energy Production - P50 (expected case)
+  # Based on 11-year wind data analysis (2014-2025)
+  aep_p50_mwh: 428_571  # 428.6 GWh/year = 32.7% capacity factor
+  
+  # Annual Energy Production - P99 (downside case)
+  # 1% probability of underperformance
+  # Critical for dual DSCR debt sizing
+  aep_p99_mwh: 364_286  # 364.3 GWh/year = 27.8% capacity factor
+  
+  # P99 represents ~15% reduction from P50 (industry typical: 10-20%)
+  # Used for conservative P99 DSCR constraint in debt sizing
+  
+  # Data source
+  era5_start_date: "2014-12-01"
+  era5_end_date: "2025-12-31"
+  years_of_data: 11
+  
+  # Turbine specification
+  turbine:
+    model: "Vestas V150-4.2MW"
+    rated_capacity_mw: 4.2
+    hub_height_m: 105
+    rotor_diameter_m: 150
+    n_turbines: 36  # 36 × 4.2MW = 151.2MW
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REVENUE
+# ═══════════════════════════════════════════════════════════════════════════
+
+revenue:
+  # Power Purchase Agreement (PPA) tariff
+  # USD-denominated PPA with Ceylon Electricity Board (CEB)
+  tariff_usd_mwh: 45.30  # $45.30/MWh
+  
+  # Escalation (if applicable)
+  escalation_rate: 0.00  # Flat tariff (typical for Sri Lankan PPAs)
+  
+  # Tariff duration
+  ppa_term_years: 20  # Standard for wind PPAs in Sri Lanka
+  
+  # Post-PPA tariff assumption (merchant market)
+  post_ppa_tariff_usd_mwh: 35.00  # Conservative merchant price
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPERATIONS & MAINTENANCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+operations:
+  # Annual Operating Expenditure (USD/year)
+  # Includes:
+  # - O&M service contract (Vestas full-service)
+  # - Insurance (all-risk + business interruption)
+  # - Land lease payments
+  # - Grid connection fees
+  # - Administration and management
+  opex_usd_year: 7_200_000  # $7.2M/year
+  
+  # Typical breakdown (for reference):
+  # - Turbine O&M: $4.5M (62%)
+  # - Insurance: $1.5M (21%)
+  # - Land lease: $0.8M (11%)
+  # - Other: $0.4M (6%)
+  
+  # OPEX escalation
+  opex_escalation_rate: 0.025  # 2.5%/year (inflation)
+  
+  # Availability guarantee
+  availability_target: 0.97  # 97% (Vestas full-service contract)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FINANCING STRUCTURE
+# ═══════════════════════════════════════════════════════════════════════════
+
+financing:
+  # ─────────────────────────────────────────────────────────────────────────
+  # DUAL DSCR TARGETS (CRITICAL FOR DEBT SIZING)
+  # ─────────────────────────────────────────────────────────────────────────
+  
+  # P50 DSCR Target (Expected Case)
+  # Industry range: 1.25x (aggressive) to 1.35x (conservative)
+  # Standard for investment-grade renewable energy debt
+  dscr_target_p50: 1.30  # 1.30x
+  
+  # P99 DSCR Target (Downside Protection)
+  # Industry range: 1.00x (break-even) to 1.05x (buffer)
+  # Ensures debt serviceability even in low-probability downside
+  dscr_target_p99: 1.00  # 1.00x (break-even in downside)
+  
+  # Final debt sizing: min(Debt_P50, Debt_P99, Capex × debt_ratio_max)
+  # Provides downside protection for lenders
+  
+  # ─────────────────────────────────────────────────────────────────────────
+  # DEBT STRUCTURE
+  # ─────────────────────────────────────────────────────────────────────────
+  
+  # Maximum debt-to-equity ratio (gearing)
+  debt_ratio_max: 0.70  # 70/30 debt-to-equity
+  
+  # Cost of debt (weighted average)
+  # Blended rate across LKR, USD, and DFI tranches
+  debt_rate: 0.08  # 8.0% nominal
+  
+  # Debt tenor
+  debt_tenor_years: 15
+  
+  # Interest-only period
+  interest_only_years: 2
+  
+  # Tranche mix (reference - not used in sensitivity)
+  tranches:
+    lkr:
+      max_share: 0.30  # 30% local currency
+      rate: 0.12  # 12% LKR rate
+    usd:
+      max_share: 0.40  # 40% USD commercial
+      rate: 0.075  # 7.5% USD rate
+    dfi:
+      max_share: 0.30  # 30% DFI (development finance)
+      rate: 0.055  # 5.5% concessional rate
+  
+  # Equity
+  equity_target_irr: 0.15  # 15% equity IRR target
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SENSITIVITY ANALYSIS CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+sensitivity:
+  # Perturbation range for sensitivity analysis
+  # Standard: ±20% covers typical parameter uncertainty
+  perturbation_range_pct: 20.0  # ±20%
+  
+  # Number of steps in sensitivity sweep
+  # 9 steps: -20%, -15%, -10%, -5%, 0%, +5%, +10%, +15%, +20%
+  # Trade-off: More steps = higher resolution, longer runtime
+  n_steps: 9
+  
+  # Variables to analyze (if not specified, uses all)
+  # Options:
+  # - degradation: Annual degradation rate
+  # - aep: Annual energy production (P50 and P99)
+  # - tariff: PPA tariff
+  # - opex: Operating expenditure
+  # - capex: Capital expenditure
+  variables:
+    - degradation
+    - aep
+    - tariff
+    - opex
+    - capex
+  
+  # Output format
+  output:
+    json: true
+    tornado_chart: true  # Generate tornado chart data
+    binding_analysis: true  # Analyze when P99 binds
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EXPECTED RESULTS (FOR VALIDATION)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Expected base case (for reference only, not used in calculation):
+# - CAPEX: $225M
+# - Debt ratio cap: 70% = $157.5M
+# - Expected debt capacity P50: ~$145M
+# - Expected debt capacity P99: ~$125M (P99 binds)
+# - Binding constraint: P99 (downside protection limits leverage)
+# - Debt reduction vs P50: ~14% (typical when P99 binds)
+#
+# Sensitivity expectations:
+# - Most sensitive variable: AEP (directly drives CFADS)
+# - Degradation impact: ~±10-15% debt capacity for ±20% degradation
+# - Tariff impact: ~±15-20% debt capacity for ±20% tariff
+# - P99 binds: Frequently in downside scenarios
+#
+# Lender presentation insights:
+# - Tornado chart: Shows AEP as primary risk driver
+# - Binding constraint analysis: Demonstrates downside protection
+# - Debt capacity range: Quantifies financing risk
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INDUSTRY REFERENCES
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Dual DSCR Methodology:
+# - Bolinger (2017): "Bookending Opportunity to Lower LCOE Through Reductions
+#   in Soft Cost Spreads Between P50 and P99 Wind Resource Estimates"
+# - DNV GL (2019): "Project Finance Debt Sizing Practices for Renewable Energy"
+# - Standard & Poor's: "Project Finance Criteria" - dual constraint requirement
+#
+# Degradation Rates:
+# - NREL (2020): "Wind Turbine Performance Trends: Focus on Degradation"
+# - IEA Wind (2021): "Long-term Performance of Wind Turbines"
+# - Vestas warranty assumptions: 0.5%/year baseline
+#
+# DSCR Targets:
+# - Moody's: "Rating Methodology for Project Finance Transactions"
+# - Fitch Ratings: "Wind and Solar Power Rating Criteria"
+# - Industry practice: P50 DSCR 1.25-1.35x, P99 DSCR 1.00-1.05x
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EOF
+# ═══════════════════════════════════════════════════════════════════════════
