@@ -93,6 +93,146 @@ class ShockResult:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# MULTI-VARIABLE SCENARIOS: Combined shock specifications
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class ScenarioSpec:
+    """Specification for a multi-variable scenario.
+    
+    Defines a named scenario with multiple simultaneous shocks for stress testing.
+    Enables correlated risk analysis (e.g., "downside case" with high CAPEX + low tariff).
+    
+    Parameters
+    ----------
+    name : str
+        Scenario name (e.g., "downside", "upside", "stressed").
+    description : str
+        Human-readable description of the scenario.
+    shocks : List[ShockSpec]
+        List of shocks to apply simultaneously.
+    
+    Examples
+    --------
+    >>> # Downside scenario: high CAPEX, low tariff, high interest
+    >>> downside = ScenarioSpec(
+    ...     name="downside",
+    ...     description="Conservative financing case",
+    ...     shocks=[
+    ...         ShockSpec("capex_total", 220e6, 220e6),  # Use high value only
+    ...         ShockSpec("tariff_rate", 0.072, 0.072),   # Use low value only
+    ...         ShockSpec("interest_rate", 0.09, 0.09),   # Use high value only
+    ...     ]
+    ... )
+    
+    Notes
+    -----
+    For stress testing, set low_value = high_value to lock shock at specific value.
+    For tornado analysis, use different low/high to test range.
+    """
+    
+    name: str
+    description: str
+    shocks: List[ShockSpec]
+    
+    def __post_init__(self) -> None:
+        """Validate ScenarioSpec contract invariants."""
+        if not self.name or not isinstance(self.name, str):
+            raise ValueError(
+                f"ScenarioSpec.name must be non-empty string, got: {self.name!r}"
+            )
+        
+        if not isinstance(self.shocks, list):
+            raise TypeError(
+                f"ScenarioSpec.shocks must be a list, got {type(self.shocks).__name__}"
+            )
+        
+        if len(self.shocks) == 0:
+            raise ValueError(
+                f"ScenarioSpec '{self.name}' must have at least one shock"
+            )
+        
+        # Validate all shocks are ShockSpec instances
+        for idx, shock in enumerate(self.shocks):
+            if not isinstance(shock, ShockSpec):
+                raise TypeError(
+                    f"ScenarioSpec '{self.name}' shock[{idx}] must be ShockSpec, "
+                    f"got {type(shock).__name__}"
+                )
+
+
+@dataclass(frozen=True)
+class ScenarioResult:
+    """Result of evaluating a multi-variable scenario.
+    
+    Contains metrics computed after applying all shocks in a scenario.
+    
+    Parameters
+    ----------
+    scenario_name : str
+        Name of the scenario evaluated.
+    description : str
+        Scenario description.
+    base_metrics : Dict[str, float]
+        Baseline metrics before shocks.
+    shocked_metrics : Dict[str, float]
+        Metrics after applying all scenario shocks.
+    shock_values : Dict[str, float]
+        Variable values used in this scenario.
+    
+    Examples
+    --------
+    >>> result = ScenarioResult(
+    ...     scenario_name="downside",
+    ...     description="Conservative case",
+    ...     base_metrics={"project_irr": 0.15, "equity_irr": 0.18},
+    ...     shocked_metrics={"project_irr": 0.11, "equity_irr": 0.14},
+    ...     shock_values={"capex_total": 220e6, "tariff_rate": 0.072},
+    ... )
+    >>> assert result.impact("project_irr") == -0.04
+    """
+    
+    scenario_name: str
+    description: str
+    base_metrics: Dict[str, float]
+    shocked_metrics: Dict[str, float]
+    shock_values: Dict[str, float]
+    
+    def impact(self, metric: str) -> float:
+        """Calculate impact for a specific metric.
+        
+        Parameters
+        ----------
+        metric : str
+            Metric name (e.g., "project_irr").
+        
+        Returns
+        -------
+        float
+            Impact = shocked_metric - base_metric.
+        
+        Raises
+        ------
+        KeyError
+            If metric not found in results.
+        """
+        if metric not in self.base_metrics:
+            raise KeyError(
+                f"Metric '{metric}' not in base_metrics. "
+                f"Available: {list(self.base_metrics.keys())}"
+            )
+        
+        if metric not in self.shocked_metrics:
+            raise KeyError(
+                f"Metric '{metric}' not in shocked_metrics. "
+                f"Available: {list(self.shocked_metrics.keys())}"
+            )
+        
+        return self.shocked_metrics[metric] - self.base_metrics[metric]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # AGGREGATION CONTRACT: SensitivitySuite
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -160,6 +300,93 @@ class SensitivitySuite:
                 }
                 for i, sr in enumerate(self.tornado_ranking)
             ],
+        }
+
+
+@dataclass(frozen=True)
+class MultiScenarioSuite:
+    """Aggregate results of multi-scenario stress testing.
+    
+    Contains results for multiple named scenarios (e.g., base, upside, downside).
+    Enables comparative stress testing across different market conditions.
+    
+    Parameters
+    ----------
+    base_scenario_name : str
+        Name of the baseline scenario.
+    scenario_results : List[ScenarioResult]
+        Results for each evaluated scenario.
+    analysis_timestamp : str
+        ISO timestamp of analysis.
+    
+    Examples
+    --------
+    >>> suite = MultiScenarioSuite(
+    ...     base_scenario_name="base",
+    ...     scenario_results=[base_result, downside_result, upside_result],
+    ...     analysis_timestamp="2025-12-21T12:00:00",
+    ... )
+    >>> print(suite.to_comparison_dict("project_irr"))
+    """
+    
+    base_scenario_name: str
+    scenario_results: List[ScenarioResult]
+    analysis_timestamp: str
+    
+    def to_comparison_dict(self, metric: str) -> Dict[str, Any]:
+        """Export scenario comparison for a specific metric.
+        
+        Parameters
+        ----------
+        metric : str
+            Metric to compare across scenarios.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            Comparison dict with baseline and scenario impacts.
+        """
+        base_result = next(
+            (r for r in self.scenario_results if r.scenario_name == self.base_scenario_name),
+            None
+        )
+        
+        if not base_result:
+            raise ValueError(
+                f"Base scenario '{self.base_scenario_name}' not found in results"
+            )
+        
+        baseline = base_result.base_metrics.get(metric)
+        
+        if baseline is None:
+            raise KeyError(
+                f"Metric '{metric}' not in base scenario metrics"
+            )
+        
+        comparisons = []
+        for result in self.scenario_results:
+            if result.scenario_name == self.base_scenario_name:
+                continue  # Skip base scenario in comparison
+            
+            shocked_value = result.shocked_metrics.get(metric)
+            if shocked_value is None:
+                continue
+            
+            comparisons.append({
+                "scenario": result.scenario_name,
+                "description": result.description,
+                "baseline": baseline,
+                "shocked": shocked_value,
+                "impact": shocked_value - baseline,
+                "impact_pct": ((shocked_value - baseline) / baseline * 100) if baseline != 0 else 0.0,
+            })
+        
+        return {
+            "metric": metric,
+            "baseline": baseline,
+            "base_scenario": self.base_scenario_name,
+            "scenarios": comparisons,
+            "timestamp": self.analysis_timestamp,
         }
 
 
@@ -450,4 +677,8 @@ __all__ = [
     "SensitivitySuite",
     "StandardShockLibrary",
     "TaxShockLibrary",
+    # Multi-variable scenarios (NEW)
+    "ScenarioSpec",
+    "ScenarioResult",
+    "MultiScenarioSuite",
 ]
