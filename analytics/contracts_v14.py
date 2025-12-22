@@ -273,39 +273,53 @@ class BreakevenResult(BaseModel):
 
 class TailRiskMetrics(BaseModel):
     """
-    Standard tail-risk snapshot for a single KPI distribution.
+    Computed tail-risk metrics for a single KPI distribution.
 
-    Kept intentionally minimal + stable:
-    - VaR/CVaR are expressed at a confidence level (e.g., 95 => left 5% tail).
-    - breach_probability is probability of falling below a covenant/threshold (if supplied).
+    This is the lightweight contract returned by compute_tail_risk_metrics().
+    Contains only computed values (no metadata like metric name or confidence).
 
-    CASPER: All tail risk metrics explicitly typed for audit trail.
-    CESSPIT: No defaults, all values computed from MC simulation.
+    CASPER: Frozen contract for tail risk snapshots.
+    CESSPIT: All values computed from MC samples.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kpi: str = Field(..., description="Name of KPI (e.g., 'project_irr', 'min_dscr')")
-    confidence_level: float = Field(
-        95.0, ge=50.0, le=99.9, description="Confidence level for VaR/CVaR (e.g., 95 => 5% tail)"
+    var: float = Field(description="Value-at-Risk at confidence level")
+    cvar: float = Field(description="Conditional VaR (Expected Shortfall)")
+    p10: float = Field(description="10th percentile")
+    p50: float = Field(description="50th percentile (median)")
+    p90: float = Field(description="90th percentile")
+    breach_prob: float = Field(
+        ge=0.0, le=1.0, description="Probability of breach (sample < VaR)"
     )
 
-    var: float | None = Field(
-        None, description="Value-at-Risk at the given confidence level (left-tail quantile)."
-    )
-    cvar: float | None = Field(
-        None, description="Conditional VaR / Expected Shortfall in the same tail as VaR."
-    )
 
-    threshold: float | None = Field(
-        None, description="Optional threshold/covenant used to compute breach probability."
-    )
-    breach_probability: float | None = Field(
-        None, ge=0.0, le=1.0, description="P(KPI < threshold) if threshold provided."
-    )
+class TailRiskSnapshot(BaseModel):
+    """
+    Complete tail-risk snapshot with full context.
 
-    mean: float | None = Field(None, description="Optional mean of the distribution.")
-    std: float | None = Field(None, ge=0.0, description="Optional std dev of the distribution.")
+    This contract includes metric name and confidence level, making it
+    suitable for CASPER reporting and dashboards.
+
+    Built by build_tail_risk_snapshot() in sensitivity_tail_risk.py.
+
+    CASPER: Full audit trail with metric name + confidence.
+    CESSPIT: All values computed, no defaults.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str = Field(description="Metric name (e.g., 'project_irr', 'min_dscr')")
+    confidence: float = Field(
+        ge=0.0, le=1.0, description="Confidence level (e.g., 0.9 for 90%)")
+    var: float = Field(description="Value-at-Risk at confidence level")
+    cvar: float = Field(description="Conditional VaR (Expected Shortfall)")
+    p10: float = Field(description="10th percentile")
+    p50: float = Field(description="50th percentile (median)")
+    p90: float = Field(description="90th percentile")
+    breach_probability: float = Field(
+        ge=0.0, le=1.0, description="Probability of breach (sample < VaR)"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -545,6 +559,7 @@ __all__ = [
     "BreakevenResult",
     # Tail Risk (Sprint 17)
     "TailRiskMetrics",
+    "TailRiskSnapshot",
     # CASPER
     "CasperResult",
     "ShockResult",
