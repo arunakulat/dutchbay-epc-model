@@ -1,6 +1,6 @@
 # Analytics Package Restructuring - Migration Plan
 
-**Status**: Phase 0 Complete ✅ | Phases 1-3 Pending ⏳  
+**Status**: Phase 0 Complete ✅ | Priority 1 Complete ✅ | Priorities 2-5 Pending ⏳  
 **Date**: December 23, 2025  
 **Sprint**: 9 of Dutchbay  
 **GWTF Compliance**: R25 (Feature branch only, no main commits)
@@ -17,30 +17,36 @@ The `analytics/` package currently contains 60+ modules in a flat structure, lea
 
 **Goal**: Restructure into clean subpackages while maintaining 100% backward compatibility.
 
+**Progress**: ✅ Phase 0 complete | ✅ MC consolidation complete | ✅ Priority 1 (CASPER) complete
+
 ---
 
 ## Current State
 
 ```
 analytics/
-├── casper_v14.py
-├── casper_payload.py
-├── kpi_normalizer.py
+├── casper_v14.py (SHIM → casper/casper_v14.py) ✅
+├── casper_payload.py (SHIM → casper/casper_payload.py) ✅
+├── kpi_normalizer.py (SHIM → casper/kpi_normalizer.py) ✅
 ├── fx_integration.py
 ├── wind_integration.py
 ├── cli_monte_carlo_hydra.py
 ├── cli_sensitivity_hydra.py
-├── monte_carlo_v14.py (SHIM → mc/engine.py)
-├── monte_carlo_correlation.py (SHIM → mc/correlation.py)
-├── correlation_engine.py (SHIM → mc/correlation.py)
+├── monte_carlo_v14.py (SHIM → mc/engine.py) ✅
+├── monte_carlo_correlation.py (SHIM → mc/correlation.py) ✅
+├── correlation_engine.py (SHIM → mc/correlation.py) ✅
 ├── [50+ other modules]
-└── mc/
-    ├── engine.py ✅
-    ├── correlation.py ✅
-    ├── samplers.py ✅
-    ├── degradation.py ✅
-    ├── aggregate.py ✅
-    └── exports.py ✅
+├── mc/                   ✅ COMPLETE
+│   ├── engine.py
+│   ├── correlation.py
+│   ├── samplers.py
+│   ├── degradation.py
+│   ├── aggregate.py
+│   └── exports.py
+└── casper/                ✅ COMPLETE
+    ├── casper_v14.py
+    ├── casper_payload.py
+    └── kpi_normalizer.py
 ```
 
 ---
@@ -51,48 +57,51 @@ analytics/
 analytics/
 ├── core/                  # Core metrics & calculations
 │   ├── __init__.py ✅
-│   ├── returns.py
-│   ├── risk_metrics.py
-│   ├── parameter_solvers.py
-│   └── config_schema.py
+│   ├── returns.py          ⏳
+│   ├── risk_metrics.py     ⏳
+│   ├── parameter_solvers.py ⏳
+│   └── config_schema.py    ⏳
 │
 ├── casper/                # CASPER payload generation
 │   ├── __init__.py ✅
-│   ├── casper_v14.py
-│   ├── casper_payload.py
-│   └── kpi_normalizer.py
+│   ├── casper_v14.py       ✅
+│   ├── casper_payload.py   ✅
+│   └── kpi_normalizer.py   ✅
 │
 ├── fx/                    # FX integration
 │   ├── __init__.py ✅
-│   └── fx_integration.py
+│   └── fx_integration.py   ⏳
 │
 ├── wind/                  # Wind analytics
 │   ├── __init__.py ✅
-│   ├── wind_integration.py
-│   └── pipeline_aep_v14.py
+│   ├── wind_integration.py ⏳
+│   └── pipeline_aep_v14.py ⏳
 │
 ├── mc/                    # Monte Carlo (COMPLETE ✅)
 │   ├── __init__.py ✅
-│   ├── engine.py ✅
-│   ├── correlation.py ✅
-│   ├── samplers.py ✅
-│   ├── degradation.py ✅
-│   ├── aggregate.py ✅
-│   └── exports.py ✅
+│   ├── engine.py           ✅
+│   ├── correlation.py      ✅
+│   ├── samplers.py         ✅
+│   ├── degradation.py      ✅
+│   ├── aggregate.py        ✅
+│   └── exports.py          ✅
 │
 ├── cli/                   # CLI entrypoints
 │   ├── __init__.py ✅
-│   ├── cli_monte_carlo_hydra.py
-│   └── cli_sensitivity_hydra.py
+│   ├── cli_monte_carlo_hydra.py  ⏳
+│   └── cli_sensitivity_hydra.py  ⏳
 │
 └── [legacy shims for backward compatibility]
-    ├── casper_v14.py → casper/casper_v14.py
-    ├── fx_integration.py → fx/fx_integration.py
-    └── ...
+    ├── casper_v14.py → casper/casper_v14.py      ✅
+    ├── casper_payload.py → casper/casper_payload.py ✅
+    ├── kpi_normalizer.py → casper/kpi_normalizer.py ✅
+    ├── monte_carlo_v14.py → mc/engine.py           ✅
+    ├── monte_carlo_correlation.py → mc/correlation.py ✅
+    └── correlation_engine.py → mc/correlation.py   ✅
 
 analysis_tools/            # Research helpers (outside production)
 ├── __init__.py ✅
-└── fx_correlation_analyzer.py
+└── fx_correlation_analyzer.py  ⏳
 ```
 
 ---
@@ -120,34 +129,72 @@ analysis_tools/__init__.py      ✅
 
 ---
 
-## Phase 1: File Moves ⏳ PENDING
+## Phase 1-3: File Migrations
 
-**Status**: ⏳ Planning  
-**Strategy**: Gradual, priority-based migration
+### Priority 1: CASPER Modules ✅ COMPLETE
 
-### Priority 1: CASPER Modules (High Impact)
+**Status**: ✅ Complete  
+**Commit**: `5c44342` - "feat: Priority 1 - Complete CASPER module migration (Phases 1-3)"
 
-**Move**:
+**Files Moved** (Phase 1):
 ```bash
-# Git operations (to preserve history)
-git mv analytics/casper_v14.py analytics/casper/casper_v14.py
-git mv analytics/casper_payload.py analytics/casper/casper_payload.py
-git mv analytics/kpi_normalizer.py analytics/casper/kpi_normalizer.py
+analytics/casper_v14.py → analytics/casper/casper_v14.py       (~3.6KB)
+analytics/casper_payload.py → analytics/casper/casper_payload.py (~12.6KB)
+analytics/kpi_normalizer.py → analytics/casper/kpi_normalizer.py (~13.9KB)
 ```
 
-**Rationale**:
-- CASPER is a well-defined subsystem
-- Clear API boundary (casper_v14.evaluate_with_casper_tail_risk_and_payload)
-- Limited internal dependencies
+**Shims Created** (Phase 2):
+```python
+# analytics/casper_v14.py
+from analytics.casper.casper_v14 import *  # noqa
+
+# analytics/casper_payload.py  
+from analytics.casper.casper_payload import *  # noqa
+
+# analytics/kpi_normalizer.py
+from analytics.casper.kpi_normalizer import *  # noqa
+```
+
+**Imports Updated** (Phase 3):
+```python
+# analytics/casper/casper_v14.py (line 6)
+# OLD: from analytics.casper_payload import build_casper_payload
+# NEW: from analytics.casper.casper_payload import build_casper_payload
+
+# analytics/casper/__init__.py - Complete public API
+from analytics.casper.casper_v14 import evaluate_with_casper_tail_risk_and_payload
+from analytics.casper.casper_payload import build_casper_payload, CASPER_CONTRACT_VERSION
+from analytics.casper.kpi_normalizer import normalize_kpis_by_capacity, ...
+```
 
 **Impact**:
-- 3 files moved
-- ~15KB code organized
-- Clear ownership established
+- ✅ 3 files moved (~30KB code organized)
+- ✅ 3 backward compat shims created
+- ✅ Clean CASPER subsystem boundary
+- ✅ Clear ownership (analytics.casper.*)
+- ✅ 100% backward compatibility
+
+**Verification**:
+```python
+# New imports (preferred)
+from analytics.casper import (
+    evaluate_with_casper_tail_risk_and_payload,
+    build_casper_payload,
+    normalize_kpis_by_capacity,
+)
+
+# Old imports (still work via shims)
+from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
+from analytics.casper_payload import build_casper_payload
+from analytics.kpi_normalizer import normalize_kpis_by_capacity
+```
 
 ---
 
-### Priority 2: CLI Modules (Medium Impact)
+### Priority 2: CLI Modules ⏳ PENDING
+
+**Status**: ⏳ Planning  
+**Strategy**: Same pattern as Priority 1
 
 **Move**:
 ```bash
@@ -162,12 +209,15 @@ git mv analytics/cli_sensitivity.py analytics/cli/cli_sensitivity.py
 - Clean separation of concerns
 
 **Impact**:
-- 3 files moved
-- ~14KB code organized
+- 3 files to move
+- ~14KB code to organize
+- 3 shims to create
 
 ---
 
-### Priority 3: FX Module (Low Impact)
+### Priority 3: FX Module ⏳ PENDING
+
+**Status**: ⏳ Planning  
 
 **Move**:
 ```bash
@@ -180,12 +230,15 @@ git mv analytics/fx_integration.py analytics/fx/fx_integration.py
 - Minimal dependencies
 
 **Impact**:
-- 1 file moved
-- ~4KB code organized
+- 1 file to move
+- ~4KB code to organize
+- 1 shim to create
 
 ---
 
-### Priority 4: Wind Modules (Medium Impact)
+### Priority 4: Wind Modules ⏳ PENDING
+
+**Status**: ⏳ Planning  
 
 **Move**:
 ```bash
@@ -199,12 +252,15 @@ git mv analytics/pipeline_aep_v14.py analytics/wind/pipeline_aep_v14.py
 - NetCDF handling
 
 **Impact**:
-- 2 files moved
-- ~24KB code organized
+- 2 files to move
+- ~24KB code to organize
+- 2 shims to create
 
 ---
 
-### Priority 5: Core Metrics (Lower Priority)
+### Priority 5: Core Metrics ⏳ PENDING
+
+**Status**: ⏳ Planning (Lower Priority)
 
 **Move**:
 ```bash
@@ -220,96 +276,9 @@ git mv analytics/config_schema.py analytics/core/config_schema.py
 - Move after higher-priority modules stabilize
 
 **Impact**:
-- 4 files moved
-- ~67KB code organized
-
----
-
-## Phase 2: Compatibility Shims ⏳ PENDING
-
-**Status**: ⏳ Planning  
-**Strategy**: Create shims for ALL moved files
-
-### Shim Pattern
-
-For each moved file, create a shim in the original location:
-
-```python
-# analytics/casper_v14.py (SHIM)
-
-"""
-BACKWARD COMPATIBILITY SHIM
-
-This module has moved to analytics.casper.casper_v14.
-This shim will be removed in v15.
-
-Migration:
-  OLD: from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
-  NEW: from analytics.casper.casper_v14 import evaluate_with_casper_tail_risk_and_payload
-  OR:  from analytics.casper import evaluate_with_casper_tail_risk_and_payload
-"""
-
-from analytics.casper.casper_v14 import *  # noqa
-
-__all__ = [
-    "evaluate_with_casper_tail_risk_and_payload",
-]
-```
-
-### Shims Required
-
-| Original Path | New Path | Shim Status |
-|--------------|----------|-------------|
-| `analytics/casper_v14.py` | `analytics/casper/casper_v14.py` | ⏳ Pending |
-| `analytics/casper_payload.py` | `analytics/casper/casper_payload.py` | ⏳ Pending |
-| `analytics/kpi_normalizer.py` | `analytics/casper/kpi_normalizer.py` | ⏳ Pending |
-| `analytics/fx_integration.py` | `analytics/fx/fx_integration.py` | ⏳ Pending |
-| `analytics/wind_integration.py` | `analytics/wind/wind_integration.py` | ⏳ Pending |
-| `analytics/cli_monte_carlo_hydra.py` | `analytics/cli/cli_monte_carlo_hydra.py` | ⏳ Pending |
-| `analytics/cli_sensitivity_hydra.py` | `analytics/cli/cli_sensitivity_hydra.py` | ⏳ Pending |
-
-### Existing Shims (Phase 4-5 Complete)
-
-| Shim | Target | Status |
-|------|--------|--------|
-| `analytics/monte_carlo_v14.py` | `analytics.mc.engine` | ✅ Complete |
-| `analytics/monte_carlo_correlation.py` | `analytics.mc.correlation` | ✅ Complete |
-| `analytics/correlation_engine.py` | `analytics.mc.correlation` | ✅ Complete |
-
----
-
-## Phase 3: Import Fixes ⏳ PENDING
-
-**Status**: ⏳ Planning  
-**Strategy**: Update internal imports to use new paths
-
-### Known Import Updates Needed
-
-#### 1. casper_v14.py (Line 6)
-```python
-# OLD
-from analytics import evaluation_v14
-from analytics.casper_payload import build_casper_payload
-
-# NEW
-from analytics import evaluation_v14
-from analytics.casper.casper_payload import build_casper_payload
-```
-
-#### 2. Update __init__.py Files
-
-```python
-# analytics/casper/__init__.py
-from analytics.casper.casper_v14 import evaluate_with_casper_tail_risk_and_payload
-from analytics.casper.casper_payload import build_casper_payload
-from analytics.casper.kpi_normalizer import normalize_kpis
-
-__all__ = [
-    "evaluate_with_casper_tail_risk_and_payload",
-    "build_casper_payload",
-    "normalize_kpis",
-]
-```
+- 4 files to move
+- ~67KB code to organize
+- 4 shims to create
 
 ---
 
@@ -322,34 +291,37 @@ __all__ = [
 3. **Reversible**: Shims allow rollback
 4. **Safe**: No main branch commits (GWTF R25)
 
-### Execution Steps
+### Execution Steps (Priority 1 Pattern - Proven ✅)
 
-1. **Phase 1**: Move Priority 1 files (CASPER)
-2. **Phase 2**: Create shims for moved files
+1. **Phase 1**: Move files to new package
+2. **Phase 2**: Create backward compat shims
 3. **Phase 3**: Update internal imports
 4. **Verify**: Run test suite
-5. **Repeat**: Move next priority group
+5. **Document**: Update migration plan
+6. **Repeat**: Move next priority group
 
 ### Verification Checklist
 
 After each migration batch:
 
 ```bash
-# 1. Import tests
+# 1. Import tests (new paths)
 python -c "from analytics.casper import evaluate_with_casper_tail_risk_and_payload; print('✅ New imports OK')"
+
+# 2. Import tests (old paths via shims)
 python -c "from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload; print('✅ Shim works')"
 
-# 2. Unit tests
+# 3. Unit tests
 pytest tests/analytics_layer/test_casper_v14.py -v
 pytest tests/analytics_layer/test_mc_integration.py -v
 
-# 3. Integration tests
+# 4. Integration tests
 pytest tests/integration/ -v
 
-# 4. Type checking
+# 5. Type checking
 mypy analytics/casper/ --strict
 
-# 5. Lint
+# 6. Lint
 ruff check analytics/casper/
 ```
 
@@ -357,19 +329,22 @@ ruff check analytics/casper/
 
 ## Risk Assessment
 
-### Low Risk
-- ✅ MC package (Phase 4-5): Already complete and tested
-- ✅ Phase 0: Package structure created, no breaking changes
+### Low Risk ✅
+- ✅ MC package (Phase 4-5): Complete and tested
+- ✅ Phase 0: Package structure created
+- ✅ Priority 1 (CASPER): Complete and verified
 
-### Medium Risk
-- ⚠️ CASPER modules: Well-isolated but imported by GWTF workflows
-- ⚠️ CLI modules: Hydra entrypoints, need careful shim handling
+### Medium Risk ⚠️
+- ⚠️ Priority 2 (CLI): Hydra entrypoints, need careful shim handling
+- ⚠️ Priority 3 (FX): Clean module, low dependencies
+- ⚠️ Priority 4 (Wind): Well-isolated but AEP dependencies
 
-### High Risk
-- ⛔ Core metrics (returns, risk_metrics): Widely imported
+### High Risk ⛔
+- ⛔ Priority 5 (Core): Widely imported across codebase
 - ⛔ Pipeline modules: Complex dependency graphs
 
 ### Mitigation
+- ✅ Proven pattern from Priority 1
 - Start with low/medium risk modules
 - Comprehensive shim coverage
 - Incremental testing after each move
@@ -379,15 +354,23 @@ ruff check analytics/casper/
 
 ## Success Criteria
 
-### Phase 1-3 Complete When:
-- [ ] All Priority 1-3 files moved
+### Priority 1 (CASPER) ✅ ACHIEVED
+- [x] All 3 CASPER files moved
+- [x] All 3 shims created and tested
+- [x] Internal imports updated
+- [x] Public API exports complete
+- [x] Backward compatibility verified
+- [x] Documentation updated
+
+### Priorities 2-5 Success Criteria
+- [ ] All priority files moved
 - [ ] All shims created and tested
 - [ ] All internal imports updated
 - [ ] Test suite passes 100%
 - [ ] Documentation updated
 - [ ] Migration verified in feature branch
 
-### Final Success When:
+### Final Success (All Priorities)
 - [ ] All 60+ analytics files organized
 - [ ] Zero import errors
 - [ ] Zero test failures
@@ -399,22 +382,53 @@ ruff check analytics/casper/
 
 ## Current Status Summary
 
-| Phase | Status | Files | Complexity |
-|-------|--------|-------|------------|
-| **Phase 0** | ✅ Complete | 6 __init__.py | Low |
-| **Phase 1** | ⏳ Planning | 10-15 moves | Medium |
-| **Phase 2** | ⏳ Planning | 10-15 shims | Low |
-| **Phase 3** | ⏳ Planning | ~20 import updates | Medium |
-| **Phase 4-5** | ✅ Complete | MC package | Low |
+| Phase/Priority | Status | Files | Complexity | Impact |
+|----------------|--------|-------|------------|--------|
+| **Phase 0** | ✅ Complete | 6 __init__.py | Low | Foundation |
+| **Phase 4-5 (MC)** | ✅ Complete | 6 modules + 3 shims | Medium | 776 lines cleaned |
+| **Priority 1 (CASPER)** | ✅ Complete | 3 files + 3 shims | Medium | ~30KB organized |
+| **Priority 2 (CLI)** | ⏳ Planning | 3 files | Medium | ~14KB to organize |
+| **Priority 3 (FX)** | ⏳ Planning | 1 file | Low | ~4KB to organize |
+| **Priority 4 (Wind)** | ⏳ Planning | 2 files | Medium | ~24KB to organize |
+| **Priority 5 (Core)** | ⏳ Planning | 4 files | High | ~67KB to organize |
+
+**Total Progress**: Phase 0 + MC + Priority 1 complete = **Foundation + 2 subsystems ✅**
 
 ---
 
 ## Next Steps
 
-1. **Immediate**: Implement Priority 1 (CASPER moves)
-2. **Short-term**: Complete Priorities 2-3 (CLI, FX)
-3. **Medium-term**: Core metrics migration
-4. **Long-term**: Full analytics package cleanup
+1. **Immediate**: Test Priority 1 in GWTF workflows
+2. **Short-term**: Implement Priority 2 (CLI) using proven pattern
+3. **Medium-term**: Complete Priorities 3-4 (FX, Wind)
+4. **Long-term**: Core metrics migration (Priority 5)
+
+---
+
+## Pattern Template (for Priorities 2-5)
+
+Based on successful Priority 1 execution:
+
+```bash
+# PHASE 1: Move files
+analytics/MODULE.py → analytics/PACKAGE/MODULE.py
+
+# PHASE 2: Create shim
+cat > analytics/MODULE.py << 'EOF'
+# BACKWARD COMPATIBILITY SHIM
+from analytics.PACKAGE.MODULE import *  # noqa
+EOF
+
+# PHASE 3: Update imports
+# In analytics/PACKAGE/MODULE.py:
+# - Update internal imports to new paths
+# - Update analytics/PACKAGE/__init__.py with exports
+
+# VERIFY
+python -c "from analytics.PACKAGE import FUNCTION"
+python -c "from analytics.MODULE import FUNCTION"  # shim
+pytest tests/analytics_layer/test_MODULE.py -v
+```
 
 ---
 
@@ -424,9 +438,10 @@ ruff check analytics/casper/
 - **GWTF R25**: No main branch commits rule
 - **CASPER Contract**: `docs/api_contract_casper_result_v1.md`
 - **MC Package**: `analytics/mc/` (complete reference implementation)
+- **Priority 1**: `analytics/casper/` (proven migration pattern)
 
 ---
 
 **Document Status**: Living document, updated as migration progresses  
-**Last Updated**: December 23, 2025, 4:47 AM IST  
-**Next Review**: After Priority 1 completion
+**Last Updated**: December 23, 2025, 4:52 AM IST (Priority 1 complete)  
+**Next Review**: After Priority 2 completion
