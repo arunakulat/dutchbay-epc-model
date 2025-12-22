@@ -2,8 +2,7 @@
 
 CANONICAL ENTRYPOINT: Use this instead of cli_sensitivity.py (legacy argparse).
 
-This is a minimal Hydra stub. Local devs should wire it to the actual
-sensitivity engine by replacing the TODO section in main().
+Wired to analytics.sensitivity_runner.run_sensitivity_analysis() engine.
 
 Usage:
     python analytics/cli_sensitivity_hydra.py \\
@@ -27,13 +26,6 @@ Output:
       "output_dir": "_out/sensitivity"
     }}
 
-Implementation Status:
-    STUB - Needs engine wiring. TODO:
-    1. Find actual sensitivity engine function
-    2. Call engine with config + shocks
-    3. Process results into JSON structure
-    4. Write artifacts if requested
-
 GWTF:
     - R3: Hydra-only (no argparse)
     - CLI-03: JSON outputs
@@ -46,22 +38,26 @@ CASPER:
 
 DSGCCCG:
     Dolphins Swim Gracefully Capturing Clean Current Groups
-    Step 3 - Wrapper stub for local dev implementation
+    Step 3B - Wired to sensitivity_runner engine
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 0.1.0 (Stub)
+Version: 1.0.0 (Wired)
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+
+# Import engine function
+from analytics.sensitivity_runner import run_sensitivity_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +90,7 @@ def main(cfg: DictConfig) -> None:
         >>> python analytics/cli_sensitivity_hydra.py \\
         ...     config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
         ...     output_dir=_out/sensitivity
-        >>> # Output: {{"status": "stub", ...}}
+        >>> # Output: {{"status": "success", "sensitivity_results": [...]}}
     """
     # Validate required config parameter
     config_path = cfg.get("config")
@@ -118,65 +114,66 @@ def main(cfg: DictConfig) -> None:
     shocks = OmegaConf.to_container(cfg.get("shocks", {}), resolve=True)
     metrics = list(cfg.get("metrics", []))
     
+    # Default metric if not specified
+    metric = metrics[0] if metrics else "project_irr"
+    
     logger.info(
-        "Sensitivity analysis CLI (stub): config=%s, output_dir=%s",
-        config_path, output_dir
+        "Sensitivity analysis: config=%s, metric=%s, output_dir=%s",
+        config_path, metric, output_dir
     )
     
-    # =========================================================================
-    # TODO: Wire to actual sensitivity engine
-    # =========================================================================
-    # 
-    # Local dev instructions:
-    # 1. Find the actual sensitivity analysis function:
-    #    grep -rn "def.*sensitivity" analytics/
-    # 
-    # 2. Import and call it, e.g.:
-    #    from analytics.sensitivity_engine import run_sensitivity
-    #    results = run_sensitivity(
-    #        config_path=str(config_path),
-    #        shocks=shocks,
-    #        metrics=metrics
-    #    )
-    # 
-    # 3. Replace the stub result below with actual results
-    # 
-    # 4. Test:
-    #    python analytics/cli_sensitivity_hydra.py \\
-    #      config=scenarios/dutchbay_lendercase_2025Q4.yaml
-    # 
-    # =========================================================================
-    
-    # STUB RESULT (replace with actual engine output)
-    result: dict[str, Any] = {
-        "status": "stub",
-        "message": "TODO: Wire to actual sensitivity engine",
-        "config_path": str(config_path),
-        "output_dir": str(output_dir),
-        "shocks_configured": list(shocks.keys()) if isinstance(shocks, dict) else [],
-        "metrics_configured": metrics,
-        "implementation_needed": [
-            "1. Find sensitivity engine function",
-            "2. Call engine with config + shocks",
-            "3. Process results into structured JSON",
-            "4. Write artifacts if write_artifacts=true",
-        ]
-    }
-    
-    # Optional artifact writing (when engine is wired)
-    if write_artifacts and result.get("status") != "stub":
-        output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # =====================================================================
+        # WIRED TO ENGINE: analytics.sensitivity_runner.run_sensitivity_analysis
+        # =====================================================================
         
-        # Write summary JSON
-        summary_path = output_dir / "sensitivity_summary.json"
-        summary_path.write_text(
-            json.dumps(result, indent=2, sort_keys=True),
-            encoding="utf-8"
+        # Call sensitivity engine
+        suite = run_sensitivity_analysis(
+            str(config_path),
+            metric=metric
         )
-        logger.info("Wrote sensitivity results to %s", summary_path)
-    
-    # Print JSON to stdout (CLI-03 compliance)
-    print(json.dumps(result, indent=2, sort_keys=True))
+        
+        # Convert dataclass to dict for JSON serialization
+        result: dict[str, Any] = asdict(suite)
+        
+        # Add status and metadata
+        result["status"] = "success"
+        result["config_path"] = str(config_path)
+        result["output_dir"] = str(output_dir)
+        result["metric_analyzed"] = metric
+        
+        logger.info(
+            "Sensitivity analysis complete: %d variations analyzed",
+            len(result.get("variations", []))
+        )
+        
+        # Optional artifact writing
+        if write_artifacts:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Write summary JSON
+            summary_path = output_dir / "sensitivity_summary.json"
+            summary_path.write_text(
+                json.dumps(result, indent=2, sort_keys=True),
+                encoding="utf-8"
+            )
+            logger.info("Wrote sensitivity results to %s", summary_path)
+        
+        # Print JSON to stdout (CLI-03 compliance)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        
+    except Exception as e:
+        # Error handling with structured JSON output
+        error_result = {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "config_path": str(config_path),
+            "metric": metric
+        }
+        print(json.dumps(error_result, indent=2))
+        logger.exception("Sensitivity analysis failed")
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":
