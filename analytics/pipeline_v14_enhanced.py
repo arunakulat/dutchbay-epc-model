@@ -151,10 +151,10 @@ def _validate_annual_rows_structure(
     Parameters
     ----------
     annual_rows : any
-        Output from build_annual_rows() or plan_debt()
+        Output from build_annual_rows()
     require_debt_fields : bool
-        If True, validate debt-enriched fields (cf_pre_debt, debt_service_total)
-        If False, only validate cashflow fields (year)
+        DEPRECATED: Debt fields are in separate debt_result, not annual_rows.
+        Kept for API compatibility but has no effect.
 
     Returns
     -------
@@ -182,17 +182,13 @@ def _validate_annual_rows_structure(
         )
 
     # Core cashflow fields (always required)
+    # Note: Debt fields (cf_pre_debt, debt_service_total) are in debt_result, not here
     required_keys = {"year"}
-
-    # Debt fields (only required after debt module runs)
-    if require_debt_fields:
-        required_keys.update({"cf_pre_debt", "debt_service_total"})
 
     missing_keys = required_keys - set(first_row.keys())
     if missing_keys:
-        stage = "debt-enriched" if require_debt_fields else "cashflow"
         raise PipelineValidationError(
-            f"annual_rows[0] missing required {stage} keys: {missing_keys}"
+            f"annual_rows[0] missing required keys: {missing_keys}"
         )
 
     # Type-check numeric values
@@ -207,8 +203,7 @@ def _validate_annual_rows_structure(
             )
 
     logger.debug(
-        "Validated annual_rows (%s): %d rows, first_row_keys=%s",
-        "debt-enriched" if require_debt_fields else "cashflow-only",
+        "Validated annual_rows (cashflow-only): %d rows, first_row_keys=%s",
         len(annual_rows),
         list(first_row.keys()),
     )
@@ -533,11 +528,7 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
 
         annual_rows = build_annual_rows(cfg)
-
-        # Validate cashflow-only fields (debt fields not yet added)
-        annual_rows = _validate_annual_rows_structure(
-            annual_rows, require_debt_fields=False
-        )
+        annual_rows = _validate_annual_rows_structure(annual_rows)
         metrics.annual_rows_count = len(annual_rows)
 
         metrics.cashflow_time_sec = time.time() - phase_start
@@ -554,11 +545,6 @@ def run_v14_pipeline_enhanced(
 
         debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
         debt_result = _validate_debt_result_structure(debt_result)
-
-        # NOW validate debt-enriched fields (after debt module runs)
-        annual_rows = _validate_annual_rows_structure(
-            annual_rows, require_debt_fields=True
-        )
 
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
