@@ -1,5 +1,7 @@
-"""Core analytics modules for financial calculations and metrics."""
+"""analytics.core
 
-# analytics/__init__.py
+Core metrics and calculation utilities.
+Foundation for all analytics modules.
+"""
 
-__version__ = "1.1.0"
+__all__ = []
