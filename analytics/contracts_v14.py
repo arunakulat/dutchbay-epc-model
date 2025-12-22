@@ -49,6 +49,13 @@ class ShockSpec(BaseModel):
         ...     shocks=[-0.10, -0.05, 0.05, 0.10],
         ...     label="Capital Cost"
         ... )
+    
+    Backward Compatibility (Pydantic v1 → v2 Migration):
+        The following computed properties maintain compatibility with legacy code:
+        - variable_name: returns parameter
+        - low_value: returns min(shocks)
+        - high_value: returns max(shocks)
+        - base_value: returns 0.0 (shocks are relative percentages)
     """
     
     model_config = ConfigDict(frozen=True)
@@ -73,6 +80,46 @@ class ShockSpec(BaseModel):
         if any(s < -1.0 or s > 5.0 for s in v):
             raise ValueError("Shock values must be in range [-1.0, 5.0] (-100% to +500%)")
         return v
+    
+    # === BACKWARD COMPATIBILITY PROPERTIES (Sprint 17 Fix - Issue #52) ===
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def variable_name(self) -> str:
+        """Backward compatibility property for legacy sensitivity_runner.py.
+        
+        Returns the parameter name. Allows legacy code using shock.variable_name
+        to continue working after Pydantic v2 migration renamed this field.
+        """
+        return self.parameter
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def low_value(self) -> float:
+        """Lowest (most negative) shock value.
+        
+        For sensitivity runner compatibility. Returns min(shocks).
+        """
+        return min(self.shocks) if self.shocks else 0.0
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def high_value(self) -> float:
+        """Highest (most positive) shock value.
+        
+        For sensitivity runner compatibility. Returns max(shocks).
+        """
+        return max(self.shocks) if self.shocks else 0.0
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def base_value(self) -> float:
+        """Base value for shock application.
+        
+        Returns 0.0 because shocks are defined as relative percentages,
+        not absolute values. The actual base comes from config.
+        """
+        return 0.0
 
 
 class StandardShockLibrary:
