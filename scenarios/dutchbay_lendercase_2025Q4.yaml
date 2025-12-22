@@ -17,36 +17,27 @@ project:
   loss_carryforward_years: 25
 
 resource:
-  # Wind turbine configuration (GWTF ARCH-01: Config-first)
   turbines:
     count: 15
     rated_power_mw: 10.0
-    total_capacity_mw: 150  # count * rated_power_mw
+    total_capacity_mw: 150
     model: "Envision EN-171-10.0"
     rotor_diameter_m: 171
     hub_height_m: 150
-  
-  # Power curve specification
   power_curve:
     source_id: "OEM_ENVISION_EN171_10_PC"
     source_type: "OEM"
     iec_standard: "IEC 61400-12-1:2022"
     certificate_ref: "CGC-B-FNc-2024-184 (10MW extrapolated)"
-    air_density_site_kgm3: 1.15  # Sri Lanka coastal conditions
-    air_density_ref_kgm3: 1.225  # IEC reference
-  
-  # AEP summary (Data Lake path)
+    air_density_site_kgm3: 1.15
+    air_density_ref_kgm3: 1.225
   aep_summary_path: "tests/mocks/aep_summary_dutchbay.json"
-  
-  # Loss factors (GWTF FIN-02: Units in field names)
   losses:
     wake_loss_pct: 8.0
     availability_pct: 97.0
     electrical_loss_pct: 2.0
     curtailment_pct: 0.0
     other_pct: 0.0
-  
-  # Wind resource metadata
   wind_resource:
     mean_wind_speed_ms: 7.85
     weibull_a: 8.32
@@ -178,9 +169,19 @@ constraints:
   fail_on_large_balloon: false
 
 monte_carlo:
+  discount_rate_pct: 8.0
+  capex_total_usd: 150000000
+  revenue_mean_usd: 50000000
+  revenue_std_pct: 10
+  cost_mean_usd: 3000000
+  cost_std_pct: 8
+  fx_mean_rate: 300.0
+  fx_std_pct: 3
+  project_life_years: 20
+  sampling_method: lhs
+  seed: 42
   enabled: true
   n_scenarios: 100000
-  seed: 42
   parameters:
     capacity_factor_std: 0.05
     tariff_lkr_std: 0.1
@@ -188,12 +189,7 @@ monte_carlo:
     capex_usd_std: 0.08
   var_confidence: 0.95
   cvar_confidence: 0.95
-  percentiles:
-  - 10
-  - 25
-  - 50
-  - 75
-  - 90
+  percentiles: [10, 25, 50, 75, 90]
   min_dscr_covenant: 1.2
   min_llcr_covenant: 1.25
   output_path: "outputs/mc_aep_dutchbay_100k.parquet"
@@ -220,12 +216,12 @@ sensitivity:
     dpi: 300
 
 metadata:
-  version: '2.5'
-  last_updated: '2025-12-21'
+  version: '2.6'
+  last_updated: '2025-12-22'
   author: DutchBay V14 Financial Modeling Team
   review_status: Draft - Pending Board Approval
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
-  sprint: 'Sprint 17 - Wind/AEP Pipeline Integration'
+  sprint: 'Sprint 17 - Entrypoint Consolidation & MC Integration'
   gwtf_compliance: 'All 51 rules audited'
 
 discount_rate: 0.12
