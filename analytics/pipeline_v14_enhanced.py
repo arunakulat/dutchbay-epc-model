@@ -143,13 +143,18 @@ def _validate_config_type_and_structure(config: Any) -> dict[str, Any]:
         )
 
 
-def _validate_annual_rows_structure(annual_rows: Any) -> list[dict[str, Any]]:
-    """CESSPIT: Strict validation of annual_rows from cashflow engine.
+def _validate_annual_rows_structure(
+    annual_rows: Any, require_debt_fields: bool = False
+) -> list[dict[str, Any]]:
+    """CESSPIT: Strict validation of annual_rows structure.
 
     Parameters
     ----------
     annual_rows : any
-        Output from build_annual_rows()
+        Output from build_annual_rows() or plan_debt()
+    require_debt_fields : bool
+        If True, validate debt-enriched fields (cf_pre_debt, debt_service_total)
+        If False, only validate cashflow fields (year)
 
     Returns
     -------
@@ -176,15 +181,24 @@ def _validate_annual_rows_structure(annual_rows: Any) -> list[dict[str, Any]]:
             f"annual_rows[0] must be dict, got {type(first_row).__name__}"
         )
 
-    required_keys = {"year", "cf_pre_debt", "debt_service_total"}
+    # Core cashflow fields (always required)
+    required_keys = {"year"}
+
+    # Debt fields (only required after debt module runs)
+    if require_debt_fields:
+        required_keys.update({"cf_pre_debt", "debt_service_total"})
+
     missing_keys = required_keys - set(first_row.keys())
     if missing_keys:
+        stage = "debt-enriched" if require_debt_fields else "cashflow"
         raise PipelineValidationError(
-            f"annual_rows[0] missing required keys: {missing_keys}"
+            f"annual_rows[0] missing required {stage} keys: {missing_keys}"
         )
 
     # Type-check numeric values
     for key in required_keys:
+        if key not in first_row:
+            continue
         try:
             float(first_row[key])
         except (TypeError, ValueError):
@@ -193,7 +207,8 @@ def _validate_annual_rows_structure(annual_rows: Any) -> list[dict[str, Any]]:
             )
 
     logger.debug(
-        "Validated annual_rows: %d rows, first_row_keys=%s",
+        "Validated annual_rows (%s): %d rows, first_row_keys=%s",
+        "debt-enriched" if require_debt_fields else "cashflow-only",
         len(annual_rows),
         list(first_row.keys()),
     )
@@ -518,7 +533,11 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
 
         annual_rows = build_annual_rows(cfg)
-        annual_rows = _validate_annual_rows_structure(annual_rows)
+
+        # Validate cashflow-only fields (debt fields not yet added)
+        annual_rows = _validate_annual_rows_structure(
+            annual_rows, require_debt_fields=False
+        )
         metrics.annual_rows_count = len(annual_rows)
 
         metrics.cashflow_time_sec = time.time() - phase_start
@@ -535,6 +554,11 @@ def run_v14_pipeline_enhanced(
 
         debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
         debt_result = _validate_debt_result_structure(debt_result)
+
+        # NOW validate debt-enriched fields (after debt module runs)
+        annual_rows = _validate_annual_rows_structure(
+            annual_rows, require_debt_fields=True
+        )
 
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
