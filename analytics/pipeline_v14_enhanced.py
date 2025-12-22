@@ -317,6 +317,8 @@ def _build_tranche_debt_profile(
 ) -> TrancheDebtProfile:
     """CCCDIR: Build TrancheDebtProfile from v14 debt_result.
 
+    Maps debt_result and config to TrancheDebtProfile dataclass fields.
+
     Parameters
     ----------
     config : dict[str, Any]
@@ -327,31 +329,40 @@ def _build_tranche_debt_profile(
     Returns
     -------
     TrancheDebtProfile
-        Lender-facing debt summary
+        Lender-facing debt summary with correct field names
     """
+    # Extract debt components by tranche
     principal_by = debt_result.get("principal_by_tranche") or {}
-    debt_result.get("lkr") or {}
+    lkr = debt_result.get("lkr") or {}
     usd = debt_result.get("usd") or {}
-    debt_result.get("dfi") or {}
+    dfi = debt_result.get("dfi") or {}
 
-    int(debt_result.get("construction_years") or 0)
+    # Timeline parameters
+    construction_years = int(debt_result.get("construction_years") or 0)
     tenor_years = int(debt_result.get("tenor_years") or 0)
-    int(debt_result.get("timeline_periods") or 0)
+    timeline_periods = int(debt_result.get("timeline_periods") or 0)
+
+    # Debt totals
     total_debt = float(sum(principal_by.values()) or 0.0)
-    float(debt_result.get("total_idc") or 0.0)
+    total_idc = float(debt_result.get("total_idc") or 0.0)
 
+    # Interest rates from config
     rates = get_nested(config, ["Financing_Terms", "rates"], {}) or {}
-    rates.get("lkr_nominal") or rates.get("lkr_min")
+    lkr_rate = rates.get("lkr_nominal") or rates.get("lkr_min")
     usd_rate = rates.get("usd_nominal") or rates.get("usd_commercial_min")
-    rates.get("dfi_nominal") or rates.get("dfi_min")
+    dfi_rate = rates.get("dfi_nominal") or rates.get("dfi_min")
 
-    int(get_nested(config, ["Financing_Terms", "interest_only_years"]) or 0)
+    # Amortization parameters
+    interest_only_years = int(
+        get_nested(config, ["Financing_Terms", "interest_only_years"]) or 0
+    )
 
     amortization_style = (
         get_nested(config, ["Financing_Terms", "amortization_style"]) or "sculpted"
     )
     amortization_style = str(amortization_style).lower()
 
+    # DSCR target
     dscr_target_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
     try:
         dscr_target = float(dscr_target_raw) if dscr_target_raw is not None else None
@@ -359,13 +370,25 @@ def _build_tranche_debt_profile(
         logger.warning("Could not parse target_dscr: %s; using None", dscr_target_raw)
         dscr_target = None
 
+    # Build TrancheDebtProfile with CORRECT field names
     return TrancheDebtProfile(
-        tranche_id="primary",
-        principal_usd=float(usd.get("principal") or 0.0),
+        construction_years=construction_years,
         tenor_years=tenor_years,
-        coupon_pct=float(usd_rate * 100) if usd_rate else 0.0,
-        disbursement_schedule={0: total_debt},
-        min_dscr_requirement=dscr_target or 1.30,
+        timeline_periods=timeline_periods,
+        total_debt=total_debt,
+        total_idc=total_idc,
+        lkr_principal=float(lkr.get("principal") or 0.0),
+        usd_principal=float(usd.get("principal") or 0.0),
+        dfi_principal=float(dfi.get("principal") or 0.0),
+        lkr_idc=float(lkr.get("idc") or 0.0),
+        usd_idc=float(usd.get("idc") or 0.0),
+        dfi_idc=float(dfi.get("idc") or 0.0),
+        lkr_rate=lkr_rate,
+        usd_rate=usd_rate,
+        dfi_rate=dfi_rate,
+        interest_only_years=interest_only_years,
+        amortization_style=amortization_style,
+        dscr_target=dscr_target,
     )
 
 
@@ -385,11 +408,12 @@ def _build_debt_covenant_snapshot(
     Returns
     -------
     DebtCovenantSnapshot
-        Covenant status for auditable reporting
+        Covenant status for auditable reporting with correct field names
     """
     dscr_series = list(debt_result.get("dscr_series") or [])
     dscr_min = float(debt_result.get("min_dscr") or 0.0)
 
+    # DSCR threshold from config
     dscr_threshold_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
     try:
         dscr_threshold = (
@@ -402,8 +426,10 @@ def _build_debt_covenant_snapshot(
         )
         dscr_threshold = 1.30
 
+    # Calculate breach statistics
     years_below = 0
     first_breach_year: Optional[int] = None
+    last_breach_year: Optional[int] = None
 
     for idx, value in enumerate(dscr_series, start=1):
         if value == float("inf"):
@@ -412,21 +438,36 @@ def _build_debt_covenant_snapshot(
             years_below += 1
             if first_breach_year is None:
                 first_breach_year = idx
+            last_breach_year = idx
 
-    float(debt_result.get("balloon_remaining") or 0.0)
+    balloon_remaining = float(debt_result.get("balloon_remaining") or 0.0)
+    balloon_flag = balloon_remaining > 1000.0  # >$1k balloon considered significant
 
+    # Audit status based on breach analysis
+    if years_below == 0:
+        audit_status = "PASS"
+        notes = "All DSCR covenant requirements met"
+    elif years_below <= 2:
+        audit_status = "REVIEW"
+        notes = f"Minor breach in {years_below} year(s)"
+    else:
+        audit_status = "FAIL"
+        notes = f"Significant breach in {years_below} year(s)"
+
+    if balloon_flag:
+        notes += f"; Balloon: ${balloon_remaining:,.0f}"
+
+    # Build DebtCovenantSnapshot with CORRECT field names
     return DebtCovenantSnapshot(
-        year=0,
-        dscr=dscr_min,
-        min_dscr_requirement=dscr_threshold,
-        is_breach=dscr_min < dscr_threshold,
-        cushion_pct=(
-            ((dscr_min - dscr_threshold) / dscr_threshold * 100)
-            if dscr_threshold > 0
-            else 0.0
-        ),
-        principal_outstanding_usd=float(debt_result.get("total_debt_remaining") or 0.0),
-        interest_expense_usd=0.0,
+        dscr_min=dscr_min,
+        dscr_threshold=dscr_threshold,
+        years_below_threshold=years_below,
+        first_breach_year=first_breach_year,
+        last_breach_year=last_breach_year,
+        balloon_remaining=balloon_remaining,
+        balloon_flag=balloon_flag,
+        audit_status=audit_status,
+        notes=notes,
     )
 
 
