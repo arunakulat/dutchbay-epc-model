@@ -1,12 +1,64 @@
 #!/usr/bin/env python
 """Monte Carlo simulation engine for DutchBay EPC model (v14).
 
+⚠️ CLI INVOCATION DEPRECATED: Use analytics/cli_monte_carlo_hydra.py for CLI usage.
+
+This module contains the MonteCarloEngine class and helper functions (PRESERVED).
+Direct CLI invocation of this script is deprecated (use wrapper instead).
+
+ENGINE USAGE (Still Valid):
+    >>> from analytics.monte_carlo_v14 import MonteCarloEngine
+    >>> engine = MonteCarloEngine(config=cfg, n_iterations=1000)
+    >>> result = engine.run()
+    >>> # This is still the canonical engine - use it in code
+
+CLI USAGE (DEPRECATED):
+    OLD (deprecated):
+        python -m analytics.monte_carlo_v14 --config scenarios/mc_base.yaml
+    
+    NEW (canonical):
+        python analytics/cli_monte_carlo_hydra.py \\
+            config=scenarios/mc_base.yaml \\
+            n_trials=10000 \\
+            seed=42
+
+MIGRATION PATH:
+
+IF using as CLI:
+    ❌ python -m analytics.monte_carlo_v14 ...
+    ✅ python analytics/cli_monte_carlo_hydra.py config=... n_trials=...
+
+IF importing as library:
+    ✅ from analytics.monte_carlo_v14 import MonteCarloEngine  # Still valid
+    ✅ engine = MonteCarloEngine(config, n_iterations=1000)   # Still valid
+
+WHAT'S DEPRECATED:
+- CLI invocation (use cli_monte_carlo_hydra.py)
+- Direct if __name__ == '__main__' execution
+
+WHAT'S PRESERVED:
+- MonteCarloEngine class (canonical implementation)
+- All helper functions (_aggregate_results, etc.)
+- Library imports (from analytics.monte_carlo_v14 import ...)
+
+GWTF:
+- R3: CLI moved to Hydra wrapper (this remains library code)
+- R7: IRR/NPV from finance.irr ONLY ✅
+- R22: Schema guard validation ✅
+- R23: Helper functions remain ✅
+
+CANONICAL CLI LOCATION:
+    analytics/cli_monte_carlo_hydra.py
+
+REMOVAL PLANNED:
+    CLI invocation: Sprint 18
+    Engine code: PRESERVED (core implementation)
+
+Status: Engine ACTIVE, CLI DEPRECATED
+DSGCCCG: Dolphins Swim Gracefully Capturing Clean Current Groups
+
 Generates stochastic scenarios for financial projections using Monte Carlo methods.
 Models uncertainty across revenue, costs, FX rates, and operational metrics.
-
-Usage:
-    python -m analytics.monte_carlo_v14 --config scenarios/mc_base.yaml
-    python -m analytics.monte_carlo_v14 --config scenarios/mc_stress.yaml --n-iterations 10000
 
 Context:
     - Simulates n iterations of project economics
@@ -57,6 +109,7 @@ Examples:
 import json
 import logging
 import time
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -697,7 +750,21 @@ def run_monte_carlo_analysis(**kwargs: Any) -> Optional[dict[str, Any]]:
 def main(
     config_path: str = "conf/scenarios/mc_base.yaml", n_iterations: int = 1000
 ) -> None:
-    """Main entry point."""
+    """Main entry point (DEPRECATED for CLI).
+    
+    ⚠️ DEPRECATED: Direct CLI invocation deprecated.
+    Use: python analytics/cli_monte_carlo_hydra.py config=... instead
+    
+    This function remains for backward compatibility but will be removed in Sprint 18.
+    """
+    warnings.warn(
+        "Direct CLI invocation of monte_carlo_v14.py is DEPRECATED. "
+        "Use: python analytics/cli_monte_carlo_hydra.py config=... n_trials=... "
+        "This entry point will be removed in Sprint 18.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -724,6 +791,26 @@ def main(
 
 
 if __name__ == "__main__":
+    # Issue deprecation warning on CLI invocation
+    warnings.warn(
+        "\n"
+        "⚠️  DEPRECATED: Direct invocation of monte_carlo_v14.py as CLI\n"
+        "\n"
+        "OLD (deprecated):\n"
+        "    python -m analytics.monte_carlo_v14 --config scenarios/mc_base.yaml\n"
+        "\n"
+        "NEW (canonical):\n"
+        "    python analytics/cli_monte_carlo_hydra.py \\\n"
+        "        config=scenarios/mc_base.yaml \\\n"
+        "        n_trials=10000 \\\n"
+        "        seed=42\n"
+        "\n"
+        "This CLI entry point will be removed in Sprint 18.\n"
+        "MonteCarloEngine class remains the canonical implementation.\n",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    
     from hydra import main as hydra_main
 
     @hydra_main(config_path="conf", config_name="monte_carlo", version_base="1.1")
