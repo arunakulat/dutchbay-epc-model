@@ -54,7 +54,7 @@ GWTF Compliance:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 2.2.0 (Lender-Grade Pipeline + Artifact Writing)
+Version: 2.2.1 (Lender-Grade Pipeline + Native Hydra chdir)
 """
 
 from __future__ import annotations
@@ -62,7 +62,6 @@ from __future__ import annotations
 import csv
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -73,9 +72,6 @@ from omegaconf import DictConfig
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
 logger = logging.getLogger(__name__)
-
-# Remember the original working directory so we can undo Hydra's job chdir.
-_ORIG_CWD = Path.cwd()
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -235,9 +231,6 @@ def cli(cfg: DictConfig) -> None:
         >>> 
         >>> # Artifacts written to: _out/run_full_pipeline_v14/
     """
-    # Undo Hydra's job-chdir so relative scenario paths still work from repo root.
-    os.chdir(_ORIG_CWD)
-
     # Validate required config parameter
     config = cfg.get("config")
     if not config:
