@@ -1,5 +1,13 @@
 # Base Hydra config for run_full_pipeline_v14.py
 
+# Prevent Hydra from changing working directory (so relative paths work)
+defaults:
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+
 # Path to YAML/JSON scenario file.
 # Override on the CLI, e.g.:
 #   python run_full_pipeline_v14.py config=scenarios/example_a.yaml
