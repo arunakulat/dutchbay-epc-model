@@ -1,9 +1,8 @@
 """Hydra CLI wrapper for Monte Carlo analysis.
 
-CANONICAL ENTRYPOINT: Use this instead of monte_carlo_v14.py (legacy).
+CANONICAL ENTRYPOINT: Use this instead of monte_carlo_v14.py (legacy CLI).
 
-This is a minimal Hydra stub. Local devs should wire it to the actual
-Monte Carlo engine by replacing the TODO section in main().
+Wired to analytics.monte_carlo_v14.MonteCarloEngine.
 
 Usage:
     python analytics/cli_monte_carlo_hydra.py \\
@@ -27,19 +26,15 @@ Output:
       "status": "success",
       "n_trials": 10000,
       "seed": 42,
-      "results": {{
-        "project_irr": {{"mean": 0.14, "std": 0.02, "p10": 0.11, "p90": 0.17}},
-        "min_dscr": {{"mean": 1.45, "std": 0.15, "p10": 1.25, "p90": 1.65}}
+      "statistics": {{
+        "npv_mean_usd": 45200000.0,
+        "npv_p10_usd": 38000000.0,
+        "npv_p90_usd": 52000000.0,
+        "irr_mean_pct": 14.5,
+        ...
       }},
       "output_dir": "_out/monte_carlo"
     }}
-
-Implementation Status:
-    STUB - Needs engine wiring. TODO:
-    1. Find actual Monte Carlo engine function
-    2. Call engine with config + distributions + n_trials + seed
-    3. Process results into JSON with statistics
-    4. Write artifacts if requested
 
 GWTF:
     - R3: Hydra-only (no argparse)
@@ -53,11 +48,11 @@ CASPER:
 
 DSGCCCG:
     Dolphins Swim Gracefully Capturing Clean Current Groups
-    Step 3 - Wrapper stub for local dev implementation
+    Step 3B - Wired to MonteCarloEngine
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 0.1.0 (Stub)
+Version: 1.0.0 (Wired)
 """
 
 from __future__ import annotations
@@ -69,6 +64,9 @@ from typing import Any
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+
+# Import engine class
+from analytics.monte_carlo_v14 import MonteCarloEngine
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +102,7 @@ def main(cfg: DictConfig) -> None:
         ...     config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
         ...     n_trials=10000 \\
         ...     seed=42
-        >>> # Output: {{"status": "stub", ...}}
+        >>> # Output: {{"status": "success", "statistics": {{...}}}}
     """
     # Validate required config parameter
     config_path = cfg.get("config")
@@ -128,79 +126,64 @@ def main(cfg: DictConfig) -> None:
     write_artifacts = bool(cfg.get("write_artifacts", True))
     n_trials = int(cfg.get("n_trials", 10000))
     seed = cfg.get("seed", 42)
-    stochastic_params = OmegaConf.to_container(
-        cfg.get("stochastic_params", {}), resolve=True
-    )
-    output_metrics = list(cfg.get("output_metrics", []))
     
     logger.info(
-        "Monte Carlo analysis CLI (stub): config=%s, n_trials=%d, seed=%s, output_dir=%s",
+        "Monte Carlo analysis: config=%s, n_trials=%d, seed=%s, output_dir=%s",
         config_path, n_trials, seed, output_dir
     )
     
-    # =========================================================================
-    # TODO: Wire to actual Monte Carlo engine
-    # =========================================================================
-    # 
-    # Local dev instructions:
-    # 1. Find the actual Monte Carlo function:
-    #    grep -rn "def.*monte_carlo" analytics/
-    # 
-    # 2. Import and call it, e.g.:
-    #    from analytics.monte_carlo_v14_enhanced import run_monte_carlo
-    #    results = run_monte_carlo(
-    #        config_path=str(config_path),
-    #        n_trials=n_trials,
-    #        seed=seed,
-    #        stochastic_params=stochastic_params,
-    #        output_metrics=output_metrics
-    #    )
-    # 
-    # 3. Replace the stub result below with actual results
-    # 
-    # 4. Test:
-    #    python analytics/cli_monte_carlo_hydra.py \\
-    #      config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
-    #      n_trials=100 seed=42
-    # 
-    # =========================================================================
-    
-    # STUB RESULT (replace with actual engine output)
-    result: dict[str, Any] = {
-        "status": "stub",
-        "message": "TODO: Wire to actual Monte Carlo engine",
-        "config_path": str(config_path),
-        "output_dir": str(output_dir),
-        "n_trials": n_trials,
-        "seed": seed,
-        "stochastic_params_configured": (
-            list(stochastic_params.keys()) 
-            if isinstance(stochastic_params, dict) 
-            else []
-        ),
-        "output_metrics_configured": output_metrics,
-        "implementation_needed": [
-            "1. Find Monte Carlo engine function (check monte_carlo_v14_enhanced.py)",
-            "2. Call engine with config + n_trials + seed + distributions",
-            "3. Process results: compute statistics (mean, std, percentiles)",
-            "4. Write artifacts if write_artifacts=true",
-        ]
-    }
-    
-    # Optional artifact writing (when engine is wired)
-    if write_artifacts and result.get("status") != "stub":
-        output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # =====================================================================
+        # WIRED TO ENGINE: analytics.monte_carlo_v14.MonteCarloEngine
+        # =====================================================================
         
-        # Write summary JSON
-        summary_path = output_dir / "monte_carlo_summary.json"
-        summary_path.write_text(
-            json.dumps(result, indent=2, sort_keys=True),
-            encoding="utf-8"
+        # Load config as DictConfig (MonteCarloEngine expects this)
+        cfg_obj = OmegaConf.load(str(config_path))
+        
+        # Initialize Monte Carlo engine
+        engine = MonteCarloEngine(cfg_obj, n_iterations=n_trials)
+        
+        # Run simulation
+        result: dict[str, Any] = engine.run()
+        
+        # Add output directory to result
+        result["output_dir"] = str(output_dir)
+        result["config_path"] = str(config_path)
+        
+        logger.info(
+            "Monte Carlo analysis complete: %d trials, execution_time=%.2fs",
+            n_trials,
+            result.get("execution_time_seconds", 0)
         )
-        logger.info("Wrote Monte Carlo results to %s", summary_path)
-    
-    # Print JSON to stdout (CLI-03 compliance)
-    print(json.dumps(result, indent=2, sort_keys=True))
+        
+        # Optional artifact writing
+        if write_artifacts and result.get("success", False):
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Write summary JSON
+            summary_path = output_dir / "monte_carlo_summary.json"
+            summary_path.write_text(
+                json.dumps(result, indent=2, sort_keys=True),
+                encoding="utf-8"
+            )
+            logger.info("Wrote Monte Carlo results to %s", summary_path)
+        
+        # Print JSON to stdout (CLI-03 compliance)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        
+    except Exception as e:
+        # Error handling with structured JSON output
+        error_result = {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "config_path": str(config_path),
+            "n_trials": n_trials,
+            "seed": seed
+        }
+        print(json.dumps(error_result, indent=2))
+        logger.exception("Monte Carlo analysis failed")
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":
