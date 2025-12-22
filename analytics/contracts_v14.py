@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -196,8 +196,6 @@ class StandardShockLibrary:
     @staticmethod
     def debt_tenor(base: float) -> ShockSpec:
         """Debt tenor shock with ±2 years (as percentage of base)."""
-        # For tenor, shocks are absolute years, not percentages
-        # But sensitivity_runner expects percentages, so we convert
         tenor_shock_pct = 2.0 / base if base > 0 else 0.1
         return ShockSpec(
             parameter="debt_tenor",
@@ -208,7 +206,6 @@ class StandardShockLibrary:
     @staticmethod
     def interest_rate(base: float) -> ShockSpec:
         """Interest rate shock with ±100 bps (as percentage of base)."""
-        # ±100 bps = ±0.01 absolute, convert to percentage of base
         rate_shock_pct = 0.01 / base if base > 0 else 0.1
         return ShockSpec(
             parameter="interest_rate",
@@ -333,6 +330,91 @@ class BreakevenResult(BaseModel):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Monte Carlo Contracts (Pydantic V2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class Distribution(BaseModel):
+    """Distribution specification for Monte Carlo sampling.
+    
+    CASPER: Contract-explicit probability distribution.
+    CESSPIT: All distribution parameters from config.
+    
+    Example:
+        >>> dist = Distribution(
+        ...     variable_name="capex",
+        ...     dist_type="normal",
+        ...     mean=1200.0,
+        ...     std=120.0
+        ... )
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    variable_name: str = Field(description="Variable name")
+    dist_type: Literal["normal", "triangular", "uniform", "lognormal"] = Field(
+        description="Distribution type"
+    )
+    mean: Optional[float] = Field(default=None, description="Mean (for normal/lognormal)")
+    std: Optional[float] = Field(default=None, description="Standard deviation")
+    min_val: Optional[float] = Field(default=None, description="Minimum value")
+    max_val: Optional[float] = Field(default=None, description="Maximum value")
+    mode: Optional[float] = Field(default=None, description="Mode (for triangular)")
+    description: Optional[str] = Field(default=None, description="Description")
+
+
+class DerivedParameter(BaseModel):
+    """Derived parameter computed from other sampled parameters.
+    
+    CASPER: Explicit dependency tracking.
+    
+    Example:
+        >>> param = DerivedParameter(
+        ...     name="total_opex",
+        ...     formula="fixed_opex + variable_opex * generation",
+        ...     depends_on=["fixed_opex", "variable_opex", "generation"]
+        ... )
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    name: str = Field(description="Derived parameter name")
+    formula: str = Field(description="Python expression to compute value")
+    depends_on: List[str] = Field(
+        default_factory=list,
+        description="List of parameter names this depends on"
+    )
+
+
+class MonteCarloScenario(BaseModel):
+    """Monte Carlo scenario configuration.
+    
+    CASPER: Complete MC scenario specification.
+    CESSPIT: All parameters from config, no hidden defaults.
+    
+    Example:
+        >>> scenario = MonteCarloScenario(
+        ...     name="base_case",
+        ...     n_iterations=1000,
+        ...     distributions=[dist1, dist2],
+        ...     seed=42
+        ... )
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    name: str = Field(description="Scenario name")
+    n_iterations: int = Field(gt=0, description="Number of iterations")
+    distributions: List[Distribution] = Field(
+        default_factory=list,
+        description="Parameter distributions"
+    )
+    derived_parameters: List[DerivedParameter] = Field(
+        default_factory=list,
+        description="Derived parameters"
+    )
+    seed: Optional[int] = Field(default=None, description="Random seed")
+    sampling_method: str = Field(default="lhs", description="Sampling method (lhs/random)")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # CASPER Result Contract (with computed fields)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -374,11 +456,11 @@ class MonteCarloResult(BaseModel):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# WACC, Lender/Scenario Results (Phase 1)
+# WACC, Lender/Scenario Results (Phase 1) - Dataclass Contracts
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@dataclass
+@dataclass(frozen=True)
 class WaccComponents:
     """WACC calculation component breakdown for scenario and audit."""
 
@@ -401,7 +483,7 @@ class WaccComponents:
     prudential_spread_bps: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class WaccResult:
     """Complete WACC result including base and prudential valuations."""
 
@@ -409,6 +491,108 @@ class WaccResult:
     prudential_rate: Optional[float] = None
     prudential_npv: Optional[float] = None
     meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TrancheDebtProfile:
+    """Aggregate per-tranche debt profile for a scenario (Lender View)."""
+    
+    construction_years: int = 0
+    tenor_years: int = 0
+    timeline_periods: int = 0
+    total_debt: float = 0.0
+    total_idc: float = 0.0
+    lkr_principal: float = 0.0
+    usd_principal: float = 0.0
+    dfi_principal: float = 0.0
+    lkr_idc: float = 0.0
+    usd_idc: float = 0.0
+    dfi_idc: float = 0.0
+    lkr_rate: Optional[float] = None
+    usd_rate: Optional[float] = None
+    dfi_rate: Optional[float] = None
+    interest_only_years: int = 0
+    amortization_style: str = "sculpted"
+    dscr_target: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class DebtCovenantSnapshot:
+    """Covenant snapshot for a single debt case (DSCR, LLCR, PLCR)."""
+    
+    dscr_min: float
+    dscr_threshold: float
+    years_below_threshold: int
+    first_breach_year: Optional[int] = None
+    last_breach_year: Optional[int] = None
+    balloon_flag: bool = False
+    balloon_remaining: float = 0.0
+    llcr: Optional[float] = None
+    plcr: Optional[float] = None
+    llcr_threshold: Optional[float] = None
+    plcr_threshold: Optional[float] = None
+    fx_min: Optional[float] = None
+    fx_max: Optional[float] = None
+    fx_avg: Optional[float] = None
+    notes: str = ""
+    audit_status: str = "REVIEW"
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CashflowResult:
+    """Canonical multi-year project cashflow surface in LKR."""
+    
+    years: List[int]
+    annual_rows: List[Dict[str, float]]
+    gross_generation_kwh: List[float]
+    net_generation_kwh: List[float]
+    revenue_lkr: List[float]
+    statutory_deductions_lkr: List[float]
+    opex_lkr: List[float]
+    pretax_cfads_lkr: List[float]
+    tax_lkr: List[float]
+    posttax_cfads_lkr: List[float]
+    cfads_final_lkr: List[float]
+    depreciation_lkr: List[float]
+    interest_expense_lkr: List[float]
+    taxable_income_lkr: List[float]
+    risk_haircut_pct: float
+    risk_haircut_amount_lkr: List[float]
+    fx_curve_lkr_per_usd: Optional[List[float]] = None
+    notes: List[str] = field(default_factory=list)
+    flags: Dict[str, bool] = field(default_factory=dict)
+
+    def as_dict_rows(self) -> List[Dict[str, float]]:
+        return list(self.annual_rows)
+
+
+@dataclass(frozen=True)
+class DownsideMetrics:
+    """Downside risk metrics for equity performance."""
+    
+    prob_negative_npv: Optional[float] = None
+    prob_below_hurdle: Optional[float] = None
+    worst_case_irr: Optional[float] = None
+    max_drawdown: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class EquityPerformance:
+    """Equity performance metrics."""
+    
+    equity_irr: Optional[float] = None
+    equity_npv: Optional[float] = None
+    moic: Optional[float] = None
+    dpi: Optional[float] = None
+    rvpi: Optional[float] = None
+    tvpi: Optional[float] = None
+    annual_coc: List[float] = field(default_factory=list)
+    average_coc: float = 0.0
+    payback_period_years: Optional[float] = None
+    downside: Optional[DownsideMetrics] = None
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -446,11 +630,11 @@ class ScenarioResult:
     annual_rows: Sequence[Dict[str, Any]] = field(default_factory=list)
     debt_result: Dict[str, Any] = field(default_factory=dict)
     kpis: Dict[str, Any] = field(default_factory=dict)
-    cashflow: Optional["CashflowResult"] = None
+    cashflow: Optional[CashflowResult] = None
 
-    equity_performance: Optional["EquityPerformance"] = None
-    debt_profile: Optional["TrancheDebtProfile"] = None
-    debt_covenants: Optional["DebtCovenantSnapshot"] = None
+    equity_performance: Optional[EquityPerformance] = None
+    debt_profile: Optional[TrancheDebtProfile] = None
+    debt_covenants: Optional[DebtCovenantSnapshot] = None
 
     def as_dict(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
@@ -482,7 +666,18 @@ __all__ = [
     "SensitivitySuite",
     "SensitivityRequest",
     "BreakevenResult",
-    "CasperResult",
-    "MonteCarloResult",
     "ShockResult",
+    # Monte Carlo contracts
+    "Distribution",
+    "DerivedParameter",
+    "MonteCarloScenario",
+    "MonteCarloResult",
+    # CASPER
+    "CasperResult",
+    # Debt & Cashflow contracts
+    "TrancheDebtProfile",
+    "DebtCovenantSnapshot",
+    "CashflowResult",
+    "EquityPerformance",
+    "DownsideMetrics",
 ]
