@@ -258,7 +258,7 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     return 0.0
 
 
-def _derive_cfads_series(annual_rows: list[dict[str, Any]]) -> list[float]:
+def _derive_cfads_series(annual_rows: Optional[Sequence[Mapping[str, Any]]]) -> list[float]:
     """Extract CFADS series in USD.
 
     Historical row schemas have drifted:
@@ -386,7 +386,13 @@ def calculate_scenario_kpis(
     # ─────────────────────────────────────────────────────────────────────────
     drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
     capex_total = _derive_capex_usd(config)
-    cfads_series = _derive_cfads_series(annual_rows, cfads_series_usd)
+    
+    # FIXED: Use cfads_series_usd override pattern correctly
+    if cfads_series_usd:
+        cfads_series = list(cfads_series_usd)
+    else:
+        cfads_series = _derive_cfads_series(annual_rows)
+    
     cfads: list[float] = [float(x) for x in cfads_series]
 
     if scenario_name is None:
