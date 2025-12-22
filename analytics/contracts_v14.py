@@ -267,6 +267,48 @@ class BreakevenResult(BaseModel):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Tail Risk Contracts (Sprint 17 - Pydantic V2 Migration)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TailRiskMetrics(BaseModel):
+    """
+    Standard tail-risk snapshot for a single KPI distribution.
+
+    Kept intentionally minimal + stable:
+    - VaR/CVaR are expressed at a confidence level (e.g., 95 => left 5% tail).
+    - breach_probability is probability of falling below a covenant/threshold (if supplied).
+
+    CASPER: All tail risk metrics explicitly typed for audit trail.
+    CESSPIT: No defaults, all values computed from MC simulation.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kpi: str = Field(..., description="Name of KPI (e.g., 'project_irr', 'min_dscr')")
+    confidence_level: float = Field(
+        95.0, ge=50.0, le=99.9, description="Confidence level for VaR/CVaR (e.g., 95 => 5% tail)"
+    )
+
+    var: float | None = Field(
+        None, description="Value-at-Risk at the given confidence level (left-tail quantile)."
+    )
+    cvar: float | None = Field(
+        None, description="Conditional VaR / Expected Shortfall in the same tail as VaR."
+    )
+
+    threshold: float | None = Field(
+        None, description="Optional threshold/covenant used to compute breach probability."
+    )
+    breach_probability: float | None = Field(
+        None, ge=0.0, le=1.0, description="P(KPI < threshold) if threshold provided."
+    )
+
+    mean: float | None = Field(None, description="Optional mean of the distribution.")
+    std: float | None = Field(None, ge=0.0, description="Optional std dev of the distribution.")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # CASPER Result Contract (with computed fields)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -501,6 +543,8 @@ __all__ = [
     "SensitivitySuite",
     "SensitivityRequest",
     "BreakevenResult",
+    # Tail Risk (Sprint 17)
+    "TailRiskMetrics",
     # CASPER
     "CasperResult",
     "ShockResult",
