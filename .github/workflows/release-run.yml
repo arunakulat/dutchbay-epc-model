@@ -35,8 +35,11 @@ jobs:
       - name: Build lendercase artifacts
         run: |
           python run_full_pipeline_v14.py \
-            --config scenarios/dutchbay_lendercase_2025Q4.yaml \
-            --output-dir _out/release_run
+            config=scenarios/dutchbay_lendercase_2025Q4.yaml \
+            validation_mode=strict \
+            validation_modules=[cashflow,debt] \
+            export_dir=_out/release_run \
+            write_artifacts=true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
