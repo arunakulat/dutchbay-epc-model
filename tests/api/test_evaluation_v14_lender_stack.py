@@ -122,11 +122,13 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
     
     This validates the alternative evaluation entry point.
     """
-    # Arrange: Minimal in-memory config
+    # Arrange: Complete v14-compliant config with all required fields
     config = {
         "project": {
             "name": "test_project",
             "capacity_mw": 100.0,
+            "capacity_factor_pct": 35.0,  # Required for energy calculation
+            "project_life_years": 25,      # Required for timeline
         },
         "wind": {
             "weibull_k": 2.0,
@@ -135,10 +137,20 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
         },
         "finance": {
             "capex_total_usd": 200e6,
-            "tariff_base_usd_per_mwh": 0.08,
-            "opex_annual_usd": 5e6,
-            "project_life_years": 25,
             "discount_rate_pct": 8.0,
+        },
+        "tariff": {
+            "lkr_per_kwh": 24.0,  # 300 LKR/USD * 0.08 USD/kWh = 24 LKR/kWh
+        },
+        "opex": {
+            "usd_per_year": 5e6,  # Annual OPEX in USD
+        },
+        "tax": {
+            "corporate_tax_rate_pct": 28.0,  # Sri Lankan corporate tax rate
+        },
+        "fx": {
+            "start_lkr_per_usd": 300.0,  # Initial LKR/USD exchange rate
+            "annual_depr": [0.02] * 25,   # 2% annual LKR depreciation for 25 years
         },
         "debt": {
             "target_dscr": 1.4,
@@ -179,16 +191,35 @@ def test_evaluation_can_apply_parameter_overrides():
     3. Debt structuring
     4. KPI calculation
     """
-    # Arrange: Minimal config
+    # Arrange: Complete v14-compliant base config
     config = {
-        "project": {"name": "test_shock", "capacity_mw": 100.0},
-        "wind": {"weibull_k": 2.0, "weibull_lambda": 8.5, "hub_height_m": 120.0},
+        "project": {
+            "name": "test_shock",
+            "capacity_mw": 100.0,
+            "capacity_factor_pct": 35.0,
+            "project_life_years": 25,
+        },
+        "wind": {
+            "weibull_k": 2.0,
+            "weibull_lambda": 8.5,
+            "hub_height_m": 120.0,
+        },
         "finance": {
             "capex_total_usd": 200e6,
-            "tariff_base_usd_per_mwh": 0.08,
-            "opex_annual_usd": 5e6,
-            "project_life_years": 25,
             "discount_rate_pct": 8.0,
+        },
+        "tariff": {
+            "lkr_per_kwh": 24.0,  # Base tariff
+        },
+        "opex": {
+            "usd_per_year": 5e6,
+        },
+        "tax": {
+            "corporate_tax_rate_pct": 28.0,
+        },
+        "fx": {
+            "start_lkr_per_usd": 300.0,
+            "annual_depr": [0.02] * 25,
         },
         "debt": {
             "target_dscr": 1.4,
@@ -209,7 +240,7 @@ def test_evaluation_can_apply_parameter_overrides():
     # Act: Apply tariff shock (+10%)
     kpis_tariff_shock = evaluate_scenario_from_dict(
         config=config,
-        overrides={"finance": {"tariff_base_usd_per_mwh": 0.088}}  # +$0.008/MWh
+        overrides={"tariff": {"lkr_per_kwh": 26.4}}  # +10% from 24.0
     )
     
     # Assert: CAPEX increase should reduce project IRR
