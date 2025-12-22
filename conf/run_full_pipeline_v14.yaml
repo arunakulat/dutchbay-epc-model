@@ -16,3 +16,12 @@ validation_mode: strict
 # or:
 #   validation_modules=[cashflow,debt]
 validation_modules: null
+
+# Where to write release/smoke artifacts (relative to repo root).
+# Override on the CLI, e.g.:
+#   python run_full_pipeline_v14.py export_dir=_out/release_run
+export_dir: _out/run_full_pipeline_v14
+
+# If true, write summary.json + (optional) annual_rows.csv, kpis.json, debt_result.json
+# Set to false for dev/debugging to skip file I/O.
+write_artifacts: true
