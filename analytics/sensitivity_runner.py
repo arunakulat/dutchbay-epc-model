@@ -8,6 +8,7 @@ from analytics.contracts_v14 import (
     ShockResult,
     ShockSpec,
     StandardShockLibrary,
+    TornadoResult,  # Added for v2 contract structure
 )
 from analytics.evaluate_scenario import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
@@ -23,6 +24,21 @@ def run_sensitivity_analysis(
 ) -> SensitivitySuite:
     """
     Run sensitivity analysis for a given scenario configuration.
+    
+    Pydantic v2 Contract Compliance:
+        - Creates ShockResult(low_case, high_case, impact)
+        - Wraps in TornadoResult(metric_name, base_metric, shock_results)
+        - Returns SensitivitySuite(metric, tornado_results, base_kpis)
+    
+    Args:
+        base_config_path: Path to base scenario YAML config
+        metric: Target metric to analyze (default: 'project_irr')
+        shock_specs: List of ShockSpec objects (auto-generated if None)
+        validation_mode: Schema validation mode ('strict', 'warn', 'off')
+        validation_modules: Modules to validate (default: ['cashflow', 'debt'])
+    
+    Returns:
+        SensitivitySuite with tornado chart results
     """
     base_path = Path(base_config_path)
     # 1. Load base scenario config
@@ -77,7 +93,7 @@ def run_sensitivity_analysis(
         if interest_base is not None and interest_base > 0:
             shock_specs.append(StandardShockLibrary.interest_rate(interest_base))
     # 4. Evaluate scenario for each shock at low and high values
-    shock_results: List[ShockResult] = []
+    tornado_results: List[TornadoResult] = []  # v2: tornado_results instead of shock_results
     for shock in shock_specs:
         # Low shock run
         low_override: dict[str, Any] = {}
@@ -108,25 +124,30 @@ def run_sensitivity_analysis(
             validation_modules=validation_modules or ["cashflow", "debt"],
         )
         high_metric_value = float(high_kpis.get(metric, 0.0))
-        # Construct shock result
+        
+        # === PYDANTIC V2 CONTRACT STRUCTURE ===
+        # Build ShockResult with v2 fields (low_case, high_case, impact)
         shock_result = ShockResult(
-            variable_name=shock.variable_name,
-            metric_name=metric,
-            base_value=float(shock.base_value),
-            low_value=float(shock.low_value),
-            high_value=float(shock.high_value),
-            base_metric=base_metric_value,
-            low_metric=low_metric_value,
-            high_metric=high_metric_value,
-            label=shock.label,
+            low_case=low_metric_value,
+            high_case=high_metric_value,
+            impact=high_metric_value - low_metric_value
         )
-        shock_results.append(shock_result)
-    # 5. Create SensitivitySuite with results
+        
+        # Wrap in TornadoResult (v2 contract expects this structure)
+        tornado_result = TornadoResult(
+            metric_name=shock.variable_name,
+            base_metric=base_metric_value,
+            shock_results=[shock_result],
+            label=shock.label,
+            impact_abs=abs(high_metric_value - low_metric_value)
+        )
+        tornado_results.append(tornado_result)
+    
+    # 5. Create SensitivitySuite with v2 contract fields
     suite = SensitivitySuite(
-        metric_name=metric,
-        base_metric_value=base_metric_value,
-        scenario_name=scenario_name,
-        shock_results=shock_results,
+        metric=metric,  # v2: 'metric' not 'metric_name'
         base_config_path=str(base_path),
+        tornado_results=tornado_results,  # v2: 'tornado_results' not 'shock_results'
+        base_kpis={metric: base_metric_value}  # v2: added base_kpis
     )
     return suite
