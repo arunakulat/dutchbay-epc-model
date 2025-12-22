@@ -144,6 +144,127 @@ class MonteCarloScenario(BaseModel):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
+class ShockSpec(BaseModel):
+    """Individual parameter shock specification for sensitivity analysis.
+    
+    Defines a single parameter to shock with specific percentage variations.
+    
+    CASPER: Contract-explicit shock definition.
+    CESSPIT: All shock values from config or library.
+    
+    Example:
+        >>> shock = ShockSpec(
+        ...     parameter="capex",
+        ...     shocks=[-0.10, -0.05, 0.05, 0.10],
+        ...     label="Capital Cost"
+        ... )
+    """
+    
+    model_config = ConfigDict(frozen=True)
+    
+    parameter: str = Field(
+        description="Parameter name to shock (e.g., 'capex', 'tariff', 'capacity_factor')"
+    )
+    shocks: List[float] = Field(
+        description="List of shock percentages as decimals (e.g., [-0.1, 0.1] for ±10%)"
+    )
+    label: Optional[str] = Field(
+        default=None,
+        description="Display label for reporting (defaults to parameter name)"
+    )
+    
+    @field_validator("shocks")
+    @classmethod
+    def validate_shocks(cls, v: List[float]) -> List[float]:
+        """Validate shock list is non-empty and reasonable."""
+        if not v:
+            raise ValueError("Shock list cannot be empty")
+        if any(s < -1.0 or s > 5.0 for s in v):
+            raise ValueError("Shock values must be in range [-1.0, 5.0] (-100% to +500%)")
+        return v
+
+
+class StandardShockLibrary:
+    """Predefined library of standard sensitivity shocks.
+    
+    Provides common shock patterns for typical project finance parameters.
+    
+    CESSPIT: Centralized shock library prevents drift.
+    GWTF: One source of truth for standard shocks.
+    
+    Usage:
+        >>> shocks = StandardShockLibrary.standard_shocks()
+        >>> capex_shock = StandardShockLibrary.capex_shock()
+    """
+    
+    @staticmethod
+    def standard_shocks() -> List[ShockSpec]:
+        """Return standard shock library for typical project parameters.
+        
+        Returns:
+            List of ShockSpec for: capex, tariff, capacity_factor, opex, discount_rate
+            
+        Example:
+            >>> shocks = StandardShockLibrary.standard_shocks()
+            >>> len(shocks)
+            5
+        """
+        return [
+            ShockSpec(
+                parameter="capex",
+                shocks=[-0.10, -0.05, 0.05, 0.10],
+                label="Capital Cost"
+            ),
+            ShockSpec(
+                parameter="tariff",
+                shocks=[-0.10, -0.05, 0.05, 0.10],
+                label="Tariff Rate"
+            ),
+            ShockSpec(
+                parameter="capacity_factor",
+                shocks=[-0.10, -0.05, 0.05, 0.10],
+                label="Capacity Factor"
+            ),
+            ShockSpec(
+                parameter="opex",
+                shocks=[-0.10, -0.05, 0.05, 0.10],
+                label="Operating Cost"
+            ),
+            ShockSpec(
+                parameter="discount_rate",
+                shocks=[-0.01, -0.005, 0.005, 0.01],
+                label="Discount Rate"
+            ),
+        ]
+    
+    @staticmethod
+    def capex_shock() -> ShockSpec:
+        """Standard CAPEX shock (±10%)."""
+        return ShockSpec(
+            parameter="capex",
+            shocks=[-0.10, -0.05, 0.05, 0.10],
+            label="Capital Cost"
+        )
+    
+    @staticmethod
+    def tariff_shock() -> ShockSpec:
+        """Standard tariff shock (±10%)."""
+        return ShockSpec(
+            parameter="tariff",
+            shocks=[-0.10, -0.05, 0.05, 0.10],
+            label="Tariff Rate"
+        )
+    
+    @staticmethod
+    def capacity_factor_shock() -> ShockSpec:
+        """Standard capacity factor shock (±10%)."""
+        return ShockSpec(
+            parameter="capacity_factor",
+            shocks=[-0.10, -0.05, 0.05, 0.10],
+            label="Capacity Factor"
+        )
+
+
 class ParameterRangeConfig(BaseModel):
     """
     Parameter shock configuration for sensitivity analysis.
@@ -550,7 +671,9 @@ __all__ = [
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
-    # Sensitivity
+    # Sensitivity (with new ShockSpec and StandardShockLibrary)
+    "ShockSpec",
+    "StandardShockLibrary",
     "TornadoResult",
     "MultiMetricTornadoResult",
     "ParameterRangeConfig",
