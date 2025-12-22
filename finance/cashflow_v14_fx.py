@@ -23,7 +23,9 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
          start_lkr_per_usd: 375
          annual_depr_pct: 3    # percentage
          # or
-         annual_depr: 0.03     # decimal
+         annual_depr: 0.03     # decimal (scalar)
+         # or
+         annual_depr: [0.02, 0.025, 0.03, ...]  # per-year list
 
     Fallbacks
     ---------
@@ -65,10 +67,28 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
             depr_pct = fx_cfg.get("annual_depr_pct") or fx_cfg.get("depr_pct")
 
             if annual_depr is not None:
+                # Support both scalar (uniform) and list (per-year) depreciation
+                if isinstance(annual_depr, (list, tuple)):
+                    # Per-year depreciation rates (e.g., Monte Carlo scenarios)
+                    rates = [float(x) for x in annual_depr]
+                    if not rates:
+                        raise ValueError("fx.annual_depr list must not be empty")
+                    # Pad if shorter than project life
+                    if len(rates) < years:
+                        rates = rates + [rates[-1]] * (years - len(rates))
+                    # Build curve with year-specific rates
+                    curve_out: List[float] = []
+                    level = float(start_val)
+                    for i in range(years):
+                        curve_out.append(level)
+                        level *= 1.0 + float(rates[i])  # Apply year i depreciation
+                    return curve_out
+                # Scalar depreciation (uniform across all years)
                 depr = float(annual_depr)  # expected as decimal (0.03 = 3%)
             else:
                 depr = _pct_to_decimal(_as_float_or_none(depr_pct) or 0.0) or 0.0
 
+            # Build uniform depreciation curve
             out: List[float] = []
             cur = start_val
             for _ in range(years):
@@ -92,6 +112,19 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
         start_val = float(start_nested)
         annual_depr_nested = get_nested(config, ["fx", "annual_depr"], None)
         if annual_depr_nested is not None:
+            if isinstance(annual_depr_nested, (list, tuple)):
+                # Per-year rates from nested path
+                rates = [float(x) for x in annual_depr_nested]
+                if not rates:
+                    raise ValueError("fx.annual_depr list must not be empty")
+                if len(rates) < years:
+                    rates = rates + [rates[-1]] * (years - len(rates))
+                curve_out2: List[float] = []
+                level2 = float(start_val)
+                for i in range(years):
+                    curve_out2.append(level2)
+                    level2 *= 1.0 + float(rates[i])
+                return curve_out2
             depr = float(annual_depr_nested or 0.0)
         else:
             depr_nested = get_nested(config, ["fx", "annual_depr_pct"], None)
