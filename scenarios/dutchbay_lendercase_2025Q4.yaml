@@ -62,9 +62,20 @@ tariff:
   tariff_type: fixed
   ppa_term_years: 20
 
+# ═════════════════════════════════════════════════════════════════════════════
+# FX INTEGRATION (Sprint 17 - Issue #52 Fix)
+# ═════════════════════════════════════════════════════════════════════════════
 fx:
-  start_lkr_per_usd: 300.0
-  annual_depr: 0.03
+  enabled: true  # ✅ ENABLED: Project has USD debt with LKR revenue
+  mode: "deterministic"  # Base case uses deterministic FX curve
+  start_lkr_per_usd: 300.0  # Starting FX rate (2025Q4)
+  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  uncertainty_pct: 0.05  # ±5% FX uncertainty (used in Monte Carlo)
+  
+  # Multi-currency debt structure drives FX risk
+  # USD exposure: 82.5M (DFI 15M + Commercial 67.5M)
+  # LKR revenue: 100% of tariff receipts
+  # → Material FX mismatch requires modeling
 
 capex:
   usd_total: 150000000
@@ -106,12 +117,43 @@ statutory:
 risk_adjustment:
   cfads_haircut_pct: 0.1
 
+# ═════════════════════════════════════════════════════════════════════════════
+# MULTI-CURRENCY DEBT STRUCTURE (Sprint 17 - Issue #52 Fix)
+# ═════════════════════════════════════════════════════════════════════════════
 Financing_Terms:
   debt_ratio: 0.7
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
   interest_rate_nominal: 0.08
+  
+  # Multi-currency debt tranches (NEW: Sprint 17)
+  debt_tranches:
+    - name: "USD_DFI"
+      currency: "USD"
+      principal_usd: 15000000  # 10% of 150M capex
+      rate_pct: 6.5
+      tenor_years: 15
+      grace_years: 2
+      amortization: "sculpted"  # DSCR-targeted
+      
+    - name: "USD_Commercial"
+      currency: "USD"
+      principal_usd: 67500000  # 45% of 150M capex
+      rate_pct: 7.5
+      tenor_years: 15
+      grace_years: 2
+      amortization: "sculpted"
+      
+    - name: "LKR_Local"
+      currency: "LKR"
+      principal_lkr: 20250000000  # 67.5M USD @ 300 FX rate
+      rate_pct: 8.0
+      tenor_years: 15
+      grace_years: 2
+      amortization: "sculpted"
+  
+  # Legacy mix parameters (preserved for backward compatibility)
   mix:
     lkr_max: 0.45
     dfi_max: 0.1
@@ -123,14 +165,17 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075
     usd_commercial_min: 0.075
+    
   target_dscr: 1.3
   min_dscr: 1.2
   min_dscr_covenant: 1.2
+  
   reserves:
     dsra_months: 6
     receivables_guarantee_months: 9
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
+  
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
@@ -168,8 +213,15 @@ constraints:
   fail_on_covenant_breach: false
   fail_on_large_balloon: false
 
+# ═════════════════════════════════════════════════════════════════════════════
+# MONTE CARLO CONFIG (Sprint 17 - Pipeline Integration)
+# ═════════════════════════════════════════════════════════════════════════════
 monte_carlo:
+  # Discount rate will be read from pipeline baseline (Option A)
+  # This config value used as fallback only
   discount_rate_pct: 8.0
+  
+  # Scenario parameters (toy model - TO BE DEPRECATED)
   capex_total_usd: 150000000
   revenue_mean_usd: 50000000
   revenue_std_pct: 10
@@ -178,15 +230,22 @@ monte_carlo:
   fx_mean_rate: 300.0
   fx_std_pct: 3
   project_life_years: 20
+  
+  # Sampling configuration
   sampling_method: lhs
   seed: 42
   enabled: true
   n_scenarios: 100000
+  
+  # Distribution parameters (for pipeline-backed MC)
   parameters:
     capacity_factor_std: 0.05
     tariff_lkr_std: 0.1
     opex_usd_std: 0.15
     capex_usd_std: 0.08
+    fx_rate_std: 0.05  # ±5% FX uncertainty
+  
+  # Output configuration
   var_confidence: 0.95
   cvar_confidence: 0.95
   percentiles: [10, 25, 50, 75, 90]
@@ -216,13 +275,17 @@ sensitivity:
     dpi: 300
 
 metadata:
-  version: '2.6'
+  version: '2.7'  # Updated for FX integration
   last_updated: '2025-12-22'
   author: DutchBay V14 Financial Modeling Team
   review_status: Draft - Pending Board Approval
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
-  sprint: 'Sprint 17 - Entrypoint Consolidation & MC Integration'
+  sprint: 'Sprint 17 - FX Integration & MC Pipeline Integration'
   gwtf_compliance: 'All 51 rules audited'
+  changes:
+    - 'v2.7: Enabled FX integration for multi-currency debt'
+    - 'v2.7: Added debt_tranches structure (USD DFI, USD Commercial, LKR Local)'
+    - 'v2.7: FX curve parameters configured for deterministic base case'
 
 discount_rate: 0.12
 
