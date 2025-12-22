@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from finance.utils import as_float, get_nested
 
-logger = logging.getLogger("dutchbay.v14chat.finance.debt")
+logger = logging.getLogger(__name__)  # Use __name__ instead of hardcoded "dutchbay.v14chat.finance.debt"
 
 """Debt Planning Module for DutchBay V14 Project Finance.
 
@@ -31,8 +31,7 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
 
 
 def _npv(cashflows: Sequence[float], rate: float) -> float:
-    """
-    Simple NPV helper (no IRR logic here – IRR stays in finance.irr).
+    """Simple NPV helper (no IRR logic here – IRR stays in finance.irr).
 
     cashflows: sequence of CFADS values by year (t = 1..N)
     rate: discount rate (e.g. cost of senior debt)
@@ -53,17 +52,43 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
+    """
+    Extract CAPEX from config, supporting both v14 and legacy schemas.
+    
+    Priority order:
+    1. finance.capex_total_usd (v14 standard)
+    2. finance.capex_usd (v14 alternate)
+    3. capex.usd_total (legacy)
+    4. capex.capex_total_usd (legacy alternate)
+    5. capex.total_capex_usd (legacy alternate)
+    6. capex_usd_total (top-level legacy)
+    7. Fallback: 100.0 (with warning)
+    """
+    # PRIORITY 1: v14 schema - finance section
+    finance_cfg = params.get("finance")
+    if isinstance(finance_cfg, dict):
+        val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
+        if isinstance(val, (int, float)):
+            return float(val)
+    
+    # PRIORITY 2: Legacy capex section
     capex_cfg = params.get("capex", {}) or {}
-    for val in [
-        capex_cfg.get("usd_total"),
-        capex_cfg.get("total_capex_usd"),
-        capex_cfg.get("total_capex_lkr"),
-        capex_cfg.get("total_capex"),
-        params.get("capex_usd_total"),
-    ]:
-        if val is not None:
-            return _as_float(val, 100.0)
-    logger.warning("CAPEX extractor: no key found; falling back to 100.0")
+    for key in ["usd_total", "capex_total_usd", "total_capex_usd", "total_capex"]:
+        val = capex_cfg.get(key)
+        if isinstance(val, (int, float)):
+            return float(val)
+    
+    # PRIORITY 3: Top-level legacy key
+    val = params.get("capex_usd_total")
+    if isinstance(val, (int, float)):
+        return float(val)
+    
+    # FALLBACK: Log warning and return minimal value
+    logger.warning(
+        "CAPEX extractor: no recognized key found. "
+        "Checked: finance.capex_total_usd, capex.usd_total, etc. "
+        "Falling back to 100.0"
+    )
     return 100.0
 
 
@@ -186,8 +211,7 @@ def apply_debt_layer(
     params: Dict[str, Any],
     annual_rows: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """
-    Core v14 debt engine.
+    """Core v14 debt engine.
 
     Returns a rich dict used internally by plan_debt and the analytics layer.
     """
@@ -214,7 +238,7 @@ def apply_debt_layer(
         debt_total,
     )
 
-    # ── Tranche mix and IDC ────────────────────────────────────────
+    # ── Tranche mix and IDC ──────────────────────────────────
     tranches = _solve_mix(p, debt_total)
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
@@ -230,7 +254,7 @@ def apply_debt_layer(
 
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
-    # ── CFADS / DSCR profile ──────────────────────────────────────────
+    # ── CFADS / DSCR profile ────────────────────────────────────
     cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
 
     # Extended CFADS series used by legacy DSCR schedule (fixed horizon = 23)
@@ -241,7 +265,7 @@ def apply_debt_layer(
         cfads_ext.append(cfads[-1] if cfads else 0.0)
     cfads_ext = cfads_ext[:23]
 
-    # ── Amortisation schedule by tranche ──────────────────────────────────
+    # ── Amortisation schedule by tranche ──────────────────────────────
     if amortization in ("annuity", "fixed"):
         schedules = {
             k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
@@ -285,7 +309,7 @@ def apply_debt_layer(
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
 
-    # ── LLCR / PLCR + FX covenant surfaces ────────────────────────────────
+    # ── LLCR / PLCR + FX covenant surfaces ────────────────────────────
     debt_principal_total = sum(principal_after_idc.values())
 
     # Weighted average cost of debt (post-IDC)
@@ -333,7 +357,7 @@ def apply_debt_layer(
     fx_max = max(fx_values) if fx_values else None
     fx_avg = sum(fx_values) / len(fx_values) if fx_values else None
 
-    # ── Final core surface ────────────────────────────────────────────
+    # ── Final core surface ────────────────────────────────
     return {
         "dscr_series": dscr_series,
         "dscr_min": dscr_min,
@@ -368,8 +392,7 @@ def plan_debt(
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """
-    Plan debt for the project using the v14 engine.
+    """Plan debt for the project using the v14 engine.
 
     Returns a dict with:
     - timeline_periods, construction_years, tenor_years
