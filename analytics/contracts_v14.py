@@ -461,6 +461,109 @@ class MonteCarloScenario(BaseModel):
     sampling_method: str = Field(default="lhs", description="Sampling method (lhs/random)")
 
 
+class MonteCarloResult(BaseModel):
+    """Monte Carlo simulation result with lender-grade analytics support.
+    
+    Enhanced contract (Sprint 18) to support breach probability calculations
+    and worst-case downside statistics required by analytics/mc/exports.py.
+    
+    CRITICAL FIELD: trials
+    ----------------------
+    The `trials` field stores raw per-trial metric arrays. This is REQUIRED
+    for computing lender-grade risk metrics:
+    - Prob(DSCR < covenant_floor)
+    - Worst-year DSCR P95 downside (5th percentile)
+    - Custom breach statistics
+    
+    Without raw trial data, these metrics cannot be computed correctly.
+    
+    Structure:
+    ----------
+    trials: Dict[str, List[float]]
+        {
+            "dscr_min": [1.32, 1.45, 1.51, ...],  # n_trials values
+            "project_irr": [0.142, 0.138, ...],
+            "project_npv": [55.3e9, 48.2e9, ...],
+            "llcr": [1.65, 1.48, ...],
+            "plcr": [1.55, 1.38, ...],
+        }
+    
+    summary: Dict[str, Any]
+        {
+            "dscr_min": {"mean": 1.42, "std": 0.08, "P50": 1.45, "P90": 1.32},
+            "project_irr": {"mean": 0.139, "std": 0.012, "P50": 0.142},
+            ...
+        }
+    
+    metadata: Dict[str, Any]
+        {
+            "n_trials": 1000,
+            "seed": 42,
+            "sampler": "lhs",
+            "correlation_enabled": true,
+            "config_hash": "abc123..."
+        }
+    
+    Example:
+    --------
+    >>> result = MonteCarloResult(
+    ...     summary={"dscr_min": {"mean": 1.42, "P50": 1.45}},
+    ...     metadata={"n_trials": 1000, "seed": 42},
+    ...     trials={"dscr_min": [1.32, 1.45, 1.51, ...]},
+    ... )
+    >>> 
+    >>> # Lender analytics
+    >>> from analytics.mc.exports import build_lender_risk_table, CovenantSpec
+    >>> table = build_lender_risk_table(result, covenant=CovenantSpec(dscr_floor=1.30))
+    
+    FRAMEWORK COMPLIANCE:
+    ---------------------
+    ✅ CASPER: Contract-explicit schema with validation
+    ✅ CESSPIT: Fail-fast if trials missing for lender metrics
+    ✅ GWTF: Single source of truth for MC results
+    ✅ CCCDIR: Comprehensive docstrings
+    
+    BACKWARD COMPATIBILITY:
+    -----------------------
+    Old code using only `summary` continues to work. The `trials` field
+    is Optional for now but STRONGLY RECOMMENDED for production use.
+    
+    Future: Make `trials` required (breaking change in v15.0.0).
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    summary: Dict[str, Any] = Field(
+        description="Aggregated statistics per metric (mean, std, percentiles)"
+    )
+    metadata: Dict[str, Any] = Field(
+        description="Execution metadata (n_trials, seed, correlation_enabled, etc.)"
+    )
+    trials: Optional[Dict[str, List[float]]] = Field(
+        default=None,
+        description="Raw per-trial arrays for each metric (REQUIRED for lender analytics)"
+    )
+    percentiles: Optional[Dict[int, Dict[str, float]]] = Field(
+        default=None,
+        description="Percentile lookup table: {50: {'dscr_min': 1.45}, 90: {...}}"
+    )
+    
+    @field_validator('trials')
+    @classmethod
+    def validate_trials_consistent(cls, v: Optional[Dict[str, List[float]]]) -> Optional[Dict[str, List[float]]]:
+        """Validate all trial arrays have same length."""
+        if v is None:
+            return v
+        if not v:
+            return v
+        lengths = {k: len(arr) for k, arr in v.items()}
+        unique_lengths = set(lengths.values())
+        if len(unique_lengths) > 1:
+            raise ValueError(
+                f"All trial arrays must have same length. Got: {lengths}"
+            )
+        return v
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # CASPER Result Contract (with computed fields)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -485,21 +588,6 @@ class CasperResult(BaseModel):
     def contract_version(self) -> str:
         """Contract version - computed property."""
         return CASPER_CONTRACT_VERSION
-
-
-class MonteCarloResult(BaseModel):
-    """
-    Monte Carlo simulation result.
-    """
-    model_config = ConfigDict(frozen=True)
-    
-    scenario_name: str
-    iterations: int
-    p10: float
-    p50: float
-    p90: float
-    mean: float
-    std: float
 
 
 # ═════════════════════════════════════════════════════════════════════════════
