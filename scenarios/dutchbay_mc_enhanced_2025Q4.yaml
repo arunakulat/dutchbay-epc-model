@@ -1,0 +1,247 @@
+# DutchBay Wind Farm - Enhanced Monte Carlo Configuration
+# Sprint 17: Degradation Uncertainty & Correlation Structure
+#
+# Purpose:
+#   Stochastic analysis with 4 correlated variables:
+#   1. Revenue (from AEP + tariff)
+#   2. Operating costs
+#   3. FX rate (LKR/USD)
+#   4. Turbine degradation rate
+#
+# Usage:
+#   python -m analytics.monte_carlo_v14_enhanced scenarios/dutchbay_mc_enhanced_2025Q4.yaml
+#
+# References:
+#   - Iman & Conover (1982): Correlation preservation in LHS
+#   - NREL (2019): Wind turbine degradation analysis
+#   - Bolinger (2017): Debt sizing with uncertainty
+
+# Import defaults
+defaults:
+  - ../config/defaults
+
+# ════════════════════════════════════════════════════════════════════════
+# SCENARIO METADATA
+# ════════════════════════════════════════════════════════════════════════
+
+scenario:
+  name: "DutchBay Lender Case - Enhanced MC - Q4 2025"
+  description: "Monte Carlo with degradation uncertainty and correlation"
+  version: "3.0.0"
+  date_created: "2025-12-21"
+  purpose: "Investment-grade stochastic analysis with tail-risk modeling"
+  stakeholders:
+    - "Senior Lenders (Debt sizing)"
+    - "Equity Investors (Return distribution)"
+    - "IEA (Independent Engineer)"
+  
+  # Analysis parameters
+  analysis_type: "enhanced_monte_carlo"
+  confidence_level: "P99"  # For DSCR constraint
+  methodology: "Iman-Conover LHS with correlation"
+
+# ════════════════════════════════════════════════════════════════════════
+# PROJECT SPECIFICS
+# ════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "DutchBay Wind Farm"
+  location: "Mannar, Sri Lanka"
+  capacity_mw: 30.0
+  turbine_model: "Vestas V150-4.2 MW"
+  n_turbines: 7
+  hub_height_m: 105
+  
+  # Timeline
+  construction_start: "2026-Q1"
+  commercial_operation: "2028-Q1"
+  project_life_years: 25
+  
+  # Degradation parameters
+  degradation: 0.006  # 0.6%/year (base case from defaults.yaml)
+
+# ════════════════════════════════════════════════════════════════════════
+# ENHANCED MONTE CARLO CONFIGURATION
+# ════════════════════════════════════════════════════════════════════════
+
+monte_carlo_enhanced:
+  # Scenario identification
+  scenario_name: "dutchbay_lendercase_enhanced_2025q4"
+  
+  # Simulation parameters
+  n_iterations: 10000      # 10,000 iterations for smooth distributions
+  sampling_method: "lhs"   # Latin Hypercube Sampling (variance reduction)
+  seed: 42                 # Reproducibility
+  
+  # ──────────────────────────────────────────────────────────
+  # FINANCIAL PARAMETERS
+  # ──────────────────────────────────────────────────────────
+  
+  # Capital expenditure (deterministic in this scenario)
+  capex_total_usd: 50000000  # $50M total CAPEX
+  
+  # Project timeline
+  project_life_years: 25
+  
+  # Discount rate (from WACC)
+  discount_rate_pct: 8.0  # CESSPIT: REQUIRED parameter
+  
+  # ──────────────────────────────────────────────────────────
+  # STOCHASTIC VARIABLE 1: REVENUE
+  # ──────────────────────────────────────────────────────────
+  # Based on wind assessment P75 AEP
+  
+  # Net AEP P75: 64,767 MWh/year (from wind_results_v3_p75.json)
+  # Tariff: $0.30/kWh (assumed PPA rate)
+  # Revenue Year 1 = 64,767 MWh * 1000 kWh/MWh * $0.30/kWh = $19,430,100
+  
+  revenue_mean_usd: 19430000  # $19.43M/year (year 1, before degradation)
+  revenue_std_pct: 10.0       # ±10% inter-annual variability
+  
+  # Rationale:
+  # - 10% std covers typical wind resource inter-annual variability
+  # - Does NOT include degradation (handled separately)
+  # - P50 revenue would be ~$21M, P75 is conservative
+  
+  # ──────────────────────────────────────────────────────────
+  # STOCHASTIC VARIABLE 2: OPERATING COSTS
+  # ──────────────────────────────────────────────────────────
+  
+  # OPEX breakdown (typical for 30MW wind farm):
+  # - O&M contract: $4.0M/year
+  # - Insurance: $1.5M/year
+  # - Land lease: $0.8M/year
+  # - Management: $0.6M/year
+  # - Reserves: $0.3M/year
+  # Total: $7.2M/year
+  
+  cost_mean_usd: 7200000  # $7.2M/year
+  cost_std_pct: 5.0       # ±5% cost variability
+  
+  # Rationale:
+  # - 5% std covers O&M contract price adjustments, insurance premium changes
+  # - Lower variability than revenue (costs more predictable)
+  
+  # ──────────────────────────────────────────────────────────
+  # STOCHASTIC VARIABLE 3: FX RATE
+  # ──────────────────────────────────────────────────────────
+  
+  # Sri Lankan Rupee / USD exchange rate
+  # Historical: 180 (2020) → 300 (2023) → 320 (2025)
+  # Assumed PPA is USD-denominated (typical for renewables in Sri Lanka)
+  
+  fx_mean_rate: 300.0  # 300 LKR/USD (current rate)
+  fx_std_pct: 15.0     # ±15% FX volatility
+  
+  # Rationale:
+  # - 15% std reflects emerging market FX volatility
+  # - LKR depreciation increases USD revenue value (if PPA is USD-based)
+  # - Correlation with revenue: negative (see correlation matrix below)
+  
+  # ──────────────────────────────────────────────────────────
+  # STOCHASTIC VARIABLE 4: DEGRADATION
+  # ──────────────────────────────────────────────────────────
+  
+  # Annual performance degradation rate
+  # Industry benchmarks:
+  # - NREL (2019): 0.53%/year (US wind farms, 2000-2018)
+  # - Staffell & Green (2014): 1.6%/year (UK, older turbines)
+  # - Kim et al (2025): 0.72%/year (global analysis)
+  # - Modern turbines: 0.5-0.7%/year typical
+  
+  degradation_mean_pct: 0.6  # 0.6%/year (compound annual)
+  degradation_std_pct: 0.1   # ±0.1%/year (1-sigma uncertainty)
+  
+  # Rationale:
+  # - 0.6% is conservative for Vestas V150 (modern turbine)
+  # - Offshore location may have higher degradation (salt, humidity)
+  # - Uncertainty ±0.1% covers manufacturing variation, O&M quality
+  # - Distribution: Normal (could use lognormal for strictly positive)
+  
+  # Impact over 25 years:
+  # - At 0.6%/year: Year 25 output = 86.1% of Year 1
+  # - At 0.5%/year: Year 25 output = 88.5% of Year 1
+  # - At 0.7%/year: Year 25 output = 83.8% of Year 1
+  
+  # ──────────────────────────────────────────────────────────
+  # CORRELATION STRUCTURE (Iman-Conover)
+  # ──────────────────────────────────────────────────────────
+  
+  correlation_enabled: true
+  
+  # Correlation matrix: [Revenue, Cost, FX, Degradation]
+  # Must be symmetric positive semi-definite with diagonal = 1.0
+  
+  correlation_matrix:
+    # Variable order: [Revenue, Cost, FX, Degradation]
+    
+    - [1.0,  0.4, -0.3, -0.2]  # Revenue correlations
+    #   ^     ^     ^     ^
+    #   |     |     |     +--- Revenue-Degradation: -0.2
+    #   |     |     +--------- Revenue-FX: -0.3
+    #   |     +--------------- Revenue-Cost: +0.4
+    #   +-------------------- Revenue-Revenue: 1.0 (self)
+    
+    - [0.4,  1.0, -0.2,  0.1]  # Cost correlations
+    #   ^     ^     ^     ^
+    #   |     |     |     +--- Cost-Degradation: +0.1
+    #   |     |     +--------- Cost-FX: -0.2
+    #   |     +--------------- Cost-Cost: 1.0 (self)
+    #   +-------------------- Cost-Revenue: +0.4 (symmetric)
+    
+    - [-0.3, -0.2, 1.0,  0.0]  # FX correlations
+    #   ^     ^     ^     ^
+    #   |     |     |     +--- FX-Degradation: 0.0
+    #   |     |     +--------- FX-FX: 1.0 (self)
+    #   |     +--------------- FX-Cost: -0.2 (symmetric)
+    #   +-------------------- FX-Revenue: -0.3 (symmetric)
+    
+    - [-0.2, 0.1,  0.0,  1.0]  # Degradation correlations
+    #   ^     ^     ^     ^
+    #   |     |     |     +--- Degradation-Degradation: 1.0 (self)
+    #   |     |     +--------- Degradation-FX: 0.0 (symmetric)
+    #   |     +--------------- Degradation-Cost: +0.1 (symmetric)
+    #   +-------------------- Degradation-Revenue: -0.2 (symmetric)
+  
+  # Rationale for correlations:
+  
+  # 1. Revenue-Cost (+0.4):
+  #    Moderate positive - both driven by inflation
+  #    Higher tariff escalation often comes with higher O&M costs
+  
+  # 2. Revenue-FX (-0.3):
+  #    Moderate negative - if PPA is USD-denominated
+  #    LKR depreciation increases USD revenue value in local terms
+  #    But we model in USD, so this represents purchasing power effect
+  
+  # 3. Revenue-Degradation (-0.2):
+  #    Weak negative - higher degradation reduces output
+  #    Not 1:1 because revenue also has inter-annual variability
+  
+  # 4. Cost-FX (-0.2):
+  #    Weak negative - O&M costs partly in LKR
+  #    LKR depreciation reduces USD cost (if local labor)
+  
+  # 5. Cost-Degradation (+0.1):
+  #    Very weak positive - more degradation may need slightly more maintenance
+  #    Effect is small, mostly correlation is through inflation
+  
+  # 6. FX-Degradation (0.0):
+  #    No correlation - degradation is mechanical, FX is macroeconomic
+
+# ════════════════════════════════════════════════════════════════════════
+# EXPECTED RESULTS (for validation)
+# ════════════════════════════════════════════════════════════════════════
+
+expected_results:
+  # Approximate expected values (for sanity check)
+  npv_mean_usd: 45000000  # ~$45M (rough estimate)
+  npv_std_usd: 15000000   # ~$15M (1-sigma)
+  irr_mean_pct: 9.5       # ~9.5%
+  
+  # Degradation impact
+  year_20_output_factor: 0.887  # (1-0.006)^19 ≈ 0.887
+  cumulative_loss_20y_pct: 11.3  # ~11.3% cumulative loss
+  
+  # Correlation verification
+  correlation_max_error: 0.05  # Max 5% error in achieved vs target correlation

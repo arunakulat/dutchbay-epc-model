@@ -65,7 +65,7 @@ def _make_simple_financing_config() -> Dict[str, Any]:
             "social_levy_pct": 0.25,
         },
         "tax": {
-            "corporate_tax_rate_pct": 24.0,
+            "corporate_tax_rate": 0.24,
             "depreciation_years": 20,
             "tax_holiday_years": 10,
             "tax_holiday_start_year": 1,
@@ -80,7 +80,7 @@ def _make_simple_financing_config() -> Dict[str, Any]:
         "capex": {
             "usd_total": 150_000_000.0,
         },
-    }
+    }  # <-- Dictionary closes here cleanly
 
 
 def _make_simple_annual_rows() -> list:

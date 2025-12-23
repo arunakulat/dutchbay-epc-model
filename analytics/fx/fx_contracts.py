@@ -24,7 +24,13 @@ Usage Pattern (GWTF):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional
+
+# ═════════════════════════════════════════════════════════════════════════════
+# IMPORTS: Pydantic v2 Migration Support (Module-Level)
+# ═════════════════════════════════════════════════════════════════════════════
+# CRITICAL: Import Pydantic at module level to avoid E402 (module-level import not at top)
+from pydantic import BaseModel, ConfigDict
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -35,10 +41,10 @@ from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 @dataclass(frozen=True)
 class FXVolumetry:
     """Per-period (annual) FX exposure snapshot.
-    
+
     Captures total debt and revenue exposure by currency for a given period.
     Used to compute portfolio-level FX risk (VaR, CVaR, concentration).
-    
+
     Fields:
         period: Period index (0 = Year 0, 1 = Year 1, etc.)
         total_debt_lkr: Total debt outstanding in LKR at end of period.
@@ -62,7 +68,7 @@ class FXVolumetry:
     @property
     def total_usd_exposure_equivalent(self) -> float:
         """Sum of all debt and debt service (interest + principal) in USD equiv.
-        
+
         Approximation: assumes all LKR denominations remain at spot rate
         (not risk-adjusted). For risk analysis, use FXRiskProfile instead.
         """
@@ -80,10 +86,10 @@ class FXVolumetry:
 @dataclass(frozen=True)
 class FXCurveOutput:
     """Time-series FX rate projections (canonical format).
-    
+
     Stores annual FX rates for each currency pair required by the model.
     All rates are spot rates (not forward); used for P&L conversion and risk.
-    
+
     Fields:
         years: Annual year labels [0, 1, 2, ..., n_periods-1].
         lkr_usd: Annual LKR/USD rates (e.g., [300, 302, 305, ...]).
@@ -126,20 +132,18 @@ class FXCurveOutput:
         # Validate all rates are positive
         for idx, rate in enumerate(self.lkr_usd):
             if rate <= 0:
-                raise ValueError(
-                    f"FXCurveOutput: lkr_usd[{idx}]={rate} must be > 0"
-                )
+                raise ValueError(f"FXCurveOutput: lkr_usd[{idx}]={rate} must be > 0")
 
     def get_rate(self, year: int, pair: str = "lkr_usd") -> float:
         """Retrieve FX rate for a given year and currency pair.
-        
+
         Args:
             year: Year index (0-based).
             pair: Currency pair name ('lkr_usd', 'lkr_cny', 'lkr_eur', 'lkr_gbp').
-        
+
         Returns:
             Float rate (e.g., 300.5 for LKR/USD).
-        
+
         Raises:
             IndexError if year not in curve.
             ValueError if pair not available.
@@ -187,15 +191,15 @@ class FXCurveOutput:
 @dataclass(frozen=True)
 class FXRiskProfile:
     """Lender-grade FX risk assessment (CASPER output).
-    
+
     Provides VaR, CVaR, and portfolio concentration metrics for:
     - Debt service (principal + interest) by currency
     - Revenue exposure by currency
     - Correlation break risk (e.g., LKR weakening while local rates rise)
-    
+
     Used in credit memos and covenant dashboards to communicate FX risk
     to lenders and equity investors.
-    
+
     Fields:
         var_95_usd_million: 95% VaR of portfolio (USD millions).
         cvar_95_usd_million: 95% CVaR (expected shortfall) of portfolio.
@@ -264,6 +268,35 @@ class FXRiskProfile:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# FXRegimeConfig – Base Configuration (Forward Reference Workaround)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class FXRegimeConfig:
+    """FX regime configuration for scenario modeling.
+
+    CRITICAL NOTE: This class is referenced by FXRegimeScenario below.
+    Defined here to resolve forward reference error (F821).
+
+    Fields:
+        base_currency: Base currency (e.g., 'LKR')
+        target_currency: Target currency (e.g., 'USD')
+        regime_type: Regime type ('fixed', 'floating', 'managed')
+        years: Number of years in regime
+        annual_depr: Annual depreciation rate (decimal, e.g., 0.025 for 2.5%)
+        start_rate: Starting exchange rate (e.g., 300.0 for LKR/USD)
+    """
+
+    base_currency: str
+    target_currency: str
+    regime_type: str
+    years: int
+    annual_depr: float = 0.0
+    start_rate: float = 1.0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # FXStructuredBlock – Primary FX Configuration and Snapshot
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -271,13 +304,13 @@ class FXRiskProfile:
 @dataclass(frozen=True)
 class FXStructuredBlock:
     """Complete FX strategy and execution snapshot for a scenario.
-    
+
     Combines configuration (how FX risk is managed) with volumetry
     (actual debt/revenue by currency) and risk metrics.
-    
+
     This is the PRIMARY FX artifact attached to ScenarioResult;
     FXCurveOutput and FXRiskProfile provide supporting detail.
-    
+
     Fields:
         strategy: FX risk management approach ('natural_hedge', 'fixed_ccy', 'hedged', 'blended').
         base_currency: Scenario base currency (usually 'USD' for NPV).
@@ -331,10 +364,10 @@ class FXStructuredBlock:
 
     def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float = 300.0) -> float:
         """Approximate total debt in USD equivalent at spot rate.
-        
+
         Args:
             spot_rate_lkr_usd: Exchange rate for LKR/USD (default: 300.0).
-        
+
         Returns:
             Sum of all debt in USD equivalent (approx).
         """
@@ -373,11 +406,54 @@ class FXStructuredBlock:
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Backward Compatibility Wrapper (Sprint 12 Pydantic v2 Migration)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class FXRegimeScenario:
+    """Backward compatibility wrapper for FX regime configurations.
+
+    CRITICAL: This class uses FXRegimeConfig defined above (no forward reference).
+    Used in legacy tests and transition code during Pydantic v2 migration.
+    """
+
+    config: FXRegimeConfig
+    scenario_name: str = "base"
+
+    @property
+    def regime_type(self) -> str:
+        """Extract regime type from config."""
+        return self.config.regime_type
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Pydantic v2 Stub (Backward Compatibility)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class FXMonteCarloConfig(BaseModel):
+    """Legacy stub for FX Monte Carlo test compatibility.
+
+    Supports Pydantic v2 migration (allows arbitrary types and extra fields).
+    """
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Public API Exports
+# ═════════════════════════════════════════════════════════════════════════════
+
 __all__ = [
     "FXVolumetry",
     "FXCurveOutput",
     "FXRiskProfile",
     "FXStructuredBlock",
+    "FXRegimeConfig",
+    "FXRegimeScenario",
+    "FXMonteCarloConfig",
 ]
 
 # EOF - analytics/fx/fx_contracts.py

@@ -1,0 +1,79 @@
+# Hydra config for Monte Carlo analysis CLI
+# Used by: analytics/cli_monte_carlo_hydra.py (future wrapper)
+
+defaults:
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+
+# Path to scenario config file (required)
+# Override: config=scenarios/dutchbay_lendercase_2025Q4.yaml
+config: ""
+
+# Output directory for Monte Carlo results
+output_dir: _out/monte_carlo
+
+# Write artifacts to disk
+write_artifacts: true
+
+# Number of Monte Carlo trials
+# Larger = more accurate distribution, slower
+n_trials: 10000
+
+# Random seed for reproducibility
+# Same seed + same config = identical results (CASPER deterministic)
+seed: 42
+
+# Parallel execution
+# Speeds up large trial counts (n_trials > 1000)
+parallel: false
+n_workers: 4
+
+# Confidence levels for risk metrics
+# Results will include percentiles at these levels
+confidence_levels:
+  - 0.90  # P10/P90
+  - 0.95  # P5/P95
+  - 0.99  # P1/P99
+
+# Stochastic parameters (distributions)
+# Each parameter varied according to distribution
+stochastic_params:
+  # CAPEX uncertainty (normal distribution)
+  capex:
+    distribution: normal
+    mean: 0.0        # Baseline = scenario value
+    std_dev: 0.10    # 10% standard deviation
+  
+  # Capacity factor uncertainty (normal, bounded)
+  capacity_factor:
+    distribution: normal
+    mean: 0.0
+    std_dev: 0.05    # 5% standard deviation
+    min: -0.15       # Lower bound
+    max: 0.15        # Upper bound
+  
+  # Tariff/PPA price uncertainty (normal)
+  tariff:
+    distribution: normal
+    mean: 0.0
+    std_dev: 0.08    # 8% standard deviation
+  
+  # OPEX uncertainty (uniform distribution)
+  opex:
+    distribution: uniform
+    min: -0.10
+    max: 0.10
+
+# Metrics to collect for distribution analysis
+output_metrics:
+  - project_irr
+  - equity_irr
+  - project_npv
+  - equity_npv
+  - min_dscr
+  - avg_dscr
+  - llcr
+  - plcr

@@ -170,8 +170,12 @@ def build_tax_profile(
         tax_holiday_start_year = int(config_tax.tax_holiday_start_year)
         depreciation_years = int(config_tax.depreciation_years)
         enhanced_cap_allowance_pct = float(config_tax.enhanced_capital_allowance_pct)
-        enhanced_allowance_applies = bool(config_tax.get("enhanced_allowance_applies", False))
-        depreciation_method = str(config_tax.get("depreciation_method", "straight_line"))
+        enhanced_allowance_applies = bool(
+            config_tax.get("enhanced_allowance_applies", False)
+        )
+        depreciation_method = str(
+            config_tax.get("depreciation_method", "straight_line")
+        )
         loss_carryforward_years = int(config_tax.get("loss_carryforward_years", 0))
         apply_interest_shield = bool(config_tax.get("apply_interest_shield", True))
     except (KeyError, TypeError, ValueError) as e:

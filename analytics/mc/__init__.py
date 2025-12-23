@@ -1,31 +1,67 @@
-"""analytics.mc - Canonical Monte Carlo analysis package.
+from __future__ import annotations
+
+"""
+analytics.mc
+
+Canonical Monte Carlo package for v14 analytics.
 
 Public API:
-    MonteCarloEngine: Main engine class
-    run_monte_carlo_analysis: Functional entrypoint
-    CorrelationSpec: Correlation configuration
-    load_correlation_from_config: Config loader
-
-Usage:
-    from analytics.mc import run_monte_carlo_analysis
-    from analytics.mc.correlation import load_correlation_from_config
+    # Engine
+    MonteCarloEngine
+    run_monte_carlo_analysis
     
-    config = load_yaml("scenario.yaml")
-    corr = load_correlation_from_config(config)
+    # Correlation
+    CorrelationSpec
+    load_correlation_from_config
+    apply_correlation_structure
+    validate_correlation_matrix
     
-    result = run_monte_carlo_analysis(
-        base_config=config,
-        n_trials=1000,
-        seed=42,
-        correlation=corr
-    )
+    # Exports (Lender Analytics)
+    CovenantSpec
+    build_lender_risk_table
+    build_casper_risk_blocks
+    
+    # Aggregation
+    aggregate_trials
 """
-from analytics.mc.correlation import CorrelationSpec, load_correlation_from_config
-from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
+
+# Engine
+from analytics.mc.engine import (
+    MonteCarloEngine,
+    run_monte_carlo_analysis,
+)
+
+# Correlation
+from analytics.mc.correlation import (
+    CorrelationSpec,
+    load_correlation_from_config,
+    apply_correlation_structure,
+    validate_correlation_matrix,
+)
+
+# Exports (Lender Analytics)
+from analytics.mc.exports import (
+    CovenantSpec,
+    build_lender_risk_table,
+    build_casper_risk_blocks,
+)
+
+# Aggregation
+from analytics.mc.aggregate import aggregate_trials
 
 __all__ = [
+    # Engine
     "MonteCarloEngine",
     "run_monte_carlo_analysis",
+    # Correlation
     "CorrelationSpec",
     "load_correlation_from_config",
+    "apply_correlation_structure",
+    "validate_correlation_matrix",
+    # Exports
+    "CovenantSpec",
+    "build_lender_risk_table",
+    "build_casper_risk_blocks",
+    # Aggregation
+    "aggregate_trials",
 ]

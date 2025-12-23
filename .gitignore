@@ -154,3 +154,9 @@ Extended DutchBay Feature Scaffolds/
 # Test output files
 run*.txt
 DutchBay_DevPkg_PREFERRED_ONLY/
+
+# GWTF R25 override log (local only)
+.gwtf-overrides.log
+
+# Validation freeze evidence (never commit)
+_freeze_artifacts/

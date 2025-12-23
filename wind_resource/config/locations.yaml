@@ -1,0 +1,29 @@
+# Pre-defined wind farm locations
+# Add new locations here for easy reuse
+
+dutchbay:
+  name: DutchBay
+  lat: 8.33
+  lon: 79.76
+  description: "Dutch Bay Wind Farm, Kalpitiya, Sri Lanka"
+  hub_height: 150
+  num_turbines: 15
+  commissioned: null
+
+mannar:
+  name: Mannar
+  lat: 8.98
+  lon: 79.90
+  description: "Mannar Wind Farm, Northern Province, Sri Lanka"
+  hub_height: 120
+  num_turbines: 10
+  commissioned: 2020
+
+hambantota:
+  name: Hambantota
+  lat: 6.12
+  lon: 81.12
+  description: "Hambantota Wind Farm, Southern Province, Sri Lanka"
+  hub_height: 100
+  num_turbines: 12
+  commissioned: 2019

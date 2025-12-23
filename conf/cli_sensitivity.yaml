@@ -1,0 +1,53 @@
+# Hydra config for sensitivity analysis CLI
+# Used by: analytics/cli_sensitivity_hydra.py (future wrapper)
+
+defaults:
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+
+# Path to scenario config file (required)
+# Override: config=scenarios/dutchbay_lendercase_2025Q4.yaml
+config: ""
+
+# Output directory for sensitivity results
+output_dir: _out/sensitivity
+
+# Write artifacts to disk (vs stdout only)
+write_artifacts: true
+
+# Parameter shocks to analyze
+# Each parameter varied independently around baseline
+shocks:
+  # CAPEX shocks (percent deviation)
+  capex: [-0.20, -0.10, 0.00, 0.10, 0.20]
+  
+  # Tariff/PPA price shocks (percent deviation)
+  tariff: [-0.15, -0.075, 0.00, 0.075, 0.15]
+  
+  # Capacity factor shocks (percent deviation)
+  capacity_factor: [-0.10, -0.05, 0.00, 0.05, 0.10]
+  
+  # OPEX shocks (percent deviation)
+  opex: [-0.10, 0.00, 0.10]
+  
+  # Discount rate shocks (absolute percentage points)
+  discount_rate: [-0.02, -0.01, 0.00, 0.01, 0.02]
+
+# Metrics to track for each shock
+# Results will include baseline + shocked values
+metrics:
+  - project_irr
+  - equity_irr
+  - project_npv
+  - equity_npv
+  - min_dscr
+  - avg_dscr
+  - llcr
+  - plcr
+
+# Parallel execution (speeds up multi-shock analysis)
+parallel: false
+n_workers: 4

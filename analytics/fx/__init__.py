@@ -1,58 +1,27 @@
-"""FX Module - Structured Blocks for v14R6 Pipeline.
+from __future__ import annotations
 
-This module provides FX-related data contracts and computation engines
-for integrating multi-currency scenarios into the dutchbay-epc-model
-v14 pipeline.
+"""
+analytics.fx - Foreign Exchange Risk Analysis Package
 
-Key Exports:
-  FXStructuredBlock: Primary FX configuration and snapshot.
-  FXCurveOutput: Time-series FX projection (LKR/USD, etc.).
-  FXRiskProfile: Lender-grade FX risk metrics (VaR, CVaR, concentration).
+Lazy-loaded exports to avoid circular import with contracts_v14.
 
-Usage:
-  from analytics.fx import FXStructuredBlock, FXCurveOutput, FXRiskProfile
+IMPORTANT: This module uses PEP 562 lazy loading to break the import cycle:
+  contracts_v14.py → fx_contracts.py → __init__.py → fx_integration.py → contracts_v14.py
 
-  # Create FX block
-  fx_block = FXStructuredBlock(...)
-
-  # Generate FX curve
-  fx_curve = FXCurveOutput(...)
-
-  # Wire into ScenarioResult
-  result = ScenarioResult(
-      ...,
-      fx_block=fx_block,
-      fx_curve=fx_curve,
-      ...
-  )
-
-Standards:
-  - GWTF: Full type hints, module docstrings
-  - CASPER: Lender-grade summaries and exports
-  - CESSPIT: Immutable records, fail-fast validation
-  - CCCDIR: Fully commented, no config shortcuts
+Solution: Don't import fx_integration at module import time; defer until first access.
 """
 
-__version__ = "1.0.0"
-__author__ = "Dutchbay Analytics"
+# DO NOT import fx_integration at import time (avoids circular imports)
+__all__ = ["integrate_fx_into_scenario_result"]
 
-try:
-    from .fx_contracts import (
-        FXCurveOutput,
-        FXRiskProfile,
-        FXStructuredBlock,
-        FXVolumetry,
-    )
 
-    __all__ = [
-        "FXStructuredBlock",
-        "FXCurveOutput",
-        "FXRiskProfile",
-        "FXVolumetry",
-    ]
-except ImportError as e:
-    # fx_contracts.py not yet created; imports will be added later
-    __all__ = []
-    _import_error = str(e)
-
-# EOF - analytics/fx/__init__.py
+def __getattr__(name: str):
+    """PEP 562: Lazy module attribute access.
+    
+    Defers importing fx_integration until first use of integrate_fx_into_scenario_result.
+    This breaks the circular dependency chain.
+    """
+    if name == "integrate_fx_into_scenario_result":
+        from .fx_integration import integrate_fx_into_scenario_result
+        return integrate_fx_into_scenario_result
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

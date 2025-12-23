@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from analytics.contracts_v14 import ScenarioResult
-from analytics.pipeline_v14 import run_v14_pipeline
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ Responsibilities
 ----------------
 - Load a base v14 config (YAML/JSON) via analytics.scenario_loader.
 - Apply nested overrides (used by Monte Carlo, sensitivity, what-if tools).
-- Call analytics.pipeline_v14.run_v14_pipeline(config=...) once per evaluation.
+- Call analytics.pipeline_v14_enhanced.run_v14_pipeline(config=...) once per evaluation.
 - Normalise engine outputs into a flat KPI dict for analytics layers.
 
 Non-responsibilities

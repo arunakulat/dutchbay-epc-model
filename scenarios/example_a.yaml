@@ -14,6 +14,7 @@ opex:
 capex:
   usd_total: 120000000
 tax:
+  depreciation_method: "straight_line"
   corporate_tax_rate_pct: 24
   tax_holiday_years: 10
   tax_holiday_start_year: 1

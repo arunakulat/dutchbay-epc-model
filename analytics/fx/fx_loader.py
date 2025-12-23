@@ -86,8 +86,7 @@ def load_fx_structured_block(
 
     if not isinstance(fx_cfg, dict):
         raise ValueError(
-            f"Invalid FX config type: {type(fx_cfg).__name__}, "
-            "expected dict."
+            f"Invalid FX config type: {type(fx_cfg).__name__}, " "expected dict."
         )
 
     # Extract fields with defaults matching FXStructuredBlock
@@ -119,7 +118,7 @@ def load_fx_structured_block(
     revenue_currencies = fx_cfg.get("revenue_currencies", ["LKR"])
 
     return FXStructuredBlock(
-        strategy=strategy,  # type: ignore[arg-type]
+        strategy=strategy,
         base_currency=base_currency,
         reporting_currency=reporting_currency,
         volumetry=volumetry_list,
@@ -214,9 +213,7 @@ def validate_fx_structured_config(
         return False
 
     if not isinstance(fx_cfg, dict):
-        logger.error(
-            f"FX config must be dict, got {type(fx_cfg).__name__}"
-        )
+        logger.error(f"FX config must be dict, got {type(fx_cfg).__name__}")
         return False
 
     # No required keys for current FXStructuredBlock (all have defaults)
@@ -286,9 +283,7 @@ def load_fx_regime(
     >>> # data = load_fx_regime(Path("scenarios/fx_base.yaml"))
     """
     if not regime_file.exists():
-        raise FileNotFoundError(
-            f"FX regime file not found: {regime_file}"
-        )
+        raise FileNotFoundError(f"FX regime file not found: {regime_file}")
 
     with open(regime_file, "r") as file_handle:
         return yaml.safe_load(file_handle) or {}

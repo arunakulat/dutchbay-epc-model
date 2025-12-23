@@ -4,41 +4,32 @@ from __future__ import annotations
 analytics.mc.aggregate
 
 Aggregate per-trial outputs into MonteCarloResult.
-Keep this vectorized, deterministic, and contract-stable.
+Keep this vectorized and deterministic.
 
-No dependencies on engine internals.
+Sprint 18 Enhancement:
+- Stores raw trial arrays in MonteCarloResult.trials
+- Enables lender-grade breach probability calculations
+- Supports worst-year DSCR P95 downside statistics
 """
 
 from typing import Any, Dict, List, Mapping, Sequence
 
 import numpy as np
 
-# Import contract (if available); fallback to dict if not yet defined
-try:
-    from analytics.contracts_v14 import MonteCarloResult
-except ImportError:
-    # Fallback: MonteCarloResult will be a dict
-    MonteCarloResult = dict  # type: ignore[misc, assignment]
+from analytics.contracts_v14 import MonteCarloResult
 
 
-def _compute_percentiles(
-    arr: np.ndarray,
-    percentiles: Sequence[int]
-) -> Dict[int, float]:
-    """
-    Compute percentiles for array.
+def _percentiles(arr: np.ndarray, ps: Sequence[int]) -> Dict[int, float]:
+    """Compute percentiles for a single metric array.
     
     Args:
-        arr: 1D array of values
-        percentiles: List of percentile values (e.g., [5, 10, 50, 90, 95])
+        arr: Metric values across all trials
+        ps: Percentiles to compute (e.g., [5, 10, 50, 90, 95])
     
     Returns:
-        Dictionary mapping percentile → value
+        Dictionary mapping percentile to value
     """
-    if arr.size == 0:
-        return {int(p): np.nan for p in percentiles}
-    
-    return {int(p): float(np.percentile(arr, p)) for p in percentiles}
+    return {int(p): float(np.percentile(arr, p)) for p in ps}
 
 
 def aggregate_trials(
@@ -51,233 +42,122 @@ def aggregate_trials(
     percentiles: Sequence[int] = (5, 10, 50, 90, 95),
 ) -> MonteCarloResult:
     """
-    Aggregate trial results into summary statistics.
+    Aggregate per-trial metrics into MonteCarloResult.
     
-    Computes mean, std, and percentiles for each metric across trials.
+    Sprint 18 Enhancement: Stores raw trial arrays in result.trials for
+    lender-grade analytics (breach probability, worst-case downside).
     
     Args:
-        trial_metrics: List of metric dictionaries (one per trial)
+        trial_metrics: List of metric dicts, one per trial
+            Example: [{"dscr_min": 1.32, "project_irr": 0.14}, ...]
         base_config: Base scenario configuration
-        param_names: Names of stochastic parameters
-        samples: Sample matrix [n_trials, n_params]
-        meta: Metadata dictionary (seed, sampler, etc.)
+        param_names: Parameter names that were varied
+        samples: LHS sample matrix [n_trials, n_params]
+        meta: Execution metadata (seed, sampler, correlation_enabled)
         percentiles: Percentiles to compute (default: P5, P10, P50, P90, P95)
     
     Returns:
-        MonteCarloResult with summary statistics
+        MonteCarloResult with:
+        - summary: {metric: {mean, std, percentiles}}
+        - trials: {metric: [val1, val2, ...]}  # RAW ARRAYS
+        - metadata: execution metadata
+        - percentiles: lookup table
     
     Example:
-        >>> trial_metrics = [
-        ...     {"project_irr": 0.18, "project_npv": 57e6, "dscr_min": 1.32},
-        ...     {"project_irr": 0.16, "project_npv": 52e6, "dscr_min": 1.28},
-        ...     # ... more trials
+        >>> trials = [
+        ...     {"dscr_min": 1.32, "project_irr": 0.14},
+        ...     {"dscr_min": 1.45, "project_irr": 0.13},
+        ...     # ... 998 more trials
         ... ]
         >>> result = aggregate_trials(
-        ...     trial_metrics=trial_metrics,
+        ...     trial_metrics=trials,
         ...     base_config=cfg,
-        ...     param_names=["revenue", "cost", "fx_rate"],
-        ...     samples=samples_array,
+        ...     param_names=["capex", "tariff"],
+        ...     samples=lhs_samples,
         ...     meta={"seed": 42, "n_trials": 1000}
         ... )
-        >>> result["summary"]["project_irr"]["mean"]
-        0.17
+        >>> 
+        >>> # Access raw trials for breach probability
+        >>> dscr_trials = result.trials["dscr_min"]  # 1000 values
+        >>> breach_prob = np.mean(dscr_trials < 1.30)
+    
+    Note:
+        Canonical KPI names expected in trial_metrics:
+        - dscr_min: Minimum DSCR over project life
+        - project_irr: Unlevered project IRR
+        - project_npv: Unlevered project NPV
+        - llcr: Loan Life Coverage Ratio
+        - plcr: Project Life Coverage Ratio
+        - equity_irr: Levered equity IRR (if equity modeled)
+        
+        Add/remove metric keys based on your canonical KPI set.
     """
-    # Canonical metric keys (adapt to your v14 pipeline outputs)
-    # These should match the keys returned by evaluate_with_overrides()
+    # Canonical metric keys - adjust to match your KPI naming
     metric_keys = [
+        "dscr_min",
         "project_irr",
         "project_npv",
-        "equity_irr",
-        "equity_npv",
-        "dscr_min",
         "llcr",
         "plcr",
-        "max_debt_usd",
+        "equity_irr",
+        "equity_npv",
     ]
-    
-    # Extract metric arrays
+
+    # Extract raw trial arrays
     arrays: Dict[str, np.ndarray] = {}
-    for key in metric_keys:
+    trials: Dict[str, List[float]] = {}
+    
+    for k in metric_keys:
         vals: List[float] = []
         for tm in trial_metrics:
-            v = tm.get(key, None)
-            if v is not None:
-                vals.append(float(v))
+            v = tm.get(k, None)
+            if v is None:
+                # Missing metric in this trial - skip or use NaN
+                # For production: decide on NaN handling policy
+                continue
+            vals.append(float(v))
         
-        if vals:
-            arrays[key] = np.array(vals, dtype=float)
-    
+        if not vals:
+            # No trials had this metric - skip it
+            continue
+            
+        arr = np.array(vals, dtype=float)
+        arrays[k] = arr
+        trials[k] = vals  # Store raw list for MonteCarloResult.trials
+
     # Compute summary statistics
     summary: Dict[str, Any] = {}
-    for key, arr in arrays.items():
+    percentile_lookup: Dict[int, Dict[str, float]] = {p: {} for p in percentiles}
+    
+    for k, arr in arrays.items():
         if arr.size == 0:
             continue
         
-        summary[key] = {
+        pctl_dict = _percentiles(arr, percentiles)
+        
+        summary[k] = {
             "mean": float(arr.mean()),
             "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0,
-            "median": float(np.median(arr)),
-            "percentiles": _compute_percentiles(arr, percentiles),
+            "percentiles": pctl_dict,
             "min": float(arr.min()),
             "max": float(arr.max()),
-            "count": int(arr.size),
         }
-    
-    # Add parameter statistics (useful for debugging correlations)
-    param_stats: Dict[str, Any] = {}
-    for i, name in enumerate(param_names):
-        if i < samples.shape[1]:
-            param_col = samples[:, i]
-            param_stats[name] = {
-                "mean": float(param_col.mean()),
-                "std": float(param_col.std(ddof=1)) if param_col.size > 1 else 0.0,
-                "min": float(param_col.min()),
-                "max": float(param_col.max()),
-            }
-    
-    # Assemble result
-    # If MonteCarloResult is a Pydantic model, construct properly
-    # Otherwise, return dict
-    result_dict = {
-        "summary": summary,
-        "metadata": dict(meta),
-        "param_stats": param_stats,
-        "n_trials": len(trial_metrics),
-    }
-    
-    if isinstance(MonteCarloResult, type) and hasattr(MonteCarloResult, "__dataclass_fields__"):
-        # MonteCarloResult is a dataclass/Pydantic model
-        return MonteCarloResult(**result_dict)  # type: ignore[call-arg]
-    else:
-        # Fallback: return dict
-        return result_dict  # type: ignore[return-value]
+        
+        # Build percentile lookup table
+        for p, val in pctl_dict.items():
+            percentile_lookup[p][k] = val
 
-
-def compute_covenant_breach_probability(
-    metric_values: Sequence[float],
-    covenant_threshold: float,
-    breach_type: str = "below"
-) -> float:
-    """
-    Compute probability of covenant breach.
+    # Build metadata
+    metadata = dict(meta)
+    metadata["n_metrics"] = len(arrays)
+    metadata["metric_keys"] = list(arrays.keys())
     
-    Useful for lender risk analysis:
-    - P(DSCR < 1.2)
-    - P(LLCR < 1.1)
-    - P(Debt/Equity > 3.0)
+    # Construct MonteCarloResult with raw trials
+    result = MonteCarloResult(
+        summary=summary,
+        metadata=metadata,
+        trials=trials,  # ✅ RAW TRIAL ARRAYS for lender analytics
+        percentiles=percentile_lookup,
+    )
     
-    Args:
-        metric_values: List of metric values from trials
-        covenant_threshold: Covenant limit
-        breach_type: "below" for min covenants (DSCR, LLCR),
-                     "above" for max covenants (Debt/Equity)
-    
-    Returns:
-        Breach probability [0, 1]
-    
-    Example:
-        >>> dscr_values = [1.32, 1.28, 1.15, 1.40, 1.22, ...]
-        >>> prob_breach = compute_covenant_breach_probability(
-        ...     dscr_values,
-        ...     covenant_threshold=1.2,
-        ...     breach_type="below"
-        ... )
-        >>> print(f"P(DSCR < 1.2) = {prob_breach*100:.1f}%")
-        P(DSCR < 1.2) = 12.3%
-    """
-    metric_array = np.array(metric_values, dtype=float)
-    
-    if metric_array.size == 0:
-        return np.nan
-    
-    if breach_type == "below":
-        breaches = np.sum(metric_array < covenant_threshold)
-    elif breach_type == "above":
-        breaches = np.sum(metric_array > covenant_threshold)
-    else:
-        raise ValueError(
-            f"Invalid breach_type: {breach_type}. "
-            f"Must be 'below' or 'above'."
-        )
-    
-    probability = float(breaches) / float(metric_array.size)
-    
-    return probability
-
-
-def compute_lender_risk_metrics(
-    trial_metrics: List[Mapping[str, Any]],
-    covenants: Optional[Mapping[str, float]] = None,
-) -> Dict[str, Any]:
-    """
-    Compute lender-focused risk metrics from MC trials.
-    
-    Provides:
-    - Covenant breach probabilities
-    - Downside risk measures (P10, worst-case)
-    - Probability of negative equity IRR/NPV
-    
-    Args:
-        trial_metrics: List of trial results
-        covenants: Optional covenant thresholds
-            e.g., {"dscr_min": 1.2, "llcr": 1.1}
-    
-    Returns:
-        Dictionary with lender risk metrics
-    
-    Example:
-        >>> lender_metrics = compute_lender_risk_metrics(
-        ...     trial_metrics=results,
-        ...     covenants={"dscr_min": 1.2, "llcr": 1.1}
-        ... )
-        >>> lender_metrics["covenant_breach_prob"]["dscr_min"]
-        0.123  # 12.3% chance of DSCR < 1.2
-    """
-    if covenants is None:
-        covenants = {
-            "dscr_min": 1.2,   # Typical lender minimum
-            "llcr": 1.1,       # Typical lender minimum
-        }
-    
-    lender_metrics: Dict[str, Any] = {
-        "covenant_breach_prob": {},
-        "downside_risk": {},
-        "probability_negative": {},
-    }
-    
-    # Covenant breach probabilities
-    for metric, threshold in covenants.items():
-        values = [t.get(metric) for t in trial_metrics if t.get(metric) is not None]
-        if values:
-            prob = compute_covenant_breach_probability(
-                values,
-                threshold,
-                breach_type="below"
-            )
-            lender_metrics["covenant_breach_prob"][metric] = prob
-    
-    # Downside risk (P10 values)
-    for metric in ["project_irr", "equity_irr", "dscr_min", "llcr"]:
-        values = [t.get(metric) for t in trial_metrics if t.get(metric) is not None]
-        if values:
-            arr = np.array(values)
-            lender_metrics["downside_risk"][f"{metric}_p10"] = float(
-                np.percentile(arr, 10)
-            )
-    
-    # Probability of negative returns
-    for metric in ["project_npv", "equity_npv", "equity_irr"]:
-        values = [t.get(metric) for t in trial_metrics if t.get(metric) is not None]
-        if values:
-            arr = np.array(values)
-            prob_negative = float(np.sum(arr < 0)) / float(arr.size)
-            lender_metrics["probability_negative"][metric] = prob_negative
-    
-    return lender_metrics
-
-
-__all__ = [
-    "aggregate_trials",
-    "compute_covenant_breach_probability",
-    "compute_lender_risk_metrics",
-]
+    return result

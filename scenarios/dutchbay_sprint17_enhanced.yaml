@@ -1,0 +1,296 @@
+# DutchBay Wind Farm - Sprint 17 Enhanced Scenario
+# Demonstrates: Degradation Uncertainty + Correlation Structure + Dual DSCR
+#
+# Features:
+# - Monte Carlo with degradation as stochastic variable
+# - Iman-Conover correlation for realistic scenarios
+# - Dual DSCR (P50/P99) debt sizing
+# - Sensitivity analysis on key drivers
+#
+# Framework Compliance:
+# - CESSPIT: All parameters explicit (no defaults in code)
+# - CASPER: Conservative assumptions for lender-grade analysis
+# - GWTF: R3 (Hydra), R22 (schema validation)
+# - CCCDIR: Complete config-driven specification
+#
+# Date: December 21, 2025
+# Sprint: 17
+# Version: 1.0.0
+
+name: "DutchBay Sprint 17 Enhanced - Degradation & Correlation"
+scenario_date: "2025-12-21"
+scenario_type: "lender_case_with_degradation"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DEFAULTS IMPORT
+# ═════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  _target_: config.defaults
+  # Imports all defaults from config/defaults.yaml
+  # Override specific values below as needed
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PROJECT DETAILS
+# ═════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "DutchBay Wind Farm"
+  location:
+    latitude: 8.5000
+    longitude: 79.8333
+    country: "Sri Lanka"
+    region: "Mannar"
+  
+  # Sprint 17: Degradation with uncertainty
+  degradation: 0.006  # 0.6%/year (base case)
+  degradation_method: "compound"  # Compound degradation formula
+  
+  # Project timeline
+  construction_years: 2
+  operation_years: 25
+  total_life_years: 27
+  
+  # Financial close
+  financial_close_date: "2026-06-30"
+  cod_date: "2028-06-30"  # Commercial Operation Date
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TURBINE CONFIGURATION
+# ═════════════════════════════════════════════════════════════════════════════
+
+turbine:
+  model: "Vestas V150-4.2MW"
+  manufacturer: "Vestas"
+  rated_power_mw: 4.2
+  n_turbines: 30
+  total_capacity_mw: 126.0
+  
+  hub_height_m: 105
+  rotor_diameter_m: 150
+  
+  # Power curve (key points)
+  cut_in_speed_ms: 3.0
+  rated_speed_ms: 12.0
+  cut_out_speed_ms: 25.0
+
+# ═════════════════════════════════════════════════════════════════════════════
+# WIND RESOURCE ASSESSMENT
+# ═════════════════════════════════════════════════════════════════════════════
+
+wind_resource:
+  # Data period (11+ years for bankability)
+  start_date: "2014-12-01"
+  end_date: "2025-12-31"
+  data_years: 11
+  
+  # Annual Energy Production (P-values from wind assessment)
+  aep_p50_mwh: 161000  # P50: Base case
+  aep_p75_mwh: 150000  # P75: Conservative case (used in Monte Carlo)
+  aep_p90_mwh: 142000  # P90: Downside case
+  aep_p99_mwh: 135000  # P99: Tail risk case
+  
+  # Loss factors (from wind pipeline)
+  losses:
+    wake_loss: 0.05        # 5%
+    electrical_loss: 0.02  # 2%
+    grid_loss: 0.02        # 2%
+    availability: 0.97     # 97% (3% downtime)
+    curtailment: 0.02      # 2%
+    environmental: 0.01    # 1%
+    total_loss_budget: 0.15  # 15% total
+  
+  # Inter-annual variability (for Monte Carlo)
+  inter_annual_variability_pct: 8.0
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FINANCE & ECONOMICS
+# ═════════════════════════════════════════════════════════════════════════════
+
+finance:
+  # Capital structure
+  capex_total_usd: 252000000  # $252M total CAPEX
+  capex_per_mw: 2000000       # $2.0M/MW
+  
+  # PPA terms
+  tariff_usd_mwh: 130.0       # $130/MWh
+  tariff_escalation_pct: 0.0  # Fixed tariff (conservative)
+  ppa_tenor_years: 25
+  
+  # Operating costs
+  opex_annual_usd: 7200000    # $7.2M/year
+  opex_per_mw: 57142          # $57k/MW/year
+  
+  # Debt terms
+  debt_interest_pct: 6.5      # 6.5% interest rate
+  debt_tenor_years: 18        # 18-year tenor
+  debt_moratorium_years: 2    # 2-year moratorium during construction
+  
+  # Discount rates
+  wacc_pct: 8.0               # 8% WACC
+  equity_discount_pct: 12.0   # 12% equity discount
+  
+  # Tax parameters
+  corporate_tax_rate_pct: 30.0
+  vat_rate_pct: 18.0
+  withholding_tax_pct: 14.0
+  
+  # Foreign exchange
+  fx_rate_lkr_usd: 300.0      # LKR 300/USD
+  fx_volatility_pct: 15.0     # 15% annual volatility
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MONTE CARLO CONFIGURATION (Sprint 17 Enhanced)
+# ═════════════════════════════════════════════════════════════════════════════
+
+monte_carlo:
+  scenario_name: "DutchBay Sprint17 Enhanced"
+  
+  # Simulation parameters
+  n_iterations: 10000
+  sampling_method: "lhs"  # Latin Hypercube Sampling
+  seed: 42                # Reproducibility
+  
+  # Discount rate (CESSPIT: required, no default)
+  discount_rate_pct: 8.0  # WACC
+  
+  # Project parameters
+  capex_total_usd: 252000000
+  project_life_years: 25
+  
+  # Revenue parameters (year 1, before degradation)
+  revenue_mean_usd: 19500000  # $19.5M/year (AEP_P75 * Tariff)
+  revenue_std_pct: 10.0       # ±10% inter-annual variability
+  
+  # Cost parameters
+  cost_mean_usd: 7200000      # $7.2M/year OPEX
+  cost_std_pct: 5.0           # ±5% cost variability
+  
+  # FX parameters
+  fx_mean_rate: 300.0         # LKR/USD
+  fx_std_pct: 15.0            # ±15% FX volatility
+  
+  # Sprint 17: Degradation uncertainty
+  degradation_mean_pct: 0.6   # 0.6%/year mean
+  degradation_std_pct: 0.1    # ±0.1%/year (1-sigma)
+  
+  # Sprint 17: Correlation structure (Iman-Conover)
+  correlation:
+    enabled: true
+    
+    # 4x4 correlation matrix
+    # Order: [revenue, cost, FX, degradation]
+    # Industry-typical correlations for renewables
+    matrix:
+      - [1.0,  0.4, -0.3, -0.2]  # Revenue correlations
+      - [0.4,  1.0, -0.2,  0.1]  # Cost correlations  
+      - [-0.3, -0.2, 1.0,  0.0]  # FX correlations
+      - [-0.2, 0.1,  0.0,  1.0]  # Degradation correlations
+    
+    # Rationale:
+    # Revenue-Cost (+0.4): Both increase with inflation
+    # Revenue-FX (-0.3): USD PPA benefits from LKR depreciation
+    # Revenue-Degradation (-0.2): Higher degradation → lower output
+    # Cost-Degradation (+0.1): Slightly higher maintenance with degradation
+    # FX-Degradation (0.0): Independent factors
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DUAL DSCR DEBT SIZING (Sprint 17)
+# ═════════════════════════════════════════════════════════════════════════════
+
+debt_sizing:
+  # Dual DSCR methodology (Bolinger 2017)
+  method: "dual_dscr"
+  
+  # P50 constraint (base case)
+  dscr_p50_target: 1.30  # 1.30x investment grade
+  
+  # P99 constraint (downside protection)
+  dscr_p99_target: 1.00  # 1.00x minimum
+  
+  # Debt ratio cap
+  debt_ratio_cap: 0.70   # 70% max leverage
+  
+  # Conservative sizing
+  take_minimum: true     # min(Debt_P50, Debt_P99)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SENSITIVITY ANALYSIS (Sprint 17)
+# ═════════════════════════════════════════════════════════════════════════════
+
+sensitivity:
+  # Perturbation range
+  perturbation_range_pct: 20.0  # ±20%
+  n_steps: 9
+  
+  # Variables for DSCR sensitivity tornado
+  dscr_variables:
+    - degradation    # Turbine performance degradation
+    - aep            # Annual Energy Production
+    - tariff         # PPA tariff
+    - opex           # Operating expenses
+  
+  # Variables for NPV/IRR sensitivity
+  npv_irr_variables:
+    - degradation
+    - aep
+    - tariff
+    - capex
+    - opex
+    - debt_rate
+    - fx_rate
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OUTPUT CONFIGURATION
+# ═════════════════════════════════════════════════════════════════════════════
+
+output:
+  # Formats
+  formats:
+    - json
+    - excel
+  
+  # Output directory
+  output_dir: "outputs/sprint17_enhanced"
+  
+  # Files to generate
+  files:
+    monte_carlo: "mc_enhanced_results.json"
+    sensitivity_dscr: "dscr_tornado.xlsx"
+    sensitivity_npv: "npv_tornado.xlsx"
+    summary: "sprint17_summary.json"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# METADATA
+# ═════════════════════════════════════════════════════════════════════════════
+
+metadata:
+  created_by: "DutchBay Financial Modeling Team"
+  created_date: "2025-12-21"
+  sprint: "Sprint 17"
+  version: "1.0.0"
+  
+  description: |
+    Sprint 17 enhanced scenario demonstrating:
+    - Monte Carlo with degradation uncertainty (4 variables)
+    - Iman-Conover correlation structure
+    - Dual DSCR (P50/P99) debt sizing
+    - DSCR sensitivity analysis
+    
+    Framework compliance:
+    - CESSPIT: All parameters explicit
+    - CASPER: Conservative lender-grade assumptions
+    - GWTF: R3 (Hydra), R22 (schema validation)
+    - CCCDIR: Complete config-driven
+  
+  assumptions:
+    - Degradation: 0.6%/year ± 0.1% (NREL 2019)
+    - Correlation: Industry-typical for renewable PPAs
+    - DSCR targets: 1.30x / 1.00x (investment grade)
+    - AEP: P75 used as conservative base
+  
+  references:
+    - "Bolinger (2017): Renewable project finance"
+    - "Iman & Conover (1982): Rank correlation in MC"
+    - "NREL (2019): Wind turbine degradation study"
+    - "Staffell & Green (2014): Performance decline"

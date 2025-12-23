@@ -1,36 +1,28 @@
-from __future__ import annotations
+"""BACKWARD COMPATIBILITY SHIM: Import from analytics.cli.cli_sensitivity instead.
 
-import argparse
-import json
-from dataclasses import asdict
-from pathlib import Path
+This module provides backward compatibility for code that imports from the old
+flat analytics/ structure. All functionality has moved to analytics/cli/.
 
-from analytics.sensitivity_runner import run_sensitivity_analysis
+⚠️ NOTE: The underlying cli_sensitivity.py is itself DEPRECATED (argparse-based).
+Prefer analytics.cli.cli_sensitivity_hydra for new code.
 
+OLD (deprecated but still works):
+    from analytics.cli_sensitivity import main
+    python analytics/cli_sensitivity.py scenario.yaml
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run sensitivity analysis for a v14 scenario."
-    )
-    parser.add_argument("scenario", type=str, help="Path to the base scenario config.")
-    parser.add_argument(
-        "--metric",
-        type=str,
-        default="project_irr",
-        help="Metric for sensitivity (default: project_irr).",
-    )
-    parser.add_argument(
-        "--output", "-o", type=Path, help="Output file path to save results (optional)."
-    )
-    args = parser.parse_args()
-    suite = run_sensitivity_analysis(args.scenario, metric=args.metric)
-    result_dict = asdict(suite)
-    if args.output:
-        args.output.write_text(json.dumps(result_dict, indent=4))
-        print(f"Sensitivity analysis results saved to {args.output}")
-    else:
-        print(json.dumps(result_dict, indent=4))
+NEW (preferred - Hydra-based):
+    from analytics.cli.cli_sensitivity_hydra import main
+    python analytics/cli/cli_sensitivity_hydra.py config=scenario.yaml
 
+DEPRECATION TIMELINE:
+- This shim: Removed Sprint 18 (Q1 2026)
+- cli_sensitivity.py itself: Removed Sprint 18 (Q1 2026)
+- Use cli_sensitivity_hydra.py instead
 
-if __name__ == "__main__":
-    main()
+Migration: Priority 2 Phase 2 (CLI backward compatibility)
+Pattern: analytics/MODULE.py → analytics/cli/MODULE.py
+GWTF R25: Feature branch migration, no main commits
+"""
+
+# Re-export everything from new location
+from analytics.cli.cli_sensitivity import *  # noqa: F401, F403

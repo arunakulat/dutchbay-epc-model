@@ -17,10 +17,10 @@ from .cashflow_v14_production import (
     _calculate_statutory_deductions,
 )
 from .cashflow_v14_tax import (
+    DepreciationSchedule,
     TaxConfig,
     TaxProfile,
     TaxResult,
-    DepreciationSchedule,
     build_tax_profile,
     build_tax_series,
     calculate_tax,
@@ -566,8 +566,7 @@ def build_annual_rows_efficient(
         )
 
         revenue_lkr = _calculate_revenue_lkr(
-            net_kwh,
-            float(params["tariff_lkr_per_kwh"])
+            net_kwh, float(params["tariff_lkr_per_kwh"])
         )
 
         statutory = _calculate_statutory_deductions(
@@ -577,28 +576,29 @@ def build_annual_rows_efficient(
             float(params["social_levy_pct"]),
         )
 
-        opex_lkr = _calculate_opex_lkr(
-            float(params["opex_usd_per_year"]),
-            fx_rate
-        )
+        opex_lkr = _calculate_opex_lkr(float(params["opex_usd_per_year"]), fx_rate)
 
         ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
 
-        production_data.append({
-            "year": float(year),
-            "gross_kwh": gross_kwh,
-            "grid_loss": gross_kwh - net_kwh,
-            "net_kwh": net_kwh,
-            "revenue_lkr": revenue_lkr,
-            "success_fee_lkr": statutory["success_fee"],
-            "env_surcharge_lkr": statutory["environmental_surcharge"],
-            "social_levy_lkr": statutory["social_services_levy"],
-            "total_statutory_deductions_lkr": statutory["total_statutory_deductions"],
-            "opex_usd": float(params["opex_usd_per_year"]),
-            "fx_rate": fx_rate,
-            "opex_lkr": opex_lkr,
-            "ebitda_lkr": ebitda_lkr,
-        })
+        production_data.append(
+            {
+                "year": float(year),
+                "gross_kwh": gross_kwh,
+                "grid_loss": gross_kwh - net_kwh,
+                "net_kwh": net_kwh,
+                "revenue_lkr": revenue_lkr,
+                "success_fee_lkr": statutory["success_fee"],
+                "env_surcharge_lkr": statutory["environmental_surcharge"],
+                "social_levy_lkr": statutory["social_services_levy"],
+                "total_statutory_deductions_lkr": statutory[
+                    "total_statutory_deductions"
+                ],
+                "opex_usd": float(params["opex_usd_per_year"]),
+                "fx_rate": fx_rate,
+                "opex_lkr": opex_lkr,
+                "ebitda_lkr": ebitda_lkr,
+            }
+        )
 
         ebit_series.append(ebitda_lkr)
 
@@ -624,17 +624,19 @@ def build_annual_rows_efficient(
         row = prod_data.copy()
 
         # Add tax data
-        row.update({
-            "pretax_cfads_lkr": tax_result.ebit,
-            "total_depreciation_lkr": tax_result.depreciation,
-            "interest_expense_lkr": tax_result.interest_expense,
-            "taxable_income_lkr": tax_result.taxable_income,
-            "tax_lkr": tax_result.tax_liability,
-            "effective_tax_rate": tax_result.effective_tax_rate,
-            "tax_holiday_applied": float(tax_result.tax_holiday_applied),
-            "carried_forward_losses": tax_result.carried_forward_losses,
-            "wht_on_interest": tax_result.wht_on_interest,
-        })
+        row.update(
+            {
+                "pretax_cfads_lkr": tax_result.ebit,
+                "total_depreciation_lkr": tax_result.depreciation,
+                "interest_expense_lkr": tax_result.interest_expense,
+                "taxable_income_lkr": tax_result.taxable_income,
+                "tax_lkr": tax_result.tax_liability,
+                "effective_tax_rate": tax_result.effective_tax_rate,
+                "tax_holiday_applied": float(tax_result.tax_holiday_applied),
+                "carried_forward_losses": tax_result.carried_forward_losses,
+                "wht_on_interest": tax_result.wht_on_interest,
+            }
+        )
 
         # Post-tax CFADS
         posttax_cfads = tax_result.ebit - tax_result.tax_liability
@@ -642,25 +644,31 @@ def build_annual_rows_efficient(
         cfads_final_lkr = _apply_risk_haircut(posttax_cfads, risk_haircut_pct)
         risk_haircut_amount = posttax_cfads - cfads_final_lkr
 
-        row.update({
-            "posttax_cfads_lkr": posttax_cfads,
-            "risk_haircut_pct": risk_haircut_pct,
-            "risk_haircut_amount_lkr": risk_haircut_amount,
-            "cfads_final_lkr": cfads_final_lkr,
-            "cfads_risk_adjusted_lkr": cfads_final_lkr,
-        })
+        row.update(
+            {
+                "posttax_cfads_lkr": posttax_cfads,
+                "risk_haircut_pct": risk_haircut_pct,
+                "risk_haircut_amount_lkr": risk_haircut_amount,
+                "cfads_final_lkr": cfads_final_lkr,
+                "cfads_risk_adjusted_lkr": cfads_final_lkr,
+            }
+        )
 
         # USD views
         if fx_rate > 0.0:
-            row.update({
-                "revenue_usd": row["revenue_lkr"] / fx_rate,
-                "cfads_usd": cfads_final_lkr / fx_rate,
-            })
+            row.update(
+                {
+                    "revenue_usd": row["revenue_lkr"] / fx_rate,
+                    "cfads_usd": cfads_final_lkr / fx_rate,
+                }
+            )
         else:
-            row.update({
-                "revenue_usd": 0.0,
-                "cfads_usd": 0.0,
-            })
+            row.update(
+                {
+                    "revenue_usd": 0.0,
+                    "cfads_usd": 0.0,
+                }
+            )
 
         rows.append(row)
 

@@ -1,557 +1,206 @@
+#!/usr/bin/env python
+"""Wind Resource Assessment and Financial Analysis Pipeline.
+
+Integrates wind_resource module for complete wind-to-finance workflow:
+1. ERA5 data download and processing (wind_resource.ERA5Fetcher)
+2. Statistical analysis with Weibull fitting (wind_resource.WindAnalyzer)
+3. Energy calculations with loss factors (wind_resource.EnergyCalculator)
+4. Monte Carlo simulation for uncertainty
+5. Financial analysis integration
+
+Usage:
+    # CLI (Hydra)
+    python run_full_pipeline_v14.py \\
+      config=scenarios/dutchbay_lendercase_2025Q4.yaml
+    
+    # Python API
+    from analytics.pipeline_v14 import run_v14_pipeline
+    
+    results = run_v14_pipeline(
+        config='scenarios/dutchbay_lendercase_2025Q4.yaml',
+        validation_mode='strict'
+    )
+
+GWTF Compliance:
+- R3: Hydra-only (no argparse)
+- CCCDIR: All config from YAML files
+- R24: Google-style docstrings
+- TYPE-01: Full type hints
+
+Author: Dutch Bay Wind Farm Team
+Date: December 2025
+Version: 2.0.0 (Integrated wind_resource)
+"""
+
 from __future__ import annotations
 
+import json
 import logging
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Dict, Optional
 
-from analytics.contracts_v14 import (
-    DebtCovenantSnapshot,
-    ScenarioResult,
-    TrancheDebtProfile,
-)
-from analytics.contracts_v14 import WaccComponents as ContractWaccComponents
-from analytics.contracts_v14 import (
-    WaccResult,
-    build_cashflow_result_from_annual_rows,
-)
-from analytics.core.metrics import calculate_scenario_kpis
-from analytics.scenario_loader import load_scenario_config
-from analytics.schema_guard import validate_config_for_v14
-from analytics.fx_integration import integrate_fx_into_scenario_result
-from finance.cashflow_v14 import build_annual_rows
-from finance.debt_v14 import plan_debt
-from finance.utils import get_nested
-from finance.wacc_v14 import compute_wacc_from_config
+import yaml
+from omegaconf import DictConfig, OmegaConf
+
+from wind_resource import WindPipeline
 
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Validation helpers
-# =============================================================================
-
-
-def _validate_annual_rows(annual_rows: list[dict[str, Any]]) -> None:
-    """Validate annual_rows structure from build_annual_rows.
-    
-    Ensures:
-    - annual_rows is a list
-    - Each row is a dict
-    - Required keys present (year, cf_pre_debt, etc)
-    
-    Raises ValueError if structure invalid.
-    """
-    if not isinstance(annual_rows, list):
-        raise ValueError(
-            f"annual_rows must be list, got {type(annual_rows).__name__}"
-        )
-    
-    if len(annual_rows) == 0:
-        raise ValueError("annual_rows cannot be empty")
-    
-    # Check first row has expected keys
-    first_row = annual_rows[0]
-    if not isinstance(first_row, dict):
-        raise ValueError(
-            f"annual_rows[0] must be dict, got {type(first_row).__name__}"
-        )
-    
-    required_keys = {"year", "cf_pre_debt", "debt_service_total"}
-    missing_keys = required_keys - set(first_row.keys())
-    if missing_keys:
-        raise ValueError(
-            f"annual_rows missing required keys: {missing_keys}"
-        )
-    
-    logger.debug(
-        "Validated annual_rows: %d rows, keys=%s",
-        len(annual_rows),
-        list(first_row.keys()),
-    )
-
-
-def _validate_debt_result(debt_result: dict[str, Any]) -> None:
-    """Validate debt_result structure from plan_debt.
-    
-    Ensures required keys present:
-    - min_dscr, dscr_series, balloon_remaining
-    - lkr, usd, dfi sub-dicts
-    
-    Raises ValueError if structure invalid.
-    """
-    if not isinstance(debt_result, dict):
-        raise ValueError(
-            f"debt_result must be dict, got {type(debt_result).__name__}"
-        )
-    
-    required_keys = {
-        "min_dscr", "dscr_series", "balloon_remaining",
-        "lkr", "usd", "dfi"
-    }
-    missing_keys = required_keys - set(debt_result.keys())
-    if missing_keys:
-        logger.warning(
-            "debt_result missing keys: %s (will use defaults)",
-            missing_keys
-        )
-    
-    logger.debug(
-        "Validated debt_result: keys=%s",
-        list(debt_result.keys())[:5] + ([
-            f"... +{len(debt_result) - 5} more"
-        ] if len(debt_result) > 5 else []),
-    )
-
-
-# =============================================================================
-# Helpers
-# =============================================================================
-
-
-def _build_tranche_debt_profile(
-    config: dict[str, Any],
-    debt_result: dict[str, Any],
-) -> TrancheDebtProfile:
-    """Adapter: build a TrancheDebtProfile from the v14 debt_result (plan_debt surface).
-
-    This is a lender-facing summary: totals, IDC, tenor, IO years, and target DSCR.
-    Uses defensive .get() to avoid KeyError on missing fields.
-    """
-    # Extract with defaults to prevent KeyError
-    principal_by = debt_result.get("principal_by_tranche") or {}
-    lkr = debt_result.get("lkr") or {}
-    usd = debt_result.get("usd") or {}
-    dfi = debt_result.get("dfi") or {}
-
-    construction_years = int(debt_result.get("construction_years") or 0)
-    tenor_years = int(debt_result.get("tenor_years") or 0)
-    timeline_periods = int(debt_result.get("timeline_periods") or 0)
-
-    total_debt = float(sum(principal_by.values()) or 0.0)
-    total_idc = float(debt_result.get("total_idc") or 0.0)
-
-    # Optional cost-of-debt metadata (if present in config)
-    rates = get_nested(config, ["Financing_Terms", "rates"], {}) or {}
-    lkr_rate = rates.get("lkr_nominal") or rates.get("lkr_min")
-    usd_rate = rates.get("usd_nominal") or rates.get("usd_commercial_min")
-    dfi_rate = rates.get("dfi_nominal") or rates.get("dfi_min")
-
-    io_years = int(
-        (get_nested(config, ["Financing_Terms", "interest_only_years"]) or 0)
-    )
-
-    amortization_style = (
-        get_nested(config, ["Financing_Terms", "amortization_style"]) or "sculpted"
-    )
-    amortization_style = str(amortization_style).lower()
-
-    dscr_target_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
-    try:
-        dscr_target = float(dscr_target_raw) if dscr_target_raw is not None else None
-    except (TypeError, ValueError):
-        logger.warning(
-            "Could not parse target_dscr: %s; using None",
-            dscr_target_raw
-        )
-        dscr_target = None
-
-    return TrancheDebtProfile(
-        construction_years=construction_years,
-        tenor_years=tenor_years,
-        timeline_periods=timeline_periods,
-        total_debt=total_debt,
-        total_idc=total_idc,
-        lkr_principal=float(lkr.get("principal") or 0.0),
-        usd_principal=float(usd.get("principal") or 0.0),
-        dfi_principal=float(dfi.get("principal") or 0.0),
-        lkr_idc=float(lkr.get("idc") or 0.0),
-        usd_idc=float(usd.get("idc") or 0.0),
-        dfi_idc=float(dfi.get("idc") or 0.0),
-        lkr_rate=float(lkr_rate) if lkr_rate is not None else None,
-        usd_rate=float(usd_rate) if usd_rate is not None else None,
-        dfi_rate=float(dfi_rate) if dfi_rate is not None else None,
-        interest_only_years=io_years,
-        amortization_style=amortization_style,
-        dscr_target=dscr_target,
-    )
-
-
-def _build_debt_covenant_snapshot(
-    config: dict[str, Any],
-    debt_result: dict[str, Any],
-) -> DebtCovenantSnapshot:
-    """Build a DebtCovenantSnapshot from the v14 debt_result dict.
-
-    Encodes DSCR profile vs lender threshold and balloon flag for ring-fence views.
-    Uses defensive .get() to avoid KeyError on missing fields.
-    """
-    # Extract with defaults
-    dscr_series = list(debt_result.get("dscr_series") or [])
-    dscr_min = float(debt_result.get("min_dscr") or 0.0)
-
-    # Threshold: if explicit target_dscr is present, use it; else default to 1.30
-    dscr_threshold_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
-    try:
-        dscr_threshold = (
-            float(dscr_threshold_raw) if dscr_threshold_raw is not None else 1.30
-        )
-    except (TypeError, ValueError):
-        logger.warning(
-            "Could not parse target_dscr for covenant snapshot: %s; using 1.30",
-            dscr_threshold_raw
-        )
-        dscr_threshold = 1.30
-
-    years_below = 0
-    first_breach_year: int | None = None
-    last_breach_year: int | None = None
-
-    for idx, value in enumerate(dscr_series, start=1):
-        if value == float("inf"):
-            # Construction / grace years – ignore for covenant counting.
-            continue
-        if value < dscr_threshold:
-            years_below += 1
-            if first_breach_year is None:
-                first_breach_year = idx
-            last_breach_year = idx
-
-    balloon_remaining = float(debt_result.get("balloon_remaining") or 0.0)
-    balloon_flag = balloon_remaining > 1e-6
-
-    audit_status = str(debt_result.get("audit_status") or "REVIEW")
-
-    notes_parts: list[str] = []
-    notes_parts.append(f"min DSCR={dscr_min:.2f} vs threshold={dscr_threshold:.2f}")
-    if years_below > 0:
-        notes_parts.append(f"{years_below} periods below threshold")
-    if balloon_flag:
-        notes_parts.append("balloon remaining at end of tenor")
-
-    notes = "; ".join(notes_parts)
-
-    return DebtCovenantSnapshot(
-        dscr_min=dscr_min,
-        dscr_threshold=dscr_threshold,
-        years_below_threshold=years_below,
-        first_breach_year=first_breach_year,
-        last_breach_year=last_breach_year,
-        balloon_remaining=balloon_remaining,
-        balloon_flag=balloon_flag,
-        audit_status=audit_status,
-        notes=notes,
-    )
-
-
-def _build_wacc_contract(
-    wacc_dict: Mapping[str, Any] | None,
-) -> WaccResult | None:
-    """Adapter: map the finance.wacc_v14 dict surface into the contracts_v14 WaccResult.
-
-    If the dict is missing core fields, we fail soft and return None.
-    Uses defensive .get() to avoid KeyError.
-    """
-    if not wacc_dict:
-        logger.debug("WACC dict is None/empty; returning None")
-        return None
-
-    try:
-        base = ContractWaccComponents(
-            mode=str(wacc_dict.get("mode", "capm")),
-            wacc_nominal=float(wacc_dict.get("wacc_nominal", 0.0)),
-            wacc_real=wacc_dict.get("wacc_real"),
-            wacc_prudential=float(
-                wacc_dict.get("wacc_prudential", wacc_dict.get("wacc_nominal", 0.0))
-            ),
-            risk_free_rate=float(wacc_dict.get("risk_free_rate", 0.0)),
-            market_risk_premium=float(wacc_dict.get("market_risk_premium", 0.0)),
-            asset_beta=float(wacc_dict.get("asset_beta", 0.0)),
-            target_debt_to_equity=float(wacc_dict.get("target_debt_to_equity", 0.0)),
-            target_debt_to_value=float(wacc_dict.get("target_debt_to_value", 0.0)),
-            target_equity_to_value=float(wacc_dict.get("target_equity_to_value", 1.0)),
-            cost_of_debt_pretax=float(wacc_dict.get("cost_of_debt_pretax", 0.0)),
-            cost_of_debt_aftertax=float(wacc_dict.get("cost_of_debt_aftertax", 0.0)),
-            equity_beta_levered=float(wacc_dict.get("equity_beta_levered", 0.0)),
-            cost_of_equity=float(wacc_dict.get("cost_of_equity", 0.0)),
-            tax_rate=float(wacc_dict.get("tax_rate", 0.0)),
-            inflation_rate=wacc_dict.get("inflation_rate"),
-            prudential_spread_bps=int(wacc_dict.get("prudential_spread_bps", 0)),
-        )
-    except (KeyError, TypeError, ValueError) as exc:
-        logger.warning(
-            "WACC dict missing/invalid fields (%s); skipping WaccResult build.",
-            exc
-        )
-        return None
-
-    return WaccResult(
-        base=base,
-        prudential_rate=base.wacc_prudential,
-        prudential_npv=None,
-        meta={},
-    )
-
-
-# =============================================================================
-# Core pipeline facade
-# =============================================================================
-
-
 def run_v14_pipeline(
-    config: str | Path | Mapping[str, Any],
+    config: str,
     validation_mode: str = "strict",
-    validation_modules: list[str] | None = None,
-    allow_fx_degradation: bool = False,
-) -> dict[str, Any]:
-    """Run the v14 engine for a single scenario.
-
-    Parameters
-    ----------
-    config
-        Either:
-        - Path to YAML/JSON scenario file (str or Path), or
-        - A pre-loaded config mapping (dict-like).
-    validation_mode : {"strict", "off"}, default "strict"
-        - "strict": run schema guard before evaluation
-        - "off": skip schema guard
-    validation_modules : list[str] or None
-        Modules to validate. Defaults to ["cashflow", "debt"].
-    allow_fx_degradation : bool, default False
-        If True, FX integration failures are logged but don't crash pipeline.
-        If False, FX errors re-raised (stops pipeline).
-
-    Returns
-    -------
-    dict[str, Any]
-        ScenarioResult-like dict with keys (superset of legacy surface):
-        - validation_mode
-        - config_path
-        - config
-        - annual_rows
-        - debt_result
-        - kpis
-        - wacc
-        - scenario_result
-        - debt_profile
-        - debt_covenants
+    validation_modules: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    """Run complete v14 pipeline with wind resource integration.
+    
+    Args:
+        config: Path to scenario YAML file.
+        validation_mode: Validation mode ('strict' or 'off').
+        validation_modules: List of modules to validate.
+        
+    Returns:
+        Dictionary containing:
+            - wind_assessment: Complete wind resource analysis
+            - aep_p50_mwh: P50 net AEP (MWh/year)
+            - aep_p75_mwh: P75 net AEP (MWh/year)
+            - revenue_annual_p75_usd: Annual revenue P75
+            - capacity_factor: Net capacity factor
+            - status: 'success' or 'error'
+            
+    Raises:
+        FileNotFoundError: If config file not found.
+        ValueError: If config validation fails.
+    
+    Example:
+        >>> results = run_v14_pipeline(
+        ...     config='scenarios/dutchbay_lendercase_2025Q4.yaml',
+        ...     validation_mode='strict'
+        ... )
+        >>> print(f"P75 AEP: {results['aep_p75_mwh']:,.0f} MWh/year")
     """
-    mode = validation_mode.lower()
-    if mode not in {"strict", "off"}:
-        raise ValueError(
-            f"validation_mode must be 'strict' or 'off', got: {validation_mode!r}"
+    logger.info("=" * 80)
+    logger.info("DUTCHBAY WIND FARM - INTEGRATED PIPELINE V14")
+    logger.info("=" * 80)
+    
+    # Load scenario configuration
+    config_path = Path(config)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config}")
+    
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    cfg = OmegaConf.create(cfg)
+    
+    logger.info(f"Project: {cfg.project.name}")
+    logger.info(f"Scenario: {config_path.stem}")
+    logger.info(f"Capacity: {cfg.project.capacity_mw} MW")
+    logger.info("=" * 80)
+    
+    # Step 1: Schema validation (if enabled)
+    if validation_mode == "strict":
+        logger.info("\n[1/4] Running schema validation...")
+        from schema import schema_guard
+        
+        validation_result = schema_guard.validate_config(
+            cfg,
+            modules=validation_modules or ["all"]
         )
-
-    # ------------------------------------------------------------------
-    # 1. Resolve config + label
-    # ------------------------------------------------------------------
-    if isinstance(config, (str, Path)):
-        config_path_label = str(config)
-        cfg = load_scenario_config(str(config))
-    elif isinstance(config, Mapping):
-        config_path_label = "<inline_config>"
-        # Shallow copy to decouple from callers
-        cfg = dict(config)
-    else:
-        raise TypeError(
-            "config must be a path (str/Path) or a mapping, "
-            f"got {type(config).__name__}"
-        )
-
-    logger.info("Pipeline starting: config_path=%s", config_path_label)
-
-    # ------------------------------------------------------------------
-    # 2. Pre-flight validation
-    # ------------------------------------------------------------------
-    if mode == "strict":
-        modules = validation_modules or ["cashflow", "debt"]
-        validate_config_for_v14(
-            raw_config=cfg,
-            config_path=config_path_label,
-            modules=modules,
-        )
-        logger.info("Schema validation passed for modules: %s", ", ".join(modules))
-    else:
-        modules = validation_modules or []
-        logger.info("Schema validation skipped (validation_mode=off)")
-
-    # ------------------------------------------------------------------
-    # 3. Canonical v14 finance engine
-    # ------------------------------------------------------------------
-
-    # 3a. Cashflow – build annual rows from the v14 cashflow engine.
-    logger.info("Step 1/4: Building annual cashflow rows...")
-    annual_rows = build_annual_rows(cfg)
+        
+        if not validation_result["valid"]:
+            error_msg = f"Schema validation failed: {validation_result['errors']}"
+            logger.error(error_msg)
+            return {
+                "status": "error",
+                "error": error_msg,
+                "validation_result": validation_result
+            }
+        
+        logger.info("✓ Schema validation passed")
     
-    # FIX #6: Validate annual_rows structure
-    try:
-        _validate_annual_rows(annual_rows)
-    except ValueError as e:
-        logger.error("Annual rows validation failed: %s", e)
-        raise
+    # Step 2: Wind Resource Assessment
+    logger.info("\n[2/4] Running wind resource assessment...")
     
-    logger.debug("Built %d annual rows", len(annual_rows))
-
-    # 3b. Debt – covenant-friendly debt surface (plan_debt is canonical v14).
-    logger.info("Step 2/4: Planning debt structure...")
-    debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
-    
-    # FIX #7: Validate debt_result structure
-    try:
-        _validate_debt_result(debt_result)
-    except ValueError as e:
-        logger.error("Debt result validation failed: %s", e)
-        raise
-    
-    logger.debug("Debt result contains %d keys", len(debt_result))
-
-    # 3c. Structured cashflow contract (for analytics / exports / lenders).
-    logger.info("Step 3/4: Building cashflow contract...")
-    cashflow_contract = build_cashflow_result_from_annual_rows(
-        config=cfg,
-        annual_rows=annual_rows,
-    )
-
-    # 3d. WACC (kept parallel to KPIs for now; KPIs still use legacy 10% discount).
-    logger.info("Step 4/4: Computing WACC and KPIs...")
-    wacc_dict = compute_wacc_from_config(cfg)
-    logger.debug("WACC dict keys: %s", list(wacc_dict.keys()) if wacc_dict else "none")
-
-    # Legacy discount rate for KPIs – wiring WACC into discount_rate is a
-    # deliberate future step (tests currently assume 10%).
-    discount_rate_for_kpis = 0.10
-
-    kpis = calculate_scenario_kpis(
-        config=cfg,
-        annual_rows=annual_rows,
-        debt_result=debt_result,
-        discount_rate=discount_rate_for_kpis,
-    )
-    logger.debug("Calculated %d KPIs", len(kpis))
-
-    # Equity overlay
-    #
-    # NOTE: v14 equity engine is designed to operate on *equity cashflows*
-    # (negative = contributions, positive = distributions). The canonical
-    # equity series is not yet exposed by the cashflow/debt pipeline, so we
-    # do not attempt to fabricate it here.
-    # FIX #10: Document equity_performance limitation
-    logger.debug(
-        "Equity performance: not implemented (v14 equity engine deferred to future sprint)"
-    )
-
-    # WACC contracts layer
-    wacc_contract = _build_wacc_contract(wacc_dict)
-
-    # Debt ring-fence surfaces
-    debt_profile = _build_tranche_debt_profile(cfg, debt_result)
-    debt_covenants = _build_debt_covenant_snapshot(cfg, debt_result)
-
-    # ------------------------------------------------------------------
-    # 4. ScenarioResult assembly (for dashboards / lender decks)
-    # ------------------------------------------------------------------
-    project_npv = float(kpis.get("project_npv", 0.0))
-    project_irr = float(kpis.get("project_irr", 0.0))
-    dscr_series = list(debt_result.get("dscr_series") or [])
-    min_dscr = float(debt_result.get("min_dscr") or 0.0)
-    max_debt_usd = float(kpis.get("max_debt_usd", 0.0))
-
-    scenario_name = str(cfg.get("scenario_name", Path(config_path_label).stem))
-
-    # Base ScenarioResult without FX overlays
-    scenario_result = ScenarioResult(
-        scenario_name=scenario_name,
-        config_path=config_path_label,
-        project_npv=project_npv,
-        project_irr=project_irr,
-        dscr_series=dscr_series,
-        min_dscr=min_dscr,
-        max_debt_usd=max_debt_usd,
-        wacc=wacc_contract,
-        discount_rate_used=discount_rate_for_kpis,
-        wacc_label=wacc_dict.get("mode") if wacc_dict else None,
-        wacc_is_real=(
-            bool(wacc_dict.get("wacc_real") is not None) if wacc_dict else None
-        ),
-        validation_mode=mode,
-        config=cfg,
-        annual_rows=annual_rows,
-        debt_result=debt_result,
-        kpis=kpis,
-        cashflow=cashflow_contract,
-        equity_performance=None,
-        debt_profile=debt_profile,
-        debt_covenants=debt_covenants,
-    )
-
-    # ------------------------------------------------------------------
-    # 4a. FX integration (optional, config-driven)
-    # FIX #8: Enhanced FX error handling with graceful degradation
-    # ------------------------------------------------------------------
-    if cfg.get("FX") or cfg.get("fx"):
-        logger.info("FX configuration detected; attempting FX integration.")
-        try:
-            scenario_result = integrate_fx_into_scenario_result(
-                scenario_result=scenario_result,
-                config=cfg,
-                debt_result=debt_result,
-                annual_rows=annual_rows,
-            )
-            if scenario_result.fx_block is not None:
-                logger.info(
-                    "FX integration successful: strategy=%s, fx_match_ratio=%.1f, "
-                    "hedging_coverage_pct=%.1f",
-                    scenario_result.fx_block.strategy,
-                    scenario_result.fx_block.fx_match_ratio,
-                    scenario_result.fx_block.hedging_coverage_pct,
-                )
-            else:
-                logger.warning(
-                    "FX integration completed but fx_block is None; "
-                    "check FX configuration for issues."
-                )
-        except (TypeError, ValueError, KeyError) as exc:
-            if allow_fx_degradation:
-                logger.warning(
-                    "FX integration failed (degradation enabled): %s; "
-                    "continuing with FX fields as None",
-                    exc,
-                )
-            else:
-                logger.error("FX integration failed (degradation disabled): %s", exc)
-                raise
-    else:
-        logger.debug("No FX configuration found; skipping FX integration.")
-
-    scenario_result_dict = asdict(scenario_result)
-
-    # ------------------------------------------------------------------
-    # 5. Package result (JSON-safe, superset of legacy surface)
-    # ------------------------------------------------------------------
-    result: dict[str, Any] = {
-        "config": cfg,
-        "config_path": config_path_label,
-        "validation_mode": mode,
-        "validated_modules": modules,
-        "annual_rows": annual_rows,
-        "debt_result": debt_result,
-        "kpis": kpis,
-        # New overlays / contracts
-        "wacc": wacc_dict,
-        "scenario_result": scenario_result_dict,
-        "debt_profile": asdict(debt_profile),
-        "debt_covenants": asdict(debt_covenants),
+    # Extract wind farm configuration from scenario
+    location = {
+        "name": cfg.project.location,
+        "lat": cfg.project.get("latitude", 8.33),
+        "lon": cfg.project.get("longitude", 79.76)
     }
-
-    logger.info(
-        "Pipeline complete: config_path=%s, annual_rows=%d, kpis=%d, "
-        "min_dscr=%.2f, project_irr=%.4f, fx_block=%s",
-        config_path_label,
-        len(annual_rows),
-        len(kpis),
-        min_dscr,
-        project_irr,
-        "present" if scenario_result.fx_block else "absent",
+    
+    # Initialize WindPipeline
+    pipeline = WindPipeline(
+        location=location,
+        hub_height=cfg.turbine.hub_height_m,
+        turbine_model=cfg.turbine.model,
+        num_turbines=cfg.turbine.n_turbines,
+        cache_dir="inputs/wind_data",
+        output_dir="outputs/wind_assessment"
     )
-
-    return result
+    
+    # Run complete assessment
+    wind_results = pipeline.run_complete_assessment(
+        start_date=cfg.wind_resource.get("start_date", "2014-12-01"),
+        end_date=cfg.wind_resource.get("end_date", "2025-12-31"),
+        force_download=False
+    )
+    
+    logger.info(f"✓ Wind assessment complete")
+    logger.info(f"  Mean wind speed: {wind_results['wind_data']['mean_ws']:.2f} m/s")
+    logger.info(f"  Gross CF: {wind_results['energy_production']['gross_aep']['capacity_factor_gross']:.1f}%")
+    logger.info(f"  Net AEP P75: {wind_results['energy_production']['net_aep']['net_aep_p75_mwh']:,.0f} MWh/year")
+    
+    # Step 3: Export for cashflow model
+    logger.info("\n[3/4] Exporting for cashflow model integration...")
+    
+    export_scenario = cfg.get("export_scenario", "P75")
+    cashflow_data = pipeline.export_for_cashflow_model(scenario=export_scenario)
+    
+    # Save cashflow export
+    output_dir = Path("outputs/wind_assessment")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    cashflow_export_path = output_dir / f"cashflow_export_{export_scenario}.json"
+    with open(cashflow_export_path, "w") as f:
+        json.dump(cashflow_data, f, indent=2)
+    
+    logger.info(f"✓ Cashflow export saved: {cashflow_export_path}")
+    
+    # Step 4: Build complete results
+    logger.info("\n[4/4] Building pipeline results...")
+    
+    results = {
+        "status": "success",
+        "config": {
+            "scenario": config_path.stem,
+            "project_name": cfg.project.name,
+            "capacity_mw": cfg.project.capacity_mw,
+            "turbines": cfg.turbine.n_turbines,
+            "turbine_model": cfg.turbine.model
+        },
+        "wind_assessment": wind_results,
+        "cashflow_export": cashflow_data,
+        # Key metrics for downstream use
+        "aep_p50_mwh": wind_results['energy_production']['net_aep']['net_aep_p50_mwh'],
+        "aep_p75_mwh": wind_results['energy_production']['net_aep']['net_aep_p75_mwh'],
+        "aep_p90_mwh": wind_results['energy_production']['net_aep']['net_aep_p90_mwh'],
+        "capacity_factor_net_p75": wind_results['energy_production']['net_aep']['capacity_factor_net_p75'],
+        "revenue_annual_p75_usd": cashflow_data['revenue_annual_usd'],
+        "weibull_k": wind_results['statistical_analysis']['weibull']['shape_k'],
+        "weibull_c": wind_results['statistical_analysis']['weibull']['scale_c'],
+        "mean_wind_speed_ms": wind_results['wind_data']['mean_ws'],
+        "output_files": {
+            "assessment": str(output_dir / f"{location['name']}_assessment.json"),
+            "cashflow_export": str(cashflow_export_path)
+        }
+    }
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ PIPELINE COMPLETE")
+    logger.info("=" * 80)
+    logger.info(f"Net AEP P75: {results['aep_p75_mwh']:,.0f} MWh/year")
+    logger.info(f"Net CF P75: {results['capacity_factor_net_p75']:.1f}%")
+    logger.info(f"Annual Revenue P75: ${results['revenue_annual_p75_usd']:,.0f}")
+    logger.info("=" * 80)
+    
+    return results

@@ -1,51 +1,45 @@
-# scenarios/test_base_scenario.yaml
-#
-# Minimal-but-realistic v14 test scenario for integration tests.
-# Based on base_scenario.yaml, with field naming aligned to example_a.yaml
-# and dutchbay_master_config_v14.yaml.
-
 project:
-  name: "Test Solar Project"
-  capacity_mw: 10.0
-  cod_year: 2024
-  project_life_years: 25
-  capacity_factor_pct: 25.0
+  capacity_mw: 75
+  capacity_factor_pct: 43
   degradation_pct: 0.5
   grid_loss_pct: 2.0
-
-capex:
-  usd_total: 10000000.0
-  freight_pct: 0.0
-  contingency_pct: 0.0
-
-opex:
-  usd_per_year: 200000.0
-
+  life_years: 20
 tariff:
-  tariff_lkr_per_kwh: 25.0
-
-debt:
-  principal_usd: 6000000.0
-  interest_rate: 0.08
-  tenor_years: 10
-
+  lkr_per_kwh: 48
 fx:
-  start_lkr_per_usd: 320.0
+  start_lkr_per_usd: 310.0
   annual_depr: 0.03
-
+opex:
+  usd_per_year: 8000000
+capex:
+  usd_total: 90000000
 tax:
-  corporate_tax_rate: 0.30
-
+  depreciation_method: "straight_line"
+  corporate_tax_rate_pct: 24
+  tax_holiday_years: 7
+  tax_holiday_start_year: 1
+  depreciation_years: 20
+  enhanced_capital_allowance_pct: 125
+risk:
+  haircut_pct: 10
 Financing_Terms:
-  debt_ratio: 0.60
-  tenor_years: 10
-  amortization_style: annuity
+  debt_ratio: 0.72
+  tenor_years: 16
+  construction_periods: 2
+  construction_schedule:
+  - 55.0
+  - 45.0
+  debt_drawdown_pct:
+  - 0.6
+  - 0.4
+  grace_years: 2
   interest_only_years: 0
+  amortization_style: annuity
   target_dscr: 1.30
   mix:
     lkr_max: 0.0
     dfi_max: 0.0
     usd_commercial_min: 1.0
   rates:
-    usd_nominal: 0.08
-    discount_rate: 0.10
+    usd_nominal: 0.072
+discount_rate: 0.12

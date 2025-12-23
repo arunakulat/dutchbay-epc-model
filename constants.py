@@ -1,53 +1,69 @@
-"""Project-wide constants and defaults."""
+"""Project-wide constants and conversions.
 
-# Currency
-DEFAULT_FX_USD_TO_LKR = 375.0
+This module contains ONLY immutable physical constants and unit conversions.
+All project defaults, thresholds, and configurable values MUST be in:
+- config/defaults.yaml
+- scenarios/*.yaml
 
-# Time
-HOURS_PER_YEAR = 8760.0
-DAYS_PER_YEAR = 365.0
+GWTF Compliance:
+- CCCDIR: Configuration in Config DIRectory
+- No magic numbers or hardcoded business logic values
+- Only universal physical/mathematical constants allowed
 
-# Project defaults
-DEFAULT_PROJECT_LIFE_YEARS = 20
-DEFAULT_CAPACITY_FACTOR = 0.40
-DEFAULT_DEGRADATION = 0.005
+Author: Dutch Bay EPC Model Team
+Date: December 2025
+Version: 2.0.0 (CCCDIR Compliant)
+"""
 
-# Financial defaults
-DEFAULT_DISCOUNT_RATE = 0.08
-DEFAULT_DSCR_THRESHOLD = 1.25
-DEFAULT_DEBT_RATIO = 0.70
-DEFAULT_TENOR_YEARS = 15
+from __future__ import annotations
 
-# Validation
-MIN_CAPACITY_MW = 10.0
-MAX_CAPACITY_MW = 1000.0
-MIN_CAPACITY_FACTOR = 0.10
-MAX_CAPACITY_FACTOR = 0.50
-# =============================================================================
-# Sensitivity Analysis Constants (Phase 3 - Added 2025-11-23)
-# =============================================================================
-
-from typing import Dict, Final
-
-# Industry-standard sensitivity ranges (CFA/DFI benchmarks)
-# Format: {parameter_name: (low_pct, high_pct)}
-SENSITIVITY_RANGES: Final[Dict[str, tuple[float, float]]] = {
-    "capex_usd_per_kw": (-20.0, +20.0),  # ±20% typical for Capex
-    "tariff_lkr_per_kwh": (-15.0, +15.0),  # ±15% for revenue/tariff
-    "capacity_factor_pct": (-10.0, +10.0),  # ±10% for generation
-    "discount_rate_pct": (-3.0, +3.0),  # ±3 percentage points for WACC
-    "debt_interest_rate_pct": (-2.0, +2.0),  # ±2 percentage points for debt
-    "construction_months": (-6.0, +6.0),  # ±6 months schedule risk
-    "opex_pct_revenue": (-5.0, +5.0),  # ±5% for O&M costs
-    "grid_loss_pct": (-2.0, +2.0),  # ±2% for transmission losses
-}
-
-# Sensitivity analysis defaults
-SENSITIVITY_DEFAULT_STEPS: Final[int] = 5  # Industry standard: 5 data points per sweep
+from typing import Final
 
 # =============================================================================
-# Monte Carlo Simulation Constants (Phase 3 - Added 2025-11-23)
+# PHYSICAL CONSTANTS (Immutable - OK to keep here)
 # =============================================================================
 
-# Default iteration count for Monte Carlo analysis (CFA Level III standard)
-MONTE_CARLO_ITERATIONS: Final[int] = 10000
+# Time conversions (universal constants)
+HOURS_PER_YEAR: Final[float] = 8760.0
+DAYS_PER_YEAR: Final[int] = 365
+MONTHS_PER_YEAR: Final[int] = 12
+QUARTERS_PER_YEAR: Final[int] = 4
+
+# Energy conversions
+KW_TO_MW: Final[float] = 0.001
+MW_TO_GW: Final[float] = 0.001
+KWH_TO_MWH: Final[float] = 0.001
+MWH_TO_GWH: Final[float] = 0.001
+
+# Percentage to decimal
+PERCENT_TO_DECIMAL: Final[float] = 0.01
+
+# =============================================================================
+# REMOVED: All project defaults moved to config/defaults.yaml
+# =============================================================================
+# The following were REMOVED for CCCDIR compliance:
+# - DEFAULT_FX_USD_TO_LKR → config/defaults.yaml: fx.start_lkr_per_usd
+# - DEFAULT_PROJECT_LIFE_YEARS → config/defaults.yaml: project.life_years
+# - DEFAULT_CAPACITY_FACTOR → wind_resource/config/era5_config.yaml
+# - DEFAULT_DEGRADATION → config/defaults.yaml: degradation.annual_rate
+# - DEFAULT_DISCOUNT_RATE → scenarios/*.yaml: financial.discount_rate_pct
+# - DEFAULT_DSCR_THRESHOLD → config/defaults.yaml: debt.min_dscr
+# - DEFAULT_DEBT_RATIO → scenarios/*.yaml: debt.ratio
+# - DEFAULT_TENOR_YEARS → scenarios/*.yaml: debt.tenor_years
+# - MIN/MAX_CAPACITY_MW → config/defaults.yaml: validation.capacity_mw_range
+# - MIN/MAX_CAPACITY_FACTOR → config/defaults.yaml: validation.cf_range
+# - SENSITIVITY_RANGES → config/defaults.yaml: sensitivity.ranges
+# - MONTE_CARLO_ITERATIONS → config/defaults.yaml: monte_carlo.iterations
+
+# =============================================================================
+# Migration Note
+# =============================================================================
+# If you need these values, import from:
+#   from omegaconf import OmegaConf
+#   config = OmegaConf.load('config/defaults.yaml')
+#   fx_rate = config.fx.start_lkr_per_usd
+#
+# For scenario-specific values:
+#   config = OmegaConf.load(f'scenarios/{scenario_name}.yaml')
+#   discount_rate = config.financial.discount_rate_pct
+# =============================================================================

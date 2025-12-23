@@ -1,0 +1,52 @@
+{
+  "capacity_factor": 0.375,
+  "net_site_aep_gwh": 485.32,
+  "gross_aep_gwh": 562.15,
+  "n_turbines": 15,
+  "rated_power_kw": 10000,
+  "hub_height_m": 150,
+  "source_id": "OEM_ENVISION_EN171_10_PC",
+  "source_type": "OEM",
+  "iec_standard": "IEC 61400-12-1:2022",
+  "derived_from": [
+    "OEM_ENVISION_EN171_10_PC",
+    "ERA5_WIND_RESOURCE_DUTCHBAY",
+    "HUB_HEIGHT_EXTRAPOLATION_150M"
+  ],
+  "losses": {
+    "wake_loss_pct": 8.0,
+    "availability_pct": 97.0,
+    "electrical_loss_pct": 2.0,
+    "total_loss_pct": 13.6
+  },
+  "wind_resource": {
+    "mean_wind_speed_ms": 7.85,
+    "weibull_a": 8.32,
+    "weibull_k": 2.1,
+    "shear_exponent": 0.14,
+    "air_density_kgm3": 1.15,
+    "data_years": "2020-2024"
+  },
+  "turbine_config": {
+    "model": "Envision EN-171-10.0",
+    "rated_power_kw": 10000,
+    "rated_power_mw": 10.0,
+    "rotor_diameter_m": 171,
+    "hub_height_m": 150,
+    "cut_in_ms": 3.0,
+    "cut_out_ms": 25.0,
+    "rated_wind_speed_ms": 11.5
+  },
+  "project_info": {
+    "name": "DutchBay Wind Farm",
+    "location": "Dutch Bay, Mannar District, Sri Lanka",
+    "capacity_mw": 150.0,
+    "n_turbines": 15,
+    "turbine_capacity_mw": 10.0,
+    "cod_year": 2027
+  },
+  "created_date": "2025-12-21",
+  "created_by": "analytics.loader.aep_loader",
+  "version": "2.0",
+  "notes": "10 MW turbine data is EXTRAPOLATED from 6.5 MW baseline. Replace with OEM-certified data when available."
+}

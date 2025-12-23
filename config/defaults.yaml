@@ -1,0 +1,288 @@
+# DutchBay EPC Model - Default Configuration
+# Sprint 17: CESSPIT Compliance - All defaults centralized
+#
+# Purpose:
+#   Eliminates hardcoded values from Python code
+#   Scenario configs override these defaults
+#   Single source of truth for all parameters
+#
+# Usage:
+#   scenarios/*.yaml imports these defaults
+#   Override specific values as needed per scenario
+#
+# CESSPIT: No parameters should have defaults in Python code
+# CCCDIR: All config in config/ directory
+# CASPER: Conservative assumptions for lender-grade analysis
+
+defaults:
+  # ═══════════════════════════════════════════════════════════════════
+  # DEGRADATION MODELING
+  # ═══════════════════════════════════════════════════════════════════
+  
+  degradation:
+    # Annual performance degradation rate
+    annual_rate_pct: 0.6  # 0.6%/year (industry standard for modern turbines)
+    
+    # Degradation calculation method
+    method: "compound"  # Options: "compound", "linear"
+    # - compound: Output_t = Base * (1 - rate)^t (recommended)
+    # - linear: Output_t = Base * (1 - rate*t) (more conservative)
+    
+    # Uncertainty for Monte Carlo
+    uncertainty_std_pct: 0.1  # ±0.1%/year (1-sigma)
+    
+    # Distribution type
+    distribution: "normal"  # Options: "normal", "lognormal", "uniform"
+    
+    # Industry benchmarks (for reference)
+    benchmarks:
+      nrel_2019_us: 0.53  # NREL study on US wind farms
+      staffell_green_2014_uk: 1.6  # UK data (older turbines)
+      kim_2025_global: 0.72  # Recent quantification study
+      offshore_typical: 0.7  # Offshore wind farms
+      onshore_typical: 0.55  # Onshore wind farms
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # DEBT SIZING (DUAL DSCR)
+  # ═══════════════════════════════════════════════════════════════════
+  
+  debt_sizing:
+    # P50 DSCR target (base case debt sizing)
+    dscr_p50_target: 1.30  # Investment grade standard
+    
+    # P99 DSCR target (downside protection)
+    dscr_p99_target: 1.00  # Minimum acceptable in stress case
+    
+    # Debt-to-value ratio cap
+    debt_ratio_cap: 0.70  # 70% maximum leverage
+    
+    # Methodology reference
+    methodology: "Bolinger (2017) dual constraint sizing"
+    
+    # Conservative sizing mode
+    take_minimum: true  # Always take min(Debt_P50, Debt_P99)
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # MONTE CARLO SIMULATION
+  # ═══════════════════════════════════════════════════════════════════
+  
+  monte_carlo:
+    # Sampling configuration
+    sampling_method: "lhs"  # Options: "lhs", "random", "sobol"
+    n_iterations: 10000     # Default simulation count
+    seed: null              # Set for reproducibility (e.g., 42)
+    
+    # Correlation structure
+    correlation:
+      enabled: false  # Enable Iman-Conover correlation
+      
+      # Default correlation matrix (4x4: revenue, cost, FX, degradation)
+      # Industry-typical correlations for renewables projects
+      matrix:
+        - [1.0,  0.4, -0.3, -0.2]  # Revenue correlations
+        - [0.4,  1.0, -0.2,  0.1]  # Cost correlations
+        - [-0.3, -0.2, 1.0,  0.0]  # FX correlations
+        - [-0.2, 0.1,  0.0,  1.0]  # Degradation correlations
+      
+      # Rationale:
+      # - Revenue-Cost (+0.4): Inflation linkage (both increase together)
+      # - Revenue-FX (-0.3): USD PPA benefit from LKR depreciation
+      # - Revenue-Degradation (-0.2): Higher degradation → lower output
+      # - Cost-Degradation (+0.1): Weak positive (maintenance slightly higher)
+    
+    # Distribution parameters (referenced by scenarios)
+    distributions:
+      revenue:
+        std_pct_default: 10.0  # ±10% inter-annual variability
+        type: "normal"
+      
+      cost:
+        std_pct_default: 5.0   # ±5% cost variability
+        type: "normal"
+      
+      fx:
+        std_pct_default: 15.0  # ±15% FX volatility
+        type: "normal"
+      
+      degradation:
+        # Uses degradation.uncertainty_std_pct from above
+        type: "normal"  # or "lognormal" for strictly positive
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # SENSITIVITY ANALYSIS
+  # ═══════════════════════════════════════════════════════════════════
+  
+  sensitivity:
+    # Perturbation range
+    perturbation_range_pct: 20.0  # ±20% around base case
+    
+    # Number of steps (odd number for symmetry around base)
+    n_steps: 9  # -20%, -15%, -10%, -5%, 0%, +5%, +10%, +15%, +20%
+    
+    # Variables to analyze (default)
+    variables:
+      - degradation    # Turbine performance degradation
+      - aep           # Annual Energy Production
+      - tariff        # PPA tariff rate
+      - capex         # Capital expenditure
+      - opex          # Operating expense
+      - debt_rate     # Debt interest rate
+      - fx_rate       # Foreign exchange rate
+    
+    # Output metrics to track
+    metrics:
+      - npv_usd       # Net Present Value
+      - irr_pct       # Internal Rate of Return
+      - equity_irr_pct  # Equity IRR
+      - debt_sized_usd  # Debt capacity
+      - dscr_min      # Minimum DSCR over project life
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # FINANCIAL MODELING
+  # ═══════════════════════════════════════════════════════════════════
+  
+  financial:
+    # Discount rates
+    wacc_pct: 8.0           # Weighted Average Cost of Capital
+    equity_discount_pct: 12.0  # Equity discount rate
+    debt_interest_pct: 6.5     # Debt interest rate
+    
+    # Project timeline
+    construction_years: 2   # Construction period
+    operation_years: 25     # Operating period
+    total_life_years: 27    # Total project life
+    
+    # Tax parameters
+    corporate_tax_rate_pct: 30.0  # Sri Lankan corporate tax
+    vat_rate_pct: 18.0            # Value Added Tax
+    withholding_tax_pct: 14.0     # WHT on interest/dividends
+    
+    # Depreciation
+    depreciation_method: "straight_line"  # or "accelerated"
+    depreciation_years: 20  # Useful life for depreciation
+    
+    # Working capital
+    working_capital_days: 30  # Days of revenue as working capital
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # WIND RESOURCE ASSESSMENT
+  # ═══════════════════════════════════════════════════════════════════
+  
+  wind_resource:
+    # Loss factors (as decimals, e.g., 0.02 = 2%)
+    losses:
+      wake_loss: 0.05        # 5% wake losses
+      electrical_loss: 0.02  # 2% electrical losses
+      grid_loss: 0.02        # 2% grid/transmission losses
+      availability: 0.97     # 97% availability (3% downtime)
+      curtailment: 0.02      # 2% curtailment
+      environmental: 0.01    # 1% environmental (icing, soiling)
+      total_loss_budget: 0.15  # 15% total losses (P50)
+    
+    # Data requirements
+    min_data_years: 10  # Minimum years of wind data for bankability
+    
+    # Uncertainty (for P75, P90, P99 calculations)
+    inter_annual_variability_pct: 8.0  # 8% inter-annual variability
+    long_term_uncertainty_pct: 6.0     # 6% long-term resource uncertainty
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # STRESS TESTING
+  # ═══════════════════════════════════════════════════════════════════
+  
+  stress_tests:
+    # Standard lender scenarios (per Moody's/S&P guidelines)
+    scenarios:
+      - name: "Base Case"
+        aep_percentile: "P50"
+        tariff_adjustment: 0.0
+        capex_adjustment: 0.0
+      
+      - name: "Downside Case"
+        aep_percentile: "P75"
+        tariff_adjustment: -0.05  # -5%
+        capex_adjustment: 0.10    # +10%
+      
+      - name: "Severe Downside"
+        aep_percentile: "P90"
+        tariff_adjustment: -0.10  # -10%
+        capex_adjustment: 0.15    # +15%
+      
+      - name: "P99 Tail Risk"
+        aep_percentile: "P99"
+        tariff_adjustment: -0.10  # -10%
+        capex_adjustment: 0.15    # +15%
+        degradation_adjustment: 0.2  # +0.2% higher degradation
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # OPTIMIZATION
+  # ═══════════════════════════════════════════════════════════════════
+  
+  optimization:
+    # Refinancing optimization
+    refinancing:
+      earliest_year: 3      # Year 3 earliest refi
+      latest_year: 10       # Year 10 latest refi
+      transaction_cost_pct: 2.0  # 2% transaction costs
+      call_premium_schedule:  # Prepayment penalties
+        year_3: 0.03  # 3% premium in year 3
+        year_4: 0.02  # 2% premium in year 4
+        year_5: 0.01  # 1% premium in year 5
+        year_6: 0.00  # No premium year 6+
+    
+    # Equity distribution optimization
+    equity_distribution:
+      max_delay_years: 5    # Maximum years to defer distributions
+      min_target_irr_pct: 15.0  # Minimum acceptable equity IRR
+      tax_efficiency_weight: 0.6  # Weight for tax savings vs IRR
+  
+  # ═══════════════════════════════════════════════════════════════════
+  # REPORTING & OUTPUT
+  # ═══════════════════════════════════════════════════════════════════
+  
+  reporting:
+    # Output formats
+    formats:
+      - "json"      # JSON for programmatic access
+      - "excel"     # Excel workbook for stakeholders
+      - "pdf"       # PDF report for lenders
+    
+    # Decimal places for rounding
+    precision:
+      currency_usd: 0        # No decimals for USD
+      currency_lkr: 0        # No decimals for LKR
+      percentages: 2         # 2 decimals for %
+      ratios: 3              # 3 decimals for ratios
+      energy_mwh: 0          # No decimals for MWh
+    
+    # Charts to generate
+    charts:
+      - "tornado"          # Sensitivity tornado
+      - "waterfall"        # IRR waterfall
+      - "cashflow_profile" # Annual cashflows
+      - "dscr_profile"     # DSCR over time
+      - "monte_carlo_dist" # MC probability distributions
+
+# ═══════════════════════════════════════════════════════════════════
+# VERSION CONTROL
+# ═══════════════════════════════════════════════════════════════════
+
+version:
+  config_version: "3.0.0"
+  model_version: "v14"
+  last_updated: "2025-12-21"
+  author: "DutchBay Wind Farm Team"
+  
+  # Change log
+  changes:
+    - version: "3.0.0"
+      date: "2025-12-21"
+      description: "Sprint 17 - Added degradation, correlation, CESSPIT compliance"
+    
+    - version: "2.0.0"
+      date: "2025-12-20"
+      description: "Sprint 16 - Dual DSCR, LHS sampling, Pydantic v2"
+    
+    - version: "1.0.0"
+      date: "2025-12-15"
+      description: "Initial defaults configuration"
