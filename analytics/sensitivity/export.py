@@ -22,66 +22,81 @@ try:
 except Exception:  # pragma: no cover
     pd = None  # type: ignore
 
-from analytics.contracts_v14 import SensitivitySuite, MultiMetricSensitivitySuite
+from analytics.contracts_v14 import SensitivitySuite
 
 
 def suite_to_records(
-    suite: Union[SensitivitySuite, MultiMetricSensitivitySuite],
+    suite: SensitivitySuite,
 ) -> Dict[str, Any]:
     """
-    Convert suite into JSON-friendly records.
+    Convert SensitivitySuite to JSON-friendly records.
+    
+    Adapted for contracts_v14.SensitivitySuite structure:
+    - suite.metric: str (target metric)
+    - suite.base_config_path: str
+    - suite.tornado_results: List[TornadoResult]
+    - suite.base_kpis: Optional[Dict[str, float]]
+    
+    TornadoResult structure:
+    - metric_name: str (parameter name)
+    - base_metric: float
+    - shock_results: List[ShockResult]
+    - label: Optional[str]
+    - impact_abs: float
+    
+    ShockResult structure:
+    - low_case: float
+    - high_case: float
+    - impact: float
     """
-    out: Dict[str, Any] = {"metadata": dict(getattr(suite, "metadata", {}) or {})}
+    out: Dict[str, Any] = {
+        "metadata": {
+            "metric": suite.metric,
+            "base_config_path": suite.base_config_path,
+        }
+    }
+    
+    if suite.base_kpis:
+        out["metadata"]["base_kpis"] = dict(suite.base_kpis)
 
-    if hasattr(suite, "tornado"):
-        tornado = getattr(suite, "tornado")
-        cases = getattr(tornado, "cases", [])
-        metric_key = getattr(tornado, "metric_key", None)
-        base_value = getattr(tornado, "base_value", None)
-
-        rows = []
-        for c in cases:
+    rows = []
+    for t in suite.tornado_results:
+        # Extract shock results
+        if t.shock_results and len(t.shock_results) > 0:
+            shock = t.shock_results[0]
             rows.append(
                 {
-                    "label": c.get("label"),
-                    "metric": metric_key,
-                    "value": c.get("value"),
-                    "base_value": base_value,
-                    "overrides": c.get("overrides", {}),
+                    "parameter": t.metric_name,
+                    "label": t.label or t.metric_name,
+                    "metric": suite.metric,
+                    "base_value": t.base_metric,
+                    "low_value": shock.low_case,
+                    "high_value": shock.high_case,
+                    "impact": shock.impact,
+                    "impact_abs": t.impact_abs,
                 }
             )
-        out["tornado_rows"] = rows
-        return out
-
-    # multi-metric
-    tornados = getattr(suite, "tornados", [])
-    rows = []
-    for t in tornados:
-        metric_keys = list(getattr(t, "metric_keys", []))
-        base_values = dict(getattr(t, "base_values", {}) or {})
-        cases = getattr(t, "cases", [])
-        param = getattr(t, "parameter", None)
-        pname = getattr(param, "name", None) if param is not None else None
-
-        for c in cases:
-            values = c.get("values", {}) or {}
-            for mk in metric_keys:
-                rows.append(
-                    {
-                        "parameter": pname,
-                        "label": c.get("label"),
-                        "metric": mk,
-                        "value": values.get(mk),
-                        "base_value": base_values.get(mk),
-                        "overrides": c.get("overrides", {}),
-                    }
-                )
+        else:
+            # No shock results - create placeholder
+            rows.append(
+                {
+                    "parameter": t.metric_name,
+                    "label": t.label or t.metric_name,
+                    "metric": suite.metric,
+                    "base_value": t.base_metric,
+                    "low_value": t.base_metric,
+                    "high_value": t.base_metric,
+                    "impact": 0.0,
+                    "impact_abs": 0.0,
+                }
+            )
+    
     out["tornado_rows"] = rows
     return out
 
 
 def suite_to_tables(
-    suite: Union[SensitivitySuite, MultiMetricSensitivitySuite],
+    suite: SensitivitySuite,
 ) -> Dict[str, Any]:
     """
     Convert suite into a dict-of-tables. If pandas is available, returns DataFrames.
@@ -98,9 +113,7 @@ def suite_to_tables(
     tables["tornado_rows"] = pd.DataFrame(rows)
 
     # If tail risk was attached, include it as a table
-    md = rec.get("metadata", {}) or {}
-    tr = md.get("tail_risk", None)
-    if isinstance(tr, list):
-        tables["tail_risk"] = pd.DataFrame(tr)
+    # Note: contracts_v14.SensitivitySuite doesn't have .metadata field
+    # so tail risk enrichment may need separate handling
 
     return tables
