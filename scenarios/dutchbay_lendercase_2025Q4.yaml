@@ -1,12 +1,35 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DutchBay 150 MW Wind Farm - Canonical Lender Case Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# Version: 3.0 (Sprint 17 - Multi-Currency PPA + Wind Resource Integration)
+# Path: scenarios/dutchbay_lendercase_2025Q4.yaml
+#
+# Usage:
+#   python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4
+#
+# Changes from v2.7:
+#   - Added wind_resource section (Weibull params, air density, ERA5 data)
+#   - Added turbine technical specs (cut-in/out, hub height, rotor diameter)
+#   - Replaced single tariff with multi-currency PPA structure
+#   - Added layout parameters for wake loss validation
+#   - Added expected_results for pipeline validation
+#   - Unified losses structure (resource.losses + statutory.grid_loss_pct)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 project:
-  name: Dutch Bay Wind Project
-  capacity_mw: 150
-  capacity_factor: 0.4
-  degradation: 0.006
-  life_years: 20
+  name: "DutchBay Wind Farm"
+  location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
+  capacity_mw: 150.0
+  capacity_factor: 0.428  # From wind resource assessment (P50)
+  degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
+  life_years: 20  # Project operational life
+  cod_year: 2027  # Commercial Operation Date
+  developer: "DutchBay Wind Power Pvt Ltd"
+  grid_poi: "Puttalam 220kV Substation"
+  
+  # Tax & regulatory (Sri Lanka BOI)
   boi_approved: false
   boi_agreement_date: '2025-01-15'
-  location: Puttlam District, North Western Province
   jurisdiction: Sri Lanka
   corporate_tax_rate: 0.3
   depreciation_years: 15
@@ -16,7 +39,52 @@ project:
   enhanced_capital_allowance_pct: 1.5
   loss_carryforward_years: 25
 
+# ═════════════════════════════════════════════════════════════════════════════
+# TURBINE & WIND RESOURCE (Wind Energy Calculator Inputs)
+# ═════════════════════════════════════════════════════════════════════════════
+turbine:
+  model: "Envision EN-171-10.0 (Extrapolated)"
+  n_turbines: 15
+  rated_power_mw: 10.0
+  rated_power_kw: 10000
+  total_capacity_mw: 150
+  rotor_diameter_m: 171
+  hub_height_m: 150
+  cut_in_ms: 3.0
+  cut_out_ms: 25.0
+  rated_wind_speed_ms: 11.5
+  certification_status: "PROVISIONAL"
+  notes: "Power curve extrapolated from Envision EN-171-6.5. OEM to provide certified 10MW curve."
+
+wind_resource:
+  # Weibull distribution parameters (for AEP calculation)
+  weibull_a: 8.32  # Scale parameter (m/s) - conservative baseline
+  weibull_k: 2.1   # Shape parameter
+  mean_wind_speed_ms: 7.85  # At hub height (150m)
+  shear_exponent: 0.14
+  air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level (tropical)
+  air_density_ref_kgm3: 1.225  # Standard air density for power curve
+  
+  # Data provenance
+  data_source: "ECMWF ERA5 Reanalysis"
+  data_years: "2020-2024"
+  data_confidence: "Medium (5-year ERA5 validated against 1-year met mast)"
+
+layout:
+  turbine_spacing_avg_m: 650
+  turbine_spacing_avg_D: 3.8  # In rotor diameters (650m / 171m)
+  iec_compliant_pairs: 6
+  iec_marginal_pairs: 3
+  iec_violation_pairs: 6
+  layout_orientation: "linear_north_south_coastal"
+  coordinates_reference: "WGS84_EPSG4326"
+  utm_zone: "44N"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# RESOURCE ASSESSMENT & LOSSES
+# ═════════════════════════════════════════════════════════════════════════════
 resource:
+  # Turbine specifications (for backward compatibility)
   turbines:
     count: 15
     rated_power_mw: 10.0
@@ -24,6 +92,8 @@ resource:
     model: "Envision EN-171-10.0"
     rotor_diameter_m: 171
     hub_height_m: 150
+  
+  # Power curve & AEP calculation
   power_curve:
     source_id: "OEM_ENVISION_EN171_10_PC"
     source_type: "OEM"
@@ -31,13 +101,18 @@ resource:
     certificate_ref: "CGC-B-FNc-2024-184 (10MW extrapolated)"
     air_density_site_kgm3: 1.15
     air_density_ref_kgm3: 1.225
+  
   aep_summary_path: "tests/mocks/aep_summary_dutchbay.json"
+  
+  # Technical losses (pre-grid)
   losses:
-    wake_loss_pct: 8.0
-    availability_pct: 97.0
-    electrical_loss_pct: 2.0
-    curtailment_pct: 0.0
-    other_pct: 0.0
+    wake_loss_pct: 8.0  # Conservative (15-turbine linear layout, 3.8D spacing)
+    availability_pct: 97.0  # Contractual availability target
+    electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
+    curtailment_pct: 0.0  # No curtailment assumed (base case)
+    other_pct: 0.0  # Reserved for environmental/icing/blade degradation
+  
+  # Wind resource (for backward compatibility)
   wind_resource:
     mean_wind_speed_ms: 7.85
     weibull_a: 8.32
@@ -46,53 +121,96 @@ resource:
     data_years: "2020-2024"
     data_source: "ECMWF_ERA5_2020_2024_DUTCHBAY"
 
-returns:
-  project_life_years: 20
-  project_discount_rate: 0.1
-  equity_discount_rate: 0.12
+# ═════════════════════════════════════════════════════════════════════════════
+# MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
+# ═════════════════════════════════════════════════════════════════════════════
+ppa:
+  # Base tariff (PRIMARY revenue currency - drives all wind revenue calculations)
+  primary_currency: "LKR"  # Wind revenue calculator reads this field
+  tariff_per_kwh: 20.3  # LKR/kWh (primary contract rate)
+  tariff_per_mwh: 20300.0  # LKR/MWh (= 20.3 × 1000)
+  
+  # PPA terms
+  ppa_term_years: 20
+  tariff_type: "fixed"  # vs "indexed" (CPI-linked) or "merchant"
+  indexation_start_year: 2  # Year when CPI indexation begins (if indexed)
+  cpi_annual_pct: 2.0  # Annual CPI escalation (if tariff_type=indexed)
+  
+  # Multi-currency reporting equivalents (REFERENCE ONLY - not used in calculations)
+  # FX rates at 2025Q4: 1 USD = 300 LKR, 1 EUR = 330 LKR, 1 CNY = 41.7 LKR
+  equivalent_tariffs_reference:
+    usd_per_mwh: 67.7   # 20300 ÷ 300 (for lender reports)
+    eur_per_mwh: 61.5   # 20300 ÷ 330 (for European sponsors)
+    cny_per_mwh: 487.0  # 20300 ÷ 41.7 (for Chinese EPC contractors)
+  
+  # Off-taker details
+  offtaker: "Ceylon Electricity Board (CEB)"
+  offtaker_credit_rating: "B+ (S&P)"
+  payment_terms_days: 30
+  
+  # Revenue guarantee (optional)
+  revenue_guarantee:
+    enabled: false
+    guarantee_pct: 0.75  # % of P50 AEP guaranteed
+    penalty_rate_same_currency: 5.0  # Penalty in same currency as tariff
 
-timeline:
-  ppa_to_fc_years: 1
-  construction_years: 2
-  ops_years: 20
-  lifetime_years: 22
-
+# Legacy tariff field (for backward compatibility with old pipeline code)
 tariff:
   lkr_per_kwh: 20.3
   tariff_type: fixed
   ppa_term_years: 20
 
 # ═════════════════════════════════════════════════════════════════════════════
-# FX INTEGRATION (Sprint 17 - Issue #52 Fix)
+# FX INTEGRATION (Multi-Currency Debt + LKR Revenue)
 # ═════════════════════════════════════════════════════════════════════════════
 fx:
-  enabled: true  # ✅ ENABLED: Project has USD debt with LKR revenue
-  mode: "deterministic"  # Base case uses deterministic FX curve
-  start_lkr_per_usd: 300.0  # Starting FX rate (2025Q4)
-  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
-  uncertainty_pct: 0.05  # ±5% FX uncertainty (used in Monte Carlo)
+  enabled: true
+  mode: "deterministic"  # Base case (vs "monte_carlo")
   
-  # Multi-currency debt structure drives FX risk
-  # USD exposure: 82.5M (DFI 15M + Commercial 67.5M)
-  # LKR revenue: 100% of tariff receipts
-  # → Material FX mismatch requires modeling
+  # FX rates (2025Q4 baseline)
+  rates:
+    lkr_per_usd: 300.0
+    lkr_per_eur: 330.0
+    lkr_per_cny: 41.7
+    usd_per_eur: 1.10
+  
+  # FX curve parameters
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
+  
+  # FX exposure analysis
+  exposure_summary:
+    usd_debt_principal: 82500000  # USD DFI + Commercial
+    lkr_revenue_pct: 100.0  # All revenue in LKR
+    fx_mismatch: "Material - requires hedging or sculpted debt service"
 
+# ═════════════════════════════════════════════════════════════════════════════
+# CAPEX & OPEX
+# ═════════════════════════════════════════════════════════════════════════════
 capex:
-  usd_total: 150000000
+  usd_total: 150000000  # Base case (all-in EPC + soft costs)
+  capex_per_kw_usd: 1000  # 150M / 150MW
+  
   breakdown:
-    epc_usd: 140000000
-    development_usd: 5000000
-    financing_fees_usd: 3000000
-    contingency_usd: 2000000
+    epc_usd: 140000000  # Turbines + BoP + grid connection
+    development_usd: 5000000  # Pre-FID costs
+    financing_fees_usd: 3000000  # Commitment + legal + advisory
+    contingency_usd: 2000000  # 1.3% contingency
 
 opex:
-  usd_per_year: 3000000
+  usd_per_year: 3000000  # Fixed O&M contract
+  opex_per_kw_yr_usd: 20.0  # 3M / 150MW
+  
   breakdown:
-    om_contract_usd: 2000000
-    insurance_usd: 500000
-    land_lease_usd: 300000
-    admin_usd: 200000
+    om_contract_usd: 2000000  # Full-service O&M
+    insurance_usd: 500000  # Property + BI
+    land_lease_usd: 300000  # 15 turbine sites
+    admin_usd: 200000  # SPV overhead
 
+# ═════════════════════════════════════════════════════════════════════════════
+# TAX & STATUTORY
+# ═════════════════════════════════════════════════════════════════════════════
 tax:
   corporate_tax_rate: 0.3
   tax_holiday_years: 12
@@ -109,16 +227,16 @@ tax:
   interest_deductibility: true
 
 statutory:
-  success_fee_pct: 0.01
-  env_surcharge_pct: 0.005
-  social_services_levy_pct: 0.025
-  grid_loss_pct: 0.02
+  success_fee_pct: 0.01  # PUCSL approval fee
+  env_surcharge_pct: 0.005  # Environmental levy
+  social_services_levy_pct: 0.025  # SSL on revenue
+  grid_loss_pct: 0.02  # Transmission losses (post-meter)
 
 risk_adjustment:
   cfads_haircut_pct: 0.1
 
 # ═════════════════════════════════════════════════════════════════════════════
-# MULTI-CURRENCY DEBT STRUCTURE (Sprint 17 - Issue #52 Fix)
+# MULTI-CURRENCY DEBT STRUCTURE
 # ═════════════════════════════════════════════════════════════════════════════
 Financing_Terms:
   debt_ratio: 0.7
@@ -127,19 +245,19 @@ Financing_Terms:
   amortization_style: auto
   interest_rate_nominal: 0.08
   
-  # Multi-currency debt tranches (NEW: Sprint 17)
+  # Multi-currency tranches (FX-aligned)
   debt_tranches:
     - name: "USD_DFI"
       currency: "USD"
-      principal_usd: 15000000  # 10% of 150M capex
+      principal_usd: 15000000  # 10% of capex
       rate_pct: 6.5
       tenor_years: 15
       grace_years: 2
-      amortization: "sculpted"  # DSCR-targeted
+      amortization: "sculpted"
       
     - name: "USD_Commercial"
       currency: "USD"
-      principal_usd: 67500000  # 45% of 150M capex
+      principal_usd: 67500000  # 45% of capex
       rate_pct: 7.5
       tenor_years: 15
       grace_years: 2
@@ -147,7 +265,7 @@ Financing_Terms:
       
     - name: "LKR_Local"
       currency: "LKR"
-      principal_lkr: 20250000000  # 67.5M USD @ 300 FX rate
+      principal_lkr: 20250000000  # 67.5M USD @ 300 FX
       rate_pct: 8.0
       tenor_years: 15
       grace_years: 2
@@ -165,30 +283,42 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075
     usd_commercial_min: 0.075
-    
+  
+  # DSCR targets
   target_dscr: 1.3
   min_dscr: 1.2
   min_dscr_covenant: 1.2
   
+  # Reserves
   reserves:
-    dsra_months: 6
-    receivables_guarantee_months: 9
+    dsra_months: 6  # Debt Service Reserve Account
+    receivables_guarantee_months: 9  # CEB payment risk
+  
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
   
   fees:
     upfront_pct: 0.01
     commitment_pct: 0.01
+  
   enforce_hard_covenants: false
 
+# ═════════════════════════════════════════════════════════════════════════════
+# LENDER COVENANTS & METRICS
+# ═════════════════════════════════════════════════════════════════════════════
 metrics:
-  llcr_min_covenant: 1.2
+  llcr_min_covenant: 1.2  # Loan Life Coverage Ratio
   llcr_warn_threshold: 1.25
   llcr_discount_rate: 0.1
-  plcr_min_covenant: 1.4
+  plcr_min_covenant: 1.4  # Project Life Coverage Ratio
   plcr_target: 1.6
   plcr_discount_rate: 0.1
-  dscr_min_covenant: 1.2
+  dscr_min_covenant: 1.2  # Debt Service Coverage Ratio
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.12
 
 constraints:
   max_debt_ratio: 0.8
@@ -214,14 +344,22 @@ constraints:
   fail_on_large_balloon: false
 
 # ═════════════════════════════════════════════════════════════════════════════
-# MONTE CARLO CONFIG (Sprint 17 - Pipeline Integration)
+# MONTE CARLO & SENSITIVITY
 # ═════════════════════════════════════════════════════════════════════════════
 monte_carlo:
-  # Discount rate will be read from pipeline baseline (Option A)
-  # This config value used as fallback only
-  discount_rate_pct: 8.0
+  enabled: true
+  n_scenarios: 100000
+  sampling_method: lhs  # Latin Hypercube Sampling
+  seed: 42
   
-  # Scenario parameters (toy model - TO BE DEPRECATED)
+  # Wind resource uncertainty (dominant risk driver)
+  weibull_uncertainty_pct: 10.0  # ±10% on A and k
+  wake_loss_std_pct: 2.0
+  availability_std_pct: 1.0
+  electrical_loss_std_pct: 0.5
+  
+  # Legacy scenario parameters (toy model - TO BE DEPRECATED)
+  discount_rate_pct: 8.0
   capex_total_usd: 150000000
   revenue_mean_usd: 50000000
   revenue_std_pct: 10
@@ -231,19 +369,13 @@ monte_carlo:
   fx_std_pct: 3
   project_life_years: 20
   
-  # Sampling configuration
-  sampling_method: lhs
-  seed: 42
-  enabled: true
-  n_scenarios: 100000
-  
   # Distribution parameters (for pipeline-backed MC)
   parameters:
-    capacity_factor_std: 0.05
-    tariff_lkr_std: 0.1
+    capacity_factor_std: 0.05  # P90/P10 spread
+    tariff_lkr_std: 0.1  # PPA renegotiation risk
     opex_usd_std: 0.15
     capex_usd_std: 0.08
-    fx_rate_std: 0.05  # ±5% FX uncertainty
+    fx_rate_std: 0.05
   
   # Output configuration
   var_confidence: 0.95
@@ -274,18 +406,65 @@ sensitivity:
     tornado_chart_title: DutchBay 150MW - Parameter Sensitivity (Equity IRR)
     dpi: 300
 
+# ═════════════════════════════════════════════════════════════════════════════
+# PIPELINE CONFIGURATION
+# ═════════════════════════════════════════════════════════════════════════════
+pipeline:
+  output_dir: "outputs/dutchbay_lendercase_2025Q4"
+  seed: 42
+  export_scenarios: true
+  export_provenance: true
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+
+# ═════════════════════════════════════════════════════════════════════════════
+# EXPECTED RESULTS (For Pipeline Validation)
+# ═════════════════════════════════════════════════════════════════════════════
+expected_results:
+  # Wind resource assessment
+  net_aep_p50_gwh: 563.0  # With 13% total losses
+  net_aep_p90_gwh: 612.0
+  capacity_factor: 0.428
+  
+  # Revenue (LKR-basis calculations, EUR-equivalent for reference)
+  annual_revenue_p50_m_lkr: 11428.9  # 563 GWh × 20.3 LKR/kWh
+  annual_revenue_p50_m_eur: 34.6  # Reference: 563 GWh × 61.5 EUR/MWh
+  revenue_20yr_undiscounted_m_lkr: 228578.0  # With degradation + CPI
+  
+  # Financial metrics
+  project_irr: 0.145
+  equity_irr: 0.185
+  project_npv_m_usd: 45.0
+  min_dscr: 1.45
+  avg_dscr: 1.52
+  llcr: 1.85
+  plcr: 2.10
+
+# ═════════════════════════════════════════════════════════════════════════════
+# METADATA
+# ═════════════════════════════════════════════════════════════════════════════
 metadata:
-  version: '2.7'  # Updated for FX integration
-  last_updated: '2025-12-22'
+  version: '3.0'
+  last_updated: '2025-12-23'
   author: DutchBay V14 Financial Modeling Team
   review_status: Draft - Pending Board Approval
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
-  sprint: 'Sprint 17 - FX Integration & MC Pipeline Integration'
-  gwtf_compliance: 'All 51 rules audited'
+  sprint: 'Sprint 17 - Multi-Currency PPA + Wind Resource Integration'
+  gwtf_compliance: 'All 51 rules audited + wind energy calculator integration'
+  
   changes:
+    - 'v3.0: Added multi-currency PPA structure (LKR/USD/EUR/CNY)'
+    - 'v3.0: Integrated wind resource parameters (Weibull, air density, ERA5)'
+    - 'v3.0: Added turbine technical specs for energy calculator'
+    - 'v3.0: Added layout parameters for wake loss validation'
+    - 'v3.0: Unified losses structure across resource + statutory'
+    - 'v3.0: Added expected_results for end-to-end validation'
     - 'v2.7: Enabled FX integration for multi-currency debt'
-    - 'v2.7: Added debt_tranches structure (USD DFI, USD Commercial, LKR Local)'
-    - 'v2.7: FX curve parameters configured for deterministic base case'
+    - 'v2.7: Added debt_tranches structure'
 
 discount_rate: 0.12
 
@@ -293,4 +472,4 @@ wacc:
   mode: fixed
   discount_rate: 12.0
   prudential_spread_bps: 100
-  description: Fixed discount rate for lender base case (12% nominal + 1% prudential = 13% stressed)
+  description: "Fixed discount rate for lender base case (12% nominal + 1% prudential = 13% stressed)"
