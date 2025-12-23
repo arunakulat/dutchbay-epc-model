@@ -3,6 +3,10 @@
 Provides the main entry point for integrating FX blocks into ScenarioResult
 during pipeline_v14 execution.
 
+IMPORTANT: Uses TYPE_CHECKING to avoid circular import with contracts_v14.
+  - Type hints use real ScenarioResult type (mypy/IDE happy)
+  - Runtime uses Any alias (breaks import cycle)
+
 Standards:
   - GWTF: Full type hints, clear module docstring
   - CASPER: Lender-grade result aggregation
@@ -20,9 +24,17 @@ Usage:
   )
 """
 
-from typing import Any, Mapping, Sequence
+from __future__ import annotations
 
-from analytics.contracts_v14 import ScenarioResult
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
+
+# TYPE_CHECKING: Import ScenarioResult for type hints only (breaks circular import)
+if TYPE_CHECKING:
+    from analytics.contracts_v14 import ScenarioResult
+else:
+    # Runtime: Use Any to avoid importing contracts_v14 at module load time
+    ScenarioResult = Any  # type: ignore[misc,assignment]
+
 from analytics.fx.fx_builder import (
     compute_fx_curve,
     compute_fx_risk_profile,
@@ -70,8 +82,11 @@ def integrate_fx_into_scenario_result(
         >>> print(result_with_fx.fx_block.strategy)
         'blended'
     """
+    # Import ScenarioResult at runtime (inside function) to break circular dependency
+    from analytics.contracts_v14 import ScenarioResult as ScenarioResultClass
+
     # CESSPIT: Input validation
-    if not isinstance(scenario_result, ScenarioResult):
+    if not isinstance(scenario_result, ScenarioResultClass):
         raise TypeError(
             f"integrate_fx_into_scenario_result: "
             f"scenario_result must be ScenarioResult, got {type(scenario_result)}"
@@ -122,7 +137,7 @@ def integrate_fx_into_scenario_result(
     result_dict["fx_curve"] = fx_curve
     result_dict["fx_risk_profile"] = fx_risk_profile
 
-    return ScenarioResult(**result_dict)
+    return ScenarioResultClass(**result_dict)
 
 
 __all__ = ["integrate_fx_into_scenario_result"]
