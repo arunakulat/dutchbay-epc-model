@@ -41,6 +41,11 @@ from analytics.core.parameter_solvers import (
     solve_for_tariff_given_npv,
 )
 
+# Sensitivity analysis - Tornado charts and shock analysis
+from analytics.core.sensitivity_runner import (
+    run_sensitivity_analysis,
+)
+
 __all__ = [
     # Returns module
     "AllReturns",
@@ -70,4 +75,6 @@ __all__ = [
     "solve_for_min_capex_given_irr_floor",
     "solve_for_tariff_given_irr",
     "solve_for_tariff_given_npv",
+    # Sensitivity analysis
+    "run_sensitivity_analysis",
 ]
