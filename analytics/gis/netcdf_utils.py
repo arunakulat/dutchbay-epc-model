@@ -46,7 +46,35 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
-from pyproj import CRS
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OPTIONAL DEPENDENCY: pyproj (for CRS/coordinate transforms)
+# ═════════════════════════════════════════════════════════════════════════════
+# GWTF/CASPER principle:
+# - Module import must be safe even when optional geo deps are absent.
+# - If optional dependencies (e.g., pyproj) are required for a function,
+#   raise a clear ImportError at call-time (not import-time).
+
+try:
+    from pyproj import CRS  # type: ignore
+    _PYPROJ_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover
+    CRS = None  # type: ignore[assignment]
+    _PYPROJ_AVAILABLE = False
+
+
+def _require_pyproj() -> None:
+    """Guard for optional pyproj dependency.
+    
+    Raises:
+        ImportError: if pyproj is not installed.
+    """
+    if not _PYPROJ_AVAILABLE:
+        raise ImportError(
+            "pyproj is required for CRS/coordinate transforms. "
+            "Install with: pip install pyproj"
+        )
+
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +103,10 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
     """Extract CRS, bounds, dimensions, variables, and time range from NetCDF.
     
     Supports ECMWF ERA5, MERRA-2, and NREL Wind Toolkit (WTK) formats.
+    
+    Note:
+        CRS validation requires pyproj. If pyproj is not installed,
+        CRS will be treated as a string without validation.
     
     Args:
         ds: xarray Dataset from NetCDF file
@@ -107,6 +139,16 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
         # Default assumption for ERA5/MERRA-2
         profile['crs'] = 'EPSG:4326'
         logger.warning("CRS not found in NetCDF, assuming EPSG:4326 (WGS84)")
+    
+    # Note: CRS validation/transformation would require pyproj
+    # For basic profile extraction, we just store the CRS string
+    if _PYPROJ_AVAILABLE and CRS is not None:
+        # Optional: validate CRS if pyproj available
+        try:
+            crs_obj = CRS.from_string(profile['crs'])
+            logger.debug(f"Validated CRS: {crs_obj.to_string()}")
+        except Exception as e:
+            logger.warning(f"Could not validate CRS '{profile['crs']}': {e}")
     
     # Detect coordinate names (ERA5 uses 'longitude'/'latitude', WTK uses 'lon'/'lat')
     lon_names = ['longitude', 'lon', 'x']
