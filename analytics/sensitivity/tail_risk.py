@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 analytics.sensitivity.tail_risk
 
-Tail risk enrichment for SensitivitySuite / MultiMetricSensitivitySuite.
+Tail risk enrichment for SensitivitySuite.
 
 Purpose:
 - Provide lender-grade downside summaries over sensitivity scenarios:
@@ -26,10 +26,7 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from analytics.contracts_v14 import (
-    SensitivitySuite,
-    MultiMetricSensitivitySuite,
-)
+from analytics.contracts_v14 import SensitivitySuite
 
 
 @dataclass(frozen=True)
@@ -68,15 +65,17 @@ def _prob_breach(arr: np.ndarray, floor: float) -> float:
 
 def enrich_suite_with_tail_risk(
     *,
-    suite: Union[SensitivitySuite, MultiMetricSensitivitySuite],
+    suite: SensitivitySuite,
     base_config: Mapping[str, Any],
     run_cfg: TailRiskConfig = TailRiskConfig(),
-) -> Union[SensitivitySuite, MultiMetricSensitivitySuite]:
+) -> SensitivitySuite:
     """
     Enrich the suite.metadata with tail risk blocks.
 
     This skeleton assumes the suite already contains scenario KPI metadata for each case.
     If you want *proper* tail risk (VaR/CVaR) you should attach Monte Carlo arrays per case.
+    
+    Note: MultiMetricSensitivitySuite was removed - use SensitivitySuite only.
     """
     if not run_cfg.enabled:
         return suite
@@ -91,30 +90,25 @@ def enrich_suite_with_tail_risk(
     tail_table: list[dict[str, Any]] = []
     summary: dict[str, Any] = {"alpha": float(run_cfg.cvar_alpha), "percentiles": list(run_cfg.percentiles)}
 
-    # SensitivitySuite vs MultiMetricSensitivitySuite shapes
-    if hasattr(suite, "tornado"):
-        tornado = getattr(suite, "tornado")
-        cases = getattr(tornado, "cases", [])
-        metric_key = getattr(tornado, "metric_key", None)
-        if metric_key is None:
-            return suite
-
-        for case in cases:
-            snap = _build_case_tail_snapshot(case=case, metric_keys=[metric_key], run_cfg=run_cfg)
+    # SensitivitySuite shape (single metric)
+    if hasattr(suite, "tornado_results"):
+        metric_key = suite.metric
+        tornado_results = suite.tornado_results
+        
+        for tornado in tornado_results:
+            # Extract data from TornadoResult
+            param_name = tornado.metric_name
+            snap = _build_tornado_tail_snapshot(
+                tornado=tornado,
+                metric_key=metric_key,
+                run_cfg=run_cfg
+            )
             tail_table.extend(snap["rows"])
+        
         summary["metrics"] = [metric_key]
-
     else:
-        tornados = getattr(suite, "tornados", [])
-        metric_keys_all: set[str] = set()
-        for t in tornados:
-            metric_keys = list(getattr(t, "metric_keys", []))
-            metric_keys_all.update(metric_keys)
-            cases = getattr(t, "cases", [])
-            for case in cases:
-                snap = _build_case_tail_snapshot(case=case, metric_keys=metric_keys, run_cfg=run_cfg)
-                tail_table.extend(snap["rows"])
-        summary["metrics"] = sorted(metric_keys_all)
+        # Fallback for older structures
+        summary["metrics"] = []
 
     md["tail_risk"] = tail_table
     md["tail_risk_summary"] = summary
@@ -127,6 +121,30 @@ def enrich_suite_with_tail_risk(
         # If contracts are frozen, recreate by copying with metadata.
         # Fallback: return suite with best effort.
         return suite
+
+
+def _build_tornado_tail_snapshot(
+    *,
+    tornado: Any,
+    metric_key: str,
+    run_cfg: TailRiskConfig,
+) -> Dict[str, Any]:
+    """Build tail risk snapshot from TornadoResult."""
+    rows: list[dict[str, Any]] = []
+    
+    param_name = str(getattr(tornado, "metric_name", "unknown"))
+    base_value = float(getattr(tornado, "base_metric", 0.0))
+    
+    # For now, just return basic structure
+    # TODO: Extract shock_results and compute tail stats
+    rows.append({
+        "parameter": param_name,
+        "metric": metric_key,
+        "base_value": base_value,
+        "note": "basic_snapshot",
+    })
+    
+    return {"rows": rows}
 
 
 def _extract_trials_from_case(case: Mapping[str, Any], metric_key: str) -> Optional[np.ndarray]:
