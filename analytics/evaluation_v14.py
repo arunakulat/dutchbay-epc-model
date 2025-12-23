@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence, Union, cast
 
 from analytics.contracts_v14 import CasperResult, MonteCarloResult
 from analytics.contracts_v14 import ScenarioResult as ScenarioResultContract
@@ -11,10 +11,14 @@ from analytics.contracts_v14 import SensitivitySuite
 # CRITICAL FIX: Import lender-grade pipeline (was: analytics.pipeline_v14)
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
-from analytics.sensitivity_tail_risk import (
-    build_tail_risk_snapshots_for_metrics,
-    enrich_tornado_with_tail_risk,
-)
+
+# CRITICAL P1 FIX: Use TYPE_CHECKING to break circular import
+# evaluation_v14 → sensitivity_tail_risk → sensitivity.engine → evaluation_v14
+if TYPE_CHECKING:
+    from analytics.sensitivity_tail_risk import (
+        build_tail_risk_snapshots_for_metrics,
+        enrich_tornado_with_tail_risk,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,9 @@ This module provides a SINGLE, typed entry point for analytics layers
     - evaluate_with_casper_tail_risk(...)
 
 Revision History:
+- v14.4.1 (2025-12-23): P1 hotfix - Break circular import with sensitivity
+  - Use TYPE_CHECKING for sensitivity_tail_risk imports
+  - Add lazy loading for tail risk functions
 - v14.4.0 (2025-12-23): Hardened for sensitivity/MC integration
   - Added raw_config parameter support
   - Fixed return type flexibility (full result vs KPIs)
@@ -314,6 +321,12 @@ def evaluate_with_casper_tail_risk(
         >>> result.monte_carlo.project_irr_p10
         0.120
     """
+    # LAZY LOADING: Import tail risk functions only when needed
+    from analytics.sensitivity_tail_risk import (
+        build_tail_risk_snapshots_for_metrics,
+        enrich_tornado_with_tail_risk,
+    )
+    
     cfg_path = Path(config_path)
     if not cfg_path.is_file():
         raise FileNotFoundError(f"Scenario config not found: {cfg_path}")
