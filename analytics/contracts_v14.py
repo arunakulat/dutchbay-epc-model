@@ -324,21 +324,6 @@ class TornadoResult(BaseModel):
         return 0.0
 
 
-class MultiMetricTornadoResult(BaseModel):
-    """
-    Multi-metric tornado result for one parameter.
-    """
-    model_config = ConfigDict(frozen=True)
-    
-    metric_name: str = Field(description="Variable being shocked")
-    label: Optional[str] = Field(default=None)
-    base_values: Dict[str, float] = Field(description="Base metric values")
-    low_values: Dict[str, float] = Field(description="Low shock values")
-    high_values: Dict[str, float] = Field(description="High shock values")
-    impacts: Dict[str, float] = Field(description="Impact per metric")
-    impact_dirs: Dict[str, int] = Field(description="Direction (+1/-1)")
-
-
 class SensitivitySuite(BaseModel):
     """
     Complete sensitivity analysis suite.
@@ -374,6 +359,81 @@ class BreakevenResult(BaseModel):
     breakeven_value: float
     status: str = Field(default="success")
     bracket: Tuple[float, float] = Field(default=(0.0, 0.0))
+
+
+# --- Back-compat multi-metric sensitivity contracts -------------------------
+# P1 HOTFIX (Sprint 18): Re-add MultiMetric contracts removed in Pydantic v2
+# These are lightweight wrappers used by analytics.sensitivity.engine
+# and export code that wants to carry multiple metric suites.
+# Keep import-safe (no heavy imports, no pipeline imports).
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class MultiMetricTornadoResult(BaseModel):
+    """
+    Container for multiple TornadoResult objects keyed by metric name.
+    
+    Back-compat shim for analytics.sensitivity.engine (Sprint 18).
+    Removed in Pydantic v2 migration but needed by engine imports.
+    
+    Example:
+        >>> results = MultiMetricTornadoResult(
+        ...     results={
+        ...         "project_irr": tornado1,
+        ...         "min_dscr": tornado2,
+        ...     }
+        ... )
+    """
+    model_config = ConfigDict(frozen=True)
+
+    results: Dict[str, TornadoResult] = Field(
+        default_factory=dict,
+        description="Tornado results keyed by metric name"
+    )
+
+    def as_dict(self) -> Dict[str, dict]:
+        """Stable dump surface for exporters/payloads."""
+        return {k: v.model_dump() for k, v in self.results.items()}
+
+    @classmethod
+    def from_mapping(cls, results: Mapping[str, TornadoResult]) -> "MultiMetricTornadoResult":
+        """Create from mapping of metric name to TornadoResult."""
+        return cls(results=dict(results))
+
+
+class MultiMetricSensitivitySuite(BaseModel):
+    """
+    Container for multiple SensitivitySuite objects keyed by metric name.
+    
+    Back-compat shim for analytics.sensitivity.engine (Sprint 18).
+    Removed in Pydantic v2 migration but needed by engine imports.
+    
+    Example:
+        >>> suites = MultiMetricSensitivitySuite(
+        ...     suites={
+        ...         "project_irr": suite1,
+        ...         "npv": suite2,
+        ...         "min_dscr": suite3,
+        ...     }
+        ... )
+        >>> suites.as_dict()["project_irr"]["metric"]
+        'project_irr'
+    """
+    model_config = ConfigDict(frozen=True)
+
+    suites: Dict[str, SensitivitySuite] = Field(
+        default_factory=dict,
+        description="Sensitivity suites keyed by metric name (e.g., 'project_irr', 'npv', 'min_dscr')"
+    )
+
+    def as_dict(self) -> Dict[str, dict]:
+        """Stable dump surface for exporters/payloads."""
+        return {k: v.model_dump() for k, v in self.suites.items()}
+
+    @classmethod
+    def from_mapping(cls, suites: Mapping[str, SensitivitySuite]) -> "MultiMetricSensitivitySuite":
+        """Create from mapping of metric name to SensitivitySuite."""
+        return cls(suites=dict(suites))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -799,6 +859,7 @@ __all__ = [
     "MultiMetricTornadoResult",
     "ParameterRangeConfig",
     "SensitivitySuite",
+    "MultiMetricSensitivitySuite",
     "SensitivityRequest",
     "BreakevenResult",
     "ShockResult",

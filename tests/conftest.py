@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-tests/conftest.py
+"""tests/conftest.py
 
 Shared pytest configuration and utilities for DutchBay v14 test suite.
 
@@ -8,18 +7,20 @@ Go-with-the-Flow Compliance:
 - CST-01: LibCST Banned APIs enforcement (shared visitor base)
 - CST-02: Safe code inspection without touching runtime
 - Automated integration with pytest tests/ directory
+- R3: No argparse (uses env vars for test mode config)
 
 This module provides:
 1. PATH SETUP - Ensures repository root is on sys.path (CRITICAL for imports)
 2. BaseSensitivityVisitor - Shared LibCST visitor for import/call inspection
 3. load_sensitivity_source() - Unified file loading from multiple locations
 4. Shared fixtures and configuration for all test suites
-5. TEST PERFORMANCE - Configurable iteration counts for Monte Carlo/sensitivity
+5. TEST PERFORMANCE - Env-var based iteration counts (DUTCHBAY_TEST_MODE)
 """
 
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from pathlib import Path
 from typing import List, Set
@@ -52,17 +53,21 @@ analytics = importlib.import_module("analytics")
 
 
 # =============================================================================
-# TEST PERFORMANCE CONFIGURATION
+# TEST PERFORMANCE CONFIGURATION (GWTF-Compliant: No argparse)
 # =============================================================================
 
 
 @pytest.fixture(scope="session")
-def fast_test_mode(request) -> bool:
+def fast_test_mode() -> bool:
     """
     Session-scoped fixture: determine if tests should run in fast mode.
 
     Fast mode reduces Monte Carlo and sensitivity test iterations for rapid
-    development feedback. Full iterations run in CI/CD or with --full-iterations.
+    development feedback. Full iterations run in CI/CD with env var.
+
+    GWTF-Compliant:
+        Uses environment variable instead of argparse-style CLI options.
+        No pytest_addoption required, avoiding argparse.
 
     Returns
     -------
@@ -71,18 +76,18 @@ def fast_test_mode(request) -> bool:
 
     Usage
     -----
-    Command line:
-        pytest                        # Fast mode (default)
-        pytest --fast-test-mode       # Explicit fast mode
-        pytest --full-iterations      # Full iterations
+    Environment variable:
+        DUTCHBAY_TEST_MODE=fast pytest    # Fast mode (20 iter, default)
+        DUTCHBAY_TEST_MODE=full pytest    # Full mode (100k iter)
+        pytest                             # Default: fast mode
 
     In test code:
         def test_monte_carlo(fast_test_mode):
             n_iter = 20 if fast_test_mode else 100000
             result = run_monte_carlo(n_iterations=n_iter)
     """
-    # Check if --full-iterations flag is set
-    return not request.config.getoption("--full-iterations", default=False)
+    test_mode = os.environ.get("DUTCHBAY_TEST_MODE", "fast").lower()
+    return test_mode != "full"
 
 
 @pytest.fixture(scope="session")
@@ -351,48 +356,8 @@ def visitor(sensitivity_module: cst.Module) -> BaseSensitivityVisitor:
 
 
 # =============================================================================
-# Pytest Configuration
+# Pytest Configuration (No argparse - GWTF R3 compliant)
 # =============================================================================
-
-
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """
-    Add custom command-line options for test configuration.
-
-    Options:
-    --------
-    --fast-test-mode
-        Run tests with reduced iterations (20 MC, 3 params).
-        This is the DEFAULT mode.
-
-    --full-iterations
-        Run tests with full production iterations (100k MC, all params).
-        Use for pre-commit validation and CI/CD.
-
-    Examples:
-    ---------
-    # Fast development mode (default)
-    pytest
-    pytest --fast-test-mode
-
-    # Full validation mode
-    pytest --full-iterations
-
-    # Fast mode with verbose output
-    pytest -v --fast-test-mode
-    """
-    parser.addoption(
-        "--fast-test-mode",
-        action="store_true",
-        default=False,
-        help="Run tests with reduced iterations for faster development (DEFAULT)",
-    )
-    parser.addoption(
-        "--full-iterations",
-        action="store_true",
-        default=False,
-        help="Run tests with full production iterations (100k+ MC simulations)",
-    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -453,17 +418,18 @@ def pytest_configure(config: pytest.Config) -> None:
         "analytics_layer: Functional/integration tests for analytics layer",
     )
 
-    # Print test mode banner
-    if config.getoption("--full-iterations"):
+    # Print test mode banner (env var based)
+    test_mode = os.environ.get("DUTCHBAY_TEST_MODE", "fast").lower()
+    if test_mode == "full":
         print("\n" + "=" * 78)
         print("TEST MODE: FULL ITERATIONS (100k+ MC simulations)")
         print("Expected runtime: 5-10 minutes for full suite")
-        print("=" * 78 + "\n")
+        print("="* 78 + "\n")
     else:
         print("\n" + "=" * 78)
         print("TEST MODE: FAST (20 iterations, 3 params)")
         print("Expected runtime: ~30 seconds for full suite")
-        print("Use --full-iterations for production validation")
+        print("Use DUTCHBAY_TEST_MODE=full for production validation")
         print("=" * 78 + "\n")
 
 

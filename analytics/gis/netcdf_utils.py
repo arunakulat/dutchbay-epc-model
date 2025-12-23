@@ -36,6 +36,11 @@ References:
 Context:
     Sprint 17 - Issue #19: NetCDF Wind Resource Processing
     Part of GIS → EPC resource loader pipeline for DutchBay 150 MW project
+    
+GWTF Compliance:
+    Module import must be safe even when optional geo deps are absent.
+    If optional dependencies (e.g., pyproj) are required for a function,
+    raise a clear ImportError at call-time (not import-time).
 """
 
 from __future__ import annotations
@@ -46,7 +51,14 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
-from pyproj import CRS
+
+# Optional dependency: pyproj for CRS transformations
+try:
+    from pyproj import CRS  # type: ignore[import-untyped]
+    _PYPROJ_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover
+    CRS = None  # type: ignore[assignment,misc]
+    _PYPROJ_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +81,19 @@ SHEAR_EXP_MAX = 0.5
 
 # Standard measurement heights in ERA5/MERRA-2
 STANDARD_HEIGHTS_M = [10, 50, 100, 150, 200]
+
+
+def _require_pyproj() -> None:
+    """Guard for optional dependency pyproj.
+    
+    Raises:
+        ImportError: if pyproj is not installed.
+    """
+    if not _PYPROJ_AVAILABLE:
+        raise ImportError(
+            "pyproj is required for CRS/coordinate transforms. "
+            "Install with: pip install pyproj"
+        )
 
 
 def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:

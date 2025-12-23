@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence, Union, cast
+from typing import Any, Dict, Mapping, Optional, Sequence, Union, cast
 
 from analytics.contracts_v14 import CasperResult, MonteCarloResult
 from analytics.contracts_v14 import ScenarioResult as ScenarioResultContract
@@ -12,13 +12,9 @@ from analytics.contracts_v14 import SensitivitySuite
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
-# CRITICAL P1 FIX: Use TYPE_CHECKING to break circular import
-# evaluation_v14 → sensitivity_tail_risk → sensitivity.engine → evaluation_v14
-if TYPE_CHECKING:
-    from analytics.sensitivity_tail_risk import (
-        build_tail_risk_snapshots_for_metrics,
-        enrich_tornado_with_tail_risk,
-    )
+# CRITICAL P1 FIX: NO imports from analytics.sensitivity at module level
+# All sensitivity/tail-risk imports are LAZY (inside functions only)
+# This breaks: evaluation_v14 → sensitivity_tail_risk → sensitivity.engine → evaluation_v14
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +32,14 @@ This module provides a SINGLE, typed entry point for analytics layers
     - evaluate_scenario_from_dict(config, overrides)
     - evaluate_with_casper_tail_risk(...)
 
+GWTF RULE: Evaluation gateway must be import-safe.
+- NO imports from analytics.sensitivity, analytics.mc at module scope
+- All enrichment imports are LAZY (inside functions)
+
 Revision History:
+- v14.4.2 (2025-12-23): P1 hotfix - Full lazy loading (no TYPE_CHECKING)
+  - Remove all sensitivity imports from module scope
+  - Tail-risk functions only imported inside evaluate_with_casper_tail_risk
 - v14.4.1 (2025-12-23): P1 hotfix - Break circular import with sensitivity
   - Use TYPE_CHECKING for sensitivity_tail_risk imports
   - Add lazy loading for tail risk functions
@@ -297,6 +300,9 @@ def evaluate_with_casper_tail_risk(
     
     Integrates baseline scenario, Monte Carlo, and sensitivity analysis with tail risk.
     
+    CRITICAL: This is the ONLY function that imports tail-risk modules.
+    All imports are lazy to avoid circular dependencies.
+    
     Args:
         config_path: Path to base scenario config
         monte_carlo_config_path: Optional path to MC config
@@ -321,12 +327,6 @@ def evaluate_with_casper_tail_risk(
         >>> result.monte_carlo.project_irr_p10
         0.120
     """
-    # LAZY LOADING: Import tail risk functions only when needed
-    from analytics.sensitivity_tail_risk import (
-        build_tail_risk_snapshots_for_metrics,
-        enrich_tornado_with_tail_risk,
-    )
-    
     cfg_path = Path(config_path)
     if not cfg_path.is_file():
         raise FileNotFoundError(f"Scenario config not found: {cfg_path}")
@@ -450,34 +450,48 @@ def evaluate_with_casper_tail_risk(
 
     logger.info("Step 3/4: Building tail-risk enrichments...")
 
-    if sensitivity_suite and monte_carlo and raw_results:
+    # LAZY IMPORT: Only import tail-risk functions when actually needed
+    if (sensitivity_suite and monte_carlo and raw_results) or (monte_carlo and raw_results):
         try:
-            tail_df = enrich_tornado_with_tail_risk(
-                tornado_suite=sensitivity_suite,
-                mc_result=monte_carlo,
-                metric=metric,
-                confidence=confidence,
+            from analytics.sensitivity_tail_risk import (
+                build_tail_risk_snapshots_for_metrics,
+                enrich_tornado_with_tail_risk,
             )
-            tail_risk_block = {
-                "metric": metric,
-                "confidence": confidence,
-                "rows": tail_df.to_dict(orient="records"),
-            }
-        except (ValueError, KeyError) as e:
+        except ImportError as e:
             logger.warning(
-                "Could not enrich tornado with tail risk: %s; skipping", str(e)
+                "Could not import tail-risk functions: %s; skipping enrichment", str(e)
             )
+        else:
+            # Enrich tornado if we have sensitivity suite
+            if sensitivity_suite and monte_carlo and raw_results:
+                try:
+                    tail_df = enrich_tornado_with_tail_risk(
+                        tornado_suite=sensitivity_suite,
+                        mc_result=monte_carlo,
+                        metric=metric,
+                        confidence=confidence,
+                    )
+                    tail_risk_block = {
+                        "metric": metric,
+                        "confidence": confidence,
+                        "rows": tail_df.to_dict(orient="records"),
+                    }
+                except (ValueError, KeyError) as e:
+                    logger.warning(
+                        "Could not enrich tornado with tail risk: %s; skipping", str(e)
+                    )
 
-    if monte_carlo and raw_results:
-        try:
-            tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
-                mc_result=monte_carlo,
-                metrics=("project_irr", "dscr_min"),
-                confidence=confidence,
-            )
-        except (ValueError, KeyError) as e:
-            logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
-            tail_risk_snapshots = {}
+            # Build tail risk snapshots
+            if monte_carlo and raw_results:
+                try:
+                    tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
+                        mc_result=monte_carlo,
+                        metrics=("project_irr", "dscr_min"),
+                        confidence=confidence,
+                    )
+                except (ValueError, KeyError) as e:
+                    logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
+                    tail_risk_snapshots = {}
 
     logger.info("Step 4/4: Assembling CASPER result...")
     metadata: Dict[str, Any] = {}
