@@ -30,6 +30,17 @@ from analytics.core.risk_metrics import (
     VaRCVaRResult,
 )
 
+# Parameter solvers - Reverse-engineering for Monte Carlo
+from analytics.core.parameter_solvers import (
+    SOLVER_REGISTRY,
+    get_solver,
+    solve_for_max_debt_given_dscr,
+    solve_for_max_debt_multi_covenant,
+    solve_for_min_capex_given_irr_floor,
+    solve_for_tariff_given_irr,
+    solve_for_tariff_given_npv,
+)
+
 __all__ = [
     # Returns module
     "AllReturns",
@@ -51,4 +62,12 @@ __all__ = [
     "TailRiskAnalyzer",
     "TailRiskReport",
     "VaRCVaRResult",
+    # Parameter solvers
+    "SOLVER_REGISTRY",
+    "get_solver",
+    "solve_for_max_debt_given_dscr",
+    "solve_for_max_debt_multi_covenant",
+    "solve_for_min_capex_given_irr_floor",
+    "solve_for_tariff_given_irr",
+    "solve_for_tariff_given_npv",
 ]
