@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 # Import engine function
 from analytics.sensitivity_runner import run_sensitivity_analysis
@@ -111,7 +111,7 @@ def main(cfg: DictConfig) -> None:
     # Extract parameters from config
     output_dir = Path(str(cfg.get("output_dir", "_out/sensitivity")))
     write_artifacts = bool(cfg.get("write_artifacts", True))
-    shocks = OmegaConf.to_container(cfg.get("shocks", {}), resolve=True)
+    # Note: shocks parameter read from config but used by sensitivity_runner internally
     metrics = list(cfg.get("metrics", []))
     
     # Default metric if not specified
