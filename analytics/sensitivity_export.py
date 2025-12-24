@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -6,7 +7,7 @@ analytics.sensitivity_export
 **DEPRECATED**: This module is a shim for backward compatibility.
 
 New code should use:
-    from analytics.sensitivity.export import suite_to_tables, suite_to_records
+    from analytics.sensitivity.export import sensitivity_to_dataframe
 
 This file will be removed in a future version.
 """

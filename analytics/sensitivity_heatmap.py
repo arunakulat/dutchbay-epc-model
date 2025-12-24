@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -6,7 +7,7 @@ analytics.sensitivity_heatmap
 **DEPRECATED**: This module is a shim for backward compatibility.
 
 New code should use:
-    from analytics.sensitivity.heatmap import suite_to_heatmap_matrix
+    from analytics.sensitivity.heatmap import build_sensitivity_heatmap
 
 This file will be removed in a future version.
 """

@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -6,7 +7,7 @@ analytics.sensitivity_tail_risk
 **DEPRECATED**: This module is a shim for backward compatibility.
 
 New code should use:
-    from analytics.sensitivity.tail_risk import TailRiskConfig, enrich_suite_with_tail_risk
+    from analytics.sensitivity.tail_risk import TailRiskConfig, enrich_with_tail_risk
 
 This file will be removed in a future version.
 """
