@@ -37,14 +37,35 @@ test = [
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
-# Dolphin #10e: Suppress E402 (import not at top) for docstring-first modules
+# Dolphin #10f: Suppress E402 (import not at top) for docstring-first modules
 # These modules intentionally place docstrings before imports for better readability
 # Rationale documented in docs/LINT_WARNINGS_E402_DEFERRED.md
 [tool.ruff.lint.per-file-ignores]
-"analytics/mc/*.py" = ["E402"]  # Monte Carlo modules: docstring-first pattern
-"analytics/sensitivity/*.py" = ["E402"]  # Sensitivity modules: docstring-first pattern
-"analytics/*_v14.py" = ["E402", "F405"]  # Legacy shim files: deprecation warnings before imports
-"finance/irr/__init__.py" = ["E402"]  # Circular import workaround
+# Monte Carlo modules
+"analytics/mc/aggregate.py" = ["E402"]
+"analytics/mc/correlation.py" = ["E402"]
+"analytics/mc/degradation.py" = ["E402"]
+"analytics/mc/engine.py" = ["E402"]
+"analytics/mc/exports.py" = ["E402"]
+"analytics/mc/samplers.py" = ["E402"]
+# Sensitivity modules
+"analytics/sensitivity/adapters.py" = ["E402"]
+"analytics/sensitivity/dscr.py" = ["E402"]
+"analytics/sensitivity/engine.py" = ["E402"]
+"analytics/sensitivity/export.py" = ["E402"]
+"analytics/sensitivity/heatmap.py" = ["E402"]
+"analytics/sensitivity/optimizer.py" = ["E402"]
+"analytics/sensitivity/tax.py" = ["E402"]
+"analytics/sensitivity/viz.py" = ["E402"]
+# Legacy shim files (deprecation warnings before imports)
+"analytics/sensitivity_dscr_v14.py" = ["E402", "F405"]
+"analytics/sensitivity_export.py" = ["E402"]
+"analytics/sensitivity_heatmap.py" = ["E402"]
+"analytics/sensitivity_tail_risk.py" = ["E402"]
+"analytics/sensitivity_v14.py" = ["E402"]
+"analytics/tax_sensitivity_v14.py" = ["E402", "F405"]
+# Finance circular import workaround
+"finance/irr/__init__.py" = ["E402"]
 
 [tool.setuptools.packages.find]
 include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*"]
