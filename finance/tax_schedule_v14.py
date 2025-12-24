@@ -31,6 +31,10 @@ Proper Cash Waterfall:
     CAFOD = Revenue - OPEX - Interest - Tax + Depreciation
           = Operating cash after tax, before distributions
 
+CRITICAL FIX (Reindeer-1):
+Interest schedule MUST decline as debt is amortized. Static interest
+schedules cause perpetual losses and infinite TLCF accumulation.
+
 Framework Compliance:
 - GWTF: Proper tax mechanics (industry-standard)
 - CESSPIT: All parameters from config
@@ -38,9 +42,9 @@ Framework Compliance:
 - CCCDIR: Clear separation: Tax → CAFOD → Distribution
 - TYPE-01: Full type hints
 
-Author: DutchBay Tax Mechanics Team
+Author: DutchBay Tax Mechanics Team + Reindeer Heavy Lifters
 Date: December 2025
-Version: 2.0 (Enhanced)
+Version: 2.1 (Emergency Fix - Zero Tax Bug)
 """
 
 import logging
@@ -255,11 +259,14 @@ def calculate_corporate_tax_schedule(
     4. Tax Liability = (Taxable Income - TLCF Shield) × Tax Rate
     5. CAFOD = Revenue - OPEX - Interest - Tax + Depreciation
     
+    CRITICAL: Interest schedule MUST decline as debt amortizes!
+    Static interest causes perpetual losses and infinite TLCF.
+    
     Args:
         revenue_schedule: Annual revenue (USD)
         opex_schedule: Annual operating expenses (USD)
         depreciation_schedule: Annual depreciation (USD, non-cash)
-        interest_schedule: Annual interest expense (USD)
+        interest_schedule: Annual interest expense (USD) - MUST decline!
         corporate_tax_rate: Corporate tax rate (decimal, e.g., 0.28)
         initial_tlcf: Initial TLCF balance (USD)
         tlcf_carryforward_limit_years: Years TLCF can be carried forward
@@ -267,12 +274,18 @@ def calculate_corporate_tax_schedule(
     Returns:
         TaxSchedule with complete tax calculation
     
-    Example:
-        >>> # Year 1: Revenue $20M, OPEX $7M, Depreciation $20M, Interest $10M
-        >>> # EBT = $20M - $7M - $20M - $10M = -$17M (loss)
-        >>> # TLCF accumulates $17M
+    Example (CORRECTED):
+        >>> # Year 1: Revenue $20M, OPEX $7M, Depreciation $20M, Interest $11.2M
+        >>> # EBT = $20M - $7M - $20M - $11.2M = -$18.2M (loss)
+        >>> # TLCF accumulates $18.2M
         >>> # Tax = $0 (loss year)
-        >>> # CAFOD = $20M - $7M - $10M - $0 + $20M = $23M
+        >>> # CAFOD = $20M - $7M - $11.2M - $0 + $20M = $21.8M
+        >>>
+        >>> # Year 15: Revenue $27M, OPEX $10M, Depreciation $0, Interest $3M
+        >>> # EBT = $27M - $10M - $0 - $3M = $14M (profit)
+        >>> # TLCF shield = min(remaining TLCF, $14M)
+        >>> # Taxable income = $14M - TLCF shield
+        >>> # Tax = taxable income × 28%
     """
     project_life = len(revenue_schedule)
     
@@ -280,6 +293,20 @@ def calculate_corporate_tax_schedule(
     assert len(opex_schedule) == project_life
     assert len(depreciation_schedule) == project_life
     assert len(interest_schedule) == project_life
+    
+    # 🦌 REINDEER FIX: Validate interest schedule is declining
+    if project_life > 5:
+        first_half_avg = sum(interest_schedule[:project_life//2]) / (project_life//2)
+        second_half_avg = sum(interest_schedule[project_life//2:]) / (project_life - project_life//2)
+        
+        if second_half_avg >= first_half_avg * 0.95:  # Allow 5% tolerance
+            logger.warning(
+                "⚠️  Interest schedule appears static (not declining). "
+                f"First half avg: ${first_half_avg/1e6:.1f}M, "
+                f"Second half avg: ${second_half_avg/1e6:.1f}M. "
+                "This will cause excessive TLCF accumulation and zero tax. "
+                "Debt should amortize over project life."
+            )
     
     # Initialize tracking arrays
     ebitda = []
@@ -356,10 +383,28 @@ def calculate_corporate_tax_schedule(
             exhaustion_year = i
             break
     
+    # Log summary with validation
+    total_tax = sum(tax_liability)
+    peak_tlcf = max(tlcf_balance)
+    
     logger.info(
         f"Tax calculation complete: TLCF exhausts at year {exhaustion_year+1}, "
-        f"Total tax paid ${sum(tax_liability)/1e6:.1f}M"
+        f"Total tax paid ${total_tax/1e6:.1f}M"
     )
+    
+    # 🦌 REINDEER VALIDATION: Warn if results look suspicious
+    if total_tax == 0 and project_life > 10:
+        logger.warning(
+            "⚠️  SUSPICIOUS: Zero tax over entire project life. "
+            "This usually indicates static interest schedule causing perpetual losses."
+        )
+    
+    if peak_tlcf > revenue_schedule[0] * 2:  # Peak TLCF > 2x Year 1 revenue
+        logger.warning(
+            f"⚠️  SUSPICIOUS: Peak TLCF ${peak_tlcf/1e6:.1f}M seems excessive "
+            f"(>2x Year 1 revenue ${revenue_schedule[0]/1e6:.1f}M). "
+            "Check interest schedule is declining properly."
+        )
     
     return TaxSchedule(
         annual_revenue=revenue_schedule,
@@ -427,12 +472,14 @@ def calculate_tax_savings_from_tlcf(
 
 
 if __name__ == "__main__":
-    # Example: DutchBay 150MW wind farm
+    # Example: DutchBay 150MW wind farm WITH PROPER DECLINING INTEREST
     logging.basicConfig(level=logging.INFO)
     
     # Project parameters
     capex = 200e6  # $200M
     project_life = 20
+    debt = 140e6  # 70% debt
+    interest_rate = 0.08
     
     # Revenue and cost schedules
     revenue = [20e6 + i * 0.5e6 for i in range(project_life)]  # Growing
@@ -446,10 +493,18 @@ if __name__ == "__main__":
     )
     depreciation = depreciation_sched.annual_depreciation
     
-    # Interest schedule (from debt)
-    debt = 140e6  # 70% debt
-    interest_rate = 0.08
-    interest = [debt * interest_rate * (1 - t/15) for t in range(project_life)]  # Declining
+    # 🦌 CORRECTED: Interest schedule (declining as debt amortizes)
+    # Assume 15-year amortization for illustration
+    amortization_years = 15
+    interest = []
+    for t in range(project_life):
+        if t < amortization_years:
+            # Declining interest as principal is paid down
+            remaining_fraction = 1 - (t / amortization_years)
+            interest.append(debt * interest_rate * remaining_fraction)
+        else:
+            # Debt fully repaid
+            interest.append(0)
     
     # Calculate tax schedule WITH TLCF
     tax_with_tlcf = calculate_corporate_tax_schedule(
@@ -475,7 +530,7 @@ if __name__ == "__main__":
     )
     
     print("\n" + "="*70)
-    print("PROPER CORPORATE TAX CALCULATION WITH TLCF")
+    print("PROPER CORPORATE TAX CALCULATION WITH TLCF (CORRECTED)")
     print("="*70)
     print(f"\nTLCF Exhaustion: Year {tax_with_tlcf.tlcf_exhaustion_year + 1}")
     print(f"Peak TLCF Balance: ${max(tax_with_tlcf.annual_tlcf_balance)/1e6:.1f}M")
@@ -483,4 +538,5 @@ if __name__ == "__main__":
     print(f"Total Tax (No Depreciation Shield): ${sum(tax_without_tlcf.annual_tax_liability)/1e6:.1f}M")
     print(f"\nTax Savings: ${savings_total/1e6:.1f}M nominal, ${savings_npv/1e6:.1f}M NPV")
     print(f"\nYear 5 CAFOD: ${tax_with_tlcf.annual_cafod[4]/1e6:.1f}M (available for distribution)")
+    print(f"\n🦌 REINDEER FIX: Interest declines from ${interest[0]/1e6:.1f}M to ${interest[-1]/1e6:.1f}M")
     print("="*70)
