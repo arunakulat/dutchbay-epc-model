@@ -46,9 +46,7 @@ import pandas as pd
 
 from analytics.contracts._phase_3_sensitivity import (
     MultiScenarioSuite,
-    ScenarioResult,
     SensitivitySuite,
-    ShockResult,
 )
 
 logger = logging.getLogger(__name__)

@@ -22,7 +22,7 @@ You will wire it to your Monte Carlo engine in your repo (recommended).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 

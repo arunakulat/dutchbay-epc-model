@@ -16,7 +16,6 @@ Copy-paste this code to replace lines 366-516 in analytics/sensitivity_v14.py
 
 from pathlib import Path
 import logging
-from typing import Optional
 
 from analytics.contracts_v14 import (
     ParameterRangeConfig,

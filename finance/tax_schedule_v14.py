@@ -45,10 +45,9 @@ Version: 2.0 (Enhanced)
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from enum import Enum
 
-import numpy as np
 
 logger = logging.getLogger(__name__)
 

@@ -123,7 +123,7 @@ class WindPipeline:
         # Load config (CCCDIR compliance)
         self._load_config(config_path)
         
-        logger.info(f"WindPipeline v1.0.0 initialized (CCCDIR compliant)")
+        logger.info("WindPipeline v1.0.0 initialized (CCCDIR compliant)")
         logger.info(f"  Location: {location['name']} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)")
         logger.info(f"  Hub height: {hub_height}m")
         logger.info(f"  Turbine model: {turbine_model}")

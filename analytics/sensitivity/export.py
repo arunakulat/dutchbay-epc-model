@@ -15,7 +15,7 @@ Public API (keep stable):
 - suite_to_records(...)
 """
 
-from typing import Any, Dict, Mapping, Optional, Sequence, Union
+from typing import Any, Dict
 
 try:
     import pandas as pd  # type: ignore
