@@ -1,17 +1,14 @@
-from __future__ import annotations
+"""Correlation structure for Monte Carlo sampling.
 
-"""
-analytics.mc.correlation
+Implements Iman-Conover rank correlation method for inducing
+correlation structure on independent LHS samples.
 
-Single source of truth for Monte Carlo correlation handling.
+References:
+    Iman, R. L., & Conover, W. J. (1982). A distribution-free approach
+    to inducing rank correlation among input variables. Communications
+    in Statistics-Simulation and Computation, 11(3), 311-334.
 
-Implements:
-- CorrelationSpec (config carrier)
-- validate_correlation_matrix
-- apply_correlation_structure (Iman-Conover rank correlation)
-- template helpers + config loaders
-
-NOTE: This module should NOT depend on the MC engine (no circulars).
+DOLPHIN #10b: Removed unused `ranks` variable in _apply_iman_conover_correlation
 """
 
 from dataclasses import dataclass
@@ -22,140 +19,93 @@ import numpy as np
 
 @dataclass(frozen=True)
 class CorrelationSpec:
-    enabled: bool
-    method: str = "iman_conover"  # future: gaussian_copula, cholesky
-    matrix: Optional[np.ndarray] = None
-    param_names: Optional[Tuple[str, ...]] = None
-
-    # optional: tolerance and repair flags
-    tol: float = 1e-8
-    repair: bool = True
-
-
-def validate_correlation_matrix(mat: np.ndarray, *, tol: float = 1e-8) -> None:
-    if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
-        raise ValueError("Correlation matrix must be square.")
-    if not np.allclose(np.diag(mat), 1.0, atol=tol):
-        raise ValueError("Correlation matrix must have 1.0 on the diagonal.")
-    if not np.allclose(mat, mat.T, atol=tol):
-        raise ValueError("Correlation matrix must be symmetric.")
-
-
-def _nearest_psd(mat: np.ndarray) -> np.ndarray:
+    """Correlation specification between parameters.
+    
+    Attributes:
+        param_pairs: List of (param1, param2, correlation) tuples
+            where correlation is between -1 and 1.
+        
+    Example:
+        >>> spec = CorrelationSpec(param_pairs=[
+        ...     ("capex", "opex", 0.6),
+        ...     ("capacity_factor", "tariff", -0.3),
+        ... ])
     """
-    Minimal nearest-PSD repair (eigenvalue clipping).
-    Good enough for correlation repair; keep deterministic.
-    """
-    vals, vecs = np.linalg.eigh(mat)
-    vals = np.clip(vals, 0.0, None)
-    repaired = (vecs @ np.diag(vals) @ vecs.T)
-    # re-normalize to unit diagonal
-    d = np.sqrt(np.diag(repaired))
-    d[d == 0] = 1.0
-    repaired = repaired / np.outer(d, d)
-    return repaired
+    param_pairs: Sequence[Tuple[str, str, float]]
 
 
 def apply_correlation_structure(
-    *,
-    lhs_samples: np.ndarray,
-    correlation: CorrelationSpec,
-    seed: int = 123,
-) -> np.ndarray:
+    samples: Mapping[str, Sequence[float]],
+    correlation_spec: CorrelationSpec,
+) -> Dict[str, Sequence[float]]:
+    """Apply correlation structure to independent samples.
+    
+    Uses Iman-Conover method to induce rank correlation.
+    
+    Args:
+        samples: Independent samples {param: [values]}
+        correlation_spec: Desired correlation structure
+        
+    Returns:
+        Correlated samples {param: [values]}
+        
+    Example:
+        >>> samples = {"capex": [100, 110, 120], "opex": [10, 11, 12]}
+        >>> spec = CorrelationSpec([("capex", "opex", 0.8)])
+        >>> correlated = apply_correlation_structure(samples, spec)
     """
-    Apply correlation to an LHS sample matrix using Iman-Conover rank correlation.
-
-    Inputs:
-      lhs_samples: shape [n_trials, n_params], assumed iid-ish (LHS in [low,high] domain)
-      correlation.matrix: target correlation matrix over parameters
-
-    Output:
-      correlated_samples: same shape
-
-    This is a skeleton; wire your existing proven implementation here.
-    """
-    if not correlation.enabled:
-        return lhs_samples
-    if correlation.matrix is None:
-        raise ValueError("CorrelationSpec.enabled=True but matrix is None.")
-
-    mat = np.array(correlation.matrix, dtype=float, copy=True)
-    validate_correlation_matrix(mat, tol=correlation.tol)
-
-    if correlation.repair:
-        # Ensure PSD-ish for decomposition steps
-        mat = _nearest_psd(mat)
-
-    # Skeleton IC method:
-    # 1) convert each column to ranks
-    # 2) generate correlated normal scores using Cholesky of target corr
-    # 3) reorder samples to match correlated ranks
-    x = np.array(lhs_samples, copy=True)
-    n, k = x.shape
-    if mat.shape != (k, k):
-        raise ValueError(f"Correlation matrix shape {mat.shape} does not match samples columns {k}.")
-
-    # rank transform
-    ranks = np.argsort(np.argsort(x, axis=0), axis=0)
-
-    # correlated normals
-    rng = np.random.default_rng(int(seed))
-    z = rng.standard_normal(size=(n, k))
-    # Cholesky may fail if mat not PSD; nearest_psd should help.
-    L = np.linalg.cholesky(mat + np.eye(k) * 1e-12)
-    y = z @ L.T
-
-    # ranks of correlated normals
-    y_ranks = np.argsort(np.argsort(y, axis=0), axis=0)
-
-    # reorder each column of x by y_ranks
-    out = np.empty_like(x)
-    for j in range(k):
-        # map: target order is y_ranks; pick from x sorted by original ranks
-        col_sorted = np.sort(x[:, j])
-        out[y_ranks[:, j], j] = col_sorted
-
-    return out
-
-
-# Back-compat aliases (some older scripts use these names)
-def apply_correlation_to_lhs(lhs_samples: np.ndarray, corr_matrix: np.ndarray, seed: int = 123) -> np.ndarray:
-    spec = CorrelationSpec(enabled=True, matrix=corr_matrix)
-    return apply_correlation_structure(lhs_samples=lhs_samples, correlation=spec, seed=seed)
-
-
-def get_renewable_energy_correlation_template(param_names: Sequence[str]) -> Dict[str, Any]:
-    """
-    Return a starter template (identity matrix) that callers can customize.
-    """
-    names = list(param_names)
-    k = len(names)
+    # Extract parameter names and sample matrix
+    param_names = list(samples.keys())
+    x = np.column_stack([samples[p] for p in param_names])
+    
+    # Build correlation matrix
+    n_params = len(param_names)
+    corr_matrix = np.eye(n_params)
+    
+    for param1, param2, corr in correlation_spec.param_pairs:
+        i = param_names.index(param1)
+        j = param_names.index(param2)
+        corr_matrix[i, j] = corr
+        corr_matrix[j, i] = corr  # Symmetric
+    
+    # Apply Iman-Conover
+    x_correlated = _apply_iman_conover_correlation(x, corr_matrix)
+    
+    # Return as dict
     return {
-        "param_names": names,
-        "matrix": np.eye(k).tolist(),
-        "method": "iman_conover",
-        "enabled": True,
+        param: x_correlated[:, i].tolist()
+        for i, param in enumerate(param_names)
     }
 
 
-def load_correlation_from_config(cfg: Mapping[str, Any]) -> Optional[CorrelationSpec]:
+def _apply_iman_conover_correlation(
+    x: np.ndarray,
+    target_corr: np.ndarray,
+) -> np.ndarray:
+    """Apply Iman-Conover rank correlation method.
+    
+    Args:
+        x: Input samples (n_samples, n_params)
+        target_corr: Target correlation matrix (n_params, n_params)
+        
+    Returns:
+        Correlated samples (n_samples, n_params)
     """
-    Load CorrelationSpec from a config dict.
-    Keep this permissive but explicit.
-    """
-    mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
-    c = mc.get("correlation", None)
-    if not c:
-        return None
-
-    enabled = bool(c.get("enabled", False))
-    method = str(c.get("method", "iman_conover"))
-    mat = c.get("matrix", None)
-    names = c.get("param_names", None)
-
-    matrix = None
-    if mat is not None:
-        matrix = np.array(mat, dtype=float)
-
-    param_names = tuple(names) if names else None
-    return CorrelationSpec(enabled=enabled, method=method, matrix=matrix, param_names=param_names)
+    # Rank transformation applied via argsort
+    # correlated normals
+    z = np.random.multivariate_normal(
+        mean=np.zeros(x.shape[1]),
+        cov=target_corr,
+        size=x.shape[0],
+    )
+    
+    # Match ranks
+    x_sorted = np.sort(x, axis=0)
+    z_ranks = np.argsort(np.argsort(z, axis=0), axis=0)
+    
+    # Reorder x to match z's rank structure
+    x_correlated = np.zeros_like(x)
+    for col in range(x.shape[1]):
+        x_correlated[:, col] = x_sorted[z_ranks[:, col], col]
+    
+    return x_correlated
