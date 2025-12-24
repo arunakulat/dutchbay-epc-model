@@ -4,52 +4,49 @@ from __future__ import annotations
 """
 analytics.mc.samplers
 
-Sampling utilities (LHS baseline).
-Keep import-light: numpy only.
+Latin Hypercube and related sampler utilities.
+Keeps the sampling logic separate from the main engine.
 """
 
-from typing import List, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import numpy as np
+from scipy.stats import qmc  # type: ignore
 
 
 def generate_lhs_samples(
-    *,
     n_trials: int,
     bounds: Sequence[Tuple[float, float]],
+    *,
     seed: int = 123,
     common_random_numbers: bool = True,
 ) -> np.ndarray:
     """
-    Minimal LHS sampler. Replace with your more advanced implementation if you already have it.
-
-    Returns: array shape [n_trials, n_params] sampled uniformly within bounds.
+    Generate Latin Hypercube Sampling (LHS) within given bounds.
+    
+    Args:
+        n_trials: number of samples
+        bounds: list of (low, high) for each dimension
+        seed: random seed
+        common_random_numbers: if True, uses consistent RNG for reproducibility
+        
+    Returns:
+        np.ndarray of shape (n_trials, n_dims)
     """
     n = int(n_trials)
-    if n <= 0:
-        raise ValueError("n_trials must be > 0")
-    k = len(bounds)
-    if k == 0:
+    d = len(bounds)
+    if d == 0:
         raise ValueError("bounds must be non-empty")
+    if n <= 0:
+        raise ValueError("n_trials must be positive")
 
-    rng = np.random.default_rng(int(seed))
+    # Construct LHS sampler
+    sampler = qmc.LatinHypercube(d=d, seed=int(seed) if common_random_numbers else None)
+    unit_samples = sampler.random(n=n)  # shape: (n, d) in [0,1]^d
 
-    # LHS in [0,1]
-    cut = np.linspace(0.0, 1.0, n + 1)
-    u = rng.uniform(size=(n, k))
-    a = cut[:n]
-    b = cut[1:]
-    pts = u * (b - a)[:, None] + a[:, None]  # [n,1] broadcast -> [n,k] via later operations
+    # Scale to bounds
+    samples = np.empty((n, d), dtype=float)
+    for i, (lo, hi) in enumerate(bounds):
+        samples[:, i] = float(lo) + unit_samples[:, i] * (float(hi) - float(lo))
 
-    # independent random permutations per dimension
-    lhs = np.zeros((n, k), dtype=float)
-    for j in range(k):
-        perm = rng.permutation(n) if common_random_numbers else np.random.default_rng(int(seed + j)).permutation(n)
-        lhs[:, j] = pts[perm, 0]  # take the single column
-
-    # scale to bounds
-    out = np.empty_like(lhs)
-    for j, (lo, hi) in enumerate(bounds):
-        out[:, j] = lo + lhs[:, j] * (hi - lo)
-
-    return out
+    return samples

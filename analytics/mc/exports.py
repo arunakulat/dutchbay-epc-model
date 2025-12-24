@@ -25,7 +25,7 @@ GWTF/CASPER:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
