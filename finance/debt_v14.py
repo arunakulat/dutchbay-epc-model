@@ -1,6 +1,3 @@
-# [File content too long - showing key changes only]
-# Line 268-275: Changed from float('inf') to None
-
 from __future__ import annotations
 
 import logging
@@ -13,7 +10,7 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.3 (Fixed DSCR Infinity handling - Sprint 18, Issue #3)
+Version: 3.4 (Added size_debt_with_dual_dscr stub - Sprint 18 Dolphin #10T)
 """
 
 
@@ -56,7 +53,6 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
     """Extract CAPEX from config, supporting both v14 and legacy schemas."""
-    # [Unchanged - keeping original implementation]
     finance_cfg = params.get("finance")
     if isinstance(finance_cfg, dict):
         val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
@@ -227,7 +223,6 @@ def apply_debt_layer(
         debt_total,
     )
 
-    # ── Tranche mix and IDC ──────────────────────────
     tranches = _solve_mix(p, debt_total)
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
@@ -243,7 +238,6 @@ def apply_debt_layer(
 
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
-    # ── CFADS / DSCR profile ────────────────────────
     cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
 
     cfads_ext = (
@@ -253,7 +247,6 @@ def apply_debt_layer(
         cfads_ext.append(cfads[-1] if cfads else 0.0)
     cfads_ext = cfads_ext[:23]
 
-    # ── Amortisation schedule by tranche ─────────────────
     if amortization in ("annuity", "fixed"):
         schedules = {
             k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
@@ -286,30 +279,19 @@ def apply_debt_layer(
         debt_service_total.append(svc)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
         
-        # ISSUE #3 FIX: Return None instead of float('inf')
-        # Rationale:
-        # - None is semantically clearer: 'not applicable' vs 'unbounded'
-        # - Monte Carlo percentile calculations don't break on None
-        # - Charts can handle None (skips point) vs crash on Infinity
-        # - min() function naturally ignores None with proper filtering
         if period < construction_periods:
-            # Construction periods: no operational cashflow
             dscr_series.append(None)
         elif svc > 0:
-            # Operational period with debt service
             dscr_series.append(cf / svc)
         else:
-            # Post-repayment or zero service: not applicable
             dscr_series.append(None)
 
-    # Calculate min_dscr from operational periods only
     dscr_op = [
         d for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
 
-    # ── LLCR / PLCR + FX covenant surfaces ──────────────
     debt_principal_total = sum(principal_after_idc.values())
 
     if debt_principal_total > 0:
@@ -387,10 +369,7 @@ def plan_debt(
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Plan debt for the project using the v14 engine.
-    
-    [Docstring unchanged - full API documentation retained]
-    """
+    """Plan debt for the project using the v14 engine."""
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
 
     principal_by = {
@@ -449,5 +428,108 @@ def plan_debt(
     }
 
 
-# [Keeping size_debt_with_dual_dscr unchanged - 200+ lines]
-# EOF
+def size_debt_with_dual_dscr(
+    *,
+    cfads_p50: Sequence[float],
+    cfads_p99: Sequence[float],
+    dscr_target_p50: float = 1.30,
+    dscr_target_p99: float = 1.00,
+    capex: float,
+    debt_ratio_max: float = 0.70,
+    debt_rate: float = 0.08,
+) -> Dict[str, Any]:
+    """Size debt using dual DSCR constraints (P50 + P99).
+    
+    DOLPHIN #10T STUB: Minimal implementation to unblock tests.
+    TODO Sprint 19: Implement full dual-DSCR debt sizing logic.
+    
+    Args:
+        cfads_p50: P50 cashflow available for debt service ($/year)
+        cfads_p99: P99 cashflow (downside case)
+        dscr_target_p50: Target DSCR for P50 case (default 1.30x)
+        dscr_target_p99: Target DSCR for P99 case (default 1.00x)
+        capex: Total project CAPEX ($)
+        debt_ratio_max: Maximum debt/CAPEX ratio (default 0.70)
+        debt_rate: Annual debt interest rate (default 0.08)
+        
+    Returns:
+        Dict with dual DSCR sizing results
+        
+    Raises:
+        ValueError: If inputs are invalid
+    """
+    # Input validation
+    if not cfads_p50 or not cfads_p99:
+        raise ValueError("CFADS sequences cannot be empty")
+    if len(cfads_p50) != len(cfads_p99):
+        raise ValueError("CFADS P50 and P99 must have same length")
+    if dscr_target_p50 <= 0 or dscr_target_p99 <= 0:
+        raise ValueError("DSCR targets must be positive")
+    if not (0 < debt_ratio_max <= 1.0):
+        raise ValueError("Debt ratio must be in (0, 1.0]")
+    if capex <= 0:
+        raise ValueError("CAPEX must be positive")
+    
+    # Stub implementation: simple NPV-based sizing
+    n_years = len(cfads_p50)
+    
+    # Size debt based on P50
+    npv_p50 = _npv(cfads_p50, debt_rate)
+    debt_p50 = min(npv_p50 / dscr_target_p50, capex * debt_ratio_max)
+    
+    # Size debt based on P99
+    npv_p99 = _npv(cfads_p99, debt_rate)
+    debt_p99 = min(npv_p99 / dscr_target_p99, capex * debt_ratio_max)
+    
+    # Choose conservative (lower) debt
+    debt_sized = min(debt_p50, debt_p99)
+    
+    # Determine binding constraint
+    if debt_sized >= capex * debt_ratio_max:
+        binding = "RATIO_CAP"
+    elif debt_p99 < debt_p50:
+        binding = "P99"
+    else:
+        binding = "P50"
+    
+    # Calculate debt service (simple annuity)
+    pmt = _pmt(debt_rate, n_years, debt_sized)
+    debt_service_p50 = [pmt] * n_years
+    debt_service_p99 = [pmt] * n_years
+    
+    # Calculate DSCR profiles
+    dscr_profile_p50 = [
+        cf / pmt if pmt > 0 else float('inf') 
+        for cf in cfads_p50
+    ]
+    dscr_profile_p99 = [
+        cf / pmt if pmt > 0 else float('inf') 
+        for cf in cfads_p99
+    ]
+    
+    # Min DSCR
+    min_dscr_p50 = min([d for d in dscr_profile_p50 if d < float('inf')], default=0.0)
+    min_dscr_p99 = min([d for d in dscr_profile_p99 if d < float('inf')], default=0.0)
+    
+    # Downside impact
+    downside_impact_pct = 0.0
+    if debt_p50 > 0:
+        downside_impact_pct = 100.0 * (debt_p50 - debt_p99) / debt_p50
+    
+    return {
+        "debt_sized": debt_sized,
+        "debt_p50": debt_p50,
+        "debt_p99": debt_p99,
+        "binding_constraint": binding,
+        "debt_service_p50": debt_service_p50,
+        "debt_service_p99": debt_service_p99,
+        "dscr_profile_p50": dscr_profile_p50,
+        "dscr_profile_p99": dscr_profile_p99,
+        "min_dscr_p50": min_dscr_p50,
+        "min_dscr_p99": min_dscr_p99,
+        "dscr_target_p50": dscr_target_p50,
+        "dscr_target_p99": dscr_target_p99,
+        "debt_ratio_cap": debt_ratio_max,
+        "capex": capex,
+        "downside_impact_pct": downside_impact_pct,
+    }
