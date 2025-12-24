@@ -37,6 +37,15 @@ test = [
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
+# Dolphin #10e: Suppress E402 (import not at top) for docstring-first modules
+# These modules intentionally place docstrings before imports for better readability
+# Rationale documented in docs/LINT_WARNINGS_E402_DEFERRED.md
+[tool.ruff.lint.per-file-ignores]
+"analytics/mc/*.py" = ["E402"]  # Monte Carlo modules: docstring-first pattern
+"analytics/sensitivity/*.py" = ["E402"]  # Sensitivity modules: docstring-first pattern
+"analytics/*_v14.py" = ["E402", "F405"]  # Legacy shim files: deprecation warnings before imports
+"finance/irr/__init__.py" = ["E402"]  # Circular import workaround
+
 [tool.setuptools.packages.find]
 include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*"]
 
