@@ -160,3 +160,5 @@ DutchBay_DevPkg_PREFERRED_ONLY/
 
 # Validation freeze evidence (never commit)
 _freeze_artifacts/
+inputs/*.zip
+inputs/*.zip
