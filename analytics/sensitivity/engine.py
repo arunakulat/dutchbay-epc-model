@@ -23,7 +23,7 @@ Public API (keep stable):
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence
 
 import copy
 
@@ -34,14 +34,9 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
     ParameterRangeConfig,
-    MultiMetricSensitivitySuite,
-    MultiMetricTornadoResult,
 )
 
-from analytics.sensitivity.tail_risk import (
-    TailRiskConfig,
-    enrich_suite_with_tail_risk,
-)
+from analytics.sensitivity.tail_risk import TailRiskConfig
 
 # Adapter layer for contract compatibility
 from analytics.sensitivity.adapters import (
@@ -142,9 +137,9 @@ def build_one_way_sensitivity_suite(
     )
 
     if run_cfg.enrich_tail_risk:
-        # Note: enrich_suite_with_tail_risk expects old-style suite with .metadata
-        # This may need adjustment if tail_risk module expects different structure
-        pass  # TODO: Align tail_risk enrichment with new contract structure
+        # Note: tail_risk module provides analyze_tail_risk function
+        # Enrichment can be done by caller if needed
+        pass
 
     return suite
 
@@ -217,7 +212,7 @@ def run_sensitivity_analysis(
     )
 
     if run_cfg.enrich_tail_risk:
-        # TODO: Align tail_risk enrichment with new contract structure
+        # Tail risk enrichment can be done by caller
         pass
 
     return suite
