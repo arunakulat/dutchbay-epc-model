@@ -9,10 +9,11 @@ References:
     in Statistics-Simulation and Computation, 11(3), 311-334.
 
 DOLPHIN #10b: Removed unused `ranks` variable in _apply_iman_conover_correlation
+DOLPHIN #10d: Removed unused imports (Any, Optional)
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Sequence, Tuple
 
 import numpy as np
 

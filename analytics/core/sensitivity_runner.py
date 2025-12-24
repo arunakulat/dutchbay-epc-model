@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from analytics.evaluation_v14 import evaluate_with_overrides
-from analytics.contracts_v14 import SensitivitySuite, TornadoResult
+from analytics.contracts_v14 import SensitivitySuite
 from analytics.sensitivity.engine import build_one_way_sensitivity_suite
 
 logger = logging.getLogger(__name__)

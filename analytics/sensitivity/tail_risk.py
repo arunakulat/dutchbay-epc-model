@@ -10,6 +10,7 @@ Integrates with:
 - analytics.contracts_v14 (SensitivitySuite)
 
 DOLPHIN #10b: Removed unused `param_name` variable
+DOLPHIN #10d: Removed unused import Mapping
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
@@ -17,7 +18,7 @@ Version: 1.0.0
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 

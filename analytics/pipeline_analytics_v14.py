@@ -3,30 +3,21 @@
 Orchestrates risk metrics, sensitivity analysis, and reporting.
 
 DOLPHIN #10b: Removed unused import VaRCVaRResult
+DOLPHIN #10d: Removed all unused risk_metrics imports and asdict
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
-
-try:
-    from analytics.risk_metrics import (
-        PercentileAnalysis,
-        RiskConfig,
-        TailRiskAnalyzer,
-        calculate_percentile_analysis,
-        calculate_var_cvar,
-    )
-    HAS_RISK_METRICS = True
-except ImportError:
-    HAS_RISK_METRICS = False
 
 from analytics.evaluation_v14 import evaluate_with_overrides
 
 logger = logging.getLogger(__name__)
+
+# Risk metrics optional (not implemented yet)
+HAS_RISK_METRICS = False
 
 
 def run_analytics_pipeline(
