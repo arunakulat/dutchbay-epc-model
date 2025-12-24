@@ -7,10 +7,8 @@ from typing import Any, Mapping, Sequence
 from analytics.contracts_v14 import (
     CasperResult,
     MonteCarloResult,
-    MultiTechGenerationResult,
     ScenarioResult,
     SensitivitySuite,
-    TechnologyBreakdown,
 )
 
 # Frozen JSON contract version for CASPER payloads.
@@ -24,8 +22,8 @@ def build_casper_payload(
     scenario: ScenarioResult,
     monte_carlo: MonteCarloResult | None = None,
     sensitivity: SensitivitySuite | None = None,
-    generation: MultiTechGenerationResult | None = None,
-    technology_breakdown: Sequence[TechnologyBreakdown] | None = None,
+    generation: dict[str, Any] | None = None,
+    technology_breakdown: Sequence[dict[str, Any]] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -47,10 +45,12 @@ def build_casper_payload(
     sensitivity:
         Optional SensitivitySuite (tornado) for this scenario.
     generation:
-        Optional MultiTechGenerationResult (wind/solar/BESS aggregation).
+        Optional generation data dict (wind/solar/BESS aggregation).
+        Accepts dict instead of typed object for flexibility.
     technology_breakdown:
         Optional per-technology breakdown for CASPER lenses
         (e.g. wind vs BESS share of AEP/CFADS/CAPEX).
+        Accepts list of dicts for flexibility.
     metadata:
         Free-form small JSON-safe fields for UIs / diagnostics.
         Must not contain large blobs or raw engine tables.
@@ -93,7 +93,7 @@ def build_casper_payload(
     return _casper_to_dict(casper)
 
 
-# ────────────────────────── internal helpers ────────────────────────────
+# ──────────────────────────── internal helpers ────────────────────────────
 
 
 def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None:
@@ -275,35 +275,27 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
 
 
 def _generation_to_dict(
-    gen: MultiTechGenerationResult | None,
+    gen: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """
-    Convert MultiTechGenerationResult using its built-in to_dict helper.
+    Pass through generation dict if provided.
+    Accepts dict for flexibility - caller can provide any structure.
     """
     if gen is None:
         return None
-    return gen.to_dict()
+    return dict(gen)
 
 
 def _technology_breakdown_to_list(
-    breakdown: Sequence[TechnologyBreakdown] | None,
+    breakdown: Sequence[dict[str, Any]] | None,
 ) -> list[dict[str, Any]] | None:
     """
-    Convert a sequence of TechnologyBreakdown into JSON-safe dicts.
+    Convert a sequence of technology breakdown dicts into JSON-safe list.
     """
     if breakdown is None:
         return None
 
-    return [
-        {
-            "technology": tb.technology,
-            "share_of_capex_pct": tb.share_of_capex_pct,
-            "share_of_cfads_pct": tb.share_of_cfads_pct,
-            "share_of_aep_pct": tb.share_of_aep_pct,
-            "notes": tb.notes,
-        }
-        for tb in breakdown
-    ]
+    return [dict(tb) for tb in breakdown]
 
 
 def _tail_risk_from_metadata(metadata: Mapping[str, Any]) -> dict[str, Any] | None:
