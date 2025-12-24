@@ -12,7 +12,11 @@
 # Sprint 9 Migration: CASPER modules consolidated to analytics.casper/
 #
 
-from analytics.casper.casper_payload import *  # noqa: F401, F403
+# FIX: Replace star import with explicit imports to avoid F405 errors
+from analytics.casper.casper_payload import (
+    CASPER_CONTRACT_VERSION,
+    build_casper_payload,
+)
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
