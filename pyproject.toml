@@ -37,9 +37,9 @@ test = [
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
-# Dolphin #10h: Suppress E402/F405 for docstring-first modules
+# Dolphin #10i: Suppress E402/F405 for docstring-first modules
 # Rationale: These modules intentionally place docstrings before imports for readability
-# Full documentation: docs/LINT_WARNINGS_E402_DEFERRED.md
+# Documentation: docs/LINT_WARNINGS_E402_DEFERRED.md
 [tool.ruff.lint.per-file-ignores]
 # Monte Carlo modules (docstring-first pattern)
 "analytics/mc/aggregate.py" = ["E402"]
@@ -48,7 +48,7 @@ exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_ca
 "analytics/mc/engine.py" = ["E402"]
 "analytics/mc/exports.py" = ["E402"]
 "analytics/mc/samplers.py" = ["E402"]
-# Sensitivity modules (docstring-first pattern)
+# Sensitivity modules (docstring-first pattern)  
 "analytics/sensitivity/adapters.py" = ["E402"]
 "analytics/sensitivity/dscr.py" = ["E402"]
 "analytics/sensitivity/engine.py" = ["E402"]
