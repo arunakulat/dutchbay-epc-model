@@ -63,11 +63,11 @@ class NormalizedKPIs:
 
     # Covenants (already dimensionless)
     dscr_min: float
-    llcr_min: Optional[float] = None
-
-    # Metadata
+    
+    # Metadata (moved before optional fields)
     capacity_mw: float = field(repr=False)  # Original capacity for reference
     project_name: Optional[str] = None
+    llcr_min: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -187,9 +187,9 @@ def normalize_kpis_by_capacity(
         equity_irr=kpis.get("equity_irr", 0.0),
         equity_multiple=kpis.get("equity_multiple", 0.0),
         dscr_min=kpis.get("dscr_min", 0.0),
-        llcr_min=kpis.get("llcr_min"),
         capacity_mw=capacity_mw,
         project_name=project_name,
+        llcr_min=kpis.get("llcr_min"),
     )
 
 
