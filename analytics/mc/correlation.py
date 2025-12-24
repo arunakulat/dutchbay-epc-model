@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Correlation structure for Monte Carlo sampling.
 
 Implements Iman-Conover rank correlation method for inducing
