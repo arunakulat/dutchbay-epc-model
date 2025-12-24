@@ -11,6 +11,23 @@ Copy-paste this code to replace lines 366-516 in analytics/sensitivity_v14.py
 """
 
 # ═══════════════════════════════════════════════════════════════════════════
+# IMPORTS - FIXED FOR RUFF F821 ERRORS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from pathlib import Path
+import logging
+from typing import Optional
+
+from analytics.contracts_v14 import (
+    ParameterRangeConfig,
+    TornadoResult,
+    ShockResult,
+)
+from analytics.evaluation_v14 import evaluate_with_overrides, build_nested_override
+
+logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Core Sensitivity Analysis: Single Parameter Shock
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -146,8 +163,6 @@ def analyze_single_parameter(
     #
     # ShockResult is also a dataclass with all shock details.
     # ════════════════════════════════════════════════════════════════════
-
-    from analytics.contracts_v14 import ShockResult
 
     shock = ShockResult(
         variable_name=variable_name,
