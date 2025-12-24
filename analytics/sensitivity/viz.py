@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -13,7 +14,7 @@ Placeholder:
 - Provides tiny plot helpers that accept tables/records and return fig objects.
 """
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, Sequence, Union
 
 
 def plot_tornado(

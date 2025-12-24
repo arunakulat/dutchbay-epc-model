@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -21,7 +22,7 @@ Output:
 The exact semantics depend on how you want to reduce cases (e.g. low/high deltas).
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 from analytics.contracts_v14 import SensitivitySuite, MultiMetricSensitivitySuite
 
