@@ -1,12 +1,13 @@
+# ruff: noqa: E402
 """
 IRR (Internal Rate of Return) Package for v14 Finance Models.
 
 Sprint 16 Iteration 6 - IRR Package Creation
-═══════════════════════════════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════════════════════
 Consolidates all IRR calculation functionality into a unified package.
 
 Public API
-────────────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 From core module (finance.irr root file):
     - npv                       # Classic periodic Net Present Value
     - irr                       # Periodic Internal Rate of Return
@@ -16,7 +17,7 @@ From core module (finance.irr root file):
     - approx_project_irr        # Approximate project IRR
 
 Backward Compatibility
-────────────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 All old imports continue to work:
 
     # Old way (still works)
@@ -28,14 +29,14 @@ All old imports continue to work:
 Both import patterns resolve to the same functions defined in finance/irr.py.
 
 Architecture Principles
-────────────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 GWTF:     Single source of truth: finance/irr.py at root
 CESSPIT:  Comprehensive input validation with fail-fast errors
 CASPER:   Contract-first design with explicit types
 CCCDIR:   Fully documented with usage examples
 
 Usage Examples
-────────────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 Basic NPV calculation:
 
     >>> from finance.irr import npv
