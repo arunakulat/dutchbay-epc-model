@@ -12,7 +12,8 @@
 # Sprint 9 Migration: CASPER modules consolidated to analytics.casper/
 #
 
-from analytics.casper.casper_v14 import *  # noqa: F401, F403
+# FIX: Replace star import with explicit import to avoid F405 errors
+from analytics.casper.casper_v14 import evaluate_with_casper_tail_risk_and_payload
 
 __all__ = [
     "evaluate_with_casper_tail_risk_and_payload",
