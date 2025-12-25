@@ -24,6 +24,8 @@ CCCDIR Compliance:
 - Config-driven (not hardcoded)
 - Clear, DRY implementation
 
+🦌 REINDEER-3: Added strict validation mode support.
+
 Usage:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline_enhanced
 
@@ -480,6 +482,8 @@ def run_v14_pipeline_enhanced(
 ) -> dict[str, Any]:
     """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening.
 
+    🦌 REINDEER-3: Now respects validation_mode for cashflow validation.
+
     This is the canonical entry point for analytics layers. All analytics
     modules must call this function, not individual finance modules directly.
 
@@ -565,18 +569,24 @@ def run_v14_pipeline_enhanced(
 
         # ===================================================================
         # PHASE 2: Cashflow Engine
+        # 🦌 REINDEER-3: Pass strict parameter based on validation_mode
         # ===================================================================
         phase_start = time.time()
 
-        annual_rows = build_annual_rows(cfg)
+        # When validation_mode='off', use lenient validation (strict=False)
+        # When validation_mode='strict', use production validation (strict=True)
+        use_strict_validation = mode == "strict"
+
+        annual_rows = build_annual_rows(cfg, strict=use_strict_validation)
         annual_rows = _validate_annual_rows_structure(annual_rows)
         metrics.annual_rows_count = len(annual_rows)
 
         metrics.cashflow_time_sec = time.time() - phase_start
         logger.info(
-            "Cashflow built in %.3f sec: %d rows",
+            "Cashflow built in %.3f sec: %d rows (strict=%s)",
             metrics.cashflow_time_sec,
             len(annual_rows),
+            use_strict_validation,
         )
 
         # ===================================================================
