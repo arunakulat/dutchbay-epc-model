@@ -59,17 +59,17 @@ The **v14chat** branch represents the canonical, hardened execution path featuri
 
 ```
 analytics/                    # Analytics & scenario evaluation
-  ├── foundation.py          # Base model (CRITICAL: do not rename)
+  ├── pipeline_v14.py        # Core analytics pipeline
   ├── scenario_loader.py     # YAML/JSON config parser
   ├── scenario_analytics.py  # KPI extraction & reporting
-  ├── sensitivity/           # Sensitivity analysis modules
-  └── monte_carlo/           # Monte Carlo simulation
+  ├── sensitivity_v14.py     # Sensitivity analysis modules
+  └── monte_carlo_v14.py     # Monte Carlo simulation
 
 finance/                      # Financial calculation engine
   ├── cashflow_v14.py        # Cash flow projections
   ├── debt_v14.py            # Debt modeling & DSCR
   ├── equity_v14.py          # Equity returns (IRR, NPV)
-  └── tax.py                 # Tax calculations
+  └── tax_v14.py             # Tax calculations
 
 scenarios/                    # Scenario configuration files
   ├── base.yaml              # Base case
