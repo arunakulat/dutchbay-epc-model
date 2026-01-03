@@ -20,23 +20,18 @@ Restore full project context instantly:
 ### For Developers
 
 ```bash
-# Clone repository
+# Clone the repository
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-# Create virtual environment
-python3.11 -m venv .venv311
-source .venv311/bin/activate  # On Windows: .venv311\Scripts\activate
+# Run the setup script (creates .venv and installs dependencies)
+bash setup_venv.sh
 
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements_dev.txt
+# Activate the virtual environment
+source .venv/bin/activate
 
-# Run tests
+# Run tests to verify the setup
 pytest tests/
-
-# Run scenario analysis
-python analytics/run_full_pipeline.py --config scenarios/base.yaml
 ```
 
 ---
