@@ -13,11 +13,11 @@ import streamlit as st
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.sensitivity import (
     SensitivityRequest,
-    plot_spider_chart,
     run_multi_metric_tornado,
     run_tornado_sensitivity,
     tornado_suite_to_dataframe,
 )
+from analytics.sensitivity.viz import plot_tornado, plot_spider_chart
 
 # Quick UI for scenario and drivers (customize as needed)
 st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
@@ -50,13 +50,12 @@ df = tornado_suite_to_dataframe(suite)
 st.dataframe(df)
 
 st.write("Tornado Chart:")
-st.image(
-    "exports/tornado_chart.png"
-)  # Assumes you pre-exported with plot_tornado_chart.
+tornado_fig = plot_tornado(table=df)
+st.pyplot(tornado_fig)
 
 st.write("Multi-metric (Spider) Chart:")
 multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image("exports/spider_chart.png")
+spider_fig = plot_spider_chart(multi_suite)
+st.pyplot(spider_fig)
 
-st.success("Try changing params in the code for more exploration.")
+st.success("Charts are now generated dynamically!")
