@@ -14,6 +14,7 @@ from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.sensitivity import (
     SensitivityRequest,
     plot_spider_chart,
+    plot_tornado_chart,
     run_multi_metric_tornado,
     run_tornado_sensitivity,
     tornado_suite_to_dataframe,
@@ -43,20 +44,23 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
 sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
-df = tornado_suite_to_dataframe(suite)
-st.dataframe(df)
 
-st.write("Tornado Chart:")
-st.image(
-    "exports/tornado_chart.png"
-)  # Assumes you pre-exported with plot_tornado_chart.
+with st.spinner("Running Tornado Analysis..."):
+    suite = run_tornado_sensitivity(sens_req)
+    df = tornado_suite_to_dataframe(suite)
+    st.dataframe(df)
 
-st.write("Multi-metric (Spider) Chart:")
-multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image("exports/spider_chart.png")
+    st.write("Tornado Chart:")
+    fig = plot_tornado_chart(suite)
+    st.pyplot(fig)
 
-st.success("Try changing params in the code for more exploration.")
+with st.spinner("Running Multi-Metric (Spider) Analysis..."):
+    st.write("Multi-metric (Spider) Chart:")
+    multi_suite = run_multi_metric_tornado(
+        sens_req, metrics=["project_irr", "equity_irr"]
+    )
+    fig_spider = plot_spider_chart(multi_suite)
+    st.pyplot(fig_spider)
+
+st.success("Analysis complete. Try changing parameters for more exploration.")
