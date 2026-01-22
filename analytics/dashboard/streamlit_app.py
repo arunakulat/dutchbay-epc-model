@@ -43,10 +43,11 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
-sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
-df = tornado_suite_to_dataframe(suite)
+with st.spinner("🌪️ Running Tornado Analysis... Please wait."):
+    sens_req = SensitivityRequest(config_path, params)
+    suite = run_tornado_sensitivity(sens_req)
+    df = tornado_suite_to_dataframe(suite)
+
 st.dataframe(df)
 
 st.write("Tornado Chart:")
@@ -55,8 +56,10 @@ st.image(
 )  # Assumes you pre-exported with plot_tornado_chart.
 
 st.write("Multi-metric (Spider) Chart:")
-multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
+with st.spinner("🕸️ Generating Spider Chart... This may take a moment."):
+    multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
+    plot_spider_chart(multi_suite, "exports/spider_chart.png")
+
 st.image("exports/spider_chart.png")
 
 st.success("Try changing params in the code for more exploration.")
