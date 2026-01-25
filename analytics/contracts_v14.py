@@ -178,7 +178,7 @@ def check_covenant_breach_with_tolerance(
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
 
-[... rest of file content unchanged ...]
+# [... rest of file content unchanged ...]
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
