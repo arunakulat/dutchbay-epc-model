@@ -1,1 +1,240 @@
-"""\nUniversal scenario configuration loader for v13/v14 compatibility.\n\nResponsibilities:\n- Load YAML / JSON config files.\n- Perform light structural checks only (no over-eager schema enforcement).\n- Provide a strict FX resolver used by tests and higher layers.\n\nDeliberate design:\n- We DO NOT require v14-only sections like 'debt' or 'generation' here.\n  Those rules live with the financial core / validators.\n- We DO enforce that explicit FX configs are well-formed when _resolve_fx()\n  is used, and we do NOT silently invent FX when the caller asks for it.\n"""\n\nfrom __future__ import annotations\n\nimport json\nimport logging\nfrom pathlib import Path\nfrom typing import Any, Dict\n\nimport yaml\n\nlogger = logging.getLogger(__name__)\n\n\nclass ScenarioConfigError(ValueError):\n    """Configuration-level error for scenario loading."""\n\n\n# ---------------------------------------------------------------------------\n# Core helpers\n# ---------------------------------------------------------------------------\n\n\ndef _try_config_paths(base_path: Path) -> Path:\n    """\n    Attempt to find a config file by trying common extensions.\n    \n    If base_path exists as-is, return it immediately.\n    Otherwise, try .yaml, .yml, .json suffixes in order.\n    \n    Args:\n        base_path: The path provided by the user (may or may not have extension)\n    \n    Returns:\n        The first existing path found\n    \n    Raises:\n        FileNotFoundError: If no variant exists\n    """\n    # Fast path: exact match\n    if base_path.exists():\n        return base_path\n    \n    # If user provided extension, don't try alternatives\n    if base_path.suffix:\n        raise FileNotFoundError(f"Scenario config not found: {base_path}")\n    \n    # Try common extensions in priority order\n    candidates = [\n        base_path.with_suffix(".yaml"),\n        base_path.with_suffix(".yml"),\n        base_path.with_suffix(".json"),\n    ]\n    \n    for candidate in candidates:\n        if candidate.exists():\n            logger.debug(f"Inferred config path: {candidate} (from {base_path})")\n            return candidate\n    \n    # Nothing found\n    tried = ", ".join(str(c) for c in candidates)\n    raise FileNotFoundError(\n        f"Scenario config not found: {base_path} "\n        f"(tried: {tried})"\n    )\n\n\ndef _load_raw_config(path: Path) -> Dict[str, Any]:\n    """\n    Load a raw scenario configuration from YAML or JSON.\n\n    This function is intentionally dumb about schema – it only cares that\n    the top level is a mapping.\n    """\n    # Use suffix inference helper\n    resolved_path = _try_config_paths(path)\n    \n    suffix = resolved_path.suffix.lower()\n    with resolved_path.open("r", encoding="utf-8") as f:\n        if suffix in (".yml", ".yaml"):\n            data = yaml.safe_load(f)\n        elif suffix == ".json":\n            data = json.load(f)\n        else:\n            raise ScenarioConfigError(\n                f"Unsupported scenario config extension '{suffix}' for {resolved_path}"\n            )\n\n    if data is None:\n        raise ScenarioConfigError(f"Empty configuration in file: {resolved_path}")\n\n    if not isinstance(data, dict):\n        raise ScenarioConfigError(\n            f"Expected a mapping at top level of {resolved_path}, "\n            f"got {type(data).__name__}"\n        )\n\n    return data\n\n\ndef _ensure_meta_source(cfg: Dict[str, Any], path: Path) -> None:\n    """\n    Attach a lightweight 'meta.source_path' breadcrumb, if not already present.\n\n    This is helpful for diagnostics and does not interfere with the financial\n    pipeline.\n    """\n    meta = cfg.setdefault("meta", {})\n    meta.setdefault("source_path", str(path))\n\n\n# ---------------------------------------------------------------------------\n# FX handling\n# ---------------------------------------------------------------------------\n\n\ndef _resolve_fx(config: Dict[str, Any]) -> Dict[str, float]:\n    """\n    Resolve FX configuration into a normalised mapping.\n\n    Contract (as enforced by tests/test_fx_config_strictness.py):\n\n    - If 'fx' is missing entirely  -> ValueError.\n    - If 'fx' is a scalar number   -> ValueError with a clear message.\n    - If 'fx' is a mapping, it MUST contain 'start_lkr_per_usd'.\n    - 'annual_depr' is optional and defaults to 0.0.\n    - Returns a dict with keys:\n        - 'start_lkr_per_usd' (float)\n        - 'annual_depr'      (float)\n    """\n    if "fx" not in config:\n        raise ValueError(\n            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"\n        )\n\n    fx_cfg = config["fx"]\n\n    # Reject bare scalar FX – the codebase now expects a structured mapping.\n    if isinstance(fx_cfg, (int, float)):\n        raise ValueError(\n            "Scalar 'fx' not supported; use mapping with "\n            "'start_lkr_per_usd' and 'annual_depr'"\n        )\n\n    if not isinstance(fx_cfg, dict):\n        raise ValueError(\n            "FX configuration must be a mapping with "\n            "'start_lkr_per_usd' and optional 'annual_depr'"\n        )\n\n    if "start_lkr_per_usd" not in fx_cfg:\n        raise ValueError(\n            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"\n        )\n\n    try:\n        start = float(fx_cfg["start_lkr_per_usd"])\n    except (TypeError, ValueError) as exc:\n        raise ValueError("fx.start_lkr_per_usd must be a valid number") from exc\n\n    annual_raw = fx_cfg.get("annual_depr", 0.0)\n    try:\n        annual = float(annual_raw)\n    except (TypeError, ValueError) as exc:\n        raise ValueError("fx.annual_depr must be a valid number if provided") from exc\n\n    result = {\n        "start_lkr_per_usd": start,\n        "annual_depr": annual,\n    }\n\n    logger.debug(\n        "Resolved FX config: start_lkr_per_usd=%s, annual_depr=%s",\n        result["start_lkr_per_usd"],\n        result["annual_depr"],\n    )\n    return result\n\n\n# ---------------------------------------------------------------------------\n# Public loader\n# ---------------------------------------------------------------------------\n\n\ndef load_scenario_config(path: str | Path) -> Dict[str, Any]:\n    """\n    Load and lightly normalise a scenario configuration.\n\n    Behaviour:\n    - Loads YAML/JSON and ensures a top-level mapping.\n    - Attaches meta.source_path for traceability.\n    - Does NOT enforce v14-only sections like 'debt' or 'generation'.\n      That logic lives with the financial core / validators.\n    - Does NOT require FX unless callers explicitly ask for it via _resolve_fx.\n      However, if FX *is* present and is a bare scalar, we reject it to enforce\n      the \"no scalar fx\" policy baked into the tests.\n    \n    UX Enhancement (Sprint 18, Issue #1):\n    - Supports suffix inference: 'scenarios/base' will try .yaml, .yml, .json\n    - Maintains backward compatibility: exact paths still work as before\n    - User-friendly for CLI and notebooks\n    """\n    p = Path(path)\n    cfg = _load_raw_config(p)\n    _ensure_meta_source(cfg, p)\n\n    # Enforce \"no scalar fx\" rule at load time for any config that\n    # chooses to specify FX.\n    fx_cfg = cfg.get("fx", None)\n    if isinstance(fx_cfg, (int, float)):\n        raise ValueError(\n            "Invalid FX configuration: scalar 'fx' not supported; "\n            "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"\n        )\n\n    # We deliberately do NOT call _resolve_fx() unconditionally here.\n    # Some configs (e.g. legacy or tests that omit FX) may rely on\n    # downstream defaults. Tests that care about FX call _resolve_fx()\n    # directly.\n    return cfg\n\n\n__all__ = [\n    "ScenarioConfigError",\n    "load_scenario_config",\n    "_resolve_fx",\n]\n
+"""
+Universal scenario configuration loader for v13/v14 compatibility.
+
+Responsibilities:
+- Load YAML / JSON config files.
+- Perform light structural checks only (no over-eager schema enforcement).
+- Provide a strict FX resolver used by tests and higher layers.
+
+Deliberate design:
+- We DO NOT require v14-only sections like 'debt' or 'generation' here.
+  Those rules live with the financial core / validators.
+- We DO enforce that explicit FX configs are well-formed when _resolve_fx()
+  is used, and we do NOT silently invent FX when the caller asks for it.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+
+class ScenarioConfigError(ValueError):
+    """Configuration-level error for scenario loading."""
+
+
+# ---------------------------------------------------------------------------
+# Core helpers
+# ---------------------------------------------------------------------------
+
+
+def _try_config_paths(base_path: Path) -> Path:
+    """
+    Attempt to find a config file by trying common extensions.
+
+    If base_path exists as-is, return it immediately.
+    Otherwise, try .yaml, .yml, .json suffixes in order.
+
+    Args:
+        base_path: The path provided by the user (may or may not have extension)
+
+    Returns:
+        The first existing path found
+
+    Raises:
+        FileNotFoundError: If no variant exists
+    """
+    # Fast path: exact match
+    if base_path.exists():
+        return base_path
+
+    # If user provided extension, don't try alternatives
+    if base_path.suffix:
+        raise FileNotFoundError(f"Scenario config not found: {base_path}")
+
+    # Try common extensions in priority order
+    candidates = [
+        base_path.with_suffix(".yaml"),
+        base_path.with_suffix(".yml"),
+        base_path.with_suffix(".json"),
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            logger.debug(f"Inferred config path: {candidate} (from {base_path})")
+            return candidate
+
+    # Nothing found
+    tried = ", ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"Scenario config not found: {base_path} "
+        f"(tried: {tried})"
+    )
+
+
+def _load_raw_config(path: Path) -> Dict[str, Any]:
+    """
+    Load a raw scenario configuration from YAML or JSON.
+
+    This function is intentionally dumb about schema – it only cares that
+    the top level is a mapping.
+    """
+    # Use suffix inference helper
+    resolved_path = _try_config_paths(path)
+
+    suffix = resolved_path.suffix.lower()
+    with resolved_path.open("r", encoding="utf-8") as f:
+        if suffix in (".yml", ".yaml"):
+            data = yaml.safe_load(f)
+        elif suffix == ".json":
+            data = json.load(f)
+        else:
+            raise ScenarioConfigError(
+                f"Unsupported scenario config extension '{suffix}' for {resolved_path}"
+            )
+
+    if data is None:
+        raise ScenarioConfigError(f"Empty configuration in file: {resolved_path}")
+
+    if not isinstance(data, dict):
+        raise ScenarioConfigError(
+            f"Expected a mapping at top level of {resolved_path}, "
+            f"got {type(data).__name__}"
+        )
+
+    return data
+
+
+def _ensure_meta_source(cfg: Dict[str, Any], path: Path) -> None:
+    """
+    Attach a lightweight 'meta.source_path' breadcrumb, if not already present.
+
+    This is helpful for diagnostics and does not interfere with the financial
+    pipeline.
+    """
+    meta = cfg.setdefault("meta", {})
+    meta.setdefault("source_path", str(path))
+
+
+# ---------------------------------------------------------------------------
+# FX handling
+# ---------------------------------------------------------------------------
+
+
+def _resolve_fx(config: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Resolve FX configuration into a normalised mapping.
+
+    Contract (as enforced by tests/test_fx_config_strictness.py):
+
+    - If 'fx' is missing entirely  -> ValueError.
+    - If 'fx' is a scalar number   -> ValueError with a clear message.
+    - If 'fx' is a mapping, it MUST contain 'start_lkr_per_usd'.
+    - 'annual_depr' is optional and defaults to 0.0.
+    - Returns a dict with keys:
+        - 'start_lkr_per_usd' (float)
+        - 'annual_depr'      (float)
+    """
+    if "fx" not in config:
+        raise ValueError(
+            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"
+        )
+
+    fx_cfg = config["fx"]
+
+    # Reject bare scalar FX – the codebase now expects a structured mapping.
+    if isinstance(fx_cfg, (int, float)):
+        raise ValueError(
+            "Scalar 'fx' not supported; use mapping with "
+            "'start_lkr_per_usd' and 'annual_depr'"
+        )
+
+    if not isinstance(fx_cfg, dict):
+        raise ValueError(
+            "FX configuration must be a mapping with "
+            "'start_lkr_per_usd' and optional 'annual_depr'"
+        )
+
+    if "start_lkr_per_usd" not in fx_cfg:
+        raise ValueError(
+            "FX configuration missing; expected 'fx.start_lkr_per_usd' mapping"
+        )
+
+    try:
+        start = float(fx_cfg["start_lkr_per_usd"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fx.start_lkr_per_usd must be a valid number") from exc
+
+    annual_raw = fx_cfg.get("annual_depr", 0.0)
+    try:
+        annual = float(annual_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fx.annual_depr must be a valid number if provided") from exc
+
+    result = {
+        "start_lkr_per_usd": start,
+        "annual_depr": annual,
+    }
+
+    logger.debug(
+        "Resolved FX config: start_lkr_per_usd=%s, annual_depr=%s",
+        result["start_lkr_per_usd"],
+        result["annual_depr"],
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Public loader
+# ---------------------------------------------------------------------------
+
+
+def load_scenario_config(path: str | Path) -> Dict[str, Any]:
+    """
+    Load and lightly normalise a scenario configuration.
+
+    Behaviour:
+    - Loads YAML/JSON and ensures a top-level mapping.
+    - Attaches meta.source_path for traceability.
+    - Does NOT enforce v14-only sections like 'debt' or 'generation'.
+      That logic lives with the financial core / validators.
+    - Does NOT require FX unless callers explicitly ask for it via _resolve_fx.
+      However, if FX *is* present and is a bare scalar, we reject it to enforce
+      the "no scalar fx" policy baked into the tests.
+
+    UX Enhancement (Sprint 18, Issue #1):
+    - Supports suffix inference: 'scenarios/base' will try .yaml, .yml, .json
+    - Maintains backward compatibility: exact paths still work as before
+    - User-friendly for CLI and notebooks
+    """
+    p = Path(path)
+    cfg = _load_raw_config(p)
+    _ensure_meta_source(cfg, p)
+
+    # Enforce "no scalar fx" rule at load time for any config that
+    # chooses to specify FX.
+    fx_cfg = cfg.get("fx", None)
+    if isinstance(fx_cfg, (int, float)):
+        raise ValueError(
+            "Invalid FX configuration: scalar 'fx' not supported; "
+            "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"
+        )
+
+    # We deliberately do NOT call _resolve_fx() unconditionally here.
+    # Some configs (e.g. legacy or tests that omit FX) may rely on
+    # downstream defaults. Tests that care about FX call _resolve_fx()
+    # directly.
+    return cfg
+
+
+__all__ = [
+    "ScenarioConfigError",
+    "load_scenario_config",
+    "_resolve_fx",
+]
