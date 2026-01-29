@@ -172,13 +172,9 @@ def check_covenant_breach_with_tolerance(
         return actual > (threshold + tolerance_abs)
 
 
-# [REST OF FILE UNCHANGED - keeping all existing contracts]
-
 # ═════════════════════════════════════════════════════════════════════════════
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
-
-[... rest of file content unchanged ...]
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
