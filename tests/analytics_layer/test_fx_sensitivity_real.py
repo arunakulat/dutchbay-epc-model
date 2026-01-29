@@ -24,7 +24,7 @@ import pytest
 
 from analytics.fx_sensitivity_real import (
     FXSensitivityAnalyzer,
-    FXSensitivityConfig,
+    # FXSensitivityConfig,
     FXSensitivityResult,
     SensitivityCoefficient,
 )
