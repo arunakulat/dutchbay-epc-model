@@ -10,6 +10,9 @@ Run with:
 
 import streamlit as st
 
+# ✅ UX: Set page branding and title
+st.set_page_config(page_title="Sensitivity Dashboard", page_icon="📊")
+
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.sensitivity import (
     SensitivityRequest,
@@ -21,6 +24,8 @@ from analytics.sensitivity import (
 
 # Quick UI for scenario and drivers (customize as needed)
 st.title("📊 Sensitivity Dashboard")
+
+# ✅ UX: Add instructions for the user
 st.info("💡 Tip: The Tornado chart below ranks parameters by their impact on Project IRR. Wider bars indicate higher sensitivity.")
 
 config_path = st.text_input(
@@ -32,14 +37,14 @@ params = [
     ParameterRangeConfig(
         variable_name="project.capex_usd_per_kw",
         base_value=900.0,
-        low_pct=20,
+        low_pct=20,  # Absolute value (positive) per Pydantic ge=0 constraint
         high_pct=20,
         steps=5,
     ),
     ParameterRangeConfig(
         variable_name="generation.capacity_factor_pct",
         base_value=45.0,
-        low_pct=10,
+        low_pct=10,  # Absolute value (positive) per Pydantic ge=0 constraint
         high_pct=10,
         steps=5,
     ),
@@ -52,6 +57,7 @@ suite = run_tornado_sensitivity(sens_req)
 df = tornado_suite_to_dataframe(suite)
 st.dataframe(df)
 
+# ✅ UX: Use subheaders and captions for better accessibility
 st.subheader("🌪️ Tornado Chart")
 st.image(
     "exports/tornado_chart.png",
