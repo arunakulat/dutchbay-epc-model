@@ -1,0 +1,3 @@
+## 2025-05-22 - Graceful Failure Pattern for Streamlit
+**Learning:** In a transitioning or partially broken codebase, the best micro-UX improvement is often providing a "Graceful Failure" state. Instead of letting the application crash with a Python traceback (which is intimidating and unhelpful for non-developers), wrapping core imports and initialization in a `try-except` block and using `st.error` with actionable advice creates a significantly better experience.
+**Action:** Always wrap volatile backend imports in Streamlit apps with a robust error handler that provides a clear "status" message and troubleshooting tips.
