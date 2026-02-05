@@ -106,7 +106,7 @@ class RealFXSensitivityResult:
 
     def calculate_summary_metrics(self) -> None:
         """Calculate summary sensitivity metrics from measured points.
-        
+
         This method computes linear regression slopes from the actual
         pipeline results to determine sensitivity coefficients.
         """
@@ -129,10 +129,7 @@ class RealFXSensitivityResult:
                     100 * (fx - self.base_fx_rate) / self.base_fx_rate
                     for fx in fx_rates
                 ]
-                irr_changes = [
-                    100 * (irr - self.base_project_irr)
-                    for irr in irrs
-                ]
+                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
 
                 # Slope = change in IRR per 1% FX change
                 if len(fx_pct_changes) > 1:
@@ -155,9 +152,7 @@ class RealFXSensitivityResult:
         # ─────────────────────────────────────────────────────────────────────
         if len(self.hedge_ratio_points) >= 2:
             hedge_ratios = [p.hedge_ratio for p in self.hedge_ratio_points]
-            irrs = [
-                p.project_irr for p in self.hedge_ratio_points if p.project_irr
-            ]
+            irrs = [p.project_irr for p in self.hedge_ratio_points if p.project_irr]
             npvs = [p.project_npv for p in self.hedge_ratio_points]
 
             if len(irrs) >= 2 and len(hedge_ratios) == len(irrs):
@@ -165,10 +160,7 @@ class RealFXSensitivityResult:
                 hedge_pct_changes = [
                     100 * (hr - self.base_hedge_ratio) for hr in hedge_ratios
                 ]
-                irr_changes = [
-                    100 * (irr - self.base_project_irr)
-                    for irr in irrs
-                ]
+                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
 
                 if len(hedge_pct_changes) > 1:
                     slope, _ = np.polyfit(hedge_pct_changes, irr_changes, 1)
@@ -196,10 +188,7 @@ class RealFXSensitivityResult:
             if len(irrs) >= 2 and len(spreads) == len(irrs):
                 # Change per 50 bps
                 spread_changes = [s - self.base_spread_bps for s in spreads]
-                irr_changes = [
-                    100 * (irr - self.base_project_irr)
-                    for irr in irrs
-                ]
+                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
 
                 if len(spread_changes) > 1:
                     slope, _ = np.polyfit(spread_changes, irr_changes, 1)
@@ -221,7 +210,9 @@ class RealFXSensitivityResult:
         if len(self.fx_rate_points) >= 3:
             npvs = [p.project_npv for p in self.fx_rate_points]
             fx_variance = float(np.var(npvs))
-            total_variance = fx_variance  # Simplified - full version needs other drivers
+            total_variance = (
+                fx_variance  # Simplified - full version needs other drivers
+            )
 
             if total_variance > 0:
                 self.fx_volatility_contribution_pct = (
@@ -261,10 +252,10 @@ class RealFXSensitivityResult:
 
 class FXSensitivityAnalyzer:
     """Production FX sensitivity analyzer using real pipeline runs.
-    
+
     This class orchestrates multiple pipeline executions with varied FX
     parameters to measure true sensitivity (not approximations).
-    
+
     Attributes:
         config_path: Path to base scenario YAML config.
         base_config: Loaded base configuration dict.
@@ -272,10 +263,10 @@ class FXSensitivityAnalyzer:
 
     def __init__(self, config_path: str | Path):
         """Initialize analyzer with scenario config.
-        
+
         Args:
             config_path: Path to YAML scenario config.
-        
+
         Raises:
             FileNotFoundError: If config_path doesn't exist.
             ValueError: If config is invalid.
@@ -296,15 +287,15 @@ class FXSensitivityAnalyzer:
         spread_bps: float,
     ) -> Dict[str, Any]:
         """Run pipeline with modified FX parameters.
-        
+
         Args:
             fx_rate: FX spot rate (e.g., 300.0 for LKR/USD).
             hedge_ratio: Hedge ratio (0.0-1.0).
             spread_bps: FX spread in basis points.
-        
+
         Returns:
             Full pipeline result dict.
-        
+
         Note:
             This modifies the config in-memory and runs the pipeline.
             Does NOT save modified config to disk.
@@ -338,10 +329,10 @@ class FXSensitivityAnalyzer:
         self, pipeline_result: Dict[str, Any]
     ) -> Tuple[Optional[float], float, Optional[float], float, float]:
         """Extract key metrics from pipeline result.
-        
+
         Args:
             pipeline_result: Full pipeline result dict.
-        
+
         Returns:
             Tuple of (project_irr, project_npv, equity_irr, equity_npv, min_dscr).
         """
@@ -376,17 +367,17 @@ class FXSensitivityAnalyzer:
         spread_steps: int = 5,
     ) -> RealFXSensitivityResult:
         """Perform comprehensive FX sensitivity analysis.
-        
+
         Args:
             fx_variation_pct: ± % range for FX rate (default 10%).
             fx_steps: Number of FX rate points to test (default 5).
             hedge_ratio_steps: List of hedge ratios to test (default [0, 0.5, 1]).
             spread_variation_bps: ± bps range for spread (default 100).
             spread_steps: Number of spread points to test (default 5).
-        
+
         Returns:
             RealFXSensitivityResult with all sensitivity metrics.
-        
+
         Example:
             >>> analyzer = FXSensitivityAnalyzer('scenarios/dutchbay.yaml')
             >>> result = analyzer.analyze_fx_sensitivity(
@@ -468,7 +459,9 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
+                    (proj_irr - base_project_irr)
+                    if proj_irr and base_project_irr
+                    else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,
@@ -507,7 +500,9 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
+                    (proj_irr - base_project_irr)
+                    if proj_irr and base_project_irr
+                    else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,
@@ -545,7 +540,9 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
+                    (proj_irr - base_project_irr)
+                    if proj_irr and base_project_irr
+                    else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,

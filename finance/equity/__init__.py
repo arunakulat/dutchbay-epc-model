@@ -23,7 +23,7 @@ All old imports continue to work:
     # Old way (still works)
     from finance.equity_v14 import EquityCalculator
     from finance.equity_distribution_v14_hydra import EquityDistributionEngine
-    
+
     # New way (recommended)
     from finance.equity import EquityCalculator
     from finance.equity import EquityDistributionEngine

@@ -41,10 +41,11 @@ from analytics.contracts_v14 import (
 # Parameter Adapters (contracts_v14 → engine)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
     """
     Convert contracts_v14.ParameterRangeConfig to engine-compatible dict.
-    
+
     Conversion:
     -----------
     ParameterRangeConfig fields:
@@ -53,14 +54,14 @@ def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
         - low_pct: float (e.g., -10.0 for -10%)
         - high_pct: float (e.g., 10.0 for +10%)
         - label: Optional[str]
-    
+
     Engine expects:
         - name: str
         - override_key: str (same as variable_name)
         - base: float
         - low: float (absolute value = base_value * (1 + low_pct/100))
         - high: float (absolute value = base_value * (1 + high_pct/100))
-    
+
     Example:
     --------
     >>> param = ParameterRangeConfig(
@@ -79,7 +80,7 @@ def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
     base = float(param.base_value)
     low_mult = 1.0 + (float(param.low_pct) / 100.0)
     high_mult = 1.0 + (float(param.high_pct) / 100.0)
-    
+
     return {
         "name": param.label or param.variable_name,
         "override_key": param.variable_name,
@@ -94,9 +95,9 @@ def iter_param_cases_from_contract(
 ) -> List[Tuple[str, Dict[str, Any]]]:
     """
     Generate (label, overrides) cases from ParameterRangeConfig.
-    
+
     This is the contract-aware version of engine._iter_param_cases.
-    
+
     Returns:
     --------
     List of (label, overrides) tuples:
@@ -110,7 +111,7 @@ def iter_param_cases_from_contract(
     base = spec["base"]
     low = spec["low"]
     high = spec["high"]
-    
+
     return [
         (f"{name}=base", {key: base}),
         (f"{name}=low", {key: low}),
@@ -122,6 +123,7 @@ def iter_param_cases_from_contract(
 # Result Adapters (engine → contracts_v14)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def engine_to_tornado_result(
     *,
     parameter: ParameterRangeConfig,
@@ -131,7 +133,7 @@ def engine_to_tornado_result(
 ) -> TornadoResult:
     """
     Convert engine tornado output to contracts_v14.TornadoResult.
-    
+
     Engine format:
     --------------
     cases = [
@@ -139,7 +141,7 @@ def engine_to_tornado_result(
         {"label": "capex=low", "value": 0.155, "overrides": {...}},
         {"label": "capex=high", "value": 0.128, "overrides": {...}},
     ]
-    
+
     TornadoResult expects:
     ----------------------
     - metric_name: str (parameter name, e.g., "CAPEX")
@@ -147,7 +149,7 @@ def engine_to_tornado_result(
     - shock_results: List[ShockResult]
     - label: Optional[str]
     - impact_abs: float
-    
+
     ShockResult expects:
     --------------------
     - low_case: float
@@ -157,26 +159,26 @@ def engine_to_tornado_result(
     # Extract low/high cases
     low_case = None
     high_case = None
-    
+
     for c in cases:
         label = str(c.get("label", "")).lower()
         if "low" in label:
             low_case = float(c.get("value", 0.0))
         elif "high" in label:
             high_case = float(c.get("value", 0.0))
-    
+
     # Fallback if not found
     if low_case is None:
         low_case = base_value
     if high_case is None:
         high_case = base_value
-    
+
     shock = ShockResult(
         low_case=low_case,
         high_case=high_case,
         impact=high_case - low_case,
     )
-    
+
     return TornadoResult(
         metric_name=parameter.label or parameter.variable_name,
         base_metric=base_value,
@@ -195,7 +197,7 @@ def engine_to_sensitivity_suite(
 ) -> SensitivitySuite:
     """
     Convert engine suite output to contracts_v14.SensitivitySuite.
-    
+
     SensitivitySuite expects:
     -------------------------
     - metric: str (target metric, e.g., "project_irr")
@@ -215,6 +217,7 @@ def engine_to_sensitivity_suite(
 # Convenience Functions
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def build_tornado_result_from_engine(
     *,
     parameter: ParameterRangeConfig,
@@ -224,7 +227,7 @@ def build_tornado_result_from_engine(
 ) -> TornadoResult:
     """
     Convenience wrapper: extract base_value from KPIs and build TornadoResult.
-    
+
     This is what sensitivity.engine will call after evaluation.
     """
     base_value = float(base_kpis.get(metric_key, 0.0))

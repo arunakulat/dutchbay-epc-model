@@ -537,7 +537,9 @@ def solve_for_max_debt_multi_covenant(
             continue
 
         # BOTH covenants must be satisfied
-        both_satisfied = (achieved_dscr >= target_dscr) and (achieved_llcr >= target_llcr)
+        both_satisfied = (achieved_dscr >= target_dscr) and (
+            achieved_llcr >= target_llcr
+        )
 
         if both_satisfied:
             # Can increase debt

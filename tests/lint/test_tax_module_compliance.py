@@ -38,7 +38,7 @@ class TestTaxModuleCompliance:
         # These are indicators of hardcoded constants in actual code
         # Only match actual assignments in function bodies (use = with leading space)
         import re
-        
+
         # Check for hardcoded numbers assigned to meaningful variables
         # Pattern: spaces + word = digit
         hardcoded_rate = re.search(r"\s+corporate_tax_rate\s*=\s*0\.", code_section)
@@ -47,17 +47,13 @@ class TestTaxModuleCompliance:
                 "Hardcoded corporate_tax_rate found. All values must come from config."
             )
 
-        hardcoded_holiday = re.search(
-            r"\s+tax_holiday_years\s*=\s*\d+", code_section
-        )
+        hardcoded_holiday = re.search(r"\s+tax_holiday_years\s*=\s*\d+", code_section)
         if hardcoded_holiday:
             raise AssertionError(
                 "Hardcoded tax_holiday_years found. All values must come from config."
             )
 
-        hardcoded_depr = re.search(
-            r"\s+depreciation_years\s*=\s*\d+", code_section
-        )
+        hardcoded_depr = re.search(r"\s+depreciation_years\s*=\s*\d+", code_section)
         if hardcoded_depr:
             raise AssertionError(
                 "Hardcoded depreciation_years found. All values must come from config."
@@ -141,9 +137,7 @@ class TestTaxModuleCompliance:
         content = self.get_tax_module_content()
 
         # Check for opening docstring
-        assert (
-            '"""' in content or "'''" in content
-        ), "Module must have docstring"
+        assert '"""' in content or "'''" in content, "Module must have docstring"
 
     def test_has_type_hints(self):
         """Tax module should have type hints.
@@ -153,12 +147,8 @@ class TestTaxModuleCompliance:
         content = self.get_tax_module_content()
 
         # Check for common type hint patterns
-        assert (
-            "->" in content
-        ), "Functions should have return type hints"
-        assert (
-            ": " in content
-        ), "Parameters should have type hints"
+        assert "->" in content, "Functions should have return type hints"
+        assert ": " in content, "Parameters should have type hints"
         assert (
             "from typing import" in content or "typing." in content
         ), "Module should use typing for annotations"
@@ -170,9 +160,7 @@ class TestTaxModuleCompliance:
         """
         content = self.get_tax_module_content()
 
-        assert (
-            "@dataclass" in content
-        ), "Tax profile should use dataclass"
+        assert "@dataclass" in content, "Tax profile should use dataclass"
         assert (
             "frozen=True" in content
         ), "Tax profile should be frozen (immutable) for audit safety"

@@ -7,17 +7,17 @@ This package contains all CASPER-related functionality for the v14 analytics sta
 Public API:
     # Main orchestrator
     evaluate_with_casper_tail_risk_and_payload
-    
+
     # Payload generation
     build_casper_payload
     CASPER_CONTRACT_VERSION
-    
+
     # KPI normalization
     normalize_kpis_by_capacity
     calculate_percentile_ranking
     benchmark_normalized_kpis
     compare_projects
-    
+
     # Data structures
     NormalizedKPIs
     IndustryBenchmarks
@@ -26,10 +26,10 @@ Public API:
 Migration Note:
     Files moved from analytics/ root to analytics/casper/ in Sprint 9.
     Old import paths still work via backward compatibility shims.
-    
+
     Preferred imports:
         from analytics.casper import evaluate_with_casper_tail_risk_and_payload
-    
+
     Legacy imports (still work):
         from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
 """

@@ -65,14 +65,14 @@ def _deep_merge_config(
 ) -> dict[str, Any]:
     """
     Recursively deep-merge two configuration dictionaries.
-    
+
     Args:
         base: Base configuration mapping
         overrides: Override values to merge into base
-        
+
     Returns:
         Merged configuration dict
-        
+
     Example:
         >>> base = {"finance": {"capex_usd": 1000}, "project": {"name": "test"}}
         >>> overrides = {"finance": {"capex_usd": 1100}}
@@ -102,15 +102,15 @@ def _deep_merge_config(
 def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
-    
+
     Filters out non-numeric values and logs warnings for skipped entries.
-    
+
     Args:
         raw_kpis: Raw KPI mapping from pipeline result
-        
+
     Returns:
         Normalized dict with only numeric (float-convertible) values
-        
+
     Example:
         >>> kpis = {"project_irr": 0.145, "name": "test", "min_dscr": "1.45"}
         >>> normalized = normalize_kpi_dict(kpis)
@@ -140,14 +140,14 @@ def _run_pipeline_with_config(
 ) -> dict[str, Any]:
     """
     Internal helper: run v14 pipeline and return full result.
-    
+
     Args:
         config: Complete scenario configuration
         validation_modules: Modules to validate (defaults to cashflow, debt)
-        
+
     Returns:
         Full pipeline result dict with keys: status, kpis, annual_rows, debt_result, etc.
-        
+
     Raises:
         TypeError: If pipeline result is malformed
     """
@@ -174,14 +174,14 @@ def evaluate_scenario_from_dict(
 ) -> dict[str, float]:
     """
     Evaluate a scenario given an in-memory configuration dict.
-    
+
     Args:
         config: Base configuration mapping
         overrides: Optional override values
-        
+
     Returns:
         Normalized KPI dict {metric_name: float_value}
-        
+
     Example:
         >>> config = load_scenario_config("scenarios/base.yaml")
         >>> kpis = evaluate_scenario_from_dict(config, {"finance.capex_usd": 1100})
@@ -190,13 +190,13 @@ def evaluate_scenario_from_dict(
     """
     merged_config = _deep_merge_config(config, overrides or {})
     result = _run_pipeline_with_config(merged_config)
-    
+
     raw_kpis = result.get("kpis")
     if not isinstance(raw_kpis, Mapping):
         raise TypeError(
             f"Expected 'kpis' to be a mapping, got {type(raw_kpis).__name__}"
         )
-    
+
     return normalize_kpi_dict(raw_kpis)
 
 
@@ -210,24 +210,24 @@ def evaluate_with_overrides(
 ) -> Union[dict[str, float], dict[str, Any]]:
     """
     Run a single scenario evaluation through the v14 pipeline.
-    
+
     This is the canonical gateway for sensitivity and optimization engines.
-    
+
     Args:
         config_path: Path to scenario YAML file (required if raw_config not provided)
         overrides: Override values to merge into config
         raw_config: In-memory config dict (alternative to config_path)
         validation_modules: Modules to validate (defaults to cashflow, debt)
         return_full_result: If True, return full pipeline result; if False, return KPIs only
-        
+
     Returns:
         - If return_full_result=False: Normalized KPI dict {metric_name: float}
         - If return_full_result=True: Full pipeline result with kpis, annual_rows, debt_result, etc.
-        
+
     Raises:
         ValueError: If neither config_path nor raw_config provided
         FileNotFoundError: If config_path doesn't exist
-        
+
     Example:
         >>> # Sensitivity analysis (KPIs only)
         >>> kpis = evaluate_with_overrides(
@@ -236,7 +236,7 @@ def evaluate_with_overrides(
         ... )
         >>> kpis["project_irr"]
         0.142
-        >>> 
+        >>>
         >>> # Optimization (full result)
         >>> result = evaluate_with_overrides(
         ...     raw_config=config_dict,
@@ -253,7 +253,7 @@ def evaluate_with_overrides(
         raise ValueError(
             "Either config_path or raw_config must be provided to evaluate_with_overrides()"
         )
-    
+
     # Load or use provided config
     if raw_config is not None:
         base_config = dict(raw_config)
@@ -271,7 +271,7 @@ def evaluate_with_overrides(
         merged_config,
         validation_modules=validation_modules,
     )
-    
+
     # Return based on requested format
     if return_full_result:
         return full_result
@@ -297,12 +297,12 @@ def evaluate_with_casper_tail_risk(
 ) -> CasperResult:
     """
     High-level CASPER orchestrator for v14 (GWTF-compliant).
-    
+
     Integrates baseline scenario, Monte Carlo, and sensitivity analysis with tail risk.
-    
+
     CRITICAL: This is the ONLY function that imports tail-risk modules.
     All imports are lazy to avoid circular dependencies.
-    
+
     Args:
         config_path: Path to base scenario config
         monte_carlo_config_path: Optional path to MC config
@@ -311,10 +311,10 @@ def evaluate_with_casper_tail_risk(
         confidence: Confidence level for VaR/CVaR (default 0.9 = 90%)
         validation_mode: Schema validation mode
         validation_modules: Modules to validate
-        
+
     Returns:
         CasperResult with scenario, sensitivities, monte_carlo, and tail risk metadata
-        
+
     Example:
         >>> result = evaluate_with_casper_tail_risk(
         ...     config_path="scenarios/base.yaml",
@@ -408,7 +408,9 @@ def evaluate_with_casper_tail_risk(
         stats = mc_result.get("statistics", {})
 
         # HARDENING: MC raw_results null safety
-        raw_results_candidate = mc_result.get("raw_results") or mc_result.get("iterations", [])
+        raw_results_candidate = mc_result.get("raw_results") or mc_result.get(
+            "iterations", []
+        )
 
         if not raw_results_candidate or len(raw_results_candidate) == 0:
             logger.error(
@@ -421,7 +423,9 @@ def evaluate_with_casper_tail_risk(
                 type(raw_results_candidate).__name__,
             )
             raw_results = []
-        elif len(raw_results_candidate) > 0 and not isinstance(raw_results_candidate[0], dict):
+        elif len(raw_results_candidate) > 0 and not isinstance(
+            raw_results_candidate[0], dict
+        ):
             logger.error(
                 "MC raw_results entries not dicts; tail risk analysis will be skipped"
             )
@@ -451,7 +455,9 @@ def evaluate_with_casper_tail_risk(
     logger.info("Step 3/4: Building tail-risk enrichments...")
 
     # LAZY IMPORT: Only import tail-risk functions when actually needed
-    if (sensitivity_suite and monte_carlo and raw_results) or (monte_carlo and raw_results):
+    if (sensitivity_suite and monte_carlo and raw_results) or (
+        monte_carlo and raw_results
+    ):
         try:
             from analytics.sensitivity_tail_risk import (
                 build_tail_risk_snapshots_for_metrics,
@@ -490,7 +496,9 @@ def evaluate_with_casper_tail_risk(
                         confidence=confidence,
                     )
                 except (ValueError, KeyError) as e:
-                    logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
+                    logger.warning(
+                        "Could not build tail risk snapshots: %s; skipping", str(e)
+                    )
                     tail_risk_snapshots = {}
 
     logger.info("Step 4/4: Assembling CASPER result...")

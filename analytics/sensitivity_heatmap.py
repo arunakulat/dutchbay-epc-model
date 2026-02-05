@@ -19,4 +19,4 @@ warnings.warn(
     stacklevel=2,
 )
 
-from analytics.sensitivity.heatmap import *  # noqa: F401,F403
+from analytics.sensitivity.heatmap import *  # noqa: F401, F403, E402

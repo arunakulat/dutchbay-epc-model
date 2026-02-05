@@ -13,7 +13,7 @@ From core module:
 
 From depreciation module (enhanced):
     - StraightLineDepreciation   # Straight-line method
-    - DecliningBalanceDepreciation  # Declining balance method  
+    - DecliningBalanceDepreciation  # Declining balance method
     - DoubleD ecliningDepreciation   # Double declining balance
     - DepreciationFactory        # Factory for creating depreciation calculators
 
@@ -28,7 +28,7 @@ All old imports continue to work:
     # Old way (still works)
     from finance.tax_v14 import TaxCalculatorV14
     from finance.tax_v14 import calculate_depreciation_schedule
-    
+
     # New way (recommended)
     from finance.tax import TaxCalculatorV14
     from finance.tax import calculate_depreciation_schedule

@@ -21,7 +21,7 @@ All old imports continue to work:
 
     # Old way (still works)
     from finance.irr import npv, irr
-    
+
     # New way (also works - same object)
     from finance.irr import npv, irr
 

@@ -15,6 +15,7 @@ import pytest
 
 try:
     import pandas as pd
+
     HAS_PANDAS = True
 except ImportError:
     HAS_PANDAS = False
@@ -38,7 +39,12 @@ def minimal_mc_config():
         "scenario_name": "test_scenario",
         "monte_carlo": {
             "parameters": [
-                {"name": "capex", "min": 100.0, "max": 120.0, "distribution": "uniform"},
+                {
+                    "name": "capex",
+                    "min": 100.0,
+                    "max": 120.0,
+                    "distribution": "uniform",
+                },
                 {"name": "tariff", "min": 0.08, "max": 0.12, "distribution": "uniform"},
             ]
         },
@@ -66,7 +72,7 @@ def realistic_mc_config():
 
 class TestMCEngineToExportsFullPipeline:
     """Test complete MC → exports pipeline."""
-    
+
     @pytest.mark.skipif(not HAS_PANDAS, reason="pandas required")
     def test_mc_engine_to_exports_full_pipeline(self, minimal_mc_config):
         """Complete pipeline: MC engine → aggregate → lender risk table."""
@@ -76,13 +82,13 @@ class TestMCEngineToExportsFullPipeline:
             n_trials=50,
             seed=42,
         )
-        
+
         # 2. Validate result structure
         assert isinstance(result, MonteCarloResult)
         assert result.trials is not None
         assert result.summary is not None
         assert result.metadata is not None
-        
+
         # 3. Build lender risk table (requires trials)
         # Note: This will work once we have real trial metrics from engine
         # For now, we'll manually add trial data for testing
@@ -91,9 +97,9 @@ class TestMCEngineToExportsFullPipeline:
             metadata={"n_trials": 50},
             trials={"dscr_min": list(np.random.uniform(1.2, 1.6, 50))},
         )
-        
+
         df = build_lender_risk_table(test_result)
-        
+
         # 4. Validate output
         assert isinstance(df, pd.DataFrame)
         assert "metric" in df.columns
@@ -104,7 +110,7 @@ class TestMCEngineToExportsFullPipeline:
 
 class TestMCResultStructure:
     """Test MonteCarloResult has required fields for exports."""
-    
+
     def test_mc_result_has_required_fields_for_exports(self):
         """MonteCarloResult must have trials field populated."""
         # Create result with trials
@@ -122,13 +128,13 @@ class TestMCResultStructure:
                 "project_irr": list(np.random.uniform(0.10, 0.18, 100)),
             },
         )
-        
+
         # Validate
         assert result.trials is not None
         assert "dscr_min" in result.trials
         assert len(result.trials["dscr_min"]) == 100
         assert len(result.trials["project_irr"]) == 100
-    
+
     def test_mc_result_trial_arrays_same_length(self):
         """All trial arrays must have same length."""
         with pytest.raises(ValueError) as exc_info:
@@ -140,19 +146,19 @@ class TestMCResultStructure:
                     "project_irr": [0.14],  # 1 value - MISMATCH!
                 },
             )
-        
+
         assert "same length" in str(exc_info.value).lower()
 
 
 @pytest.mark.skipif(not HAS_PANDAS, reason="pandas required")
 class TestLenderRiskTableFromRealSimulation:
     """Test lender risk table from realistic MC simulation."""
-    
+
     def test_lender_risk_table_from_real_mc_simulation(self):
         """Generate lender risk table from realistic trial data."""
         # Simulate realistic trial outcomes
         n_trials = 200
-        
+
         result = MonteCarloResult(
             summary={},
             metadata={"n_trials": n_trials, "seed": 42},
@@ -164,17 +170,17 @@ class TestLenderRiskTableFromRealSimulation:
                 "plcr": list(np.random.normal(1.51, 0.10, n_trials)),
             },
         )
-        
+
         # Generate lender pack
         covenant = CovenantSpec(dscr_floor=1.30)
         df = build_lender_risk_table(result, covenant=covenant)
-        
+
         # Validate structure
         assert len(df) >= 5  # At least 5 metrics
         assert "DSCR (min)" in df["metric"].values
         assert "Prob(DSCR < 1.30)" in df["metric"].values
         assert "LLCR" in df["metric"].values
-        
+
         # Validate statistics are reasonable
         dscr_row = df[df["metric"] == "DSCR (min)"].iloc[0]
         assert 1.2 < dscr_row["P50"] < 1.6
@@ -184,7 +190,7 @@ class TestLenderRiskTableFromRealSimulation:
 @pytest.mark.skipif(not HAS_PANDAS, reason="pandas required")
 class TestCASPERPayloadIntegration:
     """Test CASPER payload block generation."""
-    
+
     def test_casper_payload_integration(self):
         """CASPER blocks should be ready for payload insertion."""
         result = MonteCarloResult(
@@ -194,25 +200,27 @@ class TestCASPERPayloadIntegration:
                 "dscr_min": list(np.random.uniform(1.2, 1.6, 100)),
             },
         )
-        
-        blocks = build_casper_risk_blocks(result, covenant=CovenantSpec(dscr_floor=1.30))
-        
+
+        blocks = build_casper_risk_blocks(
+            result, covenant=CovenantSpec(dscr_floor=1.30)
+        )
+
         # Validate structure
         assert "lender_risk_table" in blocks
         assert "covenant" in blocks
-        
+
         # DataFrame should be serializable
         df = blocks["lender_risk_table"]
         assert isinstance(df, pd.DataFrame)
         records = df.to_dict(orient="records")
         assert len(records) > 0
-        
+
         # Covenant metrics should be JSON-safe
         covenant = blocks["covenant"]
         assert isinstance(covenant["dscr_floor"], (int, float))
         assert isinstance(covenant["prob_breach"], (int, float))
         assert isinstance(covenant["n_trials"], int)
-    
+
     def test_casper_payload_ready_for_insertion(self):
         """Blocks can be directly inserted into CASPER payload."""
         result = MonteCarloResult(
@@ -220,20 +228,22 @@ class TestCASPERPayloadIntegration:
             metadata={"n_trials": 50},
             trials={"dscr_min": list(np.random.uniform(1.2, 1.6, 50))},
         )
-        
+
         blocks = build_casper_risk_blocks(result)
-        
+
         # Simulate CASPER payload structure
         payload = {
             "scenario": "test",
             "tables": {},
             "metrics": {},
         }
-        
+
         # Insert blocks
-        payload["tables"]["lender_risk_table"] = blocks["lender_risk_table"].to_dict(orient="records")
+        payload["tables"]["lender_risk_table"] = blocks["lender_risk_table"].to_dict(
+            orient="records"
+        )
         payload["metrics"]["covenant"] = blocks["covenant"]
-        
+
         # Validate
         assert "lender_risk_table" in payload["tables"]
         assert "covenant" in payload["metrics"]
@@ -242,7 +252,7 @@ class TestCASPERPayloadIntegration:
 
 class TestCorrelationFlowThroughToExports:
     """Test correlation propagates through pipeline."""
-    
+
     def test_correlation_metadata_preserved(self):
         """Correlation status should be preserved in metadata."""
         result = MonteCarloResult(
@@ -254,7 +264,7 @@ class TestCorrelationFlowThroughToExports:
             },
             trials={"dscr_min": list(np.random.uniform(1.2, 1.6, 100))},
         )
-        
+
         # Metadata should be accessible
         assert result.metadata["correlation_enabled"] is True
         assert result.metadata["correlation_method"] == "iman_conover"
@@ -263,7 +273,7 @@ class TestCorrelationFlowThroughToExports:
 @pytest.mark.skipif(not HAS_PANDAS, reason="pandas required")
 class TestMetricNameMappingEndToEnd:
     """Test custom metric name mapping through pipeline."""
-    
+
     def test_metric_name_mapping_end_to_end(self):
         """Custom metric names should map correctly through exports."""
         # Result with custom metric names
@@ -274,18 +284,18 @@ class TestMetricNameMappingEndToEnd:
                 "custom_dscr_metric": list(np.random.uniform(1.2, 1.6, 50)),
             },
         )
-        
+
         # Map custom name to canonical
         metric_map = {"dscr_min": "custom_dscr_metric"}
         df = build_lender_risk_table(result, metric_map=metric_map)
-        
+
         # Should show canonical label in output
         assert "DSCR (min)" in df["metric"].values
 
 
 class TestAggregationStoresTrials:
     """Test aggregation module stores raw trials."""
-    
+
     def test_aggregate_trials_stores_raw_arrays(self):
         """aggregate_trials must populate result.trials field."""
         # Mock trial metrics
@@ -294,7 +304,7 @@ class TestAggregationStoresTrials:
             {"dscr_min": 1.45, "project_irr": 0.13},
             {"dscr_min": 1.51, "project_irr": 0.15},
         ]
-        
+
         result = aggregate_trials(
             trial_metrics=trial_metrics,
             base_config={},
@@ -302,7 +312,7 @@ class TestAggregationStoresTrials:
             samples=np.random.rand(3, 2),
             meta={"n_trials": 3, "seed": 42},
         )
-        
+
         # Validate trials stored
         assert result.trials is not None
         assert "dscr_min" in result.trials

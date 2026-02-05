@@ -63,7 +63,7 @@ class TestValidateNPV:
 
     def test_npv_nan_critical_error(self):
         """NaN NPV should return CRITICAL error."""
-        error = validate_npv(float('nan'), "project_npv")
+        error = validate_npv(float("nan"), "project_npv")
         assert error is not None
         assert error.severity == "CRITICAL"
         assert "NaN" in error.message
@@ -71,7 +71,7 @@ class TestValidateNPV:
 
     def test_npv_infinity_critical_error(self):
         """Infinite NPV should return CRITICAL error."""
-        error = validate_npv(float('inf'), "project_npv")
+        error = validate_npv(float("inf"), "project_npv")
         assert error is not None
         assert error.severity == "CRITICAL"
         assert "infinite" in error.message
@@ -121,7 +121,7 @@ class TestValidateNPV:
 
     def test_npv_field_name_in_error(self):
         """Validation error should include field name."""
-        error = validate_npv(float('nan'), "equity_npv")
+        error = validate_npv(float("nan"), "equity_npv")
         assert error is not None
         assert error.field == "equity_npv"
         assert "equity_npv" in error.message
@@ -214,14 +214,14 @@ class TestValidateEquityIRR:
 
     def test_equity_irr_nan_critical(self):
         """NaN equity IRR should return CRITICAL error."""
-        error = validate_equity_irr(float('nan'), "equity_irr")
+        error = validate_equity_irr(float("nan"), "equity_irr")
         assert error is not None
         assert error.severity == "CRITICAL"
         assert "NaN" in error.message
 
     def test_equity_irr_infinity_critical(self):
         """Infinite equity IRR should return CRITICAL error."""
-        error = validate_equity_irr(float('inf'), "equity_irr")
+        error = validate_equity_irr(float("inf"), "equity_irr")
         assert error is not None
         assert error.severity == "CRITICAL"
         assert "infinite" in error.message
@@ -341,7 +341,7 @@ class TestValidateEquityResult:
     def test_equity_result_critical_error_irr_nan(self):
         """NaN equity IRR should result in is_valid=False."""
         equity_dict = {
-            "equity_irr": float('nan'),
+            "equity_irr": float("nan"),
             "equity_npv": 50_000_000,
             "equity_multiple": 2.0,
         }
@@ -354,7 +354,7 @@ class TestValidateEquityResult:
         """Infinite equity NPV should result in is_valid=False."""
         equity_dict = {
             "equity_irr": 0.15,
-            "equity_npv": float('inf'),
+            "equity_npv": float("inf"),
             "equity_multiple": 2.0,
         }
         result = validate_equity_result(equity_dict, strict=True)
@@ -445,7 +445,7 @@ class TestValidationError:
         error = ValidationError(
             severity="CRITICAL",
             field="equity_irr",
-            value=float('nan'),
+            value=float("nan"),
             constraint="must not be NaN",
             message="equity_irr is NaN",
             remediation="Check equity cashflows",

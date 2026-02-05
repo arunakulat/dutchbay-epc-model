@@ -207,23 +207,23 @@ def _derive_scenario_name(config: Optional[Mapping[str, Any]]) -> str:
 def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     """
     Extract total CAPEX from config (v14 schema-aware).
-    
+
     Priority order:
     1. finance.capex_total_usd (v14 primary)
     2. finance.capex_usd (v14 alternate)
     3. capex.usd_total (legacy)
     4. capex.capex_total_usd (legacy alternate)
     5. capex.total_capex_usd (legacy alternate 2)
-    
+
     Returns 0.0 if no valid CAPEX found.
-    
+
     Examples
     --------
     >>> # v14 config
     >>> config = {"finance": {"capex_total_usd": 200e6}}
     >>> _derive_capex_usd(config)
     200000000.0
-    
+
     >>> # Legacy config
     >>> config = {"capex": {"usd_total": 150e6}}
     >>> _derive_capex_usd(config)
@@ -231,7 +231,7 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     """
     if not config:
         return 0.0
-    
+
     # PRIORITY 1: v14 finance section
     finance_cfg = config.get("finance")
     if isinstance(finance_cfg, Mapping):
@@ -242,7 +242,7 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
                     return float(val)
                 except (TypeError, ValueError):
                     continue
-    
+
     # PRIORITY 2: Legacy capex section
     capex_cfg = config.get("capex")
     if isinstance(capex_cfg, Mapping):
@@ -253,12 +253,14 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
                     return float(val)
                 except (TypeError, ValueError):
                     continue
-    
+
     # No valid CAPEX found
     return 0.0
 
 
-def _derive_cfads_series(annual_rows: Optional[Sequence[Mapping[str, Any]]]) -> list[float]:
+def _derive_cfads_series(
+    annual_rows: Optional[Sequence[Mapping[str, Any]]],
+) -> list[float]:
     """Extract CFADS series in USD.
 
     Historical row schemas have drifted:
@@ -386,13 +388,13 @@ def calculate_scenario_kpis(
     # ─────────────────────────────────────────────────────────────────────────
     drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
     capex_total = _derive_capex_usd(config)
-    
+
     # FIXED: Use cfads_series_usd override pattern correctly
     if cfads_series_usd:
         cfads_series = list(cfads_series_usd)
     else:
         cfads_series = _derive_cfads_series(annual_rows)
-    
+
     cfads: list[float] = [float(x) for x in cfads_series]
 
     if scenario_name is None:
@@ -534,7 +536,7 @@ def calculate_scenario_kpis(
     if debt_result and isinstance(debt_result, Mapping):
         llcr_val = debt_result.get("llcr")
         plcr_val = debt_result.get("plcr")
-        
+
         if llcr_val is not None:
             try:
                 result["llcr"] = float(llcr_val)
@@ -542,7 +544,7 @@ def calculate_scenario_kpis(
                 result["llcr"] = result["dscr_mean"]
         else:
             result["llcr"] = result["dscr_mean"]
-        
+
         if plcr_val is not None:
             try:
                 result["plcr"] = float(plcr_val)
@@ -564,6 +566,8 @@ def calculate_scenario_kpis(
     result.setdefault("plcr", float(result.get("plcr", 0.0)))
 
     return result
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Backwards compatibility adapter
 # ═════════════════════════════════════════════════════════════════════════════

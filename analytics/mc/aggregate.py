@@ -21,11 +21,11 @@ from analytics.contracts_v14 import MonteCarloResult
 
 def _percentiles(arr: np.ndarray, ps: Sequence[int]) -> Dict[int, float]:
     """Compute percentiles for a single metric array.
-    
+
     Args:
         arr: Metric values across all trials
         ps: Percentiles to compute (e.g., [5, 10, 50, 90, 95])
-    
+
     Returns:
         Dictionary mapping percentile to value
     """
@@ -43,10 +43,10 @@ def aggregate_trials(
 ) -> MonteCarloResult:
     """
     Aggregate per-trial metrics into MonteCarloResult.
-    
+
     Sprint 18 Enhancement: Stores raw trial arrays in result.trials for
     lender-grade analytics (breach probability, worst-case downside).
-    
+
     Args:
         trial_metrics: List of metric dicts, one per trial
             Example: [{"dscr_min": 1.32, "project_irr": 0.14}, ...]
@@ -55,14 +55,14 @@ def aggregate_trials(
         samples: LHS sample matrix [n_trials, n_params]
         meta: Execution metadata (seed, sampler, correlation_enabled)
         percentiles: Percentiles to compute (default: P5, P10, P50, P90, P95)
-    
+
     Returns:
         MonteCarloResult with:
         - summary: {metric: {mean, std, percentiles}}
         - trials: {metric: [val1, val2, ...]}  # RAW ARRAYS
         - metadata: execution metadata
         - percentiles: lookup table
-    
+
     Example:
         >>> trials = [
         ...     {"dscr_min": 1.32, "project_irr": 0.14},
@@ -76,11 +76,11 @@ def aggregate_trials(
         ...     samples=lhs_samples,
         ...     meta={"seed": 42, "n_trials": 1000}
         ... )
-        >>> 
+        >>>
         >>> # Access raw trials for breach probability
         >>> dscr_trials = result.trials["dscr_min"]  # 1000 values
         >>> breach_prob = np.mean(dscr_trials < 1.30)
-    
+
     Note:
         Canonical KPI names expected in trial_metrics:
         - dscr_min: Minimum DSCR over project life
@@ -89,7 +89,7 @@ def aggregate_trials(
         - llcr: Loan Life Coverage Ratio
         - plcr: Project Life Coverage Ratio
         - equity_irr: Levered equity IRR (if equity modeled)
-        
+
         Add/remove metric keys based on your canonical KPI set.
     """
     # Canonical metric keys - adjust to match your KPI naming
@@ -106,7 +106,7 @@ def aggregate_trials(
     # Extract raw trial arrays
     arrays: Dict[str, np.ndarray] = {}
     trials: Dict[str, List[float]] = {}
-    
+
     for k in metric_keys:
         vals: List[float] = []
         for tm in trial_metrics:
@@ -116,11 +116,11 @@ def aggregate_trials(
                 # For production: decide on NaN handling policy
                 continue
             vals.append(float(v))
-        
+
         if not vals:
             # No trials had this metric - skip it
             continue
-            
+
         arr = np.array(vals, dtype=float)
         arrays[k] = arr
         trials[k] = vals  # Store raw list for MonteCarloResult.trials
@@ -128,13 +128,13 @@ def aggregate_trials(
     # Compute summary statistics
     summary: Dict[str, Any] = {}
     percentile_lookup: Dict[int, Dict[str, float]] = {p: {} for p in percentiles}
-    
+
     for k, arr in arrays.items():
         if arr.size == 0:
             continue
-        
+
         pctl_dict = _percentiles(arr, percentiles)
-        
+
         summary[k] = {
             "mean": float(arr.mean()),
             "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0,
@@ -142,7 +142,7 @@ def aggregate_trials(
             "min": float(arr.min()),
             "max": float(arr.max()),
         }
-        
+
         # Build percentile lookup table
         for p, val in pctl_dict.items():
             percentile_lookup[p][k] = val
@@ -151,7 +151,7 @@ def aggregate_trials(
     metadata = dict(meta)
     metadata["n_metrics"] = len(arrays)
     metadata["metric_keys"] = list(arrays.keys())
-    
+
     # Construct MonteCarloResult with raw trials
     result = MonteCarloResult(
         summary=summary,
@@ -159,5 +159,5 @@ def aggregate_trials(
         trials=trials,  # ✅ RAW TRIAL ARRAYS for lender analytics
         percentiles=percentile_lookup,
     )
-    
+
     return result
