@@ -81,10 +81,10 @@ logger = logging.getLogger(__name__)
 
 def _safe_mkdir(path: Path) -> None:
     """Create directory if it doesn't exist (mkdir -p behavior).
-    
+
     Args:
         path: Directory path to create.
-        
+
     Returns:
         None. Creates directory with parents if needed.
     """
@@ -93,30 +93,30 @@ def _safe_mkdir(path: Path) -> None:
 
 def _write_json(path: Path, payload: Any) -> None:
     """Write Python object as formatted JSON file.
-    
+
     Args:
         path: File path for JSON output.
         payload: Python object to serialize (must be JSON-serializable).
-        
+
     Returns:
         None. Writes file with indent=2, sorted keys.
     """
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
 
 def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
     """Write annual cashflow rows as CSV (stdlib csv module - no pandas).
-    
+
     Args:
         path: File path for CSV output.
         annual_rows: List of dicts representing annual cashflow rows.
-        
+
     Returns:
         None. Writes CSV with header row derived from all dict keys.
-        
+
     Notes:
         - Uses stdlib csv module for CI stability (no pandas dependency)
         - Handles heterogeneous row schemas (union of all keys)
@@ -125,17 +125,15 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
     """
     if not isinstance(annual_rows, list) or not annual_rows:
         return
-    
+
     # Filter to dict entries only
     dict_rows = [row for row in annual_rows if isinstance(row, dict)]
     if not dict_rows:
         return
-    
+
     # Union of keys across all rows for stable columns
-    fieldnames: list[str] = sorted(
-        {k for row in dict_rows for k in row.keys()}
-    )
-    
+    fieldnames: list[str] = sorted({k for row in dict_rows for k in row.keys()})
+
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -155,7 +153,7 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
 )
 def cli(cfg: DictConfig) -> None:
     """Hydra CLI entry point for complete lender-grade pipeline.
-    
+
     Args:
         cfg: Hydra configuration from conf/run_full_pipeline_v14.yaml.
             Required fields:
@@ -165,13 +163,13 @@ def cli(cfg: DictConfig) -> None:
                 - validation_modules: Comma-separated list or array
                 - export_dir: Where to write artifacts (default: _out/run_full_pipeline_v14)
                 - write_artifacts: Write files (default: true)
-                
+
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
-        
+
     Raises:
         SystemExit: If config validation fails or errors occur.
-        
+
     Output Structure:
         {{
           "status": "success",
@@ -212,11 +210,11 @@ def cli(cfg: DictConfig) -> None:
             ...
           }}
         }}
-        
+
     Example:
         >>> # From command line
         >>> python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
-        >>> 
+        >>>
         >>> # Output includes lender-grade metrics:
         >>> {{
         >>>   "status": "success",
@@ -228,7 +226,7 @@ def cli(cfg: DictConfig) -> None:
         >>>   "annual_rows": [...],
         >>>   "debt_result": {{}}
         >>> }}
-        >>> 
+        >>>
         >>> # Artifacts written to: _out/run_full_pipeline_v14/
     """
     # Validate required config parameter
@@ -244,7 +242,7 @@ def cli(cfg: DictConfig) -> None:
                 "[validation_modules=cashflow,debt] "
                 "[export_dir=_out/release_run] "
                 "[write_artifacts=true]"
-            )
+            ),
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
@@ -286,28 +284,36 @@ def cli(cfg: DictConfig) -> None:
                 if "kpis" in result:
                     _write_json(export_dir / "kpis.json", result.get("kpis"))
                     logger.info("Wrote kpis.json to %s", export_dir / "kpis.json")
-                
+
                 if "debt_result" in result:
-                    _write_json(export_dir / "debt_result.json", result.get("debt_result"))
-                    logger.info("Wrote debt_result.json to %s", export_dir / "debt_result.json")
-                
+                    _write_json(
+                        export_dir / "debt_result.json", result.get("debt_result")
+                    )
+                    logger.info(
+                        "Wrote debt_result.json to %s", export_dir / "debt_result.json"
+                    )
+
                 if "annual_rows" in result:
-                    _write_annual_rows_csv(export_dir / "annual_rows.csv", result.get("annual_rows"))
-                    logger.info("Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv")
+                    _write_annual_rows_csv(
+                        export_dir / "annual_rows.csv", result.get("annual_rows")
+                    )
+                    logger.info(
+                        "Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv"
+                    )
 
             logger.info("All artifacts written to: %s", str(export_dir.resolve()))
 
         # Emit JSON for CI/tooling (CLI-03 compliance)
         # Note: This is always emitted, even when write_artifacts=true
         print(json.dumps(result, indent=2, sort_keys=True))
-        
+
     except Exception as e:
         # Error handling with structured JSON output
         error_result = {
             "status": "error",
             "error": str(e),
             "error_type": type(e).__name__,
-            "config": str(config)
+            "config": str(config),
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Pipeline execution failed")

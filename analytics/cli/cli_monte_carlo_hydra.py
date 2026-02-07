@@ -116,61 +116,63 @@ def main(cfg: DictConfig) -> None:
                 "[n_trials=10000] "
                 "[seed=42] "
                 "[output_dir=_out/monte_carlo]"
-            )
+            ),
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
-    
+
     # Extract parameters from config
     output_dir = Path(str(cfg.get("output_dir", "_out/monte_carlo")))
     write_artifacts = bool(cfg.get("write_artifacts", True))
     n_trials = int(cfg.get("n_trials", 10000))
     seed = cfg.get("seed", 42)
-    
+
     logger.info(
         "Monte Carlo analysis: config=%s, n_trials=%d, seed=%s, output_dir=%s",
-        config_path, n_trials, seed, output_dir
+        config_path,
+        n_trials,
+        seed,
+        output_dir,
     )
-    
+
     try:
         # =====================================================================
         # WIRED TO ENGINE: analytics.monte_carlo_v14.MonteCarloEngine
         # =====================================================================
-        
+
         # Load config as DictConfig (MonteCarloEngine expects this)
         cfg_obj = OmegaConf.load(str(config_path))
-        
+
         # Initialize Monte Carlo engine
         engine = MonteCarloEngine(cfg_obj, n_iterations=n_trials)
-        
+
         # Run simulation
         result: dict[str, Any] = engine.run()
-        
+
         # Add output directory to result
         result["output_dir"] = str(output_dir)
         result["config_path"] = str(config_path)
-        
+
         logger.info(
             "Monte Carlo analysis complete: %d trials, execution_time=%.2fs",
             n_trials,
-            result.get("execution_time_seconds", 0)
+            result.get("execution_time_seconds", 0),
         )
-        
+
         # Optional artifact writing
         if write_artifacts and result.get("success", False):
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Write summary JSON
             summary_path = output_dir / "monte_carlo_summary.json"
             summary_path.write_text(
-                json.dumps(result, indent=2, sort_keys=True),
-                encoding="utf-8"
+                json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
             )
             logger.info("Wrote Monte Carlo results to %s", summary_path)
-        
+
         # Print JSON to stdout (CLI-03 compliance)
         print(json.dumps(result, indent=2, sort_keys=True))
-        
+
     except Exception as e:
         # Error handling with structured JSON output
         error_result = {
@@ -179,7 +181,7 @@ def main(cfg: DictConfig) -> None:
             "error_type": type(e).__name__,
             "config_path": str(config_path),
             "n_trials": n_trials,
-            "seed": seed
+            "seed": seed,
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Monte Carlo analysis failed")

@@ -107,9 +107,7 @@ class SensitivityAnalysisResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     parameters_tested: List[str] = Field(description="Parameters swept")
-    sensitivity_points: List[SensitivityPoint] = Field(
-        description="All data points"
-    )
+    sensitivity_points: List[SensitivityPoint] = Field(description="All data points")
     base_npv: float = Field(description="Base case NPV")
     base_irr: Optional[float] = Field(default=None, description="Base case IRR")
     base_dscr: float = Field(description="Base case min DSCR")
@@ -170,9 +168,7 @@ class EnhancedAnalyticsResult(BaseModel):
     base_result: Dict[str, Any] = Field(description="Full base pipeline result")
 
     # Analytics enablement status
-    analytics_enabled: AnalyticsEnablement = Field(
-        description="Which analytics ran"
-    )
+    analytics_enabled: AnalyticsEnablement = Field(description="Which analytics ran")
 
     # Optional analytics results
     returns_analysis: Optional[AllReturns] = Field(
@@ -466,7 +462,9 @@ def run_v14_pipeline_with_analytics(
 
     monte_carlo_analysis = None
     if enable_monte_carlo:
-        logger.info("Running Monte Carlo simulation (%d iterations)...", monte_carlo_iterations)
+        logger.info(
+            "Running Monte Carlo simulation (%d iterations)...", monte_carlo_iterations
+        )
         monte_carlo_analysis = _calculate_monte_carlo(
             config_path, base_result, iterations=monte_carlo_iterations
         )

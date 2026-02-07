@@ -44,11 +44,11 @@ Usage:
 
     # Sprint 16: Validate NPV
     from analytics.contracts_v14_validators import validate_npv
-    
+
     npv_error = validate_npv(project_npv, "project_npv")
     if npv_error:
         logger.warning(npv_error.message)
-    
+
     # Sprint 16: Validate Equity result
     equity_result = validate_equity_result(equity_dict, strict=True)
     if not equity_result.is_valid:
@@ -83,11 +83,11 @@ WACC_MAX = 0.12
 
 # NPV: Net Present Value bounds (project-specific, but check for infinite/NaN)
 NPV_MIN = -1e10  # -10 billion (distressed scenarios)
-NPV_MAX = 1e10   # +10 billion (optimistic scenarios)
+NPV_MAX = 1e10  # +10 billion (optimistic scenarios)
 
 # Sprint 16: NPV sanity thresholds for warnings
 NPV_TYPICAL_MIN = -1e9  # -1 billion
-NPV_TYPICAL_MAX = 1e9   # +1 billion
+NPV_TYPICAL_MAX = 1e9  # +1 billion
 
 # Coupon: Debt coupon percentage (0-20%)
 COUPON_MIN = 0.0
@@ -115,13 +115,13 @@ EQUITY_MULTIPLE_MAX = 5.0
 
 # Sprint 16: Equity IRR bounds (higher than project IRR due to leverage)
 EQUITY_IRR_MIN = -0.10  # -10% for distressed
-EQUITY_IRR_MAX = 0.60   # 60% for highly levered successful projects
+EQUITY_IRR_MAX = 0.60  # 60% for highly levered successful projects
 EQUITY_IRR_TYPICAL_MIN = 0.10  # 10% typical minimum
 EQUITY_IRR_TYPICAL_MAX = 0.30  # 30% typical maximum
 
 # Sprint 16: Equity NPV bounds (smaller than project NPV)
 EQUITY_NPV_MIN = -1e9  # -1 billion
-EQUITY_NPV_MAX = 1e9   # +1 billion
+EQUITY_NPV_MAX = 1e9  # +1 billion
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -350,19 +350,19 @@ def validate_npv(
     strict_bounds: bool = False,
 ) -> Optional[ValidationError]:
     """Sprint 16: Validate Net Present Value is finite and within bounds.
-    
+
     Args:
         value: NPV value in currency units (e.g., USD or LKR)
         field_name: Name of field for error message
         strict_bounds: If True, use typical bounds; if False, use wide bounds
-    
+
     Returns:
         ValidationError if invalid, None if valid
-    
+
     Example:
         >>> error = validate_npv(50_000_000, "project_npv")
         >>> assert error is None  # Valid NPV
-        >>> 
+        >>>
         >>> error = validate_npv(float('inf'), "project_npv")
         >>> assert error.severity == "CRITICAL"  # Infinite NPV
         >>>
@@ -378,7 +378,7 @@ def validate_npv(
             constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     # Check for NaN
     if math.isnan(value):
         return ValidationError(
@@ -389,7 +389,7 @@ def validate_npv(
             message=f"{field_name} is NaN (Not a Number)",
             remediation="Check cashflow and discount rate inputs. NPV calculation failed.",
         )
-    
+
     # Check for Infinity
     if math.isinf(value):
         return ValidationError(
@@ -400,7 +400,7 @@ def validate_npv(
             message=f"{field_name} is infinite: {value}",
             remediation="Check discount rate (may be zero or negative). NPV calculation diverged.",
         )
-    
+
     # Absolute bounds check (CRITICAL)
     if not (NPV_MIN <= value <= NPV_MAX):
         return ValidationError(
@@ -411,7 +411,7 @@ def validate_npv(
             message=f"{field_name}={value:,.0f} exceeds absolute bounds [-10B, +10B]",
             remediation="NPV magnitude unrealistic. Verify capex, revenue, and discount rate.",
         )
-    
+
     # Typical bounds check (WARNING)
     if strict_bounds and not (NPV_TYPICAL_MIN <= value <= NPV_TYPICAL_MAX):
         return ValidationError(
@@ -422,7 +422,7 @@ def validate_npv(
             message=f"{field_name}={value:,.0f} is outside typical renewable project range [-1B, +1B]",
             remediation="Verify project scale. NPV > 1B suggests mega-project. NPV < -1B suggests distressed asset.",
         )
-    
+
     # All checks passed
     return None
 
@@ -433,17 +433,17 @@ def validate_npv_consistency(
     debt_npv: float = 0.0,
 ) -> Optional[ValidationError]:
     """Sprint 16: Validate NPV consistency across project/equity/debt.
-    
+
     Project NPV should approximately equal Equity NPV + Debt NPV.
-    
+
     Args:
         project_npv: Total project NPV
         equity_npv: Equity NPV
         debt_npv: Debt NPV (typically 0 if debt priced at par)
-    
+
     Returns:
         ValidationError if inconsistent, None if valid
-    
+
     Example:
         >>> error = validate_npv_consistency(
         ...     project_npv=100_000_000,
@@ -461,11 +461,11 @@ def validate_npv_consistency(
     """
     # Calculate implied NPV from equity + debt
     implied_project_npv = equity_npv + debt_npv
-    
+
     # Allow 5% tolerance for rounding and timing differences
     tolerance = abs(project_npv) * 0.05 if project_npv != 0 else 1e6
     difference = abs(project_npv - implied_project_npv)
-    
+
     if difference > tolerance:
         return ValidationError(
             severity="WARNING",
@@ -487,7 +487,7 @@ def validate_npv_consistency(
                 "Verify debt pricing assumptions (debt NPV typically 0 if priced at par)."
             ),
         )
-    
+
     return None
 
 
@@ -502,22 +502,22 @@ def validate_equity_irr(
     strict_bounds: bool = True,
 ) -> Optional[ValidationError]:
     """Sprint 16: Validate Equity IRR is within realistic bounds.
-    
+
     Equity IRR should be higher than project IRR due to leverage.
     Typical range: 10-30% for renewable projects.
-    
+
     Args:
         value: Equity IRR value (decimal, e.g., 0.15 for 15%)
         field_name: Name of field for error message
         strict_bounds: If True, warn on atypical values
-    
+
     Returns:
         ValidationError if invalid, None if valid
-    
+
     Example:
         >>> error = validate_equity_irr(0.18)  # 18% - Good
         >>> assert error is None
-        >>> 
+        >>>
         >>> error = validate_equity_irr(0.45)  # 45% - High but possible
         >>> assert error.severity == "WARNING"
         >>>
@@ -533,7 +533,7 @@ def validate_equity_irr(
             constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     # Check for NaN
     if math.isnan(value):
         return ValidationError(
@@ -544,7 +544,7 @@ def validate_equity_irr(
             message=f"{field_name} is NaN (Not a Number)",
             remediation="Check equity cashflows. IRR calculation failed.",
         )
-    
+
     # Check for Infinity
     if math.isinf(value):
         return ValidationError(
@@ -555,7 +555,7 @@ def validate_equity_irr(
             message=f"{field_name} is infinite: {value}",
             remediation="IRR calculation diverged. Check equity cashflow sign changes.",
         )
-    
+
     # Absolute bounds check
     if not (EQUITY_IRR_MIN <= value <= EQUITY_IRR_MAX):
         return ValidationError(
@@ -566,9 +566,11 @@ def validate_equity_irr(
             message=f"{field_name}={value*100:.1f}% exceeds absolute bounds [-10%, 60%]",
             remediation="Equity IRR outside plausible range. Verify equity cashflows and leverage.",
         )
-    
+
     # Typical bounds check (WARNING)
-    if strict_bounds and not (EQUITY_IRR_TYPICAL_MIN <= value <= EQUITY_IRR_TYPICAL_MAX):
+    if strict_bounds and not (
+        EQUITY_IRR_TYPICAL_MIN <= value <= EQUITY_IRR_TYPICAL_MAX
+    ):
         return ValidationError(
             severity="WARNING",
             field=field_name,
@@ -576,11 +578,11 @@ def validate_equity_irr(
             constraint=f"{EQUITY_IRR_TYPICAL_MIN*100:.0f}% <= value <= {EQUITY_IRR_TYPICAL_MAX*100:.0f}%",
             message=f"{field_name}={value*100:.1f}% is outside typical range [10%-30%]",
             remediation=(
-                f"Equity IRR < 10% may indicate low leverage or poor project economics. "
-                f"Equity IRR > 30% may indicate high leverage or exceptional project."
+                "Equity IRR < 10% may indicate low leverage or poor project economics. "
+                "Equity IRR > 30% may indicate high leverage or exceptional project."
             ),
         )
-    
+
     return None
 
 
@@ -589,17 +591,17 @@ def validate_equity_multiple(
     field_name: str = "equity_multiple",
 ) -> Optional[ValidationError]:
     """Sprint 16: Validate Equity Multiple (Total Cash / Invested Capital).
-    
+
     Equity multiple should be > 1.0 for positive return.
     Typical range: 1.2-3.0x for renewable projects.
-    
+
     Args:
         value: Equity multiple (e.g., 2.5 means 2.5x return)
         field_name: Name of field for error message
-    
+
     Returns:
         ValidationError if invalid, None if valid
-    
+
     Example:
         >>> error = validate_equity_multiple(2.0)  # 2x - Good
         >>> assert error is None
@@ -619,7 +621,7 @@ def validate_equity_multiple(
             constraint="must be numeric",
             message=f"{field_name} must be numeric, got {type(value).__name__}",
         )
-    
+
     # Check for negative (impossible)
     if value < 0:
         return ValidationError(
@@ -630,7 +632,7 @@ def validate_equity_multiple(
             message=f"{field_name}={value:.2f}x is negative (impossible)",
             remediation="Equity multiple cannot be negative. Check equity cashflow calculations.",
         )
-    
+
     # Check for loss (multiple < 1.0)
     if value < 1.0:
         return ValidationError(
@@ -641,7 +643,7 @@ def validate_equity_multiple(
             message=f"{field_name}={value:.2f}x indicates equity loss ({(1-value)*100:.1f}%)",
             remediation="Equity investors losing money. Review project economics or increase leverage.",
         )
-    
+
     # Absolute bounds check
     if not (EQUITY_MULTIPLE_MIN <= value <= EQUITY_MULTIPLE_MAX):
         return ValidationError(
@@ -651,11 +653,11 @@ def validate_equity_multiple(
             constraint=f"{EQUITY_MULTIPLE_MIN:.1f}x <= value <= {EQUITY_MULTIPLE_MAX:.1f}x",
             message=f"{field_name}={value:.2f}x is outside typical range [0.8x-5.0x]",
             remediation=(
-                f"Multiple > 5x suggests exceptional project or very long tenor. "
-                f"Multiple < 0.8x suggests project failure."
+                "Multiple > 5x suggests exceptional project or very long tenor. "
+                "Multiple < 0.8x suggests project failure."
             ),
         )
-    
+
     return None
 
 
@@ -664,20 +666,20 @@ def validate_equity_result(
     strict: bool = True,
 ) -> ValidationResult:
     """Sprint 16: Validate complete EquityResult contract.
-    
+
     Validates:
     - Equity IRR: 10-30% typical
     - Equity NPV: Finite and realistic
     - Equity Multiple: > 1.0 for positive return
     - Consistency: NPV and IRR should be directionally aligned
-    
+
     Args:
         equity_result: EquityResult dict to validate
         strict: If True, enforce typical bounds; if False, only check absolutes
-    
+
     Returns:
         ValidationResult with all findings
-    
+
     Example:
         >>> equity_dict = {
         ...     "equity_irr": 0.18,
@@ -689,7 +691,7 @@ def validate_equity_result(
         >>> assert len(result.errors) == 0
     """
     result = ValidationResult(is_valid=True, contract_type="EquityResult")
-    
+
     # Validate Equity IRR
     if "equity_irr" in equity_result and equity_result["equity_irr"] is not None:
         error = validate_equity_irr(
@@ -701,7 +703,7 @@ def validate_equity_result(
             result.errors.append(error)
             if error.severity == "CRITICAL":
                 result.is_valid = False
-    
+
     # Validate Equity NPV
     if "equity_npv" in equity_result and equity_result["equity_npv"] is not None:
         error = validate_npv(
@@ -713,9 +715,12 @@ def validate_equity_result(
             result.errors.append(error)
             if error.severity == "CRITICAL":
                 result.is_valid = False
-    
+
     # Validate Equity Multiple
-    if "equity_multiple" in equity_result and equity_result["equity_multiple"] is not None:
+    if (
+        "equity_multiple" in equity_result
+        and equity_result["equity_multiple"] is not None
+    ):
         error = validate_equity_multiple(
             equity_result["equity_multiple"],
             "equity_multiple",
@@ -724,7 +729,7 @@ def validate_equity_result(
             result.errors.append(error)
             if error.severity == "CRITICAL":
                 result.is_valid = False
-    
+
     # Consistency check: NPV and IRR should align
     if (
         "equity_npv" in equity_result
@@ -734,7 +739,7 @@ def validate_equity_result(
     ):
         npv = equity_result["equity_npv"]
         irr = equity_result["equity_irr"]
-        
+
         # If NPV is positive, IRR should be above discount rate (typically 8-12%)
         # If NPV is negative, IRR should be below discount rate
         # We'll use a simple heuristic: positive NPV should mean IRR > 5%
@@ -764,7 +769,7 @@ def validate_equity_result(
                     ),
                 )
             )
-    
+
     # Summary logging
     if result.has_critical_errors():
         logger.error(
@@ -779,7 +784,7 @@ def validate_equity_result(
         logger.info(
             f"Equity validation PASSED: {result.error_count('WARNING')} warnings"
         )
-    
+
     return result
 
 
@@ -816,7 +821,7 @@ def validate_scenario_result(
             result.errors.append(error)
             if error.severity == "CRITICAL":
                 result.is_valid = False
-    
+
     # Sprint 16: Validate project NPV if present
     if "project_npv" in scenario_result and scenario_result["project_npv"] is not None:
         error = validate_npv(

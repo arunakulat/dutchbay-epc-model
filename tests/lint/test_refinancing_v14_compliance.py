@@ -76,7 +76,8 @@ class TestDocstrings:
         """Test RefinancingCalculator methods have docstrings."""
         calc = RefinancingCalculator(RefinancingConfig())
         methods = [
-            method for method in dir(calc)
+            method
+            for method in dir(calc)
             if not method.startswith("_") and callable(getattr(calc, method))
         ]
         # Check key methods have docstrings

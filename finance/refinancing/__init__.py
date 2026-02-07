@@ -18,7 +18,7 @@ All old imports continue to work:
 
     # Old way (still works)
     from finance.refinancing_v14_hydra import RefinancingEngine
-    
+
     # New way (recommended)
     from finance.refinancing import RefinancingEngine
 

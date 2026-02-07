@@ -25,7 +25,7 @@ All old imports continue to work:
     from finance.wacc_v14 import WaccCalculatorV14
     from finance.wacc_v14 import calculate_wacc
     from finance.wacc_integration import wacc_integration
-    
+
     # New way (recommended)
     from finance.wacc import WaccCalculatorV14
     from finance.wacc import calculate_wacc

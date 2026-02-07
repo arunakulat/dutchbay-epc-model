@@ -9,23 +9,23 @@ Public API
 ──────────────────────────────────────────────────────────────
 From v14 contracts:
     - CASPER_CONTRACT_VERSION   # Contract versioning
-    
+
     Monte Carlo (Sprint 16 - Issue #43):
     - Distribution              # Distribution specification
     - DerivedParameter          # Computed parameters
     - MonteCarloScenario        # MC scenario config
     - MonteCarloResult          # MC execution output
-    
+
     WACC:
     - WaccComponents            # WACC breakdown
     - WaccResult                # Complete WACC result
     - ScenarioResult            # Full scenario evaluation
-    
+
     FX (Sprint 15 integration):
     - FXStructuredBlock         # FX configuration blocks
     - FXCurveOutput             # FX curves
     - FXRiskProfile             # FX risk profiling
-    
+
     Sensitivity:
     - TornadoResult             # Single-metric tornado
     - MultiMetricTornadoResult  # Multi-metric tornado
@@ -33,7 +33,7 @@ From v14 contracts:
     - SensitivitySuite          # Complete sensitivity suite
     - SensitivityRequest        # Sensitivity request
     - BreakevenResult           # Breakeven analysis
-    
+
     CASPER:
     - CasperResult              # Unified analysis result
     - ShockResult               # Single shock result
@@ -53,11 +53,11 @@ From phase 3 (legacy):
 Backward Compatibility
 ──────────────────────────────────────────────────────────────
 All imports work from multiple locations:
-    
+
     # Old way (still works)
     from analytics.contracts_v14 import MonteCarloScenario
     from analytics.contracts import ShockSpec
-    
+
     # New way (recommended)
     from analytics.contracts import (
         MonteCarloScenario,
@@ -102,23 +102,19 @@ from analytics.contracts._phase_3_sensitivity_loaders import (
 from analytics.contracts_v14 import (
     # Version
     CASPER_CONTRACT_VERSION,
-    
     # Monte Carlo (Sprint 16 - Issue #43)
     Distribution,
     DerivedParameter,
     MonteCarloScenario,
     MonteCarloResult,
-    
     # WACC
     WaccComponents,
     WaccResult,
     ScenarioResult,
-    
     # FX (Sprint 15 integration - Issue #31)
     FXStructuredBlock,
     FXCurveOutput,
     FXRiskProfile,
-    
     # Sensitivity (Pydantic V2)
     TornadoResult,
     MultiMetricTornadoResult,
@@ -126,7 +122,6 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     SensitivityRequest,
     BreakevenResult,
-    
     # CASPER
     CasperResult,
     ShockResult,
@@ -136,23 +131,19 @@ from analytics.contracts_v14 import (
 __all__ = [
     # Version
     "CASPER_CONTRACT_VERSION",
-    
     # Monte Carlo
     "Distribution",
     "DerivedParameter",
     "MonteCarloScenario",
     "MonteCarloResult",
-    
     # WACC
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
-    
     # FX
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
-    
     # Sensitivity (V2)
     "TornadoResult",
     "MultiMetricTornadoResult",
@@ -161,22 +152,18 @@ __all__ = [
     "SensitivityRequest",
     "BreakevenResult",
     "ShockResult",
-    
     # CASPER
     "CasperResult",
-    
     # Legacy (Phase 3)
     "LegacySensitivitySuite",
     "LegacyShockResult",
     "ShockSpec",
     "StandardShockLibrary",
     "TaxShockLibrary",
-    
     # Phase 3 Loaders
     "load_shock_specs_from_yaml",
     "load_shock_specs_from_omegaconf",
     "build_shock_spec_from_dict",
-    
     # Multi-variable scenarios (NEW)
     "ScenarioSpec",
     "Phase3ScenarioResult",

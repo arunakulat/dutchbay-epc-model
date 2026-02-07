@@ -22,7 +22,7 @@ Public API (keep stable):
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence
 
 import copy
 
@@ -33,13 +33,10 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
     ParameterRangeConfig,
-    MultiMetricSensitivitySuite,
-    MultiMetricTornadoResult,
 )
 
 from analytics.sensitivity.tail_risk import (
     TailRiskConfig,
-    enrich_suite_with_tail_risk,
 )
 
 # Adapter layer for contract compatibility
@@ -56,6 +53,7 @@ class SensitivityRunConfig:
     Execution knobs for the engine.
     Keep these small and deterministic.
     """
+
     explain: bool = False
     strict: bool = True
     attach_trial_metadata: bool = True
@@ -88,7 +86,7 @@ def build_one_way_sensitivity_suite(
 ) -> SensitivitySuite:
     """
     Build a one-way SensitivitySuite for a single parameter and a single metric.
-    
+
     Now uses adapter layer to ensure compatibility with contracts_v14.py.
     """
     base_cfg = _deepcopy_cfg(base_config)
@@ -158,10 +156,10 @@ def run_sensitivity_analysis(
 ) -> SensitivitySuite:
     """
     Multi-parameter, multi-metric orchestration.
-    
+
     NOTE: Currently returns SensitivitySuite (not MultiMetricSensitivitySuite)
     because contracts_v14.py doesn't define MultiMetricSensitivitySuite.
-    
+
     For multi-metric analysis, we'll build multiple TornadoResults and
     return them in a single SensitivitySuite.
     """
@@ -179,7 +177,7 @@ def run_sensitivity_analysis(
 
     # For each parameter, build a tornado result for the PRIMARY metric
     primary_metric = metric_keys[0] if metric_keys else "project_irr"
-    
+
     for p in parameters:
         cases: List[Dict[str, Any]] = []
         for label, overrides in iter_param_cases_from_contract(p):

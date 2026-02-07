@@ -44,7 +44,7 @@ APPROVED_SOURCES = {
         "type": "OEM",
         "description": "Envision EN-171-10.0 MW certified power curve",
         "iec_standard": "61400-12-1:2022",
-        "certificate": "CGC-B-FNc-2024-184 (extrapolated)"
+        "certificate": "CGC-B-FNc-2024-184 (extrapolated)",
     },
     "ECMWF_ERA5_2020_2024_DUTCHBAY": {
         "type": "ECMWF",
@@ -60,15 +60,14 @@ APPROVED_SOURCES = {
 
 
 def validate_source_manifest(
-    source_id: str,
-    manifest: Optional[Dict[str, Any]] = None
+    source_id: str, manifest: Optional[Dict[str, Any]] = None
 ) -> bool:
     """Validate source ID against approved manifest.
-    
+
     Args:
         source_id: Source identifier (e.g., 'OEM_ENVISION_EN171_10_PC')
         manifest: Optional custom manifest (default: APPROVED_SOURCES)
-    
+
     Returns:
         True if source ID is in manifest, False otherwise
     """
@@ -79,30 +78,27 @@ def validate_source_manifest(
 
 def compute_checksum_sha256(data: Dict[str, Any]) -> str:
     """Compute SHA-256 checksum for AEP data integrity.
-    
+
     Args:
         data: Dictionary of AEP data to hash
-    
+
     Returns:
         64-character hex string (SHA-256 hash)
     """
     json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+    return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
 
-def load_aep_from_summary(
-    path: str,
-    validate_manifest: bool = True
-) -> Dict[str, Any]:
+def load_aep_from_summary(path: str, validate_manifest: bool = True) -> Dict[str, Any]:
     """Load AEP summary from Data Lake with provenance validation.
-    
+
     CRITICAL: This function NEVER hardcodes currency or tariff values.
     All revenue calculations must use tariff.lkr_per_kwh from YAML config.
-    
+
     Args:
         path: Path to AEP summary file (JSON or CSV)
         validate_manifest: If True, verify source_id is in approved manifest
-    
+
     Returns:
         Dictionary with:
             - capacity_factor: Net capacity factor
@@ -115,12 +111,12 @@ def load_aep_from_summary(
             - source_type: Source category (OEM/NREL/ECMWF)
             - losses: Loss breakdown dict
             - provenance: Metadata dict
-    
+
     Raises:
         FileNotFoundError: If path does not exist
         ValueError: If required fields missing or format unsupported
         KeyError: If source_id not in manifest (when validate_manifest=True)
-    
+
     Example:
         >>> aep_data = load_aep_from_summary(
         ...     path='tests/mocks/aep_summary_dutchbay.json',
@@ -132,7 +128,7 @@ def load_aep_from_summary(
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"AEP summary not found: {path}")
-    
+
     # Load based on file type
     if file_path.suffix == ".json":
         with open(file_path) as f:
@@ -144,19 +140,19 @@ def load_aep_from_summary(
         data = df.iloc[0].to_dict()
     else:
         raise ValueError(f"Unsupported file format: {file_path.suffix}")
-    
+
     # Validate required fields
     required_fields = [
         "capacity_factor",
         "net_site_aep_gwh",
         "n_turbines",
         "rated_power_kw",
-        "source_id"
+        "source_id",
     ]
     missing = [f for f in required_fields if f not in data]
     if missing:
         raise ValueError(f"Missing required fields: {missing}")
-    
+
     # Validate source manifest
     if validate_manifest:
         source_id = data["source_id"]
@@ -167,17 +163,17 @@ def load_aep_from_summary(
             )
         source_meta = APPROVED_SOURCES[source_id]
         data["source_type"] = source_meta["type"]
-    
+
     # Add derived fields
     data["rated_power_mw"] = data["rated_power_kw"] / 1000.0
-    
+
     # Consistency check: n_turbines × rated_power_mw should match project capacity
     calculated_capacity_mw = data["n_turbines"] * data["rated_power_mw"]
     logger.info(
         f"Turbine configuration: {data['n_turbines']} × {data['rated_power_mw']:.1f} MW = "
         f"{calculated_capacity_mw:.1f} MW total capacity"
     )
-    
+
     # Build provenance metadata
     provenance = {
         "aep_source_id": data["source_id"],
@@ -185,10 +181,10 @@ def load_aep_from_summary(
         "iec_standard_version": data.get("iec_standard", "Unknown"),
         "validation_date": datetime.now().isoformat(),
         "checksum_sha256": compute_checksum_sha256(data),
-        "file_path": str(file_path.absolute())
+        "file_path": str(file_path.absolute()),
     }
     data["provenance"] = provenance
-    
+
     logger.info(
         f"Loaded AEP summary from {file_path.name}:\n"
         f"  Source: {data['source_id']} ({data.get('source_type', 'Unknown')})\n"
@@ -196,13 +192,13 @@ def load_aep_from_summary(
         f"  Capacity Factor: {data['capacity_factor']:.2%}\n"
         f"  Checksum: {provenance['checksum_sha256'][:16]}..."
     )
-    
+
     return data
 
 
 def create_aep_summary_template() -> Dict[str, Any]:
     """Create template for AEP summary JSON.
-    
+
     Returns:
         Dictionary template with placeholders
     """
@@ -221,24 +217,21 @@ def create_aep_summary_template() -> Dict[str, Any]:
             "wake_loss_pct": 0.0,
             "availability_pct": 97.0,
             "electrical_loss_pct": 0.0,
-            "total_loss_pct": 0.0
-        }
+            "total_loss_pct": 0.0,
+        },
     }
 
 
-def export_provenance_report(
-    aep_data: Dict[str, Any],
-    output_path: str
-) -> None:
+def export_provenance_report(aep_data: Dict[str, Any], output_path: str) -> None:
     """Export provenance report for lender audit.
-    
+
     Args:
         aep_data: AEP data dict from load_aep_from_summary()
         output_path: Output file path (.json or .md)
     """
     output_file = Path(output_path)
     provenance = aep_data.get("provenance", {})
-    
+
     if output_file.suffix == ".json":
         with open(output_file, "w") as f:
             json.dump(provenance, f, indent=2)
@@ -248,10 +241,12 @@ def export_provenance_report(
             f.write(f"**Source ID**: `{provenance.get('aep_source_id')}`\n\n")
             f.write(f"**Net AEP**: {aep_data['net_site_aep_gwh']:.2f} GWh\n\n")
             f.write(f"**Capacity Factor**: {aep_data['capacity_factor']:.2%}\n\n")
-            f.write(f"**Checksum (SHA-256)**: `{provenance.get('checksum_sha256')}`\n\n")
+            f.write(
+                f"**Checksum (SHA-256)**: `{provenance.get('checksum_sha256')}`\n\n"
+            )
             f.write(f"**Validation Date**: {provenance.get('validation_date')}\n\n")
             f.write(f"**IEC Standard**: {provenance.get('iec_standard_version')}\n\n")
-    
+
     logger.info(f"Provenance report exported to {output_file}")
 
 

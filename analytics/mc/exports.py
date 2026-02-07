@@ -24,7 +24,7 @@ GWTF/CASPER:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -197,7 +197,9 @@ def build_lender_risk_table(
         "Project IRR",
         "Project NPV",
     ]
-    df["__order"] = df["metric"].apply(lambda x: preferred_order.index(x) if x in preferred_order else 999)
+    df["__order"] = df["metric"].apply(
+        lambda x: preferred_order.index(x) if x in preferred_order else 999
+    )
     df = df.sort_values("__order").drop(columns="__order").reset_index(drop=True)
     return df
 

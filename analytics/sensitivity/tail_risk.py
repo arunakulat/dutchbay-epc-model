@@ -22,7 +22,7 @@ You will wire it to your Monte Carlo engine in your repo (recommended).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -74,7 +74,7 @@ def enrich_suite_with_tail_risk(
 
     This skeleton assumes the suite already contains scenario KPI metadata for each case.
     If you want *proper* tail risk (VaR/CVaR) you should attach Monte Carlo arrays per case.
-    
+
     Note: MultiMetricSensitivitySuite was removed - use SensitivitySuite only.
     """
     if not run_cfg.enabled:
@@ -88,23 +88,24 @@ def enrich_suite_with_tail_risk(
     # case["metadata"]["trials"][metric_key] OR case["metadata"]["mc_trials"][metric_key]
     # If absent, we fall back to single-point KPI values and only provide a trivial snapshot.
     tail_table: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"alpha": float(run_cfg.cvar_alpha), "percentiles": list(run_cfg.percentiles)}
+    summary: dict[str, Any] = {
+        "alpha": float(run_cfg.cvar_alpha),
+        "percentiles": list(run_cfg.percentiles),
+    }
 
     # SensitivitySuite shape (single metric)
     if hasattr(suite, "tornado_results"):
         metric_key = suite.metric
         tornado_results = suite.tornado_results
-        
+
         for tornado in tornado_results:
             # Extract data from TornadoResult
             param_name = tornado.metric_name
             snap = _build_tornado_tail_snapshot(
-                tornado=tornado,
-                metric_key=metric_key,
-                run_cfg=run_cfg
+                tornado=tornado, metric_key=metric_key, run_cfg=run_cfg
             )
             tail_table.extend(snap["rows"])
-        
+
         summary["metrics"] = [metric_key]
     else:
         # Fallback for older structures
@@ -131,23 +132,27 @@ def _build_tornado_tail_snapshot(
 ) -> Dict[str, Any]:
     """Build tail risk snapshot from TornadoResult."""
     rows: list[dict[str, Any]] = []
-    
+
     param_name = str(getattr(tornado, "metric_name", "unknown"))
     base_value = float(getattr(tornado, "base_metric", 0.0))
-    
+
     # For now, just return basic structure
     # TODO: Extract shock_results and compute tail stats
-    rows.append({
-        "parameter": param_name,
-        "metric": metric_key,
-        "base_value": base_value,
-        "note": "basic_snapshot",
-    })
-    
+    rows.append(
+        {
+            "parameter": param_name,
+            "metric": metric_key,
+            "base_value": base_value,
+            "note": "basic_snapshot",
+        }
+    )
+
     return {"rows": rows}
 
 
-def _extract_trials_from_case(case: Mapping[str, Any], metric_key: str) -> Optional[np.ndarray]:
+def _extract_trials_from_case(
+    case: Mapping[str, Any], metric_key: str
+) -> Optional[np.ndarray]:
     meta = case.get("metadata", None)
     if not isinstance(meta, Mapping):
         return None

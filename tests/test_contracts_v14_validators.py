@@ -37,6 +37,7 @@ from analytics.contracts_v14_validators import (
 # ║ TEST: DSCR VALIDATION (8 TESTS)                                            ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 class TestDSCRValidation:
     """Test DSCR (Debt Service Coverage Ratio) validation."""
 
@@ -110,6 +111,7 @@ class TestDSCRValidation:
 # ║ TEST: IRR VALIDATION (8 TESTS)                                             ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 class TestIRRValidation:
     """Test IRR (Internal Rate of Return) validation."""
 
@@ -178,6 +180,7 @@ class TestIRRValidation:
 # ║ TEST: WACC VALIDATION (6 TESTS)                                            ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 class TestWACCValidation:
     """Test WACC (Weighted Average Cost of Capital) validation."""
 
@@ -231,6 +234,7 @@ class TestWACCValidation:
 # ║ TEST: COVENANT BREACH LOGIC (6 TESTS)                                     ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 class TestCovenantBreachLogic:
     """Test covenant breach detection logic."""
 
@@ -273,7 +277,9 @@ class TestCovenantBreachLogic:
         # THEN: Should have remediation
         assert result is not None
         assert result.remediation is not None
-        assert "Refinancing" in result.remediation or "refinancing" in result.remediation
+        assert (
+            "Refinancing" in result.remediation or "refinancing" in result.remediation
+        )
 
     def test_non_numeric_dscr_returns_error(self):
         """TEST: Non-numeric DSCR should return ERROR."""
@@ -287,6 +293,7 @@ class TestCovenantBreachLogic:
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ TEST: VALIDATION RESULT CONTAINER (8 TESTS)                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
+
 
 class TestValidationResultContainer:
     """Test ValidationResult container and aggregation."""
@@ -420,6 +427,7 @@ class TestValidationResultContainer:
 # ║ TEST: INTEGRATION TESTS (4 TESTS)                                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+
 class TestIntegrationValidation:
     """Test integration of validators with scenario results."""
 
@@ -459,9 +467,7 @@ class TestIntegrationValidation:
             {"project_irr": -0.02, "min_dscr": 0.9},
         ]
         # WHEN: Validating each
-        results = [
-            validate_scenario_result(s, strict=False) for s in scenarios
-        ]
+        results = [validate_scenario_result(s, strict=False) for s in scenarios]
         # THEN: Should get results for each
         assert len(results) == 3
         assert all(isinstance(r, ValidationResult) for r in results)
@@ -470,6 +476,7 @@ class TestIntegrationValidation:
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ TEST: EDGE CASES & STRESS TESTS (4 TESTS)                                 ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
+
 
 class TestEdgeCasesStress:
     """Test edge cases and stress conditions."""

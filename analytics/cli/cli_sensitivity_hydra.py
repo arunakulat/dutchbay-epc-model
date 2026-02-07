@@ -103,65 +103,63 @@ def main(cfg: DictConfig) -> None:
                 "config=scenarios/example.yaml "
                 "[output_dir=_out/sensitivity] "
                 "[write_artifacts=true]"
-            )
+            ),
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
-    
+
     # Extract parameters from config
     output_dir = Path(str(cfg.get("output_dir", "_out/sensitivity")))
     write_artifacts = bool(cfg.get("write_artifacts", True))
     shocks = OmegaConf.to_container(cfg.get("shocks", {}), resolve=True)
     metrics = list(cfg.get("metrics", []))
-    
+
     # Default metric if not specified
     metric = metrics[0] if metrics else "project_irr"
-    
+
     logger.info(
         "Sensitivity analysis: config=%s, metric=%s, output_dir=%s",
-        config_path, metric, output_dir
+        config_path,
+        metric,
+        output_dir,
     )
-    
+
     try:
         # =====================================================================
         # WIRED TO ENGINE: analytics.sensitivity_runner.run_sensitivity_analysis
         # =====================================================================
-        
+
         # Call sensitivity engine
-        suite = run_sensitivity_analysis(
-            str(config_path),
-            metric=metric
-        )
-        
+        suite = run_sensitivity_analysis(str(config_path), metric=metric)
+
         # Convert dataclass to dict for JSON serialization
         result: dict[str, Any] = asdict(suite)
-        
+
         # Add status and metadata
         result["status"] = "success"
         result["config_path"] = str(config_path)
         result["output_dir"] = str(output_dir)
         result["metric_analyzed"] = metric
-        
+
         logger.info(
             "Sensitivity analysis complete: %d variations analyzed",
-            len(result.get("variations", []))
+            len(result.get("variations", [])),
         )
-        
+
         # Optional artifact writing
         if write_artifacts:
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Write summary JSON
             summary_path = output_dir / "sensitivity_summary.json"
             summary_path.write_text(
-                json.dumps(result, indent=2, sort_keys=True),
-                encoding="utf-8"
+                json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
             )
             logger.info("Wrote sensitivity results to %s", summary_path)
-        
+
         # Print JSON to stdout (CLI-03 compliance)
         print(json.dumps(result, indent=2, sort_keys=True))
-        
+
     except Exception as e:
         # Error handling with structured JSON output
         error_result = {
@@ -169,7 +167,7 @@ def main(cfg: DictConfig) -> None:
             "error": str(e),
             "error_type": type(e).__name__,
             "config_path": str(config_path),
-            "metric": metric
+            "metric": metric,
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Sensitivity analysis failed")

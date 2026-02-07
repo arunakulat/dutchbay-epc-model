@@ -133,8 +133,14 @@ class TestConfigDriven:
             min_llcr_for_distribution=1.40,
         )
 
-        assert config_strict.min_dscr_for_distribution > config_flexible.min_dscr_for_distribution
-        assert config_strict.min_llcr_for_distribution > config_flexible.min_llcr_for_distribution
+        assert (
+            config_strict.min_dscr_for_distribution
+            > config_flexible.min_dscr_for_distribution
+        )
+        assert (
+            config_strict.min_llcr_for_distribution
+            > config_flexible.min_llcr_for_distribution
+        )
 
     def test_equity_returns_configurable(self) -> None:
         """Test preferred returns are fully configurable."""
@@ -178,7 +184,9 @@ class TestCodeQuality:
     def test_no_print_statements(self) -> None:
         """Test module doesn't use print() for logging."""
         source = inspect.getsource(
-            __import__("finance.equity_distribution_v14", fromlist=["equity_distribution_v14"])
+            __import__(
+                "finance.equity_distribution_v14", fromlist=["equity_distribution_v14"]
+            )
         )
         assert "print(" not in source
 
@@ -222,6 +230,4 @@ class TestCodeQuality:
 
         # Invalid config should fail
         with pytest.raises(ValueError):
-            EquityDistributionConfig(
-                min_dscr_for_distribution=0.2  # Too low
-            )
+            EquityDistributionConfig(min_dscr_for_distribution=0.2)  # Too low

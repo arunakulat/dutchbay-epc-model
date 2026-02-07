@@ -62,17 +62,17 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
         val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
         if isinstance(val, (int, float)):
             return float(val)
-    
+
     capex_cfg = params.get("capex", {}) or {}
     for key in ["usd_total", "capex_total_usd", "total_capex_usd", "total_capex"]:
         val = capex_cfg.get(key)
         if isinstance(val, (int, float)):
             return float(val)
-    
+
     val = params.get("capex_usd_total")
     if isinstance(val, (int, float)):
         return float(val)
-    
+
     logger.warning(
         "CAPEX extractor: no recognized key found. "
         "Checked: finance.capex_total_usd, capex.usd_total, etc. "
@@ -285,7 +285,7 @@ def apply_debt_layer(
                 out_bals[k] = max(0.0, out_bals[k] - princ)
         debt_service_total.append(svc)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
-        
+
         # ISSUE #3 FIX: Return None instead of float('inf')
         # Rationale:
         # - None is semantically clearer: 'not applicable' vs 'unbounded'
@@ -304,7 +304,8 @@ def apply_debt_layer(
 
     # Calculate min_dscr from operational periods only
     dscr_op = [
-        d for i, d in enumerate(dscr_series)
+        d
+        for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
@@ -388,7 +389,7 @@ def plan_debt(
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
-    
+
     [Docstring unchanged - full API documentation retained]
     """
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))

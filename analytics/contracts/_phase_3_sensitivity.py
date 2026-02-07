@@ -14,14 +14,14 @@ class ShockSpec:
 
     Defines the low and high values for a variable to test its impact on metrics.
     Immutable (frozen=True) ensures contracts cannot be accidentally modified.
-    
+
     CESSPIT Validation
     ──────────────────
     - variable_name: Must be non-empty string
     - low_value: Must be numeric
     - high_value: Must be numeric and >= low_value
     - Fails fast on contract violation
-    
+
     Examples
     ────────
     >>> ShockSpec("capex", 180e6, 220e6, "CAPEX ±10%")  # Valid
@@ -33,12 +33,12 @@ class ShockSpec:
     low_value: float
     high_value: float
     label: Optional[str] = None
-    
+
     def __post_init__(self) -> None:
         """Validate ShockSpec contract invariants.
-        
+
         CESSPIT: Fail-fast validation catches violations at construction time.
-        
+
         Raises
         ------
         ValueError
@@ -52,20 +52,20 @@ class ShockSpec:
                 f"ShockSpec.variable_name must be non-empty string, "
                 f"got: {self.variable_name!r}"
             )
-        
+
         # Validation 2: Numeric types
         if not isinstance(self.low_value, (int, float)):
             raise TypeError(
                 f"ShockSpec.low_value must be numeric, "
                 f"got {type(self.low_value).__name__}: {self.low_value!r}"
             )
-        
+
         if not isinstance(self.high_value, (int, float)):
             raise TypeError(
                 f"ShockSpec.high_value must be numeric, "
                 f"got {type(self.high_value).__name__}: {self.high_value!r}"
             )
-        
+
         # Validation 3: Logical ordering (low <= high)
         if self.low_value > self.high_value:
             raise ValueError(
@@ -100,10 +100,10 @@ class ShockResult:
 @dataclass(frozen=True)
 class ScenarioSpec:
     """Specification for a multi-variable scenario.
-    
+
     Defines a named scenario with multiple simultaneous shocks for stress testing.
     Enables correlated risk analysis (e.g., "downside case" with high CAPEX + low tariff).
-    
+
     Parameters
     ----------
     name : str
@@ -112,7 +112,7 @@ class ScenarioSpec:
         Human-readable description of the scenario.
     shocks : List[ShockSpec]
         List of shocks to apply simultaneously.
-    
+
     Examples
     --------
     >>> # Downside scenario: high CAPEX, low tariff, high interest
@@ -125,34 +125,32 @@ class ScenarioSpec:
     ...         ShockSpec("interest_rate", 0.09, 0.09),   # Use high value only
     ...     ]
     ... )
-    
+
     Notes
     -----
     For stress testing, set low_value = high_value to lock shock at specific value.
     For tornado analysis, use different low/high to test range.
     """
-    
+
     name: str
     description: str
     shocks: List[ShockSpec]
-    
+
     def __post_init__(self) -> None:
         """Validate ScenarioSpec contract invariants."""
         if not self.name or not isinstance(self.name, str):
             raise ValueError(
                 f"ScenarioSpec.name must be non-empty string, got: {self.name!r}"
             )
-        
+
         if not isinstance(self.shocks, list):
             raise TypeError(
                 f"ScenarioSpec.shocks must be a list, got {type(self.shocks).__name__}"
             )
-        
+
         if len(self.shocks) == 0:
-            raise ValueError(
-                f"ScenarioSpec '{self.name}' must have at least one shock"
-            )
-        
+            raise ValueError(f"ScenarioSpec '{self.name}' must have at least one shock")
+
         # Validate all shocks are ShockSpec instances
         for idx, shock in enumerate(self.shocks):
             if not isinstance(shock, ShockSpec):
@@ -165,9 +163,9 @@ class ScenarioSpec:
 @dataclass(frozen=True)
 class ScenarioResult:
     """Result of evaluating a multi-variable scenario.
-    
+
     Contains metrics computed after applying all shocks in a scenario.
-    
+
     Parameters
     ----------
     scenario_name : str
@@ -180,7 +178,7 @@ class ScenarioResult:
         Metrics after applying all scenario shocks.
     shock_values : Dict[str, float]
         Variable values used in this scenario.
-    
+
     Examples
     --------
     >>> result = ScenarioResult(
@@ -192,26 +190,26 @@ class ScenarioResult:
     ... )
     >>> assert result.impact("project_irr") == -0.04
     """
-    
+
     scenario_name: str
     description: str
     base_metrics: Dict[str, float]
     shocked_metrics: Dict[str, float]
     shock_values: Dict[str, float]
-    
+
     def impact(self, metric: str) -> float:
         """Calculate impact for a specific metric.
-        
+
         Parameters
         ----------
         metric : str
             Metric name (e.g., "project_irr").
-        
+
         Returns
         -------
         float
             Impact = shocked_metric - base_metric.
-        
+
         Raises
         ------
         KeyError
@@ -222,13 +220,13 @@ class ScenarioResult:
                 f"Metric '{metric}' not in base_metrics. "
                 f"Available: {list(self.base_metrics.keys())}"
             )
-        
+
         if metric not in self.shocked_metrics:
             raise KeyError(
                 f"Metric '{metric}' not in shocked_metrics. "
                 f"Available: {list(self.shocked_metrics.keys())}"
             )
-        
+
         return self.shocked_metrics[metric] - self.base_metrics[metric]
 
 
@@ -306,10 +304,10 @@ class SensitivitySuite:
 @dataclass(frozen=True)
 class MultiScenarioSuite:
     """Aggregate results of multi-scenario stress testing.
-    
+
     Contains results for multiple named scenarios (e.g., base, upside, downside).
     Enables comparative stress testing across different market conditions.
-    
+
     Parameters
     ----------
     base_scenario_name : str
@@ -318,7 +316,7 @@ class MultiScenarioSuite:
         Results for each evaluated scenario.
     analysis_timestamp : str
         ISO timestamp of analysis.
-    
+
     Examples
     --------
     >>> suite = MultiScenarioSuite(
@@ -328,59 +326,67 @@ class MultiScenarioSuite:
     ... )
     >>> print(suite.to_comparison_dict("project_irr"))
     """
-    
+
     base_scenario_name: str
     scenario_results: List[ScenarioResult]
     analysis_timestamp: str
-    
+
     def to_comparison_dict(self, metric: str) -> Dict[str, Any]:
         """Export scenario comparison for a specific metric.
-        
+
         Parameters
         ----------
         metric : str
             Metric to compare across scenarios.
-        
+
         Returns
         -------
         Dict[str, Any]
             Comparison dict with baseline and scenario impacts.
         """
         base_result = next(
-            (r for r in self.scenario_results if r.scenario_name == self.base_scenario_name),
-            None
+            (
+                r
+                for r in self.scenario_results
+                if r.scenario_name == self.base_scenario_name
+            ),
+            None,
         )
-        
+
         if not base_result:
             raise ValueError(
                 f"Base scenario '{self.base_scenario_name}' not found in results"
             )
-        
+
         baseline = base_result.base_metrics.get(metric)
-        
+
         if baseline is None:
-            raise KeyError(
-                f"Metric '{metric}' not in base scenario metrics"
-            )
-        
+            raise KeyError(f"Metric '{metric}' not in base scenario metrics")
+
         comparisons = []
         for result in self.scenario_results:
             if result.scenario_name == self.base_scenario_name:
                 continue  # Skip base scenario in comparison
-            
+
             shocked_value = result.shocked_metrics.get(metric)
             if shocked_value is None:
                 continue
-            
-            comparisons.append({
-                "scenario": result.scenario_name,
-                "description": result.description,
-                "baseline": baseline,
-                "shocked": shocked_value,
-                "impact": shocked_value - baseline,
-                "impact_pct": ((shocked_value - baseline) / baseline * 100) if baseline != 0 else 0.0,
-            })
-        
+
+            comparisons.append(
+                {
+                    "scenario": result.scenario_name,
+                    "description": result.description,
+                    "baseline": baseline,
+                    "shocked": shocked_value,
+                    "impact": shocked_value - baseline,
+                    "impact_pct": (
+                        ((shocked_value - baseline) / baseline * 100)
+                        if baseline != 0
+                        else 0.0
+                    ),
+                }
+            )
+
         return {
             "metric": metric,
             "baseline": baseline,
@@ -488,16 +494,16 @@ class StandardShockLibrary:
 
 class TaxShockLibrary(StandardShockLibrary):
     """Extended library with tax-specific sensitivity shocks.
-    
+
     Provides 5 additional tax-specific shock types for enhanced tax analysis:
     1. Corporate Tax Rate (±5%)
     2. Depreciation Method (categorical: straight-line vs MACRS)
     3. Distribution Delay Period (±2 years)
     4. TLCF Carryforward Limit (±5 years)
     5. Salvage Value (±20%)
-    
+
     Integrates with tax_optimization_v14_enhanced.py for TLCF-aware analysis.
-    
+
     Usage Example
     ─────────────
     >>> from analytics.contracts import TaxShockLibrary
@@ -508,23 +514,23 @@ class TaxShockLibrary(StandardShockLibrary):
     ... ]
     >>> suite = run_tax_sensitivity_analysis(shocks=shocks)
     """
-    
+
     @staticmethod
     def corporate_tax_rate(base_rate: float = 0.28) -> ShockSpec:
         """Corporate Tax Rate: ±5 percentage points (±500 basis points).
-        
+
         DFI Compliance: OECD average corporate tax rate range 20-33%.
-        
+
         Parameters
         ----------
         base_rate : float, default=0.28
             Base corporate tax rate as decimal (0.28 = 28%).
-        
+
         Returns
         -------
         ShockSpec
             Shock with low=23%, high=33% for base_rate=28%.
-        
+
         Examples
         --------
         >>> TaxShockLibrary.corporate_tax_rate(0.28)
@@ -536,26 +542,26 @@ class TaxShockLibrary(StandardShockLibrary):
             high_value=min(1.0, base_rate + 0.05),  # Ceiling at 100%
             label="Tax Rate ±5%",
         )
-    
+
     @staticmethod
     def depreciation_method() -> ShockSpec:
         """Depreciation Method: Categorical shock (straight-line vs MACRS).
-        
+
         Categorical encoding:
         - 0 = Straight-line depreciation (conservative)
         - 1 = MACRS-7 (accelerated, higher early tax shields)
-        
+
         Returns
         -------
         ShockSpec
             Shock with low=0 (straight-line), high=1 (MACRS).
-        
+
         Notes
         -----
         For proper evaluation, the evaluation engine must interpret:
         - 0 → use straight-line depreciation schedule
         - 1 → use MACRS-7 year schedule (as per IRS Rev. Proc. 2011-14)
-        
+
         Examples
         --------
         >>> TaxShockLibrary.depreciation_method()
@@ -567,28 +573,28 @@ class TaxShockLibrary(StandardShockLibrary):
             high_value=1.0,  # MACRS-7
             label="Depreciation Method (0=SL, 1=MACRS)",
         )
-    
+
     @staticmethod
     def distribution_delay(base_delay_years: int = 4) -> ShockSpec:
         """Distribution Delay Period: ±2 years delay in equity distributions.
-        
+
         Parameters
         ----------
         base_delay_years : int, default=4
             Base distribution delay period in years.
-        
+
         Returns
         -------
         ShockSpec
             Shock with low=base-2 years, high=base+2 years.
             Floors at 0 years (immediate distributions).
             Ceilings at 10 years (extreme delay case).
-        
+
         Notes
         -----
         Longer delays reduce equity IRR but may optimize TLCF utilization.
         Integrates with optimize_distribution_timing_enhanced().
-        
+
         Examples
         --------
         >>> TaxShockLibrary.distribution_delay(4)
@@ -600,30 +606,30 @@ class TaxShockLibrary(StandardShockLibrary):
             high_value=float(min(10, base_delay_years + 2)),
             label=f"Distribution Delay ±2yr (base={base_delay_years}yr)",
         )
-    
+
     @staticmethod
     def tlcf_carryforward_limit(base_years: int = 20) -> ShockSpec:
         """TLCF Carryforward Limit: ±5 years variation in carryforward period.
-        
+
         Parameters
         ----------
         base_years : int, default=20
             Base TLCF carryforward limit in years.
-        
+
         Returns
         -------
         ShockSpec
             Shock with low=base-5 years, high=base+5 years.
             Floors at 10 years (short carryforward).
             Ceilings at 30 years (extended carryforward).
-        
+
         Notes
         -----
         Jurisdictions vary:
         - US: Indefinite carryforward post-TCJA 2017 (use 30 as proxy)
         - EU: Typically 5-10 years
         - Emerging markets: 5-20 years
-        
+
         Examples
         --------
         >>> TaxShockLibrary.tlcf_carryforward_limit(20)
@@ -635,29 +641,29 @@ class TaxShockLibrary(StandardShockLibrary):
             high_value=float(min(30, base_years + 5)),
             label=f"TLCF Limit ±5yr (base={base_years}yr)",
         )
-    
+
     @staticmethod
     def salvage_value(base_salvage: float) -> ShockSpec:
         """Salvage Value: ±20% variation in end-of-life asset value.
-        
+
         Parameters
         ----------
         base_salvage : float
             Base salvage value at end of project life.
-        
+
         Returns
         -------
         ShockSpec
             Shock with low=80% of base, high=120% of base.
             Floors at $0 (no salvage value).
-        
+
         Notes
         -----
         Salvage value impacts:
         - Terminal cash flow (equity distribution)
         - Depreciation basis (for tax purposes)
         - Lender recovery in stressed scenarios
-        
+
         Examples
         --------
         >>> TaxShockLibrary.salvage_value(10e6)

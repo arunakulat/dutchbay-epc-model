@@ -51,6 +51,7 @@ def _base_yaml_cfg() -> dict:
 # 1) YAML parsing contract
 # ---------------------------------------------------------------------------
 
+
 def test_tax_config_from_yaml_missing_required_key_raises() -> None:
     cfg = _base_yaml_cfg()
     del cfg["tax"]["corporate_tax_rate"]
@@ -62,6 +63,7 @@ def test_tax_config_from_yaml_missing_required_key_raises() -> None:
 # ---------------------------------------------------------------------------
 # 2) Depreciation schedule contract
 # ---------------------------------------------------------------------------
+
 
 def test_depreciation_schedule_straight_line_totals_and_tail_zeros() -> None:
     capex_lkr = 100.0
@@ -84,6 +86,7 @@ def test_depreciation_schedule_straight_line_totals_and_tail_zeros() -> None:
 # 3) Holiday mapping contract
 # ---------------------------------------------------------------------------
 
+
 def test_tax_holiday_map_start_end_inclusive() -> None:
     cfg = _base_yaml_cfg()
     cfg["tax"]["tax_holiday_start_year"] = 3
@@ -102,6 +105,7 @@ def test_tax_holiday_map_start_end_inclusive() -> None:
 # ---------------------------------------------------------------------------
 # 4) Per-year calc: holiday → zero CIT, but WHT still applies
 # ---------------------------------------------------------------------------
+
 
 def test_calculate_tax_holiday_zero_cit_but_wht_applies() -> None:
     cfg = _base_yaml_cfg()
@@ -132,6 +136,7 @@ def test_calculate_tax_holiday_zero_cit_but_wht_applies() -> None:
 # ---------------------------------------------------------------------------
 # 5) Loss carry-forward offsets future taxable income
 # ---------------------------------------------------------------------------
+
 
 def test_loss_carryforward_offsets_future_taxable_income() -> None:
     cfg = _base_yaml_cfg()

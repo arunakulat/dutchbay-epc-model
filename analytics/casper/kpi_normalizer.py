@@ -169,12 +169,16 @@ def normalize_kpis_by_capacity(
     if capacity_mw <= 0:
         raise ValueError(f"capacity_mw must be positive, got {capacity_mw}")
     if annual_generation_mwh <= 0:
-        raise ValueError(f"annual_generation_mwh must be positive, got {annual_generation_mwh}")
+        raise ValueError(
+            f"annual_generation_mwh must be positive, got {annual_generation_mwh}"
+        )
 
     # Calculate LCOE (levelized cost of energy)
     # Simplified: (capex + NPV of opex) / NPV of generation
     # For quick benchmarking, use capex/annual_gen as proxy
-    lcoe = (capex_usd + opex_usd_annual * 20) / (annual_generation_mwh * 20)  # 20-year simple
+    lcoe = (capex_usd + opex_usd_annual * 20) / (
+        annual_generation_mwh * 20
+    )  # 20-year simple
 
     return NormalizedKPIs(
         npv_per_mw=kpis.get("project_npv", 0.0) / capacity_mw,
