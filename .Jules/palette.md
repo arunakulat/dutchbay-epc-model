@@ -1,5 +1,5 @@
-# Palette's Journal - Critical UX/Accessibility Learnings
+## 2025-12-13 - Robust Backend Initialization in Streamlit
 
-## 2026-02-07 - Robust Backend Initialization for Streamlit Dashboards
-**Learning:** Streamlit applications that tightly couple with a complex analytical backend can crash with a raw Python traceback if the backend has syntax errors or missing dependencies. This is intimidating for business users and provides poor UX for a "UI layer".
-**Action:** Wrap top-level imports in a try-except block catching `ImportError` and `SyntaxError`. If an error occurs, display a polished `st.error` component with a clear title, actionable troubleshooting steps, and technical details for developers. Use `st.stop()` to prevent the rest of the app from running in a broken state.
+**Learning:** Streamlit apps that depend on complex, frequently refactored backend modules (like financial contracts or heavy analytics) are prone to cryptic "ImportError" or "SyntaxError" crashes that break the entire UI. Providing a graceful "fail-fast" UI with actionable troubleshooting steps significantly improves the developer and user experience when working with versioned models.
+
+**Action:** Wrap core backend imports in Streamlit apps with a `try...except (ImportError, SyntaxError)` block and use `st.error()` to display human-readable context and unblock the user from a raw traceback.

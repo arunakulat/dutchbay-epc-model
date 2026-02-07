@@ -26,18 +26,23 @@ except (ImportError, SyntaxError) as e:
     BACKEND_AVAILABLE = False
     IMPORT_ERROR = e
 
+# Quick UI for scenario and drivers (customize as needed)
 st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
 
 if not BACKEND_AVAILABLE:
-    st.error(
-        "### ⚠️ Model Initialization Error\n"
-        "We encountered an issue loading the financial model backend. This usually happens "
-        "if the core contracts are being refactored or contain syntax errors.\n\n"
-        "**Actionable Steps:**\n"
-        "- Verify that `analytics/contracts_v14.py` is valid.\n"
-        "- Ensure all dependencies are installed in your virtual environment.\n"
-        f"\n**Technical Details:** `{IMPORT_ERROR}`"
+    st.error("### ⚠️ Model Initialization Error")
+    st.write(
+        "We encountered an issue loading the financial model backend. "
+        "This usually happens if the core contracts are being refactored or contain syntax errors."
     )
+    with st.expander("Actionable Steps"):
+        st.markdown(
+            """
+        - Verify that `analytics/contracts_v14.py` is valid.
+        - Ensure all dependencies are installed in your virtual environment.
+        """
+        )
+    st.info(f"**Technical Details:** `{IMPORT_ERROR}`")
     st.stop()
 
 config_path = st.text_input(
@@ -58,6 +63,7 @@ params = [
         high_pct=10,
         steps=5,
     ),
+    # Add or make this dynamic as needed
 ]
 
 st.write("Running tornado analysis...")
