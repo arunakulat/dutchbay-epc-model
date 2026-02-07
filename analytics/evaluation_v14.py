@@ -408,9 +408,7 @@ def evaluate_with_casper_tail_risk(
         stats = mc_result.get("statistics", {})
 
         # HARDENING: MC raw_results null safety
-        raw_results_candidate = mc_result.get("raw_results") or mc_result.get(
-            "iterations", []
-        )
+        raw_results_candidate = mc_result.get("raw_results") or mc_result.get("iterations", [])
 
         if not raw_results_candidate or len(raw_results_candidate) == 0:
             logger.error(
@@ -423,9 +421,7 @@ def evaluate_with_casper_tail_risk(
                 type(raw_results_candidate).__name__,
             )
             raw_results = []
-        elif len(raw_results_candidate) > 0 and not isinstance(
-            raw_results_candidate[0], dict
-        ):
+        elif len(raw_results_candidate) > 0 and not isinstance(raw_results_candidate[0], dict):
             logger.error(
                 "MC raw_results entries not dicts; tail risk analysis will be skipped"
             )
@@ -455,9 +451,7 @@ def evaluate_with_casper_tail_risk(
     logger.info("Step 3/4: Building tail-risk enrichments...")
 
     # LAZY IMPORT: Only import tail-risk functions when actually needed
-    if (sensitivity_suite and monte_carlo and raw_results) or (
-        monte_carlo and raw_results
-    ):
+    if (sensitivity_suite and monte_carlo and raw_results) or (monte_carlo and raw_results):
         try:
             from analytics.sensitivity_tail_risk import (
                 build_tail_risk_snapshots_for_metrics,
@@ -496,9 +490,7 @@ def evaluate_with_casper_tail_risk(
                         confidence=confidence,
                     )
                 except (ValueError, KeyError) as e:
-                    logger.warning(
-                        "Could not build tail risk snapshots: %s; skipping", str(e)
-                    )
+                    logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
                     tail_risk_snapshots = {}
 
     logger.info("Step 4/4: Assembling CASPER result...")

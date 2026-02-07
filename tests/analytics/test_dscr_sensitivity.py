@@ -37,9 +37,9 @@ def base_config():
     return SensitivityConfig(
         base_capex=200e6,  # $200M
         base_aep_p50=100_000,  # 100 GWh/year P50
-        base_aep_p99=85_000,  # 85 GWh/year P99 (downside)
-        base_tariff=50.0,  # $50/MWh
-        base_opex=5e6,  # $5M/year
+        base_aep_p99=85_000,   # 85 GWh/year P99 (downside)
+        base_tariff=50.0,      # $50/MWh
+        base_opex=5e6,         # $5M/year
         base_degradation=0.006,  # 0.6%/year
         project_life=20,
         perturbation_range_pct=20.0,  # ±20%
@@ -54,35 +54,33 @@ def base_config():
 @pytest.fixture
 def omegaconf_config():
     """OmegaConf configuration for full pipeline testing."""
-    return OmegaConf.create(
-        {
-            "project": {
-                "capex_usd": 200e6,
-                "degradation": 0.006,
-                "life_years": 20,
-            },
-            "wind_resource": {
-                "aep_p50_mwh": 100_000,
-                "aep_p99_mwh": 85_000,
-            },
-            "revenue": {
-                "tariff_usd_mwh": 50.0,
-            },
-            "operations": {
-                "opex_usd_year": 5e6,
-            },
-            "financing": {
-                "dscr_target_p50": 1.30,
-                "dscr_target_p99": 1.00,
-                "debt_ratio_max": 0.70,
-                "debt_rate": 0.08,
-            },
-            "sensitivity": {
-                "perturbation_range_pct": 20.0,
-                "n_steps": 5,
-            },
-        }
-    )
+    return OmegaConf.create({
+        "project": {
+            "capex_usd": 200e6,
+            "degradation": 0.006,
+            "life_years": 20,
+        },
+        "wind_resource": {
+            "aep_p50_mwh": 100_000,
+            "aep_p99_mwh": 85_000,
+        },
+        "revenue": {
+            "tariff_usd_mwh": 50.0,
+        },
+        "operations": {
+            "opex_usd_year": 5e6,
+        },
+        "financing": {
+            "dscr_target_p50": 1.30,
+            "dscr_target_p99": 1.00,
+            "debt_ratio_max": 0.70,
+            "debt_rate": 0.08,
+        },
+        "sensitivity": {
+            "perturbation_range_pct": 20.0,
+            "n_steps": 5,
+        },
+    })
 
 
 class TestCFADSConstruction:
@@ -115,7 +113,7 @@ class TestCFADSConstruction:
         # Verify monotonic decrease (ignoring opex)
         revenues = [cf + 500_000 for cf in cfads]  # Add back opex
         for i in range(1, len(revenues)):
-            assert revenues[i] < revenues[i - 1], (
+            assert revenues[i] < revenues[i-1], (
                 f"Revenue should decrease: year {i} = {revenues[i]}, "
                 f"year {i-1} = {revenues[i-1]}"
             )
@@ -152,9 +150,9 @@ class TestCFADSConstruction:
         )
 
         # All years should be identical
-        assert all(
-            abs(cf - cfads[0]) < 1.0 for cf in cfads
-        ), "CFADS should be constant with zero degradation"
+        assert all(abs(cf - cfads[0]) < 1.0 for cf in cfads), (
+            "CFADS should be constant with zero degradation"
+        )
 
 
 class TestParameterPerturbation:
@@ -228,9 +226,9 @@ class TestSingleVariableSensitivity:
 
         # Lower degradation (-20%) → higher debt
         # Higher degradation (+20%) → lower debt
-        assert (
-            min_pert["debt_sized"] > max_pert["debt_sized"]
-        ), "Debt capacity should decrease with higher degradation"
+        assert min_pert["debt_sized"] > max_pert["debt_sized"], (
+            "Debt capacity should decrease with higher degradation"
+        )
 
     def test_debt_increases_with_higher_aep(self, base_config):
         """Higher AEP should increase debt capacity."""
@@ -242,9 +240,9 @@ class TestSingleVariableSensitivity:
         max_pert = max(perturbations, key=lambda x: x["perturbation_pct"])
 
         # Higher AEP (+20%) → higher debt
-        assert (
-            max_pert["debt_sized"] > min_pert["debt_sized"]
-        ), "Debt capacity should increase with higher AEP"
+        assert max_pert["debt_sized"] > min_pert["debt_sized"], (
+            "Debt capacity should increase with higher AEP"
+        )
 
     def test_tornado_data_calculated(self, base_config):
         """Tornado data should be calculated correctly."""
@@ -296,7 +294,8 @@ class TestFullSensitivityAnalysis:
     def test_analyze_dscr_sensitivity_basic(self, omegaconf_config):
         """Full analysis should produce comprehensive results."""
         result = analyze_dscr_sensitivity(
-            omegaconf_config, variables=["degradation", "aep"]
+            omegaconf_config,
+            variables=["degradation", "aep"]
         )
 
         assert "sensitivity_config" in result
@@ -312,16 +311,17 @@ class TestFullSensitivityAnalysis:
     def test_tornado_chart_sorted_by_impact(self, omegaconf_config):
         """Tornado chart should be sorted by impact magnitude."""
         result = analyze_dscr_sensitivity(
-            omegaconf_config, variables=["degradation", "aep", "tariff"]
+            omegaconf_config,
+            variables=["degradation", "aep", "tariff"]
         )
 
         tornado = result["tornado_chart"]
 
         # Verify descending order by absolute impact
         for i in range(1, len(tornado)):
-            assert abs(tornado[i - 1]["impact_range"]) >= abs(
-                tornado[i]["impact_range"]
-            ), "Tornado chart should be sorted by descending impact magnitude"
+            assert abs(tornado[i-1]["impact_range"]) >= abs(tornado[i]["impact_range"]), (
+                "Tornado chart should be sorted by descending impact magnitude"
+            )
 
     def test_summary_statistics(self, omegaconf_config):
         """Summary should contain key statistics."""
@@ -340,7 +340,8 @@ class TestFullSensitivityAnalysis:
     def test_binding_constraint_analysis(self, omegaconf_config):
         """Binding constraint analysis should be comprehensive."""
         result = analyze_dscr_sensitivity(
-            omegaconf_config, variables=["degradation", "aep"]
+            omegaconf_config,
+            variables=["degradation", "aep"]
         )
 
         binding_analysis = result["binding_constraint_analysis"]
@@ -378,14 +379,12 @@ class TestFullSensitivityAnalysis:
 
     def test_missing_config_raises_error(self):
         """Missing required config should raise clear error."""
-        incomplete_config = OmegaConf.create(
-            {
-                "project": {
-                    "capex_usd": 200e6,
-                    # Missing degradation and life_years
-                },
-            }
-        )
+        incomplete_config = OmegaConf.create({
+            "project": {
+                "capex_usd": 200e6,
+                # Missing degradation and life_years
+            },
+        })
 
         with pytest.raises(ValueError, match="Missing required configuration"):
             analyze_dscr_sensitivity(incomplete_config)
@@ -439,9 +438,9 @@ class TestEdgeCases:
         result = analyze_single_variable(config_high_deg, "degradation")
 
         # Base debt should be significantly lower than low-degradation case
-        assert (
-            result["base_debt"] < base_config.base_capex * 0.60
-        ), "High degradation should significantly reduce debt capacity"
+        assert result["base_debt"] < base_config.base_capex * 0.60, (
+            "High degradation should significantly reduce debt capacity"
+        )
 
 
 class TestRegressionPins:
@@ -456,19 +455,22 @@ class TestRegressionPins:
         tornado = result["tornado_data"]
         impact_pct = abs(tornado["range_pct"])
 
-        assert (
-            3.0 < impact_pct < 25.0
-        ), f"Degradation impact should be 3-25% of debt, got {impact_pct:.1f}%"
+        assert 3.0 < impact_pct < 25.0, (
+            f"Degradation impact should be 3-25% of debt, got {impact_pct:.1f}%"
+        )
 
     def test_aep_sensitivity_highest_impact(self, omegaconf_config):
         """AEP should typically be most sensitive variable."""
         result = analyze_dscr_sensitivity(
-            omegaconf_config, variables=["degradation", "aep", "tariff"]
+            omegaconf_config,
+            variables=["degradation", "aep", "tariff"]
         )
 
         # AEP should be in top 2 most sensitive
         top2 = [result["tornado_chart"][i]["variable"] for i in range(2)]
-        assert "aep" in top2, "AEP should be one of the most sensitive parameters"
+        assert "aep" in top2, (
+            "AEP should be one of the most sensitive parameters"
+        )
 
 
 if __name__ == "__main__":

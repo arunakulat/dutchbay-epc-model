@@ -44,7 +44,7 @@ def save_results(results: dict[str, Any], output_path: Path) -> None:
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w") as f:
+    with open(output_path, 'w') as f:
         json.dump(results, f, indent=2, default=str)
 
     logger.info("Results saved to: %s", output_path)
@@ -58,59 +58,51 @@ def print_summary(results: dict[str, Any]) -> None:
     results : dict
         Analysis results from pipeline
     """
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("ANALYSIS SUMMARY")
-    print("=" * 80)
+    print("="*80)
 
-    config_path = results.get("config_path", "Unknown")
+    config_path = results.get('config_path', 'Unknown')
     print(f"\nScenario: {config_path}")
 
-    kpis = results.get("kpis", {})
+    kpis = results.get('kpis', {})
     print(f"\nProject NPV: ${kpis.get('project_npv', 0):,.0f}")
     print(f"Project IRR: {kpis.get('project_irr', 0)*100:.2f}%")
     print(f"Max Debt (USD): ${kpis.get('max_debt_usd', 0):,.0f}")
 
-    debt_result = results.get("debt_result", {})
+    debt_result = results.get('debt_result', {})
     print(f"\nMin DSCR: {debt_result.get('min_dscr', 0):.2f}")
     print(f"Balloon Remaining: ${debt_result.get('balloon_remaining', 0):,.0f}")
 
     # Refinancing results
-    refi = results.get("refinancing_result")
+    refi = results.get('refinancing_result')
     if refi:
         print(f"\nRefinancing Triggered: {refi.get('refinancing_triggered', False)}")
-        if refi.get("refinancing_triggered"):
+        if refi.get('refinancing_triggered'):
             print(f"Net Benefit: ${refi.get('net_benefit', 0):,.0f}")
             print(f"New Interest Rate: {refi.get('new_interest_rate', 0)*100:.2f}%")
 
     # Equity distribution results
-    eq_dist = results.get("equity_distribution_result")
+    eq_dist = results.get('equity_distribution_result')
     if eq_dist:
-        print(
-            f"\nEquity Distribution Enabled: {eq_dist.get('distribution_enabled', False)}"
-        )
-        if eq_dist.get("distribution_enabled"):
-            print(
-                f"Total Distribution: ${eq_dist.get('total_equity_distribution', 0):,.0f}"
-            )
-            print(
-                f"Class A Distribution: ${eq_dist.get('class_a_distribution', 0):,.0f}"
-            )
-            print(
-                f"Class B Distribution: ${eq_dist.get('class_b_distribution', 0):,.0f}"
-            )
+        print(f"\nEquity Distribution Enabled: {eq_dist.get('distribution_enabled', False)}")
+        if eq_dist.get('distribution_enabled'):
+            print(f"Total Distribution: ${eq_dist.get('total_equity_distribution', 0):,.0f}")
+            print(f"Class A Distribution: ${eq_dist.get('class_a_distribution', 0):,.0f}")
+            print(f"Class B Distribution: ${eq_dist.get('class_b_distribution', 0):,.0f}")
 
     # FX analysis
-    scenario_result = results.get("scenario_result", {})
-    fx_block = scenario_result.get("fx_block")
+    scenario_result = results.get('scenario_result', {})
+    fx_block = scenario_result.get('fx_block')
     if fx_block:
         print(f"\nFX Strategy: {fx_block.get('strategy', 'N/A')}")
         print(f"FX Match Ratio: {fx_block.get('fx_match_ratio', 0):.1f}")
         print(f"Hedging Coverage: {fx_block.get('hedging_coverage_pct', 0):.1f}%")
 
-    annual_rows = results.get("annual_rows", [])
+    annual_rows = results.get('annual_rows', [])
     print(f"\nTimeline: {len(annual_rows)} years")
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
 
 
 def main():

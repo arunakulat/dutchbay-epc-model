@@ -76,7 +76,8 @@ def test_canonical_cli_uses_hydra(cli_path):
     """
     path = Path(cli_path)
     assert path.exists(), (
-        f"Canonical CLI not found: {cli_path}\n" f"Expected in: {path.resolve()}"
+        f"Canonical CLI not found: {cli_path}\n"
+        f"Expected in: {path.resolve()}"
     )
 
     content = path.read_text()
@@ -173,18 +174,21 @@ def test_workflows_use_hydra_style():
             if pattern in content:
                 # Find line number
                 lines = content.split("\n")
-                line_nums = [i + 1 for i, line in enumerate(lines) if pattern in line]
-                violations.append((workflow.name, pattern, suggestion, line_nums))
+                line_nums = [
+                    i + 1 for i, line in enumerate(lines)
+                    if pattern in line
+                ]
+                violations.append((
+                    workflow.name, pattern, suggestion, line_nums
+                ))
 
     assert len(violations) == 0, (
-        "Workflows contain argparse-style flags (not Hydra-compatible):\n"
-        + "\n".join(
-            [
-                f"  {name} line {nums}: {pattern.strip()!r} - {sug}"
-                for name, pattern, sug, nums in violations
-            ]
-        )
-        + "\n\nGWTF R3: Use Hydra overrides (key=value) in all workflows"
+        "Workflows contain argparse-style flags (not Hydra-compatible):\n" +
+        "\n".join([
+            f"  {name} line {nums}: {pattern.strip()!r} - {sug}"
+            for name, pattern, sug, nums in violations
+        ]) +
+        "\n\nGWTF R3: Use Hydra overrides (key=value) in all workflows"
     )
 
 
@@ -217,7 +221,8 @@ def test_no_duplicate_entrypoints():
     # Check repo root for unexpected runners
     allowed_runners = {"run_full_pipeline_v14.py", "run_scenario_analytics_v14.py"}
     root_runners = [
-        f for f in Path(".").glob("run_*.py") if f.name not in allowed_runners
+        f for f in Path(".").glob("run_*.py")
+        if f.name not in allowed_runners
     ]
 
     assert len(root_runners) == 0, (
@@ -278,7 +283,7 @@ def test_documentation():
 
     This test always passes but prints useful information.
     """
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("CANONICAL CLIS (Hydra-only):")
     for cli in CANONICAL_CLIS:
         status = "✅" if Path(cli).exists() else "❌"
@@ -294,6 +299,6 @@ def test_documentation():
     print("  - CLI-01: Hydra architecture required")
     print("  - CLI-03: JSON-first outputs")
     print("  - R25: Clean structure (no duplicates)")
-    print("=" * 80)
+    print("="*80)
 
     assert True, "Documentation printed"

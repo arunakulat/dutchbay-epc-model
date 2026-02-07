@@ -116,7 +116,7 @@ def main(cfg: DictConfig) -> None:
                 "[n_trials=10000] "
                 "[seed=42] "
                 "[output_dir=_out/monte_carlo]"
-            ),
+            )
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
@@ -129,10 +129,7 @@ def main(cfg: DictConfig) -> None:
 
     logger.info(
         "Monte Carlo analysis: config=%s, n_trials=%d, seed=%s, output_dir=%s",
-        config_path,
-        n_trials,
-        seed,
-        output_dir,
+        config_path, n_trials, seed, output_dir
     )
 
     try:
@@ -156,7 +153,7 @@ def main(cfg: DictConfig) -> None:
         logger.info(
             "Monte Carlo analysis complete: %d trials, execution_time=%.2fs",
             n_trials,
-            result.get("execution_time_seconds", 0),
+            result.get("execution_time_seconds", 0)
         )
 
         # Optional artifact writing
@@ -166,7 +163,8 @@ def main(cfg: DictConfig) -> None:
             # Write summary JSON
             summary_path = output_dir / "monte_carlo_summary.json"
             summary_path.write_text(
-                json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
+                json.dumps(result, indent=2, sort_keys=True),
+                encoding="utf-8"
             )
             logger.info("Wrote Monte Carlo results to %s", summary_path)
 
@@ -181,7 +179,7 @@ def main(cfg: DictConfig) -> None:
             "error_type": type(e).__name__,
             "config_path": str(config_path),
             "n_trials": n_trials,
-            "seed": seed,
+            "seed": seed
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Monte Carlo analysis failed")

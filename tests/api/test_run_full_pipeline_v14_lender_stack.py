@@ -106,20 +106,22 @@ class TestCanonicalCLIProducesLenderStack:
         )
 
         annual_rows = result["annual_rows"]
-        assert isinstance(
-            annual_rows, list
-        ), f"annual_rows must be list, got {type(annual_rows).__name__}"
+        assert isinstance(annual_rows, list), (
+            f"annual_rows must be list, got {type(annual_rows).__name__}"
+        )
         assert len(annual_rows) > 0, "annual_rows cannot be empty"
 
         # Validate first row structure
         first_row = annual_rows[0]
-        assert isinstance(
-            first_row, dict
-        ), f"annual_rows[0] must be dict, got {type(first_row).__name__}"
+        assert isinstance(first_row, dict), (
+            f"annual_rows[0] must be dict, got {type(first_row).__name__}"
+        )
 
         required_keys = {"year", "cf_pre_debt", "debt_service_total"}
         missing_keys = required_keys - set(first_row.keys())
-        assert not missing_keys, f"annual_rows[0] missing required keys: {missing_keys}"
+        assert not missing_keys, (
+            f"annual_rows[0] missing required keys: {missing_keys}"
+        )
 
     def test_cli_output_has_debt_result(self, minimal_test_config):
         """GOLDEN: CLI output must contain debt_result (DSCR series).
@@ -140,29 +142,29 @@ class TestCanonicalCLIProducesLenderStack:
         )
 
         debt_result = result["debt_result"]
-        assert isinstance(
-            debt_result, dict
-        ), f"debt_result must be dict, got {type(debt_result).__name__}"
+        assert isinstance(debt_result, dict), (
+            f"debt_result must be dict, got {type(debt_result).__name__}"
+        )
 
         # Validate lender-critical keys
         required_keys = {"min_dscr", "dscr_series", "balloon_remaining"}
         missing_keys = required_keys - set(debt_result.keys())
-        assert (
-            not missing_keys
-        ), f"debt_result missing required lender keys: {missing_keys}"
+        assert not missing_keys, (
+            f"debt_result missing required lender keys: {missing_keys}"
+        )
 
         # Validate DSCR series structure
         dscr_series = debt_result["dscr_series"]
-        assert isinstance(
-            dscr_series, list
-        ), f"dscr_series must be list, got {type(dscr_series).__name__}"
+        assert isinstance(dscr_series, list), (
+            f"dscr_series must be list, got {type(dscr_series).__name__}"
+        )
         assert len(dscr_series) > 0, "dscr_series cannot be empty"
 
         # Validate min_dscr is numeric
         min_dscr = debt_result["min_dscr"]
-        assert isinstance(
-            min_dscr, (int, float)
-        ), f"min_dscr must be numeric, got {type(min_dscr).__name__}"
+        assert isinstance(min_dscr, (int, float)), (
+            f"min_dscr must be numeric, got {type(min_dscr).__name__}"
+        )
 
     def test_cli_output_has_kpis(self, minimal_test_config):
         """GOLDEN: CLI output must contain kpis (IRR, NPV, DSCR, LLCR, PLCR).
@@ -183,7 +185,9 @@ class TestCanonicalCLIProducesLenderStack:
         )
 
         kpis = result["kpis"]
-        assert isinstance(kpis, dict), f"kpis must be dict, got {type(kpis).__name__}"
+        assert isinstance(kpis, dict), (
+            f"kpis must be dict, got {type(kpis).__name__}"
+        )
 
         # Validate lender-critical KPIs exist
         lender_critical_kpis = {
@@ -195,14 +199,16 @@ class TestCanonicalCLIProducesLenderStack:
         }
 
         missing_kpis = lender_critical_kpis - set(kpis.keys())
-        assert not missing_kpis, f"kpis missing lender-critical metrics: {missing_kpis}"
+        assert not missing_kpis, (
+            f"kpis missing lender-critical metrics: {missing_kpis}"
+        )
 
         # Validate KPI values are numeric
         for kpi_name in lender_critical_kpis:
             kpi_value = kpis[kpi_name]
-            assert isinstance(
-                kpi_value, (int, float)
-            ), f"kpis['{kpi_name}'] must be numeric, got {type(kpi_value).__name__}"
+            assert isinstance(kpi_value, (int, float)), (
+                f"kpis['{kpi_name}'] must be numeric, got {type(kpi_value).__name__}"
+            )
 
     def test_cli_output_has_scenario_result(self, minimal_test_config):
         """GOLDEN: CLI output must contain scenario_result (ScenarioResult contract).
@@ -223,9 +229,9 @@ class TestCanonicalCLIProducesLenderStack:
         )
 
         scenario_result = result["scenario_result"]
-        assert isinstance(
-            scenario_result, dict
-        ), f"scenario_result must be dict, got {type(scenario_result).__name__}"
+        assert isinstance(scenario_result, dict), (
+            f"scenario_result must be dict, got {type(scenario_result).__name__}"
+        )
 
         # Validate ScenarioResult contract keys
         required_keys = {
@@ -239,15 +245,15 @@ class TestCanonicalCLIProducesLenderStack:
         }
 
         missing_keys = required_keys - set(scenario_result.keys())
-        assert (
-            not missing_keys
-        ), f"scenario_result missing required contract keys: {missing_keys}"
+        assert not missing_keys, (
+            f"scenario_result missing required contract keys: {missing_keys}"
+        )
 
         # Validate project_irr is numeric
         project_irr = scenario_result["project_irr"]
-        assert isinstance(
-            project_irr, (int, float)
-        ), f"project_irr must be numeric, got {type(project_irr).__name__}"
+        assert isinstance(project_irr, (int, float)), (
+            f"project_irr must be numeric, got {type(project_irr).__name__}"
+        )
 
     def test_cli_output_status_is_success(self, minimal_test_config):
         """GOLDEN: CLI output status must be 'success' for valid config.
@@ -444,7 +450,8 @@ class TestLenderStackOutputQuality:
         if finite_dscrs:
             series_min = min(finite_dscrs)
             assert abs(min_dscr - series_min) < 0.01, (
-                f"min_dscr mismatch: min_dscr={min_dscr}, " f"series_min={series_min}"
+                f"min_dscr mismatch: min_dscr={min_dscr}, "
+                f"series_min={series_min}"
             )
 
     def test_project_irr_is_reasonable(self, minimal_test_config):
@@ -456,9 +463,9 @@ class TestLenderStackOutputQuality:
 
         project_irr = result["kpis"]["project_irr"]
 
-        assert (
-            0.0 <= project_irr <= 0.5
-        ), f"project_irr unreasonable: {project_irr} (expected 0-50%)"
+        assert 0.0 <= project_irr <= 0.5, (
+            f"project_irr unreasonable: {project_irr} (expected 0-50%)"
+        )
 
 
 if __name__ == "__main__":

@@ -23,6 +23,5 @@ def __getattr__(name: str):
     """
     if name == "integrate_fx_into_scenario_result":
         from .fx_integration import integrate_fx_into_scenario_result
-
         return integrate_fx_into_scenario_result
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

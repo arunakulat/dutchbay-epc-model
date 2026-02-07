@@ -107,7 +107,7 @@ def run_v14_pipeline(
         )
 
     # Check for AEP block
-    aep_block = cfg.get("aep") or cfg.get("AEP")
+    aep_block = cfg.get('aep') or cfg.get('AEP')
 
     if aep_block is None:
         # No AEP integration requested; use original pipeline
@@ -132,14 +132,12 @@ def run_v14_pipeline(
             allow_fx_degradation=allow_fx_degradation,
         )
 
-    logger.info(
-        "Wind analytics integration enabled for scenario: %s", config_path_label
-    )
+    logger.info("Wind analytics integration enabled for scenario: %s", config_path_label)
 
     # Parse AEP block
-    data_lake_path = aep_block.get("data_lake_path")
-    net_aep_gwh_direct = aep_block.get("net_aep_gwh")
-    monte_carlo_config = aep_block.get("monte_carlo")
+    data_lake_path = aep_block.get('data_lake_path')
+    net_aep_gwh_direct = aep_block.get('net_aep_gwh')
+    monte_carlo_config = aep_block.get('monte_carlo')
 
     # Integrate AEP into config
     try:
@@ -153,7 +151,7 @@ def run_v14_pipeline(
             logger.info("Step 0.5/5: Loading AEP from Data Lake...")
 
             mc_dict = None
-            if monte_carlo_config and monte_carlo_config.get("enabled"):
+            if monte_carlo_config and monte_carlo_config.get('enabled'):
                 logger.info("Step 0.6/5: Running Monte Carlo AEP simulation...")
                 mc_dict = monte_carlo_config
 
@@ -165,8 +163,8 @@ def run_v14_pipeline(
 
             logger.info(
                 "AEP integration complete: %.2f GWh (CF=%.2f%%)",
-                cfg["aep"]["net_aep_gwh"],
-                cfg["aep"]["capacity_factor_derived"] * 100,
+                cfg['aep']['net_aep_gwh'],
+                cfg['aep']['capacity_factor_derived'] * 100
             )
         else:
             logger.warning(
@@ -177,7 +175,7 @@ def run_v14_pipeline(
         logger.error(
             "AEP integration failed: %s; falling back to standard pipeline",
             e,
-            exc_info=True,
+            exc_info=True
         )
         # Continue with original config (will use capacity_factor)
 
@@ -190,15 +188,15 @@ def run_v14_pipeline(
     )
 
     # Add AEP data to result if present
-    if "aep" in cfg:
-        result["aep_data"] = cfg["aep"]
+    if 'aep' in cfg:
+        result['aep_data'] = cfg['aep']
         logger.info(
             "AEP provenance included in result: Source=%s, IEC=%s",
-            cfg["aep"].get("source_id", "unknown"),
-            cfg["aep"].get("provenance", {}).get("iec_standard_version", "unknown"),
+            cfg['aep'].get('source_id', 'unknown'),
+            cfg['aep'].get('provenance', {}).get('iec_standard_version', 'unknown')
         )
 
     return result
 
 
-__all__ = ["run_v14_pipeline"]
+__all__ = ['run_v14_pipeline']

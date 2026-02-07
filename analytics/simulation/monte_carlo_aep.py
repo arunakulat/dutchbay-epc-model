@@ -137,27 +137,15 @@ def run_monte_carlo_aep(
 
     # Extract loss factors
     losses = aep_data.get("losses", {})
-    wake_loss_base = (
-        wake_loss_mean_pct
-        if wake_loss_mean_pct is not None
-        else losses.get("wake_loss_pct", 8.0)
-    )
-    avail_base = (
-        availability_mean_pct
-        if availability_mean_pct is not None
-        else losses.get("availability_pct", 97.0)
-    )
-    elec_loss_base = (
-        electrical_loss_mean_pct
-        if electrical_loss_mean_pct is not None
-        else losses.get("electrical_loss_pct", 2.0)
-    )
+    wake_loss_base = wake_loss_mean_pct if wake_loss_mean_pct is not None else losses.get("wake_loss_pct", 8.0)
+    avail_base = availability_mean_pct if availability_mean_pct is not None else losses.get("availability_pct", 97.0)
+    elec_loss_base = electrical_loss_mean_pct if electrical_loss_mean_pct is not None else losses.get("electrical_loss_pct", 2.0)
 
     # Estimate Weibull parameters from AEP (if not provided)
     if weibull_a_mean is None:
         # Rough estimate: A ≈ mean_ws ≈ (AEP / (CF * 8760 * capacity))^(1/3) * 7.5
         cf = aep_data["capacity_factor"]
-        mean_ws_estimate = 7.5 * (cf / 0.35) ** (1 / 3)  # Heuristic
+        mean_ws_estimate = 7.5 * (cf / 0.35) ** (1/3)  # Heuristic
         weibull_a_mean = mean_ws_estimate
 
     if weibull_k_mean is None:
@@ -176,24 +164,38 @@ def run_monte_carlo_aep(
 
     # Sample Weibull parameters
     weibull_a_samples = np.random.normal(
-        weibull_a_mean, weibull_a_mean * weibull_uncertainty_pct / 100.0, n_scenarios
+        weibull_a_mean,
+        weibull_a_mean * weibull_uncertainty_pct / 100.0,
+        n_scenarios
     )
     weibull_a_samples = np.clip(weibull_a_samples, 4.0, 15.0)  # Realistic range
 
     weibull_k_samples = np.random.normal(
-        weibull_k_mean, weibull_k_mean * weibull_uncertainty_pct / 100.0, n_scenarios
+        weibull_k_mean,
+        weibull_k_mean * weibull_uncertainty_pct / 100.0,
+        n_scenarios
     )
     weibull_k_samples = np.clip(weibull_k_samples, 1.5, 3.0)  # Realistic range
 
     # Sample loss factors
-    wake_loss_samples = np.random.normal(wake_loss_base, wake_loss_std_pct, n_scenarios)
+    wake_loss_samples = np.random.normal(
+        wake_loss_base,
+        wake_loss_std_pct,
+        n_scenarios
+    )
     wake_loss_samples = np.clip(wake_loss_samples, 0.0, 20.0)
 
-    avail_samples = np.random.normal(avail_base, availability_std_pct, n_scenarios)
+    avail_samples = np.random.normal(
+        avail_base,
+        availability_std_pct,
+        n_scenarios
+    )
     avail_samples = np.clip(avail_samples, 90.0, 100.0)
 
     elec_loss_samples = np.random.normal(
-        elec_loss_base, electrical_loss_std_pct, n_scenarios
+        elec_loss_base,
+        electrical_loss_std_pct,
+        n_scenarios
     )
     elec_loss_samples = np.clip(elec_loss_samples, 0.0, 5.0)
 
@@ -219,18 +221,16 @@ def run_monte_carlo_aep(
             electrical_loss_pct=elec_loss_samples[i],
         )
 
-        aep_scenarios.append(
-            {
-                "scenario_id": i,
-                "aep_gwh": aep_gwh,
-                "capacity_factor": cf,
-                "weibull_a": weibull_a_samples[i],
-                "weibull_k": weibull_k_samples[i],
-                "wake_loss_pct": wake_loss_samples[i],
-                "availability_pct": avail_samples[i],
-                "electrical_loss_pct": elec_loss_samples[i],
-            }
-        )
+        aep_scenarios.append({
+            "scenario_id": i,
+            "aep_gwh": aep_gwh,
+            "capacity_factor": cf,
+            "weibull_a": weibull_a_samples[i],
+            "weibull_k": weibull_k_samples[i],
+            "wake_loss_pct": wake_loss_samples[i],
+            "availability_pct": avail_samples[i],
+            "electrical_loss_pct": elec_loss_samples[i],
+        })
 
     # Convert to DataFrame
     scenarios_df = pd.DataFrame(aep_scenarios)

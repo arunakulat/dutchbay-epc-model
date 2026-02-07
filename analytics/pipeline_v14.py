@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from wind_resource import WindPipeline
 
@@ -103,7 +103,8 @@ def run_v14_pipeline(
         from schema import schema_guard
 
         validation_result = schema_guard.validate_config(
-            cfg, modules=validation_modules or ["all"]
+            cfg,
+            modules=validation_modules or ["all"]
         )
 
         if not validation_result["valid"]:
@@ -112,7 +113,7 @@ def run_v14_pipeline(
             return {
                 "status": "error",
                 "error": error_msg,
-                "validation_result": validation_result,
+                "validation_result": validation_result
             }
 
         logger.info("✓ Schema validation passed")
@@ -124,7 +125,7 @@ def run_v14_pipeline(
     location = {
         "name": cfg.project.location,
         "lat": cfg.project.get("latitude", 8.33),
-        "lon": cfg.project.get("longitude", 79.76),
+        "lon": cfg.project.get("longitude", 79.76)
     }
 
     # Initialize WindPipeline
@@ -134,24 +135,20 @@ def run_v14_pipeline(
         turbine_model=cfg.turbine.model,
         num_turbines=cfg.turbine.n_turbines,
         cache_dir="inputs/wind_data",
-        output_dir="outputs/wind_assessment",
+        output_dir="outputs/wind_assessment"
     )
 
     # Run complete assessment
     wind_results = pipeline.run_complete_assessment(
         start_date=cfg.wind_resource.get("start_date", "2014-12-01"),
         end_date=cfg.wind_resource.get("end_date", "2025-12-31"),
-        force_download=False,
+        force_download=False
     )
 
-    logger.info("✓ Wind assessment complete")
+    logger.info(f"✓ Wind assessment complete")
     logger.info(f"  Mean wind speed: {wind_results['wind_data']['mean_ws']:.2f} m/s")
-    logger.info(
-        f"  Gross CF: {wind_results['energy_production']['gross_aep']['capacity_factor_gross']:.1f}%"
-    )
-    logger.info(
-        f"  Net AEP P75: {wind_results['energy_production']['net_aep']['net_aep_p75_mwh']:,.0f} MWh/year"
-    )
+    logger.info(f"  Gross CF: {wind_results['energy_production']['gross_aep']['capacity_factor_gross']:.1f}%")
+    logger.info(f"  Net AEP P75: {wind_results['energy_production']['net_aep']['net_aep_p75_mwh']:,.0f} MWh/year")
 
     # Step 3: Export for cashflow model
     logger.info("\n[3/4] Exporting for cashflow model integration...")
@@ -179,25 +176,23 @@ def run_v14_pipeline(
             "project_name": cfg.project.name,
             "capacity_mw": cfg.project.capacity_mw,
             "turbines": cfg.turbine.n_turbines,
-            "turbine_model": cfg.turbine.model,
+            "turbine_model": cfg.turbine.model
         },
         "wind_assessment": wind_results,
         "cashflow_export": cashflow_data,
         # Key metrics for downstream use
-        "aep_p50_mwh": wind_results["energy_production"]["net_aep"]["net_aep_p50_mwh"],
-        "aep_p75_mwh": wind_results["energy_production"]["net_aep"]["net_aep_p75_mwh"],
-        "aep_p90_mwh": wind_results["energy_production"]["net_aep"]["net_aep_p90_mwh"],
-        "capacity_factor_net_p75": wind_results["energy_production"]["net_aep"][
-            "capacity_factor_net_p75"
-        ],
-        "revenue_annual_p75_usd": cashflow_data["revenue_annual_usd"],
-        "weibull_k": wind_results["statistical_analysis"]["weibull"]["shape_k"],
-        "weibull_c": wind_results["statistical_analysis"]["weibull"]["scale_c"],
-        "mean_wind_speed_ms": wind_results["wind_data"]["mean_ws"],
+        "aep_p50_mwh": wind_results['energy_production']['net_aep']['net_aep_p50_mwh'],
+        "aep_p75_mwh": wind_results['energy_production']['net_aep']['net_aep_p75_mwh'],
+        "aep_p90_mwh": wind_results['energy_production']['net_aep']['net_aep_p90_mwh'],
+        "capacity_factor_net_p75": wind_results['energy_production']['net_aep']['capacity_factor_net_p75'],
+        "revenue_annual_p75_usd": cashflow_data['revenue_annual_usd'],
+        "weibull_k": wind_results['statistical_analysis']['weibull']['shape_k'],
+        "weibull_c": wind_results['statistical_analysis']['weibull']['scale_c'],
+        "mean_wind_speed_ms": wind_results['wind_data']['mean_ws'],
         "output_files": {
             "assessment": str(output_dir / f"{location['name']}_assessment.json"),
-            "cashflow_export": str(cashflow_export_path),
-        },
+            "cashflow_export": str(cashflow_export_path)
+        }
     }
 
     logger.info("\n" + "=" * 80)

@@ -37,6 +37,7 @@ Context:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,6 @@ logger = logging.getLogger(__name__)
 try:
     from analytics.loader.aep_loader import load_aep_from_summary
     from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep
-
     WIND_MODULES_AVAILABLE = True
 except ImportError:
     logger.warning(
@@ -107,14 +107,15 @@ def load_aep_for_project(
     logger.info("Loading AEP from Data Lake: %s", aep_summary_path)
 
     aep_data = load_aep_from_summary(
-        path=aep_summary_path, validate_manifest=validate_manifest
+        path=aep_summary_path,
+        validate_manifest=validate_manifest
     )
 
     logger.info(
         "AEP loaded: %.2f GWh, CF=%.2f%%, Source=%s",
-        aep_data["net_site_aep_gwh"],
-        aep_data["capacity_factor"] * 100,
-        aep_data["source_id"],
+        aep_data['net_site_aep_gwh'],
+        aep_data['capacity_factor'] * 100,
+        aep_data['source_id']
     )
 
     return aep_data
@@ -171,7 +172,10 @@ def run_aep_monte_carlo(
             "Ensure analytics.simulation.monte_carlo_aep is installed."
         )
 
-    logger.info("Starting Monte Carlo AEP simulation: %d scenarios", n_scenarios)
+    logger.info(
+        "Starting Monte Carlo AEP simulation: %d scenarios",
+        n_scenarios
+    )
 
     mc_results = run_monte_carlo_aep(
         aep_summary_path=aep_summary_path,
@@ -183,16 +187,17 @@ def run_aep_monte_carlo(
 
     logger.info(
         "Monte Carlo complete: P50=%.2f GWh, P90=%.2f GWh, CV=%.2f%%",
-        mc_results["percentiles"]["p50"],
-        mc_results["percentiles"]["p90"],
-        mc_results["statistics"]["cv"] * 100,
+        mc_results['percentiles']['p50'],
+        mc_results['percentiles']['p90'],
+        mc_results['statistics']['cv'] * 100
     )
 
     return mc_results
 
 
 def compute_aep_p_values(
-    mc_results: Dict[str, Any], p_values: Optional[list[int]] = None
+    mc_results: Dict[str, Any],
+    p_values: Optional[list[int]] = None
 ) -> Dict[str, float]:
     """Extract AEP P-values from Monte Carlo results.
 
@@ -213,11 +218,11 @@ def compute_aep_p_values(
     if p_values is None:
         p_values = [50, 75, 90, 99]
 
-    percentiles = mc_results["percentiles"]
+    percentiles = mc_results['percentiles']
 
     result = {}
     for p in p_values:
-        key = f"p{p}"
+        key = f'p{p}'
         if key in percentiles:
             result[key] = percentiles[key]
 
@@ -286,7 +291,7 @@ def derive_capacity_factor_from_aep(
         logger.warning(
             "Derived capacity factor %.2f%% outside typical wind range [15%%, 60%%]. "
             "Verify AEP data quality.",
-            cf * 100,
+            cf * 100
         )
 
     return cf
@@ -364,9 +369,9 @@ def integrate_aep_into_config(
     # Extract capacity from config
     capacity_mw = None
     for path in [
-        ("project", "capacity_mw"),
-        ("project", "capacity"),
-        ("parameters", "capacity_mw"),
+        ('project', 'capacity_mw'),
+        ('project', 'capacity'),
+        ('parameters', 'capacity_mw'),
     ]:
         val = config
         for key in path:
@@ -384,18 +389,20 @@ def integrate_aep_into_config(
         )
 
     # Determine AEP value (P50 default, or MC percentile)
-    net_aep_gwh = aep_data["net_site_aep_gwh"]
+    net_aep_gwh = aep_data['net_site_aep_gwh']
 
     mc_results = None
     if monte_carlo_config is not None:
         # Run Monte Carlo
-        n_scenarios = monte_carlo_config.get("n_scenarios", 100000)
-        use_p_value = monte_carlo_config.get("use_p_value", 50)
-        export = monte_carlo_config.get("export_scenarios", False)
-        output_path = monte_carlo_config.get("output_path")
+        n_scenarios = monte_carlo_config.get('n_scenarios', 100000)
+        use_p_value = monte_carlo_config.get('use_p_value', 50)
+        export = monte_carlo_config.get('export_scenarios', False)
+        output_path = monte_carlo_config.get('output_path')
 
         logger.info(
-            "Running Monte Carlo AEP: %d scenarios, P%d", n_scenarios, use_p_value
+            "Running Monte Carlo AEP: %d scenarios, P%d",
+            n_scenarios,
+            use_p_value
         )
 
         mc_results = run_aep_monte_carlo(
@@ -406,46 +413,51 @@ def integrate_aep_into_config(
         )
 
         # Use specified percentile
-        p_key = f"p{use_p_value}"
-        if p_key in mc_results["percentiles"]:
-            net_aep_gwh = mc_results["percentiles"][p_key]
-            logger.info("Using P%d AEP for revenue: %.2f GWh", use_p_value, net_aep_gwh)
+        p_key = f'p{use_p_value}'
+        if p_key in mc_results['percentiles']:
+            net_aep_gwh = mc_results['percentiles'][p_key]
+            logger.info(
+                "Using P%d AEP for revenue: %.2f GWh",
+                use_p_value,
+                net_aep_gwh
+            )
         else:
             logger.warning(
                 "P%d not found in MC results; using P50 (%.2f GWh)",
                 use_p_value,
-                mc_results["percentiles"]["p50"],
+                mc_results['percentiles']['p50']
             )
-            net_aep_gwh = mc_results["percentiles"]["p50"]
+            net_aep_gwh = mc_results['percentiles']['p50']
 
     # Derive capacity factor
     cf_derived = derive_capacity_factor_from_aep(
-        net_aep_gwh=net_aep_gwh, capacity_mw=capacity_mw
+        net_aep_gwh=net_aep_gwh,
+        capacity_mw=capacity_mw
     )
 
     # Build AEP block for config
     aep_block = {
-        "net_aep_gwh": net_aep_gwh,
-        "capacity_factor_derived": cf_derived,
-        "source_id": aep_data.get("source_id"),
-        "source_type": aep_data.get("source_type"),
-        "provenance": aep_data.get("provenance"),
+        'net_aep_gwh': net_aep_gwh,
+        'capacity_factor_derived': cf_derived,
+        'source_id': aep_data.get('source_id'),
+        'source_type': aep_data.get('source_type'),
+        'provenance': aep_data.get('provenance'),
     }
 
     if mc_results is not None:
-        aep_block["monte_carlo_results"] = {
-            "percentiles": mc_results["percentiles"],
-            "confidence_intervals": mc_results["confidence_intervals"],
-            "statistics": mc_results["statistics"],
-            "n_scenarios": mc_results["n_scenarios"],
+        aep_block['monte_carlo_results'] = {
+            'percentiles': mc_results['percentiles'],
+            'confidence_intervals': mc_results['confidence_intervals'],
+            'statistics': mc_results['statistics'],
+            'n_scenarios': mc_results['n_scenarios'],
         }
 
-    config["aep"] = aep_block
+    config['aep'] = aep_block
 
     logger.info(
         "Integrated AEP into config: %.2f GWh (CF=%.2f%%)",
         net_aep_gwh,
-        cf_derived * 100,
+        cf_derived * 100
     )
 
     return config

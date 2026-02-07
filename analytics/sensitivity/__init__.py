@@ -38,17 +38,12 @@ def __getattr__(name: str) -> Any:
     trigger import of analytics.evaluation_v14 at import time.
     """
     # Engine exports
-    if name in (
-        "SensitivityRunConfig",
-        "run_sensitivity_analysis",
-        "build_one_way_sensitivity_suite",
-    ):
+    if name in ("SensitivityRunConfig", "run_sensitivity_analysis", "build_one_way_sensitivity_suite"):
         from analytics.sensitivity.engine import (
             SensitivityRunConfig,
             run_sensitivity_analysis,
             build_one_way_sensitivity_suite,
         )
-
         return {
             "SensitivityRunConfig": SensitivityRunConfig,
             "run_sensitivity_analysis": run_sensitivity_analysis,
@@ -61,7 +56,6 @@ def __getattr__(name: str) -> Any:
             TailRiskConfig,
             enrich_suite_with_tail_risk,
         )
-
         return {
             "TailRiskConfig": TailRiskConfig,
             "enrich_suite_with_tail_risk": enrich_suite_with_tail_risk,
@@ -73,7 +67,6 @@ def __getattr__(name: str) -> Any:
             suite_to_tables,
             suite_to_records,
         )
-
         return {
             "suite_to_tables": suite_to_tables,
             "suite_to_records": suite_to_records,

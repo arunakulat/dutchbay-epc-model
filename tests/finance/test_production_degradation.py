@@ -26,13 +26,14 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 0.65  # 0.65%/year
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Production should decrease every year
         for i in range(1, years):
-            assert (
-                production[i] < production[i - 1]
-            ), f"Production increased from year {i} to {i+1}"
+            assert production[i] < production[i-1], \
+                f"Production increased from year {i} to {i+1}"
 
     def test_year_1_equals_base_production(self):
         """First year should equal base production (no degradation yet)."""
@@ -40,7 +41,9 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 0.65
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Year 1 (index 0) should equal base
         assert production[0] == pytest.approx(aep_base, rel=1e-6)
@@ -55,7 +58,9 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 0.65
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Year 10 = index 9
         expected_year_10 = aep_base * (1 - 0.0065) ** 9
@@ -63,9 +68,8 @@ class TestWindDegradation:
 
         # Should be approximately 94% of base (6% loss)
         loss_pct = (1 - production[9] / aep_base) * 100
-        assert (
-            5.0 <= loss_pct <= 7.0
-        ), f"Year 10 loss {loss_pct:.1f}% outside expected range [5%, 7%]"
+        assert 5.0 <= loss_pct <= 7.0, \
+            f"Year 10 loss {loss_pct:.1f}% outside expected range [5%, 7%]"
 
     def test_year_25_cumulative_degradation(self):
         """Year 25 should show ~15% cumulative decline.
@@ -77,7 +81,9 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 0.65
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Year 25 = index 24
         expected_year_25 = aep_base * (1 - 0.0065) ** 24
@@ -85,9 +91,8 @@ class TestWindDegradation:
 
         # Should be approximately 85% of base (15% loss)
         loss_pct = (1 - production[24] / aep_base) * 100
-        assert (
-            13.0 <= loss_pct <= 17.0
-        ), f"Year 25 loss {loss_pct:.1f}% outside expected range [13%, 17%]"
+        assert 13.0 <= loss_pct <= 17.0, \
+            f"Year 25 loss {loss_pct:.1f}% outside expected range [13%, 17%]"
 
     def test_zero_degradation_flat_production(self):
         """Zero degradation should yield flat production profile.
@@ -98,13 +103,14 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 0.0  # No degradation
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # All years should equal base
         for year_idx in range(years):
-            assert production[year_idx] == pytest.approx(
-                aep_base, rel=1e-6
-            ), f"Year {year_idx + 1} production differs from base with 0% degradation"
+            assert production[year_idx] == pytest.approx(aep_base, rel=1e-6), \
+                f"Year {year_idx + 1} production differs from base with 0% degradation"
 
     def test_commissioning_delay_degradation_start(self):
         """Commissioning years should have no degradation.
@@ -151,9 +157,8 @@ class TestWindDegradation:
 
         # Exponential should show more loss early on
         # (but this depends on rate magnitude, so just check they differ)
-        assert linear[9] != pytest.approx(
-            exponential[9], rel=0.01
-        ), "Linear and exponential degradation should differ"
+        assert linear[9] != pytest.approx(exponential[9], rel=0.01), \
+            "Linear and exponential degradation should differ"
 
     def test_high_degradation_rate_validation(self):
         """Very high degradation rates should still produce valid results.
@@ -164,27 +169,29 @@ class TestWindDegradation:
         years = 25
         degradation_rate = 1.6  # High rate (old turbines)
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Should still be monotonically decreasing
         for i in range(1, years):
-            assert production[i] < production[i - 1]
+            assert production[i] < production[i-1]
 
         # Year 25 should be significantly lower (>30% loss)
         loss_pct = (1 - production[24] / aep_base) * 100
-        assert (
-            loss_pct > 30.0
-        ), f"High degradation (1.6%/year) should cause >30% loss by Year 25"
+        assert loss_pct > 30.0, \
+            f"High degradation (1.6%/year) should cause >30% loss by Year 25"
 
     def test_degradation_profile_length(self):
         """Output list should have exactly 'years' elements."""
         aep_base = 350_000
 
         for years in [10, 20, 25, 30]:
-            production = apply_degradation_profile(aep_base, years, 0.65)
-            assert (
-                len(production) == years
-            ), f"Expected {years} elements, got {len(production)}"
+            production = apply_degradation_profile(
+                aep_base, years, 0.65
+            )
+            assert len(production) == years, \
+                f"Expected {years} elements, got {len(production)}"
 
     def test_degradation_with_low_base_aep(self):
         """Degradation should work with small AEP values.
@@ -195,12 +202,16 @@ class TestWindDegradation:
         years = 10
         degradation_rate = 0.65
 
-        production = apply_degradation_profile(aep_base, years, degradation_rate)
+        production = apply_degradation_profile(
+            aep_base, years, degradation_rate
+        )
 
         # Should still degrade correctly
         assert production[0] == pytest.approx(aep_base, rel=1e-6)
         assert production[9] < aep_base
-        assert production[9] == pytest.approx(aep_base * (1 - 0.0065) ** 9, rel=0.002)
+        assert production[9] == pytest.approx(
+            aep_base * (1 - 0.0065) ** 9, rel=0.002
+        )
 
 
 class TestDegradationIntegration:
@@ -221,7 +232,8 @@ class TestDegradationIntegration:
         # Calculate NPV without degradation
         flat_revenue = [aep_base * tariff for _ in range(years)]
         npv_flat = sum(
-            rev / (1 + discount_rate) ** (i + 1) for i, rev in enumerate(flat_revenue)
+            rev / (1 + discount_rate) ** (i + 1)
+            for i, rev in enumerate(flat_revenue)
         )
 
         # Calculate NPV with degradation
@@ -237,9 +249,8 @@ class TestDegradationIntegration:
 
         # Difference should be 8-12% (industry estimate)
         npv_reduction_pct = (1 - npv_degraded / npv_flat) * 100
-        assert (
-            7.0 <= npv_reduction_pct <= 13.0
-        ), f"NPV reduction {npv_reduction_pct:.1f}% outside expected [7%, 13%]"
+        assert 7.0 <= npv_reduction_pct <= 13.0, \
+            f"NPV reduction {npv_reduction_pct:.1f}% outside expected [7%, 13%]"
 
 
 if __name__ == "__main__":

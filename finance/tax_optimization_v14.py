@@ -48,8 +48,9 @@ Version: 1.0
 
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
+import numpy as np
 
 # R7: IRR calculation from finance.irr ONLY (singleton pattern)
 from finance.irr import irr as calculate_irr
@@ -134,7 +135,9 @@ class TaxOptimizationResult:
 
 
 def track_tlcf_schedule(
-    taxable_income: List[float], corporate_tax_rate: float, initial_tlcf: float = 0.0
+    taxable_income: List[float],
+    corporate_tax_rate: float,
+    initial_tlcf: float = 0.0
 ) -> TLCFSchedule:
     """Track Tax Loss Carryforward schedule over project life.
 
@@ -185,12 +188,13 @@ def track_tlcf_schedule(
         annual_tlcf=annual_tlcf,
         tlcf_utilization=tlcf_utilization,
         tlcf_wasted=0.0,  # Calculated during optimization
-        tlcf_exhaustion_year=exhaustion_year,
+        tlcf_exhaustion_year=exhaustion_year
     )
 
 
 def calculate_immediate_distributions(
-    fcfe_schedule: List[float], equity_invested: float
+    fcfe_schedule: List[float],
+    equity_invested: float
 ) -> DistributionSchedule:
     """Calculate base case: immediate distribution of all FCFE.
 
@@ -222,9 +226,7 @@ def calculate_immediate_distributions(
     # Calculate equity IRR using R7: finance.irr ONLY
     cashflows = [-equity_invested] + annual_distributions
     equity_irr_decimal = calculate_irr(cashflows)
-    equity_irr_pct = (
-        (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
-    )
+    equity_irr_pct = (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
 
     total_distributed = sum(annual_distributions)
 
@@ -232,7 +234,7 @@ def calculate_immediate_distributions(
         annual_distributions=annual_distributions,
         cumulative_distributions=cumulative,
         equity_irr=equity_irr_pct,
-        total_distributed=total_distributed,
+        total_distributed=total_distributed
     )
 
 
@@ -241,7 +243,7 @@ def calculate_deferred_distributions(
     equity_invested: float,
     tlcf_schedule: TLCFSchedule,
     max_delay_years: int = 5,
-    tlcf_threshold: float = 1e6,
+    tlcf_threshold: float = 1e6
 ) -> DistributionSchedule:
     """Calculate tax-optimized distribution schedule.
 
@@ -277,7 +279,8 @@ def calculate_deferred_distributions(
     for t in range(project_life):
         # Check if should defer
         should_defer = (
-            t < max_delay_years and tlcf_schedule.annual_tlcf[t] > tlcf_threshold
+            t < max_delay_years and
+            tlcf_schedule.annual_tlcf[t] > tlcf_threshold
         )
 
         if should_defer:
@@ -303,9 +306,7 @@ def calculate_deferred_distributions(
     # Calculate equity IRR using R7: finance.irr ONLY
     cashflows = [-equity_invested] + annual_distributions
     equity_irr_decimal = calculate_irr(cashflows)
-    equity_irr_pct = (
-        (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
-    )
+    equity_irr_pct = (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
 
     total_distributed = sum(annual_distributions)
 
@@ -313,7 +314,7 @@ def calculate_deferred_distributions(
         annual_distributions=annual_distributions,
         cumulative_distributions=cumulative,
         equity_irr=equity_irr_pct,
-        total_distributed=total_distributed,
+        total_distributed=total_distributed
     )
 
 
@@ -322,7 +323,7 @@ def calculate_tax_savings(
     optimized_case: DistributionSchedule,
     tlcf_schedule: TLCFSchedule,
     corporate_tax_rate: float,
-    discount_rate: float = 0.12,
+    discount_rate: float = 0.12
 ) -> Tuple[float, float]:
     """Calculate tax savings from optimized distribution timing.
 
@@ -367,9 +368,7 @@ def calculate_tax_savings(
         # corporate tax paid, which then affects distributable cash
         # Here we model the opportunity cost of distributing vs retaining
 
-        base_tax_year = (
-            base_dist * corporate_tax_rate if tlcf_available < base_dist else 0
-        )
+        base_tax_year = base_dist * corporate_tax_rate if tlcf_available < base_dist else 0
         opt_tax_year = opt_dist * corporate_tax_rate if tlcf_available < opt_dist else 0
 
         base_tax.append(base_tax_year)
@@ -393,7 +392,7 @@ def optimize_distribution_timing(
     equity_invested: float,
     corporate_tax_rate: float = 0.28,
     target_equity_irr: float = 0.15,
-    max_delay_years: int = 5,
+    max_delay_years: int = 5
 ) -> TaxOptimizationResult:
     """Optimize equity distribution timing for maximum after-tax returns.
 
@@ -432,7 +431,7 @@ def optimize_distribution_timing(
         annual_tlcf=tlcf_schedule_data,
         tlcf_utilization=[0.0] * len(tlcf_schedule_data),  # Simplified
         tlcf_wasted=0.0,
-        tlcf_exhaustion_year=0,
+        tlcf_exhaustion_year=0
     )
 
     # Find TLCF exhaustion year
@@ -451,13 +450,17 @@ def optimize_distribution_timing(
         equity_invested,
         tlcf_schedule,
         max_delay_years,
-        tlcf_threshold=1e6,
+        tlcf_threshold=1e6
     )
     logger.info(f"Optimized equity IRR: {optimized_case.equity_irr:.2f}%")
 
     # Calculate tax savings
     tax_savings, tax_savings_npv = calculate_tax_savings(
-        base_case, optimized_case, tlcf_schedule, corporate_tax_rate, discount_rate=0.12
+        base_case,
+        optimized_case,
+        tlcf_schedule,
+        corporate_tax_rate,
+        discount_rate=0.12
     )
 
     # Determine optimal delay
@@ -486,7 +489,7 @@ def optimize_distribution_timing(
         tax_savings_usd=tax_savings,
         tax_savings_npv_usd=tax_savings_npv,
         optimal_delay_years=optimal_delay,
-        recommendation=recommendation,
+        recommendation=recommendation
     )
 
 
@@ -495,8 +498,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     # Example: 20-year project
-    fcfe = [0] + [5e6 + i * 0.5e6 for i in range(19)]  # Growing FCFE
-    tlcf = [5e6, 3e6, 2e6, 1e6, 0.5e6] + [0] * 15  # TLCF exhausts year 5
+    fcfe = [0] + [5e6 + i*0.5e6 for i in range(19)]  # Growing FCFE
+    tlcf = [5e6, 3e6, 2e6, 1e6, 0.5e6] + [0]*15  # TLCF exhausts year 5
 
     result = optimize_distribution_timing(
         fcfe_schedule=fcfe,
@@ -504,25 +507,25 @@ if __name__ == "__main__":
         equity_invested=50e6,
         corporate_tax_rate=0.28,
         target_equity_irr=0.15,
-        max_delay_years=5,
+        max_delay_years=5
     )
 
-    print("\n" + "=" * 70)
+    print("\n" + "="*70)
     print("TAX-AWARE EQUITY DISTRIBUTION OPTIMIZATION")
-    print("=" * 70)
-    print("\nBase Case (Immediate):")
+    print("="*70)
+    print(f"\nBase Case (Immediate):")
     print(f"  Equity IRR: {result.base_case.equity_irr:.2f}%")
     print(f"  Total Distributed: ${result.base_case.total_distributed/1e6:.1f}M")
 
-    print("\nOptimized Case (Deferred):")
+    print(f"\nOptimized Case (Deferred):")
     print(f"  Equity IRR: {result.optimized_case.equity_irr:.2f}%")
     print(f"  Total Distributed: ${result.optimized_case.total_distributed/1e6:.1f}M")
     print(f"  Optimal Delay: {result.optimal_delay_years} years")
 
-    print("\nTax Savings:")
+    print(f"\nTax Savings:")
     print(f"  Total: ${result.tax_savings_usd/1e6:.1f}M")
     print(f"  NPV: ${result.tax_savings_npv_usd/1e6:.1f}M")
 
-    print("\nRecommendation:")
+    print(f"\nRecommendation:")
     print(f"  {result.recommendation}")
-    print("\n" + "=" * 70)
+    print("\n" + "="*70)

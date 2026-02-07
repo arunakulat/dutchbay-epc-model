@@ -46,13 +46,11 @@ def typical_tlcf() -> List[float]:
 @pytest.fixture
 def test_config():
     """Test configuration."""
-    return OmegaConf.create(
-        {
-            "project": {"capex_usd": 200e6},
-            "financing": {"debt_ratio_target": 0.70, "equity_target_irr": 0.15},
-            "tax": {"corporate_rate": 0.28},
-        }
-    )
+    return OmegaConf.create({
+        "project": {"capex_usd": 200e6},
+        "financing": {"debt_ratio_target": 0.70, "equity_target_irr": 0.15},
+        "tax": {"corporate_rate": 0.28},
+    })
 
 
 class TestDelayPeriodSensitivity:
@@ -66,7 +64,7 @@ class TestDelayPeriodSensitivity:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             min_delay=0,
-            max_delay=5,
+            max_delay=5
         )
 
         # Should have results for 0-5 years (6 data points)
@@ -84,7 +82,7 @@ class TestDelayPeriodSensitivity:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             min_delay=0,
-            max_delay=5,
+            max_delay=5
         )
 
         delays = result["delay_analysis"]
@@ -106,7 +104,7 @@ class TestDelayPeriodSensitivity:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             min_delay=0,
-            max_delay=10,
+            max_delay=10
         )
 
         delays = result["delay_analysis"]
@@ -115,15 +113,15 @@ class TestDelayPeriodSensitivity:
         irr_0yr = delays[0]["equity_irr_pct"]
         irr_10yr = delays[10]["equity_irr_pct"]
 
-        assert (
-            irr_10yr < irr_0yr
-        ), f"10-year delay should reduce IRR: {irr_10yr:.2f}% vs {irr_0yr:.2f}%"
+        assert irr_10yr < irr_0yr, (
+            f"10-year delay should reduce IRR: {irr_10yr:.2f}% vs {irr_0yr:.2f}%"
+        )
 
         # Reduction should be > 3% for 10-year delay
         irr_reduction = irr_0yr - irr_10yr
-        assert (
-            irr_reduction > 2.0
-        ), f"10-year delay should reduce IRR by > 2%, got {irr_reduction:.2f}%"
+        assert irr_reduction > 2.0, (
+            f"10-year delay should reduce IRR by > 2%, got {irr_reduction:.2f}%"
+        )
 
 
 class TestTaxRateSensitivity:
@@ -136,7 +134,7 @@ class TestTaxRateSensitivity:
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
             base_tax_rate=0.28,
-            tax_rate_range=(0.15, 0.35),
+            tax_rate_range=(0.15, 0.35)
         )
 
         # Should have 3 results (low, base, high)
@@ -153,7 +151,7 @@ class TestTaxRateSensitivity:
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
             base_tax_rate=0.28,
-            tax_rate_range=(0.15, 0.35),
+            tax_rate_range=(0.15, 0.35)
         )
 
         rates = result["tax_rate_analysis"]
@@ -174,15 +172,15 @@ class TestTaxRateSensitivity:
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
             base_tax_rate=0.28,
-            tax_rate_range=(0.15, 0.35),
+            tax_rate_range=(0.15, 0.35)
         )
 
         impact_pct = result["tax_rate_impact_pct"]
 
         # Tax rate should have 20-60% impact on savings
-        assert (
-            15.0 < impact_pct < 70.0
-        ), f"Tax rate impact should be 15-70%, got {impact_pct:.1f}%"
+        assert 15.0 < impact_pct < 70.0, (
+            f"Tax rate impact should be 15-70%, got {impact_pct:.1f}%"
+        )
 
 
 class TestTornadoChart:
@@ -194,7 +192,7 @@ class TestTornadoChart:
             fcfe_schedule=typical_fcfe,
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Should have 3 variables
@@ -212,12 +210,12 @@ class TestTornadoChart:
             fcfe_schedule=typical_fcfe,
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Verify sorted descending
         for i in range(len(tornado) - 1):
-            assert tornado[i]["impact_range"] >= tornado[i + 1]["impact_range"], (
+            assert tornado[i]["impact_range"] >= tornado[i+1]["impact_range"], (
                 f"Tornado should be sorted: {tornado[i]['variable']} "
                 f"({tornado[i]['impact_range']}) should be >= "
                 f"{tornado[i+1]['variable']} ({tornado[i+1]['impact_range']})"
@@ -229,7 +227,7 @@ class TestTornadoChart:
             fcfe_schedule=typical_fcfe,
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         for entry in tornado:
@@ -250,28 +248,27 @@ class TestTornadoChart:
             fcfe_schedule=typical_fcfe,
             tlcf_schedule=typical_tlcf,
             equity_invested=50e6,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # First entry (highest impact) should often be tax rate or delay
         most_sensitive = tornado[0]["variable"]
 
         # Should be one of the two most important variables
-        assert most_sensitive in [
-            "Corporate Tax Rate",
-            "Distribution Delay Period",
-        ], f"Most sensitive should be tax rate or delay, got {most_sensitive}"
+        assert most_sensitive in ["Corporate Tax Rate", "Distribution Delay Period"], (
+            f"Most sensitive should be tax rate or delay, got {most_sensitive}"
+        )
 
 
 class TestCompleteSensitivityAnalysis:
     """Test complete sensitivity analysis pipeline."""
 
-    def test_complete_analysis_produces_all_outputs(
-        self, test_config, typical_fcfe, typical_tlcf
-    ):
+    def test_complete_analysis_produces_all_outputs(self, test_config, typical_fcfe, typical_tlcf):
         """Complete analysis should produce all output sections."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         # Required top-level sections
@@ -281,12 +278,12 @@ class TestCompleteSensitivityAnalysis:
         assert "base_optimization" in result
         assert "summary" in result
 
-    def test_summary_includes_key_metrics(
-        self, test_config, typical_fcfe, typical_tlcf
-    ):
+    def test_summary_includes_key_metrics(self, test_config, typical_fcfe, typical_tlcf):
         """Summary should include all key optimization metrics."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         summary = result["summary"]
@@ -308,7 +305,9 @@ class TestCompleteSensitivityAnalysis:
     def test_recommendation_generated(self, test_config, typical_fcfe, typical_tlcf):
         """Analysis should generate meaningful recommendation."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         recommendation = result["summary"]["recommendation"]
@@ -327,48 +326,54 @@ class TestRegressionPins:
     def test_typical_optimal_delay_range(self, test_config, typical_fcfe, typical_tlcf):
         """Typical projects should have 3-5 year optimal delay."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         optimal_delay = result["summary"]["optimal_delay_years"]
 
         # Regression pin: 3-5 years typical
-        assert (
-            2 <= optimal_delay <= 6
-        ), f"Optimal delay should be 2-6 years, got {optimal_delay}"
+        assert 2 <= optimal_delay <= 6, (
+            f"Optimal delay should be 2-6 years, got {optimal_delay}"
+        )
 
     def test_tax_savings_magnitude(self, test_config, typical_fcfe, typical_tlcf):
         """Tax savings should be $1-4M NPV for typical project."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         savings_m = result["summary"]["tax_savings_npv_usd"] / 1e6
 
         # Regression pin: $0.5-5M NPV typical
-        assert (
-            0.3 < savings_m < 6.0
-        ), f"Tax savings should be $0.3-6M NPV, got ${savings_m:.1f}M"
+        assert 0.3 < savings_m < 6.0, (
+            f"Tax savings should be $0.3-6M NPV, got ${savings_m:.1f}M"
+        )
 
     def test_irr_trade_off_reasonable(self, test_config, typical_fcfe, typical_tlcf):
         """Equity IRR trade-off should be < 3% for optimal timing."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         irr_trade_off = abs(result["summary"]["equity_irr_trade_off_pct"])
 
         # Regression pin: < 3% IRR reduction
-        assert (
-            irr_trade_off < 3.5
-        ), f"IRR trade-off should be < 3.5%, got {irr_trade_off:.2f}%"
+        assert irr_trade_off < 3.5, (
+            f"IRR trade-off should be < 3.5%, got {irr_trade_off:.2f}%"
+        )
 
-    def test_tornado_chart_has_material_impacts(
-        self, test_config, typical_fcfe, typical_tlcf
-    ):
+    def test_tornado_chart_has_material_impacts(self, test_config, typical_fcfe, typical_tlcf):
         """All tornado variables should have material impact (> 10%)."""
         result = analyze_tax_optimization_sensitivity(
-            config=test_config, fcfe_schedule=typical_fcfe, tlcf_schedule=typical_tlcf
+            config=test_config,
+            fcfe_schedule=typical_fcfe,
+            tlcf_schedule=typical_tlcf
         )
 
         tornado = result["tornado_chart"]
@@ -382,19 +387,19 @@ class TestRegressionPins:
 
     def test_dutchbay_sensitivity_baseline(self):
         """DutchBay baseline should produce expected sensitivity results."""
-        config = OmegaConf.create(
-            {
-                "project": {"capex_usd": 200e6},
-                "financing": {"debt_ratio_target": 0.70, "equity_target_irr": 0.15},
-                "tax": {"corporate_rate": 0.28},
-            }
-        )
+        config = OmegaConf.create({
+            "project": {"capex_usd": 200e6},
+            "financing": {"debt_ratio_target": 0.70, "equity_target_irr": 0.15},
+            "tax": {"corporate_rate": 0.28},
+        })
 
         fcfe = [0] + [6e6 + i * 0.3e6 for i in range(19)]
         tlcf = [6e6, 4e6, 2.5e6, 1.2e6, 0.5e6] + [0] * 15
 
         result = analyze_tax_optimization_sensitivity(
-            config=config, fcfe_schedule=fcfe, tlcf_schedule=tlcf
+            config=config,
+            fcfe_schedule=fcfe,
+            tlcf_schedule=tlcf
         )
 
         summary = result["summary"]

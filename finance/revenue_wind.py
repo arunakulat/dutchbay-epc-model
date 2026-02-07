@@ -47,7 +47,7 @@ Version History:
 from __future__ import annotations
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -151,11 +151,7 @@ def calculate_wind_revenue_annual(
         ppa_term_years,
     )
     logger.info("  Year 1 Revenue: %s", currency_fmt.format(revenue_millions[0]))
-    logger.info(
-        "  Year %d Revenue: %s",
-        ppa_term_years,
-        currency_fmt.format(revenue_millions[-1]),
-    )
+    logger.info("  Year %d Revenue: %s", ppa_term_years, currency_fmt.format(revenue_millions[-1]))
     logger.info("  Total Undiscounted: %s", currency_fmt.format(revenue_millions.sum()))
 
     return revenue_millions
@@ -233,11 +229,8 @@ def calculate_wind_revenue_monte_carlo(
     logger.info("  P90 Annual Revenue (Yr1): %s", currency_fmt.format(p90_revenue))
     logger.info("  Std Dev: %s", currency_fmt.format(std))
     logger.info("  CV: %.2f%%", cv * 100)
-    logger.info(
-        "  Total %d-Year Revenue (P50, undiscounted): %s",
-        ppa_term_years,
-        currency_fmt.format(revenue_total),
-    )
+    logger.info("  Total %d-Year Revenue (P50, undiscounted): %s",
+                ppa_term_years, currency_fmt.format(revenue_total))
 
     return {
         "p50_revenue": p50_revenue,
@@ -247,6 +240,7 @@ def calculate_wind_revenue_monte_carlo(
         "revenue_total_p50": revenue_total,
         "revenue_annual_p50": revenue_annual,
         "currency": ppa_currency,
+
         # Legacy fields (for backward compatibility)
         "p50_revenue_m_eur": p50_revenue if ppa_currency == "EUR" else None,
         "p90_revenue_m_eur": p90_revenue if ppa_currency == "EUR" else None,
@@ -255,7 +249,10 @@ def calculate_wind_revenue_monte_carlo(
     }
 
 
-def convert_tariff_to_mwh(tariff_per_kwh: float, currency: str = "LKR") -> float:
+def convert_tariff_to_mwh(
+    tariff_per_kwh: float,
+    currency: str = "LKR"
+) -> float:
     """Convert tariff from per-kWh to per-MWh basis.
 
     Args:

@@ -7,7 +7,7 @@ Sampling utilities (LHS baseline).
 Keep import-light: numpy only.
 """
 
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import numpy as np
 
@@ -38,18 +38,12 @@ def generate_lhs_samples(
     u = rng.uniform(size=(n, k))
     a = cut[:n]
     b = cut[1:]
-    pts = (
-        u * (b - a)[:, None] + a[:, None]
-    )  # [n,1] broadcast -> [n,k] via later operations
+    pts = u * (b - a)[:, None] + a[:, None]  # [n,1] broadcast -> [n,k] via later operations
 
     # independent random permutations per dimension
     lhs = np.zeros((n, k), dtype=float)
     for j in range(k):
-        perm = (
-            rng.permutation(n)
-            if common_random_numbers
-            else np.random.default_rng(int(seed + j)).permutation(n)
-        )
+        perm = rng.permutation(n) if common_random_numbers else np.random.default_rng(int(seed + j)).permutation(n)
         lhs[:, j] = pts[perm, 0]  # take the single column
 
     # scale to bounds

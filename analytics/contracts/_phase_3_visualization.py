@@ -46,7 +46,9 @@ import pandas as pd
 
 from analytics.contracts._phase_3_sensitivity import (
     MultiScenarioSuite,
+    ScenarioResult,
     SensitivitySuite,
+    ShockResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,18 +129,16 @@ def _phase3_suite_to_dataframe(
     rows: List[Dict[str, Any]] = []
 
     for shock in suite.tornado_ranking:
-        rows.append(
-            {
-                "variable": shock.variable_name,
-                "label": shock.label,
-                "base_metric": shock.base_metric,
-                "low_metric": shock.low_metric,
-                "high_metric": shock.high_metric,
-                "impact": shock.impact,
-                "direction": shock.direction,
-                "sensitivity": shock.sensitivity,
-            }
-        )
+        rows.append({
+            "variable": shock.variable_name,
+            "label": shock.label,
+            "base_metric": shock.base_metric,
+            "low_metric": shock.low_metric,
+            "high_metric": shock.high_metric,
+            "impact": shock.impact,
+            "direction": shock.direction,
+            "sensitivity": shock.sensitivity,
+        })
 
     df = pd.DataFrame(rows)
 
@@ -169,20 +169,16 @@ def _v14_suite_to_dataframe(
 
     for tornado_result in suite.tornado_results:
         # v14 TornadoResult has different structure
-        rows.append(
-            {
-                "variable": tornado_result.variable,
-                "label": tornado_result.label,
-                "base_metric": tornado_result.base_metric,
-                "low_metric": tornado_result.low_case_metric,
-                "high_metric": tornado_result.high_case_metric,
-                "impact": tornado_result.impact_abs,
-                "direction": (
-                    "positive" if tornado_result.impact_dir > 0 else "negative"
-                ),
-                "sensitivity": 0.0,  # v14 doesn't have sensitivity field
-            }
-        )
+        rows.append({
+            "variable": tornado_result.variable,
+            "label": tornado_result.label,
+            "base_metric": tornado_result.base_metric,
+            "low_metric": tornado_result.low_case_metric,
+            "high_metric": tornado_result.high_case_metric,
+            "impact": tornado_result.impact_abs,
+            "direction": "positive" if tornado_result.impact_dir > 0 else "negative",
+            "sensitivity": 0.0,  # v14 doesn't have sensitivity field
+        })
 
     df = pd.DataFrame(rows)
 

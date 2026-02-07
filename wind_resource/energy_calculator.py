@@ -117,7 +117,7 @@ class EnergyCalculator:
         else:
             self._load_power_curve_manual(power_curve)
         
-        logger.info("EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
+        logger.info(f"EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
         logger.info(f"  Turbines: {num_turbines}")
         logger.info(f"  Rated capacity: {self.rated_capacity} kW")
         logger.info(f"  Total capacity: {self.rated_capacity * num_turbines / 1000:.1f} MW")

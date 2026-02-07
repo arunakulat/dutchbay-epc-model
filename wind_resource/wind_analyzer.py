@@ -101,7 +101,7 @@ class WindAnalyzer:
         # Load configuration (CCCDIR compliance)
         self._load_config(config_path)
         
-        logger.info("WindAnalyzer v1.0.0 initialized")
+        logger.info(f"WindAnalyzer v1.0.0 initialized")
         logger.info(f"  Data points: {len(self.df):,}")
         logger.info(f"  Wind speed column: {ws_column}")
         logger.info(f"  Mean WS: {self.df[ws_column].mean():.2f} m/s")

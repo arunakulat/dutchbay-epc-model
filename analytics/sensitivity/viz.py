@@ -13,7 +13,7 @@ Placeholder:
 - Provides tiny plot helpers that accept tables/records and return fig objects.
 """
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, Sequence, Union
 
 
 def plot_tornado(
@@ -36,14 +36,7 @@ def plot_tornado(
     ax.set_title(title)
     ax.set_xlabel("Value")
     ax.set_ylabel("Case")
-    ax.text(
-        0.5,
-        0.5,
-        "Tornado plot placeholder",
-        ha="center",
-        va="center",
-        transform=ax.transAxes,
-    )
+    ax.text(0.5, 0.5, "Tornado plot placeholder", ha="center", va="center", transform=ax.transAxes)
     return fig
 
 
@@ -64,9 +57,7 @@ def plot_heatmap_matrix(
     ax.set_title(title)
 
     if values.size == 0:
-        ax.text(
-            0.5, 0.5, "Empty heatmap", ha="center", va="center", transform=ax.transAxes
-        )
+        ax.text(0.5, 0.5, "Empty heatmap", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     im = ax.imshow(values, aspect="auto")

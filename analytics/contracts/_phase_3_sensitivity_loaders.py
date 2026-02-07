@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -95,7 +95,9 @@ def load_shock_specs_from_yaml(path: str | Path) -> List[ShockSpec]:
     yaml_path = Path(path)
 
     if not yaml_path.exists():
-        raise FileNotFoundError(f"Shock config YAML not found: {yaml_path}")
+        raise FileNotFoundError(
+            f"Shock config YAML not found: {yaml_path}"
+        )
 
     logger.debug("Loading shock specs from YAML: %s", yaml_path)
 
@@ -110,7 +112,7 @@ def load_shock_specs_from_yaml(path: str | Path) -> List[ShockSpec]:
 
 
 def load_shock_specs_from_omegaconf(
-    cfg: DictConfig | Dict[str, Any],
+    cfg: DictConfig | Dict[str, Any]
 ) -> List[ShockSpec]:
     """Load ShockSpec list from OmegaConf DictConfig.
 
@@ -199,7 +201,9 @@ def load_shock_specs_from_omegaconf(
     return shock_specs
 
 
-def build_shock_spec_from_dict(data: Dict[str, Any] | DictConfig) -> ShockSpec:
+def build_shock_spec_from_dict(
+    data: Dict[str, Any] | DictConfig
+) -> ShockSpec:
     """Build ShockSpec from dictionary.
 
     Parameters
@@ -243,7 +247,9 @@ def build_shock_spec_from_dict(data: Dict[str, Any] | DictConfig) -> ShockSpec:
         data = OmegaConf.to_container(data, resolve=True)
 
     if not isinstance(data, dict):
-        raise TypeError(f"Expected dict or DictConfig, got {type(data).__name__}")
+        raise TypeError(
+            f"Expected dict or DictConfig, got {type(data).__name__}"
+        )
 
     # Validate required fields
     required_fields = {"variable_name", "low_value", "high_value"}
@@ -306,16 +312,25 @@ def validate_shock_config_structure(cfg: DictConfig) -> bool:
     >>> assert validate_shock_config_structure(cfg)
     """
     if not isinstance(cfg, DictConfig):
-        raise ValueError(f"Expected DictConfig, got {type(cfg).__name__}")
+        raise ValueError(
+            f"Expected DictConfig, got {type(cfg).__name__}"
+        )
 
     if "shocks" not in cfg:
-        raise ValueError("Missing 'shocks' key in config. " "Expected: {shocks: [...]}")
+        raise ValueError(
+            "Missing 'shocks' key in config. "
+            "Expected: {shocks: [...]}"
+        )
 
     if not isinstance(cfg.shocks, (ListConfig, list)):
-        raise ValueError(f"'shocks' must be a list, got {type(cfg.shocks).__name__}")
+        raise ValueError(
+            f"'shocks' must be a list, got {type(cfg.shocks).__name__}"
+        )
 
     if len(cfg.shocks) == 0:
-        raise ValueError("'shocks' list is empty. At least one shock required.")
+        raise ValueError(
+            "'shocks' list is empty. At least one shock required."
+        )
 
     # Validate first shock has required fields
     first_shock = cfg.shocks[0]
@@ -323,7 +338,9 @@ def validate_shock_config_structure(cfg: DictConfig) -> bool:
     missing = required - set(first_shock.keys())
 
     if missing:
-        raise ValueError(f"First shock missing required fields: {missing}")
+        raise ValueError(
+            f"First shock missing required fields: {missing}"
+        )
 
     logger.debug(
         "Shock config structure validated: %d shock(s)",

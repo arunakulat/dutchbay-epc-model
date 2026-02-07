@@ -11,7 +11,7 @@ Full implementation in:
 Removal: Sprint 13 after test migration complete.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -21,8 +21,7 @@ class RefinancingEngine(BaseModel):
 
     Real implementation: finance.refinancing_v14_hydra.RefinancingEngineHydra
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     scenario_name: str = "base"
     config: Dict[str, Any] = {}
@@ -33,8 +32,7 @@ class RefinancingV14(BaseModel):
 
     Real implementation: finance.refinancing_v14_hydra.run_refinancing_scenario
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     year: int = 0
     trigger_dscr: float = 0.0

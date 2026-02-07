@@ -229,7 +229,9 @@ def test_aep_from_weibull_distribution(
     assert losses["electrical_loss_pct"] == 2.0
 
 
-def test_aep_from_constant_wind(reference_curve, constant_wind_8760, turbine_config):
+def test_aep_from_constant_wind(
+    reference_curve, constant_wind_8760, turbine_config
+):
     """Test AEP calculation from constant wind speed."""
     aep_gwh, cf, losses = compute_aep_from_curve(
         wind_dist_ms=constant_wind_8760,
@@ -245,7 +247,9 @@ def test_aep_from_constant_wind(reference_curve, constant_wind_8760, turbine_con
     assert abs(aep_gwh - expected_aep_gwh) / expected_aep_gwh < 0.05  # Within 5%
 
 
-def test_aep_with_loss_factors(reference_curve, weibull_wind_8760, turbine_config):
+def test_aep_with_loss_factors(
+    reference_curve, weibull_wind_8760, turbine_config
+):
     """Test that loss factors are correctly applied."""
     # Without losses
     aep_gross, _, _ = compute_aep_from_curve(
@@ -352,13 +356,13 @@ def test_thrust_coefficient_values(reference_curve):
 
     # CT should generally decrease after rated wind speed
     rated_ws = ENVISION_EN171_65_SPECS["rated_wind_speed_ms"]
-    ct_below_rated = reference_curve[reference_curve["wind_speed_ms"] <= rated_ws][
-        "thrust_coefficient"
-    ].values
+    ct_below_rated = reference_curve[
+        reference_curve["wind_speed_ms"] <= rated_ws
+    ]["thrust_coefficient"].values
 
-    ct_above_rated = reference_curve[reference_curve["wind_speed_ms"] > rated_ws][
-        "thrust_coefficient"
-    ].values
+    ct_above_rated = reference_curve[
+        reference_curve["wind_speed_ms"] > rated_ws
+    ]["thrust_coefficient"].values
 
     # Mean CT above rated should be less than below rated
     assert ct_above_rated.mean() < ct_below_rated.mean()
@@ -416,9 +420,9 @@ def test_power_curve_dataframe_structure(reference_curve):
     "air_density,expected_cf_range",
     [
         (1.225, (0.30, 0.40)),  # Sea level
-        (1.15, (0.28, 0.38)),  # 150m elevation
-        (1.05, (0.26, 0.36)),  # 500m elevation
-        (0.95, (0.24, 0.34)),  # 1000m elevation
+        (1.15, (0.28, 0.38)),   # 150m elevation
+        (1.05, (0.26, 0.36)),   # 500m elevation
+        (0.95, (0.24, 0.34)),   # 1000m elevation
     ],
 )
 def test_aep_at_different_elevations(

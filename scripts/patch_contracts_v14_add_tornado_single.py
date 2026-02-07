@@ -101,7 +101,7 @@ def add_tornado_result_single(content: str) -> str:
     """
 
     # Find insertion point after ParameterRangeConfig
-    insertion_marker = "class ShockSpec:"
+    insertion_marker = 'class ShockSpec:'
 
     new_class = '''\n\n@dataclass
 class TornadoResult:
@@ -143,9 +143,7 @@ class TornadoResult:
 @dataclass
 '''
 
-    return content.replace(
-        f"@dataclass\nclass {insertion_marker}", new_class + insertion_marker
-    )
+    return content.replace(f'@dataclass\nclass {insertion_marker}', new_class + insertion_marker)
 
 
 def rename_existing_tornado(content: str) -> str:
@@ -166,8 +164,8 @@ def rename_existing_tornado(content: str) -> str:
 
     # Also update references in MultiMetricTornadoResult
     content = content.replace(
-        "tornado_charts: Dict[str, TornadoResult]",
-        "tornado_charts: Dict[str, MultiShockTornadoResult]",
+        'tornado_charts: Dict[str, TornadoResult]',
+        'tornado_charts: Dict[str, MultiShockTornadoResult]'
     )
 
     return content
@@ -176,7 +174,7 @@ def rename_existing_tornado(content: str) -> str:
 def main() -> None:
     """Main execution: Apply all patches to analytics/contracts_v14.py."""
 
-    file_path = Path("analytics/contracts_v14.py")
+    file_path = Path('analytics/contracts_v14.py')
 
     if not file_path.exists():
         raise FileNotFoundError(f"{file_path} not found")
@@ -210,5 +208,5 @@ def main() -> None:
     print("  3. Commit: git add analytics/contracts_v14.py && git commit")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

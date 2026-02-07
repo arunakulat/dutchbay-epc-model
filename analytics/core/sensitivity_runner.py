@@ -93,9 +93,7 @@ def run_sensitivity_analysis(
         if interest_base is not None and interest_base > 0:
             shock_specs.append(StandardShockLibrary.interest_rate(interest_base))
     # 4. Evaluate scenario for each shock at low and high values
-    tornado_results: List[TornadoResult] = (
-        []
-    )  # v2: tornado_results instead of shock_results
+    tornado_results: List[TornadoResult] = []  # v2: tornado_results instead of shock_results
     for shock in shock_specs:
         # Low shock run
         low_override: dict[str, Any] = {}
@@ -132,7 +130,7 @@ def run_sensitivity_analysis(
         shock_result = ShockResult(
             low_case=low_metric_value,
             high_case=high_metric_value,
-            impact=high_metric_value - low_metric_value,
+            impact=high_metric_value - low_metric_value
         )
 
         # Wrap in TornadoResult (v2 contract expects this structure)
@@ -141,7 +139,7 @@ def run_sensitivity_analysis(
             base_metric=base_metric_value,
             shock_results=[shock_result],
             label=shock.label,
-            impact_abs=abs(high_metric_value - low_metric_value),
+            impact_abs=abs(high_metric_value - low_metric_value)
         )
         tornado_results.append(tornado_result)
 
@@ -150,6 +148,6 @@ def run_sensitivity_analysis(
         metric=metric,  # v2: 'metric' not 'metric_name'
         base_config_path=str(base_path),
         tornado_results=tornado_results,  # v2: 'tornado_results' not 'shock_results'
-        base_kpis={metric: base_metric_value},  # v2: added base_kpis
+        base_kpis={metric: base_metric_value}  # v2: added base_kpis
     )
     return suite

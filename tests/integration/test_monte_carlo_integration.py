@@ -128,9 +128,9 @@ class TestMonteCarloExecution:
         assert "irr_p90_pct" in stats
 
         # IRR should be reasonable
-        assert (
-            5.0 < stats["irr_mean_pct"] < 20.0
-        ), f"Mean IRR should be 5-20%, got {stats['irr_mean_pct']:.1f}%"
+        assert 5.0 < stats["irr_mean_pct"] < 20.0, (
+            f"Mean IRR should be 5-20%, got {stats['irr_mean_pct']:.1f}%"
+        )
 
 
 class TestMonteCarloStatistics:
@@ -140,9 +140,7 @@ class TestMonteCarloStatistics:
     def test_percentiles_ordered_correctly(self, dutchbay_omegaconf_config):
         """P10 < P50 < P90 ordering should be correct."""
         mc_config = dutchbay_omegaconf_config
-        mc_config.monte_carlo.n_iterations = (
-            500  # More iterations for stable percentiles
-        )
+        mc_config.monte_carlo.n_iterations = 500  # More iterations for stable percentiles
 
         engine = MonteCarloEngine(mc_config, n_iterations=500)
         result = engine.run()
@@ -173,33 +171,23 @@ class TestMonteCarloStatistics:
         stats = result["statistics"]
 
         # NPV: median should be within 20% of mean
-        npv_diff_pct = (
-            abs(stats["npv_median_usd"] - stats["npv_mean_usd"])
-            / stats["npv_mean_usd"]
-            * 100
+        npv_diff_pct = abs(stats["npv_median_usd"] - stats["npv_mean_usd"]) / stats["npv_mean_usd"] * 100
+        assert npv_diff_pct < 20.0, (
+            f"NPV median should be within 20% of mean, got {npv_diff_pct:.1f}% difference"
         )
-        assert (
-            npv_diff_pct < 20.0
-        ), f"NPV median should be within 20% of mean, got {npv_diff_pct:.1f}% difference"
 
         # IRR: median should be within 15% of mean
-        irr_diff_pct = (
-            abs(stats["irr_median_pct"] - stats["irr_mean_pct"])
-            / stats["irr_mean_pct"]
-            * 100
+        irr_diff_pct = abs(stats["irr_median_pct"] - stats["irr_mean_pct"]) / stats["irr_mean_pct"] * 100
+        assert irr_diff_pct < 15.0, (
+            f"IRR median should be within 15% of mean, got {irr_diff_pct:.1f}% difference"
         )
-        assert (
-            irr_diff_pct < 15.0
-        ), f"IRR median should be within 15% of mean, got {irr_diff_pct:.1f}% difference"
 
 
 class TestMonteCarloPerformance:
     """Test Monte Carlo performance benchmarks."""
 
     @pytest.mark.slow
-    def test_1k_iterations_performance(
-        self, dutchbay_omegaconf_config, performance_benchmarks
-    ):
+    def test_1k_iterations_performance(self, dutchbay_omegaconf_config, performance_benchmarks):
         """1,000 iterations should complete within performance target."""
         mc_config = dutchbay_omegaconf_config
         mc_config.monte_carlo.n_iterations = 1000
@@ -212,18 +200,16 @@ class TestMonteCarloPerformance:
 
         max_time = performance_benchmarks["monte_carlo_1k_max_seconds"]
 
-        assert (
-            execution_time < max_time
-        ), f"1K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        assert execution_time < max_time, (
+            f"1K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        )
 
         # Also check result metadata
         assert result["execution_time_seconds"] < max_time
 
     @pytest.mark.slow
     @pytest.mark.performance
-    def test_10k_iterations_performance(
-        self, dutchbay_omegaconf_config, performance_benchmarks
-    ):
+    def test_10k_iterations_performance(self, dutchbay_omegaconf_config, performance_benchmarks):
         """10,000 iterations should complete within performance target."""
         mc_config = dutchbay_omegaconf_config
         mc_config.monte_carlo.n_iterations = 10000
@@ -236,9 +222,9 @@ class TestMonteCarloPerformance:
 
         max_time = performance_benchmarks["monte_carlo_10k_max_seconds"]
 
-        assert (
-            execution_time < max_time
-        ), f"10K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        assert execution_time < max_time, (
+            f"10K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        )
 
     @pytest.mark.slow
     def test_iterations_per_second_rate(self, dutchbay_omegaconf_config):
@@ -255,9 +241,9 @@ class TestMonteCarloPerformance:
         iterations_per_second = 500 / execution_time
 
         # Should achieve at least 100 iterations/second
-        assert (
-            iterations_per_second > 100
-        ), f"Should achieve > 100 iter/s, got {iterations_per_second:.0f} iter/s"
+        assert iterations_per_second > 100, (
+            f"Should achieve > 100 iter/s, got {iterations_per_second:.0f} iter/s"
+        )
 
 
 class TestMonteCarloDegradationIntegration:
@@ -307,18 +293,18 @@ class TestMonteCarloRegressionPins:
 
         # Mean NPV should be in reasonable range
         mean_npv_m = stats["npv_mean_usd"] / 1e6
-        assert (
-            20.0 < mean_npv_m < 80.0
-        ), f"Mean NPV should be $20-80M, got ${mean_npv_m:.1f}M"
+        assert 20.0 < mean_npv_m < 80.0, (
+            f"Mean NPV should be $20-80M, got ${mean_npv_m:.1f}M"
+        )
 
         # P10-P90 range should show reasonable uncertainty
         p10_m = stats["npv_p10_usd"] / 1e6
         p90_m = stats["npv_p90_usd"] / 1e6
         range_m = p90_m - p10_m
 
-        assert (
-            range_m > 10.0
-        ), f"P10-P90 NPV range should be > $10M, got ${range_m:.1f}M"
+        assert range_m > 10.0, (
+            f"P10-P90 NPV range should be > $10M, got ${range_m:.1f}M"
+        )
 
     @pytest.mark.slow
     def test_irr_distribution_with_dutchbay_parameters(self, dutchbay_omegaconf_config):
@@ -334,16 +320,18 @@ class TestMonteCarloRegressionPins:
 
         # Mean IRR should be in reasonable range
         mean_irr = stats["irr_mean_pct"]
-        assert 7.0 < mean_irr < 15.0, f"Mean IRR should be 7-15%, got {mean_irr:.1f}%"
+        assert 7.0 < mean_irr < 15.0, (
+            f"Mean IRR should be 7-15%, got {mean_irr:.1f}%"
+        )
 
         # P10-P90 range should show reasonable uncertainty
         p10_irr = stats["irr_p10_pct"]
         p90_irr = stats["irr_p90_pct"]
         range_irr = p90_irr - p10_irr
 
-        assert (
-            range_irr > 3.0
-        ), f"P10-P90 IRR range should be > 3%, got {range_irr:.1f}%"
+        assert range_irr > 3.0, (
+            f"P10-P90 IRR range should be > 3%, got {range_irr:.1f}%"
+        )
 
 
 if __name__ == "__main__":

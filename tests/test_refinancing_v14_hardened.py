@@ -41,7 +41,6 @@ from finance.refinancing_v14_hardened import (
 # ║ FIXTURES & SETUP                                                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 @pytest.fixture
 def valid_config():
     """FIXTURE: Valid refinancing configuration."""
@@ -88,7 +87,6 @@ def valid_annual_rows():
 # ║ TEST: CONFIG VALIDATION (10 TESTS)                                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 class TestConfigValidation:
     """Test configuration validation."""
 
@@ -117,15 +115,21 @@ class TestConfigValidation:
         # THEN: Should succeed without validation
         assert calc.config.enabled is False
 
-    def test_missing_triggers_raises_error(self, valid_debt_result, valid_annual_rows):
+    def test_missing_triggers_raises_error(
+        self, valid_debt_result, valid_annual_rows
+    ):
         """TEST: Enabled config without triggers should raise error."""
         # GIVEN: Enabled config with no triggers
         config = RefinancingConfig(enabled=True, triggers=[])
         # THEN: Should raise ConfigError
         with pytest.raises(RefinancingConfigError, match="no triggers defined"):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
-    def test_missing_coupon_raises_error(self, valid_debt_result, valid_annual_rows):
+    def test_missing_coupon_raises_error(
+        self, valid_debt_result, valid_annual_rows
+    ):
         """TEST: Enabled config without coupon should raise error."""
         # GIVEN: Enabled config without new_coupon_pct
         config = RefinancingConfig(
@@ -137,9 +141,13 @@ class TestConfigValidation:
         with pytest.raises(
             RefinancingConfigError, match="new_coupon_pct not specified"
         ):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
-    def test_invalid_coupon_raises_error(self, valid_debt_result, valid_annual_rows):
+    def test_invalid_coupon_raises_error(
+        self, valid_debt_result, valid_annual_rows
+    ):
         """TEST: Coupon out of bounds should raise error."""
         # GIVEN: Config with invalid coupon (25%)
         config = RefinancingConfig(
@@ -149,9 +157,13 @@ class TestConfigValidation:
         )
         # THEN: Should raise ValidationError
         with pytest.raises(RefinancingValidationError):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
-    def test_invalid_cost_pct_raises_error(self, valid_debt_result, valid_annual_rows):
+    def test_invalid_cost_pct_raises_error(
+        self, valid_debt_result, valid_annual_rows
+    ):
         """TEST: Refinancing cost out of bounds should raise error."""
         # GIVEN: Config with invalid cost (3%)
         config = RefinancingConfig(
@@ -162,7 +174,9 @@ class TestConfigValidation:
         )
         # THEN: Should raise ValidationError
         with pytest.raises(RefinancingValidationError):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
     def test_invalid_principal_repayment_raises_error(
         self, valid_debt_result, valid_annual_rows
@@ -177,9 +191,13 @@ class TestConfigValidation:
         )
         # THEN: Should raise ValidationError
         with pytest.raises(RefinancingValidationError):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
-    def test_invalid_tenor_raises_error(self, valid_debt_result, valid_annual_rows):
+    def test_invalid_tenor_raises_error(
+        self, valid_debt_result, valid_annual_rows
+    ):
         """TEST: Tenor out of bounds should raise error."""
         # GIVEN: Config with invalid tenor (40 years)
         config = RefinancingConfig(
@@ -190,7 +208,9 @@ class TestConfigValidation:
         )
         # THEN: Should raise ValidationError
         with pytest.raises(RefinancingValidationError):
-            RefinancingCalculatorHardened(config, valid_debt_result, valid_annual_rows)
+            RefinancingCalculatorHardened(
+                config, valid_debt_result, valid_annual_rows
+            )
 
     def test_config_with_all_bounds_valid(
         self, valid_config, valid_debt_result, valid_annual_rows
@@ -216,7 +236,6 @@ class TestConfigValidation:
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ TEST: PIPELINE INTEGRATION (8 TESTS)                                      ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
-
 
 class TestPipelineIntegration:
     """Test pipeline metrics extraction and integration."""
@@ -285,7 +304,9 @@ class TestPipelineIntegration:
         assert "enabled=True" in repr_str
         assert "95000000" in repr_str  # Principal
 
-    def test_annual_rows_length_validation(self, valid_config, valid_debt_result):
+    def test_annual_rows_length_validation(
+        self, valid_config, valid_debt_result
+    ):
         """TEST: Should validate annual rows length."""
         # GIVEN: Short annual rows
         short_rows = [{"year": 1, "ebitda": 15_000_000}]
@@ -324,7 +345,6 @@ class TestPipelineIntegration:
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ TEST: REFINANCING CALCULATIONS (10 TESTS)                                  ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
-
 
 class TestRefinancingCalculations:
     """Test refinancing event calculations."""
@@ -470,7 +490,6 @@ class TestRefinancingCalculations:
 # ║ TEST: VALIDATOR FUNCTIONS (8 TESTS)                                       ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 class TestValidatorFunctions:
     """Test individual validator functions."""
 
@@ -539,7 +558,6 @@ class TestValidatorFunctions:
 # ║ TEST: EXCEPTION HANDLING (6 TESTS)                                        ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 class TestExceptionHandling:
     """Test exception types and messages."""
 
@@ -588,13 +606,10 @@ class TestExceptionHandling:
 # ║ TEST: METADATA TRACKING (4 TESTS)                                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 class TestMetadataTracking:
     """Test audit trail and metadata generation."""
 
-    def test_output_has_timestamp(
-        self, valid_config, valid_debt_result, valid_annual_rows
-    ):
+    def test_output_has_timestamp(self, valid_config, valid_debt_result, valid_annual_rows):
         """TEST: Output should include timestamp."""
         # GIVEN: Calculator
         calc = RefinancingCalculatorHardened(
@@ -608,9 +623,7 @@ class TestMetadataTracking:
         assert result.timestamp is not None
         assert "T" in result.timestamp  # ISO format
 
-    def test_output_has_version(
-        self, valid_config, valid_debt_result, valid_annual_rows
-    ):
+    def test_output_has_version(self, valid_config, valid_debt_result, valid_annual_rows):
         """TEST: Output should include contract version."""
         # GIVEN: Calculator
         calc = RefinancingCalculatorHardened(
@@ -663,11 +676,12 @@ class TestMetadataTracking:
 # ║ TEST: EDGE CASES & STRESS TESTS (6 TESTS)                                 ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-
 class TestEdgeCasesStress:
     """Test edge cases and stress conditions."""
 
-    def test_zero_principal_handles_gracefully(self, valid_config, valid_annual_rows):
+    def test_zero_principal_handles_gracefully(
+        self, valid_config, valid_annual_rows
+    ):
         """TEST: Zero principal should not crash calculator."""
         # GIVEN: Debt result with zero principal
         debt_result = {"total_debt": 0, "dscr_series": []}
@@ -678,7 +692,9 @@ class TestEdgeCasesStress:
         # THEN: Should handle gracefully
         assert calc.current_principal == 0.0
 
-    def test_high_dscr_values_handled(self, valid_config, valid_annual_rows):
+    def test_high_dscr_values_handled(
+        self, valid_config, valid_annual_rows
+    ):
         """TEST: High DSCR values should not crash."""
         # GIVEN: Debt result with high DSCR
         debt_result = {"total_debt": 100_000_000, "dscr_series": [2.0, 2.1, 2.2]}
@@ -689,11 +705,14 @@ class TestEdgeCasesStress:
         # THEN: Should handle gracefully
         assert calc.min_dscr == 2.0
 
-    def test_large_dataset_performance(self, valid_config, valid_debt_result):
+    def test_large_dataset_performance(
+        self, valid_config, valid_debt_result
+    ):
         """TEST: Calculator should handle large annual_rows efficiently."""
         # GIVEN: Large annual rows (50 years)
         large_rows = [
-            {"year": i, "ebitda": 15_000_000 - (i * 100_000)} for i in range(1, 51)
+            {"year": i, "ebitda": 15_000_000 - (i * 100_000)}
+            for i in range(1, 51)
         ]
         # WHEN: Creating calculator
         calc = RefinancingCalculatorHardened(
@@ -718,7 +737,9 @@ class TestEdgeCasesStress:
         assert isinstance(result.npv_benefit, float)
         assert isinstance(result.equity_irr_benefit_bps, float)
 
-    def test_minimum_annual_rows_accepted(self, valid_config, valid_debt_result):
+    def test_minimum_annual_rows_accepted(
+        self, valid_config, valid_debt_result
+    ):
         """TEST: Should accept minimum annual rows (1 row)."""
         # GIVEN: Single year
         single_row = [{"year": 1, "ebitda": 15_000_000}]

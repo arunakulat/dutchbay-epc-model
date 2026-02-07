@@ -38,16 +38,18 @@ class TestDegradationConfiguration:
         # This tests the parameter extraction layer
         degradation_pct = dutchbay_base_config["project"]["degradation"]
 
-        assert (
-            degradation_pct == 0.006
-        ), f"Expected 0.6% degradation, got {degradation_pct*100}%"
+        assert degradation_pct == 0.006, (
+            f"Expected 0.6% degradation, got {degradation_pct*100}%"
+        )
 
     def test_degradation_converts_to_decimal(self, dutchbay_base_config):
         """Config degradation should be in decimal form."""
         degradation = dutchbay_base_config["project"]["degradation"]
 
         # Should be decimal (0.006), not percentage (0.6)
-        assert 0.0 < degradation < 0.1, f"Degradation should be decimal: {degradation}"
+        assert 0.0 < degradation < 0.1, (
+            f"Degradation should be decimal: {degradation}"
+        )
 
     def test_degradation_backward_compatible_zero(self):
         """Zero degradation should be valid (backward compatibility)."""
@@ -72,9 +74,7 @@ class TestDegradationCashflowIntegration:
         assert expected_revenue_y1 == 400_000 * 50.0
         assert expected_revenue_y1 == 20_000_000  # $20M
 
-    def test_year20_reflects_cumulative_degradation(
-        self, dutchbay_base_config, degradation_test_params
-    ):
+    def test_year20_reflects_cumulative_degradation(self, dutchbay_base_config, degradation_test_params):
         """Year 20 revenue should reflect compound degradation."""
         aep_y1 = dutchbay_base_config["wind_resource"]["aep_p50_mwh"]
         tariff = dutchbay_base_config["revenue"]["tariff_usd_mwh"]
@@ -92,9 +92,9 @@ class TestDegradationCashflowIntegration:
         calculated_factor = (1 - 0.006) ** 20  # Alternative: full 20 years
 
         # Year 20 should be ~88.7% of Year 1
-        assert (
-            0.88 < degradation_factor_y20 < 0.90
-        ), f"Year 20 factor should be ~89%, got {degradation_factor_y20:.1%}"
+        assert 0.88 < degradation_factor_y20 < 0.90, (
+            f"Year 20 factor should be ~89%, got {degradation_factor_y20:.1%}"
+        )
 
     def test_revenue_decreases_monotonically(self, dutchbay_base_config):
         """Revenue should decrease every year with positive degradation."""
@@ -113,7 +113,7 @@ class TestDegradationCashflowIntegration:
 
         # Verify monotonic decrease
         for i in range(1, len(revenues)):
-            assert revenues[i] < revenues[i - 1], (
+            assert revenues[i] < revenues[i-1], (
                 f"Revenue should decrease: year {i+1} = ${revenues[i]:.0f}, "
                 f"year {i} = ${revenues[i-1]:.0f}"
             )
@@ -130,16 +130,17 @@ class TestDegradationCashflowIntegration:
 
         # With degradation
         revenue_with_deg = sum(
-            aep * (1 - degradation) ** year * tariff for year in range(project_life)
+            aep * (1 - degradation) ** year * tariff
+            for year in range(project_life)
         )
 
         # Calculate impact
         revenue_loss_pct = (revenue_no_deg - revenue_with_deg) / revenue_no_deg * 100
 
         # Should be 10-13% loss over 20 years with 0.6% degradation
-        assert (
-            10.0 < revenue_loss_pct < 15.0
-        ), f"Revenue loss should be 10-15%, got {revenue_loss_pct:.1f}%"
+        assert 10.0 < revenue_loss_pct < 15.0, (
+            f"Revenue loss should be 10-15%, got {revenue_loss_pct:.1f}%"
+        )
 
 
 class TestDegradationMonteCarloIntegration:
@@ -151,12 +152,12 @@ class TestDegradationMonteCarloIntegration:
         # Check if MC config has degradation parameters
         mc_config = dutchbay_omegaconf_config.monte_carlo
 
-        assert (
-            "degradation_mean_pct" in mc_config
-        ), "Monte Carlo config should include degradation_mean_pct"
-        assert (
-            "degradation_std_pct" in mc_config
-        ), "Monte Carlo config should include degradation_std_pct"
+        assert "degradation_mean_pct" in mc_config, (
+            "Monte Carlo config should include degradation_mean_pct"
+        )
+        assert "degradation_std_pct" in mc_config, (
+            "Monte Carlo config should include degradation_std_pct"
+        )
 
     @pytest.mark.slow
     def test_monte_carlo_degradation_uncertainty(self, dutchbay_omegaconf_config):
@@ -179,15 +180,15 @@ class TestDegradationMonteCarloIntegration:
             corr_matrix = mc_config.correlation_matrix
 
             # Should be 4x4 matrix (revenue, cost, FX, degradation)
-            assert (
-                len(corr_matrix) == 4
-            ), f"Expected 4x4 correlation matrix, got {len(corr_matrix)}x{len(corr_matrix[0])}"
+            assert len(corr_matrix) == 4, (
+                f"Expected 4x4 correlation matrix, got {len(corr_matrix)}x{len(corr_matrix[0])}"
+            )
 
             # Verify diagonal is 1.0
             for i in range(4):
-                assert (
-                    corr_matrix[i][i] == 1.0
-                ), f"Diagonal element [{i},{i}] should be 1.0"
+                assert corr_matrix[i][i] == 1.0, (
+                    f"Diagonal element [{i},{i}] should be 1.0"
+                )
 
 
 class TestDegradationSensitivityIntegration:
@@ -197,16 +198,17 @@ class TestDegradationSensitivityIntegration:
         """Sensitivity analysis should include degradation as variable."""
         sens_config = dutchbay_omegaconf_config.sensitivity
 
-        assert (
-            "degradation" in sens_config.variables
-        ), "Sensitivity variables should include degradation"
+        assert "degradation" in sens_config.variables, (
+            "Sensitivity variables should include degradation"
+        )
 
     def test_degradation_sensitivity_produces_results(self, dutchbay_omegaconf_config):
         """Degradation sensitivity should produce valid results."""
         # Run sensitivity analysis with degradation only
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             assert "variables" in result
@@ -220,7 +222,8 @@ class TestDegradationSensitivityIntegration:
         """Higher degradation should reduce debt sizing capacity."""
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             deg_result = result["variables"][0]
@@ -232,9 +235,9 @@ class TestDegradationSensitivityIntegration:
 
             # Lower degradation → higher debt
             # Higher degradation → lower debt
-            assert (
-                min_pert["debt_sized"] > max_pert["debt_sized"]
-            ), "Debt capacity should decrease with higher degradation"
+            assert min_pert["debt_sized"] > max_pert["debt_sized"], (
+                "Debt capacity should decrease with higher degradation"
+            )
 
         except Exception as e:
             pytest.skip(f"Sensitivity analysis not available: {e}")
@@ -273,16 +276,17 @@ class TestDegradationRegressionPins:
 
         # With degradation total
         total_with_deg = sum(
-            aep * (1 - degradation) ** t * tariff for t in range(project_life)
+            aep * (1 - degradation) ** t * tariff
+            for t in range(project_life)
         )
 
         # Calculate impact
         impact_pct = (total_no_deg - total_with_deg) / total_no_deg * 100
 
         # Regression pin: Should be 11.0-11.5%
-        assert (
-            10.8 < impact_pct < 11.7
-        ), f"20-year revenue impact should be ~11%, got {impact_pct:.2f}%"
+        assert 10.8 < impact_pct < 11.7, (
+            f"20-year revenue impact should be ~11%, got {impact_pct:.2f}%"
+        )
 
 
 if __name__ == "__main__":

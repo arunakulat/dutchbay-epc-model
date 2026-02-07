@@ -61,7 +61,6 @@ def __getattr__(name: str) -> Any:
             MonteCarloEngine,
             run_monte_carlo_analysis,
         )
-
         return {
             "MonteCarloEngine": MonteCarloEngine,
             "run_monte_carlo_analysis": run_monte_carlo_analysis,
@@ -80,7 +79,6 @@ def __getattr__(name: str) -> Any:
             apply_correlation_structure,
             validate_correlation_matrix,
         )
-
         return {
             "CorrelationSpec": CorrelationSpec,
             "load_correlation_from_config": load_correlation_from_config,
@@ -95,7 +93,6 @@ def __getattr__(name: str) -> Any:
             build_lender_risk_table,
             build_casper_risk_blocks,
         )
-
         return {
             "CovenantSpec": CovenantSpec,
             "build_lender_risk_table": build_lender_risk_table,
@@ -105,7 +102,6 @@ def __getattr__(name: str) -> Any:
     # Aggregation
     if name == "aggregate_trials":
         from analytics.mc.aggregate import aggregate_trials
-
         return aggregate_trials
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

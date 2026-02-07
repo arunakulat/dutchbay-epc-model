@@ -36,25 +36,17 @@ try:
     from analytics.monte_carlo_v14 import MonteCarloEngine
     from omegaconf import OmegaConf
 except ImportError as e:
-    pytest.skip(
-        f"Required pipeline modules not available: {e}", allow_module_level=True
-    )
+    pytest.skip(f"Required pipeline modules not available: {e}", allow_module_level=True)
 
 
 class TestPipelineDataFlow:
     """Test data flow across pipeline modules."""
 
-    def test_wind_to_cashflow_data_flow(
-        self, wind_assessment_mock_results, dutchbay_base_config
-    ):
+    def test_wind_to_cashflow_data_flow(self, wind_assessment_mock_results, dutchbay_base_config):
         """Wind assessment results should flow into cashflow model."""
         # Wind assessment outputs
-        wind_aep_p50 = wind_assessment_mock_results["energy_production"]["net_aep"][
-            "net_aep_p50_mwh"
-        ]
-        wind_aep_p99 = wind_assessment_mock_results["energy_production"]["net_aep"][
-            "net_aep_p99_mwh"
-        ]
+        wind_aep_p50 = wind_assessment_mock_results["energy_production"]["net_aep"]["net_aep_p50_mwh"]
+        wind_aep_p99 = wind_assessment_mock_results["energy_production"]["net_aep"]["net_aep_p99_mwh"]
 
         # These should match or update config
         config_aep_p50 = dutchbay_base_config["wind_resource"]["aep_p50_mwh"]
@@ -75,7 +67,6 @@ class TestPipelineDataFlow:
 
         # Build simple CFADS
         from analytics.dscr_sensitivity import _build_cfads_array
-
         cfads_p50 = _build_cfads_array(aep, tariff, opex, degradation, 20)
 
         # CFADS should be positive and reasonable
@@ -87,7 +78,8 @@ class TestPipelineDataFlow:
         try:
             # Run sensitivity with degradation only (fast)
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             # Should have base case debt sizing
@@ -133,7 +125,8 @@ class TestPipelineDegradationPropagation:
         try:
             # Run sensitivity analysis
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             deg_result = result["variables"][0]
@@ -144,9 +137,9 @@ class TestPipelineDegradationPropagation:
 
             # Impact should be measurable
             tornado = deg_result["tornado_data"]
-            assert (
-                tornado["range_pct"] > 2.0
-            ), f"Degradation should have > 2% impact, got {tornado['range_pct']:.1f}%"
+            assert tornado["range_pct"] > 2.0, (
+                f"Degradation should have > 2% impact, got {tornado['range_pct']:.1f}%"
+            )
 
         except Exception as e:
             pytest.skip(f"Sensitivity analysis not available: {e}")
@@ -157,33 +150,30 @@ class TestPipelinePerformance:
 
     @pytest.mark.slow
     @pytest.mark.performance
-    def test_sensitivity_analysis_performance(
-        self, dutchbay_omegaconf_config, performance_benchmarks
-    ):
+    def test_sensitivity_analysis_performance(self, dutchbay_omegaconf_config, performance_benchmarks):
         """Sensitivity analysis should meet performance target."""
         try:
             # Use minimal variables for speed test
             start_time = time.time()
 
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
+                dutchbay_omegaconf_config,
+                variables=["degradation", "aep"]
             )
 
             execution_time = time.time() - start_time
             max_time = performance_benchmarks["sensitivity_analysis_max_seconds"]
 
-            assert (
-                execution_time < max_time
-            ), f"Sensitivity should complete in < {max_time}s, took {execution_time:.1f}s"
+            assert execution_time < max_time, (
+                f"Sensitivity should complete in < {max_time}s, took {execution_time:.1f}s"
+            )
 
         except Exception as e:
             pytest.skip(f"Sensitivity analysis not available: {e}")
 
     @pytest.mark.slow
     @pytest.mark.performance
-    def test_monte_carlo_performance(
-        self, dutchbay_omegaconf_config, performance_benchmarks
-    ):
+    def test_monte_carlo_performance(self, dutchbay_omegaconf_config, performance_benchmarks):
         """Monte Carlo should meet performance target."""
         mc_config = dutchbay_omegaconf_config
         mc_config.monte_carlo.n_iterations = 1000
@@ -196,22 +186,21 @@ class TestPipelinePerformance:
         execution_time = time.time() - start_time
         max_time = performance_benchmarks["monte_carlo_1k_max_seconds"]
 
-        assert (
-            execution_time < max_time
-        ), f"MC 1K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        assert execution_time < max_time, (
+            f"MC 1K iterations should complete in < {max_time}s, took {execution_time:.1f}s"
+        )
 
     @pytest.mark.slow
     @pytest.mark.performance
-    def test_full_pipeline_performance(
-        self, dutchbay_omegaconf_config, performance_benchmarks
-    ):
+    def test_full_pipeline_performance(self, dutchbay_omegaconf_config, performance_benchmarks):
         """Complete pipeline should meet performance target."""
         start_time = time.time()
 
         try:
             # Run sensitivity (includes DSCR sizing)
             sens_result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
+                dutchbay_omegaconf_config,
+                variables=["degradation", "aep"]
             )
 
             # Run Monte Carlo (small sample)
@@ -223,9 +212,9 @@ class TestPipelinePerformance:
             execution_time = time.time() - start_time
             max_time = performance_benchmarks["full_pipeline_max_seconds"]
 
-            assert (
-                execution_time < max_time
-            ), f"Full pipeline should complete in < {max_time}s, took {execution_time:.1f}s"
+            assert execution_time < max_time, (
+                f"Full pipeline should complete in < {max_time}s, took {execution_time:.1f}s"
+            )
 
         except Exception as e:
             pytest.skip(f"Pipeline modules not available: {e}")
@@ -239,7 +228,8 @@ class TestPipelineOutputs:
         """Sensitivity analysis should produce complete output."""
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
+                dutchbay_omegaconf_config,
+                variables=["degradation", "aep"]
             )
 
             # Required top-level keys
@@ -252,9 +242,7 @@ class TestPipelineOutputs:
             # Tornado chart should be sorted
             tornado = result["tornado_chart"]
             for i in range(1, len(tornado)):
-                assert abs(tornado[i - 1]["impact_range"]) >= abs(
-                    tornado[i]["impact_range"]
-                )
+                assert abs(tornado[i-1]["impact_range"]) >= abs(tornado[i]["impact_range"])
 
             # Summary should have key metrics
             summary = result["summary"]
@@ -283,16 +271,10 @@ class TestPipelineOutputs:
         # Statistics should be complete
         stats = result["statistics"]
         required_stats = [
-            "npv_mean_usd",
-            "npv_std_usd",
-            "npv_median_usd",
-            "npv_p10_usd",
-            "npv_p90_usd",
-            "irr_mean_pct",
-            "irr_std_pct",
-            "irr_median_pct",
-            "irr_p10_pct",
-            "irr_p90_pct",
+            "npv_mean_usd", "npv_std_usd", "npv_median_usd",
+            "npv_p10_usd", "npv_p90_usd",
+            "irr_mean_pct", "irr_std_pct", "irr_median_pct",
+            "irr_p10_pct", "irr_p90_pct",
         ]
 
         for stat in required_stats:
@@ -304,7 +286,8 @@ class TestPipelineOutputs:
         try:
             # Sensitivity output
             sens_result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             # Should serialize to JSON
@@ -343,9 +326,9 @@ class TestPipelineRegressionPins:
         mean_npv_m = stats["npv_mean_usd"] / 1e6
 
         # Regression pin: Should be in $20-80M range
-        assert (
-            20.0 < mean_npv_m < 80.0
-        ), f"DutchBay baseline NPV should be $20-80M, got ${mean_npv_m:.1f}M"
+        assert 20.0 < mean_npv_m < 80.0, (
+            f"DutchBay baseline NPV should be $20-80M, got ${mean_npv_m:.1f}M"
+        )
 
     @pytest.mark.slow
     def test_dutchbay_baseline_irr(self, dutchbay_omegaconf_config):
@@ -361,16 +344,17 @@ class TestPipelineRegressionPins:
         mean_irr = stats["irr_mean_pct"]
 
         # Regression pin: Should be in 7-15% range
-        assert (
-            7.0 < mean_irr < 15.0
-        ), f"DutchBay baseline IRR should be 7-15%, got {mean_irr:.1f}%"
+        assert 7.0 < mean_irr < 15.0, (
+            f"DutchBay baseline IRR should be 7-15%, got {mean_irr:.1f}%"
+        )
 
     @pytest.mark.slow
     def test_dutchbay_debt_capacity(self, dutchbay_omegaconf_config):
         """DutchBay debt capacity should be in expected range."""
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             base_debt_m = result["summary"]["base_debt"] / 1e6
@@ -379,9 +363,9 @@ class TestPipelineRegressionPins:
             debt_ratio = base_debt_m / capex_m
 
             # Regression pin: Debt should be 50-75% of CAPEX
-            assert (
-                0.50 < debt_ratio < 0.75
-            ), f"Debt ratio should be 50-75%, got {debt_ratio:.1%}"
+            assert 0.50 < debt_ratio < 0.75, (
+                f"Debt ratio should be 50-75%, got {debt_ratio:.1%}"
+            )
 
         except Exception as e:
             pytest.skip(f"Sensitivity analysis not available: {e}")

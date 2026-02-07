@@ -121,7 +121,10 @@ def test_grid_resolution_detection(mock_era5_dataset):
 def test_ws150_extrapolation_power_law(mock_era5_dataset):
     """Test power law extrapolation from 100m to 150m."""
     ws150 = ws150_from_10_100(
-        mock_era5_dataset, z_hub_m=150.0, shear_exponent=0.14, method="power_law"
+        mock_era5_dataset,
+        z_hub_m=150.0,
+        shear_exponent=0.14,
+        method="power_law"
     )
 
     # Check output structure
@@ -144,7 +147,7 @@ def test_shear_exponent_estimation(mock_era5_dataset):
         mock_era5_dataset,
         z_hub_m=150.0,
         shear_exponent=None,  # Auto-estimate
-        method="power_law",
+        method="power_law"
     )
 
     # Should have estimated shear exponent
@@ -164,7 +167,7 @@ def test_shear_exponent_validation():
             "u100": (["time"], np.full(100, 6.5)),
             "v100": (["time"], np.full(100, 3.9)),
         },
-        coords={"time": np.arange(100)},
+        coords={"time": np.arange(100)}
     )
 
     # Shear exponent too high
@@ -180,7 +183,7 @@ def test_missing_wind_components():
     """Test error handling when required wind components missing."""
     mock_ds = xr.Dataset(
         {"u10": (["time"], np.full(100, 5.0))},  # Missing v10, u100, v100
-        coords={"time": np.arange(100)},
+        coords={"time": np.arange(100)}
     )
 
     with pytest.raises(ValueError, match="Missing required variables"):
@@ -219,7 +222,7 @@ def test_grid_stats_missing_coords():
     mock_da = xr.DataArray(
         np.random.randn(100, 10),
         dims=["time", "x_unknown"],
-        coords={"time": np.arange(100), "x_unknown": np.arange(10)},
+        coords={"time": np.arange(100), "x_unknown": np.arange(10)}
     )
 
     with pytest.raises(ValueError, match="Could not detect lon/lat"):

@@ -258,9 +258,7 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     return 0.0
 
 
-def _derive_cfads_series(
-    annual_rows: Optional[Sequence[Mapping[str, Any]]],
-) -> list[float]:
+def _derive_cfads_series(annual_rows: Optional[Sequence[Mapping[str, Any]]]) -> list[float]:
     """Extract CFADS series in USD.
 
     Historical row schemas have drifted:
@@ -566,8 +564,6 @@ def calculate_scenario_kpis(
     result.setdefault("plcr", float(result.get("plcr", 0.0)))
 
     return result
-
-
 # ═════════════════════════════════════════════════════════════════════════════
 # Backwards compatibility adapter
 # ═════════════════════════════════════════════════════════════════════════════

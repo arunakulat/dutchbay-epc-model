@@ -11,7 +11,6 @@ import pytest
 
 try:
     import pandas as pd
-
     HAS_PANDAS = True
 except ImportError:
     HAS_PANDAS = False
@@ -220,9 +219,7 @@ class TestBuildCasperRiskBlocks:
             },
         )
 
-        blocks = build_casper_risk_blocks(
-            result, covenant=CovenantSpec(dscr_floor=1.30)
-        )
+        blocks = build_casper_risk_blocks(result, covenant=CovenantSpec(dscr_floor=1.30))
 
         # Check structure
         assert "lender_risk_table" in blocks

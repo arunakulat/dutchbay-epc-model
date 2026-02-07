@@ -83,11 +83,11 @@ WACC_MAX = 0.12
 
 # NPV: Net Present Value bounds (project-specific, but check for infinite/NaN)
 NPV_MIN = -1e10  # -10 billion (distressed scenarios)
-NPV_MAX = 1e10  # +10 billion (optimistic scenarios)
+NPV_MAX = 1e10   # +10 billion (optimistic scenarios)
 
 # Sprint 16: NPV sanity thresholds for warnings
 NPV_TYPICAL_MIN = -1e9  # -1 billion
-NPV_TYPICAL_MAX = 1e9  # +1 billion
+NPV_TYPICAL_MAX = 1e9   # +1 billion
 
 # Coupon: Debt coupon percentage (0-20%)
 COUPON_MIN = 0.0
@@ -115,13 +115,13 @@ EQUITY_MULTIPLE_MAX = 5.0
 
 # Sprint 16: Equity IRR bounds (higher than project IRR due to leverage)
 EQUITY_IRR_MIN = -0.10  # -10% for distressed
-EQUITY_IRR_MAX = 0.60  # 60% for highly levered successful projects
+EQUITY_IRR_MAX = 0.60   # 60% for highly levered successful projects
 EQUITY_IRR_TYPICAL_MIN = 0.10  # 10% typical minimum
 EQUITY_IRR_TYPICAL_MAX = 0.30  # 30% typical maximum
 
 # Sprint 16: Equity NPV bounds (smaller than project NPV)
 EQUITY_NPV_MIN = -1e9  # -1 billion
-EQUITY_NPV_MAX = 1e9  # +1 billion
+EQUITY_NPV_MAX = 1e9   # +1 billion
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -568,9 +568,7 @@ def validate_equity_irr(
         )
 
     # Typical bounds check (WARNING)
-    if strict_bounds and not (
-        EQUITY_IRR_TYPICAL_MIN <= value <= EQUITY_IRR_TYPICAL_MAX
-    ):
+    if strict_bounds and not (EQUITY_IRR_TYPICAL_MIN <= value <= EQUITY_IRR_TYPICAL_MAX):
         return ValidationError(
             severity="WARNING",
             field=field_name,
@@ -578,8 +576,8 @@ def validate_equity_irr(
             constraint=f"{EQUITY_IRR_TYPICAL_MIN*100:.0f}% <= value <= {EQUITY_IRR_TYPICAL_MAX*100:.0f}%",
             message=f"{field_name}={value*100:.1f}% is outside typical range [10%-30%]",
             remediation=(
-                "Equity IRR < 10% may indicate low leverage or poor project economics. "
-                "Equity IRR > 30% may indicate high leverage or exceptional project."
+                f"Equity IRR < 10% may indicate low leverage or poor project economics. "
+                f"Equity IRR > 30% may indicate high leverage or exceptional project."
             ),
         )
 
@@ -653,8 +651,8 @@ def validate_equity_multiple(
             constraint=f"{EQUITY_MULTIPLE_MIN:.1f}x <= value <= {EQUITY_MULTIPLE_MAX:.1f}x",
             message=f"{field_name}={value:.2f}x is outside typical range [0.8x-5.0x]",
             remediation=(
-                "Multiple > 5x suggests exceptional project or very long tenor. "
-                "Multiple < 0.8x suggests project failure."
+                f"Multiple > 5x suggests exceptional project or very long tenor. "
+                f"Multiple < 0.8x suggests project failure."
             ),
         )
 
@@ -717,10 +715,7 @@ def validate_equity_result(
                 result.is_valid = False
 
     # Validate Equity Multiple
-    if (
-        "equity_multiple" in equity_result
-        and equity_result["equity_multiple"] is not None
-    ):
+    if "equity_multiple" in equity_result and equity_result["equity_multiple"] is not None:
         error = validate_equity_multiple(
             equity_result["equity_multiple"],
             "equity_multiple",

@@ -95,10 +95,10 @@ def dutchbay_base_config() -> Dict[str, Any]:
             "degradation_std_pct": 0.1,
             "correlation_enabled": True,
             "correlation_matrix": [
-                [1.0, 0.4, -0.3, -0.2],  # revenue, cost, fx, degradation
-                [0.4, 1.0, -0.2, 0.1],
-                [-0.3, -0.2, 1.0, 0.0],
-                [-0.2, 0.1, 0.0, 1.0],
+                [1.0,  0.4, -0.3, -0.2],  # revenue, cost, fx, degradation
+                [0.4,  1.0, -0.2,  0.1],
+                [-0.3, -0.2, 1.0,  0.0],
+                [-0.2,  0.1, 0.0,  1.0],
             ],
         },
         "sensitivity": {
@@ -217,8 +217,8 @@ def dscr_test_targets() -> Dict[str, float]:
     return {
         "dscr_p50_target": 1.30,  # Investment grade
         "dscr_p99_target": 1.00,  # Downside protection
-        "dscr_p50_min": 1.20,  # Minimum acceptable
-        "dscr_p99_min": 0.95,  # Stress case floor
+        "dscr_p50_min": 1.20,     # Minimum acceptable
+        "dscr_p99_min": 0.95,     # Stress case floor
     }
 
 

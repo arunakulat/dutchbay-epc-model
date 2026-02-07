@@ -52,10 +52,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclass import dataclass
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from omegaconf import DictConfig
+from scipy.stats import qmc
 
 from analytics.monte_carlo_v14 import (
     MonteCarloConfig,
@@ -82,7 +83,7 @@ class MonteCarloConfigEnhanced(MonteCarloConfig):
 
     # Degradation parameters (NEW)
     degradation_mean_pct: float  # Mean annual degradation (e.g., 0.6%)
-    degradation_std_pct: float  # Std deviation of degradation (e.g., 0.1%)
+    degradation_std_pct: float   # Std deviation of degradation (e.g., 0.1%)
     degradation_distribution: str = "normal"  # "normal" or "lognormal"
 
     # Correlation parameters (NEW)
@@ -334,7 +335,7 @@ class MonteCarloEngineEnhanced:
                 unit_samples = apply_correlation_structure(
                     unit_samples,
                     self.mc_config.correlation_matrix,
-                    method="iman_conover",
+                    method="iman_conover"
                 )
                 self.logger.info("Applied Iman-Conover correlation structure")
 

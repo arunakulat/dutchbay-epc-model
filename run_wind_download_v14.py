@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
 import hydra
@@ -79,7 +80,7 @@ def cli(cfg: DictConfig) -> None:
             "status": "error",
             "error": "Missing required parameter 'location'",
             "usage": "python run_wind_download_v14.py location=dutchbay",
-            "available_locations": _get_available_locations(),
+            "available_locations": _get_available_locations()
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
@@ -88,7 +89,9 @@ def cli(cfg: DictConfig) -> None:
         # Load location from config
         locations_file = Path("wind_resource/config/locations.yaml")
         if not locations_file.exists():
-            raise FileNotFoundError(f"Locations config not found: {locations_file}")
+            raise FileNotFoundError(
+                f"Locations config not found: {locations_file}"
+            )
 
         with open(locations_file) as f:
             locations = yaml.safe_load(f)
@@ -97,7 +100,7 @@ def cli(cfg: DictConfig) -> None:
             error_result = {
                 "status": "error",
                 "error": f"Unknown location: {location_name}",
-                "available_locations": list(locations.keys()),
+                "available_locations": list(locations.keys())
             }
             print(json.dumps(error_result, indent=2))
             raise SystemExit(1)
@@ -118,9 +121,7 @@ def cli(cfg: DictConfig) -> None:
         logger.info("=" * 70)
         logger.info("ERA5 WIND DATA DOWNLOAD")
         logger.info("=" * 70)
-        logger.info(
-            f"Location: {location_name} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)"
-        )
+        logger.info(f"Location: {location_name} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)")
         logger.info(f"Period: {start_date} to {end_date}")
         logger.info(f"Hub height: {hub_height}m")
 
@@ -133,24 +134,21 @@ def cli(cfg: DictConfig) -> None:
             location=location,
             start_date=start_date,
             end_date=end_date,
-            force_download=force_download,
+            force_download=force_download
         )
 
         # Load data
         logger.info("\n[Step 2/3] Loading and processing data...")
         df = pd.read_csv(data_file)
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
 
         # Extrapolate to hub height
         logger.info(f"\n[Step 3/3] Extrapolating to {hub_height}m hub height...")
         df = fetcher.extrapolate_to_hub_height(df, hub_height=hub_height)
 
         # Save processed data
-        ws_column = f"ws_{int(hub_height)}m"
-        output_file = (
-            output_dir
-            / f"{location_name}_wind_{int(hub_height)}m_{start_date}_to_{end_date}.csv"
-        )
+        ws_column = f'ws_{int(hub_height)}m'
+        output_file = output_dir / f"{location_name}_wind_{int(hub_height)}m_{start_date}_to_{end_date}.csv"
         df.to_csv(output_file, index=False)
 
         # Calculate summary statistics
@@ -166,18 +164,18 @@ def cli(cfg: DictConfig) -> None:
             "status": "success",
             "location": {
                 "name": location_name,
-                "lat": location["lat"],
-                "lon": location["lon"],
+                "lat": location['lat'],
+                "lon": location['lon']
             },
             "parameters": {
                 "start_date": start_date,
                 "end_date": end_date,
                 "hub_height_m": hub_height,
-                "force_download": force_download,
+                "force_download": force_download
             },
             "output_files": {
                 "raw_data": str(data_file),
-                "processed_data": str(output_file),
+                "processed_data": str(output_file)
             },
             "data_summary": {
                 "total_hours": len(df),
@@ -186,9 +184,9 @@ def cli(cfg: DictConfig) -> None:
                 "min_ws": round(min_ws, 2),
                 "max_ws": round(max_ws, 2),
                 "p50_ws": round(p50_ws, 2),
-                "p90_ws": round(p90_ws, 2),
+                "p90_ws": round(p90_ws, 2)
             },
-            "message": f"✓ Successfully downloaded and processed ERA5 data for {location_name}",
+            "message": f"✓ Successfully downloaded and processed ERA5 data for {location_name}"
         }
 
         logger.info("\n" + "=" * 70)
@@ -204,7 +202,7 @@ def cli(cfg: DictConfig) -> None:
             "status": "error",
             "error": str(e),
             "error_type": type(e).__name__,
-            "location": location_name if "location_name" in locals() else None,
+            "location": location_name if 'location_name' in locals() else None
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Error during wind data download")

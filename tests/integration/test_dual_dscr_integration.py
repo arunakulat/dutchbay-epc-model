@@ -39,7 +39,7 @@ class TestDualDSCRBasics:
         """Dual DSCR should use min(Debt_P50, Debt_P99) for conservative sizing."""
         # Strong P50, weaker P99
         cfads_p50 = [10.0e6] * 20  # $10M/year
-        cfads_p99 = [7.0e6] * 20  # $7M/year (30% weaker)
+        cfads_p99 = [7.0e6] * 20   # $7M/year (30% weaker)
 
         result = size_debt_dual_dscr(
             cfads_p50=cfads_p50,
@@ -49,25 +49,25 @@ class TestDualDSCRBasics:
         )
 
         # P99 should bind (weaker downside)
-        assert (
-            result["binding_constraint"] == "P99"
-        ), "P99 should bind when downside is weak"
+        assert result["binding_constraint"] == "P99", (
+            "P99 should bind when downside is weak"
+        )
 
         # Debt should equal P99 constraint
-        assert (
-            result["debt_sized_usd"] == result["debt_p99_usd"]
-        ), "Sized debt should equal P99 constraint when it binds"
+        assert result["debt_sized_usd"] == result["debt_p99_usd"], (
+            "Sized debt should equal P99 constraint when it binds"
+        )
 
         # Should be reduction from P50
-        assert (
-            result["reduction_from_p50_pct"] > 15.0
-        ), "Significant reduction expected when P99 binds"
+        assert result["reduction_from_p50_pct"] > 15.0, (
+            "Significant reduction expected when P99 binds"
+        )
 
     def test_p50_binds_when_downside_strong(self):
         """P50 should bind when P99 downside is relatively strong."""
         # Strong downside (P99 close to P50)
         cfads_p50 = [10.0e6] * 20
-        cfads_p99 = [9.5e6] * 20  # Only 5% weaker
+        cfads_p99 = [9.5e6] * 20   # Only 5% weaker
 
         result = size_debt_dual_dscr(
             cfads_p50=cfads_p50,
@@ -77,14 +77,14 @@ class TestDualDSCRBasics:
         )
 
         # P50 should bind (strong downside doesn't constrain)
-        assert (
-            result["binding_constraint"] == "P50"
-        ), "P50 should bind when downside is strong"
+        assert result["binding_constraint"] == "P50", (
+            "P50 should bind when downside is strong"
+        )
 
         # Minimal reduction
-        assert (
-            result["reduction_from_p50_pct"] < 5.0
-        ), "Minimal reduction when P50 binds"
+        assert result["reduction_from_p50_pct"] < 5.0, (
+            "Minimal reduction when P50 binds"
+        )
 
     def test_dscr_profiles_calculated(self):
         """DSCR profiles should be calculated for both P50 and P99."""
@@ -103,12 +103,12 @@ class TestDualDSCRBasics:
         assert "dscr_p99_actual" in result
 
         # Actual DSCRs should be >= targets
-        assert (
-            result["dscr_p50_actual"] >= 1.30
-        ), f"P50 DSCR {result['dscr_p50_actual']:.2f} should be >= 1.30"
-        assert (
-            result["dscr_p99_actual"] >= 1.00
-        ), f"P99 DSCR {result['dscr_p99_actual']:.2f} should be >= 1.00"
+        assert result["dscr_p50_actual"] >= 1.30, (
+            f"P50 DSCR {result['dscr_p50_actual']:.2f} should be >= 1.30"
+        )
+        assert result["dscr_p99_actual"] >= 1.00, (
+            f"P99 DSCR {result['dscr_p99_actual']:.2f} should be >= 1.00"
+        )
 
 
 class TestDualDSCRWithDegradation:
@@ -163,17 +163,17 @@ class TestDualDSCRWithDegradation:
 
         # P99 should be consistently lower than P50
         for i in range(20):
-            assert (
-                cfads_p99[i] < cfads_p50[i]
-            ), f"Year {i+1}: P99 CFADS should be < P50 CFADS"
+            assert cfads_p99[i] < cfads_p50[i], (
+                f"Year {i+1}: P99 CFADS should be < P50 CFADS"
+            )
 
         # Ratio should be roughly constant (degradation affects both equally)
         ratio_y1 = cfads_p99[0] / cfads_p50[0]
         ratio_y20 = cfads_p99[19] / cfads_p50[19]
 
-        assert (
-            abs(ratio_y1 - ratio_y20) < 0.02
-        ), f"P99/P50 ratio should be stable: Y1={ratio_y1:.3f}, Y20={ratio_y20:.3f}"
+        assert abs(ratio_y1 - ratio_y20) < 0.02, (
+            f"P99/P50 ratio should be stable: Y1={ratio_y1:.3f}, Y20={ratio_y20:.3f}"
+        )
 
     def test_higher_degradation_reduces_debt_capacity(self, dutchbay_base_config):
         """Higher degradation should reduce debt sizing capacity."""
@@ -200,21 +200,20 @@ class TestDualDSCRWithDegradation:
         )
 
         # Higher degradation should reduce debt
-        assert (
-            result_low["debt_sized_usd"] > result_high["debt_sized_usd"]
-        ), "Higher degradation should reduce debt capacity"
+        assert result_low["debt_sized_usd"] > result_high["debt_sized_usd"], (
+            "Higher degradation should reduce debt capacity"
+        )
 
         # Quantify impact
         debt_reduction_pct = (
-            (result_low["debt_sized_usd"] - result_high["debt_sized_usd"])
-            / result_low["debt_sized_usd"]
-            * 100
+            (result_low["debt_sized_usd"] - result_high["debt_sized_usd"]) /
+            result_low["debt_sized_usd"] * 100
         )
 
         # Expect 3-8% reduction when degradation doubles (0.4% → 0.8%)
-        assert (
-            2.0 < debt_reduction_pct < 10.0
-        ), f"Debt reduction should be 2-10%, got {debt_reduction_pct:.1f}%"
+        assert 2.0 < debt_reduction_pct < 10.0, (
+            f"Debt reduction should be 2-10%, got {debt_reduction_pct:.1f}%"
+        )
 
 
 class TestDualDSCRSensitivityIntegration:
@@ -224,7 +223,8 @@ class TestDualDSCRSensitivityIntegration:
         """Sensitivity analysis should produce dual DSCR results."""
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
+                dutchbay_omegaconf_config,
+                variables=["degradation"]
             )
 
             # Should have dual DSCR outputs
@@ -246,7 +246,7 @@ class TestDualDSCRSensitivityIntegration:
         try:
             result = analyze_dscr_sensitivity(
                 dutchbay_omegaconf_config,
-                variables=["aep"],  # AEP likely to cause transitions
+                variables=["aep"]  # AEP likely to cause transitions
             )
 
             aep_result = result["variables"][0]
@@ -269,7 +269,8 @@ class TestDualDSCRSensitivityIntegration:
         """Tornado chart should show debt capacity impact ranges."""
         try:
             result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
+                dutchbay_omegaconf_config,
+                variables=["degradation", "aep"]
             )
 
             tornado = result["tornado_chart"]
@@ -283,9 +284,9 @@ class TestDualDSCRSensitivityIntegration:
                 assert "impact_range" in entry
                 assert "min_impact" in entry
                 assert "max_impact" in entry
-                assert (
-                    entry["impact_range"] != 0
-                ), f"Variable {entry['variable']} should have non-zero impact"
+                assert entry["impact_range"] != 0, (
+                    f"Variable {entry['variable']} should have non-zero impact"
+                )
 
         except Exception as e:
             pytest.skip(f"Sensitivity analysis not available: {e}")
@@ -312,9 +313,9 @@ class TestDualDSCRRegressionPins:
 
         # Reduction should be 5-15% (industry typical)
         reduction = result["reduction_from_p50_pct"]
-        assert (
-            5.0 < reduction < 20.0
-        ), f"Typical P99 reduction should be 5-20%, got {reduction:.1f}%"
+        assert 5.0 < reduction < 20.0, (
+            f"Typical P99 reduction should be 5-20%, got {reduction:.1f}%"
+        )
 
     def test_debt_sizing_with_dutchbay_parameters(self, dutchbay_base_config):
         """Debt sizing with DutchBay parameters should produce reasonable results."""
@@ -338,9 +339,9 @@ class TestDualDSCRRegressionPins:
 
         # Debt should be reasonable fraction of CAPEX
         debt_ratio = result["debt_sized_usd"] / capex
-        assert (
-            0.50 < debt_ratio < 0.75
-        ), f"Debt should be 50-75% of CAPEX, got {debt_ratio:.1%}"
+        assert 0.50 < debt_ratio < 0.75, (
+            f"Debt should be 50-75% of CAPEX, got {debt_ratio:.1%}"
+        )
 
         # Sized debt should be positive
         assert result["debt_sized_usd"] > 0, "Debt sizing should be positive"

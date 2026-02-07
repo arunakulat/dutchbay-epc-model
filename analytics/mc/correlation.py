@@ -48,7 +48,7 @@ def _nearest_psd(mat: np.ndarray) -> np.ndarray:
     """
     vals, vecs = np.linalg.eigh(mat)
     vals = np.clip(vals, 0.0, None)
-    repaired = vecs @ np.diag(vals) @ vecs.T
+    repaired = (vecs @ np.diag(vals) @ vecs.T)
     # re-normalize to unit diagonal
     d = np.sqrt(np.diag(repaired))
     d[d == 0] = 1.0
@@ -93,9 +93,7 @@ def apply_correlation_structure(
     x = np.array(lhs_samples, copy=True)
     n, k = x.shape
     if mat.shape != (k, k):
-        raise ValueError(
-            f"Correlation matrix shape {mat.shape} does not match samples columns {k}."
-        )
+        raise ValueError(f"Correlation matrix shape {mat.shape} does not match samples columns {k}.")
 
     # rank transform
     ranks = np.argsort(np.argsort(x, axis=0), axis=0)
@@ -121,18 +119,12 @@ def apply_correlation_structure(
 
 
 # Back-compat aliases (some older scripts use these names)
-def apply_correlation_to_lhs(
-    lhs_samples: np.ndarray, corr_matrix: np.ndarray, seed: int = 123
-) -> np.ndarray:
+def apply_correlation_to_lhs(lhs_samples: np.ndarray, corr_matrix: np.ndarray, seed: int = 123) -> np.ndarray:
     spec = CorrelationSpec(enabled=True, matrix=corr_matrix)
-    return apply_correlation_structure(
-        lhs_samples=lhs_samples, correlation=spec, seed=seed
-    )
+    return apply_correlation_structure(lhs_samples=lhs_samples, correlation=spec, seed=seed)
 
 
-def get_renewable_energy_correlation_template(
-    param_names: Sequence[str],
-) -> Dict[str, Any]:
+def get_renewable_energy_correlation_template(param_names: Sequence[str]) -> Dict[str, Any]:
     """
     Return a starter template (identity matrix) that callers can customize.
     """
@@ -166,6 +158,4 @@ def load_correlation_from_config(cfg: Mapping[str, Any]) -> Optional[Correlation
         matrix = np.array(mat, dtype=float)
 
     param_names = tuple(names) if names else None
-    return CorrelationSpec(
-        enabled=enabled, method=method, matrix=matrix, param_names=param_names
-    )
+    return CorrelationSpec(enabled=enabled, method=method, matrix=matrix, param_names=param_names)

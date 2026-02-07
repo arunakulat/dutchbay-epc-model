@@ -40,110 +40,21 @@ logger = logging.getLogger(__name__)
 # MUST be replaced with actual 10 MW OEM-certified data when available
 # Extrapolation assumes linear power scaling + same cut-in/cut-out
 
-ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1 = pd.DataFrame(
-    {
-        "wind_speed_ms": [
-            0.0,
-            1.0,
-            2.0,
-            3.0,
-            3.5,
-            4.0,
-            4.5,
-            5.0,
-            5.5,
-            6.0,
-            6.5,
-            7.0,
-            7.5,
-            8.0,
-            8.5,
-            9.0,
-            9.5,
-            10.0,
-            10.5,
-            11.0,
-            11.5,
-            12.0,
-            12.5,
-            13.0,
-            13.5,
-            14.0,
-            14.5,
-            15.0,
-            15.5,
-            16.0,
-            16.5,
-            17.0,
-            17.5,
-            18.0,
-            18.5,
-            19.0,
-            19.5,
-            20.0,
-            20.5,
-            21.0,
-            21.5,
-            22.0,
-            22.5,
-            23.0,
-            23.5,
-            24.0,
-            24.5,
-            25.0,
-        ],
-        "power_kw": [
-            0,
-            0,
-            0,
-            0,
-            75,
-            185,
-            335,
-            532,
-            785,
-            1100,
-            1485,
-            1948,
-            2495,
-            3135,
-            3875,
-            4723,
-            5686,
-            6771,
-            7985,
-            9335,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            10000,
-            0,  # Cut-out at 25 m/s
-        ],
-    }
-)
+ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1 = pd.DataFrame({
+    "wind_speed_ms": [
+        0.0, 1.0, 2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5,
+        8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5,
+        14.0, 14.5, 15.0, 15.5, 16.0, 16.5, 17.0, 17.5, 18.0, 18.5, 19.0,
+        19.5, 20.0, 20.5, 21.0, 21.5, 22.0, 22.5, 23.0, 23.5, 24.0, 24.5, 25.0
+    ],
+    "power_kw": [
+        0, 0, 0, 0, 75, 185, 335, 532, 785, 1100, 1485, 1948, 2495,
+        3135, 3875, 4723, 5686, 6771, 7985, 9335, 10000, 10000, 10000, 10000,
+        10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+        10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+        10000, 10000, 10000, 0  # Cut-out at 25 m/s
+    ]
+})
 
 # Turbine specifications (config-driven via YAML)
 ENVISION_EN171_10MW_SPECS = {
@@ -156,11 +67,13 @@ ENVISION_EN171_10MW_SPECS = {
     "cut_out_ms": 25.0,
     "air_density_ref_kgm3": 1.225,  # IEC 61400-12-1 standard
     "iec_certificate": "CGC-B-FNc-2024-184 (6.5MW base, 10MW extrapolated)",
-    "power_curve_version": "v1.0_extrapolated_from_6.5MW",
+    "power_curve_version": "v1.0_extrapolated_from_6.5MW"
 }
 
 
-def parse_envision_en171_10mw_curve(air_density_kgm3: float = 1.225) -> pd.DataFrame:
+def parse_envision_en171_10mw_curve(
+    air_density_kgm3: float = 1.225
+) -> pd.DataFrame:
     """Parse Envision EN-171-10.0 MW power curve with air density correction.
 
     CRITICAL WARNING: This is an EXTRAPOLATED curve from the 6.5 MW baseline.
@@ -191,7 +104,7 @@ def parse_envision_en171_10mw_curve(air_density_kgm3: float = 1.225) -> pd.DataF
     density_ratio = air_density_kgm3 / rho_ref
 
     # Power scales with (rho)^(1/3) for fixed blade design
-    curve["power_kw"] = curve["power_kw"] * (density_ratio ** (1 / 3))
+    curve["power_kw"] = curve["power_kw"] * (density_ratio ** (1/3))
     curve["power_mw"] = curve["power_kw"] / 1000.0
 
     # Metadata
@@ -213,7 +126,9 @@ def parse_envision_en171_10mw_curve(air_density_kgm3: float = 1.225) -> pd.DataF
 
 
 def interpolate_power_curve(
-    curve: pd.DataFrame, wind_speeds_ms: np.ndarray, method: str = "pchip"
+    curve: pd.DataFrame,
+    wind_speeds_ms: np.ndarray,
+    method: str = "pchip"
 ) -> np.ndarray:
     """Interpolate power output for arbitrary wind speeds.
 
@@ -234,19 +149,26 @@ def interpolate_power_curve(
     if method == "pchip":
         # Piecewise Cubic Hermite Interpolating Polynomial (monotonic)
         interp_func = PchipInterpolator(
-            curve["wind_speed_ms"].values, curve["power_kw"].values
+            curve["wind_speed_ms"].values,
+            curve["power_kw"].values
         )
     elif method == "cubic":
         # Standard cubic spline (may overshoot)
         interp_func = CubicSpline(
-            curve["wind_speed_ms"].values, curve["power_kw"].values, bc_type="natural"
+            curve["wind_speed_ms"].values,
+            curve["power_kw"].values,
+            bc_type="natural"
         )
     else:
         raise ValueError(f"Unknown interpolation method: {method}")
 
     # Interpolate and clip to [0, rated_power]
     power_interpolated = interp_func(wind_speeds_ms)
-    power_interpolated = np.clip(power_interpolated, 0.0, curve["power_kw"].max())
+    power_interpolated = np.clip(
+        power_interpolated,
+        0.0,
+        curve["power_kw"].max()
+    )
 
     return power_interpolated
 
@@ -259,7 +181,7 @@ def compute_aep_from_curve(
     apply_losses: bool = True,
     wake_loss_pct: float = 8.0,
     availability_pct: float = 97.0,
-    electrical_loss_pct: float = 2.0,
+    electrical_loss_pct: float = 2.0
 ) -> Tuple[float, float, Dict[str, float]]:
     """Compute Annual Energy Production (AEP) from wind distribution.
 
@@ -304,7 +226,9 @@ def compute_aep_from_curve(
 
     # Interpolate power for each hour
     power_per_hour_kw = interpolate_power_curve(
-        curve=curve, wind_speeds_ms=wind_dist_ms, method="pchip"
+        curve=curve,
+        wind_speeds_ms=wind_dist_ms,
+        method="pchip"
     )
 
     # Gross AEP (single turbine, no losses)
@@ -367,20 +291,15 @@ ENVISION_EN171_65_POWER_CURVE = ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1
 
 # Alias for 6.5 MW specs (scaled down from 10 MW for test compatibility)
 ENVISION_EN171_65_SPECS = ENVISION_EN171_10MW_SPECS.copy()
-ENVISION_EN171_65_SPECS.update(
-    {
-        "model": "Envision EN-171-6.5 (compat alias)",
-        "rated_power_mw": 6.5,
-        "rated_power_kw": 6500,
-        "iec_certificate": "CGC-B-FNc-2024-184 (compat alias for 10MW curve)",
-    }
-)
-
+ENVISION_EN171_65_SPECS.update({
+    "model": "Envision EN-171-6.5 (compat alias)",
+    "rated_power_mw": 6.5,
+    "rated_power_kw": 6500,
+    "iec_certificate": "CGC-B-FNc-2024-184 (compat alias for 10MW curve)",
+})
 
 # Alias for 6.5 MW parser function
-def parse_envision_en171_curve(
-    air_density_kgm3: Optional[float] = None,
-) -> pd.DataFrame:
+def parse_envision_en171_curve(air_density_kgm3: Optional[float] = None) -> pd.DataFrame:
     """Compatibility wrapper for legacy test imports.
 
     This is an alias to parse_envision_en171_10mw_curve() for backward compatibility.
@@ -401,7 +320,6 @@ def parse_envision_en171_curve(
     )
 
     return parse_envision_en171_10mw_curve(air_density_kgm3=air_density_kgm3)
-
 
 # Alias for IEC compliance validation (stub for test compatibility)
 def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, any]:

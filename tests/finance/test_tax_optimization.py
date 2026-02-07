@@ -105,7 +105,8 @@ class TestImmediateDistributions:
     def test_immediate_distributions_equal_fcfe(self, typical_fcfe_schedule):
         """Immediate distributions should equal FCFE."""
         result = calculate_immediate_distributions(
-            fcfe_schedule=typical_fcfe_schedule, equity_invested=50e6
+            fcfe_schedule=typical_fcfe_schedule,
+            equity_invested=50e6
         )
 
         # All distributions should match FCFE
@@ -115,7 +116,8 @@ class TestImmediateDistributions:
     def test_cumulative_distributions_calculated(self, typical_fcfe_schedule):
         """Cumulative distributions should be calculated correctly."""
         result = calculate_immediate_distributions(
-            fcfe_schedule=typical_fcfe_schedule, equity_invested=50e6
+            fcfe_schedule=typical_fcfe_schedule,
+            equity_invested=50e6
         )
 
         # Verify cumulative sum
@@ -127,18 +129,20 @@ class TestImmediateDistributions:
     def test_equity_irr_calculated(self, typical_fcfe_schedule):
         """Equity IRR should be calculated for immediate distributions."""
         result = calculate_immediate_distributions(
-            fcfe_schedule=typical_fcfe_schedule, equity_invested=50e6
+            fcfe_schedule=typical_fcfe_schedule,
+            equity_invested=50e6
         )
 
         # IRR should be reasonable (10-20% range)
-        assert (
-            10.0 < result.equity_irr < 20.0
-        ), f"Equity IRR should be 10-20%, got {result.equity_irr:.2f}%"
+        assert 10.0 < result.equity_irr < 20.0, (
+            f"Equity IRR should be 10-20%, got {result.equity_irr:.2f}%"
+        )
 
     def test_total_distributed_equals_sum(self, typical_fcfe_schedule):
         """Total distributed should equal sum of annual distributions."""
         result = calculate_immediate_distributions(
-            fcfe_schedule=typical_fcfe_schedule, equity_invested=50e6
+            fcfe_schedule=typical_fcfe_schedule,
+            equity_invested=50e6
         )
 
         expected_total = sum(typical_fcfe_schedule)
@@ -148,15 +152,13 @@ class TestImmediateDistributions:
 class TestDeferredDistributions:
     """Test tax-optimized deferred distribution logic."""
 
-    def test_distributions_deferred_during_tlcf_period(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_distributions_deferred_during_tlcf_period(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Distributions should be deferred while TLCF > threshold."""
         tlcf = TLCFSchedule(
             annual_tlcf=typical_tlcf_schedule,
             tlcf_utilization=[0.0] * len(typical_tlcf_schedule),
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=5,
+            tlcf_exhaustion_year=5
         )
 
         result = calculate_deferred_distributions(
@@ -164,24 +166,22 @@ class TestDeferredDistributions:
             equity_invested=50e6,
             tlcf_schedule=tlcf,
             max_delay_years=5,
-            tlcf_threshold=1e6,
+            tlcf_threshold=1e6
         )
 
         # Years 1-4 should have zero distributions (TLCF > $1M)
         for i in range(4):
-            assert (
-                result.annual_distributions[i] == 0.0
-            ), f"Year {i+1} should defer, got ${result.annual_distributions[i]/1e6:.1f}M"
+            assert result.annual_distributions[i] == 0.0, (
+                f"Year {i+1} should defer, got ${result.annual_distributions[i]/1e6:.1f}M"
+            )
 
-    def test_accumulated_distributions_released(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_accumulated_distributions_released(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Accumulated distributions should be released after TLCF exhaustion."""
         tlcf = TLCFSchedule(
             annual_tlcf=typical_tlcf_schedule,
             tlcf_utilization=[0.0] * len(typical_tlcf_schedule),
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=5,
+            tlcf_exhaustion_year=5
         )
 
         result = calculate_deferred_distributions(
@@ -189,16 +189,16 @@ class TestDeferredDistributions:
             equity_invested=50e6,
             tlcf_schedule=tlcf,
             max_delay_years=5,
-            tlcf_threshold=1e6,
+            tlcf_threshold=1e6
         )
 
         # Year 5 (index 4) should have large distribution (accumulated + current)
         # Accumulated: Years 1-4 FCFE = $5M + $5.5M + $6M + $6.5M = $23M
         # Current: Year 5 = $7M
         # Total: ~$30M
-        assert (
-            result.annual_distributions[4] > 25e6
-        ), f"Year 5 should have accumulated distribution, got ${result.annual_distributions[4]/1e6:.1f}M"
+        assert result.annual_distributions[4] > 25e6, (
+            f"Year 5 should have accumulated distribution, got ${result.annual_distributions[4]/1e6:.1f}M"
+        )
 
     def test_max_delay_respected(self, typical_fcfe_schedule):
         """Distributions should not be deferred beyond max_delay_years."""
@@ -208,7 +208,7 @@ class TestDeferredDistributions:
             annual_tlcf=tlcf_long,
             tlcf_utilization=[0.0] * 20,
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=20,
+            tlcf_exhaustion_year=20
         )
 
         result = calculate_deferred_distributions(
@@ -216,23 +216,21 @@ class TestDeferredDistributions:
             equity_invested=50e6,
             tlcf_schedule=tlcf,
             max_delay_years=3,  # Max 3 years
-            tlcf_threshold=1e6,
+            tlcf_threshold=1e6
         )
 
         # Year 4 (index 3) should have distributions despite high TLCF
-        assert (
-            result.annual_distributions[3] > 0
-        ), "Distributions should start after max_delay_years"
+        assert result.annual_distributions[3] > 0, (
+            "Distributions should start after max_delay_years"
+        )
 
-    def test_total_distributed_unchanged(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_total_distributed_unchanged(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Total distributed should equal FCFE regardless of timing."""
         tlcf = TLCFSchedule(
             annual_tlcf=typical_tlcf_schedule,
             tlcf_utilization=[0.0] * len(typical_tlcf_schedule),
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=5,
+            tlcf_exhaustion_year=5
         )
 
         immediate = calculate_immediate_distributions(typical_fcfe_schedule, 50e6)
@@ -247,15 +245,13 @@ class TestDeferredDistributions:
 class TestTaxSavingsCalculation:
     """Test tax savings calculation logic."""
 
-    def test_tax_savings_positive_with_deferral(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_tax_savings_positive_with_deferral(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Deferring distributions during TLCF should create tax savings."""
         tlcf = TLCFSchedule(
             annual_tlcf=typical_tlcf_schedule,
             tlcf_utilization=[0.0] * len(typical_tlcf_schedule),
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=5,
+            tlcf_exhaustion_year=5
         )
 
         immediate = calculate_immediate_distributions(typical_fcfe_schedule, 50e6)
@@ -271,15 +267,13 @@ class TestTaxSavingsCalculation:
         assert savings > 0, "Tax savings should be positive with deferral"
         assert savings_npv > 0, "Tax savings NPV should be positive"
 
-    def test_higher_tax_rate_increases_savings(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_higher_tax_rate_increases_savings(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Higher tax rate should increase tax savings magnitude."""
         tlcf = TLCFSchedule(
             annual_tlcf=typical_tlcf_schedule,
             tlcf_utilization=[0.0] * len(typical_tlcf_schedule),
             tlcf_wasted=0.0,
-            tlcf_exhaustion_year=5,
+            tlcf_exhaustion_year=5
         )
 
         immediate = calculate_immediate_distributions(typical_fcfe_schedule, 50e6)
@@ -303,9 +297,7 @@ class TestTaxSavingsCalculation:
 class TestOptimizationIntegration:
     """Test complete optimization integration."""
 
-    def test_optimization_produces_valid_result(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_optimization_produces_valid_result(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Complete optimization should produce valid result."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
@@ -313,7 +305,7 @@ class TestOptimizationIntegration:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5,
+            max_delay_years=5
         )
 
         # Should have both base and optimized cases
@@ -329,9 +321,7 @@ class TestOptimizationIntegration:
         # Recommendation should be non-empty
         assert len(result.recommendation) > 50
 
-    def test_optimized_irr_lower_than_base(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_optimized_irr_lower_than_base(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Optimized IRR should be lower than base (trade-off)."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
@@ -339,7 +329,7 @@ class TestOptimizationIntegration:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5,
+            max_delay_years=5
         )
 
         # Deferring distributions should reduce IRR slightly
@@ -349,9 +339,7 @@ class TestOptimizationIntegration:
             f"<= base IRR {result.base_case.equity_irr:.2f}%"
         )
 
-    def test_irr_reduction_reasonable(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_irr_reduction_reasonable(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """IRR reduction should be reasonable (< 3% for optimal timing)."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
@@ -359,23 +347,21 @@ class TestOptimizationIntegration:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5,
+            max_delay_years=5
         )
 
         irr_reduction = result.base_case.equity_irr - result.optimized_case.equity_irr
 
         # Reduction should be < 3% for well-optimized timing
-        assert (
-            irr_reduction < 3.0
-        ), f"IRR reduction should be < 3%, got {irr_reduction:.2f}%"
+        assert irr_reduction < 3.0, (
+            f"IRR reduction should be < 3%, got {irr_reduction:.2f}%"
+        )
 
 
 class TestRegressionPins:
     """Regression pins for tax optimization (TEST-01 compliance)."""
 
-    def test_typical_project_optimal_delay(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_typical_project_optimal_delay(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Typical project should have 3-5 year optimal delay."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
@@ -383,17 +369,15 @@ class TestRegressionPins:
             equity_invested=50e6,
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=10,
+            max_delay_years=10
         )
 
         # Regression pin: Typical optimal delay is 3-5 years
-        assert (
-            3 <= result.optimal_delay_years <= 5
-        ), f"Typical optimal delay should be 3-5 years, got {result.optimal_delay_years}"
+        assert 3 <= result.optimal_delay_years <= 5, (
+            f"Typical optimal delay should be 3-5 years, got {result.optimal_delay_years}"
+        )
 
-    def test_tax_savings_magnitude_reasonable(
-        self, typical_fcfe_schedule, typical_tlcf_schedule
-    ):
+    def test_tax_savings_magnitude_reasonable(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Tax savings should be $1-3M NPV for $200M project."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
@@ -401,15 +385,15 @@ class TestRegressionPins:
             equity_invested=50e6,  # 25% equity of $200M
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5,
+            max_delay_years=5
         )
 
         savings_m = result.tax_savings_npv_usd / 1e6
 
         # Regression pin: $1-4M NPV savings typical
-        assert (
-            0.5 < savings_m < 5.0
-        ), f"Tax savings should be $0.5-5M NPV, got ${savings_m:.1f}M"
+        assert 0.5 < savings_m < 5.0, (
+            f"Tax savings should be $0.5-5M NPV, got ${savings_m:.1f}M"
+        )
 
     def test_dutchbay_baseline_optimization(self):
         """DutchBay baseline should optimize as expected."""
@@ -423,7 +407,7 @@ class TestRegressionPins:
             equity_invested=60e6,
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5,
+            max_delay_years=5
         )
 
         # DutchBay should have:
@@ -435,9 +419,9 @@ class TestRegressionPins:
         assert 1.0e6 < result.tax_savings_npv_usd < 4.0e6
 
         irr_reduction = result.base_case.equity_irr - result.optimized_case.equity_irr
-        assert (
-            irr_reduction < 2.5
-        ), f"DutchBay IRR reduction should be < 2.5%, got {irr_reduction:.2f}%"
+        assert irr_reduction < 2.5, (
+            f"DutchBay IRR reduction should be < 2.5%, got {irr_reduction:.2f}%"
+        )
 
 
 if __name__ == "__main__":

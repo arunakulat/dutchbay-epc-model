@@ -35,8 +35,9 @@ Version: 2.0
 
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple, Dict, Any
 
+import numpy as np
 
 # Import proper tax calculation
 from finance.tax_schedule_v14 import (
@@ -63,7 +64,6 @@ class EnhancedDistributionSchedule:
         annual_cafod: Cash Available For Distribution before distributions (USD)
         annual_tax_paid: Annual corporate tax paid (USD)
     """
-
     annual_distributions: List[float]
     cumulative_distributions: List[float]
     equity_irr: float
@@ -87,7 +87,6 @@ class EnhancedTaxOptimizationResult:
         tlcf_utilization_improvement: Additional TLCF utilized (USD)
         recommendation: Human-readable recommendation
     """
-
     base_case: EnhancedDistributionSchedule
     optimized_case: EnhancedDistributionSchedule
     base_tax_schedule: TaxSchedule
@@ -100,7 +99,8 @@ class EnhancedTaxOptimizationResult:
 
 
 def calculate_distributions_immediate(
-    cafod_schedule: List[float], equity_invested: float
+    cafod_schedule: List[float],
+    equity_invested: float
 ) -> EnhancedDistributionSchedule:
     """Calculate base case: immediate distribution of all CAFOD.
 
@@ -127,9 +127,7 @@ def calculate_distributions_immediate(
     # Calculate equity IRR
     cashflows = [-equity_invested] + annual_distributions
     equity_irr_decimal = calculate_irr(cashflows)
-    equity_irr_pct = (
-        (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
-    )
+    equity_irr_pct = (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
 
     total_distributed = sum(annual_distributions)
 
@@ -139,7 +137,7 @@ def calculate_distributions_immediate(
         equity_irr=equity_irr_pct,
         total_distributed=total_distributed,
         annual_cafod=cafod_schedule,
-        annual_tax_paid=[0.0] * len(cafod_schedule),  # Tracked separately
+        annual_tax_paid=[0.0] * len(cafod_schedule)  # Tracked separately
     )
 
 
@@ -148,7 +146,7 @@ def calculate_distributions_deferred(
     tlcf_balance_schedule: List[float],
     equity_invested: float,
     max_delay_years: int = 5,
-    tlcf_threshold: float = 1e6,
+    tlcf_threshold: float = 1e6
 ) -> EnhancedDistributionSchedule:
     """Calculate tax-optimized deferred distribution schedule.
 
@@ -174,7 +172,10 @@ def calculate_distributions_deferred(
 
     for t in range(project_life):
         # Check if should defer
-        should_defer = t < max_delay_years and tlcf_balance_schedule[t] > tlcf_threshold
+        should_defer = (
+            t < max_delay_years and
+            tlcf_balance_schedule[t] > tlcf_threshold
+        )
 
         if should_defer:
             # Defer: Retain cash in company
@@ -210,9 +211,7 @@ def calculate_distributions_deferred(
     # Calculate equity IRR
     cashflows = [-equity_invested] + annual_distributions
     equity_irr_decimal = calculate_irr(cashflows)
-    equity_irr_pct = (
-        (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
-    )
+    equity_irr_pct = (equity_irr_decimal * 100.0) if equity_irr_decimal is not None else 0.0
 
     total_distributed = sum(annual_distributions)
 
@@ -227,7 +226,7 @@ def calculate_distributions_deferred(
         equity_irr=equity_irr_pct,
         total_distributed=total_distributed,
         annual_cafod=cafod_schedule,
-        annual_tax_paid=[0.0] * project_life,  # Tracked in TaxSchedule
+        annual_tax_paid=[0.0] * project_life  # Tracked in TaxSchedule
     )
 
 
@@ -240,7 +239,7 @@ def optimize_distribution_timing_enhanced(
     corporate_tax_rate: float = 0.28,
     target_equity_irr: float = 0.15,
     max_delay_years: int = 5,
-    discount_rate: float = 0.12,
+    discount_rate: float = 0.12
 ) -> EnhancedTaxOptimizationResult:
     """Enhanced tax-aware distribution optimization with proper mechanics.
 
@@ -287,7 +286,7 @@ def optimize_distribution_timing_enhanced(
         opex_schedule=opex_schedule,
         depreciation_schedule=depreciation_schedule,
         interest_schedule=interest_schedule,
-        corporate_tax_rate=corporate_tax_rate,
+        corporate_tax_rate=corporate_tax_rate
     )
 
     logger.info(
@@ -297,7 +296,8 @@ def optimize_distribution_timing_enhanced(
 
     # Step 2: Calculate base case distributions (immediate CAFOD distribution)
     base_distributions = calculate_distributions_immediate(
-        cafod_schedule=base_tax_schedule.annual_cafod, equity_invested=equity_invested
+        cafod_schedule=base_tax_schedule.annual_cafod,
+        equity_invested=equity_invested
     )
     base_distributions.annual_tax_paid = base_tax_schedule.annual_tax_liability
 
@@ -312,26 +312,22 @@ def optimize_distribution_timing_enhanced(
         tlcf_balance_schedule=optimized_tax_schedule.annual_tlcf_balance,
         equity_invested=equity_invested,
         max_delay_years=max_delay_years,
-        tlcf_threshold=1e6,
+        tlcf_threshold=1e6
     )
-    optimized_distributions.annual_tax_paid = (
-        optimized_tax_schedule.annual_tax_liability
-    )
+    optimized_distributions.annual_tax_paid = optimized_tax_schedule.annual_tax_liability
 
     # Step 5: Calculate tax savings
     # Savings come from full TLCF utilization (not from distribution timing per se)
     # In this model: tax schedules are same, benefit is IRR vs TLCF utilization trade-off
-    tax_savings_nominal = sum(base_tax_schedule.annual_tax_liability) - sum(
-        optimized_tax_schedule.annual_tax_liability
+    tax_savings_nominal = (
+        sum(base_tax_schedule.annual_tax_liability) -
+        sum(optimized_tax_schedule.annual_tax_liability)
     )
 
     # NPV of tax timing differences
     tax_savings_npv = sum(
-        (
-            base_tax_schedule.annual_tax_liability[t]
-            - optimized_tax_schedule.annual_tax_liability[t]
-        )
-        / (1 + discount_rate) ** t
+        (base_tax_schedule.annual_tax_liability[t] -
+         optimized_tax_schedule.annual_tax_liability[t]) / (1 + discount_rate) ** t
         for t in range(len(revenue_schedule))
     )
 
@@ -341,7 +337,10 @@ def optimize_distribution_timing_enhanced(
     tlcf_improvement = tlcf_util_opt - tlcf_util_base
 
     # Optimal delay
-    optimal_delay = min(optimized_tax_schedule.tlcf_exhaustion_year, max_delay_years)
+    optimal_delay = min(
+        optimized_tax_schedule.tlcf_exhaustion_year,
+        max_delay_years
+    )
 
     # Generate recommendation
     irr_trade_off = base_distributions.equity_irr - optimized_distributions.equity_irr
@@ -376,7 +375,7 @@ def optimize_distribution_timing_enhanced(
         tax_savings_npv=tax_savings_npv,
         optimal_delay_years=optimal_delay,
         tlcf_utilization_improvement=tlcf_improvement,
-        recommendation=recommendation,
+        recommendation=recommendation
     )
 
 
@@ -394,15 +393,12 @@ if __name__ == "__main__":
 
     # Depreciation (10-year straight-line)
     from finance.tax_schedule_v14 import calculate_straight_line_depreciation
-
-    depreciation_sched = calculate_straight_line_depreciation(
-        capex, 10, 0, project_life
-    )
+    depreciation_sched = calculate_straight_line_depreciation(capex, 10, 0, project_life)
     depreciation = depreciation_sched.annual_depreciation
 
     # Interest (from debt)
     debt = 140e6
-    interest = [debt * 0.08 * max(0, 1 - t / 15) for t in range(project_life)]
+    interest = [debt * 0.08 * max(0, 1 - t/15) for t in range(project_life)]
 
     # Equity
     equity = 60e6
@@ -416,32 +412,26 @@ if __name__ == "__main__":
         equity_invested=equity,
         corporate_tax_rate=0.28,
         target_equity_irr=0.15,
-        max_delay_years=5,
+        max_delay_years=5
     )
 
-    print("\n" + "=" * 70)
+    print("\n" + "="*70)
     print("ENHANCED TAX-AWARE DISTRIBUTION OPTIMIZATION")
-    print("=" * 70)
-    print("\nBase Case (Immediate):")
+    print("="*70)
+    print(f"\nBase Case (Immediate):")
     print(f"  Equity IRR: {result.base_case.equity_irr:.2f}%")
-    print(
-        f"  Total Tax: ${sum(result.base_tax_schedule.annual_tax_liability)/1e6:.1f}M"
-    )
+    print(f"  Total Tax: ${sum(result.base_tax_schedule.annual_tax_liability)/1e6:.1f}M")
 
     print(f"\nOptimized Case (Deferred {result.optimal_delay_years} years):")
     print(f"  Equity IRR: {result.optimized_case.equity_irr:.2f}%")
-    print(
-        f"  Total Tax: ${sum(result.optimized_tax_schedule.annual_tax_liability)/1e6:.1f}M"
-    )
-    print(
-        f"  IRR Trade-off: {result.base_case.equity_irr - result.optimized_case.equity_irr:.2f}%"
-    )
+    print(f"  Total Tax: ${sum(result.optimized_tax_schedule.annual_tax_liability)/1e6:.1f}M")
+    print(f"  IRR Trade-off: {result.base_case.equity_irr - result.optimized_case.equity_irr:.2f}%")
 
-    print("\nTLCF Utilization:")
+    print(f"\nTLCF Utilization:")
     print(f"  Peak TLCF: ${max(result.base_tax_schedule.annual_tlcf_balance)/1e6:.1f}M")
     print(f"  Exhaustion Year: {result.base_tax_schedule.tlcf_exhaustion_year + 1}")
     print(f"  Utilization Improvement: ${result.tlcf_utilization_improvement/1e6:.1f}M")
 
-    print("\nRecommendation:")
+    print(f"\nRecommendation:")
     print(f"  {result.recommendation}")
-    print("=" * 70)
+    print("="*70)

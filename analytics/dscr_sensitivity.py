@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
@@ -239,7 +239,9 @@ def analyze_single_variable(
 
     # Generate perturbation points
     perturbations = np.linspace(
-        -config.perturbation_range_pct, config.perturbation_range_pct, config.n_steps
+        -config.perturbation_range_pct,
+        config.perturbation_range_pct,
+        config.n_steps
     )
 
     results = []
@@ -283,12 +285,12 @@ def analyze_single_variable(
 
         # Calculate deltas
         delta_usd = (
-            debt_result["debt_sized"] - base_debt if base_debt is not None else 0.0
+            debt_result["debt_sized"] - base_debt
+            if base_debt is not None else 0.0
         )
         delta_pct = (
             (delta_usd / base_debt * 100.0)
-            if base_debt is not None and base_debt > 0
-            else 0.0
+            if base_debt is not None and base_debt > 0 else 0.0
         )
 
         # Get perturbed parameter value for logging
@@ -305,20 +307,18 @@ def analyze_single_variable(
         else:
             perturbed_value = 0.0
 
-        results.append(
-            {
-                "perturbation_pct": float(pct),
-                "perturbed_value": float(perturbed_value),
-                "debt_sized": float(debt_result["debt_sized"]),
-                "debt_p50": float(debt_result["debt_p50"]),
-                "debt_p99": float(debt_result["debt_p99"]),
-                "binding_constraint": debt_result["binding_constraint"],
-                "delta_from_base_usd": float(delta_usd),
-                "delta_from_base_pct": float(delta_pct),
-                "min_dscr_p50": float(debt_result["min_dscr_p50"]),
-                "min_dscr_p99": float(debt_result["min_dscr_p99"]),
-            }
-        )
+        results.append({
+            "perturbation_pct": float(pct),
+            "perturbed_value": float(perturbed_value),
+            "debt_sized": float(debt_result["debt_sized"]),
+            "debt_p50": float(debt_result["debt_p50"]),
+            "debt_p99": float(debt_result["debt_p99"]),
+            "binding_constraint": debt_result["binding_constraint"],
+            "delta_from_base_usd": float(delta_usd),
+            "delta_from_base_pct": float(delta_pct),
+            "min_dscr_p50": float(debt_result["min_dscr_p50"]),
+            "min_dscr_p99": float(debt_result["min_dscr_p99"]),
+        })
 
     # Calculate tornado chart data (impact at extremes)
     min_debt = min(r["debt_sized"] for r in results)
@@ -330,40 +330,28 @@ def analyze_single_variable(
         "range_usd": float(max_debt - min_debt),
         "range_pct": (
             float((max_debt - min_debt) / base_debt * 100.0)
-            if base_debt and base_debt > 0
-            else 0.0
+            if base_debt and base_debt > 0 else 0.0
         ),
     }
 
     # Identify constraint transitions (where binding constraint changes)
     transitions = []
     for i in range(1, len(results)):
-        if results[i]["binding_constraint"] != results[i - 1]["binding_constraint"]:
-            transitions.append(
-                {
-                    "at_perturbation_pct": float(results[i]["perturbation_pct"]),
-                    "from_constraint": results[i - 1]["binding_constraint"],
-                    "to_constraint": results[i]["binding_constraint"],
-                }
-            )
+        if results[i]["binding_constraint"] != results[i-1]["binding_constraint"]:
+            transitions.append({
+                "at_perturbation_pct": float(results[i]["perturbation_pct"]),
+                "from_constraint": results[i-1]["binding_constraint"],
+                "to_constraint": results[i]["binding_constraint"],
+            })
 
     # Get base value
     base_value = (
-        config.base_degradation
-        if variable == "degradation"
-        else (
-            config.base_aep_p50
-            if variable == "aep"
-            else (
-                config.base_tariff
-                if variable == "tariff"
-                else (
-                    config.base_opex
-                    if variable == "opex"
-                    else config.base_capex if variable == "capex" else 0.0
-                )
-            )
-        )
+        config.base_degradation if variable == "degradation"
+        else config.base_aep_p50 if variable == "aep"
+        else config.base_tariff if variable == "tariff"
+        else config.base_opex if variable == "opex"
+        else config.base_capex if variable == "capex"
+        else 0.0
     )
 
     logger.info(
@@ -455,7 +443,9 @@ def analyze_dscr_sensitivity(
             perturbation_range_pct=float(
                 config.get("sensitivity", {}).get("perturbation_range_pct", 20.0)
             ),
-            n_steps=int(config.get("sensitivity", {}).get("n_steps", 9)),
+            n_steps=int(
+                config.get("sensitivity", {}).get("n_steps", 9)
+            ),
             dscr_target_p50=float(config.financing.dscr_target_p50),
             dscr_target_p99=float(config.financing.dscr_target_p99),
             debt_ratio_max=float(config.financing.debt_ratio_max),
@@ -490,15 +480,13 @@ def analyze_dscr_sensitivity(
     # Build tornado chart (sorted by impact magnitude)
     tornado_chart = []
     for var_result in variable_results:
-        tornado_chart.append(
-            {
-                "variable": var_result["variable"],
-                "impact_range": var_result["tornado_data"]["range_usd"],
-                "impact_range_pct": var_result["tornado_data"]["range_pct"],
-                "min_impact": var_result["tornado_data"]["min_impact"],
-                "max_impact": var_result["tornado_data"]["max_impact"],
-            }
-        )
+        tornado_chart.append({
+            "variable": var_result["variable"],
+            "impact_range": var_result["tornado_data"]["range_usd"],
+            "impact_range_pct": var_result["tornado_data"]["range_pct"],
+            "min_impact": var_result["tornado_data"]["min_impact"],
+            "max_impact": var_result["tornado_data"]["max_impact"],
+        })
 
     # Sort by absolute impact
     tornado_chart.sort(key=lambda x: abs(x["impact_range"]), reverse=True)

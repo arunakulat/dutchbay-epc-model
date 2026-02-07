@@ -14,16 +14,14 @@ Design goals
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import hashlib
 import json
 import numpy as np
 
 from analytics.evaluation_v14 import evaluate_with_overrides
-from analytics.contracts_v14 import (
-    MonteCarloResult,
-)  # keep your contract surface stable
+from analytics.contracts_v14 import MonteCarloResult  # keep your contract surface stable
 
 from analytics.mc.samplers import generate_lhs_samples
 from analytics.mc.aggregate import aggregate_trials
@@ -46,9 +44,7 @@ class MonteCarloRunMeta:
 
 def _stable_config_hash(cfg: Mapping[str, Any]) -> str:
     # Stable hash for regressions; avoid non-deterministic dict ordering issues.
-    payload = json.dumps(
-        cfg, sort_keys=True, separators=(",", ":"), default=str
-    ).encode("utf-8")
+    payload = json.dumps(cfg, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
@@ -75,8 +71,8 @@ class MonteCarloEngine:
         self._correlation = correlation
 
         # Extract param definitions once (fast + deterministic)
-        self._param_names, self._param_bounds, self._param_kinds = (
-            self._extract_param_definitions(self._base_config)
+        self._param_names, self._param_bounds, self._param_kinds = self._extract_param_definitions(
+            self._base_config
         )
 
         self._meta = MonteCarloRunMeta(
@@ -119,9 +115,7 @@ class MonteCarloEngine:
 
         if not param_names:
             # Fail fast: MC with no parameters is almost always a misconfig.
-            raise ValueError(
-                "Monte Carlo config has no parameters (monte_carlo.parameters is empty)."
-            )
+            raise ValueError("Monte Carlo config has no parameters (monte_carlo.parameters is empty).")
 
         return param_names, bounds, kinds
 
@@ -154,9 +148,7 @@ class MonteCarloEngine:
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
 
             # Optional degradation hook (can adjust overrides or post-process rows)
-            overrides = apply_degradation_if_enabled(
-                base_cfg=self._base_config, overrides=overrides
-            )
+            overrides = apply_degradation_if_enabled(base_cfg=self._base_config, overrides=overrides)
 
             # All evaluations go through the gateway
             out = evaluate_with_overrides(
@@ -182,17 +174,13 @@ class MonteCarloEngine:
                 "n_trials": n,
                 "config_hash": self._meta.config_hash,
                 "param_names": list(self._param_names),
-                "correlation_enabled": bool(
-                    self._correlation and self._correlation.enabled
-                ),
+                "correlation_enabled": bool(self._correlation and self._correlation.enabled),
             },
         )
         return result
 
     @staticmethod
-    def _build_overrides_from_sample(
-        sample_row: np.ndarray, param_names: Sequence[str]
-    ) -> Dict[str, Any]:
+    def _build_overrides_from_sample(sample_row: np.ndarray, param_names: Sequence[str]) -> Dict[str, Any]:
         """
         Convert a sampled vector into scenario overrides.
         This must match your v14 override schema (Hydra/OmegaConf style or dict patching).

@@ -22,7 +22,7 @@ class TestDualDSCRBasics:
         """Verify dual DSCR uses min(P50, P99)."""
         # Strong P50 case, weak P99 case
         cfads_p50 = [10.0] * 15
-        cfads_p99 = [5.0] * 15  # P99 is much weaker
+        cfads_p99 = [5.0] * 15   # P99 is much weaker
 
         result = size_debt_with_dual_dscr(
             cfads_p50=cfads_p50,
@@ -31,7 +31,7 @@ class TestDualDSCRBasics:
             dscr_target_p99=1.00,
             capex=100.0,
             debt_ratio_max=0.70,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # P99 should bind (lower CFADS)
@@ -43,7 +43,7 @@ class TestDualDSCRBasics:
         """P50 binds when P99 is close to P50 (low volatility)."""
         # Low volatility case
         cfads_p50 = [10.0] * 15
-        cfads_p99 = [9.5] * 15  # P99 only slightly lower
+        cfads_p99 = [9.5] * 15   # P99 only slightly lower
 
         result = size_debt_with_dual_dscr(
             cfads_p50=cfads_p50,
@@ -52,7 +52,7 @@ class TestDualDSCRBasics:
             dscr_target_p99=1.00,
             capex=100.0,
             debt_ratio_max=0.70,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # P50 should bind (stricter DSCR target)
@@ -73,7 +73,7 @@ class TestDualDSCRBasics:
             cfads_p99=cfads_p99,
             capex=capex,
             debt_ratio_max=debt_ratio_max,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # Even with high CFADS, debt capped at 70% of CAPEX
@@ -97,12 +97,14 @@ class TestDualDSCRCalculations:
             dscr_target_p99=1.00,
             capex=200.0,
             debt_ratio_max=0.80,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # Min DSCR in P50 case should be approximately the target
         # (within tolerance for NPV discounting effects)
-        assert result["min_dscr_p50"] == pytest.approx(dscr_target_p50, rel=0.05)
+        assert result["min_dscr_p50"] == pytest.approx(
+            dscr_target_p50, rel=0.05
+        )
 
     def test_dscr_profiles_monotonic_for_flat_cfads(self):
         """DSCR profiles should be constant for flat CFADS."""
@@ -116,7 +118,7 @@ class TestDualDSCRCalculations:
             dscr_target_p99=1.00,
             capex=100.0,
             debt_ratio_max=0.70,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # For flat CFADS, DSCR should be constant (all equal to target)
@@ -124,14 +126,11 @@ class TestDualDSCRCalculations:
         dscr_p99 = result["dscr_profile_p99"]
 
         # All P50 DSCRs should be approximately equal
-        dscr_p50_finite = [d for d in dscr_p50 if d < float("inf")]
+        dscr_p50_finite = [d for d in dscr_p50 if d < float('inf')]
         if dscr_p50_finite:
             dscr_p50_std = (
-                sum(
-                    (d - sum(dscr_p50_finite) / len(dscr_p50_finite)) ** 2
-                    for d in dscr_p50_finite
-                )
-                / len(dscr_p50_finite)
+                sum((d - sum(dscr_p50_finite) / len(dscr_p50_finite)) ** 2
+                    for d in dscr_p50_finite) / len(dscr_p50_finite)
             ) ** 0.5
             assert dscr_p50_std < 0.01  # Very low variance
 
@@ -148,13 +147,14 @@ class TestDualDSCRCalculations:
             dscr_target_p99=1.00,
             capex=200.0,
             debt_ratio_max=0.80,
-            debt_rate=debt_rate,
+            debt_rate=debt_rate
         )
 
         # Calculate NPV of debt service manually
         debt_service = result["debt_service_p50"]
         npv_manual = sum(
-            ds / (1 + debt_rate) ** (i + 1) for i, ds in enumerate(debt_service)
+            ds / (1 + debt_rate) ** (i + 1)
+            for i, ds in enumerate(debt_service)
         )
 
         # Should match debt_p50 (within tolerance)
@@ -173,7 +173,7 @@ class TestDualDSCRIndustryScenarios:
         - Expected: P99 binds, reducing debt by ~15%
         """
         cfads_p50 = [12.5] * 15
-        cfads_p99 = [8.5] * 15  # 32% downside
+        cfads_p99 = [8.5] * 15   # 32% downside
 
         result = size_debt_with_dual_dscr(
             cfads_p50=cfads_p50,
@@ -182,7 +182,7 @@ class TestDualDSCRIndustryScenarios:
             dscr_target_p99=1.00,
             capex=200.0,
             debt_ratio_max=0.70,
-            debt_rate=0.08,
+            debt_rate=0.08
         )
 
         # P99 should bind
@@ -190,9 +190,8 @@ class TestDualDSCRIndustryScenarios:
 
         # Downside impact should be 10-20%
         downside_impact = result["downside_impact_pct"]
-        assert (
-            10.0 <= downside_impact <= 25.0
-        ), f"Downside impact {downside_impact:.1f}% outside expected [10%, 25%]"
+        assert 10.0 <= downside_impact <= 25.0, \
+            f"Downside impact {downside_impact:.1f}% outside expected [10%, 25%]"
 
     def test_solar_pv_p50_often_binds(self):
         """Solar PV: P99 closer to P50, so P50 often binds.
@@ -203,7 +202,7 @@ class TestDualDSCRIndustryScenarios:
         - Expected: P50 binds (stricter DSCR target)
         """
         cfads_p50 = [10.0] * 15
-        cfads_p99 = [9.0] * 15  # Only 10% downside
+        cfads_p99 = [9.0] * 15   # Only 10% downside
 
         result = size_debt_with_dual_dscr(
             cfads_p50=cfads_p50,
@@ -212,7 +211,7 @@ class TestDualDSCRIndustryScenarios:
             dscr_target_p99=1.00,
             capex=150.0,
             debt_ratio_max=0.75,
-            debt_rate=0.07,
+            debt_rate=0.07
         )
 
         # P50 likely binds (stricter DSCR target compensates for low downside)
@@ -236,7 +235,7 @@ class TestDualDSCRIndustryScenarios:
             dscr_target_p99=1.10,  # Higher buffer
             capex=180.0,
             debt_ratio_max=0.65,  # Lower max ratio
-            debt_rate=0.10,  # Higher debt cost
+            debt_rate=0.10  # Higher debt cost
         )
 
         # Should produce conservative debt sizing
@@ -249,7 +248,11 @@ class TestDualDSCRInputValidation:
     def test_empty_cfads_raises_error(self):
         """Empty CFADS should raise ValueError."""
         with pytest.raises(ValueError, match="cannot be empty"):
-            size_debt_with_dual_dscr(cfads_p50=[], cfads_p99=[], capex=100.0)
+            size_debt_with_dual_dscr(
+                cfads_p50=[],
+                cfads_p99=[],
+                capex=100.0
+            )
 
     def test_mismatched_cfads_length_raises_error(self):
         """Mismatched CFADS lengths should raise ValueError."""
@@ -257,7 +260,7 @@ class TestDualDSCRInputValidation:
             size_debt_with_dual_dscr(
                 cfads_p50=[10.0] * 15,
                 cfads_p99=[8.0] * 10,  # Different length
-                capex=100.0,
+                capex=100.0
             )
 
     def test_negative_dscr_target_raises_error(self):
@@ -267,7 +270,7 @@ class TestDualDSCRInputValidation:
                 cfads_p50=[10.0] * 15,
                 cfads_p99=[8.0] * 15,
                 dscr_target_p50=-1.30,
-                capex=100.0,
+                capex=100.0
             )
 
     def test_invalid_debt_ratio_raises_error(self):
@@ -277,14 +280,16 @@ class TestDualDSCRInputValidation:
                 cfads_p50=[10.0] * 15,
                 cfads_p99=[8.0] * 15,
                 debt_ratio_max=1.5,  # > 1.0
-                capex=100.0,
+                capex=100.0
             )
 
     def test_zero_capex_raises_error(self):
         """Zero CAPEX should raise ValueError."""
         with pytest.raises(ValueError, match="CAPEX must be positive"):
             size_debt_with_dual_dscr(
-                cfads_p50=[10.0] * 15, cfads_p99=[8.0] * 15, capex=0.0
+                cfads_p50=[10.0] * 15,
+                cfads_p99=[8.0] * 15,
+                capex=0.0
             )
 
 
@@ -316,7 +321,9 @@ class TestDualDSCRBackwardCompatibility:
         cfads_p99 = [8.0] * 15
 
         result = size_debt_with_dual_dscr(
-            cfads_p50=cfads_p50, cfads_p99=cfads_p99, capex=100.0
+            cfads_p50=cfads_p50,
+            cfads_p99=cfads_p99,
+            capex=100.0
         )
 
         # Required keys

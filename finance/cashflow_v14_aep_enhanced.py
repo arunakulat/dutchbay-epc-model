@@ -47,12 +47,12 @@ def extract_aep_driven_capacity_factor(
         >>> cf
         0.371
     """
-    aep_block = config.get("aep") or config.get("AEP")
+    aep_block = config.get('aep') or config.get('AEP')
 
     if aep_block is None:
         return None
 
-    net_aep_gwh = aep_block.get("net_aep_gwh")
+    net_aep_gwh = aep_block.get('net_aep_gwh')
 
     if net_aep_gwh is None:
         return None
@@ -62,12 +62,15 @@ def extract_aep_driven_capacity_factor(
     except (TypeError, ValueError):
         logger.warning(
             "Invalid net_aep_gwh in config: %s; falling back to capacity_factor",
-            net_aep_gwh,
+            net_aep_gwh
         )
         return None
 
     if capacity_mw <= 0:
-        logger.error("Cannot derive CF from AEP: capacity_mw=%.2f invalid", capacity_mw)
+        logger.error(
+            "Cannot derive CF from AEP: capacity_mw=%.2f invalid",
+            capacity_mw
+        )
         return None
 
     # Derive CF: net_aep_gwh / (capacity_mw * 8760 hours / 1000)
@@ -85,16 +88,16 @@ def extract_aep_driven_capacity_factor(
     if cf < 0.15 or cf > 0.60:
         logger.warning(
             "AEP-derived capacity_factor %.2f%% outside typical wind range [15%%, 60%%]",
-            cf * 100,
+            cf * 100
         )
 
     logger.info(
         "Using AEP-driven capacity_factor: %.2f%% (from net_aep_gwh=%.2f GWh)",
         cf * 100,
-        net_aep_gwh,
+        net_aep_gwh
     )
 
     return cf
 
 
-__all__ = ["extract_aep_driven_capacity_factor"]
+__all__ = ['extract_aep_driven_capacity_factor']

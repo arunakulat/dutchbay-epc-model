@@ -123,18 +123,14 @@ class TestTaxCalculations:
         )
 
         # Verify year 13 is NOT in holiday
-        assert (
-            profile.is_in_tax_holiday(12) is False
-        ), "Year 13 should NOT be in holiday"
+        assert profile.is_in_tax_holiday(12) is False, "Year 13 should NOT be in holiday"
 
         # Tax should be > 0 (after holiday)
         assert tax > 0.0, f"Year 13 tax should be > 0, got {tax}"
 
         # Calculation: (10B - dep - 1B) * 0.3
         expected_tax = (10_000_000_000 - dep - 1_000_000_000) * 0.3
-        assert tax == pytest.approx(
-            expected_tax
-        ), f"Tax mismatch: {tax} vs {expected_tax}"
+        assert tax == pytest.approx(expected_tax), f"Tax mismatch: {tax} vs {expected_tax}"
 
     def test_tax_calculation_depreciation_consistency(self, lender_case_config):
         """Depreciation should be consistent across years."""
@@ -175,9 +171,7 @@ class TestTaxCalculations:
 
         # With interest shield: (10B - dep - 1B) * 0.3
         expected_with_shield = (pretax_cfads - dep - interest) * 0.3
-        assert tax == pytest.approx(
-            expected_with_shield
-        ), f"Tax mismatch: {tax} vs {expected_with_shield}"
+        assert tax == pytest.approx(expected_with_shield), f"Tax mismatch: {tax} vs {expected_with_shield}"
 
         # Without interest shield: (10B - dep) * 0.3 (should be larger)
         expected_without_shield = (pretax_cfads - dep) * 0.3

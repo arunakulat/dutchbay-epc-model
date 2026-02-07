@@ -304,8 +304,7 @@ def apply_debt_layer(
 
     # Calculate min_dscr from operational periods only
     dscr_op = [
-        d
-        for i, d in enumerate(dscr_series)
+        d for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0

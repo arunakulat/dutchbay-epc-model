@@ -15,7 +15,6 @@ import pytest
 
 try:
     import pandas as pd
-
     HAS_PANDAS = True
 except ImportError:
     HAS_PANDAS = False
@@ -39,12 +38,7 @@ def minimal_mc_config():
         "scenario_name": "test_scenario",
         "monte_carlo": {
             "parameters": [
-                {
-                    "name": "capex",
-                    "min": 100.0,
-                    "max": 120.0,
-                    "distribution": "uniform",
-                },
+                {"name": "capex", "min": 100.0, "max": 120.0, "distribution": "uniform"},
                 {"name": "tariff", "min": 0.08, "max": 0.12, "distribution": "uniform"},
             ]
         },
@@ -201,9 +195,7 @@ class TestCASPERPayloadIntegration:
             },
         )
 
-        blocks = build_casper_risk_blocks(
-            result, covenant=CovenantSpec(dscr_floor=1.30)
-        )
+        blocks = build_casper_risk_blocks(result, covenant=CovenantSpec(dscr_floor=1.30))
 
         # Validate structure
         assert "lender_risk_table" in blocks
@@ -239,9 +231,7 @@ class TestCASPERPayloadIntegration:
         }
 
         # Insert blocks
-        payload["tables"]["lender_risk_table"] = blocks["lender_risk_table"].to_dict(
-            orient="records"
-        )
+        payload["tables"]["lender_risk_table"] = blocks["lender_risk_table"].to_dict(orient="records")
         payload["metrics"]["covenant"] = blocks["covenant"]
 
         # Validate

@@ -44,7 +44,7 @@ APPROVED_SOURCES = {
         "type": "OEM",
         "description": "Envision EN-171-10.0 MW certified power curve",
         "iec_standard": "61400-12-1:2022",
-        "certificate": "CGC-B-FNc-2024-184 (extrapolated)",
+        "certificate": "CGC-B-FNc-2024-184 (extrapolated)"
     },
     "ECMWF_ERA5_2020_2024_DUTCHBAY": {
         "type": "ECMWF",
@@ -60,7 +60,8 @@ APPROVED_SOURCES = {
 
 
 def validate_source_manifest(
-    source_id: str, manifest: Optional[Dict[str, Any]] = None
+    source_id: str,
+    manifest: Optional[Dict[str, Any]] = None
 ) -> bool:
     """Validate source ID against approved manifest.
 
@@ -86,10 +87,13 @@ def compute_checksum_sha256(data: Dict[str, Any]) -> str:
         64-character hex string (SHA-256 hash)
     """
     json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+    return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
 
 
-def load_aep_from_summary(path: str, validate_manifest: bool = True) -> Dict[str, Any]:
+def load_aep_from_summary(
+    path: str,
+    validate_manifest: bool = True
+) -> Dict[str, Any]:
     """Load AEP summary from Data Lake with provenance validation.
 
     CRITICAL: This function NEVER hardcodes currency or tariff values.
@@ -147,7 +151,7 @@ def load_aep_from_summary(path: str, validate_manifest: bool = True) -> Dict[str
         "net_site_aep_gwh",
         "n_turbines",
         "rated_power_kw",
-        "source_id",
+        "source_id"
     ]
     missing = [f for f in required_fields if f not in data]
     if missing:
@@ -181,7 +185,7 @@ def load_aep_from_summary(path: str, validate_manifest: bool = True) -> Dict[str
         "iec_standard_version": data.get("iec_standard", "Unknown"),
         "validation_date": datetime.now().isoformat(),
         "checksum_sha256": compute_checksum_sha256(data),
-        "file_path": str(file_path.absolute()),
+        "file_path": str(file_path.absolute())
     }
     data["provenance"] = provenance
 
@@ -217,12 +221,15 @@ def create_aep_summary_template() -> Dict[str, Any]:
             "wake_loss_pct": 0.0,
             "availability_pct": 97.0,
             "electrical_loss_pct": 0.0,
-            "total_loss_pct": 0.0,
-        },
+            "total_loss_pct": 0.0
+        }
     }
 
 
-def export_provenance_report(aep_data: Dict[str, Any], output_path: str) -> None:
+def export_provenance_report(
+    aep_data: Dict[str, Any],
+    output_path: str
+) -> None:
     """Export provenance report for lender audit.
 
     Args:
@@ -241,9 +248,7 @@ def export_provenance_report(aep_data: Dict[str, Any], output_path: str) -> None
             f.write(f"**Source ID**: `{provenance.get('aep_source_id')}`\n\n")
             f.write(f"**Net AEP**: {aep_data['net_site_aep_gwh']:.2f} GWh\n\n")
             f.write(f"**Capacity Factor**: {aep_data['capacity_factor']:.2%}\n\n")
-            f.write(
-                f"**Checksum (SHA-256)**: `{provenance.get('checksum_sha256')}`\n\n"
-            )
+            f.write(f"**Checksum (SHA-256)**: `{provenance.get('checksum_sha256')}`\n\n")
             f.write(f"**Validation Date**: {provenance.get('validation_date')}\n\n")
             f.write(f"**IEC Standard**: {provenance.get('iec_standard_version')}\n\n")
 

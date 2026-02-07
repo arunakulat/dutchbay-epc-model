@@ -45,16 +45,16 @@ Version: 2.0 (Enhanced)
 
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from enum import Enum
 
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 class DepreciationMethod(Enum):
     """Depreciation calculation methods."""
-
     STRAIGHT_LINE = "straight_line"
     MACRS_5 = "macrs_5_year"  # 5-year MACRS (e.g., solar equipment)
     MACRS_7 = "macrs_7_year"  # 7-year MACRS (e.g., wind turbines)
@@ -71,7 +71,6 @@ class DepreciationSchedule:
         book_value: Remaining book value (USD)
         method: Depreciation method used
     """
-
     annual_depreciation: List[float]
     cumulative_depreciation: List[float]
     book_value: List[float]
@@ -97,7 +96,6 @@ class TaxSchedule:
         annual_cafod: Cash Available For Distribution (USD)
         tlcf_exhaustion_year: Year when TLCF drops below threshold
     """
-
     annual_revenue: List[float]
     annual_opex: List[float]
     annual_depreciation: List[float]
@@ -117,7 +115,7 @@ def calculate_straight_line_depreciation(
     capex: float,
     useful_life_years: int,
     salvage_value: float = 0.0,
-    project_life_years: int = 20,
+    project_life_years: int = 20
 ) -> DepreciationSchedule:
     """Calculate straight-line depreciation schedule.
 
@@ -166,14 +164,14 @@ def calculate_straight_line_depreciation(
         annual_depreciation=annual_depreciation,
         cumulative_depreciation=cumulative_depreciation,
         book_value=book_value,
-        method=DepreciationMethod.STRAIGHT_LINE,
+        method=DepreciationMethod.STRAIGHT_LINE
     )
 
 
 def calculate_macrs_depreciation(
     capex: float,
     macrs_class: DepreciationMethod = DepreciationMethod.MACRS_7,
-    project_life_years: int = 20,
+    project_life_years: int = 20
 ) -> DepreciationSchedule:
     """Calculate MACRS accelerated depreciation schedule.
 
@@ -197,34 +195,11 @@ def calculate_macrs_depreciation(
     # MACRS percentage tables (IRS Publication 946)
     macrs_tables = {
         DepreciationMethod.MACRS_5: [0.20, 0.32, 0.192, 0.1152, 0.1152, 0.0576],
-        DepreciationMethod.MACRS_7: [
-            0.1429,
-            0.2449,
-            0.1749,
-            0.1249,
-            0.0893,
-            0.0892,
-            0.0893,
-            0.0446,
-        ],
+        DepreciationMethod.MACRS_7: [0.1429, 0.2449, 0.1749, 0.1249, 0.0893, 0.0892, 0.0893, 0.0446],
         DepreciationMethod.MACRS_15: [
-            0.05,
-            0.095,
-            0.0855,
-            0.077,
-            0.0693,
-            0.0623,
-            0.0590,
-            0.0590,
-            0.0591,
-            0.0590,
-            0.0591,
-            0.0590,
-            0.0591,
-            0.0590,
-            0.0591,
-            0.0295,
-        ],
+            0.05, 0.095, 0.0855, 0.077, 0.0693, 0.0623, 0.0590, 0.0590,
+            0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0295
+        ]
     }
 
     if macrs_class not in macrs_tables:
@@ -257,7 +232,7 @@ def calculate_macrs_depreciation(
         annual_depreciation=annual_depreciation,
         cumulative_depreciation=cumulative_depreciation,
         book_value=book_value,
-        method=macrs_class,
+        method=macrs_class
     )
 
 
@@ -268,7 +243,7 @@ def calculate_corporate_tax_schedule(
     interest_schedule: List[float],
     corporate_tax_rate: float,
     initial_tlcf: float = 0.0,
-    tlcf_carryforward_limit_years: int = 20,
+    tlcf_carryforward_limit_years: int = 20
 ) -> TaxSchedule:
     """Calculate proper corporate tax schedule with TLCF mechanics.
 
@@ -367,11 +342,11 @@ def calculate_corporate_tax_schedule(
         # Step 5: Calculate CAFOD (Cash Available For Distribution)
         # CAFOD = Revenue - OPEX - Interest - Tax + Depreciation (add back non-cash)
         cafod_t = (
-            revenue_schedule[t]
-            - opex_schedule[t]
-            - interest_schedule[t]
-            - tax_t
-            + depreciation_schedule[t]  # Add back non-cash depreciation
+            revenue_schedule[t] -
+            opex_schedule[t] -
+            interest_schedule[t] -
+            tax_t +
+            depreciation_schedule[t]  # Add back non-cash depreciation
         )
         cafod.append(cafod_t)
 
@@ -400,14 +375,14 @@ def calculate_corporate_tax_schedule(
         annual_taxable_income=taxable_income,
         annual_tax_liability=tax_liability,
         annual_cafod=cafod,
-        tlcf_exhaustion_year=exhaustion_year,
+        tlcf_exhaustion_year=exhaustion_year
     )
 
 
 def calculate_tax_savings_from_tlcf(
     tax_schedule_with_tlcf: TaxSchedule,
     tax_schedule_without_tlcf: TaxSchedule,
-    discount_rate: float = 0.12,
+    discount_rate: float = 0.12
 ) -> Tuple[float, float]:
     """Calculate tax savings from TLCF shield.
 
@@ -430,8 +405,8 @@ def calculate_tax_savings_from_tlcf(
 
     # Calculate savings per year
     annual_savings = [
-        tax_schedule_without_tlcf.annual_tax_liability[t]
-        - tax_schedule_with_tlcf.annual_tax_liability[t]
+        tax_schedule_without_tlcf.annual_tax_liability[t] -
+        tax_schedule_with_tlcf.annual_tax_liability[t]
         for t in range(project_life)
     ]
 
@@ -440,7 +415,8 @@ def calculate_tax_savings_from_tlcf(
 
     # NPV of savings
     npv_savings = sum(
-        savings / (1 + discount_rate) ** t for t, savings in enumerate(annual_savings)
+        savings / (1 + discount_rate) ** t
+        for t, savings in enumerate(annual_savings)
     )
 
     logger.info(
@@ -465,16 +441,16 @@ if __name__ == "__main__":
 
     # Depreciation (straight-line 10 years)
     depreciation_sched = calculate_straight_line_depreciation(
-        capex=capex, useful_life_years=10, project_life_years=project_life
+        capex=capex,
+        useful_life_years=10,
+        project_life_years=project_life
     )
     depreciation = depreciation_sched.annual_depreciation
 
     # Interest schedule (from debt)
     debt = 140e6  # 70% debt
     interest_rate = 0.08
-    interest = [
-        debt * interest_rate * (1 - t / 15) for t in range(project_life)
-    ]  # Declining
+    interest = [debt * interest_rate * (1 - t/15) for t in range(project_life)]  # Declining
 
     # Calculate tax schedule WITH TLCF
     tax_with_tlcf = calculate_corporate_tax_schedule(
@@ -482,7 +458,7 @@ if __name__ == "__main__":
         opex_schedule=opex,
         depreciation_schedule=depreciation,
         interest_schedule=interest,
-        corporate_tax_rate=0.28,
+        corporate_tax_rate=0.28
     )
 
     # Calculate tax schedule WITHOUT TLCF (for comparison)
@@ -491,7 +467,7 @@ if __name__ == "__main__":
         opex_schedule=opex,
         depreciation_schedule=[0] * project_life,  # No depreciation shield
         interest_schedule=interest,
-        corporate_tax_rate=0.28,
+        corporate_tax_rate=0.28
     )
 
     # Calculate savings
@@ -499,21 +475,13 @@ if __name__ == "__main__":
         tax_with_tlcf, tax_without_tlcf
     )
 
-    print("\n" + "=" * 70)
+    print("\n" + "="*70)
     print("PROPER CORPORATE TAX CALCULATION WITH TLCF")
-    print("=" * 70)
+    print("="*70)
     print(f"\nTLCF Exhaustion: Year {tax_with_tlcf.tlcf_exhaustion_year + 1}")
     print(f"Peak TLCF Balance: ${max(tax_with_tlcf.annual_tlcf_balance)/1e6:.1f}M")
-    print(
-        f"\nTotal Tax (With TLCF): ${sum(tax_with_tlcf.annual_tax_liability)/1e6:.1f}M"
-    )
-    print(
-        f"Total Tax (No Depreciation Shield): ${sum(tax_without_tlcf.annual_tax_liability)/1e6:.1f}M"
-    )
-    print(
-        f"\nTax Savings: ${savings_total/1e6:.1f}M nominal, ${savings_npv/1e6:.1f}M NPV"
-    )
-    print(
-        f"\nYear 5 CAFOD: ${tax_with_tlcf.annual_cafod[4]/1e6:.1f}M (available for distribution)"
-    )
-    print("=" * 70)
+    print(f"\nTotal Tax (With TLCF): ${sum(tax_with_tlcf.annual_tax_liability)/1e6:.1f}M")
+    print(f"Total Tax (No Depreciation Shield): ${sum(tax_without_tlcf.annual_tax_liability)/1e6:.1f}M")
+    print(f"\nTax Savings: ${savings_total/1e6:.1f}M nominal, ${savings_npv/1e6:.1f}M NPV")
+    print(f"\nYear 5 CAFOD: ${tax_with_tlcf.annual_cafod[4]/1e6:.1f}M (available for distribution)")
+    print("="*70)

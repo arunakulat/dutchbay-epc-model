@@ -129,7 +129,10 @@ class RealFXSensitivityResult:
                     100 * (fx - self.base_fx_rate) / self.base_fx_rate
                     for fx in fx_rates
                 ]
-                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
+                irr_changes = [
+                    100 * (irr - self.base_project_irr)
+                    for irr in irrs
+                ]
 
                 # Slope = change in IRR per 1% FX change
                 if len(fx_pct_changes) > 1:
@@ -152,7 +155,9 @@ class RealFXSensitivityResult:
         # ─────────────────────────────────────────────────────────────────────
         if len(self.hedge_ratio_points) >= 2:
             hedge_ratios = [p.hedge_ratio for p in self.hedge_ratio_points]
-            irrs = [p.project_irr for p in self.hedge_ratio_points if p.project_irr]
+            irrs = [
+                p.project_irr for p in self.hedge_ratio_points if p.project_irr
+            ]
             npvs = [p.project_npv for p in self.hedge_ratio_points]
 
             if len(irrs) >= 2 and len(hedge_ratios) == len(irrs):
@@ -160,7 +165,10 @@ class RealFXSensitivityResult:
                 hedge_pct_changes = [
                     100 * (hr - self.base_hedge_ratio) for hr in hedge_ratios
                 ]
-                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
+                irr_changes = [
+                    100 * (irr - self.base_project_irr)
+                    for irr in irrs
+                ]
 
                 if len(hedge_pct_changes) > 1:
                     slope, _ = np.polyfit(hedge_pct_changes, irr_changes, 1)
@@ -188,7 +196,10 @@ class RealFXSensitivityResult:
             if len(irrs) >= 2 and len(spreads) == len(irrs):
                 # Change per 50 bps
                 spread_changes = [s - self.base_spread_bps for s in spreads]
-                irr_changes = [100 * (irr - self.base_project_irr) for irr in irrs]
+                irr_changes = [
+                    100 * (irr - self.base_project_irr)
+                    for irr in irrs
+                ]
 
                 if len(spread_changes) > 1:
                     slope, _ = np.polyfit(spread_changes, irr_changes, 1)
@@ -210,9 +221,7 @@ class RealFXSensitivityResult:
         if len(self.fx_rate_points) >= 3:
             npvs = [p.project_npv for p in self.fx_rate_points]
             fx_variance = float(np.var(npvs))
-            total_variance = (
-                fx_variance  # Simplified - full version needs other drivers
-            )
+            total_variance = fx_variance  # Simplified - full version needs other drivers
 
             if total_variance > 0:
                 self.fx_volatility_contribution_pct = (
@@ -459,9 +468,7 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr)
-                    if proj_irr and base_project_irr
-                    else None
+                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,
@@ -500,9 +507,7 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr)
-                    if proj_irr and base_project_irr
-                    else None
+                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,
@@ -540,9 +545,7 @@ class FXSensitivityAnalyzer:
                 equity_npv=eq_npv,
                 min_dscr=min_dscr,
                 irr_change_pct=(
-                    (proj_irr - base_project_irr)
-                    if proj_irr and base_project_irr
-                    else None
+                    (proj_irr - base_project_irr) if proj_irr and base_project_irr else None
                 ),
                 npv_change_usd=proj_npv - base_project_npv,
                 dscr_change=min_dscr - base_min_dscr,

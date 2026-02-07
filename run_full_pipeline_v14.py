@@ -103,7 +103,7 @@ def _write_json(path: Path, payload: Any) -> None:
     """
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False),
-        encoding="utf-8",
+        encoding="utf-8"
     )
 
 
@@ -132,7 +132,9 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
         return
 
     # Union of keys across all rows for stable columns
-    fieldnames: list[str] = sorted({k for row in dict_rows for k in row.keys()})
+    fieldnames: list[str] = sorted(
+        {k for row in dict_rows for k in row.keys()}
+    )
 
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -242,7 +244,7 @@ def cli(cfg: DictConfig) -> None:
                 "[validation_modules=cashflow,debt] "
                 "[export_dir=_out/release_run] "
                 "[write_artifacts=true]"
-            ),
+            )
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
@@ -286,20 +288,12 @@ def cli(cfg: DictConfig) -> None:
                     logger.info("Wrote kpis.json to %s", export_dir / "kpis.json")
 
                 if "debt_result" in result:
-                    _write_json(
-                        export_dir / "debt_result.json", result.get("debt_result")
-                    )
-                    logger.info(
-                        "Wrote debt_result.json to %s", export_dir / "debt_result.json"
-                    )
+                    _write_json(export_dir / "debt_result.json", result.get("debt_result"))
+                    logger.info("Wrote debt_result.json to %s", export_dir / "debt_result.json")
 
                 if "annual_rows" in result:
-                    _write_annual_rows_csv(
-                        export_dir / "annual_rows.csv", result.get("annual_rows")
-                    )
-                    logger.info(
-                        "Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv"
-                    )
+                    _write_annual_rows_csv(export_dir / "annual_rows.csv", result.get("annual_rows"))
+                    logger.info("Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv")
 
             logger.info("All artifacts written to: %s", str(export_dir.resolve()))
 
@@ -313,7 +307,7 @@ def cli(cfg: DictConfig) -> None:
             "status": "error",
             "error": str(e),
             "error_type": type(e).__name__,
-            "config": str(config),
+            "config": str(config)
         }
         print(json.dumps(error_result, indent=2))
         logger.exception("Pipeline execution failed")

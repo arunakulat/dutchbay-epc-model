@@ -29,7 +29,7 @@ def calculate_revenue_from_aep(
     aep_data: Dict[str, Any],
     tariff_lkr_per_kwh: float,
     mc_results: Optional[Dict[str, Any]] = None,
-    fx_rate_lkr_per_usd: Optional[float] = None,
+    fx_rate_lkr_per_usd: Optional[float] = None
 ) -> Dict[str, float]:
     """Calculate project revenue from AEP data and tariff.
 
@@ -107,16 +107,12 @@ def calculate_revenue_from_aep(
                 revenue_output[f"{p_label}_revenue_m_lkr"] = revenue_p_m_lkr
 
                 if fx_rate_lkr_per_usd and fx_rate_lkr_per_usd > 0:
-                    revenue_output[f"{p_label}_revenue_m_usd"] = (
-                        revenue_p_m_lkr / fx_rate_lkr_per_usd
-                    )
+                    revenue_output[f"{p_label}_revenue_m_usd"] = revenue_p_m_lkr / fx_rate_lkr_per_usd
 
         # Add risk metrics
         if "std" in statistics:
             revenue_output["aep_std_gwh"] = statistics["std"]
-            revenue_output["revenue_std_m_lkr"] = (
-                statistics["std"] * 1e6 * tariff_lkr_per_kwh
-            ) / 1e6
+            revenue_output["revenue_std_m_lkr"] = (statistics["std"] * 1e6 * tariff_lkr_per_kwh) / 1e6
 
         if "cv" in statistics:
             revenue_output["aep_cv"] = statistics["cv"]
@@ -135,7 +131,7 @@ def calculate_revenue_series(
     tariff_lkr_per_kwh: float,
     years: int,
     degradation_pct: float = 0.0,
-    tariff_escalation_pct: float = 0.0,
+    tariff_escalation_pct: float = 0.0
 ) -> np.ndarray:
     """Calculate multi-year revenue series with degradation and escalation.
 
@@ -169,9 +165,7 @@ def calculate_revenue_series(
         aep_year_gwh = base_aep_gwh * ((1.0 - degradation_pct / 100.0) ** year_idx)
 
         # Apply tariff escalation
-        tariff_year_lkr = tariff_lkr_per_kwh * (
-            (1.0 + tariff_escalation_pct / 100.0) ** year_idx
-        )
+        tariff_year_lkr = tariff_lkr_per_kwh * ((1.0 + tariff_escalation_pct / 100.0) ** year_idx)
 
         # Calculate revenue
         revenue_year_lkr = aep_year_gwh * 1e6 * tariff_year_lkr

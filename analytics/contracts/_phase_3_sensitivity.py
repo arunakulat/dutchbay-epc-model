@@ -149,7 +149,9 @@ class ScenarioSpec:
             )
 
         if len(self.shocks) == 0:
-            raise ValueError(f"ScenarioSpec '{self.name}' must have at least one shock")
+            raise ValueError(
+                f"ScenarioSpec '{self.name}' must have at least one shock"
+            )
 
         # Validate all shocks are ShockSpec instances
         for idx, shock in enumerate(self.shocks):
@@ -345,12 +347,8 @@ class MultiScenarioSuite:
             Comparison dict with baseline and scenario impacts.
         """
         base_result = next(
-            (
-                r
-                for r in self.scenario_results
-                if r.scenario_name == self.base_scenario_name
-            ),
-            None,
+            (r for r in self.scenario_results if r.scenario_name == self.base_scenario_name),
+            None
         )
 
         if not base_result:
@@ -361,7 +359,9 @@ class MultiScenarioSuite:
         baseline = base_result.base_metrics.get(metric)
 
         if baseline is None:
-            raise KeyError(f"Metric '{metric}' not in base scenario metrics")
+            raise KeyError(
+                f"Metric '{metric}' not in base scenario metrics"
+            )
 
         comparisons = []
         for result in self.scenario_results:
@@ -372,20 +372,14 @@ class MultiScenarioSuite:
             if shocked_value is None:
                 continue
 
-            comparisons.append(
-                {
-                    "scenario": result.scenario_name,
-                    "description": result.description,
-                    "baseline": baseline,
-                    "shocked": shocked_value,
-                    "impact": shocked_value - baseline,
-                    "impact_pct": (
-                        ((shocked_value - baseline) / baseline * 100)
-                        if baseline != 0
-                        else 0.0
-                    ),
-                }
-            )
+            comparisons.append({
+                "scenario": result.scenario_name,
+                "description": result.description,
+                "baseline": baseline,
+                "shocked": shocked_value,
+                "impact": shocked_value - baseline,
+                "impact_pct": ((shocked_value - baseline) / baseline * 100) if baseline != 0 else 0.0,
+            })
 
         return {
             "metric": metric,

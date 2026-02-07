@@ -39,7 +39,6 @@ import pytest
 # P0 Critical Imports (must always work)
 # =============================================================================
 
-
 def test_import_analytics():
     """Test that 'import analytics' succeeds without errors.
 
@@ -48,7 +47,6 @@ def test_import_analytics():
     """
     try:
         import analytics
-
         assert analytics is not None
     except ImportError as e:
         pytest.fail(f"Failed to import analytics: {e}")
@@ -65,7 +63,6 @@ def test_import_contracts_v14():
     """
     try:
         from analytics import contracts_v14
-
         assert contracts_v14 is not None
         # Verify key contracts exist
         assert hasattr(contracts_v14, "ScenarioResult")
@@ -91,12 +88,9 @@ def test_import_fx_integration():
     """
     try:
         from analytics.fx import integrate_fx_into_scenario_result
-
         assert integrate_fx_into_scenario_result is not None
     except ImportError as e:
-        pytest.fail(
-            f"Failed to import analytics.fx.integrate_fx_into_scenario_result: {e}"
-        )
+        pytest.fail(f"Failed to import analytics.fx.integrate_fx_into_scenario_result: {e}")
 
 
 def test_import_sensitivity_optimizer():
@@ -106,7 +100,6 @@ def test_import_sensitivity_optimizer():
     """
     try:
         from analytics.sensitivity.optimizer import run_pareto_search
-
         assert run_pareto_search is not None
     except ImportError as e:
         pytest.fail(f"Failed to import analytics.sensitivity.optimizer: {e}")
@@ -123,13 +116,10 @@ def test_import_sensitivity_pareto_shim():
     """
     try:
         import analytics.sensitivity_pareto
-
         assert analytics.sensitivity_pareto is not None
         # Verify shim exports canonical functions
         assert hasattr(analytics.sensitivity_pareto, "run_pareto_search")
-        assert hasattr(
-            analytics.sensitivity_pareto, "optimize_from_sensitivity_insights"
-        )
+        assert hasattr(analytics.sensitivity_pareto, "optimize_from_sensitivity_insights")
     except ImportError as e:
         pytest.fail(f"Failed to import analytics.sensitivity_pareto: {e}")
 
@@ -138,7 +128,6 @@ def test_import_mc_engine():
     """Test that Monte Carlo engine can be imported."""
     try:
         from analytics.mc import engine
-
         assert engine is not None
         assert hasattr(engine, "run_monte_carlo_analysis")
     except ImportError as e:
@@ -149,7 +138,6 @@ def test_import_sensitivity_engine():
     """Test that sensitivity engine can be imported."""
     try:
         from analytics.sensitivity import engine
-
         assert engine is not None
         assert hasattr(engine, "run_sensitivity_analysis")
     except ImportError as e:
@@ -159,7 +147,6 @@ def test_import_sensitivity_engine():
 # =============================================================================
 # Cross-Module Import Tests (detect subtle circular deps)
 # =============================================================================
-
 
 def test_import_all_analytics_submodules():
     """Test that all major analytics submodules can be imported together.
@@ -216,7 +203,6 @@ def test_import_contracts_then_fx():
 # Performance Guardrails (imports should be fast)
 # =============================================================================
 
-
 def test_import_speed_baseline():
     """Verify that basic imports complete quickly.
 
@@ -235,7 +221,6 @@ def test_import_speed_baseline():
 
     start = time.time()
     import analytics
-
     elapsed = time.time() - start
 
     # Allow up to 2 seconds (generous, but catches egregious issues)
@@ -245,7 +230,6 @@ def test_import_speed_baseline():
 # =============================================================================
 # Metadata (for CI reporting)
 # =============================================================================
-
 
 def test_smoke_test_coverage():
     """Document what this test suite covers.

@@ -41,7 +41,6 @@ from analytics.contracts_v14 import (
 # Parameter Adapters (contracts_v14 → engine)
 # ═══════════════════════════════════════════════════════════════════════════
 
-
 def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
     """
     Convert contracts_v14.ParameterRangeConfig to engine-compatible dict.
@@ -122,7 +121,6 @@ def iter_param_cases_from_contract(
 # ═══════════════════════════════════════════════════════════════════════════
 # Result Adapters (engine → contracts_v14)
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def engine_to_tornado_result(
     *,
@@ -216,7 +214,6 @@ def engine_to_sensitivity_suite(
 # ═══════════════════════════════════════════════════════════════════════════
 # Convenience Functions
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def build_tornado_result_from_engine(
     *,

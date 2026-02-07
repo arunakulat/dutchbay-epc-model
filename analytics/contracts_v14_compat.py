@@ -13,7 +13,7 @@ Refs:
 - SPRINT_12_R23_ACTIVATION_SUMMARY.md
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -23,8 +23,7 @@ class CasperResult(BaseModel):
 
     Replaced by CapitalRiskBundle in Pydantic v2 architecture.
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     scenario_name: str = ""
     iterations: int = 0
@@ -36,8 +35,7 @@ class TailRiskMetrics(BaseModel):
 
     Replaced by MonteCarloResult.var_90/cvar_90 in v2.
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     var_90: float = 0.0
     cvar_90: float = 0.0
@@ -49,8 +47,7 @@ class MultiMetricSensitivitySuite(BaseModel):
 
     Replaced by SensitivitySuite (dataclass) in v2.
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     scenarios: List[Dict[str, Any]] = []
 
@@ -60,8 +57,7 @@ class Distribution(BaseModel):
 
     Statistical distribution model for MC inputs.
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     dist_type: str = "normal"
     mean: float = 0.0
@@ -73,15 +69,14 @@ class DownsideMetrics(BaseModel):
 
     Replaced by EquityPerformance.downside_return_pct.
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
     downside_return_pct: float = 0.0
     p10_return: float = 0.0
 
 
 def build_cashflow_result_from_annual_rows(
-    annual_rows: List[Dict[str, Any]],
+    annual_rows: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """Temporary stub - legacy pipeline_v14 helper.
 

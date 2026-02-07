@@ -50,7 +50,7 @@ def apply_degradation_profile(
     years: int,
     degradation_rate_pct: Optional[float] = None,
     start_year: int = 1,
-    method: str = "linear",
+    method: str = "linear"
 ) -> List[float]:
     """Apply annual performance degradation to energy production.
 
@@ -141,12 +141,8 @@ def apply_degradation_profile(
 
     # Log impact
     if degradation_rate > 0:
-        year_10_loss = (
-            (1 - production[9] / aep_base) * 100 if len(production) >= 10 else 0
-        )
-        year_20_loss = (
-            (1 - production[19] / aep_base) * 100 if len(production) >= 20 else 0
-        )
+        year_10_loss = (1 - production[9] / aep_base) * 100 if len(production) >= 10 else 0
+        year_20_loss = (1 - production[19] / aep_base) * 100 if len(production) >= 20 else 0
         logger.info(
             f"Degradation impact: Year 10: -{year_10_loss:.1f}%, "
             f"Year 20: -{year_20_loss:.1f}%"

@@ -51,7 +51,10 @@ def mock_aep_summary_dict():
         "hub_height_m": 150,
         "source_id": "ECMWF_ERA5_2020_2024_DUTCHBAY",
         "source_type": "ECMWF",
-        "derived_from": ["OEM_ENVISION_EN171_65_PC", "ERA5_WIND_RESOURCE"],
+        "derived_from": [
+            "OEM_ENVISION_EN171_65_PC",
+            "ERA5_WIND_RESOURCE"
+        ],
         "losses": {
             "wake_loss_pct": 8.0,
             "availability_pct": 97.0,
@@ -104,10 +107,7 @@ def test_validate_custom_manifest():
     }
 
     assert validate_source_manifest("CUSTOM_SOURCE_A", manifest=custom_manifest) is True
-    assert (
-        validate_source_manifest("OEM_ENVISION_EN171_65_PC", manifest=custom_manifest)
-        is False
-    )
+    assert validate_source_manifest("OEM_ENVISION_EN171_65_PC", manifest=custom_manifest) is False
 
 
 def test_approved_sources_structure():
@@ -166,7 +166,8 @@ def test_checksum_changes_with_data():
 def test_load_aep_from_json(mock_aep_summary_json):
     """Test loading AEP data from JSON file."""
     aep_data = load_aep_from_summary(
-        path=str(mock_aep_summary_json), validate_manifest=True
+        path=str(mock_aep_summary_json),
+        validate_manifest=True
     )
 
     # Check required fields
@@ -182,7 +183,8 @@ def test_load_aep_from_json(mock_aep_summary_json):
 def test_load_aep_from_csv(mock_aep_summary_csv):
     """Test loading AEP data from CSV file."""
     aep_data = load_aep_from_summary(
-        path=str(mock_aep_summary_csv), validate_manifest=True
+        path=str(mock_aep_summary_csv),
+        validate_manifest=True
     )
 
     assert aep_data["net_site_aep_gwh"] == 485.32
@@ -192,7 +194,8 @@ def test_load_aep_from_csv(mock_aep_summary_csv):
 def test_load_aep_provenance_included(mock_aep_summary_json):
     """Test that provenance metadata is included."""
     aep_data = load_aep_from_summary(
-        path=str(mock_aep_summary_json), validate_manifest=True
+        path=str(mock_aep_summary_json),
+        validate_manifest=True
     )
 
     assert "provenance" in aep_data
@@ -211,7 +214,8 @@ def test_load_aep_provenance_included(mock_aep_summary_json):
 def test_load_aep_optional_fields(mock_aep_summary_json):
     """Test that optional fields are loaded when present."""
     aep_data = load_aep_from_summary(
-        path=str(mock_aep_summary_json), validate_manifest=True
+        path=str(mock_aep_summary_json),
+        validate_manifest=True
     )
 
     assert "gross_aep_gwh" in aep_data

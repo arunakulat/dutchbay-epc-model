@@ -215,7 +215,7 @@ class MonteCarloEngineCorrelated(MonteCarloEngineEnhanced):
                     unit_samples[i, 3],
                     self.degradation_mean_pct,
                     self.degradation_std_pct,
-                    self.degradation_distribution,
+                    self.degradation_distribution
                 )
 
                 # Run iteration with degradation
@@ -327,7 +327,7 @@ class MonteCarloEngineCorrelated(MonteCarloEngineEnhanced):
 
         # Transform to normal space for correlation calculation
         # (correlation is defined in normal space, not parameter space)
-        normal_samples = stats.norm.ppf(np.clip(unit_samples, 1e-10, 1 - 1e-10))
+        normal_samples = stats.norm.ppf(np.clip(unit_samples, 1e-10, 1-1e-10))
         achieved_corr = np.corrcoef(normal_samples.T)
 
         # Calculate correlation error

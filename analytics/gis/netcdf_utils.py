@@ -55,7 +55,6 @@ import xarray as xr
 # Optional dependency: pyproj for CRS transformations
 try:
     from pyproj import CRS  # type: ignore[import-untyped]
-
     _PYPROJ_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover
     CRS = None  # type: ignore[assignment,misc]
@@ -125,18 +124,18 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
     profile: Dict[str, Any] = {}
 
     # Detect CRS (most wind datasets use WGS84 / EPSG:4326)
-    if hasattr(ds, "crs"):
-        profile["crs"] = str(ds.crs)
-    elif "spatial_ref" in ds.attrs:
-        profile["crs"] = ds.attrs["spatial_ref"]
+    if hasattr(ds, 'crs'):
+        profile['crs'] = str(ds.crs)
+    elif 'spatial_ref' in ds.attrs:
+        profile['crs'] = ds.attrs['spatial_ref']
     else:
         # Default assumption for ERA5/MERRA-2
-        profile["crs"] = "EPSG:4326"
+        profile['crs'] = 'EPSG:4326'
         logger.warning("CRS not found in NetCDF, assuming EPSG:4326 (WGS84)")
 
     # Detect coordinate names (ERA5 uses 'longitude'/'latitude', WTK uses 'lon'/'lat')
-    lon_names = ["longitude", "lon", "x"]
-    lat_names = ["latitude", "lat", "y"]
+    lon_names = ['longitude', 'lon', 'x']
+    lat_names = ['latitude', 'lat', 'y']
 
     lon_var = None
     lat_var = None
@@ -161,35 +160,38 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
     lon_vals = ds[lon_var].values
     lat_vals = ds[lat_var].values
 
-    profile["bounds"] = (
+    profile['bounds'] = (
         float(lon_vals.min()),
         float(lat_vals.min()),
         float(lon_vals.max()),
-        float(lat_vals.max()),
+        float(lat_vals.max())
     )
 
     # Grid resolution
     if len(lon_vals) > 1:
         dlon = float(np.median(np.diff(lon_vals)))
         dlat = float(np.median(np.diff(lat_vals)))
-        profile["grid_resolution"] = (abs(dlon), abs(dlat))
+        profile['grid_resolution'] = (abs(dlon), abs(dlat))
     else:
-        profile["grid_resolution"] = None
+        profile['grid_resolution'] = None
 
     # Dimensions
-    profile["dims"] = {name: int(size) for name, size in ds.dims.items()}
+    profile['dims'] = {name: int(size) for name, size in ds.dims.items()}
 
     # Data variables
-    profile["variables"] = list(ds.data_vars.keys())
+    profile['variables'] = list(ds.data_vars.keys())
 
     # Time range
-    if "time" in ds.coords:
-        time_vals = pd.to_datetime(ds["time"].values)
-        profile["time_range"] = (str(time_vals.min()), str(time_vals.max()))
-        profile["time_steps"] = len(time_vals)
+    if 'time' in ds.coords:
+        time_vals = pd.to_datetime(ds['time'].values)
+        profile['time_range'] = (
+            str(time_vals.min()),
+            str(time_vals.max())
+        )
+        profile['time_steps'] = len(time_vals)
     else:
-        profile["time_range"] = None
-        profile["time_steps"] = None
+        profile['time_range'] = None
+        profile['time_steps'] = None
 
     logger.info(
         f"NetCDF Profile: CRS={profile['crs']}, "
@@ -205,11 +207,11 @@ def ws150_from_10_100(
     ds: xr.Dataset,
     z_hub_m: float = 150.0,
     shear_exponent: Optional[float] = None,
-    method: str = "power_law",
-    u10_var: str = "u10",
-    u100_var: str = "u100",
-    v10_var: str = "v10",
-    v100_var: str = "v100",
+    method: str = 'power_law',
+    u10_var: str = 'u10',
+    u100_var: str = 'u100',
+    v10_var: str = 'v10',
+    v100_var: str = 'v100'
 ) -> xr.DataArray:
     """Extrapolate wind speed from 10m/100m to hub height using power law.
 
@@ -245,7 +247,7 @@ def ws150_from_10_100(
         - IEC 61400-1 Ed4 Section 6.3 - Wind shear
         - NREL SAM Wind Module - Hub height extrapolation
     """
-    if method != "power_law":
+    if method != 'power_law':
         raise ValueError(f"Only 'power_law' method supported, got '{method}'")
 
     # Check required variables
@@ -258,8 +260,8 @@ def ws150_from_10_100(
         )
 
     # Compute wind speed magnitude at 10m and 100m
-    ws10 = np.sqrt(ds[u10_var] ** 2 + ds[v10_var] ** 2)
-    ws100 = np.sqrt(ds[u100_var] ** 2 + ds[v100_var] ** 2)
+    ws10 = np.sqrt(ds[u10_var]**2 + ds[v10_var]**2)
+    ws100 = np.sqrt(ds[u100_var]**2 + ds[v100_var]**2)
 
     # Estimate shear exponent if not provided
     if shear_exponent is None:
@@ -290,17 +292,17 @@ def ws150_from_10_100(
     ws_hub = ws100 * (z_hub_m / 100.0) ** alpha
 
     # Add metadata
-    ws_hub.name = f"ws{int(z_hub_m)}"
-    ws_hub.attrs["long_name"] = f"Wind speed at {z_hub_m}m hub height"
-    ws_hub.attrs["units"] = "m/s"
-    ws_hub.attrs["hub_height_m"] = z_hub_m
-    ws_hub.attrs["method"] = "power_law_extrapolation"
-    ws_hub.attrs["reference_height_m"] = 100.0
+    ws_hub.name = f'ws{int(z_hub_m)}'
+    ws_hub.attrs['long_name'] = f'Wind speed at {z_hub_m}m hub height'
+    ws_hub.attrs['units'] = 'm/s'
+    ws_hub.attrs['hub_height_m'] = z_hub_m
+    ws_hub.attrs['method'] = 'power_law_extrapolation'
+    ws_hub.attrs['reference_height_m'] = 100.0
     if isinstance(alpha, (int, float)):
-        ws_hub.attrs["shear_exponent"] = float(alpha)
+        ws_hub.attrs['shear_exponent'] = float(alpha)
     else:
-        ws_hub.attrs["shear_exponent_mean"] = float(alpha.mean())
-    ws_hub.attrs["iec_standard"] = "IEC 61400-1 Ed4 Section 6.3"
+        ws_hub.attrs['shear_exponent_mean'] = float(alpha.mean())
+    ws_hub.attrs['iec_standard'] = 'IEC 61400-1 Ed4 Section 6.3'
 
     logger.info(
         f"Extrapolated wind speed to {z_hub_m}m hub height: "
@@ -311,7 +313,7 @@ def ws150_from_10_100(
     return ws_hub
 
 
-def grid_stats(da: xr.DataArray, dim: str = "time") -> pd.DataFrame:
+def grid_stats(da: xr.DataArray, dim: str = 'time') -> pd.DataFrame:
     """Compute per-cell mean and standard deviation statistics.
 
     Args:
@@ -337,8 +339,8 @@ def grid_stats(da: xr.DataArray, dim: str = "time") -> pd.DataFrame:
         1  79.5  6.6   7.38  2.28  1.15 18.30   8760
     """
     # Detect coordinate names
-    lon_names = ["longitude", "lon", "x"]
-    lat_names = ["latitude", "lat", "y"]
+    lon_names = ['longitude', 'lon', 'x']
+    lat_names = ['latitude', 'lat', 'y']
 
     lon_var = None
     lat_var = None
@@ -367,17 +369,15 @@ def grid_stats(da: xr.DataArray, dim: str = "time") -> pd.DataFrame:
     count_da = da.count(dim=dim)
 
     # Stack into DataFrame
-    df = pd.DataFrame(
-        {
-            "lon": mean_da[lon_var].values.ravel(),
-            "lat": mean_da[lat_var].values.ravel(),
-            "mean": mean_da.values.ravel(),
-            "std": std_da.values.ravel(),
-            "min": min_da.values.ravel(),
-            "max": max_da.values.ravel(),
-            "count": count_da.values.ravel(),
-        }
-    )
+    df = pd.DataFrame({
+        'lon': mean_da[lon_var].values.ravel(),
+        'lat': mean_da[lat_var].values.ravel(),
+        'mean': mean_da.values.ravel(),
+        'std': std_da.values.ravel(),
+        'min': min_da.values.ravel(),
+        'max': max_da.values.ravel(),
+        'count': count_da.values.ravel(),
+    })
 
     # Remove NaN rows
     df = df.dropna()
@@ -390,7 +390,9 @@ def grid_stats(da: xr.DataArray, dim: str = "time") -> pd.DataFrame:
     return df
 
 
-def compute_weibull_parameters(ws_timeseries: np.ndarray) -> Tuple[float, float]:
+def compute_weibull_parameters(
+    ws_timeseries: np.ndarray
+) -> Tuple[float, float]:
     """Fit Weibull A and k parameters from wind speed timeseries.
 
     Uses maximum likelihood estimation (MLE) for robust parameter fitting.

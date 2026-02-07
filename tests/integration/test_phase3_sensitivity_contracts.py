@@ -332,9 +332,7 @@ def test_standard_shock_library_imports_from_contracts_package():
 
 
 @pytest.mark.integration
-@pytest.mark.skip(
-    reason="Requires sensitivity_runner.py integration - enable when runner available"
-)
+@pytest.mark.skip(reason="Requires sensitivity_runner.py integration - enable when runner available")
 def test_phase3_contracts_work_with_sensitivity_runner():
     """Test Phase 3 contracts integrate with sensitivity_runner.py.
 
@@ -359,9 +357,7 @@ def test_phase3_contracts_work_with_sensitivity_runner():
 
 
 @pytest.mark.integration
-@pytest.mark.skip(
-    reason="Requires sensitivity_v14.py integration - enable when v14 available"
-)
+@pytest.mark.skip(reason="Requires sensitivity_v14.py integration - enable when v14 available")
 def test_phase3_contracts_work_with_sensitivity_v14():
     """Test Phase 3 contracts integrate with sensitivity_v14.py.
 
@@ -394,9 +390,7 @@ def test_phase3_contracts_work_with_sensitivity_v14():
 
 
 @pytest.mark.integration
-@pytest.mark.skip(
-    reason="Requires tax_sensitivity_v14.py - enable when tax module available"
-)
+@pytest.mark.skip(reason="Requires tax_sensitivity_v14.py - enable when tax module available")
 def test_tax_shock_library_works_with_tax_sensitivity_v14():
     """Test TaxShockLibrary integrates with tax_sensitivity_v14.py.
 

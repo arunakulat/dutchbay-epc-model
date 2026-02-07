@@ -18,7 +18,7 @@ Context:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from analytics.loader.aep_loader import load_aep_from_summary
 from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep
@@ -67,9 +67,7 @@ def validate_turbine_specs(config: Dict[str, Any], aep_data: Dict[str, Any]) -> 
 
     # Validate rated power
     if rated_power_mw_config and rated_power_mw_aep:
-        if (
-            abs(rated_power_mw_config - rated_power_mw_aep) > 0.1
-        ):  # Allow 0.1 MW tolerance
+        if abs(rated_power_mw_config - rated_power_mw_aep) > 0.1:  # Allow 0.1 MW tolerance
             raise ValueError(
                 f"Turbine rated power mismatch: config says {rated_power_mw_config} MW, "
                 f"AEP summary says {rated_power_mw_aep} MW. "
@@ -83,9 +81,7 @@ def validate_turbine_specs(config: Dict[str, Any], aep_data: Dict[str, Any]) -> 
         project_capacity_mw = config.get("project", {}).get("capacity_mw")
 
         if project_capacity_mw:
-            if (
-                abs(calculated_capacity_mw - project_capacity_mw) > 1.0
-            ):  # 1 MW tolerance
+            if abs(calculated_capacity_mw - project_capacity_mw) > 1.0:  # 1 MW tolerance
                 raise ValueError(
                     f"Total capacity mismatch: {n_turbines_aep} × {rated_power_mw_aep} MW = "
                     f"{calculated_capacity_mw} MW, but project.capacity_mw = {project_capacity_mw} MW. "
@@ -99,7 +95,9 @@ def validate_turbine_specs(config: Dict[str, Any], aep_data: Dict[str, Any]) -> 
 
 
 def integrate_aep_pipeline(
-    config: Dict[str, Any], validate_manifest: bool = True, run_monte_carlo: bool = None
+    config: Dict[str, Any],
+    validate_manifest: bool = True,
+    run_monte_carlo: bool = None
 ) -> Dict[str, Any]:
     """Integrate AEP pipeline into v14 financial model configuration.
 
@@ -149,7 +147,8 @@ def integrate_aep_pipeline(
     logger.info(f"Loading AEP summary from: {aep_summary_path}")
 
     aep_data = load_aep_from_summary(
-        path=aep_summary_path, validate_manifest=validate_manifest
+        path=aep_summary_path,
+        validate_manifest=validate_manifest
     )
 
     # Step 2: Validate turbine specs consistency
@@ -168,11 +167,7 @@ def integrate_aep_pipeline(
 
     # Step 4: Monte Carlo simulation (optional, config-driven)
     mc_config = config.get("monte_carlo", {})
-    mc_enabled = (
-        run_monte_carlo
-        if run_monte_carlo is not None
-        else mc_config.get("enabled", False)
-    )
+    mc_enabled = run_monte_carlo if run_monte_carlo is not None else mc_config.get("enabled", False)
 
     if mc_enabled:
         logger.info("Running Monte Carlo AEP simulation (config-driven)...")
@@ -204,7 +199,7 @@ def integrate_aep_pipeline(
             electrical_loss_std_pct=elec_loss_std,
             export_scenarios=(output_path is not None),
             output_path=output_path,
-            seed=seed,
+            seed=seed
         )
 
         config["resource"]["aep_mc_results"] = mc_results

@@ -51,20 +51,22 @@ class TestDepreciationCalculation:
     def test_straight_line_depreciation(self):
         """Straight-line should produce equal annual depreciation."""
         depreciation = calculate_straight_line_depreciation(
-            capex=200e6, useful_life_years=10, project_life_years=20
+            capex=200e6,
+            useful_life_years=10,
+            project_life_years=20
         )
 
         # Years 1-10: Equal depreciation
         for year in range(10):
-            assert (
-                depreciation.annual_depreciation[year] == 20e6
-            ), f"Year {year+1} should have $20M depreciation"
+            assert depreciation.annual_depreciation[year] == 20e6, (
+                f"Year {year+1} should have $20M depreciation"
+            )
 
         # Years 11-20: Zero depreciation
         for year in range(10, 20):
-            assert (
-                depreciation.annual_depreciation[year] == 0
-            ), f"Year {year+1} should have $0 depreciation (fully depreciated)"
+            assert depreciation.annual_depreciation[year] == 0, (
+                f"Year {year+1} should have $0 depreciation (fully depreciated)"
+            )
 
         # Final book value should be zero
         assert depreciation.book_value[-1] == 0
@@ -72,27 +74,31 @@ class TestDepreciationCalculation:
     def test_macrs_depreciation_accelerated(self):
         """MACRS should frontload depreciation vs straight-line."""
         macrs = calculate_macrs_depreciation(
-            capex=200e6, macrs_class=DepreciationMethod.MACRS_7, project_life_years=20
+            capex=200e6,
+            macrs_class=DepreciationMethod.MACRS_7,
+            project_life_years=20
         )
 
         straight_line = calculate_straight_line_depreciation(
-            capex=200e6, useful_life_years=7, project_life_years=20
+            capex=200e6,
+            useful_life_years=7,
+            project_life_years=20
         )
 
         # Year 1: MACRS should be higher (accelerated)
-        assert (
-            macrs.annual_depreciation[0] > straight_line.annual_depreciation[0]
-        ), "MACRS Year 1 should exceed straight-line"
+        assert macrs.annual_depreciation[0] > straight_line.annual_depreciation[0], (
+            "MACRS Year 1 should exceed straight-line"
+        )
 
         # Year 7: MACRS should be lower (tail-end)
-        assert (
-            macrs.annual_depreciation[6] < straight_line.annual_depreciation[6]
-        ), "MACRS Year 7 should be less than straight-line"
+        assert macrs.annual_depreciation[6] < straight_line.annual_depreciation[6], (
+            "MACRS Year 7 should be less than straight-line"
+        )
 
         # Total depreciation should equal CAPEX
-        assert (
-            abs(sum(macrs.annual_depreciation) - 200e6) < 1000
-        ), "Total MACRS depreciation should equal CAPEX"
+        assert abs(sum(macrs.annual_depreciation) - 200e6) < 1000, (
+            "Total MACRS depreciation should equal CAPEX"
+        )
 
 
 class TestTaxableIncomeCalculation:
@@ -106,7 +112,7 @@ class TestTaxableIncomeCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -116,15 +122,15 @@ class TestTaxableIncomeCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Verify EBITDA = Revenue - OPEX
         for t in range(params["project_life"]):
             expected_ebitda = params["revenue"][t] - params["opex"][t]
-            assert (
-                abs(tax_schedule.annual_ebitda[t] - expected_ebitda) < 1
-            ), f"Year {t+1} EBITDA calculation incorrect"
+            assert abs(tax_schedule.annual_ebitda[t] - expected_ebitda) < 1, (
+                f"Year {t+1} EBITDA calculation incorrect"
+            )
 
     def test_ebit_calculation(self, typical_project_params):
         """EBIT = EBITDA - Depreciation."""
@@ -133,7 +139,7 @@ class TestTaxableIncomeCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -143,17 +149,15 @@ class TestTaxableIncomeCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Verify EBIT = EBITDA - Depreciation
         for t in range(params["project_life"]):
-            expected_ebit = (
-                tax_schedule.annual_ebitda[t] - depreciation.annual_depreciation[t]
+            expected_ebit = tax_schedule.annual_ebitda[t] - depreciation.annual_depreciation[t]
+            assert abs(tax_schedule.annual_ebit[t] - expected_ebit) < 1, (
+                f"Year {t+1} EBIT calculation incorrect"
             )
-            assert (
-                abs(tax_schedule.annual_ebit[t] - expected_ebit) < 1
-            ), f"Year {t+1} EBIT calculation incorrect"
 
     def test_ebt_calculation(self, typical_project_params):
         """EBT = EBIT - Interest."""
@@ -162,7 +166,7 @@ class TestTaxableIncomeCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -172,15 +176,15 @@ class TestTaxableIncomeCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Verify EBT = EBIT - Interest
         for t in range(params["project_life"]):
             expected_ebt = tax_schedule.annual_ebit[t] - interest[t]
-            assert (
-                abs(tax_schedule.annual_ebt[t] - expected_ebt) < 1
-            ), f"Year {t+1} EBT calculation incorrect"
+            assert abs(tax_schedule.annual_ebt[t] - expected_ebt) < 1, (
+                f"Year {t+1} EBT calculation incorrect"
+            )
 
 
 class TestTLCFMechanics:
@@ -192,7 +196,8 @@ class TestTLCFMechanics:
 
         # Use accelerated depreciation to create early losses
         depreciation = calculate_macrs_depreciation(
-            capex=params["capex"], macrs_class=DepreciationMethod.MACRS_7
+            capex=params["capex"],
+            macrs_class=DepreciationMethod.MACRS_7
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -202,19 +207,19 @@ class TestTLCFMechanics:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Early years should have TLCF accumulation
-        assert (
-            tax_schedule.annual_tlcf_balance[0] > 0
-        ), "Year 1 should have TLCF (loss year)"
+        assert tax_schedule.annual_tlcf_balance[0] > 0, (
+            "Year 1 should have TLCF (loss year)"
+        )
 
         # TLCF should peak in early years
         peak_tlcf = max(tax_schedule.annual_tlcf_balance)
-        assert (
-            peak_tlcf > 10e6
-        ), f"Peak TLCF should exceed $10M, got ${peak_tlcf/1e6:.1f}M"
+        assert peak_tlcf > 10e6, (
+            f"Peak TLCF should exceed $10M, got ${peak_tlcf/1e6:.1f}M"
+        )
 
     def test_tlcf_utilization_during_profit_years(self, typical_project_params):
         """TLCF should be utilized during profit years to reduce tax."""
@@ -223,7 +228,7 @@ class TestTLCFMechanics:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -233,19 +238,17 @@ class TestTLCFMechanics:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Find first profit year after loss year
         for t in range(1, params["project_life"]):
-            if (
-                tax_schedule.annual_ebt[t] > 0
-                and tax_schedule.annual_tlcf_balance[t - 1] > 0
-            ):
+            if (tax_schedule.annual_ebt[t] > 0 and
+                tax_schedule.annual_tlcf_balance[t-1] > 0):
                 # Should utilize TLCF
-                assert (
-                    tax_schedule.annual_tlcf_utilized[t] > 0
-                ), f"Year {t+1} should utilize TLCF (profit year with TLCF available)"
+                assert tax_schedule.annual_tlcf_utilized[t] > 0, (
+                    f"Year {t+1} should utilize TLCF (profit year with TLCF available)"
+                )
                 break
 
     def test_tlcf_exhaustion_timing(self, typical_project_params):
@@ -255,7 +258,7 @@ class TestTLCFMechanics:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -265,7 +268,7 @@ class TestTLCFMechanics:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # TLCF should exhaust within reasonable timeframe
@@ -291,15 +294,15 @@ class TestTaxLiabilityCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Loss years should have zero tax
         for t in range(5):
             if tax_schedule.annual_ebt[t] < 0:
-                assert (
-                    tax_schedule.annual_tax_liability[t] == 0
-                ), f"Year {t+1} (loss year) should have $0 tax"
+                assert tax_schedule.annual_tax_liability[t] == 0, (
+                    f"Year {t+1} (loss year) should have $0 tax"
+                )
 
     def test_tax_with_tlcf_shield(self, typical_project_params):
         """Tax should be reduced when TLCF shields taxable income."""
@@ -308,7 +311,7 @@ class TestTaxLiabilityCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -318,7 +321,7 @@ class TestTaxLiabilityCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Find year with TLCF utilization
@@ -329,15 +332,15 @@ class TestTaxLiabilityCalculation:
                 tlcf_used = tax_schedule.annual_tlcf_utilized[t]
                 taxable = tax_schedule.annual_taxable_income[t]
 
-                assert (
-                    abs(taxable - (ebt - tlcf_used)) < 1
-                ), f"Year {t+1} taxable income should be EBT - TLCF"
+                assert abs(taxable - (ebt - tlcf_used)) < 1, (
+                    f"Year {t+1} taxable income should be EBT - TLCF"
+                )
 
                 # Tax should be on reduced taxable income
                 expected_tax = taxable * 0.28
-                assert (
-                    abs(tax_schedule.annual_tax_liability[t] - expected_tax) < 1
-                ), f"Year {t+1} tax should be {expected_tax/1e6:.1f}M"
+                assert abs(tax_schedule.annual_tax_liability[t] - expected_tax) < 1, (
+                    f"Year {t+1} tax should be {expected_tax/1e6:.1f}M"
+                )
                 break
 
 
@@ -351,7 +354,7 @@ class TestCAFODCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -361,22 +364,22 @@ class TestCAFODCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # Verify CAFOD = Revenue - OPEX - Interest - Tax + Depreciation
         for t in range(params["project_life"]):
             expected_cafod = (
-                params["revenue"][t]
-                - params["opex"][t]
-                - interest[t]
-                - tax_schedule.annual_tax_liability[t]
-                + depreciation.annual_depreciation[t]
+                params["revenue"][t] -
+                params["opex"][t] -
+                interest[t] -
+                tax_schedule.annual_tax_liability[t] +
+                depreciation.annual_depreciation[t]
             )
 
-            assert (
-                abs(tax_schedule.annual_cafod[t] - expected_cafod) < 1
-            ), f"Year {t+1} CAFOD calculation incorrect"
+            assert abs(tax_schedule.annual_cafod[t] - expected_cafod) < 1, (
+                f"Year {t+1} CAFOD calculation incorrect"
+            )
 
     def test_cafod_always_positive(self, typical_project_params):
         """CAFOD should be positive throughout project life (viable project)."""
@@ -385,7 +388,7 @@ class TestCAFODCalculation:
         depreciation = calculate_straight_line_depreciation(
             capex=params["capex"],
             useful_life_years=10,
-            project_life_years=params["project_life"],
+            project_life_years=params["project_life"]
         )
 
         interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
@@ -395,12 +398,14 @@ class TestCAFODCalculation:
             opex_schedule=params["opex"],
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         # All years should have positive CAFOD
         for t, cafod in enumerate(tax_schedule.annual_cafod):
-            assert cafod > 0, f"Year {t+1} CAFOD ${cafod/1e6:.1f}M should be positive"
+            assert cafod > 0, (
+                f"Year {t+1} CAFOD ${cafod/1e6:.1f}M should be positive"
+            )
 
 
 class TestRegressionPins:
@@ -423,15 +428,15 @@ class TestRegressionPins:
             opex_schedule=opex,
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         peak_tlcf = max(tax_schedule.annual_tlcf_balance)
 
         # Regression pin: $15-30M peak TLCF
-        assert (
-            10e6 < peak_tlcf < 35e6
-        ), f"DutchBay peak TLCF should be $10-35M, got ${peak_tlcf/1e6:.1f}M"
+        assert 10e6 < peak_tlcf < 35e6, (
+            f"DutchBay peak TLCF should be $10-35M, got ${peak_tlcf/1e6:.1f}M"
+        )
 
     def test_dutchbay_baseline_total_tax(self):
         """DutchBay should pay $40-55M total tax over 20 years."""
@@ -450,15 +455,15 @@ class TestRegressionPins:
             opex_schedule=opex,
             depreciation_schedule=depreciation.annual_depreciation,
             interest_schedule=interest,
-            corporate_tax_rate=0.28,
+            corporate_tax_rate=0.28
         )
 
         total_tax = sum(tax_schedule.annual_tax_liability) / 1e6
 
         # Regression pin: $35-60M total tax
-        assert (
-            30 < total_tax < 65
-        ), f"DutchBay total tax should be $30-65M, got ${total_tax:.1f}M"
+        assert 30 < total_tax < 65, (
+            f"DutchBay total tax should be $30-65M, got ${total_tax:.1f}M"
+        )
 
 
 if __name__ == "__main__":

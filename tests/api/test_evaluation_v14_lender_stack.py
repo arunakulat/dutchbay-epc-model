@@ -26,12 +26,12 @@ from analytics.evaluation_v14 import (
 
 # Lender-grade KPIs that MUST be present in evaluation output
 REQUIRED_LENDER_KPIS = {
-    "project_irr",  # Unleveraged internal rate of return
-    "equity_irr",  # Leveraged return to equity
-    "min_dscr",  # Minimum debt service coverage ratio
-    "avg_dscr",  # Average DSCR over debt term
-    "llcr",  # Loan life coverage ratio
-    "plcr",  # Project life coverage ratio
+    "project_irr",      # Unleveraged internal rate of return
+    "equity_irr",       # Leveraged return to equity
+    "min_dscr",         # Minimum debt service coverage ratio
+    "avg_dscr",         # Average DSCR over debt term
+    "llcr",             # Loan life coverage ratio
+    "plcr",             # Project life coverage ratio
 }
 
 
@@ -59,12 +59,15 @@ def test_evaluate_with_overrides_returns_lender_kpis():
 
     # Act: Run evaluation through canonical gateway
     kpis = evaluate_with_overrides(
-        config_path=scenario_path, overrides={}, validation_modules=["cashflow", "debt"]
+        config_path=scenario_path,
+        overrides={},
+        validation_modules=["cashflow", "debt"]
     )
 
     # Assert: Output structure
     assert isinstance(kpis, dict), (
-        "evaluate_with_overrides() must return dict. " f"Got {type(kpis).__name__}"
+        "evaluate_with_overrides() must return dict. "
+        f"Got {type(kpis).__name__}"
     )
     assert len(kpis) > 0, "KPIs dict must not be empty"
 
@@ -96,9 +99,9 @@ def test_evaluate_with_overrides_returns_lender_kpis():
     # Assert: KPI values are numeric and sane
     for key in REQUIRED_LENDER_KPIS:
         value = kpis[key]
-        assert isinstance(
-            value, (int, float)
-        ), f"KPI '{key}' must be numeric, got {type(value).__name__}"
+        assert isinstance(value, (int, float)), (
+            f"KPI '{key}' must be numeric, got {type(value).__name__}"
+        )
 
         # Sanity checks on specific metrics
         if "dscr" in key.lower():
@@ -125,7 +128,7 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
             "name": "test_project",
             "capacity_mw": 100.0,
             "capacity_factor_pct": 35.0,  # Required for energy calculation
-            "project_life_years": 25,  # Required for timeline
+            "project_life_years": 25,      # Required for timeline
         },
         "wind": {
             "weibull_k": 2.0,
@@ -147,7 +150,7 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
         },
         "fx": {
             "start_lkr_per_usd": 300.0,  # Initial LKR/USD exchange rate
-            "annual_depr": 0.02,  # 2% annual LKR depreciation (scalar)
+            "annual_depr": 0.02,          # 2% annual LKR depreciation (scalar)
         },
         "debt": {
             "target_dscr": 1.4,
@@ -157,20 +160,25 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
     }
 
     # Act: Evaluate from dict
-    kpis = evaluate_scenario_from_dict(config=config, overrides={})
+    kpis = evaluate_scenario_from_dict(
+        config=config,
+        overrides={}
+    )
 
     # Assert: Same lender KPI requirements
     assert isinstance(kpis, dict)
     assert len(kpis) > 0
 
     missing_keys = REQUIRED_LENDER_KPIS - set(kpis.keys())
-    assert (
-        not missing_keys
-    ), f"evaluate_scenario_from_dict() missing lender KPIs: {missing_keys}"
+    assert not missing_keys, (
+        f"evaluate_scenario_from_dict() missing lender KPIs: {missing_keys}"
+    )
 
     # Validate numeric KPIs
     for key in REQUIRED_LENDER_KPIS:
-        assert isinstance(kpis[key], (int, float)), f"KPI '{key}' must be numeric"
+        assert isinstance(kpis[key], (int, float)), (
+            f"KPI '{key}' must be numeric"
+        )
 
 
 def test_evaluation_can_apply_parameter_overrides():
@@ -225,12 +233,14 @@ def test_evaluation_can_apply_parameter_overrides():
 
     # Act: Apply CAPEX shock (+25%)
     kpis_capex_shock = evaluate_scenario_from_dict(
-        config=config, overrides={"finance": {"capex_total_usd": 250e6}}  # +$50M
+        config=config,
+        overrides={"finance": {"capex_total_usd": 250e6}}  # +$50M
     )
 
     # Act: Apply tariff shock (+10%)
     kpis_tariff_shock = evaluate_scenario_from_dict(
-        config=config, overrides={"tariff": {"lkr_per_kwh": 26.4}}  # +10% from 24.0
+        config=config,
+        overrides={"tariff": {"lkr_per_kwh": 26.4}}  # +10% from 24.0
     )
 
     # Assert: CAPEX increase should reduce project IRR
@@ -264,7 +274,10 @@ def test_evaluation_validates_missing_config():
     CESSPIT compliance: fail-fast validation.
     """
     with pytest.raises(FileNotFoundError, match="Scenario config not found"):
-        evaluate_with_overrides(config_path="nonexistent/scenario.yaml", overrides={})
+        evaluate_with_overrides(
+            config_path="nonexistent/scenario.yaml",
+            overrides={}
+        )
 
 
 if __name__ == "__main__":
