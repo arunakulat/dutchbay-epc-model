@@ -10,17 +10,35 @@ Run with:
 
 import streamlit as st
 
-from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+# 🎨 Palette: Micro-UX Improvement - Graceful failure handling for backend errors
+try:
+    from analytics.contracts_v14 import ParameterRangeConfig
+    from analytics.sensitivity import (
+        SensitivityRequest,
+        plot_spider_chart,
+        run_multi_metric_tornado,
+        run_tornado_sensitivity,
+        tornado_suite_to_dataframe,
+    )
 
-# Quick UI for scenario and drivers (customize as needed)
+    BACKEND_AVAILABLE = True
+except (ImportError, SyntaxError) as e:
+    BACKEND_AVAILABLE = False
+    IMPORT_ERROR = e
+
 st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
+
+if not BACKEND_AVAILABLE:
+    st.error(
+        "### ⚠️ Model Initialization Error\n"
+        "We encountered an issue loading the financial model backend. This usually happens "
+        "if the core contracts are being refactored or contain syntax errors.\n\n"
+        "**Actionable Steps:**\n"
+        "- Verify that `analytics/contracts_v14.py` is valid.\n"
+        "- Ensure all dependencies are installed in your virtual environment.\n"
+        f"\n**Technical Details:** `{IMPORT_ERROR}`"
+    )
+    st.stop()
 
 config_path = st.text_input(
     "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
@@ -40,7 +58,6 @@ params = [
         high_pct=10,
         steps=5,
     ),
-    # Add or make this dynamic as needed
 ]
 
 st.write("Running tornado analysis...")
