@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from analytics.fx.fx_contracts import (
     FXStructuredBlock,
@@ -178,7 +174,6 @@ def check_covenant_breach_with_tolerance(
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
 
-[... rest of file content unchanged ...]
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",

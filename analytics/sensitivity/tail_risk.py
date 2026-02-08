@@ -22,7 +22,7 @@ You will wire it to your Monte Carlo engine in your repo (recommended).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -97,7 +97,6 @@ def enrich_suite_with_tail_risk(
         
         for tornado in tornado_results:
             # Extract data from TornadoResult
-            param_name = tornado.metric_name
             snap = _build_tornado_tail_snapshot(
                 tornado=tornado,
                 metric_key=metric_key,

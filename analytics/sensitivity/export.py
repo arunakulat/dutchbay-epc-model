@@ -15,14 +15,13 @@ Public API (keep stable):
 - suite_to_records(...)
 """
 
-from typing import Any, Dict, Mapping, Optional, Sequence, Union
+from typing import Any, Dict
+from analytics.contracts_v14 import SensitivitySuite
 
 try:
     import pandas as pd  # type: ignore
 except Exception:  # pragma: no cover
     pd = None  # type: ignore
-
-from analytics.contracts_v14 import SensitivitySuite
 
 
 def suite_to_records(

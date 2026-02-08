@@ -50,7 +50,7 @@ def run_sensitivity_analysis(
         validation_mode=validation_mode,
         validation_modules=validation_modules or ["cashflow", "debt"],
     )
-    scenario_name = str(base_kpis.get("scenario_name", base_path.stem))
+    str(base_kpis.get("scenario_name", base_path.stem))
     base_metric_value = float(base_kpis.get(metric, 0.0))
     # 3. Build default shock specifications if none provided
     if shock_specs is None:

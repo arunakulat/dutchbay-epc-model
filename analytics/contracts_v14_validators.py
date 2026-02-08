@@ -576,8 +576,8 @@ def validate_equity_irr(
             constraint=f"{EQUITY_IRR_TYPICAL_MIN*100:.0f}% <= value <= {EQUITY_IRR_TYPICAL_MAX*100:.0f}%",
             message=f"{field_name}={value*100:.1f}% is outside typical range [10%-30%]",
             remediation=(
-                f"Equity IRR < 10% may indicate low leverage or poor project economics. "
-                f"Equity IRR > 30% may indicate high leverage or exceptional project."
+                "Equity IRR < 10% may indicate low leverage or poor project economics. "
+                "Equity IRR > 30% may indicate high leverage or exceptional project."
             ),
         )
     
@@ -651,8 +651,8 @@ def validate_equity_multiple(
             constraint=f"{EQUITY_MULTIPLE_MIN:.1f}x <= value <= {EQUITY_MULTIPLE_MAX:.1f}x",
             message=f"{field_name}={value:.2f}x is outside typical range [0.8x-5.0x]",
             remediation=(
-                f"Multiple > 5x suggests exceptional project or very long tenor. "
-                f"Multiple < 0.8x suggests project failure."
+                "Multiple > 5x suggests exceptional project or very long tenor. "
+                "Multiple < 0.8x suggests project failure."
             ),
         )
     

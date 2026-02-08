@@ -96,7 +96,7 @@ def apply_correlation_structure(
         raise ValueError(f"Correlation matrix shape {mat.shape} does not match samples columns {k}.")
 
     # rank transform
-    ranks = np.argsort(np.argsort(x, axis=0), axis=0)
+    np.argsort(np.argsort(x, axis=0), axis=0)
 
     # correlated normals
     rng = np.random.default_rng(int(seed))

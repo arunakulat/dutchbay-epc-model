@@ -10,16 +10,16 @@ Run with:
 
 import streamlit as st
 
-# UX Improvement: Set page configuration for professional branding
-st.set_page_config(
-    page_title="DutchBay | Sensitivity Explorer",
-    page_icon="📊",
-)
-
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.sensitivity import (
     run_sensitivity_analysis,
     suite_to_tables,
+)
+
+# UX Improvement: Set page configuration for professional branding
+st.set_page_config(
+    page_title="DutchBay | Sensitivity Explorer",
+    page_icon="📊",
 )
 
 # Quick UI for scenario and drivers (customize as needed)
