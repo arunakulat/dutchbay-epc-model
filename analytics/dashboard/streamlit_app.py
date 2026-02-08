@@ -10,13 +10,16 @@ Run with:
 
 import streamlit as st
 
+# UX Improvement: Set page configuration for professional branding
+st.set_page_config(
+    page_title="DutchBay | Sensitivity Explorer",
+    page_icon="📊",
+)
+
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
+    run_sensitivity_analysis,
+    suite_to_tables,
 )
 
 # Quick UI for scenario and drivers (customize as needed)
@@ -43,20 +46,24 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
-sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
-df = tornado_suite_to_dataframe(suite)
+# UX Improvement: Use st.spinner for long-running analysis to provide feedback
+with st.spinner("Running tornado analysis..."):
+    # Fix broken imports/calls to use new v14 engine
+    from analytics.scenario_loader import load_scenario_config
+    base_cfg = load_scenario_config(config_path)
+    suite = run_sensitivity_analysis(
+        base_config=base_cfg,
+        base_config_path=config_path,
+        parameters=params,
+        metric_keys=["project_irr"]
+    )
+    df = suite_to_tables(suite)["tornado_rows"]
+
 st.dataframe(df)
 
 st.write("Tornado Chart:")
 st.image(
     "exports/tornado_chart.png"
 )  # Assumes you pre-exported with plot_tornado_chart.
-
-st.write("Multi-metric (Spider) Chart:")
-multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image("exports/spider_chart.png")
 
 st.success("Try changing params in the code for more exploration.")
