@@ -17,11 +17,8 @@ st.set_page_config(page_title="DutchBay | Sensitivity Explorer", page_icon="📊
 try:
     from analytics.contracts_v14 import ParameterRangeConfig
     from analytics.sensitivity import (
-        SensitivityRequest,
-        plot_spider_chart,
-        run_multi_metric_tornado,
-        run_tornado_sensitivity,
-        tornado_suite_to_dataframe,
+        SensitivityRequest, plot_spider_chart, run_multi_metric_tornado,
+        run_tornado_sensitivity, tornado_suite_to_dataframe
     )
 except (ImportError, SyntaxError) as e:
     st.error(f"### 🛑 System Load Error\n{e}")
@@ -30,12 +27,10 @@ except (ImportError, SyntaxError) as e:
 
 st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
 
-# 🎨 Palette: Multi-column layout for better spatial density
+# 🎨 Palette: Multi-column layout for spatial density
 col1, col2 = st.columns([2, 1])
 with col1:
-    config_path = st.text_input(
-        "📄 Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
-    )
+    config_path = st.text_input("📄 Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml")
 with col2:
     st.info("Select a scenario to analyze sensitivities.")
 
@@ -56,7 +51,7 @@ params = [
     ),
 ]
 
-# 🎨 Palette: Interactive feedback during computation
+# 🎨 Palette: Spinner feedback for computations
 with st.spinner("Running sensitivity analysis..."):
     sens_req = SensitivityRequest(config_path, params)
     suite = run_tornado_sensitivity(sens_req)
@@ -65,20 +60,12 @@ st.dataframe(df)
 
 st.subheader("📊 Visualizations")
 
-# 🎨 Palette: Captions for accessibility and visual context
-st.image(
-    "exports/tornado_chart.png",
-    caption="Tornado Chart: Visualizing parameter impact on project value.",
-    use_container_width=True,
-)
+# 🎨 Palette: Captions for accessibility
+st.image("exports/tornado_chart.png", caption="Tornado Chart: Parameter impacts.", use_container_width=True)
 
 with st.spinner("Generating spider chart..."):
     multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
     plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image(
-    "exports/spider_chart.png",
-    caption="Spider Chart: Multi-metric sensitivity across scenarios.",
-    use_container_width=True,
-)
+st.image("exports/spider_chart.png", caption="Spider Chart: Multi-metric sensitivity.", use_container_width=True)
 
-st.success("Analysis complete. Try changing parameters to explore different outcomes.")
+st.success("Try changing params in the code for more exploration.")
