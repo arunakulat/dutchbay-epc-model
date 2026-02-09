@@ -1,5 +1,9 @@
 name: Sprint 12 Refinancing Feature - CI/CD Pipeline
 
+permissions:
+  checks: write
+  pull-requests: write
+
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ TRIGGER CONDITIONS                                                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
@@ -63,46 +67,46 @@ jobs:
       - name: '✓ Install dependencies'
         run: |
           python -m pip install --upgrade pip
-          pip install mypy ruff black isort bandit pydantic
+          python -m pip install python -m mypy ruff python -m black python -m isort python -m bandit pydantic
 
-      - name: '✓ Type checking (mypy --strict)'
+      - name: '✓ Type checking (python -m mypy --strict)'
         run: |
-          echo "STAGE: Type Checking (mypy --strict)"
-          mypy --strict finance/refinancing_v14_hardened.py || exit 1
-          mypy --strict analytics/contracts_v14_validators.py || exit 1
+          echo "STAGE: Type Checking (python -m mypy --strict)"
+          python -m mypy --strict finance/refinancing_v14_hardened.py || exit 1
+          python -m mypy --strict analytics/contracts_v14_validators.py || exit 1
           echo "✓ Type checking PASSED"
 
-      - name: '✓ Linting (ruff check)'
+      - name: '✓ Linting (python -m ruff check)'
         run: |
-          echo "STAGE: Linting (ruff check)"
-          ruff check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          echo "STAGE: Linting (python -m ruff check)"
+          python -m ruff check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
           echo "✓ Linting PASSED"
 
-      - name: '✓ Formatting check (black)'
+      - name: '✓ Formatting check (python -m black)'
         run: |
-          echo "STAGE: Formatting (black)"
-          black --check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          echo "STAGE: Formatting (python -m black)"
+          python -m black --check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
           echo "✓ Formatting PASSED"
 
-      - name: '✓ Import ordering (isort)'
+      - name: '✓ Import ordering (python -m isort)'
         run: |
-          echo "STAGE: Import Ordering (isort)"
-          isort --check-only finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          echo "STAGE: Import Ordering (python -m isort)"
+          python -m isort --check-only finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
           echo "✓ Import ordering PASSED"
 
-      - name: '✓ Security scan (bandit)'
+      - name: '✓ Security scan (python -m bandit)'
         run: |
-          echo "STAGE: Security Scan (bandit)"
-          bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py -f json -o bandit-report.json
-          bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py
+          echo "STAGE: Security Scan (python -m bandit)"
+          python -m bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py -f json -o python -m bandit-report.json
+          python -m bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py
           echo "✓ Security scan PASSED"
 
-      - name: '✓ Upload bandit report'
+      - name: '✓ Upload python -m bandit report'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bandit-security-report
-          path: bandit-report.json
+          name: python -m bandit-security-report
+          path: python -m bandit-report.json
 
   # ════════════════════════════════════════════════════════════════════════════
   # JOB 2: UNIT TESTS (10 min)
@@ -127,25 +131,25 @@ jobs:
       - name: '✓ Install dependencies'
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov pytest-xdist pydantic dataclasses
-          pip install -e .
+          python -m pip install python -m pytest python -m pytest-cov python -m pytest-xdist pydantic dataclasses
+          python -m pip install -e .
 
       - name: '✓ Run unit tests (refinancing)'
         run: |
           echo "STAGE: Unit Tests - Refinancing Module"
-          pytest tests/test_refinancing_v14_hardened.py -v --tb=short --junit-xml=refinancing-test-results.xml
+          python -m pytest tests/test_refinancing_v14_hardened.py -v --tb=short --junit-xml=refinancing-test-results.xml
           echo "✓ Refinancing tests PASSED"
 
       - name: '✓ Run unit tests (validators)'
         run: |
           echo "STAGE: Unit Tests - Validators Module"
-          pytest tests/test_contracts_v14_validators.py -v --tb=short --junit-xml=validators-test-results.xml
+          python -m pytest tests/test_contracts_v14_validators.py -v --tb=short --junit-xml=validators-test-results.xml
           echo "✓ Validators tests PASSED"
 
       - name: '✓ Generate coverage report'
         run: |
           echo "STAGE: Coverage Analysis"
-          pytest tests/test_refinancing_v14_hardened.py tests/test_contracts_v14_validators.py \
+          python -m pytest tests/test_refinancing_v14_hardened.py tests/test_contracts_v14_validators.py \
             --cov=finance/refinancing_v14_hardened \
             --cov=analytics/contracts_v14_validators \
             --cov-report=html \
@@ -200,14 +204,14 @@ jobs:
       - name: '✓ Install dependencies'
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-xdist pydantic dataclasses
-          pip install -e .
+          python -m pip install python -m pytest python -m pytest-xdist pydantic dataclasses
+          python -m pip install -e .
 
       - name: '✓ Run integration tests'
         run: |
           echo "STAGE: Integration Tests"
-          pytest tests/test_refinancing_v14_hardened.py::TestPipelineIntegration -v
-          pytest tests/test_contracts_v14_validators.py::TestIntegrationValidation -v
+          python -m pytest tests/test_refinancing_v14_hardened.py::TestPipelineIntegration -v
+          python -m pytest tests/test_contracts_v14_validators.py::TestIntegrationValidation -v
           echo "✓ Integration tests PASSED"
 
       - name: '✓ Test pipeline compatibility'
@@ -243,8 +247,8 @@ jobs:
       - name: '✓ Install dependencies'
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-benchmark pydantic dataclasses
-          pip install -e .
+          python -m pip install python -m pytest python -m pytest-benchmark pydantic dataclasses
+          python -m pip install -e .
 
       - name: '✓ Run performance benchmarks'
         run: |
@@ -316,8 +320,8 @@ jobs:
       - name: '✓ Install dependencies'
         run: |
           python -m pip install --upgrade pip
-          pip install pydantic dataclasses
-          pip install -e .
+          python -m pip install pydantic dataclasses
+          python -m pip install -e .
 
       - name: '✓ Verify GWTF compliance'
         run: |
