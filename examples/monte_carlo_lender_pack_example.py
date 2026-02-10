@@ -52,7 +52,6 @@ except ImportError:
 
 from analytics.mc import (
     run_monte_carlo_analysis,
-    build_lender_risk_table,
     build_casper_risk_blocks,
     CovenantSpec,
     load_correlation_from_config,

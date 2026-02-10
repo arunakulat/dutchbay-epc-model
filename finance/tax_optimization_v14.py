@@ -48,9 +48,8 @@ Version: 1.0
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Tuple
+from typing import List, Tuple
 
-import numpy as np
 
 # R7: IRR calculation from finance.irr ONLY (singleton pattern)
 from finance.irr import irr as calculate_irr
@@ -513,19 +512,19 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("TAX-AWARE EQUITY DISTRIBUTION OPTIMIZATION")
     print("="*70)
-    print(f"\nBase Case (Immediate):")
+    print("\nBase Case (Immediate):")
     print(f"  Equity IRR: {result.base_case.equity_irr:.2f}%")
     print(f"  Total Distributed: ${result.base_case.total_distributed/1e6:.1f}M")
     
-    print(f"\nOptimized Case (Deferred):")
+    print("\nOptimized Case (Deferred):")
     print(f"  Equity IRR: {result.optimized_case.equity_irr:.2f}%")
     print(f"  Total Distributed: ${result.optimized_case.total_distributed/1e6:.1f}M")
     print(f"  Optimal Delay: {result.optimal_delay_years} years")
     
-    print(f"\nTax Savings:")
+    print("\nTax Savings:")
     print(f"  Total: ${result.tax_savings_usd/1e6:.1f}M")
     print(f"  NPV: ${result.tax_savings_npv_usd/1e6:.1f}M")
     
-    print(f"\nRecommendation:")
+    print("\nRecommendation:")
     print(f"  {result.recommendation}")
     print("\n" + "="*70)
