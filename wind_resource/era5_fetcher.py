@@ -108,7 +108,7 @@ class ERA5Fetcher:
         # Load configuration (CCCDIR compliance)
         self._load_config(config_path)
         
-        logger.info("ERA5Fetcher v1.1.0 initialized (CCCDIR compliant)")
+        logger.info(f"ERA5Fetcher v1.1.0 initialized (CCCDIR compliant)")
         logger.info(f"  Cache: {self.cache_dir}")
         logger.info(f"  Config: {self._config_path}")
     

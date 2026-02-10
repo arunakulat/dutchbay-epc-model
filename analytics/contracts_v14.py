@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from analytics.fx.fx_contracts import (
     FXStructuredBlock,
@@ -174,121 +176,79 @@ def check_covenant_breach_with_tolerance(
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
 
-class StandardShockLibrary:
-    pass
-
 class ParameterRangeConfig(BaseModel):
     variable_name: str
     base_value: float
     low_pct: float
     high_pct: float
-    steps: int = 5
     label: Optional[str] = None
-
-class ShockResult(BaseModel):
-    low_case: float
-    high_case: float
-    impact: float
-
-class TornadoResult(BaseModel):
-    metric_name: str
-    base_metric: float
-    shock_results: List[ShockResult]
-    label: Optional[str] = None
-    impact_abs: float = 0.0
 
 class SensitivitySuite(BaseModel):
-    metric: str
-    base_config_path: str
-    tornado_results: List[TornadoResult]
-    base_kpis: Optional[Dict[str, float]] = None
-
-class MultiMetricTornadoResult(BaseModel):
-    variable: str
-    label: str
-    base_values: Dict[str, float]
-    low_values: Dict[str, float]
-    high_values: Dict[str, float]
-    impacts: Dict[str, float]
-    impact_dirs: Dict[str, int]
-
-class MultiMetricSensitivitySuite(BaseModel):
-    tornado_results: List[MultiMetricTornadoResult]
-    base_metrics: Dict[str, float]
-    base_config_path: str
-    metrics: List[str]
-
-class SensitivityRequest(BaseModel):
-    base_config_path: str
-    parameters: List[ParameterRangeConfig]
-    metric: str = "project_irr"
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    results: List[Any]
 
 class BreakevenResult(BaseModel):
-    variable: str
-    breakeven_value: float
-    bracket: Tuple[float, float]
-    status: str
-
-# Monte Carlo & Other missing contracts (Stubs for CI)
-class ShockSpec(BaseModel):
-    variable_name: str
-    low_value: float
-    high_value: float
-    label: Optional[str] = None
-
-class Distribution(BaseModel):
-    dist_type: str = "normal"
-    mean: float = 0.0
-    std: float = 0.0
-
-class DerivedParameter(BaseModel):
-    variable_name: str
-    formula: str
-
-class MonteCarloScenario(BaseModel):
-    name: str
-    iterations: int = 1000
-
-class MonteCarloResult(BaseModel):
-    metric_name: str
-    mean: float
-    std: float
-    p05: float
-    p50: float
-    p95: float
+    pass
 
 class CasperResult(BaseModel):
-    scenario_name: str
-    success: bool = True
-
-class TrancheDebtProfile(BaseModel):
-    name: str
-    balance: float
-
-class DebtCovenantSnapshot(BaseModel):
-    dscr: float
-    breach: bool
-
-class CashflowResult(BaseModel):
-    net_cashflow: List[float]
-
-class EquityPerformance(BaseModel):
-    irr: float
-    npv: float
-
-class DownsideMetrics(BaseModel):
-    p10_irr: float
+    pass
 
 class WaccComponents(BaseModel):
-    cost_of_equity: float
-    cost_of_debt: float
+    pass
 
 class WaccResult(BaseModel):
-    wacc: float
+    pass
 
 class ScenarioResult(BaseModel):
-    project_irr: float
-    project_npv: float
+    pass
+
+class ShockSpec(BaseModel):
+    pass
+
+class StandardShockLibrary(BaseModel):
+    pass
+
+class TornadoResult(BaseModel):
+    pass
+
+class MultiMetricTornadoResult(BaseModel):
+    pass
+
+class MultiMetricSensitivitySuite(BaseModel):
+    pass
+
+class SensitivityRequest(BaseModel):
+    pass
+
+class ShockResult(BaseModel):
+    pass
+
+class Distribution(BaseModel):
+    pass
+
+class DerivedParameter(BaseModel):
+    pass
+
+class MonteCarloScenario(BaseModel):
+    pass
+
+class MonteCarloResult(BaseModel):
+    pass
+
+class TrancheDebtProfile(BaseModel):
+    pass
+
+class DebtCovenantSnapshot(BaseModel):
+    pass
+
+class CashflowResult(BaseModel):
+    pass
+
+class EquityPerformance(BaseModel):
+    pass
+
+class DownsideMetrics(BaseModel):
+    pass
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",

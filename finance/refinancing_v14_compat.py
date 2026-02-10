@@ -11,7 +11,7 @@ Full implementation in:
 Removal: Sprint 13 after test migration complete.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 

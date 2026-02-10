@@ -13,7 +13,7 @@ Refs:
 - SPRINT_12_R23_ACTIVATION_SUMMARY.md
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 

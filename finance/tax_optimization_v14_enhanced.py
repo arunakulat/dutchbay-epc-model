@@ -35,8 +35,9 @@ Version: 2.0
 
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple, Dict, Any
 
+import numpy as np
 
 # Import proper tax calculation
 from finance.tax_schedule_v14 import (
@@ -417,7 +418,7 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("ENHANCED TAX-AWARE DISTRIBUTION OPTIMIZATION")
     print("="*70)
-    print("\nBase Case (Immediate):")
+    print(f"\nBase Case (Immediate):")
     print(f"  Equity IRR: {result.base_case.equity_irr:.2f}%")
     print(f"  Total Tax: ${sum(result.base_tax_schedule.annual_tax_liability)/1e6:.1f}M")
     
@@ -426,11 +427,11 @@ if __name__ == "__main__":
     print(f"  Total Tax: ${sum(result.optimized_tax_schedule.annual_tax_liability)/1e6:.1f}M")
     print(f"  IRR Trade-off: {result.base_case.equity_irr - result.optimized_case.equity_irr:.2f}%")
     
-    print("\nTLCF Utilization:")
+    print(f"\nTLCF Utilization:")
     print(f"  Peak TLCF: ${max(result.base_tax_schedule.annual_tlcf_balance)/1e6:.1f}M")
     print(f"  Exhaustion Year: {result.base_tax_schedule.tlcf_exhaustion_year + 1}")
     print(f"  Utilization Improvement: ${result.tlcf_utilization_improvement/1e6:.1f}M")
     
-    print("\nRecommendation:")
+    print(f"\nRecommendation:")
     print(f"  {result.recommendation}")
     print("="*70)

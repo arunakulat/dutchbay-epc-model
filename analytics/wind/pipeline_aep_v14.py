@@ -18,7 +18,7 @@ Context:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from analytics.loader.aep_loader import load_aep_from_summary
 from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep

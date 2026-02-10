@@ -7,7 +7,7 @@ Sampling utilities (LHS baseline).
 Keep import-light: numpy only.
 """
 
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import numpy as np
 

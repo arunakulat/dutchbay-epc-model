@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from wind_resource import WindPipeline
 
@@ -145,7 +145,7 @@ def run_v14_pipeline(
         force_download=False
     )
     
-    logger.info("✓ Wind assessment complete")
+    logger.info(f"✓ Wind assessment complete")
     logger.info(f"  Mean wind speed: {wind_results['wind_data']['mean_ws']:.2f} m/s")
     logger.info(f"  Gross CF: {wind_results['energy_production']['gross_aep']['capacity_factor_gross']:.1f}%")
     logger.info(f"  Net AEP P75: {wind_results['energy_production']['net_aep']['net_aep_p75_mwh']:,.0f} MWh/year")

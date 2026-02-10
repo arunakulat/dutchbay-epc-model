@@ -22,7 +22,7 @@ Public API (keep stable):
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import copy
 
@@ -33,10 +33,13 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TornadoResult,
     ParameterRangeConfig,
+    MultiMetricSensitivitySuite,
+    MultiMetricTornadoResult,
 )
 
 from analytics.sensitivity.tail_risk import (
     TailRiskConfig,
+    enrich_suite_with_tail_risk,
 )
 
 # Adapter layer for contract compatibility
