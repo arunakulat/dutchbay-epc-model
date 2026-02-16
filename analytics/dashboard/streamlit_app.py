@@ -30,7 +30,7 @@ with st.sidebar:
         st.warning("⚠️ Backend unavailable. Some inputs may be disabled.")
 
 if not BACKEND_AVAILABLE:
-    st.error(f"⚠️ Model Initialization Failed")
+    st.error("⚠️ Model Initialization Failed")
     st.markdown(f"**Error:** `{IMPORT_ERROR}`")
     st.info("The dashboard is running in **Safe Mode**. Please check backend contracts and dependencies.")
     st.stop()
