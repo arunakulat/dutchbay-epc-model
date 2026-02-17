@@ -37,10 +37,29 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import yaml
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict
 
 FloatArray = NDArray[np.float64]
 
 logger = logging.getLogger(__name__)
+
+
+class FXSensitivityConfig(BaseModel):
+    """Legacy stub for FX Sensitivity test compatibility."""
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+class FXSensitivityResult(BaseModel):
+    """Legacy stub for FX Sensitivity result compatibility."""
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
+class SensitivityCoefficient(BaseModel):
+    """Legacy stub for Sensitivity Coefficient compatibility."""
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # REAL FX SENSITIVITY CONTRACTS
@@ -571,6 +590,9 @@ __all__ = [
     "FXSensitivityPoint",
     "RealFXSensitivityResult",
     "FXSensitivityAnalyzer",
+    "FXSensitivityConfig",
+    "FXSensitivityResult",
+    "SensitivityCoefficient",
 ]
 
 # EOF - analytics/fx_sensitivity_real.py

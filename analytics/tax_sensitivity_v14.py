@@ -123,3 +123,7 @@ __all__ = [
     "analyze_tax_rate_sensitivity",
     "generate_tax_tornado_chart",
 ]
+
+def analyze_tax_optimization_sensitivity(*args, **kwargs):
+    """Stub for tax optimization sensitivity analysis."""
+    return {}

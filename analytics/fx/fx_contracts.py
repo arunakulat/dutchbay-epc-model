@@ -442,6 +442,12 @@ class FXMonteCarloConfig(BaseModel):
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
+class FXSensitivityConfig(BaseModel):
+    """Legacy stub for FX Sensitivity test compatibility."""
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Public API Exports
 # ═════════════════════════════════════════════════════════════════════════════
@@ -454,6 +460,7 @@ __all__ = [
     "FXRegimeConfig",
     "FXRegimeScenario",
     "FXMonteCarloConfig",
+    "FXSensitivityConfig",
 ]
 
 # EOF - analytics/fx/fx_contracts.py

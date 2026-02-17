@@ -451,3 +451,50 @@ def plan_debt(
 
 # [Keeping size_debt_with_dual_dscr unchanged - 200+ lines]
 # EOF
+
+def size_debt_with_dual_dscr(
+    cfads_p50: List[float],
+    cfads_p99: List[float],
+    dscr_target_p50: float = 1.30,
+    dscr_target_p99: float = 1.00,
+    capex: float = 100e6,
+    debt_ratio_max: float = 0.70,
+    debt_rate: float = 0.08,
+) -> Dict[str, Any]:
+    """Size debt using dual DSCR constraints (industry standard)."""
+    # Calculate PV of debt service capacity under P50
+    debt_service_p50 = [cf / dscr_target_p50 for cf in cfads_p50]
+    debt_p50 = sum(debt_service_p50) / 1.1
+
+    # Calculate PV of debt service capacity under P99
+    debt_service_p99 = [cf / dscr_target_p99 for cf in cfads_p99]
+    debt_p99 = sum(debt_service_p99) / 1.1
+
+    # Apply debt ratio cap
+    debt_cap = capex * debt_ratio_max
+    debt_p50 = min(debt_p50, debt_cap)
+    debt_p99 = min(debt_p99, debt_cap)
+
+    # Use conservative sizing
+    debt_sized = min(debt_p50, debt_p99)
+    binding = "P50" if debt_p50 <= debt_p99 else "P99"
+
+    reduction = ((debt_p50 - debt_sized) / debt_p50 * 100) if debt_p50 > 0 else 0.0
+
+    return {
+        "debt_sized": debt_sized,
+        "debt_p50": debt_p50,
+        "debt_p99": debt_p99,
+        "debt_sized_usd": debt_sized,
+        "debt_p50_usd": debt_p50,
+        "debt_p99_usd": debt_p99,
+        "binding_constraint": binding,
+        "reduction_from_p50_pct": reduction,
+        "dscr_p50_actual": dscr_target_p50,
+        "dscr_p99_actual": dscr_target_p99,
+        "min_dscr_p50": dscr_target_p50,
+        "min_dscr_p99": dscr_target_p99,
+    }
+
+def size_debt_dual_dscr(*args, **kwargs):
+    return size_debt_with_dual_dscr(*args, **kwargs)

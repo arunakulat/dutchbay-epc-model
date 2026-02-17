@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from analytics.fx.fx_contracts import (
     FXStructuredBlock,
@@ -41,157 +41,217 @@ def check_covenant_breach_with_tolerance(
     tolerance_bps: int = 1,
     covenant_type: str = "floor",
 ) -> bool:
-    """Check if covenant breaches threshold with floating-point tolerance.
-    
-    Prevents false breach warnings from floating-point rounding errors
-    by applying industry-standard 1 basis point (0.01%) tolerance.
-    
-    **Why Tolerance Matters**
-    -------------------------
-    Financial covenants use threshold comparisons (e.g., DSCR >= 1.30x).
-    Floating-point arithmetic can produce values like 1.2999999999 when
-    the true value is 1.30. Without tolerance, this triggers false breaches.
-    
-    Example:
-        >>> dscr = 1.30 * 0.9999999  # Simulated rounding error
-        >>> dscr
-        1.2999998999999999
-        >>> dscr >= 1.30  # False (breach)
-        False
-        >>> check_covenant_breach_with_tolerance(dscr, 1.30, tolerance_bps=1)
-        False  # Within 1bp tolerance - NOT a breach
-    
-    **Covenant Types**
-    ------------------
-    1. Floor covenants (minimum thresholds):
-       - DSCR >= 1.30x (must be at or above)
-       - LLCR >= 1.10x
-       - Interest Coverage >= 2.0x
-       - Breach if: actual < threshold (with tolerance)
-    
-    2. Ceiling covenants (maximum limits):
-       - Leverage Ratio <= 4.0x (must be at or below)
-       - Debt/EBITDA <= 5.0x
-       - Breach if: actual > threshold (with tolerance)
-    
-    **Tolerance Standard**
-    ----------------------
-    1 basis point (0.01%) is industry standard for covenant monitoring:
-    - Conservative: catches real breaches, ignores rounding
-    - Lender-accepted: within measurement precision
-    - IEEE 754 compliant: handles double-precision errors
-    
-    For DSCR 1.30x threshold:
-    - 1bp tolerance = 0.01% × 1.30 = 0.00013 absolute
-    - Accept range: [1.29987, 1.30013]
-    - True breaches: anything < 1.29987
-    
-    Args:
-        actual: Actual covenant metric value (e.g., DSCR = 1.299)
-        threshold: Covenant threshold (e.g., 1.30 for DSCR floor)
-        tolerance_bps: Tolerance in basis points (default 1bp = 0.01%)
-            - 1bp: Standard precision (recommended)
-            - 5bp: Relaxed for volatile metrics
-            - 0bp: Strict (no tolerance, may trigger false positives)
-        covenant_type: "floor" (minimum) or "ceiling" (maximum)
-    
-    Returns:
-        True if covenant BREACHES (actual violates threshold beyond tolerance)
-        False if covenant OK (actual within acceptable range)
-    
-    Raises:
-        ValueError: If tolerance_bps < 0 or covenant_type invalid
-    
-    References:
-        - Kurtovic Financial: DSCR threshold 1.0x key issues [web:175]
-        - Corporate Finance Institute: DSCR covenant practices [web:181]
-        - DebtBook: Covenant compliance monitoring [web:184]
-        - FinancialModelling: DSCR below 1.0x analysis [web:187]
-        - Stack Overflow: Floating-point equality tolerance [web:170]
-        - Go testing: 1e-9 tolerance for financial calcs [web:171]
-    
-    Examples:
-        >>> # Floor covenant (DSCR minimum)
-        >>> check_covenant_breach_with_tolerance(1.299, 1.30, tolerance_bps=1)
-        False  # Within 1bp - OK
-        >>> check_covenant_breach_with_tolerance(1.295, 1.30, tolerance_bps=1)
-        True   # Beyond 1bp - BREACH
-        
-        >>> # Ceiling covenant (Leverage maximum)
-        >>> check_covenant_breach_with_tolerance(
-        ...     actual=4.001,
-        ...     threshold=4.0,
-        ...     tolerance_bps=1,
-        ...     covenant_type="ceiling"
-        ... )
-        False  # Within 1bp - OK
-        
-        >>> # Strict comparison (no tolerance)
-        >>> check_covenant_breach_with_tolerance(1.2999, 1.30, tolerance_bps=0)
-        True   # Even tiny differences breach
-    
-    Testing:
-        >>> # Test suite in tests/api/test_covenant_breach_tolerance_v14.py
-        >>> # Covers: rounding errors, edge cases, multiple covenant types
-    
-    FRAMEWORK COMPLIANCE:
-    ---------------------
-    ✅ CASPER: Contract-explicit tolerance parameter
-    ✅ CESSPIT: Config-driven tolerance (default can be overridden)
-    ✅ GWTF: Single source of truth for covenant breach detection
-    ✅ CCCDIR: Comprehensive documentation with examples
-    ✅ MRM-02: Reproducible breach detection logic
-    
-    Version: Sprint 18, Issue #4
-    Author: DutchBay v14 Team
-    Date: 2025-12-23
-    """
-    # Input validation
+    """Check if covenant breaches threshold with floating-point tolerance."""
     if tolerance_bps < 0:
         raise ValueError(f"Tolerance must be non-negative, got {tolerance_bps}bp")
-    
     if covenant_type not in ("floor", "ceiling"):
-        raise ValueError(
-            f"covenant_type must be 'floor' or 'ceiling', got '{covenant_type}'"
-        )
-    
-    # Convert basis points to absolute tolerance
-    # 1bp = 0.01% = 0.0001
+        raise ValueError(f"covenant_type must be 'floor' or 'ceiling', got '{covenant_type}'")
     tolerance_abs = abs(threshold) * (tolerance_bps / 10000.0)
-    
-    # Floor covenant: breach if actual < threshold (allowing tolerance)
     if covenant_type == "floor":
-        # actual >= (threshold - tolerance) → OK
-        # actual < (threshold - tolerance) → BREACH
         return actual < (threshold - tolerance_abs)
-    
-    # Ceiling covenant: breach if actual > threshold (allowing tolerance)
-    else:  # covenant_type == "ceiling"
-        # actual <= (threshold + tolerance) → OK
-        # actual > (threshold + tolerance) → BREACH
+    else:
         return actual > (threshold + tolerance_abs)
 
-
-# [REST OF FILE UNCHANGED - keeping all existing contracts]
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Sensitivity Analysis Contracts (Pydantic V2)
 # ═════════════════════════════════════════════════════════════════════════════
 
-[... rest of file content unchanged ...]
+class ParameterRangeConfig(BaseModel):
+    """Configuration for a single parameter's sensitivity range."""
+    variable_name: str
+    base_value: float
+    low_pct: float = Field(ge=-100, le=100)
+    high_pct: float = Field(ge=-100, le=100)
+    steps: int = Field(default=5, ge=2, le=20)
+    label: Optional[str] = None
+    shock_type: str = "scalar"
+    low_value: Optional[float] = None
+    high_value: Optional[float] = None
+
+    @model_validator(mode="after")
+    def compute_range_values(self) -> "ParameterRangeConfig":
+        if self.low_value is None:
+            self.low_value = self.base_value * (1 + self.low_pct / 100)
+        if self.high_value is None:
+            self.high_value = self.base_value * (1 + self.high_pct / 100)
+        return self
+
+class ShockSpec(BaseModel):
+    """Specification for a single sensitivity shock."""
+    variable_name: str
+    low_value: float
+    high_value: float
+    label: Optional[str] = None
+
+class ShockResult(BaseModel):
+    """Result of applying a shock to a variable."""
+    variable_name: str
+    base_value: float
+    low_value: float
+    high_value: float
+    base_metric: float
+    low_metric: float
+    high_metric: float
+    metric_name: str
+    label: str
+    low_case: Optional[float] = None
+    high_case: Optional[float] = None
+    impact: Optional[float] = None
+
+class TornadoResult(BaseModel):
+    """Single parameter tornado sensitivity result."""
+    metric_name: str
+    base_metric: float
+    shock_results: List[ShockResult]
+    label: Optional[str] = None
+    impact_abs: Optional[float] = None
+    impact_dir: Optional[int] = None
+    low_case_metric: Optional[float] = None
+    high_case_metric: Optional[float] = None
+
+class MultiMetricTornadoResult(BaseModel):
+    """Multi-metric tornado result for a single parameter."""
+    variable: str
+    label: str
+    base_values: Dict[str, float]
+    low_values: Dict[str, float]
+    high_values: Dict[str, float]
+    impacts: Optional[Dict[str, float]] = None
+    impact_dirs: Optional[Dict[str, int]] = None
+
+class SensitivitySuite(BaseModel):
+    """Complete tornado sensitivity analysis suite."""
+    tornado_results: List[TornadoResult]
+    base_metric: float
+    base_config_path: str
+    metric: str = "project_irr"
+    base_kpis: Optional[Dict[str, float]] = None
+
+class MultiMetricSensitivitySuite(BaseModel):
+    """Multi-metric tornado sensitivity suite."""
+    tornado_results: List[MultiMetricTornadoResult]
+    base_metrics: Dict[str, float]
+    base_config_path: str
+    metrics: List[str]
+
+class SensitivityRequest(BaseModel):
+    """Request for sensitivity analysis."""
+    config_path: str
+    params: List[ParameterRangeConfig]
+
+class BreakevenResult(BaseModel):
+    """Breakeven parameter search result."""
+    variable: str
+    breakeven_value: float
+    bracket: Tuple[float, float]
+    status: str = "success"
+    iterations: Optional[int] = None
+    target_value: Optional[float] = 0.0
+
+class StandardShockLibrary:
+    """Library of standard sensitivity shocks."""
+    @staticmethod
+    def capex_overrun(base_capex: float) -> ShockSpec:
+        return ShockSpec(variable_name="capex", low_value=base_capex*0.9, high_value=base_capex*1.1)
+
+class Distribution(BaseModel):
+    """Statistical distribution specification."""
+    type: str = "normal"
+    mean: float = 0.0
+    std: float = 1.0
+    min: Optional[float] = None
+    max: Optional[float] = None
+
+class DerivedParameter(BaseModel):
+    """Parameter derived from other parameters."""
+    variable_name: str
+    formula: str
+
+class CasperResult(BaseModel):
+    """CASPER evaluation result."""
+    scenario_name: str
+    is_valid: bool = True
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class ScenarioResult(BaseModel):
+    """Result of evaluating a multi-variable scenario."""
+    scenario_name: str
+    description: str
+    base_metrics: Dict[str, float]
+    shocked_metrics: Dict[str, float]
+    shock_values: Dict[str, float]
+
+class WaccComponents(BaseModel):
+    """Components of WACC calculation."""
+    cost_of_equity: float
+    cost_of_debt: float
+    gearing_pct: float
+    tax_rate: float
+
+class WaccResult(BaseModel):
+    """Result of WACC calculation."""
+    wacc_nominal: float
+    wacc_real: float
+    components: WaccComponents
+
+class TrancheDebtProfile(BaseModel):
+    """Debt profile for a single tranche."""
+    tranche_id: str
+    principal: float
+    interest_rate: float
+    tenor: int
+
+class DebtCovenantSnapshot(BaseModel):
+    """Snapshot of debt covenants."""
+    dscr: float
+    llcr: float
+    is_compliant: bool
+
+class CashflowResult(BaseModel):
+    """Result of cashflow projection."""
+    annual_cfads: List[float]
+    annual_debt_service: List[float]
+    total_npv: float
+
+class EquityPerformance(BaseModel):
+    """Equity performance metrics."""
+    equity_irr: float
+    equity_npv: float
+
+class DownsideMetrics(BaseModel):
+    """Downside risk metrics."""
+    dscr_min: float
+    break_even_capex_pct: float
+
+class MonteCarloScenario(BaseModel):
+    """Single Monte Carlo iteration scenario."""
+    index: int
+    overrides: Dict[str, float]
+
+class MonteCarloResult(BaseModel):
+    """Monte Carlo simulation result."""
+    metric_name: str
+    mean: float
+    std: float
+    p05: float
+    p50: float
+    p95: float
+    iterations: int
+    seed: Optional[int] = None
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
-    "check_covenant_breach_with_tolerance",  # NEW - Sprint 18, Issue #4
+    "check_covenant_breach_with_tolerance",
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
-    # Sensitivity contracts
     "ShockSpec",
-    "StandardShockLibrary",
     "TornadoResult",
     "MultiMetricTornadoResult",
     "ParameterRangeConfig",
@@ -200,14 +260,12 @@ __all__ = [
     "SensitivityRequest",
     "BreakevenResult",
     "ShockResult",
-    # Monte Carlo contracts
     "Distribution",
     "DerivedParameter",
-    "MonteCarloScenario",
+    "StandardShockLibrary",
     "MonteCarloResult",
-    # CASPER
+    "MonteCarloScenario",
     "CasperResult",
-    # Debt & Cashflow contracts
     "TrancheDebtProfile",
     "DebtCovenantSnapshot",
     "CashflowResult",
