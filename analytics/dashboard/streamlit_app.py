@@ -10,21 +10,42 @@ Run with:
 
 import streamlit as st
 
-from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
+st.set_page_config(
+    page_title="DutchBay | Sensitivity Explorer", page_icon="📊", layout="wide"
 )
 
-# Quick UI for scenario and drivers (customize as needed)
-st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
+try:
+    from analytics.contracts_v14 import ParameterRangeConfig
+    from analytics.sensitivity import (
+        SensitivityRequest,
+        plot_spider_chart,
+        run_multi_metric_tornado,
+        run_tornado_sensitivity,
+        tornado_suite_to_dataframe,
+    )
 
-config_path = st.text_input(
-    "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
-)
+    READY = True
+except (ImportError, SyntaxError):
+    READY = False
+
+st.title("Sensitivity Dashboard")
+
+if not READY:
+    st.error("⚠️ **Model Initialization Failed**")
+    st.info("Dashboard is in Safe Mode. Please resolve backend syntax errors.")
+    st.stop()
+
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    config_path = st.text_input(
+        "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    )
+    run_btn = st.button("🚀 Run Analysis", type="primary")
+
+if not run_btn:
+    st.info("👈 Adjust parameters in the sidebar and click **Run Analysis** to start.")
+    st.stop()
+
 params = [
     ParameterRangeConfig(
         variable_name="project.capex_usd_per_kw",
@@ -43,7 +64,7 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
+st.write("### 📈 Analysis Results")
 sens_req = SensitivityRequest(config_path, params)
 suite = run_tornado_sensitivity(sens_req)
 df = tornado_suite_to_dataframe(suite)
