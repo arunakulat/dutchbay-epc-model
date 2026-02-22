@@ -10,20 +10,26 @@ Run with:
 
 import streamlit as st
 
-from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+st.set_page_config(page_title="DutchBay | Sensitivity Explorer", page_icon="📊")
+st.title("📊 Sensitivity Explorer")
 
-# Quick UI for scenario and drivers (customize as needed)
-st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
+try:
+    from analytics.contracts_v14 import ParameterRangeConfig
+    from analytics.sensitivity import (
+        SensitivityRequest,
+        plot_spider_chart,
+        run_multi_metric_tornado,
+        run_tornado_sensitivity,
+        tornado_suite_to_dataframe,
+    )
+except (ImportError, SyntaxError) as e:
+    st.error(f"⚠️ Model Initialization Failed: {e}")
+    st.stop()
 
 config_path = st.text_input(
-    "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    "Scenario Config Path",
+    "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    help="Relative path to the scenario YAML configuration file."
 )
 params = [
     ParameterRangeConfig(
@@ -43,20 +49,26 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
-sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
-df = tornado_suite_to_dataframe(suite)
-st.dataframe(df)
+if st.button("🚀 Run Analysis", type="primary", help="Execute sensitivity analysis"):
+    st.write("Running tornado analysis...")
+    sens_req = SensitivityRequest(config_path, params)
+    suite = run_tornado_sensitivity(sens_req)
+    df = tornado_suite_to_dataframe(suite)
+    st.dataframe(df)
 
-st.write("Tornado Chart:")
-st.image(
-    "exports/tornado_chart.png"
-)  # Assumes you pre-exported with plot_tornado_chart.
+    st.write("Tornado Chart:")
+    st.image(
+        "exports/tornado_chart.png",
+        caption="Impact of key drivers on project returns."
+    )
 
-st.write("Multi-metric (Spider) Chart:")
-multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image("exports/spider_chart.png")
-
-st.success("Try changing params in the code for more exploration.")
+    st.write("Multi-metric (Spider) Chart:")
+    multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
+    plot_spider_chart(multi_suite, "exports/spider_chart.png")
+    st.image(
+        "exports/spider_chart.png",
+        caption="Spider chart comparing sensitivity across multiple financial metrics."
+    )
+    st.success("Analysis complete!")
+else:
+    st.info("👋 Welcome! Adjust parameters and click **Run Analysis** to begin.")
