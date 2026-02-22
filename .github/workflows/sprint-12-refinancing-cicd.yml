@@ -99,7 +99,7 @@ jobs:
 
       - name: '✓ Upload bandit report'
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: bandit-security-report
           path: bandit-report.json
@@ -161,7 +161,7 @@ jobs:
 
       - name: '✓ Upload test results'
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: test-results
           path: |
@@ -476,7 +476,7 @@ jobs:
           echo "✓ Build artifacts generated"
 
       - name: '✓ Upload build artifacts'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: sprint-12-refinancing-build
           path: build/sprint-12-refinancing/

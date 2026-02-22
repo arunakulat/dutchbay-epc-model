@@ -7,10 +7,6 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
-permissions:
-  checks: write
-  pull-requests: write
-
 jobs:
   test:
     name: Run Tests (Python ${{ matrix.python-version }})
@@ -35,7 +31,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-        if [ -f requirements_dev.txt ]; then pip install -r requirements_dev.txt; fi
         pip install pytest pytest-cov pytest-xdist pytest-html
 
     - name: Display environment info
