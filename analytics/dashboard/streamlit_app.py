@@ -35,14 +35,14 @@ params = [
     ParameterRangeConfig(
         variable_name="project.capex_usd_per_kw",
         base_value=900.0,
-        low_pct=-20,
+        low_pct=20,
         high_pct=20,
         steps=5,
     ),
     ParameterRangeConfig(
         variable_name="generation.capacity_factor_pct",
         base_value=45.0,
-        low_pct=-10,
+        low_pct=10,
         high_pct=10,
         steps=5,
     ),
