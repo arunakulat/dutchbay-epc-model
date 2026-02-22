@@ -50,25 +50,30 @@ params = [
 ]
 
 if st.button("🚀 Run Analysis", type="primary", help="Execute sensitivity analysis"):
-    st.write("Running tornado analysis...")
-    sens_req = SensitivityRequest(config_path, params)
-    suite = run_tornado_sensitivity(sens_req)
-    df = tornado_suite_to_dataframe(suite)
-    st.dataframe(df)
+    with st.spinner("Executing sensitivity analysis..."):
+        sens_req = SensitivityRequest(config_path, params)
+        suite = run_tornado_sensitivity(sens_req)
+        df = tornado_suite_to_dataframe(suite)
+        st.dataframe(df)
 
-    st.write("Tornado Chart:")
-    st.image(
-        "exports/tornado_chart.png",
-        caption="Impact of key drivers on project returns."
-    )
+        st.subheader("Visual Analysis")
+        col1, col2 = st.columns(2)
 
-    st.write("Multi-metric (Spider) Chart:")
-    multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-    plot_spider_chart(multi_suite, "exports/spider_chart.png")
-    st.image(
-        "exports/spider_chart.png",
-        caption="Spider chart comparing sensitivity across multiple financial metrics."
-    )
-    st.success("Analysis complete!")
+        with col1:
+            st.write("**Tornado Chart**")
+            st.image(
+                "exports/tornado_chart.png",
+                caption="Impact of key drivers on project returns."
+            )
+
+        with col2:
+            st.write("**Spider Chart**")
+            multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
+            plot_spider_chart(multi_suite, "exports/spider_chart.png")
+            st.image(
+                "exports/spider_chart.png",
+                caption="Multi-metric sensitivity comparison."
+            )
+        st.success("Analysis complete!")
 else:
     st.info("👋 Welcome! Adjust parameters and click **Run Analysis** to begin.")
