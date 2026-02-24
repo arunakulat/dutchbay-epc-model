@@ -37,6 +37,10 @@ platformdirs==4.5.0
 pluggy==1.6.0
 pycodestyle==2.14.0
 pydantic==2.12.4
+omegaconf==2.3.0
+xarray>=2023.1.0
+netCDF4>=1.6.0
+cdsapi>=0.6.1
 pydantic_core==2.41.5
 pyflakes==3.4.0
 Pygments==2.19.2

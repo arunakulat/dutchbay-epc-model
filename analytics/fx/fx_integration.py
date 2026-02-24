@@ -129,10 +129,8 @@ def integrate_fx_into_scenario_result(
         ) from e
 
     # Return new ScenarioResult with FX fields populated
-    # (Use dataclass replace or manual instantiation for immutability)
-    import dataclasses
-
-    result_dict = dataclasses.asdict(scenario_result)
+    # (Use .model_dump() for Pydantic V2 compatibility)
+    result_dict = scenario_result.model_dump()
     result_dict["fx_block"] = fx_block
     result_dict["fx_curve"] = fx_curve
     result_dict["fx_risk_profile"] = fx_risk_profile

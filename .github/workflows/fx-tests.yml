@@ -144,27 +144,7 @@ jobs:
           logging.basicConfig(level=logging.DEBUG)
           from analytics.pipeline_v14 import run_v14_pipeline
           
-          config = {
-              'scenario_name': 'smoke_test_with_fx',
-              'Project': {
-                  'name': 'SmokeTestProject',
-                  'capex_usd': 100_000_000,
-                  'opex_usd_yr': 5_000_000,
-                  'project_life_years': 10,
-                  'construction_years': 2,
-              },
-              'Financing_Terms': {
-                  'total_debt_usd': 70_000_000,
-                  'debt_tenor_years': 8,
-                  'rates': {'usd_commercial_min': 0.08},
-              },
-              'FX': {
-                  'strategy': 'blended',
-                  'curve': {'lkr_usd': [300] * 10},
-              },
-          }
-          
-          result = run_v14_pipeline(config=config, validation_mode='off')
+          result = run_v14_pipeline(config='scenarios/dutchbay_lendercase_2025Q4.yaml', validation_mode='off')
           assert result['scenario_result']['fx_block'] is not None, 'FX block missing!'
           print('✓ Smoke test passed: FX block populated')
           "
@@ -174,25 +154,17 @@ jobs:
       - name: Run smoke test - pipeline without FX
         run: |
           python -c "
+          import yaml
           from analytics.pipeline_v14 import run_v14_pipeline
           
-          config = {
-              'scenario_name': 'smoke_test_without_fx',
-              'Project': {
-                  'name': 'SmokeTestProject',
-                  'capex_usd': 100_000_000,
-                  'opex_usd_yr': 5_000_000,
-                  'project_life_years': 10,
-                  'construction_years': 2,
-              },
-              'Financing_Terms': {
-                  'total_debt_usd': 70_000_000,
-                  'debt_tenor_years': 8,
-                  'rates': {'usd_commercial_min': 0.08},
-              },
-          }
+          with open('scenarios/dutchbay_lendercase_2025Q4.yaml') as f:
+              cfg = yaml.safe_load(f)
+          if 'fx' in cfg:
+              del cfg['fx']
+          with open('smoke_no_fx.yaml', 'w') as f:
+              yaml.dump(cfg, f)
           
-          result = run_v14_pipeline(config=config, validation_mode='off')
+          result = run_v14_pipeline(config='smoke_no_fx.yaml', validation_mode='off')
           assert result['scenario_result']['fx_block'] is None, 'FX block should be None'
           print('✓ Smoke test passed: Backward compatibility maintained')
           "

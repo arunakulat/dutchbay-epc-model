@@ -87,30 +87,32 @@ if str(_parent) not in sys.path:
     sys.path.insert(0, str(_parent))
 
 # Import from the irr.py file at finance root (not this package)
-# We use importlib to avoid circular import issues
+# We use a unique name in sys.modules to avoid clashing with the package name
+# and ensure C-extensions (like numpy) are handled correctly.
 import importlib.util
 
 _irr_module_path = _parent / "irr.py"
-if not _irr_module_path.exists():
-    raise ImportError(
-        f"Cannot find finance/irr.py source file at {_irr_module_path}. "
-        "The IRR package requires finance/irr.py to exist at the parent level."
-    )
+_module_name = "finance._irr_core_impl"
 
-_spec = importlib.util.spec_from_file_location("_finance_irr_module", _irr_module_path)
-if _spec is None or _spec.loader is None:
-    raise ImportError(f"Cannot load IRR module from {_irr_module_path}")
-
-_irr_module = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_irr_module)
+if _module_name not in sys.modules:
+    if not _irr_module_path.exists():
+        raise ImportError(f"Cannot find finance/irr.py at {_irr_module_path}")
+    _spec = importlib.util.spec_from_file_location(_module_name, str(_irr_module_path))
+    if _spec is None or _spec.loader is None:
+        raise ImportError(f"Cannot load IRR module from {_irr_module_path}")
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_module_name] = _module
+    _spec.loader.exec_module(_module)
+else:
+    _module = sys.modules[_module_name]
 
 # Re-export all public functions
-npv = _irr_module.npv
-irr = _irr_module.irr
-xnpv = _irr_module.xnpv
-xirr = _irr_module.xirr
-project_npv_from_cfads = _irr_module.project_npv_from_cfads
-approx_project_irr = _irr_module.approx_project_irr
+npv = _module.npv
+irr = _module.irr
+xnpv = _module.xnpv
+xirr = _module.xirr
+project_npv_from_cfads = _module.project_npv_from_cfads
+approx_project_irr = _module.approx_project_irr
 
 __all__ = [
     "npv",
