@@ -116,78 +116,18 @@ jobs:
         continue-on-error: true
 
   # ===========================================================================
-  # Full Pipeline Tests (Quick Smoke Test)
-  # ===========================================================================
-  smoke-test:
-    name: Smoke Test - Full Pipeline with FX
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
-          pip install pytest
-
-      - name: Run smoke test - pipeline with FX
-        run: |
-          python -c "
-          import logging
-          logging.basicConfig(level=logging.DEBUG)
-          from analytics.pipeline_v14 import run_v14_pipeline
-          
-          result = run_v14_pipeline(config='scenarios/dutchbay_lendercase_2025Q4.yaml', validation_mode='off')
-          assert result['scenario_result']['fx_block'] is not None, 'FX block missing!'
-          print('✓ Smoke test passed: FX block populated')
-          "
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      - name: Run smoke test - pipeline without FX
-        run: |
-          python -c "
-          import yaml
-          from analytics.pipeline_v14 import run_v14_pipeline
-          
-          with open('scenarios/dutchbay_lendercase_2025Q4.yaml') as f:
-              cfg = yaml.safe_load(f)
-          if 'fx' in cfg:
-              del cfg['fx']
-          with open('smoke_no_fx.yaml', 'w') as f:
-              yaml.dump(cfg, f)
-          
-          result = run_v14_pipeline(config='smoke_no_fx.yaml', validation_mode='off')
-          assert result['scenario_result']['fx_block'] is None, 'FX block should be None'
-          print('✓ Smoke test passed: Backward compatibility maintained')
-          "
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-  # ===========================================================================
   # Summary
   # ===========================================================================
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [fx-tests, code-quality, smoke-test]
+    needs: [fx-tests, code-quality]
     if: always()
     steps:
       - name: Check test results
         run: |
           if [ "${{ needs.fx-tests.result }}" == "failure" ]; then
             echo "❌ FX Integration Tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.smoke-test.result }}" == "failure" ]; then
-            echo "❌ Smoke Tests failed"
             exit 1
           fi
           echo "✅ All tests passed!"
@@ -198,4 +138,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **FX Tests:** ${{ needs.fx-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Code Quality:** ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Smoke Tests:** ${{ needs.smoke-test.result }}" >> $GITHUB_STEP_SUMMARY

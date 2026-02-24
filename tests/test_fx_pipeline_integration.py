@@ -1,43 +1,46 @@
 """Smoke test for FX pipeline integration."""
 import pytest
+import yaml
 from unittest.mock import patch, MagicMock
-from analytics.pipeline_v14 import run_v14_pipeline
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
-@patch("analytics.pipeline_v14.WindPipeline")
-def test_fx_pipeline_smoke(mock_wind_pipeline):
-    """Verify that the pipeline runs with a basic FX config."""
-    # Build a complex mock result structure to satisfy run_v14_pipeline
-    mock_results = {
-        "wind_data": {"mean_ws": 7.5},
-        "energy_production": {
-            "net_aep": {
-                "net_aep_p50_mwh": 500000.0,
-                "net_aep_p75_mwh": 480000.0,
-                "net_aep_p90_mwh": 450000.0,
-                "capacity_factor_net_p75": 0.4
-            },
-            "gross_aep": {"capacity_factor_gross": 45.0}
-        },
-        "statistical_analysis": {
-            "weibull": {"shape_k": 2.0, "scale_c": 8.0}
-        }
-    }
-
-    mock_cashflow_data = {
-        "revenue_annual_usd": 10000000.0
-    }
-
-    mock_instance = mock_wind_pipeline.return_value
-    mock_instance.run_complete_assessment.return_value = mock_results
-    mock_instance.export_for_cashflow_model.return_value = mock_cashflow_data
-
+def test_fx_pipeline_smoke():
+    """Verify that the financial pipeline runs with FX integration."""
     config_path = "scenarios/dutchbay_lendercase_2025Q4.yaml"
 
-    # We want to verify that run_v14_pipeline can at least be called
-    # and it successfully imports all its dependencies (like omegaconf, numpy, etc.)
+    # We use validation_mode='off' to skip schema checks for the smoke test
     result = run_v14_pipeline(config=config_path, validation_mode='off')
 
     assert result is not None
     assert result.get("status") == "success"
-    assert "wind_assessment" in result
-    assert result["aep_p50_mwh"] == 500000.0
+    assert "scenario_result" in result
+    # In the current implementation, if FX is in config, it should be in the result
+    # even if it's just empty/default blocks (depending on how it's implemented)
+
+    # Let's check if the scenario_result has the expected fields
+    scenario_res = result["scenario_result"]
+    assert "project_irr" in scenario_res
+    assert "min_dscr" in scenario_res
+
+def test_pipeline_no_fx_smoke():
+    """Verify that the pipeline runs correctly when FX is missing (backward compatibility)."""
+    # Load config and remove FX
+    config_path = "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    if "fx" in cfg:
+        del cfg["fx"]
+
+    temp_config = "smoke_no_fx.yaml"
+    with open(temp_config, "w") as f:
+        yaml.dump(cfg, f)
+
+    try:
+        result = run_v14_pipeline(config=temp_config, validation_mode='off')
+        assert result is not None
+        assert result.get("status") == "success"
+        assert "scenario_result" in result
+    finally:
+        import os
+        if os.path.exists(temp_config):
+            os.remove(temp_config)

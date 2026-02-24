@@ -5,13 +5,14 @@ import streamlit as st
 import logging
 
 try:
-    from analytics.contracts_v14 import ParameterRangeConfig, SensitivityRequest
+    from analytics.contracts_v14 import ParameterRangeConfig
     from analytics.sensitivity import (
-        run_tornado_sensitivity,
-        tornado_suite_to_dataframe,
+        run_sensitivity_analysis,
+        suite_to_tables,
     )
+    from analytics.scenario_loader import load_scenario_config
     BACKEND_READY = True
-except (ImportError, SyntaxError) as e:
+except (ImportError, SyntaxError, AttributeError) as e:
     BACKEND_READY = False
     BACKEND_ERROR = str(e)
 
@@ -36,6 +37,7 @@ if not BACKEND_READY:
         1. **Corruption Detected**: `analytics/contracts_v14.py` or `scenario_loader.py` appear corrupted.
         2. **Fix**: Ensure placeholder text like `[... rest of file ...]` is removed and escaped newlines are restored.
         3. **Dependencies**: Verify `pydantic` and `libcst` are installed.
+        4. **API Mismatch**: Check if `analytics.sensitivity` has the expected members (it uses lazy loading).
         """)
     st.stop()
 
@@ -47,15 +49,28 @@ if run_btn:
             ParameterRangeConfig(variable_name="generation.capacity_factor_pct", base_value=45.0, low_pct=10, high_pct=10, label="Yield"),
         ]
         with st.spinner("🔄 Running high-fidelity simulation..."):
-            sens_req = SensitivityRequest(base_config_path=config_path, parameters=params, metric="project_irr")
-            suite = run_tornado_sensitivity(sens_req)
-            df = tornado_suite_to_dataframe(suite)
+            # Load base config
+            base_cfg = load_scenario_config(config_path)
+
+            # Run sensitivity analysis
+            suite = run_sensitivity_analysis(
+                base_config=base_cfg,
+                base_config_path=config_path,
+                parameters=params,
+                metric_keys=["project_irr"]
+            )
+
+            # Convert to dataframe
+            tables = suite_to_tables(suite)
+            df = tables["tornado_rows"]
 
         st.subheader("📈 Driver Impact Analysis")
-        st.dataframe(df, use_container_width=True)
+        # Display the dataframe
+        st.dataframe(df, width=1200)
         st.success("✅ Analysis successfully completed.")
     except Exception as e:
         st.error(f"❌ Calculation Error: {str(e)}")
+        st.exception(e)
 else:
     st.info("👋 **Ready to begin.** Configure your scenario in the sidebar and click 'Run Analysis' to see how variables impact Project IRR.")
     st.image("https://raw.githubusercontent.com/arunakulat/dutchbay-epc-model/main/docs/sensitivity_demo.png", caption="Sample Tornado Analysis")

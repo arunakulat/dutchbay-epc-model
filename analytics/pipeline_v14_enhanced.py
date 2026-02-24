@@ -432,7 +432,7 @@ def _build_debt_covenant_snapshot(
     last_breach_year: Optional[int] = None
 
     for idx, value in enumerate(dscr_series, start=1):
-        if value == float("inf"):
+        if value is None or value == float("inf"):
             continue
         if value < dscr_threshold:
             years_below += 1
@@ -665,11 +665,18 @@ def run_v14_pipeline_enhanced(
 
         metrics.total_runtime_sec = time.time() - start_time
 
+        # Convert ScenarioResult to dict for output
+        # Handle Pydantic V2 model_dump if it's a BaseModel, otherwise fallback to asdict
+        if hasattr(scenario_result, "model_dump"):
+            scenario_dict = scenario_result.model_dump()
+        else:
+            scenario_dict = asdict(scenario_result)
+
         result: dict[str, Any] = {
             "status": "success",
             "config_path": config_path_label,
             "validation_mode": mode,
-            "scenario_result": asdict(scenario_result),
+            "scenario_result": scenario_dict,
             "kpis": kpis,
             "annual_rows": annual_rows,
             "debt_result": debt_result,
