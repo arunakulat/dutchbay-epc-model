@@ -73,9 +73,9 @@ SALib
 multiprocess
 streamlit
 matplotlib
-# EOF
 urllib3==2.6.0
 
 # AST / codemod tooling
 libcst>=1.1.0
+libcst>=1.0.0
 libcst>=1.0.0
