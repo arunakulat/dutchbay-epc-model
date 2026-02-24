@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.tax_sensitivity_v14
 
@@ -14,14 +12,17 @@ This file will be removed in a future version.
 import warnings
 from typing import Any
 
+# Import new API explicitly to satisfy linters
+from analytics.sensitivity.tax import (
+    TaxSensitivityConfig,
+    run_tax_one_way,
+)
+
 warnings.warn(
     "analytics.tax_sensitivity_v14 is deprecated. Use 'from analytics.sensitivity.tax import ...' instead.",
     DeprecationWarning,
     stacklevel=2,
 )
-
-# Import new API
-from analytics.sensitivity.tax import *  # noqa: F401,F403
 
 
 # ═════════════════════════════════════════════════════════════════════════════

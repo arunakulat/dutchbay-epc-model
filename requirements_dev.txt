@@ -44,6 +44,7 @@ pylint==4.0.3
 pyparsing==3.2.5
 pytest==9.0.1
 pytest-cov==7.0.0
+pytest-html>=4.0
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 python-dotenv==1.2.1
@@ -77,5 +78,3 @@ urllib3==2.6.0
 
 # AST / codemod tooling
 libcst>=1.1.0
-libcst>=1.0.0
-libcst>=1.0.0

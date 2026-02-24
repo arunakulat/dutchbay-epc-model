@@ -12,7 +12,15 @@
 # Sprint 9 Migration: CASPER modules consolidated to analytics.casper/
 #
 
-from analytics.casper.kpi_normalizer import *  # noqa: F401, F403
+from analytics.casper.kpi_normalizer import (
+    NormalizedKPIs,
+    PercentileRanking,
+    IndustryBenchmarks,
+    normalize_kpis_by_capacity,
+    calculate_percentile_ranking,
+    benchmark_normalized_kpis,
+    compare_projects,
+)
 
 __all__ = [
     "normalize_kpis_by_capacity",

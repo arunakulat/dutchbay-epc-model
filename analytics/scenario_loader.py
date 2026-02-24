@@ -82,7 +82,7 @@ def _load_raw_config(path: Path) -> Dict[str, Any]:
     """
     Load a raw scenario configuration from YAML or JSON.
 
-    This function is intentionally dumb about schema – it only cares that
+    This function is intentionally dumb about schema â it only cares that
     the top level is a mapping.
     """
     # Use suffix inference helper
@@ -148,7 +148,7 @@ def _resolve_fx(config: Dict[str, Any]) -> Dict[str, float]:
 
     fx_cfg = config["fx"]
 
-    # Reject bare scalar FX – the codebase now expects a structured mapping.
+    # Reject bare scalar FX â the codebase now expects a structured mapping.
     if isinstance(fx_cfg, (int, float)):
         raise ValueError(
             "Scalar 'fx' not supported; use mapping with "
@@ -206,7 +206,7 @@ def load_scenario_config(path: str | Path) -> Dict[str, Any]:
       That logic lives with the financial core / validators.
     - Does NOT require FX unless callers explicitly ask for it via _resolve_fx.
       However, if FX *is* present and is a bare scalar, we reject it to enforce
-      the \"no scalar fx\" policy baked into the tests.
+      the "no scalar fx" policy baked into the tests.
 
     UX Enhancement (Sprint 18, Issue #1):
     - Supports suffix inference: 'scenarios/base' will try .yaml, .yml, .json
@@ -217,7 +217,7 @@ def load_scenario_config(path: str | Path) -> Dict[str, Any]:
     cfg = _load_raw_config(p)
     _ensure_meta_source(cfg, p)
 
-    # Enforce \"no scalar fx\" rule at load time for any config that
+    # Enforce "no scalar fx" rule at load time for any config that
     # chooses to specify FX.
     fx_cfg = cfg.get("fx", None)
     if isinstance(fx_cfg, (int, float)):

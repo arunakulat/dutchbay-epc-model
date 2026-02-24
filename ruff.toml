@@ -21,13 +21,9 @@ extend-exclude = [
 select = ["E", "F"]
 
 # Ignore long lines and the Black/E203 mismatch.
-# E402/F401/F541 ignored to handle pre-existing linting backlog.
 ignore = [
   "E203",
   "E501",
-  "E402",
-  "F401",
-  "F541",
 ]
 
 # Per-file exceptions for intentional patterns

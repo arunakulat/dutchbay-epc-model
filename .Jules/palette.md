@@ -1,3 +1,3 @@
-## 2025-05-15 - [Graceful Failure Pattern for Streamlit]
-**Learning:** Wrapping core imports and initialization in a try-except block with a "Safe Mode" UI significantly improves UX when working with volatile backend dependencies. It prevents a total app crash and provides actionable troubleshooting steps.
-**Action:** Always wrap volatile backend imports in Streamlit apps and use `st.stop()` to prevent cascading errors while still showing branding/sidebar.
+## 2026-02-24 - [Graceful Failure Pattern for Model Initialization]
+**Learning:** In complex financial models where backend dependencies (like Pydantic contracts) are volatile or prone to corruption during refactoring, the Streamlit dashboard should implement a "Safe Mode" pattern. By wrapping core imports in a try-except block, the UI can remain interactive and provide troubleshooting guidance instead of showing a raw traceback.
+**Action:** Always wrap volatile backend imports in a try-except block and provide an st.error/st.expander combination for identified failure modes.

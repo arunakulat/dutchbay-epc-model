@@ -63,10 +63,12 @@ class NormalizedKPIs:
 
     # Covenants (already dimensionless)
     dscr_min: float
-    llcr_min: Optional[float] = None
 
     # Metadata
     capacity_mw: float = field(repr=False)  # Original capacity for reference
+
+    # Fields with defaults must come last
+    llcr_min: Optional[float] = None
     project_name: Optional[str] = None
 
 

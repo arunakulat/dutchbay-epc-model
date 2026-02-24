@@ -12,7 +12,9 @@
 # Sprint 9 Migration: CASPER modules consolidated to analytics.casper/
 #
 
-from analytics.casper.casper_v14 import *  # noqa: F401, F403
+from analytics.casper.casper_v14 import (
+    evaluate_with_casper_tail_risk_and_payload,
+)
 
 __all__ = [
     "evaluate_with_casper_tail_risk_and_payload",

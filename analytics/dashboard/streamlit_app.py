@@ -1,45 +1,61 @@
 """
-dashboard/streamlit_app.py - Interactive explorer with Graceful Failure.
+dashboard/streamlit_app.py - Polished UX Edition
 """
 import streamlit as st
-import traceback
+import logging
+
+try:
+    from analytics.contracts_v14 import ParameterRangeConfig, SensitivityRequest
+    from analytics.sensitivity import (
+        run_tornado_sensitivity,
+        tornado_suite_to_dataframe,
+    )
+    BACKEND_READY = True
+except (ImportError, SyntaxError) as e:
+    BACKEND_READY = False
+    BACKEND_ERROR = str(e)
 
 st.set_page_config(page_title="DutchBay | Sensitivity Explorer", page_icon="📊", layout="wide")
 
-try:
-    from analytics.contracts_v14 import ParameterRangeConfig
-    from analytics.sensitivity import (
-        SensitivityRequest,
-        run_sensitivity_analysis, suite_to_tables,
-    )
-    BACKEND_OK = True
-except (ImportError, SyntaxError, AttributeError, NameError) as e:
-    BACKEND_OK, ERR, TRACE = False, e, traceback.format_exc()
+# Sidebar for controls
+with st.sidebar:
+    st.image("https://raw.githubusercontent.com/arunakulat/dutchbay-epc-model/main/docs/logo.png", width=200) # Fallback logo
+    st.title("DutchBay v14")
+    st.divider()
+    st.header("⚙️ Analysis Settings")
+    config_path = st.text_input("Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml", help="Path to the scenario YAML configuration file.")
+    run_btn = st.button("🚀 Run Analysis", type="primary", disabled=not BACKEND_READY)
 
-st.title("📊 Sensitivity Dashboard")
+st.title("📊 Sensitivity Driver Explorer")
 
-if not BACKEND_OK:
-    st.error("### ⚠️ Model Initialization Failed")
-    st.info("The application is running in **Safe Mode**. This usually happens when backend contracts are corrupted or dependencies are missing.")
-    with st.expander("Show Technical Details"):
-        st.code(TRACE)
+if not BACKEND_READY:
+    st.error("🚨 **Backend Initialization Failed**")
+    st.warning(f"The model cannot run because of a technical error: `{BACKEND_ERROR}`")
+    with st.expander("🛠️ Troubleshooting Guidance"):
+        st.markdown("""
+        1. **Corruption Detected**: `analytics/contracts_v14.py` or `scenario_loader.py` appear corrupted.
+        2. **Fix**: Ensure placeholder text like `[... rest of file ...]` is removed and escaped newlines are restored.
+        3. **Dependencies**: Verify `pydantic` and `libcst` are installed.
+        """)
     st.stop()
 
-with st.sidebar:
-    st.header("Settings")
-    conf_path = st.text_input("Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml", help="Path to scenario YAML")
-    run_btn = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
-
 if run_btn:
-    with st.spinner("Analyzing..."):
+    try:
+        # Default parameters for demo
         params = [
-            ParameterRangeConfig(variable_name="project.capex_usd_per_kw", base_value=900.0, low_pct=20, high_pct=20, steps=5),
-            ParameterRangeConfig(variable_name="generation.capacity_factor_pct", base_value=45.0, low_pct=10, high_pct=10, steps=5),
+            ParameterRangeConfig(variable_name="project.capex_usd_per_kw", base_value=900.0, low_pct=20, high_pct=20, label="CAPEX"),
+            ParameterRangeConfig(variable_name="generation.capacity_factor_pct", base_value=45.0, low_pct=10, high_pct=10, label="Yield"),
         ]
-        sens_req = SensitivityRequest(config_path=conf_path, parameters=params)
-        suite = run_sensitivity_analysis(sens_req)
-        tables = suite_to_tables(suite)
-        st.dataframe(tables["summary"], use_container_width=True)
-        st.success("Analysis Complete!")
+        with st.spinner("🔄 Running high-fidelity simulation..."):
+            sens_req = SensitivityRequest(base_config_path=config_path, parameters=params, metric="project_irr")
+            suite = run_tornado_sensitivity(sens_req)
+            df = tornado_suite_to_dataframe(suite)
+
+        st.subheader("📈 Driver Impact Analysis")
+        st.dataframe(df, use_container_width=True)
+        st.success("✅ Analysis successfully completed.")
+    except Exception as e:
+        st.error(f"❌ Calculation Error: {str(e)}")
 else:
-    st.info("👈 Adjust parameters in the sidebar and click **Run Analysis** to begin.")
+    st.info("👋 **Ready to begin.** Configure your scenario in the sidebar and click 'Run Analysis' to see how variables impact Project IRR.")
+    st.image("https://raw.githubusercontent.com/arunakulat/dutchbay-epc-model/main/docs/sensitivity_demo.png", caption="Sample Tornado Analysis")
