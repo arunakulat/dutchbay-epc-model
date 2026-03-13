@@ -24,11 +24,11 @@ select = ["E", "F"]
 ignore = [
   "E203",
   "E501",
-  "E402",
-  "F401",
-  "F403",
-  "F405",
-  "F841",
+  "E402", # Module level import not at top of file
+  "F401", # Unused import
+  "F403", # Star imports
+  "F405", # Name from star import
+  "F841", # Unused local variable
 ]
 
 # Per-file exceptions for intentional patterns

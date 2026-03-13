@@ -206,7 +206,7 @@ def load_scenario_config(path: str | Path) -> Dict[str, Any]:
       That logic lives with the financial core / validators.
     - Does NOT require FX unless callers explicitly ask for it via _resolve_fx.
       However, if FX *is* present and is a bare scalar, we reject it to enforce
-      the \"no scalar fx\" policy baked into the tests.
+      the "no scalar fx" policy baked into the tests.
 
     UX Enhancement (Sprint 18, Issue #1):
     - Supports suffix inference: 'scenarios/base' will try .yaml, .yml, .json
@@ -217,7 +217,7 @@ def load_scenario_config(path: str | Path) -> Dict[str, Any]:
     cfg = _load_raw_config(p)
     _ensure_meta_source(cfg, p)
 
-    # Enforce \"no scalar fx\" rule at load time for any config that
+    # Enforce "no scalar fx" rule at load time for any config that
     # chooses to specify FX.
     fx_cfg = cfg.get("fx", None)
     if isinstance(fx_cfg, (int, float)):
