@@ -2,84 +2,54 @@
 dashboard/streamlit_app.py
 
 Interactive explorer for sensitivity results using Streamlit.
+Plug in any analytics/sensitivity output (tornado/spider) for fast DFI/lead demo!
+
+Run with:
+    streamlit run dashboard/streamlit_app.py
 """
 
 import streamlit as st
-import pandas as pd
 
-# Set page config for professional look
-st.set_page_config(
-    page_title="DutchBay | Sensitivity Explorer",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(page_title="DutchBay | Sensitivity Explorer", page_icon="📊", layout="wide")
 
+BACKEND_OK = False
 try:
-    from analytics.contracts_v14 import ParameterRangeConfig, SensitivityRequest
-    from analytics.sensitivity import (
-        run_sensitivity_analysis,
-        suite_to_tables,
-    )
+    from analytics.contracts_v14 import ParameterRangeConfig
+    from analytics.sensitivity import run_sensitivity_analysis, suite_to_tables
+    from analytics.scenario_loader import load_scenario_config
     BACKEND_OK = True
 except ImportError as e:
-    st.error(f"Backend Initialization Failed: {e}")
-    BACKEND_OK = False
+    st.error(f"Model Initialization Failed: {e}")
 
-st.title("📊 Sensitivity Explorer")
+st.title("📊 DutchBay Sensitivity Explorer")
 
 with st.sidebar:
     st.header("Scenario Settings")
     config_path = st.text_input(
-        "Scenario Config Path",
+        "Scenario Config Path 📁",
         "scenarios/dutchbay_lendercase_2025Q4.yaml",
-        help="Path to the YAML scenario configuration file."
+        help="Path to the Hydra YAML scenario configuration."
     )
+if not BACKEND_OK:
+    st.warning("⚠️ Safe Mode: Dashboard is running without backend integration.")
+    st.info("Check `analytics/contracts_v14.py` for syntax errors or missing dependencies.")
+    st.stop()
 
-    st.header("Sensitivity Drivers")
-    # In a real app, these might be dynamic. For now, we show the intention.
-    st.info("Drivers are currently configured in the model suite.")
+params = [
+    ParameterRangeConfig(variable_name="project.capex_usd_per_kw", base_value=900.0, low_pct=-20, high_pct=20),
+    ParameterRangeConfig(variable_name="generation.capacity_factor_pct", base_value=45.0, low_pct=-10, high_pct=10),
+]
 
-if BACKEND_OK:
-    if st.button("Run Sensitivity Analysis", type="primary"):
-        with st.spinner("Executing sensitivity orchestration..."):
-            try:
-                # Simplified demonstration of the v14 sensitivity API
-                params = [
-                    ParameterRangeConfig(
-                        variable_name="project.capex_usd_per_kw",
-                        base_value=900.0,
-                        low_pct=-10,
-                        high_pct=10,
-                        steps=3,
-                        label="CAPEX \u00b110%"
-                    )
-                ]
-                req = SensitivityRequest(config_path=config_path, params=params)
-
-                # Mocking/Calling the modern v14 engine
-                # results = run_sensitivity_analysis(req)
-                # tables = suite_to_tables(results)
-
-                st.success("Analysis complete!")
-                st.info("Displaying results for: project.capex_usd_per_kw")
-
-                # Placeholder for visual feedback
-                mock_data = {
-                    "Shock": ["-10%", "Base", "+10%"],
-                    "Project IRR": ["14.2%", "13.5%", "12.8%"],
-                    "Equity IRR": ["18.5%", "17.2%", "15.9%"]
-                }
-                st.table(pd.DataFrame(mock_data))
-
-            except Exception as e:
-                st.error(f"Analysis Error: {e}")
-    else:
-        st.write("Click 'Run Sensitivity Analysis' to begin.")
+if st.button("🚀 Run Analysis", type="primary"):
+    with st.spinner("Orchestrating sensitivity trials..."):
+        try:
+            base_cfg = load_scenario_config(config_path)
+            suite = run_sensitivity_analysis(base_config=base_cfg, parameters=params, metric_keys=["project_irr"])
+            tables = suite_to_tables(suite)
+            st.subheader("Tornado Impact Table")
+            st.table(tables[0])
+            st.success("Analysis complete.")
+        except Exception as e:
+            st.error(f"Analysis Failed: {e}")
 else:
-    st.warning("⚠️ Dashboard is in 'Safe Mode' due to backend configuration issues.")
-    st.markdown("""
-    Please check:
-    1. `analytics/contracts_v14.py` for syntax errors.
-    2. `analytics/scenario_loader.py` for corruption.
-    3. Environment dependencies.
-    """)
+    st.info("Adjust parameters in the sidebar and click 'Run Analysis' to see results.")
