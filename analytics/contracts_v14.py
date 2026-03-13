@@ -174,11 +174,178 @@ def check_covenant_breach_with_tolerance(
 
 # [REST OF FILE UNCHANGED - keeping all existing contracts]
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Sensitivity Analysis Contracts (Pydantic V2)
-# ═════════════════════════════════════════════════════════════════════════════
+class ShockSpec(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    variable_name: str
+    low_value: float
+    high_value: float
+    label: Optional[str] = None
 
-[... rest of file content unchanged ...]
+class StandardShockLibrary:
+    @staticmethod
+    def capex_overrun(base_capex: float) -> ShockSpec:
+        return ShockSpec(
+            variable_name='capex_total',
+            low_value=base_capex * 0.90,
+            high_value=base_capex * 1.10,
+            label='CAPEX u00b110%',
+        )
+
+
+class WaccComponents(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    mode: str
+    wacc_nominal: float
+    wacc_real: Optional[float] = None
+    wacc_prudential: float
+    risk_free_rate: float
+    market_risk_premium: float
+    asset_beta: float
+    target_debt_to_equity: float
+    target_debt_to_value: float
+    target_equity_to_value: float
+    cost_of_debt_pretax: float
+    cost_of_debt_aftertax: float
+    equity_beta_levered: float
+    cost_of_equity: float
+    tax_rate: float
+    inflation_rate: Optional[float] = None
+    prudential_spread_bps: int
+
+class WaccResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    base: WaccComponents
+    prudential_rate: float
+    prudential_npv: float
+
+class ScenarioResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    scenario_name: str
+    project_irr: float = 0.0
+    min_dscr: float = 0.0
+    wacc: Optional[WaccResult] = None
+    fx_block: Optional[FXStructuredBlock] = None
+
+class ParameterRangeConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    variable_name: str
+    base_value: float
+    low_pct: float
+    high_pct: float
+    steps: int = 5
+    label: Optional[str] = None
+
+class ShockResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    low_case: float
+    high_case: float
+    impact: float
+
+class TornadoResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    metric_name: str
+    base_metric: float
+    shock_results: List[ShockResult]
+    label: Optional[str] = None
+    impact_abs: float = 0.0
+
+class MultiMetricTornadoResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    metric_results: Dict[str, TornadoResult]
+
+class SensitivitySuite(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    metric: str
+    base_config_path: str
+    tornado_results: List[TornadoResult]
+    base_kpis: Optional[Dict[str, float]] = None
+
+class MultiMetricSensitivitySuite(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    base_config_path: str
+    metrics: List[str]
+    results: List[MultiMetricTornadoResult]
+
+class SensitivityRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    base_config_path: str
+    parameters: List[ParameterRangeConfig]
+    metric: str = "project_irr"
+
+class BreakevenResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    variable: str
+    target_metric: str
+    target_value: float
+    breakeven_value: float
+    status: str
+    bracket: Tuple[float, float]
+
+class Distribution(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    dist_type: str
+    parameters: Dict[str, Any]
+
+class DerivedParameter(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    name: str
+    formula: str
+
+class MonteCarloScenario(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    scenario_name: str
+    n_iterations: int
+    sampling_method: str = "lhs"
+    seed: Optional[int] = None
+    distributions: Dict[str, Distribution]
+
+class MonteCarloResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    scenario_name: str
+    n_iterations: int
+    mean: float
+    std: float
+    p10: float
+    p50: float
+    p90: float
+    min_value: float
+    max_value: float
+    metric_name: str
+    sampling_method: str
+    var_95: float = 0.0
+
+class TrancheDebtProfile(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    name: str
+    principal: float
+    repayment: List[float]
+
+class DebtCovenantSnapshot(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    dscr_min: float
+    llcr: float
+
+class CashflowResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    annual_cashflows: List[float]
+
+class EquityPerformance(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    equity_irr: float
+    downside_return_pct: float = 0.0
+
+class DownsideMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    var_95: float
+
+class CasperResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    scenario: str
+    baseline_kpis: Dict[str, float]
+    sensitivities: Dict[str, Any] = {}
+    monte_carlo: Dict[str, Any] = {}
+    def contract_version(self) -> str:
+        return "v1.0"
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",

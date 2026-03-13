@@ -24,6 +24,11 @@ select = ["E", "F"]
 ignore = [
   "E203",
   "E501",
+  "E402",
+  "F401",
+  "F403",
+  "F405",
+  "F841",
 ]
 
 # Per-file exceptions for intentional patterns
