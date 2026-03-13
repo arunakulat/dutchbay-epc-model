@@ -10,20 +10,31 @@ Run with:
 
 import streamlit as st
 
-from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+try:
+    from analytics.contracts_v14 import ParameterRangeConfig
+    from analytics.sensitivity import (
+        SensitivityRequest,
+        plot_spider_chart,
+        run_multi_metric_tornado,
+        run_tornado_sensitivity,
+        tornado_suite_to_dataframe,
+    )
+    BACKEND_OK = True
+except Exception:
+    BACKEND_OK = False
 
 # Quick UI for scenario and drivers (customize as needed)
-st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
+st.title("📊 Sensitivity Dashboard")
+
+if not BACKEND_OK:
+    st.error("### ⚠️ Model Initialization Failed")
+    st.warning("The dashboard backend could not be initialized. Please verify `analytics/contracts_v14.py`.")
+    st.stop()
 
 config_path = st.text_input(
-    "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    "Scenario Config Path",
+    "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    help="Path to the v14 YAML scenario configuration file."
 )
 params = [
     ParameterRangeConfig(
@@ -43,9 +54,9 @@ params = [
     # Add or make this dynamic as needed
 ]
 
-st.write("Running tornado analysis...")
-sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
+with st.spinner("Orchestrating sensitivity suite..."):
+    sens_req = SensitivityRequest(config_path, params)
+    suite = run_tornado_sensitivity(sens_req)
 df = tornado_suite_to_dataframe(suite)
 st.dataframe(df)
 
