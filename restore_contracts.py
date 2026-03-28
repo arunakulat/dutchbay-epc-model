@@ -1,10 +1,12 @@
-from __future__ import annotations
+import os
+
+content = """from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from analytics.fx.fx_contracts import (
     FXStructuredBlock,
@@ -31,93 +33,85 @@ def check_covenant_breach_with_tolerance(
         return actual > (threshold + tolerance_abs)
 
 class ShockSpec(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    parameter: str = ""
-    shocks: List[float] = Field(default_factory=list)
+    parameter: str
+    shocks: List[float]
     @computed_field
     @property
     def variable_name(self) -> str:
-        return getattr(self, "parameter", "")
+        return self.parameter
 
 class StandardShockLibrary:
     pass
 
-class ShockResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    low_case: float = 0.0
-    high_case: float = 0.0
-    impact: float = 0.0
-    low_metric: float = 0.0
-    high_metric: float = 0.0
-
 class TornadoResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    metric_name: str = ""
-    base_metric: float = 0.0
-    shock_results: List[ShockResult] = Field(default_factory=list)
+    metric_name: str
+    base_metric: float
+    shock_results: List[ShockResult]
     label: Optional[str] = None
-    impact_abs: float = 0.0
+    impact_abs: Optional[float] = None
+    @model_validator(mode="after")
+    def compute_impact(self) -> "TornadoResult":
+        if self.impact_abs is None and self.shock_results:
+            self.impact_abs = abs(self.shock_results[0].high_metric - self.shock_results[0].low_metric)
+        return self
 
 class MultiMetricTornadoResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    variable: str = ""
-    label: str = ""
-    base_values: Dict[str, float] = Field(default_factory=dict)
-    low_values: Dict[str, float] = Field(default_factory=dict)
-    high_values: Dict[str, float] = Field(default_factory=dict)
+    variable: str
+    label: str
+    base_values: Dict[str, float]
+    low_values: Dict[str, float]
+    high_values: Dict[str, float]
 
 class ParameterRangeConfig(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    variable_name: str = ""
-    base_value: float = 0.0
-    low_pct: float = 0.0
-    high_pct: float = 0.0
+    variable_name: str
+    base_value: float
+    low_pct: float
+    high_pct: float
     label: Optional[str] = None
 
 class SensitivitySuite(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    metric: str = ""
-    base_config_path: str = ""
-    tornado_results: List[TornadoResult] = Field(default_factory=list)
+    metric: str
+    base_config_path: str
+    tornado_results: List[TornadoResult]
     base_kpis: Optional[Dict[str, float]] = None
 
 class MultiMetricSensitivitySuite(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    tornado_results: List[MultiMetricTornadoResult] = Field(default_factory=list)
-    base_metrics: Dict[str, float] = Field(default_factory=dict)
-    base_config_path: str = ""
-    metrics: List[str] = Field(default_factory=list)
+    tornado_results: List[MultiMetricTornadoResult]
+    base_metrics: Dict[str, float]
+    base_config_path: str
+    metrics: List[str]
 
 class SensitivityRequest(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    base_config_path: str = ""
-    parameters: List[ParameterRangeConfig] = Field(default_factory=list)
+    base_config_path: str
+    parameters: List[ParameterRangeConfig]
     metric: str = "project_irr"
 
 class BreakevenResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    variable: str = ""
-    breakeven_value: float = 0.0
-    bracket: Tuple[float, float] = (0.0, 0.0)
+    variable: str
+    breakeven_value: float
+    bracket: Tuple[float, float]
     status: str = "success"
 
+class ShockResult(BaseModel):
+    low_case: float
+    high_case: float
+    impact: float
+    low_metric: float = 0.0
+    high_metric: float = 0.0
+
 class Distribution(BaseModel):
-    model_config = ConfigDict(extra='allow')
     dist_type: str = "normal"
     mean: float = 0.0
     std: float = 0.0
 
 class DerivedParameter(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    name: str = ""
+    name: str
 
 class MonteCarloScenario(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    name: str = ""
+    name: str
 
 class MonteCarloResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
-    metric_name: str = ""
+    metric_name: str
     mean: float = 0.0
     std: float = 0.0
     p05: float = 0.0
@@ -183,3 +177,8 @@ __all__ = [
     "EquityPerformance",
     "DownsideMetrics",
 ]
+\"\"\"
+from pydantic import model_validator
+\"\"\" + content
+with open("analytics/contracts_v14.py", "w") as f:
+    f.write(content)
