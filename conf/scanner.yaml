@@ -1,0 +1,19 @@
+# Dolphin D01 Repository Scanner Configuration
+# Sprint 18 - Phase 0
+# Complies with GWTF ARCH-01 (config-first architecture)
+
+# Repository root directory to scan
+# Default: current working directory
+repo_root: "."
+
+# Output directory for generated reports
+# Default: reports/ subdirectory
+output_dir: "reports"
+
+# Hydra configuration
+hydra:
+  run:
+    dir: "."
+  job:
+    name: dolphin_d01_scanner
+    chdir: false
