@@ -118,6 +118,13 @@ class DebtCovenantSnapshot(ContractMixin):
     balloon_flag: bool
     audit_status: str
     notes: str = ""
+    llcr: float | None = None
+    plcr: float | None = None
+    llcr_threshold: float | None = None
+    plcr_threshold: float | None = None
+    fx_min: float | None = None
+    fx_max: float | None = None
+    fx_avg: float | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +147,12 @@ class ScenarioResult(ContractMixin):
     debt_profile: TrancheDebtProfile | None = None
     debt_covenants: DebtCovenantSnapshot | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    wacc_is_real: bool | None = None
+    fx_block: FXStructuredBlock | None = None
+    fx_curve: FXCurveOutput | None = None
+    fx_risk_profile: FXRiskProfile | None = None
+    cashflow: CashflowResult | None = None
+    equity_performance: EquityPerformance | None = None
 
 
 @dataclass(frozen=True)
