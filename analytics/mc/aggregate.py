@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 """
@@ -156,7 +157,7 @@ def aggregate_trials(
     result = MonteCarloResult(
         summary=summary,
         metadata=metadata,
-        trials=trials,  # ✅ RAW TRIAL ARRAYS for lender analytics
+        trials=trials,  # RAW TRIAL ARRAYS for lender analytics
         percentiles=percentile_lookup,
     )
     
