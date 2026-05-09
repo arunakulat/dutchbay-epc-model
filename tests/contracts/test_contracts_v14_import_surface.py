@@ -5,7 +5,9 @@ from dataclasses import asdict
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
     CasperResult,
+    CashflowResult,
     DebtCovenantSnapshot,
+    EquityPerformance,
     MonteCarloResult,
     ParameterRangeConfig,
     ScenarioResult,
@@ -56,6 +58,57 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert payload["wacc"]["prudential_rate"] == 0.11
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
+
+
+def test_contracts_v14_dolphin_enrichment_fields_are_optional_and_serializable() -> None:
+    covenants = DebtCovenantSnapshot(
+        dscr_min=1.35,
+        dscr_threshold=1.30,
+        years_below_threshold=0,
+        first_breach_year=None,
+        last_breach_year=None,
+        balloon_remaining=0.0,
+        balloon_flag=False,
+        audit_status="PASS",
+        llcr=1.55,
+        plcr=1.70,
+        llcr_threshold=1.40,
+        plcr_threshold=1.45,
+        fx_min=310.0,
+        fx_max=365.0,
+        fx_avg=337.5,
+    )
+    cashflow = CashflowResult(
+        annual_rows=[{"year": 1, "cfads": 100.0}],
+        metadata={"source": "test"},
+    )
+    equity = EquityPerformance(
+        equity_irr=0.16,
+        equity_npv=25.0,
+        equity_multiple=1.8,
+    )
+    result = ScenarioResult(
+        scenario_name="enriched",
+        config_path="inline",
+        project_npv=1.0,
+        project_irr=0.12,
+        dscr_series=[1.4],
+        min_dscr=1.4,
+        max_debt_usd=100.0,
+        debt_covenants=covenants,
+        wacc_is_real=True,
+        cashflow=cashflow,
+        equity_performance=equity,
+    )
+
+    payload = asdict(result)
+    assert payload["wacc_is_real"] is True
+    assert payload["cashflow"]["annual_rows"][0]["cfads"] == 100.0
+    assert payload["equity_performance"]["equity_multiple"] == 1.8
+    assert payload["debt_covenants"]["llcr"] == 1.55
+    assert payload["debt_covenants"]["plcr_threshold"] == 1.45
+    assert payload["debt_covenants"]["fx_avg"] == 337.5
+    assert result.model_dump()["debt_covenants"]["fx_max"] == 365.0
 
 
 def test_contracts_v14_sensitivity_and_mc_surface_is_importable() -> None:
