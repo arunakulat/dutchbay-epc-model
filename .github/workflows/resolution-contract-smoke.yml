@@ -1,0 +1,44 @@
+name: Resolution Contract Smoke
+
+on:
+  push:
+    branches:
+      - resolution/dolphin-onto-dependabot-contracts-v14
+  workflow_dispatch:
+
+jobs:
+  contract-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv-ci
+          . .venv-ci/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install dependencies
+        run: |
+          . .venv-ci/bin/activate
+          python -m pip install -r requirements.txt
+
+      - name: Run focused pytest smoke
+        run: |
+          . .venv-ci/bin/activate
+          python -m pytest \
+            tests/contracts/test_contracts_v14_import_surface.py \
+            tests/api/test_evaluation_v14_lender_stack.py \
+            tests/lint/test_import_smoke.py \
+            -q \
+            --tb=short \
+            --override-ini=addopts=
