@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """DutchBay v14 analytics contracts.
 
 This module is the backward-compatible source of truth for v14 analytics
@@ -9,6 +7,8 @@ repair because the canonical pipeline serializes ScenarioResult with
 ``analytics.contracts`` package as Pydantic models once the pipeline serializer
 supports both dataclasses and Pydantic objects.
 """
+
+from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Any
