@@ -53,6 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e .[dev]
           pip install pytest pytest-cov pytest-xdist pytest-timeout
 
@@ -96,6 +97,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install black isort mypy flake8 pylint
           pip install -e .[dev]
 
@@ -134,6 +136,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e .[dev]
           pip install pytest
 
