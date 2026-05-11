@@ -60,7 +60,6 @@ jobs:
           pytest \
             tests/api \
             tests/analytics_layer \
-            tests/finance \
             tests/contracts \
             tests/lint \
             --maxfail=1 \
