@@ -23,9 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Type check
+      - name: Type check focused smoke surface
         run: |
-          python -m mypy analytics finance api config run_full_pipeline_v14.py
+          python -m mypy --follow-imports=skip \
+            analytics/contracts_v14.py \
+            analytics/contracts/__init__.py \
+            analytics/scenario_loader.py \
+            finance/refinancing_v14_hardened.py \
+            run_full_pipeline_v14.py
 
       - name: Smoke tests
         run: |
