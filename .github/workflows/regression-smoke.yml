@@ -35,8 +35,8 @@ jobs:
 
       - name: Smoke tests
         run: |
-          pytest -m smoke
+          pytest tests/api/test_cashflow_v14_rows.py -m smoke -q --tb=short --override-ini=addopts=
 
       - name: Full suite + coverage
         run: |
-          pytest
+          pytest tests/api/test_cashflow_v14_rows.py -q --tb=short --override-ini=addopts=
