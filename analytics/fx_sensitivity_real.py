@@ -101,7 +101,8 @@ class RealFXSensitivityResult:
             xs = [p.fx_rate for p in self.fx_rate_points]
             ys = [p.project_irr for p in self.fx_rate_points if p.project_irr is not None]
             if len(xs) == len(ys) and len(ys) >= 2:
-                self.fx_rate_irr_sensitivity = float(np.polyfit(xs, ys, 1)[0])
+                coef, _variance = _linear_fit("fx_rate", xs, [float(y) for y in ys])
+                self.fx_rate_irr_sensitivity = coef.coefficient
 
 
 def evaluate_with_overrides(base_config_path: str, overrides: dict[str, Any]) -> dict[str, Any]:
@@ -130,22 +131,32 @@ def _metric_from_result(result: dict[str, Any], metric: str) -> float:
 
 
 def _linear_fit(parameter: str, xs: Sequence[float], ys: Sequence[float]) -> tuple[SensitivityCoefficient, float]:
-    x = np.asarray(xs, dtype=float)
-    y = np.asarray(ys, dtype=float)
+    x = np.asarray([float(value) for value in xs], dtype=float)
+    y = np.asarray([float(value) for value in ys], dtype=float)
     if len(x) != len(y) or len(x) == 0:
         raise ValueError("x and y must have equal non-zero length")
-    if len(x) == 1 or float(np.var(x)) == 0.0:
+
+    x_mean = float(np.mean(x))
+    y_mean = float(np.mean(y))
+    x_delta = x - x_mean
+    y_delta = y - y_mean
+    denominator = float(np.sum(x_delta * x_delta))
+
+    if len(x) == 1 or denominator == 0.0:
         slope = 0.0
-        fitted = np.full_like(y, float(np.mean(y)))
+        intercept = y_mean
     else:
-        slope, intercept = np.polyfit(x, y, 1)
-        fitted = slope * x + intercept
+        slope = float(np.sum(x_delta * y_delta) / denominator)
+        intercept = y_mean - slope * x_mean
+
+    fitted = slope * x + intercept
     residuals = y - fitted
-    ss_res = float(np.sum(residuals**2))
-    ss_tot = float(np.sum((y - float(np.mean(y))) ** 2))
-    r2 = 1.0 if ss_tot == 0.0 else max(0.0, 1.0 - ss_res / ss_tot)
+    ss_res = float(np.sum(residuals * residuals))
+    ss_tot = float(np.sum(y_delta * y_delta))
+    r2 = 1.0 if ss_tot == 0.0 else max(0.0, min(1.0, 1.0 - ss_res / ss_tot))
     stderr = float(np.std(residuals, ddof=1)) if len(residuals) > 1 else 0.0
-    return SensitivityCoefficient(parameter, float(slope), stderr, r2), float(np.var(y))
+    variance = float(np.var(y))
+    return SensitivityCoefficient(parameter, slope, stderr, r2), variance
 
 
 class FXSensitivityAnalyzer:
