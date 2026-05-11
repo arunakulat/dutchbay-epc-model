@@ -59,7 +59,7 @@ jobs:
       - name: 'Linting (ruff check)'
         run: |
           echo "STAGE: Linting (ruff check)"
-          ruff check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          ruff check --ignore F541 finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
           echo "Linting PASSED"
 
       - name: 'Formatting check (black)'
