@@ -137,7 +137,7 @@ jobs:
       - name: 'Verify coverage threshold'
         run: |
           echo "STAGE: Coverage Verification (Refinancing threshold: ${{ env.COVERAGE_THRESHOLD }}%)"
-          coverage report finance/refinancing_v14_hardened.py --fail-under=${{ env.COVERAGE_THRESHOLD }}
+          coverage report --fail-under=${{ env.COVERAGE_THRESHOLD }} finance/refinancing_v14_hardened.py
           echo "Coverage threshold PASSED"
 
       - name: 'Upload test results'
