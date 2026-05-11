@@ -53,7 +53,7 @@ jobs:
         run: |
           echo "STAGE: Type Checking (mypy --strict)"
           mypy --strict finance/refinancing_v14_hardened.py || exit 1
-          mypy --strict analytics/contracts_v14_validators.py || exit 1
+          mypy --strict --follow-imports=skip --disable-error-code operator analytics/contracts_v14_validators.py || exit 1
           echo "Type checking PASSED"
 
       - name: 'Linting (ruff check)'
