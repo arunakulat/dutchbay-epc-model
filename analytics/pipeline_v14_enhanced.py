@@ -432,9 +432,20 @@ def _build_debt_covenant_snapshot(
     last_breach_year: Optional[int] = None
 
     for idx, value in enumerate(dscr_series, start=1):
-        if value == float("inf"):
+        if value is None:
             continue
-        if value < dscr_threshold:
+        try:
+            dscr_value = float(value)
+        except (TypeError, ValueError):
+            logger.debug(
+                "Skipping non-numeric DSCR covenant value at position %d: %r",
+                idx,
+                value,
+            )
+            continue
+        if dscr_value == float("inf"):
+            continue
+        if dscr_value < dscr_threshold:
             years_below += 1
             if first_breach_year is None:
                 first_breach_year = idx
