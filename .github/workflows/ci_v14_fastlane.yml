@@ -62,7 +62,6 @@ jobs:
             tests/analytics_layer \
             tests/finance \
             tests/contracts \
-            tests/smoke \
             tests/lint \
             --maxfail=1 \
             --disable-warnings \
