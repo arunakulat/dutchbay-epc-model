@@ -127,8 +127,8 @@ jobs:
         run: |
           echo "STAGE: Coverage Analysis"
           pytest tests/test_refinancing_v14_hardened.py tests/test_contracts_v14_validators.py \
-            --cov=finance/refinancing_v14_hardened \
-            --cov=analytics/contracts_v14_validators \
+            --cov=finance.refinancing_v14_hardened \
+            --cov=analytics.contracts_v14_validators \
             --cov-report=html \
             --cov-report=xml \
             --cov-report=term-missing
