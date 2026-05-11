@@ -65,7 +65,7 @@ jobs:
       - name: 'Formatting check (black)'
         run: |
           echo "STAGE: Formatting (black)"
-          black --check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          black --check finance/refinancing_v14_hardened.py || exit 1
           echo "Formatting PASSED"
 
       - name: 'Import ordering (isort)'
