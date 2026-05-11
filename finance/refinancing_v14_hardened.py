@@ -22,21 +22,19 @@ PRINCIPAL_REPAY_MAX_PCT = 100.0
 
 
 class RefinancingValidationError(ValueError):
-    """Raised when refinancing config or inputs fail validation."""
+    pass
 
 
 class RefinancingConfigError(ValueError):
-    """Raised when refinancing configuration is invalid."""
+    pass
 
 
 class RefinancingCalculationError(RuntimeError):
-    """Raised when refinancing calculations fail."""
+    pass
 
 
 @dataclass
 class RefinancingConfig:
-    """Refinancing event configuration."""
-
     enabled: bool = False
     triggers: List[Dict[str, Any]] = field(default_factory=list)
     new_coupon_pct: Optional[float] = None
@@ -48,8 +46,6 @@ class RefinancingConfig:
 
 @dataclass
 class RefinancingOutput:
-    """Refinancing event output contract with audit metadata."""
-
     scenario_name: str
     refinancing_occurred: bool
     event_year: Optional[int] = None
@@ -78,7 +74,6 @@ class RefinancingOutput:
 
 
 def validate_dscr_value(dscr: float, field_name: str = "dscr") -> None:
-    """Validate DSCR is within acceptable range."""
     if not isinstance(dscr, (int, float)):
         raise RefinancingValidationError(
             f"{field_name} must be numeric, got {type(dscr).__name__}"
@@ -91,7 +86,6 @@ def validate_dscr_value(dscr: float, field_name: str = "dscr") -> None:
 
 
 def validate_coupon_pct(coupon: float, field_name: str = "coupon_pct") -> None:
-    """Validate coupon percentage."""
     if not isinstance(coupon, (int, float)):
         raise RefinancingValidationError(
             f"{field_name} must be numeric, got {type(coupon).__name__}"
@@ -104,7 +98,6 @@ def validate_coupon_pct(coupon: float, field_name: str = "coupon_pct") -> None:
 
 
 def validate_tenor_years(tenor: int, field_name: str = "tenor_years") -> None:
-    """Validate tenor in years."""
     if not isinstance(tenor, (int, float)):
         raise RefinancingValidationError(
             f"{field_name} must be numeric, got {type(tenor).__name__}"
@@ -118,7 +111,6 @@ def validate_tenor_years(tenor: int, field_name: str = "tenor_years") -> None:
 
 
 def validate_cost_pct(cost: float, field_name: str = "cost_pct") -> None:
-    """Validate cost percentage."""
     if not isinstance(cost, (int, float)):
         raise RefinancingValidationError(
             f"{field_name} must be numeric, got {type(cost).__name__}"
@@ -131,8 +123,6 @@ def validate_cost_pct(cost: float, field_name: str = "cost_pct") -> None:
 
 
 class RefinancingCalculatorHardened:
-    """Production-grade refinancing calculator with validation."""
-
     def __init__(
         self,
         config: RefinancingConfig,
@@ -146,32 +136,31 @@ class RefinancingCalculatorHardened:
         self._validate_config()
 
     def _extract_pipeline_metrics(self) -> None:
-        """Extract and cache key metrics from pipeline results."""
         self.current_principal = float(
             self.debt_result.get("total_debt_remaining")
             or self.debt_result.get("total_debt", 0.0)
         )
         self.dscr_series = list(self.debt_result.get("dscr_series") or [])
-        self.min_dscr = float(self.debt_result.get("min_dscr", 0.0))
+        if self.debt_result.get("min_dscr") is not None:
+            self.min_dscr = float(self.debt_result["min_dscr"])
+        elif self.dscr_series:
+            self.min_dscr = float(min(self.dscr_series))
+        else:
+            self.min_dscr = 0.0
         self.current_coupon_rate = 0.065
 
     def _validate_config(self) -> None:
-        """Validate configuration thoroughly."""
         if not self.config.enabled:
             logger.info("Refinancing disabled, skipping validation")
             return
-
         if not self.config.triggers:
             raise RefinancingConfigError("Refinancing enabled but no triggers defined")
-
         if self.config.new_coupon_pct is None:
             raise RefinancingConfigError(
                 "Refinancing enabled but new_coupon_pct not specified"
             )
-
         validate_coupon_pct(self.config.new_coupon_pct, "new_coupon_pct")
         validate_cost_pct(self.config.refinancing_cost_pct, "refinancing_cost_pct")
-
         if not (
             PRINCIPAL_REPAY_MIN_PCT
             <= self.config.principal_repayment_pct
@@ -181,10 +170,8 @@ class RefinancingCalculatorHardened:
                 "principal_repayment_pct must be 0-100%, "
                 f"got {self.config.principal_repayment_pct}%"
             )
-
         if self.config.new_tenor_years is not None:
             validate_tenor_years(self.config.new_tenor_years, "new_tenor_years")
-
         logger.info("Refinancing config validation passed")
 
     def evaluate_refinancing_event(
@@ -193,34 +180,24 @@ class RefinancingCalculatorHardened:
         trigger_dscr: float,
         discount_rate: float,
     ) -> RefinancingOutput:
-        """Evaluate refinancing event impact."""
         if year < 1 or year > len(self.annual_rows):
             raise RefinancingValidationError(
                 f"Refinancing year must be 1-{len(self.annual_rows)}, got {year}"
             )
-
         validate_dscr_value(trigger_dscr, "trigger_dscr")
-
         if not self.config.enabled:
-            logger.info("Refinancing disabled, no event")
-            return RefinancingOutput(
-                scenario_name="base",
-                refinancing_occurred=False,
-            )
-
+            return RefinancingOutput("base", False)
         new_coupon_pct = self.config.new_coupon_pct
         if new_coupon_pct is None:
             raise RefinancingCalculationError(
                 "new_coupon_pct is required when refinancing is enabled"
             )
-
         try:
             refinancing_cost = self.current_principal * (
                 self.config.refinancing_cost_pct / 100
             )
             old_annual_interest = self.current_principal * self.current_coupon_rate
-            new_coupon_rate = new_coupon_pct / 100
-            new_annual_interest = self.current_principal * new_coupon_rate
+            new_annual_interest = self.current_principal * (new_coupon_pct / 100)
             annual_savings = old_annual_interest - new_annual_interest
             tenor = self.config.new_tenor_years or (len(self.annual_rows) - year)
             npv_savings = sum(
@@ -235,24 +212,20 @@ class RefinancingCalculatorHardened:
             breach_before = sum(1 for d in self.dscr_series if d < 1.25)
             breach_after = max(0, breach_before - 1)
             breach_resolved = trigger_dscr < 1.25 and breach_before > breach_after
-
-            output = RefinancingOutput(
+            return RefinancingOutput(
                 scenario_name="base",
                 refinancing_occurred=True,
                 event_year=year,
                 trigger_type="dscr_floor",
                 trigger_value=trigger_dscr,
                 trigger_dscr=trigger_dscr,
-                pre_refi_npv=None,
-                post_refi_npv=None,
                 npv_benefit=npv_benefit,
                 equity_irr_benefit_bps=equity_irr_improvement_bps,
                 refinancing_cost_usd=refinancing_cost,
                 new_principal_usd=self.current_principal,
                 new_coupon_pct=new_coupon_pct,
-                principal_repaid_usd=(
-                    self.current_principal * (self.config.principal_repayment_pct / 100)
-                ),
+                principal_repaid_usd=self.current_principal
+                * (self.config.principal_repayment_pct / 100),
                 new_tenor_years=tenor,
                 covenant_breach_resolved=breach_resolved,
                 pre_refi_min_dscr=self.min_dscr,
@@ -266,16 +239,7 @@ class RefinancingCalculatorHardened:
                     "validator_version": "v14.4.0",
                 },
             )
-            logger.info(
-                "Refinancing evaluation complete: year=%s, npv_benefit=USD %.0f, breach_resolved=%s",
-                year,
-                npv_benefit,
-                breach_resolved,
-            )
-            return output
-
         except Exception as exc:
-            logger.error("Refinancing calculation failed: %s", exc)
             raise RefinancingCalculationError(
                 f"Refinancing calculation failed at year {year}: {exc}"
             ) from exc
@@ -284,7 +248,7 @@ class RefinancingCalculatorHardened:
         return (
             "RefinancingCalculatorHardened("
             f"enabled={self.config.enabled}, "
-            f"principal=USD {self.current_principal:,.0f}, "
+            f"principal=USD {self.current_principal:.0f}, "
             f"min_dscr={self.min_dscr:.2f})"
         )
 
