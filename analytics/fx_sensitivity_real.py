@@ -6,7 +6,7 @@ import copy
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 import yaml
@@ -108,7 +108,7 @@ class RealFXSensitivityResult:
 def evaluate_with_overrides(base_config_path: str, overrides: dict[str, Any]) -> dict[str, Any]:
     from analytics.evaluation_v14 import evaluate_with_overrides as _evaluate
 
-    return _evaluate(base_config_path, overrides)
+    return cast(dict[str, Any], _evaluate(base_config_path, overrides))
 
 
 def _metric_from_result(result: dict[str, Any], metric: str) -> float:
@@ -228,7 +228,10 @@ class FXSensitivityAnalyzer:
         )
         from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
 
-        return run_v14_pipeline_with_analytics(config=config, enable_returns=True, enable_risk=False)
+        return cast(
+            dict[str, Any],
+            run_v14_pipeline_with_analytics(config=config, enable_returns=True, enable_risk=False),
+        )
 
     def _extract_metrics(self, pipeline_result: dict[str, Any]) -> tuple[Optional[float], float, Optional[float], float, float]:
         kpis = pipeline_result.get("kpis", {})
