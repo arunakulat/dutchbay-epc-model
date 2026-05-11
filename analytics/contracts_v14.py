@@ -10,8 +10,8 @@ supports both dataclasses and Pydantic objects.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, is_dataclass
-from typing import Any
+from dataclasses import dataclass, field, fields, is_dataclass
+from typing import Any, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
 
@@ -20,8 +20,8 @@ CASPER_CONTRACT_VERSION = "v1.0"
 
 def _dump(value: Any) -> Any:
     """Serialize dataclasses recursively; leave plain values unchanged."""
-    if is_dataclass(value):
-        return asdict(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return {item.name: _dump(getattr(value, item.name)) for item in fields(value)}
     if isinstance(value, dict):
         return {k: _dump(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -33,10 +33,10 @@ class ContractMixin:
     """Small compatibility mixin for dataclass contracts."""
 
     def model_dump(self) -> dict[str, Any]:
-        return asdict(self)  # type: ignore[arg-type]
+        return cast(dict[str, Any], _dump(self))
 
     def dict(self) -> dict[str, Any]:
-        return asdict(self)  # type: ignore[arg-type]
+        return self.model_dump()
 
 
 def check_covenant_breach_with_tolerance(
