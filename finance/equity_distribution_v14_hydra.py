@@ -5,6 +5,7 @@ Core responsibility: Calculate equity distributions, enforce covenants,
 manage waterfall logic for renewable energy project finance structures.
 
 Computes distributions across LKR, USD, and DFI tranches with priority rules.
+Future annotations: from __future__ import annotations
 
 Configuration Path:
     scenarios/dutchbay_lendercase_2025Q4.yaml::equity_distribution
@@ -42,6 +43,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
@@ -165,6 +167,9 @@ class EquityDistributionEngine:
             min_llcr_threshold=config.equity.get("min_llcr_threshold", 1.5),
             min_reserve_months=config.equity.get("min_reserve_months", 6),
         )
+        self.config.min_dscr_threshold = self.equity_config.min_dscr_threshold
+        self.config.min_llcr_threshold = self.equity_config.min_llcr_threshold
+        self.config.min_reserve_months = self.equity_config.min_reserve_months
         self.logger.info(
             f"Initialized EquityDistributionEngine: {self.equity_config.scenario_name}"
         )
@@ -296,7 +301,7 @@ def main(config_path: str = "conf/scenarios/equity_base.yaml") -> None:
         result = engine.run()
         json_output = json.dumps(result, indent=2)
         logger_main.info("Results computed successfully")
-        print(json_output)
+        sys.stdout.write(json_output + "\n")
         logger_main.info("Results output to stdout (JSON)")
 
     except Exception as e:
@@ -305,7 +310,7 @@ def main(config_path: str = "conf/scenarios/equity_base.yaml") -> None:
             "success": False,
             "error": str(e),
         }
-        print(json.dumps(error_result, indent=2))
+        sys.stdout.write(json.dumps(error_result, indent=2) + "\n")
         raise
 
 

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.utils import as_float, get_nested
 
@@ -13,8 +13,23 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.3 (Fixed DSCR Infinity handling - Sprint 18, Issue #3)
+Version: 3.5 (Compact CAPEX adapter + public DSCR cleanup)
 """
+
+
+def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
+def _section_case_insensitive(mapping: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+    value = _lookup_case_insensitive(mapping, key)
+    return value if isinstance(value, Mapping) else None
 
 
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
@@ -34,17 +49,10 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
 
 
 def _npv(cashflows: Sequence[float], rate: float) -> float:
-    """Simple NPV helper (no IRR logic here – IRR stays in finance.irr).
-
-    cashflows: sequence of CFADS values by year (t = 1..N)
-    rate: discount rate (e.g. cost of senior debt)
-
-    NPV = sum_t CF_t / (1 + r)^t
-    """
+    """Simple NPV helper (no IRR logic here – IRR stays in finance.irr)."""
     if not cashflows:
         return 0.0
     if rate <= -1.0:
-        # Defensive: avoid negative (1 + r) bases blowing up.
         return 0.0
 
     df = 1.0 + rate
@@ -55,30 +63,124 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
-    """Extract CAPEX from config, supporting both v14 and legacy schemas."""
-    # [Unchanged - keeping original implementation]
-    finance_cfg = params.get("finance")
-    if isinstance(finance_cfg, dict):
-        val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
-        if isinstance(val, (int, float)):
-            return float(val)
-    
-    capex_cfg = params.get("capex", {}) or {}
-    for key in ["usd_total", "capex_total_usd", "total_capex_usd", "total_capex"]:
-        val = capex_cfg.get(key)
-        if isinstance(val, (int, float)):
-            return float(val)
-    
-    val = params.get("capex_usd_total")
-    if isinstance(val, (int, float)):
-        return float(val)
-    
+    """Extract CAPEX from config, supporting v14, legacy and compact schemas."""
+    for section_name, keys in (
+        ("finance", ("capex_total_usd", "capex_usd")),
+        ("capex", ("usd_total", "capex_total_usd", "total_capex_usd", "total_capex")),
+        ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
+    ):
+        section = _section_case_insensitive(params, section_name)
+        if not section:
+            continue
+        for key in keys:
+            value = _lookup_case_insensitive(section, key)
+            if isinstance(value, (int, float)):
+                return float(value)
+            if value is not None:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+
+    for key in ("capex_usd_total", "capex_total_usd", "total_capex_usd"):
+        value = _lookup_case_insensitive(params, key)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+
     logger.warning(
         "CAPEX extractor: no recognized key found. "
-        "Checked: finance.capex_total_usd, capex.usd_total, etc. "
+        "Checked finance/capex/costs sections and top-level CAPEX aliases. "
         "Falling back to 100.0"
     )
     return 100.0
+
+
+def _rate_decimal(value: Any, default: float = 0.0) -> float:
+    """Normalize a percentage or decimal interest-rate input."""
+    raw = _as_float(value, default)
+    return raw / 100.0 if raw > 1.0 else raw
+
+
+def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
+    """Return lender-facing DSCR values suitable for min/max comparisons."""
+    clean: List[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric == float("inf") or numeric <= 0.0:
+            continue
+        clean.append(numeric)
+    return clean
+
+
+def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Return canonical financing terms from v14 or simple test schemas."""
+    financing_terms = _section_case_insensitive(params, "Financing_Terms")
+    if financing_terms:
+        adapted = dict(financing_terms)
+        if adapted.get("debt_ratio") is None:
+            debt_pct = adapted.get("debt_pct")
+            if debt_pct is None:
+                debt_pct = adapted.get("leverage_pct")
+            if debt_pct is not None:
+                ratio = _as_float(debt_pct, 0.70)
+                adapted["debt_ratio"] = ratio / 100.0 if ratio > 1.0 else ratio
+        if adapted.get("construction_periods") is None:
+            adapted["construction_periods"] = adapted.get("construction_years", 2)
+        if adapted.get("debt_drawdown_pct") is None:
+            adapted["debt_drawdown_pct"] = adapted.get("drawdown_pct", [0.5, 0.5])
+        if adapted.get("construction_schedule") is None:
+            adapted["construction_schedule"] = [40.0, 60.0]
+        if adapted.get("mix") is None:
+            adapted["mix"] = {"usd_commercial_min": 1.0}
+        return adapted
+
+    financing = _section_case_insensitive(params, "financing")
+    if financing:
+        return dict(financing)
+
+    debt_cfg = _section_case_insensitive(params, "debt")
+    if isinstance(debt_cfg, Mapping):
+        debt_ratio = debt_cfg.get("debt_ratio")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("debt_ratio_pct")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("leverage_pct")
+        debt_ratio_value = _as_float(debt_ratio, 0.70)
+        if debt_ratio_value > 1.0:
+            debt_ratio_value /= 100.0
+
+        tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years", 15))
+        rate_value = debt_cfg.get(
+            "interest_rate_pct",
+            debt_cfg.get("interest_rate", debt_cfg.get("usd_nominal", 0.0)),
+        )
+        usd_rate = _rate_decimal(rate_value, 0.0)
+
+        return {
+            "construction_periods": int(_as_float(debt_cfg.get("construction_periods"), 2)),
+            "construction_schedule": debt_cfg.get("construction_schedule", [40.0, 60.0]),
+            "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
+            "grace_years": int(_as_float(debt_cfg.get("grace_years"), 0)),
+            "debt_ratio": debt_ratio_value,
+            "tenor_years": int(_as_float(tenor_value, 15)),
+            "interest_only_years": int(_as_float(debt_cfg.get("interest_only_years"), 0)),
+            "amortization_style": debt_cfg.get("amortization_style", "annuity"),
+            "target_dscr": _as_float(debt_cfg.get("target_dscr"), 1.30),
+            "mix": debt_cfg.get("mix", {"usd_commercial_min": 1.0}),
+            "rates": debt_cfg.get("rates", {"usd_nominal": usd_rate}),
+        }
+
+    return params
 
 
 def calculate_construction_drawdowns(
@@ -87,7 +189,6 @@ def calculate_construction_drawdowns(
     drawdown_pct_per_year: List[float],
 ) -> List[float]:
     drawn_schedule: List[float] = []
-    cumulative = 0.0
     for i, _ in enumerate(construction_schedule):
         amt = (
             total_debt * float(drawdown_pct_per_year[i])
@@ -95,7 +196,6 @@ def calculate_construction_drawdowns(
             else 0.0
         )
         drawn_schedule.append(amt)
-        cumulative += amt
     return drawn_schedule
 
 
@@ -204,7 +304,7 @@ def apply_debt_layer(
 
     Returns a rich dict used internally by plan_debt and the analytics layer.
     """
-    p = params.get("Financing_Terms", params.get("financing", params))
+    p = _extract_financing_terms(params)
 
     construction_periods = int(_as_float(p.get("construction_periods"), 2))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
@@ -227,7 +327,6 @@ def apply_debt_layer(
         debt_total,
     )
 
-    # ── Tranche mix and IDC ──────────────────────────
     tranches = _solve_mix(p, debt_total)
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
@@ -243,7 +342,6 @@ def apply_debt_layer(
 
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
-    # ── CFADS / DSCR profile ────────────────────────
     cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
 
     cfads_ext = (
@@ -253,7 +351,6 @@ def apply_debt_layer(
         cfads_ext.append(cfads[-1] if cfads else 0.0)
     cfads_ext = cfads_ext[:23]
 
-    # ── Amortisation schedule by tranche ─────────────────
     if amortization in ("annuity", "fixed"):
         schedules = {
             k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
@@ -285,31 +382,20 @@ def apply_debt_layer(
                 out_bals[k] = max(0.0, out_bals[k] - princ)
         debt_service_total.append(svc)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
-        
-        # ISSUE #3 FIX: Return None instead of float('inf')
-        # Rationale:
-        # - None is semantically clearer: 'not applicable' vs 'unbounded'
-        # - Monte Carlo percentile calculations don't break on None
-        # - Charts can handle None (skips point) vs crash on Infinity
-        # - min() function naturally ignores None with proper filtering
+
         if period < construction_periods:
-            # Construction periods: no operational cashflow
             dscr_series.append(None)
         elif svc > 0:
-            # Operational period with debt service
             dscr_series.append(cf / svc)
         else:
-            # Post-repayment or zero service: not applicable
             dscr_series.append(None)
 
-    # Calculate min_dscr from operational periods only
     dscr_op = [
         d for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
 
-    # ── LLCR / PLCR + FX covenant surfaces ──────────────
     debt_principal_total = sum(principal_after_idc.values())
 
     if debt_principal_total > 0:
@@ -387,10 +473,7 @@ def plan_debt(
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Plan debt for the project using the v14 engine.
-    
-    [Docstring unchanged - full API documentation retained]
-    """
+    """Plan debt for the project using the v14 engine."""
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
 
     principal_by = {
@@ -404,6 +487,8 @@ def plan_debt(
     timeline = core.get("timeline_periods", 0)
     debt_outstanding = core.get("debt_outstanding", []) or []
     debt_service_total = core.get("debt_service_total", []) or []
+    public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+    min_dscr = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
 
     return {
         "construction_years": core.get("construction_periods", 0),
@@ -429,14 +514,15 @@ def plan_debt(
         },
         "total_idc": core.get("total_idc_capitalized", 0.0),
         "total_idc_m": core.get("total_idc_capitalized", 0.0),
-        "min_dscr": core.get("dscr_min", 0.0),
+        "min_dscr": min_dscr,
         "principal_by_tranche": principal_by,
         "idc_by_tranche": idc_by,
         "audit_status": core.get("audit_status", "REVIEW"),
         "debt_outstanding": debt_outstanding,
         "debt_service_total": debt_service_total,
         "total_service": debt_service_total,
-        "dscr_series": core.get("dscr_series", []),
+        "dscr_series": public_dscr_series,
+        "raw_dscr_series": core.get("dscr_series", []),
         "balloon_remaining": core.get("balloon_remaining", 0.0),
         "debt_schedules": core.get("debt_schedules", {}),
         "debt_total": core.get("debt_total", 0.0),
@@ -449,5 +535,4 @@ def plan_debt(
     }
 
 
-# [Keeping size_debt_with_dual_dscr unchanged - 200+ lines]
 # EOF

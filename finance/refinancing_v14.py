@@ -417,7 +417,7 @@ class RefinancingCalculator:
         current_balance: float,
         current_year: int,
         remaining_years: int,
-        current_interest_rate: float,
+        current_interest_rate: float = 0.0,
         debt_terms: Optional[List[DebtTerm]] = None,
     ) -> Dict[str, float]:
         """Recalculate debt schedule post-refinancing.
@@ -428,7 +428,9 @@ class RefinancingCalculator:
             current_balance: Total current debt balance (>= 0)
             current_year: Current year in simulation (>= 1)
             remaining_years: Years remaining in project life (> 0)
-            current_interest_rate: Current weighted average interest rate
+            current_interest_rate: Current weighted average interest rate. Optional
+                for backward compatibility; when omitted or zero the method uses
+                the existing conservative fallback rate.
             debt_terms: Optional list of existing debt terms
 
         Returns:

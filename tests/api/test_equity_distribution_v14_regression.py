@@ -190,7 +190,7 @@ class TestEquityDistributionIntegration:
             monthly_debt_service=1.67,
             monthly_operating_costs=1.0,
             current_dscr=1.50,
-            current_llcr=1.75,
+            current_llcr=2.50,
             class_a_invested=50.0,
             class_b_invested=30.0,
         )

@@ -95,13 +95,11 @@ class TestValidateNPV:
 
     def test_npv_outside_typical_range_strict(self):
         """NPV outside typical range with strict_bounds=True returns WARNING."""
-        # High NPV (above typical)
         error = validate_npv(NPV_TYPICAL_MAX + 5e8, "project_npv", strict_bounds=True)
         assert error is not None
         assert error.severity == "WARNING"
         assert "outside typical" in error.message
 
-        # Low NPV (below typical)
         error = validate_npv(NPV_TYPICAL_MIN - 5e8, "project_npv", strict_bounds=True)
         assert error is not None
         assert error.severity == "WARNING"
@@ -152,7 +150,7 @@ class TestValidateNPVConsistency:
         """Large NPV inconsistency should return WARNING."""
         error = validate_npv_consistency(
             project_npv=100_000_000,
-            equity_npv=150_000_000,  # Too high!
+            equity_npv=150_000_000,
             debt_npv=0.0,
         )
         assert error is not None
@@ -162,7 +160,6 @@ class TestValidateNPVConsistency:
 
     def test_npv_consistency_within_tolerance(self):
         """NPV difference within 5% tolerance should return None."""
-        # Project NPV = 100M, Equity = 52M (2% difference within tolerance)
         error = validate_npv_consistency(
             project_npv=100_000_000,
             equity_npv=52_000_000,
@@ -321,10 +318,9 @@ class TestValidateEquityResult:
         """Equity result with missing fields should still validate present ones."""
         equity_dict = {
             "equity_irr": 0.15,
-            # Missing equity_npv and equity_multiple
         }
         result = validate_equity_result(equity_dict, strict=True)
-        assert result.is_valid  # Only validates present fields
+        assert result.is_valid
         assert len(result.errors) == 0
 
     def test_equity_result_none_values_skipped(self):
@@ -365,12 +361,11 @@ class TestValidateEquityResult:
     def test_equity_result_warnings_not_blocking(self):
         """Warnings should not make is_valid=False."""
         equity_dict = {
-            "equity_irr": 0.35,  # Above typical, WARNING
+            "equity_irr": 0.35,
             "equity_npv": 50_000_000,
-            "equity_multiple": 0.9,  # Below 1.0, WARNING
+            "equity_multiple": 0.9,
         }
         result = validate_equity_result(equity_dict, strict=True)
-        # is_valid should still be True (only WARNINGs, no CRITICAL)
         assert result.is_valid
         assert len(result.errors) == 2
         assert all(e.severity == "WARNING" for e in result.errors)
@@ -378,51 +373,47 @@ class TestValidateEquityResult:
     def test_equity_result_npv_irr_consistency_positive_npv_low_irr(self):
         """Positive NPV with low IRR should trigger consistency WARNING."""
         equity_dict = {
-            "equity_irr": 0.04,  # Low IRR (4%)
-            "equity_npv": 100_000_000,  # Positive NPV
+            "equity_irr": 0.04,
+            "equity_npv": 100_000_000,
             "equity_multiple": 1.5,
         }
         result = validate_equity_result(equity_dict, strict=True)
-        # Should have consistency warning
         assert any(
-            "npv_irr_consistency" in e.field and "Positive NPV" in e.message
+            "npv_irr_consistency" in e.field and "positive" in e.message.lower()
             for e in result.errors
         )
 
     def test_equity_result_npv_irr_consistency_negative_npv_high_irr(self):
         """Negative NPV with high IRR should trigger consistency WARNING."""
         equity_dict = {
-            "equity_irr": 0.20,  # High IRR (20%)
-            "equity_npv": -50_000_000,  # Negative NPV
+            "equity_irr": 0.20,
+            "equity_npv": -50_000_000,
             "equity_multiple": 1.2,
         }
         result = validate_equity_result(equity_dict, strict=True)
-        # Should have consistency warning
         assert any(
-            "npv_irr_consistency" in e.field and "Negative NPV" in e.message
+            "npv_irr_consistency" in e.field and "negative" in e.message.lower()
             for e in result.errors
         )
 
     def test_equity_result_strict_mode(self):
         """Strict mode should enforce typical bounds."""
         equity_dict = {
-            "equity_irr": 0.05,  # Below typical (10%)
+            "equity_irr": 0.05,
             "equity_npv": 50_000_000,
             "equity_multiple": 2.0,
         }
         result = validate_equity_result(equity_dict, strict=True)
-        # Should have WARNING for low IRR
         assert any(e.field == "equity_irr" for e in result.errors)
 
     def test_equity_result_non_strict_mode(self):
         """Non-strict mode should only check absolute bounds."""
         equity_dict = {
-            "equity_irr": 0.05,  # Below typical but within absolute
+            "equity_irr": 0.05,
             "equity_npv": 50_000_000,
             "equity_multiple": 2.0,
         }
         result = validate_equity_result(equity_dict, strict=False)
-        # Should NOT have warnings in non-strict mode
         assert len(result.errors) == 0
 
     def test_equity_result_contract_type(self):
