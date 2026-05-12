@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.utils import as_float, get_nested
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.3 (Fixed DSCR Infinity handling - Sprint 18, Issue #3)
+Version: 3.4 (Simple debt schema adapter + DSCR None handling)
 """
 
 
@@ -56,29 +56,88 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
     """Extract CAPEX from config, supporting both v14 and legacy schemas."""
-    # [Unchanged - keeping original implementation]
     finance_cfg = params.get("finance")
     if isinstance(finance_cfg, dict):
         val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
         if isinstance(val, (int, float)):
             return float(val)
-    
+
     capex_cfg = params.get("capex", {}) or {}
     for key in ["usd_total", "capex_total_usd", "total_capex_usd", "total_capex"]:
         val = capex_cfg.get(key)
         if isinstance(val, (int, float)):
             return float(val)
-    
+
     val = params.get("capex_usd_total")
     if isinstance(val, (int, float)):
         return float(val)
-    
+
     logger.warning(
         "CAPEX extractor: no recognized key found. "
         "Checked: finance.capex_total_usd, capex.usd_total, etc. "
         "Falling back to 100.0"
     )
     return 100.0
+
+
+def _rate_decimal(value: Any, default: float = 0.0) -> float:
+    """Normalize a percentage or decimal interest-rate input."""
+    raw = _as_float(value, default)
+    return raw / 100.0 if raw > 1.0 else raw
+
+
+def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Return canonical financing terms from v14 or simple test schemas.
+
+    Priority remains the lender-grade ``Financing_Terms`` block. The compact
+    top-level ``debt`` block is adapted only when the canonical block is absent;
+    this keeps existing lender scenarios stable while making lightweight
+    in-memory evaluation tests propagate debt shocks through actual debt service.
+    """
+    financing_terms = params.get("Financing_Terms")
+    if isinstance(financing_terms, dict):
+        return financing_terms
+
+    financing = params.get("financing")
+    if isinstance(financing, dict):
+        return financing
+
+    debt_cfg = params.get("debt")
+    if isinstance(debt_cfg, Mapping):
+        debt_ratio = debt_cfg.get("debt_ratio")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("debt_ratio_pct")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("leverage_pct")
+        debt_ratio_value = _as_float(debt_ratio, 0.70)
+        if debt_ratio_value > 1.0:
+            debt_ratio_value /= 100.0
+
+        tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years", 15))
+        rate_value = debt_cfg.get(
+            "interest_rate_pct",
+            debt_cfg.get("interest_rate", debt_cfg.get("usd_nominal", 0.0)),
+        )
+        usd_rate = _rate_decimal(rate_value, 0.0)
+
+        return {
+            "construction_periods": int(_as_float(debt_cfg.get("construction_periods"), 2)),
+            "construction_schedule": debt_cfg.get("construction_schedule", [40.0, 60.0]),
+            "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
+            "grace_years": int(_as_float(debt_cfg.get("grace_years"), 0)),
+            "debt_ratio": debt_ratio_value,
+            "tenor_years": int(_as_float(tenor_value, 15)),
+            "interest_only_years": int(_as_float(debt_cfg.get("interest_only_years"), 0)),
+            # Compact debt configs do not carry a full sculpting covenant model.
+            # Use annuity service so CAPEX/debt shocks change DSCR instead of
+            # being hidden as target-pinned sculpted service with balloon risk.
+            "amortization_style": debt_cfg.get("amortization_style", "annuity"),
+            "target_dscr": _as_float(debt_cfg.get("target_dscr"), 1.30),
+            "mix": debt_cfg.get("mix", {"usd_commercial_min": 1.0}),
+            "rates": debt_cfg.get("rates", {"usd_nominal": usd_rate}),
+        }
+
+    return params
 
 
 def calculate_construction_drawdowns(
@@ -204,7 +263,7 @@ def apply_debt_layer(
 
     Returns a rich dict used internally by plan_debt and the analytics layer.
     """
-    p = params.get("Financing_Terms", params.get("financing", params))
+    p = _extract_financing_terms(params)
 
     construction_periods = int(_as_float(p.get("construction_periods"), 2))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
@@ -285,7 +344,7 @@ def apply_debt_layer(
                 out_bals[k] = max(0.0, out_bals[k] - princ)
         debt_service_total.append(svc)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
-        
+
         # ISSUE #3 FIX: Return None instead of float('inf')
         # Rationale:
         # - None is semantically clearer: 'not applicable' vs 'unbounded'
@@ -388,7 +447,7 @@ def plan_debt(
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
-    
+
     [Docstring unchanged - full API documentation retained]
     """
     core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
@@ -449,5 +508,4 @@ def plan_debt(
     }
 
 
-# [Keeping size_debt_with_dual_dscr unchanged - 200+ lines]
 # EOF
