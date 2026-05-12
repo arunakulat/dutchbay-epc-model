@@ -36,6 +36,7 @@ from typing import Any, Mapping, Optional
 
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
+    EquityPerformance,
     ScenarioResult,
     TrancheDebtProfile,
 )
@@ -46,6 +47,9 @@ from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
+from finance.equity_distribution_v14_hydra import (
+    calculate_equity_distribution_from_pipeline,
+)
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_wacc_from_config
 
@@ -66,6 +70,7 @@ class PipelineMetrics:
     fx_integration_time_sec: float
     annual_rows_count: int
     kpis_count: int
+    equity_distribution_time_sec: float = 0.0
     validation_errors: list[str] = field(default_factory=list)
     validation_warnings: list[str] = field(default_factory=list)
     fx_integration_attempted: bool = False
@@ -193,12 +198,7 @@ def _enrich_annual_rows_with_debt(
     annual_rows: list[dict[str, Any]],
     debt_result: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Overlay lender-facing debt columns onto annual rows.
-
-    The cashflow engine remains cashflow-only. The enhanced pipeline is the
-    lender-facing gateway, so it exposes the joined annual rows required by
-    downstream CLI/export tests and board-pack outputs.
-    """
+    """Overlay lender-facing debt columns onto annual rows."""
     debt_service = list(debt_result.get("debt_service_total") or [])
     enriched: list[dict[str, Any]] = []
 
@@ -396,6 +396,46 @@ def _build_debt_covenant_snapshot(
     )
 
 
+def _update_kpis_with_equity_distribution(
+    kpis: dict[str, Any], equity_distribution: Mapping[str, Any]
+) -> EquityPerformance | None:
+    """Merge computed equity distribution metrics into the KPI surface."""
+    status = str(equity_distribution.get("status", "failed"))
+    kpis["equity_distribution_status"] = status
+
+    if status not in {"computed", "defaulted"}:
+        return None
+
+    summary_raw = equity_distribution.get("equity_summary")
+    if not isinstance(summary_raw, Mapping):
+        return None
+
+    for source_key, target_key in (
+        ("equity_irr", "equity_irr"),
+        ("equity_npv", "equity_npv"),
+        ("equity_multiple", "equity_multiple"),
+        ("moic", "equity_moic"),
+        ("payback_period_years", "equity_payback_period_years"),
+        ("total_equity_distributed_usd", "total_equity_distributed_usd"),
+        ("average_cash_on_cash", "average_equity_cash_on_cash"),
+        ("covenant_locked_years", "equity_covenant_locked_years"),
+    ):
+        value = summary_raw.get(source_key)
+        if value is not None:
+            kpis[target_key] = value
+
+    return EquityPerformance(
+        equity_irr=summary_raw.get("equity_irr"),
+        equity_npv=summary_raw.get("equity_npv"),
+        equity_multiple=summary_raw.get("equity_multiple"),
+        metadata={
+            "source": "equity_distribution_v14_hydra",
+            "status": status,
+            "equity_investment_source": summary_raw.get("equity_investment_source"),
+        },
+    )
+
+
 def run_v14_pipeline_enhanced(
     config: str | Path | Mapping[str, Any],
     validation_mode: str = "strict",
@@ -404,6 +444,7 @@ def run_v14_pipeline_enhanced(
     allow_fx_degradation: bool = False,
 ) -> dict[str, Any]:
     """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening."""
+    del allow_fx_degradation
     start_time = time.time()
     metrics = PipelineMetrics(
         total_runtime_sec=0,
@@ -485,6 +526,24 @@ def run_v14_pipeline_enhanced(
         )
 
         phase_start = time.time()
+        equity_distribution = calculate_equity_distribution_from_pipeline(
+            config=cfg,
+            annual_rows=annual_rows_enriched,
+            debt_result=debt_result,
+            kpis=kpis,
+        )
+        equity_performance = _update_kpis_with_equity_distribution(
+            kpis, equity_distribution
+        )
+        metrics.equity_distribution_time_sec = time.time() - phase_start
+        metrics.kpis_count = len(kpis)
+        logger.info(
+            "Equity distribution %s in %.3f sec",
+            equity_distribution.get("status", "unknown"),
+            metrics.equity_distribution_time_sec,
+        )
+
+        phase_start = time.time()
         wacc_dict = compute_wacc_from_config(cfg)
         wacc_contract = _build_wacc_contract(wacc_dict)
         metrics.wacc_time_sec = time.time() - phase_start
@@ -519,6 +578,8 @@ def run_v14_pipeline_enhanced(
             kpis=kpis,
             debt_profile=debt_profile,
             debt_covenants=debt_covenants,
+            equity_performance=equity_performance,
+            metadata={"equity_distribution_status": equity_distribution.get("status")},
         )
 
         logger.info(
@@ -538,6 +599,7 @@ def run_v14_pipeline_enhanced(
             "kpis": kpis,
             "annual_rows": annual_rows_enriched,
             "debt_result": debt_result,
+            "equity_distribution": equity_distribution,
             "metrics": asdict(metrics) if enable_monitoring else {},
         }
 
