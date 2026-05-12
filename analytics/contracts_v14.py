@@ -303,6 +303,17 @@ class MonteCarloResult(ContractMixin):
     metric_name: str | None = None
     sampling_method: str | None = None
 
+    def __post_init__(self) -> None:
+        if not self.trials:
+            return
+        lengths = {metric: len(values) for metric, values in self.trials.items()}
+        unique_lengths = set(lengths.values())
+        if len(unique_lengths) > 1:
+            raise ValueError(
+                "MonteCarloResult trial arrays must all have the same length; "
+                f"got lengths {lengths}"
+            )
+
 
 @dataclass(frozen=True)
 class CasperResult(ContractMixin):
