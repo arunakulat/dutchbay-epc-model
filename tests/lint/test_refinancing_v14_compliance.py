@@ -35,7 +35,7 @@ class TestTypeHints:
     def test_refinancing_calculator_methods_type_hints(self) -> None:
         """Test RefinancingCalculator methods have type hints."""
         calc_methods = inspect.getmembers(
-            RefinancingCalculator, predicate=inspect.ismethod
+            RefinancingCalculator, predicate=inspect.isfunction
         )
         # Should have type hints in method signatures
         assert len(calc_methods) > 0
