@@ -347,9 +347,10 @@ def apply_debt_layer(
     cfads_ext = (
         [0.0] * construction_periods + [cfads[0] * 0.5 if cfads else 0.0] + cfads
     )
-    while len(cfads_ext) < 23:
+    timeline_periods = max(construction_periods + tenor, len(cfads_ext))
+    while len(cfads_ext) < timeline_periods:
         cfads_ext.append(cfads[-1] if cfads else 0.0)
-    cfads_ext = cfads_ext[:23]
+    cfads_ext = cfads_ext[:timeline_periods]
 
     if amortization in ("annuity", "fixed"):
         schedules = {
@@ -372,7 +373,7 @@ def apply_debt_layer(
 
     out_bals = {k: t.principal for k, t in tranches.items()}
 
-    for period in range(23):
+    for period in range(timeline_periods):
         debt_outstanding.append(sum(out_bals.values()))
         svc = 0.0
         for k in schedules:
@@ -453,7 +454,7 @@ def apply_debt_layer(
         "principal_after_idc": principal_after_idc,
         "total_idc_capitalized": sum(total_idc_by_tranche.values()),
         "grace_periods": grace_years,
-        "timeline_periods": 23,
+        "timeline_periods": timeline_periods,
         "tenor_years": tenor,
         "cfads_extended": cfads_ext,
         "debt_schedules": schedules,
