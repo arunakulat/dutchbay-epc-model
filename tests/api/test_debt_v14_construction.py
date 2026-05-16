@@ -89,6 +89,23 @@ def _make_simple_annual_rows() -> list:
     return build_annual_rows(cfg)
 
 
+def _make_short_debt_config() -> Dict[str, Any]:
+    cfg = _make_simple_financing_config()
+    cfg["Financing_Terms"]["construction_periods"] = 1
+    cfg["Financing_Terms"]["construction_schedule"] = [100.0]
+    cfg["Financing_Terms"]["debt_drawdown_pct"] = [1.0]
+    cfg["Financing_Terms"]["tenor_years"] = 8
+    cfg["Financing_Terms"]["interest_only_years"] = 1
+    return cfg
+
+
+def _make_short_annual_rows() -> list[Dict[str, float]]:
+    return [
+        {"year": year, "cfads_usd": 10_000_000.0 + year * 100_000.0}
+        for year in range(1, 6)
+    ]
+
+
 # ============================================================================
 # Tests
 # ============================================================================
@@ -109,7 +126,10 @@ def test_plan_debt_construction_timeline_and_idc():
 
     # High-level timeline shape
     assert result["construction_years"] == 2
-    assert result["timeline_periods"] == 23
+    assert result["timeline_periods"] == max(
+        17,
+        result["annual_row_debt_period_map"][-1]["debt_period"] + 1,
+    )
     assert result["tenor_years"] == 15
 
     # v14 plan_debt no longer exposes a flat `debt_outstanding` series.
@@ -124,6 +144,43 @@ def test_plan_debt_construction_timeline_and_idc():
 
     # total_idc must reconcile with the tranche IDC breakdown
     assert result["total_idc"] == pytest.approx(sum(idc_by.values()))
+
+
+def test_plan_debt_uses_dynamic_timeline_and_preserves_year_mapping():
+    """Debt timeline should derive from tenor/CFADS, not from hardcoded 23."""
+    cfg = _make_short_debt_config()
+    annual_rows = _make_short_annual_rows()
+
+    result = plan_debt(annual_rows=annual_rows, config=cfg)
+
+    expected_timeline = max(1 + 8, 1 + 1 + len(annual_rows))
+    assert expected_timeline != 23
+    assert result["timeline_periods"] == expected_timeline
+    assert len(result["debt_service_total"]) == expected_timeline
+    assert len(result["debt_outstanding"]) == expected_timeline
+    assert len(result["raw_dscr_series"]) == expected_timeline
+
+    mapping = result["annual_row_debt_period_map"]
+    assert len(mapping) == len(annual_rows)
+    assert result["cfads_bridge_debt_period"] == 1
+    assert mapping[0]["annual_row_index"] == 0
+    assert mapping[0]["year"] == 1
+    assert mapping[0]["debt_period"] == 2
+    assert set(result["dscr_by_year"].keys()) == {1, 2, 3, 4, 5}
+
+
+def test_missing_capex_is_fatal_unless_toy_fallback_is_explicit():
+    """Production debt planning must not silently size debt on toy CAPEX."""
+    cfg = _make_short_debt_config()
+    annual_rows = _make_short_annual_rows()
+    cfg.pop("capex")
+
+    with pytest.raises(ValueError, match="no recognized CAPEX key"):
+        plan_debt(annual_rows=annual_rows, config=cfg)
+
+    cfg["allow_toy_fallback"] = True
+    result = plan_debt(annual_rows=annual_rows, config=cfg)
+    assert result["debt_total"] == pytest.approx(70.0)
 
 
 def test_plan_debt_dscr_and_audit_status():
