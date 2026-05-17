@@ -212,6 +212,7 @@ class SensitivitySuite(ContractMixin):
     tornado_results: list[TornadoResult] = field(default_factory=list)
     results: list[Any] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    base_kpis: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

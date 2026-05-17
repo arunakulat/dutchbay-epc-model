@@ -1,62 +1,41 @@
 """
 dashboard/streamlit_app.py
-
 Interactive explorer for sensitivity results using Streamlit.
-Plug in any analytics/sensitivity output (tornado/spider) for fast DFI/lead demo!
-
-Run with:
-    streamlit run dashboard/streamlit_app.py
 """
-
 import streamlit as st
-
 from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity import (
-    SensitivityRequest,
-    plot_spider_chart,
-    run_multi_metric_tornado,
-    run_tornado_sensitivity,
-    tornado_suite_to_dataframe,
-)
+from analytics.sensitivity import run_sensitivity_analysis, suite_to_tables
+from analytics.scenario_loader import load_scenario_config
 
-# Quick UI for scenario and drivers (customize as needed)
-st.title("Sensitivity Dashboard (Tornado/Spider Explorer)")
+st.set_page_config(page_title="DutchBay | Sensitivity", page_icon="📊", layout="wide")
+st.title("📊 DutchBay Sensitivity Explorer")
 
-config_path = st.text_input(
-    "Scenario Config Path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
-)
-params = [
-    ParameterRangeConfig(
-        variable_name="project.capex_usd_per_kw",
-        base_value=900.0,
-        low_pct=-20,
-        high_pct=20,
-        steps=5,
-    ),
-    ParameterRangeConfig(
-        variable_name="generation.capacity_factor_pct",
-        base_value=45.0,
-        low_pct=-10,
-        high_pct=10,
-        steps=5,
-    ),
-    # Add or make this dynamic as needed
-]
+with st.sidebar:
+    st.header("Analysis Settings")
+    cfg_path = st.text_input("Scenario Config", "scenarios/dutchbay_lendercase_2025Q4.yaml", help="Path to scenario YAML.")
 
-st.write("Running tornado analysis...")
-sens_req = SensitivityRequest(config_path, params)
-suite = run_tornado_sensitivity(sens_req)
-df = tornado_suite_to_dataframe(suite)
-st.dataframe(df)
+    st.subheader("Drivers")
+    p1 = ParameterRangeConfig(variable_name="project.capacity_factor", base_value=0.428, low_pct=-5, high_pct=5, label="Capacity Factor")
+    p2 = ParameterRangeConfig(variable_name="capex.capex_per_kw_usd", base_value=1000.0, low_pct=-10, high_pct=10, label="CAPEX ($/kW)")
+    st.caption(f"Testing: {p1.label}, {p2.label}")
 
-st.write("Tornado Chart:")
-st.image(
-    "exports/tornado_chart.png"
-)  # Assumes you pre-exported with plot_tornado_chart.
+    st.markdown("---")
+    run_btn = st.button("Run Analysis", type="primary", use_container_width=True)
 
-st.write("Multi-metric (Spider) Chart:")
-multi_suite = run_multi_metric_tornado(sens_req, metrics=["project_irr", "equity_irr"])
-plot_spider_chart(multi_suite, "exports/spider_chart.png")
-st.image("exports/spider_chart.png")
+if run_btn:
+    with st.spinner("Executing sensitivity sweep..."):
+        try:
+            cfg = load_scenario_config(cfg_path)
+            suite = run_sensitivity_analysis(base_config=cfg, base_config_path=cfg_path, parameters=[p1, p2], metric_keys=["project_irr"])
+            df = suite_to_tables(suite)["tornado_rows"]
+            st.subheader(f"Results for {suite.metric}")
+            st.dataframe(df, use_container_width=True)
+            st.success("✅ Sensitivity analysis complete.")
+        except Exception as e:
+            st.error(f"Analysis failed: {e}")
+            st.info("Check if the scenario config path is correct and dependencies are installed.")
+else:
+    st.info("👈 Configure drivers in the sidebar and click 'Run Analysis' to begin.")
 
-st.success("Try changing params in the code for more exploration.")
+st.markdown("---")
+st.caption("DutchBay EPC Model v14 | Palette UX Edition 🎨")
