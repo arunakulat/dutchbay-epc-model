@@ -1,0 +1,3 @@
+## 2026-05-22 - Streamlit Dashboard Optimization
+**Learning:** For expensive financial simulations in Streamlit, using an explicit "Run Analysis" button (type="primary") significantly improves the user experience by preventing frustrating re-calculation lags during parameter adjustment. Additionally, moving configuration to the sidebar (`st.sidebar`) maximizes the visual real estate for results and charts, which are the user's primary focus.
+**Action:** Always default to a sidebar-for-input/main-for-results layout in analytics dashboards and use primary action buttons to trigger long-running computations.
