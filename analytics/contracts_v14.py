@@ -211,6 +211,7 @@ class SensitivitySuite(ContractMixin):
     metric: str = "project_irr"
     tornado_results: list[TornadoResult] = field(default_factory=list)
     results: list[Any] = field(default_factory=list)
+    base_kpis: dict[str, float] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
