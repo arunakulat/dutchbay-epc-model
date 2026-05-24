@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.5 (Compact CAPEX adapter + public DSCR cleanup)
+Version: 3.6 (Dynamic debt timeline + explicit CAPEX guard)
 """
 
 
@@ -42,6 +42,32 @@ def _as_float(v: Any, default: Optional[float] = None) -> float:
     return float(val if val is not None else base_default)
 
 
+def _truthy_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _allow_toy_capex_fallback(params: Mapping[str, Any]) -> bool:
+    """Return true only when toy fallback is explicitly enabled."""
+    if _truthy_flag(_lookup_case_insensitive(params, "allow_toy_fallback")):
+        return True
+
+    testing_cfg = _section_case_insensitive(params, "testing")
+    if testing_cfg is not None:
+        if _truthy_flag(_lookup_case_insensitive(testing_cfg, "allow_toy_fallback")):
+            return True
+
+    debt_cfg = _section_case_insensitive(params, "debt")
+    if debt_cfg is not None:
+        if _truthy_flag(_lookup_case_insensitive(debt_cfg, "allow_toy_fallback")):
+            return True
+
+    return False
+
+
 def _pmt(rate: float, nper: int, pv: float) -> float:
     if rate == 0:
         return pv / nper if nper > 0 else 0.0
@@ -49,7 +75,7 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
 
 
 def _npv(cashflows: Sequence[float], rate: float) -> float:
-    """Simple NPV helper (no IRR logic here – IRR stays in finance.irr)."""
+    """Simple NPV helper (no IRR logic here - IRR stays in finance.irr)."""
     if not cashflows:
         return 0.0
     if rate <= -1.0:
@@ -92,12 +118,18 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
             except (TypeError, ValueError):
                 continue
 
-    logger.warning(
-        "CAPEX extractor: no recognized key found. "
-        "Checked finance/capex/costs sections and top-level CAPEX aliases. "
-        "Falling back to 100.0"
+    if _allow_toy_capex_fallback(params):
+        logger.warning(
+            "CAPEX extractor: no recognized key found. "
+            "Using explicit toy fallback CAPEX=100.0"
+        )
+        return 100.0
+
+    raise ValueError(
+        "CAPEX extractor: no recognized CAPEX key found in finance/capex/costs "
+        "sections or top-level CAPEX aliases. Set allow_toy_fallback=true only "
+        "for explicit toy/test scenarios."
     )
-    return 100.0
 
 
 def _rate_decimal(value: Any, default: float = 0.0) -> float:
@@ -181,6 +213,41 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     return params
+
+
+def _build_cfads_timeline(
+    annual_rows: Sequence[Dict[str, Any]],
+    cfads: Sequence[float],
+    construction_periods: int,
+    tenor: int,
+) -> Tuple[List[float], List[Dict[str, Any]], int, Optional[int]]:
+    """Build CFADS timeline and explicit annual-row-to-debt-period mapping."""
+    cfads_ext: List[float] = [0.0] * construction_periods
+    annual_row_debt_period_map: List[Dict[str, Any]] = []
+    bridge_debt_period: Optional[int] = None
+
+    if cfads:
+        bridge_debt_period = len(cfads_ext)
+        cfads_ext.append(float(cfads[0]) * 0.5)
+
+    for row_index, row in enumerate(annual_rows):
+        cfads_value = float(cfads[row_index]) if row_index < len(cfads) else 0.0
+        debt_period = len(cfads_ext)
+        cfads_ext.append(cfads_value)
+        annual_row_debt_period_map.append(
+            {
+                "annual_row_index": row_index,
+                "year": row.get("year", row_index + 1),
+                "debt_period": debt_period,
+                "cfads_usd": cfads_value,
+            }
+        )
+
+    timeline_periods = max(construction_periods + tenor, len(cfads_ext))
+    while len(cfads_ext) < timeline_periods:
+        cfads_ext.append(float(cfads[-1]) if cfads else 0.0)
+
+    return cfads_ext, annual_row_debt_period_map, timeline_periods, bridge_debt_period
 
 
 def calculate_construction_drawdowns(
@@ -306,13 +373,13 @@ def apply_debt_layer(
     """
     p = _extract_financing_terms(params)
 
-    construction_periods = int(_as_float(p.get("construction_periods"), 2))
+    construction_periods = max(0, int(_as_float(p.get("construction_periods"), 2)))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
     drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
     grace_years = int(_as_float(p.get("grace_years"), 0))
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
-    tenor = int(_as_float(p.get("tenor_years"), 15))
-    years_io = int(_as_float(p.get("interest_only_years"), 0))
+    tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
+    years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
     amortization = (p.get("amortization_style", "sculpted") or "sculpted").lower()
     target_dscr = _as_float(p.get("target_dscr"), 1.30)
 
@@ -343,22 +410,20 @@ def apply_debt_layer(
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
     cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
+    (
+        cfads_ext,
+        annual_row_debt_period_map,
+        timeline_periods,
+        bridge_debt_period,
+    ) = _build_cfads_timeline(annual_rows, cfads, construction_periods, tenor)
 
-    cfads_ext = (
-        [0.0] * construction_periods + [cfads[0] * 0.5 if cfads else 0.0] + cfads
-    )
-    while len(cfads_ext) < 23:
-        cfads_ext.append(cfads[-1] if cfads else 0.0)
-    cfads_ext = cfads_ext[:23]
-
+    amort_years = max(0, tenor - years_io)
     if amortization in ("annuity", "fixed"):
-        schedules = {
-            k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
-        }
+        schedules = {k: _annuity_schedule(t, amort_years) for k, t in tranches.items()}
     else:
         schedules = _sculpted_schedule(
             tranches,
-            tenor - years_io,
+            amort_years,
             cfads_ext[construction_periods:],
             target_dscr,
         )
@@ -372,7 +437,7 @@ def apply_debt_layer(
 
     out_bals = {k: t.principal for k, t in tranches.items()}
 
-    for period in range(23):
+    for period in range(timeline_periods):
         debt_outstanding.append(sum(out_bals.values()))
         svc = 0.0
         for k in schedules:
@@ -389,6 +454,14 @@ def apply_debt_layer(
             dscr_series.append(cf / svc)
         else:
             dscr_series.append(None)
+
+    dscr_by_year: Dict[Any, Optional[float]] = {}
+    for mapping in annual_row_debt_period_map:
+        debt_period = int(mapping["debt_period"])
+        year_key = mapping.get("year", mapping["annual_row_index"] + 1)
+        dscr_by_year[year_key] = (
+            dscr_series[debt_period] if debt_period < len(dscr_series) else None
+        )
 
     dscr_op = [
         d for i, d in enumerate(dscr_series)
@@ -442,6 +515,7 @@ def apply_debt_layer(
 
     return {
         "dscr_series": dscr_series,
+        "dscr_by_year": dscr_by_year,
         "dscr_min": dscr_min,
         "debt_service_total": debt_service_total,
         "debt_outstanding": debt_outstanding,
@@ -453,9 +527,11 @@ def apply_debt_layer(
         "principal_after_idc": principal_after_idc,
         "total_idc_capitalized": sum(total_idc_by_tranche.values()),
         "grace_periods": grace_years,
-        "timeline_periods": 23,
+        "timeline_periods": timeline_periods,
         "tenor_years": tenor,
         "cfads_extended": cfads_ext,
+        "cfads_bridge_debt_period": bridge_debt_period,
+        "annual_row_debt_period_map": annual_row_debt_period_map,
         "debt_schedules": schedules,
         "audit_status": "PASS" if dscr_min >= target_dscr else "REVIEW",
         "debt_total": debt_total,
@@ -523,6 +599,9 @@ def plan_debt(
         "total_service": debt_service_total,
         "dscr_series": public_dscr_series,
         "raw_dscr_series": core.get("dscr_series", []),
+        "dscr_by_year": core.get("dscr_by_year", {}),
+        "annual_row_debt_period_map": core.get("annual_row_debt_period_map", []),
+        "cfads_bridge_debt_period": core.get("cfads_bridge_debt_period"),
         "balloon_remaining": core.get("balloon_remaining", 0.0),
         "debt_schedules": core.get("debt_schedules", {}),
         "debt_total": core.get("debt_total", 0.0),
