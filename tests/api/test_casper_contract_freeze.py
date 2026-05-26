@@ -112,6 +112,13 @@ def test_casper_result_contract_version_attribute_matches_contracts_constant() -
 def test_casper_result_has_documented_canonical_fields() -> None:
     """The CasperResult dataclass must expose exactly the canonical
     field set. New fields require an explicit contract version bump.
+
+    Sprint 18D, D.X+6 update: ``contract_version`` is now a class-level
+    frozen attribute (was previously a method) and therefore appears in
+    ``__annotations__``. Adding it to the canonical set is the explicit
+    "contract version bump" this test asks for: the public payload key
+    is unchanged ("casper_result_v1") but the Python attribute surface
+    grew by one. Pinned here so any further field additions still trip.
     """
     canonical_fields = {
         "scenario",
@@ -119,6 +126,7 @@ def test_casper_result_has_documented_canonical_fields() -> None:
         "sensitivities",
         "monte_carlo",
         "metadata",
+        "contract_version",  # D.X+6: was method, now init=False frozen attr
     }
     annotations = set(CasperResult.__annotations__.keys())
     # Use set equality so additions are caught loudly.
