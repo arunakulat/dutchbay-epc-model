@@ -12,6 +12,7 @@ from analytics.contracts_v14 import (
     ParameterRangeConfig,
     ScenarioResult,
     SensitivityRequest,
+    SensitivitySuite,
     TrancheDebtProfile,
     WaccComponents,
     WaccResult,
@@ -144,3 +145,32 @@ def test_covenant_breach_tolerance_helper() -> None:
         threshold=4.0,
         covenant_type="ceiling",
     ) is False
+
+
+def test_sensitivity_suite_audit_fields_are_optional_and_serializable() -> None:
+    """Pin Sprint 18C ARCH-04 unification fields (issue #52)."""
+    # Default construction — all new fields must be optional with defaults
+    empty = SensitivitySuite()
+    assert empty.base_kpis == {}
+    assert empty.scenario_name is None
+    assert empty.analysis_timestamp is None
+    assert empty.metric == "project_irr"
+
+    # Full construction — exercise every new field
+    populated = SensitivitySuite(
+        base_config_path="scenarios/dutchbay_lendercase_2025Q4.yaml",
+        metric="project_irr",
+        base_kpis={"project_irr": 0.124, "equity_irr": 0.165},
+        scenario_name="dutchbay_lendercase_2025Q4",
+        analysis_timestamp="2026-05-26T00:00:00Z",
+    )
+    assert populated.base_kpis["project_irr"] == 0.124
+    assert populated.scenario_name == "dutchbay_lendercase_2025Q4"
+    assert populated.analysis_timestamp == "2026-05-26T00:00:00Z"
+
+    # MRM-02 audit trail — must round-trip through asdict + model_dump
+    payload = asdict(populated)
+    assert payload["base_kpis"]["equity_irr"] == 0.165
+    assert payload["scenario_name"] == "dutchbay_lendercase_2025Q4"
+    assert payload["analysis_timestamp"] == "2026-05-26T00:00:00Z"
+    assert populated.model_dump()["base_kpis"]["project_irr"] == 0.124

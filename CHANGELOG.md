@@ -7,6 +7,59 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v14.13.0 - 2026-05-26
+
+### Sprint 18C — ARCH-04 SensitivitySuite Unification
+
+#### Added
+- `SensitivitySuite` audit fields: `base_kpis`, `scenario_name`, `analysis_timestamp` (all optional, backward compatible)
+- Parked-tests observability workflow (`.github/workflows/parked-tests-observability.yml`) — non-blocking junit-xml + html artefact pipeline for the test surface outside the canonical v14 nine; 30-day retention; runs on push/PR/manual/daily 07:00 UTC
+- Pin test `test_sensitivity_suite_audit_fields_are_optional_and_serializable` in `tests/contracts/`
+
+#### Changed
+- Bumped project version from 14.12.2 → **14.13.0** (additive contract surface change)
+- Aligned `pyproject.toml` version (was 14.0.1) with `VERSION` file
+
+#### Removed
+- **Phase 3 dead-code island** (1,423 lines): `analytics/contracts/_phase_3_sensitivity.py`, `analytics/contracts/_phase_3_sensitivity_loaders.py`, `analytics/contracts/_phase_3_visualization.py` — zero external importers; closed self-referential island
+- **Definition C stubs** in `finance/contracts.py`: `SensitivitySuite` and `MultiMetricSensitivitySuite` (54 lines) — zero external importers
+- Dead Phase 3 integration test `tests/integration/test_phase3_sensitivity_contracts.py` (419 lines, 24 funcs, 0% coverage)
+
+#### Fixed
+- `tests/_quarantine/test_sensitivity_v14_all.py` — imported `SensitivityRequest` from canonical `analytics.contracts_v14` (the `analytics.sensitivity_v14` shim does not re-export it)
+
+#### Architecture (ARCH-04)
+- **Three-way SensitivitySuite contention resolved.** The codebase now has a single canonical class at `analytics/contracts_v14.py:209`. Definitions B (`analytics/contracts/_phase_3_sensitivity.py`) and C (`finance/contracts.py`) deleted. Closes #52.
+- Parked-tests observability drift inventory tracked in #115 (7 fronts catalogued).
+- Sprint 18C follow-ups:
+  - #117 — PR-10 follow-up: v14 SensitivityRunner end-to-end test
+  - #118 — ARCH-04 follow-up: retire `analytics.contracts_v14_compat.MultiMetricSensitivitySuite` stub (Sprint 19 candidate)
+
+#### Observability needle (parked-tests, pre→post)
+| Metric | Main baseline | After PR #116 | Δ |
+|---|---|---|---|
+| Collected | 155 | 154 | −1 (Phase 3 test deleted) |
+| Passed | 37 | 37 | 0 |
+| Failed | 109 | 109 | 0 |
+| Errors | 6 | 5 | −1 (TaxShockLibrary ImportError gone) |
+| Skipped | 3 | 3 | 0 |
+| `base_kpis` TypeError class | many | **0** | extinguished |
+| `TaxShockLibrary` ImportError class | present | **0** | extinguished |
+| `SensitivityRequest` ImportError class | masked | **0** | exposed & fixed |
+| `_phase_3_sensitivity` references | present | **0** | extinguished |
+| `finance.contracts.SensitivitySuite` references | present | **0** | extinguished |
+
+#### Compliance
+- GWTF v3.0 R23/R25 (feature branch + PR + CI gate; zero direct-to-main commits)
+- ARCH-04 (single canonical contract surface in `contracts_v14`)
+- TYPE-01 (mypy --strict clean)
+- TEST-01/R11 (9 canonical v14 tests green; pin tests added)
+- FIN-01/02 (additive changes only; IRR/DSCR/NPV pins unchanged)
+- DOC-02 (this CHANGELOG entry + VERSION bump in same PR)
+- MRM-02 (junit artefacts retained; `scenario_name` + `analysis_timestamp` now in audit trail)
+
+
+
 ## v0.3.1 - 2025-12-11
 
 - Sprint 10 – evaluation_v14 + Monte Carlo gateway hardened (CASPER & tail-risk green)

@@ -25,9 +25,9 @@ analytics/
 ├── contracts_v14.py           # ✅ Source of truth (remains at root for backward compat)
 └── contracts/                # 🆕 UNIFIED PACKAGE
     ├── __init__.py            # Complete re-exports from contracts_v14.py
-    ├── README.md              # This documentation
-    └── _phase_3_sensitivity.py # Legacy backward compat
+    └── README.md              # This documentation
 ```
+> Phase 3 modules removed in Sprint 18C (PR #116, v14.13.0) — see CHANGELOG.
 
 ---
 
@@ -245,11 +245,16 @@ analytics/
 │
 └── contracts/                # 🆕 UNIFIED PACKAGE
     ├── __init__.py            # Re-exports from contracts_v14.py
-    ├── README.md              # This documentation
-    └── _phase_3_sensitivity.py # Legacy contracts (backward compat)
+    └── README.md              # This documentation
 ```
+> Phase 3 modules removed in Sprint 18C (PR #116, v14.13.0) — see CHANGELOG.
 
 ### Planned Structure (Phase 2 - Future)
+
+> **Note (Sprint 18C, May 2026):** This Phase 2 plan is now partially superseded.
+> The `_phase_3_sensitivity.py` source referenced as `_legacy.py` was removed in
+> PR #116 (v14.13.0) as part of the ARCH-04 unification. The aspirational tree
+> below is preserved for historical context only.
 
 ```
 analytics/
