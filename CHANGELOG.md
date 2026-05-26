@@ -128,10 +128,24 @@ All notable changes to this project will be documented here.
   missing contracts in `analytics/contracts_v14.py` (see Fixed section
   above). Discovered when the revived D.5 freeze test triggered pytest
   collection on the import chain.
+- **`analytics.casper.kpi_normalizer` was unimportable on `main`** due to
+  `NormalizedKPIs.capacity_mw` (non-default, declared with
+  `field(repr=False)` which suppresses repr but does NOT supply a default)
+  being declared *after* the defaulted `llcr_min: Optional[float] = None`.
+  This violated Python's dataclass field-ordering rule and raised
+  `TypeError: non-default argument 'capacity_mw' follows default argument`
+  at class-creation time. Same Palette-era lineage as the
+  `MultiTechGenerationResult` defect above — a module that no test or
+  call site imported until Sprint 18D's revived freeze test triggered
+  package-level loading. **Resolved in this PR (commit `0139469`)** by
+  reordering the fields so `capacity_mw` precedes the two optional
+  fields; `field(repr=False)` semantics preserved and `capacity_mw`
+  remains required (smoke test verifies omitting it still raises
+  TypeError — no silent default was introduced).
 
 #### Sprint 18D Provenance
 - Branch cut from `b4a2498` (Sprint 18B merge on `main`).
-- Seven surgical commits, all reversible:
+- Nine surgical commits, all reversible:
   1. `4d65575` — D.2: payload fix
   2. `2ac6e06` — D.3: regression tests
   3. `7ca6d68` — D.4: tail-risk smoke test revived
@@ -139,8 +153,12 @@ All notable changes to this project will be documented here.
   5. `f6def23` — D.6: legacy_v14 README corrected
   6. `4bbe31d` — D.X: VERSION bump 14.14.0 → 14.14.1 + initial CHANGELOG
   7. `92f514b` — D.X+2: re-instate MultiTechGenerationResult /
-     TechnologyBreakdown / GenerationProfile (resolves CI collection
-     failure exposed by D.5)
+     TechnologyBreakdown / GenerationProfile (resolves 1st CI
+     collection failure exposed by D.5)
+  8. `25c4707` — docs: CHANGELOG records D.X+2
+  9. `0139469` — D.X+3: reorder NormalizedKPIs fields so required
+     `capacity_mw` precedes defaults (resolves 2nd CI collection
+     failure exposed beneath D.X+2)
 - Investigation artefact retained as a workspace-only deliverable:
   `CASPER_INVESTIGATION_REPORT.md`.
 
