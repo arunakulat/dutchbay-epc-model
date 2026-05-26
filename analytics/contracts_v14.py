@@ -15,7 +15,13 @@ from typing import Any, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
 
-CASPER_CONTRACT_VERSION = "v1.0"
+# Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
+# match the value already shipping in the JSON payload
+# (``analytics.casper.casper_payload.CASPER_CONTRACT_VERSION``), which is the
+# customer/API-visible surface. The two constants were divergent on main
+# ("v1.0" here vs "casper_result_v1" in casper_payload) — disclosed as
+# Defect #3 in CHANGELOG v14.14.1.
+CASPER_CONTRACT_VERSION = "casper_result_v1"
 
 
 def _dump(value: Any) -> Any:
@@ -318,6 +324,24 @@ class MonteCarloResult(ContractMixin):
                 f"got lengths {lengths}"
             )
 
+    def success_rate(self) -> float:
+        """Return the Monte Carlo success rate as a percentage (0-100).
+
+        Computed from ``iterations`` and ``failed_iterations``:
+            success_rate = (iterations - failed_iterations) / iterations * 100
+
+        Returns ``0.0`` when ``iterations == 0`` (no trials run) to avoid
+        division-by-zero; callers should inspect ``iterations`` if they need
+        to distinguish "no run" from "all failed".
+
+        Consumed by ``analytics.casper.casper_payload._monte_carlo_to_dict``
+        to populate the ``"success_rate_pct"`` field of the CASPER JSON payload.
+        """
+        if self.iterations <= 0:
+            return 0.0
+        successful = self.iterations - self.failed_iterations
+        return 100.0 * successful / self.iterations
+
 
 @dataclass(frozen=True)
 class CasperResult(ContractMixin):
@@ -327,8 +351,15 @@ class CasperResult(ContractMixin):
     monte_carlo: MonteCarloResult | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def contract_version(self) -> str:
-        return CASPER_CONTRACT_VERSION
+    # Class-level frozen attribute (NOT __init__ arg). Resolved Sprint 18D
+    # (D.X+6): previously defined as ``def contract_version(self) -> str``,
+    # which silently became a bound method when callers used attribute
+    # access (``result.contract_version`` rather than ``result.contract_version()``).
+    # That produced misleading values in serialization paths and contradicted
+    # the sibling ``RefinancingResult.contract_version`` attribute shape.
+    # ``init=False`` keeps the value pinned to the module-level constant
+    # while still supporting ``ContractMixin.model_dump()`` / dataclasses.asdict.
+    contract_version: str = field(default=CASPER_CONTRACT_VERSION, init=False)
 
 
 @dataclass(frozen=True)
@@ -352,6 +383,87 @@ class DownsideMetrics(ContractMixin):
     project_npv_p10: float | None = None
     breach_probability: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Multi-technology generation contracts (re-instated Sprint 18D)
+#
+# These three dataclasses were originally introduced in Sprint 9 (commit
+# 260fc3b) and consumed by ``analytics.casper.casper_payload``. They were
+# inadvertently deleted from ``contracts_v14.py`` during the Palette refactor
+# (commit 979520b, Feb 24 2026) while their import sites in
+# ``analytics/casper/casper_payload.py`` were left untouched. The deletion
+# survived undetected because no test imported ``analytics.casper.casper_payload``
+# at module level until Sprint 18D's contract-freeze test was revived.
+#
+# Surfaces here match the consumer expectations in
+# ``analytics/casper/casper_payload.py`` (``_generation_to_dict``,
+# ``_technology_breakdown_to_list``) and are *intentionally distinct* from
+# the ``TechnologyBreakdown`` model in ``finance.contracts`` which carries a
+# different field surface (capacity_mw / capex_usd / opex_annual_usd).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GenerationProfile(ContractMixin):
+    """Per-technology generation profile (annual AEP/CFADS view)."""
+
+    technology: str
+    annual_aep_kwh: float
+    annual_cfads_usd: float
+    availability_pct: float | None = None
+    losses_breakdown: dict[str, float] | None = None
+
+
+@dataclass(frozen=True)
+class MultiTechGenerationResult(ContractMixin):
+    """Aggregated generation view across multiple technologies.
+
+    Consumed by ``analytics.casper.casper_payload._generation_to_dict`` which
+    invokes ``to_dict()`` to serialize the structure into a JSON-safe payload.
+    """
+
+    total_aep_kwh: float
+    total_cfads_usd: float
+    technologies: dict[str, GenerationProfile] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_aep_kwh": self.total_aep_kwh,
+            "total_cfads_usd": self.total_cfads_usd,
+            "technologies": {
+                tech: {
+                    "technology": profile.technology,
+                    "annual_aep_kwh": profile.annual_aep_kwh,
+                    "annual_cfads_usd": profile.annual_cfads_usd,
+                    "availability_pct": profile.availability_pct,
+                    "losses_breakdown": (
+                        dict(profile.losses_breakdown)
+                        if profile.losses_breakdown is not None
+                        else None
+                    ),
+                }
+                for tech, profile in self.technologies.items()
+            },
+        }
+
+
+@dataclass(frozen=True)
+class TechnologyBreakdown(ContractMixin):
+    """Per-technology KPI share for lender / investor visibility.
+
+    NOTE: This contract is *distinct* from ``finance.contracts.TechnologyBreakdown``
+    (which carries capex/opex/capacity fields). The two share a name for
+    historical reasons but serve different consumers. The CASPER payload
+    pipeline consumes this analytics-side variant via
+    ``_technology_breakdown_to_list``.
+    """
+
+    technology: str
+    share_of_capex_pct: float | None = None
+    share_of_cfads_pct: float | None = None
+    share_of_aep_pct: float | None = None
+    notes: str | None = None
 
 
 __all__ = [
@@ -383,4 +495,7 @@ __all__ = [
     "CashflowResult",
     "EquityPerformance",
     "DownsideMetrics",
+    "GenerationProfile",
+    "MultiTechGenerationResult",
+    "TechnologyBreakdown",
 ]

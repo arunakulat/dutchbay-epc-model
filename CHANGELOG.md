@@ -7,6 +7,225 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v14.14.1 - 2026-05-26
+
+### Sprint 18D — CASPER Contract Alignment (Patch)
+
+#### Fixed
+- **CASPER payload ↔ canonical EquityPerformance contract alignment**
+  (`analytics/casper/casper_payload.py`, +31/-15). Sprint 18B rewrote
+  `EquityPerformance` to expose only `equity_irr`, `equity_npv`,
+  `equity_multiple` and `metadata`. The payload's
+  `_scenario_summary_to_dict` was still reading the pre-Sprint-18B
+  attribute surface (`ep.downside`, `.moic`, `.dpi`, `.rvpi`, `.tvpi`,
+  `.average_coc`, `.payback_period_years`), which would raise
+  `AttributeError` on every real CASPER run
+  (`analytics/pipeline_v14_enhanced.py:535-585` populates
+  `scenario.equity_performance` on every CASPER call). CI did not
+  detect the bug because canonical CASPER test paths are 4-line stubs
+  and the real tests sat in `tests/_quarantine/`. The fix:
+  - reads legacy PE metrics (`moic`, `dpi`, `rvpi`, `tvpi`,
+    `average_coc`, `payback_period_years`) from `ep.metadata` with
+    `.get()` guards (graceful `None` for leaner producers);
+  - adds the canonical `equity_multiple` field to the payload (net
+    additive);
+  - synthesises the `downside` dict from `MonteCarloResult` percentile
+    fields (`project_irr_p10`, `project_npv_p10`, `dscr_min_p10`) when
+    `monte_carlo` is provided, since `DownsideMetrics` is declared in
+    `contracts_v14` but never attached to any `ScenarioResult`.
+  - The `downside` dict's keys therefore change from
+    `{prob_negative_npv, prob_below_hurdle, worst_case_irr, max_drawdown}`
+    (no producer existed) to `{project_irr_p10, project_npv_p10,
+    dscr_min_p10}`. Top-level payload keys are unchanged.
+- **Re-instated `MultiTechGenerationResult`, `TechnologyBreakdown`, and
+  `GenerationProfile` in `analytics/contracts_v14.py`** (+84 LOC). These
+  three dataclasses were originally introduced in Sprint 9 (commit
+  `260fc3b`) and consumed by `analytics/casper/casper_payload.py`. They
+  were inadvertently deleted from `contracts_v14.py` during the Palette
+  refactor (commit `979520b`, Feb 24 2026) while their import sites in
+  `casper_payload.py:7-14` were left untouched. The defect was latent
+  because no test imported `analytics.casper.casper_payload` at module
+  level (canonical CASPER tests were stubs); Sprint 18D's revived
+  contract-freeze test (D.5) exposed it at pytest collection.
+  Consequences on main pre-fix:
+  - `import analytics.casper.casper_payload` raised `ImportError:
+    cannot import name 'MultiTechGenerationResult'`.
+  - `analytics.casper.__init__` (which re-exports `build_casper_payload`)
+    therefore also failed to import, breaking the entire `analytics.casper`
+    package.
+  - `analytics/casper/casper_v14.py:97` calls `build_casper_payload(...)`
+    in the production tail-risk evaluation path — that path has been
+    silently unreachable since Feb 24 2026.
+  Restoration matches the original Sprint 9 surface exactly, adapted to
+  the current `dataclass(frozen=True) + ContractMixin` style. Field
+  surfaces precisely match the live consumer expectations in
+  `_generation_to_dict` and `_technology_breakdown_to_list`.
+  Naming note: `TechnologyBreakdown` is *intentionally distinct* from
+  `finance.contracts.TechnologyBreakdown` which carries a different
+  field surface (`capacity_mw`, `capex_usd`, `opex_annual_usd`) for a
+  different consumer. The name collision is historical and documented
+  inline in both modules.
+
+#### Added
+- **Eight regression tests pinning the bug class**
+  (`tests/analytics/test_casper_payload_equity_contract.py`, +231 new):
+  no-AttributeError guard, metadata surfacing, lean-metadata graceful
+  `None`, `equity_multiple` presence, downside synthesis on/off, JSON
+  round-trip, contract version pin.
+- **Revived CASPER tail-risk smoke test from quarantine**
+  (`tests/analytics_layer/test_evaluation_casper_tail_risk.py`, +196
+  rewritten; `tests/analytics_layer/_casper_fakes.py`, +141 restored
+  from commit `3f0297f`). Adapted to today's `TornadoResult` /
+  `SensitivitySuite` contract surfaces and to the canonical
+  `enrich_tornado_with_tail_risk` consumer.
+- **Revived CASPER contract freeze test from quarantine**
+  (`tests/api/test_casper_contract_freeze.py`, +94 rewritten). Pins
+  payload contract-version string, contracts_v14 contract-version
+  string, canonical `CasperResult` field set, and method-form contract
+  version.
+
+#### Changed
+- Bumped project version 14.14.0 → **14.14.1** (bug-fix patch).
+- CASPER JSON contract version unchanged at `casper_result_v1` (silent
+  fix; payload structure realigned to documented surface).
+
+#### Disclosures (pre-existing follow-ups; NOT introduced by this PR)
+- **`MonteCarloResult.success_rate()` is called but not defined**
+  (`analytics/casper/casper_payload.py:269`). The regression test
+  exercises `_scenario_summary_to_dict` directly rather than
+  `build_casper_payload` for the MC-present case to avoid coupling to
+  this unrelated defect. Recorded as a follow-up.
+- **`enrich_tornado_with_tail_risk` and
+  `build_tail_risk_snapshots_for_metrics` are imported by
+  `analytics/evaluation_v14.py:457-458` but do not exist on the shim or
+  canonical `analytics.sensitivity.tail_risk` module**. In production
+  this raises `ImportError`, which is silently swallowed; the
+  `tail_risk_block` therefore stays `None` and `metadata["tail_risk"]`
+  is never populated. The revived tail-risk smoke test injects both
+  missing symbols via `monkeypatch.setattr(raising=False)` so the
+  assembly path can be exercised. Recorded as a follow-up.
+- **Two divergent `CASPER_CONTRACT_VERSION` constants**:
+  `analytics.casper.casper_payload.CASPER_CONTRACT_VERSION =
+  "casper_result_v1"` (emitted into every payload) vs
+  `analytics.contracts_v14.CASPER_CONTRACT_VERSION = "v1.0"` (returned
+  by `CasperResult.contract_version()`). These have silently disagreed
+  since at least Sprint 14. The freeze test pins each in its own module
+  so the drift cannot widen. Reconciliation is a follow-up.
+- **`CasperResult.contract_version` is a no-args method, not an
+  attribute** (likely refactor regression). Tests call it as a method.
+  Follow-up.
+- **Stale `tests/legacy_v14/README.md`** previously claimed an
+  `IndentationError at line 71` in `analytics/casper/casper_payload.py`.
+  That claim was inaccurate — the file parses cleanly via `ast.parse`.
+  The README is corrected in this PR.
+- **`analytics.casper.casper_payload` was unimportable on `main`**
+  due to `from analytics.contracts_v14 import MultiTechGenerationResult,
+  TechnologyBreakdown` referencing names deleted in the Palette refactor
+  (`979520b`, Feb 24 2026). This was a latent production-blocker: the
+  entire `analytics.casper` package failed to load, silently disabling
+  the tail-risk evaluation path at `analytics/casper/casper_v14.py:97`.
+  **Resolved in this PR (commit `92f514b`)** by re-instating the three
+  missing contracts in `analytics/contracts_v14.py` (see Fixed section
+  above). Discovered when the revived D.5 freeze test triggered pytest
+  collection on the import chain.
+- **`analytics.casper.kpi_normalizer` was unimportable on `main`** due to
+  `NormalizedKPIs.capacity_mw` (non-default, declared with
+  `field(repr=False)` which suppresses repr but does NOT supply a default)
+  being declared *after* the defaulted `llcr_min: Optional[float] = None`.
+  This violated Python's dataclass field-ordering rule and raised
+  `TypeError: non-default argument 'capacity_mw' follows default argument`
+  at class-creation time. Same Palette-era lineage as the
+  `MultiTechGenerationResult` defect above — a module that no test or
+  call site imported until Sprint 18D's revived freeze test triggered
+  package-level loading. **Resolved in this PR (commit `0139469`)** by
+  reordering the fields so `capacity_mw` precedes the two optional
+  fields; `field(repr=False)` semantics preserved and `capacity_mw`
+  remains required (smoke test verifies omitting it still raises
+  TypeError — no silent default was introduced).
+- **`MonteCarloResult.success_rate()` was called but not defined**
+  (`analytics/casper/casper_payload.py:269` writes
+  `"success_rate_pct": mc.success_rate()` into every CASPER JSON payload).
+  Any payload that included Monte Carlo results raised `AttributeError`
+  at runtime. **Resolved in this PR (commit `ba25a54`)** by adding the
+  method to `MonteCarloResult` in `contracts_v14.py`. Computed from
+  existing `iterations` and `failed_iterations` fields as
+  `(iterations - failed_iterations) / iterations * 100`. Returns `0.0`
+  when `iterations == 0` to avoid division-by-zero. Smoke verified for
+  99.5% / zero-iter guard / all-failed / perfect-run cases.
+- **Two divergent `CASPER_CONTRACT_VERSION` constants** existed:
+  `analytics.contracts_v14.CASPER_CONTRACT_VERSION = "v1.0"` (internal
+  Python constant) and
+  `analytics.casper.casper_payload.CASPER_CONTRACT_VERSION = "casper_result_v1"`
+  (customer-visible JSON payload key). Both were re-exported via package
+  `__init__.py` files — consumers received different strings depending on
+  import path. **Resolved in this PR (commit `ba25a54`)** by unifying
+  the `contracts_v14` constant to `"casper_result_v1"` (the value already
+  shipping in the JSON payload). The freeze test
+  (`tests/api/test_casper_contract_freeze.py`) was updated to pin the
+  unification rather than the prior drift: both constants MUST now be
+  equal AND equal `"casper_result_v1"`. Companion test update
+  (`tests/contracts/test_contracts_v14_import_surface.py:137`) committed
+  separately as `d82a2f6`.
+- **`CasperResult.contract_version` was a method, not an attribute.**
+  Defined as `def contract_version(self) -> str`, this silently became
+  a bound-method object whenever callers used attribute access
+  (`result.contract_version` rather than `result.contract_version()`).
+  Consequences: (a) any serializer using attribute access embedded a
+  method-repr string into the output, (b) the sibling
+  `RefinancingResult.contract_version` is a real string attribute, so
+  the API was inconsistent within the same module, (c) the quarantined
+  test already asserted attribute access and would have caught this
+  immediately if not excluded from collection. **Resolved in this PR
+  (commit `889381f`)** by converting to a class-level frozen attribute:
+  `contract_version: str = field(default=CASPER_CONTRACT_VERSION, init=False)`.
+  Properties (smoke-verified): attribute access returns string, not
+  method; `init=False` rejects constructor override; frozen dataclass
+  semantics preserved; `ContractMixin.model_dump()` includes it.
+  Test assertions updated from method-call to attribute-access form.
+
+#### Sprint 18D Provenance
+- Branch cut from `b4a2498` (Sprint 18B merge on `main`).
+- Thirteen surgical commits, all reversible:
+  1. `4d65575` — D.2: payload fix
+  2. `2ac6e06` — D.3: regression tests
+  3. `7ca6d68` — D.4: tail-risk smoke test revived
+  4. `a10f99d` — D.5: contract freeze test revived
+  5. `f6def23` — D.6: legacy_v14 README corrected
+  6. `4bbe31d` — D.X: VERSION bump 14.14.0 → 14.14.1 + initial CHANGELOG
+  7. `92f514b` — D.X+2: re-instate MultiTechGenerationResult /
+     TechnologyBreakdown / GenerationProfile (resolves 1st CI
+     collection failure exposed by D.5)
+  8. `25c4707` — docs: CHANGELOG records D.X+2
+  9. `0139469` — D.X+3: reorder NormalizedKPIs fields so required
+     `capacity_mw` precedes defaults (resolves 2nd CI collection
+     failure exposed beneath D.X+2)
+  10. `218555c` — docs: CHANGELOG records D.X+3
+  11. `ba25a54` — D.X+4 + D.X+5: add MonteCarloResult.success_rate()
+      and unify CASPER_CONTRACT_VERSION to `"casper_result_v1"`
+      (Defects #1 and #3)
+  12. `d82a2f6` — test adaptations for D.X+5 (freeze + import-surface)
+  13. `889381f` — D.X+6: CasperResult.contract_version converted from
+      method to class-level frozen attribute (Defect #4)
+- Defect #2 (`enrich_tornado_with_tail_risk` /
+  `build_tail_risk_snapshots_for_metrics` referenced by
+  `analytics/evaluation_v14.py:457-458` but not exported by
+  `analytics.sensitivity.tail_risk` under those names) deferred to
+  Sprint 19 — the actual public name is `enrich_suite_with_tail_risk`
+  and resolving the call sites requires signature-compatibility
+  investigation that exceeds Sprint 18D's scope. The production call
+  site is currently guarded by a `try/except ImportError` block that
+  silently swallows the failure, so no runtime crash is exposed; the
+  tail-risk enrichment is simply unreachable. Original disclosure
+  text was imprecise ("not defined anywhere") and is corrected here.
+- Investigation artefact retained as a workspace-only deliverable:
+  `CASPER_INVESTIGATION_REPORT.md`.
+
+#### Compliance
+- GWTF: R23/R25 (feature branch + PR + CI), ARCH-04 (single canonical
+  contract surface), TYPE-01 (mypy --strict clean), TEST-01
+  (regression pins), DOC-02 (VERSION + CHANGELOG together), no edits
+  on `main` until investigation was complete.
+
 ## v14.14.0 - 2026-05-26
 
 ### Sprint 18B — Equity Distribution Productionisation
