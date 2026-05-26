@@ -20,14 +20,17 @@ Adaptations vs the quarantined version:
       __annotations__ assertion are dropped.
     - CasperResult.scenario is now typed ScenarioResult | str (no None
       allowed). The test passes the string sentinel "<frozen-contract-stub>".
-    - CasperResult.contract_version is currently defined as a no-args
-      method, not an attribute. The test calls it as a method. (Pre-
-      existing issue recorded as follow-up; out of scope for this branch.)
-    - Two CASPER_CONTRACT_VERSION constants exist: payload emits
-      "casper_result_v1" while CasperResult.contract_version() returns
-      "v1.0". This freeze test pins each in its own module so the drift
-      cannot widen silently. Reconciliation is a pre-existing follow-up
-      out of scope for this branch.
+    - CasperResult.contract_version was previously defined as a no-args
+      method on this branch's first pass. **Resolved in Sprint 18D, D.X+6**:
+      converted to a class-level frozen attribute via
+      ``field(default=CASPER_CONTRACT_VERSION, init=False)``. The test
+      now asserts attribute-access form.
+    - Two CASPER_CONTRACT_VERSION constants previously existed and
+      disagreed: payload emitted "casper_result_v1" while contracts_v14
+      held "v1.0". **Unified in Sprint 18D, D.X+5** to "casper_result_v1"
+      (the customer-visible value that has been shipping in the JSON
+      payload since at least Sprint 14). This freeze test now pins the
+      unification: both constants MUST be equal.
 
 Framework Compliance:
     - TEST-01: contract-level regression pin
@@ -86,13 +89,24 @@ def test_casper_result_constructs_with_canonical_fields() -> None:
     assert result.monte_carlo is None
 
 
-def test_casper_result_contract_version_method_matches_contracts_constant() -> None:
-    """CasperResult.contract_version is currently a no-args method whose
-    return value must equal the contracts_v14-level constant.
-    Pinning both forms guards against drift in either direction.
+def test_casper_result_contract_version_attribute_matches_contracts_constant() -> None:
+    """CasperResult.contract_version is a class-level frozen attribute
+    (resolved in Sprint 18D, D.X+6 — previously a no-args method, which
+    silently became a bound method whenever callers used attribute access).
+
+    The value must equal the contracts_v14-level constant, which is itself
+    unified with the payload-level constant (test above).
     """
     result = CasperResult(scenario="<frozen-contract-stub>")
-    assert result.contract_version() == CONTRACTS_CASPER_CONTRACT_VERSION
+    # Attribute access — NOT a method call. Pinned to catch any future
+    # accidental reversion to method form.
+    assert result.contract_version == CONTRACTS_CASPER_CONTRACT_VERSION
+    assert isinstance(result.contract_version, str)
+
+    # init=False: contract_version cannot be passed to the constructor.
+    import pytest
+    with pytest.raises(TypeError):
+        CasperResult(scenario="stub", contract_version="hacked")  # type: ignore[call-arg]
 
 
 def test_casper_result_has_documented_canonical_fields() -> None:

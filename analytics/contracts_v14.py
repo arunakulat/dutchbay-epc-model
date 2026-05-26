@@ -351,8 +351,15 @@ class CasperResult(ContractMixin):
     monte_carlo: MonteCarloResult | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def contract_version(self) -> str:
-        return CASPER_CONTRACT_VERSION
+    # Class-level frozen attribute (NOT __init__ arg). Resolved Sprint 18D
+    # (D.X+6): previously defined as ``def contract_version(self) -> str``,
+    # which silently became a bound method when callers used attribute
+    # access (``result.contract_version`` rather than ``result.contract_version()``).
+    # That produced misleading values in serialization paths and contradicted
+    # the sibling ``RefinancingResult.contract_version`` attribute shape.
+    # ``init=False`` keeps the value pinned to the module-level constant
+    # while still supporting ``ContractMixin.model_dump()`` / dataclasses.asdict.
+    contract_version: str = field(default=CASPER_CONTRACT_VERSION, init=False)
 
 
 @dataclass(frozen=True)
