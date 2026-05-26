@@ -354,6 +354,87 @@ class DownsideMetrics(ContractMixin):
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Multi-technology generation contracts (re-instated Sprint 18D)
+#
+# These three dataclasses were originally introduced in Sprint 9 (commit
+# 260fc3b) and consumed by ``analytics.casper.casper_payload``. They were
+# inadvertently deleted from ``contracts_v14.py`` during the Palette refactor
+# (commit 979520b, Feb 24 2026) while their import sites in
+# ``analytics/casper/casper_payload.py`` were left untouched. The deletion
+# survived undetected because no test imported ``analytics.casper.casper_payload``
+# at module level until Sprint 18D's contract-freeze test was revived.
+#
+# Surfaces here match the consumer expectations in
+# ``analytics/casper/casper_payload.py`` (``_generation_to_dict``,
+# ``_technology_breakdown_to_list``) and are *intentionally distinct* from
+# the ``TechnologyBreakdown`` model in ``finance.contracts`` which carries a
+# different field surface (capacity_mw / capex_usd / opex_annual_usd).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GenerationProfile(ContractMixin):
+    """Per-technology generation profile (annual AEP/CFADS view)."""
+
+    technology: str
+    annual_aep_kwh: float
+    annual_cfads_usd: float
+    availability_pct: float | None = None
+    losses_breakdown: dict[str, float] | None = None
+
+
+@dataclass(frozen=True)
+class MultiTechGenerationResult(ContractMixin):
+    """Aggregated generation view across multiple technologies.
+
+    Consumed by ``analytics.casper.casper_payload._generation_to_dict`` which
+    invokes ``to_dict()`` to serialize the structure into a JSON-safe payload.
+    """
+
+    total_aep_kwh: float
+    total_cfads_usd: float
+    technologies: dict[str, GenerationProfile] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_aep_kwh": self.total_aep_kwh,
+            "total_cfads_usd": self.total_cfads_usd,
+            "technologies": {
+                tech: {
+                    "technology": profile.technology,
+                    "annual_aep_kwh": profile.annual_aep_kwh,
+                    "annual_cfads_usd": profile.annual_cfads_usd,
+                    "availability_pct": profile.availability_pct,
+                    "losses_breakdown": (
+                        dict(profile.losses_breakdown)
+                        if profile.losses_breakdown is not None
+                        else None
+                    ),
+                }
+                for tech, profile in self.technologies.items()
+            },
+        }
+
+
+@dataclass(frozen=True)
+class TechnologyBreakdown(ContractMixin):
+    """Per-technology KPI share for lender / investor visibility.
+
+    NOTE: This contract is *distinct* from ``finance.contracts.TechnologyBreakdown``
+    (which carries capex/opex/capacity fields). The two share a name for
+    historical reasons but serve different consumers. The CASPER payload
+    pipeline consumes this analytics-side variant via
+    ``_technology_breakdown_to_list``.
+    """
+
+    technology: str
+    share_of_capex_pct: float | None = None
+    share_of_cfads_pct: float | None = None
+    share_of_aep_pct: float | None = None
+    notes: str | None = None
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     "check_covenant_breach_with_tolerance",
@@ -383,4 +464,7 @@ __all__ = [
     "CashflowResult",
     "EquityPerformance",
     "DownsideMetrics",
+    "GenerationProfile",
+    "MultiTechGenerationResult",
+    "TechnologyBreakdown",
 ]
