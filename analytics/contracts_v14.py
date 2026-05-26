@@ -15,7 +15,13 @@ from typing import Any, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
 
-CASPER_CONTRACT_VERSION = "v1.0"
+# Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
+# match the value already shipping in the JSON payload
+# (``analytics.casper.casper_payload.CASPER_CONTRACT_VERSION``), which is the
+# customer/API-visible surface. The two constants were divergent on main
+# ("v1.0" here vs "casper_result_v1" in casper_payload) — disclosed as
+# Defect #3 in CHANGELOG v14.14.1.
+CASPER_CONTRACT_VERSION = "casper_result_v1"
 
 
 def _dump(value: Any) -> Any:
@@ -317,6 +323,24 @@ class MonteCarloResult(ContractMixin):
                 "MonteCarloResult trial arrays must all have the same length; "
                 f"got lengths {lengths}"
             )
+
+    def success_rate(self) -> float:
+        """Return the Monte Carlo success rate as a percentage (0-100).
+
+        Computed from ``iterations`` and ``failed_iterations``:
+            success_rate = (iterations - failed_iterations) / iterations * 100
+
+        Returns ``0.0`` when ``iterations == 0`` (no trials run) to avoid
+        division-by-zero; callers should inspect ``iterations`` if they need
+        to distinguish "no run" from "all failed".
+
+        Consumed by ``analytics.casper.casper_payload._monte_carlo_to_dict``
+        to populate the ``"success_rate_pct"`` field of the CASPER JSON payload.
+        """
+        if self.iterations <= 0:
+            return 0.0
+        successful = self.iterations - self.failed_iterations
+        return 100.0 * successful / self.iterations
 
 
 @dataclass(frozen=True)
