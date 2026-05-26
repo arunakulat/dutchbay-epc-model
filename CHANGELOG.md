@@ -37,6 +37,34 @@ All notable changes to this project will be documented here.
     `{prob_negative_npv, prob_below_hurdle, worst_case_irr, max_drawdown}`
     (no producer existed) to `{project_irr_p10, project_npv_p10,
     dscr_min_p10}`. Top-level payload keys are unchanged.
+- **Re-instated `MultiTechGenerationResult`, `TechnologyBreakdown`, and
+  `GenerationProfile` in `analytics/contracts_v14.py`** (+84 LOC). These
+  three dataclasses were originally introduced in Sprint 9 (commit
+  `260fc3b`) and consumed by `analytics/casper/casper_payload.py`. They
+  were inadvertently deleted from `contracts_v14.py` during the Palette
+  refactor (commit `979520b`, Feb 24 2026) while their import sites in
+  `casper_payload.py:7-14` were left untouched. The defect was latent
+  because no test imported `analytics.casper.casper_payload` at module
+  level (canonical CASPER tests were stubs); Sprint 18D's revived
+  contract-freeze test (D.5) exposed it at pytest collection.
+  Consequences on main pre-fix:
+  - `import analytics.casper.casper_payload` raised `ImportError:
+    cannot import name 'MultiTechGenerationResult'`.
+  - `analytics.casper.__init__` (which re-exports `build_casper_payload`)
+    therefore also failed to import, breaking the entire `analytics.casper`
+    package.
+  - `analytics/casper/casper_v14.py:97` calls `build_casper_payload(...)`
+    in the production tail-risk evaluation path — that path has been
+    silently unreachable since Feb 24 2026.
+  Restoration matches the original Sprint 9 surface exactly, adapted to
+  the current `dataclass(frozen=True) + ContractMixin` style. Field
+  surfaces precisely match the live consumer expectations in
+  `_generation_to_dict` and `_technology_breakdown_to_list`.
+  Naming note: `TechnologyBreakdown` is *intentionally distinct* from
+  `finance.contracts.TechnologyBreakdown` which carries a different
+  field surface (`capacity_mw`, `capex_usd`, `opex_annual_usd`) for a
+  different consumer. The name collision is historical and documented
+  inline in both modules.
 
 #### Added
 - **Eight regression tests pinning the bug class**
@@ -90,15 +118,29 @@ All notable changes to this project will be documented here.
   `IndentationError at line 71` in `analytics/casper/casper_payload.py`.
   That claim was inaccurate — the file parses cleanly via `ast.parse`.
   The README is corrected in this PR.
+- **`analytics.casper.casper_payload` was unimportable on `main`**
+  due to `from analytics.contracts_v14 import MultiTechGenerationResult,
+  TechnologyBreakdown` referencing names deleted in the Palette refactor
+  (`979520b`, Feb 24 2026). This was a latent production-blocker: the
+  entire `analytics.casper` package failed to load, silently disabling
+  the tail-risk evaluation path at `analytics/casper/casper_v14.py:97`.
+  **Resolved in this PR (commit `92f514b`)** by re-instating the three
+  missing contracts in `analytics/contracts_v14.py` (see Fixed section
+  above). Discovered when the revived D.5 freeze test triggered pytest
+  collection on the import chain.
 
 #### Sprint 18D Provenance
 - Branch cut from `b4a2498` (Sprint 18B merge on `main`).
-- Five surgical commits, all reversible:
+- Seven surgical commits, all reversible:
   1. `4d65575` — D.2: payload fix
   2. `2ac6e06` — D.3: regression tests
   3. `7ca6d68` — D.4: tail-risk smoke test revived
   4. `a10f99d` — D.5: contract freeze test revived
   5. `f6def23` — D.6: legacy_v14 README corrected
+  6. `4bbe31d` — D.X: VERSION bump 14.14.0 → 14.14.1 + initial CHANGELOG
+  7. `92f514b` — D.X+2: re-instate MultiTechGenerationResult /
+     TechnologyBreakdown / GenerationProfile (resolves CI collection
+     failure exposed by D.5)
 - Investigation artefact retained as a workspace-only deliverable:
   `CASPER_INVESTIGATION_REPORT.md`.
 
