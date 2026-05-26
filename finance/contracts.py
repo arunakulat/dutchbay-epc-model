@@ -295,60 +295,6 @@ class MultiMetricTornadoResult(BaseModel):
         return self
 
 
-class SensitivitySuite(BaseModel):
-    """Complete tornado sensitivity analysis suite for a single metric.
-
-    Bundles all tornado results for a scenario with metadata. Used as
-    return type from sensitivity_v14.run_tornado_sensitivity().
-
-    Args:
-        tornado_results: List of TornadoResult objects (one per parameter)
-        base_metric: Baseline metric value (unshocked)
-        base_config_path: Path to scenario configuration file
-        metric: Name of analyzed metric (e.g., "project_irr")
-
-    Example:
-        >>> suite = SensitivitySuite(
-        ...     tornado_results=[result1, result2, result3],
-        ...     base_metric=0.12,
-        ...     base_config_path="scenarios/example.yaml",
-        ...     metric="project_irr"
-        ... )
-    """
-
-    tornado_results: list[TornadoResult]
-    base_metric: float
-    base_config_path: str
-    metric: str = "project_irr"
-
-
-class MultiMetricSensitivitySuite(BaseModel):
-    """Multi-metric tornado sensitivity suite.
-
-    Bundles tornado results for multiple KPI metrics. Used as return
-    type from sensitivity_v14.run_multi_metric_tornado().
-
-    Args:
-        tornado_results: List of MultiMetricTornadoResult objects
-        base_metrics: Dict of base metric values {metric_name: value}
-        base_config_path: Path to scenario configuration file
-        metrics: List of analyzed metric names
-
-    Example:
-        >>> suite = MultiMetricSensitivitySuite(
-        ...     tornado_results=[result1, result2],
-        ...     base_metrics={"project_irr": 0.12, "equity_irr": 0.15},
-        ...     base_config_path="scenarios/example.yaml",
-        ...     metrics=["project_irr", "equity_irr"]
-        ... )
-    """
-
-    tornado_results: list[MultiMetricTornadoResult]
-    base_metrics: dict[str, float]
-    base_config_path: str
-    metrics: list[str]
-
-
 class BreakevenResult(BaseModel):
     """Breakeven parameter search result.
 
