@@ -51,7 +51,10 @@ src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
 [tool.setuptools.packages.find]
-include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*"]
+# wind_resource* added Sprint 19 (W.2) — the package existed in the repo
+# tree but was excluded from wheel discovery, so `pip install` produced an
+# artifact without the wind-ingestion modules. Disclosed as Defect W2.
+include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*", "wind_resource*"]
 
 [tool.black]
 line-length = 88
