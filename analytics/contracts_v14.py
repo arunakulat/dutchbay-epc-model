@@ -212,6 +212,10 @@ class SensitivitySuite(ContractMixin):
     tornado_results: list[TornadoResult] = field(default_factory=list)
     results: list[Any] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Sprint 18C — ARCH-04 unification (issue #52)
+    base_kpis: dict[str, float] = field(default_factory=dict)
+    scenario_name: str | None = None
+    analysis_timestamp: str | None = None
 
 
 @dataclass(frozen=True)
