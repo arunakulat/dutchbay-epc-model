@@ -96,7 +96,10 @@ def build_casper_payload(
 # ────────────────────────── internal helpers ────────────────────────────
 
 
-def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None:
+def _scenario_summary_to_dict(
+    s: ScenarioResult | None,
+    mc: MonteCarloResult | None = None,
+) -> dict[str, Any] | None:
     """
     Slender, JSON-safe descriptor for the scenario.
 
@@ -178,28 +181,41 @@ def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None
     if s.debt_covenants is not None:
         data["debt_covenants"] = s.debt_covenants.as_dict()
 
-    # Equity performance overlay (if available)
+    # Equity performance overlay (if available).
+    #
+    # Canonical EquityPerformance exposes only equity_irr, equity_npv,
+    # equity_multiple and metadata. Legacy PE metrics (moic/dpi/rvpi/tvpi/
+    # average_coc/payback_period_years) are retained inside ep.metadata by
+    # finance/equity_v14.py; we surface them defensively with .get() so the
+    # payload also tolerates leaner producers (e.g. pipeline_v14_enhanced).
+    #
+    # Downside is synthesised from MonteCarloResult when provided, since
+    # DownsideMetrics is declared in contracts but not attached to any
+    # ScenarioResult in the current pipeline.
     if s.equity_performance is not None:
         ep = s.equity_performance
+        ep_meta: Mapping[str, Any] = (
+            ep.metadata if isinstance(ep.metadata, Mapping) else {}
+        )
+
         downside_dict: dict[str, Any] | None = None
-        if ep.downside is not None:
-            d = ep.downside
+        if mc is not None:
             downside_dict = {
-                "prob_negative_npv": d.prob_negative_npv,
-                "prob_below_hurdle": d.prob_below_hurdle,
-                "worst_case_irr": d.worst_case_irr,
-                "max_drawdown": d.max_drawdown,
+                "project_irr_p10": mc.project_irr_p10,
+                "project_npv_p10": mc.project_npv_p10,
+                "dscr_min_p10": mc.dscr_min_p10,
             }
 
         data["equity_performance"] = {
             "equity_irr": ep.equity_irr,
             "equity_npv": ep.equity_npv,
-            "moic": ep.moic,
-            "dpi": ep.dpi,
-            "rvpi": ep.rvpi,
-            "tvpi": ep.tvpi,
-            "average_coc": ep.average_coc,
-            "payback_period_years": ep.payback_period_years,
+            "equity_multiple": ep.equity_multiple,
+            "moic": ep_meta.get("moic"),
+            "dpi": ep_meta.get("dpi"),
+            "rvpi": ep_meta.get("rvpi"),
+            "tvpi": ep_meta.get("tvpi"),
+            "average_coc": ep_meta.get("average_coc"),
+            "payback_period_years": ep_meta.get("payback_period_years"),
             "downside": downside_dict,
         }
 
@@ -340,7 +356,7 @@ def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
     metadata = dict(casper.metadata)
     return {
         "contract_version": CASPER_CONTRACT_VERSION,
-        "scenario": _scenario_summary_to_dict(casper.scenario),
+        "scenario": _scenario_summary_to_dict(casper.scenario, casper.monte_carlo),
         "baseline_kpis": dict(casper.baseline_kpis),
         # Singular key to match the CASPER v1 contract docs
         "sensitivity": _sensitivity_to_dict(casper.sensitivities),
