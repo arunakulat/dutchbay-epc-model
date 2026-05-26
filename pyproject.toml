@@ -33,6 +33,18 @@ test = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
 ]
+# Wind-resource ingestion path (ERA5 / Copernicus CDS). Kept as an opt-in
+# extra so lender-grade finance runs that consume a *frozen* wind export JSON
+# do not require Copernicus credentials or the netCDF toolchain. Install with:
+#     pip install -e ".[wind]"
+# Producers of the frozen export (scripts/run_wind_analysis_v14.py) require
+# this extra; consumers (run_full_pipeline_v14.py + wind_resource.cashflow_adapter)
+# do not. Disclosed as Defect W1 in Sprint 19 (CHANGELOG v14.15.0).
+wind = [
+  "cdsapi>=0.6",
+  "xarray>=2023.6",
+  "netcdf4>=1.6",
+]
 
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
