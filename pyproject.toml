@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dutchbay-epc-model"
-version = "14.13.0"
+version = "14.14.0"
 description = "DutchBay EPC Model - Sprint 10 Release: Monte Carlo Performance & Test Infrastructure"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,7 @@ dependencies = [
   "matplotlib>=3.7",
   "pyyaml>=6.0",
   "scipy>=1.10",
+  "omegaconf>=2.3",
 ]
 
 [project.optional-dependencies]

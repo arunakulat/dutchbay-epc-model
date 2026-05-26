@@ -7,6 +7,45 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v14.14.0 - 2026-05-26
+
+### Sprint 18B — Equity Distribution Productionisation
+
+#### Added
+- **Equity distribution pipeline-ready API** (`finance/equity_distribution_v14_hydra.py`, +559/-87): Hydra/OmegaConf-driven config surface and pipeline-ready entry points.
+- **Pipeline wiring** (`analytics/pipeline_v14_enhanced.py`, +68/-6): equity distribution integrated into the v14 enhanced pipeline.
+- **CLI artifact exposure** (`run_full_pipeline_v14.py`, +26/-84): equity distribution result exposed through the full-pipeline CLI.
+- **Production API re-exports** (`finance/equity/__init__.py`, +55/-32): canonical equity distribution surface re-exported.
+- **Regression suite** (`tests/api/test_equity_distribution_pipeline_integration.py`, +98 new): equity distribution pipeline regression tests.
+- **Runtime dependency:** `omegaconf` added to `pyproject.toml` (required by the Hydra-style config surface).
+
+#### Changed
+- **ARCH-04 alignment in `finance/equity_v14.py`** (+43/-232): `calculate_equity_performance` now returns the canonical `analytics.contracts_v14.EquityPerformance` (fields: `equity_irr`, `equity_npv`, `equity_multiple`, `metadata`). Auxiliary statistics (`moic`, `dpi`, `rvpi`, `tvpi`, `downside`, `average_coc`, `payback_period_years`) are now nested inside `metadata`. Import-safe fallback repaired. Private helper `_calculate_downside_proxy` removed (no external importers).
+- **Equity compliance guard** (`tests/lint/test_equity_distribution_compliance.py`, +60/-80): narrowly relaxed to permit `__all__` metadata exports. No global-state policy changed.
+- Bumped project version 14.13.0 → **14.14.0** (additive feature surface + ARCH-04 canonicalisation of `EquityPerformance` consumers).
+
+#### Skipped (intentional)
+- Sprint 18B commit `0bff333` ("derive debt timeline from tenor and CFADS") **superseded upstream**: main's PR #107 (`fde8dec`) achieves the same via a cleaner `_build_cfads_timeline()` helper extraction in `finance/debt_v14.py`. The feature branch's `finance/debt_v14.py` is byte-identical to main.
+
+#### Disclosures
+- **Pre-existing latent break — NOT introduced by this PR:** `analytics/casper/casper_payload.py` (lines 185-186) reads legacy `EquityPerformance` attributes (`.downside`, `.moic`, `.dpi`, `.rvpi`, `.tvpi`, `.average_coc`, `.payback_period_years`) that no longer exist on the canonical shape. The file is already broken on `main` (IndentationError at line 71, documented in `tests/legacy_v14/README.md`); CASPER tests are already quarantined. Follow-up issue to be filed for a separate sprint.
+- **`EquityPerformance` shape change is a soft public-API shift** for any external caller reading `.moic/.dpi/.rvpi/.tvpi/.downside` top-level — those values now live under `metadata`. No in-repo callers affected.
+
+#### Sprint 18B Provenance
+- All 9 sprint-18b commits accounted for: **8 cherry-picked** (each with `-x` provenance recorded), **1 skipped** (subsumed upstream — see above).
+- Net diff vs main: **+951 / -523 across 10 files** (8 code/test files + `VERSION`, `pyproject.toml`, `CHANGELOG.md`).
+- Cherry-pick order (new → old SHA): `9aa3d1c←d725187`, `4220861←94bd03d`, `daf7501←995eea1`, `b82f023←bbd0c8d`, `1bba038←25f93e8`, `fc465b0←c37db4e`, `d98243f←55ce7eb`, `2bd40dc←ab6033c`.
+- Read-only audit and disclosures retained as workspace-only artefacts (`SPRINT_18B_DOLPHIN_AUDIT.md`, `SPRINT_18B_DOLPHIN_DISCLOSURES.md`).
+
+#### Compliance
+- GWTF v3.0 R23/R25 (feature branch + PR + CI gate; zero direct-to-main commits — surgical cherry-picks only)
+- ARCH-04 (single canonical contract surface in `contracts_v14` — equity_v14 now consumes canonical `EquityPerformance`)
+- TYPE-01 (mypy --strict — verified via CI on Draft PR)
+- TEST-01/R11 (9 canonical v14 tests green; new equity distribution regression suite added)
+- FIN-01/02 (additive changes only; IRR/DSCR/NPV pins unchanged — sprint 18B is equity-distribution work, not core math)
+- DOC-02 (this CHANGELOG entry + VERSION bump in same PR)
+- MRM-02 (junit artefacts retained via standard CI)
+
 ## v14.13.0 - 2026-05-26
 
 ### Sprint 18C — ARCH-04 SensitivitySuite Unification
