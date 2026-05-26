@@ -58,17 +58,16 @@ def test_payload_casper_contract_version_is_frozen() -> None:
 
 
 def test_contracts_casper_contract_version_is_frozen() -> None:
-    """analytics.contracts_v14.CASPER_CONTRACT_VERSION is the value returned
-    by CasperResult.contract_version(). Currently "v1.0" — different from
-    the payload constant. Pinned to catch any future drift in either
-    location.
+    """analytics.contracts_v14.CASPER_CONTRACT_VERSION must equal the
+    payload-level constant. Unified in Sprint 18D (D.X+5) to
+    "casper_result_v1" — previously the two locations silently disagreed
+    ("v1.0" here vs "casper_result_v1" in casper_payload) since at least
+    Sprint 14.
 
-    Pre-existing follow-up: these two constants should be reconciled.
-    They were independently introduced in different modules and have
-    silently disagreed since at least Sprint 14. Out of scope for the
-    current branch.
+    This test now also pins the unification: both constants MUST be equal.
     """
-    assert CONTRACTS_CASPER_CONTRACT_VERSION == "v1.0"
+    assert CONTRACTS_CASPER_CONTRACT_VERSION == "casper_result_v1"
+    assert CONTRACTS_CASPER_CONTRACT_VERSION == PAYLOAD_CASPER_CONTRACT_VERSION
 
 
 def test_casper_result_constructs_with_canonical_fields() -> None:

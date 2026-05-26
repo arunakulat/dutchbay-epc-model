@@ -134,7 +134,7 @@ def test_contracts_v14_sensitivity_and_mc_surface_is_importable() -> None:
     )
     assert request.metric == "project_irr"
     assert mc.trials["project_irr"][1] == 0.12
-    assert casper.contract_version() == "v1.0"
+    assert casper.contract_version() == "casper_result_v1"
 
 
 def test_covenant_breach_tolerance_helper() -> None:
