@@ -80,7 +80,7 @@ GWTF Compliance:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 2.2.2 (Lender-Grade Pipeline + Equity Distribution Integration)
+Version: 2.3.0 (Lender-Grade Pipeline + Equity Distribution + Wind→Finance Integration)
 """
 
 from __future__ import annotations
@@ -175,6 +175,10 @@ def _load_wind_export(export_path: str | Path) -> dict[str, Any]:
     whose value matches the :class:`wind_resource.cashflow_adapter.WindCashflowExport`
     contract. Top-level shapes that already match the contract (no wrapper)
     are also accepted for forward-compatibility.
+
+    No validation is performed here beyond "is a dict" — contract enforcement
+    is the adapter's job (Pydantic ``WindCashflowExport`` will reject any
+    payload that fails the 11-key schema with a clear ValidationError).
     """
     p = Path(export_path)
     with p.open("r", encoding="utf-8") as f:
@@ -290,7 +294,9 @@ def _apply_wind_to_scenario(
 
     # Write to a temp file alongside the original scenario so any relative
     # paths inside the YAML still resolve correctly. delete=False because we
-    # hand the path to run_v14_pipeline; cleanup is the caller's job.
+    # hand the path to run_v14_pipeline; cleanup is performed by the
+    # ``finally`` block in :func:`cli` (see end of this module).
+    # The original scenario YAML on disk is never mutated.
     src_dir = Path(scenario_path).resolve().parent
     tmp = tempfile.NamedTemporaryFile(
         mode="w",
@@ -354,22 +360,51 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
 )
 def cli(cfg: DictConfig) -> None:
     """Hydra CLI entry point for complete lender-grade pipeline.
-    
+
     Args:
         cfg: Hydra configuration from conf/run_full_pipeline_v14.yaml.
             Required fields:
-                - config: Path to scenario YAML file
-            Optional fields:
-                - validation_mode: 'strict' or 'off' (default: 'strict')
-                - validation_modules: Comma-separated list or array
-                - export_dir: Where to write artifacts (default: _out/run_full_pipeline_v14)
-                - write_artifacts: Write files (default: true)
-                
+                - config: Path to scenario YAML file.
+            Optional fields (finance):
+                - validation_mode: 'strict' or 'off' (default: 'strict').
+                - validation_modules: Comma-separated string or array of
+                  modules to validate (default: None → all modules).
+                - export_dir: Artifact output directory
+                  (default: '_out/run_full_pipeline_v14').
+                - write_artifacts: Write JSON/CSV files (default: true).
+            Optional fields (Sprint 19 W.6 — wind→finance ingestion;
+            OFF by default — setting neither of the first two preserves
+            pre-Sprint-19 behaviour exactly):
+                - wind_assessment_json: Path to a frozen wind-export JSON
+                  produced by scripts/run_wind_analysis_v14.py. When set,
+                  the finance run consumes this export via
+                  wind_resource.cashflow_adapter. Mutually exclusive with
+                  wind_auto_orchestrate — an explicit path always wins.
+                - wind_auto_orchestrate: If true AND wind_assessment_json
+                  is null, subprocess the wind producer to mint a fresh
+                  export before the finance run. Requires the [wind] extra
+                  (cdsapi, xarray, netcdf4). Default false — lender-grade
+                  runs should consume an audited frozen export.
+                - adapter_mode: 'overwrite' | 'fill_if_absent' |
+                  'validate_only' (default: 'fill_if_absent'). See
+                  wind_resource.cashflow_adapter module docstring.
+                - wind_tolerance_pct: Symmetric relative drift tolerance
+                  in percent for fill_if_absent and validate_only modes
+                  (default: 0.5).
+                - wind_export_scenario: P-level selector ('P50' | 'P75' |
+                  'P90'); must match the scenario field of the export JSON
+                  (default: 'P75').
+
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
-        
+        On wind-ingestion failure, prints a structured error JSON with
+        ``status='error'`` and ``phase='wind_resource_ingestion'`` (or
+        ``error_type='WindAdapterDriftError'`` for drift failures) and
+        exits 1 before the finance pipeline runs.
+
     Raises:
-        SystemExit: If config validation fails or errors occur.
+        SystemExit: Exit code 1 on any failure (missing config, wind
+            ingestion error, drift threshold breach, or pipeline error).
     """
     config = cfg.get("config")
     if not config:
