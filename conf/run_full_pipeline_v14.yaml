@@ -33,3 +33,33 @@ export_dir: _out/run_full_pipeline_v14
 # If true, write summary.json + (optional) annual_rows.csv, kpis.json, debt_result.json
 # Set to false for dev/debugging to skip file I/O.
 write_artifacts: true
+
+# ---------------------------------------------------------------------------
+# Sprint 19 W.6: Wind→Finance integration (OFF by default).
+# Setting neither wind_assessment_json nor wind_auto_orchestrate preserves
+# the pre-Sprint-19 behaviour exactly. See run_full_pipeline_v14.py docstring
+# for the full design (two-CLI topology, three adapter modes, frozen-export
+# contract).
+# ---------------------------------------------------------------------------
+
+# Path to a frozen wind-export JSON (produced by scripts/run_wind_analysis_v14.py).
+# When set, the finance run consumes this export via wind_resource.cashflow_adapter.
+# Mutually exclusive with wind_auto_orchestrate: an explicit path always wins.
+wind_assessment_json: null
+
+# If true AND wind_assessment_json is null, subprocess scripts/run_wind_analysis_v14.py
+# to mint a fresh frozen export before the finance run. Requires the [wind] extra.
+# Default false — lender-grade runs should consume an audited frozen export.
+wind_auto_orchestrate: false
+
+# Adapter merge mode: 'overwrite' | 'fill_if_absent' | 'validate_only'
+# See wind_resource.cashflow_adapter module docstring for semantics.
+adapter_mode: fill_if_absent
+
+# Acceptable symmetric relative drift (percent) between wind-derived and YAML
+# values in fill_if_absent and validate_only modes.
+wind_tolerance_pct: 0.5
+
+# P-level selector for the wind export ('P50' | 'P75' | 'P90').
+# Must match the scenario field of the export JSON.
+wind_export_scenario: P75

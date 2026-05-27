@@ -7,6 +7,141 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v14.15.0 - 2026-05-27
+
+### Sprint 19 — Wind→Finance Integration Bridge
+
+This release closes the long-standing gap between the `wind_resource`
+package (ERA5 ingestion, Weibull fit, Wake/Pcurve modelling, P50/P75/P90
+computation) and the `run_full_pipeline_v14` finance CLI. Prior to
+v14.15.0, the wind capability existed in the repo but was not packaged,
+not wired, and not testable end-to-end; the v14 pipeline docstring
+over-claimed integration that did not exist. This release introduces a
+pure-function adapter and an opt-in CLI wiring so frozen wind exports
+flow into the lender-grade cashflow model with deterministic,
+auditable provenance — and zero behaviour change for callers who do
+not opt in.
+
+#### Added
+- **`wind_resource/cashflow_adapter.py`** (+394 LOC) — pure function
+  `wind_export_to_scenario_patch()` that consumes a frozen
+  `WindPipeline.export_for_cashflow_model()` payload and returns a
+  patched v14 scenario dict. Highlights:
+  - Pydantic `WindCashflowExport` model enforces the 11-key producer
+    contract (`scenario`, `annual_generation_mwh`,
+    `capacity_factor_percent`, `revenue_annual_usd`,
+    `revenue_cumulative_usd`, `project_capacity_mw`, `num_turbines`,
+    `rated_capacity_per_turbine_kw`, `ppa_years`, `tariff_lkr_per_kwh`,
+    `exchange_rate_lkr_usd`) with `extra="allow", frozen=True` for
+    forward compatibility.
+  - Three merge modes selectable per-run: `overwrite` (wind wins),
+    `fill_if_absent` (default — wind fills only missing/zero slots and
+    validates drift on populated ones), and `validate_only` (no writes
+    to economic fields; provenance metadata still recorded).
+  - Symmetric relative drift detection `100 * |a-b| / max(|a|,|b|)`
+    (zero-safe). Default tolerance ±0.5%. Drift breaches raise
+    `WindAdapterDriftError` with structured fields (`field`,
+    `wind_value`, `scenario_value`, `drift_pct`, `tolerance_pct`,
+    `mode`).
+  - Normalisation: producer emits capacity factor as percent (e.g.
+    42.8); adapter converts to decimal (0.428) before writing to the
+    canonical `project.capacity_factor` slot (priority-2 in the v14
+    cashflow resolution order — lower slots would have silently
+    shadowed the wind value).
+  - Provenance metadata written under `wind_resource.*` in the
+    patched scenario in **all** modes (including `validate_only`).
+  - **Leaf module** — does NOT import `cdsapi`/`xarray`/`netcdf4`, so
+    consumers (notably `run_full_pipeline_v14`) can import it without
+    the `[wind]` extra installed.
+- **`tests/wind/test_cashflow_adapter.py`** (+32 tests, all green) —
+  30 contract tests covering the 11-key validation surface,
+  PERCENT→DECIMAL conversion, all three merge modes, drift
+  computation edge cases, and provenance metadata; plus 2 round-trip
+  integration tests gated by `pytest.importorskip('numpy_financial')`
+  that drive a synthetic export through the full v14 cashflow path
+  and assert IRR/NPV/DSCR stability within ±0.5%.
+- **`pyproject.toml [project.optional-dependencies] wind`** — declares
+  `cdsapi>=0.6`, `xarray>=2023.6`, `netcdf4>=1.6` as the `[wind]`
+  extra. Wind producer (`scripts/run_wind_analysis_v14.py`) needs
+  this; the finance consumer does not (unless
+  `wind_auto_orchestrate=true` — see below).
+- **`pyproject.toml [tool.setuptools.packages.find]`** — added
+  `wind_resource*` to the include list. Prior to this release the
+  wind package would not have shipped in a wheel build.
+- **`run_full_pipeline_v14.py` — five new Hydra parameters** (all
+  optional, all OFF by default):
+  - `wind_assessment_json`: Path to a frozen wind export. When set,
+    the finance run consumes this export via the adapter.
+  - `wind_auto_orchestrate`: If `true` AND `wind_assessment_json` is
+    null, subprocess the wind producer to mint a fresh export before
+    the finance run. Requires the `[wind]` extra. Default `false` —
+    lender-grade runs should consume an audited frozen export.
+  - `adapter_mode`: `overwrite` | `fill_if_absent` | `validate_only`.
+    Default `fill_if_absent`.
+  - `wind_tolerance_pct`: Drift tolerance (percent). Default `0.5`.
+  - `wind_export_scenario`: P-level selector (`P50` | `P75` | `P90`).
+    Default `P75`.
+  - When wind ingestion is active, the original scenario YAML is
+    **never mutated** — a temp `.patched.yaml` is written alongside
+    the original (so relative paths still resolve), the pipeline
+    reads from that, and a `finally`-block cleans it up on every
+    exit path. Structured `status="error"` JSON is emitted on any of
+    four failure modes: missing export file, `[wind]` extra not
+    installed in auto-orchestrate, producer subprocess failure, or
+    adapter drift breach.
+
+#### Changed
+- **`run_full_pipeline_v14.py` docstring** — rewritten to match the
+  implementation. Pre-Sprint-19 docstring claimed wind-resource
+  integration that did not exist (Sprint 19 defect W4). Now
+  documents the OFF-by-default contract, the two-CLI topology
+  (producer vs. consumer), the three adapter modes, the structured
+  error JSON shape, and all five Hydra params with their defaults
+  and semantics. Module version header bumped 2.2.2 → 2.3.0.
+- **`scripts/legacy_runners/run_wind_analysis_v14.py` →
+  `scripts/run_wind_analysis_v14.py`** (`git mv`). The wind
+  producer had been parked in `legacy_runners/` despite being the
+  canonical wind CLI. Hydra `config_path="conf"` was also broken
+  in the legacy location — it resolved to a non-existent
+  `scripts/legacy_runners/conf/`. Promotion + `config_path="../conf"`
+  fixes both issues. `scripts/legacy_runners/README.md` added to
+  document the (now correctly populated) deprecated-runners folder.
+
+#### Fixed
+- **`pyproject.toml [project] version`**: stale `14.14.0` → `14.15.0`.
+  pyproject was one patch behind `VERSION` on main pre-Sprint-19
+  (14.14.0 vs. 14.14.1); this release re-aligns both files.
+- **Wind producer Hydra config resolution** (latent bug uncovered
+  during W.5 promotion): the producer at
+  `scripts/legacy_runners/run_wind_analysis_v14.py` declared
+  `config_path="conf"`, which Hydra resolved relative to the script
+  file as `scripts/legacy_runners/conf/` — a directory that does not
+  and never did exist. The promotion + `config_path="../conf"`
+  correction makes the producer actually loadable.
+
+#### Defects deferred
+- **`enrich_tornado_with_tail_risk` / `build_tail_risk_snapshots_for_metrics`**
+  signature compatibility (carried from Sprint 18D Defect #2): the
+  symbol names referenced in `analytics/evaluation_v14.py:454-461`
+  exist under a different identifier (`enrich_suite_with_tail_risk`
+  in `analytics/sensitivity/tail_risk.py`); the production caller is
+  `try/except ImportError`-guarded so the path is silently inactive.
+  A signature-compat audit is scheduled for a follow-on sprint —
+  out of scope for the Sprint 19 wind→finance bridge.
+
+#### Commit ledger (this release)
+
+| SHA      | Phase | Purpose                                                                |
+| -------- | ----- | ---------------------------------------------------------------------- |
+| 99913a5  | W.1   | pyproject: declare `[wind]` optional extra                             |
+| da278ef  | W.2   | pyproject: include `wind_resource*` in setuptools package discovery    |
+| e3250ab  | W.3   | NEW `wind_resource/cashflow_adapter.py` (394 LOC, pure function)       |
+| a0ccbd0  | W.4   | NEW 32 adapter tests (contract + round-trip)                           |
+| e79b9d1  | W.5   | promote `run_wind_analysis_v14.py` out of `legacy_runners`             |
+| 4efe80d  | W.6   | wire wind ingestion into `run_full_pipeline_v14` (additive, OFF-default) |
+| 5b8a718  | W.7   | docstring alignment with W.6 wiring                                    |
+| _(this)_ | W.X   | VERSION 14.14.1 → 14.15.0, CHANGELOG, pyproject realignment            |
+
 ## v14.14.1 - 2026-05-26
 
 ### Sprint 18D — CASPER Contract Alignment (Patch)
