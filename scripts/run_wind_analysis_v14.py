@@ -62,9 +62,15 @@ logger = logging.getLogger(__name__)
 _ORIG_CWD = Path.cwd()
 
 
+# config_path is resolved by Hydra relative to *this* script file.
+# Sprint 19 (W.5) promoted this runner from scripts/legacy_runners/ to
+# scripts/, so the path to the repo-root ./conf/ directory is now "../conf".
+# Prior location was effectively broken — Hydra was looking for
+# scripts/legacy_runners/conf/ which never existed; the runner only
+# happened to work when invoked with a chdir into the wrong directory.
 @hydra.main(
     version_base="1.3",
-    config_path="conf",
+    config_path="../conf",
     config_name="wind_analysis",
 )
 def cli(cfg: DictConfig) -> None:
