@@ -215,7 +215,7 @@ def _run_wind_producer(
     # Probe for [wind] extra before spawning the subprocess so we fail fast
     # with a clear message rather than a cryptic subprocess error.
     try:
-        import cdsapi  # noqa: F401  (probe only)
+        import cdsapi  # type: ignore[import-not-found]  # noqa: F401  (probe only; cdsapi ships no stubs and is an optional [wind] extra)
     except ImportError as exc:
         raise RuntimeError(
             "wind_auto_orchestrate=true requires the [wind] extra. "
@@ -288,7 +288,7 @@ def _apply_wind_to_scenario(
         export_dict,
         scenario_dict,
         scenario_name=scenario_name,
-        adapter_mode=adapter_mode,  # type: ignore[arg-type]
+        adapter_mode=adapter_mode,
         tolerance_pct=float(tolerance_pct),
     )
 
