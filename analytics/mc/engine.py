@@ -92,7 +92,24 @@ class MonteCarloEngine:
         common_random_numbers: bool = True,
         correlation: Optional[CorrelationSpec] = None,
     ) -> None:
-        self._base_config: Dict[str, Any] = dict(base_config)
+        # Deep-convert OmegaConf DictConfig to a plain dict so that
+        # _deep_merge_config (in evaluation_v14) receives a fully plain
+        # mapping.  A shallow dict(OmegaConf_object) leaves nested values
+        # as DictConfig, which causes _deep_merge_config to overwrite them
+        # with plain dicts on merge, silently dropping sibling keys that
+        # were not in the override.  When base_config is already a plain
+        # Mapping (the normal case from tests and CLI), this is a no-op.
+        try:
+            from omegaconf import OmegaConf, DictConfig
+            if isinstance(base_config, DictConfig):
+                self._base_config: Dict[str, Any] = OmegaConf.to_container(  # type: ignore[assignment]
+                    base_config, resolve=True, throw_on_missing=False
+                )
+            else:
+                self._base_config = dict(base_config)
+        except ImportError:
+            self._base_config = dict(base_config)
+
         self._seed = int(seed)
         self._crn = bool(common_random_numbers)
         self._correlation = correlation
@@ -195,9 +212,46 @@ class MonteCarloEngine:
 
     @staticmethod
     def _build_overrides_from_sample(sample_row: np.ndarray, param_names: Sequence[str]) -> Dict[str, Any]:
+        """Build a nested override dict from a flat LHS sample row.
+
+        Dot-notation parameter names (e.g. ``"project.capacity_factor"``) are
+        expanded into nested dicts so that ``_deep_merge_config`` in
+        ``evaluation_v14`` can correctly merge them into the base scenario
+        config.  Flat (non-dotted) names are placed at the top level as
+        before.
+
+        Example
+        -------
+        param_names = ["project.capacity_factor", "Financing_Terms.rates.lkr_nominal"]
+        sample_row  = [0.42, 0.075]
+
+        Returns
+        -------
+        {
+            "project": {"capacity_factor": 0.42},
+            "Financing_Terms": {"rates": {"lkr_nominal": 0.075}},
+        }
+
+        Dolphin Strategy note: this is a self-contained static method fix.
+        No shim is required because ``_build_overrides_from_sample`` is a
+        private helper with no external callers; the public API
+        (``MonteCarloEngine.run`` and ``run_monte_carlo_analysis``) is
+        unchanged.  Bug: MC trials all fell back to toy-metric fallback
+        because flat keys were never found in the nested config and the
+        schema guard raised ValidationError on every trial.
+        """
         overrides: Dict[str, Any] = {}
         for name, val in zip(param_names, sample_row.tolist()):
-            overrides[name] = val
+            keys = name.split(".")
+            if len(keys) == 1:
+                # Non-dotted name: place at top level (backward-compatible)
+                overrides[name] = val
+            else:
+                # Dot-notation: expand into nested dict
+                d = overrides
+                for k in keys[:-1]:
+                    d = d.setdefault(k, {})
+                d[keys[-1]] = val
         return overrides
 
 
