@@ -22,21 +22,41 @@ def plot_tornado(
     title: str = "Tornado",
 ) -> Any:
     """
-    Minimal tornado plot helper.
+    Plot a tornado chart from a sensitivity results table.
 
     table: typically a pandas DataFrame from analytics.sensitivity.export.suite_to_tables()["tornado_rows"]
     Returns a matplotlib Figure.
-
-    NOTE: This is a placeholder. Implement real plotting once core surfaces are stable.
     """
     import matplotlib.pyplot as plt  # lazy import
+    import numpy as np
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+    if table is None or (hasattr(table, "empty") and table.empty):
+        fig, ax = plt.subplots()
+        ax.set_title(title)
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        return fig
+
+    df = table.copy()
+    if "impact_abs" in df.columns:
+        df = df.sort_values("impact_abs", ascending=True)
+
+    labels = df["label"].tolist()
+    lows = df["low_value"].tolist()
+    highs = df["high_value"].tolist()
+    base_val = df["base_value"].iloc[0] if "base_value" in df.columns and not df.empty else 0.0
+
+    fig, ax = plt.subplots(figsize=(10, max(4, len(labels) * 0.6)))
+    y_pos = np.arange(len(labels))
+
+    for i, (l, h) in enumerate(zip(lows, highs)):
+        ax.barh(y_pos[i], abs(h - l), left=min(l, h), color="skyblue", edgecolor="black", alpha=0.8)
+
+    ax.axvline(base_val, color="red", linestyle="--", linewidth=1.5, label=f"Base ({base_val:.4f})")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels)
     ax.set_title(title)
-    ax.set_xlabel("Value")
-    ax.set_ylabel("Case")
-    ax.text(0.5, 0.5, "Tornado plot placeholder", ha="center", va="center", transform=ax.transAxes)
+    ax.legend()
+    plt.tight_layout()
     return fig
 
 
