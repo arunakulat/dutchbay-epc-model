@@ -162,3 +162,6 @@ DutchBay_DevPkg_PREFERRED_ONLY/
 _freeze_artifacts/
 inputs/*.zip
 inputs/*.zip
+
+# AI coding-agent scratch / journal files (e.g. Jules "Palette" persona)
+.Jules/
