@@ -32,6 +32,33 @@ from finance.tax_schedule_v14 import (
 )
 
 
+def _amortizing_interest(
+    debt: float, rate: float, tenor_years: int, project_life: int
+) -> List[float]:
+    """Declining annual interest on an equal-principal amortizing debt balance.
+
+    Mirrors finance.debt_v14's amortizing schedules (interest = outstanding * rate),
+    so fixtures exercise a realistic *declining* interest profile. A flat schedule
+    (the prior fixture bug) drives perpetual losses -> unbounded TLCF -> $0 tax (#59).
+
+    Args:
+        debt: Initial debt principal (USD).
+        rate: Annual interest rate (decimal).
+        tenor_years: Years over which principal amortizes to zero.
+        project_life: Number of annual periods to emit.
+
+    Returns:
+        List of annual interest expense (USD), declining to 0 after ``tenor_years``.
+    """
+    schedule: List[float] = []
+    balance = debt
+    principal = debt / tenor_years
+    for _ in range(project_life):
+        schedule.append(max(0.0, balance) * rate)
+        balance = max(0.0, balance - principal)
+    return schedule
+
+
 @pytest.fixture
 def typical_project_params():
     """Typical wind project parameters."""
@@ -115,7 +142,9 @@ class TestTaxableIncomeCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -142,7 +171,9 @@ class TestTaxableIncomeCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -169,7 +200,9 @@ class TestTaxableIncomeCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -200,7 +233,9 @@ class TestTLCFMechanics:
             macrs_class=DepreciationMethod.MACRS_7
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -231,7 +266,9 @@ class TestTLCFMechanics:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -252,7 +289,7 @@ class TestTLCFMechanics:
                 break
     
     def test_tlcf_exhaustion_timing(self, typical_project_params):
-        """TLCF should exhaust within 5-7 years for typical projects."""
+        """TLCF exhausts in the back half of project life under amortizing debt."""
         params = typical_project_params
         
         depreciation = calculate_straight_line_depreciation(
@@ -261,7 +298,9 @@ class TestTLCFMechanics:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -271,10 +310,11 @@ class TestTLCFMechanics:
             corporate_tax_rate=0.28
         )
         
-        # TLCF should exhaust within reasonable timeframe
-        assert 3 <= tax_schedule.tlcf_exhaustion_year <= 10, (
+        # Regression pin (TEST-01): with amortizing debt, accumulated TLCF is
+        # not consumed until the back half of the 20-year life (~year 16).
+        assert 13 <= tax_schedule.tlcf_exhaustion_year <= 19, (
             f"TLCF exhaustion year {tax_schedule.tlcf_exhaustion_year} "
-            f"should be 3-10 years for typical project"
+            f"should be ~16 (back half) for typical project"
         )
 
 
@@ -287,7 +327,9 @@ class TestTaxLiabilityCalculation:
         
         # Create loss years with high depreciation
         depreciation = [40e6] * 5 + [0] * 15  # Front-loaded
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -314,7 +356,9 @@ class TestTaxLiabilityCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -357,7 +401,9 @@ class TestCAFODCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -391,7 +437,9 @@ class TestCAFODCalculation:
             project_life_years=params["project_life"]
         )
         
-        interest = [params["debt"] * params["interest_rate"]] * params["project_life"]
+        interest = _amortizing_interest(
+            params["debt"], params["interest_rate"], 15, params["project_life"]
+        )
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=params["revenue"],
@@ -412,16 +460,16 @@ class TestRegressionPins:
     """Regression pins for DutchBay baseline (TEST-01 compliance)."""
     
     def test_dutchbay_baseline_tlcf(self):
-        """DutchBay $200M project should have $15-25M peak TLCF."""
+        """DutchBay baseline: amortizing debt + 15-yr depreciation -> ~$59M peak TLCF."""
         capex = 200e6
         project_life = 20
         revenue = [20e6 + i * 0.5e6 for i in range(project_life)]
         opex = [7e6] * project_life
         
-        depreciation = calculate_straight_line_depreciation(capex, 10, 0, project_life)
+        depreciation = calculate_straight_line_depreciation(capex, 15, 0, project_life)
         
         debt = 140e6
-        interest = [debt * 0.08] * project_life
+        interest = _amortizing_interest(debt, 0.08, 15, project_life)
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=revenue,
@@ -433,22 +481,23 @@ class TestRegressionPins:
         
         peak_tlcf = max(tax_schedule.annual_tlcf_balance)
         
-        # Regression pin: $15-30M peak TLCF
-        assert 10e6 < peak_tlcf < 35e6, (
-            f"DutchBay peak TLCF should be $10-35M, got ${peak_tlcf/1e6:.1f}M"
+        # Regression pin (TEST-01): declining interest + 15-yr straight-line
+        # depreciation yield ~$59.2M peak TLCF for the DutchBay baseline.
+        assert 52e6 < peak_tlcf < 66e6, (
+            f"DutchBay peak TLCF should be ~$59M, got ${peak_tlcf/1e6:.1f}M"
         )
     
     def test_dutchbay_baseline_total_tax(self):
-        """DutchBay should pay $40-55M total tax over 20 years."""
+        """DutchBay baseline: amortizing debt -> ~$18M total corporate tax over 20y."""
         capex = 200e6
         project_life = 20
         revenue = [20e6 + i * 0.5e6 for i in range(project_life)]
         opex = [7e6] * project_life
         
-        depreciation = calculate_straight_line_depreciation(capex, 10, 0, project_life)
+        depreciation = calculate_straight_line_depreciation(capex, 15, 0, project_life)
         
         debt = 140e6
-        interest = [debt * 0.08] * project_life
+        interest = _amortizing_interest(debt, 0.08, 15, project_life)
         
         tax_schedule = calculate_corporate_tax_schedule(
             revenue_schedule=revenue,
@@ -460,9 +509,10 @@ class TestRegressionPins:
         
         total_tax = sum(tax_schedule.annual_tax_liability) / 1e6
         
-        # Regression pin: $35-60M total tax
-        assert 30 < total_tax < 65, (
-            f"DutchBay total tax should be $30-65M, got ${total_tax:.1f}M"
+        # Regression pin (TEST-01): declining interest retires the legacy $0-tax
+        # artifact (#59); ~$18.3M total corporate tax over 20 years.
+        assert 15 < total_tax < 22, (
+            f"DutchBay total tax should be ~$18M (non-zero), got ${total_tax:.1f}M"
         )
 
 
