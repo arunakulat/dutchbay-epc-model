@@ -100,8 +100,6 @@ def _prepare_cashflow_context(
     fx_curve: Optional[List[float]],
     capex_depreciable_lkr: Optional[float],
     interest_expense_series: Optional[List[float]],
-    *,
-    strict: bool = True,
 ) -> Tuple[
     Dict[str, Any],
     List[float],
@@ -123,10 +121,8 @@ def _prepare_cashflow_context(
     reused for all years, avoiding repeated computation and ensuring
     consistent loss carry-forward tracking.
     """
-    # Validate parameters before expensive calculations.
-    # strict=True (default) preserves production behaviour (raise on bad config);
-    # strict=False routes the same issues to warnings for lenient/test runs.
-    validate_parameters(config, strict=strict)
+    # Validate parameters before expensive calculations
+    validate_parameters(config)
 
     params_obj: CashflowParams = _build_cashflow_params(config)
     params_dict: Dict[str, Any] = asdict(params_obj)
@@ -393,8 +389,6 @@ def build_annual_cfads(
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
     verbose: bool = False,
-    *,
-    strict: bool = True,
 ) -> List[float]:
     """
     Return list of CFADS (LKR) for each project year.
@@ -415,7 +409,6 @@ def build_annual_cfads(
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
-        strict=strict,
     )
 
     cfads_list: List[float] = []
@@ -458,8 +451,6 @@ def build_annual_rows(
     fx_curve: Optional[List[float]] = None,
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
-    *,
-    strict: bool = True,
 ) -> List[Dict[str, float]]:
     """
     Return list of per-year breakdown rows including CFADS in LKR and USD.
@@ -486,7 +477,6 @@ def build_annual_rows(
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
-        strict=strict,
     )
 
     rows: List[Dict[str, float]] = []
@@ -530,8 +520,6 @@ def build_annual_rows_efficient(
     fx_curve: Optional[List[float]] = None,
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
-    *,
-    strict: bool = True,
 ) -> List[Dict[str, float]]:
     """
     Build annual rows using batch tax calculation (build_tax_series).
@@ -559,7 +547,6 @@ def build_annual_rows_efficient(
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
-        strict=strict,
     )
 
     # Step 1: Compute all production/revenue/opex data

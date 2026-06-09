@@ -465,39 +465,9 @@ def _extract_parameters(raw: Dict[str, Any]) -> Dict[str, Any]:
     return asdict(params)
 
 
-def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[str]:
-    """Validate cashflow parameters from configuration.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration dictionary to validate.
-    strict : bool, default=True
-        If True (the production default), raise ``ValueError`` on any missing
-        or invalid required field — byte-for-byte identical to the historical
-        behaviour. If False (test/development), collect the same issues as
-        warnings, log them once, and return without raising so callers can
-        proceed on downstream defaults.
-
-    Returns
-    -------
-    list[str]
-        Empty list on success (backward compatible).
-
-    Raises
-    ------
-    ValueError
-        If validation fails in strict mode.
-    """
+def validate_parameters(config: Dict[str, Any]) -> List[str]:
+    """Validate cashflow parameters from configuration."""
     errors: List[str] = []
-    warnings: List[str] = []
-
-    def _flag(msg: str, default_hint: str = "") -> None:
-        """Route an issue to errors (strict) or warnings (lenient)."""
-        if strict:
-            errors.append(msg)
-        else:
-            warnings.append(f"{msg}{default_hint}")
 
     tax_rate_raw = _as_float_or_none(
         _resolve_first(
@@ -511,25 +481,21 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
         )
     )
     if tax_rate_raw is None:
-        _flag("corporate_tax_rate: missing (required field)", " - using default 24%")
+        errors.append("corporate_tax_rate: missing (required field)")
     else:
         tax_rate = _pct_to_decimal(tax_rate_raw)
         if tax_rate is None or not (0.0 <= tax_rate <= 1.0):
-            _flag(
+            errors.append(
                 "corporate_tax_rate: "
-                f"{tax_rate} out of range (must be 0.0-1.0 or 0-100%)",
-                " - using default 24%",
+                f"{tax_rate} out of range (must be 0.0-1.0 or 0-100%)"
             )
 
     try:
         project_life = _extract_project_life_years(config, log=False)
         if project_life < 1:
-            _flag(
-                f"project_life_years: {project_life} invalid (must be >= 1)",
-                " - using default 20 years",
-            )
+            errors.append(f"project_life_years: {project_life} invalid (must be >= 1)")
     except ValueError as e:
-        _flag(f"project_life_years: {e}", " - using default 20 years")
+        errors.append(f"project_life_years: {e}")
 
     capacity_mw = _as_float_or_none(
         _resolve_first(
@@ -540,10 +506,7 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
         )
     )
     if capacity_mw is None or capacity_mw <= 0:
-        _flag(
-            f"capacity_mw: {capacity_mw} invalid (must be > 0)",
-            " - using default 100 MW",
-        )
+        errors.append(f"capacity_mw: {capacity_mw} invalid (must be > 0)")
 
     cf_raw = _as_float_or_none(
         _resolve_first(
@@ -557,21 +520,17 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
         )
     )
     if cf_raw is None:
-        _flag("capacity_factor: missing (required field)", " - using default 25%")
+        errors.append("capacity_factor: missing (required field)")
     else:
         cf = _pct_to_decimal(cf_raw)
         if cf is None or not (0.0 < cf <= 1.0):
-            _flag(
-                f"capacity_factor: {cf} out of range (must be 0.0-1.0 or 0-100%)",
-                " - using default 25%",
+            errors.append(
+                f"capacity_factor: {cf} out of range (must be 0.0-1.0 or 0-100%)"
             )
 
     tariff = _resolve_tariff_lkr_per_kwh(config)
     if tariff is None or tariff < 0:
-        _flag(
-            f"tariff_lkr_per_kwh: {tariff} invalid (must be >= 0)",
-            " - using default 20 LKR/kWh",
-        )
+        errors.append(f"tariff_lkr_per_kwh: {tariff} invalid (must be >= 0)")
 
     opex = _as_float_or_none(
         _resolve_first(
@@ -584,24 +543,19 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
         )
     )
     if opex is None or opex < 0:
-        _flag(
-            f"opex_usd_per_year: {opex} invalid (must be >= 0)",
-            " - using default $1M/year",
-        )
+        errors.append(f"opex_usd_per_year: {opex} invalid (must be >= 0)")
 
     degradation_raw = _as_float_or_none(
         _resolve_first(config, ("project", "degradation_pct"), "degradation_pct")
     )
     if degradation_raw is not None:
         if degradation_raw < 0:
-            _flag(
-                f"degradation_pct: {degradation_raw} invalid (must be >= 0, percent)",
-                " - using 0%",
+            errors.append(
+                f"degradation_pct: {degradation_raw} invalid (must be >= 0, percent)"
             )
         elif degradation_raw > 30:
-            _flag(
-                f"degradation_pct: {degradation_raw}% implausibly high (>30%/year). "
-                "Check units."
+            errors.append(
+                f"degradation_pct: {degradation_raw}% implausibly high (>30%/year). Check units."
             )
 
     grid_loss_raw = _as_float_or_none(
@@ -610,10 +564,7 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
     if grid_loss_raw is not None:
         loss = _pct_to_decimal(grid_loss_raw)
         if loss and not (0.0 <= loss < 1.0):
-            _flag(
-                f"grid_loss_pct: {loss} out of range (must be 0.0-1.0)",
-                " - using 0%",
-            )
+            errors.append(f"grid_loss_pct: {loss} out of range (must be 0.0-1.0)")
 
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
@@ -627,18 +578,14 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
     if risk_haircut_raw is not None:
         risk = _pct_to_decimal(risk_haircut_raw)
         if risk and not (0.0 <= risk < 1.0):
-            _flag(
-                f"risk_haircut_pct: {risk} out of range (must be 0.0-1.0)",
-                " - using 0%",
-            )
+            errors.append(f"risk_haircut_pct: {risk} out of range (must be 0.0-1.0)")
 
     depreciation_years = as_int(
         _resolve_first(config, ("tax", "depreciation_years"), "depreciation_years")
     )
     if depreciation_years is not None and depreciation_years < 1:
-        _flag(
-            f"depreciation_years: {depreciation_years} invalid (must be >= 1)",
-            " - using default 20 years",
+        errors.append(
+            f"depreciation_years: {depreciation_years} invalid (must be >= 1)"
         )
 
     fx_cfg = config.get("fx") or config.get("FX")
@@ -646,17 +593,9 @@ def validate_parameters(config: Dict[str, Any], *, strict: bool = True) -> List[
         start = fx_cfg.get("start_lkr_per_usd")
         curve = fx_cfg.get("curve") or fx_cfg.get("curve_lkr_per_usd")
         if start is None and not isinstance(curve, (list, tuple)):
-            _flag(
-                "fx: invalid configuration; expected 'start_lkr_per_usd' "
-                "or an explicit 'curve' list",
-                " - FX integration may fail",
+            errors.append(
+                "fx: invalid configuration; expected 'start_lkr_per_usd' or an explicit 'curve' list"
             )
-
-    if not strict and warnings:
-        logger.warning(
-            "Configuration validation warnings (non-strict mode):\n%s",
-            "\n".join(f"  • {w}" for w in warnings),
-        )
 
     if errors:
         error_msg = "Configuration validation failed:\n" + "\n".join(
