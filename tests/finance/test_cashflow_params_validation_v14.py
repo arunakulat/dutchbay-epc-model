@@ -26,15 +26,15 @@ COMPLIANT_CONFIG: dict[str, Any] = {
     "project": {
         "capacity_mw": 100.0,
         "capacity_factor": 0.40,
+        # Explicit, supported life field — do NOT rely on the heuristic
+        # path-substring fallback in _extract_project_life_years.
+        "project_life_years": 20,
     },
     "tariff": {
         "lkr_per_kwh": 20.0,
     },
     "opex": {
         "usd_per_year": 3_000_000.0,
-    },
-    "returns": {
-        "project_life_years": 20,
     },
     "tax": {
         "corporate_tax_rate": 0.30,
