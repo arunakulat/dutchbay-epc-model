@@ -495,7 +495,9 @@ def run_v14_pipeline_enhanced(
         metrics.validation_time_sec = time.time() - phase_start
 
         phase_start = time.time()
-        annual_rows = build_annual_rows(cfg)
+        # Honour the pipeline validation_mode for cashflow parameter validation:
+        # 'strict' -> raise on bad config (production); 'off' -> lenient/warn.
+        annual_rows = build_annual_rows(cfg, strict=(mode == "strict"))
         annual_rows = _validate_annual_rows_structure(annual_rows)
         metrics.annual_rows_count = len(annual_rows)
         metrics.cashflow_time_sec = time.time() - phase_start
