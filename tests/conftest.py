@@ -417,6 +417,10 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "analytics_layer: Functional/integration tests for analytics layer",
     )
+    config.addinivalue_line(
+        "markers",
+        "performance: Performance/throughput benchmark tests (subset of slow)",
+    )
 
     # Print test mode banner (env var based)
     test_mode = os.environ.get("DUTCHBAY_TEST_MODE", "fast").lower()
