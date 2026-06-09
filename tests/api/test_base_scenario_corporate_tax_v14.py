@@ -31,10 +31,11 @@ from finance.tax_profile_v14_hydra import (
 
 BASE_SCENARIO = "scenarios/dutchbay_basecase_2025Q4.yaml"
 HOURS_PER_YEAR = 8760.0
-# Documented test approximations for the interest shield only (not scenario params):
-TYPICAL_GEARING = 0.7
-TYPICAL_DEBT_RATE = 0.08
-DEBT_TENOR_YEARS = 15
+# Fallback financing terms, used only if the scenario omits Financing_Terms
+# (these defaults equal the base scenario's own values).
+DEFAULT_GEARING = 0.7
+DEFAULT_DEBT_RATE = 0.08
+DEFAULT_DEBT_TENOR_YEARS = 15
 
 
 @pytest.fixture
@@ -67,17 +68,30 @@ def _pretax_cfads_lkr(cfg: object) -> float:
 
 
 def _declining_interest_lkr(cfg: object, project_life: int) -> List[float]:
-    """Amortizing (declining) annual interest in LKR over the project life."""
-    debt_lkr = (
-        float(cfg.capex.usd_total)
-        * float(cfg.fx.start_lkr_per_usd)
-        * TYPICAL_GEARING
+    """Amortizing (declining) annual interest in LKR, geared from the scenario.
+
+    Gearing, rate and tenor are sourced from the scenario's Financing_Terms
+    (config-first / ARCH-01), falling back to documented defaults only if absent.
+    """
+    gearing = float(
+        OmegaConf.select(cfg, "Financing_Terms.debt_ratio", default=DEFAULT_GEARING)
     )
-    principal = debt_lkr / DEBT_TENOR_YEARS
+    rate = float(
+        OmegaConf.select(
+            cfg, "Financing_Terms.interest_rate_nominal", default=DEFAULT_DEBT_RATE
+        )
+    )
+    tenor = int(
+        OmegaConf.select(
+            cfg, "Financing_Terms.tenor_years", default=DEFAULT_DEBT_TENOR_YEARS
+        )
+    )
+    debt_lkr = float(cfg.capex.usd_total) * float(cfg.fx.start_lkr_per_usd) * gearing
+    principal = debt_lkr / tenor
     interest: List[float] = []
     balance = debt_lkr
     for _ in range(project_life):
-        interest.append(max(0.0, balance) * TYPICAL_DEBT_RATE)
+        interest.append(max(0.0, balance) * rate)
         balance = max(0.0, balance - principal)
     return interest
 
