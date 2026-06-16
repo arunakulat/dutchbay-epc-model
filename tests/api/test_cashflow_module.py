@@ -80,10 +80,17 @@ def test_build_annual_cfads_minimal_valid_params():
         # Optional explicit tax block to avoid surprises
         "tax": {
             "corporate_tax_rate": 0.30,
+            "depreciation_method": "straight_line",
+            "depreciation_start_year": 1,
             "depreciation_years": 15,
-            "tax_holiday_years": 0,
-            "tax_holiday_start_year": 1,
+            "enhanced_allowance_applies": False,
             "enhanced_capital_allowance_pct": 1.0,
+            "loss_carryforward_years": 25,
+            "tax_holiday_start_year": 1,
+            "tax_holiday_years": 0,
+            "wht_on_interest_to_nonresidents": 0.0,
+            "wht_on_interest_enabled": False,
+            "wht_gross_up": False,
         },
     }
 
