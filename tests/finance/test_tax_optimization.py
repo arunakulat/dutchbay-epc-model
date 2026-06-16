@@ -192,12 +192,11 @@ class TestDeferredDistributions:
             tlcf_threshold=1e6
         )
         
-        # Year 5 (index 4) should have large distribution (accumulated + current)
-        # Accumulated: Years 1-4 FCFE = $5M + $5.5M + $6M + $6.5M = $23M
-        # Current: Year 5 = $7M
-        # Total: ~$30M
-        assert result.annual_distributions[4] > 25e6, (
-            f"Year 5 should have accumulated distribution, got ${result.annual_distributions[4]/1e6:.1f}M"
+        # Year 5 (index 4) releases the accumulated deferrals + that year's FCFE.
+        # Deferred years 2-4 FCFE ($5M + $5.5M + $6M = $16.5M) + year-5 FCFE ($6.5M)
+        # = $23M (year-1 FCFE is 0, so nothing accrues in year 1).
+        assert result.annual_distributions[4] == pytest.approx(23e6), (
+            f"Year 5 should release accumulated + current, got ${result.annual_distributions[4]/1e6:.1f}M"
         )
     
     def test_max_delay_respected(self, typical_fcfe_schedule):
@@ -263,9 +262,11 @@ class TestTaxSavingsCalculation:
             immediate, deferred, tlcf, 0.28, discount_rate=0.12
         )
         
-        # Tax savings should be positive
-        assert savings > 0, "Tax savings should be positive with deferral"
-        assert savings_npv > 0, "Tax savings NPV should be positive"
+        # Distribution timing is value-neutral on a NOMINAL basis (the same total is
+        # distributed), so the undiscounted total is ~0 by construction. The real
+        # benefit is the NPV of deferring the dividend WHT to later years.
+        assert savings == pytest.approx(0.0, abs=1.0), "Nominal distribution-tax total is conserved by timing"
+        assert savings_npv > 0, "Deferring the distribution WHT yields a positive NPV benefit"
     
     def test_higher_tax_rate_increases_savings(self, typical_fcfe_schedule, typical_tlcf_schedule):
         """Higher tax rate should increase tax savings magnitude."""
@@ -281,16 +282,15 @@ class TestTaxSavingsCalculation:
             typical_fcfe_schedule, 50e6, tlcf, max_delay_years=5, tlcf_threshold=1e6
         )
         
-        # Low tax rate (20%)
-        savings_low, _ = calculate_tax_savings(immediate, deferred, tlcf, 0.20)
-        
-        # High tax rate (35%)
-        savings_high, _ = calculate_tax_savings(immediate, deferred, tlcf, 0.35)
-        
-        # Higher tax rate should yield more savings
-        assert savings_high > savings_low, (
-            f"Higher tax rate should yield more savings: "
-            f"low=${savings_low/1e6:.1f}M, high=${savings_high/1e6:.1f}M"
+        # Compare the NPV benefit (the meaningful, non-zero quantity) across rates;
+        # the undiscounted total is ~0 by construction (timing-conserved).
+        _, savings_npv_low = calculate_tax_savings(immediate, deferred, tlcf, 0.20)
+        _, savings_npv_high = calculate_tax_savings(immediate, deferred, tlcf, 0.35)
+
+        # Higher WHT rate should yield a larger NPV benefit.
+        assert savings_npv_high > savings_npv_low, (
+            f"Higher WHT rate should yield more NPV benefit: "
+            f"low=${savings_npv_low/1e6:.2f}M, high=${savings_npv_high/1e6:.2f}M"
         )
 
 
@@ -378,21 +378,22 @@ class TestRegressionPins:
         )
     
     def test_tax_savings_magnitude_reasonable(self, typical_fcfe_schedule, typical_tlcf_schedule):
-        """Tax savings should be $1-3M NPV for $200M project."""
+        """Tax-deferral NPV benefit is a modest, positive fraction of $1M (dividend-WHT
+        time value at the SL 15% rate) — not the multi-$M of the old simplified pin."""
         result = optimize_distribution_timing(
             fcfe_schedule=typical_fcfe_schedule,
             tlcf_schedule_data=typical_tlcf_schedule,
             equity_invested=50e6,  # 25% equity of $200M
             corporate_tax_rate=0.28,
             target_equity_irr=0.15,
-            max_delay_years=5
+            max_delay_years=5,
         )
-        
+
         savings_m = result.tax_savings_npv_usd / 1e6
-        
-        # Regression pin: $1-4M NPV savings typical
-        assert 0.5 < savings_m < 5.0, (
-            f"Tax savings should be $0.5-5M NPV, got ${savings_m:.1f}M"
+
+        # Regression pin: ~$0.4M NPV (dividend-WHT timing benefit at the SL 15% rate).
+        assert 0.2 < savings_m < 1.0, (
+            f"Tax-deferral NPV benefit should be ~$0.2-1.0M, got ${savings_m:.2f}M"
         )
     
     def test_dutchbay_baseline_optimization(self):
@@ -411,12 +412,12 @@ class TestRegressionPins:
         )
         
         # DutchBay should have:
-        # - Optimal delay: 4-5 years (TLCF exhausts year 5)
-        # - Tax savings: $1.5-3M NPV
+        # - Optimal delay: 4-5 years (TLCF exhausts ~year 5)
+        # - Tax-deferral NPV benefit: ~$0.46M (dividend-WHT time value at SL 15%)
         # - Equity IRR reduction: < 2%
-        
+
         assert 3 <= result.optimal_delay_years <= 5
-        assert 1.0e6 < result.tax_savings_npv_usd < 4.0e6
+        assert 0.25e6 < result.tax_savings_npv_usd < 0.75e6
         
         irr_reduction = result.base_case.equity_irr - result.optimized_case.equity_irr
         assert irr_reduction < 2.5, (
