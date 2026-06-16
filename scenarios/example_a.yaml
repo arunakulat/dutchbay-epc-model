@@ -14,12 +14,18 @@ opex:
 capex:
   usd_total: 120000000
 tax:
+  corporate_tax_rate: 0.24
   depreciation_method: "straight_line"
-  corporate_tax_rate_pct: 24
-  tax_holiday_years: 10
-  tax_holiday_start_year: 1
+  depreciation_start_year: 1
   depreciation_years: 20
+  enhanced_allowance_applies: false
   enhanced_capital_allowance_pct: 150
+  loss_carryforward_years: 25
+  tax_holiday_start_year: 1
+  tax_holiday_years: 10
+  wht_on_interest_to_nonresidents: 0.0
+  wht_on_interest_enabled: false
+  wht_gross_up: false
 risk:
   haircut_pct: 10
 Financing_Terms:

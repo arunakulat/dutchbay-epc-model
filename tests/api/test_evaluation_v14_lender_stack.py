@@ -146,7 +146,18 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
             "usd_per_year": 5e6,  # Annual OPEX in USD
         },
         "tax": {
-            "corporate_tax_rate_pct": 28.0,  # Sri Lankan corporate tax rate
+            "corporate_tax_rate": 0.28,  # Sri Lankan corporate tax rate
+            "depreciation_method": "straight_line",
+            "depreciation_start_year": 1,
+            "depreciation_years": 15,
+            "enhanced_allowance_applies": False,
+            "enhanced_capital_allowance_pct": 1.0,
+            "loss_carryforward_years": 25,
+            "tax_holiday_start_year": 1,
+            "tax_holiday_years": 0,
+            "wht_on_interest_to_nonresidents": 0.0,
+            "wht_on_interest_enabled": False,
+            "wht_gross_up": False,
         },
         "fx": {
             "start_lkr_per_usd": 300.0,  # Initial LKR/USD exchange rate
@@ -215,7 +226,18 @@ def test_evaluation_can_apply_parameter_overrides():
             "usd_per_year": 5e6,
         },
         "tax": {
-            "corporate_tax_rate_pct": 28.0,
+            "corporate_tax_rate": 0.28,
+            "depreciation_method": "straight_line",
+            "depreciation_start_year": 1,
+            "depreciation_years": 15,
+            "enhanced_allowance_applies": False,
+            "enhanced_capital_allowance_pct": 1.0,
+            "loss_carryforward_years": 25,
+            "tax_holiday_start_year": 1,
+            "tax_holiday_years": 0,
+            "wht_on_interest_to_nonresidents": 0.0,
+            "wht_on_interest_enabled": False,
+            "wht_gross_up": False,
         },
         "fx": {
             "start_lkr_per_usd": 300.0,

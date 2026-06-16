@@ -127,82 +127,46 @@ class TaxConfig:
 
     @classmethod
     def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":
-        """Build TaxConfig from the full scenario dict."""
+        """Build TaxConfig from the full scenario dict.
+
+        CESSPIT / R22 — schema-strict, no hidden defaults: every tax field is
+        REQUIRED and a missing key fails fast with ``KeyError: ... tax.<key>``
+        rather than silently substituting a default. The single optional field
+        is ``interest_deductibility`` (documented default ``True``).
+        """
         tax = _require_section(cfg, "tax")
 
-        try:
-            corporate_tax_rate = _get_tax_rate_with_compat(tax)
-        except KeyError:
-            corporate_tax_rate = float(DEFAULT_TAX_CONFIG["corporate_tax_rate"])
+        # Required + range-validated; canonical/compact/deprecated aliases are
+        # accepted, but absence raises (no silent default fallback).
+        corporate_tax_rate = _get_tax_rate_with_compat(tax)
 
         obj = cls(
             corporate_tax_rate=corporate_tax_rate,
-            depreciation_method=_get_key_with_default(
-                tax,
-                "depreciation_method",
-                DEFAULT_TAX_CONFIG["depreciation_method"],
-                str,
+            depreciation_method=str(_require_key(tax, "depreciation_method", "tax")),
+            depreciation_start_year=int(
+                _require_key(tax, "depreciation_start_year", "tax")
             ),
-            depreciation_start_year=_get_key_with_default(
-                tax,
-                "depreciation_start_year",
-                DEFAULT_TAX_CONFIG["depreciation_start_year"],
-                int,
+            depreciation_years=int(_require_key(tax, "depreciation_years", "tax")),
+            enhanced_allowance_applies=bool(
+                _require_key(tax, "enhanced_allowance_applies", "tax")
             ),
-            depreciation_years=_get_key_with_default(
-                tax,
-                "depreciation_years",
-                DEFAULT_TAX_CONFIG["depreciation_years"],
-                int,
+            enhanced_capital_allowance_pct=float(
+                _require_key(tax, "enhanced_capital_allowance_pct", "tax")
             ),
-            enhanced_allowance_applies=_get_key_with_default(
-                tax,
-                "enhanced_allowance_applies",
-                DEFAULT_TAX_CONFIG["enhanced_allowance_applies"],
-                bool,
+            loss_carryforward_years=int(
+                _require_key(tax, "loss_carryforward_years", "tax")
             ),
-            enhanced_capital_allowance_pct=_get_key_with_default(
-                tax,
-                "enhanced_capital_allowance_pct",
-                DEFAULT_TAX_CONFIG["enhanced_capital_allowance_pct"],
-                float,
+            tax_holiday_start_year=int(
+                _require_key(tax, "tax_holiday_start_year", "tax")
             ),
-            loss_carryforward_years=_get_key_with_default(
-                tax,
-                "loss_carryforward_years",
-                DEFAULT_TAX_CONFIG["loss_carryforward_years"],
-                int,
+            tax_holiday_years=int(_require_key(tax, "tax_holiday_years", "tax")),
+            wht_on_interest_to_nonresidents=float(
+                _require_key(tax, "wht_on_interest_to_nonresidents", "tax")
             ),
-            tax_holiday_start_year=_get_key_with_default(
-                tax,
-                "tax_holiday_start_year",
-                DEFAULT_TAX_CONFIG["tax_holiday_start_year"],
-                int,
+            wht_on_interest_enabled=bool(
+                _require_key(tax, "wht_on_interest_enabled", "tax")
             ),
-            tax_holiday_years=_get_key_with_default(
-                tax,
-                "tax_holiday_years",
-                DEFAULT_TAX_CONFIG["tax_holiday_years"],
-                int,
-            ),
-            wht_on_interest_to_nonresidents=_get_key_with_default(
-                tax,
-                "wht_on_interest_to_nonresidents",
-                DEFAULT_TAX_CONFIG["wht_on_interest_to_nonresidents"],
-                float,
-            ),
-            wht_on_interest_enabled=_get_key_with_default(
-                tax,
-                "wht_on_interest_enabled",
-                DEFAULT_TAX_CONFIG["wht_on_interest_enabled"],
-                bool,
-            ),
-            wht_gross_up=_get_key_with_default(
-                tax,
-                "wht_gross_up",
-                DEFAULT_TAX_CONFIG["wht_gross_up"],
-                bool,
-            ),
+            wht_gross_up=bool(_require_key(tax, "wht_gross_up", "tax")),
             interest_deductibility=bool(
                 _lookup_case_insensitive(tax, "interest_deductibility")
                 if _lookup_case_insensitive(tax, "interest_deductibility") is not None
