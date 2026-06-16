@@ -186,18 +186,31 @@ def _prepare_cashflow_context(
     tax_config = TaxConfig.from_yaml(config)
 
     # Build depreciation schedule
-    if capex_dep_resolved is not None and tax_config.depreciation_years > 0:
-        # Apply enhancement factor if enabled
+    _split_mode = tax_config.plant_capex_share is not None
+    if capex_dep_resolved is not None and (
+        _split_mode or tax_config.depreciation_years > 0
+    ):
+        # Apply enhancement factor if enabled (to the whole base, before any split)
         capex_for_depreciation = capex_dep_resolved * (
             tax_config.enhanced_capital_allowance_pct
             if tax_config.enhanced_allowance_applies
             else 1.0
         )
-        depreciation_schedule = DepreciationSchedule.build_straight_line(
-            capex_lkr=capex_for_depreciation,
-            useful_life=tax_config.depreciation_years,
-            project_life=years,
-        )
+        if _split_mode:
+            # Post-2025 SL Fourth-Schedule split: plant (short life) + civils (long life)
+            depreciation_schedule = DepreciationSchedule.build_split_straight_line(
+                total_capex=capex_for_depreciation,
+                plant_capex_share=tax_config.plant_capex_share,
+                plant_useful_life=tax_config.plant_depreciation_years,
+                civil_useful_life=tax_config.civil_depreciation_years,
+                project_life=years,
+            )
+        else:
+            depreciation_schedule = DepreciationSchedule.build_straight_line(
+                capex_lkr=capex_for_depreciation,
+                useful_life=tax_config.depreciation_years,
+                project_life=years,
+            )
     else:
         # No depreciation: all-zero schedule
         depreciation_schedule = DepreciationSchedule.build_straight_line(
