@@ -614,4 +614,114 @@ def plan_debt(
     }
 
 
+def size_debt_with_dual_dscr(
+    cfads_p50: Sequence[float],
+    cfads_p99: Sequence[float],
+    *,
+    dscr_target_p50: float = 1.30,
+    dscr_target_p99: float = 1.00,
+    capex: float,
+    debt_ratio_max: float = 0.70,
+    debt_rate: float = 0.08,
+) -> Dict[str, Any]:
+    """Size project debt under a dual DSCR (P50 / P99) constraint.
+
+    Implements the standard lender dual-DSCR methodology (e.g. Bolinger 2017,
+    DNV GL 2019): debt service is sculpted so the achieved DSCR equals the target
+    in each scenario, the conservative ``min(Debt_P50, Debt_P99)`` is taken, and
+    the result is capped at ``debt_ratio_max * capex``.
+
+    For each period the sustainable debt service is ``CFADS / DSCR_target`` (so
+    the achieved DSCR equals the target), and the scenario debt capacity is the
+    present value of that debt-service stream discounted at ``debt_rate`` over
+    periods 1..N (matching :func:`_npv`).
+
+    Args:
+        cfads_p50: Per-period Cash Flow Available for Debt Service, P50 (central)
+            scenario. Must be non-empty.
+        cfads_p99: Per-period CFADS, P99 (downside) scenario. Must be the same
+            length as ``cfads_p50``.
+        dscr_target_p50: Minimum DSCR target for the P50 scenario (must be > 0).
+        dscr_target_p99: Minimum DSCR target for the P99 scenario (must be > 0).
+        capex: Total project capital cost (must be > 0); sets the gearing cap.
+        debt_ratio_max: Maximum debt-to-CAPEX gearing, in ``(0, 1]``.
+        debt_rate: Periodic cost of debt used to discount debt service.
+
+    Returns:
+        Mapping with the sized debt and supporting detail. Keys: ``debt_sized``,
+        ``debt_p50``, ``debt_p99``, ``binding_constraint`` (``"P50"`` |
+        ``"P99"`` | ``"RATIO_CAP"``), ``debt_service_p50`` / ``debt_service_p99``,
+        ``dscr_profile_p50`` / ``dscr_profile_p99``, ``min_dscr_p50`` /
+        ``min_dscr_p99``, ``dscr_target_p50`` / ``dscr_target_p99``,
+        ``debt_ratio_cap``, ``capex`` and ``downside_impact_pct`` (the P99-vs-P50
+        debt-capacity reduction, in percent).
+
+    Raises:
+        ValueError: If CFADS arrays are empty or different lengths, if a DSCR
+            target is non-positive, if ``debt_ratio_max`` is outside ``(0, 1]``,
+            or if ``capex`` is non-positive.
+    """
+    cfads_p50 = [float(x) for x in cfads_p50]
+    cfads_p99 = [float(x) for x in cfads_p99]
+
+    if not cfads_p50 or not cfads_p99:
+        raise ValueError("CFADS arrays cannot be empty")
+    if len(cfads_p50) != len(cfads_p99):
+        raise ValueError("CFADS P50 and P99 arrays must have the same length")
+    if dscr_target_p50 <= 0.0 or dscr_target_p99 <= 0.0:
+        raise ValueError("DSCR target must be positive")
+    if not (0.0 < debt_ratio_max <= 1.0):
+        raise ValueError("Debt ratio must be in (0, 1]")
+    if capex <= 0.0:
+        raise ValueError("CAPEX must be positive")
+
+    def _size_one(
+        cfads: Sequence[float], target: float
+    ) -> Tuple[List[float], float, List[float], float]:
+        service = [cf / target for cf in cfads]
+        capacity = _npv(service, debt_rate)
+        profile = [
+            (cf / svc) if svc > 0 else float("inf")
+            for cf, svc in zip(cfads, service)
+        ]
+        min_dscr = min(profile) if profile else 0.0
+        return service, capacity, profile, min_dscr
+
+    service_p50, debt_p50, profile_p50, min_dscr_p50 = _size_one(cfads_p50, dscr_target_p50)
+    service_p99, debt_p99, profile_p99, min_dscr_p99 = _size_one(cfads_p99, dscr_target_p99)
+
+    ratio_cap = capex * debt_ratio_max
+    debt_uncapped = min(debt_p50, debt_p99)
+    debt_sized = min(debt_uncapped, ratio_cap)
+
+    if debt_sized < debt_uncapped:
+        binding_constraint = "RATIO_CAP"
+    elif debt_p99 <= debt_p50:
+        binding_constraint = "P99"
+    else:
+        binding_constraint = "P50"
+
+    downside_impact_pct = (
+        (debt_p50 - debt_p99) / debt_p50 * 100.0 if debt_p50 > 0 else 0.0
+    )
+
+    return {
+        "debt_sized": debt_sized,
+        "debt_p50": debt_p50,
+        "debt_p99": debt_p99,
+        "binding_constraint": binding_constraint,
+        "debt_service_p50": service_p50,
+        "debt_service_p99": service_p99,
+        "dscr_profile_p50": profile_p50,
+        "dscr_profile_p99": profile_p99,
+        "min_dscr_p50": min_dscr_p50,
+        "min_dscr_p99": min_dscr_p99,
+        "dscr_target_p50": dscr_target_p50,
+        "dscr_target_p99": dscr_target_p99,
+        "debt_ratio_cap": ratio_cap,
+        "capex": capex,
+        "downside_impact_pct": downside_impact_pct,
+    }
+
+
 # EOF
