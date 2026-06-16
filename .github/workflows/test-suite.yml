@@ -49,8 +49,8 @@ jobs:
     - name: Run test suite
       run: |
         # Default CI tracks the supported v14 surface plus the green suites
-        # promoted in #136 (integration + root contract/refinancing tests).
-        # Still parked until their feature contracts/deps are restored:
+        # promoted in #136 (finance + integration + root contract/refinancing
+        # tests). Still parked until their feature contracts/deps are restored:
         # NetCDF/GIS xarray tests, dual-DSCR sizing, legacy Phase-3 sensitivity.
         pytest \
           tests/api \
@@ -58,6 +58,7 @@ jobs:
           tests/contracts \
           tests/lint \
           tests/integration \
+          tests/finance \
           tests/test_contracts_v14_validators.py \
           tests/test_refinancing_v14_hardened.py \
           --verbose \
