@@ -39,7 +39,10 @@ def base_config():
         base_aep_p50=100_000,  # 100 GWh/year P50
         base_aep_p99=85_000,   # 85 GWh/year P99 (downside)
         base_tariff=50.0,      # $50/MWh
-        base_opex=5e6,         # $5M/year
+        # Revenue P50 = 100 GWh * $50/MWh = $5M/yr. OPEX must leave positive
+        # CFADS: the prior $5M (== revenue) drove CFADS to ~0 and produced a
+        # negative sized debt. $2.5M gives a ~50% CFADS margin.
+        base_opex=2.5e6,       # $2.5M/year (~50% CFADS margin)
         base_degradation=0.006,  # 0.6%/year
         project_life=20,
         perturbation_range_pct=20.0,  # ±20%
@@ -68,7 +71,8 @@ def omegaconf_config():
             "tariff_usd_mwh": 50.0,
         },
         "operations": {
-            "opex_usd_year": 5e6,
+            # ~50% CFADS margin (revenue P50 ≈ $5M/yr); $5M would zero out CFADS.
+            "opex_usd_year": 2.5e6,
         },
         "financing": {
             "dscr_target_p50": 1.30,

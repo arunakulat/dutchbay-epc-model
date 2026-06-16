@@ -123,8 +123,7 @@ class TestDualDSCRCalculations:
         
         # For flat CFADS, DSCR should be constant (all equal to target)
         dscr_p50 = result["dscr_profile_p50"]
-        dscr_p99 = result["dscr_profile_p99"]
-        
+
         # All P50 DSCRs should be approximately equal
         dscr_p50_finite = [d for d in dscr_p50 if d < float('inf')]
         if dscr_p50_finite:
@@ -239,7 +238,7 @@ class TestDualDSCRIndustryScenarios:
         )
         
         # Should produce conservative debt sizing
-        assert result["debt_sized"] < capex * 0.65
+        assert result["debt_sized"] < result["capex"] * 0.65
 
 
 class TestDualDSCRInputValidation:
