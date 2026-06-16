@@ -48,15 +48,18 @@ jobs:
 
     - name: Run test suite
       run: |
-        # Default CI intentionally tracks the supported v14 surface.
-        # Parked/optional areas stay out of this matrix until their feature
-        # contracts are restored: dual-DSCR sizing, NetCDF/GIS xarray tests,
-        # and legacy Phase-3 sensitivity contract aliases.
+        # Default CI tracks the supported v14 surface plus the green suites
+        # promoted in #136 (integration + root contract/refinancing tests).
+        # Still parked until their feature contracts/deps are restored:
+        # NetCDF/GIS xarray tests, dual-DSCR sizing, legacy Phase-3 sensitivity.
         pytest \
           tests/api \
           tests/analytics_layer \
           tests/contracts \
           tests/lint \
+          tests/integration \
+          tests/test_contracts_v14_validators.py \
+          tests/test_refinancing_v14_hardened.py \
           --verbose \
           --tb=short \
           --maxfail=10 \

@@ -57,11 +57,15 @@ jobs:
 
       - name: Pytest - fast lane (including Sprint 11 compliance tests)
         run: |
+          # + green suites promoted in #136: integration + root contract/refinancing tests
           pytest \
             tests/api \
             tests/analytics_layer \
             tests/contracts \
             tests/lint \
+            tests/integration \
+            tests/test_contracts_v14_validators.py \
+            tests/test_refinancing_v14_hardened.py \
             --maxfail=1 \
             --disable-warnings \
             --tb=short
