@@ -345,7 +345,24 @@ class TestRoundTrip:
                 "degradation": 0.005,
                 "grid_loss_pct": 0.0,
             },
-            "tax": {"corporate_tax_rate": 0.30},
+            # Schema-complete tax block (CESSPIT/R22 — TaxConfig.from_yaml is
+            # schema-strict since #136/#142: every required key must be present,
+            # no hidden defaults). Values mirror the post-2025 SL regime but are
+            # immaterial here — the assertion below is on pre-tax net_kwh.
+            "tax": {
+                "corporate_tax_rate": 0.30,
+                "depreciation_method": "straight_line",
+                "depreciation_start_year": 1,
+                "depreciation_years": 5,
+                "enhanced_allowance_applies": False,
+                "enhanced_capital_allowance_pct": 1.5,
+                "loss_carryforward_years": 6,
+                "tax_holiday_start_year": 1,
+                "tax_holiday_years": 0,
+                "wht_on_interest_to_nonresidents": 0.10,
+                "wht_on_interest_enabled": True,
+                "wht_gross_up": False,
+            },
             "tariff": {"tariff_type": "fixed", "ppa_term_years": 20},
             "opex": {"usd_per_year": 0.0},  # opex zero — we only care about net_kwh
         }

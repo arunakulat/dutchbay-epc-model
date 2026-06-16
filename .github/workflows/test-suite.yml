@@ -37,7 +37,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
-        python -m pip install -e .
+        # ".[wind]" pulls the xarray/netcdf4/cdsapi toolchain so the wind
+        # adapter + NetCDF/GIS xarray tests run in the gate (was opt-in only).
+        python -m pip install -e ".[wind]"
         python -m pip install pytest pytest-cov pytest-xdist pytest-html
 
     - name: Display environment info
@@ -49,9 +51,11 @@ jobs:
     - name: Run test suite
       run: |
         # Default CI tracks the supported v14 surface plus the green suites
-        # promoted in #136 (finance + integration + root contract/refinancing
-        # tests). Still parked until their feature contracts/deps are restored:
-        # NetCDF/GIS xarray tests, dual-DSCR sizing, legacy Phase-3 sensitivity.
+        # promoted in #136 (finance + integration + root contract/refinancing)
+        # and the wind path (wind adapter + NetCDF/GIS xarray, enabled by the
+        # ".[wind]" extra installed above). Still parked until their
+        # contracts/deps land: dual-DSCR integration (symbol-name mismatch),
+        # legacy Phase-3 sensitivity.
         pytest \
           tests/api \
           tests/analytics_layer \
@@ -59,6 +63,8 @@ jobs:
           tests/lint \
           tests/integration \
           tests/finance \
+          tests/wind \
+          tests/analytics/test_netcdf_utils.py \
           tests/test_contracts_v14_validators.py \
           tests/test_refinancing_v14_hardened.py \
           --verbose \
