@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 
 DEFAULT_TAX_CONFIG = {
@@ -69,6 +69,16 @@ def _require_key(section: Mapping[str, Any], key: str, ctx: str) -> Any:
     return value
 
 
+def _opt_float(value: Any) -> Optional[float]:
+    """Cast to float, or None when the key was absent."""
+    return float(value) if value is not None else None
+
+
+def _opt_int(value: Any) -> Optional[int]:
+    """Cast to int, or None when the key was absent."""
+    return int(value) if value is not None else None
+
+
 def _get_tax_rate_with_compat(tax: Mapping[str, Any]) -> float:
     """Extract corporate tax rate from canonical or compact aliases."""
     canonical = _lookup_case_insensitive(tax, "corporate_tax_rate")
@@ -124,6 +134,11 @@ class TaxConfig:
     wht_on_interest_enabled: bool
     wht_gross_up: bool
     interest_deductibility: bool = True
+    # Optional post-2025-regime fields — default-absent → legacy single-class mode.
+    tax_holiday_route: str = "none"  # "none" | "sdp" (descriptive; tax_holiday_years drives calc)
+    plant_capex_share: Optional[float] = None  # set → split depreciation (plant vs civil)
+    plant_depreciation_years: Optional[int] = None  # SL Class 2 plant & machinery = 5 yr
+    civil_depreciation_years: Optional[int] = None  # SL Class 4 buildings/civils = 20 yr
 
     @classmethod
     def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":
@@ -172,6 +187,19 @@ class TaxConfig:
                 if _lookup_case_insensitive(tax, "interest_deductibility") is not None
                 else True
             ),
+            # Optional post-2025-regime fields — absent → legacy single-class mode.
+            tax_holiday_route=str(
+                _lookup_case_insensitive(tax, "tax_holiday_route") or "none"
+            ),
+            plant_capex_share=_opt_float(
+                _lookup_case_insensitive(tax, "plant_capex_share")
+            ),
+            plant_depreciation_years=_opt_int(
+                _lookup_case_insensitive(tax, "plant_depreciation_years")
+            ),
+            civil_depreciation_years=_opt_int(
+                _lookup_case_insensitive(tax, "civil_depreciation_years")
+            ),
         )
         obj._validate()
         return obj
@@ -199,6 +227,21 @@ class TaxConfig:
             raise ValueError(
                 f"tax.depreciation_method unsupported: {self.depreciation_method}"
             )
+        if self.tax_holiday_route not in ("none", "sdp"):
+            raise ValueError(
+                f"tax.tax_holiday_route must be 'none' or 'sdp', got {self.tax_holiday_route}"
+            )
+        if self.plant_capex_share is not None:
+            if not (0.0 <= self.plant_capex_share <= 1.0):
+                raise ValueError("tax.plant_capex_share must be in [0,1]")
+            if not self.plant_depreciation_years or self.plant_depreciation_years < 1:
+                raise ValueError(
+                    "tax.plant_depreciation_years must be >= 1 when plant_capex_share is set"
+                )
+            if not self.civil_depreciation_years or self.civil_depreciation_years < 1:
+                raise ValueError(
+                    "tax.civil_depreciation_years must be >= 1 when plant_capex_share is set"
+                )
 
 
 @dataclass(frozen=True)
@@ -261,6 +304,48 @@ class DepreciationSchedule:
             method="straight_line",
             capex_base=capex_lkr,
             useful_life_years=useful_life,
+            annual_amounts=annual_amounts,
+            accumulated_depreciation=accumulated,
+            book_value=book_values,
+        )
+
+    @staticmethod
+    def build_split_straight_line(
+        total_capex: float,
+        plant_capex_share: float,
+        plant_useful_life: int,
+        civil_useful_life: int,
+        project_life: int,
+    ) -> "DepreciationSchedule":
+        """Combined straight-line schedule for a split capex base.
+
+        Splits ``total_capex`` into a plant/machinery component
+        (``plant_capex_share``, depreciated over ``plant_useful_life``) and a
+        civil-works component (the remainder, over ``civil_useful_life``), builds
+        each straight-line, and sums them — modelling the Sri Lanka Fourth-Schedule
+        asset-class split (plant & machinery 5 yr / buildings & civils 20 yr).
+        """
+        if not (0.0 <= plant_capex_share <= 1.0):
+            raise ValueError("plant_capex_share must be in [0,1]")
+        plant = DepreciationSchedule.build_straight_line(
+            total_capex * plant_capex_share, plant_useful_life, project_life
+        )
+        civil = DepreciationSchedule.build_straight_line(
+            total_capex * (1.0 - plant_capex_share), civil_useful_life, project_life
+        )
+        annual_amounts = [
+            p + c for p, c in zip(plant.annual_amounts, civil.annual_amounts)
+        ]
+        accumulated: List[float] = []
+        acc = 0.0
+        for amount in annual_amounts:
+            acc += amount
+            accumulated.append(acc)
+        book_values = [max(total_capex - a, 0.0) for a in accumulated]
+        return DepreciationSchedule(
+            method="straight_line_split",
+            capex_base=total_capex,
+            useful_life_years=max(plant_useful_life, civil_useful_life),
             annual_amounts=annual_amounts,
             accumulated_depreciation=accumulated,
             book_value=book_values,
