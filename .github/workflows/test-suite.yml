@@ -141,5 +141,16 @@ jobs:
     steps:
     - name: Check test status
       run: |
-        echo "Test suite completed"
+        echo "Test suite completed (test=${{ needs.test.result }}, lint=${{ needs.lint.result }})"
         echo "View detailed results in artifacts"
+        # Gate the required 'Test Summary' check on the ACTUAL pytest-matrix
+        # result. Without this the job only echoes and passes even when 'test'
+        # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
+        # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
+        # any failure/cancel/skip is non-success and blocks the merge.
+        # 'lint' stays advisory by design — the Code Quality Checks job runs
+        # ruff/black/mypy with '|| true', so it is not a meaningful gate.
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"
+          exit 1
+        fi
