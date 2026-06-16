@@ -59,6 +59,31 @@ def test_tax_config_from_yaml_missing_required_key_raises() -> None:
         TaxConfig.from_yaml(cfg)
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "depreciation_method",
+        "depreciation_start_year",
+        "depreciation_years",
+        "enhanced_allowance_applies",
+        "enhanced_capital_allowance_pct",
+        "loss_carryforward_years",
+        "tax_holiday_start_year",
+        "tax_holiday_years",
+        "wht_on_interest_to_nonresidents",
+        "wht_on_interest_enabled",
+        "wht_gross_up",
+    ],
+)
+def test_tax_config_from_yaml_missing_each_required_key_raises(field: str) -> None:
+    """CESSPIT/R22: every required tax field fails fast when absent (no hidden default)."""
+    cfg = _base_yaml_cfg()
+    del cfg["tax"][field]
+
+    with pytest.raises(KeyError, match=rf"tax\.{field}"):
+        TaxConfig.from_yaml(cfg)
+
+
 # ---------------------------------------------------------------------------
 # 2) Depreciation schedule contract
 # ---------------------------------------------------------------------------
