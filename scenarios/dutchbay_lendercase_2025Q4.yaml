@@ -31,13 +31,7 @@ project:
   boi_approved: false
   boi_agreement_date: '2025-01-15'
   jurisdiction: Sri Lanka
-  corporate_tax_rate: 0.3
-  depreciation_years: 15
-  depreciation_start_year: 1
-  tax_holiday_years: 12
-  tax_holiday_start_year: 1
-  enhanced_capital_allowance_pct: 1.5
-  loss_carryforward_years: 25
+  # Tax inputs are the single source of truth in the `tax:` block (CESSPIT).
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TURBINE & WIND RESOURCE (Wind Energy Calculator Inputs)
@@ -212,15 +206,22 @@ opex:
 # TAX & STATUTORY
 # ═════════════════════════════════════════════════════════════════════════════
 tax:
-  corporate_tax_rate: 0.3
-  tax_holiday_years: 12
+  # Single source of truth for tax inputs (CESSPIT). Current SL regime (post-2025):
+  # CIT 30%, no renewable holiday for new IPPs, TLCF 6yr, split straight-line
+  # depreciation (plant&machinery 5yr / civils 20yr), interest WHT 10%.
+  corporate_tax_rate: 0.30
+  tax_holiday_route: none
+  tax_holiday_years: 0
   tax_holiday_start_year: 1
   depreciation_method: straight_line
-  depreciation_years: 15
+  depreciation_years: 5  # placeholder; the split fields below drive the calc
   depreciation_start_year: 1
+  plant_capex_share: 0.80
+  plant_depreciation_years: 5  # SL Fourth Sched Class 2 (plant & machinery)
+  civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
   enhanced_capital_allowance_pct: 1.5
   enhanced_allowance_applies: false
-  loss_carryforward_years: 25
+  loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false

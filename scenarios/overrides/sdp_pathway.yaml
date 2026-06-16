@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SDP-pathway tax override  (CESSPIT: a thin delta, NOT a duplicated scenario)
+#
+# Models the *incentivized* Strategic-Development-Project route — a discretionary
+# SDP-Act-26/2025 grant: a capped ≤10-year tax holiday + enhanced capital
+# allowance — as the dual pathway vs the no-holiday BASE case carried by the
+# canonical scenarios (the single source of truth for everything else).
+#
+# Apply by merging onto a base scenario, e.g.:
+#   from omegaconf import OmegaConf
+#   base = OmegaConf.load("scenarios/dutchbay_lendercase_2025Q4.yaml")
+#   sdp  = OmegaConf.merge(base, OmegaConf.load("scenarios/overrides/sdp_pathway.yaml"))
+#
+# See memory: sri_lanka_corporate_tax_regime — SDP route capped at 10yr (down from
+# 25), discretionary, rule-based; the base case for a new IPP has NO statutory holiday.
+# ─────────────────────────────────────────────────────────────────────────────
+tax:
+  tax_holiday_route: sdp
+  tax_holiday_years: 10          # SDP Act 26/2025 caps the holiday at 10 years
+  enhanced_allowance_applies: true   # SDP incentive: claim the enhanced capital allowance

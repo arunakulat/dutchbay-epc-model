@@ -107,14 +107,18 @@ opex:
 
 tax:
   corporate_tax_rate: 0.30                 # 30% corporate tax
-  tax_holiday_years: 12
+  tax_holiday_years: 0
+  tax_holiday_route: none
   tax_holiday_start_year: 1
   depreciation_method: "straight_line"
-  depreciation_years: 15
+  depreciation_years: 5
+  plant_capex_share: 0.80
+  plant_depreciation_years: 5
+  civil_depreciation_years: 20
   depreciation_start_year: 1
   enhanced_capital_allowance_pct: 1.5
   enhanced_allowance_applies: true
-  loss_carryforward_years: 25
+  loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.10    # 10% WHT
   wht_on_interest_enabled: false
   wht_gross_up: false
