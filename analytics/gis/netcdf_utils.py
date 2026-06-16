@@ -176,7 +176,7 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
         profile['grid_resolution'] = None
     
     # Dimensions
-    profile['dims'] = {name: int(size) for name, size in ds.dims.items()}
+    profile['dims'] = {name: int(size) for name, size in ds.sizes.items()}
     
     # Data variables
     profile['variables'] = list(ds.data_vars.keys())
@@ -368,15 +368,22 @@ def grid_stats(da: xr.DataArray, dim: str = 'time') -> pd.DataFrame:
     max_da = da.max(dim=dim)
     count_da = da.count(dim=dim)
     
-    # Stack into DataFrame
+    # Flatten the spatial grid to one row per cell. Stacking the remaining
+    # (post-reduction) dims into a single 'cell' index keeps each cell's
+    # lon/lat coordinate aligned with its statistic — unlike raveling the 1-D
+    # coordinate arrays, whose lengths (n_lon, n_lat) do not match the raveled
+    # 2-D grid (n_lat × n_lon). Robust to dim ordering and xarray version.
+    cell_dims = list(mean_da.dims)
+    mean_cells = mean_da.stack(cell=cell_dims)
+
     df = pd.DataFrame({
-        'lon': mean_da[lon_var].values.ravel(),
-        'lat': mean_da[lat_var].values.ravel(),
-        'mean': mean_da.values.ravel(),
-        'std': std_da.values.ravel(),
-        'min': min_da.values.ravel(),
-        'max': max_da.values.ravel(),
-        'count': count_da.values.ravel(),
+        'lon': mean_cells[lon_var].values,
+        'lat': mean_cells[lat_var].values,
+        'mean': mean_cells.values,
+        'std': std_da.stack(cell=cell_dims).values,
+        'min': min_da.stack(cell=cell_dims).values,
+        'max': max_da.stack(cell=cell_dims).values,
+        'count': count_da.stack(cell=cell_dims).values,
     })
     
     # Remove NaN rows

@@ -34,6 +34,8 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          # wind extra (xarray/netcdf4/cdsapi) for the gated wind + NetCDF tests
+          pip install -e ".[wind]"
 
       - name: Ruff - lint focused v14 surface
         run: |
@@ -58,6 +60,7 @@ jobs:
       - name: Pytest - fast lane (including Sprint 11 compliance tests)
         run: |
           # + green suites promoted in #136: finance + integration + root contract/refinancing tests
+          # + wind path: wind adapter + NetCDF/GIS xarray (via the ".[wind]" extra)
           pytest \
             tests/api \
             tests/analytics_layer \
@@ -65,6 +68,8 @@ jobs:
             tests/lint \
             tests/integration \
             tests/finance \
+            tests/wind \
+            tests/analytics/test_netcdf_utils.py \
             tests/test_contracts_v14_validators.py \
             tests/test_refinancing_v14_hardened.py \
             --maxfail=1 \

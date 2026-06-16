@@ -215,7 +215,7 @@ def _run_wind_producer(
     # Probe for [wind] extra before spawning the subprocess so we fail fast
     # with a clear message rather than a cryptic subprocess error.
     try:
-        import cdsapi  # type: ignore[import-not-found]  # noqa: F401  (probe only; cdsapi ships no stubs and is an optional [wind] extra)
+        import cdsapi  # type: ignore  # noqa: F401  (availability probe; bare ignore is deliberate — mypy's import-error code varies by env: import-not-found without the [wind] extra vs import-untyped once cdsapi is installed, as it ships no stubs, so a coded ignore would be flagged unused in one env or the other)
     except ImportError as exc:
         raise RuntimeError(
             "wind_auto_orchestrate=true requires the [wind] extra. "
