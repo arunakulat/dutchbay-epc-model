@@ -373,7 +373,7 @@ def integrate_aep_into_config(
         ('project', 'capacity'),
         ('parameters', 'capacity_mw'),
     ]:
-        val = config
+        val: Any = config
         for key in path:
             val = val.get(key)
             if val is None:
@@ -393,6 +393,11 @@ def integrate_aep_into_config(
     
     mc_results = None
     if monte_carlo_config is not None:
+        if aep_summary_path is None:
+            raise ValueError(
+                "Monte Carlo AEP requires aep_summary_path (the summary JSON "
+                "to resample); none was provided."
+            )
         # Run Monte Carlo
         n_scenarios = monte_carlo_config.get('n_scenarios', 100000)
         use_p_value = monte_carlo_config.get('use_p_value', 50)

@@ -47,7 +47,7 @@ Version History:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -153,8 +153,8 @@ def calculate_wind_revenue_annual(
     logger.info("  Year 1 Revenue: %s", currency_fmt.format(revenue_millions[0]))
     logger.info("  Year %d Revenue: %s", ppa_term_years, currency_fmt.format(revenue_millions[-1]))
     logger.info("  Total Undiscounted: %s", currency_fmt.format(revenue_millions.sum()))
-    
-    return revenue_millions
+
+    return cast("np.ndarray", revenue_millions)
 
 
 def calculate_wind_revenue_monte_carlo(
@@ -165,7 +165,7 @@ def calculate_wind_revenue_monte_carlo(
     cpi_annual_pct: float = 2.0,
     degradation_pct_yr: float = 0.5,
     tariff_type: str = "fixed",
-) -> Dict:
+) -> Dict[str, Any]:
     """Calculate revenue distribution from Monte Carlo AEP scenarios (multi-currency).
     
     Args:

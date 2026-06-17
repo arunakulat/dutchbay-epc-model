@@ -23,7 +23,7 @@ Context:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -100,7 +100,7 @@ def parse_envision_en171_10mw_curve(
     curve = ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1.copy()
     
     # Air density correction per IEC 61400-12-1:2022
-    rho_ref = ENVISION_EN171_10MW_SPECS["air_density_ref_kgm3"]
+    rho_ref = cast(float, ENVISION_EN171_10MW_SPECS["air_density_ref_kgm3"])
     density_ratio = air_density_kgm3 / rho_ref
     
     # Power scales with (rho)^(1/3) for fixed blade design
@@ -169,8 +169,8 @@ def interpolate_power_curve(
         0.0,
         curve["power_kw"].max()
     )
-    
-    return power_interpolated
+
+    return cast("np.ndarray", power_interpolated)
 
 
 def compute_aep_from_curve(
@@ -322,7 +322,7 @@ def parse_envision_en171_curve(air_density_kgm3: Optional[float] = None) -> pd.D
     return parse_envision_en171_10mw_curve(air_density_kgm3=air_density_kgm3)
 
 # Alias for IEC compliance validation (stub for test compatibility)
-def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, any]:
+def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, Any]:
     """Validate power curve compliance with IEC 61400-12-1:2022.
     
     This is a minimal stub for test compatibility. Full validation should be
