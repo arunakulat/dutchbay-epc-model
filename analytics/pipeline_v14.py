@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_v14_pipeline(
-    config: str,
+    config: str | Path,
     validation_mode: str = "strict",
     validation_modules: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
