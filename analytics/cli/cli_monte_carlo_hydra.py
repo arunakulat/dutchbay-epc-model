@@ -71,7 +71,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, cast
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -120,7 +120,7 @@ def main(cfg: DictConfig) -> None:
     # Validate required config parameter
     config_path = cfg.get("config")
     if not config_path:
-        error_result = {
+        error_result: dict[str, Any] = {
             "status": "error",
             "error": "Missing 'config' parameter",
             "usage": (
@@ -153,12 +153,16 @@ def main(cfg: DictConfig) -> None:
         # Load scenario as a DictConfig. MonteCarloEngine deep-converts this to
         # a plain dict internally, so the OmegaConf object can be passed as-is.
         cfg_obj = OmegaConf.load(str(config_path))
+        if not isinstance(cfg_obj, DictConfig):
+            raise TypeError(
+                f"Config root must be a mapping (DictConfig), got {type(cfg_obj).__name__}"
+            )
 
         # Run simulation via the canonical functional entrypoint. n_trials and
         # seed are passed through to MonteCarloEngine(seed=...).run(n_trials=...).
         start = time.perf_counter()
         result: MonteCarloResult = run_monte_carlo_analysis(
-            base_config=cfg_obj,
+            base_config=cast("Mapping[str, Any]", cfg_obj),
             n_trials=n_trials,
             seed=seed,
         )

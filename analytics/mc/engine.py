@@ -184,7 +184,11 @@ class MonteCarloEngine:
                     raw_config=self._base_config,
                     overrides=overrides,
                 )
-                trial_metrics.append(out.get("kpis", out) if isinstance(out, Mapping) else {})
+                if isinstance(out, Mapping):
+                    kpis = out.get("kpis", out)
+                    trial_metrics.append(kpis if isinstance(kpis, Mapping) else out)
+                else:
+                    trial_metrics.append({})
             except Exception as exc:
                 logger.debug(
                     "MC trial %d used toy fallback because full v14 evaluation failed: %s",
