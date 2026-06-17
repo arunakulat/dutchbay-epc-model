@@ -43,7 +43,7 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 try:
     import pandas as pd
 except Exception:  # pragma: no cover
-    pd = None
+    pd = None  # type: ignore[assignment]
 
 
 # -----------------------------

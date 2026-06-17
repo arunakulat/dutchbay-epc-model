@@ -31,7 +31,7 @@ import numpy as np
 try:
     import pandas as pd
 except Exception:  # pragma: no cover
-    pd = None
+    pd = None  # type: ignore[assignment]
 
 from analytics.contracts_v14 import MonteCarloResult
 
