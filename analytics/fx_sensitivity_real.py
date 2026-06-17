@@ -228,10 +228,14 @@ class FXSensitivityAnalyzer:
         )
         from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
 
-        return cast(
-            dict[str, Any],
-            run_v14_pipeline_with_analytics(config=config, enable_returns=True, enable_risk=False),
+        # Annotated local (not cast): under the full mypy run the cast is
+        # "redundant", but fastlane's focused `--follow-imports=skip` surface
+        # sees this return as Any. An annotated local satisfies both — it
+        # absorbs the Any and gives the return a concrete type.
+        result: dict[str, Any] = run_v14_pipeline_with_analytics(
+            config=config, enable_returns=True, enable_risk=False
         )
+        return result
 
     def _extract_metrics(self, pipeline_result: dict[str, Any]) -> tuple[Optional[float], float, Optional[float], float, float]:
         kpis = pipeline_result.get("kpis", {})
