@@ -57,9 +57,10 @@ Usage:
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -139,7 +140,7 @@ class ValidationError:
     constraint: str  # e.g., "must be >= 0.8"
     message: str
     remediation: Optional[str] = None
-    timestamp: str = dc_field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = dataclasses.field(default_factory=lambda: datetime.utcnow().isoformat())
 
     def __str__(self) -> str:
         return f"[{self.severity}] {self.field}: {self.message}"
@@ -150,12 +151,12 @@ class ValidationResult:
     """CCCDIR: Complete validation result with audit trail."""
 
     is_valid: bool
-    errors: List[ValidationError] = dc_field(default_factory=list)
-    warnings: List[str] = dc_field(default_factory=list)
-    info_messages: List[str] = dc_field(default_factory=list)
+    errors: List[ValidationError] = dataclasses.field(default_factory=list)
+    warnings: List[str] = dataclasses.field(default_factory=list)
+    info_messages: List[str] = dataclasses.field(default_factory=list)
     validation_time_ms: float = 0.0
     contract_type: str = "unknown"
-    timestamp: str = dc_field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = dataclasses.field(default_factory=lambda: datetime.utcnow().isoformat())
 
     def has_critical_errors(self) -> bool:
         """Check if any CRITICAL errors present."""
