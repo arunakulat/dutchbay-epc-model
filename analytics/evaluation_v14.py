@@ -485,50 +485,14 @@ def evaluate_with_casper_tail_risk(
             dscr_min_p50=stats.get("dscr_min_p50", 0.0),
         )
 
-    logger.info("Step 3/4: Building tail-risk enrichments...")
-
-    # LAZY IMPORT: Only import tail-risk functions when actually needed
-    if (sensitivity_suite and monte_carlo and raw_results) or (monte_carlo and raw_results):
-        try:
-            from analytics.sensitivity_tail_risk import (
-                build_tail_risk_snapshots_for_metrics,
-                enrich_tornado_with_tail_risk,
-            )
-        except ImportError as e:
-            logger.warning(
-                "Could not import tail-risk functions: %s; skipping enrichment", str(e)
-            )
-        else:
-            # Enrich tornado if we have sensitivity suite
-            if sensitivity_suite and monte_carlo and raw_results:
-                try:
-                    tail_df = enrich_tornado_with_tail_risk(
-                        tornado_suite=sensitivity_suite,
-                        mc_result=monte_carlo,
-                        metric=metric,
-                        confidence=confidence,
-                    )
-                    tail_risk_block = {
-                        "metric": metric,
-                        "confidence": confidence,
-                        "rows": tail_df.to_dict(orient="records"),
-                    }
-                except (ValueError, KeyError) as e:
-                    logger.warning(
-                        "Could not enrich tornado with tail risk: %s; skipping", str(e)
-                    )
-
-            # Build tail risk snapshots
-            if monte_carlo and raw_results:
-                try:
-                    tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
-                        mc_result=monte_carlo,
-                        metrics=("project_irr", "dscr_min"),
-                        confidence=confidence,
-                    )
-                except (ValueError, KeyError) as e:
-                    logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
-                    tail_risk_snapshots = {}
+    # Tail-risk enrichment is deferred (#60 follow-up). The previous lazy import of
+    # build_tail_risk_snapshots_for_metrics / enrich_tornado_with_tail_risk targeted
+    # functions that no longer exist anywhere; the live API is
+    # analytics.sensitivity.tail_risk.enrich_suite_with_tail_risk, which is
+    # suite-centric with a different output shape. The block was already silently
+    # disabled by its ImportError guard (so this is behavior-preserving). Removed
+    # here; tail_risk_block / tail_risk_snapshots keep their empty defaults until
+    # the enrichment is rewired onto the current API.
 
     logger.info("Step 4/4: Assembling CASPER result...")
     metadata: Dict[str, Any] = {}

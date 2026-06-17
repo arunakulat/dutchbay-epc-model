@@ -5,7 +5,7 @@ History:
     reason "absolute IRR band assertions without frozen/regression labeling".
     Investigation (Sprint 18D) determined the quarantine reason was a false
     positive: this test asserts no absolute IRR bands — only structural
-    properties of result.metadata["tail_risk"].
+    properties of the assembled CASPER result.
 
 Why revived:
     - Sprint 18B aligned EquityPerformance to a canonical 4-field surface.
@@ -19,14 +19,15 @@ Why revived:
 Adaptations vs the quarantined version:
     - TornadoResult fields updated to the canonical Sprint 18C/18B surface
       (metric_name / base_metric / shock_results / impact_abs / metadata).
-      The old (variable / base_irr / low_irr / high_irr) signature no
-      longer exists.
     - SensitivitySuite.base_metric was removed in Sprint 18C and replaced
       by base_kpis: dict[str, float]. Updated accordingly.
-    - The monkeypatch target switched from tornado_suite_to_dataframe (no
-      longer used by evaluation_v14) to enrich_tornado_with_tail_risk
-      (the real consumer), with a DataFrame stub that carries the
-      BreachProbability column the original test asserted.
+    - Sprint 19 (#60 unpark): the tail-risk enrichment block in
+      evaluation_v14 was removed (it lazily imported helpers that no longer
+      exist anywhere; the live API is analytics.sensitivity.tail_risk.
+      enrich_suite_with_tail_risk, which is suite-centric with a different
+      shape). Re-enabling tail-risk is a tracked follow-up. This test no
+      longer stubs the enrichment helpers; instead it pins the deferred
+      state (no tail_risk metadata) so the re-enable PR flips it deliberately.
 
 Framework Compliance:
     - TEST-01: integration-shaped regression pin with deterministic fakes
@@ -35,15 +36,13 @@ Framework Compliance:
     - GWTF R23/R25: lives on a feature branch with PR + CI
 
 Author: Aruna Kulatunga
-Sprint: 18D (CASPER contract alignment)
+Sprint: 18D (CASPER contract alignment); 19 (#60 unpark)
 """
 
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
-import analytics.sensitivity_tail_risk as tr
 from analytics import evaluation_v14
 from analytics.contracts_v14 import (
     SensitivitySuite,
@@ -60,13 +59,11 @@ def test_evaluate_with_casper_tail_risk_smoke(
 
     - Patches run_v14_pipeline and run_monte_carlo_analysis with the
       deterministic fakes in tests/analytics_layer/_casper_fakes.py.
-    - Patches enrich_tornado_with_tail_risk on the deprecated shim so
-      evaluation_v14's lazy import resolves to the stub. (Real consumer
-      is analytics.sensitivity.tail_risk.enrich_tornado_with_tail_risk;
-      the shim re-exports it via star-import.)
     - Creates toy YAML configs on disk so evaluation_v14 can resolve paths.
-    - Asserts CASPER result + tail_risk metadata are populated, and that
-      BreachProbability survives into the row dicts.
+    - Asserts the CASPER result is assembled end-to-end (scenario,
+      baseline_kpis, monte_carlo, attached sensitivity suite).
+    - Tail-risk enrichment is currently deferred (#60 re-enable follow-up),
+      so metadata must NOT carry a tail_risk block; this pins that state.
     """
     # --- 1. Create toy config files on disk ---------------------------------
     conf_dir = tmp_path_factory.mktemp("conf")
@@ -96,62 +93,14 @@ def test_evaluate_with_casper_tail_risk_smoke(
         _fake_run_monte_carlo_analysis,
     )
 
-    # --- 3. Stub enrich_tornado_with_tail_risk on the shim module -----------
-    # evaluation_v14 imports from analytics.sensitivity_tail_risk lazily
-    # (at function call time). The shim re-exports analytics.sensitivity.
-    # tail_risk via star-import, but the canonical module does not currently
-    # define enrich_tornado_with_tail_risk or build_tail_risk_snapshots_for_
-    # metrics. In real production code this raises ImportError, which
-    # evaluation_v14 catches and swallows, so tail_risk_block stays None and
-    # metadata["tail_risk"] is never populated. That is a pre-existing
-    # production issue, recorded as a follow-up; the test injects both
-    # missing symbols here so the lazy import resolves and the assertion
-    # path can exercise the assembly logic. raising=False is required
-    # because the attributes do not exist on the shim by default.
-    def _fake_enrich_tornado_with_tail_risk(
-        *,
-        tornado_suite: SensitivitySuite,
-        mc_result: object,
-        metric: str,
-        confidence: float,
-    ) -> pd.DataFrame:
-        _ = (tornado_suite, mc_result, metric, confidence)
-        return pd.DataFrame(
-            {
-                "Variable": ["project.capex_usd_per_kw"],
-                "Low Metric": [0.11],
-                "High Metric": [0.13],
-                "BreachProbability": [0.07],
-            }
-        )
+    # --- 3. Tail-risk enrichment is deferred (#60 re-enable follow-up) -------
+    # evaluation_v14 no longer imports/calls the tail-risk enrichment helpers
+    # (they targeted functions that no longer exist anywhere), so there is
+    # nothing to stub here; we assert below that metadata carries no tail_risk
+    # block. The re-enable PR will rewire onto enrich_suite_with_tail_risk and
+    # flip these assertions back.
 
-    monkeypatch.setattr(
-        tr,
-        "enrich_tornado_with_tail_risk",
-        _fake_enrich_tornado_with_tail_risk,
-        raising=False,
-    )
-
-    # build_tail_risk_snapshots_for_metrics is called for snapshot building
-    # after the tornado enrichment block. Stub it to return an empty dict so
-    # we don't depend on percentile maths over the fake samples.
-    def _fake_build_tail_risk_snapshots_for_metrics(
-        *,
-        mc_result: object,
-        metrics: tuple[str, ...],
-        confidence: float,
-    ) -> dict[str, object]:
-        _ = (mc_result, metrics, confidence)
-        return {}
-
-    monkeypatch.setattr(
-        tr,
-        "build_tail_risk_snapshots_for_metrics",
-        _fake_build_tail_risk_snapshots_for_metrics,
-        raising=False,
-    )
-
-    # --- 4. Minimal SensitivitySuite for tail-risk enrichment ----------------
+    # --- 4. Minimal SensitivitySuite (attached to the CASPER result) --------
     suite = SensitivitySuite(
         base_config_path=str(cfg_path),
         metric="project_irr",
@@ -188,18 +137,17 @@ def test_evaluate_with_casper_tail_risk_smoke(
         validation_modules=("cashflow", "debt"),
     )
 
-    # --- 6. Assertions: CASPER + tail_risk metadata --------------------------
+    # --- 6. Assertions: CASPER result assembled end-to-end -------------------
     assert result.scenario is not None
     assert result.baseline_kpis["project_irr"] == pytest.approx(0.12)
     assert result.monte_carlo is not None
-    assert "tail_risk" in result.metadata
+    assert result.sensitivities is suite
 
-    tail = result.metadata["tail_risk"]
-    assert tail["metric"] == "project_irr"
-    assert tail["confidence"] == 0.9
-    assert isinstance(tail["rows"], list)
-    assert len(tail["rows"]) == 1
-    assert "BreachProbability" in tail["rows"][0]
+    # Tail-risk enrichment is deferred (#60 re-enable follow-up): the assembly
+    # block was removed, so no tail_risk metadata is produced. Pin that state
+    # so the re-enable PR flips these assertions back deliberately.
+    assert "tail_risk" not in result.metadata
+    assert "tail_risk_summary" not in result.metadata
 
 
 if __name__ == "__main__":  # pragma: no cover
