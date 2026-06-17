@@ -43,16 +43,11 @@ from analytics.contracts_v14 import (
     ScenarioResult,
 )
 
-# XFAIL (module): analytics/casper/casper_payload.py is out of sync with its
-# contracts_v14 surface — build_casper_payload constructs CasperResult(generation=…)
-# (and reads TornadoResult.variable / MonteCarloResult.project_irr_se /
-# SensitivitySuite.base_metric) which no longer exist, so it raises TypeError on a
-# full build. The casper_payload realignment rides with the parked #60 Monte Carlo /
-# CASPER work (go-word "resume #60"). Parked here visibly until then.
-pytestmark = pytest.mark.xfail(
-    reason="casper_payload out of sync with contracts (CasperResult 'generation' kwarg etc.); rides with parked #60",
-    strict=False,
-)
+# (Sprint 19, #60 unpark) The module-level xfail was removed here: casper_payload
+# has been realigned to the current contracts_v14 surface — CasperResult.generation /
+# .multi_tech_generation_breakdown re-instated, and the TornadoResult / SensitivitySuite /
+# MonteCarloResult reads remapped (shock_results, base_kpis, *_std). These CASPER
+# payload contract tests now pass against main.
 
 
 # ────────────────────────── fixtures ──────────────────────────────

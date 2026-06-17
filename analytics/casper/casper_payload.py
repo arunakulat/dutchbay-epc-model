@@ -21,7 +21,7 @@ CASPER_CONTRACT_VERSION = "casper_result_v1"
 
 def build_casper_payload(
     *,
-    scenario: ScenarioResult,
+    scenario: ScenarioResult | str,
     monte_carlo: MonteCarloResult | None = None,
     sensitivity: SensitivitySuite | None = None,
     generation: MultiTechGenerationResult | None = None,
@@ -97,7 +97,7 @@ def build_casper_payload(
 
 
 def _scenario_summary_to_dict(
-    s: ScenarioResult | None,
+    s: ScenarioResult | str | None,
     mc: MonteCarloResult | None = None,
 ) -> dict[str, Any] | None:
     """
@@ -106,9 +106,14 @@ def _scenario_summary_to_dict(
     Intentionally avoids shipping full `config` / `annual_rows` to keep
     payloads light and lender-friendly. Those remain available on disk /
     in the model outputs when deeper audits are required.
+
+    ``CasperResult.scenario`` may be a bare scenario-name string when the full
+    ScenarioResult is not available; in that case we emit a minimal descriptor.
     """
     if s is None:
         return None
+    if isinstance(s, str):
+        return {"scenario_name": s}
 
     data: dict[str, Any] = {
         "scenario_name": s.scenario_name,
@@ -179,7 +184,7 @@ def _scenario_summary_to_dict(
 
     # Debt covenants (if attached)
     if s.debt_covenants is not None:
-        data["debt_covenants"] = s.debt_covenants.as_dict()
+        data["debt_covenants"] = s.debt_covenants.model_dump()
 
     # Equity performance overlay (if available).
     #
@@ -232,21 +237,33 @@ def _sensitivity_to_dict(suite: SensitivitySuite | None) -> dict[str, Any] | Non
     if suite is None:
         return None
 
+    # base_metric: baseline value of the suite's headline metric, taken from
+    # base_kpis (SensitivitySuite no longer carries a dedicated base_metric field).
+    base_metric = suite.base_kpis.get(suite.metric)
+
+    # Per-variable tornado rows live in each TornadoResult's shock_results; the
+    # suite-level tornado_results are per-metric containers.
+    tornado: list[dict[str, Any]] = []
+    for tr in suite.tornado_results:
+        for sr in tr.shock_results:
+            tornado.append(
+                {
+                    "variable": sr.label or sr.variable_name,
+                    "base_irr": (
+                        sr.base_case if sr.base_case is not None else tr.base_metric
+                    ),
+                    "low_irr": sr.low_case,
+                    "high_irr": sr.high_case,
+                    "impact_abs": sr.impact_abs,
+                    "impact_pct": sr.impact,
+                }
+            )
+
     return {
         "metric": suite.metric,
-        "base_metric": suite.base_metric,
+        "base_metric": base_metric,
         "base_config_path": suite.base_config_path,
-        "tornado": [
-            {
-                "variable": row.variable,
-                "base_irr": row.base_irr,
-                "low_irr": row.low_irr,
-                "high_irr": row.high_irr,
-                "impact_abs": row.impact_abs,
-                "impact_pct": row.impact_pct,
-            }
-            for row in suite.tornado_results
-        ],
+        "tornado": tornado,
     }
 
 
@@ -257,7 +274,8 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
     Notes:
     - Does *not* emit raw per-draw results by default; that stays in the
       engine outputs and regression tests.
-    - Includes success rate and standard errors for convergence checks.
+    - Includes success rate and percentile spreads; standard-error fields are
+      not part of the current MonteCarloResult contract and are omitted.
     """
     if mc is None:
         return None
@@ -273,19 +291,16 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
             "p10": mc.project_irr_p10,
             "p50": mc.project_irr_p50,
             "p90": mc.project_irr_p90,
-            "se": mc.project_irr_se,
         },
         "npv": {
             "mean": mc.project_npv_mean,
             "p10": mc.project_npv_p10,
             "p50": mc.project_npv_p50,
             "p90": mc.project_npv_p90,
-            "se": mc.project_npv_se,
         },
         "dscr_min": {
             "p10": mc.dscr_min_p10,
             "p50": mc.dscr_min_p50,
-            "se": mc.dscr_min_se,
         },
     }
 
