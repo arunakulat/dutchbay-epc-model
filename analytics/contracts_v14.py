@@ -349,6 +349,12 @@ class CasperResult(ContractMixin):
     baseline_kpis: dict[str, float] = field(default_factory=dict)
     sensitivities: SensitivitySuite | None = None
     monte_carlo: MonteCarloResult | None = None
+    # Re-instated Sprint 19 (#60 unpark): these were dropped from the contract in
+    # the Palette refactor (979520b) while ``casper_payload`` kept building/reading
+    # them. The generation sub-contracts (GenerationProfile / MultiTechGenerationResult
+    # / TechnologyBreakdown) were already re-instated below for the same reason.
+    generation: MultiTechGenerationResult | None = None
+    multi_tech_generation_breakdown: list[TechnologyBreakdown] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # Class-level frozen attribute (NOT __init__ arg). Resolved Sprint 18D

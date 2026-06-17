@@ -15,9 +15,13 @@ Why revived:
     field set on the canonical dataclass).
 
 Adaptations vs the quarantined version:
-    - CasperResult.multi_tech_generation_breakdown was removed from the
-      canonical dataclass (no longer in contracts_v14). The kwarg and
-      __annotations__ assertion are dropped.
+    - CasperResult.generation and .multi_tech_generation_breakdown were dropped
+      from the canonical dataclass in the Palette refactor (979520b) while
+      casper_payload kept building/reading them; **re-instated Sprint 19 (#60
+      unpark)** so the builder/serializer and the contract agree again. The
+      customer-visible payload keys ("generation", "technology_breakdown") were
+      always part of casper_result_v1 (emitted by _casper_to_dict), so no
+      payload version bump — only the documented field set grows by two.
     - CasperResult.scenario is now typed ScenarioResult | str (no None
       allowed). The test passes the string sentinel "<frozen-contract-stub>".
     - CasperResult.contract_version was previously defined as a no-args
@@ -125,6 +129,8 @@ def test_casper_result_has_documented_canonical_fields() -> None:
         "baseline_kpis",
         "sensitivities",
         "monte_carlo",
+        "generation",  # Sprint 19 (#60): re-instated (consumed by casper_payload)
+        "multi_tech_generation_breakdown",  # Sprint 19 (#60): re-instated
         "metadata",
         "contract_version",  # D.X+6: was method, now init=False frozen attr
     }
