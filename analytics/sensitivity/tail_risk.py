@@ -21,7 +21,7 @@ This skeleton implements the metadata schema and hooks.
 You will wire it to your Monte Carlo engine in your repo (recommended).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -113,14 +113,11 @@ def enrich_suite_with_tail_risk(
     md["tail_risk"] = tail_table
     md["tail_risk_summary"] = summary
 
-    # write back
-    try:
-        suite.metadata = md  # type: ignore[attr-defined]
-        return suite
-    except Exception:
-        # If contracts are frozen, recreate by copying with metadata.
-        # Fallback: return suite with best effort.
-        return suite
+    # SensitivitySuite is a frozen dataclass — build a new instance carrying the
+    # enriched metadata rather than mutating in place. The previous setattr
+    # always raised FrozenInstanceError (silently caught), dropping the
+    # tail-risk enrichment entirely.
+    return replace(suite, metadata=md)
 
 
 def _build_tornado_tail_snapshot(
