@@ -109,10 +109,21 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
+        cache: 'pip'
 
     - name: Install linting tools
       run: |
-        pip install ruff black mypy
+        # The mypy gate must run against a FAITHFUL environment. With only
+        # ruff/black/mypy installed (no project deps), mypy reported ~36 spurious
+        # "Class cannot subclass BaseModel (has type Any)" errors because pydantic
+        # was absent. Mirror the test job's install so pydantic/omegaconf/numpy/
+        # xarray are present, and pin mypy to the version the v14 surface was
+        # cleared against (1.19.0) — newer mypy emits different unused-ignore
+        # diagnostics. Without this, the gate would be both noisy and unstable.
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements.txt
+        python -m pip install -e ".[wind]"
+        pip install ruff black mypy==1.19.0
 
     - name: Run ruff
       run: ruff check . --output-format=github || true
