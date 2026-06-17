@@ -228,9 +228,8 @@ class FXSensitivityAnalyzer:
         )
         from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
 
-        return cast(
-            dict[str, Any],
-            run_v14_pipeline_with_analytics(config=config, enable_returns=True, enable_risk=False),
+        return run_v14_pipeline_with_analytics(
+            config=config, enable_returns=True, enable_risk=False
         )
 
     def _extract_metrics(self, pipeline_result: dict[str, Any]) -> tuple[Optional[float], float, Optional[float], float, float]:
