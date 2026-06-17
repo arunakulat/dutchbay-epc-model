@@ -23,11 +23,11 @@ Adaptations vs the quarantined version:
       by base_kpis: dict[str, float]. Updated accordingly.
     - Sprint 19 (#60 unpark): the tail-risk enrichment block in
       evaluation_v14 was removed (it lazily imported helpers that no longer
-      exist anywhere; the live API is analytics.sensitivity.tail_risk.
-      enrich_suite_with_tail_risk, which is suite-centric with a different
-      shape). Re-enabling tail-risk is a tracked follow-up. This test no
-      longer stubs the enrichment helpers; instead it pins the deferred
-      state (no tail_risk metadata) so the re-enable PR flips it deliberately.
+      existed). Re-enabled in #165 onto the live suite-centric API
+      analytics.sensitivity.tail_risk.enrich_suite_with_tail_risk: the
+      orchestrator now surfaces metadata["tail_risk"] (per-parameter table)
+      and metadata["tail_risk_summary"] ({metric: snapshot}, consumer-shaped).
+      This test asserts enrichment is present and end-to-end consumer-readable.
 
 Framework Compliance:
     - TEST-01: integration-shaped regression pin with deterministic fakes
@@ -62,8 +62,8 @@ def test_evaluate_with_casper_tail_risk_smoke(
     - Creates toy YAML configs on disk so evaluation_v14 can resolve paths.
     - Asserts the CASPER result is assembled end-to-end (scenario,
       baseline_kpis, monte_carlo, attached sensitivity suite).
-    - Tail-risk enrichment is currently deferred (#60 re-enable follow-up),
-      so metadata must NOT carry a tail_risk block; this pins that state.
+    - Tail-risk enrichment is re-enabled (#165): metadata carries a
+      tail_risk table and a consumer-shaped tail_risk_summary.
     """
     # --- 1. Create toy config files on disk ---------------------------------
     conf_dir = tmp_path_factory.mktemp("conf")
@@ -93,12 +93,11 @@ def test_evaluate_with_casper_tail_risk_smoke(
         _fake_run_monte_carlo_analysis,
     )
 
-    # --- 3. Tail-risk enrichment is deferred (#60 re-enable follow-up) -------
-    # evaluation_v14 no longer imports/calls the tail-risk enrichment helpers
-    # (they targeted functions that no longer exist anywhere), so there is
-    # nothing to stub here; we assert below that metadata carries no tail_risk
-    # block. The re-enable PR will rewire onto enrich_suite_with_tail_risk and
-    # flip these assertions back.
+    # --- 3. Tail-risk enrichment runs for real (#165) -----------------------
+    # evaluation_v14 now calls the real enrich_suite_with_tail_risk on the
+    # attached suite (no stubbing needed — it is deterministic and derives its
+    # snapshot from the suite's tornado/shock data, not from MC arrays). We
+    # assert below that the metadata is populated and consumer-shaped.
 
     # --- 4. Minimal SensitivitySuite (attached to the CASPER result) --------
     suite = SensitivitySuite(
@@ -143,11 +142,37 @@ def test_evaluate_with_casper_tail_risk_smoke(
     assert result.monte_carlo is not None
     assert result.sensitivities is suite
 
-    # Tail-risk enrichment is deferred (#60 re-enable follow-up): the assembly
-    # block was removed, so no tail_risk metadata is produced. Pin that state
-    # so the re-enable PR flips these assertions back deliberately.
-    assert "tail_risk" not in result.metadata
-    assert "tail_risk_summary" not in result.metadata
+    # Tail-risk enrichment re-enabled (#165): metadata carries both the
+    # per-parameter table and the {metric: snapshot} summary.
+    assert "tail_risk" in result.metadata
+    assert "tail_risk_summary" in result.metadata
+
+    # Per-parameter table: one honest row per tornado, derived from the shock
+    # cases (low_case=0.10 / high_case=0.14 on the single capex shock).
+    table = result.metadata["tail_risk"]
+    assert isinstance(table, list) and len(table) == 1
+    assert table[0]["metric"] == "project_irr"
+    assert table[0]["downside"] == pytest.approx(0.10)
+    assert table[0]["upside"] == pytest.approx(0.14)
+
+    # Per-metric summary keyed by metric name (consumer contract).
+    summary = result.metadata["tail_risk_summary"]
+    assert "project_irr" in summary
+    snap = summary["project_irr"]
+    assert snap["base_value"] == pytest.approx(0.12)
+    assert snap["downside"] == pytest.approx(0.10)
+    assert snap["upside"] == pytest.approx(0.14)
+    # alpha is derived from `confidence` (0.9 -> 0.10), not hardcoded.
+    assert snap["cvar_alpha"] == pytest.approx(0.10)
+
+    # End-to-end producer -> consumer contract: the CASPER payload helper must
+    # surface the suite-centric summary. Guards the silent-None shape mismatch
+    # (a flat run-summary would be dropped by _tail_risk_from_metadata).
+    from analytics.casper.casper_payload import _tail_risk_from_metadata
+
+    surfaced = _tail_risk_from_metadata(result.metadata)
+    assert surfaced is not None
+    assert "project_irr" in surfaced
 
 
 if __name__ == "__main__":  # pragma: no cover

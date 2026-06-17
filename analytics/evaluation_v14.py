@@ -394,7 +394,7 @@ def evaluate_with_casper_tail_risk(
 
     logger.info("Step 2/4: Running Monte Carlo analysis...")
     monte_carlo = None
-    tail_risk_block = None
+    tail_risk_block: list[dict[str, Any]] | None = None
     tail_risk_snapshots: dict[str, Any] = {}
     raw_results: list[dict[str, Any]] = []
 
@@ -485,14 +485,27 @@ def evaluate_with_casper_tail_risk(
             dscr_min_p50=stats.get("dscr_min_p50", 0.0),
         )
 
-    # Tail-risk enrichment is deferred (#60 follow-up). The previous lazy import of
-    # build_tail_risk_snapshots_for_metrics / enrich_tornado_with_tail_risk targeted
-    # functions that no longer exist anywhere; the live API is
-    # analytics.sensitivity.tail_risk.enrich_suite_with_tail_risk, which is
-    # suite-centric with a different output shape. The block was already silently
-    # disabled by its ImportError guard (so this is behavior-preserving). Removed
-    # here; tail_risk_block / tail_risk_snapshots keep their empty defaults until
-    # the enrichment is rewired onto the current API.
+    # Tail-risk enrichment (#165 re-enable): enrich the attached sensitivity
+    # suite via the live suite-centric API and surface the result on the
+    # CasperResult metadata. enrich_suite_with_tail_risk is imported lazily to
+    # preserve this module's import-safety invariant (no analytics.sensitivity
+    # imports at module scope). The CVaR tail probability is derived from the
+    # caller's `confidence` (alpha = 1 - confidence) rather than hardcoded
+    # (ARCH-01 / config-first), which also makes the `confidence` argument live.
+    if sensitivity_suite is not None:
+        from analytics.sensitivity.tail_risk import (
+            TailRiskConfig,
+            enrich_suite_with_tail_risk,
+        )
+
+        enriched_suite = enrich_suite_with_tail_risk(
+            suite=sensitivity_suite,
+            base_config=base_config,
+            run_cfg=TailRiskConfig(cvar_alpha=1.0 - confidence),
+        )
+        enriched_md = enriched_suite.metadata or {}
+        tail_risk_block = enriched_md.get("tail_risk") or None
+        tail_risk_snapshots = enriched_md.get("tail_risk_summary") or {}
 
     logger.info("Step 4/4: Assembling CASPER result...")
     metadata: Dict[str, Any] = {}

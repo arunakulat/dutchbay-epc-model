@@ -26,7 +26,7 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from analytics.contracts_v14 import SensitivitySuite
+from analytics.contracts_v14 import SensitivitySuite, TornadoResult
 
 
 @dataclass(frozen=True)
@@ -69,79 +69,108 @@ def enrich_suite_with_tail_risk(
     base_config: Mapping[str, Any],
     run_cfg: TailRiskConfig = TailRiskConfig(),
 ) -> SensitivitySuite:
-    """
-    Enrich the suite.metadata with tail risk blocks.
+    """Enrich ``suite.metadata`` with lender-grade tail-risk blocks.
 
-    This skeleton assumes the suite already contains scenario KPI metadata for each case.
-    If you want *proper* tail risk (VaR/CVaR) you should attach Monte Carlo arrays per case.
-    
-    Note: MultiMetricSensitivitySuite was removed - use SensitivitySuite only.
+    Produces two complementary views and attaches them to the suite metadata:
+
+    * ``metadata["tail_risk"]`` — a per-parameter table (one row per tornado)
+      carrying the base value plus the downside/upside/impact observed across
+      that parameter's shocks.
+    * ``metadata["tail_risk_summary"]`` — a ``{metric_name: {snapshot}}``
+      mapping aggregating the worst downside / best upside / largest impact
+      across all parameters. This is the shape consumed by
+      :func:`analytics.casper.casper_payload._tail_risk_from_metadata`, so the
+      CASPER payload can surface it directly (a flat run-summary would have been
+      silently dropped by that consumer).
+
+    The suite is a frozen dataclass, so a new instance carrying the enriched
+    metadata is returned rather than mutating in place.
+
+    Note:
+        Snapshots are derived from the suite's tornado/shock data. For full
+        distributional VaR/CVaR from Monte Carlo trial arrays, see the
+        ``_build_case_tail_snapshot`` trial-array path below — a caller can wire
+        it once per-case MC arrays are attached to each scenario's metadata.
     """
     if not run_cfg.enabled:
         return suite
 
     md = dict(getattr(suite, "metadata", {}) or {})
-    md.setdefault("tail_risk", {})
-    md.setdefault("tail_risk_summary", {})
 
-    # We will compute "snapshots" using any trial arrays that are present under:
-    # case["metadata"]["trials"][metric_key] OR case["metadata"]["mc_trials"][metric_key]
-    # If absent, we fall back to single-point KPI values and only provide a trivial snapshot.
     tail_table: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"alpha": float(run_cfg.cvar_alpha), "percentiles": list(run_cfg.percentiles)}
+    summary: dict[str, Any] = {}
 
-    # SensitivitySuite shape (single metric)
-    if hasattr(suite, "tornado_results"):
-        metric_key = suite.metric
-        tornado_results = suite.tornado_results
-        
-        for tornado in tornado_results:
-            # Extract data from TornadoResult
-            param_name = tornado.metric_name
-            snap = _build_tornado_tail_snapshot(
-                tornado=tornado,
-                metric_key=metric_key,
-                run_cfg=run_cfg
-            )
-            tail_table.extend(snap["rows"])
-        
-        summary["metrics"] = [metric_key]
-    else:
-        # Fallback for older structures
-        summary["metrics"] = []
+    # SensitivitySuite shape (single metric). An empty tornado set leaves both
+    # blocks empty rather than fabricating a snapshot.
+    if getattr(suite, "tornado_results", None):
+        metric_key = str(suite.metric)
+        rows = [
+            _tornado_tail_stats(tornado=tornado)
+            for tornado in suite.tornado_results
+        ]
+        tail_table.extend(rows)
+        summary[metric_key] = _aggregate_metric_snapshot(rows=rows, run_cfg=run_cfg)
 
     md["tail_risk"] = tail_table
     md["tail_risk_summary"] = summary
 
     # SensitivitySuite is a frozen dataclass — build a new instance carrying the
-    # enriched metadata rather than mutating in place. The previous setattr
-    # always raised FrozenInstanceError (silently caught), dropping the
-    # tail-risk enrichment entirely.
+    # enriched metadata rather than mutating in place. A prior setattr-based
+    # implementation always raised FrozenInstanceError (silently caught),
+    # dropping the tail-risk enrichment entirely.
     return replace(suite, metadata=md)
 
 
-def _build_tornado_tail_snapshot(
+def _tornado_tail_stats(*, tornado: TornadoResult) -> dict[str, Any]:
+    """Honest per-parameter tail snapshot from a tornado's shock results.
+
+    Derives downside/upside/impact from the shock cases actually present
+    (``low_case`` / ``high_case`` / ``impact_abs`` are optional on
+    :class:`~analytics.contracts_v14.ShockResult`, so missing values are
+    skipped). A tornado with no usable shocks collapses to its base value.
+    """
+    base = float(tornado.base_metric)
+    lows = [s.low_case for s in tornado.shock_results if s.low_case is not None]
+    highs = [s.high_case for s in tornado.shock_results if s.high_case is not None]
+    impacts = [
+        s.impact_abs for s in tornado.shock_results if s.impact_abs is not None
+    ]
+    return {
+        "parameter": str(tornado.label or tornado.metric_name),
+        "metric": str(tornado.metric_name),
+        "base_value": base,
+        "downside": float(min(lows)) if lows else base,
+        "upside": float(max(highs)) if highs else base,
+        "worst_impact_abs": float(max(impacts)) if impacts else float(tornado.impact_abs),
+        "n_shocks": len(tornado.shock_results),
+    }
+
+
+def _aggregate_metric_snapshot(
     *,
-    tornado: Any,
-    metric_key: str,
+    rows: Sequence[Mapping[str, Any]],
     run_cfg: TailRiskConfig,
-) -> Dict[str, Any]:
-    """Build tail risk snapshot from TornadoResult."""
-    rows: list[dict[str, Any]] = []
-    
-    param_name = str(getattr(tornado, "metric_name", "unknown"))
-    base_value = float(getattr(tornado, "base_metric", 0.0))
-    
-    # For now, just return basic structure
-    # TODO: Extract shock_results and compute tail stats
-    rows.append({
-        "parameter": param_name,
-        "metric": metric_key,
-        "base_value": base_value,
-        "note": "basic_snapshot",
-    })
-    
-    return {"rows": rows}
+) -> dict[str, Any]:
+    """Aggregate per-parameter rows into one per-metric tail snapshot.
+
+    Shaped for the CASPER consumer (``{metric_name: {snapshot}}``): the worst
+    downside / best upside / largest impact across all parameters, plus the
+    tail-risk run parameters for provenance.
+    """
+    base = float(rows[0]["base_value"]) if rows else float("nan")
+    downsides = [float(r["downside"]) for r in rows]
+    upsides = [float(r["upside"]) for r in rows]
+    impacts = [float(r["worst_impact_abs"]) for r in rows]
+    return {
+        "base_value": base,
+        "downside": min(downsides) if downsides else base,
+        "upside": max(upsides) if upsides else base,
+        "worst_impact_abs": max(impacts) if impacts else 0.0,
+        "n_parameters": len(rows),
+        "cvar_alpha": float(run_cfg.cvar_alpha),
+        "percentiles": list(run_cfg.percentiles),
+        "dscr_floor": float(run_cfg.dscr_floor),
+    }
 
 
 def _extract_trials_from_case(case: Mapping[str, Any], metric_key: str) -> Optional[np.ndarray]:
