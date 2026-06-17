@@ -78,6 +78,19 @@ def _extract_scalar_metric(kpis: Mapping[str, Any], metric_key: str) -> float:
         raise TypeError(f"KPI '{metric_key}' is not numeric: {v!r}") from e
 
 
+def _coerce_kpis(out: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return the KPI mapping from an evaluation result.
+
+    ``evaluate_with_overrides`` returns either a flat KPI dict or a wrapper dict
+    carrying a nested ``"kpis"`` mapping. Normalise to a single ``Mapping`` so
+    downstream metric extraction is statically typed (not ``float | Any``).
+    """
+    inner = out.get("kpis")
+    if isinstance(inner, Mapping):
+        return inner
+    return out
+
+
 def build_one_way_sensitivity_suite(
     *,
     base_config: Mapping[str, Any],
@@ -99,7 +112,7 @@ def build_one_way_sensitivity_suite(
         raw_config=base_cfg,
         overrides={},
     )
-    base_kpis = base_out.get("kpis", base_out)
+    base_kpis = _coerce_kpis(base_out)
     base_value = _extract_scalar_metric(base_kpis, metric_key)
 
     # Sweep cases using adapter
@@ -110,7 +123,7 @@ def build_one_way_sensitivity_suite(
             raw_config=base_cfg,
             overrides=override_dict,
         )
-        kpis = out.get("kpis", out)
+        kpis = _coerce_kpis(out)
         val = _extract_scalar_metric(kpis, metric_key)
 
         record: Dict[str, Any] = {
@@ -173,7 +186,7 @@ def run_sensitivity_analysis(
         raw_config=base_cfg,
         overrides={},
     )
-    base_kpis = base_out.get("kpis", base_out)
+    base_kpis = _coerce_kpis(base_out)
 
     tornado_results: List[TornadoResult] = []
 
@@ -188,7 +201,7 @@ def run_sensitivity_analysis(
                 raw_config=base_cfg,
                 overrides=overrides,
             )
-            kpis = out.get("kpis", out)
+            kpis = _coerce_kpis(out)
             val = _extract_scalar_metric(kpis, primary_metric)
 
             record: Dict[str, Any] = {
