@@ -50,10 +50,11 @@ def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
     ParameterRangeConfig fields:
         - variable_name: str (dotted path, e.g., 'finance.capex_usd')
         - base_value: float
-        - low_pct: float (e.g., -10.0 for -10%)
-        - high_pct: float (e.g., 10.0 for +10%)
+        - low_pct / high_pct: Optional[float] (percentage mode, e.g. -10.0/10.0)
+        - low_value / high_value: Optional[float] (absolute mode; takes
+          precedence over the percentage fields when both are supplied)
         - label: Optional[str]
-    
+
     Engine expects:
         - name: str
         - override_key: str (same as variable_name)
@@ -77,15 +78,27 @@ def parameter_to_engine_spec(param: ParameterRangeConfig) -> Dict[str, Any]:
     1100.0
     """
     base = float(param.base_value)
-    low_mult = 1.0 + (float(param.low_pct) / 100.0)
-    high_mult = 1.0 + (float(param.high_pct) / 100.0)
-    
+
+    # ParameterRangeConfig accepts EITHER absolute (low_value, high_value) OR
+    # percentage (low_pct, high_pct) bounds. Prefer absolute when supplied;
+    # otherwise derive from percentages (treating a missing pct as 0 = base).
+    # The previous code assumed pct-mode unconditionally and crashed with
+    # float(None) whenever a caller used absolute mode.
+    if param.low_value is not None and param.high_value is not None:
+        low = float(param.low_value)
+        high = float(param.high_value)
+    else:
+        low_pct = param.low_pct if param.low_pct is not None else 0.0
+        high_pct = param.high_pct if param.high_pct is not None else 0.0
+        low = base * (1.0 + low_pct / 100.0)
+        high = base * (1.0 + high_pct / 100.0)
+
     return {
         "name": param.label or param.variable_name,
         "override_key": param.variable_name,
         "base": base,
-        "low": base * low_mult,
-        "high": base * high_mult,
+        "low": low,
+        "high": high,
     }
 
 
@@ -171,18 +184,19 @@ def engine_to_tornado_result(
     if high_case is None:
         high_case = base_value
     
+    impact = high_case - low_case
     shock = ShockResult(
         low_case=low_case,
         high_case=high_case,
-        impact=high_case - low_case,
+        impact=impact,
     )
-    
+
     return TornadoResult(
         metric_name=parameter.label or parameter.variable_name,
         base_metric=base_value,
         shock_results=[shock],
         label=parameter.label,
-        impact_abs=abs(shock.impact),
+        impact_abs=abs(impact),
     )
 
 
