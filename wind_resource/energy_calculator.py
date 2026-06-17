@@ -276,7 +276,7 @@ class EnergyCalculator:
             Gross CF: 42.5%
         """
         # Apply power curve to wind speeds
-        wind_speeds = self.df[self.ws_column].values
+        wind_speeds = self.df[self.ws_column].to_numpy()
         power_output = self.power_curve_func(wind_speeds)
         
         # Average power (kW)

@@ -236,7 +236,7 @@ def run_monte_carlo_aep(
     scenarios_df = pd.DataFrame(aep_scenarios)
     
     # Compute statistics
-    aep_values = scenarios_df["aep_gwh"].values
+    aep_values = scenarios_df["aep_gwh"].to_numpy()
     
     percentiles = {
         "p50": float(np.percentile(aep_values, 50)),

@@ -23,7 +23,7 @@ Context:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -146,17 +146,21 @@ def interpolate_power_curve(
         >>> power_out
         array([2495., 3135., 3875.])
     """
+    # interp_func is one of several scipy interpolators (PchipInterpolator /
+    # CubicSpline); annotate the common callable shape so both branches assign
+    # to the same declared type.
+    interp_func: Callable[..., np.ndarray]
     if method == "pchip":
         # Piecewise Cubic Hermite Interpolating Polynomial (monotonic)
         interp_func = PchipInterpolator(
-            curve["wind_speed_ms"].values,
-            curve["power_kw"].values
+            curve["wind_speed_ms"].to_numpy(),
+            curve["power_kw"].to_numpy()
         )
     elif method == "cubic":
         # Standard cubic spline (may overshoot)
         interp_func = CubicSpline(
-            curve["wind_speed_ms"].values,
-            curve["power_kw"].values,
+            curve["wind_speed_ms"].to_numpy(),
+            curve["power_kw"].to_numpy(),
             bc_type="natural"
         )
     else:
