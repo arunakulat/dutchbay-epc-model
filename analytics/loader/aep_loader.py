@@ -22,7 +22,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import pandas as pd
 
@@ -196,8 +196,8 @@ def load_aep_from_summary(
         f"  Capacity Factor: {data['capacity_factor']:.2%}\n"
         f"  Checksum: {provenance['checksum_sha256'][:16]}..."
     )
-    
-    return data
+
+    return cast("dict[str, Any]", data)
 
 
 def create_aep_summary_template() -> Dict[str, Any]:

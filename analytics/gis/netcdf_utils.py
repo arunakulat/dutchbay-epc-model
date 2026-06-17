@@ -46,7 +46,7 @@ GWTF Compliance:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -54,10 +54,10 @@ import xarray as xr
 
 # Optional dependency: pyproj for CRS transformations
 try:
-    from pyproj import CRS  # type: ignore[import-untyped]
+    from pyproj import CRS
     _PYPROJ_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover
-    CRS = None  # type: ignore[assignment,misc]
+    CRS = None
     _PYPROJ_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -260,8 +260,8 @@ def ws150_from_10_100(
         )
     
     # Compute wind speed magnitude at 10m and 100m
-    ws10 = np.sqrt(ds[u10_var]**2 + ds[v10_var]**2)
-    ws100 = np.sqrt(ds[u100_var]**2 + ds[v100_var]**2)
+    ws10 = cast("xr.DataArray", np.sqrt(ds[u10_var]**2 + ds[v10_var]**2))
+    ws100 = cast("xr.DataArray", np.sqrt(ds[u100_var]**2 + ds[v100_var]**2))
     
     # Estimate shear exponent if not provided
     if shear_exponent is None:
@@ -309,8 +309,8 @@ def ws150_from_10_100(
         f"mean={float(ws_hub.mean()):.2f} m/s, "
         f"max={float(ws_hub.max()):.2f} m/s"
     )
-    
-    return ws_hub
+
+    return cast("xr.DataArray", ws_hub)
 
 
 def grid_stats(da: xr.DataArray, dim: str = 'time') -> pd.DataFrame:
