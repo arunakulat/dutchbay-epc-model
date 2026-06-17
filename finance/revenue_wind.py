@@ -199,7 +199,7 @@ def calculate_wind_revenue_monte_carlo(
     if ppa_currency not in SUPPORTED_CURRENCIES:
         raise ValueError(f"Unsupported currency: {ppa_currency}")
     
-    aep_scenarios = mc_scenarios["aep_gwh"].values
+    aep_scenarios = mc_scenarios["aep_gwh"].to_numpy()
     
     # Calculate Year 1 revenue for each scenario
     revenue_yr1 = aep_scenarios * ppa_price_per_mwh * 1000 / 1e6
