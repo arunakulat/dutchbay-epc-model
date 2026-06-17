@@ -121,7 +121,7 @@ jobs:
       run: black --check --diff . || true
 
     - name: Run mypy
-      run: mypy finance/ analytics/ --ignore-missing-imports || true
+      run: mypy finance/ analytics/ --ignore-missing-imports
 
   summary:
     name: Test Summary
@@ -139,9 +139,16 @@ jobs:
         # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
         # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
         # any failure/cancel/skip is non-success and blocks the merge.
-        # 'lint' stays advisory by design — the Code Quality Checks job runs
-        # ruff/black/mypy with '|| true', so it is not a meaningful gate.
+        # The 'lint' job is now a mypy gate: ruff/black still run with '|| true'
+        # (advisory), but the mypy step does NOT, so a type-check regression in
+        # finance/ or analytics/ fails 'lint' and — via the second check below —
+        # blocks the merge. (PR4: fix-first mypy gate, landed once the surface
+        # reached zero errors.)
         if [ "${{ needs.test.result }}" != "success" ]; then
           echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"
+          exit 1
+        fi
+        if [ "${{ needs.lint.result }}" != "success" ]; then
+          echo "::error::Lint job did not succeed (result=${{ needs.lint.result }}) — mypy gate failed; blocking Test Summary"
           exit 1
         fi
