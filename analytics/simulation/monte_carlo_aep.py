@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -84,7 +84,7 @@ def run_monte_carlo_aep(
     export_scenarios: bool = False,
     output_path: Optional[str] = None,
     seed: Optional[int] = None,
-) -> Dict:
+) -> Dict[str, Any]:
     """Run Monte Carlo simulation for AEP uncertainty quantification.
     
     Samples Weibull wind distribution parameters and loss factors to generate
