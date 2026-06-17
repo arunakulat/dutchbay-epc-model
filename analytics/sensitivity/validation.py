@@ -16,11 +16,23 @@ RETURNS:
     DataFrame with any param/point that failed basic sanity checks.
 """
 
-from typing import List
+from typing import Any, List
 
 import pandas as pd
 
 from analytics.contracts_v14 import ParameterRangeConfig
+
+
+def _nested_override(dotted_key: str, value: float) -> dict[str, Any]:
+    """Expand a dotted key ('a.b.c') into a nested override dict."""
+    parts = dotted_key.split(".")
+    nested: dict[str, Any] = {}
+    cursor = nested
+    for part in parts[:-1]:
+        cursor[part] = {}
+        cursor = cursor[part]
+    cursor[parts[-1]] = value
+    return nested
 
 
 def validate_parameter_ranges(
@@ -33,13 +45,15 @@ def validate_parameter_ranges(
     for suspicious outputs (negative IRR, >50%, etc.).
     """
     from analytics.evaluate_scenario import evaluate_with_overrides
-    from analytics.sensitivity_v14 import build_nested_override
 
     errors = []
     for p in parameters:
         for pct in (p.low_pct, p.high_pct):
+            if pct is None:
+                # Absolute-mode bounds (low_value/high_value) are not pct-swept here.
+                continue
             val = p.base_value * (1 + pct / 100)
-            ovr = build_nested_override(p.variable_name, val)
+            ovr = _nested_override(p.variable_name, val)
             try:
                 out = evaluate_with_overrides(base_config_path, ovr)
                 met = out[metric]
