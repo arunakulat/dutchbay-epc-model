@@ -50,23 +50,14 @@ jobs:
 
     - name: Run test suite
       run: |
-        # Default CI tracks the supported v14 surface plus the green suites
-        # promoted in #136 (finance + integration + root contract/refinancing)
-        # and the wind path (wind adapter + NetCDF/GIS xarray, enabled by the
-        # ".[wind]" extra installed above). Still parked until their
-        # contracts/deps land: dual-DSCR integration (symbol-name mismatch),
-        # legacy Phase-3 sensitivity.
+        # Run the FULL tests/ tree (pytest.ini norecursedirs excludes tests/_quarantine).
+        # Previously this listed explicit sub-paths, which silently hid failures in any
+        # UNLISTED file (e.g. tests/analytics/test_oem_parser / test_tax_sensitivity /
+        # test_casper_payload_equity_contract / test_aep_loader). Those are now triaged
+        # (migrated or xfailed), so the whole tree is green and the gate can no longer be
+        # dodged by omission — the same class of hole as the #149 Test Summary rubber-stamp.
         pytest \
-          tests/api \
-          tests/analytics_layer \
-          tests/contracts \
-          tests/lint \
-          tests/integration \
-          tests/finance \
-          tests/wind \
-          tests/analytics/test_netcdf_utils.py \
-          tests/test_contracts_v14_validators.py \
-          tests/test_refinancing_v14_hardened.py \
+          tests/ \
           --verbose \
           --tb=short \
           --maxfail=10 \
