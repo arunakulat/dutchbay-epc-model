@@ -22,7 +22,7 @@ Version: 2.0.0 (Added degradation)
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import yaml
@@ -31,17 +31,17 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def _load_degradation_config() -> Dict:
+def _load_degradation_config() -> Dict[str, Any]:
     """Load degradation config from defaults.yaml.
-    
+
     Returns:
         Dict with degradation configuration, or defaults if not found.
     """
     defaults_path = Path("config/defaults.yaml")
     if defaults_path.exists():
         with open(defaults_path) as f:
-            config = yaml.safe_load(f)
-            return config.get("wind_degradation", {})
+            config = yaml.safe_load(f) or {}
+            return cast("Dict[str, Any]", config.get("wind_degradation", {}))
     return {}
 
 

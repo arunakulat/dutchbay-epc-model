@@ -197,12 +197,24 @@ def _prepare_cashflow_context(
             else 1.0
         )
         if _split_mode:
-            # Post-2025 SL Fourth-Schedule split: plant (short life) + civils (long life)
+            # Post-2025 SL Fourth-Schedule split: plant (short life) + civils (long life).
+            # TaxConfig.validate guarantees all three fields are populated whenever
+            # plant_capex_share is set (the _split_mode trigger); re-assert here so the
+            # contract is explicit and fail-loud at the call site (CESSPIT).
+            plant_share = tax_config.plant_capex_share
+            plant_life = tax_config.plant_depreciation_years
+            civil_life = tax_config.civil_depreciation_years
+            if plant_share is None or plant_life is None or civil_life is None:
+                raise ValueError(
+                    "Split-depreciation mode requires tax.plant_capex_share, "
+                    "tax.plant_depreciation_years and tax.civil_depreciation_years "
+                    "to all be set."
+                )
             depreciation_schedule = DepreciationSchedule.build_split_straight_line(
                 total_capex=capex_for_depreciation,
-                plant_capex_share=tax_config.plant_capex_share,
-                plant_useful_life=tax_config.plant_depreciation_years,
-                civil_useful_life=tax_config.civil_depreciation_years,
+                plant_capex_share=plant_share,
+                plant_useful_life=plant_life,
+                civil_useful_life=civil_life,
                 project_life=years,
             )
         else:

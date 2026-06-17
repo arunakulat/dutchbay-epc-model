@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, cast
 
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -331,8 +331,8 @@ def _extract_cf_pre_debt(row: Mapping[str, Any]) -> float:
         row.get("cfads_final_lkr") or row.get("cfads_lkr") or row.get("cfads")
     )
     fx_rate = _as_float(row.get("fx_rate") or row.get("start_lkr_per_usd"))
-    if cfads_lkr is not None and fx_rate not in (None, 0.0):
-        return cfads_lkr / float(fx_rate)
+    if cfads_lkr is not None and fx_rate is not None and fx_rate != 0.0:
+        return cfads_lkr / fx_rate
     return 0.0
 
 
@@ -575,6 +575,10 @@ def load_config(config_path: str) -> DictConfig:
         ValueError: If config validation fails.
     """
     cfg = OmegaConf.load(config_path)
+    if not isinstance(cfg, DictConfig):
+        raise TypeError(
+            f"Config root must be a mapping (DictConfig), got {type(cfg).__name__}"
+        )
     logger.info("Loaded config from: %s", config_path)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
@@ -582,7 +586,9 @@ def load_config(config_path: str) -> DictConfig:
         raise ValueError("Config must be a mapping (dict)")
 
     validate_config_for_v14(
-        raw_config=cfg_dict, config_path=config_path, modules=["cashflow", "debt"]
+        raw_config=cast("Mapping[str, Any]", cfg_dict),
+        config_path=config_path,
+        modules=["cashflow", "debt"],
     )
     logger.info("Schema validation passed (R5, R22)")
 
