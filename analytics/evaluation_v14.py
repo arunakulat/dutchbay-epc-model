@@ -99,6 +99,42 @@ def _deep_merge_config(
     return result
 
 
+def _expand_dotted_overrides(overrides: Mapping[str, Any]) -> dict[str, Any]:
+    """Expand flat *dotted* override keys into nested dicts before deep-merging.
+
+    ``{"tax.corporate_tax_rate": 0.30}`` becomes
+    ``{"tax": {"corporate_tax_rate": 0.30}}``. Plain keys pass through unchanged,
+    and nested mappings are expanded recursively (so a dotted key nested under a
+    plain parent is also handled).
+
+    This makes the dotted override form documented on ``evaluate_with_overrides`` /
+    ``evaluate_scenario_from_dict`` actually apply. Without it ``_deep_merge_config``
+    treats ``"tax.corporate_tax_rate"`` as a *literal* top-level key and silently
+    drops the override (it never reaches ``config["tax"]["corporate_tax_rate"]``) —
+    which made every nested-parameter one-way sensitivity a silent no-op.
+    """
+    expanded: dict[str, Any] = {}
+    for key, value in overrides.items():
+        value = _expand_dotted_overrides(value) if isinstance(value, Mapping) else value
+        if isinstance(key, str) and "." in key:
+            parts = key.split(".")
+            cursor = expanded
+            for part in parts[:-1]:
+                existing = cursor.get(part)
+                if not isinstance(existing, dict):
+                    existing = {}
+                    cursor[part] = existing
+                cursor = existing
+            cursor[parts[-1]] = value
+        else:
+            existing = expanded.get(key)
+            if isinstance(existing, dict) and isinstance(value, Mapping):
+                expanded[key] = _deep_merge_config(existing, dict(value))
+            else:
+                expanded[key] = value
+    return expanded
+
+
 def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
@@ -188,7 +224,7 @@ def evaluate_scenario_from_dict(
         >>> kpis["project_irr"]
         0.142
     """
-    merged_config = _deep_merge_config(config, overrides or {})
+    merged_config = _deep_merge_config(config, _expand_dotted_overrides(overrides or {}))
     result = _run_pipeline_with_config(merged_config)
     
     raw_kpis = result.get("kpis")
@@ -263,8 +299,9 @@ def evaluate_with_overrides(
             raise FileNotFoundError(f"Scenario config not found: {cfg_path}")
         base_config = load_scenario_config(cfg_path)
 
-    # Merge overrides
-    merged_config = _deep_merge_config(base_config, overrides or {})
+    # Merge overrides (dotted keys like "tax.corporate_tax_rate" are expanded to
+    # nested form first so they actually apply — see _expand_dotted_overrides).
+    merged_config = _deep_merge_config(base_config, _expand_dotted_overrides(overrides or {}))
 
     # Run pipeline
     full_result = _run_pipeline_with_config(
