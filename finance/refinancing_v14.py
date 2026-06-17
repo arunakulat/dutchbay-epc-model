@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -610,7 +610,7 @@ class RefinancingOutput:
     schedule_metrics: Dict[str, float]
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "refinancing_triggered": self.refinancing_triggered,
@@ -734,7 +734,7 @@ def calculate_refinancing(
         trigger_conditions=conditions,
         current_year=current_year,
         new_annual_payment=schedule_metrics["new_annual_payment"],
-        new_tenor_years=schedule_metrics["new_tenor_effective"],
+        new_tenor_years=int(round(schedule_metrics["new_tenor_effective"])),
         total_interest_savings=schedule_metrics["interest_savings"],
         upfront_costs=schedule_metrics["upfront_costs"],
         net_benefit=schedule_metrics["net_benefit"],

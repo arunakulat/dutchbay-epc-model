@@ -182,6 +182,8 @@ class RefinancingCalculator:
 
         # Compute NPV benefit from coupon reduction (simplified)
         # In production, would need actual debt schedule and cashflows
+        if self.config.new_coupon_pct is None:
+            raise ValueError("Refinancing enabled but new_coupon_pct not specified")
         old_coupon_rate = 0.065  # Placeholder - would come from scenario
         new_coupon_rate = self.config.new_coupon_pct / 100
         annual_savings = current_principal_usd * (old_coupon_rate - new_coupon_rate)
