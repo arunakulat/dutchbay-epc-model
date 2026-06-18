@@ -14,6 +14,8 @@ orchestration hub avoids the duplicate-and-drift failure mode that previously
 left this entry point calling a non-existent ``StandardShockLibrary`` API.
 """
 
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence
 
@@ -114,10 +116,20 @@ def run_sensitivity_analysis(
     params = (
         list(parameters) if parameters is not None else _default_parameters(base_cfg)
     )
-    return _run_engine_sensitivity(
+    suite = _run_engine_sensitivity(
         base_config=base_cfg,
         base_config_path=str(base_path),
         parameters=params,
         metric_keys=[metric],
         run_cfg=run_cfg or SensitivityRunConfig(),
+    )
+    # Sprint 18C audit fields (#117): stamp scenario provenance + run time onto
+    # the returned suite. The engine is config-agnostic, so these are set here —
+    # the one place that knows the originating config + path. SensitivitySuite is
+    # a frozen dataclass, so build a new instance via dataclasses.replace.
+    scenario_name = base_cfg.get("project", {}).get("name") or base_path.stem
+    return replace(
+        suite,
+        scenario_name=str(scenario_name),
+        analysis_timestamp=datetime.now(timezone.utc).isoformat(),
     )
