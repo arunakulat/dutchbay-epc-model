@@ -22,7 +22,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -193,6 +193,13 @@ def load_aep_from_summary(
         "checksum_sha256": compute_checksum_sha256(data),
         "file_path": str(file_path.absolute())
     }
+    # Standardized provenance.aep block for v14 outputs (#18). Attached only for
+    # manifest-approved sources (load with validate_manifest=False to skip).
+    if validate_source_manifest(data["source_id"]):
+        provenance["aep"] = build_provenance_aep_block(
+            data["source_id"],
+            derived_from=data.get("derived_from"),
+        )
     data["provenance"] = provenance
     
     logger.info(
@@ -261,10 +268,162 @@ def export_provenance_report(
     logger.info(f"Provenance report exported to {output_file}")
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROVENANCE ENFORCEMENT (#18 — lender-grade, test-enforced)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Sources kept for back-compat that must NOT back a lender-grade AEP when a
+# certified OEM curve is available (e.g. the extrapolated 10 MW placeholder).
+PLACEHOLDER_SOURCE_IDS = frozenset({"OEM_ENVISION_EN171_10_PC"})
+PLACEHOLDER_SOURCE_TYPES = frozenset({"PLACEHOLDER"})
+
+
+def assert_source_in_manifest(
+    source_id: str,
+    manifest: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Raise if ``source_id`` is not an approved AEP source.
+
+    Args:
+        source_id: The AEP source identifier to check.
+        manifest: Approved-source manifest (defaults to ``APPROVED_SOURCES``).
+
+    Raises:
+        KeyError: If ``source_id`` is not present in the manifest.
+    """
+    if manifest is None:
+        manifest = APPROVED_SOURCES
+    if source_id not in manifest:
+        raise KeyError(
+            f"AEP source_id {source_id!r} is not in the approved manifest. "
+            f"Approved sources: {sorted(manifest)}"
+        )
+
+
+def is_placeholder_source(
+    source_id: str,
+    manifest: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Return True if ``source_id`` is a known placeholder (non-certified) source.
+
+    A source is a placeholder if it is in :data:`PLACEHOLDER_SOURCE_IDS`, declares
+    a placeholder ``type``, or its description is marked ``PLACEHOLDER``.
+    """
+    if manifest is None:
+        manifest = APPROVED_SOURCES
+    if source_id in PLACEHOLDER_SOURCE_IDS:
+        return True
+    meta = manifest.get(source_id, {})
+    if meta.get("type") in PLACEHOLDER_SOURCE_TYPES:
+        return True
+    return "PLACEHOLDER" in str(meta.get("description", "")).upper()
+
+
+def has_certified_oem_curve(manifest: Optional[Dict[str, Any]] = None) -> bool:
+    """Return True if a certified (non-placeholder) OEM power curve is available."""
+    if manifest is None:
+        manifest = APPROVED_SOURCES
+    return any(
+        meta.get("type") == "OEM" and not is_placeholder_source(sid, manifest)
+        for sid, meta in manifest.items()
+    )
+
+
+def build_provenance_aep_block(
+    source_id: str,
+    *,
+    derived_from: Optional[List[str]] = None,
+    manifest: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build the standardized ``provenance.aep`` block for v14 outputs (#18).
+
+    Args:
+        source_id: Approved AEP source identifier.
+        derived_from: Upstream source IDs this AEP derives from.
+        manifest: Approved-source manifest (defaults to ``APPROVED_SOURCES``).
+
+    Returns:
+        Mapping with ``aep_source_id``, ``source_type``, ``derived_from``,
+        ``iec_standard``, ``certificate`` and ``is_placeholder``.
+
+    Raises:
+        KeyError: If ``source_id`` is not in the manifest.
+    """
+    if manifest is None:
+        manifest = APPROVED_SOURCES
+    assert_source_in_manifest(source_id, manifest)
+    meta = manifest[source_id]
+    return {
+        "aep_source_id": source_id,
+        "source_type": meta.get("type", "Unknown"),
+        "derived_from": list(derived_from or []),
+        "iec_standard": meta.get("iec_standard", "Unknown"),
+        "certificate": meta.get("certificate"),
+        "is_placeholder": is_placeholder_source(source_id, manifest),
+    }
+
+
+def validate_config_aep_provenance(
+    config: Dict[str, Any],
+    *,
+    manifest: Optional[Dict[str, Any]] = None,
+    allow_placeholder: bool = False,
+) -> Dict[str, Any]:
+    """Enforce AEP provenance for a v14 scenario config and return its block.
+
+    Reads ``resource.power_curve.source_id``, asserts it is an approved source,
+    and (unless ``allow_placeholder``) refuses a placeholder source when a
+    certified OEM curve is available — the lender-grade guard.
+
+    Args:
+        config: Parsed v14 scenario config mapping.
+        manifest: Approved-source manifest (defaults to ``APPROVED_SOURCES``).
+        allow_placeholder: If True, permit a placeholder source (e.g. for tests).
+
+    Returns:
+        The ``provenance.aep`` block for the config's source.
+
+    Raises:
+        ValueError: If the source is missing, or is a placeholder while a
+            certified OEM curve exists (and ``allow_placeholder`` is False).
+        KeyError: If the source is not in the manifest.
+    """
+    if manifest is None:
+        manifest = APPROVED_SOURCES
+    resource = config.get("resource", {}) or {}
+    power_curve = resource.get("power_curve", {}) or {}
+    source_id = power_curve.get("source_id")
+    if not source_id:
+        raise ValueError(
+            "Config is missing resource.power_curve.source_id "
+            "(AEP provenance is required for lender-grade output)."
+        )
+    assert_source_in_manifest(source_id, manifest)
+    if (
+        not allow_placeholder
+        and is_placeholder_source(source_id, manifest)
+        and has_certified_oem_curve(manifest)
+    ):
+        raise ValueError(
+            f"AEP source_id {source_id!r} is a PLACEHOLDER but a certified OEM "
+            f"curve is available; refuse for lender-grade output (#18)."
+        )
+    derived_from = power_curve.get("derived_from") or resource.get("derived_from")
+    return build_provenance_aep_block(
+        source_id, derived_from=derived_from, manifest=manifest
+    )
+
+
 __all__ = [
     "APPROVED_SOURCES",
     "IEC_STANDARDS",
+    "PLACEHOLDER_SOURCE_IDS",
     "validate_source_manifest",
+    "assert_source_in_manifest",
+    "is_placeholder_source",
+    "has_certified_oem_curve",
+    "build_provenance_aep_block",
+    "validate_config_aep_provenance",
     "compute_checksum_sha256",
     "load_aep_from_summary",
     "create_aep_summary_template",
