@@ -143,10 +143,6 @@ coverage.xml
 *.logpath
 pytest.ini.tmp
 
-# Sprint 11+ Local Work Files
-# Documentation and planning files
-docs/
-
 # Feature scaffolds and backups
 Extended DutchBay Feature Scaffolds/
 *.backup
