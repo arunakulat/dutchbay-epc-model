@@ -1,11 +1,13 @@
-"""Tests for the config-driven ERA5 retrieval feature (issue #177).
+"""Tests for the config-driven ERA5 retrieval feature (issues #177, #178).
 
-The live CDS retrieval is not exercised in CI; the processing + AEP path is tested on a
-synthetic ERA5-like dataset, and config + credential handling are unit-tested.
+The live CDS retrieval is not exercised in CI; the processing + AEP path, the
+``latest`` reference resolution + vintage, and the coverage guard are unit-tested on a
+synthetic ERA5-like dataset.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import stat
 
 import numpy as np
@@ -13,10 +15,13 @@ import pandas as pd
 import pytest
 
 from wind_resource.era5_retrieval import (
+    ERA5CoverageError,
     ERA5RequestConfig,
     build_hub_height_series,
     compute_site_aep,
     ensure_cdsapirc,
+    expected_hours_for_years,
+    validate_coverage,
 )
 
 
@@ -54,7 +59,7 @@ def cfg() -> ERA5RequestConfig:
     )
 
 
-def test_config_from_yaml(tmp_path):
+def test_config_from_yaml_fixed(tmp_path):
     yml = tmp_path / "req.yaml"
     yml.write_text(
         "project:\n  name: X\n  latitude: 8.27\n  longitude: 79.75\n"
@@ -65,7 +70,28 @@ def test_config_from_yaml(tmp_path):
     assert c.project_name == "X"
     assert c.latitude == 8.27
     assert (c.start_year, c.end_year) == (2020, 2024)
+    assert c.reference_mode == "fixed"
     assert c.date_range == "2020-01-01/2024-12-31"
+
+
+def test_latest_reference_resolution(tmp_path):
+    yml = tmp_path / "req.yaml"
+    yml.write_text(
+        "project:\n  name: L\n  latitude: 8.27\n  longitude: 79.75\n"
+        "download:\n  reference:\n    mode: latest\n    n_years: 20\n    end_year_lag: 2\n"
+    )
+    c = ERA5RequestConfig.from_yaml(str(yml))
+    end = dt.date.today().year - 2
+    assert c.reference_mode == "latest"
+    assert (c.start_year, c.end_year) == (end - 19, end)
+    assert c.end_year - c.start_year + 1 == 20
+    assert c.resolved_at  # vintage timestamp recorded
+
+
+def test_expected_hours_leap_aware():
+    assert expected_hours_for_years(2023, 2023) == 8760
+    assert expected_hours_for_years(2024, 2024) == 8784  # leap year
+    assert expected_hours_for_years(2005, 2024) == 175320  # 20 yr, 5 leap
 
 
 def test_build_hub_height_series(tmp_path, cfg):
@@ -84,6 +110,38 @@ def test_compute_site_aep(tmp_path, cfg):
     assert res["net_aep_p50_gwh"] > 0
     assert 0.0 < res["capacity_factor_p50"] < 1.0
     assert res["hours"] == 8760
+
+
+def test_validate_coverage_complete(tmp_path, cfg):
+    nc = _synthetic_era5_nc(tmp_path, hours=8760)  # full 2023
+    df = build_hub_height_series(nc, cfg)
+    info = validate_coverage(df, cfg)
+    assert info["coverage_complete"]
+    assert info["expected_hours"] == 8760
+    assert info["missing_hours"] == 0
+
+
+def test_validate_coverage_short_raises(tmp_path, cfg):
+    nc = _synthetic_era5_nc(tmp_path, hours=8640)  # 120 h short (latency edge)
+    df = build_hub_height_series(nc, cfg)
+    with pytest.raises(ERA5CoverageError, match="coverage incomplete"):
+        validate_coverage(df, cfg)
+
+
+def test_validate_coverage_warn_only(tmp_path):
+    c = ERA5RequestConfig(
+        project_name="W",
+        latitude=8.27,
+        longitude=79.75,
+        start_year=2023,
+        end_year=2023,
+        strict_coverage=False,
+    )
+    nc = _synthetic_era5_nc(tmp_path, hours=8640)
+    df = build_hub_height_series(nc, c)
+    info = validate_coverage(df, c)  # warns, does not raise
+    assert not info["coverage_complete"]
+    assert info["missing_hours"] == 120
 
 
 def test_ensure_cdsapirc_writes_from_args(tmp_path):
