@@ -7,37 +7,41 @@
 project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka"
-  capacity_mw: 150.0
+  capacity_mw: 149.5
   cod_year: 2027
   developer: "DutchBay Wind Power Pvt Ltd"
   grid_poi: "Puttalam 220kV Substation"
 
 turbine:
-  model: "Envision 10 MW (Extrapolated)"
-  n_turbines: 15
-  rated_power_kw: 10000
-  rotor_diameter_m: 220
+  model: "Envision EN-171/6.5"
+  n_turbines: 23
+  rated_power_kw: 6500
+  rotor_diameter_m: 171
   hub_height_m: 150
   cut_in_ms: 3.0
   cut_out_ms: 25.0
-  rated_wind_speed_ms: 11.5
-  certification_status: "PROVISIONAL"
-  notes: "Power curve extrapolated from Envision EN-171-6.5. OEM to provide certified curve."
+  rated_wind_speed_ms: 12.0
+  certification_status: "OEM_CERTIFIED"
+  notes: "Canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml). 23 x 6.5 MW = 149.5 MW. Supersedes the prior 10 MW x 15 extrapolation."
 
 wind_resource:
-  weibull_a: 8.9  # Weibull scale parameter (m/s)
+  weibull_a: 8.32  # Weibull scale parameter (m/s) - canonical lender baseline (aligned with lender scenario)
   weibull_k: 2.1  # Weibull shape parameter
-  mean_wind_speed_ms: 8.5
+  mean_wind_speed_ms: 7.85
   shear_exponent: 0.14
   air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level
   data_source: "ECMWF ERA5 Reanalysis"
   data_years: "2020-2024"
 
 losses:
-  wake_loss_pct: 11.0  # Improved from 15% with 15-turbine layout
+  # ERA5 canonical loss stack (wind_resource/config/era5_config.yaml): multiplicative total 12.4%.
+  # TODO(layout): 5% wake is the ERA5 baseline; a 23-turbine wake study is pending and will lower P50.
+  wake_loss_pct: 5.0
   availability_pct: 97.0
-  electrical_loss_pct: 2.0  # Cable + transformer losses
-  total_loss_pct: 16.2
+  electrical_loss_pct: 2.0
+  curtailment_pct: 2.0
+  environmental_pct: 1.0
+  total_loss_pct: 12.4
 
 layout:
   turbine_spacing_avg_m: 650
@@ -74,9 +78,11 @@ pipeline:
 
 # Expected Results (for validation)
 expected_results:
-  net_aep_p50_gwh: 563.0
-  net_aep_p90_gwh: 612.0
-  capacity_factor: 0.428
-  annual_revenue_p50_m_eur: 40.8
-  annual_revenue_p90_m_eur: 44.4
-  revenue_25yr_undiscounted_m_eur: 1020.0
+  # Computed from the canonical EN-171/6.5 curve via wind_resource.EnergyCalculator
+  # (23 x 6.5 MW, ERA5 Weibull A=8.32/k=2.1, 12.4% losses, P50=1.0). Supersedes 563/612/0.428.
+  net_aep_p50_gwh: 402.6
+  net_aep_p90_gwh: 322.1
+  capacity_factor: 0.307
+  annual_revenue_p50_m_eur: 29.2
+  annual_revenue_p90_m_eur: 23.3
+  revenue_25yr_undiscounted_m_eur: 729.4

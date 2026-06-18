@@ -100,8 +100,14 @@ def test_lendercase_idc_totals_pinned() -> None:
       - DFI idc_m       ≈   1,045,931.25
         => total_idc     ≈  12,315,646.88
 
-      - min_dscr        ≈   1.30
+      - min_dscr        ≈   1.1625  (re-baselined from 1.30 — AEP re-baseline cut CF
+                                      0.428 -> 0.307 (canonical 6.5 MW curve), reducing CFADS.
+                                      Debt is fixed at 70% of CAPEX, NOT DSCR-sculpted, so the
+                                      gearing is unchanged and the covenant metric degrades.
+                                      NOTE: 1.16x is below typical 1.20-1.30x lender floors.)
       - audit_status    ==  "REVIEW"
+
+    Principals + IDC are UNCHANGED (debt = 70% of fixed CAPEX, independent of AEP).
     """
     result = _plan_debt_for_config("dutchbay_lendercase_2025Q4.yaml")
     lkr = _extract_tranche(result, "lkr")
@@ -131,7 +137,7 @@ def test_lendercase_idc_totals_pinned() -> None:
 
     # Min DSCR and audit status
     min_dscr = float(result.get("min_dscr"))
-    assert min_dscr == pytest.approx(1.30, rel=tol)
+    assert min_dscr == pytest.approx(1.1625, rel=tol)
 
     audit_status = str(result.get("audit_status", "")).upper()
     assert audit_status == "REVIEW"

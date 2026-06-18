@@ -1,23 +1,25 @@
 {
-  "capacity_factor": 0.375,
-  "net_site_aep_gwh": 485.32,
-  "gross_aep_gwh": 562.15,
-  "n_turbines": 15,
-  "rated_power_kw": 10000,
+  "capacity_factor": 0.307,
+  "net_site_aep_gwh": 402.6,
+  "gross_aep_gwh": 459.5,
+  "n_turbines": 23,
+  "rated_power_kw": 6500,
   "hub_height_m": 150,
-  "source_id": "OEM_ENVISION_EN171_10_PC",
+  "source_id": "OEM_ENVISION_EN171_65_PC",
   "source_type": "OEM",
   "iec_standard": "IEC 61400-12-1:2022",
   "derived_from": [
-    "OEM_ENVISION_EN171_10_PC",
+    "OEM_ENVISION_EN171_65_PC",
     "ERA5_WIND_RESOURCE_DUTCHBAY",
     "HUB_HEIGHT_EXTRAPOLATION_150M"
   ],
   "losses": {
-    "wake_loss_pct": 8.0,
+    "wake_loss_pct": 5.0,
     "availability_pct": 97.0,
     "electrical_loss_pct": 2.0,
-    "total_loss_pct": 13.6
+    "curtailment_pct": 2.0,
+    "environmental_pct": 1.0,
+    "total_loss_pct": 12.4
   },
   "wind_resource": {
     "mean_wind_speed_ms": 7.85,
@@ -28,25 +30,25 @@
     "data_years": "2020-2024"
   },
   "turbine_config": {
-    "model": "Envision EN-171-10.0",
-    "rated_power_kw": 10000,
-    "rated_power_mw": 10.0,
+    "model": "Envision EN-171/6.5",
+    "rated_power_kw": 6500,
+    "rated_power_mw": 6.5,
     "rotor_diameter_m": 171,
     "hub_height_m": 150,
     "cut_in_ms": 3.0,
     "cut_out_ms": 25.0,
-    "rated_wind_speed_ms": 11.5
+    "rated_wind_speed_ms": 12.0
   },
   "project_info": {
     "name": "DutchBay Wind Farm",
-    "location": "Dutch Bay, Mannar District, Sri Lanka",
-    "capacity_mw": 150.0,
-    "n_turbines": 15,
-    "turbine_capacity_mw": 10.0,
+    "location": "Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka",
+    "capacity_mw": 149.5,
+    "n_turbines": 23,
+    "turbine_capacity_mw": 6.5,
     "cod_year": 2027
   },
   "created_date": "2025-12-21",
   "created_by": "analytics.loader.aep_loader",
-  "version": "2.0",
-  "notes": "10 MW turbine data is EXTRAPOLATED from 6.5 MW baseline. Replace with OEM-certified data when available."
+  "version": "2.1",
+  "notes": "Net AEP computed from the canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml) via wind_resource.EnergyCalculator: 23 turbines x 6.5 MW = 149.5 MW, ERA5 Weibull A=8.32/k=2.1, 12.4% losses (ERA5 canonical stack), P50 factor 1.0. Supersedes the prior 10 MW x 15 extrapolation (485.32 / CF 0.375). NOTE: 5% wake is the ERA5 baseline; a 23-turbine layout wake study is pending and will lower P50."
 }
