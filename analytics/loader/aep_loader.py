@@ -40,9 +40,15 @@ IEC_STANDARDS = {
 }
 
 APPROVED_SOURCES = {
+    "OEM_ENVISION_EN171_65_PC": {
+        "type": "OEM",
+        "description": "Envision EN-171/6.5 MW certified power curve (canonical)",
+        "iec_standard": "61400-12-1:2022",
+        "certificate": "CGC-B-FNc-2024-184"
+    },
     "OEM_ENVISION_EN171_10_PC": {
         "type": "OEM",
-        "description": "Envision EN-171-10.0 MW certified power curve",
+        "description": "Envision EN-171-10.0 MW power curve (PLACEHOLDER, extrapolated from 6.5 MW; superseded by OEM_ENVISION_EN171_65_PC)",
         "iec_standard": "61400-12-1:2022",
         "certificate": "CGC-B-FNc-2024-184 (extrapolated)"
     },

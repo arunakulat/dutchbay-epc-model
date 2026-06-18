@@ -86,12 +86,6 @@ def mock_aep_summary_csv(mock_aep_summary_dict, tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(
-    reason="APPROVED_SOURCES lists OEM_ENVISION_EN171_10_PC (10 MW placeholder) but the fixtures/test "
-    "use the real 6.5 MW OEM_ENVISION_EN171_65_PC; reconcile the 6.5-vs-10 MW turbine spec across "
-    "oem_parser + aep_loader manifest + tests (same follow-up as test_oem_parser)",
-    strict=False,
-)
 def test_validate_approved_source():
     """Test validation of approved source IDs."""
     assert validate_source_manifest("OEM_ENVISION_EN171_65_PC") is True
