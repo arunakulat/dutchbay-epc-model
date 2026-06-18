@@ -161,3 +161,11 @@ inputs/*.zip
 
 # AI coding-agent scratch / journal files (e.g. Jules "Palette" persona)
 .Jules/
+
+# ERA5 retrieval (issue #177): NEVER commit credentials or downloaded data
+.cdsapirc
+**/cds_credentials*.yaml
+*.local.yaml
+era5_cache/
+**/era5_cache/
+wind_data_output/
