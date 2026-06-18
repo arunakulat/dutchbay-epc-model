@@ -45,6 +45,7 @@ wind = [
   "cdsapi>=0.6",
   "xarray>=2023.6",
   "netcdf4>=1.6",
+  "windpowerlib>=0.2",  # open turbine library (oedb) for power-curve sourcing (#181)
 ]
 
 [tool.ruff]
