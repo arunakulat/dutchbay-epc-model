@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import pandas as pd
 
@@ -17,6 +17,7 @@ def build_executive_workbook(
     ratios_df: pd.DataFrame,
     scenario_summary_df: pd.DataFrame,
     output_path: PathLike,
+    resource_trend_df: Optional[pd.DataFrame] = None,
 ) -> Path:
     """
     Build the lender-facing Executive Workbook for a single scenario.
@@ -30,6 +31,9 @@ def build_executive_workbook(
         * "DebtService"
         * "Ratios"
         * "ScenarioSummary"
+    - Optionally creates "ResourceTrend" when ``resource_trend_df`` is supplied
+      (long-term wind-resource & trend commentary; IEC-61400-15 / MEASNET basis --
+      see ``wind_resource.long_term_trend``).
     - Returns the resolved Path to the created workbook.
 
     Inputs
@@ -46,6 +50,10 @@ def build_executive_workbook(
         Multi-scenario KPI comparison for dashboards.
     output_path
         Target XLSX path. May be str or Path; parent dirs are created.
+    resource_trend_df
+        Optional long-term resource & trend table (Metric/Value) from
+        ``wind_resource.long_term_trend.trend_summary_dataframe``; written as the
+        "ResourceTrend" sheet when provided.
 
     Notes
     -----
@@ -68,6 +76,12 @@ def build_executive_workbook(
         _to_excel(debt_df, writer, "DebtService")
         _to_excel(ratios_df, writer, "Ratios")
         _to_excel(scenario_summary_df, writer, "ScenarioSummary")
+
+        # Optional long-term resource & trend section (issue #178): lender-facing
+        # commentary on decadal variability vs secular "stilling" and the IEC-61400-15 /
+        # MEASNET long-term-reference basis for the forward P50.
+        if resource_trend_df is not None:
+            _to_excel(resource_trend_df, writer, "ResourceTrend")
 
         # Ensure the Summary sheet has at least 3 rows:
         #   - header row
