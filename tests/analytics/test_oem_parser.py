@@ -29,7 +29,13 @@ from analytics.power_curves.oem_parser import (
     validate_power_curve_iec_compliance,
 )
 
-# XFAIL (module): analytics/power_curves/oem_parser.py has a real capacity-factor bug
+# NOTE (#166): the capacity-factor bug described below is now FIXED in
+# compute_aep_from_curve (denominator now = n_turbines * capacity_mw). This
+# module-level xfail REMAINS only because the rest of this suite is aspirational
+# (thrust-coefficient/Ct OEM data, capacity_factor/air-density parse features,
+# a 46-point curve, an availability_loss_pct loss key, specific error strings) —
+# a separate oem_parser rebuild. Auxiliary/non-revenue path; #166 stays open.
+# XFAIL (module): analytics/power_curves/oem_parser.py had a real capacity-factor bug
 # — compute_aep_from_curve returns CF ≈ 8.5 ≈ 0.37 × 23 turbines, i.e. the CF
 # denominator is missing the n_turbines factor — plus an unresolved 6.5 MW vs 10 MW
 # curve/spec split. It is NOT on the live revenue path (the financed AEP comes from
@@ -37,7 +43,7 @@ from analytics.power_curves.oem_parser import (
 # analytics/simulation/monte_carlo_aep path. Parked here visibly (not hidden by
 # omission) pending the oem_parser fix — see the main-branch audit follow-up.
 pytestmark = pytest.mark.xfail(
-    reason="oem_parser compute_aep_from_curve CF bug + 6.5/10 MW spec split (auxiliary, non-revenue path); tracked follow-up",
+    reason="oem_parser CF n_turbines bug FIXED (#166); module still xfail because the test suite is aspirational (thrust-coefficient/Ct OEM data, 46-pt curve, capacity_factor/air-density parse features, availability_loss_pct loss key, specific error strings) needing an oem_parser rebuild. Auxiliary/non-revenue.",
     strict=False,
 )
 

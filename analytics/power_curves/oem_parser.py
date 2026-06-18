@@ -60,6 +60,7 @@ ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1 = pd.DataFrame({
 ENVISION_EN171_10MW_SPECS = {
     "model": "Envision EN-171-10.0",
     "rated_power_mw": 10.0,
+    "rated_power_kw": 10000,
     "rotor_diameter_m": 171,
     "hub_height_m": 150,  # Typical for 10 MW class
     "cut_in_ms": 3.0,
@@ -196,7 +197,8 @@ def compute_aep_from_curve(
         wind_dist_ms: 8760-hour wind speed timeseries (m/s)
         curve: Power curve DataFrame from parse_envision_en171_10mw_curve()
         n_turbines: Number of turbines (from config.resource.turbines.count)
-        capacity_mw: Total farm capacity (from config.project.capacity_mw)
+        capacity_mw: Per-turbine rated capacity in MW (farm capacity is computed
+            internally as n_turbines * capacity_mw). E.g. 10.0 for EN-171-10.0.
         apply_losses: If True, apply wake/availability/electrical losses
         wake_loss_pct: Wake loss percentage (from config.resource.losses.wake_loss_pct)
         availability_pct: Availability percentage (from config.resource.losses.availability_pct)
@@ -215,7 +217,7 @@ def compute_aep_from_curve(
         ...     wind_dist_ms=wind_8760,
         ...     curve=curve,
         ...     n_turbines=15,
-        ...     capacity_mw=150.0,
+        ...     capacity_mw=10.0,  # per-turbine rating (15 × 10 MW = 150 MW farm)
         ...     wake_loss_pct=8.0,  # From YAML!
         ...     availability_pct=97.0,  # From YAML!
         ...     electrical_loss_pct=2.0  # From YAML!
@@ -269,11 +271,17 @@ def compute_aep_from_curve(
         net_aep_gwh = gross_aep_farm_gwh
         losses_dict["total_loss_pct"] = 0.0
     
-    # Capacity factor
-    capacity_factor = net_aep_gwh / (capacity_mw * 8.760)  # GWh / (MW * 8760 h)
+    # Capacity factor. net_aep_gwh is FARM-level (scaled by n_turbines above),
+    # so the denominator must be FARM capacity = n_turbines * capacity_mw (the
+    # per-turbine rating). The prior `capacity_mw * 8.760` omitted n_turbines,
+    # inflating CF by ~n_turbines× (≈8.5 vs ≈0.37 for 23 turbines) — and both
+    # callers (this module's tests and analytics/simulation/monte_carlo_aep, which
+    # passes capacity_mw = rated_power_kw/1000) supply per-turbine capacity.
+    farm_capacity_mw = n_turbines * capacity_mw
+    capacity_factor = net_aep_gwh / (farm_capacity_mw * 8.760)  # GWh / (MW * 8760 h)
     
     logger.info(
-        f"AEP Calculation: {n_turbines} turbines × {capacity_mw/n_turbines:.1f} MW each\n"
+        f"AEP Calculation: {n_turbines} turbines × {capacity_mw:.1f} MW each\n"
         f"  Gross AEP: {gross_aep_farm_gwh:.2f} GWh\n"
         f"  Net AEP: {net_aep_gwh:.2f} GWh\n"
         f"  Capacity Factor: {capacity_factor:.2%}\n"
