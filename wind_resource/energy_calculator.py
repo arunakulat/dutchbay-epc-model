@@ -115,6 +115,8 @@ class EnergyCalculator:
         if turbine_model is not None:
             self._load_power_curve_from_config(turbine_model, power_curves_path)
         else:
+            # turbine_model is None here, so power_curve is non-None (validated above)
+            assert power_curve is not None
             self._load_power_curve_manual(power_curve)
         
         logger.info(f"EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
@@ -132,15 +134,16 @@ class EnergyCalculator:
             FileNotFoundError: If config file doesn't exist.
             KeyError: If required config sections are missing.
         """
-        if config_path is None:
-            config_path = Path(__file__).parent / "config" / "era5_config.yaml"
-        else:
-            config_path = Path(config_path)
-        
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
-        
-        with open(config_path) as f:
+        config_file = (
+            Path(__file__).parent / "config" / "era5_config.yaml"
+            if config_path is None
+            else Path(config_path)
+        )
+
+        if not config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {config_file}")
+
+        with open(config_file) as f:
             self.config = yaml.safe_load(f)
         
         # Extract values (CCCDIR: no hardcoded values)
@@ -173,15 +176,16 @@ class EnergyCalculator:
             FileNotFoundError: If power curves file not found.
             KeyError: If turbine model not in config.
         """
-        if power_curves_path is None:
-            power_curves_path = Path(__file__).parent / "config" / "power_curves.yaml"
-        else:
-            power_curves_path = Path(power_curves_path)
-        
-        if not power_curves_path.exists():
-            raise FileNotFoundError(f"Power curves file not found: {power_curves_path}")
-        
-        with open(power_curves_path) as f:
+        curves_file = (
+            Path(__file__).parent / "config" / "power_curves.yaml"
+            if power_curves_path is None
+            else Path(power_curves_path)
+        )
+
+        if not curves_file.exists():
+            raise FileNotFoundError(f"Power curves file not found: {curves_file}")
+
+        with open(curves_file) as f:
             power_curves = yaml.safe_load(f)
         
         if turbine_model not in power_curves:
@@ -272,7 +276,7 @@ class EnergyCalculator:
             Gross CF: 42.5%
         """
         # Apply power curve to wind speeds
-        wind_speeds = self.df[self.ws_column].values
+        wind_speeds = self.df[self.ws_column].to_numpy()
         power_output = self.power_curve_func(wind_speeds)
         
         # Average power (kW)

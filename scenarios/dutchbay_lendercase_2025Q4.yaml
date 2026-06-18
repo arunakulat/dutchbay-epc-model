@@ -19,8 +19,8 @@
 project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
-  capacity_mw: 150.0
-  capacity_factor: 0.428  # From wind resource assessment (P50)
+  capacity_mw: 149.5
+  capacity_factor: 0.307  # Computed from EN-171/6.5 curve via EnergyCalculator (was 0.428 @ 10MW x 15)
   degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
@@ -31,30 +31,24 @@ project:
   boi_approved: false
   boi_agreement_date: '2025-01-15'
   jurisdiction: Sri Lanka
-  corporate_tax_rate: 0.3
-  depreciation_years: 15
-  depreciation_start_year: 1
-  tax_holiday_years: 12
-  tax_holiday_start_year: 1
-  enhanced_capital_allowance_pct: 1.5
-  loss_carryforward_years: 25
+  # Tax inputs are the single source of truth in the `tax:` block (CESSPIT).
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TURBINE & WIND RESOURCE (Wind Energy Calculator Inputs)
 # ═════════════════════════════════════════════════════════════════════════════
 turbine:
-  model: "Envision EN-171-10.0 (Extrapolated)"
-  n_turbines: 15
-  rated_power_mw: 10.0
-  rated_power_kw: 10000
-  total_capacity_mw: 150
+  model: "Envision EN-171/6.5"
+  n_turbines: 23
+  rated_power_mw: 6.5
+  rated_power_kw: 6500
+  total_capacity_mw: 149.5
   rotor_diameter_m: 171
   hub_height_m: 150
   cut_in_ms: 3.0
   cut_out_ms: 25.0
-  rated_wind_speed_ms: 11.5
-  certification_status: "PROVISIONAL"
-  notes: "Power curve extrapolated from Envision EN-171-6.5. OEM to provide certified 10MW curve."
+  rated_wind_speed_ms: 12.0
+  certification_status: "OEM_CERTIFIED"
+  notes: "Canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml). 23 x 6.5 MW = 149.5 MW. Supersedes the prior 10 MW x 15 extrapolation."
 
 wind_resource:
   # Weibull distribution parameters (for AEP calculation)
@@ -86,19 +80,19 @@ layout:
 resource:
   # Turbine specifications (for backward compatibility)
   turbines:
-    count: 15
-    rated_power_mw: 10.0
-    total_capacity_mw: 150
-    model: "Envision EN-171-10.0"
+    count: 23
+    rated_power_mw: 6.5
+    total_capacity_mw: 149.5
+    model: "Envision EN-171/6.5"
     rotor_diameter_m: 171
     hub_height_m: 150
   
   # Power curve & AEP calculation
   power_curve:
-    source_id: "OEM_ENVISION_EN171_10_PC"
+    source_id: "OEM_ENVISION_EN171_65_PC"
     source_type: "OEM"
     iec_standard: "IEC 61400-12-1:2022"
-    certificate_ref: "CGC-B-FNc-2024-184 (10MW extrapolated)"
+    certificate_ref: "CGC-B-FNc-2024-184 (6.5 MW certified)"
     air_density_site_kgm3: 1.15
     air_density_ref_kgm3: 1.225
   
@@ -106,11 +100,13 @@ resource:
   
   # Technical losses (pre-grid)
   losses:
-    wake_loss_pct: 8.0  # Conservative (15-turbine linear layout, 3.8D spacing)
+    # ERA5 canonical loss stack (wind_resource/config/era5_config.yaml): multiplicative total 12.4%.
+    # TODO(layout): 5% wake is the ERA5 baseline; a 23-turbine wake study is pending and will lower P50.
+    wake_loss_pct: 5.0  # ERA5 baseline (23-turbine wake study pending)
     availability_pct: 97.0  # Contractual availability target
     electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
-    curtailment_pct: 0.0  # No curtailment assumed (base case)
-    other_pct: 0.0  # Reserved for environmental/icing/blade degradation
+    curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
+    other_pct: 1.0  # Environmental / icing / blade degradation
   
   # Wind resource (for backward compatibility)
   wind_resource:
@@ -212,15 +208,22 @@ opex:
 # TAX & STATUTORY
 # ═════════════════════════════════════════════════════════════════════════════
 tax:
-  corporate_tax_rate: 0.3
-  tax_holiday_years: 12
+  # Single source of truth for tax inputs (CESSPIT). Current SL regime (post-2025):
+  # CIT 30%, no renewable holiday for new IPPs, TLCF 6yr, split straight-line
+  # depreciation (plant&machinery 5yr / civils 20yr), interest WHT 10%.
+  corporate_tax_rate: 0.30
+  tax_holiday_route: none
+  tax_holiday_years: 0
   tax_holiday_start_year: 1
   depreciation_method: straight_line
-  depreciation_years: 15
+  depreciation_years: 5  # placeholder; the split fields below drive the calc
   depreciation_start_year: 1
+  plant_capex_share: 0.80
+  plant_depreciation_years: 5  # SL Fourth Sched Class 2 (plant & machinery)
+  civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
   enhanced_capital_allowance_pct: 1.5
   enhanced_allowance_applies: false
-  loss_carryforward_years: 25
+  loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false
@@ -239,7 +242,9 @@ risk_adjustment:
 # MULTI-CURRENCY DEBT STRUCTURE
 # ═════════════════════════════════════════════════════════════════════════════
 Financing_Terms:
-  debt_ratio: 0.7
+  debt_ratio: 0.7                  # MAX gearing cap; actual gearing auto-solved to target_dscr
+  debt_sizing: dual_dscr           # auto-size debt on the real schedule to target_dscr (capped at debt_ratio); robust to AEP (#180)
+  dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
@@ -426,14 +431,16 @@ timeline:
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
   # Wind resource assessment
-  net_aep_p50_gwh: 563.0  # With 13% total losses
-  net_aep_p90_gwh: 612.0
-  capacity_factor: 0.428
-  
+  # Computed from the canonical EN-171/6.5 curve via wind_resource.EnergyCalculator
+  # (23 x 6.5 MW, DECLARED config Weibull A=8.32/k=2.1 -- pending live ERA5 fetch #18/#24, 12.4% losses, P50=1.0). Supersedes 563/612/0.428.
+  net_aep_p50_gwh: 402.6  # ERA5 canonical 12.4% losses; 5% wake is baseline (23-turbine wake study pending)
+  net_aep_p90_gwh: 322.1
+  capacity_factor: 0.307
+
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
-  annual_revenue_p50_m_lkr: 11428.9  # 563 GWh × 20.3 LKR/kWh
-  annual_revenue_p50_m_eur: 34.6  # Reference: 563 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 228578.0  # With degradation + CPI
+  annual_revenue_p50_m_lkr: 8172.8  # 402.6 GWh × 20.3 LKR/kWh
+  annual_revenue_p50_m_eur: 24.8  # Reference: 402.6 GWh × 61.5 EUR/MWh
+  revenue_20yr_undiscounted_m_lkr: 163455.0  # With degradation + CPI (scaled by 402.6/563)
   
   # Financial metrics
   project_irr: 0.145

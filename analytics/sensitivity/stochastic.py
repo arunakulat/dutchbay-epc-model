@@ -85,8 +85,10 @@ def run_stochastic_tornado(
     all_vars: Dict[str, ParameterRangeConfig] = {p.variable_name: p for p in parameters}
 
     for driver in parameters:
-        low_val = driver.base_value * (1.0 + driver.low_pct / 100.0)
-        high_val = driver.base_value * (1.0 + driver.high_pct / 100.0)
+        low_pct = driver.low_pct if driver.low_pct is not None else 0.0
+        high_pct = driver.high_pct if driver.high_pct is not None else 0.0
+        low_val = driver.base_value * (1.0 + low_pct / 100.0)
+        high_val = driver.base_value * (1.0 + high_pct / 100.0)
         sweep_vals = np.linspace(low_val, high_val, sweep_size)
 
         for sv in sweep_vals:

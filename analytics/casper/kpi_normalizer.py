@@ -63,10 +63,14 @@ class NormalizedKPIs:
 
     # Covenants (already dimensionless)
     dscr_min: float
-    llcr_min: Optional[float] = None
 
-    # Metadata
+    # Metadata (required reference — must precede any defaulted field per
+    # Python dataclass ordering rules; ``field(repr=False)`` does NOT supply
+    # a default value, only suppresses repr output).
     capacity_mw: float = field(repr=False)  # Original capacity for reference
+
+    # Optional fields (must come last)
+    llcr_min: Optional[float] = None
     project_name: Optional[str] = None
 
 

@@ -28,6 +28,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 # Base pipeline
@@ -49,9 +50,6 @@ try:
     from analytics.risk_metrics import (
         RiskConfig,
         TailRiskAnalyzer,
-        VaRCVaRResult,
-        calculate_percentile_analysis,
-        calculate_var_cvar,
     )
 
     RISK_AVAILABLE = True
@@ -269,40 +267,44 @@ def _calculate_risk_analysis(
 
         cfads_series = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
 
-        # Default risk config (can be made configurable later)
+        # Deterministic risk metrics on the scenario CFADS series.
+        cfads_arr = np.asarray(cfads_series, dtype=float)
+
+        # RiskConfig requires covenant/target thresholds, but the VaR/CVaR and
+        # percentile metrics computed here use only confidence_level. Source all
+        # fields from config (config-first, no hardcoded model constants); fall
+        # back to the DSCR covenant for LLCR/PLCR when the scenario does not
+        # specify them separately (those fields are unused on this path).
+        constraints = config.get("constraints", {})
+        dscr_cov = float(constraints.get("min_dscr_covenant", 1.0))
         risk_config = RiskConfig(
-            var_confidence_level=0.95,
-            cvar_confidence_level=0.95,
-            tail_percentile=0.05,
-            monte_carlo_iterations=10000,
+            confidence_level=float(config.get("risk", {}).get("confidence_level", 0.95)),
+            target_return=float(config.get("returns", {}).get("equity_discount_rate", 0.0)),
+            min_dscr=dscr_cov,
+            min_llcr=float(constraints.get("min_llcr_covenant", dscr_cov)),
+            min_plcr=float(constraints.get("min_plcr_covenant", dscr_cov)),
         )
+        analyzer = TailRiskAnalyzer(config=risk_config)
 
-        # VaR/CVaR
-        var_cvar = calculate_var_cvar(
-            data=cfads_series,
-            confidence_level=risk_config.var_confidence_level,
+        var_cvar = analyzer.calculate_var_cvar(
+            returns=cfads_arr, return_type="cfads_final_lkr"
         )
-
-        # Tail risk analysis
-        tail_analyzer = TailRiskAnalyzer(config=risk_config)
-        tail_risk_report = tail_analyzer.analyze_tail_risk(cashflows=cfads_series)
-
-        # Percentile analysis
-        percentiles = calculate_percentile_analysis(
-            data=cfads_series,
-            percentiles=[0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95],
-        )
+        percentiles = analyzer.percentile_analysis(returns=cfads_arr)
 
         logger.info(
-            "Risk analysis complete: VaR(95%%)=%.2f M, CVaR(95%%)=%.2f M",
-            var_cvar.var_value,
-            var_cvar.cvar_value,
+            "Risk analysis complete: %s=%.2f, %s=%.2f",
+            var_cvar.var_label,
+            var_cvar.var,
+            var_cvar.cvar_label,
+            var_cvar.cvar,
         )
 
-        # Return as dict (could create Pydantic contract later)
+        # NOTE: TailRiskAnalyzer.tail_risk_report() requires full Monte Carlo
+        # distributions (equity/project IRR & NPV, DSCR/LLCR/PLCR arrays). That
+        # path depends on the parked Monte Carlo engine work (#60); the
+        # deterministic VaR/CVaR + percentile metrics above stand alone.
         return {
             "var_cvar": var_cvar.model_dump(),
-            "tail_risk": tail_risk_report.model_dump(),
             "percentiles": percentiles.model_dump(),
         }
 
@@ -428,22 +430,28 @@ def run_v14_pipeline_with_analytics(
     # 1. Run base pipeline (unchanged)
     # ──────────────────────────────────────────────────────────────────────────
     logger.info("Running base V14 pipeline...")
+    # The base pipeline loads its config from a path; an inline Mapping config
+    # cannot drive it (that path never worked — it raised inside Path(config)).
+    # Fail fast with a clear message. allow_fx_degradation is a no-op in the base
+    # pipeline (see run_v14_pipeline_enhanced, which discards it) and is
+    # intentionally not forwarded.
+    if not isinstance(config, (str, Path)):
+        raise TypeError(
+            "run_v14_pipeline_with_analytics requires a path-based config "
+            "(str | Path) to run the base pipeline; inline Mapping configs are "
+            "not supported."
+        )
     base_result = run_v14_pipeline(
         config=config,
         validation_mode=validation_mode,
         validation_modules=validation_modules,
-        allow_fx_degradation=allow_fx_degradation,
     )
 
     logger.info("Base pipeline complete. Starting analytics modules...")
 
-    # Resolve config path for analytics that need it
-    if isinstance(config, (str, Path)):
-        config_path = str(config)
-        cfg = base_result["config"]
-    else:
-        config_path = "<inline_config>"
-        cfg = dict(config)
+    # config is guaranteed path-based (guarded above); resolve for analytics.
+    config_path = str(config)
+    cfg = base_result["config"]
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Calculate optional analytics

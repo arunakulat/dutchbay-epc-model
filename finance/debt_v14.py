@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+import copy
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.utils import as_float, get_nested
 
@@ -13,8 +14,23 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.3 (Fixed DSCR Infinity handling - Sprint 18, Issue #3)
+Version: 3.6 (Dynamic debt timeline + explicit CAPEX guard)
 """
+
+
+def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
+def _section_case_insensitive(mapping: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+    value = _lookup_case_insensitive(mapping, key)
+    return value if isinstance(value, Mapping) else None
 
 
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
@@ -27,6 +43,32 @@ def _as_float(v: Any, default: Optional[float] = None) -> float:
     return float(val if val is not None else base_default)
 
 
+def _truthy_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _allow_toy_capex_fallback(params: Mapping[str, Any]) -> bool:
+    """Return true only when toy fallback is explicitly enabled."""
+    if _truthy_flag(_lookup_case_insensitive(params, "allow_toy_fallback")):
+        return True
+
+    testing_cfg = _section_case_insensitive(params, "testing")
+    if testing_cfg is not None:
+        if _truthy_flag(_lookup_case_insensitive(testing_cfg, "allow_toy_fallback")):
+            return True
+
+    debt_cfg = _section_case_insensitive(params, "debt")
+    if debt_cfg is not None:
+        if _truthy_flag(_lookup_case_insensitive(debt_cfg, "allow_toy_fallback")):
+            return True
+
+    return False
+
+
 def _pmt(rate: float, nper: int, pv: float) -> float:
     if rate == 0:
         return pv / nper if nper > 0 else 0.0
@@ -34,17 +76,10 @@ def _pmt(rate: float, nper: int, pv: float) -> float:
 
 
 def _npv(cashflows: Sequence[float], rate: float) -> float:
-    """Simple NPV helper (no IRR logic here – IRR stays in finance.irr).
-
-    cashflows: sequence of CFADS values by year (t = 1..N)
-    rate: discount rate (e.g. cost of senior debt)
-
-    NPV = sum_t CF_t / (1 + r)^t
-    """
+    """Simple NPV helper (no IRR logic here - IRR stays in finance.irr)."""
     if not cashflows:
         return 0.0
     if rate <= -1.0:
-        # Defensive: avoid negative (1 + r) bases blowing up.
         return 0.0
 
     df = 1.0 + rate
@@ -55,30 +90,165 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
-    """Extract CAPEX from config, supporting both v14 and legacy schemas."""
-    # [Unchanged - keeping original implementation]
-    finance_cfg = params.get("finance")
-    if isinstance(finance_cfg, dict):
-        val = finance_cfg.get("capex_total_usd") or finance_cfg.get("capex_usd")
-        if isinstance(val, (int, float)):
-            return float(val)
-    
-    capex_cfg = params.get("capex", {}) or {}
-    for key in ["usd_total", "capex_total_usd", "total_capex_usd", "total_capex"]:
-        val = capex_cfg.get(key)
-        if isinstance(val, (int, float)):
-            return float(val)
-    
-    val = params.get("capex_usd_total")
-    if isinstance(val, (int, float)):
-        return float(val)
-    
-    logger.warning(
-        "CAPEX extractor: no recognized key found. "
-        "Checked: finance.capex_total_usd, capex.usd_total, etc. "
-        "Falling back to 100.0"
+    """Extract CAPEX from config, supporting v14, legacy and compact schemas."""
+    for section_name, keys in (
+        ("finance", ("capex_total_usd", "capex_usd")),
+        ("capex", ("usd_total", "capex_total_usd", "total_capex_usd", "total_capex")),
+        ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
+    ):
+        section = _section_case_insensitive(params, section_name)
+        if not section:
+            continue
+        for key in keys:
+            value = _lookup_case_insensitive(section, key)
+            if isinstance(value, (int, float)):
+                return float(value)
+            if value is not None:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+
+    for key in ("capex_usd_total", "capex_total_usd", "total_capex_usd"):
+        value = _lookup_case_insensitive(params, key)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+
+    if _allow_toy_capex_fallback(params):
+        logger.warning(
+            "CAPEX extractor: no recognized key found. "
+            "Using explicit toy fallback CAPEX=100.0"
+        )
+        return 100.0
+
+    raise ValueError(
+        "CAPEX extractor: no recognized CAPEX key found in finance/capex/costs "
+        "sections or top-level CAPEX aliases. Set allow_toy_fallback=true only "
+        "for explicit toy/test scenarios."
     )
-    return 100.0
+
+
+def _rate_decimal(value: Any, default: float = 0.0) -> float:
+    """Normalize a percentage or decimal interest-rate input."""
+    raw = _as_float(value, default)
+    return raw / 100.0 if raw > 1.0 else raw
+
+
+def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
+    """Return lender-facing DSCR values suitable for min/max comparisons."""
+    clean: List[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric == float("inf") or numeric <= 0.0:
+            continue
+        clean.append(numeric)
+    return clean
+
+
+def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Return canonical financing terms from v14 or simple test schemas."""
+    financing_terms = _section_case_insensitive(params, "Financing_Terms")
+    if financing_terms:
+        adapted = dict(financing_terms)
+        if adapted.get("debt_ratio") is None:
+            debt_pct = adapted.get("debt_pct")
+            if debt_pct is None:
+                debt_pct = adapted.get("leverage_pct")
+            if debt_pct is not None:
+                ratio = _as_float(debt_pct, 0.70)
+                adapted["debt_ratio"] = ratio / 100.0 if ratio > 1.0 else ratio
+        if adapted.get("construction_periods") is None:
+            adapted["construction_periods"] = adapted.get("construction_years", 2)
+        if adapted.get("debt_drawdown_pct") is None:
+            adapted["debt_drawdown_pct"] = adapted.get("drawdown_pct", [0.5, 0.5])
+        if adapted.get("construction_schedule") is None:
+            adapted["construction_schedule"] = [40.0, 60.0]
+        if adapted.get("mix") is None:
+            adapted["mix"] = {"usd_commercial_min": 1.0}
+        return adapted
+
+    financing = _section_case_insensitive(params, "financing")
+    if financing:
+        return dict(financing)
+
+    debt_cfg = _section_case_insensitive(params, "debt")
+    if isinstance(debt_cfg, Mapping):
+        debt_ratio = debt_cfg.get("debt_ratio")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("debt_ratio_pct")
+        if debt_ratio is None:
+            debt_ratio = debt_cfg.get("leverage_pct")
+        debt_ratio_value = _as_float(debt_ratio, 0.70)
+        if debt_ratio_value > 1.0:
+            debt_ratio_value /= 100.0
+
+        tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years", 15))
+        rate_value = debt_cfg.get(
+            "interest_rate_pct",
+            debt_cfg.get("interest_rate", debt_cfg.get("usd_nominal", 0.0)),
+        )
+        usd_rate = _rate_decimal(rate_value, 0.0)
+
+        return {
+            "construction_periods": int(_as_float(debt_cfg.get("construction_periods"), 2)),
+            "construction_schedule": debt_cfg.get("construction_schedule", [40.0, 60.0]),
+            "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
+            "grace_years": int(_as_float(debt_cfg.get("grace_years"), 0)),
+            "debt_ratio": debt_ratio_value,
+            "tenor_years": int(_as_float(tenor_value, 15)),
+            "interest_only_years": int(_as_float(debt_cfg.get("interest_only_years"), 0)),
+            "amortization_style": debt_cfg.get("amortization_style", "annuity"),
+            "target_dscr": _as_float(debt_cfg.get("target_dscr"), 1.30),
+            "mix": debt_cfg.get("mix", {"usd_commercial_min": 1.0}),
+            "rates": debt_cfg.get("rates", {"usd_nominal": usd_rate}),
+        }
+
+    return params
+
+
+def _build_cfads_timeline(
+    annual_rows: Sequence[Dict[str, Any]],
+    cfads: Sequence[float],
+    construction_periods: int,
+    tenor: int,
+) -> Tuple[List[float], List[Dict[str, Any]], int, Optional[int]]:
+    """Build CFADS timeline and explicit annual-row-to-debt-period mapping."""
+    cfads_ext: List[float] = [0.0] * construction_periods
+    annual_row_debt_period_map: List[Dict[str, Any]] = []
+    bridge_debt_period: Optional[int] = None
+
+    if cfads:
+        bridge_debt_period = len(cfads_ext)
+        cfads_ext.append(float(cfads[0]) * 0.5)
+
+    for row_index, row in enumerate(annual_rows):
+        cfads_value = float(cfads[row_index]) if row_index < len(cfads) else 0.0
+        debt_period = len(cfads_ext)
+        cfads_ext.append(cfads_value)
+        annual_row_debt_period_map.append(
+            {
+                "annual_row_index": row_index,
+                "year": row.get("year", row_index + 1),
+                "debt_period": debt_period,
+                "cfads_usd": cfads_value,
+            }
+        )
+
+    timeline_periods = max(construction_periods + tenor, len(cfads_ext))
+    while len(cfads_ext) < timeline_periods:
+        cfads_ext.append(float(cfads[-1]) if cfads else 0.0)
+
+    return cfads_ext, annual_row_debt_period_map, timeline_periods, bridge_debt_period
 
 
 def calculate_construction_drawdowns(
@@ -87,7 +257,6 @@ def calculate_construction_drawdowns(
     drawdown_pct_per_year: List[float],
 ) -> List[float]:
     drawn_schedule: List[float] = []
-    cumulative = 0.0
     for i, _ in enumerate(construction_schedule):
         amt = (
             total_debt * float(drawdown_pct_per_year[i])
@@ -95,7 +264,6 @@ def calculate_construction_drawdowns(
             else 0.0
         )
         drawn_schedule.append(amt)
-        cumulative += amt
     return drawn_schedule
 
 
@@ -204,15 +372,15 @@ def apply_debt_layer(
 
     Returns a rich dict used internally by plan_debt and the analytics layer.
     """
-    p = params.get("Financing_Terms", params.get("financing", params))
+    p = _extract_financing_terms(params)
 
-    construction_periods = int(_as_float(p.get("construction_periods"), 2))
+    construction_periods = max(0, int(_as_float(p.get("construction_periods"), 2)))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
     drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
     grace_years = int(_as_float(p.get("grace_years"), 0))
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
-    tenor = int(_as_float(p.get("tenor_years"), 15))
-    years_io = int(_as_float(p.get("interest_only_years"), 0))
+    tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
+    years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
     amortization = (p.get("amortization_style", "sculpted") or "sculpted").lower()
     target_dscr = _as_float(p.get("target_dscr"), 1.30)
 
@@ -227,7 +395,6 @@ def apply_debt_layer(
         debt_total,
     )
 
-    # ── Tranche mix and IDC ──────────────────────────
     tranches = _solve_mix(p, debt_total)
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
@@ -243,25 +410,21 @@ def apply_debt_layer(
 
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
-    # ── CFADS / DSCR profile ────────────────────────
     cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
+    (
+        cfads_ext,
+        annual_row_debt_period_map,
+        timeline_periods,
+        bridge_debt_period,
+    ) = _build_cfads_timeline(annual_rows, cfads, construction_periods, tenor)
 
-    cfads_ext = (
-        [0.0] * construction_periods + [cfads[0] * 0.5 if cfads else 0.0] + cfads
-    )
-    while len(cfads_ext) < 23:
-        cfads_ext.append(cfads[-1] if cfads else 0.0)
-    cfads_ext = cfads_ext[:23]
-
-    # ── Amortisation schedule by tranche ─────────────────
+    amort_years = max(0, tenor - years_io)
     if amortization in ("annuity", "fixed"):
-        schedules = {
-            k: _annuity_schedule(t, tenor - t.years_io) for k, t in tranches.items()
-        }
+        schedules = {k: _annuity_schedule(t, amort_years) for k, t in tranches.items()}
     else:
         schedules = _sculpted_schedule(
             tranches,
-            tenor - years_io,
+            amort_years,
             cfads_ext[construction_periods:],
             target_dscr,
         )
@@ -275,7 +438,7 @@ def apply_debt_layer(
 
     out_bals = {k: t.principal for k, t in tranches.items()}
 
-    for period in range(23):
+    for period in range(timeline_periods):
         debt_outstanding.append(sum(out_bals.values()))
         svc = 0.0
         for k in schedules:
@@ -285,31 +448,28 @@ def apply_debt_layer(
                 out_bals[k] = max(0.0, out_bals[k] - princ)
         debt_service_total.append(svc)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
-        
-        # ISSUE #3 FIX: Return None instead of float('inf')
-        # Rationale:
-        # - None is semantically clearer: 'not applicable' vs 'unbounded'
-        # - Monte Carlo percentile calculations don't break on None
-        # - Charts can handle None (skips point) vs crash on Infinity
-        # - min() function naturally ignores None with proper filtering
+
         if period < construction_periods:
-            # Construction periods: no operational cashflow
             dscr_series.append(None)
         elif svc > 0:
-            # Operational period with debt service
             dscr_series.append(cf / svc)
         else:
-            # Post-repayment or zero service: not applicable
             dscr_series.append(None)
 
-    # Calculate min_dscr from operational periods only
+    dscr_by_year: Dict[Any, Optional[float]] = {}
+    for mapping in annual_row_debt_period_map:
+        debt_period = int(mapping["debt_period"])
+        year_key = mapping.get("year", mapping["annual_row_index"] + 1)
+        dscr_by_year[year_key] = (
+            dscr_series[debt_period] if debt_period < len(dscr_series) else None
+        )
+
     dscr_op = [
         d for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
 
-    # ── LLCR / PLCR + FX covenant surfaces ──────────────
     debt_principal_total = sum(principal_after_idc.values())
 
     if debt_principal_total > 0:
@@ -356,6 +516,7 @@ def apply_debt_layer(
 
     return {
         "dscr_series": dscr_series,
+        "dscr_by_year": dscr_by_year,
         "dscr_min": dscr_min,
         "debt_service_total": debt_service_total,
         "debt_outstanding": debt_outstanding,
@@ -367,9 +528,11 @@ def apply_debt_layer(
         "principal_after_idc": principal_after_idc,
         "total_idc_capitalized": sum(total_idc_by_tranche.values()),
         "grace_periods": grace_years,
-        "timeline_periods": 23,
+        "timeline_periods": timeline_periods,
         "tenor_years": tenor,
         "cfads_extended": cfads_ext,
+        "cfads_bridge_debt_period": bridge_debt_period,
+        "annual_row_debt_period_map": annual_row_debt_period_map,
         "debt_schedules": schedules,
         "audit_status": "PASS" if dscr_min >= target_dscr else "REVIEW",
         "debt_total": debt_total,
@@ -382,16 +545,118 @@ def apply_debt_layer(
     }
 
 
+def _solve_gearing_for_dscr(
+    config: Dict[str, Any],
+    annual_rows: List[Dict[str, Any]],
+    target_dscr: float,
+    max_ratio: float,
+    *,
+    step: float = 0.0025,
+    fp_eps: float = 1e-6,
+) -> float:
+    """Largest gearing whose REAL-schedule min DSCR still meets ``target_dscr``.
+
+    Min DSCR is non-increasing in gearing and PLATEAUS at the sculpt target for low
+    gearing, then drops once the debt is too large for the schedule to hold the target.
+    The goal is the MAX gearing on that plateau (maximum leverage at the target DSCR), so
+    a tolerance ``dscr_tol`` is used to treat the plateau as "meets target" and converge on
+    its upper edge rather than chasing floating-point noise deep inside it. Unlike the
+    closed-form :func:`size_debt_with_dual_dscr`, this drives the actual amortization engine
+    (grace period, declining-CFADS tail), so the achieved DSCR lands on target. If min DSCR
+    at ``max_ratio`` already meets the target, ``max_ratio`` is returned unchanged.
+    """
+
+    def _min_dscr_at(ratio: float) -> float:
+        cfg = copy.deepcopy(config)
+        fin = _section_case_insensitive(cfg, "Financing_Terms")
+        if isinstance(fin, dict):
+            fin["debt_ratio"] = ratio
+        else:
+            cfg["debt_ratio"] = ratio
+        core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
+        # Target the SAME public covenant metric plan_debt reports (cleaned series),
+        # not the raw operational dscr_min (which includes the balloon/bridge period).
+        public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+        return min(public) if public else float(core.get("dscr_min", 0.0))
+
+    # Scan gearing high -> low and return the MAX gearing whose achieved min DSCR meets
+    # the target (an FP epsilon absorbs the sculpt's near-target rounding). min DSCR is
+    # monotonic in gearing, so the first pass scanning down is the boundary -> max leverage
+    # at the target, without the bisection's plateau/FP fragility.
+    ratio = max_ratio
+    while ratio > 0.0:
+        if _min_dscr_at(ratio) >= target_dscr - fp_eps:
+            return round(ratio, 6)
+        ratio -= step
+    return round(max(step, max_ratio - step), 6)
+
+
+def _maybe_autosolve_dscr(
+    config: Dict[str, Any], annual_rows: List[Dict[str, Any]]
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Opt-in DSCR-based debt sizing (``Financing_Terms.debt_sizing: dual_dscr``).
+
+    Solves the gearing on the real engine to hit ``target_dscr`` (capped at the configured
+    ``debt_ratio``), and computes the dual-DSCR (P50 / P99) debt-capacity detail for the
+    lender pack. Returns ``(config, dual_dscr_detail)`` -- ``config`` is resized only when
+    the mode is active; ``dual_dscr_detail`` is ``None`` otherwise.
+    """
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    mode = str(fin.get("debt_sizing", "")).lower()
+    if mode not in ("dual_dscr", "auto_dscr", "dscr_sculpt"):
+        return config, None
+
+    target = _as_float(fin.get("target_dscr"), 1.30)
+    max_ratio = _as_float(fin.get("debt_ratio"), 0.70)
+    solved = _solve_gearing_for_dscr(config, annual_rows, target, max_ratio)
+
+    resized = copy.deepcopy(config)
+    fin_resized = _section_case_insensitive(resized, "Financing_Terms")
+    if isinstance(fin_resized, dict):
+        fin_resized["debt_ratio"] = solved
+
+    cfads = [_as_float(r.get("cfads_usd"), 0.0) for r in annual_rows]
+    tenor = max(1, int(_as_float(fin.get("tenor_years"), 15)))
+    capex = _extract_capex_usd(config)
+    downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
+    rate = _as_float(fin.get("interest_rate_nominal"), 0.08)
+    detail: Optional[Dict[str, Any]] = None
+    if cfads and capex > 0:
+        try:
+            detail = size_debt_with_dual_dscr(
+                cfads[:tenor],
+                [c * downside for c in cfads[:tenor]],
+                dscr_target_p50=target,
+                dscr_target_p99=_as_float(fin.get("dscr_target_p99"), 1.00),
+                capex=capex,
+                debt_ratio_max=max_ratio,
+                debt_rate=rate,
+            )
+            detail["solved_gearing"] = solved
+            detail["sizing_mode"] = mode
+        except ValueError:
+            detail = None
+    logger.info(
+        "DSCR debt sizing (%s): solved gearing %.3f for target DSCR %.2f",
+        mode, solved, target,
+    )
+    return resized, detail
+
+
 def plan_debt(
     *,
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
-    
-    [Docstring unchanged - full API documentation retained]
+
+    When ``Financing_Terms.debt_sizing`` is ``dual_dscr`` / ``auto_dscr``, the gearing is
+    first solved on the real schedule to hit ``target_dscr`` (capped at ``debt_ratio``),
+    and the dual-DSCR (P50/P99) capacity detail is attached under ``dual_dscr``.
     """
-    core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
+    rows = list(annual_rows)
+    config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
+    core = apply_debt_layer(params=config, annual_rows=rows)
 
     principal_by = {
         k.lower(): float(v)
@@ -404,6 +669,8 @@ def plan_debt(
     timeline = core.get("timeline_periods", 0)
     debt_outstanding = core.get("debt_outstanding", []) or []
     debt_service_total = core.get("debt_service_total", []) or []
+    public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+    min_dscr = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
 
     return {
         "construction_years": core.get("construction_periods", 0),
@@ -429,14 +696,18 @@ def plan_debt(
         },
         "total_idc": core.get("total_idc_capitalized", 0.0),
         "total_idc_m": core.get("total_idc_capitalized", 0.0),
-        "min_dscr": core.get("dscr_min", 0.0),
+        "min_dscr": min_dscr,
         "principal_by_tranche": principal_by,
         "idc_by_tranche": idc_by,
         "audit_status": core.get("audit_status", "REVIEW"),
         "debt_outstanding": debt_outstanding,
         "debt_service_total": debt_service_total,
         "total_service": debt_service_total,
-        "dscr_series": core.get("dscr_series", []),
+        "dscr_series": public_dscr_series,
+        "raw_dscr_series": core.get("dscr_series", []),
+        "dscr_by_year": core.get("dscr_by_year", {}),
+        "annual_row_debt_period_map": core.get("annual_row_debt_period_map", []),
+        "cfads_bridge_debt_period": core.get("cfads_bridge_debt_period"),
         "balloon_remaining": core.get("balloon_remaining", 0.0),
         "debt_schedules": core.get("debt_schedules", {}),
         "debt_total": core.get("debt_total", 0.0),
@@ -446,8 +717,118 @@ def plan_debt(
         "fx_min": core.get("fx_min"),
         "fx_max": core.get("fx_max"),
         "fx_avg": core.get("fx_avg"),
+        "dual_dscr": dual_dscr_detail,
     }
 
 
-# [Keeping size_debt_with_dual_dscr unchanged - 200+ lines]
+def size_debt_with_dual_dscr(
+    cfads_p50: Sequence[float],
+    cfads_p99: Sequence[float],
+    *,
+    dscr_target_p50: float = 1.30,
+    dscr_target_p99: float = 1.00,
+    capex: float,
+    debt_ratio_max: float = 0.70,
+    debt_rate: float = 0.08,
+) -> Dict[str, Any]:
+    """Size project debt under a dual DSCR (P50 / P99) constraint.
+
+    Implements the standard lender dual-DSCR methodology (e.g. Bolinger 2017,
+    DNV GL 2019): debt service is sculpted so the achieved DSCR equals the target
+    in each scenario, the conservative ``min(Debt_P50, Debt_P99)`` is taken, and
+    the result is capped at ``debt_ratio_max * capex``.
+
+    For each period the sustainable debt service is ``CFADS / DSCR_target`` (so
+    the achieved DSCR equals the target), and the scenario debt capacity is the
+    present value of that debt-service stream discounted at ``debt_rate`` over
+    periods 1..N (matching :func:`_npv`).
+
+    Args:
+        cfads_p50: Per-period Cash Flow Available for Debt Service, P50 (central)
+            scenario. Must be non-empty.
+        cfads_p99: Per-period CFADS, P99 (downside) scenario. Must be the same
+            length as ``cfads_p50``.
+        dscr_target_p50: Minimum DSCR target for the P50 scenario (must be > 0).
+        dscr_target_p99: Minimum DSCR target for the P99 scenario (must be > 0).
+        capex: Total project capital cost (must be > 0); sets the gearing cap.
+        debt_ratio_max: Maximum debt-to-CAPEX gearing, in ``(0, 1]``.
+        debt_rate: Periodic cost of debt used to discount debt service.
+
+    Returns:
+        Mapping with the sized debt and supporting detail. Keys: ``debt_sized``,
+        ``debt_p50``, ``debt_p99``, ``binding_constraint`` (``"P50"`` |
+        ``"P99"`` | ``"RATIO_CAP"``), ``debt_service_p50`` / ``debt_service_p99``,
+        ``dscr_profile_p50`` / ``dscr_profile_p99``, ``min_dscr_p50`` /
+        ``min_dscr_p99``, ``dscr_target_p50`` / ``dscr_target_p99``,
+        ``debt_ratio_cap``, ``capex`` and ``downside_impact_pct`` (the P99-vs-P50
+        debt-capacity reduction, in percent).
+
+    Raises:
+        ValueError: If CFADS arrays are empty or different lengths, if a DSCR
+            target is non-positive, if ``debt_ratio_max`` is outside ``(0, 1]``,
+            or if ``capex`` is non-positive.
+    """
+    cfads_p50 = [float(x) for x in cfads_p50]
+    cfads_p99 = [float(x) for x in cfads_p99]
+
+    if not cfads_p50 or not cfads_p99:
+        raise ValueError("CFADS arrays cannot be empty")
+    if len(cfads_p50) != len(cfads_p99):
+        raise ValueError("CFADS P50 and P99 arrays must have the same length")
+    if dscr_target_p50 <= 0.0 or dscr_target_p99 <= 0.0:
+        raise ValueError("DSCR target must be positive")
+    if not (0.0 < debt_ratio_max <= 1.0):
+        raise ValueError("Debt ratio must be in (0, 1]")
+    if capex <= 0.0:
+        raise ValueError("CAPEX must be positive")
+
+    def _size_one(
+        cfads: Sequence[float], target: float
+    ) -> Tuple[List[float], float, List[float], float]:
+        service = [cf / target for cf in cfads]
+        capacity = _npv(service, debt_rate)
+        profile = [
+            (cf / svc) if svc > 0 else float("inf")
+            for cf, svc in zip(cfads, service)
+        ]
+        min_dscr = min(profile) if profile else 0.0
+        return service, capacity, profile, min_dscr
+
+    service_p50, debt_p50, profile_p50, min_dscr_p50 = _size_one(cfads_p50, dscr_target_p50)
+    service_p99, debt_p99, profile_p99, min_dscr_p99 = _size_one(cfads_p99, dscr_target_p99)
+
+    ratio_cap = capex * debt_ratio_max
+    debt_uncapped = min(debt_p50, debt_p99)
+    debt_sized = min(debt_uncapped, ratio_cap)
+
+    if debt_sized < debt_uncapped:
+        binding_constraint = "RATIO_CAP"
+    elif debt_p99 <= debt_p50:
+        binding_constraint = "P99"
+    else:
+        binding_constraint = "P50"
+
+    downside_impact_pct = (
+        (debt_p50 - debt_p99) / debt_p50 * 100.0 if debt_p50 > 0 else 0.0
+    )
+
+    return {
+        "debt_sized": debt_sized,
+        "debt_p50": debt_p50,
+        "debt_p99": debt_p99,
+        "binding_constraint": binding_constraint,
+        "debt_service_p50": service_p50,
+        "debt_service_p99": service_p99,
+        "dscr_profile_p50": profile_p50,
+        "dscr_profile_p99": profile_p99,
+        "min_dscr_p50": min_dscr_p50,
+        "min_dscr_p99": min_dscr_p99,
+        "dscr_target_p50": dscr_target_p50,
+        "dscr_target_p99": dscr_target_p99,
+        "debt_ratio_cap": ratio_cap,
+        "capex": capex,
+        "downside_impact_pct": downside_impact_pct,
+    }
+
+
 # EOF

@@ -21,7 +21,7 @@ CASPER_CONTRACT_VERSION = "casper_result_v1"
 
 def build_casper_payload(
     *,
-    scenario: ScenarioResult,
+    scenario: ScenarioResult | str,
     monte_carlo: MonteCarloResult | None = None,
     sensitivity: SensitivitySuite | None = None,
     generation: MultiTechGenerationResult | None = None,
@@ -96,16 +96,24 @@ def build_casper_payload(
 # ────────────────────────── internal helpers ────────────────────────────
 
 
-def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None:
+def _scenario_summary_to_dict(
+    s: ScenarioResult | str | None,
+    mc: MonteCarloResult | None = None,
+) -> dict[str, Any] | None:
     """
     Slender, JSON-safe descriptor for the scenario.
 
     Intentionally avoids shipping full `config` / `annual_rows` to keep
     payloads light and lender-friendly. Those remain available on disk /
     in the model outputs when deeper audits are required.
+
+    ``CasperResult.scenario`` may be a bare scenario-name string when the full
+    ScenarioResult is not available; in that case we emit a minimal descriptor.
     """
     if s is None:
         return None
+    if isinstance(s, str):
+        return {"scenario_name": s}
 
     data: dict[str, Any] = {
         "scenario_name": s.scenario_name,
@@ -176,30 +184,43 @@ def _scenario_summary_to_dict(s: ScenarioResult | None) -> dict[str, Any] | None
 
     # Debt covenants (if attached)
     if s.debt_covenants is not None:
-        data["debt_covenants"] = s.debt_covenants.as_dict()
+        data["debt_covenants"] = s.debt_covenants.model_dump()
 
-    # Equity performance overlay (if available)
+    # Equity performance overlay (if available).
+    #
+    # Canonical EquityPerformance exposes only equity_irr, equity_npv,
+    # equity_multiple and metadata. Legacy PE metrics (moic/dpi/rvpi/tvpi/
+    # average_coc/payback_period_years) are retained inside ep.metadata by
+    # finance/equity_v14.py; we surface them defensively with .get() so the
+    # payload also tolerates leaner producers (e.g. pipeline_v14_enhanced).
+    #
+    # Downside is synthesised from MonteCarloResult when provided, since
+    # DownsideMetrics is declared in contracts but not attached to any
+    # ScenarioResult in the current pipeline.
     if s.equity_performance is not None:
         ep = s.equity_performance
+        ep_meta: Mapping[str, Any] = (
+            ep.metadata if isinstance(ep.metadata, Mapping) else {}
+        )
+
         downside_dict: dict[str, Any] | None = None
-        if ep.downside is not None:
-            d = ep.downside
+        if mc is not None:
             downside_dict = {
-                "prob_negative_npv": d.prob_negative_npv,
-                "prob_below_hurdle": d.prob_below_hurdle,
-                "worst_case_irr": d.worst_case_irr,
-                "max_drawdown": d.max_drawdown,
+                "project_irr_p10": mc.project_irr_p10,
+                "project_npv_p10": mc.project_npv_p10,
+                "dscr_min_p10": mc.dscr_min_p10,
             }
 
         data["equity_performance"] = {
             "equity_irr": ep.equity_irr,
             "equity_npv": ep.equity_npv,
-            "moic": ep.moic,
-            "dpi": ep.dpi,
-            "rvpi": ep.rvpi,
-            "tvpi": ep.tvpi,
-            "average_coc": ep.average_coc,
-            "payback_period_years": ep.payback_period_years,
+            "equity_multiple": ep.equity_multiple,
+            "moic": ep_meta.get("moic"),
+            "dpi": ep_meta.get("dpi"),
+            "rvpi": ep_meta.get("rvpi"),
+            "tvpi": ep_meta.get("tvpi"),
+            "average_coc": ep_meta.get("average_coc"),
+            "payback_period_years": ep_meta.get("payback_period_years"),
             "downside": downside_dict,
         }
 
@@ -216,21 +237,33 @@ def _sensitivity_to_dict(suite: SensitivitySuite | None) -> dict[str, Any] | Non
     if suite is None:
         return None
 
+    # base_metric: baseline value of the suite's headline metric, taken from
+    # base_kpis (SensitivitySuite no longer carries a dedicated base_metric field).
+    base_metric = suite.base_kpis.get(suite.metric)
+
+    # Per-variable tornado rows live in each TornadoResult's shock_results; the
+    # suite-level tornado_results are per-metric containers.
+    tornado: list[dict[str, Any]] = []
+    for tr in suite.tornado_results:
+        for sr in tr.shock_results:
+            tornado.append(
+                {
+                    "variable": sr.label or sr.variable_name,
+                    "base_irr": (
+                        sr.base_case if sr.base_case is not None else tr.base_metric
+                    ),
+                    "low_irr": sr.low_case,
+                    "high_irr": sr.high_case,
+                    "impact_abs": sr.impact_abs,
+                    "impact_pct": sr.impact,
+                }
+            )
+
     return {
         "metric": suite.metric,
-        "base_metric": suite.base_metric,
+        "base_metric": base_metric,
         "base_config_path": suite.base_config_path,
-        "tornado": [
-            {
-                "variable": row.variable,
-                "base_irr": row.base_irr,
-                "low_irr": row.low_irr,
-                "high_irr": row.high_irr,
-                "impact_abs": row.impact_abs,
-                "impact_pct": row.impact_pct,
-            }
-            for row in suite.tornado_results
-        ],
+        "tornado": tornado,
     }
 
 
@@ -241,7 +274,8 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
     Notes:
     - Does *not* emit raw per-draw results by default; that stays in the
       engine outputs and regression tests.
-    - Includes success rate and standard errors for convergence checks.
+    - Includes success rate and percentile spreads; standard-error fields are
+      not part of the current MonteCarloResult contract and are omitted.
     """
     if mc is None:
         return None
@@ -257,19 +291,16 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
             "p10": mc.project_irr_p10,
             "p50": mc.project_irr_p50,
             "p90": mc.project_irr_p90,
-            "se": mc.project_irr_se,
         },
         "npv": {
             "mean": mc.project_npv_mean,
             "p10": mc.project_npv_p10,
             "p50": mc.project_npv_p50,
             "p90": mc.project_npv_p90,
-            "se": mc.project_npv_se,
         },
         "dscr_min": {
             "p10": mc.dscr_min_p10,
             "p50": mc.dscr_min_p50,
-            "se": mc.dscr_min_se,
         },
     }
 
@@ -340,7 +371,7 @@ def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
     metadata = dict(casper.metadata)
     return {
         "contract_version": CASPER_CONTRACT_VERSION,
-        "scenario": _scenario_summary_to_dict(casper.scenario),
+        "scenario": _scenario_summary_to_dict(casper.scenario, casper.monte_carlo),
         "baseline_kpis": dict(casper.baseline_kpis),
         # Singular key to match the CASPER v1 contract docs
         "sensitivity": _sensitivity_to_dict(casper.sensitivities),

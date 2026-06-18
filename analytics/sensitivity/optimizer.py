@@ -41,9 +41,9 @@ import numpy as np
 from analytics.evaluation_v14 import evaluate_with_overrides
 
 try:
-    import pandas as pd  # type: ignore
+    import pandas as pd
 except Exception:  # pragma: no cover
-    pd = None  # type: ignore
+    pd = None  # type: ignore[assignment]
 
 
 # -----------------------------

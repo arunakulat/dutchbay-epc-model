@@ -124,6 +124,41 @@ def dutchbay_omegaconf_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf
 
 
 @pytest.fixture
+def mc_sampling_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
+    """Config for the canonical Monte Carlo engine (``analytics.mc.engine``).
+
+    The current engine consumes ``monte_carlo.parameters`` — a list of Latin
+    Hypercube stochastic variables (``name`` / ``distribution`` / ``low`` /
+    ``high``) — and returns a :class:`analytics.contracts_v14.MonteCarloResult`
+    dataclass (not a dict). This fixture augments the lender-case config with
+    that block so the integration tests exercise the real engine API.
+
+    The bespoke test config is intentionally *not* the full v14 finance schema,
+    so per-trial evaluation falls back to the engine's deterministic toy-metric
+    path. That exercises the sampler -> aggregator -> result-contract flow end
+    to end *without* weakening production schema validation — the documented
+    fallback behaviour in ``analytics/mc/engine.py``. The parameter names use
+    the engine's recognised override keys so sampling produces non-degenerate
+    (std > 0) distributions for every aggregated KPI (``project_npv``,
+    ``project_irr``, ``dscr_min``, ``llcr``, ``plcr``).
+
+    Args:
+        dutchbay_base_config: Base configuration dictionary.
+
+    Returns:
+        OmegaConf configuration object with a ``monte_carlo.parameters`` block.
+    """
+    cfg = OmegaConf.create(dutchbay_base_config)
+    cfg.monte_carlo.parameters = [
+        {"name": "capex", "distribution": "uniform", "low": 90.0, "high": 110.0},
+        {"name": "tariff", "distribution": "uniform", "low": 0.09, "high": 0.11},
+        {"name": "capacity_factor", "distribution": "uniform", "low": 0.28, "high": 0.32},
+        {"name": "opex_annual", "distribution": "uniform", "low": 2.0, "high": 3.0},
+    ]
+    return cfg
+
+
+@pytest.fixture
 def wind_assessment_mock_results() -> Dict[str, Any]:
     """Mock wind assessment results for testing.
     

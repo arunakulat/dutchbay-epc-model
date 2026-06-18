@@ -144,6 +144,22 @@ def test_import_sensitivity_engine():
         pytest.fail(f"Failed to import analytics.sensitivity.engine: {e}")
 
 
+def test_import_scenario_analytics():
+    """Test that the blessed scenario-analytics entrypoint imports.
+
+    analytics.scenario_analytics backs the run_scenario_analytics_v14 CLI.
+    It silently broke (ImportError) when a call to an unimplemented
+    normalise_kpis_for_export was added in #135 — nothing imported it, so
+    nothing caught it. This guard keeps the entrypoint importable.
+    """
+    try:
+        from analytics.scenario_analytics import ScenarioAnalytics
+
+        assert ScenarioAnalytics is not None
+    except ImportError as e:
+        pytest.fail(f"Failed to import analytics.scenario_analytics: {e}")
+
+
 # =============================================================================
 # Cross-Module Import Tests (detect subtle circular deps)
 # =============================================================================

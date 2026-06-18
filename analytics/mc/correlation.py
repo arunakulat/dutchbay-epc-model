@@ -15,7 +15,7 @@ NOTE: This module should NOT depend on the MC engine (no circulars).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -53,7 +53,7 @@ def _nearest_psd(mat: np.ndarray) -> np.ndarray:
     d = np.sqrt(np.diag(repaired))
     d[d == 0] = 1.0
     repaired = repaired / np.outer(d, d)
-    return repaired
+    return cast("np.ndarray", repaired)
 
 
 def apply_correlation_structure(

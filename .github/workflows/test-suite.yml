@@ -2,10 +2,16 @@ name: Test Suite
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
+    branches: [ main, develop, feature/*, resolution/* ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+  issues: write
 
 jobs:
   test:
@@ -30,8 +36,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .
-        pip install pytest pytest-cov pytest-xdist pytest-html
+        python -m pip install -r requirements.txt
+        # ".[wind]" pulls the xarray/netcdf4/cdsapi toolchain so the wind
+        # adapter + NetCDF/GIS xarray tests run in the gate (was opt-in only).
+        python -m pip install -e ".[wind]"
+        python -m pip install pytest pytest-cov pytest-xdist pytest-html
 
     - name: Display environment info
       run: |
@@ -41,7 +50,14 @@ jobs:
 
     - name: Run test suite
       run: |
-        pytest tests/ \
+        # Run the FULL tests/ tree (pytest.ini norecursedirs excludes tests/_quarantine).
+        # Previously this listed explicit sub-paths, which silently hid failures in any
+        # UNLISTED file (e.g. tests/analytics/test_oem_parser / test_tax_sensitivity /
+        # test_casper_payload_equity_contract / test_aep_loader). Those are now triaged
+        # (migrated or xfailed), so the whole tree is green and the gate can no longer be
+        # dodged by omission — the same class of hole as the #149 Test Summary rubber-stamp.
+        pytest \
+          tests/ \
           --verbose \
           --tb=short \
           --maxfail=10 \
@@ -80,6 +96,7 @@ jobs:
       with:
         files: test-results-*.xml
         check_name: Test Results (Python ${{ matrix.python-version }})
+        compare_to_earlier_commit: false
 
   lint:
     name: Code Quality Checks
@@ -92,10 +109,21 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
+        cache: 'pip'
 
     - name: Install linting tools
       run: |
-        pip install ruff black mypy
+        # The mypy gate must run against a FAITHFUL environment. With only
+        # ruff/black/mypy installed (no project deps), mypy reported ~36 spurious
+        # "Class cannot subclass BaseModel (has type Any)" errors because pydantic
+        # was absent. Mirror the test job's install so pydantic/omegaconf/numpy/
+        # xarray are present, and pin mypy to the version the v14 surface was
+        # cleared against (1.19.0) — newer mypy emits different unused-ignore
+        # diagnostics. Without this, the gate would be both noisy and unstable.
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements.txt
+        python -m pip install -e ".[wind]"
+        pip install ruff black mypy==1.19.0
 
     - name: Run ruff
       run: ruff check . --output-format=github || true
@@ -104,7 +132,7 @@ jobs:
       run: black --check --diff . || true
 
     - name: Run mypy
-      run: mypy finance/ analytics/ --ignore-missing-imports || true
+      run: mypy finance/ analytics/ --ignore-missing-imports
 
   summary:
     name: Test Summary
@@ -115,5 +143,23 @@ jobs:
     steps:
     - name: Check test status
       run: |
-        echo "Test suite completed"
+        echo "Test suite completed (test=${{ needs.test.result }}, lint=${{ needs.lint.result }})"
         echo "View detailed results in artifacts"
+        # Gate the required 'Test Summary' check on the ACTUAL pytest-matrix
+        # result. Without this the job only echoes and passes even when 'test'
+        # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
+        # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
+        # any failure/cancel/skip is non-success and blocks the merge.
+        # The 'lint' job is now a mypy gate: ruff/black still run with '|| true'
+        # (advisory), but the mypy step does NOT, so a type-check regression in
+        # finance/ or analytics/ fails 'lint' and — via the second check below —
+        # blocks the merge. (PR4: fix-first mypy gate, landed once the surface
+        # reached zero errors.)
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"
+          exit 1
+        fi
+        if [ "${{ needs.lint.result }}" != "success" ]; then
+          echo "::error::Lint job did not succeed (result=${{ needs.lint.result }}) — mypy gate failed; blocking Test Summary"
+          exit 1
+        fi

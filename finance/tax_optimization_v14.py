@@ -322,67 +322,54 @@ def calculate_tax_savings(
     base_case: DistributionSchedule,
     optimized_case: DistributionSchedule,
     tlcf_schedule: TLCFSchedule,
-    corporate_tax_rate: float,
-    discount_rate: float = 0.12
+    distribution_tax_rate: float = 0.15,
+    discount_rate: float = 0.12,
 ) -> Tuple[float, float]:
-    """Calculate tax savings from optimized distribution timing.
-    
-    Tax savings arise from:
-    - Reduced taxable distributions during TLCF period
-    - Better utilization of tax loss carryforwards
-    - Deferred tax liability (time value benefit)
-    
+    """NPV benefit of deferring distribution-level (dividend withholding) tax.
+
+    Distribution *timing* does NOT change corporate income tax — corporate tax is
+    levied on profit and shielded by TLCF / holiday / depreciation regardless of
+    *when* equity is distributed. The genuine lever is the **time value** of the
+    *distribution* tax: Sri Lanka levies a flat dividend withholding tax (15% — see
+    memory ``sri_lanka_corporate_tax_regime``). Deferring distributions defers that
+    WHT, so its nominal total is conserved (~0) but its NPV falls.
+
     Args:
-        base_case: Immediate distribution schedule
-        optimized_case: Tax-optimized distribution schedule
-        tlcf_schedule: Tax loss carryforward schedule
-        corporate_tax_rate: Corporate tax rate (decimal)
-        discount_rate: Discount rate for NPV calculation
-    
+        base_case: Immediate distribution schedule.
+        optimized_case: Tax-optimized (deferred) distribution schedule.
+        tlcf_schedule: Retained for API/context; the timing benefit is independent
+            of the TLCF balance under this distribution-tax model.
+        distribution_tax_rate: Dividend/withholding tax rate on distributions
+            (decimal; Sri Lanka default 0.15).
+        discount_rate: Discount rate for the NPV calculation.
+
     Returns:
-        Tuple of (total_tax_savings, tax_savings_npv)
-    
-    Example:
-        >>> # With $3M TLCF and 28% tax rate:
-        >>> # Deferring $5M distribution saves $1.4M in tax
-        >>> savings, npv = calculate_tax_savings(base, optimized, tlcf, 0.28)
-        >>> savings
-        1400000.0
+        ``(total_tax_savings, tax_savings_npv)``. The total is ~0 by construction
+        (timing conserves the nominal distribution-tax base when both schedules
+        distribute the same amount); the **NPV** is the real, positive benefit and
+        scales with ``distribution_tax_rate`` and ``discount_rate``.
     """
     project_life = len(base_case.annual_distributions)
-    
-    # Calculate tax on distributions for both cases
-    base_tax = []
-    optimized_tax = []
-    
-    for t in range(project_life):
-        # Simplified: Tax on distributions reduced by TLCF shield
-        base_dist = base_case.annual_distributions[t]
-        opt_dist = optimized_case.annual_distributions[t]
-        
-        # TLCF shield available
-        tlcf_available = tlcf_schedule.annual_tlcf[t]
-        
-        # Tax on distributions (simplified model)
-        # Reality: Distributions don't directly incur tax, but timing affects
-        # corporate tax paid, which then affects distributable cash
-        # Here we model the opportunity cost of distributing vs retaining
-        
-        base_tax_year = base_dist * corporate_tax_rate if tlcf_available < base_dist else 0
-        opt_tax_year = opt_dist * corporate_tax_rate if tlcf_available < opt_dist else 0
-        
-        base_tax.append(base_tax_year)
-        optimized_tax.append(opt_tax_year)
-    
-    # Total tax difference
-    total_tax_savings = sum(base_tax) - sum(optimized_tax)
-    
-    # NPV of tax savings
+
+    # Distribution-level (dividend WHT) tax per year — base vs deferred timing.
+    base_tax = [
+        base_case.annual_distributions[t] * distribution_tax_rate
+        for t in range(project_life)
+    ]
+    opt_tax = [
+        optimized_case.annual_distributions[t] * distribution_tax_rate
+        for t in range(project_life)
+    ]
+
+    # Nominal total is conserved when both schedules distribute the same amount.
+    total_tax_savings = sum(base_tax) - sum(opt_tax)
+
+    # The real benefit is the time value: deferring tax to later years lowers its PV.
     tax_savings_npv = sum(
-        (base_tax[t] - optimized_tax[t]) / (1 + discount_rate) ** t
+        (base_tax[t] - opt_tax[t]) / (1.0 + discount_rate) ** t
         for t in range(project_life)
     )
-    
+
     return total_tax_savings, tax_savings_npv
 
 
@@ -392,7 +379,8 @@ def optimize_distribution_timing(
     equity_invested: float,
     corporate_tax_rate: float = 0.28,
     target_equity_irr: float = 0.15,
-    max_delay_years: int = 5
+    max_delay_years: int = 5,
+    distribution_tax_rate: float = 0.15,
 ) -> TaxOptimizationResult:
     """Optimize equity distribution timing for maximum after-tax returns.
     
@@ -454,13 +442,15 @@ def optimize_distribution_timing(
     )
     logger.info(f"Optimized equity IRR: {optimized_case.equity_irr:.2f}%")
     
-    # Calculate tax savings
+    # Calculate tax savings. The timing benefit is the time value of the
+    # *distribution* (dividend WHT) tax, NOT corporate tax (which is timing-
+    # invariant) — use the dividend WHT rate (SL: 15%), not corporate_tax_rate.
     tax_savings, tax_savings_npv = calculate_tax_savings(
         base_case,
         optimized_case,
         tlcf_schedule,
-        corporate_tax_rate,
-        discount_rate=0.12
+        distribution_tax_rate,
+        discount_rate=0.12,
     )
     
     # Determine optimal delay

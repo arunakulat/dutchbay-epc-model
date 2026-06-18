@@ -1,48 +1,71 @@
 """
 Equity Package for v14 Finance Models.
 
-Sprint 16 Iteration 6 - Equity Package Creation
-═══════════════════════════════════════════════════════════════════════════════════════
-Consolidates all equity-related functionality into a unified package.
+This package is the public equity namespace for the v14 finance stack. The
+production distribution waterfall lives in finance.equity_distribution_v14_hydra
+for backward compatibility with existing imports, and is re-exported here for
+new code.
 
 Public API
-────────────────────────────────────────────────────────────────────────────────────────
-From core module:
-    - EquityCalculator          # Main equity calculation engine
-    - calculate_equity_irr      # Equity IRR calculations
-    - calculate_distributions   # Distribution calculations
+----------
+Core equity metrics:
+    - EquityCashflowSummary
+    - calculate_equity_irr
+    - calculate_equity_npv
+    - calculate_cash_on_cash
+    - calculate_moic
+    - calculate_payback_period
+    - calculate_pe_triad
+    - calculate_equity_performance
 
-From distribution:
-    - EquityDistributionEngine  # Distribution engine
-    - calculate_dividend_policy # Dividend policy calculations
-
-Backward Compatibility
-────────────────────────────────────────────────────────────────────────────────────────
-All old imports continue to work:
-
-    # Old way (still works)
-    from finance.equity_v14 import EquityCalculator
-    from finance.equity_distribution_v14_hydra import EquityDistributionEngine
-    
-    # New way (recommended)
-    from finance.equity import EquityCalculator
-    from finance.equity import EquityDistributionEngine
+Distribution waterfall:
+    - EquityDistributionConfig
+    - EquityDistributionEngine
+    - build_equity_distribution_schedule
+    - calculate_equity_distribution_from_pipeline
 
 Architecture Principles
-────────────────────────────────────────────────────────────────────────────────────────
-GWTF:     Single source of truth for equity calculations
-CESSPIT:  Comprehensive input validation with fail-fast errors
-CASPER:   Contract-first design with explicit types
-CCCDIR:   Fully documented with usage examples
+-----------------------
+GWTF:     Single public namespace for equity calculations.
+CESSPIT:  Explicit validation and fail-fast distribution status.
+CASPER:   JSON-safe audit metadata for computed/defaulted/failed states.
+CCCDIR:   Clear import surface; no generated orchestrator becomes canonical.
 """
 
 from __future__ import annotations
 
-# Core module will be imported from equity_v14.py (source of truth)
-# When source files are in place, they will be imported here
+from finance.equity_distribution_v14_hydra import (
+    EquityDistributionConfig,
+    EquityDistributionEngine,
+    build_equity_distribution_schedule,
+    calculate_equity_distribution_from_pipeline,
+)
+from finance.equity_v14 import (
+    EquityCashflowSummary,
+    calculate_cash_on_cash,
+    calculate_equity_irr,
+    calculate_equity_npv,
+    calculate_equity_performance,
+    calculate_moic,
+    calculate_payback_period,
+    calculate_pe_triad,
+    summarise_equity_cashflows,
+)
 
 __all__ = [
-    # Will be populated when modules are created
+    "EquityCashflowSummary",
+    "EquityDistributionConfig",
+    "EquityDistributionEngine",
+    "build_equity_distribution_schedule",
+    "calculate_cash_on_cash",
+    "calculate_equity_distribution_from_pipeline",
+    "calculate_equity_irr",
+    "calculate_equity_npv",
+    "calculate_equity_performance",
+    "calculate_moic",
+    "calculate_payback_period",
+    "calculate_pe_triad",
+    "summarise_equity_cashflows",
 ]
 
 # EOF

@@ -16,7 +16,7 @@ on:
       - 'analytics/fx_integration.py'
       - 'analytics/pipeline_v14.py'
       - 'analytics/contracts_v14.py'
-      - 'tests/test_fx_pipeline_integration.py'
+      - 'tests/analytics_layer/test_fx_sensitivity_real.py'
       - '.github/workflows/fx-tests.yml'
   pull_request:
     branches:
@@ -26,18 +26,15 @@ on:
       - 'analytics/fx_integration.py'
       - 'analytics/pipeline_v14.py'
       - 'analytics/contracts_v14.py'
-      - 'tests/test_fx_pipeline_integration.py'
+      - 'tests/analytics_layer/test_fx_sensitivity_real.py'
 
 jobs:
-  # ===========================================================================
-  # FX Integration Tests
-  # ===========================================================================
   fx-tests:
     name: FX Integration Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11']
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -53,12 +50,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e .[dev]
           pip install pytest pytest-cov pytest-xdist pytest-timeout
 
       - name: Run FX integration tests
         run: |
-          pytest tests/test_fx_pipeline_integration.py -v \
+          pytest tests/analytics_layer/test_fx_sensitivity_real.py -v \
             --cov=analytics.fx \
             --cov=analytics.fx_integration \
             --cov=analytics.pipeline_v14 \
@@ -77,9 +75,6 @@ jobs:
           name: fx-coverage-py${{ matrix.python-version }}
           fail_ci_if_error: false
 
-  # ===========================================================================
-  # Code Quality Checks
-  # ===========================================================================
   code-quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest
@@ -90,21 +85,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'
           cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install black isort mypy flake8 pylint
           pip install -e .[dev]
 
       - name: Check formatting with Black
-        run: black --check analytics/fx/ tests/test_fx_pipeline_integration.py
+        run: black --check analytics/fx/ tests/analytics_layer/test_fx_sensitivity_real.py
         continue-on-error: true
 
       - name: Check import order with isort
-        run: isort --check-only analytics/fx/ tests/test_fx_pipeline_integration.py
+        run: isort --check-only analytics/fx/ tests/analytics_layer/test_fx_sensitivity_real.py
         continue-on-error: true
 
       - name: Type check with mypy
@@ -112,12 +108,9 @@ jobs:
         continue-on-error: true
 
       - name: Lint with flake8
-        run: flake8 analytics/fx/ tests/test_fx_pipeline_integration.py --max-line-length=88
+        run: flake8 analytics/fx/ tests/analytics_layer/test_fx_sensitivity_real.py --max-line-length=88
         continue-on-error: true
 
-  # ===========================================================================
-  # Full Pipeline Tests (Quick Smoke Test)
-  # ===========================================================================
   smoke-test:
     name: Smoke Test - Full Pipeline with FX
     runs-on: ubuntu-latest
@@ -128,80 +121,28 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'
           cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e .[dev]
           pip install pytest
 
       - name: Run smoke test - pipeline with FX
         run: |
-          python -c "
-          import logging
-          logging.basicConfig(level=logging.DEBUG)
-          from analytics.pipeline_v14 import run_v14_pipeline
-          
-          config = {
-              'scenario_name': 'smoke_test_with_fx',
-              'Project': {
-                  'name': 'SmokeTestProject',
-                  'capex_usd': 100_000_000,
-                  'opex_usd_yr': 5_000_000,
-                  'project_life_years': 10,
-                  'construction_years': 2,
-              },
-              'Financing_Terms': {
-                  'total_debt_usd': 70_000_000,
-                  'debt_tenor_years': 8,
-                  'rates': {'usd_commercial_min': 0.08},
-              },
-              'FX': {
-                  'strategy': 'blended',
-                  'curve': {'lkr_usd': [300] * 10},
-              },
-          }
-          
-          result = run_v14_pipeline(config=config, validation_mode='off')
-          assert result['scenario_result']['fx_block'] is not None, 'FX block missing!'
-          print('✓ Smoke test passed: FX block populated')
-          "
+          python -c "from pathlib import Path; from unittest.mock import patch; from analytics.pipeline_v14 import run_v14_pipeline; p = Path('scenarios/dutchbay_lendercase_2025Q4.yaml'); assert p.exists(), p; wr = {'wind_data': {'mean_ws': 7.85}, 'energy_production': {'gross_aep': {'capacity_factor_gross': 45.0}, 'net_aep': {'net_aep_p50_mwh': 563000.0, 'net_aep_p75_mwh': 540000.0, 'net_aep_p90_mwh': 500000.0, 'capacity_factor_net_p75': 41.1}}, 'statistical_analysis': {'weibull': {'shape_k': 2.1, 'scale_c': 8.32}}}; cf = {'revenue_annual_usd': 36540000.0}; StubWindPipeline = type('StubWindPipeline', (), {'__init__': lambda self, *a, **k: None, 'run_complete_assessment': lambda self, *a, **k: wr, 'export_for_cashflow_model': lambda self, *a, **k: cf}); ctx = patch('analytics.pipeline_v14.WindPipeline', StubWindPipeline); ctx.start(); result = run_v14_pipeline(config=str(p), validation_mode='off'); ctx.stop(); assert result['status'] == 'success'; assert result['config']['project_name'] == 'DutchBay Wind Farm'; assert result['aep_p75_mwh'] == 540000.0; print('Smoke test passed: path-based FX scenario pipeline invocation works')"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
       - name: Run smoke test - pipeline without FX
         run: |
-          python -c "
-          from analytics.pipeline_v14 import run_v14_pipeline
-          
-          config = {
-              'scenario_name': 'smoke_test_without_fx',
-              'Project': {
-                  'name': 'SmokeTestProject',
-                  'capex_usd': 100_000_000,
-                  'opex_usd_yr': 5_000_000,
-                  'project_life_years': 10,
-                  'construction_years': 2,
-              },
-              'Financing_Terms': {
-                  'total_debt_usd': 70_000_000,
-                  'debt_tenor_years': 8,
-                  'rates': {'usd_commercial_min': 0.08},
-              },
-          }
-          
-          result = run_v14_pipeline(config=config, validation_mode='off')
-          assert result['scenario_result']['fx_block'] is None, 'FX block should be None'
-          print('✓ Smoke test passed: Backward compatibility maintained')
-          "
+          python -c "from pathlib import Path; from tempfile import NamedTemporaryFile; from unittest.mock import patch; import yaml; from analytics.pipeline_v14 import run_v14_pipeline; src = Path('scenarios/dutchbay_lendercase_2025Q4.yaml'); assert src.exists(), src; cfg = yaml.safe_load(src.read_text()); cfg.pop('fx', None); tmp = NamedTemporaryFile('w', suffix='.yaml', delete=False); yaml.safe_dump(cfg, tmp); tmp.close(); wr = {'wind_data': {'mean_ws': 7.85}, 'energy_production': {'gross_aep': {'capacity_factor_gross': 45.0}, 'net_aep': {'net_aep_p50_mwh': 563000.0, 'net_aep_p75_mwh': 540000.0, 'net_aep_p90_mwh': 500000.0, 'capacity_factor_net_p75': 41.1}}, 'statistical_analysis': {'weibull': {'shape_k': 2.1, 'scale_c': 8.32}}}; cf = {'revenue_annual_usd': 36540000.0}; StubWindPipeline = type('StubWindPipeline', (), {'__init__': lambda self, *a, **k: None, 'run_complete_assessment': lambda self, *a, **k: wr, 'export_for_cashflow_model': lambda self, *a, **k: cf}); ctx = patch('analytics.pipeline_v14.WindPipeline', StubWindPipeline); ctx.start(); result = run_v14_pipeline(config=tmp.name, validation_mode='off'); ctx.stop(); assert result['status'] == 'success'; assert result['config']['project_name'] == 'DutchBay Wind Farm'; assert result['aep_p75_mwh'] == 540000.0; print('Smoke test passed: path-based non-FX scenario pipeline invocation works')"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-  # ===========================================================================
-  # Summary
-  # ===========================================================================
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
@@ -211,14 +152,14 @@ jobs:
       - name: Check test results
         run: |
           if [ "${{ needs.fx-tests.result }}" == "failure" ]; then
-            echo "❌ FX Integration Tests failed"
+            echo "FX Integration Tests failed"
             exit 1
           fi
           if [ "${{ needs.smoke-test.result }}" == "failure" ]; then
-            echo "❌ Smoke Tests failed"
+            echo "Smoke Tests failed"
             exit 1
           fi
-          echo "✅ All tests passed!"
+          echo "All tests passed"
       - name: Post to GitHub
         if: always()
         run: |

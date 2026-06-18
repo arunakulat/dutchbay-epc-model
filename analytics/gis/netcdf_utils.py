@@ -46,7 +46,7 @@ GWTF Compliance:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -54,10 +54,10 @@ import xarray as xr
 
 # Optional dependency: pyproj for CRS transformations
 try:
-    from pyproj import CRS  # type: ignore[import-untyped]
+    from pyproj import CRS
     _PYPROJ_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover
-    CRS = None  # type: ignore[assignment,misc]
+    CRS = None
     _PYPROJ_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -176,7 +176,7 @@ def gis_netcdf_profile(ds: xr.Dataset) -> Dict[str, Any]:
         profile['grid_resolution'] = None
     
     # Dimensions
-    profile['dims'] = {name: int(size) for name, size in ds.dims.items()}
+    profile['dims'] = {name: int(size) for name, size in ds.sizes.items()}
     
     # Data variables
     profile['variables'] = list(ds.data_vars.keys())
@@ -260,8 +260,8 @@ def ws150_from_10_100(
         )
     
     # Compute wind speed magnitude at 10m and 100m
-    ws10 = np.sqrt(ds[u10_var]**2 + ds[v10_var]**2)
-    ws100 = np.sqrt(ds[u100_var]**2 + ds[v100_var]**2)
+    ws10 = cast("xr.DataArray", np.sqrt(ds[u10_var]**2 + ds[v10_var]**2))
+    ws100 = cast("xr.DataArray", np.sqrt(ds[u100_var]**2 + ds[v100_var]**2))
     
     # Estimate shear exponent if not provided
     if shear_exponent is None:
@@ -309,8 +309,8 @@ def ws150_from_10_100(
         f"mean={float(ws_hub.mean()):.2f} m/s, "
         f"max={float(ws_hub.max()):.2f} m/s"
     )
-    
-    return ws_hub
+
+    return cast("xr.DataArray", ws_hub)
 
 
 def grid_stats(da: xr.DataArray, dim: str = 'time') -> pd.DataFrame:
@@ -368,15 +368,22 @@ def grid_stats(da: xr.DataArray, dim: str = 'time') -> pd.DataFrame:
     max_da = da.max(dim=dim)
     count_da = da.count(dim=dim)
     
-    # Stack into DataFrame
+    # Flatten the spatial grid to one row per cell. Stacking the remaining
+    # (post-reduction) dims into a single 'cell' index keeps each cell's
+    # lon/lat coordinate aligned with its statistic — unlike raveling the 1-D
+    # coordinate arrays, whose lengths (n_lon, n_lat) do not match the raveled
+    # 2-D grid (n_lat × n_lon). Robust to dim ordering and xarray version.
+    cell_dims = list(mean_da.dims)
+    mean_cells = mean_da.stack(cell=cell_dims)
+
     df = pd.DataFrame({
-        'lon': mean_da[lon_var].values.ravel(),
-        'lat': mean_da[lat_var].values.ravel(),
-        'mean': mean_da.values.ravel(),
-        'std': std_da.values.ravel(),
-        'min': min_da.values.ravel(),
-        'max': max_da.values.ravel(),
-        'count': count_da.values.ravel(),
+        'lon': mean_cells[lon_var].values,
+        'lat': mean_cells[lat_var].values,
+        'mean': mean_cells.values,
+        'std': std_da.stack(cell=cell_dims).values,
+        'min': min_da.stack(cell=cell_dims).values,
+        'max': max_da.stack(cell=cell_dims).values,
+        'count': count_da.stack(cell=cell_dims).values,
     })
     
     # Remove NaN rows

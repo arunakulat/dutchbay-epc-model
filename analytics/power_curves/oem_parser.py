@@ -23,7 +23,7 @@ Context:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -60,6 +60,7 @@ ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1 = pd.DataFrame({
 ENVISION_EN171_10MW_SPECS = {
     "model": "Envision EN-171-10.0",
     "rated_power_mw": 10.0,
+    "rated_power_kw": 10000,
     "rotor_diameter_m": 171,
     "hub_height_m": 150,  # Typical for 10 MW class
     "cut_in_ms": 3.0,
@@ -100,7 +101,7 @@ def parse_envision_en171_10mw_curve(
     curve = ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1.copy()
     
     # Air density correction per IEC 61400-12-1:2022
-    rho_ref = ENVISION_EN171_10MW_SPECS["air_density_ref_kgm3"]
+    rho_ref = cast(float, ENVISION_EN171_10MW_SPECS["air_density_ref_kgm3"])
     density_ratio = air_density_kgm3 / rho_ref
     
     # Power scales with (rho)^(1/3) for fixed blade design
@@ -146,17 +147,21 @@ def interpolate_power_curve(
         >>> power_out
         array([2495., 3135., 3875.])
     """
+    # interp_func is one of several scipy interpolators (PchipInterpolator /
+    # CubicSpline); annotate the common callable shape so both branches assign
+    # to the same declared type.
+    interp_func: Callable[..., np.ndarray]
     if method == "pchip":
         # Piecewise Cubic Hermite Interpolating Polynomial (monotonic)
         interp_func = PchipInterpolator(
-            curve["wind_speed_ms"].values,
-            curve["power_kw"].values
+            curve["wind_speed_ms"].to_numpy(),
+            curve["power_kw"].to_numpy()
         )
     elif method == "cubic":
         # Standard cubic spline (may overshoot)
         interp_func = CubicSpline(
-            curve["wind_speed_ms"].values,
-            curve["power_kw"].values,
+            curve["wind_speed_ms"].to_numpy(),
+            curve["power_kw"].to_numpy(),
             bc_type="natural"
         )
     else:
@@ -169,8 +174,8 @@ def interpolate_power_curve(
         0.0,
         curve["power_kw"].max()
     )
-    
-    return power_interpolated
+
+    return cast("np.ndarray", power_interpolated)
 
 
 def compute_aep_from_curve(
@@ -192,7 +197,8 @@ def compute_aep_from_curve(
         wind_dist_ms: 8760-hour wind speed timeseries (m/s)
         curve: Power curve DataFrame from parse_envision_en171_10mw_curve()
         n_turbines: Number of turbines (from config.resource.turbines.count)
-        capacity_mw: Total farm capacity (from config.project.capacity_mw)
+        capacity_mw: Per-turbine rated capacity in MW (farm capacity is computed
+            internally as n_turbines * capacity_mw). E.g. 10.0 for EN-171-10.0.
         apply_losses: If True, apply wake/availability/electrical losses
         wake_loss_pct: Wake loss percentage (from config.resource.losses.wake_loss_pct)
         availability_pct: Availability percentage (from config.resource.losses.availability_pct)
@@ -211,7 +217,7 @@ def compute_aep_from_curve(
         ...     wind_dist_ms=wind_8760,
         ...     curve=curve,
         ...     n_turbines=15,
-        ...     capacity_mw=150.0,
+        ...     capacity_mw=10.0,  # per-turbine rating (15 × 10 MW = 150 MW farm)
         ...     wake_loss_pct=8.0,  # From YAML!
         ...     availability_pct=97.0,  # From YAML!
         ...     electrical_loss_pct=2.0  # From YAML!
@@ -265,11 +271,17 @@ def compute_aep_from_curve(
         net_aep_gwh = gross_aep_farm_gwh
         losses_dict["total_loss_pct"] = 0.0
     
-    # Capacity factor
-    capacity_factor = net_aep_gwh / (capacity_mw * 8.760)  # GWh / (MW * 8760 h)
+    # Capacity factor. net_aep_gwh is FARM-level (scaled by n_turbines above),
+    # so the denominator must be FARM capacity = n_turbines * capacity_mw (the
+    # per-turbine rating). The prior `capacity_mw * 8.760` omitted n_turbines,
+    # inflating CF by ~n_turbines× (≈8.5 vs ≈0.37 for 23 turbines) — and both
+    # callers (this module's tests and analytics/simulation/monte_carlo_aep, which
+    # passes capacity_mw = rated_power_kw/1000) supply per-turbine capacity.
+    farm_capacity_mw = n_turbines * capacity_mw
+    capacity_factor = net_aep_gwh / (farm_capacity_mw * 8.760)  # GWh / (MW * 8760 h)
     
     logger.info(
-        f"AEP Calculation: {n_turbines} turbines × {capacity_mw/n_turbines:.1f} MW each\n"
+        f"AEP Calculation: {n_turbines} turbines × {capacity_mw:.1f} MW each\n"
         f"  Gross AEP: {gross_aep_farm_gwh:.2f} GWh\n"
         f"  Net AEP: {net_aep_gwh:.2f} GWh\n"
         f"  Capacity Factor: {capacity_factor:.2%}\n"
@@ -322,7 +334,7 @@ def parse_envision_en171_curve(air_density_kgm3: Optional[float] = None) -> pd.D
     return parse_envision_en171_10mw_curve(air_density_kgm3=air_density_kgm3)
 
 # Alias for IEC compliance validation (stub for test compatibility)
-def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, any]:
+def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, Any]:
     """Validate power curve compliance with IEC 61400-12-1:2022.
     
     This is a minimal stub for test compatibility. Full validation should be

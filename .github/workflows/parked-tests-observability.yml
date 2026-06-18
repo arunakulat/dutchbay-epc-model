@@ -1,0 +1,133 @@
+# Parked Tests Observability
+#
+# Purpose
+# -------
+# Runs the previously-parked test paths (tests/integration, tests/analytics,
+# tests/_quarantine) as a non-blocking diagnostic job. Surfaces contract drift
+# (e.g. SensitivitySuite missing base_kpis — see #52), dual-DSCR sizing gaps,
+# and NetCDF/GIS xarray fragility without blocking main.
+#
+# Status
+# ------
+# continue-on-error: true   — never gates main, never blocks PRs.
+# Promotion to a required check is tracked separately and will follow the
+# ARCH-04 SensitivitySuite unification PR (Sprint 18C, PR-2).
+#
+# GWTF compliance
+# ---------------
+# - R23: feature-branch + PR workflow.
+# - R25: no direct commits to main; this workflow was added via PR.
+# - TEST-01: surfaces hidden test failures to restore observability.
+# - MRM-02: junit-xml + html artefacts uploaded on every run for audit trail.
+#
+# Refs: #52
+
+name: Parked Tests (Observability)
+
+on:
+  push:
+    branches:
+      - main
+      - "sprint-*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    # Daily 07:00 UTC = 12:30 IST. Refreshes failure list even without commits.
+    - cron: "0 7 * * *"
+
+jobs:
+  parked-tests-observability:
+    name: Parked Tests (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+          python -m pip install pytest pytest-cov pytest-xdist pytest-html
+
+      - name: Display environment info
+        run: |
+          python --version
+          pip --version
+          echo "Repo HEAD: $(git rev-parse HEAD)"
+          echo "Branch: ${GITHUB_REF_NAME}"
+
+      - name: Run parked tests (collect + execute, non-blocking)
+        id: pytest
+        continue-on-error: true
+        run: |
+          pytest \
+            tests/integration \
+            tests/analytics \
+            tests/_quarantine \
+            --junit-xml=parked-test-results.xml \
+            --html=parked-test-report.html \
+            --self-contained-html \
+            --continue-on-collection-errors \
+            --maxfail=999 \
+            --tb=short \
+            -v \
+            --no-cov \
+            --override-ini=addopts=
+
+      - name: Summarise outcomes from junit XML
+        if: always()
+        run: |
+          if [ ! -f parked-test-results.xml ]; then
+            echo "::warning::No junit XML produced — pytest crashed before writing."
+            exit 0
+          fi
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          import pathlib
+          tree = ET.parse("parked-test-results.xml")
+          root = tree.getroot()
+          # junit may have a top-level <testsuites> or a single <testsuite>
+          suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for s in suites:
+              for k in totals:
+                  totals[k] += int(s.attrib.get(k, "0"))
+          passed = totals["tests"] - totals["failures"] - totals["errors"] - totals["skipped"]
+          print("=" * 72)
+          print(f"PARKED TESTS OBSERVABILITY — collected {totals['tests']}")
+          print(f"  passed:   {passed}")
+          print(f"  failed:   {totals['failures']}")
+          print(f"  errors:   {totals['errors']}  (collection failures)")
+          print(f"  skipped:  {totals['skipped']}")
+          print("=" * 72)
+          print("This job is intentionally non-blocking. See workflow header for context.")
+          PY
+
+      - name: Upload junit XML artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parked-test-results-xml
+          path: parked-test-results.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload HTML report artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parked-test-report-html
+          path: parked-test-report.html
+          if-no-files-found: warn
+          retention-days: 30

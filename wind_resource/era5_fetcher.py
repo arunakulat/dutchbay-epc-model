@@ -122,21 +122,21 @@ class ERA5Fetcher:
             FileNotFoundError: If config file doesn't exist.
             KeyError: If required config sections are missing.
         """
-        if config_path is None:
-            # Default: wind_resource/config/era5_config.yaml
-            config_path = Path(__file__).parent / "config" / "era5_config.yaml"
-        else:
-            config_path = Path(config_path)
-        
-        if not config_path.exists():
+        config_file = (
+            Path(__file__).parent / "config" / "era5_config.yaml"
+            if config_path is None
+            else Path(config_path)
+        )
+
+        if not config_file.exists():
             raise FileNotFoundError(
-                f"Config file not found: {config_path}. "
+                f"Config file not found: {config_file}. "
                 "Create wind_resource/config/era5_config.yaml or specify config_path."
             )
-        
-        self._config_path = config_path
-        
-        with open(config_path) as f:
+
+        self._config_path = config_file
+
+        with open(config_file) as f:
             self.config = yaml.safe_load(f)
         
         # Extract config values (CCCDIR: centralized config)

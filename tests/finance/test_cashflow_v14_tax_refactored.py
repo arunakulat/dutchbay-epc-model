@@ -59,6 +59,31 @@ def test_tax_config_from_yaml_missing_required_key_raises() -> None:
         TaxConfig.from_yaml(cfg)
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "depreciation_method",
+        "depreciation_start_year",
+        "depreciation_years",
+        "enhanced_allowance_applies",
+        "enhanced_capital_allowance_pct",
+        "loss_carryforward_years",
+        "tax_holiday_start_year",
+        "tax_holiday_years",
+        "wht_on_interest_to_nonresidents",
+        "wht_on_interest_enabled",
+        "wht_gross_up",
+    ],
+)
+def test_tax_config_from_yaml_missing_each_required_key_raises(field: str) -> None:
+    """CESSPIT/R22: every required tax field fails fast when absent (no hidden default)."""
+    cfg = _base_yaml_cfg()
+    del cfg["tax"][field]
+
+    with pytest.raises(KeyError, match=rf"tax\.{field}"):
+        TaxConfig.from_yaml(cfg)
+
+
 # ---------------------------------------------------------------------------
 # 2) Depreciation schedule contract
 # ---------------------------------------------------------------------------
@@ -78,6 +103,82 @@ def test_depreciation_schedule_straight_line_totals_and_tail_zeros() -> None:
     assert sum(s.annual_amounts[:useful_life]) == pytest.approx(capex_lkr)
     assert all(v == 0.0 for v in s.annual_amounts[useful_life:])
     assert s.book_value[-1] == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# 2b) Split (plant + civil) depreciation contract  [#136 post-2025 regime]
+# ---------------------------------------------------------------------------
+
+def test_build_split_straight_line_sums_plant_and_civil() -> None:
+    total_capex = 1000.0
+    plant_share = 0.80
+    project_life = 25
+
+    s = DepreciationSchedule.build_split_straight_line(
+        total_capex=total_capex,
+        plant_capex_share=plant_share,
+        plant_useful_life=5,
+        civil_useful_life=20,
+        project_life=project_life,
+    )
+
+    assert len(s.annual_amounts) == project_life
+    # Whole base written off over the longer (civil) life.
+    assert sum(s.annual_amounts) == pytest.approx(total_capex)
+    assert s.book_value[-1] == pytest.approx(0.0)
+    # Year 1 = plant (800/5 = 160) + civil (200/20 = 10).
+    assert s.annual_amounts[0] == pytest.approx(800.0 / 5 + 200.0 / 20)
+    # After plant is fully written off (yr 6+), only civil (10/yr) remains.
+    assert s.annual_amounts[5] == pytest.approx(200.0 / 20)
+    # Equals the element-wise sum of two independent straight-line schedules.
+    plant = DepreciationSchedule.build_straight_line(800.0, 5, project_life)
+    civil = DepreciationSchedule.build_straight_line(200.0, 20, project_life)
+    for i in range(project_life):
+        assert s.annual_amounts[i] == pytest.approx(
+            plant.annual_amounts[i] + civil.annual_amounts[i]
+        )
+
+
+def test_tax_config_split_mode_parses_and_validates() -> None:
+    cfg = _base_yaml_cfg()
+    cfg["tax"]["plant_capex_share"] = 0.80
+    cfg["tax"]["plant_depreciation_years"] = 5
+    cfg["tax"]["civil_depreciation_years"] = 20
+    cfg["tax"]["tax_holiday_route"] = "sdp"
+
+    tc = TaxConfig.from_yaml(cfg)
+    assert tc.plant_capex_share == pytest.approx(0.80)
+    assert tc.plant_depreciation_years == 5
+    assert tc.civil_depreciation_years == 20
+    assert tc.tax_holiday_route == "sdp"
+
+
+def test_tax_config_legacy_single_mode_has_none_split_fields() -> None:
+    # A config without the split fields stays in legacy single-class mode.
+    tc = TaxConfig.from_yaml(_base_yaml_cfg())
+    assert tc.plant_capex_share is None
+    assert tc.tax_holiday_route == "none"
+
+
+@pytest.mark.parametrize(
+    "missing", ["plant_depreciation_years", "civil_depreciation_years"]
+)
+def test_tax_config_split_mode_requires_both_lives(missing: str) -> None:
+    cfg = _base_yaml_cfg()
+    cfg["tax"]["plant_capex_share"] = 0.80
+    cfg["tax"]["plant_depreciation_years"] = 5
+    cfg["tax"]["civil_depreciation_years"] = 20
+    del cfg["tax"][missing]
+
+    with pytest.raises(ValueError, match=missing):
+        TaxConfig.from_yaml(cfg)
+
+
+def test_tax_holiday_route_invalid_raises() -> None:
+    cfg = _base_yaml_cfg()
+    cfg["tax"]["tax_holiday_route"] = "boi"  # not none|sdp
+    with pytest.raises(ValueError, match="tax_holiday_route"):
+        TaxConfig.from_yaml(cfg)
 
 
 # ---------------------------------------------------------------------------

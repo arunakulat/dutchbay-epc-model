@@ -5,10 +5,26 @@ This directory contains test files that were retired during the v15 architecture
 ## Why These Tests Were Retired
 
 ### CASPER v14 Module Tests
-- **Reason**: The `analytics.casper.casper_payload` module has a syntax error (IndentationError at line 71) that blocks all CASPER-related test imports
-- **Impact**: Any test importing from `analytics.casper_v14` or `analytics.casper.*` fails during collection
-- **Files affected**: All CASPER smoke, payload, tail risk, and contract tests
-- **Status**: These files were already absent from the v15 branch, suggesting earlier cleanup
+- **Reason (HISTORICAL, NOW SUPERSEDED)**: This README originally claimed
+  `analytics.casper.casper_payload` had a syntax error (IndentationError at
+  line 71) blocking CASPER test imports. Sprint 18D investigation
+  (2026-05-26) determined that claim was **inaccurate** — the file parses
+  cleanly via `ast.parse` and has done since commits `5c44342`, `b635f74`,
+  and `434b1ff` rewrote the function. The original claim predates those
+  rewrites and was never refreshed.
+- **Actual blocker (Sprint 18B → 18D)**: `casper_payload._scenario_summary_to_dict`
+  read attributes (`ep.downside`, `.moic`, `.dpi`, `.rvpi`, `.tvpi`,
+  `.average_coc`, `.payback_period_years`) that do not exist on the canonical
+  `EquityPerformance` post-Sprint-18B, raising `AttributeError` on every
+  real CASPER run. This contract-shape bug is fixed on branch
+  `fix/casper-equity-performance-contract-alignment` (Sprint 18D).
+- **Files affected**: Originally the canonical CASPER smoke, payload,
+  tail-risk and contract tests were quarantined under a false-positive
+  rule ("absolute IRR band assertions"). Two are revived on the Sprint 18D
+  branch: `tests/analytics_layer/test_evaluation_casper_tail_risk.py` and
+  `tests/api/test_casper_contract_freeze.py`.
+- **Status**: Files in `tests/legacy_v14/` (this directory) remain retired
+  for the v15 refactor reasons listed below.
 
 ### Legacy API Unit Tests
 - **Reason**: These tests depend on internal APIs that were removed or refactored in v15
@@ -27,9 +43,13 @@ This directory contains test files that were retired during the v15 architecture
 
 ## What Would Be Required to Resurrect
 
-1. **CASPER tests**: Fix the syntax error in `analytics/casper/casper_payload.py:71` (restore from known-good version or rewrite the `_scenario_summary_to_dict` function)
-2. **Legacy API tests**: Either restore compatibility shims or rewrite tests against new v15 APIs
-3. **Smoke tests**: Update YAML fixtures and entry point calls to match v15 architecture
+1. **CASPER tests**: Already underway on branch
+   `fix/casper-equity-performance-contract-alignment` (Sprint 18D). The
+   contract-shape bug has been fixed and two canonical CASPER tests have
+   been resurrected (tail-risk smoke + contract freeze). No syntax fix is
+   required — the original IndentationError claim was inaccurate.
+2. **Legacy API tests**: Either restore compatibility shims or rewrite tests against new v15 APIs.
+3. **Smoke tests**: Update YAML fixtures and entry point calls to match v15 architecture.
 
 ## Current v15 Test Suite Focus
 
@@ -46,9 +66,19 @@ The active test suite now focuses on:
    - **Fix**: Add `grid_loss_pct: 0.03` to `scenarios/dutchbay_lendercase_2025Q4.yaml` under `statutory:` section
    - **Alternative**: Make field optional in `finance/dutchbay_finmodel/statutory_profile.py`
 
-2. **CASPER payload syntax error**: Line 71 in `analytics/casper/casper_payload.py` has indentation error
-   - **Status**: Module exists but is broken; not blocking v15 core tests since CASPER tests are retired
-   - **Priority**: Low (CASPER v14 will be replaced by CASPER v15 contracts)
+2. **CASPER payload contract-shape bug (SUPERSEDES earlier syntax-error
+   claim)**: The earlier wording in this section was inaccurate.
+   `analytics/casper/casper_payload.py` parses cleanly — there is no
+   IndentationError. The real defect was that `_scenario_summary_to_dict`
+   read pre-Sprint-18B attributes off `EquityPerformance` that no longer
+   exist on the canonical dataclass, raising `AttributeError` on every
+   real CASPER run.
+   - **Status**: Fixed on branch
+     `fix/casper-equity-performance-contract-alignment` (Sprint 18D). The
+     payload now reads legacy PE metrics from `ep.metadata` with `.get()`
+     guards and synthesises the downside block from `MonteCarloResult`
+     when present.
+   - **Priority**: Resolved by Sprint 18D.
 
 ## Directory Structure
 
@@ -87,4 +117,5 @@ pytest tests/legacy_v14/ --override-ini="addopts=" -v
 ---
 
 **Maintained by**: DutchBay EPC Model Team
-**Last updated**: December 15, 2025
+**Last updated**: 2026-05-26 (Sprint 18D — superseded the earlier inaccurate
+IndentationError claim and pointed to the contract-alignment fix branch)

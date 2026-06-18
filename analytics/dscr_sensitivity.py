@@ -564,7 +564,11 @@ def main() -> None:
     logger.info(f"Loading config: {config_path}")
     
     cfg = OmegaConf.load(config_path)
-    
+    if not isinstance(cfg, DictConfig):
+        raise TypeError(
+            f"Config root must be a mapping (DictConfig), got {type(cfg).__name__}"
+        )
+
     results = analyze_dscr_sensitivity(cfg)
     
     # Output JSON results

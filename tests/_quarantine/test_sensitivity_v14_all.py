@@ -32,12 +32,12 @@ from analytics.contracts_v14 import (
     MultiMetricSensitivitySuite,
     MultiMetricTornadoResult,
     ParameterRangeConfig,
+    SensitivityRequest,
     SensitivitySuite,
     TornadoResult,
 )
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.sensitivity_v14 import (
-    SensitivityRequest,
     build_nested_override,
     multi_metric_suite_to_dataframe,
     run_breakeven_parameter,

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -116,17 +116,18 @@ class WindAnalyzer:
             FileNotFoundError: If config file doesn't exist.
             KeyError: If required config sections are missing.
         """
-        if config_path is None:
-            config_path = Path(__file__).parent / "config" / "era5_config.yaml"
-        else:
-            config_path = Path(config_path)
-        
-        if not config_path.exists():
+        config_file = (
+            Path(__file__).parent / "config" / "era5_config.yaml"
+            if config_path is None
+            else Path(config_path)
+        )
+
+        if not config_file.exists():
             raise FileNotFoundError(
-                f"Config file not found: {config_path}"
+                f"Config file not found: {config_file}"
             )
-        
-        with open(config_path) as f:
+
+        with open(config_file) as f:
             self.config = yaml.safe_load(f)
         
         # Extract config values (CCCDIR: no hardcoded values)
@@ -221,9 +222,10 @@ class WindAnalyzer:
             >>> print(f"Monthly WS range: {patterns['monthly_range_ratio']:.2f}x")
         """
         df = self.df.copy()
-        df['month'] = df.index.month
-        df['season'] = df.index.month.map(self._month_to_season)
-        df['hour'] = df.index.hour
+        idx = cast("pd.DatetimeIndex", df.index)
+        df['month'] = idx.month
+        df['season'] = df['month'].map(self._month_to_season)
+        df['hour'] = idx.hour
         
         # Monthly averages
         monthly = df.groupby('month')[self.ws_column].mean().to_dict()
@@ -235,8 +237,8 @@ class WindAnalyzer:
         hourly = df.groupby('hour')[self.ws_column].mean().to_dict()
         
         # Identify extremes
-        windiest_month = max(monthly, key=monthly.get)
-        calmest_month = min(monthly, key=monthly.get)
+        windiest_month = max(monthly, key=lambda m: monthly[m])
+        calmest_month = min(monthly, key=lambda m: monthly[m])
         monthly_range_ratio = monthly[windiest_month] / monthly[calmest_month]
         
         results = {
@@ -291,7 +293,7 @@ class WindAnalyzer:
             CoV: 2.9%
         """
         df = self.df.copy()
-        df['year'] = df.index.year
+        df['year'] = cast("pd.DatetimeIndex", df.index).year
         
         annual_means = df.groupby('year')[self.ws_column].mean()
         

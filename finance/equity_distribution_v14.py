@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -543,7 +543,7 @@ class EquityDistributionOutput:
     remaining_cashflow: float
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "distribution_year": self.distribution_year,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dutchbay-epc-model"
-version = "14.0.1"
+version = "14.15.0"
 description = "DutchBay EPC Model - Sprint 10 Release: Monte Carlo Performance & Test Infrastructure"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,8 @@ dependencies = [
   "matplotlib>=3.7",
   "pyyaml>=6.0",
   "scipy>=1.10",
+  "omegaconf>=2.3",
+  "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -32,13 +34,29 @@ test = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
 ]
+# Wind-resource ingestion path (ERA5 / Copernicus CDS). Kept as an opt-in
+# extra so lender-grade finance runs that consume a *frozen* wind export JSON
+# do not require Copernicus credentials or the netCDF toolchain. Install with:
+#     pip install -e ".[wind]"
+# Producers of the frozen export (scripts/run_wind_analysis_v14.py) require
+# this extra; consumers (run_full_pipeline_v14.py + wind_resource.cashflow_adapter)
+# do not. Disclosed as Defect W1 in Sprint 19 (CHANGELOG v14.15.0).
+wind = [
+  "cdsapi>=0.6",
+  "xarray>=2023.6",
+  "netcdf4>=1.6",
+  "windpowerlib>=0.2",  # open turbine library (oedb) for power-curve sourcing (#181)
+]
 
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]
 
 [tool.setuptools.packages.find]
-include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*"]
+# wind_resource* added Sprint 19 (W.2) — the package existed in the repo
+# tree but was excluded from wheel discovery, so `pip install` produced an
+# artifact without the wind-ingestion modules. Disclosed as Defect W2.
+include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*", "wind_resource*"]
 
 [tool.black]
 line-length = 88

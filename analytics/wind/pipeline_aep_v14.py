@@ -97,7 +97,7 @@ def validate_turbine_specs(config: Dict[str, Any], aep_data: Dict[str, Any]) -> 
 def integrate_aep_pipeline(
     config: Dict[str, Any],
     validate_manifest: bool = True,
-    run_monte_carlo: bool = None
+    run_monte_carlo: Optional[bool] = None
 ) -> Dict[str, Any]:
     """Integrate AEP pipeline into v14 financial model configuration.
     

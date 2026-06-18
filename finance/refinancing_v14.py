@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -417,7 +417,7 @@ class RefinancingCalculator:
         current_balance: float,
         current_year: int,
         remaining_years: int,
-        current_interest_rate: float,
+        current_interest_rate: float = 0.0,
         debt_terms: Optional[List[DebtTerm]] = None,
     ) -> Dict[str, float]:
         """Recalculate debt schedule post-refinancing.
@@ -428,7 +428,9 @@ class RefinancingCalculator:
             current_balance: Total current debt balance (>= 0)
             current_year: Current year in simulation (>= 1)
             remaining_years: Years remaining in project life (> 0)
-            current_interest_rate: Current weighted average interest rate
+            current_interest_rate: Current weighted average interest rate. Optional
+                for backward compatibility; when omitted or zero the method uses
+                the existing conservative fallback rate.
             debt_terms: Optional list of existing debt terms
 
         Returns:
@@ -608,7 +610,7 @@ class RefinancingOutput:
     schedule_metrics: Dict[str, float]
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "refinancing_triggered": self.refinancing_triggered,
@@ -732,7 +734,7 @@ def calculate_refinancing(
         trigger_conditions=conditions,
         current_year=current_year,
         new_annual_payment=schedule_metrics["new_annual_payment"],
-        new_tenor_years=schedule_metrics["new_tenor_effective"],
+        new_tenor_years=int(round(schedule_metrics["new_tenor_effective"])),
         total_interest_savings=schedule_metrics["interest_savings"],
         upfront_costs=schedule_metrics["upfront_costs"],
         net_benefit=schedule_metrics["net_benefit"],

@@ -29,9 +29,9 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 try:
-    import pandas as pd  # type: ignore
+    import pandas as pd
 except Exception:  # pragma: no cover
-    pd = None  # type: ignore
+    pd = None  # type: ignore[assignment]
 
 from analytics.contracts_v14 import MonteCarloResult
 

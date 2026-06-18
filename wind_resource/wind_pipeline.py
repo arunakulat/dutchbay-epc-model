@@ -135,15 +135,16 @@ class WindPipeline:
         Args:
             config_path: Path to config file, or None for default.
         """
-        if config_path is None:
-            config_path = Path(__file__).parent / "config" / "era5_config.yaml"
-        else:
-            config_path = Path(config_path)
-        
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
-        
-        with open(config_path) as f:
+        config_file = (
+            Path(__file__).parent / "config" / "era5_config.yaml"
+            if config_path is None
+            else Path(config_path)
+        )
+
+        if not config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {config_file}")
+
+        with open(config_file) as f:
             self.config = yaml.safe_load(f)
         
         logger.debug("Configuration loaded for pipeline")

@@ -99,6 +99,42 @@ def _deep_merge_config(
     return result
 
 
+def _expand_dotted_overrides(overrides: Mapping[str, Any]) -> dict[str, Any]:
+    """Expand flat *dotted* override keys into nested dicts before deep-merging.
+
+    ``{"tax.corporate_tax_rate": 0.30}`` becomes
+    ``{"tax": {"corporate_tax_rate": 0.30}}``. Plain keys pass through unchanged,
+    and nested mappings are expanded recursively (so a dotted key nested under a
+    plain parent is also handled).
+
+    This makes the dotted override form documented on ``evaluate_with_overrides`` /
+    ``evaluate_scenario_from_dict`` actually apply. Without it ``_deep_merge_config``
+    treats ``"tax.corporate_tax_rate"`` as a *literal* top-level key and silently
+    drops the override (it never reaches ``config["tax"]["corporate_tax_rate"]``) —
+    which made every nested-parameter one-way sensitivity a silent no-op.
+    """
+    expanded: dict[str, Any] = {}
+    for key, value in overrides.items():
+        value = _expand_dotted_overrides(value) if isinstance(value, Mapping) else value
+        if isinstance(key, str) and "." in key:
+            parts = key.split(".")
+            cursor = expanded
+            for part in parts[:-1]:
+                existing = cursor.get(part)
+                if not isinstance(existing, dict):
+                    existing = {}
+                    cursor[part] = existing
+                cursor = existing
+            cursor[parts[-1]] = value
+        else:
+            existing = expanded.get(key)
+            if isinstance(existing, dict) and isinstance(value, Mapping):
+                expanded[key] = _deep_merge_config(existing, dict(value))
+            else:
+                expanded[key] = value
+    return expanded
+
+
 def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
@@ -188,7 +224,7 @@ def evaluate_scenario_from_dict(
         >>> kpis["project_irr"]
         0.142
     """
-    merged_config = _deep_merge_config(config, overrides or {})
+    merged_config = _deep_merge_config(config, _expand_dotted_overrides(overrides or {}))
     result = _run_pipeline_with_config(merged_config)
     
     raw_kpis = result.get("kpis")
@@ -263,8 +299,9 @@ def evaluate_with_overrides(
             raise FileNotFoundError(f"Scenario config not found: {cfg_path}")
         base_config = load_scenario_config(cfg_path)
 
-    # Merge overrides
-    merged_config = _deep_merge_config(base_config, overrides or {})
+    # Merge overrides (dotted keys like "tax.corporate_tax_rate" are expanded to
+    # nested form first so they actually apply — see _expand_dotted_overrides).
+    merged_config = _deep_merge_config(base_config, _expand_dotted_overrides(overrides or {}))
 
     # Run pipeline
     full_result = _run_pipeline_with_config(
@@ -357,7 +394,7 @@ def evaluate_with_casper_tail_risk(
 
     logger.info("Step 2/4: Running Monte Carlo analysis...")
     monte_carlo = None
-    tail_risk_block = None
+    tail_risk_block: list[dict[str, Any]] | None = None
     tail_risk_snapshots: dict[str, Any] = {}
     raw_results: list[dict[str, Any]] = []
 
@@ -448,50 +485,27 @@ def evaluate_with_casper_tail_risk(
             dscr_min_p50=stats.get("dscr_min_p50", 0.0),
         )
 
-    logger.info("Step 3/4: Building tail-risk enrichments...")
+    # Tail-risk enrichment (#165 re-enable): enrich the attached sensitivity
+    # suite via the live suite-centric API and surface the result on the
+    # CasperResult metadata. enrich_suite_with_tail_risk is imported lazily to
+    # preserve this module's import-safety invariant (no analytics.sensitivity
+    # imports at module scope). The CVaR tail probability is derived from the
+    # caller's `confidence` (alpha = 1 - confidence) rather than hardcoded
+    # (ARCH-01 / config-first), which also makes the `confidence` argument live.
+    if sensitivity_suite is not None:
+        from analytics.sensitivity.tail_risk import (
+            TailRiskConfig,
+            enrich_suite_with_tail_risk,
+        )
 
-    # LAZY IMPORT: Only import tail-risk functions when actually needed
-    if (sensitivity_suite and monte_carlo and raw_results) or (monte_carlo and raw_results):
-        try:
-            from analytics.sensitivity_tail_risk import (
-                build_tail_risk_snapshots_for_metrics,
-                enrich_tornado_with_tail_risk,
-            )
-        except ImportError as e:
-            logger.warning(
-                "Could not import tail-risk functions: %s; skipping enrichment", str(e)
-            )
-        else:
-            # Enrich tornado if we have sensitivity suite
-            if sensitivity_suite and monte_carlo and raw_results:
-                try:
-                    tail_df = enrich_tornado_with_tail_risk(
-                        tornado_suite=sensitivity_suite,
-                        mc_result=monte_carlo,
-                        metric=metric,
-                        confidence=confidence,
-                    )
-                    tail_risk_block = {
-                        "metric": metric,
-                        "confidence": confidence,
-                        "rows": tail_df.to_dict(orient="records"),
-                    }
-                except (ValueError, KeyError) as e:
-                    logger.warning(
-                        "Could not enrich tornado with tail risk: %s; skipping", str(e)
-                    )
-
-            # Build tail risk snapshots
-            if monte_carlo and raw_results:
-                try:
-                    tail_risk_snapshots = build_tail_risk_snapshots_for_metrics(
-                        mc_result=monte_carlo,
-                        metrics=("project_irr", "dscr_min"),
-                        confidence=confidence,
-                    )
-                except (ValueError, KeyError) as e:
-                    logger.warning("Could not build tail risk snapshots: %s; skipping", str(e))
-                    tail_risk_snapshots = {}
+        enriched_suite = enrich_suite_with_tail_risk(
+            suite=sensitivity_suite,
+            base_config=base_config,
+            run_cfg=TailRiskConfig(cvar_alpha=1.0 - confidence),
+        )
+        enriched_md = enriched_suite.metadata or {}
+        tail_risk_block = enriched_md.get("tail_risk") or None
+        tail_risk_snapshots = enriched_md.get("tail_risk_summary") or {}
 
     logger.info("Step 4/4: Assembling CASPER result...")
     metadata: Dict[str, Any] = {}

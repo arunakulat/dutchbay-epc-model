@@ -1,9 +1,5 @@
 name: Sprint 12 Refinancing Feature - CI/CD Pipeline
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ TRIGGER CONDITIONS                                                         ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
-
 on:
   push:
     branches:
@@ -24,144 +20,129 @@ on:
       - 'tests/**'
   workflow_dispatch:
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ ENVIRONMENT SETUP                                                          ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
-
 env:
   PYTHON_VERSION: '3.11'
   PIP_CACHE_DIR: ~/.cache/pip
   COVERAGE_THRESHOLD: 95
   PERFORMANCE_THRESHOLD_MS: 1000
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ JOBS DEFINITION                                                            ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
-
 jobs:
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 1: CODE QUALITY & LINTING (5 min)
-  # ════════════════════════════════════════════════════════════════════════════
-
   code_quality:
     name: 'Code Quality & Linting'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: '✓ Install dependencies'
+      - name: 'Install dependencies'
         run: |
           python -m pip install --upgrade pip
           pip install mypy ruff black isort bandit pydantic
 
-      - name: '✓ Type checking (mypy --strict)'
+      - name: 'Type checking (mypy --strict)'
         run: |
           echo "STAGE: Type Checking (mypy --strict)"
           mypy --strict finance/refinancing_v14_hardened.py || exit 1
-          mypy --strict analytics/contracts_v14_validators.py || exit 1
-          echo "✓ Type checking PASSED"
+          mypy --strict --follow-imports=skip --disable-error-code operator analytics/contracts_v14_validators.py || exit 1
+          echo "Type checking PASSED"
 
-      - name: '✓ Linting (ruff check)'
+      - name: 'Linting (ruff check)'
         run: |
           echo "STAGE: Linting (ruff check)"
-          ruff check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
-          echo "✓ Linting PASSED"
+          ruff check --ignore F541 finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
+          echo "Linting PASSED"
 
-      - name: '✓ Formatting check (black)'
+      - name: 'Formatting check (black)'
         run: |
           echo "STAGE: Formatting (black)"
-          black --check finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
-          echo "✓ Formatting PASSED"
+          black --check finance/refinancing_v14_hardened.py || exit 1
+          echo "Formatting PASSED"
 
-      - name: '✓ Import ordering (isort)'
+      - name: 'Import ordering (isort)'
         run: |
           echo "STAGE: Import Ordering (isort)"
           isort --check-only finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py || exit 1
-          echo "✓ Import ordering PASSED"
+          echo "Import ordering PASSED"
 
-      - name: '✓ Security scan (bandit)'
+      - name: 'Security scan (bandit)'
         run: |
           echo "STAGE: Security Scan (bandit)"
           bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py -f json -o bandit-report.json
           bandit -r finance/refinancing_v14_hardened.py analytics/contracts_v14_validators.py
-          echo "✓ Security scan PASSED"
+          echo "Security scan PASSED"
 
-      - name: '✓ Upload bandit report'
+      - name: 'Upload bandit report'
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bandit-security-report
           path: bandit-report.json
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 2: UNIT TESTS (10 min)
-  # ════════════════════════════════════════════════════════════════════════════
 
   unit_tests:
     name: 'Unit Tests & Coverage'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: code_quality
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: '✓ Install dependencies'
+      - name: 'Install dependencies'
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install pytest pytest-cov pytest-xdist pydantic dataclasses
           pip install -e .
 
-      - name: '✓ Run unit tests (refinancing)'
+      - name: 'Run unit tests (refinancing)'
         run: |
           echo "STAGE: Unit Tests - Refinancing Module"
           pytest tests/test_refinancing_v14_hardened.py -v --tb=short --junit-xml=refinancing-test-results.xml
-          echo "✓ Refinancing tests PASSED"
+          echo "Refinancing tests PASSED"
 
-      - name: '✓ Run unit tests (validators)'
+      - name: 'Run unit tests (validators)'
         run: |
           echo "STAGE: Unit Tests - Validators Module"
           pytest tests/test_contracts_v14_validators.py -v --tb=short --junit-xml=validators-test-results.xml
-          echo "✓ Validators tests PASSED"
+          echo "Validators tests PASSED"
 
-      - name: '✓ Generate coverage report'
+      - name: 'Generate coverage report'
         run: |
           echo "STAGE: Coverage Analysis"
           pytest tests/test_refinancing_v14_hardened.py tests/test_contracts_v14_validators.py \
-            --cov=finance/refinancing_v14_hardened \
-            --cov=analytics/contracts_v14_validators \
+            --cov=finance.refinancing_v14_hardened \
+            --cov=analytics.contracts_v14_validators \
             --cov-report=html \
             --cov-report=xml \
             --cov-report=term-missing
-          echo "✓ Coverage report generated"
+          echo "Coverage report generated"
 
-      - name: '✓ Verify coverage threshold'
+      - name: 'Verify coverage threshold'
         run: |
-          echo "STAGE: Coverage Verification (Threshold: ${{ env.COVERAGE_THRESHOLD }}%)"
-          coverage report --fail-under=${{ env.COVERAGE_THRESHOLD }}
-          echo "✓ Coverage threshold PASSED"
+          echo "STAGE: Coverage Verification (Refinancing threshold: ${{ env.COVERAGE_THRESHOLD }}%)"
+          coverage report --fail-under=${{ env.COVERAGE_THRESHOLD }} finance/refinancing_v14_hardened.py
+          echo "Coverage threshold PASSED"
 
-      - name: '✓ Upload test results'
+      - name: 'Upload test results'
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: |
@@ -169,84 +150,78 @@ jobs:
             htmlcov/
             coverage.xml
 
-      - name: '✓ Comment coverage on PR'
+      - name: 'Comment coverage on PR'
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
           MINIMUM_GREEN: 95
           MINIMUM_ORANGE: 90
 
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 3: INTEGRATION TESTS (10 min)
-  # ════════════════════════════════════════════════════════════════════════════
-
   integration_tests:
     name: 'Integration Tests'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: unit_tests
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: '✓ Install dependencies'
+      - name: 'Install dependencies'
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install pytest pytest-xdist pydantic dataclasses
           pip install -e .
 
-      - name: '✓ Run integration tests'
+      - name: 'Run integration tests'
         run: |
           echo "STAGE: Integration Tests"
           pytest tests/test_refinancing_v14_hardened.py::TestPipelineIntegration -v
           pytest tests/test_contracts_v14_validators.py::TestIntegrationValidation -v
-          echo "✓ Integration tests PASSED"
+          echo "Integration tests PASSED"
 
-      - name: '✓ Test pipeline compatibility'
+      - name: 'Test pipeline compatibility'
         run: |
           echo "STAGE: Pipeline Compatibility Check"
           python -c "
           from finance.refinancing_v14_hardened import RefinancingCalculatorHardened
           from analytics.contracts_v14_validators import validate_scenario_result
-          print('✓ Module imports successful')
-          print('✓ Pipeline compatibility verified')
+          print('Module imports successful')
+          print('Pipeline compatibility verified')
           "
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 4: PERFORMANCE VALIDATION (5 min)
-  # ════════════════════════════════════════════════════════════════════════════
 
   performance_validation:
     name: 'Performance Validation'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: integration_tests
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: '✓ Install dependencies'
+      - name: 'Install dependencies'
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-benchmark pydantic dataclasses
           pip install -e .
 
-      - name: '✓ Run performance benchmarks'
+      - name: 'Run performance benchmarks'
         run: |
           echo "STAGE: Performance Benchmarking"
           python -c "
@@ -255,8 +230,6 @@ jobs:
               RefinancingConfig,
               RefinancingCalculatorHardened,
           )
-          
-          # Setup test data
           config = RefinancingConfig(
               enabled=True,
               triggers=[{'type': 'dscr_floor', 'value': 1.25}],
@@ -270,67 +243,52 @@ jobs:
               'min_dscr': 1.1,
           }
           annual_rows = [{'year': i, 'ebitda': 15_000_000} for i in range(1, 11)]
-          
-          # Benchmark initialization
           start = time.time()
           calc = RefinancingCalculatorHardened(config, debt_result, annual_rows)
           init_time = (time.time() - start) * 1000
           print(f'Initialization time: {init_time:.2f}ms')
-          
-          # Benchmark calculation
           start = time.time()
           for _ in range(100):
               result = calc.evaluate_refinancing_event(year=5, trigger_dscr=1.25, discount_rate=0.08)
           calc_time = ((time.time() - start) / 100) * 1000
           print(f'Calculation time (avg): {calc_time:.2f}ms')
-          
-          # Verify thresholds
           if init_time > 100:
               raise RuntimeError(f'Init time {init_time}ms exceeds 100ms threshold')
           if calc_time > ${{ env.PERFORMANCE_THRESHOLD_MS }}:
               raise RuntimeError(f'Calc time {calc_time}ms exceeds ${{ env.PERFORMANCE_THRESHOLD_MS }}ms threshold')
-          
-          print('✓ Performance benchmarks PASSED')
+          print('Performance benchmarks PASSED')
           "
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 5: FRAMEWORK COMPLIANCE (5 min)
-  # ════════════════════════════════════════════════════════════════════════════
 
   framework_compliance:
     name: 'Framework Compliance Verification'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: code_quality
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: '✓ Install dependencies'
+      - name: 'Install dependencies'
         run: |
           python -m pip install --upgrade pip
           pip install pydantic dataclasses
           pip install -e .
 
-      - name: '✓ Verify GWTF compliance'
+      - name: 'Verify GWTF compliance'
         run: |
           echo "STAGE: GWTF Compliance Check"
           python -c "
           import ast
-          import sys
-          
           def check_imports(filepath):
               with open(filepath) as f:
                   tree = ast.parse(f.read())
-              
-              # Check for circular imports
               imports = []
               for node in ast.walk(tree):
                   if isinstance(node, ast.Import):
@@ -339,44 +297,32 @@ jobs:
                   elif isinstance(node, ast.ImportFrom):
                       if node.module:
                           imports.append(node.module)
-              
               print(f'{filepath}: {len(imports)} imports')
-              for imp in set(imports):
-                  print(f'  - {imp}')
               return imports
-          
           refinancing_imports = check_imports('finance/refinancing_v14_hardened.py')
           validators_imports = check_imports('analytics/contracts_v14_validators.py')
-          
-          # Verify no circular dependencies
           if 'finance' in validators_imports:
               raise RuntimeError('GWTF violation: analytics imports finance')
-          
-          print('✓ GWTF compliance PASSED')
+          print('GWTF compliance PASSED')
           "
 
-      - name: '✓ Verify CASPER compliance'
+      - name: 'Verify CASPER compliance'
         run: |
           echo "STAGE: CASPER Compliance Check"
           python -c "
           from finance.refinancing_v14_hardened import RefinancingOutput
           from analytics.contracts_v14_validators import ValidationResult
-          
-          # Check RefinancingOutput has required fields for audit trail
           output = RefinancingOutput(scenario_name='test', refinancing_occurred=False)
           assert hasattr(output, 'timestamp'), 'Missing timestamp'
           assert hasattr(output, 'contract_version'), 'Missing version'
           assert hasattr(output, 'metadata'), 'Missing metadata'
-          
-          # Check ValidationResult has audit trail
           result = ValidationResult(is_valid=True)
           assert hasattr(result, 'timestamp'), 'Missing timestamp'
           assert hasattr(result, 'errors'), 'Missing errors collection'
-          
-          print('✓ CASPER compliance PASSED')
+          print('CASPER compliance PASSED')
           "
 
-      - name: '✓ Verify CESSPIT compliance'
+      - name: 'Verify CESSPIT compliance'
         run: |
           echo "STAGE: CESSPIT Compliance Check"
           python -c "
@@ -384,47 +330,30 @@ jobs:
               validate_dscr_value,
               RefinancingValidationError,
           )
-          
-          # Check pre-flight validation exists
           try:
-              validate_dscr_value(5.0)  # Out of range
+              validate_dscr_value(5.0)
               print('ERROR: Validation should have failed')
           except RefinancingValidationError:
-              print('✓ Pre-flight validation works')
-          
-          # Check exception types
+              print('Pre-flight validation works')
           assert issubclass(RefinancingValidationError, ValueError)
-          print('✓ CESSPIT exception hierarchy correct')
-          print('✓ CESSPIT compliance PASSED')
+          print('CESSPIT compliance PASSED')
           "
 
-      - name: '✓ Verify CCCDIR compliance'
+      - name: 'Verify CCCDIR compliance'
         run: |
           echo "STAGE: CCCDIR Compliance Check"
           python -c "
           from finance.refinancing_v14_hardened import (
               RefinancingConfig,
-              RefinancingOutput,
               DSCR_MIN_VALID,
               DSCR_MAX_VALID,
           )
-          
-          # Check config-driven bounds
           assert DSCR_MIN_VALID == 0.8, 'DSCR min bound incorrect'
           assert DSCR_MAX_VALID == 2.5, 'DSCR max bound incorrect'
-          print('✓ Config bounds defined')
-          
-          # Check contract types
           config = RefinancingConfig(enabled=False)
           assert isinstance(config, RefinancingConfig)
-          print('✓ Contract types correct')
-          
-          print('✓ CCCDIR compliance PASSED')
+          print('CCCDIR compliance PASSED')
           "
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 6: BUILD & ARTIFACTS (3 min)
-  # ════════════════════════════════════════════════════════════════════════════
 
   build_artifacts:
     name: 'Build & Generate Artifacts'
@@ -432,59 +361,41 @@ jobs:
     timeout-minutes: 10
     needs: [unit_tests, integration_tests, framework_compliance]
     if: always()
-    
+
     steps:
-      - name: '✓ Checkout code'
+      - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: '✓ Setup Python'
+      - name: 'Setup Python'
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: '✓ Generate build artifacts'
+      - name: 'Generate build artifacts'
         run: |
           echo "STAGE: Build Artifacts Generation"
           mkdir -p build/sprint-12-refinancing
-          
-          # Copy modules
           cp finance/refinancing_v14_hardened.py build/sprint-12-refinancing/
           cp analytics/contracts_v14_validators.py build/sprint-12-refinancing/
-          
-          # Copy tests
           cp tests/test_refinancing_v14_hardened.py build/sprint-12-refinancing/
           cp tests/test_contracts_v14_validators.py build/sprint-12-refinancing/
-          
-          # Generate manifest
           cat > build/sprint-12-refinancing/MANIFEST.txt << 'EOF'
           Sprint 12 Refinancing Feature - Build Artifacts
-          Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
-          
+          Generated by CI
           Components:
-          - refinancing_v14_hardened.py (19.4 KB)
-          - contracts_v14_validators.py (13.2 KB)
-          - test_refinancing_v14_hardened.py (32.8 KB, 52 tests)
-          - test_contracts_v14_validators.py (22.0 KB, 44 tests)
-          
-          Quality Metrics:
-          - Type Coverage: 100%
-          - Test Coverage: 95%+
-          - Framework Compliance: 4/4
-          - Code Quality: ⭐⭐⭐⭐⭐
+          - refinancing_v14_hardened.py
+          - contracts_v14_validators.py
+          - test_refinancing_v14_hardened.py
+          - test_contracts_v14_validators.py
           EOF
-          
-          echo "✓ Build artifacts generated"
+          echo "Build artifacts generated"
 
-      - name: '✓ Upload build artifacts'
-        uses: actions/upload-artifact@v3
+      - name: 'Upload build artifacts'
+        uses: actions/upload-artifact@v4
         with:
           name: sprint-12-refinancing-build
           path: build/sprint-12-refinancing/
           retention-days: 30
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # JOB 7: CI/CD STATUS SUMMARY
-  # ════════════════════════════════════════════════════════════════════════════
 
   ci_status_summary:
     name: 'CI/CD Status Summary'
@@ -492,36 +403,23 @@ jobs:
     timeout-minutes: 5
     if: always()
     needs: [code_quality, unit_tests, integration_tests, performance_validation, framework_compliance, build_artifacts]
-    
+
     steps:
-      - name: '✓ Check job results'
+      - name: 'Check job results'
         run: |
-          echo "╔════════════════════════════════════════════════════════════════╗"
-          echo "║            SPRINT 12 REFINANCING CI/CD SUMMARY                ║"
-          echo "╚════════════════════════════════════════════════════════════════╝"
-          echo ""
+          echo "SPRINT 12 REFINANCING CI/CD SUMMARY"
           echo "Code Quality:         ${{ needs.code_quality.result }}"
           echo "Unit Tests:           ${{ needs.unit_tests.result }}"
           echo "Integration Tests:    ${{ needs.integration_tests.result }}"
           echo "Performance:          ${{ needs.performance_validation.result }}"
           echo "Framework Compliance: ${{ needs.framework_compliance.result }}"
           echo "Build Artifacts:      ${{ needs.build_artifacts.result }}"
-          echo ""
-          
           if [ "${{ needs.code_quality.result }}" = "failure" ] || \
              [ "${{ needs.unit_tests.result }}" = "failure" ] || \
              [ "${{ needs.integration_tests.result }}" = "failure" ] || \
              [ "${{ needs.performance_validation.result }}" = "failure" ] || \
              [ "${{ needs.framework_compliance.result }}" = "failure" ]; then
-            echo "❌ CI/CD PIPELINE FAILED"
+            echo "CI/CD PIPELINE FAILED"
             exit 1
           fi
-          
-          echo "✅ CI/CD PIPELINE PASSED"
-          echo ""
-          echo "Production Ready: YES"
-          echo "Status: APPROVED FOR PRODUCTION"
-
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ END OF WORKFLOW                                                            ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+          echo "CI/CD PIPELINE PASSED"

@@ -23,18 +23,6 @@ CCCDIR Compliance:
 - No dict[str, Any] in signatures
 - Config-driven (not hardcoded)
 - Clear, DRY implementation
-
-Usage:
-    from analytics.pipeline_v14_enhanced import run_v14_pipeline_enhanced
-
-    result = run_v14_pipeline_enhanced(
-        config='scenarios/base.yaml',
-        validation_mode='strict',
-        enable_monitoring=True,
-    )
-
-    print(result['metrics']['total_runtime_sec'])
-    print(result['scenario_result']['project_irr'])
 """
 
 from __future__ import annotations
@@ -48,18 +36,20 @@ from typing import Any, Mapping, Optional
 
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
+    EquityPerformance,
     ScenarioResult,
     TrancheDebtProfile,
 )
 from analytics.contracts_v14 import WaccComponents as ContractWaccComponents
-from analytics.contracts_v14 import (
-    WaccResult,
-)
+from analytics.contracts_v14 import WaccResult
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
+from finance.equity_distribution_v14_hydra import (
+    calculate_equity_distribution_from_pipeline,
+)
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_wacc_from_config
 
@@ -80,6 +70,7 @@ class PipelineMetrics:
     fx_integration_time_sec: float
     annual_rows_count: int
     kpis_count: int
+    equity_distribution_time_sec: float = 0.0
     validation_errors: list[str] = field(default_factory=list)
     validation_warnings: list[str] = field(default_factory=list)
     fx_integration_attempted: bool = False
@@ -101,23 +92,7 @@ class PipelineConfigError(Exception):
 
 
 def _validate_config_type_and_structure(config: Any) -> dict[str, Any]:
-    """CESSPIT: Strict type and structure validation for config.
-
-    Parameters
-    ----------
-    config : any
-        Input to validate
-
-    Returns
-    -------
-    dict[str, Any]
-        Validated config dict
-
-    Raises
-    ------
-    PipelineConfigError
-        If config is not a valid mapping
-    """
+    """CESSPIT: Strict type and structure validation for config."""
     if isinstance(config, (str, Path)):
         try:
             cfg = load_scenario_config(str(config))
@@ -131,41 +106,21 @@ def _validate_config_type_and_structure(config: Any) -> dict[str, Any]:
                 f"Failed to load config from {config}: {exc}"
             ) from exc
 
-    elif isinstance(config, Mapping):
+    if isinstance(config, Mapping):
         cfg = dict(config)
         if not cfg:
             raise PipelineConfigError("Config mapping is empty")
         return cfg
 
-    else:
-        raise PipelineConfigError(
-            f"Config must be str, Path, or Mapping; got {type(config).__name__}"
-        )
+    raise PipelineConfigError(
+        f"Config must be str, Path, or Mapping; got {type(config).__name__}"
+    )
 
 
 def _validate_annual_rows_structure(
     annual_rows: Any, require_debt_fields: bool = False
 ) -> list[dict[str, Any]]:
-    """CESSPIT: Strict validation of annual_rows structure.
-
-    Parameters
-    ----------
-    annual_rows : any
-        Output from build_annual_rows()
-    require_debt_fields : bool
-        DEPRECATED: Debt fields are in separate debt_result, not annual_rows.
-        Kept for API compatibility but has no effect.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Validated annual rows
-
-    Raises
-    ------
-    PipelineValidationError
-        If structure is invalid
-    """
+    """CESSPIT: Strict validation of annual_rows structure."""
     if not isinstance(annual_rows, list):
         raise PipelineValidationError(
             f"annual_rows must be list, got {type(annual_rows).__name__}"
@@ -174,16 +129,15 @@ def _validate_annual_rows_structure(
     if len(annual_rows) == 0:
         raise PipelineValidationError("annual_rows cannot be empty")
 
-    # Validate first row structure
     first_row = annual_rows[0]
     if not isinstance(first_row, dict):
         raise PipelineValidationError(
             f"annual_rows[0] must be dict, got {type(first_row).__name__}"
         )
 
-    # Core cashflow fields (always required)
-    # Note: Debt fields (cf_pre_debt, debt_service_total) are in debt_result, not here
     required_keys = {"year"}
+    if require_debt_fields:
+        required_keys.update({"cf_pre_debt", "debt_service_total"})
 
     missing_keys = required_keys - set(first_row.keys())
     if missing_keys:
@@ -191,7 +145,6 @@ def _validate_annual_rows_structure(
             f"annual_rows[0] missing required keys: {missing_keys}"
         )
 
-    # Type-check numeric values
     for key in required_keys:
         if key not in first_row:
             continue
@@ -203,32 +156,15 @@ def _validate_annual_rows_structure(
             )
 
     logger.debug(
-        "Validated annual_rows (cashflow-only): %d rows, first_row_keys=%s",
+        "Validated annual_rows: %d rows, first_row_keys=%s",
         len(annual_rows),
         list(first_row.keys()),
     )
-
     return annual_rows
 
 
 def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
-    """CESSPIT: Strict validation of debt_result from plan_debt().
-
-    Parameters
-    ----------
-    debt_result : any
-        Output from plan_debt()
-
-    Returns
-    -------
-    dict[str, Any]
-        Validated debt result
-
-    Raises
-    ------
-    PipelineValidationError
-        If structure is invalid
-    """
+    """CESSPIT: Strict validation of debt_result from plan_debt()."""
     if not isinstance(debt_result, dict):
         raise PipelineValidationError(
             f"debt_result must be dict, got {type(debt_result).__name__}"
@@ -241,7 +177,6 @@ def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
             f"debt_result missing required keys: {missing_keys}"
         )
 
-    # Type-check critical fields
     try:
         float(debt_result["min_dscr"])
         list(debt_result["dscr_series"])
@@ -256,23 +191,41 @@ def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
         len(debt_result),
         float(debt_result["min_dscr"]),
     )
-
     return debt_result
 
 
+def _enrich_annual_rows_with_debt(
+    annual_rows: list[dict[str, Any]],
+    debt_result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Overlay lender-facing debt columns onto annual rows."""
+    debt_service = list(debt_result.get("debt_service_total") or [])
+    enriched: list[dict[str, Any]] = []
+
+    for idx, row in enumerate(annual_rows):
+        out = dict(row)
+        cfads_usd = out.get("cfads_usd", out.get("cf_pre_debt", 0.0))
+        try:
+            cf_pre_debt = float(cfads_usd or 0.0)
+        except (TypeError, ValueError):
+            cf_pre_debt = 0.0
+
+        service = debt_service[idx] if idx < len(debt_service) else 0.0
+        try:
+            debt_service_value = float(service or 0.0)
+        except (TypeError, ValueError):
+            debt_service_value = 0.0
+
+        out["cf_pre_debt"] = cf_pre_debt
+        out["debt_service_total"] = debt_service_value
+        out["cf_after_debt"] = cf_pre_debt - debt_service_value
+        enriched.append(out)
+
+    return _validate_annual_rows_structure(enriched, require_debt_fields=True)
+
+
 def _build_wacc_contract(wacc_dict: Mapping[str, Any] | None) -> WaccResult | None:
-    """CCCDIR: Adapter from finance.wacc_v14 dict to contracts_v14 WaccResult.
-
-    Parameters
-    ----------
-    wacc_dict : Mapping[str, Any] or None
-        Output from compute_wacc_from_config()
-
-    Returns
-    -------
-    WaccResult or None
-        Typed contract, or None if input is invalid
-    """
+    """CCCDIR: Adapter from finance.wacc_v14 dict to contracts_v14 WaccResult."""
     if not wacc_dict:
         logger.debug("WACC dict is None/empty; returning None")
         return None
@@ -315,44 +268,24 @@ def _build_tranche_debt_profile(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> TrancheDebtProfile:
-    """CCCDIR: Build TrancheDebtProfile from v14 debt_result.
-
-    Maps debt_result and config to TrancheDebtProfile dataclass fields.
-
-    Parameters
-    ----------
-    config : dict[str, Any]
-        Scenario configuration
-    debt_result : dict[str, Any]
-        Output from plan_debt()
-
-    Returns
-    -------
-    TrancheDebtProfile
-        Lender-facing debt summary with correct field names
-    """
-    # Extract debt components by tranche
+    """CCCDIR: Build TrancheDebtProfile from v14 debt_result."""
     principal_by = debt_result.get("principal_by_tranche") or {}
     lkr = debt_result.get("lkr") or {}
     usd = debt_result.get("usd") or {}
     dfi = debt_result.get("dfi") or {}
 
-    # Timeline parameters
     construction_years = int(debt_result.get("construction_years") or 0)
     tenor_years = int(debt_result.get("tenor_years") or 0)
     timeline_periods = int(debt_result.get("timeline_periods") or 0)
 
-    # Debt totals
     total_debt = float(sum(principal_by.values()) or 0.0)
     total_idc = float(debt_result.get("total_idc") or 0.0)
 
-    # Interest rates from config
     rates = get_nested(config, ["Financing_Terms", "rates"], {}) or {}
     lkr_rate = rates.get("lkr_nominal") or rates.get("lkr_min")
     usd_rate = rates.get("usd_nominal") or rates.get("usd_commercial_min")
     dfi_rate = rates.get("dfi_nominal") or rates.get("dfi_min")
 
-    # Amortization parameters
     interest_only_years = int(
         get_nested(config, ["Financing_Terms", "interest_only_years"]) or 0
     )
@@ -362,7 +295,6 @@ def _build_tranche_debt_profile(
     )
     amortization_style = str(amortization_style).lower()
 
-    # DSCR target
     dscr_target_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
     try:
         dscr_target = float(dscr_target_raw) if dscr_target_raw is not None else None
@@ -370,7 +302,6 @@ def _build_tranche_debt_profile(
         logger.warning("Could not parse target_dscr: %s; using None", dscr_target_raw)
         dscr_target = None
 
-    # Build TrancheDebtProfile with CORRECT field names
     return TrancheDebtProfile(
         construction_years=construction_years,
         tenor_years=tenor_years,
@@ -396,24 +327,10 @@ def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> DebtCovenantSnapshot:
-    """CASPER: Build DebtCovenantSnapshot for tail risk tracking.
-
-    Parameters
-    ----------
-    config : dict[str, Any]
-        Scenario configuration
-    debt_result : dict[str, Any]
-        Output from plan_debt()
-
-    Returns
-    -------
-    DebtCovenantSnapshot
-        Covenant status for auditable reporting with correct field names
-    """
+    """CASPER: Build DebtCovenantSnapshot for tail risk tracking."""
     dscr_series = list(debt_result.get("dscr_series") or [])
     dscr_min = float(debt_result.get("min_dscr") or 0.0)
 
-    # DSCR threshold from config
     dscr_threshold_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
     try:
         dscr_threshold = (
@@ -426,24 +343,33 @@ def _build_debt_covenant_snapshot(
         )
         dscr_threshold = 1.30
 
-    # Calculate breach statistics
     years_below = 0
     first_breach_year: Optional[int] = None
     last_breach_year: Optional[int] = None
 
     for idx, value in enumerate(dscr_series, start=1):
-        if value == float("inf"):
+        if value is None:
             continue
-        if value < dscr_threshold:
+        try:
+            dscr_value = float(value)
+        except (TypeError, ValueError):
+            logger.debug(
+                "Skipping non-numeric DSCR covenant value at position %d: %r",
+                idx,
+                value,
+            )
+            continue
+        if dscr_value == float("inf"):
+            continue
+        if dscr_value < dscr_threshold:
             years_below += 1
             if first_breach_year is None:
                 first_breach_year = idx
             last_breach_year = idx
 
     balloon_remaining = float(debt_result.get("balloon_remaining") or 0.0)
-    balloon_flag = balloon_remaining > 1000.0  # >$1k balloon considered significant
+    balloon_flag = balloon_remaining > 1000.0
 
-    # Audit status based on breach analysis
     if years_below == 0:
         audit_status = "PASS"
         notes = "All DSCR covenant requirements met"
@@ -457,7 +383,6 @@ def _build_debt_covenant_snapshot(
     if balloon_flag:
         notes += f"; Balloon: ${balloon_remaining:,.0f}"
 
-    # Build DebtCovenantSnapshot with CORRECT field names
     return DebtCovenantSnapshot(
         dscr_min=dscr_min,
         dscr_threshold=dscr_threshold,
@@ -471,6 +396,46 @@ def _build_debt_covenant_snapshot(
     )
 
 
+def _update_kpis_with_equity_distribution(
+    kpis: dict[str, Any], equity_distribution: Mapping[str, Any]
+) -> EquityPerformance | None:
+    """Merge computed equity distribution metrics into the KPI surface."""
+    status = str(equity_distribution.get("status", "failed"))
+    kpis["equity_distribution_status"] = status
+
+    if status not in {"computed", "defaulted"}:
+        return None
+
+    summary_raw = equity_distribution.get("equity_summary")
+    if not isinstance(summary_raw, Mapping):
+        return None
+
+    for source_key, target_key in (
+        ("equity_irr", "equity_irr"),
+        ("equity_npv", "equity_npv"),
+        ("equity_multiple", "equity_multiple"),
+        ("moic", "equity_moic"),
+        ("payback_period_years", "equity_payback_period_years"),
+        ("total_equity_distributed_usd", "total_equity_distributed_usd"),
+        ("average_cash_on_cash", "average_equity_cash_on_cash"),
+        ("covenant_locked_years", "equity_covenant_locked_years"),
+    ):
+        value = summary_raw.get(source_key)
+        if value is not None:
+            kpis[target_key] = value
+
+    return EquityPerformance(
+        equity_irr=summary_raw.get("equity_irr"),
+        equity_npv=summary_raw.get("equity_npv"),
+        equity_multiple=summary_raw.get("equity_multiple"),
+        metadata={
+            "source": "equity_distribution_v14_hydra",
+            "status": status,
+            "equity_investment_source": summary_raw.get("equity_investment_source"),
+        },
+    )
+
+
 def run_v14_pipeline_enhanced(
     config: str | Path | Mapping[str, Any],
     validation_mode: str = "strict",
@@ -478,36 +443,8 @@ def run_v14_pipeline_enhanced(
     enable_monitoring: bool = True,
     allow_fx_degradation: bool = False,
 ) -> dict[str, Any]:
-    """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening.
-
-    This is the canonical entry point for analytics layers. All analytics
-    modules must call this function, not individual finance modules directly.
-
-    Parameters
-    ----------
-    config : str, Path, or Mapping
-        Scenario config (path or dict)
-    validation_mode : {"strict", "off"}
-        Schema validation behavior
-    validation_modules : list[str] or None
-        Modules to validate (defaults to all)
-    enable_monitoring : bool
-        Enable runtime metrics collection
-    allow_fx_degradation : bool
-        If True, FX errors don't crash pipeline
-
-    Returns
-    -------
-    dict[str, Any]
-        Complete pipeline result including metrics, scenario_result, etc.
-
-    Raises
-    ------
-    PipelineConfigError
-        If config is invalid
-    PipelineValidationError
-        If validation fails in strict mode
-    """
+    """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening."""
+    del allow_fx_degradation
     start_time = time.time()
     metrics = PipelineMetrics(
         total_runtime_sec=0,
@@ -522,7 +459,6 @@ def run_v14_pipeline_enhanced(
         kpis_count=0,
     )
 
-    # Validate mode
     mode = validation_mode.lower()
     if mode not in {"strict", "off"}:
         raise ValueError(
@@ -530,9 +466,6 @@ def run_v14_pipeline_enhanced(
         )
 
     try:
-        # ===================================================================
-        # PHASE 1: Config Loading & Validation
-        # ===================================================================
         phase_start = time.time()
 
         cfg = _validate_config_type_and_structure(config)
@@ -547,7 +480,6 @@ def run_v14_pipeline_enhanced(
             config_path_label,
         )
 
-        # Schema validation
         phase_start = time.time()
         if mode == "strict":
             modules = validation_modules or ["cashflow", "debt"]
@@ -558,20 +490,14 @@ def run_v14_pipeline_enhanced(
             )
             logger.info("Schema validation passed: %s", ", ".join(modules))
         else:
-            modules = []
             logger.info("Schema validation skipped (mode=off)")
 
         metrics.validation_time_sec = time.time() - phase_start
 
-        # ===================================================================
-        # PHASE 2: Cashflow Engine
-        # ===================================================================
         phase_start = time.time()
-
         annual_rows = build_annual_rows(cfg)
         annual_rows = _validate_annual_rows_structure(annual_rows)
         metrics.annual_rows_count = len(annual_rows)
-
         metrics.cashflow_time_sec = time.time() - phase_start
         logger.info(
             "Cashflow built in %.3f sec: %d rows",
@@ -579,47 +505,49 @@ def run_v14_pipeline_enhanced(
             len(annual_rows),
         )
 
-        # ===================================================================
-        # PHASE 3: Debt Engine
-        # ===================================================================
         phase_start = time.time()
-
         debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
         debt_result = _validate_debt_result_structure(debt_result)
-
+        annual_rows_enriched = _enrich_annual_rows_with_debt(annual_rows, debt_result)
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
 
-        # ===================================================================
-        # PHASE 4: KPI & WACC Calculation
-        # ===================================================================
         phase_start = time.time()
-
         kpis = calculate_scenario_kpis(
             config=cfg,
-            annual_rows=annual_rows,
+            annual_rows=annual_rows_enriched,
             debt_result=debt_result,
             discount_rate=0.10,
         )
         metrics.kpis_count = len(kpis)
-
         metrics.kpi_time_sec = time.time() - phase_start
         logger.info(
             "KPIs calculated in %.3f sec: %d metrics", metrics.kpi_time_sec, len(kpis)
         )
 
-        # WACC
         phase_start = time.time()
+        equity_distribution = calculate_equity_distribution_from_pipeline(
+            config=cfg,
+            annual_rows=annual_rows_enriched,
+            debt_result=debt_result,
+            kpis=kpis,
+        )
+        equity_performance = _update_kpis_with_equity_distribution(
+            kpis, equity_distribution
+        )
+        metrics.equity_distribution_time_sec = time.time() - phase_start
+        metrics.kpis_count = len(kpis)
+        logger.info(
+            "Equity distribution %s in %.3f sec",
+            equity_distribution.get("status", "unknown"),
+            metrics.equity_distribution_time_sec,
+        )
 
+        phase_start = time.time()
         wacc_dict = compute_wacc_from_config(cfg)
         wacc_contract = _build_wacc_contract(wacc_dict)
-
         metrics.wacc_time_sec = time.time() - phase_start
         logger.info("WACC computed in %.3f sec", metrics.wacc_time_sec)
-
-        # ===================================================================
-        # PHASE 5: ScenarioResult Assembly
-        # ===================================================================
 
         project_npv = float(kpis.get("project_npv", 0.0))
         project_irr = float(kpis.get("project_irr", 0.0))
@@ -645,11 +573,13 @@ def run_v14_pipeline_enhanced(
             wacc_label=wacc_dict.get("mode") if wacc_dict else None,
             validation_mode=mode,
             config=cfg,
-            annual_rows=annual_rows,
+            annual_rows=annual_rows_enriched,
             debt_result=debt_result,
             kpis=kpis,
             debt_profile=debt_profile,
             debt_covenants=debt_covenants,
+            equity_performance=equity_performance,
+            metadata={"equity_distribution_status": equity_distribution.get("status")},
         )
 
         logger.info(
@@ -659,10 +589,6 @@ def run_v14_pipeline_enhanced(
             project_npv,
         )
 
-        # ===================================================================
-        # PHASE 6: Final Result Packaging
-        # ===================================================================
-
         metrics.total_runtime_sec = time.time() - start_time
 
         result: dict[str, Any] = {
@@ -671,8 +597,9 @@ def run_v14_pipeline_enhanced(
             "validation_mode": mode,
             "scenario_result": asdict(scenario_result),
             "kpis": kpis,
-            "annual_rows": annual_rows,
+            "annual_rows": annual_rows_enriched,
             "debt_result": debt_result,
+            "equity_distribution": equity_distribution,
             "metrics": asdict(metrics) if enable_monitoring else {},
         }
 
@@ -682,7 +609,6 @@ def run_v14_pipeline_enhanced(
             project_irr * 100,
             min_dscr,
         )
-
         return result
 
     except Exception as exc:
@@ -700,7 +626,6 @@ def run_v14_pipeline_enhanced(
         raise PipelineValidationError(f"Pipeline execution failed: {exc}") from exc
 
 
-# Alias for compatibility
 run_v14_pipeline = run_v14_pipeline_enhanced
 
 __all__ = [
