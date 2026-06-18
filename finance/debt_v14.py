@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -544,13 +545,118 @@ def apply_debt_layer(
     }
 
 
+def _solve_gearing_for_dscr(
+    config: Dict[str, Any],
+    annual_rows: List[Dict[str, Any]],
+    target_dscr: float,
+    max_ratio: float,
+    *,
+    step: float = 0.0025,
+    fp_eps: float = 1e-6,
+) -> float:
+    """Largest gearing whose REAL-schedule min DSCR still meets ``target_dscr``.
+
+    Min DSCR is non-increasing in gearing and PLATEAUS at the sculpt target for low
+    gearing, then drops once the debt is too large for the schedule to hold the target.
+    The goal is the MAX gearing on that plateau (maximum leverage at the target DSCR), so
+    a tolerance ``dscr_tol`` is used to treat the plateau as "meets target" and converge on
+    its upper edge rather than chasing floating-point noise deep inside it. Unlike the
+    closed-form :func:`size_debt_with_dual_dscr`, this drives the actual amortization engine
+    (grace period, declining-CFADS tail), so the achieved DSCR lands on target. If min DSCR
+    at ``max_ratio`` already meets the target, ``max_ratio`` is returned unchanged.
+    """
+
+    def _min_dscr_at(ratio: float) -> float:
+        cfg = copy.deepcopy(config)
+        fin = _section_case_insensitive(cfg, "Financing_Terms")
+        if isinstance(fin, dict):
+            fin["debt_ratio"] = ratio
+        else:
+            cfg["debt_ratio"] = ratio
+        core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
+        # Target the SAME public covenant metric plan_debt reports (cleaned series),
+        # not the raw operational dscr_min (which includes the balloon/bridge period).
+        public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+        return min(public) if public else float(core.get("dscr_min", 0.0))
+
+    # Scan gearing high -> low and return the MAX gearing whose achieved min DSCR meets
+    # the target (an FP epsilon absorbs the sculpt's near-target rounding). min DSCR is
+    # monotonic in gearing, so the first pass scanning down is the boundary -> max leverage
+    # at the target, without the bisection's plateau/FP fragility.
+    ratio = max_ratio
+    while ratio > 0.0:
+        if _min_dscr_at(ratio) >= target_dscr - fp_eps:
+            return round(ratio, 6)
+        ratio -= step
+    return round(max(step, max_ratio - step), 6)
+
+
+def _maybe_autosolve_dscr(
+    config: Dict[str, Any], annual_rows: List[Dict[str, Any]]
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Opt-in DSCR-based debt sizing (``Financing_Terms.debt_sizing: dual_dscr``).
+
+    Solves the gearing on the real engine to hit ``target_dscr`` (capped at the configured
+    ``debt_ratio``), and computes the dual-DSCR (P50 / P99) debt-capacity detail for the
+    lender pack. Returns ``(config, dual_dscr_detail)`` -- ``config`` is resized only when
+    the mode is active; ``dual_dscr_detail`` is ``None`` otherwise.
+    """
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    mode = str(fin.get("debt_sizing", "")).lower()
+    if mode not in ("dual_dscr", "auto_dscr", "dscr_sculpt"):
+        return config, None
+
+    target = _as_float(fin.get("target_dscr"), 1.30)
+    max_ratio = _as_float(fin.get("debt_ratio"), 0.70)
+    solved = _solve_gearing_for_dscr(config, annual_rows, target, max_ratio)
+
+    resized = copy.deepcopy(config)
+    fin_resized = _section_case_insensitive(resized, "Financing_Terms")
+    if isinstance(fin_resized, dict):
+        fin_resized["debt_ratio"] = solved
+
+    cfads = [_as_float(r.get("cfads_usd"), 0.0) for r in annual_rows]
+    tenor = max(1, int(_as_float(fin.get("tenor_years"), 15)))
+    capex = _extract_capex_usd(config)
+    downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
+    rate = _as_float(fin.get("interest_rate_nominal"), 0.08)
+    detail: Optional[Dict[str, Any]] = None
+    if cfads and capex > 0:
+        try:
+            detail = size_debt_with_dual_dscr(
+                cfads[:tenor],
+                [c * downside for c in cfads[:tenor]],
+                dscr_target_p50=target,
+                dscr_target_p99=_as_float(fin.get("dscr_target_p99"), 1.00),
+                capex=capex,
+                debt_ratio_max=max_ratio,
+                debt_rate=rate,
+            )
+            detail["solved_gearing"] = solved
+            detail["sizing_mode"] = mode
+        except ValueError:
+            detail = None
+    logger.info(
+        "DSCR debt sizing (%s): solved gearing %.3f for target DSCR %.2f",
+        mode, solved, target,
+    )
+    return resized, detail
+
+
 def plan_debt(
     *,
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Plan debt for the project using the v14 engine."""
-    core = apply_debt_layer(params=config, annual_rows=list(annual_rows))
+    """Plan debt for the project using the v14 engine.
+
+    When ``Financing_Terms.debt_sizing`` is ``dual_dscr`` / ``auto_dscr``, the gearing is
+    first solved on the real schedule to hit ``target_dscr`` (capped at ``debt_ratio``),
+    and the dual-DSCR (P50/P99) capacity detail is attached under ``dual_dscr``.
+    """
+    rows = list(annual_rows)
+    config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
+    core = apply_debt_layer(params=config, annual_rows=rows)
 
     principal_by = {
         k.lower(): float(v)
@@ -611,6 +717,7 @@ def plan_debt(
         "fx_min": core.get("fx_min"),
         "fx_max": core.get("fx_max"),
         "fx_avg": core.get("fx_avg"),
+        "dual_dscr": dual_dscr_detail,
     }
 
 
