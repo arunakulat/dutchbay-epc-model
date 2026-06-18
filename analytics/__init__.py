@@ -15,6 +15,7 @@ from analytics.contracts_v14 import (
     BreakevenResult,
     CasperResult,
     MonteCarloResult,
+    MultiMetricSensitivitySuite,
     MultiMetricTornadoResult,
     ParameterRangeConfig,
     ScenarioResult,
@@ -27,9 +28,10 @@ from analytics.contracts_v14 import (
 )
 
 # Legacy compatibility stubs (temporary - Sprint 16)
+# NOTE: MultiMetricSensitivitySuite is no longer a compat stub — it is the
+# canonical contracts_v14 dataclass, imported above (ARCH-04, issue #118).
 from analytics.contracts_v14_compat import (
     DownsideMetrics,
-    MultiMetricSensitivitySuite,
     TailRiskMetrics,
     build_cashflow_result_from_annual_rows,
 )
