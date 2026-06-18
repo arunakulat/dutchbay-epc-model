@@ -42,16 +42,6 @@ class TailRiskMetrics(BaseModel):
     worst_case_irr: float = 0.0
 
 
-class MultiMetricSensitivitySuite(BaseModel):
-    """Temporary stub - legacy sensitivity_v14 module.
-    
-    Replaced by SensitivitySuite (dataclass) in v2.
-    """
-    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
-    
-    scenarios: List[Dict[str, Any]] = []
-
-
 class Distribution(BaseModel):
     """Temporary stub - legacy monte_carlo_v14 module.
     
@@ -94,7 +84,6 @@ def build_cashflow_result_from_annual_rows(
 __all__ = [
     "CasperResult",
     "TailRiskMetrics",
-    "MultiMetricSensitivitySuite",
     "Distribution",
     "DownsideMetrics",
     "build_cashflow_result_from_annual_rows",
