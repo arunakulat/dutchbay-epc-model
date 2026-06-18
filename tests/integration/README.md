@@ -10,41 +10,36 @@ Comprehensive integration tests validating cross-module interactions and end-to-
 
 ## Test Structure
 
-### 📦 Test Modules (6 dolphins)
+### 📦 Test Modules (4 dolphins)
 
 1. **`test_degradation_flow.py`** - Degradation integration
    - Configuration → Cashflow → Monte Carlo → Sensitivity
    - Year-over-year degradation calculations
-   - 26 tests, ~5 seconds
+   - 15 tests, ~1 second
 
-2. **`test_dual_dscr_integration.py`** - Dual DSCR debt sizing
-   - CFADS P50/P99 construction with degradation
-   - Conservative sizing logic
-   - Binding constraint detection
-   - 18 tests, ~3 seconds
-
-3. **`test_monte_carlo_integration.py`** - Monte Carlo with performance
+2. **`test_monte_carlo_integration.py`** - Monte Carlo with performance
    - 4-variable stochastic model (revenue, cost, FX, degradation)
    - Correlation structure validation
    - NPV/IRR distribution outputs
    - Performance benchmarks
-   - 24 tests, ~20 seconds (with slow tests)
 
-4. **`test_pipeline_end_to_end.py`** - Complete pipeline
+3. **`test_pipeline_end_to_end.py`** - Complete pipeline
    - Wind → Cashflow → Debt → MC → Sensitivity
    - Data flow validation
    - Output completeness
    - Regression pins
-   - 20 tests, ~30 seconds (with slow tests)
 
-5. **`conftest.py`** - Shared fixtures
+4. **`conftest.py`** - Shared fixtures
    - DutchBay 150MW realistic configuration
    - Wind assessment mock data
    - Performance benchmarks
 
-6. **`__init__.py`** - Package initialization
+> **Retired (2026-06):** `test_dual_dscr_integration.py` targeted an unbuilt API
+> (`size_debt_dual_dscr`); the shipped `size_debt_with_dual_dscr` sculptor is
+> covered by `tests/finance/test_debt_dual_dscr.py` and
+> `test_pipeline_end_to_end.py`.
 
-**Total**: ~88 integration tests
+**Total**: 44 integration tests
 
 ---
 
@@ -111,7 +106,7 @@ pytest tests/integration/test_pipeline_end_to_end.py::TestPipelinePerformance -v
 
 ### TEST-01: Regression Pins
 All integration tests include regression pins for:
-- Degradation impact magnitude (10-12% over 20 years)
+- Degradation impact magnitude (~5.5% total-life revenue loss over 20 years)
 - DSCR reduction when P99 binds (5-15%)
 - NPV/IRR distribution ranges
 - Debt sizing capacity (50-75% of CAPEX)
