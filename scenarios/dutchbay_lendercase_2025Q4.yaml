@@ -430,7 +430,7 @@ timeline:
 expected_results:
   # Wind resource assessment
   # Computed from the canonical EN-171/6.5 curve via wind_resource.EnergyCalculator
-  # (23 x 6.5 MW, ERA5 Weibull A=8.32/k=2.1, 12.4% losses, P50=1.0). Supersedes 563/612/0.428.
+  # (23 x 6.5 MW, DECLARED config Weibull A=8.32/k=2.1 -- pending live ERA5 fetch #18/#24, 12.4% losses, P50=1.0). Supersedes 563/612/0.428.
   net_aep_p50_gwh: 402.6  # ERA5 canonical 12.4% losses; 5% wake is baseline (23-turbine wake study pending)
   net_aep_p90_gwh: 322.1
   capacity_factor: 0.307

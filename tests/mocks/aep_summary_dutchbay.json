@@ -50,5 +50,5 @@
   "created_date": "2025-12-21",
   "created_by": "analytics.loader.aep_loader",
   "version": "2.1",
-  "notes": "Net AEP computed from the canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml) via wind_resource.EnergyCalculator: 23 turbines x 6.5 MW = 149.5 MW, ERA5 Weibull A=8.32/k=2.1, 12.4% losses (ERA5 canonical stack), P50 factor 1.0. Supersedes the prior 10 MW x 15 extrapolation (485.32 / CF 0.375). NOTE: 5% wake is the ERA5 baseline; a 23-turbine layout wake study is pending and will lower P50."
+  "notes": "Net AEP computed from the canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml) via wind_resource.EnergyCalculator: 23 turbines x 6.5 MW = 149.5 MW, DECLARED config Weibull A=8.32/k=2.1 (NOT a live ERA5 fetch -- pending Sprint-10 #18/#24), 12.4% losses (ERA5 canonical stack), P50 factor 1.0. Supersedes the prior 10 MW x 15 extrapolation (485.32 / CF 0.375). NOTE: 5% wake is the ERA5 baseline; a 23-turbine layout wake study is pending and will lower P50."
 }
