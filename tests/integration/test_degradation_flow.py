@@ -21,10 +21,12 @@ import pytest
 import numpy as np
 from typing import Dict, Any
 
-# Import modules to test
+# Import modules to test. analyze_dscr_sensitivity is the only symbol the tests
+# below actually exercise; the cashflow / Monte-Carlo behaviour is asserted
+# structurally off the config fixtures. The prior guard also imported a
+# never-existent finance.cashflow_v14_params.extract_cashflow_params, which
+# skipped this whole module — dropping its degradation regression pins.
 try:
-    from finance.cashflow_v14_params import extract_cashflow_params
-    from analytics.monte_carlo_v14 import MonteCarloEngine
     from analytics.dscr_sensitivity import analyze_dscr_sensitivity
 except ImportError as e:
     pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
@@ -119,7 +121,12 @@ class TestDegradationCashflowIntegration:
             )
     
     def test_total_revenue_with_vs_without_degradation(self, dutchbay_base_config):
-        """Total revenue over project life should be 12-15% less with degradation."""
+        """Total revenue over project life should be ~5.5% less with degradation.
+
+        This is the *total-life* loss (sum of annual revenue), ~5.5% for 0.6%/yr
+        over 20yr — NOT the year-20 endpoint factor (~11.3% down), which earlier
+        revisions of this pin conflated it with.
+        """
         aep = dutchbay_base_config["wind_resource"]["aep_p50_mwh"]
         tariff = dutchbay_base_config["revenue"]["tariff_usd_mwh"]
         degradation = dutchbay_base_config["project"]["degradation"]
@@ -137,9 +144,9 @@ class TestDegradationCashflowIntegration:
         # Calculate impact
         revenue_loss_pct = (revenue_no_deg - revenue_with_deg) / revenue_no_deg * 100
         
-        # Should be 10-13% loss over 20 years with 0.6% degradation
-        assert 10.0 < revenue_loss_pct < 15.0, (
-            f"Revenue loss should be 10-15%, got {revenue_loss_pct:.1f}%"
+        # ~5.5% total-life loss over 20 years with 0.6% degradation
+        assert 5.0 < revenue_loss_pct < 6.0, (
+            f"Total-life revenue loss should be ~5.5%, got {revenue_loss_pct:.1f}%"
         )
 
 
@@ -265,7 +272,7 @@ class TestDegradationRegressionPins:
         )
     
     def test_degradation_revenue_impact_magnitude(self, dutchbay_base_config):
-        """20-year degradation should reduce total revenue by 11-12%."""
+        """20-year degradation should reduce total-life revenue by ~5.5%."""
         aep = dutchbay_base_config["wind_resource"]["aep_p50_mwh"]
         tariff = dutchbay_base_config["revenue"]["tariff_usd_mwh"]
         degradation = 0.006  # 0.6%/year
@@ -283,9 +290,10 @@ class TestDegradationRegressionPins:
         # Calculate impact
         impact_pct = (total_no_deg - total_with_deg) / total_no_deg * 100
         
-        # Regression pin: Should be 11.0-11.5%
-        assert 10.8 < impact_pct < 11.7, (
-            f"20-year revenue impact should be ~11%, got {impact_pct:.2f}%"
+        # Regression pin: ~5.50% total-life loss (0.6%/yr x 20yr). The prior
+        # 11% pin was the year-20 endpoint factor, not the total-revenue impact.
+        assert 5.3 < impact_pct < 5.7, (
+            f"20-year total-revenue impact should be ~5.5%, got {impact_pct:.2f}%"
         )
 
 

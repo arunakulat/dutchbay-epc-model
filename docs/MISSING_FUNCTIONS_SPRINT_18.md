@@ -17,14 +17,18 @@ This document tracks 4 missing functions that are referenced in tests but not ye
 
 ## Missing Functions
 
-### 1. `size_debt_with_dual_dscr`
+### 1. ✅ RESOLVED (implemented in `finance.debt_v14`) — `size_debt_with_dual_dscr`
+
+> Implemented; real signature takes `cfads_p50` / `cfads_p99` / `capex` (not the
+> speculative shape below). The `Expected Signature` block is kept only as the
+> original Sprint-18 guess.
 
 **Module:** `finance.debt_v14`  
 **Purpose:** Debt sizing with dual DSCR constraints (operational + prudential)  
 **Affected Tests:**
 - `tests/analytics/test_dscr_sensitivity.py`
 - `tests/finance/test_debt_dual_dscr.py`
-- `tests/integration/test_dual_dscr_integration.py`
+- _(test_dual_dscr_integration.py retired 2026-06; real coverage in test_debt_dual_dscr.py)_
 - `tests/integration/test_pipeline_end_to_end.py`
 
 **Expected Signature:**
@@ -123,7 +127,12 @@ class FXSensitivityConfig:
 
 ---
 
-### 4. `extract_cashflow_params`
+### 4. ✅ RESOLVED (not needed) — `extract_cashflow_params`
+
+> Never implemented and not needed: the only referencing test
+> (`test_degradation_flow.py`) imported it in a skip guard but never called it.
+> The spurious import was removed 2026-06; extraction already exists as
+> `_build_cashflow_params` / `_extract_parameters` in the same module.
 
 **Module:** `finance.cashflow_v14_params`  
 **Purpose:** Extract cashflow parameters from scenario config for reuse  
