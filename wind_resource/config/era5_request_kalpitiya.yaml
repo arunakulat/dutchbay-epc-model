@@ -1,0 +1,29 @@
+# ERA5 retrieval request -- DutchBay / Kalpitiya (issue #177).
+#
+# Credentials are NOT stored here. The Copernicus CDS key lives only in ~/.cdsapirc
+# (the cdsapi default), or is provided via CDSAPI_URL / CDSAPI_KEY env vars and written
+# by wind_resource.era5_retrieval.ensure_cdsapirc(). NEVER commit the key.
+#
+# This config is generic: change project.name + latitude/longitude (and the year range)
+# to retrieve + compute AEP for ANY RE project site.
+project:
+  name: "DutchBay Kalpitiya"
+  latitude: 8.27        # turbine-array centroid (T1-T15), Kalpitiya, Puttalam, Sri Lanka
+  longitude: 79.75
+download:
+  years:
+    start: 2020
+    end: 2024           # 5-year ERA5 baseline (clean hourly via the timeseries product)
+  output_dir: "/tmp/era5_cache"
+  alpha_min: 0.05       # wind-shear bounds for the 100m -> hub power-law extrapolation
+  alpha_max: 0.40
+turbine:
+  model: "envision_en171_6p5"   # canonical 6.5 MW curve (wind_resource/config/power_curves.yaml)
+  num_turbines: 23              # 23 x 6.5 MW = 149.5 MW
+  hub_height_m: 150
+credentials:
+  # CDS key is NEVER stored in the repo. Provide it in ~/.cdsapirc:
+  #   url: https://cds.climate.copernicus.eu/api
+  #   key: <your-token>
+  # (or export CDSAPI_URL / CDSAPI_KEY and call ensure_cdsapirc()).
+  cdsapirc: "~/.cdsapirc"
