@@ -230,14 +230,19 @@ monte_carlo_enhanced:
   #    No correlation - degradation is mechanical, FX is macroeconomic
 
 # ════════════════════════════════════════════════════════════════════════
-# EXPECTED RESULTS (for validation)
+# EXPECTED RESULTS — UNVALIDATED PLACEHOLDER (orphan enhanced-MC scenario)
 # ════════════════════════════════════════════════════════════════════════
+# WARNING: these are stale pre-honest-baseline guesses, NOT validated targets,
+# and no test asserts them. The discredited ~$45M NPV / 9.5% IRR were repudiated
+# for the lender case (the honest engine yields project NPV ~$1.18M / IRR 8.35%
+# — see scenarios/dutchbay_lendercase_2025Q4.yaml, bound by
+# tests/finance/test_lendercase_expected_results.py). Do NOT cite these numbers.
 
 expected_results:
-  # Approximate expected values (for sanity check)
-  npv_mean_usd: 45000000  # ~$45M (rough estimate)
-  npv_std_usd: 15000000   # ~$15M (1-sigma)
-  irr_mean_pct: 9.5       # ~9.5%
+  # [UNVALIDATED PLACEHOLDER — do not use; see warning above]
+  npv_mean_usd: 45000000  # stale guess (NOT validated)
+  npv_std_usd: 15000000   # stale guess (NOT validated)
+  irr_mean_pct: 9.5       # stale guess (NOT validated)
   
   # Degradation impact
   year_20_output_factor: 0.887  # (1-0.006)^19 ≈ 0.887

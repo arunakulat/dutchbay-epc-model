@@ -15,23 +15,23 @@ make lint type security test cov
 make freeze   # writes constraints.txt from your current env
 make lock     # writes requirements.lock for CI/Prod
 git add constraints.txt requirements.lock
-git commit -m "chore(lock): freeze dependencies for v13.1.0"
+git commit -m "chore(lock): freeze dependencies for v14.15.0"
 ```
 
 ## 3) Bump version
-- Update `VERSION` file to `13.1.0` (already included in this kit).
+- Update `VERSION` file to `14.15.0` (already included in this kit).
 
 ## 4) Tag & push
 ```bash
 git add VERSION
-git commit -m "chore(release): v13.1.0"
-git tag -s v13.1.0 -m "DutchBay 13.1.0"
+git commit -m "chore(release): v14.15.0"
+git tag -s v14.15.0 -m "DutchBay 14.15.0"
 git push origin main --tags
 ```
 
 ## 5) GitHub Actions
-- CI will run on the tag and create a Release with the artifact: `DutchBay_Model_V13.1.0.zip`.
-- If CI fails, fix, bump to 13.1.1, and retag.
+- CI will run on the tag and create a Release with the artifact: `DutchBay_Model_V14.15.0.zip`.
+- If CI fails, fix, bump to 14.15.1, and retag.
 
 ## Notes
 - Runtime installs use `requirements.lock` or `constraints.txt` per environment policy.
