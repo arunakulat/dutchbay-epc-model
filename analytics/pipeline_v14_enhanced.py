@@ -611,6 +611,15 @@ def run_v14_pipeline_enhanced(
             cfg, debt_result
         )
         wacc_contract = _build_wacc_contract(wacc_dict)
+        # Single source of truth for the discount basis: `drives_discount_rate`
+        # is what made `project_discount` the build-up WACC instead of the
+        # legacy default. Both the KPI surface and the ScenarioResult contract
+        # below report from these same values so they cannot disagree.
+        wacc_cfg = cfg.get("wacc", {}) or {}
+        wacc_drives = bool(wacc_dict) and bool(wacc_cfg.get("drives_discount_rate"))
+        wacc_label_val = (
+            str(wacc_dict.get("mode")) if (wacc_drives and wacc_dict) else "base"
+        )
         metrics.wacc_time_sec = time.time() - phase_start
         logger.info(
             "WACC resolved in %.3f sec: project discount %.3f%%",
@@ -624,6 +633,8 @@ def run_v14_pipeline_enhanced(
             annual_rows=annual_rows_enriched,
             debt_result=debt_result,
             discount_rate=project_discount,
+            wacc_is_real=wacc_drives,
+            wacc_label=wacc_label_val,
         )
         metrics.kpis_count = len(kpis)
         metrics.kpi_time_sec = time.time() - phase_start
@@ -675,8 +686,8 @@ def run_v14_pipeline_enhanced(
             min_dscr=min_dscr,
             max_debt_usd=max_debt_usd,
             wacc=wacc_contract,
-            discount_rate_used=0.10,
-            wacc_label=wacc_dict.get("mode") if wacc_dict else None,
+            discount_rate_used=project_discount,
+            wacc_label=wacc_label_val,
             validation_mode=mode,
             config=cfg,
             annual_rows=annual_rows_enriched,
