@@ -41,7 +41,7 @@ import warnings
 from dataclasses import asdict
 from pathlib import Path
 
-from analytics.sensitivity_runner import run_sensitivity_analysis
+from analytics.core.sensitivity_runner import run_sensitivity_analysis
 
 # Issue deprecation warning on import
 warnings.warn(
