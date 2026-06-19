@@ -19,8 +19,8 @@
 project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
-  capacity_mw: 149.5
-  capacity_factor: 0.307  # Computed from EN-171/6.5 curve via EnergyCalculator (was 0.428 @ 10MW x 15)
+  capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
+  capacity_factor: 0.346  # Net P50 CF, 15 x IEA-10MW-198 via wind_resource.bankable_aep (was 0.307 @ 23x6.5)
   degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
@@ -37,18 +37,18 @@ project:
 # TURBINE & WIND RESOURCE (Wind Energy Calculator Inputs)
 # ═════════════════════════════════════════════════════════════════════════════
 turbine:
-  model: "Envision EN-171/6.5"
-  n_turbines: 23
-  rated_power_mw: 6.5
-  rated_power_kw: 6500
-  total_capacity_mw: 149.5
-  rotor_diameter_m: 171
+  model: "IEA Reference 10MW (198m)"
+  n_turbines: 15
+  rated_power_mw: 10.6383
+  rated_power_kw: 10638
+  total_capacity_mw: 159.6
+  rotor_diameter_m: 198
   hub_height_m: 150
   cut_in_ms: 3.0
   cut_out_ms: 25.0
-  rated_wind_speed_ms: 12.0
-  certification_status: "OEM_CERTIFIED"
-  notes: "Canonical Envision EN-171/6.5 OEM power curve (wind_resource/config/power_curves.yaml). 23 x 6.5 MW = 149.5 MW. Supersedes the prior 10 MW x 15 extrapolation."
+  rated_wind_speed_ms: 11.0
+  certification_status: "OPEN_REFERENCE"  # IEA Wind Task 37 reference design (not OEM-certified)
+  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
 
 wind_resource:
   # Weibull distribution parameters (for AEP calculation)
@@ -80,30 +80,29 @@ layout:
 resource:
   # Turbine specifications (for backward compatibility)
   turbines:
-    count: 23
-    rated_power_mw: 6.5
-    total_capacity_mw: 149.5
-    model: "Envision EN-171/6.5"
-    rotor_diameter_m: 171
+    count: 15
+    rated_power_mw: 10.6383
+    total_capacity_mw: 159.6
+    model: "IEA Reference 10MW (198m)"
+    rotor_diameter_m: 198
     hub_height_m: 150
-  
+
   # Power curve & AEP calculation
   power_curve:
-    source_id: "OEM_ENVISION_EN171_65_PC"
-    source_type: "OEM"
-    curve_key: "envision_en171_6p5"   # power_curves.yaml store slug; must match the manifest's curve_key (asserted)
+    source_id: "IEA_REFERENCE_10MW_198_PC"
+    source_type: "REFERENCE"
+    curve_key: "iea_reference_10mw"   # power_curves.yaml store slug; must match the manifest's curve_key (asserted)
     iec_standard: "IEC 61400-12-1:2022"
-    certificate_ref: "CGC-B-FNc-2024-184 (6.5 MW certified)"
+    certificate_ref: "IEA Wind Task 37 reference design (open, not OEM-certified)"
     air_density_site_kgm3: 1.15
     air_density_ref_kgm3: 1.225
-  
-  aep_summary_path: "tests/mocks/aep_summary_dutchbay.json"
-  
-  # Technical losses (pre-grid)
+
+  aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
+
+  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
+  # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:
-    # ERA5 canonical loss stack (wind_resource/config/era5_config.yaml): multiplicative total 12.4%.
-    # TODO(layout): 5% wake is the ERA5 baseline; a 23-turbine wake study is pending and will lower P50.
-    wake_loss_pct: 5.0  # ERA5 baseline (23-turbine wake study pending)
+    wake_loss_pct: 7.28  # PyWake Bastankhah-Porte-Agel granular wake (15-turbine layout); TurbOPark bound 8.93%
     availability_pct: 97.0  # Contractual availability target
     electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
     curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
@@ -123,10 +122,10 @@ resource:
   wind:
     ws150_mean_ms: 7.85       # Mean hub-height (150 m) wind speed
     ws150_std_ms: 3.69        # Weibull-derived (A=8.32, k=2.1)
-    capacity_factor: 0.307    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 402.6            # Net P50 AEP, GWh (canonical; matches aep_summary)
-    source_id: "OEM_ENVISION_EN171_65_PC"
-    source_type: "OEM"
+    capacity_factor: 0.346    # Net P50 CF (canonical; matches aep_summary)
+    aep_gwh: 483.6            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    source_id: "IEA_REFERENCE_10MW_198_PC"
+    source_type: "REFERENCE"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
@@ -196,8 +195,8 @@ fx:
 # CAPEX & OPEX
 # ═════════════════════════════════════════════════════════════════════════════
 capex:
-  usd_total: 150000000  # Base case (all-in EPC + soft costs)
-  capex_per_kw_usd: 1000  # 150M / 150MW
+  usd_total: 159600000  # Base case (all-in EPC + soft costs); 159.6 MW @ $1000/kW
+  capex_per_kw_usd: 1000  # 159.6M / 159.6MW (15 x IEA-10MW)
   
   breakdown:
     epc_usd: 140000000  # Turbines + BoP + grid connection
@@ -450,31 +449,33 @@ timeline:
 # EXPECTED RESULTS (For Pipeline Validation)
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
-  # Wind resource assessment
-  # Computed from the canonical EN-171/6.5 curve via wind_resource.EnergyCalculator
-  # (23 x 6.5 MW, DECLARED config Weibull A=8.32/k=2.1 -- pending live ERA5 fetch #18/#24, 12.4% losses, P50=1.0). Supersedes 563/612/0.428.
-  net_aep_p50_gwh: 402.6  # ERA5 canonical 12.4% losses; 5% wake is baseline (23-turbine wake study pending)
-  net_aep_p90_gwh: 322.1
-  capacity_factor: 0.307
+  # Wind resource assessment — 15 x IEA Reference 10MW (198m) via
+  # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
+  # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
+  # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
+  net_aep_p50_gwh: 483.6  # 14.48% total losses (modelled wake 7.28%)
+  net_aep_p90_gwh: 421.2  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871), was crude 0.800 haircut
+  capacity_factor: 0.346
 
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
-  annual_revenue_p50_m_lkr: 8172.8  # 402.6 GWh × 20.3 LKR/kWh
-  annual_revenue_p50_m_eur: 24.8  # Reference: 402.6 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 163455.0  # With degradation + CPI (scaled by 402.6/563)
+  annual_revenue_p50_m_lkr: 9817.1  # 483.6 GWh × 20.3 LKR/kWh
+  annual_revenue_p50_m_eur: 29.7  # Reference: 483.6 GWh × 61.5 EUR/MWh
+  revenue_20yr_undiscounted_m_lkr: 196373.0  # With degradation + CPI (scaled by 483.6/402.6)
   
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
-  # build-up WACC driving the project discount). These are binding validation
-  # targets: tests/finance/test_lendercase_expected_results.py asserts the live
-  # pipeline matches them, so they cannot silently drift back to fiction.
-  # (Superseded the pre-honest-baseline placeholders 0.145/0.185/45/1.45/1.52/1.85/2.10,
-  #  which overstated a sub-WACC, equity-negative deal as bankable.)
-  project_irr: 0.0835       # project NPV crosses zero ~ here (knife-edge vs ke)
-  equity_irr: 0.0131        # equity is the real problem; FX + balloon driven
-  project_npv_m_usd: 1.18   # at ke=12% -> WACC 8.19% discount
+  # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
+  # Binding validation targets: tests/finance/test_lendercase_expected_results.py
+  # asserts the live pipeline matches them, so they cannot silently drift.
+  # The +20% AEP (483.6 vs 402.6) at only +6.7% capacity turns the prior knife-edge,
+  # equity-negative EN-171 base (0.0835/0.0131/$1.18M) into a comfortably bankable,
+  # equity-positive case.
+  project_irr: 0.1112       # clears WACC (~7.74%) comfortably
+  equity_irr: 0.0621        # equity now positive (~6.2%)
+  project_npv_m_usd: 27.36  # build-up WACC ~7.74% discount
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.13
-  plcr: 1.19
+  llcr: 1.14
+  plcr: 1.21
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
