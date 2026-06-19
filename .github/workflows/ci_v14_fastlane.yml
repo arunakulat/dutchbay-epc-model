@@ -34,8 +34,9 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          # wind extra (xarray/netcdf4/cdsapi) for the gated wind + NetCDF tests
-          pip install -e ".[wind]"
+          # wind extra (xarray/netcdf4/cdsapi) for the gated wind + NetCDF tests;
+          # gis extra (rasterio) for the #20 GeoTIFF-export tests
+          pip install -e ".[wind,gis]"
 
       - name: Ruff - lint focused v14 surface
         run: |
