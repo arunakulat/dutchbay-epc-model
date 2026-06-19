@@ -342,7 +342,13 @@ def _extract_debt_service(
     index: int,
 ) -> float:
     """Extract annual debt service from row or aligned debt_result series."""
-    row_value = _as_float(row.get("debt_service_total") or row.get("total_service"))
+    # Use presence, not truthiness: a legitimate 0.0 (post-debt years) must NOT
+    # fall through to the positional series (which is period-indexed and would
+    # mis-attribute an earlier year's service).
+    raw = row.get("debt_service_total")
+    if raw is None:
+        raw = row.get("total_service")
+    row_value = _as_float(raw)
     if row_value is not None:
         return row_value
     if index < len(debt_service_series):
