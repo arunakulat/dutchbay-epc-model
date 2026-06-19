@@ -292,9 +292,23 @@ class ERA5Fetcher:
                 str(nc_file)
             )
         except Exception as e:
+            msg = str(e).lower()
+            hint = ""
+            if "cost" in msg or "too large" in msg or "403" in msg:
+                # This fetcher requests the heavyweight GRIDDED single-levels
+                # product over a full year/month/day/hour grid, which CDS rejects
+                # as too large for multi-year requests. For a single-point,
+                # multi-year site assessment use the lighter ARCO timeseries path.
+                hint = (
+                    " This is the gridded single-levels product; CDS rejects "
+                    "large multi-year requests. For a single-point, multi-year "
+                    "site assessment use the ARCO timeseries module instead: "
+                    "wind_resource.era5_retrieval (reanalysis-era5-single-levels-"
+                    "timeseries)."
+                )
             raise RuntimeError(
                 f"CDS API download failed: {e}. "
-                "Check ~/.cdsapirc credentials and CDS status."
+                "Check ~/.cdsapirc credentials and CDS status." + hint
             ) from e
         
         logger.info(f"Downloaded NetCDF: {nc_file}")
