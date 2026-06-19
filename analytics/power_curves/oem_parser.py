@@ -103,13 +103,13 @@ def _build_base_curve(entry: Dict[str, Any]) -> pd.DataFrame:
     )
 
 
-def _build_specs(entry: Dict[str, Any]) -> Dict[str, Any]:
+def _build_specs(entry: Dict[str, Any], key: str) -> Dict[str, Any]:
     """Build the turbine specs mapping from a store entry."""
     rated_kw = float(entry["rated_capacity_kw"])
     hub_heights = entry.get("hub_heights") or [150.0]
     return {
-        "model": entry.get("model", "EN-171/6.5"),
-        "manufacturer": entry.get("manufacturer", "Envision"),
+        "model": entry.get("model", key),
+        "manufacturer": entry.get("manufacturer", "unknown"),
         "rated_power_kw": rated_kw,
         "rated_power_mw": rated_kw / 1000.0,
         "hub_height_m": float(hub_heights[len(hub_heights) // 2]),
@@ -117,7 +117,7 @@ def _build_specs(entry: Dict[str, Any]) -> Dict[str, Any]:
         "rated_wind_speed_ms": float(entry["rated"]),
         "cut_out_ms": float(entry["cut_out"]),
         "air_density_ref_kgm3": IEC_REFERENCE_AIR_DENSITY_KGM3,
-        "source": f"{POWER_CURVE_STORE.name}:{CANONICAL_CURVE_KEY}",
+        "source": f"{POWER_CURVE_STORE.name}:{key}",
     }
 
 
@@ -128,31 +128,23 @@ _CURVE_ENTRY: Dict[str, Any] = _load_curve_entry()
 ENVISION_EN171_65_POWER_CURVE: pd.DataFrame = _build_base_curve(_CURVE_ENTRY)
 
 #: EN-171/6.5 MW turbine specifications, config-sourced.
-ENVISION_EN171_65_SPECS: Dict[str, Any] = _build_specs(_CURVE_ENTRY)
+ENVISION_EN171_65_SPECS: Dict[str, Any] = _build_specs(_CURVE_ENTRY, CANONICAL_CURVE_KEY)
 
 
-def parse_envision_en171_curve(
-    air_density_kgm3: Optional[float] = None,
+def _apply_air_density_correction(
+    base_curve: pd.DataFrame,
+    specs: Dict[str, Any],
+    air_density_kgm3: Optional[float],
 ) -> pd.DataFrame:
-    """Parse the Envision EN-171/6.5 MW power curve with air-density correction.
+    """Apply the IEC 61400-12-1 air-density correction to a base curve.
 
     Args:
-        air_density_kgm3: Site air density (kg/m^3). Defaults to the IEC reference
-            (1.225 kg/m^3). Must lie within
-            ``[AIR_DENSITY_MIN_KGM3, AIR_DENSITY_MAX_KGM3]``.
-
-    Returns:
-        DataFrame with columns:
-            - ``wind_speed_ms``: Wind speed (m/s)
-            - ``power_kw``: Power output (kW), corrected for site air density
-            - ``power_mw``: Power output (MW), corrected for site air density
+        base_curve: Reference (uncorrected) curve (``wind_speed_ms``/``power_kw``).
+        specs: The turbine specs (provides reference density + metadata).
+        air_density_kgm3: Site air density (kg/m^3); defaults to the IEC reference.
 
     Raises:
         ValueError: If ``air_density_kgm3`` is outside the plausible site band.
-
-    References:
-        IEC 61400-12-1:2022 Section 10.2 - Air density correction
-        ``P_site = P_ref * (rho_site / rho_ref) ** (1/3)``
     """
     if air_density_kgm3 is None:
         air_density_kgm3 = IEC_REFERENCE_AIR_DENSITY_KGM3
@@ -163,32 +155,70 @@ def parse_envision_en171_curve(
             f"got {air_density_kgm3}"
         )
 
-    curve = ENVISION_EN171_65_POWER_CURVE.copy()
-
-    rho_ref = cast(float, ENVISION_EN171_65_SPECS["air_density_ref_kgm3"])
+    curve = base_curve.copy()
+    rho_ref = cast(float, specs["air_density_ref_kgm3"])
     density_ratio = air_density_kgm3 / rho_ref
 
     # Power scales with rho**(1/3) for a fixed blade design (IEC 61400-12-1).
     curve["power_kw"] = curve["power_kw"] * (density_ratio ** (1.0 / 3.0))
     curve["power_mw"] = curve["power_kw"] / 1000.0
 
-    curve.attrs["model"] = ENVISION_EN171_65_SPECS["model"]
-    curve.attrs["rated_power_mw"] = ENVISION_EN171_65_SPECS["rated_power_mw"]
+    curve.attrs["model"] = specs["model"]
+    curve.attrs["rated_power_mw"] = specs["rated_power_mw"]
     curve.attrs["air_density_site_kgm3"] = air_density_kgm3
     curve.attrs["air_density_ref_kgm3"] = rho_ref
     curve.attrs["iec_standard"] = "IEC 61400-12-1:2022"
-    curve.attrs["source"] = ENVISION_EN171_65_SPECS["source"]
+    curve.attrs["source"] = specs["source"]
 
     logger.info(
         "Loaded %s power curve: rated %.1f MW, air density %.3f kg/m^3 "
         "(correction factor %.4f)",
-        ENVISION_EN171_65_SPECS["model"],
-        ENVISION_EN171_65_SPECS["rated_power_mw"],
+        specs["model"],
+        specs["rated_power_mw"],
         air_density_kgm3,
         density_ratio ** (1.0 / 3.0),
     )
-
     return curve
+
+
+def parse_power_curve(
+    curve_key: str = CANONICAL_CURVE_KEY,
+    air_density_kgm3: Optional[float] = None,
+    *,
+    store_path: Path = POWER_CURVE_STORE,
+) -> pd.DataFrame:
+    """Parse a config-selected power curve from the store, air-density corrected.
+
+    ``curve_key`` is the ``power_curves.yaml`` slug the model selected (the same
+    key the config's ``turbine.model`` / :class:`wind_resource.EnergyCalculator`
+    uses). The turbine is NOT hardwired (GWTF ARCH-01) — pass the model's choice.
+
+    Args:
+        curve_key: Store slug of the turbine curve (e.g. ``vestas_v150_5p6``).
+        air_density_kgm3: Site air density (kg/m^3); defaults to the IEC reference.
+        store_path: Path to the ``power_curves.yaml`` store.
+
+    Returns:
+        DataFrame with ``wind_speed_ms`` / ``power_kw`` / ``power_mw`` columns.
+
+    Raises:
+        KeyError: If ``curve_key`` is not in the store.
+        ValueError: If ``air_density_kgm3`` is outside the plausible site band.
+    """
+    entry = _load_curve_entry(store_path, curve_key)
+    base = _build_base_curve(entry)
+    specs = _build_specs(entry, curve_key)
+    return _apply_air_density_correction(base, specs, air_density_kgm3)
+
+
+def parse_envision_en171_curve(
+    air_density_kgm3: Optional[float] = None,
+) -> pd.DataFrame:
+    """Back-compat wrapper for the canonical Envision EN-171/6.5 MW curve.
+
+    Prefer :func:`parse_power_curve` with the model-selected ``curve_key``.
+    """
+    return parse_power_curve(CANONICAL_CURVE_KEY, air_density_kgm3)
 
 
 def interpolate_power_curve(
@@ -377,6 +407,7 @@ __all__ = [
     "ENVISION_EN171_65_SPECS",
     "POWER_CURVE_STORE",
     "CANONICAL_CURVE_KEY",
+    "parse_power_curve",
     "parse_envision_en171_curve",
     "interpolate_power_curve",
     "compute_aep_from_curve",
