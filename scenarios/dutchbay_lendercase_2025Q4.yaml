@@ -462,14 +462,19 @@ expected_results:
   annual_revenue_p50_m_eur: 24.8  # Reference: 402.6 GWh × 61.5 EUR/MWh
   revenue_20yr_undiscounted_m_lkr: 163455.0  # With degradation + CPI (scaled by 402.6/563)
   
-  # Financial metrics
-  project_irr: 0.145
-  equity_irr: 0.185
-  project_npv_m_usd: 45.0
-  min_dscr: 1.45
-  avg_dscr: 1.52
-  llcr: 1.85
-  plcr: 2.10
+  # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
+  # build-up WACC driving the project discount). These are binding validation
+  # targets: tests/finance/test_lendercase_expected_results.py asserts the live
+  # pipeline matches them, so they cannot silently drift back to fiction.
+  # (Superseded the pre-honest-baseline placeholders 0.145/0.185/45/1.45/1.52/1.85/2.10,
+  #  which overstated a sub-WACC, equity-negative deal as bankable.)
+  project_irr: 0.0835       # project NPV crosses zero ~ here (knife-edge vs ke)
+  equity_irr: 0.0131        # equity is the real problem; FX + balloon driven
+  project_npv_m_usd: 1.18   # at ke=12% -> WACC 8.19% discount
+  min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
+  avg_dscr: 1.39
+  llcr: 1.13
+  plcr: 1.19
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
