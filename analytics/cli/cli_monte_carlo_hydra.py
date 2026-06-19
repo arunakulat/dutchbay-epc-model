@@ -18,8 +18,11 @@ Config:
     - n_trials: Number of Monte Carlo simulations (default: 10000)
     - seed: Random seed for reproducibility (default: 42)
     - output_dir: Where to write results
-    - stochastic_params: Distribution definitions
-    - output_metrics: KPIs to collect
+    - write_artifacts: Write the result JSON to output_dir (default: true)
+
+    The stochastic distributions are read from the scenario's
+    ``monte_carlo.parameters`` block by analytics.mc.engine — NOT from this CLI
+    config — so there is no stochastic_params/output_metrics knob here.
 
 Output:
     Prints JSON to stdout (raw per-trial arrays are written only to the
@@ -101,8 +104,8 @@ def main(cfg: DictConfig) -> None:
                 - seed: Random seed (default: 42)
                 - output_dir: Output directory (default: _out/monte_carlo)
                 - write_artifacts: Write files (default: true)
-                - stochastic_params: Distribution definitions
-                - output_metrics: KPIs to collect
+            Stochastic distributions come from the scenario's
+            monte_carlo.parameters block (analytics.mc.engine), not this CLI.
 
     Returns:
         None. Prints JSON to stdout, optionally writes artifacts.
