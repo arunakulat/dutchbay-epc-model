@@ -117,6 +117,16 @@ resource:
     data_years: "2020-2024"
     data_source: "ECMWF_ERA5_2020_2024_DUTCHBAY"
 
+  # Normalized GIS -> EPC wind interface (#22). Stable handoff contract validated
+  # by analytics.wind.wind_interface_schema; consumed by cashflow/metrics.
+  wind:
+    ws150_mean_ms: 7.85       # Mean hub-height (150 m) wind speed
+    ws150_std_ms: 3.69        # Weibull-derived (A=8.32, k=2.1)
+    capacity_factor: 0.307    # Net P50 CF (canonical; matches aep_summary)
+    aep_gwh: 402.6            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    source_id: "OEM_ENVISION_EN171_65_PC"
+    source_type: "OEM"
+
 # ═════════════════════════════════════════════════════════════════════════════
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
 # ═════════════════════════════════════════════════════════════════════════════
