@@ -39,3 +39,300 @@ ge_cypress_5p5:
     ws: [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 20, 25, 30]
     power: [0, 0, 175, 425, 800, 1350, 2100, 3050, 4200, 5300, 5500,
             5500, 5500, 5500, 0, 0]
+
+# ── Real 10 MW reference curves (NREL turbine-models, BSD-3) ───────────────
+# Replace the retired Envision-10MW placeholder. EN-171/6.5 stays canonical for
+# Kalpitiya; these are selectable 10 MW options. iea_reference_10mw is the default
+# (IEA Wind Task 37; ships thrust Ct for the #166 oem-parser path).
+
+# Added via power_curve_sourcing (source: nrel_turbine_models)
+iea_reference_10mw:
+  manufacturer: IEA Wind (Task 37 reference)
+  model: IEA_Reference_10MW_198
+  rated_capacity_kw: 10638.3
+  hub_heights: []
+  cut_in: 3.0
+  rated: 11.0
+  cut_out: 25.0
+  power_curve:
+    ws:
+    - 3.0
+    - 4.0
+    - 5.0
+    - 6.0
+    - 7.0
+    - 8.0
+    - 9.0
+    - 9.5
+    - 10.0
+    - 10.5
+    - 11.0
+    - 11.5
+    - 12.0
+    - 13.0
+    - 14.0
+    - 15.0
+    - 16.0
+    - 18.0
+    - 20.0
+    - 25.0
+    power:
+    - 37.874
+    - 440.49
+    - 1074.369
+    - 1973.429
+    - 3152.143
+    - 4723.686
+    - 6734.924
+    - 7863.971
+    - 9057.796
+    - 10309.687
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.3
+    - 10638.301
+  thrust_curve:
+    ws:
+    - 3.0
+    - 4.0
+    - 5.0
+    - 6.0
+    - 7.0
+    - 8.0
+    - 9.0
+    - 9.5
+    - 10.0
+    - 10.5
+    - 11.0
+    - 11.5
+    - 12.0
+    - 13.0
+    - 14.0
+    - 15.0
+    - 16.0
+    - 18.0
+    - 20.0
+    - 25.0
+    ct:
+    - 0.915
+    - 0.926
+    - 0.921
+    - 0.895
+    - 0.885
+    - 0.873
+    - 0.827
+    - 0.789
+    - 0.754
+    - 0.721
+    - 0.591
+    - 0.49
+    - 0.418
+    - 0.318
+    - 0.251
+    - 0.203
+    - 0.167
+    - 0.119
+    - 0.088
+    - 0.049
+  provenance:
+    source: nrel_turbine_models
+    dataset: NREL turbine-models (BSD-3, reference design)
+    file: IEA_Reference_10MW_198.csv
+    has_thrust_coefficient: true
+    recommended_default_10mw: true
+
+# Added via power_curve_sourcing (source: nrel_turbine_models)
+dtu_reference_10mw:
+  manufacturer: DTU Wind Energy (reference)
+  model: DTU_Reference_v1_10MW_178
+  rated_capacity_kw: 10683.7
+  hub_heights: []
+  cut_in: 3.0
+  rated: 12.0
+  cut_out: 25.0
+  power_curve:
+    ws:
+    - 4.0
+    - 5.0
+    - 6.0
+    - 7.0
+    - 8.0
+    - 9.0
+    - 10.0
+    - 11.0
+    - 12.0
+    - 13.0
+    - 14.0
+    - 15.0
+    - 16.0
+    - 17.0
+    - 18.0
+    - 19.0
+    - 20.0
+    - 21.0
+    - 22.0
+    - 23.0
+    - 24.0
+    - 25.0
+    power:
+    - 280.2
+    - 799.1
+    - 1532.7
+    - 2506.1
+    - 3730.7
+    - 5311.8
+    - 7286.5
+    - 9698.3
+    - 10639.1
+    - 10648.5
+    - 10639.3
+    - 10683.7
+    - 10642.0
+    - 10640.0
+    - 10639.9
+    - 10652.8
+    - 10646.2
+    - 10644.0
+    - 10641.2
+    - 10639.5
+    - 10643.6
+    - 10635.7
+  thrust_curve:
+    ws:
+    - 4.0
+    - 5.0
+    - 6.0
+    - 7.0
+    - 8.0
+    - 9.0
+    - 10.0
+    - 11.0
+    - 12.0
+    - 13.0
+    - 14.0
+    - 15.0
+    - 16.0
+    - 17.0
+    - 18.0
+    - 19.0
+    - 20.0
+    - 21.0
+    - 22.0
+    - 23.0
+    - 24.0
+    - 25.0
+    ct:
+    - 0.923
+    - 0.919
+    - 0.904
+    - 0.858
+    - 0.814
+    - 0.814
+    - 0.814
+    - 0.814
+    - 0.577
+    - 0.419
+    - 0.323
+    - 0.259
+    - 0.211
+    - 0.175
+    - 0.148
+    - 0.126
+    - 0.109
+    - 0.095
+    - 0.084
+    - 0.074
+    - 0.066
+    - 0.059
+  provenance:
+    source: nrel_turbine_models
+    dataset: NREL turbine-models (BSD-3, reference design)
+    file: DTU_Reference_v1_10MW_178.csv
+    has_thrust_coefficient: true
+
+# Added via power_curve_sourcing (source: nrel_turbine_models)
+nrel_reference_10mw:
+  manufacturer: NREL (reference)
+  model: 2016CACost_NREL_Reference_10MW_205
+  rated_capacity_kw: 10000.0
+  hub_heights: []
+  cut_in: 3.0
+  rated: 12.0
+  cut_out: 25.0
+  power_curve:
+    ws:
+    - 1.0
+    - 2.0
+    - 3.0
+    - 4.0
+    - 4.5
+    - 5.0
+    - 5.5
+    - 6.0
+    - 6.5
+    - 7.0
+    - 7.5
+    - 8.0
+    - 8.5
+    - 9.0
+    - 9.5
+    - 10.0
+    - 10.5
+    - 11.0
+    - 12.0
+    - 13.0
+    - 14.0
+    - 15.0
+    - 16.0
+    - 17.0
+    - 18.0
+    - 19.0
+    - 20.0
+    - 21.0
+    - 22.0
+    - 23.0
+    - 24.0
+    - 25.0
+    power:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 471.0
+    - 733.0
+    - 1059.0
+    - 1455.0
+    - 1928.0
+    - 2483.0
+    - 3125.0
+    - 3860.0
+    - 4691.0
+    - 5622.0
+    - 6655.0
+    - 7792.0
+    - 8858.0
+    - 9417.0
+    - 9767.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+    - 10000.0
+  provenance:
+    source: nrel_turbine_models
+    dataset: NREL turbine-models (BSD-3, reference design)
+    file: 2016CACost_NREL_Reference_10MW_205.csv
