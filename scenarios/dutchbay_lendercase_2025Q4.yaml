@@ -91,6 +91,7 @@ resource:
   power_curve:
     source_id: "OEM_ENVISION_EN171_65_PC"
     source_type: "OEM"
+    curve_key: "envision_en171_6p5"   # power_curves.yaml store slug; must match the manifest's curve_key (asserted)
     iec_standard: "IEC 61400-12-1:2022"
     certificate_ref: "CGC-B-FNc-2024-184 (6.5 MW certified)"
     air_density_site_kgm3: 1.15

@@ -44,7 +44,10 @@ APPROVED_SOURCES = {
         "type": "OEM",
         "description": "Envision EN-171/6.5 MW certified power curve (canonical)",
         "iec_standard": "61400-12-1:2022",
-        "certificate": "CGC-B-FNc-2024-184"
+        "certificate": "CGC-B-FNc-2024-184",
+        # Store slug in wind_resource/config/power_curves.yaml — links the manifest
+        # source_id to the actual curve (closes the curve-selection identifier gap).
+        "curve_key": "envision_en171_6p5",
     },
     "OEM_ENVISION_EN171_10_PC": {
         "type": "OEM",
