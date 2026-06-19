@@ -139,7 +139,13 @@ def test_evaluate_with_casper_tail_risk_smoke(
     # --- 6. Assertions: CASPER result assembled end-to-end -------------------
     assert result.scenario is not None
     assert result.baseline_kpis["project_irr"] == pytest.approx(0.12)
+    # monte_carlo is the engine's MonteCarloResult dataclass (not a dict). The
+    # orchestrator must have called the engine with n_trials = the config's
+    # iterations (10) and surfaced the dataclass — the previous wiring passed
+    # config=/n_iterations= and did dict .get() on the frozen result.
     assert result.monte_carlo is not None
+    assert result.monte_carlo.iterations == 10
+    assert result.monte_carlo.project_irr_p10 == pytest.approx(0.11)
     assert result.sensitivities is suite
 
     # Tail-risk enrichment re-enabled (#165): metadata carries both the
@@ -173,6 +179,38 @@ def test_evaluate_with_casper_tail_risk_smoke(
     surfaced = _tail_risk_from_metadata(result.metadata)
     assert surfaced is not None
     assert "project_irr" in surfaced
+
+
+def test_evaluate_with_casper_tail_risk_real_engine(tmp_path: object) -> None:
+    """End-to-end with NO fakes: the real pipeline + real MC engine on the
+    canonical lender scenario must drive CASPER tail-risk to a populated
+    MonteCarloResult. This is the guard the faked smoke test could not provide —
+    it exercises the exact wiring that was dead (engine kwargs + dataclass
+    result handling) against real code.
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    lender = repo_root / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    mc_cfg = Path(tmp_path) / "mc_small.yaml"  # type: ignore[arg-type]
+    mc_cfg.write_text("monte_carlo:\n  iterations: 6\n  seed: 42\n", encoding="utf-8")
+
+    result = evaluation_v14.evaluate_with_casper_tail_risk(
+        config_path=str(lender),
+        monte_carlo_config_path=str(mc_cfg),
+        metric="project_irr",
+        confidence=0.9,
+    )
+
+    assert result.monte_carlo is not None
+    assert result.monte_carlo.iterations == 6
+    assert result.monte_carlo.failed_iterations == 0
+    assert result.monte_carlo.success_rate() == 100.0
+    # Real distribution, ordered, finite.
+    p10 = result.monte_carlo.project_irr_p10
+    p90 = result.monte_carlo.project_irr_p90
+    assert isinstance(p10, float) and isinstance(p90, float)
+    assert p10 <= result.monte_carlo.project_irr_p50 <= p90
 
 
 if __name__ == "__main__":  # pragma: no cover
