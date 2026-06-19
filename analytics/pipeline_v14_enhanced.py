@@ -688,6 +688,7 @@ def run_v14_pipeline_enhanced(
             wacc=wacc_contract,
             discount_rate_used=project_discount,
             wacc_label=wacc_label_val,
+            wacc_is_real=wacc_drives,
             validation_mode=mode,
             config=cfg,
             annual_rows=annual_rows_enriched,
