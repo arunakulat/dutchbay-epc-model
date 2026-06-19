@@ -10,12 +10,8 @@
 
 ## 🚀 Quick Start
 
-### For New AI Threads/Sessions
-
-Restore full project context instantly:
-
-**Quick:** See [THREAD_MIGRATION_QUICKSTART.md](THREAD_MIGRATION_QUICKSTART.md)
-**Complete:** See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md)
+See [QUICK_START.md](QUICK_START.md) for setup and the four routines. The
+governance ruleset is [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv).
 
 ### For Developers
 
@@ -90,9 +86,9 @@ tests/                        # Test suite
   └── integration/           # Integration tests
 
 docs/                         # Documentation
-  ├── THREAD_MIGRATION_PACKAGE.md  # AI context restoration guide
-  ├── architecture_v14.md             # Technical architecture
-  └── Dev_workflow_v14.md             # Development workflow
+  ├── PIPELINE_ARCHITECTURE.md    # Technical architecture
+  ├── ANALYTICS_INTEGRATION.md    # Analytics module details
+  └── CASPER_MC_INTEGRATION.md    # Monte Carlo / tail-risk integration
 ```
 
 ---
@@ -131,7 +127,7 @@ These non-negotiable principles ensure production-grade quality:
 4. **Test-First**: Contract tests for all analytics
 5. **Type-Safe**: Full mypy compliance
 
-See [docs/THREAD_MIGRATION_PACKAGE.md](docs/THREAD_MIGRATION_PACKAGE.md) for complete standards.
+See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 58 rules) for the complete standards.
 
 ### Code Quality
 
@@ -193,12 +189,16 @@ print(f"Min DSCR: {kpis['min_dscr']:.2f}")
 ### Export to Excel
 
 ```python
-from analytics.executive_workbook import create_executive_workbook
+from analytics.executive_workbook import build_executive_workbook
 
-create_executive_workbook(
+# Board-ready workbook from the canonical v14 frames.
+build_executive_workbook(
     summary_df=summary_df,
-    timeseries_df=timeseries_df,
-    output_path="exports/executive_summary.xlsx"
+    cashflow_df=cashflow_df,
+    debt_df=debt_df,
+    ratios_df=ratios_df,
+    scenario_summary_df=scenario_summary_df,
+    output_path="exports/executive_summary.xlsx",
 )
 ```
 
@@ -206,15 +206,12 @@ create_executive_workbook(
 
 ## 📚 Documentation
 
-### For AI Assistants & Context Restoration
-- [Thread Migration Quick Start](THREAD_MIGRATION_QUICKSTART.md) - Minimal paste for new threads
-- [Complete Migration Package](docs/THREAD_MIGRATION_PACKAGE.md) - Full context & standards
-
 ### For Developers
-- [Architecture Overview](docs/architecture_v14.md) - Technical design
-- [Development Workflow](docs/Dev_workflow_v14.md) - Git workflow & practices
-- [Analytics Layer](docs/ANALYTICS_SETUP_COMPLETE.md) - Analytics module details
-- [Production Readiness](docs/ANALYTICS_PRODUCTION_READY.md) - Deployment guide
+- [Architecture Overview](docs/PIPELINE_ARCHITECTURE.md) - Pipeline / technical design
+- [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) - Analytics module details
+- [CASPER / Monte Carlo](docs/CASPER_MC_INTEGRATION.md) - Tail-risk & MC integration
+- [FX / WACC / Equity](docs/FX_WACC_EQUITY_INTEGRATION_v14.md) - Multi-currency + discounting
+- [GIS GeoTIFF Export](docs/GIS_GEOTIFF_EXPORT.md) - Raster export for QGIS
 
 ### For Project Managers
 - [Changelog](CHANGELOG.md) - Version history
