@@ -67,7 +67,7 @@ print(result['analytics_result']['analytics_enabled'])
 
 #### 1. Returns Analysis
 
-**Module:** `analytics/returns.py`  
+**Module:** `analytics/core/returns.py`  
 **Status:** ✅ PRODUCTION READY  
 **Compliance:** GWTF ✅ | CASPER ✅ | CESSPIT ✅ | CCCDIR ✅
 
@@ -107,7 +107,7 @@ returns:
 
 #### 2. Risk Metrics
 
-**Module:** `analytics/risk_metrics.py`  
+**Module:** `analytics/core/risk_metrics.py`  
 **Status:** ✅ PRODUCTION READY  
 **Compliance:** GWTF ✅ | CASPER ✅ | CESSPIT ✅ | CCCDIR ✅
 
@@ -334,8 +334,8 @@ print(f"IRR Range: {comparison['irr_range'] * 100:.2f}%")
 ### Sprint 15 (CURRENT) ✅
 
 - [x] Create `analytics/pipeline_analytics_v14.py`
-- [x] Integrate `analytics/returns.py` (production-ready)
-- [x] Integrate `analytics/risk_metrics.py` (production-ready)
+- [x] Integrate `analytics/core/returns.py` (production-ready)
+- [x] Integrate `analytics/core/risk_metrics.py` (production-ready)
 - [x] Add Pydantic contracts for all analytics
 - [x] Graceful degradation (stubs for unimplemented modules)
 - [x] Documentation (`ANALYTICS_INTEGRATION.md`)
