@@ -42,16 +42,16 @@ from analytics.contracts_v14 import (
 )
 from analytics.contracts_v14 import WaccComponents as ContractWaccComponents
 from analytics.contracts_v14 import WaccResult
-from analytics.core.metrics import calculate_scenario_kpis
+from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.cashflow_v14 import build_annual_rows
-from finance.debt_v14 import plan_debt
+from finance.debt_v14 import _extract_capex_usd, plan_debt
 from finance.equity_distribution_v14_hydra import (
     calculate_equity_distribution_from_pipeline,
 )
 from finance.utils import get_nested
-from finance.wacc_v14 import compute_wacc_from_config
+from finance.wacc_v14 import compute_build_up_wacc, compute_wacc_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +256,54 @@ def _enrich_annual_rows_with_debt(
         enriched.append(out)
 
     return _validate_annual_rows_structure(enriched, require_debt_fields=True)
+
+
+def _debt_fee_rate(config: Mapping[str, Any]) -> float:
+    """Annualised debt fee load (guarantee/PRI + amortised upfront) for a fee-inclusive kd."""
+    fin = config.get("Financing_Terms") or {}
+    if not isinstance(fin, Mapping):
+        return 0.0
+    guarantee = float(fin.get("guarantee_revenue_pct") or 0.0)
+    fees = fin.get("fees") or {}
+    upfront = float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
+    tenor = float(fin.get("tenor_years") or 15.0) or 15.0
+    return guarantee + (upfront / tenor)
+
+
+def _resolve_wacc_and_discounts(
+    config: Mapping[str, Any], debt_result: Mapping[str, Any]
+) -> tuple[dict[str, Any], float, float | None]:
+    """Resolve the WACC dict and the project/equity discount rates.
+
+    ``build_up`` mode computes the after-tax WACC from the ACTUAL sized debt (gearing
+    + blended rate from the debt engine) plus the configured cost of equity. When
+    ``wacc.drives_discount_rate`` is set, the project NPV is discounted at the WACC and
+    equity at the cost of equity; otherwise the legacy default rate is used and the
+    WACC stays informational (contract only) — preserving pre-existing behaviour.
+    """
+    wacc_cfg = config.get("wacc", {}) or {}
+    mode = str(wacc_cfg.get("mode", "")).lower()
+    if mode == "build_up":
+        capex = _extract_capex_usd(dict(config))
+        debt_total = float(debt_result.get("debt_total") or 0.0)
+        d_to_v = debt_total / capex if capex > 0 else 0.0
+        kd_pretax = float(debt_result.get("avg_debt_rate") or 0.0)
+        wacc_dict = compute_build_up_wacc(
+            dict(config),
+            debt_to_value=d_to_v,
+            cost_of_debt_pretax=kd_pretax,
+            debt_fee_rate=_debt_fee_rate(config),
+        )
+    else:
+        wacc_dict = compute_wacc_from_config(dict(config))
+
+    project_discount = DEFAULT_DISCOUNT_RATE
+    equity_discount: float | None = None
+    if wacc_dict and wacc_cfg.get("drives_discount_rate"):
+        project_discount = float(wacc_dict.get("wacc_nominal") or DEFAULT_DISCOUNT_RATE)
+        ke = wacc_dict.get("cost_of_equity")
+        equity_discount = float(ke) if ke else None
+    return wacc_dict, project_discount, equity_discount
 
 
 def _build_wacc_contract(wacc_dict: Mapping[str, Any] | None) -> WaccResult | None:
@@ -554,12 +602,28 @@ def run_v14_pipeline_enhanced(
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
 
+        # WACC + discount rates resolved BEFORE the NPV so a build_up WACC (derived
+        # from the sized debt) can drive the project/equity discounting instead of a
+        # hardcoded rate. Default (no drives_discount_rate flag) preserves the legacy
+        # DEFAULT_DISCOUNT_RATE and leaves the WACC informational.
+        phase_start = time.time()
+        wacc_dict, project_discount, equity_discount = _resolve_wacc_and_discounts(
+            cfg, debt_result
+        )
+        wacc_contract = _build_wacc_contract(wacc_dict)
+        metrics.wacc_time_sec = time.time() - phase_start
+        logger.info(
+            "WACC resolved in %.3f sec: project discount %.3f%%",
+            metrics.wacc_time_sec,
+            project_discount * 100.0,
+        )
+
         phase_start = time.time()
         kpis = calculate_scenario_kpis(
             config=cfg,
             annual_rows=annual_rows_enriched,
             debt_result=debt_result,
-            discount_rate=0.10,
+            discount_rate=project_discount,
         )
         metrics.kpis_count = len(kpis)
         metrics.kpi_time_sec = time.time() - phase_start
@@ -568,8 +632,14 @@ def run_v14_pipeline_enhanced(
         )
 
         phase_start = time.time()
+        equity_cfg: Mapping[str, Any] = cfg
+        if equity_discount is not None:
+            equity_cfg = dict(cfg)
+            equity_block = dict(equity_cfg.get("equity", {}) or {})
+            equity_block["discount_rate"] = equity_discount
+            equity_cfg["equity"] = equity_block
         equity_distribution = calculate_equity_distribution_from_pipeline(
-            config=cfg,
+            config=equity_cfg,
             annual_rows=annual_rows_enriched,
             debt_result=debt_result,
             kpis=kpis,
@@ -584,12 +654,6 @@ def run_v14_pipeline_enhanced(
             equity_distribution.get("status", "unknown"),
             metrics.equity_distribution_time_sec,
         )
-
-        phase_start = time.time()
-        wacc_dict = compute_wacc_from_config(cfg)
-        wacc_contract = _build_wacc_contract(wacc_dict)
-        metrics.wacc_time_sec = time.time() - phase_start
-        logger.info("WACC computed in %.3f sec", metrics.wacc_time_sec)
 
         project_npv = float(kpis.get("project_npv", 0.0))
         project_irr = float(kpis.get("project_irr", 0.0))
