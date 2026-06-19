@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -228,3 +229,177 @@ def add_curve_to_store(
             f.write(f"\n# Added via power_curve_sourcing (source: {pc.source})\n{block}")
     logger.info("Added power curve %r (%s) to %s", pc.key, pc.source, store_path)
     return store_path
+
+
+# ---------------------------------------------------------------------------
+# Additional sources (issue #181 follow-up; see the deep-research shortlist):
+#   - NREL `turbine-models` package: free, BSD-3 REFERENCE designs (IEA/NREL/DTU 5-18 MW).
+#   - WAsP `.wtg` and tabular `.dat`/`.csv` parsers for OEM curves mined from permit/EIA
+#     portals or exported from WAsP/EMD (the practical route to real large-turbine curves).
+# ---------------------------------------------------------------------------
+
+
+def _turbine_models_data_dir() -> Path:
+    try:
+        import turbine_models
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "Reference curves need the turbine-models package: pip install turbine-models"
+        ) from exc
+    return Path(turbine_models.__file__).parent / "data"
+
+
+def list_turbine_models() -> List[str]:
+    """List reference turbines available in the NREL ``turbine-models`` package (BSD-3)."""
+    return sorted(
+        p.stem
+        for p in _turbine_models_data_dir().rglob("*.csv")
+        if "Validation" not in p.stem
+    )
+
+
+def fetch_turbine_models_curve(
+    name: str, *, key: Optional[str] = None, manufacturer: str = "reference"
+) -> PowerCurve:
+    """Load a power curve from the NREL ``turbine-models`` package by name.
+
+    These are institutional REFERENCE designs (e.g. ``IEA_Reference_15MW_240``,
+    ``2020ATB_NREL_Reference_18MW_263``, ``DTU_Reference_v1_10MW_178``), NOT commercial OEM
+    curves -- use them as defaults/fallbacks for the 5-18 MW band. Exact stem match first,
+    then case-insensitive substring.
+    """
+    import pandas as pd
+
+    csvs = list(_turbine_models_data_dir().rglob("*.csv"))
+    matches = [p for p in csvs if p.stem == name]
+    if not matches:
+        matches = [p for p in csvs if name.lower() in p.stem.lower() and "Validation" not in p.stem]
+    if not matches:
+        raise ValueError(f"No turbine-models curve named {name!r}; see list_turbine_models()")
+    csv = matches[0]
+    df = pd.read_csv(csv)
+    ws_col = next((c for c in df.columns if "wind speed" in str(c).lower()), None)
+    power_col = next((c for c in df.columns if str(c).lower().startswith("power")), None)
+    if ws_col is None or power_col is None:
+        raise ValueError(f"{csv.name} missing wind-speed/power columns: {list(df.columns)}")
+    sub = df[[ws_col, power_col]].apply(pd.to_numeric, errors="coerce").dropna()
+    ws = [float(x) for x in sub[ws_col]]
+    power = [float(x) for x in sub[power_col]]  # already kW
+    rated = max(power) if power else 0.0
+    return PowerCurve(
+        key=key or _slugify(csv.stem),
+        manufacturer=manufacturer,
+        model=csv.stem,
+        rated_capacity_kw=round(rated, 1),
+        wind_speeds_ms=ws,
+        power_kw=power,
+        rated_ms=_rated_wind_speed(ws, power, rated),
+        source="nrel_turbine_models",
+        provenance={"dataset": "NREL turbine-models (BSD-3, reference design)", "file": csv.name},
+    )
+
+
+def from_wasp_wtg(
+    path: Any,
+    *,
+    air_density_kgm3: float = 1.225,
+    manufacturer: str = "",
+    key: Optional[str] = None,
+) -> PowerCurve:
+    """Parse a WAsP ``.wtg`` (XML) turbine file -- the format OEMs / permit portals distribute.
+
+    Multi-mode files carry several ``PerformanceTable`` blocks (one per air density); the one
+    nearest ``air_density_kgm3`` is used. ``PowerOutput`` (W) is converted to kW.
+    """
+    root = ElementTree.parse(str(path)).getroot()
+    desc = root.get("Description") or root.get("ManufacturerName") or Path(str(path)).stem
+    rotor = root.get("RotorDiameter")
+    tables = root.findall(".//PerformanceTable")
+    if not tables:
+        raise ValueError(f"No <PerformanceTable> in WAsP file {path}")
+
+    def _density(table: Any) -> float:
+        try:
+            return float(table.get("AirDensity"))
+        except (TypeError, ValueError):
+            return 1.225
+
+    table = min(tables, key=lambda t: abs(_density(t) - air_density_kgm3))
+    points = table.findall(".//DataPoint")
+    ws = [float(p.get("WindSpeed")) for p in points if p.get("WindSpeed") is not None]
+    power = [float(p.get("PowerOutput")) / 1000.0 for p in points if p.get("PowerOutput") is not None]
+    rated = max(power) if power else 0.0
+    strat = table.find(".//StartStopStrategy")
+    cut_in = float(strat.get("LowSpeedCutIn")) if (strat is not None and strat.get("LowSpeedCutIn")) else 3.0
+    cut_out = float(strat.get("HighSpeedCutOut")) if (strat is not None and strat.get("HighSpeedCutOut")) else 25.0
+    return PowerCurve(
+        key=key or _slugify(str(desc)),
+        manufacturer=manufacturer or "unknown",
+        model=str(desc),
+        rated_capacity_kw=round(rated, 1),
+        wind_speeds_ms=ws,
+        power_kw=power,
+        cut_in_ms=cut_in,
+        cut_out_ms=cut_out,
+        rated_ms=_rated_wind_speed(ws, power, rated),
+        source="wasp_wtg",
+        provenance={
+            "file": Path(str(path)).name,
+            "air_density_kgm3": _density(table),
+            "rotor_diameter_m": float(rotor) if rotor else None,
+        },
+    )
+
+
+def from_tabular_file(
+    path: Any,
+    *,
+    key: str,
+    manufacturer: str,
+    model: str,
+    rated_capacity_kw: Optional[float] = None,
+    power_unit: str = "kW",
+    hub_heights_m: Optional[Sequence[float]] = None,
+    certificate: Optional[str] = None,
+) -> PowerCurve:
+    """Parse a ws/power table from a ``.dat``/``.tsv``/``.csv`` file.
+
+    For IEA reference ``.dat`` performance files or a curve extracted from a permit-portal
+    PDF. Delimiter is sniffed from the extension; the wind-speed and power columns are found
+    by header keyword. ``power_unit`` may be ``kW`` (default) or ``W``.
+    """
+    import pandas as pd
+
+    sep = "\t" if str(path).endswith((".dat", ".tsv")) else None
+    df = pd.read_csv(path, sep=sep, engine="python")
+
+    def _find(keywords: List[str]) -> Optional[Any]:
+        for col in df.columns:
+            if any(k in str(col).lower() for k in keywords):
+                return col
+        return None
+
+    ws_col = _find(["wind speed", "wind_speed", "windspeed", "speed", "ws"])
+    power_col = _find(["power", "electrical"])
+    if ws_col is None or power_col is None:
+        raise ValueError(f"Could not find ws/power columns in {path}: {list(df.columns)}")
+    sub = df[[ws_col, power_col]].apply(pd.to_numeric, errors="coerce").dropna()
+    divisor = 1000.0 if power_unit.lower() in ("w", "watt", "watts") else 1.0
+    ws = [float(x) for x in sub[ws_col]]
+    power = [float(x) / divisor for x in sub[power_col]]
+    rated = float(rated_capacity_kw) if rated_capacity_kw else (max(power) if power else 0.0)
+    prov: Dict[str, Any] = {"file": Path(str(path)).name, "power_unit": power_unit}
+    if certificate:
+        prov["certificate"] = certificate
+    return PowerCurve(
+        key=key,
+        manufacturer=manufacturer,
+        model=model,
+        rated_capacity_kw=round(rated, 1),
+        wind_speeds_ms=ws,
+        power_kw=power,
+        hub_heights_m=[float(h) for h in (hub_heights_m or [])],
+        rated_ms=_rated_wind_speed(ws, power, rated),
+        source="tabular_import",
+        provenance=prov,
+    )

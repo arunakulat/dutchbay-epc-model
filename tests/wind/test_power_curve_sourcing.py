@@ -116,3 +116,67 @@ def test_oedb_paths_if_available(path):
             assert pc.source == "oedb_windpowerlib"
     except Exception as exc:  # network / windpowerlib absent
         pytest.skip(f"oedb/windpowerlib unavailable: {type(exc).__name__}")
+
+
+def _wtg_xml():
+    return (
+        '<WindTurbineGenerator Description="TestCo TC-200/12.0" RotorDiameter="200">'
+        '<PerformanceTable AirDensity="1.225">'
+        '<StartStopStrategy LowSpeedCutIn="3.0" HighSpeedCutOut="25.0"/>'
+        '<DataTable>'
+        '<DataPoint WindSpeed="3.0" PowerOutput="0"/>'
+        '<DataPoint WindSpeed="5.0" PowerOutput="1000000"/>'
+        '<DataPoint WindSpeed="8.0" PowerOutput="5000000"/>'
+        '<DataPoint WindSpeed="11.0" PowerOutput="11000000"/>'
+        '<DataPoint WindSpeed="12.0" PowerOutput="12000000"/>'
+        '<DataPoint WindSpeed="20.0" PowerOutput="12000000"/>'
+        '<DataPoint WindSpeed="25.0" PowerOutput="0"/>'
+        '</DataTable></PerformanceTable>'
+        '<PerformanceTable AirDensity="1.10"><DataTable>'
+        '<DataPoint WindSpeed="3.0" PowerOutput="0"/>'
+        '<DataPoint WindSpeed="12.0" PowerOutput="11000000"/>'
+        '</DataTable></PerformanceTable></WindTurbineGenerator>'
+    )
+
+
+def test_from_wasp_wtg_picks_density_and_converts(tmp_path):
+    from wind_resource.power_curve_sourcing import from_wasp_wtg
+
+    path = tmp_path / "t.wtg"
+    path.write_text(_wtg_xml())
+    pc = from_wasp_wtg(path, air_density_kgm3=1.225, manufacturer="TestCo", key="tc_12mw")
+    assert pc.rated_capacity_kw == 12000.0  # the 1.225 table, not the 1.10 one
+    assert pc.wind_speeds_ms[1] == 5.0 and pc.power_kw[1] == 1000.0  # W -> kW
+    assert pc.cut_in_ms == 3.0 and pc.cut_out_ms == 25.0
+    assert pc.source == "wasp_wtg"
+    assert validate_power_curve(pc) == []
+
+
+def test_from_tabular_file_dat_watts(tmp_path):
+    from wind_resource.power_curve_sourcing import from_tabular_file
+
+    path = tmp_path / "curve.dat"
+    path.write_text(
+        "Wind speed (m/s)\tRotor electrical power (W)\n3.0\t0\n5.0\t1000000\n12.0\t12000000\n25.0\t0\n"
+    )
+    pc = from_tabular_file(path, key="x", manufacturer="M", model="m", power_unit="W")
+    assert pc.power_kw[2] == 12000.0  # 12e6 W -> 12000 kW
+    assert pc.rated_capacity_kw == 12000.0
+    assert pc.source == "tabular_import"
+
+
+def test_fetch_turbine_models_if_available():
+    from wind_resource.power_curve_sourcing import (
+        fetch_turbine_models_curve,
+        list_turbine_models,
+    )
+
+    try:
+        names = list_turbine_models()
+    except ImportError:
+        pytest.skip("turbine-models not installed")
+    assert any("15MW" in n for n in names)
+    pc = fetch_turbine_models_curve("IEA_Reference_15MW_240")
+    assert pc.rated_capacity_kw == pytest.approx(15000, rel=0.01)
+    assert pc.source == "nrel_turbine_models"
+    assert validate_power_curve(pc) == []

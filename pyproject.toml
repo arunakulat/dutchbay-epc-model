@@ -46,6 +46,7 @@ wind = [
   "xarray>=2023.6",
   "netcdf4>=1.6",
   "windpowerlib>=0.2",  # open turbine library (oedb) for power-curve sourcing (#181)
+  "turbine-models>=0.2",  # NREL reference power curves (5-18 MW) for sourcing fallback (#181)
 ]
 
 [tool.ruff]
