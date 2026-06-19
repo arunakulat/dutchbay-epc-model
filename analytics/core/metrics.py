@@ -199,8 +199,16 @@ def calculate_scenario_kpis(
     cfads_series_usd: Optional[Sequence[float]] = None,
     valuation: Optional[Mapping[str, Any]] = None,
     scenario_name: Optional[str] = None,
+    wacc_is_real: Optional[bool] = None,
+    wacc_label: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Canonical v14 KPI computation surface."""
+    """Canonical v14 KPI computation surface.
+
+    ``wacc_is_real`` / ``wacc_label`` describe the discount basis. The pipeline
+    passes the resolved truth (whether the build-up WACC actually drove the
+    project discount); when omitted they are derived from ``config['wacc']``
+    (config-first, ARCH-01), so standalone callers stay correct too.
+    """
     drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
     capex_total = _derive_capex_usd(config)
 
@@ -308,9 +316,20 @@ def calculate_scenario_kpis(
         result["project_irr"] = project_irr
         result["irr"] = project_irr
 
+    # WACC reporting basis. Prefer the caller-resolved truth (the pipeline knows
+    # whether the build-up WACC actually drove `drate`); else derive from config
+    # so the label/flag never silently contradict the rate actually used.
+    if wacc_is_real is None or wacc_label is None:
+        wacc_cfg = (config or {}).get("wacc", {}) or {}
+        _drives = bool(wacc_cfg.get("drives_discount_rate"))
+        _mode = str(wacc_cfg.get("mode") or "")
+        if wacc_is_real is None:
+            wacc_is_real = _drives
+        if wacc_label is None:
+            wacc_label = _mode if (_drives and _mode) else "base"
     result["discount_rate_used"] = drate
-    result["wacc_label"] = "base"
-    result["wacc_is_real"] = False
+    result["wacc_label"] = wacc_label
+    result["wacc_is_real"] = bool(wacc_is_real)
 
     result["avg_dscr"] = result["dscr_mean"]
     if "equity_irr" not in result:
