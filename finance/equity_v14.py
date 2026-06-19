@@ -115,7 +115,15 @@ def calculate_payback_period(
     annual_distributions: Sequence[Number],
     initial_equity: float,
 ) -> Optional[float]:
-    """Calculate payback period in years."""
+    """Calculate the payback period in years (first year cumulative distributions reach equity).
+
+    NOTE: this is *first-crossing* payback. When distributions are front-loaded
+    and a covenant lockup then zeroes several years, the cumulative can plateau
+    right at ``initial_equity`` -- so a tiny change in either input can flip the
+    reported year across that plateau (e.g. ~4 vs ~18 years). That sensitivity is
+    inherent to first-crossing payback on lumpy cashflows, not a calculation
+    error; read it alongside MOIC / equity NPV, which vary smoothly.
+    """
     if initial_equity <= 0.0:
         return None
 
