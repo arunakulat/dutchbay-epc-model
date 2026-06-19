@@ -205,7 +205,7 @@ These modules are **imported** but not **fully utilized**:
 ### Multiple Tax Implementations Found:
 
 1. `finance/tax_v14.py` ✅ (canonical)
-2. `finance/tax_profile_v14_hydra.py` ⚠️ (duplicate?)
+2. ~~`finance/tax_profile_v14_hydra.py`~~ ✅ RETIRED 2026-06 (stale duplicate; de-duped onto `cashflow_v14_tax.py`)
 3. `finance/statutory_profile.py` ⚠️ (old API?)
 4. `finance/cashflow_v14_tax.py` ✅ (integrated)
 5. `finance/cashflow_v14_tax.py.bak` ❌ (DELETE - backup file)
@@ -216,7 +216,7 @@ These modules are **imported** but not **fully utilized**:
 **Sprint 16 Actions:**
 1. ❌ DELETE `cashflow_v14_tax.py.bak`
 2. ❌ DEPRECATE `finance/dutchbay_finmodel/tax_profile.py`
-3. ⚠️ CONSOLIDATE `tax_profile_v14_hydra.py` into `tax_v14.py`
+3. ✅ DONE (2026-06) — retired `tax_profile_v14_hydra.py`; canonical engine is `cashflow_v14_tax.py`, tests migrated (CCCDIR de-dup)
 4. ⚠️ VERIFY `statutory_profile.py` is still needed
 5. ✅ DOCUMENT canonical tax entry point
 
@@ -324,8 +324,8 @@ ORPHANED MODULES (not in chain):
    - Implement real sensitivity calculations
    - Wire into analytics pipeline
 
-5. **Consolidate tax modules**
-   - Merge `tax_profile_v14_hydra.py` into `tax_v14.py`
+5. **Consolidate tax modules** — ✅ hydra engine done (2026-06)
+   - ✅ Retired `tax_profile_v14_hydra.py` (CCCDIR de-dup); canonical engine = `cashflow_v14_tax.py`, tests migrated
    - Deprecate `dutchbay_finmodel/tax_profile.py`
    - Document canonical tax engine
 
