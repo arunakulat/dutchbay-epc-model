@@ -619,6 +619,10 @@ def _maybe_autosolve_dscr(
     tenor = max(1, int(_as_float(fin.get("tenor_years"), 15)))
     capex = _extract_capex_usd(config)
     downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
+    # NOTE: interest_rate_nominal here only discounts the dual-DSCR *capacity*
+    # detail (lender-pack metadata). The real amortization uses the per-tranche
+    # rates, so overriding Financing_Terms.interest_rate_nominal does NOT change
+    # the achieved schedule or equity_irr.
     rate = _as_float(fin.get("interest_rate_nominal"), 0.08)
     detail: Optional[Dict[str, Any]] = None
     if cfads and capex > 0:
