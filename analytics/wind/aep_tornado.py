@@ -74,14 +74,17 @@ def _weibull_pdf(v: np.ndarray, a: float, k: float) -> np.ndarray:
     return np.asarray(pdf, dtype=float)
 
 
-def _gross_aep_farm_gwh(
+def gross_aep_farm_gwh(
     weibull_a: float,
     weibull_k: float,
     curve_ws: np.ndarray,
     curve_power_kw: np.ndarray,
     n_turbines: int,
 ) -> float:
-    """Analytic gross farm AEP (GWh) from a Weibull and a power curve."""
+    """Analytic gross farm AEP (GWh) from a Weibull and a power curve.
+
+    Shared with the #24 Monte-Carlo AEP module so both use the same method.
+    """
     pdf = _weibull_pdf(_WS_GRID, weibull_a, weibull_k)
     pdf = pdf / float(np.trapezoid(pdf, _WS_GRID))  # renormalise over the grid
     power = np.interp(_WS_GRID, curve_ws, curve_power_kw, left=0.0, right=0.0)
@@ -98,7 +101,7 @@ def _net_aep_gwh(
     n_turbines: int,
     losses: Mapping[str, Any],
 ) -> float:
-    gross = _gross_aep_farm_gwh(
+    gross = gross_aep_farm_gwh(
         weibull_a, weibull_k, curve_ws, curve_power_kw, n_turbines
     )
     return apply_losses(gross, losses).net_aep_gwh
@@ -217,6 +220,7 @@ def write_tornado_csv(df: pd.DataFrame, output_path: str) -> Path:
 
 __all__ = [
     "AEPTornadoConfig",
+    "gross_aep_farm_gwh",
     "run_aep_tornado",
     "tornado_from_config",
     "write_tornado_csv",
