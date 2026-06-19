@@ -6,28 +6,22 @@ This module is intentionally thin:
     * scenario config path
     * parameter ranges
     * target KPI metric (default: "project_irr")
-- Builds a `SensitivityRequest` from `analytics.sensitivity_v14`.
-- Delegates the work to the v14 sensitivity coordinator.
-- Returns a JSON-serialisable list[dict[str, Any]].
+- Delegates to the canonical engine
+  ``analytics.core.sensitivity_runner.run_sensitivity_analysis``.
+- Returns a JSON-serialisable list[dict[str, Any]] of tornado rows.
 
 No IRR or cashflow logic lives here; all modelling stays in analytics/finance.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Hashable, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity_export import tornado_suite_to_dataframe
-from analytics.sensitivity_v14 import (
-    SensitivityRequest,
-)
-from analytics.sensitivity_v14 import (
-    run as run_sensitivity,  # type: ignore[attr-defined]
-)
+from analytics.core.sensitivity_runner import run_sensitivity_analysis
 
 app = FastAPI(title="DutchBay v14 Sensitivity API", version="1.0.0")
 
@@ -52,24 +46,39 @@ def run_tornado(payload: SensitivityInput) -> List[Dict[str, Any]]:
     Returns
     -------
     list[dict[str, Any]]:
-        Tornado rows as a list of plain dicts, ready for JSON encoding.
-        Column names and semantics are defined by the analytics layer
-        (see `tornado_suite_to_dataframe`).
+        One tornado row per parameter: ``parameter``, ``metric``,
+        ``base_metric``, ``low_case``, ``high_case``, ``impact_abs``.
     """
-    # Normalise raw dicts into strongly-typed ParameterRangeConfig objects
+    # Normalise raw dicts into strongly-typed ParameterRangeConfig objects.
     params: List[ParameterRangeConfig] = [
         ParameterRangeConfig(**p) for p in payload.parameters
     ]
 
-    request = SensitivityRequest(
-        base_config_path=payload.config_path,
-        parameters=params,
+    # Canonical engine: takes the config path, target metric, and explicit
+    # parameter ranges, and returns a SensitivitySuite with tornado_results.
+    suite = run_sensitivity_analysis(
+        payload.config_path,
         metric=payload.metric,
+        parameters=params,
     )
 
-    suite = run_sensitivity(request)
-    df = tornado_suite_to_dataframe(suite)
-
-    # Pandas returns list[dict[Hashable, Any]]; normalise keys to str for JSON contract.
-    rows: List[Dict[Hashable, Any]] = df.to_dict(orient="records")
-    return [{str(k): v for k, v in row.items()} for row in rows]
+    rows: List[Dict[str, Any]] = []
+    for tornado in suite.tornado_results:
+        shocks = tornado.shock_results or []
+        first: Optional[Any] = shocks[0] if shocks else None
+        parameter = (
+            getattr(first, "variable_name", None)
+            or tornado.label
+            or tornado.metric_name
+        )
+        rows.append(
+            {
+                "parameter": parameter,
+                "metric": payload.metric,
+                "base_metric": tornado.base_metric,
+                "low_case": getattr(first, "low_case", None),
+                "high_case": getattr(first, "high_case", None),
+                "impact_abs": tornado.impact_abs,
+            }
+        )
+    return rows
