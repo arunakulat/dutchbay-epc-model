@@ -35,6 +35,16 @@ from analytics.mc.samplers import generate_lhs_samples
 logger = logging.getLogger(__name__)
 
 
+class MonteCarloConfigError(ValueError):
+    """Raised when a ``monte_carlo`` config block does not match the engine contract.
+
+    CESSPIT (schema strict) / CASPER (predictable error responses): a malformed
+    ``monte_carlo.parameters`` block must fail with a clear, actionable message
+    rather than a cryptic ``TypeError`` from deep inside the sampler. Subclasses
+    :class:`ValueError` so existing ``except ValueError`` callers keep working.
+    """
+
+
 @dataclass(frozen=True)
 class MonteCarloRunMeta:
     n_trials: int
@@ -134,11 +144,34 @@ class MonteCarloEngine:
         mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
         params = mc.get("parameters", []) or mc.get("params", [])
 
+        # CESSPIT (schema strict): the engine contract is an explicit *list* of
+        # ``{name, low, high[, distribution]}`` mappings. A bare mapping (e.g.
+        # ``{capacity_factor_std: 0.05, ...}``) is a different, incompatible
+        # schema; iterating it would yield string keys and ``p["name"]`` would
+        # raise an opaque ``TypeError``. Reject it up-front with a clear message
+        # naming the exact field and the expected shape.
+        if isinstance(params, Mapping):
+            raise MonteCarloConfigError(
+                "monte_carlo.parameters must be a LIST of "
+                "{name, low, high[, distribution]} mappings, but a mapping "
+                f"(dict) was provided with keys {sorted(params)!r}. A dict of "
+                "per-parameter scalars is not the engine contract — convert it "
+                "to an explicit list of parameter definitions with dotted "
+                "config paths as `name` (e.g. "
+                "[{name: project.capacity_factor, low: 0.276, high: 0.338}])."
+            )
+
         param_names: List[str] = []
         bounds: List[Tuple[float, float]] = []
         kinds: List[str] = []
 
-        for p in params:
+        for idx, p in enumerate(params):
+            if not isinstance(p, Mapping) or "name" not in p:
+                raise MonteCarloConfigError(
+                    f"monte_carlo.parameters[{idx}] must be a mapping with a "
+                    f"'name' key (a dotted config path), got {type(p).__name__}: "
+                    f"{p!r}."
+                )
             name = str(p["name"])
             low = float(p.get("low", p.get("min", 0.0)))
             high = float(p.get("high", p.get("max", 1.0)))
@@ -149,7 +182,10 @@ class MonteCarloEngine:
             kinds.append(kind)
 
         if not param_names:
-            raise ValueError("Monte Carlo config has no parameters (monte_carlo.parameters is empty).")
+            raise MonteCarloConfigError(
+                "Monte Carlo config has no parameters "
+                "(monte_carlo.parameters is empty)."
+            )
 
         return param_names, bounds, kinds
 
