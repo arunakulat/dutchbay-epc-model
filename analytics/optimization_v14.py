@@ -33,6 +33,20 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 
 _DIRECTIONS = ("max", "min")
 
+# Feasibility comparisons need a floating-point tolerance: the dual-DSCR debt
+# sculpt pins the achieved DSCR *exactly* at the covenant target, so the
+# constraint value lands at target +/- ~1e-15 rounding noise. A naked
+# ``constraint < constraint_min`` then flips feasibility on that noise, marking
+# covenant-grazing-but-compliant points infeasible at random. Treat a point as
+# satisfying a bound when it does so within this tolerance (relative + absolute).
+_FEASIBILITY_ABS_TOL = 1e-9
+_FEASIBILITY_REL_TOL = 1e-9
+
+
+def _bound_slack(bound: float) -> float:
+    """Absolute slack to allow at a constraint bound (scales with the bound)."""
+    return max(_FEASIBILITY_ABS_TOL, _FEASIBILITY_REL_TOL * abs(bound))
+
 
 @dataclass(frozen=True)
 class OptimizationPoint:
@@ -108,9 +122,15 @@ def optimize_parameter(
         feasible = True
         if constraint_key is not None:
             constraint = float(kpis[constraint_key])
-            if constraint_min is not None and constraint < constraint_min:
+            if (
+                constraint_min is not None
+                and constraint < constraint_min - _bound_slack(constraint_min)
+            ):
                 feasible = False
-            if constraint_max is not None and constraint > constraint_max:
+            if (
+                constraint_max is not None
+                and constraint > constraint_max + _bound_slack(constraint_max)
+            ):
                 feasible = False
 
         curve.append(
