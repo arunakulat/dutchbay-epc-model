@@ -44,7 +44,7 @@ from analytics.fx.fx_contracts import (
 )
 
 # Returns calculation module
-from analytics.returns import (
+from analytics.core.returns import (
     AllReturns,
     EquityReturns,
     ProjectReturns,
@@ -58,7 +58,7 @@ from analytics.returns import (
 )
 
 # Risk metrics module
-from analytics.risk_metrics import (
+from analytics.core.risk_metrics import (
     CovenantBreachAnalysis,
     DownsideRisk,
     MetricRiskSummary,

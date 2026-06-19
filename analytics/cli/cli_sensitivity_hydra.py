@@ -2,7 +2,7 @@
 
 CANONICAL ENTRYPOINT: Use this instead of cli_sensitivity.py (legacy argparse).
 
-Wired to analytics.sensitivity_runner.run_sensitivity_analysis() engine.
+Wired to analytics.core.sensitivity_runner.run_sensitivity_analysis() engine.
 
 Usage:
     python analytics/cli/cli_sensitivity_hydra.py \\
@@ -57,7 +57,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 # Import engine function
-from analytics.sensitivity_runner import run_sensitivity_analysis
+from analytics.core.sensitivity_runner import run_sensitivity_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +143,8 @@ def main(cfg: DictConfig) -> None:
         result["metric_analyzed"] = metric
         
         logger.info(
-            "Sensitivity analysis complete: %d variations analyzed",
-            len(result.get("variations", []))
+            "Sensitivity analysis complete: %d tornado(s) analyzed",
+            len(result.get("tornado_results", []))
         )
         
         # Optional artifact writing

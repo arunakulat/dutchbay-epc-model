@@ -36,7 +36,7 @@ from analytics.pipeline_v14 import run_v14_pipeline
 
 # Analytics modules (optional imports with graceful degradation)
 try:
-    from analytics.returns import (
+    from analytics.core.returns import (
         AllReturns,
         ReturnsConfig,
         summarize_all_returns,
@@ -47,7 +47,7 @@ except ImportError:
     RETURNS_AVAILABLE = False
 
 try:
-    from analytics.risk_metrics import (
+    from analytics.core.risk_metrics import (
         RiskConfig,
         TailRiskAnalyzer,
     )
