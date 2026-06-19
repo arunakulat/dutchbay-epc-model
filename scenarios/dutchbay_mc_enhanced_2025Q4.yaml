@@ -8,8 +8,8 @@
 #   3. FX rate (LKR/USD)
 #   4. Turbine degradation rate
 #
-# Usage:
-#   python -m analytics.monte_carlo_v14_enhanced scenarios/dutchbay_mc_enhanced_2025Q4.yaml
+# Usage (unvalidated placeholder scenario — see the expected_results warning below):
+#   python -m analytics.cli.cli_monte_carlo_hydra config=scenarios/dutchbay_mc_enhanced_2025Q4.yaml
 #
 # References:
 #   - Iman & Conover (1982): Correlation preservation in LHS

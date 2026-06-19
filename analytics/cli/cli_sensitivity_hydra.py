@@ -14,8 +14,7 @@ Config:
     See conf/cli_sensitivity.yaml for all parameters:
     - config: Scenario YAML file path (required)
     - output_dir: Where to write results
-    - shocks: Parameter variations (capex, tariff, capacity_factor)
-    - metrics: KPIs to track (IRRs, DSCRs, etc.)
+    - metrics: KPIs to track; the first is the tornado target metric
 
 Output:
     Prints JSON to stdout:
@@ -54,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 # Import engine function
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
@@ -77,8 +76,7 @@ def main(cfg: DictConfig) -> None:
             Optional:
                 - output_dir: Output directory (default: _out/sensitivity)
                 - write_artifacts: Write files (default: true)
-                - shocks: Parameter variations
-                - metrics: KPIs to track
+                - metrics: KPIs to track (first is the tornado target metric)
                 
     Returns:
         None. Prints JSON to stdout, optionally writes artifacts.
@@ -111,7 +109,6 @@ def main(cfg: DictConfig) -> None:
     # Extract parameters from config
     output_dir = Path(str(cfg.get("output_dir", "_out/sensitivity")))
     write_artifacts = bool(cfg.get("write_artifacts", True))
-    shocks = OmegaConf.to_container(cfg.get("shocks", {}), resolve=True)
     metrics = list(cfg.get("metrics", []))
     
     # Default metric if not specified
@@ -124,7 +121,7 @@ def main(cfg: DictConfig) -> None:
     
     try:
         # =====================================================================
-        # WIRED TO ENGINE: analytics.sensitivity_runner.run_sensitivity_analysis
+        # WIRED TO ENGINE: analytics.core.sensitivity_runner.run_sensitivity_analysis
         # =====================================================================
         
         # Call sensitivity engine
