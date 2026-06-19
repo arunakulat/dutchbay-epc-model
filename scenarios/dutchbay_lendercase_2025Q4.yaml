@@ -256,6 +256,13 @@ Financing_Terms:
   debt_ratio: 0.7                  # MAX gearing cap; actual gearing auto-solved to target_dscr
   debt_sizing: dual_dscr           # auto-size debt on the real schedule to target_dscr (capped at debt_ratio); robust to AEP (#180)
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
+  # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
+  # maturity. balloon_treatment governs how the equity waterfall resolves it
+  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
+  # the prudent-lender default: post-maturity CFADS is trapped to retire the
+  # balloon before any equity distribution. NB: this structure carries a ~36%
+  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto

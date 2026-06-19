@@ -326,6 +326,13 @@ def calculate_scenario_kpis(
                 except (TypeError, ValueError):
                     pass
             result[metric_name] = result["dscr_mean"]
+        # Balloon covenant surface (numeric, so it survives KPI normalisation and
+        # can be used as an optimisation constraint key, e.g. balloon_pct <= 0.10).
+        result["balloon_pct"] = float(debt_result.get("balloon_pct") or 0.0)
+        result["balloon_residual"] = float(debt_result.get("balloon_residual") or 0.0)
+        result["balloon_covenant_breach"] = (
+            1.0 if bool(debt_result.get("balloon_covenant_breach")) else 0.0
+        )
     else:
         result["llcr"] = result["dscr_mean"]
         result["plcr"] = result["dscr_mean"]

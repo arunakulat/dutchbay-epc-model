@@ -400,6 +400,14 @@ def build_equity_distribution_schedule(
         reserve_balance += reserve_funded
 
         cash_after_reserve = max(0.0, cf_after_debt - reserve_funded)
+
+        # Balloon repayment (cash_sweep / refinance / bullet) is senior to equity
+        # but is NOT scheduled senior debt service, so it never enters the DSCR.
+        # cash_sweep is bounded by available cash; refinance/bullet may exceed it,
+        # in which case the shortfall is a sponsor cash call (negative equity CF).
+        balloon_resolution = _as_float(row.get("balloon_resolution"), 0.0) or 0.0
+        cash_for_equity = cash_after_reserve - balloon_resolution
+
         covenant_locked = bool(
             dscr is not None
             and distribution_config.min_dscr_threshold > 0.0
@@ -407,11 +415,15 @@ def build_equity_distribution_schedule(
         )
 
         if covenant_locked:
-            equity_distribution = 0.0
-            retained_cash = cash_after_reserve
+            # No positive distribution while locked; a balloon shortfall is still a cash call.
+            equity_distribution = min(0.0, cash_for_equity)
+            retained_cash = max(0.0, cash_for_equity)
+        elif cash_for_equity < 0.0:
+            equity_distribution = cash_for_equity  # sponsor cash call to fund the balloon
+            retained_cash = 0.0
         else:
-            gross_distribution = cash_after_reserve * sweep
-            retained_cash = cash_after_reserve - gross_distribution
+            gross_distribution = cash_for_equity * sweep
+            retained_cash = cash_for_equity - gross_distribution
             holdback_amount = gross_distribution * holdback
             equity_distribution = max(0.0, gross_distribution - holdback_amount)
             retained_cash += holdback_amount
@@ -428,6 +440,7 @@ def build_equity_distribution_schedule(
                 "cf_pre_debt_usd": cf_pre_debt,
                 "debt_service_usd": debt_service,
                 "cf_after_debt_usd": cf_after_debt,
+                "balloon_resolution_usd": balloon_resolution,
                 "dscr": dscr,
                 "covenant_locked": covenant_locked,
                 "reserve_required_usd": reserve_required,
