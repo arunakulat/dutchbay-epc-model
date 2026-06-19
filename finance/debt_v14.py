@@ -14,8 +14,39 @@ logger = logging.getLogger(__name__)
 """Debt Planning Module for DutchBay V14 Project Finance.
 
 Author: DutchBay V14 Team, Nov 2025
-Version: 3.6 (Dynamic debt timeline + explicit CAPEX guard)
+Version: 3.7 (Dynamic debt timeline + explicit CAPEX guard + balloon treatment)
 """
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Balloon treatment
+# ─────────────────────────────────────────────────────────────────────────────
+# A sculpted schedule pays principal = CFADS/DSCR − interest each year. Over a
+# FIXED tenor this need not retire the whole loan; the residual is a BALLOON due
+# at maturity. The equity waterfall MUST resolve it — otherwise equity collects
+# post-maturity CFADS as a free pass and equity IRR is overstated. The treatment
+# is config-selectable via ``Financing_Terms.balloon_treatment``:
+#   - "cash_sweep" (default): trap post-maturity CFADS to retire the balloon
+#       before any equity distribution (prudent-lender cash-sweep covenant).
+#   - "refinance":  refinance the balloon over ``refinance_tenor_years`` at
+#       ``avg_debt_rate + refinance_rate_premium``; the refi service reduces
+#       equity (and may require a sponsor cash call if it exceeds CFADS).
+#   - "bullet":     single lump repayment at maturity (cash call if > CFADS).
+#   - "amortize":   resize debt DOWN so the sculpt fully amortises within tenor
+#       (no balloon); reported == honest, lowest leverage.
+#   - "legacy_ignore": historical (incorrect) behaviour — balloon flagged but
+#       never serviced. Retained ONLY to reproduce pre-fix numbers.
+_BALLOON_VALID_TREATMENTS = (
+    "cash_sweep",
+    "refinance",
+    "bullet",
+    "amortize",
+    "legacy_ignore",
+)
+_BALLOON_DEFAULT_TREATMENT = "cash_sweep"
+_BALLOON_TOL = 1.0  # USD; outstanding balances below this are treated as repaid
+_SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt period
+_REFINANCE_TENOR_DEFAULT = 3
+_REFINANCE_PREMIUM_DEFAULT = 0.02
 
 
 def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
@@ -647,6 +678,125 @@ def _maybe_autosolve_dscr(
     return resized, detail
 
 
+def _maturity_period_index(
+    debt_service_total: Sequence[float], construction_periods: int
+) -> int:
+    """Period index just AFTER the last scheduled senior service (balloon due here)."""
+    nonzero = [
+        i for i, s in enumerate(debt_service_total) if _as_float(s, 0.0) > _SERVICE_TOL
+    ]
+    return (max(nonzero) + 1) if nonzero else int(construction_periods)
+
+
+def _refinance_terms(config: Dict[str, Any]) -> Tuple[int, float]:
+    """(tenor_years, rate_premium) for a balloon refinance, from config with fallbacks."""
+    refi = {}
+    constraints = _section_case_insensitive(config, "constraints") or {}
+    if isinstance(constraints.get("refinancing"), Mapping):
+        refi = dict(constraints["refinancing"])
+    tenor = int(_as_float(refi.get("refinance_tenor_years"), _REFINANCE_TENOR_DEFAULT))
+    premium = _as_float(refi.get("refinance_rate_premium"), _REFINANCE_PREMIUM_DEFAULT)
+    return max(1, tenor), premium
+
+
+def _balloon_resolution_stream(
+    *,
+    treatment: str,
+    balloon: float,
+    cfads_ext: Sequence[float],
+    debt_service_total: Sequence[float],
+    construction_periods: int,
+    timeline_periods: int,
+    avg_rate: float,
+    refi_tenor_years: int,
+    refi_rate_premium: float,
+) -> Tuple[List[float], float]:
+    """Per-period cash diverted from equity to retire the balloon + residual.
+
+    ``resolution[p]`` (USD) is senior to equity and aligned to the SAME period
+    index as ``debt_service_total``. ``residual`` is any balloon still outstanding
+    after the treatment (0.0 when fully resolved). ``cash_sweep``/``bullet``/
+    ``refinance`` produce a stream; ``legacy_ignore``/``amortize`` produce none
+    (``amortize`` removes the balloon by resizing debt upstream).
+    """
+    n = int(timeline_periods)
+    resolution = [0.0] * n
+    if balloon <= _BALLOON_TOL or treatment in ("legacy_ignore", "amortize"):
+        return resolution, (0.0 if balloon <= _BALLOON_TOL else float(balloon))
+
+    maturity = _maturity_period_index(debt_service_total, construction_periods)
+    if maturity >= n:
+        # No post-maturity period to resolve into → collapse to a terminal bullet.
+        if n > 0:
+            resolution[n - 1] = float(balloon)
+        return resolution, 0.0
+
+    if treatment == "bullet":
+        resolution[maturity] = float(balloon)
+        return resolution, 0.0
+
+    if treatment == "refinance":
+        rate = max(0.0, float(avg_rate) + float(refi_rate_premium))
+        periods = max(1, int(refi_tenor_years))
+        if rate > 0.0:
+            factor = (rate * (1.0 + rate) ** periods) / ((1.0 + rate) ** periods - 1.0)
+            annuity = float(balloon) * factor
+        else:
+            annuity = float(balloon) / periods
+        for j in range(periods):
+            p = maturity + j
+            resolution[min(p, n - 1)] += annuity  # tail compresses into final period
+        return resolution, 0.0
+
+    # Default: cash_sweep — trap post-maturity CFADS until the balloon clears.
+    remaining = float(balloon)
+    for p in range(maturity, n):
+        available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
+        pay = min(max(0.0, available), remaining)
+        resolution[p] = pay
+        remaining -= pay
+        if remaining <= _BALLOON_TOL:
+            return resolution, 0.0
+    return resolution, remaining
+
+
+def _resize_for_amortization(
+    config: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    core: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Reduce gearing until the sculpt fully amortises within tenor (no balloon).
+
+    Bisects ``Financing_Terms.debt_ratio`` between 0 (always balloon-free) and the
+    current solved gearing (has a balloon), returning the largest gearing whose
+    ``balloon_remaining`` is ~0. No-op when the current schedule has no balloon.
+    """
+    if _as_float(core.get("balloon_remaining"), 0.0) <= _BALLOON_TOL:
+        return config, core
+
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    lo, hi = 0.0, _as_float(fin.get("debt_ratio"), 0.70)
+
+    def _at_ratio(ratio: float) -> Dict[str, Any]:
+        cfg = copy.deepcopy(config)
+        fin_m = _section_case_insensitive(cfg, "Financing_Terms")
+        if isinstance(fin_m, dict):
+            fin_m["debt_ratio"] = ratio
+        else:
+            cfg["debt_ratio"] = ratio
+        return cfg
+
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        trial = apply_debt_layer(params=_at_ratio(mid), annual_rows=rows)
+        if _as_float(trial.get("balloon_remaining"), 0.0) > _BALLOON_TOL:
+            hi = mid
+        else:
+            lo = mid
+    resized_cfg = _at_ratio(lo)
+    return resized_cfg, apply_debt_layer(params=resized_cfg, annual_rows=rows)
+
+
 def plan_debt(
     *,
     annual_rows: Sequence[Dict[str, Any]],
@@ -661,6 +811,44 @@ def plan_debt(
     rows = list(annual_rows)
     config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
     core = apply_debt_layer(params=config, annual_rows=rows)
+
+    # ── Balloon treatment ──────────────────────────────────────────────────
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    treatment = str(
+        fin.get("balloon_treatment", _BALLOON_DEFAULT_TREATMENT)
+        or _BALLOON_DEFAULT_TREATMENT
+    ).lower()
+    if treatment not in _BALLOON_VALID_TREATMENTS:
+        logger.warning(
+            "Unknown balloon_treatment %r; falling back to %s",
+            treatment,
+            _BALLOON_DEFAULT_TREATMENT,
+        )
+        treatment = _BALLOON_DEFAULT_TREATMENT
+
+    if treatment == "amortize":
+        config, core = _resize_for_amortization(config, rows, core)
+
+    structural_balloon = _as_float(core.get("balloon_remaining"), 0.0)
+    refi_tenor, refi_premium = _refinance_terms(config)
+    balloon_resolution, balloon_residual = _balloon_resolution_stream(
+        treatment=treatment,
+        balloon=structural_balloon,
+        cfads_ext=core.get("cfads_extended", []) or [],
+        debt_service_total=core.get("debt_service_total", []) or [],
+        construction_periods=int(core.get("construction_periods", 0) or 0),
+        timeline_periods=int(core.get("timeline_periods", 0) or 0),
+        avg_rate=_as_float(core.get("avg_debt_rate"), 0.0),
+        refi_tenor_years=refi_tenor,
+        refi_rate_premium=refi_premium,
+    )
+    debt_total_final = _as_float(core.get("debt_total"), 0.0)
+    balloon_pct = structural_balloon / debt_total_final if debt_total_final > 0 else 0.0
+    max_balloon_pct = _as_float(
+        (_section_case_insensitive(config, "constraints") or {}).get("max_balloon_pct"),
+        0.10,
+    )
+    balloon_covenant_breach = balloon_pct > max_balloon_pct
 
     principal_by = {
         k.lower(): float(v)
@@ -712,7 +900,13 @@ def plan_debt(
         "dscr_by_year": core.get("dscr_by_year", {}),
         "annual_row_debt_period_map": core.get("annual_row_debt_period_map", []),
         "cfads_bridge_debt_period": core.get("cfads_bridge_debt_period"),
-        "balloon_remaining": core.get("balloon_remaining", 0.0),
+        "balloon_remaining": structural_balloon,
+        "balloon_treatment": treatment,
+        "balloon_resolution": balloon_resolution,
+        "balloon_residual": balloon_residual,
+        "balloon_pct": balloon_pct,
+        "balloon_covenant_breach": balloon_covenant_breach,
+        "max_balloon_pct": max_balloon_pct,
         "debt_schedules": core.get("debt_schedules", {}),
         "debt_total": core.get("debt_total", 0.0),
         "avg_debt_rate": core.get("avg_debt_rate", 0.0),

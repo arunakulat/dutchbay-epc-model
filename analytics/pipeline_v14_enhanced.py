@@ -200,6 +200,10 @@ def _enrich_annual_rows_with_debt(
 ) -> list[dict[str, Any]]:
     """Overlay lender-facing debt columns onto annual rows."""
     debt_service = list(debt_result.get("debt_service_total") or [])
+    # Post-maturity cash diverted from equity to retire the balloon (sweep/refi/
+    # bullet). Same PERIOD index as debt_service_total; senior to equity but NOT
+    # part of scheduled debt service, so it does not enter the DSCR.
+    balloon_resolution = list(debt_result.get("balloon_resolution") or [])
     # debt_service_total is PERIOD-indexed (offset by the construction + bridge
     # lead-in). Align each annual row to its debt period via the canonical map;
     # positional indexing attributed each year an earlier (higher-CFADS) year's
@@ -235,9 +239,20 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             debt_service_value = 0.0
 
+        resolution = (
+            balloon_resolution[period_idx]
+            if 0 <= period_idx < len(balloon_resolution)
+            else 0.0
+        )
+        try:
+            balloon_resolution_value = float(resolution or 0.0)
+        except (TypeError, ValueError):
+            balloon_resolution_value = 0.0
+
         out["cf_pre_debt"] = cf_pre_debt
         out["debt_service_total"] = debt_service_value
-        out["cf_after_debt"] = cf_pre_debt - debt_service_value
+        out["balloon_resolution"] = balloon_resolution_value
+        out["cf_after_debt"] = cf_pre_debt - debt_service_value - balloon_resolution_value
         enriched.append(out)
 
     return _validate_annual_rows_structure(enriched, require_debt_fields=True)
@@ -400,7 +415,15 @@ def _build_debt_covenant_snapshot(
         notes = f"Significant breach in {years_below} year(s)"
 
     if balloon_flag:
-        notes += f"; Balloon: ${balloon_remaining:,.0f}"
+        balloon_pct = float(debt_result.get("balloon_pct") or 0.0)
+        treatment = str(debt_result.get("balloon_treatment") or "")
+        notes += f"; Balloon: ${balloon_remaining:,.0f} ({balloon_pct:.1%}"
+        if treatment:
+            notes += f", {treatment}"
+        notes += ")"
+        if bool(debt_result.get("balloon_covenant_breach")):
+            max_pct = float(debt_result.get("max_balloon_pct") or 0.10)
+            notes += f" — BREACHES max_balloon_pct {max_pct:.0%}"
 
     return DebtCovenantSnapshot(
         dscr_min=dscr_min,
