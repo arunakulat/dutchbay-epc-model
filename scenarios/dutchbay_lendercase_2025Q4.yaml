@@ -268,43 +268,24 @@ Financing_Terms:
   amortization_style: auto
   interest_rate_nominal: 0.08
   
-  # Multi-currency tranches (FX-aligned)
-  debt_tranches:
-    - name: "USD_DFI"
-      currency: "USD"
-      principal_usd: 15000000  # 10% of capex
-      rate_pct: 6.5
-      tenor_years: 15
-      grace_years: 2
-      amortization: "sculpted"
-      
-    - name: "USD_Commercial"
-      currency: "USD"
-      principal_usd: 67500000  # 45% of capex
-      rate_pct: 7.5
-      tenor_years: 15
-      grace_years: 2
-      amortization: "sculpted"
-      
-    - name: "LKR_Local"
-      currency: "LKR"
-      principal_lkr: 20250000000  # 67.5M USD @ 300 FX
-      rate_pct: 8.0
-      tenor_years: 15
-      grace_years: 2
-      amortization: "sculpted"
-  
-  # Legacy mix parameters (preserved for backward compatibility)
+  # ── Multi-currency debt structure (CANONICAL) ───────────────────────────
+  # The engine (finance/debt_v14._solve_mix) sizes total debt via dual_dscr,
+  # then splits it by these mix PROPORTIONS at the per-currency rates below.
+  # Proportions (not absolute principals) are required because the debt amount
+  # is AUTO-SIZED, not fixed. The realised per-tranche principal + IDC are
+  # reported in debt_result.principal_by_tranche / idc_by_tranche.
+  # NB: a `debt_tranches:` list (absolute principals/per-tranche tenors) is NOT
+  # an engine input — plan_debt warns if one is present. Edit mix + rates here.
   mix:
-    lkr_max: 0.45
-    dfi_max: 0.1
-    usd_commercial_min: 0.45
+    lkr_max: 0.45              # LKR_Local share (45%)
+    dfi_max: 0.1               # USD_DFI concessional share (10%)
+    usd_commercial_min: 0.45   # USD_Commercial share (45%)
   rates:
-    lkr_nominal: 0.08
+    lkr_nominal: 0.08          # LKR_Local rate (8.0%)
     lkr_min: 0.08
-    dfi_nominal: 0.065
+    dfi_nominal: 0.065         # USD_DFI rate (6.5%)
     dfi_min: 0.065
-    usd_nominal: 0.075
+    usd_nominal: 0.075         # USD_Commercial rate (7.5%)
     usd_commercial_min: 0.075
   
   # DSCR targets
@@ -490,6 +471,7 @@ metadata:
     - 'v3.0: Added expected_results for end-to-end validation'
     - 'v2.7: Enabled FX integration for multi-currency debt'
     - 'v2.7: Added debt_tranches structure'
+    - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input); mix + rates are canonical (plan_debt warns if re-added)'
 
 discount_rate: 0.12
 

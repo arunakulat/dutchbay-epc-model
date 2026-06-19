@@ -48,6 +48,14 @@ _SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt per
 _REFINANCE_TENOR_DEFAULT = 3
 _REFINANCE_PREMIUM_DEFAULT = 0.02
 
+# Debt is sized via dual_dscr and split by Financing_Terms.mix proportions at the
+# per-currency Financing_Terms.rates. A hand-authored Financing_Terms.debt_tranches
+# list (absolute principals / per-tranche tenors) is NOT an engine input — absolute
+# principals are incompatible with auto-sizing. We warn once if one is present so the
+# redundant block cannot silently drift from the engine's actual schedule. Tests reset
+# this flag to assert the warning.
+_warned_decorative_tranches = False
+
 
 def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
     if key in mapping:
@@ -797,6 +805,27 @@ def _resize_for_amortization(
     return resized_cfg, apply_debt_layer(params=resized_cfg, annual_rows=rows)
 
 
+def _warn_if_decorative_tranches(config: Dict[str, Any]) -> None:
+    """Warn once if a (non-input) ``Financing_Terms.debt_tranches`` block is present.
+
+    The engine sizes debt via dual_dscr and splits it by ``mix`` proportions at the
+    ``rates`` per currency; a hand-authored ``debt_tranches`` list is ignored. Flag it
+    so the redundant block cannot silently drift from the engine's actual schedule.
+    """
+    global _warned_decorative_tranches
+    if _warned_decorative_tranches:
+        return
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    if fin.get("debt_tranches"):
+        _warned_decorative_tranches = True
+        logger.warning(
+            "Financing_Terms.debt_tranches is NOT an engine input and is ignored; "
+            "debt is sized via dual_dscr and split by Financing_Terms.mix proportions "
+            "at Financing_Terms.rates. Edit mix + rates instead (the realised "
+            "per-tranche principals are in debt_result.principal_by_tranche)."
+        )
+
+
 def plan_debt(
     *,
     annual_rows: Sequence[Dict[str, Any]],
@@ -807,8 +836,13 @@ def plan_debt(
     When ``Financing_Terms.debt_sizing`` is ``dual_dscr`` / ``auto_dscr``, the gearing is
     first solved on the real schedule to hit ``target_dscr`` (capped at ``debt_ratio``),
     and the dual-DSCR (P50/P99) capacity detail is attached under ``dual_dscr``.
+
+    The debt mix/rates are governed by ``Financing_Terms.mix`` + ``Financing_Terms.rates``;
+    a ``Financing_Terms.debt_tranches`` list is not an engine input (see
+    :func:`_warn_if_decorative_tranches`).
     """
     rows = list(annual_rows)
+    _warn_if_decorative_tranches(config)
     config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
     core = apply_debt_layer(params=config, annual_rows=rows)
 
