@@ -231,12 +231,17 @@ class ScenarioAnalytics:
             # Debt layer (may mutate annual_rows in-place)
             debt_result = apply_debt_layer(config, annual_rows)
 
-            # KPIs, using WACC: always prefer config > default
+            # KPIs. This batch surface uses a config/default discount, NOT the
+            # computed build-up WACC, so report wacc_is_real=False explicitly:
+            # otherwise the metrics config-fallback would label the basis "real"
+            # from wacc.drives_discount_rate while the rate is not the WACC.
             kpis = calculate_scenario_kpis(
                 config=config,
                 annual_rows=annual_rows,
                 debt_result=debt_result,
                 discount_rate=discount_rate,
+                wacc_is_real=False,
+                wacc_label="base",
             )
 
             # EPC breakdown, optional non-blocking

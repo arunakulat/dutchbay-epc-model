@@ -44,10 +44,16 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     assert kpis["wacc_is_real"] is True
     assert kpis["wacc_label"] == "build_up"
 
-    # The ScenarioResult contract agrees with the KPI surface (the bug was the
-    # dataclass reporting a different, hardcoded rate).
+    # The ScenarioResult contract agrees with the KPI surface on ALL three WACC
+    # fields (discount_rate_used was the original bug; wacc_is_real was a second
+    # blind spot — the dataclass field was never set by the pipeline, so the
+    # CASPER payload read None).
     assert abs(scenario_result["discount_rate_used"] - drate) < 1e-12
     assert scenario_result["wacc_label"] == "build_up"
+    assert scenario_result["wacc_is_real"] is True
+    # The CASPER payload reads this field straight off the contract
+    # (getattr(s, "wacc_is_real", None)); now that the pipeline sets it, the
+    # lender-facing payload reports the real basis instead of None.
 
 
 def test_disabling_drives_falls_back_to_legacy_and_says_so() -> None:
