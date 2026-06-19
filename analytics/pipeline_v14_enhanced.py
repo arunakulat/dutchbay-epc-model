@@ -200,6 +200,20 @@ def _enrich_annual_rows_with_debt(
 ) -> list[dict[str, Any]]:
     """Overlay lender-facing debt columns onto annual rows."""
     debt_service = list(debt_result.get("debt_service_total") or [])
+    # debt_service_total is PERIOD-indexed (offset by the construction + bridge
+    # lead-in). Align each annual row to its debt period via the canonical map;
+    # positional indexing attributed each year an earlier (higher-CFADS) year's
+    # service, collapsing the achieved DSCR ~3 years out of phase and triggering a
+    # phantom covenant lockup. Falls back to positional when no map is present.
+    period_map = debt_result.get("annual_row_debt_period_map") or []
+    row_to_period: dict[int, int] = {}
+    for mapping in period_map:
+        try:
+            row_to_period[int(mapping["annual_row_index"])] = int(
+                mapping["debt_period"]
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
     enriched: list[dict[str, Any]] = []
 
     for idx, row in enumerate(annual_rows):
@@ -210,7 +224,12 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             cf_pre_debt = 0.0
 
-        service = debt_service[idx] if idx < len(debt_service) else 0.0
+        period_idx = row_to_period.get(idx, idx)
+        service = (
+            debt_service[period_idx]
+            if 0 <= period_idx < len(debt_service)
+            else 0.0
+        )
         try:
             debt_service_value = float(service or 0.0)
         except (TypeError, ValueError):
