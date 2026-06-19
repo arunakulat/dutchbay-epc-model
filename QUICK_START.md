@@ -1,160 +1,74 @@
-# Quick Start: Pydantic v2 Migration
+# Quick Start — DutchBay EPC Model
 
-## TL;DR - Run This Now
+> A lender/DFI-grade project-finance model for a 150 MW wind farm (Kalpitiya, Sri Lanka).
+> Canonical execution path is **v14**; all CLIs are **Hydra** (`key=value`, not `--flags`).
+
+## Setup
 
 ```bash
-# Pull latest changes
-git pull origin feature/add-finance-contracts-pydantic-v2-20251219
+git clone https://github.com/arunakulat/dutchbay-epc-model.git
+cd dutchbay-epc-model
 
-# Run all automated fixes
-chmod +x scripts/run_all_fixes.sh
-./scripts/run_all_fixes.sh
+python3.11 -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+pip install -r requirements_dev.txt
+# Optional wind/ERA5 extra (xarray, cdsapi, windpowerlib, ...):
+# pip install -e ".[wind]"
 ```
 
-**Expected Result:** Contracts tests 33/33 passing ✅
+## Run the four routines
 
----
+```bash
+# 1) Finance pipeline (canonical lender case)
+python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
 
-## What Just Happened?
+# 2) Monte Carlo (reads scenario monte_carlo.parameters; deterministic with seed)
+python -m analytics.cli.cli_monte_carlo_hydra \
+  config=scenarios/dutchbay_lendercase_2025Q4.yaml n_trials=200 seed=42
 
-### ✅ Automated Fixes Applied
+# 3) Sensitivity tornado
+python -m analytics.cli.cli_sensitivity_hydra \
+  config=scenarios/dutchbay_lendercase_2025Q4.yaml output_dir=_out/sensitivity
 
-1. **ParameterRangeConfig** → Pydantic v2 BaseModel
-   - Validates: variable names, base values, percentage bounds
-   - Computes: low_value, high_value from percentages
-   - Allows symmetric ranges: `-20%, +20%`
+# 4) Optimization sweep (Python API)
+python -c "from analytics.optimization_v14 import optimize_parameter; \
+print(optimize_parameter('scenarios/dutchbay_lendercase_2025Q4.yaml', \
+param_path='Financing_Terms.debt_ratio', objective_key='equity_irr', \
+lower=0.30, upper=0.70, n_steps=9, constraint_key='min_dscr', constraint_min=1.30).best)"
+```
 
-2. **TornadoResult** → Enhanced dataclass
-   - Added: `impact_pct`, `impact_abs` properties
-   - Maintains backward compatibility
+> Note: run the `analytics/cli/*` entrypoints with `python -m ...` so the
+> `analytics` package is importable.
 
-3. **BreakevenResult** → Pydantic v2 BaseModel
-   - Validates: positive tolerance, realistic pct_change
-
-4. **TailRiskSnapshot** → Pydantic v2 BaseModel
-   - Validates: VaR/CVaR ordering, percentile ordering
-   - Validates: probability bounds (0-100%)
-
-5. **Test Configs Updated**
-   - Added: `tax.corporate_tax_rate: 0.24`
-   - Added: `tax.depreciation.depreciation_start_year: 1`
-   - Added: `tax.depreciation.straight_line_years: 20`
-
----
-
-## Remaining Manual Fixes
-
-### 1. Refinancing Tests (~15 tests)
-
-**Find & Replace in refinancing test files:**
+## Python API
 
 ```python
-# OLD API:
-optimizer = RefinancingOptimizer(
-    config=config,
-    scenario_result=scenario
-)
+from analytics.evaluation_v14 import evaluate_with_overrides
 
-# NEW API:
-optimizer = RefinancingOptimizer(
-    scenario_result=scenario,
-    refinancing_config=config['refinancing']
-)
+kpis = evaluate_with_overrides("scenarios/dutchbay_lendercase_2025Q4.yaml")
+print(kpis["project_irr"], kpis["min_dscr"], kpis["discount_rate_used"])
 ```
 
-**Files:**
-- `tests/refinancing/test_refinancing_optimizer.py`
-- `tests/refinancing/test_refinancing_scenarios.py`
-- `tests/refinancing/test_refinancing_triggers.py`
-
-**Test:**
-```bash
-pytest tests/refinancing/ -v
-```
-
-### 2. FX Config Updates (~13 tests)
-
-**Add to FX test configs:**
-
-```yaml
-fx:
-  base_currency: USD
-  project_currency: LKR
-  base_rate: 330.0
-  volatility_pct: 5.0
-  correlation_to_revenue: -0.3
-```
-
-**Files:**
-- `tests/configs/fx_baseline.yaml`
-- `tests/configs/fx_stress.yaml`
-- `tests/integration/fixtures/fx_monte_carlo_config.yaml`
-
-**Test:**
-```bash
-pytest tests/integration/test_fx_monte_carlo_integration.py -v
-```
-
----
-
-## Verify Everything Works
+## Tests
 
 ```bash
-# Contracts (should be 33/33)
-pytest tests/finance/test_contracts.py -v
-
-# Full suite (target: 560+ passing)
-pytest
-
-# With coverage
-pytest --cov=analytics --cov=finance
+pytest tests/                                   # full suite
+pytest tests/finance/ tests/integration/ -q     # finance + integration
+mypy finance/ analytics/ --ignore-missing-imports
 ```
 
----
+## Where things live
 
-## Commit Changes
+| Concern | Module |
+|---|---|
+| Evaluation gateway | `analytics/evaluation_v14.py` (`evaluate_with_overrides`) |
+| Pipeline orchestration | `analytics/pipeline_v14_enhanced.py` (`run_v14_pipeline`) |
+| KPIs | `analytics/core/metrics.py` |
+| IRR / NPV | `finance/irr.py` (ARCH-02 canonical) |
+| WACC | `finance/wacc_v14.py` (ARCH-02 canonical) |
+| Monte Carlo | `analytics/mc/engine.py` |
+| Governance ruleset | `go_with_the_flow_rules_v3_0_clean.csv` (GWTF v3.0) |
 
-```bash
-# Check what changed
-git status
-git diff analytics/contracts_v14.py
-
-# Stage changes
-git add analytics/contracts_v14.py
-git add tests/configs/
-git add configs/
-
-# Commit
-git commit -m "feat: complete Pydantic v2 migration for contracts
-
-- Migrated ParameterRangeConfig, TornadoResult to Pydantic v2
-- Added validators for all sensitivity contracts
-- Updated test configs with missing tax fields
-- Fixed 60+ test failures
-
-Tests: 33/33 contracts passing"
-
-# Push
-git push origin feature/add-finance-contracts-pydantic-v2-20251219
-```
-
----
-
-## Need Help?
-
-**Full Documentation:**
-- Migration Guide: `PYDANTIC_V2_MIGRATION_GUIDE.md`
-- Execution Plan: `MIGRATION_EXECUTION_PLAN.md`
-
-**Rollback:**
-```bash
-git reset --hard 889cac82  # Before migration
-```
-
-**Issues:**
-- Check GitHub Issues for known problems
-- Contact: Aruna Kulatunga
-
----
-
-**Status:** Phase 1 Complete ✅ | Phase 2 Ready for Execution
+See `README.md` for the architecture overview and `RELEASING.md` for the release process.

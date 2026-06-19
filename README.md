@@ -1,6 +1,6 @@
 # DutchBay EPC Model – 150MW Wind Farm Financial Model
 
-[![CI v14chat](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/ci-v14.yml)
+[![Test Suite](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -25,8 +25,8 @@ git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
 # Create virtual environment
-python3.11 -m venv .venv311
-source .venv311/bin/activate  # On Windows: .venv311\Scripts\activate
+python3.11 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -35,46 +35,49 @@ pip install -r requirements_dev.txt
 # Run tests
 pytest tests/
 
-# Run scenario analysis
-python analytics/run_full_pipeline.py --config scenarios/base.yaml
+# Run the canonical lender-case pipeline (Hydra CLI — key=value, not --flags)
+python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
 ```
 
 ---
 
 ## 🏛️ Architecture Overview
 
-### v14 Status: Production Ready ✅
+### v14 Status
 
-The **v14chat** branch represents the canonical, hardened execution path featuring:
+The canonical, hardened execution path (`main`) features:
 
 - ✅ **Validated scenario loader** with strict YAML/JSON parsing
 - ✅ **Annual cashflow engine** (CFADS, OpEx, CapEx, debt service)
-- ✅ **Debt modeling** (amortization, DSCR calculations)
-- ✅ **Isolated IRR/NPV** calculations
-- ✅ **Analytics pipeline** (sensitivity, Monte Carlo ready)
+- ✅ **Debt modeling** (dual-DSCR sizing, DSCR/LLCR/PLCR, balloon treatment)
+- ✅ **Isolated IRR/NPV** (`finance/irr.py`) and build-up WACC (`finance/wacc_v14.py`)
+- ✅ **Analytics** — sensitivity tornado, Monte Carlo (`analytics/mc/`), optimization
 - ✅ **Export infrastructure** (CSV, Excel, JSON)
-- ✅ **CI/CD pipeline** with regression testing
+- ✅ **CI/CD** — gated `Test Summary` + `fastlane` + `smoke`, mypy, framework-compliance lints
 
 ### Core Modules
 
 ```
 analytics/                    # Analytics & scenario evaluation
-  ├── foundation.py          # Base model (CRITICAL: do not rename)
+  ├── evaluation_v14.py      # The single evaluation gateway (evaluate_with_overrides)
+  ├── pipeline_v14_enhanced.py  # Lender-grade pipeline orchestration (run_v14_pipeline)
   ├── scenario_loader.py     # YAML/JSON config parser
-  ├── scenario_analytics.py  # KPI extraction & reporting
+  ├── core/metrics.py        # Canonical KPI computation
   ├── sensitivity/           # Sensitivity analysis modules
-  └── monte_carlo/           # Monte Carlo simulation
+  └── mc/                    # Monte Carlo engine (analytics.mc.engine)
 
 finance/                      # Financial calculation engine
   ├── cashflow_v14.py        # Cash flow projections
   ├── debt_v14.py            # Debt modeling & DSCR
-  ├── equity_v14.py          # Equity returns (IRR, NPV)
-  └── tax.py                 # Tax calculations
+  ├── irr.py                 # Isolated IRR/NPV (ARCH-02 canonical source)
+  ├── wacc_v14.py            # WACC (ARCH-02 canonical source)
+  └── cashflow_v14_tax.py    # Tax (SL plant/civil split, TLCF, interest WHT)
 
 scenarios/                    # Scenario configuration files
-  ├── base.yaml              # Base case
-  ├── optimistic.yaml        # Upside scenario
-  └── pessimistic.yaml       # Downside scenario
+  ├── dutchbay_lendercase_2025Q4.yaml   # Canonical lender case
+  ├── dutchbay_basecase_2025Q4.yaml
+  ├── dutchbay_optimistic_2025Q4.yaml
+  └── dutchbay_pessimistic_2025Q4.yaml
 
 exports/                      # Generated outputs (git-ignored)
   ├── *.csv
@@ -159,32 +162,32 @@ pytest --cov=analytics --cov=finance --cov-report=html
 ### Basic Scenario Run
 
 ```bash
-python analytics/run_full_pipeline.py --config scenarios/base.yaml
+# Hydra CLI: override config with key=value (no --flags)
+python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
 ```
 
 ### Sensitivity Analysis
 
 ```bash
-python analytics/sensitivity_v14.py \
-  --config scenarios/base.yaml \
-  --output exports/
+# Canonical Hydra entrypoint (run as a module so `analytics` is importable)
+python -m analytics.cli.cli_sensitivity_hydra \
+  config=scenarios/dutchbay_lendercase_2025Q4.yaml \
+  output_dir=_out/sensitivity
 ```
 
 ### Python API
 
 ```python
-from analytics.scenario_loader import load_scenario_config
-from analytics.scenario_analytics import run_scenario
+from analytics.evaluation_v14 import evaluate_with_overrides
 
-# Load configuration
-config = load_scenario_config("scenarios/base.yaml", validation_mode="strict")
+# The single evaluation gateway (ARCH-04): returns a flat KPI dict.
+kpis = evaluate_with_overrides(
+    "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    overrides={"Financing_Terms.debt_ratio": 0.55},  # optional dotted overrides
+)
 
-# Run analysis
-summary_df, timeseries_df = run_scenario(config)
-
-# Access results
-print(f"Project IRR: {summary_df['project_irr'].iloc[0]:.2%}")
-print(f"Min DSCR: {summary_df['dscr_min'].iloc[0]:.2f}")
+print(f"Project IRR: {kpis['project_irr']:.2%}")
+print(f"Min DSCR: {kpis['min_dscr']:.2f}")
 ```
 
 ### Export to Excel
