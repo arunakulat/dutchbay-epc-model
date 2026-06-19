@@ -16,8 +16,10 @@ import yaml
 
 from wind_resource.power_curve_sourcing import (
     DEFAULT_STORE,
+    PowerCurve,
     add_curve_to_store,
     fetch_oedb_power_curve,
+    fetch_turbine_models_curve,
     list_oedb_turbines,
     manual_power_curve,
     validate_power_curve,
@@ -163,6 +165,84 @@ def test_from_tabular_file_dat_watts(tmp_path):
     assert pc.power_kw[2] == 12000.0  # 12e6 W -> 12000 kW
     assert pc.rated_capacity_kw == 12000.0
     assert pc.source == "tabular_import"
+
+
+# ── 10 MW reference curves + thrust-coefficient (Ct) capture ──────────────────
+
+
+def test_turbine_models_fetch_captures_thrust_when_present():
+    """IEA/DTU reference designs ship Ct; the fetch captures it aligned to ws.
+
+    NREL's 10 MW reference ships Cp only, so its thrust_coeffs stay None.
+    """
+    try:
+        iea = fetch_turbine_models_curve(
+            "IEA_Reference_10MW_198", key="iea", manufacturer="IEA"
+        )
+    except Exception as exc:  # turbine-models absent
+        pytest.skip(f"turbine-models unavailable: {type(exc).__name__}")
+    assert iea.rated_capacity_kw == pytest.approx(10638, rel=0.02)
+    assert iea.thrust_coeffs is not None
+    assert len(iea.thrust_coeffs) == len(iea.wind_speeds_ms)
+    assert all(0.0 <= c <= 1.2 for c in iea.thrust_coeffs)
+    assert validate_power_curve(iea) == []
+
+    nrel = fetch_turbine_models_curve(
+        "2016CACost_NREL_Reference_10MW_205", key="nrel", manufacturer="NREL"
+    )
+    assert nrel.rated_capacity_kw == pytest.approx(10000, rel=0.01)
+    assert nrel.thrust_coeffs is None
+
+
+def test_to_yaml_block_emits_thrust_curve_only_when_present():
+    with_ct = PowerCurve(
+        key="k", manufacturer="M", model="m", rated_capacity_kw=1000,
+        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, 500.0, 1000.0],
+        thrust_coeffs=[0.8, 0.85, 0.7],
+    )
+    block = with_ct.to_yaml_block()["k"]
+    assert block["thrust_curve"]["ws"] == [3.0, 4.0, 5.0]
+    assert block["thrust_curve"]["ct"] == [0.8, 0.85, 0.7]
+
+    without_ct = PowerCurve(
+        key="k", manufacturer="M", model="m", rated_capacity_kw=1000,
+        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, 500.0, 1000.0],
+    )
+    assert "thrust_curve" not in without_ct.to_yaml_block()["k"]
+
+
+def test_validate_flags_bad_thrust():
+    bad_len = PowerCurve(
+        "k", "M", "m", 1000, [3.0, 4.0, 5.0], [0.0, 500.0, 1000.0],
+        thrust_coeffs=[0.8],
+    )
+    assert any("thrust_coeffs length" in i for i in validate_power_curve(bad_len))
+    bad_range = PowerCurve(
+        "k", "M", "m", 1000, [3.0, 4.0, 5.0], [0.0, 500.0, 1000.0],
+        thrust_coeffs=[0.8, 0.9, 5.0],
+    )
+    assert any("thrust coefficients" in i for i in validate_power_curve(bad_range))
+
+
+def test_reference_10mw_curves_in_canonical_store():
+    """The three real 10 MW reference curves are wired into power_curves.yaml."""
+    store = yaml.safe_load(DEFAULT_STORE.read_text())
+    for key in ("iea_reference_10mw", "dtu_reference_10mw", "nrel_reference_10mw"):
+        assert key in store, f"{key} missing from power_curves.yaml"
+        entry = store[key]
+        assert 9500 <= entry["rated_capacity_kw"] <= 11000
+        assert entry["power_curve"]["ws"] and entry["power_curve"]["power"]
+        assert validate_power_curve(
+            manual_power_curve(
+                key, "M", "m", entry["rated_capacity_kw"],
+                entry["power_curve"]["ws"], entry["power_curve"]["power"],
+            )
+        ) == []
+    # IEA is the recommended default and carries Ct; NREL is Cp-only.
+    assert store["iea_reference_10mw"]["provenance"]["recommended_default_10mw"] is True
+    assert "thrust_curve" in store["iea_reference_10mw"]
+    assert "thrust_curve" in store["dtu_reference_10mw"]
+    assert "thrust_curve" not in store["nrel_reference_10mw"]
 
 
 def test_fetch_turbine_models_if_available():

@@ -59,27 +59,37 @@ class PowerCurve:
     cut_in_ms: float = 3.0
     rated_ms: Optional[float] = None
     cut_out_ms: float = 25.0
+    # IEC thrust-coefficient curve (Ct), aligned to ``wind_speeds_ms``. Populated
+    # only when the source provides it (e.g. IEA/DTU reference designs); ``None``
+    # for sources that ship power-only. Captured for the oem-parser thrust path (#166).
+    thrust_coeffs: Optional[List[float]] = None
     source: str = "manual"
     provenance: Dict[str, Any] = field(default_factory=dict)
 
     def to_yaml_block(self) -> Dict[str, Any]:
         """Render as a ``{key: {...}}`` block matching power_curves.yaml."""
-        return {
-            self.key: {
-                "manufacturer": self.manufacturer,
-                "model": self.model,
-                "rated_capacity_kw": self.rated_capacity_kw,
-                "hub_heights": list(self.hub_heights_m),
-                "cut_in": self.cut_in_ms,
-                "rated": self.rated_ms,
-                "cut_out": self.cut_out_ms,
-                "power_curve": {
-                    "ws": [float(x) for x in self.wind_speeds_ms],
-                    "power": [float(x) for x in self.power_kw],
-                },
-                "provenance": {"source": self.source, **self.provenance},
-            }
+        block: Dict[str, Any] = {
+            "manufacturer": self.manufacturer,
+            "model": self.model,
+            "rated_capacity_kw": self.rated_capacity_kw,
+            "hub_heights": list(self.hub_heights_m),
+            "cut_in": self.cut_in_ms,
+            "rated": self.rated_ms,
+            "cut_out": self.cut_out_ms,
+            "power_curve": {
+                "ws": [float(x) for x in self.wind_speeds_ms],
+                "power": [float(x) for x in self.power_kw],
+            },
         }
+        if self.thrust_coeffs is not None:
+            # Additive: existing consumers read only power_curve.{ws,power}; this
+            # surfaces the source's thrust curve (Ct) for the #166 oem-parser path.
+            block["thrust_curve"] = {
+                "ws": [float(x) for x in self.wind_speeds_ms],
+                "ct": [float(x) for x in self.thrust_coeffs],
+            }
+        block["provenance"] = {"source": self.source, **self.provenance}
+        return {self.key: block}
 
 
 def list_oedb_turbines(manufacturer: Optional[str] = None) -> Any:
@@ -195,6 +205,13 @@ def validate_power_curve(pc: PowerCurve, *, rated_tol_pct: float = 5.0) -> List[
             issues.append(
                 f"peak power {peak:.0f} kW never reaches rated {pc.rated_capacity_kw:.0f} kW"
             )
+    if pc.thrust_coeffs is not None:
+        if len(pc.thrust_coeffs) != len(ws):
+            issues.append(
+                f"thrust_coeffs length {len(pc.thrust_coeffs)} != ws length {len(ws)}"
+            )
+        elif any((c < -1e-9 or c > 1.2) for c in pc.thrust_coeffs):
+            issues.append("thrust coefficients must be within [0, 1.2]")
     return issues
 
 
@@ -285,7 +302,24 @@ def fetch_turbine_models_curve(
     sub = df[[ws_col, power_col]].apply(pd.to_numeric, errors="coerce").dropna()
     ws = [float(x) for x in sub[ws_col]]
     power = [float(x) for x in sub[power_col]]  # already kW
+    # Capture the thrust-coefficient (Ct) curve when the source ships one, aligned
+    # to the same rows as ws/power (IEA/DTU reference designs carry it; others don't).
+    ct_col = next(
+        (c for c in df.columns if str(c).strip().lower() in ("ct [-]", "ct", "thrust coefficient")),
+        None,
+    )
+    thrust: Optional[List[float]] = None
+    if ct_col is not None:
+        ct_series = pd.to_numeric(df.loc[sub.index, ct_col], errors="coerce")
+        if not bool(ct_series.isna().any()):
+            thrust = [float(x) for x in ct_series]
     rated = max(power) if power else 0.0
+    prov: Dict[str, Any] = {
+        "dataset": "NREL turbine-models (BSD-3, reference design)",
+        "file": csv.name,
+    }
+    if thrust is not None:
+        prov["has_thrust_coefficient"] = True
     return PowerCurve(
         key=key or _slugify(csv.stem),
         manufacturer=manufacturer,
@@ -293,9 +327,10 @@ def fetch_turbine_models_curve(
         rated_capacity_kw=round(rated, 1),
         wind_speeds_ms=ws,
         power_kw=power,
+        thrust_coeffs=thrust,
         rated_ms=_rated_wind_speed(ws, power, rated),
         source="nrel_turbine_models",
-        provenance={"dataset": "NREL turbine-models (BSD-3, reference design)", "file": csv.name},
+        provenance=prov,
     )
 
 
