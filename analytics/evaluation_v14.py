@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Union, cast
 
-from analytics.contracts_v14 import CasperResult, MonteCarloResult
+from analytics.contracts_v14 import CasperResult
 from analytics.contracts_v14 import ScenarioResult as ScenarioResultContract
 from analytics.contracts_v14 import SensitivitySuite
 
@@ -54,7 +54,7 @@ def run_monte_carlo_analysis(*args: Any, **kwargs: Any) -> Any:
     """
     Lazy proxy for the v14 Monte Carlo engine.
     """
-    from analytics.monte_carlo_v14 import run_monte_carlo_analysis as _real_run_mc
+    from analytics.mc.engine import run_monte_carlo_analysis as _real_run_mc
 
     return _real_run_mc(*args, **kwargs)
 
@@ -396,7 +396,6 @@ def evaluate_with_casper_tail_risk(
     monte_carlo = None
     tail_risk_block: list[dict[str, Any]] | None = None
     tail_risk_snapshots: dict[str, Any] = {}
-    raw_results: list[dict[str, Any]] = []
 
     if monte_carlo_config_path:
         from omegaconf import OmegaConf
@@ -432,58 +431,33 @@ def evaluate_with_casper_tail_risk(
                 mc_iterations,
             )
 
-        mc_result = run_monte_carlo_analysis(
-            config=mc_config, n_iterations=mc_iterations
-        )
+        # Seed: prefer the MC config's value, else the scenario's monte_carlo block.
+        mc_seed = 42
+        try:
+            mc_block = getattr(mc_config, "monte_carlo", None)
+            if mc_block is not None and hasattr(mc_block, "seed"):
+                mc_seed = int(mc_block.seed)
+            elif (base_config.get("monte_carlo") or {}).get("seed") is not None:
+                mc_seed = int(base_config["monte_carlo"]["seed"])
+        except (AttributeError, TypeError, ValueError):
+            pass
 
-        if not mc_result or not mc_result.get("success"):
+        # The canonical engine consumes the scenario's monte_carlo.parameters
+        # block (base_config) and returns a contracts_v14.MonteCarloResult
+        # directly — no dict munging, no rebuild. (Previously this called the
+        # engine with non-existent kwargs config=/n_iterations= and then treated
+        # the frozen dataclass result as a dict via .get(...), so the entire
+        # CASPER tail-risk MC path was dead.)
+        monte_carlo = run_monte_carlo_analysis(
+            base_config=base_config,
+            n_trials=mc_iterations,
+            seed=mc_seed,
+        )
+        if monte_carlo is None or int(getattr(monte_carlo, "iterations", 0)) <= 0:
             raise ValueError(
-                f"run_monte_carlo_analysis failed for scenario '{scenario_name_for_mc}'. "
-                f"Result: {mc_result}"
+                "Monte Carlo produced no iterations for scenario "
+                f"'{scenario_name_for_mc}'."
             )
-
-        stats = mc_result.get("statistics", {})
-
-        # HARDENING: MC raw_results null safety
-        raw_results_candidate = mc_result.get("raw_results") or mc_result.get("iterations", [])
-
-        if not raw_results_candidate or len(raw_results_candidate) == 0:
-            logger.error(
-                "MC raw_results empty or missing; tail risk analysis will be skipped"
-            )
-            raw_results = []
-        elif not isinstance(raw_results_candidate, list):
-            logger.error(
-                "MC raw_results not a list; got %s; tail risk analysis will be skipped",
-                type(raw_results_candidate).__name__,
-            )
-            raw_results = []
-        elif len(raw_results_candidate) > 0 and not isinstance(raw_results_candidate[0], dict):
-            logger.error(
-                "MC raw_results entries not dicts; tail risk analysis will be skipped"
-            )
-            raw_results = []
-        else:
-            # Valid raw_results
-            raw_results = list(raw_results_candidate)
-
-        monte_carlo = MonteCarloResult(
-            scenario_name=mc_result.get("scenario_name", scenario_name_for_mc),
-            iterations=mc_result.get("n_iterations", 0),
-            failed_iterations=mc_result.get("failed_iterations", 0),
-            raw_results=raw_results if raw_results else None,
-            project_irr_mean=stats.get("irr_mean_pct", 0.0) / 100.0,
-            project_irr_std=stats.get("irr_std_pct", 0.0) / 100.0,
-            project_irr_p10=stats.get("irr_p10_pct", 0.0) / 100.0,
-            project_irr_p50=stats.get("irr_median_pct", 0.0) / 100.0,
-            project_irr_p90=stats.get("irr_p90_pct", 0.0) / 100.0,
-            project_npv_mean=stats.get("npv_mean_usd", 0.0),
-            project_npv_p10=stats.get("npv_p10_usd", 0.0),
-            project_npv_p50=stats.get("npv_median_usd", 0.0),
-            project_npv_p90=stats.get("npv_p90_usd", 0.0),
-            dscr_min_p10=stats.get("dscr_min_p10", 0.0),
-            dscr_min_p50=stats.get("dscr_min_p50", 0.0),
-        )
 
     # Tail-risk enrichment (#165 re-enable): enrich the attached sensitivity
     # suite via the live suite-centric API and surface the result on the
