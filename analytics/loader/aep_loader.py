@@ -55,6 +55,18 @@ APPROVED_SOURCES = {
         "iec_standard": "61400-12-1:2022",
         "certificate": "CGC-B-FNc-2024-184 (extrapolated)"
     },
+    "IEA_REFERENCE_10MW_198_PC": {
+        "type": "REFERENCE",
+        "description": (
+            "IEA Wind Task 37 10 MW reference turbine (198 m rotor, ~10.64 MW, "
+            "345 W/m2): open community reference with published power + thrust (Ct) "
+            "curves, used as a representative low-specific-power 10 MW-class "
+            "machine for the 15 x 10 MW DutchBay re-model. Not OEM-certified. "
+            "Density per 61400-12-1; uncertainty per 61400-15-2."
+        ),
+        "iec_standard": "61400-12-1:2022",
+        "curve_key": "iea_reference_10mw",
+    },
     "ECMWF_ERA5_2020_2024_DUTCHBAY": {
         "type": "ECMWF",
         "description": "ERA5 reanalysis 2020-2024 for Dutch Bay",
