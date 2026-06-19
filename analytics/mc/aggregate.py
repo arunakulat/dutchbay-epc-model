@@ -152,6 +152,12 @@ def aggregate_trials(
     metadata = dict(meta)
     metadata["n_metrics"] = len(arrays)
     metadata["metric_keys"] = list(arrays.keys())
+    # Surface toy-fallback usage so a degenerate run (real evaluation failed on
+    # every trial, fabricated KPIs substituted) is detectable rather than silent.
+    # toy_fallback_count == n_trials means NO real evaluation succeeded.
+    metadata["toy_fallback_count"] = sum(
+        1 for tm in trial_metrics if tm.get("_toy_fallback")
+    )
     
     # Populate the legacy flat scalar surface from the structured aggregates, so
     # consumers reading MonteCarloResult.iterations / .project_irr_p10 /

@@ -88,6 +88,9 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
         "dscr_min": float(dscr_min),
         "llcr": float(max(dscr_min * 1.10, 0.01)),
         "plcr": float(max(dscr_min * 1.05, 0.01)),
+        # Tag so aggregate_trials can count toy-fallback usage and consumers can
+        # detect a degenerate run where real evaluation failed on every trial.
+        "_toy_fallback": True,
     }
 
 
@@ -226,7 +229,11 @@ class MonteCarloEngine:
                 else:
                     trial_metrics.append({})
             except Exception as exc:
-                logger.debug(
+                # WARNING, not DEBUG: on a production scenario a toy fallback
+                # means real evaluation FAILED for this trial; silently swallowing
+                # it at DEBUG let an all-failing run report success_rate=100% with
+                # fabricated KPIs. aggregate_trials surfaces toy_fallback_count.
+                logger.warning(
                     "MC trial %d used toy fallback because full v14 evaluation failed: %s",
                     i,
                     exc,
