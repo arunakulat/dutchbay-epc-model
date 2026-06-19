@@ -40,8 +40,9 @@ import pandas as pd
 
 from analytics.loader.aep_loader import load_aep_from_summary
 from analytics.power_curves.oem_parser import (
+    CANONICAL_CURVE_KEY,
     compute_aep_from_curve,
-    parse_envision_en171_curve,
+    parse_power_curve,
 )
 
 logger = logging.getLogger(__name__)
@@ -156,8 +157,11 @@ def run_monte_carlo_aep(
         f"Loss factors: wake={wake_loss_base:.1f}%, avail={avail_base:.1f}%, elec={elec_loss_base:.1f}%"
     )
     
-    # Load power curve
-    power_curve = parse_envision_en171_curve(air_density_kgm3=air_density_kgm3)
+    # Load the power curve the AEP summary was computed with (the model's
+    # selection), not a hardwired turbine (GWTF ARCH-01). Falls back to the
+    # canonical key only when the summary doesn't record one.
+    curve_key = str(aep_data.get("power_curve_key") or CANONICAL_CURVE_KEY)
+    power_curve = parse_power_curve(curve_key, air_density_kgm3=air_density_kgm3)
     
     # Monte Carlo sampling
     aep_scenarios = []

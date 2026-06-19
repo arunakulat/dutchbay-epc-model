@@ -7,6 +7,7 @@
   "hub_height_m": 150,
   "source_id": "OEM_ENVISION_EN171_65_PC",
   "source_type": "OEM",
+  "power_curve_key": "envision_en171_6p5",
   "iec_standard": "IEC 61400-12-1:2022",
   "derived_from": [
     "OEM_ENVISION_EN171_65_PC",

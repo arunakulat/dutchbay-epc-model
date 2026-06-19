@@ -24,11 +24,13 @@ import pandas as pd
 import pytest
 
 from analytics.power_curves.oem_parser import (
+    CANONICAL_CURVE_KEY,
     ENVISION_EN171_65_POWER_CURVE,
     ENVISION_EN171_65_SPECS,
     compute_aep_from_curve,
     interpolate_power_curve,
     parse_envision_en171_curve,
+    parse_power_curve,
     validate_power_curve_iec_compliance,
 )
 
@@ -284,6 +286,54 @@ def test_aep_increases_with_air_density(weibull_wind_8760: np.ndarray) -> None:
         weibull_wind_8760, parse_envision_en171_curve(0.95), 23, 6.5
     )[1]
     assert cf_high > cf_low
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONFIG-SELECTABLE CURVE (GWTF ARCH-01 — not hardwired to one turbine)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.parametrize(
+    "curve_key,expected_peak_kw",
+    [
+        ("envision_en171_6p5", 6500.0),
+        ("vestas_v150_5p6", 5600.0),
+        ("ge_cypress_5p5", 5500.0),
+    ],
+)
+def test_parse_power_curve_selects_by_key(curve_key: str, expected_peak_kw: float) -> None:
+    """parse_power_curve loads whichever store curve the model selected."""
+    curve = parse_power_curve(curve_key)
+    assert abs(curve["power_kw"].max() - expected_peak_kw) < 1.0
+    assert str(curve.attrs["source"]).endswith(curve_key)
+
+
+def test_parse_power_curve_unknown_key_raises() -> None:
+    with pytest.raises(KeyError, match="not found"):
+        parse_power_curve("not_a_real_turbine")
+
+
+def test_envision_wrapper_matches_canonical_key() -> None:
+    """The legacy wrapper equals parse_power_curve at the canonical key."""
+    wrapper = parse_envision_en171_curve(1.15)
+    explicit = parse_power_curve(CANONICAL_CURVE_KEY, 1.15)
+    assert list(wrapper["power_kw"]) == list(explicit["power_kw"])
+
+
+def test_monte_carlo_uses_summary_curve_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The auxiliary MC path picks the curve recorded in the AEP summary."""
+    import analytics.simulation.monte_carlo_aep as mc
+
+    seen: dict = {}
+    original = mc.parse_power_curve
+
+    def _spy(key, *args, **kwargs):  # type: ignore[no-untyped-def]
+        seen["key"] = key
+        return original(key, *args, **kwargs)
+
+    monkeypatch.setattr(mc, "parse_power_curve", _spy)
+    mc.run_monte_carlo_aep("tests/mocks/aep_summary_dutchbay.json", n_scenarios=20, seed=1)
+    assert seen["key"] == "envision_en171_6p5"
 
 
 if __name__ == "__main__":
