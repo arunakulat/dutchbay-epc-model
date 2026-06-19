@@ -2,6 +2,17 @@
 """
 WACC & hurdle-rate engine driven entirely by a YAML configuration.
 
+DEPRECATED / SUPERSEDED (kept as a standalone calculator only).
+    The build-up WACC methodology this script pioneered (target-return cost of
+    equity, fee-inclusive cost of debt, foreign hurdle) now lives in the live
+    engine ``finance/wacc_v14.py`` (``mode: build_up``) and is wired into the
+    pipeline: with ``wacc.drives_discount_rate`` the after-tax WACC — computed
+    from the ACTUAL sized debt (Financing_Terms.mix + rates) — drives the project
+    NPV discount and the cost of equity drives the equity NPV discount. For the
+    cost-of-equity sensitivity use ``analytics.wacc_sensitivity.ke_band_npv``.
+    Prefer those for any scenario the pipeline evaluates; this CLI remains for
+    quick standalone capital-structure sketches with its own tranche YAML schema.
+
 Usage:
     python wacc_engine_yaml.py wacc_config.yaml
 

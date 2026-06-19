@@ -359,6 +359,149 @@ def build_wacc(
 
 
 # =============================================================================
+# Build-up WACC (target-return cost of equity; ported from wacc_engine_yaml)
+# =============================================================================
+
+
+def build_wacc_build_up(
+    *,
+    debt_to_value: float,
+    cost_of_debt_pretax: float,
+    cost_of_equity: float,
+    tax_rate: float,
+    debt_fee_rate: float = 0.0,
+    inflation_rate: Optional[float] = None,
+    prudential_spread_bps: int = 100,
+) -> WaccComponents:
+    """After-tax WACC from a *target-return* cost of equity (no CAPM beta).
+
+    The build-up method states the required return directly rather than deriving it
+    from a beta + market premium — better suited to frontier/post-default markets
+    where a defensible beta is hard to argue. Cost of debt is fee-inclusive
+    (``cost_of_debt_pretax + debt_fee_rate``, e.g. guarantee/PRI + amortised upfront)
+    and tax-shielded. Gearing/cost-of-debt should come from the ACTUAL sized debt
+    (Financing_Terms.mix + rates via the debt engine), not hand-set values.
+    """
+    if not (0.0 <= debt_to_value < 1.0):
+        raise ValueError(f"Invalid debt_to_value: {debt_to_value}")
+
+    equity_to_value = 1.0 - debt_to_value
+    kd_pretax = cost_of_debt_pretax + debt_fee_rate
+    kd_aftertax = kd_pretax * (1.0 - tax_rate)
+    wacc_nominal = equity_to_value * cost_of_equity + debt_to_value * kd_aftertax
+
+    wacc_real: Optional[float] = None
+    if inflation_rate is not None and inflation_rate > 0:
+        wacc_real = calculate_real_wacc(wacc_nominal, inflation_rate)
+
+    prudential_spread = prudential_spread_bps / 10000.0
+    return WaccComponents(
+        mode="build_up",
+        wacc_nominal=wacc_nominal,
+        wacc_real=wacc_real,
+        wacc_prudential=wacc_nominal + prudential_spread,
+        risk_free_rate=0.0,
+        market_risk_premium=0.0,
+        asset_beta=0.0,
+        target_debt_to_equity=(
+            debt_to_value / equity_to_value if equity_to_value > 0 else 0.0
+        ),
+        target_debt_to_value=debt_to_value,
+        target_equity_to_value=equity_to_value,
+        cost_of_debt_pretax=kd_pretax,
+        cost_of_debt_aftertax=kd_aftertax,
+        equity_beta_levered=0.0,
+        cost_of_equity=cost_of_equity,
+        tax_rate=tax_rate,
+        inflation_rate=inflation_rate,
+        prudential_spread_bps=int(prudential_spread_bps),
+    )
+
+
+def resolve_cost_of_equity(wacc_cfg: Dict[str, Any]) -> float:
+    """Cost of equity for build-up mode: a direct figure or a transparent build-up.
+
+    Accepts either ``cost_of_equity`` (decimal or %), or a ``build_up`` block of
+    ``risk_free`` + ``country_risk_premium`` + ``equity_risk_premium`` (+ optional
+    ``size_premium``) which are summed. Raises if neither is present/valid.
+    """
+    direct = wacc_cfg.get("cost_of_equity", wacc_cfg.get("target_equity_return"))
+    if direct is not None:
+        ke = _pct_to_decimal(_as_float_or_none(direct))
+        if ke is None or ke <= 0:
+            raise ValueError(f"Invalid wacc.cost_of_equity: {direct!r}")
+        return ke
+
+    bu = wacc_cfg.get("build_up")
+    if isinstance(bu, dict):
+        parts = ("risk_free", "country_risk_premium", "equity_risk_premium", "size_premium")
+        total = 0.0
+        seen = False
+        for key in parts:
+            raw = bu.get(key)
+            if raw is None:
+                continue
+            val = _pct_to_decimal(_as_float_or_none(raw))
+            if val is None or val < 0:
+                raise ValueError(f"Invalid wacc.build_up.{key}: {raw!r}")
+            total += val
+            seen = True
+        if not seen or total <= 0:
+            raise ValueError("wacc.build_up requires positive risk_free/premia components")
+        return total
+
+    raise ValueError(
+        "build_up WACC requires wacc.cost_of_equity or a wacc.build_up component block"
+    )
+
+
+def compute_build_up_wacc(
+    config: Dict[str, Any],
+    *,
+    debt_to_value: float,
+    cost_of_debt_pretax: float,
+    debt_fee_rate: float = 0.0,
+) -> Dict[str, Any]:
+    """Build-up WACC from config, using ACTUAL gearing + cost of debt from the engine.
+
+    Reads the cost of equity (and tax) from the ``wacc`` block; gearing and cost of
+    debt are passed in from the sized debt so the WACC reflects the real structure.
+    """
+    wacc_cfg = config.get("wacc", {}) or {}
+    cost_of_equity = resolve_cost_of_equity(wacc_cfg)
+
+    tax_raw = wacc_cfg.get("tax_rate")
+    if tax_raw is None:
+        tax_raw = get_nested(config, ["tax", "corporate_tax_rate_pct"])
+    if tax_raw is None:
+        tax_raw = get_nested(config, ["tax", "corporate_tax_rate"])
+    tax_rate = _pct_to_decimal(_as_float_or_none(tax_raw)) if tax_raw is not None else 0.0
+    if tax_rate is None or not (0.0 <= tax_rate <= 1.0):
+        raise ValueError(f"Invalid tax_rate for build_up WACC: {tax_raw!r}")
+
+    inflation_raw = wacc_cfg.get("inflation_rate")
+    inflation_rate = (
+        _pct_to_decimal(_as_float_or_none(inflation_raw))
+        if inflation_raw is not None
+        else None
+    )
+    prudential_bps = _parse_prudential_spread_bps(
+        wacc_cfg.get("prudential_spread_bps"), default_bps=100
+    )
+
+    components = build_wacc_build_up(
+        debt_to_value=debt_to_value,
+        cost_of_debt_pretax=cost_of_debt_pretax,
+        cost_of_equity=cost_of_equity,
+        tax_rate=tax_rate,
+        debt_fee_rate=debt_fee_rate,
+        inflation_rate=inflation_rate,
+        prudential_spread_bps=prudential_bps,
+    )
+    return asdict(components)
+
+
+# =============================================================================
 # WACC from Config (YAML-driven)
 # =============================================================================
 
@@ -424,11 +567,24 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         return asdict(components)
 
     # -------------------------------------------------------------------------
+    # Build-up mode — needs the SIZED debt (gearing + cost of debt), so it is
+    # computed in the pipeline via compute_build_up_wacc(); not resolvable here.
+    # -------------------------------------------------------------------------
+    if wacc_cfg.get("mode", "").lower() == "build_up":
+        logger.debug(
+            "wacc.mode=build_up resolved in-pipeline from sized debt; "
+            "compute_wacc_from_config returns {} here."
+        )
+        return {}
+
+    # -------------------------------------------------------------------------
     # CAPM mode
     # -------------------------------------------------------------------------
     mode = wacc_cfg.get("mode", "capm").lower()
     if mode != "capm":
-        raise ValueError(f"Unknown wacc.mode: '{mode}'. Use 'capm' or 'fixed/simple'.")
+        raise ValueError(
+            f"Unknown wacc.mode: '{mode}'. Use 'capm', 'build_up', or 'fixed/simple'."
+        )
 
     # CAPM inputs (dual naming)
     rf_raw = wacc_cfg.get("risk_free_rate", wacc_cfg.get("risk_free"))
