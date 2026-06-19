@@ -310,5 +310,83 @@ class TestAggregationStoresTrials:
         assert result.trials["dscr_min"] == [1.32, 1.45, 1.51]
 
 
+class TestFlatCompatSurfacePopulated:
+    """Regression: aggregate_trials must populate the legacy flat scalar surface.
+
+    Before the fix, aggregate_trials only set summary/metadata/trials/percentiles,
+    leaving MonteCarloResult.iterations / .project_irr_p10 / etc. at their dataclass
+    defaults (0 / None). Downstream consumers — success_rate() (reads .iterations) and
+    casper_payload._monte_carlo_to_dict (reads .project_irr_p10) — therefore reported a
+    run of 0 trials with no IRR even though the structured aggregates were fully present.
+    These tests pin the flat surface to the structured data so the regression can't return.
+    """
+
+    def _run(self, trial_metrics):
+        return aggregate_trials(
+            trial_metrics=trial_metrics,
+            base_config={},
+            param_names=["capex", "tariff"],
+            samples=np.random.rand(len(trial_metrics), 2),
+            meta={"seed": 42, "n_trials": len(trial_metrics)},
+        )
+
+    def test_flat_fields_mirror_structured_aggregates(self):
+        """Flat scalars must equal the matching summary/percentile values (no drift)."""
+        trial_metrics = [
+            {"dscr_min": 1.32, "project_irr": 0.14, "project_npv": 5.0e6},
+            {"dscr_min": 1.45, "project_irr": 0.13, "project_npv": 3.0e6},
+            {"dscr_min": 1.51, "project_irr": 0.15, "project_npv": 7.0e6},
+        ]
+        result = self._run(trial_metrics)
+
+        # Counts reflect the real run, not the 0 default.
+        assert result.iterations == 3
+        assert result.n_iterations == 3
+        assert result.failed_iterations == 0
+        assert result.success_rate() == 100.0
+
+        # Means come straight from the structured summary.
+        assert result.project_irr_mean == result.summary["project_irr"]["mean"]
+        assert result.project_irr_std == result.summary["project_irr"]["std"]
+        assert result.project_npv_mean == result.summary["project_npv"]["mean"]
+
+        # Percentile scalars come straight from the percentile lookup.
+        assert result.project_irr_p10 == result.percentiles[10]["project_irr"]
+        assert result.project_irr_p50 == result.percentiles[50]["project_irr"]
+        assert result.project_irr_p90 == result.percentiles[90]["project_irr"]
+        assert result.project_npv_p10 == result.percentiles[10]["project_npv"]
+        assert result.dscr_min_p10 == result.percentiles[10]["dscr_min"]
+        assert result.dscr_min_p50 == result.percentiles[50]["dscr_min"]
+
+    def test_failed_iterations_counts_metricless_trials(self):
+        """Trials carrying no canonical metric count as failed; success_rate() reflects it."""
+        trial_metrics = [
+            {"project_irr": 0.14},
+            {"project_irr": 0.13},
+            {},                       # produced nothing → failed
+            {"unrelated_key": 1.0},   # no canonical metric → failed
+        ]
+        result = self._run(trial_metrics)
+
+        assert result.iterations == 4
+        assert result.failed_iterations == 2
+        assert result.success_rate() == 50.0
+
+    def test_absent_metric_leaves_its_flat_fields_none(self):
+        """A metric absent from every trial stays None (not 0.0) on the flat surface."""
+        trial_metrics = [
+            {"project_irr": 0.14},
+            {"project_irr": 0.15},
+        ]
+        result = self._run(trial_metrics)
+
+        # project_npv / dscr_min never appeared → their flat scalars remain None.
+        assert result.project_npv_p10 is None
+        assert result.project_npv_mean is None
+        assert result.dscr_min_p10 is None
+        # project_irr was present → populated.
+        assert result.project_irr_p50 is not None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

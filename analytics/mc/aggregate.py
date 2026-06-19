@@ -13,7 +13,7 @@ Sprint 18 Enhancement:
 - Supports worst-year DSCR P95 downside statistics
 """
 
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -153,12 +153,42 @@ def aggregate_trials(
     metadata["n_metrics"] = len(arrays)
     metadata["metric_keys"] = list(arrays.keys())
     
-    # Construct MonteCarloResult with raw trials
+    # Populate the legacy flat scalar surface from the structured aggregates, so
+    # consumers reading MonteCarloResult.iterations / .project_irr_p10 /
+    # .success_rate() see the real run instead of the dataclass defaults (0/None).
+    # Derived from summary + percentile_lookup (no recomputation). NOTE: "failed"
+    # counts trials that produced NO canonical metric; toy-fallback trials carry
+    # metrics and are not distinguishable here, so they count as run.
+    n_trials = len(trial_metrics)
+    n_failed = sum(1 for tm in trial_metrics if not any(k in tm for k in metric_keys))
+
+    def _stat(metric: str, key: str) -> Optional[float]:
+        s = summary.get(metric)
+        return float(s[key]) if isinstance(s, dict) and key in s else None
+
+    def _pct(metric: str, p: int) -> Optional[float]:
+        return percentile_lookup.get(p, {}).get(metric)
+
+    # Construct MonteCarloResult with raw trials + the flat compatibility surface.
     result = MonteCarloResult(
         summary=summary,
         metadata=metadata,
         trials=trials,  # RAW TRIAL ARRAYS for lender analytics
         percentiles=percentile_lookup,
+        iterations=n_trials,
+        n_iterations=n_trials,
+        failed_iterations=n_failed,
+        project_irr_mean=_stat("project_irr", "mean"),
+        project_irr_std=_stat("project_irr", "std"),
+        project_irr_p10=_pct("project_irr", 10),
+        project_irr_p50=_pct("project_irr", 50),
+        project_irr_p90=_pct("project_irr", 90),
+        project_npv_mean=_stat("project_npv", "mean"),
+        project_npv_p10=_pct("project_npv", 10),
+        project_npv_p50=_pct("project_npv", 50),
+        project_npv_p90=_pct("project_npv", 90),
+        dscr_min_p10=_pct("dscr_min", 10),
+        dscr_min_p50=_pct("dscr_min", 50),
     )
     
     return result
