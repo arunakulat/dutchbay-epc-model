@@ -47,6 +47,7 @@ wind = [
   "netcdf4>=1.6",
   "windpowerlib>=0.2",  # open turbine library (oedb) for power-curve sourcing (#181)
   "turbine-models>=0.2",  # NREL reference power curves (5-18 MW) for sourcing fallback (#181)
+  "py-wake>=2.6",  # DTU PyWake — granular per-turbine wake model (Bastankhah/TurbOPark) for the bankable AEP engine
 ]
 # GeoTIFF / raster export for QGIS (issue #20). rasterio wheels bundle their own GDAL,
 # so no system GDAL/apt is needed on the CI runner or macOS. Opt-in like [wind]; the
