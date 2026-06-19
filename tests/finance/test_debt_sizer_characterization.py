@@ -7,8 +7,11 @@ sweeping ``Financing_Terms.debt_ratio`` (see the #30 optimization facade):
 1. ``min_dscr`` sits at the sculpt target across gearings (DSCR-sculpted debt) —
    it is NOT mis-reported; the DSCR *series* spread (mean/max) does vary.
 2. ``equity_npv`` is monotonic non-decreasing in gearing — cheaper leverage
-   improves equity value smoothly, so the IRR solver / economics are sound (the
-   non-monotonic *equity_irr* is a real covenant-lockup timing effect, not a bug).
+   improves equity value smoothly, so the IRR solver / economics are sound.
+   (NOTE: the equity_irr non-monotonicity / sub-target achieved DSCR first seen
+   here was later traced to a real debt-service ALIGNMENT bug — period- vs
+   annual-row indexing of debt service — and FIXED. The base case now holds DSCR
+   at target with no covenant lockup; see test_no_phantom_covenant_lockup.)
 3. ``Financing_Terms.interest_rate_nominal`` is a no-op on the achieved schedule
    (per-tranche rates govern; the top-level key only discounts the dual-DSCR
    capacity detail).
@@ -37,6 +40,20 @@ def _kpis(debt_ratio: float) -> dict:
     return evaluate_with_overrides(
         LENDER_CONFIG, overrides={"Financing_Terms.debt_ratio": debt_ratio}
     )
+
+
+def test_no_phantom_covenant_lockup() -> None:
+    """The sculpted lender case holds DSCR at target with NO covenant lockup.
+
+    Guards the debt-service alignment fix: debt_service_total is period-indexed
+    (offset by construction + bridge periods), and indexing it by annual-row index
+    had spuriously collapsed the achieved DSCR ~3 years out of phase, locking 13
+    years of equity distributions. Correct alignment leaves zero locked years.
+    """
+    kpis = evaluate_with_overrides(LENDER_CONFIG, overrides={})
+    assert kpis["equity_covenant_locked_years"] == 0
+    # The reported covenant DSCR is genuinely achieved (sculpted to target).
+    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
 
 
 def test_min_dscr_holds_sculpt_target_across_gearing() -> None:
