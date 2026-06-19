@@ -1,0 +1,32 @@
+# GIS export config — issue #20: DutchBay WS150 / CF / AEP GeoTIFFs (coarse + fine).
+# Consumed by analytics.gis.gis_export.run_gis_export. Config-first (ARCH-01/CESSPIT):
+# no hardcoded paths, CRS, extent or period. The same shape may live under a scenario
+# `gis:` block; the CLI reads `full.get("gis", full)`.
+gis:
+  crs: EPSG:4326
+  out_dir: outputs/gis/dutchbay
+  manifest_path: outputs/gis/DataLake_Manifest_All.json
+
+  # Kalpitiya / Dutch Bay — the 23 × Envision EN-171/6.5 turbine centroid.
+  center_lat: 8.27
+  center_lon: 79.75
+
+  grids:
+    - name: coarse        # native ERA5 ≈0.25° cells → ≈0.75°/~80 km box, real spatial variation
+      n: 3
+      cell_deg: 0.25
+      mode: native
+    - name: fine          # wind-farm scale ≈0.05°/~5 km — bilinear DOWNSCALE of `coarse`
+      n: 3                 # (smooth interpolation of ERA5 0.25°, NOT measured sub-grid detail)
+      cell_deg: 0.05
+      mode: interpolated
+      source: coarse
+
+  era5:
+    project_name: DutchBay
+    turbine_model: envision_en171_6p5
+    num_turbines: 23
+    hub_height_m: 150
+    output_dir: /tmp/era5_grid_cache
+    start_year: 2020      # recent 5-yr GIS snapshot (explicit window; CESSPIT — no hidden default)
+    end_year: 2024

@@ -39,7 +39,7 @@ jobs:
         python -m pip install -r requirements.txt
         # ".[wind]" pulls the xarray/netcdf4/cdsapi toolchain so the wind
         # adapter + NetCDF/GIS xarray tests run in the gate (was opt-in only).
-        python -m pip install -e ".[wind]"
+        python -m pip install -e ".[wind,gis]"
         python -m pip install pytest pytest-cov pytest-xdist pytest-html
 
     - name: Display environment info
@@ -122,7 +122,7 @@ jobs:
         # diagnostics. Without this, the gate would be both noisy and unstable.
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
-        python -m pip install -e ".[wind]"
+        python -m pip install -e ".[wind,gis]"
         pip install ruff black mypy==1.19.0
 
     - name: Run ruff
