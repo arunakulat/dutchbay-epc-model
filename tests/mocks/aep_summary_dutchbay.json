@@ -19,7 +19,7 @@
     "availability_pct": 97.0,
     "electrical_loss_pct": 2.0,
     "curtailment_pct": 2.0,
-    "environmental_pct": 1.0,
+    "other_pct": 1.0,
     "total_loss_pct": 12.4
   },
   "wind_resource": {

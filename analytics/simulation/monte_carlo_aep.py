@@ -141,7 +141,20 @@ def run_monte_carlo_aep(
     wake_loss_base = wake_loss_mean_pct if wake_loss_mean_pct is not None else losses.get("wake_loss_pct", 8.0)
     avail_base = availability_mean_pct if availability_mean_pct is not None else losses.get("availability_pct", 97.0)
     elec_loss_base = electrical_loss_mean_pct if electrical_loss_mean_pct is not None else losses.get("electrical_loss_pct", 2.0)
-    
+
+    # compute_aep_from_curve only applies wake/availability/electrical. The loss
+    # stack also has curtailment and other (icing/environmental); dropping them
+    # under-counted total losses by ~3% and overstated AEP. Apply them as a fixed
+    # multiplicative retention (they are not sampled). Config-first: read from the
+    # summary's loss block (canonical key `other_pct`, tolerate legacy
+    # `environmental_pct`). Zero when absent keeps prior behaviour for stacks
+    # that genuinely have no curtailment/other component.
+    curtailment_base = float(losses.get("curtailment_pct", 0.0) or 0.0)
+    other_base = float(
+        losses.get("other_pct", losses.get("environmental_pct", 0.0)) or 0.0
+    )
+    fixed_loss_retention = (1.0 - curtailment_base / 100.0) * (1.0 - other_base / 100.0)
+
     # Estimate Weibull parameters from AEP (if not provided)
     if weibull_a_mean is None:
         # Rough estimate: A ≈ mean_ws ≈ (AEP / (CF * 8760 * capacity))^(1/3) * 7.5
@@ -224,7 +237,12 @@ def run_monte_carlo_aep(
             availability_pct=avail_samples[i],
             electrical_loss_pct=elec_loss_samples[i],
         )
-        
+
+        # Apply the remaining fixed loss components (curtailment + other) that
+        # compute_aep_from_curve does not model, so the net stack is complete.
+        aep_gwh *= fixed_loss_retention
+        cf *= fixed_loss_retention
+
         aep_scenarios.append({
             "scenario_id": i,
             "aep_gwh": aep_gwh,
