@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -93,14 +93,30 @@ def _load_curve_entry(
 
 
 def _build_base_curve(entry: Dict[str, Any]) -> pd.DataFrame:
-    """Build the reference (uncorrected) power-curve DataFrame from a store entry."""
+    """Build the reference (uncorrected) power-curve DataFrame from a store entry.
+
+    Adds a ``thrust_coefficient`` column when the store entry carries a
+    ``thrust_curve`` block (IEA/DTU reference designs sourced via
+    ``power_curve_sourcing``; #166). Ct is air-density-independent, so it rides
+    through the IEC correction unchanged. Curves without a thrust curve (the
+    canonical EN-171/6.5 and Cp-only sources) simply omit the column.
+    """
     pc = entry["power_curve"]
-    return pd.DataFrame(
-        {
-            "wind_speed_ms": [float(x) for x in pc["ws"]],
-            "power_kw": [float(x) for x in pc["power"]],
-        }
-    )
+    ws = [float(x) for x in pc["ws"]]
+    data: Dict[str, List[float]] = {
+        "wind_speed_ms": ws,
+        "power_kw": [float(x) for x in pc["power"]],
+    }
+    thrust = entry.get("thrust_curve")
+    if thrust:
+        t_ws = [float(x) for x in thrust["ws"]]
+        t_ct = [float(x) for x in thrust["ct"]]
+        # Aligned to the power grid (the store writes matching grids); interpolate
+        # defensively if a future source provides Ct on a different wind-speed grid.
+        data["thrust_coefficient"] = (
+            t_ct if t_ws == ws else [float(c) for c in np.interp(ws, t_ws, t_ct)]
+        )
+    return pd.DataFrame(data)
 
 
 def _build_specs(entry: Dict[str, Any], key: str) -> Dict[str, Any]:

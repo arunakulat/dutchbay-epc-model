@@ -336,5 +336,19 @@ def test_monte_carlo_uses_summary_curve_key(monkeypatch: pytest.MonkeyPatch) -> 
     assert seen["key"] == "envision_en171_6p5"
 
 
+def test_thrust_coefficient_surfaced_when_store_has_it() -> None:
+    """Curves with a thrust_curve block (IEA/DTU 10 MW refs) expose Ct (#166)."""
+    iea = parse_power_curve("iea_reference_10mw")
+    assert "thrust_coefficient" in iea.columns
+    ct = iea["thrust_coefficient"]
+    assert len(ct) == len(iea)
+    assert ct.between(0.0, 1.2).all()
+    # Ct is air-density-independent: the IEC correction leaves it unchanged.
+    iea_site = parse_power_curve("iea_reference_10mw", air_density_kgm3=1.10)
+    assert list(iea_site["thrust_coefficient"]) == list(ct)
+    # The canonical EN-171/6.5 ships power only -> no Ct column.
+    assert "thrust_coefficient" not in parse_power_curve(CANONICAL_CURVE_KEY).columns
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
