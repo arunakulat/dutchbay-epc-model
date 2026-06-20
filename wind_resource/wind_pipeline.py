@@ -8,14 +8,14 @@ Orchestrates the complete wind resource assessment workflow:
 
 All configuration loaded from YAML files (CCCDIR compliant).
 
-Typical usage:
+Typical usage (all turbine/site identity comes from YOUR scenario's config):
     >>> from wind_resource import WindPipeline
-    >>> location = {'name': 'DutchBay', 'lat': 8.33, 'lon': 79.76}
+    >>> location = {'name': 'YourSite', 'lat': 8.33, 'lon': 79.76}
     >>> pipeline = WindPipeline(
     ...     location=location,
-    ...     hub_height=150.0,
-    ...     turbine_model='envision_en171_6p5',
-    ...     num_turbines=15
+    ...     hub_height=cfg['turbine']['hub_height_m'],
+    ...     turbine_model=cfg['turbine']['model'],
+    ...     num_turbines=cfg['turbine']['n_turbines'],
     ... )
     >>> results = pipeline.run_complete_assessment(
     ...     start_date='2014-12-01',
@@ -66,7 +66,9 @@ class WindPipeline:
     Example:
         >>> pipeline = WindPipeline(
         ...     location={'name': 'Site1', 'lat': 8.5, 'lon': 80.0},
-        ...     hub_height=150.0
+        ...     hub_height=120.0,            # from your turbine.hub_height_m
+        ...     turbine_model='iea_reference_10mw',  # from your turbine.model
+        ...     num_turbines=15,             # from your turbine.n_turbines
         ... )
         >>> results = pipeline.run_complete_assessment()
     """
@@ -74,22 +76,26 @@ class WindPipeline:
     def __init__(
         self,
         location: Dict[str, Any],
-        hub_height: float = 150.0,
-        turbine_model: str = 'envision_en171_6p5',
-        num_turbines: int = 15,
+        hub_height: float,
+        turbine_model: str,
+        num_turbines: int,
         cache_dir: str = "inputs/wind_data",
         output_dir: str = "outputs/wind_assessment",
         config_path: Optional[str] = None
     ) -> None:
         """Initialize wind assessment pipeline.
-        
+
+        Turbine/site identity (``hub_height``, ``turbine_model``, ``num_turbines``) is
+        REQUIRED and config-driven (ARCH-01) — this is a general-purpose tool, so there
+        is no DutchBay/Kalpitiya default a different project could silently inherit.
+
         Args:
             location: Dict with 'name', 'lat', 'lon' keys.
-                Example: {'name': 'DutchBay', 'lat': 8.33, 'lon': 79.76}
-            hub_height: Turbine hub height in meters. Default 150.0.
-            turbine_model: Turbine model name from power_curves.yaml.
-                Default 'envision_en171_6p5'.
-            num_turbines: Number of turbines in wind farm. Default 15.
+                Example: {'name': 'Site', 'lat': 8.33, 'lon': 79.76}
+            hub_height: Turbine hub height in meters (required; from turbine.hub_height_m).
+            turbine_model: Turbine model name from power_curves.yaml (required;
+                from turbine.model).
+            num_turbines: Number of turbines in wind farm (required; from turbine.n_turbines).
             cache_dir: Directory for ERA5 data cache. Default 'inputs/wind_data'.
             output_dir: Directory for analysis outputs. Default 'outputs/wind_assessment'.
             config_path: Path to era5_config.yaml. If None, uses default.
@@ -123,7 +129,7 @@ class WindPipeline:
         # Load config (CCCDIR compliance)
         self._load_config(config_path)
         
-        logger.info(f"WindPipeline v1.0.0 initialized (CCCDIR compliant)")
+        logger.info("WindPipeline v1.0.0 initialized (CCCDIR compliant)")
         logger.info(f"  Location: {location['name']} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)")
         logger.info(f"  Hub height: {hub_height}m")
         logger.info(f"  Turbine model: {turbine_model}")

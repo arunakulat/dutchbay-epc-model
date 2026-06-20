@@ -60,6 +60,23 @@ class TestNoSilentDefaults:
         with pytest.raises(KeyError, match="hub_height_m"):
             build_aep_summary_from_config(bad)
 
+    def test_wind_pipeline_requires_turbine_identity(self) -> None:
+        """WindPipeline (public API) must not default to DutchBay turbine/hub/count."""
+        from wind_resource.wind_pipeline import WindPipeline
+
+        with pytest.raises(TypeError):
+            WindPipeline(location={"name": "x", "lat": 1.0, "lon": 2.0})
+
+    def test_era5_request_config_requires_turbine_identity(self) -> None:
+        """Direct construction (not just from_yaml) must require turbine identity."""
+        from wind_resource.era5_retrieval import ERA5RequestConfig
+
+        with pytest.raises(TypeError):
+            ERA5RequestConfig(
+                project_name="x", latitude=1.0, longitude=2.0,
+                start_year=2020, end_year=2024,
+            )
+
     def test_lender_scenario_still_builds(self, scenario: dict) -> None:
         """The compliant lender scenario provides every field — no raise, 483.6 GWh."""
         summary = build_aep_summary_from_config(scenario)
@@ -91,6 +108,20 @@ class TestNoMaskingDefaultLiterals:
         assert 'get("model", "envision' not in src
         assert 'get("num_turbines", 23)' not in src
         assert 'get("hub_height_m", 150' not in src
+
+    def test_wind_pipeline_has_no_turbine_identity_defaults(self) -> None:
+        """The general-purpose WindPipeline must bake no DutchBay turbine/hub/count."""
+        src = _src("wind_resource/wind_pipeline.py")
+        assert "hub_height: float = 150" not in src
+        assert "turbine_model: str = 'envision" not in src
+        assert "num_turbines: int = 15" not in src
+
+    def test_era5_dataclass_has_no_turbine_identity_defaults(self) -> None:
+        """ERA5RequestConfig identity fields are required (no direct-construction bypass)."""
+        src = _src("wind_resource/era5_retrieval.py")
+        assert 'turbine_model: str = "envision' not in src
+        assert "num_turbines: int = 23" not in src
+        assert "hub_height_m: float = 150" not in src
 
 
 def test_hours_per_year_is_unified() -> None:

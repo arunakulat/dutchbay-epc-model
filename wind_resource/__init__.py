@@ -8,14 +8,14 @@ Provides comprehensive wind resource analysis tools including:
 
 All modules are CCCDIR compliant with configuration loaded from YAML files.
 
-Quick Start:
+Quick Start (turbine/site identity is config-driven — no built-in defaults):
     >>> from wind_resource import WindPipeline
-    >>> location = {'name': 'DutchBay', 'lat': 8.33, 'lon': 79.76}
+    >>> location = {'name': 'YourSite', 'lat': 8.33, 'lon': 79.76}
     >>> pipeline = WindPipeline(
     ...     location=location,
-    ...     hub_height=150.0,
-    ...     turbine_model='envision_en171_6p5',
-    ...     num_turbines=15
+    ...     hub_height=cfg['turbine']['hub_height_m'],
+    ...     turbine_model=cfg['turbine']['model'],
+    ...     num_turbines=cfg['turbine']['n_turbines'],
     ... )
     >>> results = pipeline.run_complete_assessment(
     ...     start_date='2014-12-01',

@@ -70,7 +70,9 @@ def test_reference_periods_clamped():
 
 def test_period_aep_table_positive():
     cfg = ERA5RequestConfig(project_name="T", latitude=8.27, longitude=79.75,
-                            start_year=2005, end_year=2024)
+                            start_year=2005, end_year=2024,
+                            hub_height_m=150.0, turbine_model="iea_reference_10mw",
+                            num_turbines=15)
     table = period_aep_table(_ws_series(2005, 2024), cfg, reference_periods(2005, 2024))
     assert len(table) >= 3
     assert all(r["net_aep_p50_gwh"] > 0 and 0 < r["capacity_factor"] < 1 for r in table)
@@ -91,7 +93,9 @@ def test_recommend_p50_by_classification():
 
 def test_analyze_renders_markdown_and_dataframe():
     cfg = ERA5RequestConfig(project_name="T", latitude=8.27, longitude=79.75,
-                            start_year=2005, end_year=2024)
+                            start_year=2005, end_year=2024,
+                            hub_height_m=150.0, turbine_model="iea_reference_10mw",
+                            num_turbines=15)
     out = analyze_long_term_resource(cfg, series=_ws_series(2005, 2024))
     md = out["markdown"]
     assert "## Long-Term Wind Resource & Trend" in md

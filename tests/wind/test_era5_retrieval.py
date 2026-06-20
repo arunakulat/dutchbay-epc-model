@@ -52,6 +52,9 @@ def cfg() -> ERA5RequestConfig:
         longitude=79.75,
         start_year=2023,
         end_year=2023,
+        hub_height_m=150.0,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
     )
 
 
@@ -133,6 +136,9 @@ def test_validate_coverage_warn_only(tmp_path):
         longitude=79.75,
         start_year=2023,
         end_year=2023,
+        hub_height_m=150.0,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
         strict_coverage=False,
     )
     nc = _synthetic_era5_nc(tmp_path, hours=8640)
