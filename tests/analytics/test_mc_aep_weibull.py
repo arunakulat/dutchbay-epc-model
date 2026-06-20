@@ -51,7 +51,7 @@ def test_fit_too_few_samples_raises() -> None:
 def test_percentile_ordering_exceedance() -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
     p = run_mc_aep(
-        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=800
+        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=800
     )["percentiles"]
     assert p["p99"] < p["p90"] < p["p75"] < p["p50"]
 
@@ -59,7 +59,7 @@ def test_percentile_ordering_exceedance() -> None:
 def test_p50_corroborates_canonical() -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
     res = run_mc_aep(
-        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=2000
+        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=2000
     )
     assert res["percentiles"]["p50"] == pytest.approx(402.6, abs=10.0)
 
@@ -67,14 +67,14 @@ def test_p50_corroborates_canonical() -> None:
 def test_p90_is_conservative() -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
     res = run_mc_aep(
-        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=800
+        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=800
     )
     assert res["percentiles"]["p90"] < res["percentiles"]["p50"]
 
 
 def test_reproducible_with_seed() -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
-    kw = dict(n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=500, seed=11)
+    kw = dict(n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=500, seed=11)
     a = run_mc_aep(fit, **kw)["percentiles"]
     b = run_mc_aep(fit, **kw)["percentiles"]
     assert a == b
@@ -82,7 +82,7 @@ def test_reproducible_with_seed() -> None:
 
 def test_higher_uncertainty_widens_spread() -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
-    base = dict(n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=1500)
+    base = dict(n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=1500)
     narrow = run_mc_aep(fit, weibull_uncertainty_pct=3.0, **base)
     wide = run_mc_aep(fit, weibull_uncertainty_pct=12.0, **base)
     assert wide["std"] > narrow["std"]
@@ -91,7 +91,7 @@ def test_higher_uncertainty_widens_spread() -> None:
 def test_summary_csv_written(tmp_path: Path) -> None:
     fit = fit_weibull_from_series(_synthetic_ws150())
     res = run_mc_aep(
-        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, n_samples=500
+        fit, n_turbines=23, capacity_mw=6.5, losses=CANONICAL_LOSSES, curve_key="envision_en171_6p5", n_samples=500
     )
     out = write_mc_summary_csv(res, str(tmp_path / "DutchBay_AEP_MC_Summary.csv"))
     assert out.exists()
