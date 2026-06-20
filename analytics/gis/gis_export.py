@@ -17,20 +17,12 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 import numpy as np
 
-from analytics.gis.geotiff_export import (
-    DEFAULT_CRS,
-    append_manifest,
-    build_manifest_entry,
-    export_grid_rasters,
-)
-from wind_resource.era5_grid import (
-    GRID_VARIABLES,
-    CellResult,
-    GridSpec,
-    assemble_grids,
-    downscale_bilinear,
-    fetch_cell_results,
-)
+from analytics.gis.geotiff_export import (DEFAULT_CRS, append_manifest,
+                                          build_manifest_entry,
+                                          export_grid_rasters)
+from wind_resource.era5_grid import (GRID_VARIABLES, CellResult, GridSpec,
+                                     assemble_grids, downscale_bilinear,
+                                     fetch_cell_results)
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +50,17 @@ def grid_specs(gis_cfg: Mapping[str, Any]) -> List[GridSpec]:
 
 
 def default_era5_source(era5_cfg: Mapping[str, Any]) -> CellSource:
-    """Build a live-ERA5 :data:`CellSource` from a ``gis.era5`` config block."""
+    """Build a live-ERA5 :data:`CellSource` from a ``gis.era5`` config block.
+
+    Turbine/site identity (hub height, turbine model, turbine count) is
+    config-REQUIRED — no silent fallback to a specific machine/hub (ARCH-01 /
+    CESSPIT), matching :func:`wind_resource.arco_assessment.era5_config_from_scenario`
+    and ``ERA5RequestConfig.from_yaml``. A misconfigured ``gis.era5`` block must fail
+    loud, not compute a wind grid for the wrong turbine/hub.
+
+    Raises:
+        KeyError: if any required ``gis.era5`` identity field is absent.
+    """
     from wind_resource.era5_retrieval import ERA5RequestConfig
 
     base = ERA5RequestConfig(
@@ -67,10 +69,10 @@ def default_era5_source(era5_cfg: Mapping[str, Any]) -> CellSource:
         longitude=0.0,
         start_year=int(era5_cfg["start_year"]),
         end_year=int(era5_cfg["end_year"]),
-        hub_height_m=float(era5_cfg.get("hub_height_m", 150.0)),
-        output_dir=str(era5_cfg.get("output_dir", "/tmp/era5_grid_cache")),
-        turbine_model=str(era5_cfg.get("turbine_model", "envision_en171_6p5")),
-        num_turbines=int(era5_cfg.get("num_turbines", 23)),
+        hub_height_m=float(era5_cfg["hub_height_m"]),
+        output_dir=str(era5_cfg.get("output_dir", "outputs/era5_grid_cache")),
+        turbine_model=str(era5_cfg["turbine_model"]),
+        num_turbines=int(era5_cfg["num_turbines"]),
     )
 
     def _source(spec: GridSpec) -> List[CellResult]:
