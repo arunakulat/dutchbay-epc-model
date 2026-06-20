@@ -96,6 +96,7 @@ resource:
     certificate_ref: "IEA Wind Task 37 reference design (open, not OEM-certified)"
     air_density_site_kgm3: 1.15
     air_density_ref_kgm3: 1.225
+    alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
   aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
 

@@ -441,40 +441,6 @@ def pytest_configure(config: pytest.Config) -> None:
 # Test Collection Hooks
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# STAGED RE-BASELINE SET (15 x IEA-10MW adoption)
-# ---------------------------------------------------------------------------
-# The lender case was re-pointed from 23 x EN-171/6.5 (402.6 GWh / CF 0.307) to
-# 15 x IEA Reference 10MW (483.6 GWh / CF 0.346) via the bankable AEP engine.
-# These characterization tests still pin the *old* EN-171 AEP / debt / WACC /
-# balloon numbers, so they fail against the adopted scenario. They are marked
-# xfail (NOT skip — they still run and report, just don't gate CI) and are
-# tracked for the immediate follow-up "tests next" re-baseline PR, which will
-# update each assertion to the 10MW values and delete this block. Per the user's
-# explicit "stage it: scenario + economics now, tests next" decision.
-_STAGED_REBASELINE_NODEIDS = frozenset(
-    {
-        "tests/analytics/test_aep_provenance.py::test_validate_config_provenance_passes_for_lender",
-        "tests/analytics/test_aep_summary_builder.py::test_lender_curve_selection_valid",
-        "tests/analytics/test_aep_summary_builder.py::test_regen_reproduces_canonical",
-        "tests/analytics/test_aep_summary_builder.py::test_regen_summary_is_loader_compatible",
-        "tests/analytics/test_aep_tornado.py::test_base_reproduces_canonical",
-        "tests/analytics/test_losses_model.py::test_lender_config_losses_reproduce_summary",
-        "tests/analytics/test_wind_interface_schema.py::test_lender_config_passes_wind_schema",
-        "tests/api/test_debt_construction_idc_regression_v14.py::test_lendercase_idc_totals_pinned",
-        "tests/finance/test_balloon_treatment.py::test_lender_case_carries_a_covenant_breaching_balloon",
-        "tests/finance/test_balloon_treatment.py::test_legacy_ignore_reproduces_free_pass",
-        "tests/finance/test_balloon_treatment.py::test_cash_sweep_clears_balloon_and_lowers_equity_irr",
-        "tests/finance/test_balloon_treatment.py::test_refinance_is_lowest_due_to_penalty_rate",
-        "tests/finance/test_debt_autosolve_dscr.py::test_dual_dscr_autosolve_sizes_to_target",
-        "tests/finance/test_debt_autosolve_dscr.py::test_opt_out_keeps_fixed_gearing",
-        "tests/finance/test_debt_autosolve_dscr.py::test_lower_target_allows_more_leverage",
-        "tests/finance/test_wacc_discount_wiring.py::test_wacc_drives_project_discount_rate",
-        "tests/finance/test_wacc_discount_wiring.py::test_drives_discount_rate_flag_is_opt_in",
-        "tests/finance/test_wacc_discount_wiring.py::test_higher_ke_raises_wacc_and_lowers_project_npv",
-    }
-)
-
 
 def pytest_collection_modifyitems(
     config: pytest.Config, items: List[pytest.Item]
@@ -505,19 +471,6 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.edge_case)
         if "stress" in item.nodeid.lower():
             item.add_marker(pytest.mark.stress)
-
-        # Staged re-baseline (15 x IEA-10MW adoption) — see the node-id set above.
-        if item.nodeid in _STAGED_REBASELINE_NODEIDS:
-            # No strict= kwarg (R22): xfail_strict is unset in pyproject, so the
-            # default is non-strict — an unexpected xpass won't gate CI.
-            item.add_marker(
-                pytest.mark.xfail(
-                    reason=(
-                        "EN-171/6.5 characterization baseline; pending 15x10MW "
-                        "re-baseline (follow-up 'tests next' PR)"
-                    ),
-                )
-            )
 
 
 __all__ = [

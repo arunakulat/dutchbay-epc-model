@@ -30,8 +30,10 @@ from analytics.loader.aep_loader import validate_source_manifest
 #: Logical module name used with ``validate_config_for_v14(..., ["wind"])``.
 WIND_INTERFACE_MODULE = "wind"
 
-#: Approved source categories for the GIS → EPC handoff.
-VALID_SOURCE_TYPES = frozenset({"OEM", "ECMWF", "NREL"})
+#: Approved source categories for the GIS → EPC handoff. REFERENCE covers
+#: open reference machines (e.g. the IEA Reference 10 MW) used when no
+#: OEM-certified curve is available.
+VALID_SOURCE_TYPES = frozenset({"OEM", "ECMWF", "NREL", "REFERENCE"})
 
 # Plausible upper bound for a hub-height mean wind speed (m/s); guards typos.
 _MAX_PLAUSIBLE_WS_MS = 30.0

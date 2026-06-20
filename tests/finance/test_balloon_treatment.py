@@ -44,10 +44,10 @@ def results() -> dict:
 
 
 def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None:
-    """The structural balloon is ~36% of debt and breaches max_balloon_pct (10%)."""
+    """The structural balloon is ~33% of debt and breaches max_balloon_pct (10%)."""
     dr = results["cash_sweep"]["debt_result"]
-    assert dr["balloon_remaining"] == pytest.approx(33_562_638, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.358, abs=0.01)
+    assert dr["balloon_remaining"] == pytest.approx(37_154_109, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.333, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -56,7 +56,7 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """legacy_ignore preserves the pre-fix (inflated) equity IRR and never services."""
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(0.0508, abs=0.002)
+    assert kpis["equity_irr"] == pytest.approx(0.0929, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -72,8 +72,8 @@ def test_cash_sweep_clears_balloon_and_lowers_equity_irr(results: dict) -> None:
     assert sum(dr["balloon_resolution"]) == pytest.approx(
         dr["balloon_remaining"], rel=0.02
     )
-    assert sweep < legacy - 0.03  # ~3.8pp lower, honest
-    assert sweep == pytest.approx(0.0131, abs=0.003)
+    assert sweep < legacy - 0.03  # ~3.1pp lower, honest
+    assert sweep == pytest.approx(0.06208, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -81,7 +81,7 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     refi = results["refinance"]["kpis"]["equity_irr"]
     assert refi <= sweep
-    assert refi == pytest.approx(0.0014, abs=0.004)
+    assert refi == pytest.approx(0.05289, abs=0.004)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:
