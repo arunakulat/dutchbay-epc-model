@@ -9,8 +9,8 @@ import pytest
 
 pytest.importorskip("rasterio")  # the writer needs the [gis] extra
 
+from analytics.gis.gis_export import default_era5_source, run_gis_export  # noqa: E402
 from wind_resource.era5_grid import CellResult, GridSpec  # noqa: E402
-from analytics.gis.gis_export import run_gis_export  # noqa: E402
 
 
 def _synthetic_source(spec: GridSpec):
@@ -69,3 +69,28 @@ def test_run_gis_export_manifest_idempotent(tmp_path):
     summary = run_gis_export(cfg, source=_synthetic_source)  # re-run
     doc = json.loads(Path(summary["manifest_path"]).read_text())
     assert len(doc["datasets"]) == 2  # no duplication
+
+
+# ── ARCH-01 / CESSPIT: gis.era5 turbine/site identity is config-required ─────────
+
+_VALID_ERA5 = {
+    "start_year": 2020,
+    "end_year": 2024,
+    "hub_height_m": 150,
+    "turbine_model": "iea_reference_10mw",
+    "num_turbines": 15,
+}
+
+
+def test_default_era5_source_builds_from_complete_block():
+    """A complete gis.era5 block yields a usable source provider (no fetch yet)."""
+    src = default_era5_source(dict(_VALID_ERA5))
+    assert callable(src)
+
+
+@pytest.mark.parametrize("missing", ["hub_height_m", "turbine_model", "num_turbines"])
+def test_default_era5_source_requires_turbine_identity(missing):
+    """Omitting any turbine/site identity field must raise — no EN-171/23/150 fallback."""
+    bad = {k: v for k, v in _VALID_ERA5.items() if k != missing}
+    with pytest.raises(KeyError, match=missing):
+        default_era5_source(bad)
