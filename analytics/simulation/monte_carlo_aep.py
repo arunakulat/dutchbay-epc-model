@@ -39,11 +39,9 @@ import numpy as np
 import pandas as pd
 
 from analytics.loader.aep_loader import load_aep_from_summary
-from analytics.power_curves.oem_parser import (
-    CANONICAL_CURVE_KEY,
-    compute_aep_from_curve,
-    parse_power_curve,
-)
+from analytics.power_curves.oem_parser import (compute_aep_from_curve,
+                                               parse_power_curve)
+from analytics.wind.losses_model import DEFAULT_WIND_LOSSES
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +136,9 @@ def run_monte_carlo_aep(
     
     # Extract loss factors
     losses = aep_data.get("losses", {})
-    wake_loss_base = wake_loss_mean_pct if wake_loss_mean_pct is not None else losses.get("wake_loss_pct", 8.0)
-    avail_base = availability_mean_pct if availability_mean_pct is not None else losses.get("availability_pct", 97.0)
-    elec_loss_base = electrical_loss_mean_pct if electrical_loss_mean_pct is not None else losses.get("electrical_loss_pct", 2.0)
+    wake_loss_base = wake_loss_mean_pct if wake_loss_mean_pct is not None else losses.get("wake_loss_pct", DEFAULT_WIND_LOSSES["wake_loss_pct"])
+    avail_base = availability_mean_pct if availability_mean_pct is not None else losses.get("availability_pct", DEFAULT_WIND_LOSSES["availability_pct"])
+    elec_loss_base = electrical_loss_mean_pct if electrical_loss_mean_pct is not None else losses.get("electrical_loss_pct", DEFAULT_WIND_LOSSES["electrical_loss_pct"])
 
     # compute_aep_from_curve only applies wake/availability/electrical. The loss
     # stack also has curtailment and other (icing/environmental); dropping them
@@ -171,9 +169,15 @@ def run_monte_carlo_aep(
     )
     
     # Load the power curve the AEP summary was computed with (the model's
-    # selection), not a hardwired turbine (GWTF ARCH-01). Falls back to the
-    # canonical key only when the summary doesn't record one.
-    curve_key = str(aep_data.get("power_curve_key") or CANONICAL_CURVE_KEY)
+    # selection), not a hardwired turbine (GWTF ARCH-01). REQUIRED — a summary
+    # without a recorded curve must fail loud rather than silently Monte-Carlo the
+    # legacy Envision turbine. Every valid summary records power_curve_key.
+    if not aep_data.get("power_curve_key"):
+        raise KeyError(
+            "AEP summary is missing 'power_curve_key' — cannot Monte-Carlo without "
+            "the project's turbine curve (no silent fallback to the legacy curve)."
+        )
+    curve_key = str(aep_data["power_curve_key"])
     power_curve = parse_power_curve(curve_key, air_density_kgm3=air_density_kgm3)
     
     # Monte Carlo sampling
