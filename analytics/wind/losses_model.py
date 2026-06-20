@@ -35,6 +35,17 @@ REDUCTION_LOSS_KEYS = (
 #: Availability is expressed as an *uptime* percentage, not a loss percentage.
 AVAILABILITY_KEY = "availability_pct"
 
+#: Industry-typical default wind losses, used ONLY as an overridable fallback when a
+#: scenario does not specify ``resource.losses``. These are generic (not project- or
+#: DutchBay-specific) and a real assessment should override them with site values via
+#: ``resource.losses``. Centralised here (single source) instead of scattered magic
+#: numbers across the AEP/Monte-Carlo modules (ARCH-01 / DRY).
+DEFAULT_WIND_LOSSES: Dict[str, float] = {
+    "wake_loss_pct": 8.0,
+    "availability_pct": 97.0,
+    "electrical_loss_pct": 2.0,
+}
+
 
 @dataclass(frozen=True)
 class LossResult:
@@ -152,6 +163,7 @@ __all__ = [
     "HOURS_PER_YEAR",
     "REDUCTION_LOSS_KEYS",
     "AVAILABILITY_KEY",
+    "DEFAULT_WIND_LOSSES",
     "LossResult",
     "compute_net_factor",
     "apply_losses",

@@ -115,6 +115,15 @@ class TestNoMaskingDefaultLiterals:
         """The MC-AEP engine must load THIS project's curve_key, not a baked Envision curve."""
         assert "parse_envision_en171_curve" not in _src("analytics/wind/mc_aep_weibull.py")
 
+    def test_monte_carlo_aep_uses_centralised_losses_and_required_curve(self) -> None:
+        """No scattered loss magic numbers, no silent fallback to the legacy curve."""
+        src = _src("analytics/simulation/monte_carlo_aep.py")
+        assert 'wake_loss_pct", 8.0' not in src  # uses DEFAULT_WIND_LOSSES
+        assert "or CANONICAL_CURVE_KEY" not in src  # power_curve_key is required
+
+    def test_pipeline_aep_v14_uses_centralised_losses(self) -> None:
+        assert 'wake_loss_pct", 8.0' not in _src("analytics/wind/pipeline_aep_v14.py")
+
     def test_summary_builder_has_no_hub_height_fallback(self) -> None:
         assert 'get("hub_height_m", 150' not in _src("analytics/wind/aep_summary_builder.py")
 

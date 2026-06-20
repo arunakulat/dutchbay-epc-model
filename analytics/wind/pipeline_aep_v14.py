@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 from analytics.loader.aep_loader import load_aep_from_summary
 from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep
+from analytics.wind.losses_model import DEFAULT_WIND_LOSSES
 
 logger = logging.getLogger(__name__)
 
@@ -176,11 +177,13 @@ def integrate_aep_pipeline(
         seed = mc_config.get("seed", None)
         output_path = mc_config.get("output_path", None)
         
-        # Extract loss parameters from config (NOT hardcoded)
+        # Extract loss parameters from config; fall back to the centralised, documented
+        # industry-typical defaults (overridable via resource.losses) rather than scattered
+        # magic numbers (ARCH-01 / DRY — see losses_model.DEFAULT_WIND_LOSSES).
         losses_config = config.get("resource", {}).get("losses", {})
-        wake_loss_pct = losses_config.get("wake_loss_pct", 8.0)
-        availability_pct = losses_config.get("availability_pct", 97.0)
-        electrical_loss_pct = losses_config.get("electrical_loss_pct", 2.0)
+        wake_loss_pct = losses_config.get("wake_loss_pct", DEFAULT_WIND_LOSSES["wake_loss_pct"])
+        availability_pct = losses_config.get("availability_pct", DEFAULT_WIND_LOSSES["availability_pct"])
+        electrical_loss_pct = losses_config.get("electrical_loss_pct", DEFAULT_WIND_LOSSES["electrical_loss_pct"])
         
         # MC uncertainty parameters from config
         mc_params = mc_config.get("parameters", {})
