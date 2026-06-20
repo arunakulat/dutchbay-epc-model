@@ -153,18 +153,16 @@ resource:
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
 # ═════════════════════════════════════════════════════════════════════════════
 ppa:
-  # INFORMATIONAL ONLY. The model is structurally LKR-primary: the engine reads the
-  # LKR tariff (tariff.lkr_per_kwh below), computes LKR revenue -> LKR CFADS -> LKR tax,
-  # and reports USD only as a post-hoc division by the FX curve. NO Python reads
-  # primary_currency to choose the revenue numeraire (the old comment "Wind revenue
-  # calculator reads this field" was false). A USD-primary flip would touch the whole
-  # cashflow/debt/tax stack; until then this field MUST be "LKR" (locked by
-  # tests/finance/test_currency_lkr_primary.py). ppa.tariff_per_kwh/_per_mwh are
-  # DECORATIVE duplicates of tariff.lkr_per_kwh — the engine does not read them.
+  # INFORMATIONAL ONLY (not read by code). The model is structurally LKR-primary: the
+  # engine reads the LKR tariff (tariff.lkr_per_kwh below), computes LKR revenue -> LKR
+  # CFADS -> LKR tax, and reports USD only as a post-hoc division by the FX curve. NO
+  # Python reads primary_currency to choose the revenue numeraire. A USD-primary flip
+  # would touch the whole cashflow/debt/tax stack; until then this field MUST be "LKR"
+  # (locked by tests/finance/test_currency_lkr_primary.py). The former ppa.tariff_per_kwh
+  # / tariff_per_mwh were unread duplicates of tariff.lkr_per_kwh (a manual-sync footgun)
+  # and have been removed — the tariff lives ONLY in the `tariff:` block.
   primary_currency: "LKR"  # informational only; must equal "LKR" (see note above)
-  tariff_per_kwh: 20.3  # LKR/kWh (decorative duplicate of tariff.lkr_per_kwh)
-  tariff_per_mwh: 20300.0  # LKR/MWh (decorative; = 20.3 × 1000)
-  
+
   # PPA terms
   ppa_term_years: 20
   tariff_type: "fixed"  # vs "indexed" (CPI-linked) or "merchant"

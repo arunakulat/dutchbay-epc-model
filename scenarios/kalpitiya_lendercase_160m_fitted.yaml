@@ -77,15 +77,17 @@ resource:
     curtailment_pct: 2.0
     other_pct: 1.0
   wind_resource:
-    mean_wind_speed_ms: 7.85
-    weibull_a: 8.32
-    weibull_k: 2.1
+    # ERA5-fitted @160m (matches the top-level wind_resource block); was an orphaned
+    # declared 8.32/2.1/7.85 left over from the lender template.
+    mean_wind_speed_ms: 7.341
+    weibull_a: 8.259
+    weibull_k: 2.664
     shear_exponent: 0.14
     data_years: 2020-2024
     data_source: ECMWF_ERA5_2020_2024_DUTCHBAY
   wind:
     ws150_mean_ms: 7.34
-    ws150_std_ms: 3.69
+    ws150_std_ms: 2.97        # Weibull-derived (A=8.259, k=2.664)
     capacity_factor: 0.344
     aep_gwh: 480.92
     source_id: IEA_REFERENCE_10MW_198_PC
@@ -103,9 +105,11 @@ resource:
     weibull_fit:
       drift_tolerance_pct: 5.0
 ppa:
+  # INFORMATIONAL ONLY (not read by code). The model is structurally LKR-primary; no
+  # Python reads primary_currency. Must equal "LKR" (tests/finance/test_currency_lkr_primary.py).
+  # The former tariff_per_kwh/tariff_per_mwh were unread duplicates of tariff.lkr_per_kwh
+  # (a manual-sync footgun) — removed; the tariff lives only in `tariff:`.
   primary_currency: LKR
-  tariff_per_kwh: 20.3
-  tariff_per_mwh: 20300.0
   ppa_term_years: 20
   tariff_type: fixed
   indexation_start_year: 2
@@ -128,12 +132,23 @@ tariff:
 fx:
   enabled: true
   mode: deterministic
+  base_currency: "USD"
+  quote_currency: "LKR"
   rates:
-    lkr_per_usd: 300.0
-    lkr_per_eur: 330.0
-    lkr_per_cny: 41.7
+    lkr_per_usd: 333.79
+    lkr_per_eur: 330.0    # EUR/LKR not refreshed (USD/LKR is the fetched vintage)
+    lkr_per_cny: 41.7     # CNY/LKR not refreshed
     usd_per_eur: 1.1
-  start_lkr_per_usd: 300.0
+  # Config-driven FX source (analytics.fx.fx_fetch); FIXED vintage = reproducible.
+  source:
+    mode: "fixed"
+    provider: "open_er_api"
+    endpoint: "https://open.er-api.com/v6/latest/USD"
+    reference_url: "https://www.cbsl.gov.lk/en/rates-and-indicators/exchange-rates/daily-indicative-usd-spot-exchange-rates"
+    pinned_rate: 333.79            # MUST equal start_lkr_per_usd (cross-asserted)
+    pinned_as_of: "2026-06-20T00:02:31Z"
+    drift_tolerance_pct: 5.0
+  start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0)
   annual_depr: 0.03
   uncertainty_pct: 0.05
   exposure_summary:
@@ -262,7 +277,7 @@ monte_carlo:
   revenue_std_pct: 10
   cost_mean_usd: 3000000
   cost_std_pct: 8
-  fx_mean_rate: 300.0
+  fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
   fx_std_pct: 3
   project_life_years: 20
   parameters:
@@ -282,9 +297,9 @@ monte_carlo:
     low: 126000000.0
     high: 174000000.0
     distribution: uniform
-  - name: fx.start_lkr_per_usd
-    low: 270.0
-    high: 330.0
+  - name: fx.start_lkr_per_usd  # centered on the 333.79 pinned vintage (was 300)
+    low: 300.0
+    high: 367.0
     distribution: uniform
   var_confidence: 0.95
   cvar_confidence: 0.95
@@ -328,19 +343,22 @@ timeline:
   ops_years: 20
   lifetime_years: 22
 expected_results:
-  net_aep_p50_gwh: 483.6
-  net_aep_p90_gwh: 421.2
-  capacity_factor: 0.346
-  annual_revenue_p50_m_lkr: 9817.1
-  annual_revenue_p50_m_eur: 29.7
-  revenue_20yr_undiscounted_m_lkr: 196373.0
-  project_irr: 0.1112
-  equity_irr: 0.0621
-  project_npv_m_usd: 27.36
-  min_dscr: 1.3
-  avg_dscr: 1.39
-  llcr: 1.14
-  plcr: 1.21
+  # Regenerated from THIS scenario (15x IEA-10MW @160m, fitted Weibull A=8.259/k=2.664,
+  # net AEP 480.9 GWh per its own aep_summary) — was a copy-paste of the 483.6 lender block.
+  net_aep_p50_gwh: 480.9
+  net_aep_p90_gwh: 418.9   # P90/P50 ~0.871
+  capacity_factor: 0.344
+  annual_revenue_p50_m_lkr: 9762.3  # 480.9 GWh x 20.3 LKR/kWh (LKR-native tariff)
+  annual_revenue_p50_m_eur: 29.6    # reference: 9762.3 M LKR / 330 LKR/EUR
+  revenue_20yr_undiscounted_m_lkr: 195300.0  # with degradation + CPI
+  # Financials at the corrected FX 333.79 (LKR-native tariff -> full FX drag on USD returns).
+  project_irr: 0.0873
+  equity_irr: 0.0185
+  project_npv_m_usd: 4.88
+  min_dscr: 1.30
+  avg_dscr: 1.387
+  llcr: 1.124
+  plcr: 1.190
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'
