@@ -1,0 +1,372 @@
+# Kalpitiya lender case @ 160 m hub, OPTIMIZED (ERA5-fitted) Weibull.
+# Demonstrates the lesson: hub height is YAML-sourced (turbine/era5/turbines all 160 m),
+# and the Weibull is FITTED from live ERA5 2020-2024 (A=8.259, k=2.664 via 3-method
+# consensus) instead of the declared k=2.1 (which overstated AEP ~2%). Derived from
+# dutchbay_lendercase_2025Q4.yaml. AEP/economics recomputed from the fitted distribution.
+project:
+  name: DutchBay Wind Farm
+  location: Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka
+  capacity_mw: 159.6
+  capacity_factor: 0.344
+  degradation: 0.005
+  life_years: 20
+  cod_year: 2027
+  developer: DutchBay Wind Power Pvt Ltd
+  grid_poi: Puttalam 220kV Substation
+  boi_approved: false
+  boi_agreement_date: '2025-01-15'
+  jurisdiction: Sri Lanka
+turbine:
+  model: IEA Reference 10MW (198m)
+  n_turbines: 15
+  rated_power_mw: 10.6383
+  rated_power_kw: 10638
+  total_capacity_mw: 159.6
+  rotor_diameter_m: 198
+  hub_height_m: 160
+  cut_in_ms: 3.0
+  cut_out_ms: 25.0
+  rated_wind_speed_ms: 11.0
+  certification_status: OPEN_REFERENCE
+  notes: IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine
+    for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference
+    (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the
+    23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity
+    case.
+wind_resource:
+  weibull_a: 8.259
+  weibull_k: 2.664
+  mean_wind_speed_ms: 7.341
+  shear_exponent: 0.14
+  air_density_kgm3: 1.15
+  air_density_ref_kgm3: 1.225
+  data_source: ECMWF ERA5 Reanalysis
+  data_years: 2020-2024
+  data_confidence: Medium (5-year ERA5 validated against 1-year met mast)
+layout:
+  turbine_spacing_avg_m: 650
+  turbine_spacing_avg_D: 3.8
+  iec_compliant_pairs: 6
+  iec_marginal_pairs: 3
+  iec_violation_pairs: 6
+  layout_orientation: linear_north_south_coastal
+  coordinates_reference: WGS84_EPSG4326
+  utm_zone: 44N
+resource:
+  turbines:
+    count: 15
+    rated_power_mw: 10.6383
+    total_capacity_mw: 159.6
+    model: IEA Reference 10MW (198m)
+    rotor_diameter_m: 198
+    hub_height_m: 160
+  power_curve:
+    source_id: IEA_REFERENCE_10MW_198_PC
+    source_type: REFERENCE
+    curve_key: iea_reference_10mw
+    iec_standard: IEC 61400-12-1:2022
+    certificate_ref: IEA Wind Task 37 reference design (open, not OEM-certified)
+    air_density_site_kgm3: 1.15
+    air_density_ref_kgm3: 1.225
+    alt_curve_key: dtu_reference_10mw
+  aep_summary_path: scenarios/aep_summary_kalpitiya_160m_fitted.json
+  losses:
+    wake_loss_pct: 7.28
+    availability_pct: 97.0
+    electrical_loss_pct: 2.0
+    curtailment_pct: 2.0
+    other_pct: 1.0
+  wind_resource:
+    mean_wind_speed_ms: 7.85
+    weibull_a: 8.32
+    weibull_k: 2.1
+    shear_exponent: 0.14
+    data_years: 2020-2024
+    data_source: ECMWF_ERA5_2020_2024_DUTCHBAY
+  wind:
+    ws150_mean_ms: 7.34
+    ws150_std_ms: 3.69
+    capacity_factor: 0.344
+    aep_gwh: 480.92
+    source_id: IEA_REFERENCE_10MW_198_PC
+    source_type: REFERENCE
+  era5:
+    latitude: 8.27
+    longitude: 79.75
+    hub_height_m: 160
+    reference:
+      mode: fixed
+      start_year: 2005
+      end_year: 2024
+    strict_coverage: true
+    output_dir: outputs/era5_cache
+    weibull_fit:
+      drift_tolerance_pct: 5.0
+ppa:
+  primary_currency: LKR
+  tariff_per_kwh: 20.3
+  tariff_per_mwh: 20300.0
+  ppa_term_years: 20
+  tariff_type: fixed
+  indexation_start_year: 2
+  cpi_annual_pct: 2.0
+  equivalent_tariffs_reference:
+    usd_per_mwh: 67.7
+    eur_per_mwh: 61.5
+    cny_per_mwh: 487.0
+  offtaker: Ceylon Electricity Board (CEB)
+  offtaker_credit_rating: B+ (S&P)
+  payment_terms_days: 30
+  revenue_guarantee:
+    enabled: false
+    guarantee_pct: 0.75
+    penalty_rate_same_currency: 5.0
+tariff:
+  lkr_per_kwh: 20.3
+  tariff_type: fixed
+  ppa_term_years: 20
+fx:
+  enabled: true
+  mode: deterministic
+  rates:
+    lkr_per_usd: 300.0
+    lkr_per_eur: 330.0
+    lkr_per_cny: 41.7
+    usd_per_eur: 1.1
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.03
+  uncertainty_pct: 0.05
+  exposure_summary:
+    usd_debt_principal: 82500000
+    lkr_revenue_pct: 100.0
+    fx_mismatch: Material - requires hedging or sculpted debt service
+capex:
+  usd_total: 159600000
+  capex_per_kw_usd: 1000
+  breakdown:
+    epc_usd: 140000000
+    development_usd: 5000000
+    financing_fees_usd: 3000000
+    contingency_usd: 2000000
+opex:
+  usd_per_year: 3000000
+  opex_per_kw_yr_usd: 20.0
+  breakdown:
+    om_contract_usd: 2000000
+    insurance_usd: 500000
+    land_lease_usd: 300000
+    admin_usd: 200000
+tax:
+  corporate_tax_rate: 0.3
+  tax_holiday_route: none
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 5
+  depreciation_start_year: 1
+  plant_capex_share: 0.8
+  plant_depreciation_years: 5
+  civil_depreciation_years: 20
+  enhanced_capital_allowance_pct: 1.5
+  enhanced_allowance_applies: false
+  loss_carryforward_years: 6
+  wht_on_interest_to_nonresidents: 0.1
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+  interest_deductibility: true
+statutory:
+  success_fee_pct: 0.01
+  env_surcharge_pct: 0.005
+  social_services_levy_pct: 0.025
+  grid_loss_pct: 0.02
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+Financing_Terms:
+  debt_ratio: 0.7
+  debt_sizing: dual_dscr
+  dscr_p99_downside_factor: 0.8
+  balloon_treatment: cash_sweep
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.1
+    usd_commercial_min: 0.45
+  rates:
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  target_dscr: 1.3
+  min_dscr: 1.2
+  min_dscr_covenant: 1.2
+  reserves:
+    dsra_months: 6
+    receivables_guarantee_months: 9
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+  enforce_hard_covenants: false
+metrics:
+  llcr_min_covenant: 1.2
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.1
+  plcr_min_covenant: 1.4
+  plcr_target: 1.6
+  plcr_discount_rate: 0.1
+  dscr_min_covenant: 1.2
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.12
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.3
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.1
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: DFI
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+monte_carlo:
+  enabled: true
+  n_scenarios: 100000
+  sampling_method: lhs
+  seed: 42
+  weibull_uncertainty_pct: 10.0
+  wake_loss_std_pct: 2.0
+  availability_std_pct: 1.0
+  electrical_loss_std_pct: 0.5
+  discount_rate_pct: 8.0
+  capex_total_usd: 150000000
+  revenue_mean_usd: 50000000
+  revenue_std_pct: 10
+  cost_mean_usd: 3000000
+  cost_std_pct: 8
+  fx_mean_rate: 300.0
+  fx_std_pct: 3
+  project_life_years: 20
+  parameters:
+  - name: project.capacity_factor
+    low: 0.2763
+    high: 0.3377
+    distribution: uniform
+  - name: tariff.lkr_per_kwh
+    low: 16.24
+    high: 24.36
+    distribution: uniform
+  - name: opex.usd_per_year
+    low: 2100000.0
+    high: 3900000.0
+    distribution: uniform
+  - name: capex.usd_total
+    low: 126000000.0
+    high: 174000000.0
+    distribution: uniform
+  - name: fx.start_lkr_per_usd
+    low: 270.0
+    high: 330.0
+    distribution: uniform
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles:
+  - 10
+  - 25
+  - 50
+  - 75
+  - 90
+  min_dscr_covenant: 1.2
+  min_llcr_covenant: 1.25
+  output_path: outputs/mc_aep_dutchbay_100k.parquet
+sensitivity:
+  ranges:
+    capacity_factor:
+      low_pct: -0.05
+      high_pct: 0.05
+    tariff_lkr_per_kwh:
+      low_pct: -0.1
+      high_pct: 0.1
+    opex_usd_per_year:
+      low_pct: -0.15
+      high_pct: 0.15
+    capex_usd_total:
+      low_pct: -0.08
+      high_pct: 0.08
+    grid_loss_pct:
+      low_pct: -0.01
+      high_pct: 0.03
+  analysis:
+    tornado_chart_title: DutchBay 150MW - Parameter Sensitivity (Equity IRR)
+    dpi: 300
+pipeline:
+  output_dir: outputs/dutchbay_lendercase_2025Q4
+  seed: 42
+  export_scenarios: true
+  export_provenance: true
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+expected_results:
+  net_aep_p50_gwh: 483.6
+  net_aep_p90_gwh: 421.2
+  capacity_factor: 0.346
+  annual_revenue_p50_m_lkr: 9817.1
+  annual_revenue_p50_m_eur: 29.7
+  revenue_20yr_undiscounted_m_lkr: 196373.0
+  project_irr: 0.1112
+  equity_irr: 0.0621
+  project_npv_m_usd: 27.36
+  min_dscr: 1.3
+  avg_dscr: 1.39
+  llcr: 1.14
+  plcr: 1.21
+metadata:
+  version: '3.0'
+  last_updated: '2025-12-23'
+  author: DutchBay V14 Financial Modeling Team
+  review_status: Draft - Pending Board Approval
+  assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
+  sprint: Sprint 17 - Multi-Currency PPA + Wind Resource Integration
+  gwtf_compliance: All 51 rules audited + wind energy calculator integration
+  changes:
+  - 'v3.0: Added multi-currency PPA structure (LKR/USD/EUR/CNY)'
+  - 'v3.0: Integrated wind resource parameters (Weibull, air density, ERA5)'
+  - 'v3.0: Added turbine technical specs for energy calculator'
+  - 'v3.0: Added layout parameters for wake loss validation'
+  - 'v3.0: Unified losses structure across resource + statutory'
+  - 'v3.0: Added expected_results for end-to-end validation'
+  - 'v2.7: Enabled FX integration for multi-currency debt'
+  - 'v2.7: Added debt_tranches structure'
+  - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input);
+    mix + rates are canonical (plan_debt warns if re-added)'
+discount_rate: 0.12
+wacc:
+  mode: build_up
+  drives_discount_rate: true
+  cost_of_equity: 0.12
+  prudential_spread_bps: 100
+  description: Build-up WACC drives the discount rate (replaces a decorative fixed
+    12%).
+meta:
+  source_path: scenarios/dutchbay_lendercase_2025Q4.yaml
