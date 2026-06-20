@@ -31,7 +31,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 IEC_REFERENCE_AIR_DENSITY_KGM3 = 1.225
-HOURS_PER_YEAR = 8766.0  # mean Julian year (365.25 d)
+# Standard 8760-h year — MUST match analytics.wind.{losses_model,aep_tornado}.HOURS_PER_YEAR
+# so the bankable and analytic engines reconcile exactly (was 8766 mean-Julian, a ~0.07%
+# cross-engine drift; enforced by tests/lint/test_wind_aep_config_compliance.py).
+HOURS_PER_YEAR = 8760.0
 
 # Normal-distribution z-scores for exceedance probabilities (P_x = P50 - z*sigma).
 _EXCEEDANCE_Z = {50: 0.0, 75: 0.6745, 90: 1.2816, 95: 1.6449, 99: 2.3263}

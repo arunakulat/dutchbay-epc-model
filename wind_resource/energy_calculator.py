@@ -70,7 +70,7 @@ class EnergyCalculator:
         ws_column: str = 'ws_150m',
         turbine_model: Optional[str] = None,
         power_curve: Optional[Dict[str, List[float]]] = None,
-        num_turbines: int = 15,
+        num_turbines: Optional[int] = None,
         config_path: Optional[str] = None,
         power_curves_path: Optional[str] = None
     ) -> None:
@@ -83,7 +83,8 @@ class EnergyCalculator:
                 Example: 'envision_en171_6p5'. If None, must provide power_curve.
             power_curve: Manual power curve dict with 'ws' and 'power' lists.
                 Only used if turbine_model is None.
-            num_turbines: Number of turbines in wind farm. Default 15.
+            num_turbines: Number of turbines in wind farm. Required (config-driven;
+                no default — raises ValueError if omitted).
             config_path: Path to era5_config.yaml. If None, uses default.
             power_curves_path: Path to power_curves.yaml. If None, uses default.
                 
@@ -98,12 +99,20 @@ class EnergyCalculator:
                 "Must provide either 'turbine_model' or 'power_curve'. "
                 "Example: turbine_model='envision_en171_6p5'"
             )
-        
+
+        # ARCH-01 / CESSPIT: num_turbines must be supplied by the caller from config —
+        # no silent default (a hidden 15 would masquerade as a wrong farm size).
+        if num_turbines is None:
+            raise ValueError(
+                "num_turbines is required (config-driven; no silent default). "
+                "Pass it from resource.turbines.count / turbine.n_turbines."
+            )
+
         if ws_column not in df.columns:
             raise ValueError(
                 f"Wind speed column '{ws_column}' not found in DataFrame."
             )
-        
+
         self.df = df
         self.ws_column = ws_column
         self.num_turbines = num_turbines
@@ -119,7 +128,7 @@ class EnergyCalculator:
             assert power_curve is not None
             self._load_power_curve_manual(power_curve)
         
-        logger.info(f"EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
+        logger.info("EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
         logger.info(f"  Turbines: {num_turbines}")
         logger.info(f"  Rated capacity: {self.rated_capacity} kW")
         logger.info(f"  Total capacity: {self.rated_capacity * num_turbines / 1000:.1f} MW")

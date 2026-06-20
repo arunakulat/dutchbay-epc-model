@@ -215,14 +215,23 @@ def tornado_from_config(
     """Build and run the AEP tornado from a parsed v14 scenario config.
 
     Reads the selected power curve and the IEC air-density basis from
-    ``resource.power_curve`` (``curve_key`` + ``air_density_{site,ref}_kgm3``),
-    falling back to the canonical curve / no density correction when those
-    fields are absent — so pre-10MW scenarios keep their prior behaviour.
+    ``resource.power_curve``. ``curve_key`` is REQUIRED (ARCH-01 / CESSPIT — no
+    silent fallback to the legacy EN-171 curve, which would tornado the wrong
+    turbine class); the air-density correction is skipped only when both density
+    fields are genuinely absent.
+
+    Raises:
+        KeyError: if ``resource.power_curve.curve_key`` is missing.
     """
     wr = config.get("wind_resource", {}) or {}
     resource = config.get("resource", {}) or {}
     power_curve = resource.get("power_curve", {}) or {}
-    curve_key = power_curve.get("curve_key", CANONICAL_CURVE_KEY)
+    if "curve_key" not in power_curve:
+        raise KeyError(
+            "resource.power_curve.curve_key is required for the AEP tornado "
+            "(config-driven; no silent fallback to the legacy curve)."
+        )
+    curve_key = power_curve["curve_key"]
     rho_site = power_curve.get("air_density_site_kgm3", wr.get("air_density_kgm3"))
     rho_ref = power_curve.get("air_density_ref_kgm3", wr.get("air_density_ref_kgm3"))
     density_factor = (

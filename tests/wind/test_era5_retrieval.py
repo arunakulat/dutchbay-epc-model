@@ -14,15 +14,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from wind_resource.era5_retrieval import (
-    ERA5CoverageError,
-    ERA5RequestConfig,
-    build_hub_height_series,
-    compute_site_aep,
-    ensure_cdsapirc,
-    expected_hours_for_years,
-    validate_coverage,
-)
+from wind_resource.era5_retrieval import (ERA5CoverageError, ERA5RequestConfig,
+                                          build_hub_height_series,
+                                          compute_site_aep, ensure_cdsapirc,
+                                          expected_hours_for_years,
+                                          validate_coverage)
 
 
 def _synthetic_era5_nc(tmp_path, hours: int = 168):
@@ -64,7 +60,8 @@ def test_config_from_yaml_fixed(tmp_path):
     yml.write_text(
         "project:\n  name: X\n  latitude: 8.27\n  longitude: 79.75\n"
         "download:\n  years:\n    start: 2020\n    end: 2024\n"
-        "turbine:\n  num_turbines: 23\n"
+        # Turbine identity is config-required (ARCH-01: no EN-171/23/150 defaults).
+        "turbine:\n  model: iea_reference_10mw\n  num_turbines: 15\n  hub_height_m: 150\n"
     )
     c = ERA5RequestConfig.from_yaml(str(yml))
     assert c.project_name == "X"
@@ -79,6 +76,7 @@ def test_latest_reference_resolution(tmp_path):
     yml.write_text(
         "project:\n  name: L\n  latitude: 8.27\n  longitude: 79.75\n"
         "download:\n  reference:\n    mode: latest\n    n_years: 20\n    end_year_lag: 2\n"
+        "turbine:\n  model: iea_reference_10mw\n  num_turbines: 15\n  hub_height_m: 150\n"
     )
     c = ERA5RequestConfig.from_yaml(str(yml))
     end = dt.date.today().year - 2
