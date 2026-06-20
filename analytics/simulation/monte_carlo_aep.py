@@ -41,7 +41,12 @@ import pandas as pd
 from analytics.loader.aep_loader import load_aep_from_summary
 from analytics.power_curves.oem_parser import (compute_aep_from_curve,
                                                parse_power_curve)
-from analytics.wind.losses_model import DEFAULT_WIND_LOSSES
+
+# DEFAULT_WIND_LOSSES is imported LAZILY inside run_monte_carlo_aep (not here) to avoid a
+# circular import: analytics.wind.__init__ -> analytics.wind.pipeline_aep_v14 ->
+# analytics.simulation.monte_carlo_aep. A module-level `from analytics.wind.losses_model
+# import ...` triggers analytics.wind.__init__ while this module is still importing (when
+# monte_carlo_aep is imported BEFORE analytics.wind), raising ImportError.
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +133,9 @@ def run_monte_carlo_aep(
     
     logger.info(f"Starting Monte Carlo AEP simulation with {n_scenarios:,} scenarios")
     
+    # Lazy import (breaks the analytics.wind <-> monte_carlo_aep cycle; see module top).
+    from analytics.wind.losses_model import DEFAULT_WIND_LOSSES
+
     # Load AEP summary
     aep_data = load_aep_from_summary(aep_summary_path, validate_manifest=True)
     
