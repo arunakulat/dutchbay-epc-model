@@ -326,7 +326,12 @@ def calculate_single_year_cfads(
         float(params["social_levy_pct"]),
     )
 
-    opex_lkr = _calculate_opex_lkr(float(params["opex_usd_per_year"]), fx_rate)
+    # OpEx escalates in USD at opex_escalation_pct/yr (O&M inflation), THEN is
+    # translated to LKR at the per-year FX rate — so the LKR cost carries both the
+    # inflation and the FX-depreciation effect. year_index is 0-based (ops year 1 = base).
+    opex_escalation = float(params.get("opex_escalation_pct", 0.0))
+    opex_usd_year = float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
+    opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
     # Depreciation is NOT in EBIT; it's a tax deduction
@@ -377,7 +382,7 @@ def calculate_single_year_cfads(
         "env_surcharge_lkr": statutory["environmental_surcharge"],
         "social_levy_lkr": statutory["social_services_levy"],
         "total_statutory_deductions_lkr": statutory["total_statutory_deductions"],
-        "opex_usd": float(params["opex_usd_per_year"]),
+        "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
         "fx_rate": fx_rate,
         "opex_lkr": opex_lkr,
         "ebitda_lkr": ebitda_lkr,
@@ -601,7 +606,12 @@ def build_annual_rows_efficient(
             float(params["social_levy_pct"]),
         )
 
-        opex_lkr = _calculate_opex_lkr(float(params["opex_usd_per_year"]), fx_rate)
+        # OpEx escalates in USD at opex_escalation_pct/yr, then x the per-year FX rate.
+        opex_escalation = float(params.get("opex_escalation_pct", 0.0))
+        opex_usd_year = (
+            float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
+        )
+        opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
 
         ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
 
@@ -618,7 +628,7 @@ def build_annual_rows_efficient(
                 "total_statutory_deductions_lkr": statutory[
                     "total_statutory_deductions"
                 ],
-                "opex_usd": float(params["opex_usd_per_year"]),
+                "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
                 "fx_rate": fx_rate,
                 "opex_lkr": opex_lkr,
                 "ebitda_lkr": ebitda_lkr,

@@ -4,14 +4,18 @@
 # Version: 3.0 (Sprint 17 - Multi-Currency PPA + Wind Resource Integration)
 # Path: scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml
 #
-# TARIFF VARIANT of scenarios/dutchbay_lendercase_2025Q4.yaml. IDENTICAL in every
-# respect (Kalpitiya 15 x IEA Reference 10 MW = 159.6 MW @150m; IEA 10.6 MW power +
-# Ct curve; ERA5-fitted Weibull A=8.199/k=2.665; FX 333.79; net AEP 473.8 GWh) EXCEPT
-# the unit price: the PPA is benchmarked at 5.0 US cents/kWh (0.05 USD) but PAID IN
-# LKR. The LKR tariff is FIXED at signing FX (0.05 x 333.79 = 16.69 LKR/kWh) with NO
-# escalation — there is no USD cashflow; revenue is LKR-only. Honest result: at 5c/kWh
-# the deal is UNECONOMIC (project IRR 4.80%, equity IRR -2.06%, project NPV -$31.5M),
-# vs the canonical 20.3 LKR/kWh (6.1c) case's +$2.0M. See test_kalpitiya_5usc_smoke.
+# TARIFF + GRANULAR-COST variant of scenarios/dutchbay_lendercase_2025Q4.yaml. Same
+# resource/turbine (Kalpitiya 15 x IEA Reference 10 MW = 159.6 MW @150m; IEA 10.6 MW
+# power + Ct curve; ERA5-fitted Weibull A=8.199/k=2.665; FX 333.79; net AEP 473.8 GWh),
+# but with TWO differences from the canonical:
+#  1. Unit price: PPA benchmarked at 5.0 US cents/kWh (0.05 USD) but PAID IN LKR, FIXED
+#     at signing FX (0.05 x 333.79 = 16.69 LKR/kWh), no escalation — LKR-only revenue.
+#  2. Costs are a BOTTOM-UP build (vs the canonical's flat $1,000/kW / $3M flat opex):
+#     CAPEX $207.5M = $1,300/kW (line items derived; IRENA/Lazard/NREL-sourced); OPEX
+#     $3.51M/yr = $22/kW-yr with 2.5%/yr O&M inflation (USD) on top of the FX curve.
+# Honest result: at 5c/kWh on realistic costs the deal is DEEPLY UNECONOMIC — project
+# IRR 0.23%, equity IRR -6.33%, project NPV -$86.9M (vs -$31.5M on the old flat $1,000/kW
+# / no-escalation costs, and the canonical 6.1c case's +$2.0M). See test_kalpitiya_5usc_smoke.
 #
 # Usage:
 #   python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4
@@ -247,25 +251,43 @@ fx:
 # ═════════════════════════════════════════════════════════════════════════════
 # CAPEX & OPEX
 # ═════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# CAPEX — bottom-up line-item build (single source of truth).
+# derive_from_breakdown: true => the engine SUMS capex.breakdown for total CAPEX
+# (cross-checked against usd_total, must agree within 0.5%). Total $207.5M = $1,300/kW.
+# Basis (2025 USD): IRENA 2024 global onshore TIC $1,041/kW (Asia projection ~$850/kW);
+# Lazard LCOE+ v18.0 (US) $1,900-2,300/kW; import-dependent Bangladesh $1,900-2,100/kW.
+# Sri Lanka anchored at $1,300/kW — above IRENA-global for imported turbines + 220kV grid
+# + remote NW-coast BoP, well below US/Bangladesh (lower local labour/permitting).
+# Component shares per IRENA / NREL Cost of Wind Energy consensus (turbine ~69%, BoP ~16%,
+# grid ~8%, dev/owners ~3.5%, financing ~2%, contingency ~1.5%).
 capex:
-  usd_total: 159600000  # Base case (all-in EPC + soft costs); 159.6 MW @ $1000/kW
-  capex_per_kw_usd: 1000  # 159.6M / 159.6MW (15 x IEA-10MW)
-  
+  derive_from_breakdown: true   # bottom-up: usd_total = sum(breakdown), cross-asserted
+  usd_total: 207500000          # = $1,300/kW x 159.6 MW (cross-check vs breakdown sum)
+  capex_per_kw_usd: 1300        # 207.5M / 159.6 MW
   breakdown:
-    epc_usd: 140000000  # Turbines + BoP + grid connection
-    development_usd: 5000000  # Pre-FID costs
-    financing_fees_usd: 3000000  # Commitment + legal + advisory
-    contingency_usd: 2000000  # 1.3% contingency
+    wtg_supply_usd: 143200000        # turbines: rotor+nacelle+tower, CIF + inland transport (~69%)
+    balance_of_plant_usd: 33200000   # foundations, access roads, 33 kV collection, civil (~16%)
+    grid_connection_usd: 16600000    # 220 kV line + Puttalam substation bay (~8%)
+    development_owners_usd: 7300000  # permitting, engineering, owner's costs, land (~3.5%)
+    financing_fees_usd: 4100000      # commitment + legal + advisory + DSRA funding (~2%)
+    contingency_usd: 3100000         # ~1.5%
 
+# ─────────────────────────────────────────────────────────────────────────────
+# OPEX — bottom-up line items, with BOTH O&M inflation and FX. Base $3.51M/yr =
+# $22.0/kW-yr (Lazard v18.0 US fixed O&M $24.50-40/kW-yr; SL set slightly below the low
+# end for cheaper local labour). escalation_pct: O&M inflates 2.5%/yr in USD, THEN the
+# LKR cost escalates further via the per-year FX curve (annual_depr 3%/yr) -> ~5.5%/yr LKR.
 opex:
-  usd_per_year: 3000000  # Fixed O&M contract
-  opex_per_kw_yr_usd: 20.0  # 3M / 150MW
-  
+  usd_per_year: 3510000   # year-1 base (engine escalates it); $22.0/kW-yr at 159.6 MW
+  opex_per_kw_yr_usd: 22.0
+  escalation_pct: 2.5     # %/yr O&M inflation in USD terms (compounds on top of FX)
   breakdown:
-    om_contract_usd: 2000000  # Full-service O&M
-    insurance_usd: 500000  # Property + BI
-    land_lease_usd: 300000  # 15 turbine sites
-    admin_usd: 200000  # SPV overhead
+    om_service_contract_usd: 2400000       # OEM full-service O&M
+    insurance_usd: 450000                  # property + business interruption + liability
+    land_lease_usd: 300000                 # turbine sites
+    spv_admin_usd: 200000                  # SPV management, audit, listing
+    grid_transmission_charges_usd: 160000  # wheeling / balancing
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TAX & STATUTORY
@@ -416,10 +438,10 @@ monte_carlo:
   
   # Legacy scenario parameters (toy model - TO BE DEPRECATED)
   discount_rate_pct: 8.0
-  capex_total_usd: 150000000
+  capex_total_usd: 207500000  # reconciled to the granular bottom-up build ($1,300/kW)
   revenue_mean_usd: 50000000
   revenue_std_pct: 10
-  cost_mean_usd: 3000000
+  cost_mean_usd: 3510000  # reconciled to the granular opex base ($22/kW-yr)
   cost_std_pct: 8
   fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
   fx_std_pct: 3
@@ -441,13 +463,13 @@ monte_carlo:
       low: 16.24
       high: 24.36
       distribution: uniform
-    - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%
-      low: 2100000.0
-      high: 3900000.0
+    - name: opex.usd_per_year         # base 3.51e6, rel_std 0.15 -> +/-30%
+      low: 2457000.0
+      high: 4563000.0
       distribution: uniform
-    - name: capex.usd_total           # base 150e6, rel_std 0.08 -> +/-16%
-      low: 126000000.0
-      high: 174000000.0
+    - name: capex.usd_total           # base 207.5e6, rel_std 0.08 -> +/-16%
+      low: 174300000.0
+      high: 240700000.0
       distribution: uniform
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
@@ -517,19 +539,19 @@ expected_results:
   revenue_20yr_undiscounted_m_lkr: 158177.0  # with degradation (scaled by 16.69/20.3)
 
   # Financial metrics — HONEST live-engine output. Bound by
-  # tests/integration/test_kalpitiya_5usc_smoke.py. Everything equals the canonical
-  # dutchbay_lendercase_2025Q4 EXCEPT the tariff: 16.69 LKR/kWh (5.0 US cents, fixed in
-  # LKR, no escalation) vs the canonical 20.3 LKR/kWh (6.1 US cents). The -17.8% revenue
-  # cut pushes the already-marginal deal firmly UNDERWATER: project IRR 4.80% (well below
-  # the ~8.94% WACC), equity IRR NEGATIVE -2.06%, project NPV -$31.5M. Debt deleverages
-  # to $80.2M (DSCR-bound, less CFADS) and the higher equity weight lifts the WACC.
-  project_irr: 0.0480       # well below WACC (~8.94%)
-  equity_irr: -0.0206       # NEGATIVE at 5c/kWh
-  project_npv_m_usd: -31.45 # deeply negative
+  # tests/integration/test_kalpitiya_5usc_smoke.py. TWO changes vs the canonical: (1) tariff
+  # 16.69 LKR/kWh (5.0 US cents fixed LKR) vs 20.3 (6.1c); (2) GRANULAR costs — CAPEX
+  # $207.5M ($1,300/kW, bottom-up) vs flat $159.6M ($1,000/kW), and OPEX $3.51M/yr with
+  # 2.5%/yr O&M escalation vs flat $3M. Realistic costs at 5c/kWh leave the deal DEEPLY
+  # UNECONOMIC: project IRR 0.23% (far below the ~9.72% WACC), equity IRR -6.33%, project
+  # NPV -$86.9M. Debt deleverages to $77.8M (DSCR-bound). (Was -$31.5M on the old flat costs.)
+  project_irr: 0.0023       # barely positive; far below WACC (~9.72%)
+  equity_irr: -0.0633       # deeply NEGATIVE
+  project_npv_m_usd: -86.89 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.387
-  llcr: 1.171
-  plcr: 1.237
+  avg_dscr: 1.388
+  llcr: 1.190
+  plcr: 1.243
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
