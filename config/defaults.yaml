@@ -41,6 +41,10 @@ defaults:
   # analytics.cost.cost_basis.resolve_cost_basis_year (never a Python literal).
   cost_reference:
     basis_year: 2026                   # USD vintage for the cost stack
+    # IRENA 2024 global weighted-average onshore-wind total installed cost (USD/kW), the
+    # top-down anchor a bottom-up cost stack is sanity-checked against (range 727-2110).
+    irena_benchmark_per_kw: 1041
+    irena_benchmark_year: 2024
 
   # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING

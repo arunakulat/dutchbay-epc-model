@@ -19,9 +19,11 @@ from typing import Any, Dict, List, Mapping, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from finance.debt_v14 import _extract_capex_usd
 
 router = APIRouter()
 
@@ -116,6 +118,15 @@ class DebtBlock(BaseModel):
     schedule: List[DebtScheduleRow] = Field(default_factory=list)
 
 
+class CostBlock(BaseModel):
+    capex_total_usd: Optional[float] = None
+    capex_per_kw_usd: Optional[float] = None
+    irena_benchmark_per_kw: Optional[float] = None
+    ratio_to_benchmark: Optional[float] = None
+    within_band: Optional[bool] = None
+    note: Optional[str] = None
+
+
 class RunPipelineResponse(BaseModel):
     scenario_name: str
     config_path: Optional[str] = None
@@ -124,6 +135,7 @@ class RunPipelineResponse(BaseModel):
     kpis: KpiBlock
     aep: AepBlock
     debt: DebtBlock
+    cost: CostBlock
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +247,40 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
     )
 
 
+def _capacity_mw(cfg: Mapping[str, Any]) -> float:
+    project = _as_map(cfg.get("project"))
+    if isinstance(project.get("capacity_mw"), (int, float)):
+        return float(project["capacity_mw"])
+    turbines = _as_map(_as_map(cfg.get("resource")).get("turbines"))
+    total = turbines.get("total_capacity_mw")
+    if isinstance(total, (int, float)):
+        return float(total)
+    count, rated = turbines.get("count"), turbines.get("rated_power_mw")
+    if isinstance(count, (int, float)) and isinstance(rated, (int, float)):
+        return float(count) * float(rated)
+    return 0.0
+
+
+def _extract_cost(cfg: Mapping[str, Any]) -> CostBlock:
+    """CAPEX total + the IRENA $/kW sanity-check banner (pure serialisation)."""
+    try:
+        capex = _extract_capex_usd(dict(cfg))
+    except (ValueError, KeyError, TypeError):
+        return CostBlock()
+    cap_mw = _capacity_mw(cfg)
+    if cap_mw <= 0:
+        return CostBlock(capex_total_usd=capex)
+    b = capex_benchmark(capex, cap_mw)
+    return CostBlock(
+        capex_total_usd=capex,
+        capex_per_kw_usd=b["capex_per_kw_usd"],
+        irena_benchmark_per_kw=b["irena_benchmark_per_kw"],
+        ratio_to_benchmark=b["ratio_to_benchmark"],
+        within_band=b["within_band"],
+        note=b["note"],
+    )
+
+
 def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
     return KpiBlock(
         project_irr=_f(kpis.get("project_irr")),
@@ -284,4 +330,5 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         kpis=_extract_kpis(kpis),
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
+        cost=_extract_cost(cfg),
     )
