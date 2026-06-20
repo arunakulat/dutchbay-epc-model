@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
@@ -119,6 +120,7 @@ class RunPipelineResponse(BaseModel):
     scenario_name: str
     config_path: Optional[str] = None
     validation_mode: str
+    cost_basis_year: int  # USD vintage the CAPEX/OPEX figures are expressed in
     kpis: KpiBlock
     aep: AepBlock
     debt: DebtBlock
@@ -278,6 +280,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         scenario_name=str(kpis.get("scenario_name") or cfg.get("name") or "<inline>"),
         config_path=payload.config_path,
         validation_mode=payload.validation_mode,
+        cost_basis_year=resolve_cost_basis_year(cfg),
         kpis=_extract_kpis(kpis),
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
