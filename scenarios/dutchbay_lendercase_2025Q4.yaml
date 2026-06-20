@@ -20,7 +20,7 @@ project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
-  capacity_factor: 0.346  # Net P50 CF, 15 x IEA-10MW-198 via wind_resource.bankable_aep (was 0.307 @ 23x6.5)
+  capacity_factor: 0.339  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
   degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
@@ -51,10 +51,13 @@ turbine:
   notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
 
 wind_resource:
-  # Weibull distribution parameters (for AEP calculation)
-  weibull_a: 8.32  # Scale parameter (m/s) - conservative baseline
-  weibull_k: 2.1   # Shape parameter
-  mean_wind_speed_ms: 7.85  # At hub height (150m)
+  # Weibull distribution parameters (for AEP calculation). ERA5-FITTED (3-method
+  # consensus MLE/MoM/scipy on the 2020-2024 ARCO single-point timeseries at 150 m,
+  # r2=0.998) — re-baselined from the prior DECLARED A=8.32/k=2.1/mean 7.85, which
+  # overstated the resource (net AEP 483.6 -> 473.8 GWh, -2.0%).
+  weibull_a: 8.199  # Scale parameter (m/s) - ERA5-fitted
+  weibull_k: 2.665  # Shape parameter - ERA5-fitted (declared 2.1 was too broad)
+  mean_wind_speed_ms: 7.29  # At hub height (150m), ERA5-fitted
   shear_exponent: 0.14
   air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level (tropical)
   air_density_ref_kgm3: 1.225  # Standard air density for power curve
@@ -109,11 +112,11 @@ resource:
     curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
     other_pct: 1.0  # Environmental / icing / blade degradation
   
-  # Wind resource (for backward compatibility)
+  # Wind resource (for backward compatibility). ERA5-FITTED (see top-level block).
   wind_resource:
-    mean_wind_speed_ms: 7.85
-    weibull_a: 8.32
-    weibull_k: 2.1
+    mean_wind_speed_ms: 7.29
+    weibull_a: 8.199
+    weibull_k: 2.665
     shear_exponent: 0.14
     data_years: "2020-2024"
     data_source: "ECMWF_ERA5_2020_2024_DUTCHBAY"
@@ -121,17 +124,17 @@ resource:
   # Normalized GIS -> EPC wind interface (#22). Stable handoff contract validated
   # by analytics.wind.wind_interface_schema; consumed by cashflow/metrics.
   wind:
-    ws150_mean_ms: 7.85       # Mean hub-height (150 m) wind speed
-    ws150_std_ms: 3.69        # Weibull-derived (A=8.32, k=2.1)
-    capacity_factor: 0.346    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 483.6            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
+    ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
+    capacity_factor: 0.339    # Net P50 CF (canonical; matches aep_summary)
+    aep_gwh: 473.8            # Net P50 AEP, GWh (canonical; matches aep_summary)
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
   # ARCO single-point ERA5 retrieval (validated by analytics.wind.era5_interface_schema;
   # consumed by wind_resource.arco_assessment). Co-located so ONE scenario drives both the
   # finance pipeline and the ERA5 fit. FIXED vintage = reproducible: the frozen 2005-2024
-  # 20-yr window backs the DECLARED wind_resource.weibull_a/k (8.32/2.1). VALIDATE mode:
+  # 20-yr window backs the ERA5-FITTED wind_resource.weibull_a/k (8.199/2.665). VALIDATE mode:
   # the ARCO fit reports drift vs the declared baseline; it never overwrites it.
   era5:
     latitude: 8.27            # turbine-array centroid (T1-T15), Kalpitiya, Puttalam
@@ -495,28 +498,28 @@ expected_results:
   # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
   # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
   # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
-  net_aep_p50_gwh: 483.6  # 14.48% total losses (modelled wake 7.28%)
-  net_aep_p90_gwh: 421.2  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871), was crude 0.800 haircut
-  capacity_factor: 0.346
+  net_aep_p50_gwh: 473.8  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
+  net_aep_p90_gwh: 412.7  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
+  capacity_factor: 0.339
 
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
-  annual_revenue_p50_m_lkr: 9817.1  # 483.6 GWh × 20.3 LKR/kWh
-  annual_revenue_p50_m_eur: 29.7  # Reference: 483.6 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 196373.0  # With degradation + CPI (scaled by 483.6/402.6)
+  annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
+  annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
+  revenue_20yr_undiscounted_m_lkr: 192394.0  # With degradation + CPI (scaled by 473.8/483.6)
   
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
   # asserts the live pipeline matches them, so they cannot silently drift.
-  # FX-CORRECTED (USD/LKR 300 -> 333.79): the LKR revenue is unchanged but buys ~10%
-  # fewer USD, and the USD O&M costs more LKR, so the USD-denominated returns fall
-  # markedly. Project IRR 8.85% now only just exceeds the ~8.10% WACC and equity IRR
-  # is a thin ~2.1% — the honest knife-edge the stale 300 FX had hidden (it showed
-  # 11.12% / 6.21% / $27.4M). AEP/CF below are unchanged here (the Weibull re-baseline
-  # is a separate PR).
-  project_irr: 0.0885       # only just clears WACC (~8.10%) — marginal
-  equity_irr: 0.0207        # thin (~2.1%) at the corrected FX
-  project_npv_m_usd: 5.94   # build-up WACC ~8.10% discount; FX-corrected
+  # HONEST after TWO corrections: (1) FX 300 -> 333.79 and (2) the ERA5-fitted Weibull
+  # re-baseline (declared A=8.32/k=2.1/mean 7.85 -> fitted 8.199/2.665/7.29, net AEP
+  # 483.6 -> 473.8 GWh). The LKR revenue falls ~2% with AEP and buys ~10% fewer USD,
+  # so USD returns are now a razor-thin knife-edge: project IRR 8.44% only just clears
+  # the ~8.18% WACC, equity IRR ~1.4%, NPV ~+$2M. The two flattering errors (stale 300
+  # FX + overstated declared Weibull) had together shown 11.12% / 6.21% / $27.4M.
+  project_irr: 0.0844       # barely clears WACC (~8.18%) — razor-thin
+  equity_irr: 0.0145        # ~1.4% at corrected FX + fitted Weibull
+  project_npv_m_usd: 2.03   # build-up WACC ~8.18% discount
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
   llcr: 1.13

@@ -137,13 +137,15 @@ def test_drift_within_and_outside_tolerance() -> None:
 
 def test_assessment_validates_without_mutating(scenario: dict) -> None:
     before = copy.deepcopy(scenario)
-    res = build_arco_assessment(_weibull_series(8.30, 2.10), scenario, ws_column="ws_150m")
+    # Generate a series matching the scenario's ERA5-fitted declared baseline
+    # (A=8.199/k=2.665) so the fit lands within the drift tolerance.
+    res = build_arco_assessment(_weibull_series(8.199, 2.665), scenario, ws_column="ws_150m")
     # VALIDATE mode: declared baseline untouched.
     assert res["mode"] == "validate"
     assert scenario == before  # no mutation of the caller's scenario
     assert res["drift"]["within_tolerance"] is True
-    # implied AEP comes from the analytic engine on the fitted Weibull, near 483.6.
-    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(483.6, abs=8.0)
+    # implied AEP comes from the analytic engine on the fitted Weibull, near 473.8.
+    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(473.8, abs=8.0)
 
 
 def test_assessment_implied_block_satisfies_wind_contract(scenario: dict) -> None:

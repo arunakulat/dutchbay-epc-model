@@ -1,7 +1,7 @@
 {
-  "capacity_factor": 0.346,
-  "net_site_aep_gwh": 483.6,
-  "gross_aep_gwh": 565.5,
+  "capacity_factor": 0.339,
+  "net_site_aep_gwh": 473.8,
+  "gross_aep_gwh": 554.1,
   "n_turbines": 15,
   "rated_power_kw": 10638.3,
   "hub_height_m": 150,
@@ -24,9 +24,9 @@
     "total_loss_pct": 14.48
   },
   "wind_resource": {
-    "mean_wind_speed_ms": 7.85,
-    "weibull_a": 8.32,
-    "weibull_k": 2.1,
+    "mean_wind_speed_ms": 7.29,
+    "weibull_a": 8.199,
+    "weibull_k": 2.665,
     "shear_exponent": 0.14,
     "air_density_kgm3": 1.15,
     "data_years": "2020-2024"
@@ -52,15 +52,15 @@
   },
   "wake_model": "PyWake Bastankhah-Porte-Agel 2014 (Gaussian, k*=0.042); TurbOPark cross-check 8.93%",
   "exceedance": {
-    "net_aep_p50_gwh": 483.6,
-    "net_aep_p75_gwh": 450.8,
-    "net_aep_p90_1yr_gwh": 421.2,
-    "net_aep_p90_life_gwh": 426.0,
+    "net_aep_p50_gwh": 473.8,
+    "net_aep_p75_gwh": 441.7,
+    "net_aep_p90_1yr_gwh": 412.7,
+    "net_aep_p90_life_gwh": 417.4,
     "sigma_1yr_pct": 10.07,
     "sigma_life_pct": 9.29
   },
   "created_date": "2026-06-20",
   "created_by": "wind_resource.bankable_aep",
   "version": "3.0",
-  "notes": "Net AEP for the 15 x IEA Reference 10MW (198 m, 345 W/m2) re-model via wind_resource.bankable_aep: IEC 61400-12-1 air-density correction (rho 1.15, v-shift x0.979) of the IEA power curve over DECLARED Weibull A=8.32/k=2.1; PyWake Bastankhah-Porte-Agel 2014 granular wake = 7.28% (TurbOPark bound 8.93%) over a 15-turbine 650 m row; availability/electrical/curtailment/other = 14.48% total losses; P50/P75/P90 from an IEC 61400-15-2 uncertainty budget (sigma ~10%). 15 x 10.638 = 159.6 MW nameplate, net CF 0.346. Supersedes the EN-171/6.5 base (402.6 GWh / 0.307); EN-171 retained as a characterization/sensitivity machine. Declared Weibull pending live ARCO ERA5 refresh."
+  "notes": "Net AEP for the 15 x IEA Reference 10MW (198 m, 345 W/m2) re-model via wind_resource.bankable_aep: IEC 61400-12-1 air-density correction (rho 1.15, v-shift x0.979) of the IEA power curve over the ERA5-FITTED Weibull A=8.199/k=2.665 (3-method consensus MLE/MoM/scipy on the 2020-2024 ARCO single-point timeseries at the 150 m hub, r2=0.998); PyWake Bastankhah-Porte-Agel 2014 granular wake = 7.28% (TurbOPark bound 8.93%) over a 15-turbine 650 m row; availability/electrical/curtailment/other = 14.48% total losses; P50/P75/P90 from an IEC 61400-15-2 uncertainty budget (sigma ~10%). 15 x 10.638 = 159.6 MW nameplate, net CF 0.339. RE-BASELINED from the prior DECLARED Weibull A=8.32/k=2.1 (mean 7.85): the declared mean overstated the resource, so net AEP falls 483.6 -> 473.8 GWh (-2.0%). Supersedes the EN-171/6.5 base (402.6 GWh / 0.307, still on the declared Weibull); EN-171 retained as a characterization/sensitivity machine."
 }

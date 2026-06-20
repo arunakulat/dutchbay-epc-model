@@ -90,23 +90,24 @@ def test_lendercase_idc_totals_pinned() -> None:
     (including capitalised IDC).
 
     As of the current v14 snapshot (Financing_Terms.debt_sizing = dual_dscr, #180),
-    re-baselined for the 15 x IEA-10MW adoption (capex $159.6M, net AEP 483.6 GWh) AND
-    the FX correction (USD/LKR 300 -> 333.79, which raises USD O&M in LKR and lowers
-    CFADS, sizing debt DOWN below the 70% gearing cap):
-      - LKR principal_m ≈  51,627,663.36
-      - USD principal_m ≈  51,265,116.00
-      - DFI principal_m ≈  11,231,881.92
-        => total principal_m ≈ 114,124,661.28  (base debt $102.14M + capitalised IDC)
+    re-baselined for the 15 x IEA-10MW adoption (capex $159.6M) AND two honesty
+    corrections — the FX fix (USD/LKR 300 -> 333.79) and the ERA5-fitted Weibull
+    (declared A=8.32/k=2.1 -> 8.199/2.665, net AEP 483.6 -> 473.8 GWh) — which lower
+    CFADS and size debt DOWN below the 70% gearing cap:
+      - LKR principal_m ≈  50,619,310.56
+      - USD principal_m ≈  50,263,844.20
+      - DFI principal_m ≈  11,012,509.23
+        => total principal_m ≈ 111,895,663.99  (base debt $100.15M + capitalised IDC)
 
-      - LKR idc_m       ≈   5,662,863.36
-      - USD idc_m       ≈   5,300,316.00
-      - DFI idc_m       ≈   1,017,481.92
-        => total_idc     ≈  11,980,661.28
+      - LKR idc_m       ≈   5,552,260.56
+      - USD idc_m       ≈   5,196,794.20
+      - DFI idc_m       ≈     997,609.23
+        => total_idc     ≈  11,746,663.99
 
-      - min_dscr        ≈   1.30  (at the corrected FX the DSCR debt capacity falls
-                                    BELOW the 70% gearing ceiling, so the auto-sizer is
-                                    now DSCR-bound -> base debt $102.14M = 0.640 x $159.6M,
-                                    binding_constraint P50. A fixed 70% would breach at 1.19.)
+      - min_dscr        ≈   1.30  (the DSCR debt capacity falls BELOW the 70% gearing
+                                    ceiling, so the auto-sizer is DSCR-bound -> base debt
+                                    $100.15M = 0.6275 x $159.6M, binding_constraint P50.
+                                    A fixed 70% would breach at 1.17.)
       - audit_status    ==  "REVIEW"  (sculpt floors min DSCR at the 1.30 target)
 
     Principals + IDC CHANGE with AEP and FX (debt auto-solves to hold DSCR >= target).
@@ -118,24 +119,24 @@ def test_lendercase_idc_totals_pinned() -> None:
     tol = 0.002  # 0.2% relative tolerance
 
     # Principals by tranche (absolute USD amounts, not "millions")
-    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(51_627_663.36, rel=tol)
-    assert float(usd.get("principal_m", 0.0)) == pytest.approx(51_265_116.00, rel=tol)
-    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(11_231_881.92, rel=tol)
+    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(50_619_310.56, rel=tol)
+    assert float(usd.get("principal_m", 0.0)) == pytest.approx(50_263_844.20, rel=tol)
+    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(11_012_509.23, rel=tol)
 
     total_principal = (
         float(lkr.get("principal_m", 0.0))
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(114_124_661.28, rel=tol)
+    assert total_principal == pytest.approx(111_895_663.99, rel=tol)
 
     # IDC by tranche
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_662_863.36, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(5_300_316.00, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(1_017_481.92, rel=tol)
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_552_260.56, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(5_196_794.20, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(997_609.23, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(11_980_661.28, rel=tol)
+    assert total_idc == pytest.approx(11_746_663.99, rel=tol)
 
     # Min DSCR and audit status
     min_dscr = float(result.get("min_dscr"))
