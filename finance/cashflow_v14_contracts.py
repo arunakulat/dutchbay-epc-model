@@ -16,7 +16,9 @@ class CashflowParams:
     - degradation: float (decimal per year, e.g. 0.005 = 0.5%/yr)
     - grid_loss_pct: float (decimal share of gross, 0–1)
     - tariff_lkr_per_kwh: float (LKR per kWh)
-    - opex_usd_per_year: float (USD per year)
+    - opex_usd_per_year: float (USD per year, base/year-1)
+    - opex_escalation_pct: float (decimal per year, e.g. 0.025 = 2.5%/yr O&M inflation
+      in USD terms; the LKR cost then escalates further via the FX curve). Default 0.0.
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - corporate_tax_rate: float (decimal, 0–1)
     - depreciation_years: int (years)
@@ -42,6 +44,7 @@ class CashflowParams:
     tax_holiday_start_year: int
     enhanced_capital_allowance_pct: float
     risk_haircut_pct: float
+    opex_escalation_pct: float = 0.0
 
 
 __all__ = ["CashflowParams"]

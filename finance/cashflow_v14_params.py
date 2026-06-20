@@ -285,6 +285,21 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         )
     )
 
+    # Annual O&M escalation (USD-real inflation), e.g. opex.escalation_pct: 2.5 -> 0.025.
+    # Optional; defaults to 0.0 (flat USD) so existing scenarios are unchanged. The LKR
+    # opex then escalates further via the per-year FX curve (inflation AND FX effects).
+    opex_escalation_pct = _pct_to_decimal(
+        _as_float_or_none(
+            _resolve_first(
+                raw,
+                ("opex", "escalation_pct"),
+                ("opex", "annual_escalation_pct"),
+                ("opex", "inflation_pct"),
+                "opex_escalation_pct",
+            )
+        )
+    ) or 0.0
+
     success_fee_raw = _as_float_or_none(
         _resolve_first(
             raw,
@@ -417,6 +432,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         opex_usd_per_year=(
             float(opex_usd_per_year) if opex_usd_per_year is not None else 0.0
         ),
+        opex_escalation_pct=float(opex_escalation_pct),
         success_fee_pct=float(success_fee_pct),
         env_surcharge_pct=float(env_surcharge_pct),
         social_levy_pct=float(social_levy_pct),

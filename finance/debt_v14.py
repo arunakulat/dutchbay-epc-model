@@ -129,7 +129,36 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
 
 
 def _extract_capex_usd(params: Dict[str, Any]) -> float:
-    """Extract CAPEX from config, supporting v14, legacy and compact schemas."""
+    """Extract CAPEX from config, supporting v14, legacy and compact schemas.
+
+    When ``capex.derive_from_breakdown`` is truthy, CAPEX is computed BOTTOM-UP as the
+    sum of the numeric line items under ``capex.breakdown`` (single source of truth, no
+    flat-total/breakdown divergence). Otherwise the flat ``capex.usd_total`` (etc.) is
+    used. If both a derived sum and an explicit ``usd_total`` are present, they are
+    cross-checked and a mismatch >0.5% raises (CESSPIT: the two must not silently differ).
+    """
+    capex_section = _section_case_insensitive(params, "capex")
+    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+        breakdown = _lookup_case_insensitive(capex_section, "breakdown")
+        if not isinstance(breakdown, Mapping):
+            raise ValueError(
+                "capex.derive_from_breakdown is set but capex.breakdown is missing or "
+                "not a mapping of line items"
+            )
+        derived = sum(
+            float(v) for v in breakdown.values() if isinstance(v, (int, float))
+        )
+        if derived <= 0:
+            raise ValueError("capex.breakdown sums to <= 0; provide positive line items")
+        stated = _lookup_case_insensitive(capex_section, "usd_total")
+        if isinstance(stated, (int, float)) and stated > 0:
+            if abs(float(stated) - derived) / derived > 0.005:
+                raise ValueError(
+                    f"capex.breakdown sums to {derived:,.0f} but capex.usd_total is "
+                    f"{float(stated):,.0f} (>0.5% mismatch) — reconcile the two"
+                )
+        return derived
+
     for section_name, keys in (
         ("finance", ("capex_total_usd", "capex_usd")),
         ("capex", ("usd_total", "capex_total_usd", "total_capex_usd", "total_capex")),
