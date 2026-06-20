@@ -128,6 +128,24 @@ resource:
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
+  # ARCO single-point ERA5 retrieval (validated by analytics.wind.era5_interface_schema;
+  # consumed by wind_resource.arco_assessment). Co-located so ONE scenario drives both the
+  # finance pipeline and the ERA5 fit. FIXED vintage = reproducible: the frozen 2005-2024
+  # 20-yr window backs the DECLARED wind_resource.weibull_a/k (8.32/2.1). VALIDATE mode:
+  # the ARCO fit reports drift vs the declared baseline; it never overwrites it.
+  era5:
+    latitude: 8.27            # turbine-array centroid (T1-T15), Kalpitiya, Puttalam
+    longitude: 79.75
+    hub_height_m: 150         # MUST equal turbine.hub_height_m (cross-asserted)
+    reference:
+      mode: fixed             # reproducible (NEVER 'latest' for the lender case)
+      start_year: 2005
+      end_year: 2024          # the 20-yr window backing the declared Weibull
+    strict_coverage: true     # fail (not warn) on a latency-truncated series
+    output_dir: "outputs/era5_cache"
+    weibull_fit:
+      drift_tolerance_pct: 5.0  # warn/flag if |A_fit-A_declared| or |k_fit-k_declared| exceeds this
+
 # ═════════════════════════════════════════════════════════════════════════════
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
 # ═════════════════════════════════════════════════════════════════════════════
