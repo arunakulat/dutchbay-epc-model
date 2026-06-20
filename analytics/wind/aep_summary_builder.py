@@ -38,7 +38,8 @@ from analytics.power_curves.oem_parser import (IEC_REFERENCE_AIR_DENSITY_KGM3,
                                                parse_power_curve)
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses, net_capacity_factor
-from wind_resource.bankable_aep import density_velocity_factor
+from wind_resource.bankable_aep import (UncertaintyBudget, density_velocity_factor,
+                                        exceedance_levels)
 
 
 def validate_curve_selection(
@@ -90,6 +91,36 @@ def validate_curve_selection(
         "curve_key": str(curve_key),
         "source_type": str(source_type),
     }
+
+
+def _uncertainty_from_config(
+    resource: Mapping[str, Any],
+) -> "tuple[UncertaintyBudget, float, float, int]":
+    """Build the IEC 61400-15-2 uncertainty budget + knobs from ``resource.uncertainty``.
+
+    All fields are optional; category sigmas default to the UncertaintyBudget defaults,
+    and the two knobs (p50_haircut_pct, correlation) default to 0 -> the IEC RSS baseline
+    with no haircut, so scenarios without an `uncertainty` block are unchanged.
+    """
+    unc: Dict[str, Any] = dict(resource.get("uncertainty", {}) or {})
+    d = UncertaintyBudget()
+    budget = UncertaintyBudget(
+        wind_measurement_pct=float(unc.get("wind_measurement_pct", d.wind_measurement_pct)),
+        long_term_pct=float(unc.get("long_term_pct", d.long_term_pct)),
+        vertical_extrapolation_pct=float(
+            unc.get("vertical_extrapolation_pct", d.vertical_extrapolation_pct)
+        ),
+        horizontal_flow_pct=float(unc.get("horizontal_flow_pct", d.horizontal_flow_pct)),
+        power_curve_pct=float(unc.get("power_curve_pct", d.power_curve_pct)),
+        wake_model_pct=float(unc.get("wake_model_pct", d.wake_model_pct)),
+        interannual_variability_pct=float(
+            unc.get("interannual_variability_pct", d.interannual_variability_pct)
+        ),
+    )
+    haircut_pct = float(unc.get("p50_haircut_pct", 0.0))
+    correlation = float(unc.get("correlation", 0.0))
+    life_years = int(unc.get("life_years", 20))
+    return budget, haircut_pct, correlation, life_years
 
 
 def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
@@ -144,7 +175,21 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
         n_turbines,
     )
     loss_result = apply_losses(gross_gwh, losses)
-    net_gwh = loss_result.net_aep_gwh
+    modelled_p50_gwh = loss_result.net_aep_gwh  # net P50 before any bankability haircut
+
+    # IEC 61400-15-2 exceedance build-up, with two optional config-driven knobs
+    # (resource.uncertainty): a P50 over-prediction haircut and an inter-category
+    # correlation for the systematic-sigma combination. Both default to 0 -> the
+    # bankable P50 == modelled net AEP and the RSS baseline is preserved.
+    budget, haircut_pct, correlation, life_years = _uncertainty_from_config(resource)
+    exceedance = exceedance_levels(
+        modelled_p50_gwh,
+        budget,
+        life_years=life_years,
+        p50_haircut_pct=haircut_pct,
+        correlation=correlation,
+    )
+    net_gwh = exceedance.p50_gwh  # bankable P50 (haircut applied; == modelled if 0)
     cf = net_capacity_factor(net_gwh, n_turbines * capacity_mw)
 
     losses["total_loss_pct"] = round(loss_result.total_loss_pct, 2)
@@ -164,6 +209,20 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
         "power_curve_key": selection["curve_key"],
         "iec_standard": power_curve_cfg.get("iec_standard", "IEC 61400-12-1:2022"),
         "losses": losses,
+        "exceedance": {
+            "net_aep_p50_gwh": round(exceedance.p50_gwh, 1),
+            "net_aep_p75_gwh": round(exceedance.p75_gwh, 1),
+            "net_aep_p90_1yr_gwh": round(exceedance.p90_1yr_gwh, 1),
+            "net_aep_p90_life_gwh": round(exceedance.p90_life_gwh, 1),
+            "sigma_1yr_pct": round(exceedance.sigma_1yr_pct, 2),
+            "sigma_life_pct": round(exceedance.sigma_life_pct, 2),
+        },
+        "uncertainty": {
+            "p50_haircut_pct": haircut_pct,
+            "correlation": correlation,
+            "life_years": life_years,
+            "modelled_p50_gwh": round(modelled_p50_gwh, 2),
+        },
         "provenance": {"aep": provenance},
         "generated_by": "analytics.wind.aep_summary_builder",
     }

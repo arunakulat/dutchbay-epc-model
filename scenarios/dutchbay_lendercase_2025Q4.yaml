@@ -238,6 +238,7 @@ fx:
 # CAPEX & OPEX
 # ═════════════════════════════════════════════════════════════════════════════
 capex:
+  cost_basis_year: 2026  # USD vintage of the whole cost stack (anchored, ATB-style)
   usd_total: 159600000  # Base case (all-in EPC + soft costs); 159.6 MW @ $1000/kW
   capex_per_kw_usd: 1000  # 159.6M / 159.6MW (15 x IEA-10MW)
   

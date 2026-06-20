@@ -264,23 +264,33 @@ class UncertaintyBudget:
     wake_model_pct: float = 3.0
     interannual_variability_pct: float = 4.0
 
-    def systematic_sigma_pct(self) -> float:
-        """RSS of the systematic (non-IAV) categories."""
-        return float(
-            np.sqrt(
-                self.wind_measurement_pct**2
-                + self.long_term_pct**2
-                + self.vertical_extrapolation_pct**2
-                + self.horizontal_flow_pct**2
-                + self.power_curve_pct**2
-                + self.wake_model_pct**2
-            )
-        )
+    def systematic_sigma_pct(self, correlation: float = 0.0) -> float:
+        """Combined sigma of the systematic (non-IAV) categories.
 
-    def combined_sigma_pct(self, life_years: float) -> float:
+        ``correlation`` rho in [0, 1] is a uniform inter-category correlation. The
+        standard IEC 61400-15-2 convention combines categories as the root-sum-of-
+        squares (rho=0, uncorrelated) — but empirical work (e.g. WES 2021) shows this
+        understates total uncertainty. With a single uniform rho the variance is
+        ``(1-rho)*RSS^2 + rho*(sum sigma)^2``, so rho=0 -> RSS and rho=1 -> linear sum
+        (fully correlated). Default 0.0 preserves the IEC RSS baseline.
+        """
+        rho = min(max(float(correlation), 0.0), 1.0)
+        sigmas = (
+            self.wind_measurement_pct,
+            self.long_term_pct,
+            self.vertical_extrapolation_pct,
+            self.horizontal_flow_pct,
+            self.power_curve_pct,
+            self.wake_model_pct,
+        )
+        rss_sq = float(sum(s**2 for s in sigmas))
+        lin_sq = float(sum(sigmas)) ** 2
+        return float(np.sqrt((1.0 - rho) * rss_sq + rho * lin_sq))
+
+    def combined_sigma_pct(self, life_years: float, correlation: float = 0.0) -> float:
         """Total sigma for an averaging window of ``life_years`` years."""
         iav = self.interannual_variability_pct / np.sqrt(max(life_years, 1.0))
-        return float(np.sqrt(self.systematic_sigma_pct() ** 2 + iav**2))
+        return float(np.sqrt(self.systematic_sigma_pct(correlation) ** 2 + iav**2))
 
 
 @dataclass(frozen=True)
@@ -295,11 +305,22 @@ class ExceedanceResult:
 
 
 def exceedance_levels(
-    p50_gwh: float, budget: UncertaintyBudget, life_years: int = 20
+    p50_gwh: float,
+    budget: UncertaintyBudget,
+    life_years: int = 20,
+    p50_haircut_pct: float = 0.0,
+    correlation: float = 0.0,
 ) -> ExceedanceResult:
-    """P50/P75/P90 (1-year and project-life) from an uncertainty budget."""
-    sig1 = budget.combined_sigma_pct(1.0)
-    sigl = budget.combined_sigma_pct(life_years)
+    """P50/P75/P90 (1-year and project-life) from an uncertainty budget.
+
+    ``p50_haircut_pct`` applies a bankability haircut to the modelled P50 BEFORE the
+    exceedance build-up (pre-construction P50 has historically been over-predicted,
+    ~0-7% across studies; default 0.0 = no haircut). ``correlation`` (rho in [0,1]) is
+    passed to the systematic-sigma combination (0.0 = IEC RSS baseline).
+    """
+    p50_gwh = p50_gwh * (1.0 - float(p50_haircut_pct) / 100.0)
+    sig1 = budget.combined_sigma_pct(1.0, correlation)
+    sigl = budget.combined_sigma_pct(life_years, correlation)
 
     def pxx(sigma_pct: float, z: float) -> float:
         return p50_gwh * (1.0 - z * sigma_pct / 100.0)

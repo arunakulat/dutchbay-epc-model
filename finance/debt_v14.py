@@ -145,11 +145,27 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
                 "capex.derive_from_breakdown is set but capex.breakdown is missing or "
                 "not a mapping of line items"
             )
-        derived = sum(
+        line_total = sum(
             float(v) for v in breakdown.values() if isinstance(v, (int, float))
         )
-        if derived <= 0:
+        if line_total <= 0:
             raise ValueError("capex.breakdown sums to <= 0; provide positive line items")
+
+        # AACE QRA contingency: when capex.contingency.method == 'qra', the contingency
+        # is RECOMPUTED from the base cost (breakdown minus its contingency line) + the
+        # risk inputs, instead of the fixed line item. Otherwise the fixed breakdown sum
+        # stands and is cross-asserted against usd_total.
+        from analytics.cost.contingency import contingency_is_qra, resolve_contingency
+
+        if contingency_is_qra(capex_section):
+            contingency_line = float(_lookup_case_insensitive(breakdown, "contingency_usd") or 0.0)
+            base_cost = line_total - contingency_line
+            derived = base_cost + resolve_contingency(base_cost, capex_section).contingency_usd
+            if derived <= 0:
+                raise ValueError("QRA-derived CAPEX is <= 0; check the breakdown / risk inputs")
+            return derived
+
+        derived = line_total
         stated = _lookup_case_insensitive(capex_section, "usd_total")
         if isinstance(stated, (int, float)) and stated > 0:
             if abs(float(stated) - derived) / derived > 0.005:
