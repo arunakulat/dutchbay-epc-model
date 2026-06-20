@@ -49,6 +49,17 @@ APPROVED_SOURCES = {
         # source_id to the actual curve (closes the curve-selection identifier gap).
         "curve_key": "envision_en171_6p5",
     },
+    "OEM_VESTAS_V150_56_PC": {
+        "type": "OEM",
+        "description": (
+            "Vestas V150-5.6 MW power curve (150 m rotor). Proxy for the ~5 MW / "
+            "<=160 m-rotor class at the Mullikulam (Mannar) 2x50 MW project; the "
+            "spec turbine is the Envision EN-156/5.0, whose certified curve is not "
+            "yet in the store."
+        ),
+        "iec_standard": "61400-12-1:2022",
+        "curve_key": "vestas_v150_5p6",
+    },
     "OEM_ENVISION_EN171_10_PC": {
         "type": "OEM",
         "description": "Envision EN-171-10.0 MW power curve (PLACEHOLDER, extrapolated from 6.5 MW; superseded by OEM_ENVISION_EN171_65_PC)",
