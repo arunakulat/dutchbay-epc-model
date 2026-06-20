@@ -34,8 +34,9 @@ CANONICAL_STACK = {
     "other_pct": 1.0,
 }
 GROSS_CANONICAL_GWH = 459.5
-# Lender case after the 15 x IEA-10MW re-model: density-corrected farm gross.
-LENDER_GROSS_GWH = 565.5
+# Lender case after the 15 x IEA-10MW re-model + ERA5-fitted Weibull re-baseline:
+# density-corrected farm gross (was 565.5 at the declared 8.32/2.1 Weibull).
+LENDER_GROSS_GWH = 554.1
 
 
 def test_reproduces_canonical_net_aep() -> None:
@@ -110,4 +111,4 @@ def test_lender_config_losses_reproduce_summary() -> None:
     cfg = yaml.safe_load(LENDER_CONFIG.read_text())
     losses = cfg["resource"]["losses"]
     result = apply_losses(LENDER_GROSS_GWH, losses)
-    assert result.net_aep_gwh == pytest.approx(483.6, abs=0.5)
+    assert result.net_aep_gwh == pytest.approx(473.8, abs=0.5)  # ERA5-fitted Weibull

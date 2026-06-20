@@ -15,8 +15,8 @@ from wind_resource.bankable_aep import (
     non_wake_retention,
 )
 
-# DutchBay site (Kalpitiya): declared Weibull + densities.
-A, K = 8.32, 2.1
+# DutchBay site (Kalpitiya): ERA5-fitted Weibull + densities (was declared 8.32/2.1).
+A, K = 8.199, 2.665
 RHO_SITE, RHO_REF = 1.15, 1.225
 N_TURBINES = 15
 ROTOR_M, HUB_M = 198.0, 150.0
@@ -48,8 +48,8 @@ def test_gross_aep_iea_10mw_density_corrected() -> None:
         wind_speed_ms=ws, power_kw=pw, weibull_a=A, weibull_k=K,
         rated_power_kw=rated, n_turbines=N_TURBINES, rho_site_kgm3=RHO_SITE,
     )
-    # IEA 10MW on the site Weibull: ~0.419 ref, ~0.404 density-corrected.
-    assert 0.41 < ref.capacity_factor < 0.43
+    # IEA 10MW on the ERA5-fitted site Weibull: ~0.414 ref, ~0.396 density-corrected.
+    assert 0.40 < ref.capacity_factor < 0.42
     assert 0.39 < dens.capacity_factor < 0.41
     assert dens.capacity_factor < ref.capacity_factor  # density haircut
     assert dens.aep_gwh_farm > 540.0  # gross farm AEP (15 turbines)
