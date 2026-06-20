@@ -147,6 +147,14 @@ class TestNoMaskingDefaultLiterals:
         assert "num_turbines: int = 23" not in src
         assert "hub_height_m: float = 150" not in src
 
+    def test_gis_default_era5_source_has_no_identity_fallbacks(self) -> None:
+        """gis_export.default_era5_source is a THIRD construction site for ERA5RequestConfig:
+        it must not re-introduce the EN-171/23/150 .get() fallbacks #226 removed."""
+        src = _src("analytics/gis/gis_export.py")
+        assert 'get("hub_height_m", 150' not in src
+        assert 'get("turbine_model", "envision' not in src
+        assert 'get("num_turbines", 23)' not in src
+
 
 def test_hours_per_year_is_unified() -> None:
     """The bankable and analytic engines must use the same year length (was 8766 vs 8760)."""
