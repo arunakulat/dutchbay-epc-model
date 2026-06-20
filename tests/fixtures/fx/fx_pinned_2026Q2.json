@@ -1,0 +1,10 @@
+{
+  "lkr_per_usd": 333.79,
+  "as_of_utc": "2026-06-20T00:02:31Z",
+  "provider": "open_er_api",
+  "source_url": "https://open.er-api.com/v6/latest/USD",
+  "reference_url": "https://www.cbsl.gov.lk/en/rates-and-indicators/exchange-rates/daily-indicative-usd-spot-exchange-rates",
+  "resolved_at": "2026-06-20T05:40:00Z",
+  "observed_lkr_per_usd": 333.788859,
+  "notes": "Pinned 2026-Q2 USD/LKR vintage. Programmatic source: exchangerate-api.com via open.er-api.com (no key). Cross-checked: exchange-rates.org 333.68 (2026-06-18), 30-day avg 332.34. CBSL daily indicative is the authoritative reference (JS-rendered, documented not fetched). Supersedes the stale hardcoded 300.0 (~11.3% understatement). Re-baseline this vintage only via a deliberate dated edit."
+}

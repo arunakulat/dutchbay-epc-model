@@ -150,10 +150,17 @@ resource:
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
 # ═════════════════════════════════════════════════════════════════════════════
 ppa:
-  # Base tariff (PRIMARY revenue currency - drives all wind revenue calculations)
-  primary_currency: "LKR"  # Wind revenue calculator reads this field
-  tariff_per_kwh: 20.3  # LKR/kWh (primary contract rate)
-  tariff_per_mwh: 20300.0  # LKR/MWh (= 20.3 × 1000)
+  # INFORMATIONAL ONLY. The model is structurally LKR-primary: the engine reads the
+  # LKR tariff (tariff.lkr_per_kwh below), computes LKR revenue -> LKR CFADS -> LKR tax,
+  # and reports USD only as a post-hoc division by the FX curve. NO Python reads
+  # primary_currency to choose the revenue numeraire (the old comment "Wind revenue
+  # calculator reads this field" was false). A USD-primary flip would touch the whole
+  # cashflow/debt/tax stack; until then this field MUST be "LKR" (locked by
+  # tests/finance/test_currency_lkr_primary.py). ppa.tariff_per_kwh/_per_mwh are
+  # DECORATIVE duplicates of tariff.lkr_per_kwh — the engine does not read them.
+  primary_currency: "LKR"  # informational only; must equal "LKR" (see note above)
+  tariff_per_kwh: 20.3  # LKR/kWh (decorative duplicate of tariff.lkr_per_kwh)
+  tariff_per_mwh: 20300.0  # LKR/MWh (decorative; = 20.3 × 1000)
   
   # PPA terms
   ppa_term_years: 20
@@ -162,11 +169,12 @@ ppa:
   cpi_annual_pct: 2.0  # Annual CPI escalation (if tariff_type=indexed)
   
   # Multi-currency reporting equivalents (REFERENCE ONLY - not used in calculations)
-  # FX rates at 2025Q4: 1 USD = 300 LKR, 1 EUR = 330 LKR, 1 CNY = 41.7 LKR
+  # FX at 2026-Q2 pinned vintage: 1 USD = 333.79 LKR (was a stale 300). EUR/CNY cross
+  # rates not refreshed (USD/LKR is the only fetched vintage); recompute when needed.
   equivalent_tariffs_reference:
-    usd_per_mwh: 67.7   # 20300 ÷ 300 (for lender reports)
-    eur_per_mwh: 61.5   # 20300 ÷ 330 (for European sponsors)
-    cny_per_mwh: 487.0  # 20300 ÷ 41.7 (for Chinese EPC contractors)
+    usd_per_mwh: 60.82  # 20300 ÷ 333.79 (for lender reports)
+    eur_per_mwh: 61.5   # 20300 ÷ 330 (EUR/LKR not refreshed)
+    cny_per_mwh: 487.0  # 20300 ÷ 41.7 (CNY/LKR not refreshed)
   
   # Off-taker details
   offtaker: "Ceylon Electricity Board (CEB)"
@@ -191,16 +199,31 @@ tariff:
 fx:
   enabled: true
   mode: "deterministic"  # Base case (vs "monte_carlo")
-  
-  # FX rates (2025Q4 baseline)
+  base_currency: "USD"
+  quote_currency: "LKR"
+
+  # FX rates (2026-Q2 pinned vintage; USD/LKR refreshed from 300 -> 333.79)
   rates:
-    lkr_per_usd: 300.0
-    lkr_per_eur: 330.0
-    lkr_per_cny: 41.7
+    lkr_per_usd: 333.79
+    lkr_per_eur: 330.0    # EUR/LKR not refreshed (USD/LKR is the fetched vintage)
+    lkr_per_cny: 41.7     # CNY/LKR not refreshed
     usd_per_eur: 1.10
-  
+
+  # Config-driven FX source (analytics.fx.fx_fetch). FIXED vintage = reproducible:
+  # CI/lender runs read the pinned rate, ZERO network. VALIDATE mode reports drift vs
+  # the live provider but never mutates the pinned rate (re-baseline is a dated edit).
+  # CBSL daily indicative is the authoritative reference (documented, never fetched).
+  source:
+    mode: "fixed"                  # fixed (reproducible/lender) | latest (exploratory)
+    provider: "open_er_api"
+    endpoint: "https://open.er-api.com/v6/latest/USD"
+    reference_url: "https://www.cbsl.gov.lk/en/rates-and-indicators/exchange-rates/daily-indicative-usd-spot-exchange-rates"
+    pinned_rate: 333.79            # 2026-Q2; MUST equal start_lkr_per_usd (cross-asserted)
+    pinned_as_of: "2026-06-20T00:02:31Z"
+    drift_tolerance_pct: 5.0
+
   # FX curve parameters
-  start_lkr_per_usd: 300.0
+  start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
   annual_depr: 0.03  # 3% annual LKR depreciation vs USD
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
   
@@ -387,7 +410,7 @@ monte_carlo:
   revenue_std_pct: 10
   cost_mean_usd: 3000000
   cost_std_pct: 8
-  fx_mean_rate: 300.0
+  fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
   fx_std_pct: 3
   project_life_years: 20
   
@@ -415,9 +438,9 @@ monte_carlo:
       low: 126000000.0
       high: 174000000.0
       distribution: uniform
-    - name: fx.start_lkr_per_usd      # base 300.0, rel_std 0.05 -> +/-10%
-      low: 270.0
-      high: 330.0
+    - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
+      low: 300.0
+      high: 367.0
       distribution: uniform
   
   # Output configuration
@@ -485,16 +508,19 @@ expected_results:
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
   # asserts the live pipeline matches them, so they cannot silently drift.
-  # The +20% AEP (483.6 vs 402.6) at only +6.7% capacity turns the prior knife-edge,
-  # equity-negative EN-171 base (0.0835/0.0131/$1.18M) into a comfortably bankable,
-  # equity-positive case.
-  project_irr: 0.1112       # clears WACC (~7.74%) comfortably
-  equity_irr: 0.0621        # equity now positive (~6.2%)
-  project_npv_m_usd: 27.36  # build-up WACC ~7.74% discount
+  # FX-CORRECTED (USD/LKR 300 -> 333.79): the LKR revenue is unchanged but buys ~10%
+  # fewer USD, and the USD O&M costs more LKR, so the USD-denominated returns fall
+  # markedly. Project IRR 8.85% now only just exceeds the ~8.10% WACC and equity IRR
+  # is a thin ~2.1% — the honest knife-edge the stale 300 FX had hidden (it showed
+  # 11.12% / 6.21% / $27.4M). AEP/CF below are unchanged here (the Weibull re-baseline
+  # is a separate PR).
+  project_irr: 0.0885       # only just clears WACC (~8.10%) — marginal
+  equity_irr: 0.0207        # thin (~2.1%) at the corrected FX
+  project_npv_m_usd: 5.94   # build-up WACC ~8.10% discount; FX-corrected
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.14
-  plcr: 1.21
+  llcr: 1.13
+  plcr: 1.19
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA

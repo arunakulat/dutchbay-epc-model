@@ -147,6 +147,15 @@ def _resolve_fx(config: dict[str, Any]) -> dict[str, float]:
     except (TypeError, ValueError) as exc:
         raise ValueError("fx.annual_depr must be a valid number if provided") from exc
 
+    # When an explicit config-driven FX source block is present, validate it through
+    # the FX routine: this enforces the mode contract and the cross-assert that
+    # fx.start_lkr_per_usd == fx.source.pinned_rate (single source of truth, no drift
+    # between the two). Scenarios without a source block keep the legacy contract.
+    if isinstance(fx_cfg.get("source"), dict):
+        from analytics.fx.fx_fetch import FXRequestConfig
+
+        FXRequestConfig.from_scenario(config)
+
     result = {
         "start_lkr_per_usd": start,
         "annual_depr": annual,

@@ -197,8 +197,11 @@ def compute_fx_curve(
     # Read LKR/USD curve (required)
     lkr_usd_raw = curve_config.get("lkr_usd")
     if lkr_usd_raw is None:
-        # Default: flat curve at spot rate
-        spot = float(curve_config.get("spot_lkr_usd", 300.0))
+        # Default: flat curve at the config spot, else the single config-sourced
+        # reference rate (config/defaults.yaml) — never a Python literal (CESSPIT).
+        from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+        spot = float(curve_config.get("spot_lkr_usd") or default_fx_lkr_per_usd())
         lkr_usd = [spot] * len(years)
         logger.debug(
             "compute_fx_curve: No lkr_usd provided; using flat curve at %.2f",
@@ -359,8 +362,11 @@ def compute_fx_risk_profile(
     debt_usd_pct = 100.0 * total_debt_usd / total_debt if total_debt > 0 else 0.0
     debt_cny_pct = 100.0 * total_debt_cny / total_debt if total_debt > 0 else 0.0
 
-    # Get spot rate from curve (final year)
-    spot_lkr_usd = fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else 300.0
+    # Get spot rate from curve (final year); empty curve -> config reference rate
+    # (config/defaults.yaml), never a Python literal (CESSPIT).
+    from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+    spot_lkr_usd = fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else default_fx_lkr_per_usd()
 
     # Compute VaR/CVaR as simplified estimate:
     # VaR_95 = 5% potential LKR depreciation impact on LKR-denominated debt

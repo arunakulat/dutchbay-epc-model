@@ -16,9 +16,25 @@
 
 defaults:
   # ═══════════════════════════════════════════════════════════════════
+  # FX REFERENCE (USD/LKR) — single fallback source of truth
+  # ═══════════════════════════════════════════════════════════════════
+  # CESSPIT: legacy code paths that lack an explicit scenario `fx` block resolve
+  # their fallback rate HERE (via analytics.fx.fx_fetch.default_fx_lkr_per_usd),
+  # never from a Python literal. Production scenarios MUST declare their own
+  # `fx.start_lkr_per_usd` + `fx.source` pinned vintage; this is only a safety net
+  # for lightweight/hand-authored configs. Replaces the divergent stale literals
+  # (300 / 305 / 320 / 375 / 396) that had accreted across the codebase.
+  # Pinned 2026-Q2 vintage (open.er-api.com; CBSL authoritative reference). The
+  # stale 300 understated the rate by ~11.3% vs the ~333.8 spot.
+  fx_reference:
+    start_lkr_per_usd: 333.79          # 2026-Q2 pinned USD/LKR
+    pinned_as_of: "2026-06-20T00:02:31Z"
+    provider: "open_er_api"
+
+  # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
   # ═══════════════════════════════════════════════════════════════════
-  
+
   degradation:
     # Annual performance degradation rate
     annual_rate_pct: 0.6  # 0.6%/year (industry standard for modern turbines)
