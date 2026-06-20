@@ -54,6 +54,13 @@ class TestNoSilentDefaults:
         with pytest.raises(KeyError, match="curve_key"):
             tornado_from_config(bad)
 
+    def test_tornado_requires_hub_height(self, scenario: dict) -> None:
+        """The tornado shear driver must use THIS project's hub height, not 150 m."""
+        bad = copy.deepcopy(scenario)
+        del bad["resource"]["turbines"]["hub_height_m"]
+        with pytest.raises(KeyError, match="hub_height_m"):
+            tornado_from_config(bad)
+
     def test_aep_summary_requires_hub_height(self, scenario: dict) -> None:
         bad = copy.deepcopy(scenario)
         del bad["resource"]["turbines"]["hub_height_m"]
@@ -99,6 +106,14 @@ class TestNoMaskingDefaultLiterals:
     def test_tornado_from_config_has_no_curve_key_fallback(self) -> None:
         src = _src("analytics/wind/aep_tornado.py")
         assert 'get("curve_key", CANONICAL_CURVE_KEY)' not in src
+
+    def test_tornado_has_no_baked_alt_curve(self) -> None:
+        """The power-curve driver's alternative machine is config-driven, not baked."""
+        assert 'alt_curve_key: str = "ge_cypress' not in _src("analytics/wind/aep_tornado.py")
+
+    def test_mc_aep_has_no_hardcoded_envision_curve(self) -> None:
+        """The MC-AEP engine must load THIS project's curve_key, not a baked Envision curve."""
+        assert "parse_envision_en171_curve" not in _src("analytics/wind/mc_aep_weibull.py")
 
     def test_summary_builder_has_no_hub_height_fallback(self) -> None:
         assert 'get("hub_height_m", 150' not in _src("analytics/wind/aep_summary_builder.py")

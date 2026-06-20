@@ -29,7 +29,7 @@ from typing import Any, Dict, Mapping
 import numpy as np
 import pandas as pd
 
-from analytics.power_curves.oem_parser import parse_envision_en171_curve
+from analytics.power_curves.oem_parser import parse_power_curve
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses
 
@@ -80,6 +80,7 @@ def run_mc_aep(
     n_turbines: int,
     capacity_mw: float,
     losses: Mapping[str, Any],
+    curve_key: str,
     n_samples: int = 2000,
     weibull_uncertainty_pct: float = 6.0,
     air_density_kgm3: float = 1.225,
@@ -90,6 +91,8 @@ def run_mc_aep(
     Args:
         fit: The Weibull fit (from :func:`fit_weibull_from_series`).
         n_turbines: Number of turbines.
+        curve_key: power_curves.yaml slug for THIS project's turbine (required;
+            from resource.power_curve.curve_key — no hardcoded Envision curve).
         capacity_mw: Per-turbine rated capacity (MW) — unused by the analytic AEP
             but kept for interface clarity / future CF reporting.
         losses: ``resource.losses`` mapping applied via the #23 losses model.
@@ -106,7 +109,7 @@ def run_mc_aep(
         ``std``, ``cv``, ``n_samples`` and the ``weibull_fit``.
     """
     rng = np.random.RandomState(seed)
-    curve = parse_envision_en171_curve(air_density_kgm3=air_density_kgm3)
+    curve = parse_power_curve(curve_key, air_density_kgm3=air_density_kgm3)
     curve_ws = curve["wind_speed_ms"].to_numpy()
     curve_power = curve["power_kw"].to_numpy()
 

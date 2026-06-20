@@ -57,8 +57,11 @@ class AEPTornadoConfig:
     shear_delta: float = 0.04  # ± on the shear exponent
     losses_rel_pct: float = 20.0  # ± relative on the loss stack
     reference_height_m: float = 100.0  # shear-extrapolation reference (ERA5 100 m)
-    hub_height_m: float = 150.0
-    alt_curve_key: str = "ge_cypress_5p5"  # alternative curve for OEM-vs-alt driver
+    hub_height_m: float = 150.0  # low-level default; tornado_from_config overrides from config
+    # No baked machine for the power-curve driver (a specific 5.5 MW curve would be a
+    # DutchBay/global-reuse hardcode). Sourced from resource.power_curve.alt_curve_key;
+    # the driver is simply skipped when the scenario names no alternative.
+    alt_curve_key: str | None = None
 
 
 def _load_curve(key: str, store: Path = POWER_CURVE_STORE) -> Tuple[np.ndarray, np.ndarray]:
@@ -193,11 +196,13 @@ def run_aep_tornado(
         _net_aep_gwh(weibull_a, weibull_k, base_ws, base_power, n_turbines, _scaled_losses(losses, frl)),
     )
 
-    # 4. Power curve: certified OEM vs an alternative store curve.
-    alt_ws, alt_power = _load_curve(cfg.alt_curve_key)
-    alt_ws = alt_ws / density_factor  # same density basis as the base curve
-    alt_aep = _net_aep_gwh(weibull_a, weibull_k, alt_ws, alt_power, n_turbines, losses)
-    _row("power_curve", f"alt:{cfg.alt_curve_key}", f"oem:{curve_key}", alt_aep, base)
+    # 4. Power curve: certified OEM vs an alternative store curve. Optional — only
+    # when the scenario names a comparable alternative (no baked default machine).
+    if cfg.alt_curve_key is not None:
+        alt_ws, alt_power = _load_curve(cfg.alt_curve_key)
+        alt_ws = alt_ws / density_factor  # same density basis as the base curve
+        alt_aep = _net_aep_gwh(weibull_a, weibull_k, alt_ws, alt_power, n_turbines, losses)
+        _row("power_curve", f"alt:{cfg.alt_curve_key}", f"oem:{curve_key}", alt_aep, base)
 
     df = pd.DataFrame(rows)
     df["base_aep_gwh"] = round(base, 3)
@@ -239,9 +244,18 @@ def tornado_from_config(
         if rho_site is not None and rho_ref is not None
         else 1.0
     )
+    # Hub height drives the shear sensitivity; source it from config (required, like
+    # the AEP summary) so the tornado is correct for THIS project's turbine, not 150 m.
+    turbines = resource.get("turbines", {}) or {}
+    if "hub_height_m" not in turbines:
+        raise KeyError(
+            "resource.turbines.hub_height_m is required for the AEP tornado "
+            "(config-driven; no silent 150 m default)."
+        )
+    cfg = replace(cfg, hub_height_m=float(turbines["hub_height_m"]))
     # Use a comparable alternative machine for the power-curve sensitivity driver
     # when the scenario names one (e.g. the other 10 MW reference), so the driver
-    # measures curve choice rather than a turbine-class mismatch.
+    # measures curve choice rather than a turbine-class mismatch. Skipped if absent.
     alt_curve_key = power_curve.get("alt_curve_key")
     if alt_curve_key:
         cfg = replace(cfg, alt_curve_key=alt_curve_key)

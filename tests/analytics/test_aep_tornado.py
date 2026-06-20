@@ -96,9 +96,20 @@ def test_run_with_explicit_args() -> None:
         weibull_k=2.1,
         losses={"wake_loss_pct": 5.0, "availability_pct": 97.0, "electrical_loss_pct": 2.0},
         n_turbines=23,
+        cfg=AEPTornadoConfig(alt_curve_key="ge_cypress_5p5"),  # name an alt -> power_curve driver
     )
     assert set(df["driver"]) == EXPECTED_DRIVERS
     assert df["base_aep_gwh"].iloc[0] > 0
+
+
+def test_power_curve_driver_skipped_without_alt() -> None:
+    """No baked alternative machine: the power-curve driver is simply absent."""
+    df = run_aep_tornado(
+        weibull_a=8.32, weibull_k=2.1,
+        losses={"wake_loss_pct": 5.0, "availability_pct": 97.0},
+        n_turbines=15,
+    )
+    assert "power_curve" not in set(df["driver"])  # alt_curve_key defaults to None
 
 
 def test_config_overrides_ranges(lender_cfg: dict) -> None:
