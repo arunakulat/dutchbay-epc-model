@@ -116,7 +116,9 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     n_turbines = int(turbines["count"])
     rated_power_kw = float(turbines["rated_power_mw"]) * 1000.0
     capacity_mw = rated_power_kw / 1000.0
-    hub_height_m = float(turbines.get("hub_height_m", 150.0))
+    # ARCH-01: hub height is config-required (consistent with count/rated above) —
+    # no silent 150.0 that would mask a wrong/absent turbine hub height.
+    hub_height_m = float(turbines["hub_height_m"])
 
     # Parse the reference (uncorrected) curve, then apply the IEC 61400-12-1
     # velocity-cube air-density correction so the regen reproduces the canonical

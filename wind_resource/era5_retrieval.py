@@ -134,12 +134,14 @@ class ERA5RequestConfig:
             longitude=float(proj["longitude"]),
             start_year=start_year,
             end_year=end_year,
-            hub_height_m=float(turb.get("hub_height_m", 150.0)),
+            # Turbine identity is config-required (ARCH-01) — no EN-171/23/150 m
+            # fallbacks that would silently compute AEP for the wrong machine.
+            hub_height_m=float(turb["hub_height_m"]),
             alpha_min=float(dl.get("alpha_min", 0.05)),
             alpha_max=float(dl.get("alpha_max", 0.40)),
-            output_dir=str(dl.get("output_dir", "/tmp/era5_cache")),
-            turbine_model=str(turb.get("model", "envision_en171_6p5")),
-            num_turbines=int(turb.get("num_turbines", 23)),
+            output_dir=str(dl.get("output_dir", "outputs/era5_cache")),
+            turbine_model=str(turb["model"]),
+            num_turbines=int(turb["num_turbines"]),
             reference_mode=mode,
             resolved_at=_dt.datetime.now().isoformat(timespec="seconds"),
             strict_coverage=bool(dl.get("strict_coverage", True)),
