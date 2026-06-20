@@ -102,19 +102,25 @@ class ERA5RequestConfig:
     may be resolved from a ``latest`` reference at load time, then frozen here.
     """
 
+    # Site + turbine identity: REQUIRED, no defaults (ARCH-01). A general-purpose
+    # tool must never bake a DutchBay/Kalpitiya hub height or an Envision/IEA turbine
+    # as a default that a different project could silently inherit via direct
+    # construction. (from_yaml / from_scenario / gis already pass these from config.)
     project_name: str
     latitude: float
     longitude: float
     start_year: int
     end_year: int
-    hub_height_m: float = 150.0
+    hub_height_m: float
+    turbine_model: str
+    num_turbines: int
+    # Universal ERA5-product / analysis constants (the dataset ships 10 m & 100 m
+    # winds; shear-clip bounds are physical) — genuine defaults, project-independent.
     reference_height_low_m: float = 10.0
     reference_height_high_m: float = 100.0
     alpha_min: float = 0.05
     alpha_max: float = 0.40
-    output_dir: str = "/tmp/era5_cache"
-    turbine_model: str = "envision_en171_6p5"
-    num_turbines: int = 23
+    output_dir: str = "outputs/era5_cache"
     reference_mode: str = "fixed"
     resolved_at: str = ""
     strict_coverage: bool = True
