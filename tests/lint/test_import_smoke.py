@@ -215,6 +215,25 @@ def test_import_contracts_then_fx():
         pytest.fail(f"Circular import detected (contracts_v14 ↔ fx): {e}")
 
 
+def test_import_monte_carlo_aep_before_analytics_wind():
+    """Regression: monte_carlo_aep must import standalone (before analytics.wind).
+
+    analytics.wind.__init__ -> pipeline_aep_v14 -> analytics.simulation.monte_carlo_aep
+    forms a cycle; a module-level `from analytics.wind.losses_model import ...` in
+    monte_carlo_aep broke when monte_carlo_aep was imported FIRST (the test suite masked
+    it by importing analytics.wind earlier). The DEFAULT_WIND_LOSSES import is now lazy.
+    """
+    for key in list(sys.modules.keys()):
+        if key.startswith("analytics.wind") or key.startswith("analytics.simulation"):
+            del sys.modules[key]
+    try:
+        from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep
+
+        assert run_monte_carlo_aep is not None
+    except ImportError as e:
+        pytest.fail(f"Circular import (analytics.wind ↔ monte_carlo_aep): {e}")
+
+
 # =============================================================================
 # Performance Guardrails (imports should be fast)
 # =============================================================================
