@@ -65,6 +65,7 @@ class RefinancingConfig:
     enabled: bool = False
     triggers: List[Dict[str, Any]] = field(default_factory=list)
     new_coupon_pct: Optional[float] = None
+    current_coupon_pct: Optional[float] = None  # the coupon being refinanced AWAY from
     refinancing_cost_pct: float = 0.5  # % of refinanced amount
     new_tenor_years: Optional[int] = None
     principal_repayment_pct: float = 0.0  # % of proceeds to repay principal
@@ -132,6 +133,13 @@ class RefinancingCalculator:
         if self.config.new_coupon_pct is None:
             raise ValueError("Refinancing enabled but new_coupon_pct not specified")
 
+        if self.config.current_coupon_pct is None:
+            raise ValueError(
+                "Refinancing enabled but current_coupon_pct not specified "
+                "(the coupon being refinanced away from must come from config, "
+                "not a hardcoded placeholder)."
+            )
+
         if not 0 <= self.config.refinancing_cost_pct <= 2:
             raise ValueError(
                 f"refinancing_cost_pct must be 0-2%, got {self.config.refinancing_cost_pct}"
@@ -184,7 +192,9 @@ class RefinancingCalculator:
         # In production, would need actual debt schedule and cashflows
         if self.config.new_coupon_pct is None:
             raise ValueError("Refinancing enabled but new_coupon_pct not specified")
-        old_coupon_rate = 0.065  # Placeholder - would come from scenario
+        if self.config.current_coupon_pct is None:
+            raise ValueError("Refinancing enabled but current_coupon_pct not specified")
+        old_coupon_rate = self.config.current_coupon_pct / 100  # config-driven (ARCH-01)
         new_coupon_rate = self.config.new_coupon_pct / 100
         annual_savings = current_principal_usd * (old_coupon_rate - new_coupon_rate)
 

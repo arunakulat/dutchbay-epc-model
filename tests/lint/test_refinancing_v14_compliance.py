@@ -87,6 +87,16 @@ class TestDocstrings:
 class TestNonHardcodedValues:
     """Verify no hardcoded values in business logic."""
 
+    def test_no_hardcoded_current_coupon_placeholder(self) -> None:
+        """The coupon being refinanced away from must be config-/data-driven (not 0.065)."""
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        hydra = (root / "finance/refinancing_v14_hydra.py").read_text()
+        hardened = (root / "finance/refinancing_v14_hardened.py").read_text()
+        assert "old_coupon_rate = 0.065" not in hydra  # from config.current_coupon_pct
+        assert "self.current_coupon_rate = 0.065" not in hardened  # from debt avg_debt_rate
+
     def test_trigger_thresholds_from_config(self) -> None:
         """Test trigger logic uses config values, not hardcoded."""
         config = RefinancingConfig(
