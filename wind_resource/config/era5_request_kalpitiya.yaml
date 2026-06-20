@@ -12,16 +12,19 @@ project:
   longitude: 79.75
 download:
   reference:
-    mode: latest        # most recent complete ERA5 final-data years (stays current); frozen per run
-    n_years: 20         # 20-yr long-term P50 reference; matches the 20-yr operating life
-    end_year_lag: 2     # end = current_year - 2 (ensures complete ERA5 FINAL data; ~2-3 mo latency)
-  output_dir: "/tmp/era5_cache"
+    mode: fixed         # FIXED = reproducible: a pinned window can't drift between runs.
+    start: 2005         # the 20-yr long-term P50 window backing the lender baseline.
+    end: 2024
+    # 'mode: latest' (n_years + end_year_lag) resolves end = current_year - lag at LOAD
+    # time, so it moves every run -- use it for exploratory re-baselining ONLY, never for
+    # a reproducible lender assessment.
+  output_dir: "outputs/era5_cache"   # project-relative (not machine-local /tmp)
   alpha_min: 0.05       # wind-shear bounds for the 100m -> hub power-law extrapolation
   alpha_max: 0.40
   strict_coverage: true # raise if the retrieved series doesn't fully cover the window (no silent partials)
 turbine:
-  model: "envision_en171_6p5"   # canonical 6.5 MW curve (wind_resource/config/power_curves.yaml)
-  num_turbines: 23              # 23 x 6.5 MW = 149.5 MW
+  model: "iea_reference_10mw"   # IEA Reference 10MW curve (wind_resource/config/power_curves.yaml)
+  num_turbines: 15              # 15 x 10.638 MW = 159.6 MW
   hub_height_m: 150
 credentials:
   # CDS key is NEVER stored in the repo. Provide it in ~/.cdsapirc:

@@ -46,6 +46,7 @@ _MODULE_IMPORTS: dict[str, str] = {
     "debt": "finance.debt_v14",
     "irr": "finance.irr",
     "wind": "analytics.wind.wind_interface_schema",
+    "era5": "analytics.wind.era5_interface_schema",
 }
 
 
