@@ -1,0 +1,31 @@
+{
+  "capacity_factor": 0.2713,
+  "net_site_aep_gwh": 133.1,
+  "gross_aep_gwh": 155.65,
+  "n_turbines": 10,
+  "rated_power_kw": 5600.0,
+  "hub_height_m": 125.0,
+  "source_id": "OEM_VESTAS_V150_56_PC",
+  "source_type": "OEM",
+  "power_curve_key": "vestas_v150_5p6",
+  "iec_standard": "IEC 61400-12-1:2022",
+  "losses": {
+    "wake_loss_pct": 7.28,
+    "availability_pct": 97.0,
+    "electrical_loss_pct": 2.0,
+    "curtailment_pct": 2.0,
+    "other_pct": 1.0,
+    "total_loss_pct": 14.49
+  },
+  "provenance": {
+    "aep": {
+      "aep_source_id": "OEM_VESTAS_V150_56_PC",
+      "source_type": "OEM",
+      "derived_from": [],
+      "iec_standard": "61400-12-1:2022",
+      "certificate": null,
+      "is_placeholder": false
+    }
+  },
+  "generated_by": "analytics.wind.aep_summary_builder"
+}
