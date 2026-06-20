@@ -127,7 +127,7 @@ These non-negotiable principles ensure production-grade quality:
 4. **Test-First**: Contract tests for all analytics
 5. **Type-Safe**: Full mypy compliance
 
-See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 58 rules) for the complete standards.
+See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 60 rules) for the complete standards.
 
 ### Code Quality
 
