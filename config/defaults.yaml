@@ -32,6 +32,17 @@ defaults:
     provider: "open_er_api"
 
   # ═══════════════════════════════════════════════════════════════════
+  # COST REFERENCE — single anchored cost-basis year
+  # ═══════════════════════════════════════════════════════════════════
+  # CESSPIT/CCCDIR: the USD vintage all CAPEX/OPEX figures are expressed in. Anchoring
+  # ONE basis year (the way NREL ATB fixes everything in 2022$) prevents silent vintage-
+  # mixing across benchmarks (IRENA 2024, Lazard 2025, the 2026-Q2 FX). Scenarios may
+  # override via capex.cost_basis_year; this is the single fallback default, resolved by
+  # analytics.cost.cost_basis.resolve_cost_basis_year (never a Python literal).
+  cost_reference:
+    basis_year: 2026                   # USD vintage for the cost stack
+
+  # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
   # ═══════════════════════════════════════════════════════════════════
 
