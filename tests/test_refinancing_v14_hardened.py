@@ -12,30 +12,22 @@ Total: 46+ test cases with 95%+ code coverage
 """
 
 import pytest
-from datetime import datetime
-from unittest.mock import Mock, patch
 
-from finance.refinancing_v14_hardened import (
-    RefinancingConfig,
-    RefinancingOutput,
-    RefinancingCalculatorHardened,
-    validate_dscr_value,
-    validate_coupon_pct,
-    validate_tenor_years,
-    validate_cost_pct,
-    RefinancingValidationError,
-    RefinancingConfigError,
-    RefinancingCalculationError,
-    DSCR_MIN_VALID,
-    DSCR_MAX_VALID,
-    COUPON_MIN_PCT,
-    COUPON_MAX_PCT,
-    TENOR_MIN_YEARS,
-    TENOR_MAX_YEARS,
-    REFIN_COST_MIN_PCT,
-    REFIN_COST_MAX_PCT,
-)
-
+from finance.refinancing_v14_hardened import (COUPON_MAX_PCT, COUPON_MIN_PCT,
+                                              DSCR_MAX_VALID, DSCR_MIN_VALID,
+                                              REFIN_COST_MAX_PCT,
+                                              REFIN_COST_MIN_PCT,
+                                              TENOR_MAX_YEARS, TENOR_MIN_YEARS,
+                                              RefinancingCalculationError,
+                                              RefinancingCalculatorHardened,
+                                              RefinancingConfig,
+                                              RefinancingConfigError,
+                                              RefinancingOutput,
+                                              RefinancingValidationError,
+                                              validate_cost_pct,
+                                              validate_coupon_pct,
+                                              validate_dscr_value,
+                                              validate_tenor_years)
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ FIXTURES & SETUP                                                         ║
@@ -63,6 +55,9 @@ def valid_debt_result():
         "dscr_series": [1.5, 1.4, 1.3, 1.2, 1.1, 1.25, 1.3, 1.4, 1.5, 1.6],
         "min_dscr": 1.1,
         "max_dscr": 1.6,
+        # Blended debt rate the refinancing engine now reads as the current coupon
+        # (config/data-driven, was a hardcoded 0.065 placeholder).
+        "avg_debt_rate": 0.065,
     }
 
 

@@ -147,7 +147,9 @@ class RefinancingCalculatorHardened:
             self.min_dscr = float(min(self.dscr_series))
         else:
             self.min_dscr = 0.0
-        self.current_coupon_rate = 0.065
+        # Current coupon is the ACTUAL blended debt rate from the sized schedule, not a
+        # hardcoded placeholder (ARCH-01) — debt_v14 exposes it as avg_debt_rate.
+        self.current_coupon_rate = float(self.debt_result.get("avg_debt_rate") or 0.0)
 
     def _validate_config(self) -> None:
         if not self.config.enabled:
