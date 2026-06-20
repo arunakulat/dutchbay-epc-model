@@ -496,6 +496,9 @@ expected_results:
   # Wind resource assessment — 15 x IEA Reference 10MW (198m) via
   # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
   # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
+  # (IEC 61400-15-2 = the Energy Yield Assessment loss/uncertainty part, still DRAFT
+  #  as of 2025 — NOT the published -15-1:2025, which is the separate site-suitability
+  #  part. Knobs to vary it: resource.uncertainty.p50_haircut_pct / .correlation.)
   # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
   net_aep_p50_gwh: 473.8  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
   net_aep_p90_gwh: 412.7  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
