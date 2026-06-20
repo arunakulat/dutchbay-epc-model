@@ -137,10 +137,13 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
             cur2 *= 1.0 + depr
         return out2
 
-    # Final hard fallback – true legacy behaviour
-    default_fx = 375.0
+    # Final fallback when no fx block is present – single config-sourced reference
+    # rate (config/defaults.yaml), never a Python literal (CESSPIT / ARCH-01).
+    from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+    default_fx = default_fx_lkr_per_usd()
     logger.warning(
-        "FX configuration missing; falling back to flat %.2f LKR/USD for %d years",
+        "FX configuration missing; falling back to config reference %.2f LKR/USD for %d years",
         default_fx,
         years,
     )

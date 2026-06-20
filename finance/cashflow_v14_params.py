@@ -18,8 +18,6 @@ from .cashflow_v14_utils import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_LEGACY_FX_LKR_PER_USD = 375.0
-
 
 def _resolve_project_life_components(
     raw: Dict[str, Any],
@@ -61,7 +59,15 @@ def _resolve_project_life_components(
 
 
 def _resolve_fx_start(raw: Dict[str, Any]) -> float:
-    """Resolve a start FX rate for USD tariff translation."""
+    """Resolve a start FX rate for USD tariff translation.
+
+    Prefers the scenario's explicit ``fx.start_lkr_per_usd``; when no fx block is
+    present (lightweight / hand-authored configs) falls back to the single
+    config-sourced reference rate (``config/defaults.yaml``), never a Python
+    literal (CESSPIT / ARCH-01).
+    """
+    from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
     fx_start = _as_float_or_none(
         _resolve_first(
             raw,
@@ -74,7 +80,7 @@ def _resolve_fx_start(raw: Dict[str, Any]) -> float:
     )
     if fx_start is not None and fx_start > 0:
         return fx_start
-    return _DEFAULT_LEGACY_FX_LKR_PER_USD
+    return default_fx_lkr_per_usd()
 
 
 def _resolve_tariff_lkr_per_kwh(raw: Dict[str, Any]) -> float | None:

@@ -47,7 +47,7 @@ class FXCorrelationModule:
         annual_lkr_revenue: float,
         annual_lkr_debt: float,
         annual_usd_debt: float,
-        base_fx_rate: float = 305.0,
+        base_fx_rate: float | None = None,
     ) -> None:
         """
         Initialize the FX correlation module.
@@ -57,8 +57,14 @@ class FXCorrelationModule:
             annual_lkr_revenue: Fixed annual revenue in LKR.
             annual_lkr_debt: Annual LKR debt service.
             annual_usd_debt: Annual USD debt service (USD nominal).
-            base_fx_rate: Baseline FX rate (LKR / USD).
+            base_fx_rate: Baseline FX rate (LKR / USD). When ``None``, resolves the
+                single config-sourced reference rate (``config/defaults.yaml``);
+                never a Python literal (CESSPIT / ARCH-01).
         """
+        if base_fx_rate is None:
+            from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+            base_fx_rate = default_fx_lkr_per_usd()
         self.monthly_fx = monthly_fx_df.copy()
 
         # Normalize date column if present
@@ -259,7 +265,8 @@ class FXCorrelationModule:
 
         Args:
             paydown_scenarios: USD debt paydown targets (% reduction as 0–1).
-            fx_shocks: FX levels to test, e.g. [220, 250, 305, 350, 365, 396].
+            fx_shocks: FX levels to test. When None, derived as multipliers off the
+                config-sourced base rate (re-anchors when spot updates).
 
         Returns:
             Nested mapping: scenario → FX description → metrics.
@@ -273,7 +280,11 @@ class FXCorrelationModule:
             }
 
         if fx_shocks is None:
-            fx_shocks = [220.0, 250.0, 305.0, 350.0, 365.0, 396.0]
+            # Stress ladder derived as multipliers off the config-sourced base rate
+            # (re-anchors automatically when spot updates), never hardcoded absolute
+            # LKR/USD levels (CESSPIT / ARCH-01). Span ~0.66x..1.19x of base.
+            multipliers = (0.66, 0.75, 0.91, 1.05, 1.09, 1.19)
+            fx_shocks = [round(self.base_fx_rate * m, 1) for m in multipliers]
 
         results: Dict[str, Dict[str, Dict[str, float]]] = {}
 
@@ -407,14 +418,19 @@ class FXCorrelationModule:
 
     @staticmethod
     def _interpret_fx_rate(fx_rate: float) -> str:
-        """Map FX level to a qualitative descriptor."""
+        """Map FX level to a qualitative descriptor.
+
+        Band edges are historical USD/LKR regime boundaries (Strong-LKR / Pre-2022 /
+        post-IMF current zone / crisis), NOT a fetchable spot rate. The current-zone
+        ceiling is 345 so the ~333.8 (2026-Q2) spot labels as 'Current zone'.
+        """
         if fx_rate < 220.0:
             return "Strong LKR"
         if fx_rate < 280.0:
             return "Pre-2022"
-        if fx_rate < 330.0:
+        if fx_rate < 345.0:
             return "Current zone"
-        if fx_rate < 365.0:
+        if fx_rate < 380.0:
             return "Weak/Crisis"
         return "Extreme (2022-like)"
 

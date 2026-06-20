@@ -25,31 +25,34 @@ def base_config():
 
 
 def test_dual_dscr_autosolve_sizes_to_target(base_config):
-    """The shipped lender scenario (debt_sizing: dual_dscr) is now gearing-bound.
+    """The shipped lender scenario (debt_sizing: dual_dscr) is DSCR-bound at honest FX.
 
-    The higher 15x10MW AEP lifts DSCR capacity above the 70% gearing ceiling, so
-    the auto-sizer binds on RATIO_CAP at the cap rather than below it; the sculpt
-    still floors min DSCR at the 1.30 target.
+    At the corrected FX 333.79 the USD O&M costs more in LKR, lowering CFADS and the
+    DSCR debt capacity BELOW the 70% gearing ceiling (it was gearing-bound under the
+    stale 300). The auto-sizer therefore binds on the P50 DSCR (~0.640 gearing), below
+    the cap, and the sculpt floors min DSCR at the 1.30 target.
     """
     cfg = copy.deepcopy(base_config)
     rows = build_annual_rows(cfg)
     res = plan_debt(annual_rows=rows, config=cfg)
 
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
-    assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # at the gearing cap
+    assert res["debt_total"] == pytest.approx(0.640 * CAPEX, rel=2e-3)  # DSCR-solved, below cap
     detail = res["dual_dscr"]
     assert detail is not None
-    assert 0.40 < detail["solved_gearing"] <= 0.70  # capped at 0.70
-    assert detail["binding_constraint"] == "RATIO_CAP"  # gearing-bound, not DSCR-bound
-    assert detail["debt_p99"] >= res["debt_total"]  # P99 capacity exceeds the cap
+    assert 0.40 < detail["solved_gearing"] < 0.70  # DSCR-bound, strictly below the 0.70 cap
+    assert detail["binding_constraint"] == "P50"  # DSCR-bound, not gearing-bound
+    assert detail["debt_p99"] >= res["debt_total"]  # P99 capacity exceeds the P50 sizing
 
 
 def test_opt_out_keeps_fixed_gearing(base_config):
     """Without the flag, debt stays fixed at capex * debt_ratio.
 
-    At 70% gearing the higher 10MW AEP now clears the 1.30 floor (was a 1.16
-    sub-covenant under the 23 x EN-171/6.5 base), so the fixed-gearing case and
-    the dual-DSCR auto-sizer coincide.
+    At the corrected FX 333.79 a fixed 70% gearing OVER-levers the deal: min DSCR
+    falls to ~1.19, a sub-covenant breach of the 1.30 target. This is exactly why
+    the dual_dscr auto-sizer (the shipped default) sizes debt DOWN to ~0.640 — the
+    fixed-gearing path and the auto-sizer no longer coincide (they did under the
+    stale 300, which flattered CFADS).
     """
     cfg = copy.deepcopy(base_config)
     cfg["Financing_Terms"].pop("debt_sizing", None)
@@ -58,15 +61,16 @@ def test_opt_out_keeps_fixed_gearing(base_config):
 
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
-    assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # 70% gearing now clears 1.30
+    assert res["min_dscr"] == pytest.approx(1.193, abs=0.01)  # 70% over-levers -> sub-covenant
 
 
-def test_lower_target_is_gearing_bound_at_the_cap(base_config):
-    """When the deal is gearing-bound, a lower DSCR target adds no leverage.
+def test_lower_target_adds_leverage_when_dscr_bound(base_config):
+    """When the deal is DSCR-bound, a lower DSCR target unlocks MORE leverage.
 
-    The 10MW AEP lifts DSCR capacity above the 70% ceiling, so both the 1.30 and
-    1.20 targets sit at the same gearing-capped debt; the lower target only
-    sculpts the repayment profile to a lower DSCR floor.
+    At the corrected FX 333.79 the deal is DSCR-bound (below the 70% cap), so a
+    lower 1.20 target sizes MORE debt (~0.695 gearing) than the 1.30 target
+    (~0.640) — the opposite of the stale-300 gearing-bound case where both targets
+    sat at the same capped debt.
     """
     cfg = copy.deepcopy(base_config)  # 1.30 target
     res_130 = plan_debt(annual_rows=build_annual_rows(cfg), config=cfg)
@@ -75,6 +79,6 @@ def test_lower_target_is_gearing_bound_at_the_cap(base_config):
     cfg_120["Financing_Terms"]["target_dscr"] = 1.20
     res_120 = plan_debt(annual_rows=build_annual_rows(cfg_120), config=cfg_120)
 
-    assert res_120["debt_total"] == pytest.approx(res_130["debt_total"], rel=1e-3)
+    assert res_120["debt_total"] > res_130["debt_total"] + 1_000_000  # lower target -> more debt
     assert res_130["min_dscr"] == pytest.approx(1.30, abs=0.01)
     assert res_120["min_dscr"] == pytest.approx(1.20, abs=0.01)  # lower DSCR floor

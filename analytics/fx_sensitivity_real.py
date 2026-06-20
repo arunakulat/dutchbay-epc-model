@@ -179,17 +179,31 @@ class FXSensitivityAnalyzer:
             if isinstance(loaded, dict):
                 self.base_config = loaded
 
+    def _base_fx(self) -> float:
+        """Resolve the base USD/LKR rate to anchor FX shocks.
+
+        Reads the scenario's own ``fx`` block (``spot_rate`` / ``start_lkr_per_usd``);
+        falls back to the single config-sourced reference rate
+        (``config/defaults.yaml``), never a Python literal (CESSPIT / ARCH-01).
+        """
+        from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+        fx_config = self.base_config.get("fx", {})
+        spot = fx_config.get("spot_rate", fx_config.get("start_lkr_per_usd"))
+        return float(spot) if spot is not None else default_fx_lkr_per_usd()
+
     def run(self) -> FXSensitivityResult:
         metric = self.config.target_metric
         base = evaluate_with_overrides(self.base_config_path, {"fx": {"fx_shock": 0.0}})
         base_value = _metric_from_result(base, metric)
         pairs: list[tuple[SensitivityCoefficient, float]] = []
 
+        base_fx = self._base_fx()
         fx_values = []
         for shock in self.config.fx_rate_shocks:
             out = evaluate_with_overrides(
                 self.base_config_path,
-                {"fx": {"fx_shock": float(shock), "spot_rate_lkr_usd": 320.0 * (1.0 + float(shock))}},
+                {"fx": {"fx_shock": float(shock), "spot_rate_lkr_usd": base_fx * (1.0 + float(shock))}},
             )
             fx_values.append(_metric_from_result(out, metric))
         pairs.append(_linear_fit("fx_rate", self.config.fx_rate_shocks, fx_values))
@@ -256,7 +270,7 @@ class FXSensitivityAnalyzer:
         spread_steps: int = 5,
     ) -> RealFXSensitivityResult:
         fx_config = self.base_config.get("fx", {})
-        base_fx = float(fx_config.get("spot_rate", fx_config.get("start_lkr_per_usd", 300.0)))
+        base_fx = self._base_fx()
         base_hedge = float(fx_config.get("hedge_ratio", 0.0))
         base_spread = float(fx_config.get("spread_bps", 0.0))
         base_result = self._run_pipeline_with_fx_params(base_fx, base_hedge, base_spread)

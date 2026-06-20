@@ -72,8 +72,11 @@ class FXVolumetry:
         Approximation: assumes all LKR denominations remain at spot rate
         (not risk-adjusted). For risk analysis, use FXRiskProfile instead.
         """
-        # Assume ~300 LKR/USD at computation time; actual rates from fx_curve
-        assumed_spot_lkr_usd = 300.0
+        # Config-sourced reference spot (config/defaults.yaml); actual rates from
+        # fx_curve when risk-adjusted. Never a Python literal (CESSPIT).
+        from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+        assumed_spot_lkr_usd = default_fx_lkr_per_usd()
         lkr_in_usd = (self.total_debt_lkr + self.interest_lkr) / assumed_spot_lkr_usd
         return self.total_debt_usd + lkr_in_usd
 
@@ -285,7 +288,7 @@ class FXRegimeConfig:
         regime_type: Regime type ('fixed', 'floating', 'managed')
         years: Number of years in regime
         annual_depr: Annual depreciation rate (decimal, e.g., 0.025 for 2.5%)
-        start_rate: Starting exchange rate (e.g., 300.0 for LKR/USD)
+        start_rate: Starting exchange rate (e.g., 333.79 for LKR/USD)
     """
 
     base_currency: str
@@ -362,17 +365,24 @@ class FXStructuredBlock:
         """Return number of periods in volumetry."""
         return len(self.volumetry)
 
-    def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float = 300.0) -> float:
+    def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float | None = None) -> float:
         """Approximate total debt in USD equivalent at spot rate.
 
         Args:
-            spot_rate_lkr_usd: Exchange rate for LKR/USD (default: 300.0).
+            spot_rate_lkr_usd: Exchange rate for LKR/USD. When ``None``, resolves
+                the single config-sourced reference rate (``config/defaults.yaml``);
+                never a Python literal (CESSPIT / ARCH-01).
 
         Returns:
             Sum of all debt in USD equivalent (approx).
         """
         if not self.volumetry:
             return 0.0
+
+        if spot_rate_lkr_usd is None:
+            from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+            spot_rate_lkr_usd = default_fx_lkr_per_usd()
 
         # Use final period debt (end of loan tenor)
         final_period = self.volumetry[-1]

@@ -48,5 +48,8 @@ p_levels:
 # Revenue assumptions (can be overridden)
 revenue:
   default_tariff_lkr_kwh: 20.30
-  default_exchange_rate_lkr_usd: 300.0
+  # USD/LKR for the wind-resource revenue translation (energy_calculator). Kept in
+  # step with the canonical fx vintage (config/defaults.yaml fx_reference /
+  # analytics.fx.fx_fetch). Was a stale 300.0 (~11.3% understatement vs ~333.8 spot).
+  default_exchange_rate_lkr_usd: 333.79
   ppa_years: 20

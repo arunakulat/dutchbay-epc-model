@@ -94,9 +94,9 @@ def _resolve_fx_rate(
       ValueError if no FX rate can be resolved.
 
     Examples:
-        >>> config = {"fx": {"start_lkr_per_usd": 320.0}}
+        >>> config = {"fx": {"start_lkr_per_usd": 333.79}}
         >>> _resolve_fx_rate(config)
-        320.0
+        333.79
 
         >>> config = {"fx": {"base_rate": 350.0}}
         >>> _resolve_fx_rate(config)
@@ -238,7 +238,7 @@ def epc_breakdown_from_config(
         contingency_pct: 10       # optional, % of base EPC
 
       fx:
-        base_rate: 375.0          # LKR per USD (or equivalent keys)
+        base_rate: 333.79         # LKR per USD (or equivalent keys)
 
     Behaviour:
       * EPC base cost is resolved via _resolve_capex_usd_total, which supports:
@@ -302,7 +302,7 @@ def epc_breakdown_from_config(
 
 def epc_breakdown_dict(
     config: Mapping[str, Any],
-    default_fx_rate: float = 300.0,
+    default_fx_rate: Optional[float] = None,
 ) -> Dict[str, float]:
     """
     Compute a simple EPC cost breakdown in USD and LCY.
@@ -372,7 +372,12 @@ def epc_breakdown_dict(
     freight_pct = _pct_or_zero(capex.get("freight_pct", 0.0))
     contingency_pct = _pct_or_zero(capex.get("contingency_pct", 0.0))
 
-    # FX – prefer config, fall back to default
+    # FX – prefer config; fall back to the single config-sourced reference rate
+    # (config/defaults.yaml), never a Python literal (CESSPIT / ARCH-01).
+    if default_fx_rate is None:
+        from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+
+        default_fx_rate = default_fx_lkr_per_usd()
     fx_rate = _resolve_fx_rate(cfg, default_fx_rate=default_fx_rate)
 
     # USD layer

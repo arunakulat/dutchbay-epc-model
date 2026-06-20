@@ -161,22 +161,16 @@ def build_fx_curve_from_block(
     >>> len(curve.years)
     3
     """
-    # STUB: Generate flat curve at 300 LKR/USD
-    # TODO Sprint 13: Implement proper curve generation
-    year_indices = list(range(years))
-    rates = [300.0] * years  # Placeholder flat rate
-
-    metadata: dict[str, Any] = {
-        "base_currency": block.base_currency,
-        "strategy": block.strategy,
-        "notes": "STUB curve - Sprint 13 implementation pending",
-    }
-
-    return FXCurveOutput(
-        years=year_indices,
-        lkr_usd=rates,
-        source="stub_base_case",
-        notes=metadata["notes"],
+    # This was a STUB that silently emitted a flat 300 LKR/USD curve regardless of
+    # input — a hardcoded FX rate (CESSPIT / ARCH-01 violation). It has no live
+    # callers (verified). Rather than emit a wrong curve, fail loudly: real curve
+    # generation must source the spot from config via analytics.fx.fx_fetch (the
+    # FIXED-vintage / pinned-rate path) or compute_fx_curve in fx_builder.
+    raise NotImplementedError(
+        "build_fx_curve_from_block is not implemented: it previously emitted a "
+        "hardcoded flat 300 LKR/USD curve. Use analytics.fx.fx_builder.compute_fx_curve "
+        "with a config-sourced spot (fx.start_lkr_per_usd / fx.source pinned vintage), "
+        f"not a magic default. (requested years={years}, strategy={block.strategy})"
     )
 
 

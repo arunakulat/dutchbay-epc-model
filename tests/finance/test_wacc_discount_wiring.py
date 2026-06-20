@@ -54,8 +54,9 @@ def test_wacc_drives_project_discount_rate() -> None:
     kpis = _kpis({})
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
-    assert used == pytest.approx(0.0774, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive
-    # At ke=12% the WACC (~7.74%) is well below project IRR 11.12% → project NPV +$27.4M.
+    assert used == pytest.approx(0.0810, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive
+    # At ke=12% the WACC (~8.10%) is just below project IRR 8.85% → project NPV +$5.9M.
+    # (Marginal at the corrected FX 333.79; the stale 300 flattered IRR to 11.12% / NPV +$27.4M.)
     assert kpis["project_npv"] > 0
 
 
@@ -63,8 +64,10 @@ def test_drives_discount_rate_flag_is_opt_in() -> None:
     """With the flag off, the project discount falls back to the legacy default (0.10)."""
     kpis = _kpis({"wacc.drives_discount_rate": False})
     assert kpis["discount_rate_used"] == pytest.approx(0.10)
-    # The 10MW re-model clears even a flat 10% hurdle (project NPV ~+$8M at 0.10).
-    assert kpis["project_npv"] > 0
+    # At the corrected FX (333.79) the project IRR is 8.85%, BELOW a flat 10% hurdle,
+    # so the project NPV is NEGATIVE (~-$8.3M) at 0.10. The stale 300 FX had flattered
+    # this to ~+$8M — an honest knife-edge the FX correction surfaced.
+    assert kpis["project_npv"] < 0
 
 
 def test_higher_ke_raises_wacc_and_lowers_project_npv() -> None:
@@ -74,11 +77,12 @@ def test_higher_ke_raises_wacc_and_lowers_project_npv() -> None:
     npvs = [r["project_npv"] for r in rows]
     assert waccs[0] < waccs[1] < waccs[2]
     assert npvs[0] > npvs[1] > npvs[2]
-    # The 10MW re-model clears its WACC across the whole ke band (NPV stays > 0
-    # even at ke=0.20, WACC ~10.1%), so the sign no longer flips — only the
-    # monotonic ordering above pins the wiring.
+    # At the corrected FX (333.79) the project IRR is 8.85%, so the NPV sign flips
+    # across the ke band: positive at ke=0.12 (WACC ~8.10% < IRR, NPV +$5.9M) but
+    # NEGATIVE by ke=0.20 (WACC ~10.98% > IRR, NPV -$14.7M). The crossover (~ke 0.13)
+    # is exactly project IRR — the honest marginality the stale 300 FX had hidden.
     assert rows[0]["project_npv"] > 0
-    assert rows[-1]["project_npv"] > 0
+    assert rows[-1]["project_npv"] < 0
 
 
 def test_equity_npv_discounts_at_cost_of_equity() -> None:
