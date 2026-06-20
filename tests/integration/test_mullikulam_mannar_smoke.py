@@ -58,8 +58,11 @@ def test_weibull_is_the_era5_fitted_optimum(cfg: dict) -> None:
 
 
 def test_tariff_is_the_usd_bid_in_lkr(cfg: dict) -> None:
-    """3.96 USD c/kWh bid carried as 11.88 LKR/kWh (the field revenue actually reads)."""
-    assert float(cfg["tariff"]["lkr_per_kwh"]) == pytest.approx(11.88, abs=0.001)
+    """3.96 USD c/kWh bid carried as 13.22 LKR/kWh at the corrected FX 333.79.
+
+    (Was 11.88 = 0.0396 x the stale 300; the USD bid is preserved at the real rate.)
+    """
+    assert float(cfg["tariff"]["lkr_per_kwh"]) == pytest.approx(13.22, abs=0.001)
 
 
 def test_curve_is_the_registered_approved_source(cfg: dict) -> None:

@@ -48,7 +48,8 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    # honest fitted-Weibull economics at 160 m (lower than the hand-extrapolated case)
-    assert kpis["project_irr"] == pytest.approx(0.1099, abs=0.01)
+    # honest fitted-Weibull economics at 160 m, at the corrected FX 333.79 (the LKR-native
+    # 20.3 tariff takes the full FX drag, so project IRR drops from 11.0% to 8.7%).
+    assert kpis["project_irr"] == pytest.approx(0.0873, abs=0.01)
     assert kpis["equity_irr"] > 0.0
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
