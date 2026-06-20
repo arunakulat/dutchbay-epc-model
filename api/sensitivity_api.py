@@ -22,8 +22,12 @@ from pydantic import BaseModel
 
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
+from api.pipeline_api import router as pipeline_router
 
-app = FastAPI(title="DutchBay v14 Sensitivity API", version="1.0.0")
+app = FastAPI(title="DutchBay v14 API", version="1.1.0")
+
+# Full-pipeline report endpoint (POST /run-pipeline): KPIs + sculpted debt + AEP.
+app.include_router(pipeline_router, tags=["pipeline"])
 
 
 class SensitivityInput(BaseModel):
