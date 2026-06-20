@@ -17,22 +17,16 @@ Context:
 from __future__ import annotations
 
 import json
-import tempfile
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from analytics.loader.aep_loader import (
-    APPROVED_SOURCES,
-    IEC_STANDARDS,
-    compute_checksum_sha256,
-    create_aep_summary_template,
-    export_provenance_report,
-    load_aep_from_summary,
-    validate_source_manifest,
-)
-
+from analytics.loader.aep_loader import (APPROVED_SOURCES, IEC_STANDARDS,
+                                         compute_checksum_sha256,
+                                         create_aep_summary_template,
+                                         export_provenance_report,
+                                         load_aep_from_summary,
+                                         validate_source_manifest)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # FIXTURES
@@ -353,6 +347,76 @@ def test_export_provenance_report_markdown(mock_aep_summary_json, tmp_path):
     assert "Net AEP" in content
     assert "Capacity Factor" in content
     assert "Checksum (SHA-256)" in content
+
+
+# ── Config-driven approved-source extension (global reuse) ──────────────────────
+
+
+@pytest.fixture
+def restore_approved_sources():
+    """Snapshot + restore APPROVED_SOURCES so registration tests don't pollute others."""
+    import copy
+
+    from analytics.loader import aep_loader
+
+    snapshot = copy.deepcopy(aep_loader.APPROVED_SOURCES)
+    yield
+    aep_loader.APPROVED_SOURCES.clear()
+    aep_loader.APPROVED_SOURCES.update(snapshot)
+
+
+def test_register_approved_source_extends_manifest(restore_approved_sources):
+    from analytics.loader.aep_loader import (register_approved_source,
+                                             validate_source_manifest)
+
+    register_approved_source(
+        "OEM_VESTAS_V172_72_PC",
+        {
+            "type": "OEM",
+            "description": "Vestas V172-7.2 MW (a different project's turbine)",
+            "iec_standard": "61400-12-1:2022",
+            "curve_key": "vestas_v172_7p2",
+        },
+    )
+    assert validate_source_manifest("OEM_VESTAS_V172_72_PC") is True
+
+
+def test_register_rejects_missing_and_unknown_iec(restore_approved_sources):
+    from analytics.loader.aep_loader import register_approved_source
+
+    with pytest.raises(ValueError, match="missing required"):
+        register_approved_source("X", {"type": "OEM", "description": "no iec"})
+    with pytest.raises(ValueError, match="unknown IEC standard"):
+        register_approved_source(
+            "Y", {"type": "OEM", "description": "bad iec", "iec_standard": "made-up"}
+        )
+
+
+def test_register_rejects_duplicate_without_overwrite(restore_approved_sources):
+    from analytics.loader.aep_loader import register_approved_source
+
+    with pytest.raises(ValueError, match="already registered"):
+        register_approved_source(
+            "IEA_REFERENCE_10MW_198_PC",
+            {"type": "REFERENCE", "description": "dup", "iec_standard": "61400-12-1:2022"},
+        )
+
+
+def test_load_approved_sources_from_yaml(restore_approved_sources, tmp_path):
+    from analytics.loader.aep_loader import (load_approved_sources_from_yaml,
+                                             validate_source_manifest)
+
+    yml = tmp_path / "approved_sources.yaml"
+    yml.write_text(
+        "OEM_SIEMENS_SG145_PC:\n"
+        "  type: OEM\n"
+        "  description: Siemens Gamesa SG 14-236\n"
+        "  iec_standard: '61400-12-1:2022'\n"
+        "  curve_key: siemens_sg14\n"
+    )
+    ids = load_approved_sources_from_yaml(str(yml))
+    assert ids == ["OEM_SIEMENS_SG145_PC"]
+    assert validate_source_manifest("OEM_SIEMENS_SG145_PC") is True
 
 
 if __name__ == "__main__":

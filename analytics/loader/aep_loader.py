@@ -22,7 +22,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, cast
 
 import pandas as pd
 
@@ -96,6 +96,63 @@ def validate_source_manifest(
     if manifest is None:
         manifest = APPROVED_SOURCES
     return source_id in manifest
+
+
+def register_approved_source(
+    source_id: str, meta: Mapping[str, Any], *, overwrite: bool = False
+) -> None:
+    """Register an additional approved AEP/curve source at runtime (global reuse).
+
+    This makes the approved-source manifest EXTENSIBLE without editing the code registry:
+    a project with its own (vetted) turbine/source supplies it from config rather than
+    hardcoding it here. The SAME provenance structure is enforced as the built-in entries
+    — ``type``, ``description`` and a known ``iec_standard`` are required — so config-driven
+    extension cannot weaken the provenance guarantee.
+
+    Raises:
+        ValueError: if ``meta`` is missing a required field, names an unknown IEC standard,
+            or ``source_id`` already exists and ``overwrite`` is False.
+    """
+    required = ("type", "description", "iec_standard")
+    missing = [k for k in required if k not in meta]
+    if missing:
+        raise ValueError(
+            f"Approved source {source_id!r} is missing required field(s): {missing}"
+        )
+    if meta["iec_standard"] not in IEC_STANDARDS:
+        raise ValueError(
+            f"Approved source {source_id!r} names unknown IEC standard "
+            f"{meta['iec_standard']!r}; valid: {sorted(IEC_STANDARDS)}"
+        )
+    if source_id in APPROVED_SOURCES and not overwrite:
+        raise ValueError(
+            f"Approved source {source_id!r} already registered "
+            "(pass overwrite=True to replace)."
+        )
+    APPROVED_SOURCES[source_id] = dict(meta)
+
+
+def load_approved_sources_from_yaml(path: str, *, overwrite: bool = False) -> List[str]:
+    """Register every source from a project approved-sources YAML; return their ids.
+
+    The YAML is a mapping ``{source_id: {type, description, iec_standard, [curve_key], ...}}``.
+    Lets a global project vet + register its own turbine/source provenance from config
+    instead of editing this module (each entry is validated by
+    :func:`register_approved_source`).
+    """
+    import yaml
+
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Approved-sources YAML {path} must be a mapping of source_id -> metadata."
+        )
+    registered: List[str] = []
+    for source_id, meta in data.items():
+        register_approved_source(str(source_id), meta, overwrite=overwrite)
+        registered.append(str(source_id))
+    return registered
 
 
 def compute_checksum_sha256(data: Dict[str, Any]) -> str:
