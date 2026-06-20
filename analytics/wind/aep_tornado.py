@@ -5,9 +5,11 @@ assumptions, ranked by impact, for lender tornado charts. Gross AEP is computed
 by an analytic Weibull integral with **linear** power-curve interpolation
 (matching :class:`wind_resource.EnergyCalculator`, which integrates a wind
 timeseries with a linear curve); losses are applied via the #23 losses model.
-With the canonical declared Weibull (A=8.32, k=2.1) and the Envision EN-171/6.5
-curve this reproduces the canonical base (~402.6 GWh net) — so the swings are
-method-consistent with the headline AEP.
+The selected curve carries the IEC 61400-12-1 velocity-cube air-density
+correction (``density_factor``), so with the declared Weibull (A=8.32, k=2.1)
+and the 15 x IEA-10MW lender curve this reproduces the canonical base
+(~483.6 GWh net) — method-consistent with the headline AEP. (The legacy
+23 x EN-171/6.5 base, ~402.6 GWh, regenerates from its own config.)
 
 Drivers:
     - ``wind_speed_bias``   ± on mean wind speed (scales Weibull A)
@@ -21,7 +23,7 @@ Context:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Tuple
 
@@ -29,8 +31,10 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from analytics.power_curves.oem_parser import CANONICAL_CURVE_KEY, POWER_CURVE_STORE
+from analytics.power_curves.oem_parser import (CANONICAL_CURVE_KEY,
+                                               POWER_CURVE_STORE)
 from analytics.wind.losses_model import apply_losses
+from wind_resource.bankable_aep import density_velocity_factor
 
 HOURS_PER_YEAR = 8760.0
 # Fine wind-speed grid (m/s) for the analytic Weibull integral.
@@ -126,6 +130,7 @@ def run_aep_tornado(
     losses: Mapping[str, Any],
     n_turbines: int,
     curve_key: str = CANONICAL_CURVE_KEY,
+    density_factor: float = 1.0,
     cfg: AEPTornadoConfig = AEPTornadoConfig(),
 ) -> pd.DataFrame:
     """Run the AEP tornado and return a DataFrame ranked by absolute swing.
@@ -133,8 +138,16 @@ def run_aep_tornado(
     Columns: ``driver``, ``minus_label``, ``plus_label``, ``aep_minus_gwh``,
     ``aep_plus_gwh``, ``base_aep_gwh``, ``swing_gwh`` (signed plus−minus),
     ``abs_swing_gwh``, ``swing_pct`` (of base).
+
+    ``density_factor`` is the IEC 61400-12-1 velocity-cube ratio
+    ``(rho_site / rho_ref) ** (1/3)`` (1.0 = no correction). Applying it is
+    equivalent to shifting the curve's wind-speed axis by ``1 / density_factor``,
+    so a sub-unity factor (thinner air) raises the speed needed for each power
+    level and yields the canonical density-corrected AEP — matching the bankable
+    engine, without disturbing the shared :func:`gross_aep_farm_gwh`.
     """
     base_ws, base_power = _load_curve(curve_key)
+    base_ws = base_ws / density_factor
     base = _net_aep_gwh(weibull_a, weibull_k, base_ws, base_power, n_turbines, losses)
 
     rows: List[Dict[str, Any]] = []
@@ -182,6 +195,7 @@ def run_aep_tornado(
 
     # 4. Power curve: certified OEM vs an alternative store curve.
     alt_ws, alt_power = _load_curve(cfg.alt_curve_key)
+    alt_ws = alt_ws / density_factor  # same density basis as the base curve
     alt_aep = _net_aep_gwh(weibull_a, weibull_k, alt_ws, alt_power, n_turbines, losses)
     _row("power_curve", f"alt:{cfg.alt_curve_key}", f"oem:{curve_key}", alt_aep, base)
 
@@ -198,14 +212,37 @@ def tornado_from_config(
     config: Mapping[str, Any],
     cfg: AEPTornadoConfig = AEPTornadoConfig(),
 ) -> pd.DataFrame:
-    """Build and run the AEP tornado from a parsed v14 scenario config."""
+    """Build and run the AEP tornado from a parsed v14 scenario config.
+
+    Reads the selected power curve and the IEC air-density basis from
+    ``resource.power_curve`` (``curve_key`` + ``air_density_{site,ref}_kgm3``),
+    falling back to the canonical curve / no density correction when those
+    fields are absent — so pre-10MW scenarios keep their prior behaviour.
+    """
     wr = config.get("wind_resource", {}) or {}
     resource = config.get("resource", {}) or {}
+    power_curve = resource.get("power_curve", {}) or {}
+    curve_key = power_curve.get("curve_key", CANONICAL_CURVE_KEY)
+    rho_site = power_curve.get("air_density_site_kgm3", wr.get("air_density_kgm3"))
+    rho_ref = power_curve.get("air_density_ref_kgm3", wr.get("air_density_ref_kgm3"))
+    density_factor = (
+        density_velocity_factor(float(rho_site), float(rho_ref))
+        if rho_site is not None and rho_ref is not None
+        else 1.0
+    )
+    # Use a comparable alternative machine for the power-curve sensitivity driver
+    # when the scenario names one (e.g. the other 10 MW reference), so the driver
+    # measures curve choice rather than a turbine-class mismatch.
+    alt_curve_key = power_curve.get("alt_curve_key")
+    if alt_curve_key:
+        cfg = replace(cfg, alt_curve_key=alt_curve_key)
     return run_aep_tornado(
         weibull_a=float(wr["weibull_a"]),
         weibull_k=float(wr["weibull_k"]),
         losses=resource["losses"],
         n_turbines=int(resource["turbines"]["count"]),
+        curve_key=curve_key,
+        density_factor=density_factor,
         cfg=cfg,
     )
 

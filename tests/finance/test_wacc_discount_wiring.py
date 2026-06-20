@@ -54,8 +54,8 @@ def test_wacc_drives_project_discount_rate() -> None:
     kpis = _kpis({})
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
-    assert used == pytest.approx(0.0819, abs=0.002)  # ke=12%, gearing 62.5%, fee-inclusive
-    # At ke=12% the WACC (~8.2%) is just below project IRR 8.35% → project NPV positive.
+    assert used == pytest.approx(0.0774, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive
+    # At ke=12% the WACC (~7.74%) is well below project IRR 11.12% → project NPV +$27.4M.
     assert kpis["project_npv"] > 0
 
 
@@ -63,7 +63,8 @@ def test_drives_discount_rate_flag_is_opt_in() -> None:
     """With the flag off, the project discount falls back to the legacy default (0.10)."""
     kpis = _kpis({"wacc.drives_discount_rate": False})
     assert kpis["discount_rate_used"] == pytest.approx(0.10)
-    assert kpis["project_npv"] < 0  # the old hardcoded-10% result
+    # The 10MW re-model clears even a flat 10% hurdle (project NPV ~+$8M at 0.10).
+    assert kpis["project_npv"] > 0
 
 
 def test_higher_ke_raises_wacc_and_lowers_project_npv() -> None:
@@ -73,9 +74,11 @@ def test_higher_ke_raises_wacc_and_lowers_project_npv() -> None:
     npvs = [r["project_npv"] for r in rows]
     assert waccs[0] < waccs[1] < waccs[2]
     assert npvs[0] > npvs[1] > npvs[2]
-    # Project clears its WACC only at the low end of the band.
+    # The 10MW re-model clears its WACC across the whole ke band (NPV stays > 0
+    # even at ke=0.20, WACC ~10.1%), so the sign no longer flips — only the
+    # monotonic ordering above pins the wiring.
     assert rows[0]["project_npv"] > 0
-    assert rows[-1]["project_npv"] < 0
+    assert rows[-1]["project_npv"] > 0
 
 
 def test_equity_npv_discounts_at_cost_of_equity() -> None:

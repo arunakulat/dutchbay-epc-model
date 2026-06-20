@@ -39,9 +39,9 @@ def cfg() -> dict:
 def test_lender_curve_selection_valid(cfg: dict) -> None:
     sel = validate_curve_selection(cfg)
     assert sel == {
-        "source_id": "OEM_ENVISION_EN171_65_PC",
-        "curve_key": "envision_en171_6p5",
-        "source_type": "OEM",
+        "source_id": "IEA_REFERENCE_10MW_198_PC",
+        "curve_key": "iea_reference_10mw",
+        "source_type": "REFERENCE",
     }
 
 
@@ -71,11 +71,11 @@ def test_unknown_source_raises(cfg: dict) -> None:
 
 def test_regen_reproduces_canonical(cfg: dict) -> None:
     summary = build_aep_summary_from_config(cfg)
-    assert summary["net_site_aep_gwh"] == pytest.approx(402.6, abs=0.5)
-    assert summary["gross_aep_gwh"] == pytest.approx(459.5, abs=1.0)
-    assert summary["capacity_factor"] == pytest.approx(0.307, abs=0.002)
-    assert summary["power_curve_key"] == "envision_en171_6p5"
-    assert summary["source_id"] == "OEM_ENVISION_EN171_65_PC"
+    assert summary["net_site_aep_gwh"] == pytest.approx(483.6, abs=0.5)
+    assert summary["gross_aep_gwh"] == pytest.approx(565.5, abs=1.0)
+    assert summary["capacity_factor"] == pytest.approx(0.346, abs=0.002)
+    assert summary["power_curve_key"] == "iea_reference_10mw"
+    assert summary["source_id"] == "IEA_REFERENCE_10MW_198_PC"
     assert summary["provenance"]["aep"]["is_placeholder"] is False
 
 
@@ -84,6 +84,6 @@ def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
     out = write_aep_summary(cfg, str(tmp_path / "regen_summary.json"))
     assert out.exists()
     loaded = load_aep_from_summary(str(out), validate_manifest=True)
-    assert loaded["net_site_aep_gwh"] == pytest.approx(402.6, abs=0.5)
-    assert loaded["power_curve_key"] == "envision_en171_6p5"
+    assert loaded["net_site_aep_gwh"] == pytest.approx(483.6, abs=0.5)
+    assert loaded["power_curve_key"] == "iea_reference_10mw"
     assert "aep" in loaded["provenance"]

@@ -89,22 +89,23 @@ def test_lendercase_idc_totals_pinned() -> None:
     Pins reflect ACTUAL v14 engine output for dutchbay_lendercase_2025Q4.yaml
     (including capitalised IDC).
 
-    As of the current v14 snapshot (Financing_Terms.debt_sizing = dual_dscr, #180):
-      - LKR principal_m ≈  47,385,000.00
-      - USD principal_m ≈  47,052,246.09
-      - DFI principal_m ≈  10,308,867.19
-        => total principal_m ≈ 104,746,113.28
+    As of the current v14 snapshot (Financing_Terms.debt_sizing = dual_dscr, #180),
+    re-baselined for the 15 x IEA-10MW adoption (capex $159.6M, net AEP 483.6 GWh):
+      - LKR principal_m ≈  56,467,756.80
+      - USD principal_m ≈  56,071,220.62
+      - DFI principal_m ≈  12,284,870.85
+        => total principal_m ≈ 124,823,848.27  (base debt $111.72M + capitalised IDC)
 
-      - LKR idc_m       ≈   5,197,500.00
-      - USD idc_m       ≈   4,864,746.09
-      - DFI idc_m       ≈     933,867.19
-        => total_idc     ≈  10,996,113.28
+      - LKR idc_m       ≈   6,193,756.80
+      - USD idc_m       ≈   5,797,220.62
+      - DFI idc_m       ≈   1,112,870.85
+        => total_idc     ≈  13,103,848.28
 
-      - min_dscr        ≈   1.30  (DSCR auto-sizer: debt sized on the REAL schedule to the
-                                    1.30 target, capped at the 70% gearing -> solved gearing
-                                    ~0.625 ($93.75M base vs $105M before). Clears the 1.20
-                                    covenant with margin; resolves the #176 sub-covenant 1.16.)
-      - audit_status    ==  "REVIEW"  (sized exactly to the 1.30 target -> no headroom above it)
+      - min_dscr        ≈   1.30  (the higher 10MW AEP lifts DSCR capacity above the
+                                    70% gearing ceiling, so the auto-sizer is now
+                                    gearing-bound -> base debt $111.72M = 0.70 x $159.6M,
+                                    binding_constraint RATIO_CAP. Still clears 1.20 with margin.)
+      - audit_status    ==  "REVIEW"  (sculpt floors min DSCR at the 1.30 target)
 
     Principals + IDC now CHANGE with AEP (debt auto-solves to hold DSCR >= target).
     """
@@ -115,24 +116,24 @@ def test_lendercase_idc_totals_pinned() -> None:
     tol = 0.002  # 0.2% relative tolerance
 
     # Principals by tranche (absolute USD amounts, not "millions")
-    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(47_385_000.00, rel=tol)
-    assert float(usd.get("principal_m", 0.0)) == pytest.approx(47_052_246.09, rel=tol)
-    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(10_308_867.19, rel=tol)
+    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(56_467_756.80, rel=tol)
+    assert float(usd.get("principal_m", 0.0)) == pytest.approx(56_071_220.62, rel=tol)
+    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(12_284_870.85, rel=tol)
 
     total_principal = (
         float(lkr.get("principal_m", 0.0))
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(104_746_113.28, rel=tol)
+    assert total_principal == pytest.approx(124_823_848.27, rel=tol)
 
     # IDC by tranche
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_197_500.00, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(4_864_746.09, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(933_867.19, rel=tol)
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(6_193_756.80, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(5_797_220.62, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(1_112_870.85, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(10_996_113.28, rel=tol)
+    assert total_idc == pytest.approx(13_103_848.28, rel=tol)
 
     # Min DSCR and audit status
     min_dscr = float(result.get("min_dscr"))

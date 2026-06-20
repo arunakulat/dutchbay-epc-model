@@ -14,9 +14,12 @@ This module:
   a consistent AEP summary from the config in one call, so switching curves is
   one config edit + one run.
 
-AEP basis: analytic Weibull integral on the selected OEM curve at the IEC
-reference density (matching the canonical v14 chain) + the #23 multiplicative
-loss stack. For the canonical config this reproduces net 402.6 GWh / CF 0.307.
+AEP basis: analytic Weibull integral on the selected curve with the IEC
+61400-12-1 velocity-cube air-density correction (config ``air_density_site/ref``,
+falling back to no correction) + the #23 multiplicative loss stack. For the
+15 x IEA-10MW lender case this reproduces net 483.6 GWh / CF 0.346, matching the
+bankable engine; the legacy 23 x EN-171/6.5 base (402.6 / 0.307) still regenerates
+from its own config.
 
 Context:
     Sprint 11 follow-up — power-curve sourcing wiring (#181 thread).
@@ -28,17 +31,14 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from analytics.loader.aep_loader import (
-    APPROVED_SOURCES,
-    assert_source_in_manifest,
-    build_provenance_aep_block,
-)
-from analytics.power_curves.oem_parser import (
-    IEC_REFERENCE_AIR_DENSITY_KGM3,
-    parse_power_curve,
-)
+from analytics.loader.aep_loader import (APPROVED_SOURCES,
+                                         assert_source_in_manifest,
+                                         build_provenance_aep_block)
+from analytics.power_curves.oem_parser import (IEC_REFERENCE_AIR_DENSITY_KGM3,
+                                               parse_power_curve)
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses, net_capacity_factor
+from wind_resource.bankable_aep import density_velocity_factor
 
 
 def validate_curve_selection(
@@ -118,14 +118,26 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     capacity_mw = rated_power_kw / 1000.0
     hub_height_m = float(turbines.get("hub_height_m", 150.0))
 
-    # Reference-density curve to match the canonical AEP basis.
+    # Parse the reference (uncorrected) curve, then apply the IEC 61400-12-1
+    # velocity-cube air-density correction so the regen reproduces the canonical
+    # bankable basis. Dividing the curve's wind-speed axis by the velocity factor
+    # is equivalent to the bankable engine's density shift (thinner air -> higher
+    # speed needed per power level). Falls back to no correction when the density
+    # fields are absent, preserving pre-10MW scenarios.
     curve = parse_power_curve(
         selection["curve_key"], air_density_kgm3=IEC_REFERENCE_AIR_DENSITY_KGM3
+    )
+    rho_site = power_curve_cfg.get("air_density_site_kgm3", wind.get("air_density_kgm3"))
+    rho_ref = power_curve_cfg.get("air_density_ref_kgm3", wind.get("air_density_ref_kgm3"))
+    density_factor = (
+        density_velocity_factor(float(rho_site), float(rho_ref))
+        if rho_site is not None and rho_ref is not None
+        else 1.0
     )
     gross_gwh = gross_aep_farm_gwh(
         weibull_a,
         weibull_k,
-        curve["wind_speed_ms"].to_numpy(),
+        curve["wind_speed_ms"].to_numpy() / density_factor,
         curve["power_kw"].to_numpy(),
         n_turbines,
     )

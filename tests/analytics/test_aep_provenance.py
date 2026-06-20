@@ -35,6 +35,8 @@ MOCK_SUMMARY = REPO_ROOT / "tests" / "mocks" / "aep_summary_dutchbay.json"
 
 CANONICAL_OEM = "OEM_ENVISION_EN171_65_PC"
 PLACEHOLDER_OEM = "OEM_ENVISION_EN171_10_PC"
+# The lender case now references the IEA Reference 10 MW (15 x 10 MW re-model).
+CANONICAL_LENDER_SOURCE = "IEA_REFERENCE_10MW_198_PC"
 
 
 @pytest.fixture
@@ -95,7 +97,7 @@ def test_lender_config_source_is_approved(lender_config: dict) -> None:
 
 def test_validate_config_provenance_passes_for_lender(lender_config: dict) -> None:
     block = validate_config_aep_provenance(lender_config)
-    assert block["aep_source_id"] == CANONICAL_OEM
+    assert block["aep_source_id"] == CANONICAL_LENDER_SOURCE
     assert block["is_placeholder"] is False
 
 
