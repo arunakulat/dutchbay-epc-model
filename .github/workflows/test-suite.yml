@@ -60,7 +60,7 @@ jobs:
 
     - name: Run test suite
       run: |
-        # Run the FULL tests/ tree (pytest.ini norecursedirs excludes tests/_quarantine).
+        # Run the FULL tests/ tree (no test paths are excluded; the _quarantine dir is gone).
         # Previously this listed explicit sub-paths, which silently hid failures in any
         # UNLISTED file (e.g. tests/analytics/test_oem_parser / test_tax_sensitivity /
         # test_casper_payload_equity_contract / test_aep_loader). Those are now triaged
