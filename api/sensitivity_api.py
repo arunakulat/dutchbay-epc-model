@@ -17,11 +17,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from analytics.contracts_v14 import ParameterRangeConfig
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
+from api.path_safety import UnsafePathError, confined_path
 from api.pipeline_api import router as pipeline_router
 
 app = FastAPI(title="DutchBay v14 API", version="1.1.0")
@@ -53,6 +54,13 @@ def run_tornado(payload: SensitivityInput) -> List[Dict[str, Any]]:
         One tornado row per parameter: ``parameter``, ``metric``,
         ``base_metric``, ``low_case``, ``high_case``, ``impact_abs``.
     """
+    # Confine the caller-supplied scenario path to the allowed roots before the
+    # engine opens it (path-traversal guard); reject out-of-bounds paths loudly.
+    try:
+        safe_path = confined_path(payload.config_path, must_exist=True)
+    except UnsafePathError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid config_path: {exc}")
+
     # Normalise raw dicts into strongly-typed ParameterRangeConfig objects.
     params: List[ParameterRangeConfig] = [
         ParameterRangeConfig(**p) for p in payload.parameters
@@ -61,7 +69,7 @@ def run_tornado(payload: SensitivityInput) -> List[Dict[str, Any]]:
     # Canonical engine: takes the config path, target metric, and explicit
     # parameter ranges, and returns a SensitivitySuite with tornado_results.
     suite = run_sensitivity_analysis(
-        payload.config_path,
+        str(safe_path),
         metric=payload.metric,
         parameters=params,
     )
