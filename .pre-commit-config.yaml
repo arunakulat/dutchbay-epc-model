@@ -38,6 +38,11 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
         exclude: ^legacy/
+      # GWTF GOV-02: never commit directly to a protected branch. Blocks the commit
+      # LOCALLY (before the confusing push-time ruleset rejection). Branch -> PR ->
+      # merge; releases tag the merged commit (see RELEASING.md), never commit on main.
+      - id: no-commit-to-branch
+        args: ["--branch", "main", "--branch", "master"]
 
   # Mypy disabled for Sprint Day N – runs in CI instead.
   # Re-enable when you want mypy on every commit:
