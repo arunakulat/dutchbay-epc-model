@@ -106,6 +106,7 @@ class DebtBlock(BaseModel):
     total_idc_usd: Optional[float] = None
     gearing: Optional[float] = None
     binding_constraint: Optional[str] = None
+    binding_production_case: Optional[str] = None  # "P50" | "P90" (downside-binding sizing)
     sizing_mode: Optional[str] = None
     tenor_years: Optional[int] = None
     construction_years: Optional[int] = None
@@ -241,6 +242,7 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         total_idc_usd=_f(debt.get("total_idc")),
         gearing=_f(dual.get("solved_gearing")),
         binding_constraint=dual.get("binding_constraint"),
+        binding_production_case=dual.get("binding_production_case"),
         sizing_mode=dual.get("sizing_mode"),
         tenor_years=int(debt["tenor_years"]) if debt.get("tenor_years") is not None else None,
         construction_years=(

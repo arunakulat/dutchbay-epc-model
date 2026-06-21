@@ -675,6 +675,29 @@ def _solve_gearing_for_dscr(
     return round(max(step, max_ratio - step), 6)
 
 
+def _resolve_downside_ratio(
+    config: Dict[str, Any], fin: Mapping[str, Any]
+) -> Tuple[float, str]:
+    """Per-period CFADS downside scale for the P90 (bankable downside) sizing case.
+
+    Config-first: an explicit ``Financing_Terms.downside_cfads_factor`` override, else the
+    REAL bankable P90/P50 AEP ratio from ``expected_results`` (when
+    ``downside_aep_source: p90``), else the legacy flat ``dscr_p99_downside_factor`` (0.80
+    proxy). Returns ``(ratio, source)``.
+    """
+    override = fin.get("downside_cfads_factor")
+    if override is not None:
+        return _as_float(override, 0.80), "explicit_factor"
+    source = str(fin.get("downside_aep_source", "p90")).lower()
+    if source == "p90":
+        er = _section_case_insensitive(config, "expected_results") or {}
+        p50 = _as_float(er.get("net_aep_p50_gwh"), 0.0)
+        p90 = _as_float(er.get("net_aep_p90_gwh"), 0.0)
+        if p50 > 0.0 and p90 > 0.0:
+            return p90 / p50, "p90_aep"
+    return _as_float(fin.get("dscr_p99_downside_factor"), 0.80), "flat_factor"
+
+
 def _maybe_autosolve_dscr(
     config: Dict[str, Any], annual_rows: List[Dict[str, Any]]
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
@@ -684,6 +707,13 @@ def _maybe_autosolve_dscr(
     ``debt_ratio``), and computes the dual-DSCR (P50 / P99) debt-capacity detail for the
     lender pack. Returns ``(config, dual_dscr_detail)`` -- ``config`` is resized only when
     the mode is active; ``dual_dscr_detail`` is ``None`` otherwise.
+
+    When ``Financing_Terms.bind_downside`` is true, the bankable P90 (downside) production
+    case ALSO binds the gearing: the engine solves a second gearing against a P90 schedule
+    (annual CFADS rescaled by the real P90/P50 AEP ratio) at ``target_dscr_p90``, and the
+    resized gearing is ``min(P50, P90)`` -- so the structure clears both the base DSCR and a
+    downside DSCR floor. Default-off leaves the P50 solve as the sole driver (canonical
+    gearing unchanged).
     """
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     mode = str(fin.get("debt_sizing", "")).lower()
@@ -694,15 +724,35 @@ def _maybe_autosolve_dscr(
     max_ratio = _as_float(fin.get("debt_ratio"), 0.70)
     solved = _solve_gearing_for_dscr(config, annual_rows, target, max_ratio)
 
+    # Optionally let the bankable P90 (downside) case BIND the gearing: size to
+    # min(P50 gearing, P90 gearing). Default-off keeps the P50 solve as sole driver.
+    bind_downside = _truthy_flag(fin.get("bind_downside"))
+    binding_case = "P50"
+    binding_gearing = solved
+    solved_p90: Optional[float] = None
+    if bind_downside:
+        downside_ratio, downside_source = _resolve_downside_ratio(config, fin)
+        target_p90 = _as_float(fin.get("target_dscr_p90"), target)
+        p90_rows = [
+            {**r, "cfads_usd": _as_float(r.get("cfads_usd"), 0.0) * downside_ratio}
+            for r in annual_rows
+        ]
+        solved_p90 = _solve_gearing_for_dscr(config, p90_rows, target_p90, max_ratio)
+        if solved_p90 < binding_gearing:
+            binding_gearing, binding_case = solved_p90, "P90"
+        downside = downside_ratio
+    else:
+        downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
+        downside_source = "flat_factor"
+
     resized = copy.deepcopy(config)
     fin_resized = _section_case_insensitive(resized, "Financing_Terms")
     if isinstance(fin_resized, dict):
-        fin_resized["debt_ratio"] = solved
+        fin_resized["debt_ratio"] = binding_gearing
 
     cfads = [_as_float(r.get("cfads_usd"), 0.0) for r in annual_rows]
     tenor = max(1, int(_as_float(fin.get("tenor_years"), 15)))
     capex = _extract_capex_usd(config)
-    downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
     # NOTE: interest_rate_nominal here only discounts the dual-DSCR *capacity*
     # detail (lender-pack metadata). The real amortization uses the per-tranche
     # rates, so overriding Financing_Terms.interest_rate_nominal does NOT change
@@ -720,13 +770,23 @@ def _maybe_autosolve_dscr(
                 debt_ratio_max=max_ratio,
                 debt_rate=rate,
             )
-            detail["solved_gearing"] = solved
+            detail["solved_gearing"] = binding_gearing
             detail["sizing_mode"] = mode
+            detail["binding_production_case"] = binding_case
+            detail["solved_gearing_p50"] = solved
+            if solved_p90 is not None:
+                detail["solved_gearing_p90"] = solved_p90
+            detail["downside_ratio"] = round(downside, 6)
+            detail["downside_source"] = downside_source
         except ValueError:
             detail = None
     logger.info(
-        "DSCR debt sizing (%s): solved gearing %.3f for target DSCR %.2f",
-        mode, solved, target,
+        "DSCR debt sizing (%s): gearing %.3f (P50 %.3f%s) for target DSCR %.2f",
+        mode,
+        binding_gearing,
+        solved,
+        f"; P90 {solved_p90:.3f} -> binds {binding_case}" if solved_p90 is not None else "",
+        target,
     )
     return resized, detail
 
