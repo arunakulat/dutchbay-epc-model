@@ -145,6 +145,21 @@ class ManifestBlock(BaseModel):
     manifest_schema_version: str
 
 
+class FundingBlock(BaseModel):
+    """Sources-and-Uses at financial close (+ a DSRA funded at close when opted in)."""
+
+    fund_at_close: Optional[bool] = None
+    dsra_target_months: Optional[float] = None
+    initial_dsra_usd: Optional[float] = None
+    capex_usd: Optional[float] = None
+    idc_usd: Optional[float] = None
+    senior_debt_usd: Optional[float] = None
+    equity_usd: Optional[float] = None
+    uses_total_usd: Optional[float] = None
+    sources_total_usd: Optional[float] = None
+    balanced: Optional[bool] = None
+
+
 class RunPipelineResponse(BaseModel):
     scenario_name: str
     config_path: Optional[str] = None
@@ -154,6 +169,7 @@ class RunPipelineResponse(BaseModel):
     aep: AepBlock
     debt: DebtBlock
     cost: CostBlock
+    funding: FundingBlock  # sources-and-uses + DSRA-at-close
     manifest: ManifestBlock  # reproducibility stamp over the RESOLVED config
 
 
@@ -267,6 +283,26 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
     )
 
 
+def _extract_funding(debt: Mapping[str, Any]) -> FundingBlock:
+    """Sources-and-Uses + DSRA-at-close from the debt result (pure serialisation)."""
+    f = _as_map(debt.get("funding"))
+    su = _as_map(f.get("sources_and_uses"))
+    uses = _as_map(su.get("uses"))
+    sources = _as_map(su.get("sources"))
+    return FundingBlock(
+        fund_at_close=bool(f.get("fund_at_close")) if f else None,
+        dsra_target_months=_f(f.get("dsra_target_months")),
+        initial_dsra_usd=_f(f.get("initial_dsra_usd")),
+        capex_usd=_f(uses.get("capex_usd")),
+        idc_usd=_f(uses.get("idc_usd")),
+        senior_debt_usd=_f(sources.get("senior_debt_usd")),
+        equity_usd=_f(sources.get("equity_usd")),
+        uses_total_usd=_f(su.get("uses_total_usd")),
+        sources_total_usd=_f(su.get("sources_total_usd")),
+        balanced=bool(su.get("balanced")) if su else None,
+    )
+
+
 def _capacity_mw(cfg: Mapping[str, Any]) -> float:
     project = _as_map(cfg.get("project"))
     if isinstance(project.get("capacity_mw"), (int, float)):
@@ -363,5 +399,6 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
         cost=_extract_cost(cfg),
+        funding=_extract_funding(debt),
         manifest=ManifestBlock(**manifest.as_dict()),
     )
