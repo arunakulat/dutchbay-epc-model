@@ -519,11 +519,13 @@ expected_results:
   # 16.69 LKR/kWh (5.0 US cents fixed LKR) vs 20.3 (6.1c); (2) GRANULAR costs — CAPEX
   # $207.5M ($1,300/kW, bottom-up) vs flat $159.6M ($1,000/kW), and OPEX $3.51M/yr with
   # 2.5%/yr O&M escalation vs flat $3M. Realistic costs at 5c/kWh leave the deal DEEPLY
-  # UNECONOMIC: project IRR 0.23% (far below the ~9.72% WACC), equity IRR -6.33%, project
-  # NPV -$86.9M. Debt deleverages to $77.8M (DSCR-bound). (Was -$31.5M on the old flat costs.)
-  project_irr: 0.0023       # barely positive; far below WACC (~9.72%)
+  # UNECONOMIC: project IRR 0.16% (far below the ~9.72% WACC), equity IRR -6.33%, project
+  # NPV -$116.2M. Debt deleverages to $77.8M (DSCR-bound). (Deepened by the 2026-06
+  # project-discounting fix / audit finding 2.0 — construction lag + the operating-year-1
+  # off-by-one; was 0.23% / -$86.9M before the timing correction.)
+  project_irr: 0.0016       # barely positive; far below WACC (~9.72%)
   equity_irr: -0.0633       # deeply NEGATIVE
-  project_npv_m_usd: -86.89 # deeply underwater
+  project_npv_m_usd: -116.18 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.388
   llcr: 1.190

@@ -73,8 +73,10 @@ def test_default_curtailment_is_byte_identical() -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     k = run_v14_pipeline(config=LENDER)["kpis"]
-    assert k["project_irr"] == pytest.approx(0.084367, abs=1e-5)
-    assert k["project_npv"] == pytest.approx(2033661.29, abs=1.0)
+    # Construction-lag-correct project economics (audit finding 2.0): operating year 1
+    # is discounted after the 2-yr build, not at t=0. projIRR 5.43% (< ~8.18% WACC), NPV -$31.9M.
+    assert k["project_irr"] == pytest.approx(0.054338, abs=1e-5)
+    assert k["project_npv"] == pytest.approx(-31926643.35, abs=1.0)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
 
 

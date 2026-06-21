@@ -55,9 +55,10 @@ def test_wacc_drives_project_discount_rate() -> None:
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
     assert used == pytest.approx(0.0810, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive
-    # At ke=12% the WACC (~8.10%) is just below project IRR 8.85% → project NPV +$5.9M.
-    # (Marginal at the corrected FX 333.79; the stale 300 flattered IRR to 11.12% / NPV +$27.4M.)
-    assert kpis["project_npv"] > 0
+    # The construction-lag-correct project IRR (5.43%, audit finding 2.0) is BELOW the WACC
+    # (~8.10%), so the project NPV is NEGATIVE (-$31.9M). The prior "+$5.9M / IRR 8.85%" was
+    # the operating-year-1 off-by-one (year 1 undiscounted + the 2-yr build lag ignored).
+    assert kpis["project_npv"] < 0
 
 
 def test_drives_discount_rate_flag_is_opt_in() -> None:
@@ -77,11 +78,11 @@ def test_higher_ke_raises_wacc_and_lowers_project_npv() -> None:
     npvs = [r["project_npv"] for r in rows]
     assert waccs[0] < waccs[1] < waccs[2]
     assert npvs[0] > npvs[1] > npvs[2]
-    # At the corrected FX (333.79) the project IRR is 8.85%, so the NPV sign flips
-    # across the ke band: positive at ke=0.12 (WACC ~8.10% < IRR, NPV +$5.9M) but
-    # NEGATIVE by ke=0.20 (WACC ~10.98% > IRR, NPV -$14.7M). The crossover (~ke 0.13)
-    # is exactly project IRR — the honest marginality the stale 300 FX had hidden.
-    assert rows[0]["project_npv"] > 0
+    # The construction-lag-correct project IRR (5.43%, audit finding 2.0) is below the WACC
+    # at EVERY ke in the band, so project NPV is negative throughout (no sign flip) — it just
+    # gets more negative as ke rises. (Pre-fix the off-by-one showed IRR 8.85% with a knife-
+    # edge crossover near ke 0.13.) The monotonic ordering is the invariant under test.
+    assert rows[0]["project_npv"] < 0
     assert rows[-1]["project_npv"] < 0
 
 

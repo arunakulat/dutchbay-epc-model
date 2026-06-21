@@ -48,8 +48,9 @@ def test_capex_mc_distribution_is_monotonic_and_sound() -> None:
     for kpi in (res.project_irr, res.equity_irr, res.project_npv_usd):
         assert kpi["p10"] < kpi["p50"] < kpi["p90"]
 
-    # the median is near the deterministic base-case project IRR (8.44%)
-    assert res.project_irr["p50"] == pytest.approx(0.0844, abs=0.02)
+    # the median is near the deterministic base-case project IRR (5.43% after the
+    # construction-lag/off-by-one project-discounting fix, audit finding 2.0)
+    assert res.project_irr["p50"] == pytest.approx(0.0569, abs=0.02)
 
     # debt is DSCR-sculpted, so min DSCR holds at the covenant floor across the cost range
     for level in ("p10", "p50", "p90"):

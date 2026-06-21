@@ -102,10 +102,12 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    assert kpis["project_irr"] == pytest.approx(0.0023, abs=0.005)
+    # Deepened by the 2026-06 construction-lag/off-by-one project-discounting fix
+    # (audit finding 2.0): project IRR 0.16% and NPV -$116.2M (was 0.23% / -$86.9M).
+    assert kpis["project_irr"] == pytest.approx(0.0016, abs=0.005)
     assert kpis["equity_irr"] == pytest.approx(-0.0633, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-86.89e6, rel=0.05)
+    assert kpis["project_npv"] == pytest.approx(-116.18e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(77.8e6, rel=0.02)  # deleveraged (DSCR-bound)

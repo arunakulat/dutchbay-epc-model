@@ -117,4 +117,5 @@ def test_basecase_returns_regression_pins(base_config):
     # lockup that front-loaded equity and inflated this IRR (was ~0.30). The true
     # sculpted-waterfall equity IRR is ~0.105. project_irr (unlevered) is unchanged.
     assert 0.09 < base["equity_irr"] < 0.12
-    assert 0.12 < base["project_irr"] < 0.14
+    # project_irr re-baselined by the construction-lag fix (audit finding 2.0): ~7.9%.
+    assert 0.07 < base["project_irr"] < 0.09

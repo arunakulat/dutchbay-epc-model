@@ -294,16 +294,39 @@ def calculate_scenario_kpis(
             except (TypeError, ValueError):
                 project_irr = None
 
+    # Construction lag for project NPV/IRR: operating CFADS must be discounted
+    # AFTER the build period, not from t=0 (audit 2026-06-22, finding 2.0). Use the
+    # value the debt engine actually resolved so the discount timeline matches the
+    # financing timeline; fall back to config, then 0 (off-by-one fix only).
+    construction_years = 0
+    if debt_result:
+        try:
+            construction_years = max(
+                0, int(debt_result.get("construction_years", 0) or 0)
+            )
+        except (TypeError, ValueError):
+            construction_years = 0
+    if construction_years == 0 and config is not None:
+        cfg_cy = _lookup_case_insensitive(config, "construction_years")
+        try:
+            construction_years = max(0, int(cfg_cy)) if cfg_cy is not None else 0
+        except (TypeError, ValueError):
+            construction_years = 0
+
     if project_npv is None and cfads and capex_total > 0.0:
         try:
-            project_npv = project_npv_from_cfads(drate, cfads, capex_total)
+            project_npv = project_npv_from_cfads(
+                drate, cfads, capex_total, construction_years=construction_years
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Project NPV calculation failed: %s", exc)
             project_npv = 0.0
 
     if project_irr is None and cfads and capex_total > 0.0:
         try:
-            project_irr = approx_project_irr(cfads, capex_total)
+            project_irr = approx_project_irr(
+                cfads, capex_total, construction_years=construction_years
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Project IRR calculation failed: %s", exc)
             project_irr = 0.0
