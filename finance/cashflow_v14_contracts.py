@@ -19,6 +19,11 @@ class CashflowParams:
     - opex_usd_per_year: float (USD per year, base/year-1)
     - opex_escalation_pct: float (decimal per year, e.g. 0.025 = 2.5%/yr O&M inflation
       in USD terms; the LKR cost then escalates further via the FX curve). Default 0.0.
+    - curtailment_pct: float (decimal, 0–1). An INCREMENTAL financed grid-curtailment
+      haircut on delivered energy, applied after grid_loss_pct. Default 0.0 — the
+      physical/embedded curtailment is already in the bankable net AEP / capacity_factor;
+      this lever models ADDITIONAL constrained-grid curtailment for stress/risk analysis
+      (see analytics.core.sensitivity_runner + the canonical scenario's monte_carlo block).
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - corporate_tax_rate: float (decimal, 0–1)
     - depreciation_years: int (years)
@@ -45,6 +50,7 @@ class CashflowParams:
     enhanced_capital_allowance_pct: float
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
+    curtailment_pct: float = 0.0
 
 
 __all__ = ["CashflowParams"]

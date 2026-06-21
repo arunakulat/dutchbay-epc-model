@@ -193,6 +193,7 @@ There are **two different energy-yield figures** in the repository for the same 
 | R6 | Production scenario references an AEP summary under **`tests/mocks/`** | `scenarios/...lendercase...yaml resource.aep_summary_path` | Medium — promote to production input |
 | R7 | Auxiliary Monte Carlo Weibull A can be **back-estimated by a "Heuristic"** if not supplied | `monte_carlo_aep.py:145-149` | Low — only on auxiliary path; supply A/k explicitly |
 | R8 | Legacy "6.5 MW" symbol names on the auxiliary path **alias to the 10 MW placeholder** | `oem_parser.py:301-311`, `:314-334` | Low — naming hazard; financed path unaffected |
+| R9 | Grid **curtailment is a flat 2% placeholder** (in `resource.losses`, embedded in CF), **not a physics-based interconnection study** — a constrained CEB grid (Mannar/Kalpitiya) plausibly curtails more, so 2% may understate a real bankability risk | `resource.losses.curtailment_pct`, `losses_model.py` | Medium — UNVALIDATED pending a CEB interconnection study. Now a first-class **financed** stress lever (`project.curtailment_pct`, default 0) in the tornado + Monte-Carlo, swept to 15% total; a 10% incremental curtailment turns project NPV negative (+$2.0M → −$17.1M) |
 
 ---
 

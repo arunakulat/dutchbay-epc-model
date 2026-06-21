@@ -21,6 +21,13 @@ project:
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
   capacity_factor: 0.339  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
+  # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
+  # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
+  # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
+  # ADDITIONAL constrained-CEB-grid curtailment risk and is a first-class tornado +
+  # Monte-Carlo variable (stress band 0-13% incremental = 2-15% total). The flat 2% is an
+  # UNVALIDATED placeholder pending a CEB interconnection study (see docs red-flag note).
+  curtailment_pct: 0.0
   degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
@@ -465,6 +472,10 @@ monte_carlo:
       low: 300.0
       high: 367.0
       distribution: uniform
+    - name: project.curtailment_pct   # INCREMENTAL grid curtailment over the ~2% embedded
+      low: 0.0                         # in CF; 0-13% incremental = 2-15% total grid curtailment.
+      high: 0.13                       # Deliberately downside-weighted: the flat 2% is an
+      distribution: uniform            # unvalidated optimistic placeholder for a constrained grid.
   
   # Output configuration
   var_confidence: 0.95
