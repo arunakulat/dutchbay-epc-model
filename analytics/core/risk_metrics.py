@@ -246,7 +246,11 @@ class TailRiskAnalyzer:
             Pydantic V2 contract with VaR/CVaR metrics.
         """
         sorted_returns = np.sort(returns)
-        var_index = int((1 - self.config.confidence_level) * len(returns))
+        # max(1, ...) so the CVaR tail always averages at least one point. A small sample
+        # rounds the index to 0, making sorted_returns[:0].mean() NaN (audit R1). For
+        # samples large enough that the index is already >= 1 this is a no-op, so VaR/CVaR
+        # on the canonical risk path are byte-identical.
+        var_index = max(1, int((1 - self.config.confidence_level) * len(returns)))
 
         var = float(sorted_returns[var_index])
         cvar = float(sorted_returns[:var_index].mean())

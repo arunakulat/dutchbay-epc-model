@@ -162,11 +162,17 @@ def aggregate_trials(
     # Populate the legacy flat scalar surface from the structured aggregates, so
     # consumers reading MonteCarloResult.iterations / .project_irr_p10 /
     # .success_rate() see the real run instead of the dataclass defaults (0/None).
-    # Derived from summary + percentile_lookup (no recomputation). NOTE: "failed"
-    # counts trials that produced NO canonical metric; toy-fallback trials carry
-    # metrics and are not distinguishable here, so they count as run.
+    # Derived from summary + percentile_lookup (no recomputation). A trial is failed/
+    # degraded if it produced NO canonical metric OR fell back to the toy-metric fallback
+    # (fabricated KPIs from a failed full-v14 eval, tagged _toy_fallback by the engine).
+    # Otherwise success_rate() would report fabricated trials as successful production
+    # runs (audit R1).
     n_trials = len(trial_metrics)
-    n_failed = sum(1 for tm in trial_metrics if not any(k in tm for k in metric_keys))
+    n_failed = sum(
+        1
+        for tm in trial_metrics
+        if tm.get("_toy_fallback") or not any(k in tm for k in metric_keys)
+    )
 
     def _stat(metric: str, key: str) -> Optional[float]:
         s = summary.get(metric)
