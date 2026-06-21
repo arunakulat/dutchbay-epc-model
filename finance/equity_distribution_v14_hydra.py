@@ -312,7 +312,15 @@ def _derive_equity_investment_usd(
     )
 
     if capex_usd is not None and debt_total is not None:
-        return max(0.0, float(capex_usd) - float(debt_total)), "capex_less_debt"
+        base = max(0.0, float(capex_usd) - float(debt_total))
+        # When the DSRA is funded at financial close (Financing_Terms.dsra.fund_at_close),
+        # the reserve is an additional EQUITY use at t0 (prudent-lender structure), so it
+        # raises the initial equity drawn. Default-off -> initial_dsra is 0 (unchanged).
+        funding = debt_result.get("funding") or {}
+        if bool(funding.get("fund_at_close")):
+            dsra = float(_as_float(funding.get("initial_dsra_usd"), 0.0) or 0.0)
+            return base + dsra, "capex_less_debt_plus_dsra"
+        return base, "capex_less_debt"
 
     if distribution_config.allow_default_equity_investment:
         return float(distribution_config.default_equity_investment_usd), "defaulted"
@@ -377,7 +385,15 @@ def build_equity_distribution_schedule(
     """Build annual equity distributions from debt-enriched annual rows."""
     debt_service_series = list(debt_result.get("debt_service_total") or [])
     debt_outstanding_series = list(debt_result.get("debt_outstanding") or [])
-    reserve_balance = 0.0
+    # When the DSRA is funded at close it is already full at t0, so the operating top-up
+    # only has to REBUILD it after a drawdown rather than fund it from year-1 cash.
+    # Default-off -> seed 0 (the reserve is built from operating cash, as before).
+    _funding = debt_result.get("funding") or {}
+    reserve_balance = (
+        float(_as_float(_funding.get("initial_dsra_usd"), 0.0) or 0.0)
+        if bool(_funding.get("fund_at_close"))
+        else 0.0
+    )
     schedule: List[Dict[str, Any]] = []
 
     sweep = distribution_config.distribution_sweep_pct / 100.0
