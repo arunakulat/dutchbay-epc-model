@@ -255,6 +255,19 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     grid_loss_pct = _pct_to_decimal(grid_loss_raw) or 0.0
 
+    # Incremental financed grid-curtailment haircut (default 0.0 → byte-identical; the
+    # physical/embedded curtailment is already in the bankable net AEP / capacity_factor).
+    # First-class risk lever: stressed by the tornado + Monte-Carlo (see sensitivity_runner).
+    curtailment_raw = _as_float_or_none(
+        _resolve_first(
+            raw,
+            ("project", "curtailment_pct"),
+            ("parameters", "curtailment_pct"),
+            "curtailment_pct",
+        )
+    )
+    curtailment_pct = _pct_to_decimal(curtailment_raw) or 0.0
+
     tariff_lkr_per_kwh = _resolve_tariff_lkr_per_kwh(raw)
 
     opex_usd_per_year = _as_float_or_none(
@@ -410,6 +423,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         capacity_factor=float(capacity_factor) if capacity_factor is not None else 0.0,
         degradation=float(degradation),
         grid_loss_pct=float(grid_loss_pct),
+        curtailment_pct=float(curtailment_pct),
         tariff_lkr_per_kwh=(
             float(tariff_lkr_per_kwh) if tariff_lkr_per_kwh is not None else 0.0
         ),

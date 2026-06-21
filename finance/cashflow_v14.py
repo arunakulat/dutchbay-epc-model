@@ -314,6 +314,7 @@ def calculate_single_year_cfads(
         float(params["degradation"]),
         float(params["grid_loss_pct"]),
         year_index,
+        curtailment_pct=float(params.get("curtailment_pct", 0.0)),
     )
 
     revenue_lkr = _calculate_revenue_lkr(net_kwh, float(params["tariff_lkr_per_kwh"]))

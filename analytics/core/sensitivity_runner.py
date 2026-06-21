@@ -51,6 +51,15 @@ _DEFAULT_DRIVERS: tuple[tuple[str, str, float, float], ...] = (
     ("Financing_Terms.tenor_years", "Debt Tenor", -20.0, 20.0),
 )
 
+# ABSOLUTE-band drivers (config_key, label, low_value, high_value). Used for levers whose
+# base value is 0 (a relative band on 0 is flat), e.g. the incremental financed
+# curtailment stress: base 0.0, swept 0 -> 13% (= 2-15% total grid curtailment over the
+# ~2% physical curtailment already embedded in capacity_factor). Driver is emitted only
+# when the key is present in the config (project.curtailment_pct).
+_DEFAULT_ABSOLUTE_DRIVERS: tuple[tuple[str, str, float, float], ...] = (
+    ("project.curtailment_pct", "Grid Curtailment (incremental)", 0.0, 0.13),
+)
+
 
 def _get_nested(cfg: Mapping[str, Any], dotted_key: str) -> Optional[float]:
     """Resolve a dotted config key to its numeric base value, or None if absent."""
@@ -80,6 +89,19 @@ def _default_parameters(cfg: Mapping[str, Any]) -> List[ParameterRangeConfig]:
                 base_value=base,
                 low_pct=low_pct,
                 high_pct=high_pct,
+                label=label,
+            )
+        )
+    for config_key, label, low_value, high_value in _DEFAULT_ABSOLUTE_DRIVERS:
+        base = _get_nested(cfg, config_key)
+        if base is None:
+            continue
+        params.append(
+            ParameterRangeConfig(
+                variable_name=config_key,
+                base_value=base,
+                low_value=low_value,
+                high_value=high_value,
                 label=label,
             )
         )

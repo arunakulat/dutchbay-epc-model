@@ -157,9 +157,10 @@ def _calculate_net_production(
     degradation: float,
     grid_loss_pct: float,
     year: int,
+    curtailment_pct: float = 0.0,
 ) -> tuple[float, float]:
     """Calculate gross and net kWh for a given year.
-    
+
     DEPRECATED: Use apply_degradation_profile() for new code.
     This function maintained for backward compatibility.
 
@@ -175,12 +176,16 @@ def _calculate_net_production(
         Grid losses (decimal share of gross).
     year :
         Zero-based year index (0 = first operating year).
+    curtailment_pct :
+        INCREMENTAL financed grid-curtailment haircut (decimal), applied after grid
+        losses. Default 0.0 → byte-identical (the physical/embedded curtailment is
+        already in capacity_factor); a first-class stress/risk lever above that base.
     """
     hours_per_year = 8760.0
     effective_cf = capacity_factor * ((1.0 - degradation) ** year)
     gross_kwh = capacity_mw * 1e3 * hours_per_year * effective_cf
     grid_loss = gross_kwh * grid_loss_pct
-    net_kwh = gross_kwh - grid_loss
+    net_kwh = (gross_kwh - grid_loss) * (1.0 - curtailment_pct)
     return gross_kwh, net_kwh
 
 
