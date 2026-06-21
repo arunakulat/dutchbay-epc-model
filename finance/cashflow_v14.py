@@ -594,6 +594,7 @@ def build_annual_rows_efficient(
             float(params["degradation"]),
             float(params["grid_loss_pct"]),
             year_index,
+            curtailment_pct=float(params.get("curtailment_pct", 0.0)),
         )
 
         revenue_lkr = _calculate_revenue_lkr(
