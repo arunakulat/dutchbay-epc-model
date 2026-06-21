@@ -103,6 +103,34 @@ def resolve_first(
 
 
 # =============================================================================
+# Revenue-basis resolution paths — the SINGLE source of truth for how the engine
+# resolves the capacity and capacity-factor it bills revenue off. _build_cashflow_params
+# (cashflow_v14_params) and the AEP reconciliation guard (analytics.aep_reconciliation)
+# BOTH consume these so the guard reconciles exactly what the engine bills (and the two
+# can never silently diverge). Order = precedence (first non-None wins). capacity_factor
+# is normalized via pct_to_decimal (a value > 1.0 is a percent).
+# =============================================================================
+
+CAPACITY_MW_PATHS: tuple[Any, ...] = (
+    ("project", "capacity_mw"),
+    ("project", "capacity"),
+    ("parameters", "capacity_mw"),
+    "capacity_mw",
+)
+
+CAPACITY_FACTOR_PATHS: tuple[Any, ...] = (
+    ("project", "capacity_factor_pct"),
+    ("project", "capacity_factor"),
+    ("production", "capacity_factor_net"),
+    ("production", "capacity_factor"),
+    ("parameters", "capacity_factor_pct"),
+    ("parameters", "capacity_factor"),
+    "capacity_factor_pct",
+    "capacity_factor",
+)
+
+
+# =============================================================================
 # Internal aliases with underscore prefix (for backward compatibility)
 # =============================================================================
 
@@ -122,4 +150,6 @@ __all__ = [
     "_as_float_or_none",
     "_pct_to_decimal",
     "_resolve_first",
+    "CAPACITY_MW_PATHS",
+    "CAPACITY_FACTOR_PATHS",
 ]
