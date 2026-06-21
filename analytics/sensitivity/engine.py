@@ -154,9 +154,12 @@ def build_one_way_sensitivity_suite(
     )
 
     if run_cfg.enrich_tail_risk:
-        # Note: enrich_suite_with_tail_risk expects old-style suite with .metadata
-        # This may need adjustment if tail_risk module expects different structure
-        pass  # TODO: Align tail_risk enrichment with new contract structure
+        # SensitivitySuite already carries .metadata, so the enricher applies
+        # directly (the prior "may need adjustment" TODO was stale — the contract
+        # matches). Opting in now actually enriches instead of silently no-op'ing.
+        suite = enrich_suite_with_tail_risk(
+            suite=suite, base_config=base_cfg, run_cfg=run_cfg.tail_risk
+        )
 
     return suite
 
@@ -229,7 +232,9 @@ def run_sensitivity_analysis(
     )
 
     if run_cfg.enrich_tail_risk:
-        # TODO: Align tail_risk enrichment with new contract structure
-        pass
+        # SensitivitySuite carries .metadata; the enricher applies directly.
+        suite = enrich_suite_with_tail_risk(
+            suite=suite, base_config=base_cfg, run_cfg=run_cfg.tail_risk
+        )
 
     return suite

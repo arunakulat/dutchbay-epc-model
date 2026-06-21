@@ -101,6 +101,8 @@ from omegaconf import DictConfig
 
 # CRITICAL FIX: Import lender-grade pipeline (was: analytics.pipeline_v14)
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.run_manifest import build_run_manifest
+from analytics.scenario_loader import load_scenario_config
 
 # Sprint 19 (W.6): the wind→finance adapter is a leaf module with no
 # heavy dependencies, so importing it unconditionally is safe even when
@@ -517,6 +519,17 @@ def cli(cfg: DictConfig) -> None:
             validation_mode=str(validation_mode),
             validation_modules=validation_modules,
         )
+
+        # Stamp an auditable run manifest (resolved-config hash + engine version +
+        # commit) so summary.json is reproducible and tamper-evident (ICAEW posture).
+        if isinstance(result, dict):
+            try:
+                _manifest_cfg = dict(load_scenario_config(effective_config))
+            except Exception:
+                _manifest_cfg = {"config_path": str(effective_config)}
+            result["run_manifest"] = build_run_manifest(
+                _manifest_cfg, validation_mode=str(validation_mode)
+            ).as_dict()
 
         write_artifacts = bool(cfg.get("write_artifacts", False))
         export_dir_raw = cfg.get("export_dir", "_out/run_full_pipeline_v14")

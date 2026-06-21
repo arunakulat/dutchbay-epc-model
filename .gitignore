@@ -126,16 +126,11 @@ _archive/
 
 # Scenario backups
 scenarios/**/*.bak
-coverage.xml
-coverage.xml
-datalake/
-out/
 
-# Local data + outputs
+# Local data + outputs (coverage.xml is ignored once, near the top of this file)
 datalake/
 out/
 _out/
-coverage.xml
 
 # Temp / scratch
 .tmp_fix/
@@ -156,6 +151,11 @@ DutchBay_DevPkg_PREFERRED_ONLY/
 
 # Validation freeze evidence (never commit)
 _freeze_artifacts/
+
+# Generated reporting / regression / analysis artifacts (regenerable; never commit)
+_out_reporting_cli/
+_regression/
+reports/
 inputs/*.zip
 inputs/*.zip
 

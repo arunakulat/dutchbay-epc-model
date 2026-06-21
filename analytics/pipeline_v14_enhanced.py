@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from analytics.run_manifest import engine_version
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
     EquityPerformance,
@@ -76,7 +77,9 @@ class PipelineMetrics:
     fx_integration_attempted: bool = False
     fx_integration_succeeded: bool = False
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    pipeline_version: str = "v14.3.0"
+    # Read from the repo VERSION file (single source of truth) — was a hardcoded
+    # 'v14.3.0' literal that had drifted from the real version (CESSPIT/CCCDIR).
+    pipeline_version: str = field(default_factory=engine_version)
 
 
 class PipelineValidationError(Exception):
