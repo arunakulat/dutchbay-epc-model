@@ -16,8 +16,8 @@ black \
   analytics/monte_carlo_v14.py \
   analytics/evaluate_scenario.py \
   analytics/sensitivity_v14.py \
-  tests/analytics_layer/test_monte_carlo_v14.py \
-  tests/analytics_layer/test_sensitivity_v14_all.py
+  tests/analytics_layer/test_mc_integration.py \
+  tests/analytics/test_sensitivity_runner.py
 
 echo "=== Sorting imports with isort ==="
 isort \
@@ -25,8 +25,8 @@ isort \
   analytics/monte_carlo_v14.py \
   analytics/evaluate_scenario.py \
   analytics/sensitivity_v14.py \
-  tests/analytics_layer/test_monte_carlo_v14.py \
-  tests/analytics_layer/test_sensitivity_v14_all.py
+  tests/analytics_layer/test_mc_integration.py \
+  tests/analytics/test_sensitivity_runner.py
 
 echo
 echo "=== mypy (analytics + finance + run_full_pipeline_v14.py) ==="
@@ -34,9 +34,12 @@ python -m mypy analytics finance run_full_pipeline_v14.py
 
 echo
 echo "=== pytest (focused analytics-layer checks) ==="
+# Repointed in the 2026-06-21 audit: the old targets (test_monte_carlo_v14.py /
+# test_sensitivity_v14_all.py) were quarantine tombstones that collected ZERO tests, so
+# under `set -e` this step exited 5 and halted the script before the full suite ever ran.
 pytest \
-  tests/analytics_layer/test_monte_carlo_v14.py \
-  tests/analytics_layer/test_sensitivity_v14_all.py
+  tests/analytics_layer/test_mc_integration.py \
+  tests/analytics/test_sensitivity_runner.py
 
 echo
 echo "=== pytest (full suite) ==="
