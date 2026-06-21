@@ -30,9 +30,11 @@ from analytics.contracts_v14 import (
 # Legacy compatibility stubs (temporary - Sprint 16)
 # NOTE: MultiMetricSensitivitySuite is no longer a compat stub — it is the
 # canonical contracts_v14 dataclass, imported above (ARCH-04, issue #118).
+# The DownsideMetrics/TailRiskMetrics compat stubs were removed (audit R2,
+# finding 1.2): they had ZERO consumers and silently SHADOWED the real
+# contracts_v14.DownsideMetrics dataclass. build_cashflow_result_from_annual_rows
+# remains — it has live production callers.
 from analytics.contracts_v14_compat import (
-    DownsideMetrics,
-    TailRiskMetrics,
     build_cashflow_result_from_annual_rows,
 )
 
@@ -90,9 +92,7 @@ __all__ = [
     "FXRiskProfile",
     "FXStructuredBlock",
     # Legacy compatibility (Sprint 16 removal)
-    "DownsideMetrics",
     "MultiMetricSensitivitySuite",
-    "TailRiskMetrics",
     "build_cashflow_result_from_annual_rows",
     # Returns module
     "AllReturns",
