@@ -148,18 +148,21 @@ def run_monte_carlo_aep(
     avail_base = availability_mean_pct if availability_mean_pct is not None else losses.get("availability_pct", DEFAULT_WIND_LOSSES["availability_pct"])
     elec_loss_base = electrical_loss_mean_pct if electrical_loss_mean_pct is not None else losses.get("electrical_loss_pct", DEFAULT_WIND_LOSSES["electrical_loss_pct"])
 
-    # compute_aep_from_curve only applies wake/availability/electrical. The loss
-    # stack also has curtailment and other (icing/environmental); dropping them
-    # under-counted total losses by ~3% and overstated AEP. Apply them as a fixed
-    # multiplicative retention (they are not sampled). Config-first: read from the
-    # summary's loss block (canonical key `other_pct`, tolerate legacy
-    # `environmental_pct`). Zero when absent keeps prior behaviour for stacks
-    # that genuinely have no curtailment/other component.
-    curtailment_base = float(losses.get("curtailment_pct", 0.0) or 0.0)
-    other_base = float(
-        losses.get("other_pct", losses.get("environmental_pct", 0.0)) or 0.0
+    # compute_aep_from_curve only samples wake/availability/electrical. Every OTHER
+    # reduction line in the taxonomy (curtailment, other, and any finer IEC sub-loss
+    # a scenario itemises — turbine performance, icing, transmission, …) is applied
+    # as a fixed multiplicative retention so the net stack is complete. Delegating to
+    # losses_model.compute_net_factor (excluding the sampled wake/electrical and the
+    # uptime availability) means new taxonomy keys are honoured automatically and an
+    # unknown loss key fails loud instead of being silently dropped — the same
+    # config-driven taxonomy as apply_losses. For the canonical stack this is exactly
+    # curtailment × other, so the result is numerically unchanged.
+    from analytics.wind.losses_model import compute_net_factor
+
+    fixed_loss_retention = compute_net_factor(
+        losses,
+        exclude={"wake_loss_pct", "electrical_loss_pct", "availability_pct"},
     )
-    fixed_loss_retention = (1.0 - curtailment_base / 100.0) * (1.0 - other_base / 100.0)
 
     # Estimate Weibull parameters from AEP (if not provided)
     if weibull_a_mean is None:

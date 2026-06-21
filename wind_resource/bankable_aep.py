@@ -343,12 +343,12 @@ def non_wake_retention(losses: Mapping[str, Any]) -> float:
     """Multiplicative retention for the non-wake loss components.
 
     Wake is modeled separately (see :func:`model_wake_loss`), so it is excluded
-    here. ``availability_pct`` is an uptime; the rest are percentage reductions.
+    here. Delegates to the config-driven, fail-loud loss taxonomy in
+    :mod:`analytics.wind.losses_model` (single source of truth — same taxonomy as
+    :func:`~analytics.wind.losses_model.apply_losses`), so any finer non-wake loss a
+    scenario itemises (turbine performance, icing, transmission, …) is honoured and
+    an unknown loss key raises instead of being silently dropped.
     """
-    avail = float(losses.get("availability_pct", 100.0)) / 100.0
-    factor = avail
-    for key in ("electrical_loss_pct", "curtailment_pct", "other_pct"):
-        val = losses.get(key)
-        if val is not None:
-            factor *= 1.0 - float(val) / 100.0
-    return factor
+    from analytics.wind.losses_model import compute_net_factor
+
+    return compute_net_factor(losses, exclude={"wake_loss_pct"})
