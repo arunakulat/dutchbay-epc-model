@@ -60,7 +60,7 @@ jobs:
 
       - name: Pytest - fast lane (including Sprint 11 compliance tests)
         run: |
-          # Run the FULL tests/ tree (norecursedirs excludes _quarantine) so the fast lane
+          # Run the FULL tests/ tree (no test paths are excluded) so the fast lane
           # cannot hide failures in unlisted files either; --maxfail=1 keeps it fail-fast.
           pytest \
             tests/ \
