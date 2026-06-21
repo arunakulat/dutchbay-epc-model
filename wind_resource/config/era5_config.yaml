@@ -39,11 +39,14 @@ losses:
   wake: 0.95              # 5% wake losses
   environmental: 0.99     # 1% degradation/icing
 
-# P-level scenarios for uncertainty
+# P50 base factor only. P75/P90 are NOT flat haircuts: EnergyCalculator derives
+# them at runtime from the IEC 61400-15-2 exceedance build-up
+# (wind_resource.bankable_aep.exceedance_levels), so they reflect a real
+# uncertainty budget rather than a crude multiplier. The old p75: 0.90 / p90: 0.80
+# implied ~P99 at typical sigma and mislabeled a planning haircut as an exceedance
+# P-value — removed.
 p_levels:
-  p50: 1.00   # Base case (50% exceedance)
-  p75: 0.90   # Conservative (75% exceedance) - LENDER BASE
-  p90: 0.80   # Stress case (90% exceedance)
+  p50: 1.00   # Base case (50% exceedance); P75/P90 = IEC 61400-15-2 build-up
 
 # Revenue assumptions (can be overridden)
 revenue:

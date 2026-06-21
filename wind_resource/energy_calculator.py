@@ -37,6 +37,8 @@ import pandas as pd
 import yaml
 from scipy import interpolate
 
+from wind_resource.bankable_aep import UncertaintyBudget, exceedance_levels
+
 logger = logging.getLogger(__name__)
 
 
@@ -340,11 +342,19 @@ class EnergyCalculator:
         # Calculate total loss factor (CCCDIR: from config)
         total_loss = self._calculate_total_loss()
         
-        # Apply P-level adjustments (CCCDIR: from config)
+        # Net P50 (base case). P75/P90 come from the canonical IEC 61400-15-2
+        # exceedance build-up (single source of truth: wind_resource.bankable_aep),
+        # NOT a flat planning haircut that mislabeled a crude multiplier (e.g. 0.80
+        # ~= P99) as an exceedance P-value. Finance does not consume this timeseries
+        # path (it uses the bankable aep_summary), so headline economics are
+        # unaffected; this corrects the secondary wind-diagnostic P-values only.
         net_p50 = gross_aep_mwh * total_loss * self.p_levels['p50']
-        net_p75 = gross_aep_mwh * total_loss * self.p_levels['p75']
-        net_p90 = gross_aep_mwh * total_loss * self.p_levels['p90']
-        
+        _exc = exceedance_levels(
+            net_p50 / 1000.0, UncertaintyBudget(), life_years=int(self.ppa_years)
+        )
+        net_p75 = _exc.p75_gwh * 1000.0
+        net_p90 = _exc.p90_1yr_gwh * 1000.0
+
         # Net capacity factors
         total_capacity_mw = (self.rated_capacity * self.num_turbines) / 1000
         cf_net_p50 = (net_p50 / (total_capacity_mw * 8760)) * 100
@@ -360,7 +370,9 @@ class EnergyCalculator:
             'net_aep_p90_mwh': net_p90,
             'capacity_factor_net_p50': cf_net_p50,
             'capacity_factor_net_p75': cf_net_p75,
-            'capacity_factor_net_p90': cf_net_p90
+            'capacity_factor_net_p90': cf_net_p90,
+            'pvalue_method': 'iec_61400_15_2',
+            'uncertainty_sigma_1yr_pct': _exc.sigma_1yr_pct,
         }
         
         logger.info(f"Net AEP P50: {net_p50:,.0f} MWh/year (CF: {cf_net_p50:.1f}%)")
