@@ -136,7 +136,7 @@ finance:
   withholding_tax_pct: 14.0
   
   # Foreign exchange
-  fx_rate_lkr_usd: 300.0      # LKR 300/USD
+  fx_rate_lkr_usd: 333.79     # LKR/USD — matches the canonical lender-case vintage (see analytics.fx.fx_fetch)
   fx_volatility_pct: 15.0     # 15% annual volatility
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -167,7 +167,7 @@ monte_carlo:
   cost_std_pct: 5.0           # ±5% cost variability
   
   # FX parameters
-  fx_mean_rate: 300.0         # LKR/USD
+  fx_mean_rate: 333.79        # LKR/USD — matches the canonical lender-case vintage (see analytics.fx.fx_fetch)
   fx_std_pct: 15.0            # ±15% FX volatility
   
   # Sprint 17: Degradation uncertainty
