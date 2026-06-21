@@ -168,7 +168,7 @@ def build_fx_curve_from_block(
     # FIXED-vintage / pinned-rate path) or compute_fx_curve in fx_builder.
     raise NotImplementedError(
         "build_fx_curve_from_block is not implemented: it previously emitted a "
-        "hardcoded flat 300 LKR/USD curve. Use analytics.fx.fx_builder.compute_fx_curve "
+        "hardcoded flat-rate LKR/USD curve. Use analytics.fx.fx_builder.compute_fx_curve "
         "with a config-sourced spot (fx.start_lkr_per_usd / fx.source pinned vintage), "
         f"not a magic default. (requested years={years}, strategy={block.strategy})"
     )

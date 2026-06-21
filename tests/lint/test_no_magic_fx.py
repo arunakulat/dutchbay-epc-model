@@ -29,13 +29,9 @@ GUARDED_FILES = [
     "wind_resource/energy_calculator.py",
 ]
 
-# The specific stale USD/LKR rate literals to ban (as float literals).
-STALE_FX = re.compile(r"(?<![\d.])(300|305|320|375|396)\.0(?!\d)")
-
-
-def _is_comment_or_docstring_line(line: str) -> bool:
-    stripped = line.strip()
-    return stripped.startswith("#") or stripped.startswith(">>>") or '"""' in line
+# The specific stale USD/LKR rate literals to ban — integer OR decimal form (audit R1
+# broadened this: the old `\.0`-only pattern missed a bare-integer `300` FX literal).
+STALE_FX = re.compile(r"(?<![\d.,])(300|305|320|375|396)(\.\d+)?(?![\d.])")
 
 
 @pytest.mark.parametrize("rel_path", GUARDED_FILES)
@@ -43,8 +39,22 @@ def test_no_stale_fx_literal_in_production_code(rel_path: str) -> None:
     path = REPO_ROOT / rel_path
     assert path.exists(), f"guarded file missing: {rel_path}"
     offenders = []
+    in_docstring = False
     for n, line in enumerate(path.read_text().splitlines(), start=1):
-        if _is_comment_or_docstring_line(line):
+        # Track multi-line docstring state so EXAMPLE rates INSIDE a """...""" block
+        # (e.g. "start_lkr_per_usd: 375") are skipped, not flagged as live literals.
+        triple = line.count('"""') + line.count("'''")
+        if in_docstring:
+            if triple % 2 == 1:
+                in_docstring = False
+            continue
+        stripped = line.strip()
+        if stripped.startswith("#") or stripped.startswith(">>>"):
+            continue
+        if triple % 2 == 1:  # opening a multi-line docstring on this line
+            in_docstring = True
+            continue
+        if triple >= 2:  # a self-contained single-line docstring
             continue
         if STALE_FX.search(line):
             offenders.append(f"{rel_path}:{n}: {line.strip()}")

@@ -361,7 +361,6 @@ Financing_Terms:
   # DSCR targets
   target_dscr: 1.3
   min_dscr: 1.2
-  min_dscr_covenant: 1.2
   
   # Reserves
   reserves:
@@ -387,7 +386,6 @@ metrics:
   plcr_min_covenant: 1.4  # Project Life Coverage Ratio
   plcr_target: 1.6
   plcr_discount_rate: 0.1
-  dscr_min_covenant: 1.2  # Debt Service Coverage Ratio
 
 returns:
   project_life_years: 20
@@ -484,27 +482,6 @@ monte_carlo:
   min_llcr_covenant: 1.25
   output_path: "outputs/mc_aep_dutchbay_100k.parquet"
 
-sensitivity:
-  ranges:
-    capacity_factor:
-      low_pct: -0.05
-      high_pct: 0.05
-    tariff_lkr_per_kwh:
-      low_pct: -0.1
-      high_pct: 0.1
-    opex_usd_per_year:
-      low_pct: -0.15
-      high_pct: 0.15
-    capex_usd_total:
-      low_pct: -0.08
-      high_pct: 0.08
-    grid_loss_pct:
-      low_pct: -0.01
-      high_pct: 0.03
-  analysis:
-    tornado_chart_title: DutchBay 150MW - Parameter Sensitivity (Equity IRR)
-    dpi: 300
-
 # ═════════════════════════════════════════════════════════════════════════════
 # PIPELINE CONFIGURATION
 # ═════════════════════════════════════════════════════════════════════════════
@@ -581,7 +558,6 @@ metadata:
     - 'v2.7: Added debt_tranches structure'
     - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input); mix + rates are canonical (plan_debt warns if re-added)'
 
-discount_rate: 0.12
 
 wacc:
   # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
