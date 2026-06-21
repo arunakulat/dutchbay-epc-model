@@ -1,0 +1,99 @@
+{
+  "nodes": [
+    {
+      "id": "file:scripts/run_sprint9_validation.sh",
+      "type": "file",
+      "name": "run_sprint9_validation.sh",
+      "filePath": "scripts/run_sprint9_validation.sh",
+      "summary": "Sprint 9 validation suite shell script that verifies pytest marker registration and runs the comprehensive edge-case, stress, Monte-Carlo, and sensitivity test pipeline using explicit file targets for real signal.",
+      "tags": ["validation", "ci-cd", "monte-carlo", "sensitivity", "pipeline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/sprint_16_test_suite.sh",
+      "type": "file",
+      "name": "sprint_16_test_suite.sh",
+      "filePath": "scripts/sprint_16_test_suite.sh",
+      "summary": "Sprint 16 comprehensive test-suite verification script that runs and tallies all Priority 1/2/3 deliverable tests plus regression checks, reporting colored pass/fail/skip counters for the finance-contracts feature branch.",
+      "tags": ["validation", "ci-cd", "contracts", "pipeline", "finance"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/tag_model_release.sh",
+      "type": "file",
+      "name": "tag_model_release.sh",
+      "filePath": "scripts/tag_model_release.sh",
+      "summary": "Release tagging helper that authenticates with the GitHub CLI, stages the debt module and YAML config, commits, creates an annotated DFI-checkpoint tag, and publishes a GitHub Release for institutional audit traceability.",
+      "tags": ["ci-cd", "debt", "configuration", "utility", "pipeline"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/validate_sensitivity_v14_gwtf.sh",
+      "type": "file",
+      "name": "validate_sensitivity_v14_gwtf.sh",
+      "filePath": "scripts/validate_sensitivity_v14_gwtf.sh",
+      "summary": "GWTF-compliant shell validator that grep-checks analytics/sensitivity_v14.py for banned imports/calls and required symbols (evaluate_scenario, SensitivityResult, _evaluate_base_kpis), exiting non-zero on any of seven structural failures.",
+      "tags": ["validation", "sensitivity", "ci-cd", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/venv_up.sh",
+      "type": "file",
+      "name": "venv_up.sh",
+      "filePath": "scripts/venv_up.sh",
+      "summary": "Sourced bootstrap script that detects the shell, locates the repo root, and creates then activates a Python 3.11 virtual environment, falling back across python3.11 candidates when the preferred interpreter is missing.",
+      "tags": ["utility", "configuration", "cli", "pipeline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/sprint_16_test_suite.sh:run_test",
+      "type": "function",
+      "name": "run_test",
+      "summary": "Runs a single shell-command test case, incrementing the total/passed/failed counters and printing a colored pass or fail line based on the command's exit status.",
+      "tags": ["validation", "utility", "ci-cd"],
+      "complexity": "simple",
+      "lineRange": [39, 53]
+    },
+    {
+      "id": "function:scripts/sprint_16_test_suite.sh:run_pytest",
+      "type": "function",
+      "name": "run_pytest",
+      "summary": "Executes a pytest target and folds its result into the suite's pass/fail/skip tallies, printing a colored status line so the Sprint 16 verification report reflects per-suite outcomes.",
+      "tags": ["validation", "utility", "ci-cd"],
+      "complexity": "simple",
+      "lineRange": [56, 73]
+    },
+    {
+      "id": "function:scripts/validate_sensitivity_v14_gwtf.sh:print_summary",
+      "type": "function",
+      "name": "print_summary",
+      "summary": "Prints the final pass/fail summary for the sensitivity_v14 validator, listing any accumulated error messages and signaling overall success or failure of the seven structural checks.",
+      "tags": ["validation", "sensitivity", "utility"],
+      "complexity": "simple",
+      "lineRange": [45, 65]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/sprint_16_test_suite.sh",
+      "target": "function:scripts/sprint_16_test_suite.sh:run_test",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/sprint_16_test_suite.sh",
+      "target": "function:scripts/sprint_16_test_suite.sh:run_pytest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/validate_sensitivity_v14_gwtf.sh",
+      "target": "function:scripts/validate_sensitivity_v14_gwtf.sh:print_summary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    }
+  ]
+}

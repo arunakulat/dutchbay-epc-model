@@ -1,0 +1,445 @@
+{
+  "nodes": [
+    {
+      "id": "file:analytics/export_helpers.py",
+      "type": "file",
+      "name": "export_helpers",
+      "summary": "Export utilities that write scenario summary and timeseries dataframes to formatted, board-friendly Excel workbooks and render matplotlib charts (DSCR, IRR, NPV, debt waterfall).",
+      "tags": ["finance", "reporting", "cashflow", "utility"],
+      "complexity": "complex",
+      "filePath": "analytics/export_helpers.py"
+    },
+    {
+      "id": "function:analytics/export_helpers.py:validate_for_export",
+      "type": "function",
+      "name": "validate_for_export",
+      "summary": "Validates summary and timeseries dataframes prior to export, collecting warnings about missing or inconsistent columns.",
+      "tags": ["validation", "reporting", "utility", "finance"],
+      "complexity": "simple",
+      "lineRange": [29, 53]
+    },
+    {
+      "id": "class:analytics/export_helpers.py:ExcelExporter",
+      "type": "class",
+      "name": "ExcelExporter",
+      "summary": "Builds formatted Excel workbooks with metadata, dataframe sheets, conditional formatting, embedded chart images, and board-friendly DSCR/IRR views plus column auto-fit.",
+      "tags": ["finance", "reporting", "cashflow", "utility"],
+      "complexity": "complex",
+      "lineRange": [56, 488]
+    },
+    {
+      "id": "class:analytics/export_helpers.py:ChartExporter",
+      "type": "class",
+      "name": "ChartExporter",
+      "summary": "Generates and saves PNG charts for DSCR-over-time and IRR-distribution histograms from scenario dataframes using a lazily-loaded matplotlib.",
+      "tags": ["finance", "reporting", "dscr", "irr"],
+      "complexity": "moderate",
+      "lineRange": [497, 605]
+    },
+    {
+      "id": "class:analytics/export_helpers.py:ChartGenerator",
+      "type": "class",
+      "name": "ChartGenerator",
+      "summary": "Produces analytical plots including KPI comparison bars, NPV distribution, DSCR comparison, and debt waterfall charts with path resolution and matplotlib.",
+      "tags": ["finance", "reporting", "npv", "debt"],
+      "complexity": "complex",
+      "lineRange": [608, 755]
+    },
+    {
+      "id": "document:analytics/fx/README.md",
+      "type": "document",
+      "name": "FX Analytics Subpackage README",
+      "summary": "Overview of the v14 FX analytics subpackage modules (contracts, loader, processor, correlation, risk, returns) and their independence and migration status.",
+      "tags": ["documentation", "fx", "risk", "data-model"],
+      "complexity": "simple",
+      "filePath": "analytics/fx/README.md"
+    },
+    {
+      "id": "document:analytics/fx/README_STRUCTURED_BLOCKS.md",
+      "type": "document",
+      "name": "FX Structured Blocks User Guide",
+      "summary": "User guide for configuring v14 structured FX blocks in scenario YAML, covering multi-regime scenarios, sensitivity, Monte Carlo, lender-grade risk profiles, and migration from scalar FX.",
+      "tags": ["documentation", "fx", "scenario", "monte-carlo", "configuration"],
+      "complexity": "complex",
+      "filePath": "analytics/fx/README_STRUCTURED_BLOCKS.md"
+    },
+    {
+      "id": "file:analytics/fx/__init__.py",
+      "type": "file",
+      "name": "analytics.fx",
+      "summary": "FX risk-analysis package initializer using PEP 562 lazy loading to expose integrate_fx_into_scenario_result while breaking a circular import cycle with contracts_v14.",
+      "tags": ["fx", "risk", "utility", "scenario"],
+      "complexity": "simple",
+      "filePath": "analytics/fx/__init__.py"
+    },
+    {
+      "id": "function:analytics/fx/__init__.py:__getattr__",
+      "type": "function",
+      "name": "__getattr__",
+      "summary": "PEP 562 lazy attribute hook that defers importing fx_integration until integrate_fx_into_scenario_result is first accessed, avoiding circular imports.",
+      "tags": ["fx", "utility", "lazy-loading", "imports"],
+      "complexity": "simple",
+      "lineRange": [20, 29]
+    },
+    {
+      "id": "file:analytics/fx/correlation.py",
+      "type": "file",
+      "name": "fx.correlation",
+      "summary": "FX correlation module that links monthly LKR/USD rates to DSCR, runs FX sensitivity, paydown-schedule analysis, stress tests, and Monte Carlo paydown optimization with FX path generation.",
+      "tags": ["fx", "monte-carlo", "risk", "debt"],
+      "complexity": "complex",
+      "filePath": "analytics/fx/correlation.py"
+    },
+    {
+      "id": "class:analytics/fx/correlation.py:FXCorrelationModule",
+      "type": "class",
+      "name": "FXCorrelationModule",
+      "summary": "Core engine correlating monthly FX rates with debt-service coverage, providing DSCR computation, FX sensitivity, paydown stress testing, Monte Carlo optimization, and an audit report.",
+      "tags": ["fx", "monte-carlo", "risk", "dscr"],
+      "complexity": "complex",
+      "lineRange": [37, 472]
+    },
+    {
+      "id": "file:analytics/fx/fx_fetch.py",
+      "type": "file",
+      "name": "fx_fetch",
+      "summary": "Config-driven FX rate routine that loads pinned (vintage) LKR/USD rates or fetches live rates, computes drift versus tolerance, and validates a scenario's FX block.",
+      "tags": ["fx", "config", "validation", "risk"],
+      "complexity": "complex",
+      "filePath": "analytics/fx/fx_fetch.py"
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:default_fx_lkr_per_usd",
+      "type": "function",
+      "name": "default_fx_lkr_per_usd",
+      "summary": "Loads the canonical default LKR-per-USD exchange rate from the defaults YAML for use across analytics modules.",
+      "tags": ["fx", "config", "utility", "defaults"],
+      "complexity": "simple",
+      "lineRange": [56, 75]
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:load_pinned_fx",
+      "type": "function",
+      "name": "load_pinned_fx",
+      "summary": "Builds a pinned FXRate from a config's fixed-vintage rate and timestamp for reproducible FIXED-vintage modeling.",
+      "tags": ["fx", "config", "data-model", "risk"],
+      "complexity": "simple",
+      "lineRange": [238, 252]
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:fetch_live_fx",
+      "type": "function",
+      "name": "fetch_live_fx",
+      "summary": "Fetches the latest live LKR/USD rate from a configured HTTP endpoint and wraps it in an FXRate with provenance metadata.",
+      "tags": ["fx", "risk", "utility", "live-data"],
+      "complexity": "simple",
+      "lineRange": [255, 276]
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:fx_drift",
+      "type": "function",
+      "name": "fx_drift",
+      "summary": "Computes the percentage drift between a pinned and a live FX rate and reports whether it lies within the configured tolerance.",
+      "tags": ["fx", "validation", "risk", "utility"],
+      "complexity": "simple",
+      "lineRange": [279, 293]
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:resolve_fx",
+      "type": "function",
+      "name": "resolve_fx",
+      "summary": "Resolves the effective FX rate for a config by selecting pinned or live mode according to the reference mode.",
+      "tags": ["fx", "config", "utility", "risk"],
+      "complexity": "simple",
+      "lineRange": [296, 304]
+    },
+    {
+      "id": "function:analytics/fx/fx_fetch.py:validate_fx",
+      "type": "function",
+      "name": "validate_fx",
+      "summary": "Validates a scenario's FX configuration, loading the pinned rate and optionally checking live-rate drift against tolerance with warnings.",
+      "tags": ["fx", "validation", "scenario", "risk"],
+      "complexity": "moderate",
+      "lineRange": [307, 344]
+    },
+    {
+      "id": "class:analytics/fx/fx_fetch.py:FXRate",
+      "type": "class",
+      "name": "FXRate",
+      "summary": "Immutable record of an LKR-per-USD rate with as-of timestamp, provider, and source URL, including a constructor from a vintage JSON file.",
+      "tags": ["fx", "data-model", "risk", "provenance"],
+      "complexity": "simple",
+      "lineRange": [93, 128]
+    },
+    {
+      "id": "class:analytics/fx/fx_fetch.py:FXRequestConfig",
+      "type": "class",
+      "name": "FXRequestConfig",
+      "summary": "Configuration dataclass describing an FX request (currencies, reference mode, provider, endpoint, pinned rate, drift tolerance) with scenario-based construction and validation.",
+      "tags": ["fx", "config", "data-model", "validation"],
+      "complexity": "moderate",
+      "lineRange": [155, 230]
+    },
+    {
+      "id": "file:analytics/fx/processor.py",
+      "type": "file",
+      "name": "fx.processor",
+      "summary": "Processes a historical FX CSV into dual-regime (pre/post float) monthly rate series with rolling volatility, emitting per-period YAML config blocks for scenarios.",
+      "tags": ["fx", "data-model", "config", "scenario"],
+      "complexity": "complex",
+      "filePath": "analytics/fx/processor.py"
+    },
+    {
+      "id": "function:analytics/fx/processor.py:process_fx_csv_dual_regime",
+      "type": "function",
+      "name": "process_fx_csv_dual_regime",
+      "summary": "Reads a raw FX CSV, normalizes columns and dates, and splits the series into two currency regimes for downstream monthly aggregation and config emission.",
+      "tags": ["fx", "data-model", "processing", "scenario"],
+      "complexity": "complex",
+      "lineRange": [35, 270]
+    },
+    {
+      "id": "function:analytics/fx/processor.py:_process_periods",
+      "type": "function",
+      "name": "_process_periods",
+      "summary": "Aggregates a regime's daily FX rates into monthly mean/min/max/std with rolling 12-month volatility and writes the resulting YAML period config files.",
+      "tags": ["fx", "data-model", "processing", "config"],
+      "complexity": "complex",
+      "lineRange": [273, 392]
+    },
+    {
+      "id": "file:analytics/fx_sensitivity_real.py",
+      "type": "file",
+      "name": "fx_sensitivity_real",
+      "summary": "FX sensitivity analysis surface that perturbs FX rate, hedge ratio, and credit spread, re-runs the v14 pipeline, and fits linear sensitivity coefficients on IRR/NPV/DSCR.",
+      "tags": ["fx", "sensitivity", "risk", "finance"],
+      "complexity": "complex",
+      "filePath": "analytics/fx_sensitivity_real.py"
+    },
+    {
+      "id": "function:analytics/fx_sensitivity_real.py:_metric_from_result",
+      "type": "function",
+      "name": "_metric_from_result",
+      "summary": "Extracts a named target metric (IRR, NPV, DSCR) from a nested pipeline result dictionary, searching analytics and returns sub-structures.",
+      "tags": ["fx", "sensitivity", "utility", "finance"],
+      "complexity": "moderate",
+      "lineRange": [114, 130]
+    },
+    {
+      "id": "function:analytics/fx_sensitivity_real.py:_linear_fit",
+      "type": "function",
+      "name": "_linear_fit",
+      "summary": "Fits a least-squares line of a metric versus a parameter, returning the slope coefficient, standard error, R-squared, and variance contribution.",
+      "tags": ["sensitivity", "statistics", "risk", "utility"],
+      "complexity": "moderate",
+      "lineRange": [133, 159]
+    },
+    {
+      "id": "class:analytics/fx_sensitivity_real.py:RealFXSensitivityResult",
+      "type": "class",
+      "name": "RealFXSensitivityResult",
+      "summary": "Result container holding base-case FX/hedge/spread economics and sensitivity point arrays, with a method to compute summary IRR/NPV sensitivities and FX volatility contribution.",
+      "tags": ["fx", "sensitivity", "data-model", "risk"],
+      "complexity": "moderate",
+      "lineRange": [77, 105]
+    },
+    {
+      "id": "class:analytics/fx_sensitivity_real.py:FXSensitivityAnalyzer",
+      "type": "class",
+      "name": "FXSensitivityAnalyzer",
+      "summary": "Driver that loads a scenario config and runs the FX/hedge/spread sensitivity sweeps through the v14 pipeline to produce real and linear-fit sensitivity results.",
+      "tags": ["fx", "sensitivity", "risk", "finance"],
+      "complexity": "complex",
+      "lineRange": [162, 284]
+    },
+    {
+      "id": "file:analytics/gis/netcdf_utils.py",
+      "type": "file",
+      "name": "netcdf_utils",
+      "summary": "NetCDF wind-resource utilities for ERA5/ECMWF reanalysis: extracts geospatial profiles, extrapolates wind speed to 150m hub height, computes grid stats and Weibull parameters.",
+      "tags": ["wind-resource", "aep", "data-model", "utility"],
+      "complexity": "complex",
+      "filePath": "analytics/gis/netcdf_utils.py"
+    },
+    {
+      "id": "function:analytics/gis/netcdf_utils.py:_require_pyproj",
+      "type": "function",
+      "name": "_require_pyproj",
+      "summary": "Guards optional pyproj import, raising a clear ImportError when CRS reprojection support is unavailable.",
+      "tags": ["wind-resource", "utility", "gis", "imports"],
+      "complexity": "simple",
+      "lineRange": [86, 96]
+    },
+    {
+      "id": "function:analytics/gis/netcdf_utils.py:gis_netcdf_profile",
+      "type": "function",
+      "name": "gis_netcdf_profile",
+      "summary": "Extracts a geospatial profile (CRS, bounds, grid resolution, variables, time coverage) from an xarray NetCDF dataset for wind-resource characterization.",
+      "tags": ["wind-resource", "gis", "data-model", "aep"],
+      "complexity": "complex",
+      "lineRange": [99, 203]
+    },
+    {
+      "id": "function:analytics/gis/netcdf_utils.py:ws150_from_10_100",
+      "type": "function",
+      "name": "ws150_from_10_100",
+      "summary": "Extrapolates 10m and 100m reanalysis wind speeds to 150m hub height using power-law or log-law shear following IEC 61400-1 methodology.",
+      "tags": ["wind-resource", "aep", "gis", "extrapolation"],
+      "complexity": "complex",
+      "lineRange": [206, 313]
+    },
+    {
+      "id": "function:analytics/gis/netcdf_utils.py:grid_stats",
+      "type": "function",
+      "name": "grid_stats",
+      "summary": "Computes per-cell mean/std/min/max/count statistics over a wind-speed DataArray and flattens them into a tidy dataframe.",
+      "tags": ["wind-resource", "aep", "statistics", "utility"],
+      "complexity": "complex",
+      "lineRange": [316, 397]
+    },
+    {
+      "id": "function:analytics/gis/netcdf_utils.py:compute_weibull_parameters",
+      "type": "function",
+      "name": "compute_weibull_parameters",
+      "summary": "Fits Weibull shape and scale parameters to a wind-speed timeseries for use in AEP and capacity-factor estimation.",
+      "tags": ["wind-resource", "aep", "statistics", "weibull"],
+      "complexity": "moderate",
+      "lineRange": [400, 446]
+    },
+    {
+      "id": "file:analytics/mc/__init__.py",
+      "type": "file",
+      "name": "analytics.mc",
+      "summary": "Canonical Monte Carlo package initializer using lazy __getattr__ loading to expose the MC engine, correlation, lender-export, and aggregation APIs while avoiding circular imports.",
+      "tags": ["monte-carlo", "risk", "utility", "entry-point"],
+      "complexity": "moderate",
+      "filePath": "analytics/mc/__init__.py"
+    },
+    {
+      "id": "function:analytics/mc/__init__.py:__getattr__",
+      "type": "function",
+      "name": "__getattr__",
+      "summary": "Lazy module-attribute hook that imports MC engine, correlation, export, and aggregation symbols on first access to prevent circular imports with evaluation_v14.",
+      "tags": ["monte-carlo", "utility", "lazy-loading", "imports"],
+      "complexity": "moderate",
+      "lineRange": [51, 107]
+    },
+    {
+      "id": "file:analytics/pysam_sandbox/__init__.py",
+      "type": "file",
+      "name": "analytics.pysam_sandbox",
+      "summary": "Optional, isolated PySAM integration sandbox that extracts AEP profiles when NREL-PySAM is installed and falls back gracefully with a not-installed stub otherwise.",
+      "tags": ["wind-resource", "aep", "utility", "pysam"],
+      "complexity": "moderate",
+      "filePath": "analytics/pysam_sandbox/__init__.py"
+    },
+    {
+      "id": "class:analytics/pysam_sandbox/__init__.py:PySAMRunner",
+      "type": "class",
+      "name": "PySAMRunner",
+      "summary": "Façade runner that delegates to the real PySAM implementation when available or raises a clear not-installed error, exposing get_annual_profile for AEP extraction.",
+      "tags": ["wind-resource", "aep", "pysam", "utility"],
+      "complexity": "moderate",
+      "lineRange": [41, 101]
+    },
+    {
+      "id": "file:analytics/pysam_sandbox/pysam_runner.py",
+      "type": "file",
+      "name": "pysam_runner",
+      "summary": "Concrete PySAM-backed runner that loads a wind resource file and executes NREL-PySAM Windpower to produce an annual AEP/generation profile.",
+      "tags": ["wind-resource", "aep", "pysam", "utility"],
+      "complexity": "moderate",
+      "filePath": "analytics/pysam_sandbox/pysam_runner.py"
+    },
+    {
+      "id": "class:analytics/pysam_sandbox/pysam_runner.py:PySAMRunner",
+      "type": "class",
+      "name": "PySAMRunner",
+      "summary": "Loads a validated wind resource file and runs NREL-PySAM Windpower to compute and return the annual energy production profile.",
+      "tags": ["wind-resource", "aep", "pysam", "utility"],
+      "complexity": "moderate",
+      "lineRange": [24, 123]
+    }
+  ],
+  "edges": [
+    {"source": "file:analytics/export_helpers.py", "target": "function:analytics/export_helpers.py:validate_for_export", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ExcelExporter", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ChartExporter", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ChartGenerator", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/export_helpers.py", "target": "function:analytics/export_helpers.py:validate_for_export", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ExcelExporter", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ChartExporter", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/export_helpers.py", "target": "class:analytics/export_helpers.py:ChartGenerator", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "class:analytics/export_helpers.py:ExcelExporter", "target": "function:analytics/export_helpers.py:validate_for_export", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "document:analytics/fx/README.md", "target": "file:analytics/fx/processor.py", "type": "documents", "direction": "forward", "weight": 0.5},
+    {"source": "document:analytics/fx/README.md", "target": "file:analytics/fx/correlation.py", "type": "documents", "direction": "forward", "weight": 0.5},
+    {"source": "document:analytics/fx/README_STRUCTURED_BLOCKS.md", "target": "file:analytics/fx/fx_fetch.py", "type": "documents", "direction": "forward", "weight": 0.5},
+
+    {"source": "file:analytics/fx/__init__.py", "target": "function:analytics/fx/__init__.py:__getattr__", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:analytics/fx/correlation.py", "target": "class:analytics/fx/correlation.py:FXCorrelationModule", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/correlation.py", "target": "class:analytics/fx/correlation.py:FXCorrelationModule", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "class:analytics/fx/correlation.py:FXCorrelationModule", "target": "function:analytics/fx/fx_fetch.py:default_fx_lkr_per_usd", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:default_fx_lkr_per_usd", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:load_pinned_fx", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:fetch_live_fx", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:fx_drift", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:resolve_fx", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:validate_fx", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "class:analytics/fx/fx_fetch.py:FXRate", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "class:analytics/fx/fx_fetch.py:FXRequestConfig", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:default_fx_lkr_per_usd", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:load_pinned_fx", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:fetch_live_fx", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:fx_drift", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:resolve_fx", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "function:analytics/fx/fx_fetch.py:validate_fx", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "class:analytics/fx/fx_fetch.py:FXRate", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/fx_fetch.py", "target": "class:analytics/fx/fx_fetch.py:FXRequestConfig", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/fx_fetch.py:resolve_fx", "target": "function:analytics/fx/fx_fetch.py:load_pinned_fx", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/fx_fetch.py:resolve_fx", "target": "function:analytics/fx/fx_fetch.py:fetch_live_fx", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/fx_fetch.py:validate_fx", "target": "function:analytics/fx/fx_fetch.py:load_pinned_fx", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/fx_fetch.py:validate_fx", "target": "function:analytics/fx/fx_fetch.py:fetch_live_fx", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/fx_fetch.py:validate_fx", "target": "function:analytics/fx/fx_fetch.py:fx_drift", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/fx/processor.py", "target": "function:analytics/fx/processor.py:process_fx_csv_dual_regime", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/processor.py", "target": "function:analytics/fx/processor.py:_process_periods", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx/processor.py", "target": "function:analytics/fx/processor.py:process_fx_csv_dual_regime", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx/processor.py", "target": "function:analytics/fx/processor.py:_process_periods", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/fx/processor.py:process_fx_csv_dual_regime", "target": "function:analytics/fx/processor.py:_process_periods", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "function:analytics/fx_sensitivity_real.py:_metric_from_result", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "function:analytics/fx_sensitivity_real.py:_linear_fit", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "class:analytics/fx_sensitivity_real.py:RealFXSensitivityResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "class:analytics/fx_sensitivity_real.py:FXSensitivityAnalyzer", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "function:analytics/fx_sensitivity_real.py:_metric_from_result", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "function:analytics/fx_sensitivity_real.py:_linear_fit", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "class:analytics/fx_sensitivity_real.py:RealFXSensitivityResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/fx_sensitivity_real.py", "target": "class:analytics/fx_sensitivity_real.py:FXSensitivityAnalyzer", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "class:analytics/fx_sensitivity_real.py:RealFXSensitivityResult", "target": "function:analytics/fx_sensitivity_real.py:_linear_fit", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "class:analytics/fx_sensitivity_real.py:FXSensitivityAnalyzer", "target": "function:analytics/fx_sensitivity_real.py:_metric_from_result", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "class:analytics/fx_sensitivity_real.py:FXSensitivityAnalyzer", "target": "function:analytics/fx/fx_fetch.py:default_fx_lkr_per_usd", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:_require_pyproj", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:gis_netcdf_profile", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:ws150_from_10_100", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:grid_stats", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:compute_weibull_parameters", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:_require_pyproj", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:gis_netcdf_profile", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:ws150_from_10_100", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:grid_stats", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/netcdf_utils.py", "target": "function:analytics/gis/netcdf_utils.py:compute_weibull_parameters", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/mc/__init__.py", "target": "function:analytics/mc/__init__.py:__getattr__", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:analytics/pysam_sandbox/__init__.py", "target": "class:analytics/pysam_sandbox/__init__.py:PySAMRunner", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pysam_sandbox/__init__.py", "target": "class:analytics/pysam_sandbox/__init__.py:PySAMRunner", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pysam_sandbox/__init__.py", "target": "file:analytics/pysam_sandbox/pysam_runner.py", "type": "depends_on", "direction": "forward", "weight": 0.6},
+
+    {"source": "file:analytics/pysam_sandbox/pysam_runner.py", "target": "class:analytics/pysam_sandbox/pysam_runner.py:PySAMRunner", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pysam_sandbox/pysam_runner.py", "target": "class:analytics/pysam_sandbox/pysam_runner.py:PySAMRunner", "type": "exports", "direction": "forward", "weight": 0.8}
+  ]
+}

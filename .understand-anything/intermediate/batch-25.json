@@ -1,0 +1,228 @@
+{
+  "nodes": [
+    {
+      "id": "config:scenarios/aep_summary_kalpitiya_160m_fitted.json",
+      "type": "config",
+      "name": "aep_summary_kalpitiya_160m_fitted.json",
+      "filePath": "scenarios/aep_summary_kalpitiya_160m_fitted.json",
+      "summary": "Machine-generated AEP summary for the Kalpitiya 160m fitted wind-resource case, recording capacity factor, gross/net AEP, turbine count, power-curve key, IEC standard, loss breakdown and provenance. Produced by analytics.wind.aep_summary_builder as a canonical resource input for downstream finance scenarios.",
+      "tags": ["aep", "wind-resource", "scenario", "configuration", "provenance"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:scenarios/aep_summary_mullikulam.json",
+      "type": "config",
+      "name": "aep_summary_mullikulam.json",
+      "filePath": "scenarios/aep_summary_mullikulam.json",
+      "summary": "Machine-generated AEP summary for the Mullikulam site (10 x Vestas V150-5.6MW, CF 0.2713, net 133.1 GWh) capturing power-curve key, IEC standard, loss breakdown and OEM provenance. Serves as a wind-resource input artifact for AEP-driven finance runs.",
+      "tags": ["aep", "wind-resource", "scenario", "configuration", "provenance"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:scenarios/bad_missing_tax.yaml",
+      "type": "config",
+      "name": "bad_missing_tax.yaml",
+      "filePath": "scenarios/bad_missing_tax.yaml",
+      "summary": "Intentionally malformed scenario used as a negative test fixture: a full DutchBay config whose tax block is incomplete/missing to exercise validation error paths. Drives schema and required-field checks in the config loader.",
+      "tags": ["scenario", "validation", "config", "tax", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/contracts_edgecase_base_v14.yaml",
+      "type": "config",
+      "name": "contracts_edgecase_base_v14.yaml",
+      "filePath": "scenarios/contracts_edgecase_base_v14.yaml",
+      "summary": "Minimal v14-compliant base scenario (150MW wind, 25yr life) used as the foundation for contracts sensitivity edgecase tests. Provides a stripped-down project/fx/tax/debt/capex/opex/revenue baseline to layer edgecase overrides on.",
+      "tags": ["scenario", "contracts", "config", "validation", "configuration"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:scenarios/dscr_sensitivity_example.yaml",
+      "type": "config",
+      "name": "dscr_sensitivity_example.yaml",
+      "filePath": "scenarios/dscr_sensitivity_example.yaml",
+      "summary": "Example configuration demonstrating dual-DSCR debt-sizing sensitivity analysis for the lender case, showing how debt capacity varies with key project parameters. Consumed by analytics.dscr_sensitivity to produce lender-facing sensitivity output.",
+      "tags": ["scenario", "debt", "sensitivity", "finance", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_basecase_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_basecase_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_basecase_2025Q4.yaml",
+      "summary": "Base-case 2025Q4 scenario for the 150MW DutchBay wind farm covering project, tax/statutory, returns, tariff, FX, capex/opex, financing terms, Monte-Carlo and sensitivity blocks. The central reference configuration for full-pipeline finance runs.",
+      "tags": ["scenario", "finance", "config", "monte-carlo", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_equitycase_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_equitycase_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_equitycase_2025Q4.yaml",
+      "summary": "Equity-perspective 2025Q4 scenario for the DutchBay wind farm, mirroring the base case structure but tuned for equity-return analysis (returns, KPIs, financing, WACC). Used to evaluate sponsor IRR and NPV under the equity view.",
+      "tags": ["scenario", "equity", "finance", "config", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_lendercase_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "summary": "Canonical lender-case 2025Q4 scenario (Sprint 17): full wind-resource, turbine, PPA, FX, capex/opex, financing covenants, Monte-Carlo, sensitivity and expected-results blocks for the 150MW DutchBay project. The most complete lender-facing configuration driving the full pipeline.",
+      "tags": ["scenario", "debt", "finance", "wind-resource", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+      "type": "config",
+      "name": "dutchbay_lendercase_5usc_fixed_lkr.yaml",
+      "summary": "Tariff-and-cost variant of the canonical lender case: PPA benchmarked at 5.0 US cents/kWh paid in fixed LKR with a bottom-up granular CAPEX ($1,300/kW) and escalating OPEX. Demonstrates the deeply uneconomic outcome (project IRR 0.23%, equity IRR -6.33%) under realistic costs.",
+      "filePath": "scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+      "tags": ["scenario", "debt", "capex", "opex", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_master_config_v14.yaml",
+      "type": "config",
+      "name": "dutchbay_master_config_v14.yaml",
+      "filePath": "scenarios/dutchbay_master_config_v14.yaml",
+      "summary": "Master v14 configuration aggregating financing terms, capex/opex, constraints, FX, IRR validation, Monte-Carlo, named scenarios and sensitivity scenario definitions for the DutchBay model. Acts as the consolidated multi-scenario control file.",
+      "tags": ["scenario", "config", "finance", "sensitivity", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_mc_enhanced_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_mc_enhanced_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_mc_enhanced_2025Q4.yaml",
+      "summary": "Enhanced Monte-Carlo scenario (Sprint 17) modeling four correlated stochastic variables — revenue, operating costs, FX, and turbine degradation — for the DutchBay project. Consumed by the Hydra Monte-Carlo CLI to run correlated-uncertainty risk analysis.",
+      "tags": ["scenario", "monte-carlo", "risk", "config", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_optimistic_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_optimistic_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_optimistic_2025Q4.yaml",
+      "summary": "Optimistic 2025Q4 sensitivity scenario for the DutchBay wind farm with favorable tariff, cost, FX and risk assumptions, including embedded scenario_result and IRR-validation blocks. Used as the upside bound in scenario comparisons.",
+      "tags": ["scenario", "finance", "sensitivity", "config", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_pessimistic_2025Q4.yaml",
+      "type": "config",
+      "name": "dutchbay_pessimistic_2025Q4.yaml",
+      "filePath": "scenarios/dutchbay_pessimistic_2025Q4.yaml",
+      "summary": "Pessimistic 2025Q4 sensitivity scenario for the DutchBay wind farm with adverse tariff, cost, FX and risk assumptions plus embedded scenario_result and IRR-validation blocks. Used as the downside bound in scenario comparisons.",
+      "tags": ["scenario", "finance", "sensitivity", "risk", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/dutchbay_sprint17_enhanced.yaml",
+      "type": "config",
+      "name": "dutchbay_sprint17_enhanced.yaml",
+      "filePath": "scenarios/dutchbay_sprint17_enhanced.yaml",
+      "summary": "Sprint 17 enhanced scenario integrating turbine specs, wind_resource, finance, Monte-Carlo, debt_sizing and sensitivity blocks with explicit defaults import and output section. Represents the consolidated Sprint 17 end-to-end configuration.",
+      "tags": ["scenario", "finance", "debt", "monte-carlo", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/edge_extreme_stress.yaml",
+      "type": "config",
+      "name": "edge_extreme_stress.yaml",
+      "filePath": "scenarios/edge_extreme_stress.yaml",
+      "summary": "Extreme-stress edge scenario applying severe adverse parameter combinations across tariff, cost, FX, tax and risk blocks to stress-test the DutchBay model's robustness and constraint handling. Includes scenario_result and IRR-validation sections.",
+      "tags": ["scenario", "risk", "sensitivity", "validation", "configuration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/example_a.yaml",
+      "type": "config",
+      "name": "example_a.yaml",
+      "filePath": "scenarios/example_a.yaml",
+      "summary": "Compact example scenario (Example A) with minimal project, tariff, FX, opex/capex, tax, risk and financing blocks. Serves as a lightweight demonstration/test input for the config loader and pipeline smoke checks.",
+      "tags": ["scenario", "config", "finance", "configuration", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:scenarios/example_a_old.yaml",
+      "type": "config",
+      "name": "example_a_old.yaml",
+      "filePath": "scenarios/example_a_old.yaml",
+      "summary": "Legacy/superseded version of the Example A scenario kept for backward-compatibility and regression comparison against the current example_a.yaml. Same minimal project/tariff/fx/cost/financing structure.",
+      "tags": ["scenario", "config", "finance", "configuration", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:scenarios/example_b.json",
+      "type": "config",
+      "name": "example_b.json",
+      "filePath": "scenarios/example_b.json",
+      "summary": "JSON-format example scenario (Example B) providing project, tariff, FX, opex/capex and financing-terms blocks. Demonstrates JSON config parsing parity with the YAML loader for the DutchBay model.",
+      "tags": ["scenario", "config", "finance", "configuration", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:scenarios/example_b.yaml",
+      "type": "config",
+      "name": "example_b.yaml",
+      "filePath": "scenarios/example_b.yaml",
+      "summary": "YAML-format example scenario (Example B) with project, tariff, FX, opex/capex, tax, risk and financing blocks. Paired with example_b.json to demonstrate equivalent YAML/JSON configuration inputs.",
+      "tags": ["scenario", "config", "finance", "configuration", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:scenarios/example_fx_structured_blocks.yaml",
+      "type": "config",
+      "name": "example_fx_structured_blocks.yaml",
+      "filePath": "scenarios/example_fx_structured_blocks.yaml",
+      "summary": "Reference scenario demonstrating the v14R6-compliant structured FX block format (replacing scalar FX values) alongside project, capex/opex, tariff, tax and debt blocks. Serves as the canonical example for the required structured-FX configuration.",
+      "tags": ["scenario", "config", "finance", "validation", "configuration"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+      "target": "config:scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:scenarios/example_a_old.yaml",
+      "target": "config:scenarios/example_a.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:scenarios/example_b.json",
+      "target": "config:scenarios/example_b.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:scenarios/dutchbay_optimistic_2025Q4.yaml",
+      "target": "config:scenarios/dutchbay_basecase_2025Q4.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:scenarios/dutchbay_pessimistic_2025Q4.yaml",
+      "target": "config:scenarios/dutchbay_basecase_2025Q4.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:scenarios/dutchbay_equitycase_2025Q4.yaml",
+      "target": "config:scenarios/dutchbay_basecase_2025Q4.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

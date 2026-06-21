@@ -1,0 +1,1737 @@
+{
+ "nodes": [
+  {
+   "id": "file:analytics/__init__.py",
+   "type": "file",
+   "name": "__init__.py",
+   "summary": "Public API surface for the analytics package; re-exports Pydantic v2 contracts, returns/risk-metrics functions, and legacy compatibility stubs for downstream consumers.",
+   "tags": [
+    "finance",
+    "risk",
+    "data-model",
+    "utility",
+    "aggregation"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/__init__.py"
+  },
+  {
+   "id": "file:analytics/capital_risk_layer_v14.py",
+   "type": "file",
+   "name": "capital_risk_layer_v14.py",
+   "summary": "Capital-risk Monte-Carlo layer that runs driver simulations and computes VaR/CVaR on equity IRR, equity NPV, minimum DSCR and AEP samples for the wind project.",
+   "tags": [
+    "monte-carlo",
+    "risk",
+    "equity",
+    "debt",
+    "cashflow"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/capital_risk_layer_v14.py"
+  },
+  {
+   "id": "file:analytics/contracts_v14_compat.py",
+   "type": "file",
+   "name": "contracts_v14_compat.py",
+   "summary": "Legacy compatibility shims providing minimal dataclass stand-ins (CasperResult, TailRiskMetrics, Distribution, DownsideMetrics) and a cashflow-result builder for code not yet migrated to contracts_v14.",
+   "tags": [
+    "data-model",
+    "risk",
+    "utility",
+    "contracts"
+   ],
+   "complexity": "simple",
+   "filePath": "analytics/contracts_v14_compat.py"
+  },
+  {
+   "id": "file:analytics/core/__init__.py",
+   "type": "file",
+   "name": "__init__.py",
+   "summary": "Aggregates the core analytics calculation utilities (returns, risk metrics, parameter solvers, sensitivity runner) into a single import surface.",
+   "tags": [
+    "finance",
+    "utility",
+    "aggregation",
+    "data-model"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/core/__init__.py"
+  },
+  {
+   "id": "file:analytics/core/parameter_solvers.py",
+   "type": "file",
+   "name": "parameter_solvers.py",
+   "summary": "Goal-seeking solvers that invert the scenario engine to find tariff for a target IRR/NPV, maximum debt under DSCR/LLCR covenants, and minimum CAPEX under an IRR floor.",
+   "tags": [
+    "finance",
+    "debt",
+    "equity",
+    "sensitivity",
+    "solver"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/core/parameter_solvers.py"
+  },
+  {
+   "id": "file:analytics/core/returns.py",
+   "type": "file",
+   "name": "returns.py",
+   "summary": "Project- and equity-return engine computing IRR, NPV, MIRR, payback and profitability index from CFADS and debt-service series for the project-finance model.",
+   "tags": [
+    "finance",
+    "equity",
+    "cashflow",
+    "data-model",
+    "returns"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/core/returns.py"
+  },
+  {
+   "id": "file:analytics/core/risk_metrics.py",
+   "type": "file",
+   "name": "risk_metrics.py",
+   "summary": "Tail-risk analytics engine providing VaR/CVaR, percentile, downside-deviation/Sortino, and covenant-breach-probability calculations over Monte-Carlo metric samples.",
+   "tags": [
+    "risk",
+    "monte-carlo",
+    "debt",
+    "data-model",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/core/risk_metrics.py"
+  },
+  {
+   "id": "file:analytics/fx/fx_builder.py",
+   "type": "file",
+   "name": "fx_builder.py",
+   "summary": "Builds the structured FX block, multi-currency FX rate curve, and FX risk profile (VaR/CVaR, concentration, depreciation) from scenario config, debt result and annual cashflow rows.",
+   "tags": [
+    "finance",
+    "risk",
+    "cashflow",
+    "fx",
+    "currency"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/fx/fx_builder.py"
+  },
+  {
+   "id": "file:analytics/fx/fx_contracts.py",
+   "type": "file",
+   "name": "fx_contracts.py",
+   "summary": "Pydantic/dataclass contracts for the FX subsystem: volumetry, FX rate curve, risk profile, regime config and the structured FX block with validation and serialization helpers.",
+   "tags": [
+    "data-model",
+    "fx",
+    "currency",
+    "contracts",
+    "validation"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/fx/fx_contracts.py"
+  },
+  {
+   "id": "file:analytics/fx/fx_integration.py",
+   "type": "file",
+   "name": "fx_integration.py",
+   "summary": "Integration shim that computes the FX structured block, curve and risk profile and attaches them onto a ScenarioResult for downstream reporting.",
+   "tags": [
+    "fx",
+    "currency",
+    "cashflow",
+    "integration",
+    "data-model"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/fx/fx_integration.py"
+  },
+  {
+   "id": "file:analytics/fx/fx_loader.py",
+   "type": "file",
+   "name": "fx_loader.py",
+   "summary": "Loads and validates structured FX config from YAML, builds FX curves from a block, and discovers FX regime scenario files on disk.",
+   "tags": [
+    "fx",
+    "currency",
+    "config",
+    "validation",
+    "loader"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/fx/fx_loader.py"
+  },
+  {
+   "id": "file:analytics/parameter_solvers.py",
+   "type": "file",
+   "name": "parameter_solvers.py",
+   "summary": "Deprecated re-export shim that forwards to analytics.core.parameter_solvers and emits a DeprecationWarning; retained for backward-compatible imports.",
+   "tags": [
+    "finance",
+    "solver",
+    "utility",
+    "deprecated"
+   ],
+   "complexity": "simple",
+   "filePath": "analytics/parameter_solvers.py"
+  },
+  {
+   "id": "class:analytics/capital_risk_layer_v14.py:CapitalRiskLayer",
+   "type": "class",
+   "name": "CapitalRiskLayer",
+   "summary": "Result dataclass bundling Monte-Carlo VaR/CVaR for equity IRR & NPV, DSCR and AEP across simulated samples.",
+   "tags": [
+    "risk",
+    "monte-carlo",
+    "data-model",
+    "equity"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    33,
+    41
+   ]
+  },
+  {
+   "id": "function:analytics/capital_risk_layer_v14.py:compute_capital_risk_layer",
+   "type": "function",
+   "name": "compute_capital_risk_layer",
+   "summary": "Computes VaR/CVaR and percentile statistics for equity IRR, equity NPV, minimum DSCR and AEP sample arrays via the TailRiskAnalyzer.",
+   "tags": [
+    "risk",
+    "monte-carlo",
+    "equity",
+    "debt"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    57,
+    125
+   ]
+  },
+  {
+   "id": "function:analytics/capital_risk_layer_v14.py:run_driver_mc",
+   "type": "function",
+   "name": "run_driver_mc",
+   "summary": "Runs a driver-level Monte-Carlo, perturbing inputs with a seeded RNG and re-evaluating the scenario to collect IRR/NPV/DSCR samples.",
+   "tags": [
+    "monte-carlo",
+    "risk",
+    "cashflow",
+    "simulation"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    128,
+    161
+   ]
+  },
+  {
+   "id": "function:analytics/capital_risk_layer_v14.py:run_capital_risk_layer",
+   "type": "function",
+   "name": "run_capital_risk_layer",
+   "summary": "Top-level orchestrator that runs the driver Monte-Carlo and feeds samples into compute_capital_risk_layer to produce the capital risk layer.",
+   "tags": [
+    "monte-carlo",
+    "risk",
+    "equity",
+    "debt"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    164,
+    183
+   ]
+  },
+  {
+   "id": "function:analytics/contracts_v14_compat.py:build_cashflow_result_from_annual_rows",
+   "type": "function",
+   "name": "build_cashflow_result_from_annual_rows",
+   "summary": "Constructs a minimal cashflow-result stand-in from a list of annual cashflow rows for legacy compatibility.",
+   "tags": [
+    "cashflow",
+    "data-model",
+    "utility",
+    "contracts"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    68,
+    81
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_irr",
+   "type": "function",
+   "name": "solve_for_tariff_given_irr",
+   "summary": "Bisection/secant solver that finds the power tariff yielding a target equity or project IRR by repeatedly evaluating the scenario engine.",
+   "tags": [
+    "finance",
+    "equity",
+    "solver",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    63,
+    188
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_given_dscr",
+   "type": "function",
+   "name": "solve_for_max_debt_given_dscr",
+   "summary": "Solves for the maximum debt amount whose resulting minimum DSCR meets a target covenant, sizing gearing under DSCR constraints.",
+   "tags": [
+    "debt",
+    "finance",
+    "solver",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    196,
+    315
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_npv",
+   "type": "function",
+   "name": "solve_for_tariff_given_npv",
+   "summary": "Finds the tariff that drives a chosen NPV metric (project or equity) to a target value via iterative root finding.",
+   "tags": [
+    "finance",
+    "equity",
+    "solver",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    323,
+    448
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_multi_covenant",
+   "type": "function",
+   "name": "solve_for_max_debt_multi_covenant",
+   "summary": "Sizes maximum debt subject to both DSCR and LLCR covenants simultaneously, taking the binding constraint.",
+   "tags": [
+    "debt",
+    "finance",
+    "solver",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    456,
+    588
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:solve_for_min_capex_given_irr_floor",
+   "type": "function",
+   "name": "solve_for_min_capex_given_irr_floor",
+   "summary": "Solves for the minimum CAPEX consistent with an equity IRR floor, useful for cost-target back-solving.",
+   "tags": [
+    "capex",
+    "finance",
+    "solver",
+    "sensitivity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    596,
+    708
+   ]
+  },
+  {
+   "id": "function:analytics/core/parameter_solvers.py:get_solver",
+   "type": "function",
+   "name": "get_solver",
+   "summary": "Registry lookup returning a named solver callable, raising KeyError with available options when unknown.",
+   "tags": [
+    "solver",
+    "utility",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    731,
+    765
+   ]
+  },
+  {
+   "id": "class:analytics/core/returns.py:ReturnsConfig",
+   "type": "class",
+   "name": "ReturnsConfig",
+   "summary": "Pydantic config for returns calculations holding CAPEX, FX rate, debt ratio, discount/finance/reinvest rates and operation/equity start years, with a from_yaml loader.",
+   "tags": [
+    "finance",
+    "config",
+    "equity",
+    "data-model"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    43,
+    118
+   ]
+  },
+  {
+   "id": "class:analytics/core/returns.py:ProjectReturns",
+   "type": "class",
+   "name": "ProjectReturns",
+   "summary": "Result container for project-level returns: IRR, NPV, MIRR, profitability index, payback and the underlying cashflows.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "data-model",
+    "returns"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    121,
+    146
+   ]
+  },
+  {
+   "id": "class:analytics/core/returns.py:EquityReturns",
+   "type": "class",
+   "name": "EquityReturns",
+   "summary": "Result container for equity-level returns including equity IRR/NPV/MIRR, PI, payback and equity cashflow series.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "data-model",
+    "returns"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    149,
+    177
+   ]
+  },
+  {
+   "id": "class:analytics/core/returns.py:AllReturns",
+   "type": "class",
+   "name": "AllReturns",
+   "summary": "Combined project + equity returns summary with capex split, debt/equity ratios and IRR uplift.",
+   "tags": [
+    "finance",
+    "equity",
+    "data-model",
+    "returns"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    180,
+    200
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:calculate_npv",
+   "type": "function",
+   "name": "calculate_npv",
+   "summary": "Computes net present value of a cashflow series at a given discount rate and start period with safe-float guards.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "returns",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    233,
+    274
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:calculate_irr",
+   "type": "function",
+   "name": "calculate_irr",
+   "summary": "Computes the internal rate of return for a cashflow series, returning a safe float and warning on degenerate inputs.",
+   "tags": [
+    "finance",
+    "returns",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    277,
+    302
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:calculate_mirr",
+   "type": "function",
+   "name": "calculate_mirr",
+   "summary": "Computes the modified internal rate of return separating financing and reinvestment rates over the cashflow series.",
+   "tags": [
+    "finance",
+    "returns",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    305,
+    358
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:calculate_project_returns",
+   "type": "function",
+   "name": "calculate_project_returns",
+   "summary": "Assembles project-level returns (IRR/NPV/MIRR/PI/payback) from a CFADS series and config, producing a ProjectReturns result.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "returns",
+    "equity"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    366,
+    436
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:calculate_equity_returns",
+   "type": "function",
+   "name": "calculate_equity_returns",
+   "summary": "Computes equity returns from CFADS net of debt service, building equity cashflows and the EquityReturns result.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "debt",
+    "returns"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    444,
+    536
+   ]
+  },
+  {
+   "id": "function:analytics/core/returns.py:summarize_all_returns",
+   "type": "function",
+   "name": "summarize_all_returns",
+   "summary": "Combines project and equity return calculations into a single AllReturns summary with capital structure splits.",
+   "tags": [
+    "finance",
+    "equity",
+    "returns",
+    "aggregation"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    544,
+    592
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:RiskConfig",
+   "type": "class",
+   "name": "RiskConfig",
+   "summary": "Config for tail-risk analysis holding confidence level, target return, and minimum DSCR/LLCR/PLCR covenant thresholds with validation.",
+   "tags": [
+    "risk",
+    "config",
+    "debt",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    36,
+    63
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:VaRCVaRResult",
+   "type": "class",
+   "name": "VaRCVaRResult",
+   "summary": "Dataclass holding a VaR/CVaR pair with its confidence level, return type and human-readable labels.",
+   "tags": [
+    "risk",
+    "data-model",
+    "monte-carlo"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    66,
+    80
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:PercentileAnalysis",
+   "type": "class",
+   "name": "PercentileAnalysis",
+   "summary": "Dataclass capturing P10/P25/P50/P75/P90 percentile points for a metric distribution.",
+   "tags": [
+    "risk",
+    "data-model",
+    "sensitivity"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    83,
+    96
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:DownsideRisk",
+   "type": "class",
+   "name": "DownsideRisk",
+   "summary": "Dataclass for downside risk metrics: downside deviation, Sortino ratio and probability below target.",
+   "tags": [
+    "risk",
+    "data-model",
+    "equity"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    99,
+    114
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:CovenantBreachAnalysis",
+   "type": "class",
+   "name": "CovenantBreachAnalysis",
+   "summary": "Dataclass summarizing DSCR/LLCR/PLCR breach probabilities and mean minima against covenant thresholds.",
+   "tags": [
+    "risk",
+    "debt",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    117,
+    142
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:MetricRiskSummary",
+   "type": "class",
+   "name": "MetricRiskSummary",
+   "summary": "Per-metric risk roll-up combining mean/std/min/max with VaR/CVaR, percentiles and downside metrics.",
+   "tags": [
+    "risk",
+    "data-model",
+    "aggregation"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    145,
+    164
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:TailRiskReport",
+   "type": "class",
+   "name": "TailRiskReport",
+   "summary": "Aggregated tail-risk report across equity/project IRR & NPV, covenant breaches and probability below hurdle.",
+   "tags": [
+    "risk",
+    "equity",
+    "debt",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    167,
+    189
+   ]
+  },
+  {
+   "id": "class:analytics/core/risk_metrics.py:TailRiskAnalyzer",
+   "type": "class",
+   "name": "TailRiskAnalyzer",
+   "summary": "Core analyzer computing VaR/CVaR, percentile analysis, downside risk, covenant-breach probability and a full tail-risk report from Monte-Carlo samples.",
+   "tags": [
+    "risk",
+    "monte-carlo",
+    "debt",
+    "equity"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    197,
+    525
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_builder.py:compute_fx_structured_block",
+   "type": "function",
+   "name": "compute_fx_structured_block",
+   "summary": "Builds the structured FX block from scenario config, debt tranches and annual rows, deriving currency volumetry and hedging coverage.",
+   "tags": [
+    "fx",
+    "currency",
+    "debt",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    42,
+    160
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_builder.py:compute_fx_curve",
+   "type": "function",
+   "name": "compute_fx_curve",
+   "summary": "Constructs the multi-currency FX rate curve (LKR vs USD/CNY/EUR/GBP) over the project horizon from config and annual rows.",
+   "tags": [
+    "fx",
+    "currency",
+    "cashflow",
+    "data-model"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    163,
+    302
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_builder.py:compute_fx_risk_profile",
+   "type": "function",
+   "name": "compute_fx_risk_profile",
+   "summary": "Derives the FX risk profile (VaR/CVaR, debt concentration HHI, depreciation shock, worst-case year) from the FX block and curve.",
+   "tags": [
+    "fx",
+    "currency",
+    "risk",
+    "monte-carlo"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    305,
+    417
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXVolumetry",
+   "type": "class",
+   "name": "FXVolumetry",
+   "summary": "FX volumetry record of per-period multi-currency debt, revenue and interest/principal exposures with USD-equivalent helper.",
+   "tags": [
+    "fx",
+    "currency",
+    "data-model",
+    "debt"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    42,
+    81
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXCurveOutput",
+   "type": "class",
+   "name": "FXCurveOutput",
+   "summary": "FX rate curve contract holding per-year LKR rates against USD/CNY/EUR/GBP with validation, rate lookup and serialization.",
+   "tags": [
+    "fx",
+    "currency",
+    "data-model",
+    "validation"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    90,
+    186
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXRiskProfile",
+   "type": "class",
+   "name": "FXRiskProfile",
+   "summary": "FX risk-profile contract capturing VaR/CVaR, currency split percentages, concentration HHI and recovery years with high-risk flagging.",
+   "tags": [
+    "fx",
+    "currency",
+    "risk",
+    "data-model"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    195,
+    270
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXRegimeConfig",
+   "type": "class",
+   "name": "FXRegimeConfig",
+   "summary": "Config for an FX regime scenario: base/target currency, regime type, horizon, annual depreciation and start rate.",
+   "tags": [
+    "fx",
+    "currency",
+    "config",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    279,
+    299
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXStructuredBlock",
+   "type": "class",
+   "name": "FXStructuredBlock",
+   "summary": "Structured FX block contract bundling strategy, volumetry, debt tranches, revenue currencies, match ratio and hedging coverage with validation and serialization.",
+   "tags": [
+    "fx",
+    "currency",
+    "data-model",
+    "validation"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    308,
+    416
+   ]
+  },
+  {
+   "id": "class:analytics/fx/fx_contracts.py:FXRegimeScenario",
+   "type": "class",
+   "name": "FXRegimeScenario",
+   "summary": "Named FX regime scenario wrapping an FXRegimeConfig with a regime-type accessor.",
+   "tags": [
+    "fx",
+    "currency",
+    "scenario",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    425,
+    438
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "type": "function",
+   "name": "integrate_fx_into_scenario_result",
+   "summary": "Computes the FX structured block, curve and risk profile and returns a ScenarioResult augmented with the FX analytics.",
+   "tags": [
+    "fx",
+    "currency",
+    "cashflow",
+    "integration"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_loader.py:load_fx_structured_block",
+   "type": "function",
+   "name": "load_fx_structured_block",
+   "summary": "Parses raw YAML config into an FXStructuredBlock, building per-period volumetry records with validation.",
+   "tags": [
+    "fx",
+    "currency",
+    "config",
+    "loader"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    43,
+    130
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_loader.py:build_fx_curve_from_block",
+   "type": "function",
+   "name": "build_fx_curve_from_block",
+   "summary": "Builds an FX curve from a structured block over the given years; confidence-interval mode is not yet implemented.",
+   "tags": [
+    "fx",
+    "currency",
+    "data-model",
+    "loader"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    133,
+    174
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_loader.py:validate_fx_structured_config",
+   "type": "function",
+   "name": "validate_fx_structured_config",
+   "summary": "Validates the shape and types of a raw structured FX config, logging errors and returning a boolean result.",
+   "tags": [
+    "fx",
+    "currency",
+    "validation",
+    "config"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    177,
+    215
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_loader.py:discover_fx_files",
+   "type": "function",
+   "name": "discover_fx_files",
+   "summary": "Discovers FX regime scenario YAML files under a scenarios directory via globbing.",
+   "tags": [
+    "fx",
+    "currency",
+    "loader",
+    "config"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    218,
+    249
+   ]
+  },
+  {
+   "id": "function:analytics/fx/fx_loader.py:load_fx_regime",
+   "type": "function",
+   "name": "load_fx_regime",
+   "summary": "Loads an FX regime scenario from a YAML file, raising FileNotFoundError if missing.",
+   "tags": [
+    "fx",
+    "currency",
+    "loader",
+    "config"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    252,
+    283
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "file:analytics/__init__.py",
+   "target": "file:analytics/contracts_v14_compat.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/__init__.py",
+   "target": "file:analytics/contracts_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/__init__.py",
+   "target": "file:analytics/core/returns.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/__init__.py",
+   "target": "file:analytics/core/risk_metrics.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/__init__.py",
+   "target": "file:analytics/fx/fx_contracts.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "file:analytics/core/risk_metrics.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "file:analytics/evaluation_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/__init__.py",
+   "target": "file:analytics/core/parameter_solvers.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/__init__.py",
+   "target": "file:analytics/core/returns.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/__init__.py",
+   "target": "file:analytics/core/risk_metrics.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/__init__.py",
+   "target": "file:analytics/core/sensitivity_runner.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "file:analytics/evaluate_scenario.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "file:analytics/fx/fx_contracts.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/fx/fx_integration.py",
+   "target": "file:analytics/fx/fx_builder.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "file:analytics/fx/fx_contracts.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/parameter_solvers.py",
+   "target": "file:analytics/core/parameter_solvers.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "class:analytics/capital_risk_layer_v14.py:CapitalRiskLayer",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "class:analytics/capital_risk_layer_v14.py:CapitalRiskLayer",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:compute_capital_risk_layer",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:compute_capital_risk_layer",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:run_driver_mc",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:run_driver_mc",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:run_capital_risk_layer",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/capital_risk_layer_v14.py",
+   "target": "function:analytics/capital_risk_layer_v14.py:run_capital_risk_layer",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/contracts_v14_compat.py",
+   "target": "function:analytics/contracts_v14_compat.py:build_cashflow_result_from_annual_rows",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/contracts_v14_compat.py",
+   "target": "function:analytics/contracts_v14_compat.py:build_cashflow_result_from_annual_rows",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_irr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_irr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_given_dscr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_given_dscr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_npv",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_npv",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_multi_covenant",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_multi_covenant",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_min_capex_given_irr_floor",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:solve_for_min_capex_given_irr_floor",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:get_solver",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/parameter_solvers.py",
+   "target": "function:analytics/core/parameter_solvers.py:get_solver",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:ReturnsConfig",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:ReturnsConfig",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:ProjectReturns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:ProjectReturns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:EquityReturns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:EquityReturns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:AllReturns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "class:analytics/core/returns.py:AllReturns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_npv",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_npv",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_irr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_irr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_mirr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_mirr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_project_returns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_project_returns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_equity_returns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:calculate_equity_returns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:summarize_all_returns",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/returns.py",
+   "target": "function:analytics/core/returns.py:summarize_all_returns",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:RiskConfig",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:RiskConfig",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:VaRCVaRResult",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:VaRCVaRResult",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:PercentileAnalysis",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:PercentileAnalysis",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:DownsideRisk",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:DownsideRisk",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:CovenantBreachAnalysis",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:CovenantBreachAnalysis",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:MetricRiskSummary",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:MetricRiskSummary",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:TailRiskReport",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:TailRiskReport",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:TailRiskAnalyzer",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/risk_metrics.py",
+   "target": "class:analytics/core/risk_metrics.py:TailRiskAnalyzer",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_structured_block",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_structured_block",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_curve",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_curve",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_risk_profile",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_builder.py",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_risk_profile",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXVolumetry",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXVolumetry",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXCurveOutput",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXCurveOutput",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRiskProfile",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRiskProfile",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRegimeConfig",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRegimeConfig",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXStructuredBlock",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXStructuredBlock",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRegimeScenario",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_contracts.py",
+   "target": "class:analytics/fx/fx_contracts.py:FXRegimeScenario",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_integration.py",
+   "target": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_integration.py",
+   "target": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:load_fx_structured_block",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:load_fx_structured_block",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:build_fx_curve_from_block",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:build_fx_curve_from_block",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:validate_fx_structured_config",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:validate_fx_structured_config",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:discover_fx_files",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:discover_fx_files",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:load_fx_regime",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/fx/fx_loader.py",
+   "target": "function:analytics/fx/fx_loader.py:load_fx_regime",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/returns.py:calculate_npv",
+   "target": "file:finance/irr.py",
+   "type": "depends_on",
+   "direction": "forward",
+   "weight": 0.6
+  },
+  {
+   "source": "function:analytics/core/returns.py:calculate_irr",
+   "target": "file:finance/irr.py",
+   "type": "depends_on",
+   "direction": "forward",
+   "weight": 0.6
+  },
+  {
+   "source": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_irr",
+   "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_given_dscr",
+   "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/parameter_solvers.py:solve_for_tariff_given_npv",
+   "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/parameter_solvers.py:solve_for_max_debt_multi_covenant",
+   "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/parameter_solvers.py:solve_for_min_capex_given_irr_floor",
+   "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/capital_risk_layer_v14.py:run_driver_mc",
+   "target": "function:analytics/evaluation_v14.py:evaluate_with_overrides",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_structured_block",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_curve",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/fx/fx_integration.py:integrate_fx_into_scenario_result",
+   "target": "function:analytics/fx/fx_builder.py:compute_fx_risk_profile",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  }
+ ]
+}

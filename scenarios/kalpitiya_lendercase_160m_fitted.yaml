@@ -158,11 +158,22 @@ fx:
 capex:
   usd_total: 159600000
   capex_per_kw_usd: 1000
+  # LandBOSSE-decomposed WBS (sums to usd_total 159.6M); was a stale 4-line epc/dev/
+  # fees/contingency block summing to 150M (!= usd_total). derive_from_breakdown is off,
+  # so usd_total drives; the breakdown is now consistent rather than decorative-wrong.
   breakdown:
-    epc_usd: 140000000
-    development_usd: 5000000
-    financing_fees_usd: 3000000
-    contingency_usd: 2000000
+    wtg_supply_usd: 110124000
+    foundation_usd: 7660800
+    erection_usd: 5107200
+    collection_system_usd: 5107200
+    site_preparation_usd: 3064320
+    site_development_usd: 2042880
+    project_management_usd: 2553600
+    grid_connection_usd: 7660800
+    substation_usd: 5107200
+    development_owners_usd: 5586000
+    financing_fees_usd: 3192000
+    contingency_usd: 2394000
 opex:
   usd_per_year: 3000000
   opex_per_kw_yr_usd: 20.0

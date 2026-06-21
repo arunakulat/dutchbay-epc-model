@@ -1,0 +1,528 @@
+{
+  "nodes": [
+    {
+      "id": "file:analytics/scenarioloader.py",
+      "type": "file",
+      "name": "scenarioloader.py",
+      "filePath": "analytics/scenarioloader.py",
+      "summary": "Legacy backward-compatibility shim exposing loadscenarioconfig() for older imports; loads a v14 YAML/JSON scenario config into a dict.",
+      "tags": ["scenario", "config", "legacy", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:analytics/scenarioloader.py:loadscenarioconfig",
+      "type": "function",
+      "name": "loadscenarioconfig",
+      "summary": "Legacy-named loader that reads and parses a YAML scenario config file into a dict, kept for historical import compatibility.",
+      "tags": ["scenario", "config", "legacy", "entry-point"],
+      "complexity": "simple",
+      "lineRange": [19, 55]
+    },
+    {
+      "id": "file:analytics/scenarios/__init__.py",
+      "type": "file",
+      "name": "scenarios/__init__.py",
+      "filePath": "analytics/scenarios/__init__.py",
+      "summary": "Package facade that consolidates the fragmented scenario utilities (loader, legacy loader, manager) and re-exports a unified public API for scenario loading, discovery, and analysis.",
+      "tags": ["scenario", "config", "package", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:analytics/sensitivity/stochastic.py",
+      "type": "file",
+      "name": "stochastic.py",
+      "filePath": "analytics/sensitivity/stochastic.py",
+      "summary": "Runs a stochastic tornado sensitivity: sweeps each parameter over a range with Gaussian jitter, re-evaluates the scenario per sample, and summarises metric percentiles per variable.",
+      "tags": ["sensitivity", "monte-carlo", "risk", "scenario"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:analytics/sensitivity/stochastic.py:run_stochastic_tornado",
+      "type": "function",
+      "name": "run_stochastic_tornado",
+      "summary": "Generates jittered parameter sweeps, evaluates the metric via the scenario engine per sample, and returns a DataFrame of per-variable percentile bands for tornado plots.",
+      "tags": ["sensitivity", "monte-carlo", "risk", "entry-point"],
+      "complexity": "moderate",
+      "lineRange": [52, 126]
+    },
+    {
+      "id": "function:analytics/sensitivity/stochastic.py:_build_nested_override",
+      "type": "function",
+      "name": "_build_nested_override",
+      "summary": "Expands a dotted variable name and value into the nested override dict structure the scenario evaluator expects.",
+      "tags": ["sensitivity", "scenario", "utility"],
+      "complexity": "simple",
+      "lineRange": [129, 159]
+    },
+    {
+      "id": "file:api/pipeline_api.py",
+      "type": "file",
+      "name": "pipeline_api.py",
+      "filePath": "api/pipeline_api.py",
+      "summary": "FastAPI-style endpoint layer that runs the v14 pipeline from a request payload and extracts AEP, KPI, debt, cost, and funding blocks plus a reproducibility manifest into a typed response.",
+      "tags": ["pipeline", "cli", "data-model", "finance", "entry-point"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:api/pipeline_api.py:RunPipelineRequest",
+      "type": "class",
+      "name": "RunPipelineRequest",
+      "summary": "Request schema for the run-pipeline endpoint accepting either a config path or inline config plus overrides, validating that exactly one config source is provided.",
+      "tags": ["pipeline", "data-model", "validation", "cli"],
+      "complexity": "simple",
+      "lineRange": [36, 63]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_apply_overrides",
+      "type": "function",
+      "name": "_apply_overrides",
+      "summary": "Deep-copies the config and applies dotted-key override values into the nested scenario structure before running the pipeline.",
+      "tags": ["pipeline", "scenario", "config", "utility"],
+      "complexity": "simple",
+      "lineRange": [179, 191]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_extract_aep",
+      "type": "function",
+      "name": "_extract_aep",
+      "summary": "Pulls the AEP/energy-yield block (P50/P75/P90, gross GWh, capacity factor) from the resolved config or a referenced wind-resource JSON for the API response.",
+      "tags": ["aep", "wind-resource", "data-model", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [212, 230]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_extract_debt",
+      "type": "function",
+      "name": "_extract_debt",
+      "summary": "Flattens the debt-sizing result into a DebtBlock with tranches, gearing, binding constraint, DSCR series, balloon, and a per-year schedule for the API response.",
+      "tags": ["debt", "data-model", "cashflow", "pipeline"],
+      "complexity": "moderate",
+      "lineRange": [233, 283]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_extract_funding",
+      "type": "function",
+      "name": "_extract_funding",
+      "summary": "Builds the funding sources-and-uses block (debt, equity, IDC, DSRA, balance check) from the debt result for the API response.",
+      "tags": ["debt", "equity", "data-model", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [286, 303]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_capacity_mw",
+      "type": "function",
+      "name": "_capacity_mw",
+      "summary": "Resolves the project's installed capacity in MW from the project block or the turbine count times rated capacity.",
+      "tags": ["wind-resource", "capex", "utility", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [306, 317]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_extract_cost",
+      "type": "function",
+      "name": "_extract_cost",
+      "summary": "Builds the cost block (total/per-kW CAPEX, IRENA benchmark ratio, within-band flag, estimate class, accuracy band) for the API response.",
+      "tags": ["capex", "cost-benchmark", "data-model", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [320, 348]
+    },
+    {
+      "id": "function:api/pipeline_api.py:_extract_kpis",
+      "type": "function",
+      "name": "_extract_kpis",
+      "summary": "Maps the pipeline KPI dict into a typed KpiBlock (project/equity IRR, NPV, DSCR, LLCR/PLCR, equity multiple, payback) for the API response.",
+      "tags": ["finance", "equity", "data-model", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [351, 365]
+    },
+    {
+      "id": "function:api/pipeline_api.py:run_pipeline",
+      "type": "function",
+      "name": "run_pipeline",
+      "summary": "Endpoint handler that loads/overrides the config, runs the v14 pipeline, and assembles the full typed RunPipelineResponse with KPIs, AEP, debt, cost, funding, and manifest.",
+      "tags": ["pipeline", "cli", "entry-point", "finance"],
+      "complexity": "moderate",
+      "lineRange": [372, 404]
+    },
+    {
+      "id": "file:finance/wacc_v14.py",
+      "type": "file",
+      "name": "wacc_v14.py",
+      "filePath": "finance/wacc_v14.py",
+      "summary": "Computes the project's weighted-average cost of capital via CAPM or build-up methods, relevering beta, deriving cost of equity/debt, after-tax and real WACC, and a prudential-spread overlay used as the NPV discount rate.",
+      "tags": ["finance", "wacc", "equity", "debt", "discount-rate"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:finance/wacc_v14.py:WaccComponents",
+      "type": "class",
+      "name": "WaccComponents",
+      "summary": "Dataclass holding the full WACC breakdown: nominal/real/prudential WACC, cost of equity/debt, levered beta, target gearing, tax and inflation inputs.",
+      "tags": ["finance", "wacc", "data-model", "contracts"],
+      "complexity": "simple",
+      "lineRange": [72, 104]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:get_nested",
+      "type": "function",
+      "name": "get_nested",
+      "summary": "Safely traverses a nested config dict by a key path, returning a default when any level is missing.",
+      "tags": ["finance", "config", "utility"],
+      "complexity": "simple",
+      "lineRange": [139, 158]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:_parse_prudential_spread_bps",
+      "type": "function",
+      "name": "_parse_prudential_spread_bps",
+      "summary": "Parses the prudential spread input (int, bps, or percent-suffixed string) into a basis-points integer added to the WACC for conservatism.",
+      "tags": ["finance", "wacc", "validation", "utility"],
+      "complexity": "moderate",
+      "lineRange": [161, 205]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:calculate_cost_of_equity_capm",
+      "type": "function",
+      "name": "calculate_cost_of_equity_capm",
+      "summary": "Computes cost of equity via CAPM as risk-free rate plus beta times the market risk premium.",
+      "tags": ["finance", "wacc", "equity"],
+      "complexity": "simple",
+      "lineRange": [213, 222]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:relever_beta",
+      "type": "function",
+      "name": "relever_beta",
+      "summary": "Relevers an asset (unlevered) beta to an equity beta given target debt-to-equity and tax rate using the Hamada relation.",
+      "tags": ["finance", "wacc", "equity"],
+      "complexity": "simple",
+      "lineRange": [225, 234]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:calculate_after_tax_wacc",
+      "type": "function",
+      "name": "calculate_after_tax_wacc",
+      "summary": "Blends cost of equity and after-tax cost of debt by their value weights to produce the after-tax nominal WACC.",
+      "tags": ["finance", "wacc", "debt", "equity"],
+      "complexity": "simple",
+      "lineRange": [242, 255]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:calculate_real_wacc",
+      "type": "function",
+      "name": "calculate_real_wacc",
+      "summary": "Converts a nominal WACC to a real WACC by deflating with the inflation rate via the Fisher relation.",
+      "tags": ["finance", "wacc", "inflation"],
+      "complexity": "simple",
+      "lineRange": [258, 266]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:build_wacc",
+      "type": "function",
+      "name": "build_wacc",
+      "summary": "CAPM-driven WACC builder: relevers beta, computes cost of equity, after-tax and real WACC, and assembles the WaccComponents with a prudential overlay.",
+      "tags": ["finance", "wacc", "equity", "debt"],
+      "complexity": "moderate",
+      "lineRange": [274, 358]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:build_wacc_build_up",
+      "type": "function",
+      "name": "build_wacc_build_up",
+      "summary": "Build-up-method WACC builder using an explicit cost of equity and pre-tax cost of debt plus fees, producing the after-tax, real, and prudential WACC components.",
+      "tags": ["finance", "wacc", "equity", "debt"],
+      "complexity": "moderate",
+      "lineRange": [366, 418]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:resolve_cost_of_equity",
+      "type": "function",
+      "name": "resolve_cost_of_equity",
+      "summary": "Resolves the cost of equity from the WACC config, accepting either an explicit value or build-up sub-components and validating the result.",
+      "tags": ["finance", "wacc", "equity", "config"],
+      "complexity": "simple",
+      "lineRange": [421, 455]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:compute_build_up_wacc",
+      "type": "function",
+      "name": "compute_build_up_wacc",
+      "summary": "Reads WACC config and debt inputs, resolves the cost of equity, and returns a build-up WACC component dict for the pipeline.",
+      "tags": ["finance", "wacc", "debt", "config"],
+      "complexity": "moderate",
+      "lineRange": [458, 501]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:compute_wacc_from_config",
+      "type": "function",
+      "name": "compute_wacc_from_config",
+      "summary": "Top-level config-driven WACC resolver that dispatches across explicit, build-up, and CAPM modes and returns the full WACC component dict used as the discount rate.",
+      "tags": ["finance", "wacc", "config", "discount-rate"],
+      "complexity": "complex",
+      "lineRange": [509, 717]
+    },
+    {
+      "id": "function:finance/wacc_v14.py:extract_wacc_rates",
+      "type": "function",
+      "name": "extract_wacc_rates",
+      "summary": "Pulls a compact set of headline WACC rates from a computed components dict for reporting and KPI labelling.",
+      "tags": ["finance", "wacc", "utility"],
+      "complexity": "simple",
+      "lineRange": [725, 760]
+    },
+    {
+      "id": "file:run_full_pipeline_v14.py",
+      "type": "file",
+      "name": "run_full_pipeline_v14.py",
+      "filePath": "run_full_pipeline_v14.py",
+      "summary": "Top-level CLI orchestrator that runs the wind producer, applies the wind export to a scenario via the cashflow adapter, runs the v14 finance pipeline, and writes JSON/CSV outputs plus a run manifest.",
+      "tags": ["cli", "pipeline", "wind-resource", "entry-point", "cashflow"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_safe_mkdir",
+      "type": "function",
+      "name": "_safe_mkdir",
+      "summary": "Creates an output directory (with parents) idempotently for pipeline artifacts.",
+      "tags": ["cli", "utility", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [123, 132]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_write_json",
+      "type": "function",
+      "name": "_write_json",
+      "summary": "Serialises a payload to a pretty-printed JSON file for pipeline output artifacts.",
+      "tags": ["cli", "utility", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [135, 148]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_load_yaml_scenario",
+      "type": "function",
+      "name": "_load_yaml_scenario",
+      "summary": "Loads a scenario YAML file into a dict, raising on non-mapping content, for the CLI's wind and pipeline steps.",
+      "tags": ["cli", "scenario", "config", "utility"],
+      "complexity": "simple",
+      "lineRange": [156, 170]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_load_wind_export",
+      "type": "function",
+      "name": "_load_wind_export",
+      "summary": "Loads the wind producer's export JSON into a dict for application to the scenario via the cashflow adapter.",
+      "tags": ["cli", "wind-resource", "utility"],
+      "complexity": "simple",
+      "lineRange": [173, 196]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_run_wind_producer",
+      "type": "function",
+      "name": "_run_wind_producer",
+      "summary": "Invokes the external wind-resource producer as a subprocess to generate the AEP/cashflow export JSON for a scenario.",
+      "tags": ["cli", "wind-resource", "aep", "pipeline"],
+      "complexity": "moderate",
+      "lineRange": [199, 271]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario",
+      "type": "function",
+      "name": "_apply_wind_to_scenario",
+      "summary": "Applies the wind export to a scenario via the cashflow adapter, writes a patched scenario YAML, and returns its path for the finance pipeline.",
+      "tags": ["cli", "wind-resource", "scenario", "cashflow"],
+      "complexity": "moderate",
+      "lineRange": [274, 318]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:_write_annual_rows_csv",
+      "type": "function",
+      "name": "_write_annual_rows_csv",
+      "summary": "Writes the pipeline's per-year annual cashflow rows to a CSV file with a stable column ordering.",
+      "tags": ["cli", "cashflow", "utility"],
+      "complexity": "simple",
+      "lineRange": [321, 350]
+    },
+    {
+      "id": "function:run_full_pipeline_v14.py:cli",
+      "type": "function",
+      "name": "cli",
+      "summary": "Main CLI entry orchestrating the wind producer, wind-to-scenario application, v14 pipeline run, and output/manifest writing with error handling and exit codes.",
+      "tags": ["cli", "pipeline", "entry-point", "wind-resource"],
+      "complexity": "complex",
+      "lineRange": [363, 593]
+    },
+    {
+      "id": "file:wind_resource/cashflow_adapter.py",
+      "type": "file",
+      "name": "cashflow_adapter.py",
+      "filePath": "wind_resource/cashflow_adapter.py",
+      "summary": "Bridges the wind-resource cashflow export into a finance scenario config, patching AEP/generation/capacity-factor fields and enforcing drift tolerances between the wind model and scenario assumptions.",
+      "tags": ["wind-resource", "aep", "scenario", "validation", "cashflow"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/cashflow_adapter.py:WindAdapterDriftError",
+      "type": "class",
+      "name": "WindAdapterDriftError",
+      "summary": "Exception raised when a wind-export field drifts beyond tolerance from the scenario assumption, carrying field, values, and drift percentage for diagnostics.",
+      "tags": ["wind-resource", "validation", "risk", "data-model"],
+      "complexity": "simple",
+      "lineRange": [98, 132]
+    },
+    {
+      "id": "class:wind_resource/cashflow_adapter.py:WindCashflowExport",
+      "type": "class",
+      "name": "WindCashflowExport",
+      "summary": "Pydantic model of the wind producer's cashflow export (annual generation, capacity factor, revenue, turbine count, tariff, FX) with a sanity validator.",
+      "tags": ["wind-resource", "aep", "data-model", "validation"],
+      "complexity": "moderate",
+      "lineRange": [135, 169]
+    },
+    {
+      "id": "function:wind_resource/cashflow_adapter.py:_get_nested",
+      "type": "function",
+      "name": "_get_nested",
+      "summary": "Reads a value from a nested dict by a path list for comparing wind-export and scenario fields.",
+      "tags": ["wind-resource", "utility"],
+      "complexity": "simple",
+      "lineRange": [216, 227]
+    },
+    {
+      "id": "function:wind_resource/cashflow_adapter.py:_set_nested",
+      "type": "function",
+      "name": "_set_nested",
+      "summary": "Writes a value into a nested dict by a path list, creating intermediate maps, when patching the scenario.",
+      "tags": ["wind-resource", "scenario", "utility"],
+      "complexity": "simple",
+      "lineRange": [230, 239]
+    },
+    {
+      "id": "function:wind_resource/cashflow_adapter.py:_drift_pct",
+      "type": "function",
+      "name": "_drift_pct",
+      "summary": "Computes the percentage drift between a wind-model value and the scenario value to enforce the adapter tolerance.",
+      "tags": ["wind-resource", "validation", "risk"],
+      "complexity": "simple",
+      "lineRange": [242, 252]
+    },
+    {
+      "id": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch",
+      "type": "function",
+      "name": "wind_export_to_scenario_patch",
+      "summary": "Validates the wind export, patches the scenario YAML's AEP/generation/capacity fields per the adapter mode, and raises WindAdapterDriftError when drift exceeds tolerance.",
+      "tags": ["wind-resource", "aep", "scenario", "validation", "entry-point"],
+      "complexity": "complex",
+      "lineRange": [255, 394]
+    }
+  ],
+  "edges": [
+    {"source": "file:analytics/scenarioloader.py", "target": "function:analytics/scenarioloader.py:loadscenarioconfig", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/scenarioloader.py", "target": "function:analytics/scenarioloader.py:loadscenarioconfig", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/scenarios/__init__.py", "target": "file:analytics/scenario_loader.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/scenarios/__init__.py", "target": "file:analytics/scenario_manager.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/scenarios/__init__.py", "target": "file:analytics/scenarioloader.py", "type": "imports", "direction": "forward", "weight": 0.7},
+
+    {"source": "file:analytics/sensitivity/stochastic.py", "target": "file:analytics/contracts_v14.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/sensitivity/stochastic.py", "target": "file:analytics/evaluate_scenario.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/sensitivity/stochastic.py", "target": "function:analytics/sensitivity/stochastic.py:run_stochastic_tornado", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/sensitivity/stochastic.py", "target": "function:analytics/sensitivity/stochastic.py:_build_nested_override", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/sensitivity/stochastic.py", "target": "function:analytics/sensitivity/stochastic.py:run_stochastic_tornado", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/sensitivity/stochastic.py:run_stochastic_tornado", "target": "function:analytics/sensitivity/stochastic.py:_build_nested_override", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/sensitivity/stochastic.py:run_stochastic_tornado", "target": "function:analytics/evaluate_scenario.py:evaluate_with_overrides", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/cost/benchmark.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/cost/cost_basis.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/cost/estimate_class.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/pipeline_v14_enhanced.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/run_manifest.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:analytics/scenario_loader.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "file:finance/debt_v14.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:api/pipeline_api.py", "target": "class:api/pipeline_api.py:RunPipelineRequest", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_apply_overrides", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_extract_aep", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_extract_debt", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_extract_funding", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_capacity_mw", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_extract_cost", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:_extract_kpis", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:run_pipeline", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:api/pipeline_api.py", "target": "class:api/pipeline_api.py:RunPipelineRequest", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:api/pipeline_api.py", "target": "function:api/pipeline_api.py:run_pipeline", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_apply_overrides", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_extract_kpis", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_extract_aep", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_extract_debt", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_extract_cost", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:api/pipeline_api.py:_extract_funding", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:analytics/scenario_loader.py:load_scenario_config", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:analytics/run_manifest.py:build_run_manifest", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:run_pipeline", "target": "function:analytics/cost/cost_basis.py:resolve_cost_basis_year", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:_extract_cost", "target": "function:analytics/cost/benchmark.py:capex_benchmark", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:api/pipeline_api.py:_extract_cost", "target": "function:analytics/cost/estimate_class.py:resolve_accuracy_band", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:finance/wacc_v14.py", "target": "class:finance/wacc_v14.py:WaccComponents", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:get_nested", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:_parse_prudential_spread_bps", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:calculate_cost_of_equity_capm", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:relever_beta", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:calculate_after_tax_wacc", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:calculate_real_wacc", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:build_wacc", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:build_wacc_build_up", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:resolve_cost_of_equity", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:compute_build_up_wacc", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:compute_wacc_from_config", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:extract_wacc_rates", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:finance/wacc_v14.py", "target": "class:finance/wacc_v14.py:WaccComponents", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:build_wacc", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:build_wacc_build_up", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:compute_build_up_wacc", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:compute_wacc_from_config", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:finance/wacc_v14.py", "target": "function:finance/wacc_v14.py:extract_wacc_rates", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:build_wacc", "target": "function:finance/wacc_v14.py:relever_beta", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:build_wacc", "target": "function:finance/wacc_v14.py:calculate_cost_of_equity_capm", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:build_wacc", "target": "function:finance/wacc_v14.py:calculate_after_tax_wacc", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:build_wacc", "target": "function:finance/wacc_v14.py:calculate_real_wacc", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:build_wacc_build_up", "target": "function:finance/wacc_v14.py:calculate_real_wacc", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:compute_build_up_wacc", "target": "function:finance/wacc_v14.py:resolve_cost_of_equity", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:finance/wacc_v14.py:compute_build_up_wacc", "target": "function:finance/wacc_v14.py:build_wacc_build_up", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:run_full_pipeline_v14.py", "target": "file:analytics/pipeline_v14_enhanced.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:run_full_pipeline_v14.py", "target": "file:analytics/run_manifest.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:run_full_pipeline_v14.py", "target": "file:analytics/scenario_loader.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:run_full_pipeline_v14.py", "target": "file:wind_resource/cashflow_adapter.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_safe_mkdir", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_write_json", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_load_yaml_scenario", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_load_wind_export", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_run_wind_producer", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:_write_annual_rows_csv", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:cli", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:run_full_pipeline_v14.py", "target": "function:run_full_pipeline_v14.py:cli", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:run_full_pipeline_v14.py:_run_wind_producer", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:run_full_pipeline_v14.py:_write_annual_rows_csv", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:run_full_pipeline_v14.py:_write_json", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:run_full_pipeline_v14.py:_safe_mkdir", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:analytics/scenario_loader.py:load_scenario_config", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:cli", "target": "function:analytics/run_manifest.py:build_run_manifest", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario", "target": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario", "target": "function:run_full_pipeline_v14.py:_load_yaml_scenario", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:run_full_pipeline_v14.py:_apply_wind_to_scenario", "target": "function:run_full_pipeline_v14.py:_load_wind_export", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "class:wind_resource/cashflow_adapter.py:WindAdapterDriftError", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "class:wind_resource/cashflow_adapter.py:WindCashflowExport", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "function:wind_resource/cashflow_adapter.py:_get_nested", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "function:wind_resource/cashflow_adapter.py:_set_nested", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "function:wind_resource/cashflow_adapter.py:_drift_pct", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "class:wind_resource/cashflow_adapter.py:WindAdapterDriftError", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "class:wind_resource/cashflow_adapter.py:WindCashflowExport", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/cashflow_adapter.py", "target": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "target": "function:wind_resource/cashflow_adapter.py:_get_nested", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "target": "function:wind_resource/cashflow_adapter.py:_set_nested", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/cashflow_adapter.py:wind_export_to_scenario_patch", "target": "function:wind_resource/cashflow_adapter.py:_drift_pct", "type": "calls", "direction": "forward", "weight": 0.8}
+  ]
+}

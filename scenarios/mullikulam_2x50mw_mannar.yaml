@@ -1,17 +1,18 @@
 # Mullikulam 2x50 MW Wind Farm (Lot 1), Musali DS, Mannar, Northern Province.
 # Config-driven NEW PROJECT: location 8.82N/79.96E, Vestas V150-5.6 proxy (EN-156/5.0 spec),
 # hub 125m (tip 200<=220, clearance 50>=25), Weibull FITTED from live ERA5 2020-2024 @125m,
-# USD 3.96 c/kWh tariff (=11.88 LKR at 300 FX). 10 WTGs/lot, 50 MW metering @ 220 kV.
+# USD 3.96 c/kWh tariff (=13.22 LKR at the corrected 2026-Q2 FX 333.79). 10 WTGs/lot,
+# 50 MW metering @ 220 kV.
 project:
   name: Mullikulam Mannar
-  location: Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka
-  capacity_mw: 159.6
+  location: Musali DS, Mannar District, Northern Province, Sri Lanka
+  capacity_mw: 56.0
   capacity_factor: 0.2713
   degradation: 0.005
   life_years: 20
   cod_year: 2027
   developer: DutchBay Wind Power Pvt Ltd
-  grid_poi: Puttalam 220kV Substation
+  grid_poi: Mannar 220kV Grid Substation
   boi_approved: false
   boi_agreement_date: '2025-01-15'
   jurisdiction: Sri Lanka
@@ -27,11 +28,10 @@ turbine:
   cut_out_ms: 22.5
   rated_wind_speed_ms: 12.0
   certification_status: OEM_CERTIFIED
-  notes: IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine
-    for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference
-    (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the
-    23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity
-    case.
+  notes: Vestas V150-5.6, proxy for the OEM-certified EN-156/5.0 machine at Mullikulam
+    (Musali DS, Mannar). 10 x 5.6 MW = 56 MW (Lot 1), 220 kV metering. Hub 125 m =>
+    tip 200 m <= 220 m cap, clearance 50 m >= 25 m. Distinct from the 15 x IEA-10MW
+    Kalpitiya lender case; this is a separate Mannar site.
 wind_resource:
   weibull_a: 7.97
   weibull_k: 2.506
@@ -56,8 +56,8 @@ resource:
     count: 10
     rated_power_mw: 5.6
     total_capacity_mw: 56.0
-    model: IEA Reference 10MW (198m)
-    rotor_diameter_m: 198
+    model: Vestas V150-5.6 (proxy for EN-156/5.0)
+    rotor_diameter_m: 150
     hub_height_m: 125
   power_curve:
     source_id: OEM_VESTAS_V150_56_PC
@@ -158,20 +158,33 @@ fx:
     fx_mismatch: Material - requires hedging or sculpted debt service
 capex:
   usd_total: 63100000
-  capex_per_kw_usd: 1000
+  capex_per_kw_usd: 1126.79   # 63.1M / 56 MW (was a stale lender 1000)
+  # LandBOSSE-decomposed WBS (sums to usd_total 63.1M for this 56 MW lot); was a stale
+  # lender 4-line block summing to 150M (!= usd_total). derive_from_breakdown is off.
   breakdown:
-    epc_usd: 140000000
-    development_usd: 5000000
-    financing_fees_usd: 3000000
-    contingency_usd: 2000000
+    wtg_supply_usd: 43539000
+    foundation_usd: 3028800
+    erection_usd: 2019200
+    collection_system_usd: 2019200
+    site_preparation_usd: 1211520
+    site_development_usd: 807680
+    project_management_usd: 1009600
+    grid_connection_usd: 3028800
+    substation_usd: 2019200
+    development_owners_usd: 2208500
+    financing_fees_usd: 1262000
+    contingency_usd: 946500
 opex:
-  usd_per_year: 3000000
+  # $20/kW-yr x 56 MW = 1.12M. Was a stale lender 3.0M ($54/kW-yr for 56 MW) that
+  # contradicted this scenario's own opex_per_kw_yr_usd: 20.0 — re-baselined to the
+  # consistent, benchmark-aligned figure (see expected_results below).
+  usd_per_year: 1120000
   opex_per_kw_yr_usd: 20.0
   breakdown:
-    om_contract_usd: 2000000
-    insurance_usd: 500000
-    land_lease_usd: 300000
-    admin_usd: 200000
+    om_contract_usd: 746666
+    insurance_usd: 186667
+    land_lease_usd: 112000
+    admin_usd: 74667
 tax:
   corporate_tax_rate: 0.3
   tax_holiday_route: none
@@ -273,30 +286,30 @@ monte_carlo:
   availability_std_pct: 1.0
   electrical_loss_std_pct: 0.5
   discount_rate_pct: 8.0
-  capex_total_usd: 150000000
-  revenue_mean_usd: 50000000
+  capex_total_usd: 63100000   # Mullikulam 56 MW lot (was a stale lender 150M)
+  revenue_mean_usd: 5271578   # 1759.6M LKR / 333.79 (was a stale lender 50M)
   revenue_std_pct: 10
-  cost_mean_usd: 3000000
+  cost_mean_usd: 1120000      # = opex.usd_per_year (was a stale lender 3M)
   cost_std_pct: 8
   fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
   fx_std_pct: 3
   project_life_years: 20
   parameters:
   - name: project.capacity_factor
-    low: 0.2763
-    high: 0.3377
+    low: 0.2442
+    high: 0.2984
     distribution: uniform
   - name: tariff.lkr_per_kwh
-    low: 16.24
-    high: 24.36
+    low: 10.58
+    high: 15.86
     distribution: uniform
   - name: opex.usd_per_year
-    low: 2100000.0
-    high: 3900000.0
+    low: 784000.0
+    high: 1456000.0
     distribution: uniform
   - name: capex.usd_total
-    low: 126000000.0
-    high: 174000000.0
+    low: 56790000.0
+    high: 69410000.0
     distribution: uniform
   - name: fx.start_lkr_per_usd  # centered on the 333.79 pinned vintage (was 300)
     low: 300.0
@@ -352,14 +365,22 @@ expected_results:
   annual_revenue_p50_m_lkr: 1759.6  # 133.1 GWh x 13.22 LKR/kWh (3.96 USDc bid @ FX 333.79)
   annual_revenue_p50_m_eur: 5.3     # reference: 1759.6 M LKR / 330 LKR/EUR
   revenue_20yr_undiscounted_m_lkr: 33400.0  # with degradation
-  # Financials at the corrected FX 333.79 (USD bid preserved, so ~FX-invariant in USD).
-  project_irr: 0.1084
-  equity_irr: 0.0518
-  project_npv_m_usd: 9.63
+  # HONEST re-baseline (2026-06-21). The prior +9.63M / 10.84% headline was fiction:
+  # capacity_mw carried a stale lender 159.6 (3x the real 56 MW Lot 1), and the engine
+  # drives revenue from capacity_mw x capacity_factor x 8760, so it booked ~3x the real
+  # generation. With capacity_mw corrected to 56 (now consistent with aep_summary 133.1
+  # GWh) AND opex corrected to the benchmark 1.12M, Lot 1 is uneconomic: LCOE ~5.5 USc
+  # exceeds the aggressive 3.96 USc WindForce bid. The dual-DSCR sizer holds min DSCR
+  # 1.30 by sizing debt down to ~15.9M (gearing ~0.25), pushing the loss onto equity.
+  project_irr: 0.0          # no positive root (project NPV is negative)
+  equity_irr: -0.0707
+  project_npv_m_usd: -37.75
+  equity_npv_m_usd: -41.24
+  equity_moic: 0.379        # equity recovers only ~38% of its outlay
   min_dscr: 1.30
-  avg_dscr: 1.395
-  llcr: 1.115
-  plcr: 1.177
+  avg_dscr: 1.388
+  llcr: 1.302
+  plcr: 1.364
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'

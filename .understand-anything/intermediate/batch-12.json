@@ -1,0 +1,142 @@
+{
+  "nodes": [
+    {
+      "id": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "type": "pipeline",
+      "name": "CI - v14 fastlane",
+      "summary": "Fast-lane CI workflow run on every push/PR to main: lints (ruff) and type-checks (mypy) the focused v14 surface, then runs the full pytest tree fail-fast (--maxfail=1) for quick gating.",
+      "tags": ["ci-cd", "pipeline", "validation", "finance"],
+      "complexity": "moderate",
+      "filePath": ".github/workflows/ci_v14_fastlane.yml"
+    },
+    {
+      "id": "pipeline:.github/workflows/fx-tests.yml",
+      "type": "pipeline",
+      "name": "FX Integration Tests",
+      "summary": "Path-filtered CI workflow exercising the FX sensitivity/integration layer: runs FX pytest with coverage, advisory code-quality checks (black/isort/mypy/flake8), and full-pipeline smoke tests with and without an FX config block.",
+      "tags": ["ci-cd", "pipeline", "validation", "finance", "monte-carlo"],
+      "complexity": "complex",
+      "filePath": ".github/workflows/fx-tests.yml"
+    },
+    {
+      "id": "pipeline:.github/workflows/regression-smoke.yml",
+      "type": "pipeline",
+      "name": "Regression Smoke",
+      "summary": "Lightweight regression-smoke CI on push/PR to v14chat-upgrade and main: mypy type-checks the focused smoke surface, then runs the v14 cashflow-rows smoke marker and the full cashflow row test file.",
+      "tags": ["ci-cd", "pipeline", "validation", "cashflow"],
+      "complexity": "simple",
+      "filePath": ".github/workflows/regression-smoke.yml"
+    },
+    {
+      "id": "pipeline:.github/workflows/release-run.yml",
+      "type": "pipeline",
+      "name": "Release Run",
+      "summary": "Tag-triggered (v*) release workflow that runs the full test suite plus v14 pipeline/CLI smoke tests, then builds and uploads the DutchBay lendercase artifacts via run_full_pipeline_v14.py in strict validation mode.",
+      "tags": ["ci-cd", "pipeline", "release", "finance"],
+      "complexity": "simple",
+      "filePath": ".github/workflows/release-run.yml"
+    },
+    {
+      "id": "pipeline:.github/workflows/test-suite.yml",
+      "type": "pipeline",
+      "name": "Test Suite",
+      "summary": "Primary CI gate on push/PR/nightly-cron/dispatch: runs the full pytest tree under a Python 3.11/3.12 matrix with xdist and coverage, an enforced mypy lint gate over finance/ and analytics/, and a Test Summary job that blocks merges unless both succeed.",
+      "tags": ["ci-cd", "pipeline", "validation", "finance"],
+      "complexity": "complex",
+      "filePath": ".github/workflows/test-suite.yml"
+    }
+  ],
+  "edges": [
+    {
+      "source": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "target": "file:analytics/contracts_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "target": "file:analytics/scenario_loader.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "target": "file:analytics/fx_sensitivity_real.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci_v14_fastlane.yml",
+      "target": "file:finance/refinancing_v14_hardened.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/fx-tests.yml",
+      "target": "file:analytics/fx_integration.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/fx-tests.yml",
+      "target": "file:analytics/pipeline_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/fx-tests.yml",
+      "target": "file:analytics/contracts_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/regression-smoke.yml",
+      "target": "file:analytics/contracts_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/regression-smoke.yml",
+      "target": "file:analytics/scenario_loader.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/regression-smoke.yml",
+      "target": "file:finance/refinancing_v14_hardened.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/regression-smoke.yml",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/release-run.yml",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "nodes": [
+    {
+      "id": "document:.github/SPRINT_WORKFLOW_CHECKLIST.md",
+      "type": "document",
+      "name": "SPRINT_WORKFLOW_CHECKLIST.md",
+      "filePath": ".github/SPRINT_WORKFLOW_CHECKLIST.md",
+      "summary": "Detailed sprint governance checklist enforcing the GWTF v3.0 and CCCDIR frameworks across architecture, implementation, testing, review, and merge phases. Codifies config-first architecture, Hydra CLI, schema-guard validation, LibCST guardrails, strict typing, regression tests, coverage, and a compliance scorecard for DutchBay contributions.",
+      "tags": ["documentation", "ci-cd", "validation", "config", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:.github/dependabot.yml",
+      "type": "config",
+      "name": "dependabot.yml",
+      "filePath": ".github/dependabot.yml",
+      "summary": "GitHub Dependabot version-update configuration scheduling daily dependency checks for package manifests at the repository root. Drives automated dependency-bump pull requests for the DutchBay model.",
+      "tags": ["configuration", "ci-cd", "dependencies", "config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:.github/pull_request_template.md",
+      "type": "document",
+      "name": "pull_request_template.md",
+      "filePath": ".github/pull_request_template.md",
+      "summary": "Default GitHub pull-request template prompting contributors for a focused-change summary, test/doc updates, local pre-commit results, and the required green 'gate' CI check. Enforces the project's PR hygiene and review conventions.",
+      "tags": ["documentation", "ci-cd", "validation", "contracts"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:.github/dependabot.yml",
+      "target": "document:.github/pull_request_template.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:.github/SPRINT_WORKFLOW_CHECKLIST.md",
+      "target": "document:.github/pull_request_template.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

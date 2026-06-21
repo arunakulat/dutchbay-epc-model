@@ -1,0 +1,153 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Lines below are suggestions — uncomment to activate.
+# Use ! prefix to force-include something excluded by defaults.
+#
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, *.lock, *.min.js, etc.
+#
+
+# --- ACTIVE: derived/dead scaffolding excluded for a teaching-focused graph ---
+tests/
+legacy_scripts/
+legacy_tests/
+legacy_scenarios/
+.backups/
+
+# --- From .gitignore (uncomment to exclude) ---
+
+# *.py[cod]
+# *$py.class
+# *.so
+# .Python
+# develop-eggs/
+# downloads/
+# eggs/
+# .eggs/
+# lib/
+# lib64/
+# parts/
+# sdist/
+# var/
+# wheels/
+# *.egg-info/
+# .installed.cfg
+# *.egg
+# MANIFEST
+# .env
+# env/
+# ENV/
+# env.bak/
+# venv.bak/
+# .venv311/
+# .venv3*/
+# *.swp
+# *.swo
+# *~
+# .DS_Store
+# *.sublime-project
+# *.sublime-workspace
+# .pytest_cache/
+# .coverage
+# .coverage.*
+# htmlcov/
+# .tox/
+# .hypothesis/
+# *.cover
+# .mypy_cache/
+# .dmypy.json
+# dmypy.json
+# .pyre/
+# .ruff_cache/
+# *.xlsx
+# *.xlsm
+# *.docx
+# DutchBay_EPC_*.zip
+# DutchBay_EPC_*.json
+# manifest_*.txt
+# output/
+# exports/
+# temp/
+# tmp/
+# .ipynb_checkpoints
+# *.ipynb
+# *.spec
+# .DS_Store
+# .AppleDouble
+# .LSOverride
+# !.gitkeep
+# outputs/concatenated_scripts_v14.py
+# outputs/*.ipynb
+# outputs/*.py
+# outputs/concatenated_scripts_v14.py
+# outputs/*.ipynb
+# outputs/*.py
+# DutchBay_EPC_*.txt
+# DutchBay_EPC_*
+# DutchBay_EPC_*.txt
+# DutchBay_EPC_*
+# DutchBay_EPC_*.txt
+# DutchBay_EPC_20*
+# coverage.xml
+# audit_report.json
+# release_manifest.json
+# *.sublime-project
+# *.sublime-build
+# _archive/
+# outputs/
+# multirun/
+# .hydra/
+# **/*.bak
+# **/*.oops.*
+# _archive/
+# .dutchbay_bootstrap_report.json
+# scenarios/**/*.bak
+# datalake/
+# _out/
+# .tmp_fix/
+# *.logpath
+# pytest.ini.tmp
+# Extended DutchBay Feature Scaffolds/
+# *.backup
+# run*.txt
+# DutchBay_DevPkg_PREFERRED_ONLY/
+# .gwtf-overrides.log
+# _freeze_artifacts/
+# _out_reporting_cli/
+# _regression/
+# reports/
+# inputs/*.zip
+# inputs/*.zip
+# .Jules/
+# .cdsapirc
+# **/cds_credentials*.yaml
+# *.local.yaml
+# era5_cache/
+# **/era5_cache/
+# wind_data_output/
+
+# --- Detected directories (uncomment to exclude) ---
+
+# docs/
+# examples/
+# scripts/
+# tests/
+
+# --- Test file patterns (uncomment to exclude) ---
+
+# JS / TS
+# *.test.*
+# *.spec.*
+# *.snap
+# C# / .NET
+# **/*Tests.cs
+# **/*Test.cs
+# **/*Fixture.cs
+# **/*.Tests.csproj
+# Java / Kotlin
+# **/src/test/**
+# **/*Test.java
+# **/*IT.java
+# **/*Spec.kt
+# Go
+# **/*_test.go
