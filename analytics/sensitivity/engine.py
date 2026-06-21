@@ -222,6 +222,16 @@ def run_sensitivity_analysis(
     primary_metric = metric_keys[0] if metric_keys else "project_irr"
 
     for p in parameters:
+        # Reject parameters that don't resolve to a real config path (else a silent flat
+        # tornado bar; audit R1). Same contract as build_one_way_sensitivity_suite.
+        if not _resolves_in_config(base_cfg, p.variable_name):
+            message = (
+                f"sensitivity parameter '{p.variable_name}' does not resolve to an "
+                "existing config path; its sweep would be a silent flat bar."
+            )
+            if run_cfg.strict:
+                raise ValueError(message)
+            logger.warning(message)
         cases: List[Dict[str, Any]] = []
         for label, overrides in iter_param_cases_from_contract(p):
             out = evaluate_with_overrides(
