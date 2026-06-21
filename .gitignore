@@ -169,3 +169,10 @@ inputs/*.zip
 era5_cache/
 **/era5_cache/
 wind_data_output/
+
+# Understand-Anything knowledge-graph output (the /understand plugin): a derived
+# code-graph artifact that regenerates locally and otherwise dirties the tree.
+# Not version-controlled by design. If you later want teammates to skip the
+# pipeline, drop this line and commit .understand-anything/knowledge-graph.json
+# (keep intermediate/ + tmp/ ignored — those are local scratch).
+.understand-anything/
