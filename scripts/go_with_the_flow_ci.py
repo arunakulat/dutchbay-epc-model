@@ -58,11 +58,20 @@ COMPILE_TARGETS = (
     "finance",
 )
 
+# Fast lane: a small, representative, currently-PASSING slice of the v14 surface
+# (imports → Monte Carlo → sensitivity → canonical lender pipeline) for quick local
+# feedback. Repointed in the 2026-06-21 audit: the previous four targets were all dead —
+# 'tests/api/test_scenario_manager_smoke.py' never existed (pytest exits 4 on a missing
+# path), and the other three were 4-line quarantine tombstones that collected ZERO tests
+# (pytest exits 5), so `--fast` had been silently non-functional. Remote CI was unaffected
+# (the GitHub 'fastlane' job runs `pytest tests/` directly, not this driver), which hid it.
+# tests/lint/test_ci_driver_targets_exist.py now asserts every target both exists AND
+# collects at least one test, so the lane cannot rot back to a no-op.
 FAST_PYTEST_TARGETS = (
-    "tests/analytics_layer/test_monte_carlo_v14.py",
-    "tests/analytics_layer/test_sensitivity_v14_all.py",
-    "tests/api/test_scenario_manager_smoke.py",
-    "tests/test_v14_pipeline_smoke.py",
+    "tests/lint/test_import_smoke.py",
+    "tests/analytics_layer/test_mc_integration.py",
+    "tests/analytics/test_sensitivity_runner.py",
+    "tests/integration/test_mc_canonical_scenario.py",
 )
 
 FULL_PYTEST_TARGETS = ("tests",)
@@ -680,5 +689,3 @@ def fire_warning() -> None:
 
 if __name__ == "__main__":
     app()
-
-EOF

@@ -28,9 +28,13 @@ jobs:
 
       - name: Run v14 lender pipeline smoke
         run: |
+          # Targeted smoke over the canonical lender pipeline (MC) + sensitivity CLI.
+          # The previous targets were dead — tests/test_v14_pipeline_smoke.py is a
+          # quarantine tombstone (0 tests) and tests/test_cli_v14_smoke.py never existed
+          # (pytest would exit 4 on the missing path), so this step gave no real signal.
           python -m pytest \
-            tests/test_v14_pipeline_smoke.py \
-            tests/test_cli_v14_smoke.py
+            tests/integration/test_mc_canonical_scenario.py \
+            tests/integration/test_sensitivity_cli_smoke.py
 
       - name: Build lendercase artifacts
         run: |
