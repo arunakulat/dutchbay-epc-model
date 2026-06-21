@@ -7,6 +7,63 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+Work merged since v14.15.0 (PRs #220–#264). Grouped by theme; see `git log` /
+`gh pr view <n>` for per-PR detail.
+
+### Wind resource & bankable AEP
+- **Bankable AEP engine** (#220): IEC 61400-12-1 air-density correction, PyWake
+  Bastankhah–Porté-Agel granular wake (TurbOPark cross-check), IEC 61400-15-2 P50/P75/P90
+  uncertainty build-up. Adopted **15 × IEA-10MW** as the canonical lender case (#221, #223).
+- **ARCO single-point ERA5 → fitted Weibull** wiring in VALIDATE mode (#224); config-driven
+  ERA5-fitted Kalpitiya 160 m scenario (#234).
+- **Canonical Weibull re-baseline** to the ERA5-fitted shape (k 2.1→2.665), net AEP
+  483.6→473.8 GWh (#237). Configurable P50 bankability haircut + correlation-aware
+  uncertainty (#244); IEC 61400-15-1 vs -2 doc clarification (#245).
+
+### FX & currency
+- **Corrected the hardcoded USD/LKR 300→333.79** and added a config-driven FX routine
+  (`analytics/fx/fx_fetch.py`, FIXED/LATEST/VALIDATE) with a no-magic-FX lint guard (#236).
+- Currency numéraire settled as **LKR-primary by design** (soft lock documented; #264).
+
+### Global reusability (ARCH-01 hardening)
+- Removed DutchBay/Kalpitiya site & turbine defaults from `WindPipeline`,
+  `ERA5RequestConfig`, the AEP tornado/MC engines and GIS export — identity is now
+  config-required, enforced by lint (#225–#231). Added the **WORKTREE-01** governance rule
+  (worktree-per-concurrent-agent) and a gis_export fence scan (#232).
+
+### Cost engine (AACE / LandBOSSE roadmap)
+- Single cost-basis-year anchor (#246), QRA-driven contingency per AACE RP 119R-21 (#247),
+  canonical bottom-up cost WBS + IRENA $/kW sanity banner (#248), probabilistic CAPEX
+  Monte Carlo → P-level economics (#249), AACE estimate-class attribute + LandBOSSE
+  balance-of-plant WBS split (#260). Granular bottom-up CAPEX/OPEX + OPEX escalation (#241).
+
+### Finance & debt
+- Bankable **P90 downside case can bind debt sizing** (#259); **DSRA funded at financial
+  close** + a Sources-and-Uses statement (#261); config-/data-driven refinancing coupon
+  (#230).
+
+### Governance, API & correctness
+- Auditable **run manifest** (config sha256 + engine version + git sha) stamped on pipeline
+  and API outputs (#256). Config-driven IEC 61400-15-2 loss taxonomy that fails loud on
+  unknown loss keys (#254). `POST /run-pipeline` full-report endpoint (#243). Fixed an
+  `analytics.wind ↔ monte_carlo_aep` circular import (#233).
+
+### Scenarios
+- New config-driven **Mullikulam 2×50MW (Mannar)** scenario (#235); Kalpitiya lender case
+  at a 5 US-cent/kWh fixed-LKR tariff (#240); scenario config hygiene + sibling re-baseline
+  (#239); **honest Mullikulam Lot-1 re-baseline** correcting a 3×-inflated capacity_mw and a
+  stale opex, plus capex-breakdown reconciliation (#263).
+
+### Architecture & repo hygiene
+- Removed dead revenue modules (#238), expired Sprint-18 compat shims (#257), the
+  `_quarantine` test tier + parked-tests workflow (#258), and untracked generated artifacts
+  (#253). Refreshed stale `pyproject` package metadata; version-agnostic `RELEASING.md`.
+
+### CI & dependencies
+- Parallelised the suite with `pytest-xdist -n auto` (#250); 3.12-only on PRs with the full
+  3.11+3.12 matrix on merge/nightly (#251); consolidated redundant workflows off the PR
+  critical path (#252). Curated security/maintenance pip bumps (#262).
+
 ## v14.15.0 - 2026-05-27
 
 ### Sprint 19 — Wind→Finance Integration Bridge
