@@ -366,7 +366,7 @@ expected_results:
   # lag + operating-year-1 off-by-one moved project IRR 8.73% -> 5.60% and NPV +$4.88M ->
   # -$29.46M (below the ~8.18% WACC, like the canonical lender case).
   project_irr: 0.0560
-  equity_irr: 0.0185
+  equity_irr: 0.0034   # ~0.3% after the 2026-06 debt-service-orphan fix (was 1.85%)
   project_npv_m_usd: -29.46
   min_dscr: 1.30
   avg_dscr: 1.387

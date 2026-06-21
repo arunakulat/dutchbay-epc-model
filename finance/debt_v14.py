@@ -540,13 +540,33 @@ def apply_debt_layer(
         else:
             dscr_series.append(None)
 
+    # The "bridge" lead-in period carries real scheduled debt service but maps to no
+    # operating row. Fold its service into operating year 1's reported DSCR so the
+    # per-year covenant coverage matches what equity actually bears (audit finding 2.2):
+    # year 1 covers its OWN period's service PLUS the orphaned bridge service. Without
+    # this, year 1 read the phantom interest-only period's ~2.6x instead of the ~1.30 it
+    # truly achieves once the bridge service is included.
+    mapped_periods = {int(m["debt_period"]) for m in annual_row_debt_period_map}
+    bridge_extra_service = 0.0
+    if (
+        bridge_debt_period is not None
+        and int(bridge_debt_period) not in mapped_periods
+        and 0 <= int(bridge_debt_period) < len(debt_service_total)
+    ):
+        bridge_extra_service = float(debt_service_total[int(bridge_debt_period)])
+
     dscr_by_year: Dict[Any, Optional[float]] = {}
-    for mapping in annual_row_debt_period_map:
+    for row_i, mapping in enumerate(annual_row_debt_period_map):
         debt_period = int(mapping["debt_period"])
         year_key = mapping.get("year", mapping["annual_row_index"] + 1)
-        dscr_by_year[year_key] = (
-            dscr_series[debt_period] if debt_period < len(dscr_series) else None
-        )
+        if debt_period >= len(dscr_series) or dscr_series[debt_period] is None:
+            dscr_by_year[year_key] = None
+        elif row_i == 0 and bridge_extra_service > 0.0:
+            cf = cfads_ext[debt_period] if debt_period < len(cfads_ext) else 0.0
+            svc = float(debt_service_total[debt_period]) + bridge_extra_service
+            dscr_by_year[year_key] = (cf / svc) if svc > 0 else None
+        else:
+            dscr_by_year[year_key] = dscr_series[debt_period]
 
     dscr_op = [
         d for i, d in enumerate(dscr_series)

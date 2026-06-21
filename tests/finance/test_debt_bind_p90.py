@@ -35,7 +35,7 @@ def _run(**fin_overrides):
 def test_default_off_preserves_canonical() -> None:
     kpis, d = _run()  # no bind_downside -> default off
     assert kpis["project_irr"] == pytest.approx(0.0543, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(0.0145, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(0.0003, abs=0.003)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"
