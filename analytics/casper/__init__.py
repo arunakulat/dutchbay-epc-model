@@ -11,17 +11,6 @@ Public API:
     # Payload generation
     build_casper_payload
     CASPER_CONTRACT_VERSION
-    
-    # KPI normalization
-    normalize_kpis_by_capacity
-    calculate_percentile_ranking
-    benchmark_normalized_kpis
-    compare_projects
-    
-    # Data structures
-    NormalizedKPIs
-    IndustryBenchmarks
-    PercentileRanking
 
 Migration Note:
     Files moved from analytics/ root to analytics/casper/ in Sprint 9.
@@ -34,29 +23,10 @@ from analytics.casper.casper_payload import (
     CASPER_CONTRACT_VERSION,
     build_casper_payload,
 )
-from analytics.casper.kpi_normalizer import (
-    IndustryBenchmarks,
-    NormalizedKPIs,
-    PercentileRanking,
-    benchmark_normalized_kpis,
-    calculate_percentile_ranking,
-    compare_projects,
-    normalize_kpis_by_capacity,
-)
-
 __all__ = [
     # Orchestrator
     "evaluate_with_casper_tail_risk_and_payload",
     # Payload
     "build_casper_payload",
     "CASPER_CONTRACT_VERSION",
-    # Normalization
-    "normalize_kpis_by_capacity",
-    "calculate_percentile_ranking",
-    "benchmark_normalized_kpis",
-    "compare_projects",
-    # Data structures
-    "NormalizedKPIs",
-    "IndustryBenchmarks",
-    "PercentileRanking",
 ]
