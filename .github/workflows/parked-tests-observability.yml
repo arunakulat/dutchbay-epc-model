@@ -29,9 +29,11 @@ on:
     branches:
       - main
       - "sprint-*"
-  pull_request:
-    branches:
-      - main
+  # Intentionally NOT triggered on pull_request: this is a non-blocking
+  # observability job (continue-on-error), so running it on every PR only added
+  # latency to the gate without ever gating it. It still runs on push-to-main,
+  # the daily schedule, and manual dispatch, which is where the diagnostic value
+  # lives. (Re-add a pull_request trigger if/when it is promoted to a required check.)
   workflow_dispatch:
   schedule:
     # Daily 07:00 UTC = 12:30 IST. Refreshes failure list even without commits.
