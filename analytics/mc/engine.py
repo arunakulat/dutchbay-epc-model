@@ -60,6 +60,24 @@ def _stable_config_hash(cfg: Mapping[str, Any]) -> str:
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
+def _num_override(overrides: Mapping[str, Any], *keys: str, default: float) -> float:
+    """Resolve the first numeric override across the given keys, else ``default``.
+
+    Robust to BOTH the generic smoke-test names ("capex") and the real dotted MC
+    parameter names ("capex.usd_total"), and to NESTED override dicts: a value that is
+    a mapping (e.g. ``{"capex": {"usd_total": ...}}`` from dotted-key expansion) is
+    skipped rather than crashing ``float(dict)`` — which previously defeated this
+    deliberately fail-soft fallback (audit R1).
+    """
+    for key in keys:
+        value = overrides.get(key)
+        if isinstance(value, bool):  # bool is an int subclass — not a numeric override
+            continue
+        if isinstance(value, (int, float)):
+            return float(value)
+    return float(default)
+
+
 def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
     """Return deterministic toy KPIs for MC engine smoke tests.
 
@@ -68,10 +86,12 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
     aggregator, and export flow testable without weakening production schema
     validation in evaluation_v14 or pipeline_v14_enhanced.
     """
-    capex = float(overrides.get("capex", 100.0) or 100.0)
-    tariff = float(overrides.get("tariff", 0.10) or 0.10)
-    capacity_factor = float(overrides.get("capacity_factor", 0.35) or 0.35)
-    opex = float(overrides.get("opex_annual", 2.5) or 2.5)
+    capex = _num_override(overrides, "capex", "capex.usd_total", default=100.0)
+    tariff = _num_override(overrides, "tariff", "tariff.lkr_per_kwh", default=0.10)
+    capacity_factor = _num_override(
+        overrides, "capacity_factor", "project.capacity_factor", default=0.35
+    )
+    opex = _num_override(overrides, "opex_annual", "opex.usd_per_year", default=2.5)
 
     capex_scale = capex / 100.0 if capex < 1_000_000 else capex / 100_000_000.0
     tariff_scale = tariff / 0.10 if tariff else 1.0

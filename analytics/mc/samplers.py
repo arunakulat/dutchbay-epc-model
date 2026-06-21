@@ -44,7 +44,10 @@ def generate_lhs_samples(
     lhs = np.zeros((n, k), dtype=float)
     for j in range(k):
         perm = rng.permutation(n) if common_random_numbers else np.random.default_rng(int(seed + j)).permutation(n)
-        lhs[:, j] = pts[perm, 0]  # take the single column
+        # Take dimension j's OWN stratified column (was column 0 for every j, which made
+        # every dimension reuse the same stratified values — a degenerate Latin Hypercube
+        # where all parameters were perfectly correlated; audit R1).
+        lhs[:, j] = pts[perm, j]
 
     # scale to bounds
     out = np.empty_like(lhs)
