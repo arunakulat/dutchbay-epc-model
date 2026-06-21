@@ -113,7 +113,7 @@ Writes `outputs/wind_assessment/<site>_assessment_<start>_to_<end>.json` (`wind_
 
 ### Link 8 — Finance consumption
 
-**Module:** `finance/cashflow_v14_params.py`. The v14 parameter builder reads capacity factor from a priority-ordered list, with `project.capacity_factor` as the canonical lender-case home (`cashflow_v14_params.py:217-230`, and validation at `cashflow_v14_params.py:511-529`). The wind adapter writes to exactly this slot (Link 7), so the energy yield flows cleanly into the cashflow / DSCR engine. Wind revenue itself is computed by `finance/revenue_wind.py::calculate_wind_revenue_annual` (multi-currency PPA, 0.5%/yr degradation; `revenue_wind.py:71-157`).
+**Module:** `finance/cashflow_v14_params.py`. The v14 parameter builder reads capacity factor from a priority-ordered list, with `project.capacity_factor` as the canonical lender-case home (`cashflow_v14_params.py:217-230`, and validation at `cashflow_v14_params.py:511-529`). The wind adapter writes to exactly this slot (Link 7), so the energy yield flows cleanly into the cashflow / DSCR engine. Wind revenue itself is computed by `finance/cashflow_v14.py::_calculate_revenue_lkr` (net energy × the LKR/kWh tariff; call site `cashflow_v14.py:319`).
 
 ---
 

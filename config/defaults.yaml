@@ -216,6 +216,25 @@ defaults:
     # Uncertainty (for P75, P90, P99 calculations)
     inter_annual_variability_pct: 8.0  # 8% inter-annual variability
     long_term_uncertainty_pct: 6.0     # 6% long-term resource uncertainty
+
+    # Loss taxonomy (IEC 61400-15-2 aligned). Classifies every *_pct key a scenario
+    # may put in `resource.losses` as a `reduction` (retention = 1 - pct/100) or an
+    # `uptime` (retention = pct/100). Consumed by analytics.wind.losses_model — a
+    # loss-shaped key NOT listed here fails loud rather than being silently dropped.
+    loss_taxonomy:
+      wake_loss_pct: reduction
+      electrical_loss_pct: reduction
+      transmission_loss_pct: reduction
+      turbine_performance_pct: reduction
+      high_wind_hysteresis_pct: reduction
+      icing_pct: reduction
+      soiling_pct: reduction
+      blade_degradation_pct: reduction
+      environmental_pct: reduction
+      curtailment_pct: reduction
+      other_pct: reduction
+      availability_pct: uptime
+      grid_availability_pct: uptime
   
   # ═══════════════════════════════════════════════════════════════════
   # STRESS TESTING
