@@ -130,7 +130,6 @@ project:
   name: Dutch Bay Wind Project
 regulatory:
   env_surcharge_pct: 0.005
-  grid_loss_pct: 0.02
   social_services_levy_pct: 0.025
   success_fee_pct: 0.01
 returns:

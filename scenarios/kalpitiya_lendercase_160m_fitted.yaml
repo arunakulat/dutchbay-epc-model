@@ -204,7 +204,6 @@ statutory:
   success_fee_pct: 0.01
   env_surcharge_pct: 0.005
   social_services_levy_pct: 0.025
-  grid_loss_pct: 0.02
 risk_adjustment:
   cfads_haircut_pct: 0.1
 Financing_Terms:

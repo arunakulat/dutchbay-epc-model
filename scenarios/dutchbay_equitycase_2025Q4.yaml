@@ -35,7 +35,6 @@ tax:
 
 statutory:
   env_surcharge_pct: 0.005
-  grid_loss_pct: 0.02
   success_fee_pct: 0.01
   social_services_levy_pct: 0.025
   sscl_enabled: true

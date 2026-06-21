@@ -32,6 +32,9 @@ project:
   name: "Dutch Bay Wind Project - Pessimistic Case"
   capacity_mw: 150
   capacity_factor: 0.35                    # ← PESSIMISTIC: 35% vs 40% base
+  curtailment_pct: 0.05                    # ← PESSIMISTIC: 5% grid curtailment, now LIVE
+                                           #   via the financed lever (was a dead
+                                           #   regulatory.grid_loss_pct that never applied)
   degradation: 0.008                       # ← WORSE: 0.8% annual degradation
   life_years: 20
   boi_approved: true
@@ -131,7 +134,6 @@ regulatory:
   success_fee_pct: 0.01                    # 1% success fee
   env_surcharge_pct: 0.005                 # 0.5% environmental surcharge
   social_services_levy_pct: 0.025          # 2.5% social services levy
-  grid_loss_pct: 0.05                      # ← PESSIMISTIC: 5% grid curtailment
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Risk Adjustments
