@@ -275,11 +275,18 @@ def run_monte_carlo_aep(
     # Compute statistics
     aep_values = scenarios_df["aep_gwh"].to_numpy()
     
+    # Wind EXCEEDANCE convention: P90 = the AEP exceeded in 90% of years = the
+    # 10th percentile of the sampled distribution (conservative, lender-facing);
+    # P75 -> 25th, P99 -> 1st, P50 -> 50th. The prior code used the distribution
+    # percentile directly (p90 = 90th = the *upside*), inverting the meaning and
+    # injecting an over-optimistic "P90" into revenue/DSCR/IRR. This mirrors the
+    # canonical analytics/wind/mc_aep_weibull.py:EXCEEDANCE_TO_PERCENTILE (kept
+    # local to avoid the analytics.wind <-> analytics.simulation import cycle; the
+    # two MC-AEP engines are slated for consolidation in the thinning pass).
+    exceedance_to_pct = {"p50": 50.0, "p75": 25.0, "p90": 10.0, "p99": 1.0}
     percentiles = {
-        "p50": float(np.percentile(aep_values, 50)),
-        "p75": float(np.percentile(aep_values, 75)),
-        "p90": float(np.percentile(aep_values, 90)),
-        "p99": float(np.percentile(aep_values, 99)),
+        name: float(np.percentile(aep_values, pct))
+        for name, pct in exceedance_to_pct.items()
     }
     
     confidence_intervals = {
