@@ -176,3 +176,7 @@ wind_data_output/
 # pipeline, drop this line and commit .understand-anything/knowledge-graph.json
 # (keep intermediate/ + tmp/ ignored — those are local scratch).
 .understand-anything/
+
+# Timestamped backups (audit R1)
+.backups/
+*.py.backup.*
