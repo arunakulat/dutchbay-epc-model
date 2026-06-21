@@ -524,7 +524,7 @@ expected_results:
   # project-discounting fix / audit finding 2.0 — construction lag + the operating-year-1
   # off-by-one; was 0.23% / -$86.9M before the timing correction.)
   project_irr: 0.0016       # barely positive; far below WACC (~9.72%)
-  equity_irr: -0.0633       # deeply NEGATIVE
+  equity_irr: -0.0671       # deeply NEGATIVE (was -6.33%; debt-orphan fix 2026-06)
   project_npv_m_usd: -116.18 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.388

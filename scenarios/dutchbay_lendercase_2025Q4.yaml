@@ -531,7 +531,9 @@ expected_results:
   # NPV -$31.9M. The prior +$2.03M / 8.44% headline was a timing artifact. (The stale 300
   # FX + overstated Weibull had earlier shown a flattered 11.12% / $27.4M.)
   project_irr: 0.0543       # BELOW WACC (~8.18%) — value-destructive
-  equity_irr: 0.0145        # ~1.4% (re-baselined to ~0% once finding 2.1 debt-orphan lands)
+  equity_irr: 0.0003        # ~0% — finding 2.1 debt-service-orphan fix applied (was a
+                            # flattered 1.4%: ~$8.5M of scheduled debt service had been
+                            # orphaned from the equity waterfall). MOIC ~1.00.
   project_npv_m_usd: -31.93 # construction-lag-correct discount at build-up WACC ~8.18%
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39

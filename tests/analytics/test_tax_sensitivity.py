@@ -112,10 +112,10 @@ def test_suite_structure_and_base_kpis(base_config):
 def test_basecase_returns_regression_pins(base_config):
     """Pin baseline returns so a tax-model regression is caught."""
     base = _one_way(base_config, "tax.corporate_tax_rate", 0.30).base_kpis
-    # equity_irr band corrected after the debt-service alignment fix: positional
-    # (vs debt-period) indexing of debt service had triggered a phantom covenant
-    # lockup that front-loaded equity and inflated this IRR (was ~0.30). The true
-    # sculpted-waterfall equity IRR is ~0.105. project_irr (unlevered) is unchanged.
-    assert 0.09 < base["equity_irr"] < 0.12
+    # equity_irr re-baselined by the 2026-06 debt-service-orphan fix (audit finding 2.1):
+    # the bridge period's scheduled service is now charged to equity, lowering the
+    # basecase equity IRR from ~0.095 to ~0.071. (An earlier alignment fix had already
+    # removed a phantom covenant lockup that had inflated this to ~0.30.)
+    assert 0.06 < base["equity_irr"] < 0.08
     # project_irr re-baselined by the construction-lag fix (audit finding 2.0): ~7.9%.
     assert 0.07 < base["project_irr"] < 0.09

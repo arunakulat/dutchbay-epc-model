@@ -26,7 +26,7 @@ def test_run_pipeline_returns_full_report() -> None:
 
     # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull).
     assert resp.kpis.project_irr == pytest.approx(0.0543, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(0.0145, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(0.0003, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 

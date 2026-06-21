@@ -221,6 +221,26 @@ def _enrich_annual_rows_with_debt(
             )
         except (KeyError, TypeError, ValueError):
             continue
+
+    # The "bridge" lead-in period carries real scheduled debt service but maps to no
+    # operating row, so without this it was ORPHANED from the equity waterfall: ~$8.5M
+    # of debt service never reduced equity distributions, flattering equity IRR (audit
+    # finding 2.1). It is the first post-construction period, so fold its service into
+    # operating year 1 (the nearest equity period). Years 2+ stay aligned to their own
+    # sculpted period, so the per-year DSCR and covenant timing are unchanged for them.
+    mapped_periods = set(row_to_period.values())
+    bridge_period = debt_result.get("cfads_bridge_debt_period")
+    bridge_extra_service = 0.0
+    if (
+        bridge_period is not None
+        and int(bridge_period) not in mapped_periods
+        and 0 <= int(bridge_period) < len(debt_service)
+    ):
+        try:
+            bridge_extra_service = float(debt_service[int(bridge_period)] or 0.0)
+        except (TypeError, ValueError):
+            bridge_extra_service = 0.0
+
     enriched: list[dict[str, Any]] = []
 
     for idx, row in enumerate(annual_rows):
@@ -241,6 +261,10 @@ def _enrich_annual_rows_with_debt(
             debt_service_value = float(service or 0.0)
         except (TypeError, ValueError):
             debt_service_value = 0.0
+
+        # Operating year 1 also bears the orphaned bridge-period service (finding 2.1).
+        if idx == 0 and bridge_extra_service > 0.0:
+            debt_service_value += bridge_extra_service
 
         resolution = (
             balloon_resolution[period_idx]

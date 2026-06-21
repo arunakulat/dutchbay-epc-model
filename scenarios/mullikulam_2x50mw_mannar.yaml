@@ -372,7 +372,7 @@ expected_results:
   # exceeds the aggressive 3.96 USc WindForce bid. The dual-DSCR sizer holds min DSCR
   # 1.30 by sizing debt down to ~15.9M (gearing ~0.25), pushing the loss onto equity.
   project_irr: 0.0          # no positive root (project NPV is negative)
-  equity_irr: -0.0707
+  equity_irr: -0.0727  # deepened by the 2026-06 debt-service-orphan fix (was -7.07%)
   project_npv_m_usd: -44.29  # deepened by the 2026-06 project-discounting fix (finding 2.0)
   equity_npv_m_usd: -41.24
   equity_moic: 0.379        # equity recovers only ~38% of its outlay
