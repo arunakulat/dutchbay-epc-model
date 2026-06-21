@@ -42,13 +42,13 @@ import pytest
 CANONICAL_CLIS = [
     "run_full_pipeline_v14.py",
     "run_scenario_analytics_v14.py",
-    "analytics/cli_sensitivity_hydra.py",
-    "analytics/cli_monte_carlo_hydra.py",
+    "analytics/cli/cli_sensitivity_hydra.py",
+    "analytics/cli/cli_monte_carlo_hydra.py",
 ]
 
 # Legacy CLIs (MUST have DEPRECATED warning, allowed argparse until Sprint 18)
 LEGACY_CLIS = [
-    "analytics/cli_sensitivity.py",
+    "analytics/cli/cli_sensitivity.py",
     "analytics/monte_carlo_v14.py",
 ]
 
