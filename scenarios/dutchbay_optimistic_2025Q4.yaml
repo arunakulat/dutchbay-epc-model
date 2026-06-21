@@ -47,7 +47,6 @@ returns:
   project_discount_rate: 0.10              # 10% WACC
   equity_discount_rate: 0.12               # 12% equity hurdle
 
-discount_rate: 0.12
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Timeline

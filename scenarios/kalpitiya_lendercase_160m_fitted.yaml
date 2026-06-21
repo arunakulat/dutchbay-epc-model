@@ -391,7 +391,6 @@ metadata:
   - 'v2.7: Added debt_tranches structure'
   - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input);
     mix + rates are canonical (plan_debt warns if re-added)'
-discount_rate: 0.12
 wacc:
   mode: build_up
   drives_discount_rate: true
