@@ -37,7 +37,6 @@ Context:
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -162,8 +161,8 @@ def run_aep_monte_carlo(
         ... )
         >>> mc_results['percentiles']['p50']
         485.32
-        >>> mc_results['percentiles']['p90']
-        538.94
+        >>> mc_results['percentiles']['p90']  # exceedance: conservative, < P50
+        431.18
     """
     if not WIND_MODULES_AVAILABLE:
         raise ImportError(
@@ -212,8 +211,8 @@ def compute_aep_p_values(
         >>> p_vals = compute_aep_p_values(mc_results)
         >>> p_vals['p50']
         485.32
-        >>> p_vals['p90']
-        538.94
+        >>> p_vals['p90']  # exceedance convention: P90 < P50 (conservative)
+        431.18
     """
     if p_values is None:
         p_values = [50, 75, 90, 99]
