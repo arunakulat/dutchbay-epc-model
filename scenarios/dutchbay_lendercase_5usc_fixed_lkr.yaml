@@ -26,7 +26,7 @@
 #   - Replaced single tariff with multi-currency PPA structure
 #   - Added layout parameters for wake loss validation
 #   - Added expected_results for pipeline validation
-#   - Unified losses structure (resource.losses + statutory.grid_loss_pct)
+#   - Unified losses structure (resource.losses; the ~2% transmission/curtailment is embedded in the net CF)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 project:
@@ -318,7 +318,6 @@ statutory:
   success_fee_pct: 0.01  # PUCSL approval fee
   env_surcharge_pct: 0.005  # Environmental levy
   social_services_levy_pct: 0.025  # SSL on revenue
-  grid_loss_pct: 0.02  # Transmission losses (post-meter)
 
 risk_adjustment:
   cfads_haircut_pct: 0.1

@@ -130,7 +130,6 @@ regulatory:
   success_fee_pct: 0.01                    # 1% success fee
   env_surcharge_pct: 0.005                 # 0.5% environmental surcharge
   social_services_levy_pct: 0.025          # 2.5% social services levy
-  grid_loss_pct: 0.02                      # 2% grid losses
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Risk Adjustments
