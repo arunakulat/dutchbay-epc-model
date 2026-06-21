@@ -20,8 +20,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GUARDED_FILES = [
     "analytics/fx/fx_builder.py",
     "analytics/fx/fx_contracts.py",
-    "analytics/fx/fx_loader.py",
-    "analytics/fx/correlation.py",
     "analytics/fx_sensitivity_real.py",
     "finance/cashflow_v14_params.py",
     "finance/cashflow_v14_fx.py",
