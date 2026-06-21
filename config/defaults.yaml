@@ -60,6 +60,20 @@ defaults:
       "1": {low_pct: -6.0,  high_pct: 9.0}    # check estimate
 
   # ═══════════════════════════════════════════════════════════════════
+  # AEP ↔ CAPACITY-FACTOR RECONCILIATION
+  # ═══════════════════════════════════════════════════════════════════
+  # CESSPIT: the finance engine bills revenue off capacity_mw × capacity_factor × 8760,
+  # while a scenario may ALSO carry a bankable net AEP (expected_results.net_aep_p50_gwh
+  # and/or the resource.aep_summary_path JSON net_site_aep_gwh). These are two views of
+  # the same quantity and MUST agree. analytics.aep_reconciliation fails loud when
+  # capacity_mw × CF × 8.760 diverges from a bankable reference beyond this tolerance —
+  # catching the class of stale-copy-paste error (#263 Mullikulam 3× capacity; red-flag
+  # #175). Scenarios override via aep_reconciliation.tolerance_pct; this is the fallback.
+  aep_reconciliation:
+    tolerance_pct: 2.0   # all canonical scenarios reconcile within ~0.04%; 2% catches
+                         # any material divergence while tolerating capacity_factor rounding
+
+  # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
   # ═══════════════════════════════════════════════════════════════════
 

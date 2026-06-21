@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Tuple
 
 from .cashflow_v14_contracts import CashflowParams
 from .cashflow_v14_utils import (
+    CAPACITY_FACTOR_PATHS,
+    CAPACITY_MW_PATHS,
     _as_float_or_none,
     _pct_to_decimal,
     _resolve_first,
@@ -210,29 +212,11 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     """Extract and normalize parameters required for v14 CFADS calculation."""
     project_life_years = _extract_project_life_years(raw, log=True)
 
-    capacity_mw = _as_float_or_none(
-        _resolve_first(
-            raw,
-            ("project", "capacity_mw"),
-            ("project", "capacity"),
-            ("parameters", "capacity_mw"),
-            "capacity_mw",
-        )
-    )
+    # Path lists centralised in cashflow_v14_utils so the AEP reconciliation guard
+    # reconciles EXACTLY the capacity / capacity_factor this engine bills off.
+    capacity_mw = _as_float_or_none(_resolve_first(raw, *CAPACITY_MW_PATHS))
 
-    capacity_factor_raw = _as_float_or_none(
-        _resolve_first(
-            raw,
-            ("project", "capacity_factor_pct"),
-            ("project", "capacity_factor"),
-            ("production", "capacity_factor_net"),
-            ("production", "capacity_factor"),
-            ("parameters", "capacity_factor_pct"),
-            ("parameters", "capacity_factor"),
-            "capacity_factor_pct",
-            "capacity_factor",
-        )
-    )
+    capacity_factor_raw = _as_float_or_none(_resolve_first(raw, *CAPACITY_FACTOR_PATHS))
     capacity_factor = _pct_to_decimal(capacity_factor_raw)
 
     degradation_pct_raw = _as_float_or_none(

@@ -21,6 +21,8 @@ from typing import Any
 
 import yaml
 
+from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+
 logger = logging.getLogger(__name__)
 
 
@@ -194,6 +196,12 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
             "Invalid FX configuration: scalar 'fx' not supported; "
             "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"
         )
+
+    # An AUTHORED scenario's capacity_mw × capacity_factor (the engine's revenue basis)
+    # must reconcile with any bankable net AEP it also declares — caught here at load
+    # time, NOT on every derived run, so deliberate sensitivity/Monte-Carlo perturbations
+    # of capacity_factor (which pass in-memory dicts, never re-loaded) are unaffected.
+    reconcile_capacity_factor_with_bankable_aep(cfg, str(config_path))
 
     return cfg
 
