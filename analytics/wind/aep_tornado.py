@@ -6,10 +6,10 @@ by an analytic Weibull integral with **linear** power-curve interpolation
 (matching :class:`wind_resource.EnergyCalculator`, which integrates a wind
 timeseries with a linear curve); losses are applied via the #23 losses model.
 The selected curve carries the IEC 61400-12-1 velocity-cube air-density
-correction (``density_factor``), so with the declared Weibull (A=8.32, k=2.1)
+correction (``density_factor``), so with the ERA5-fitted Weibull (A=8.199, k=2.665)
 and the 15 x IEA-10MW lender curve this reproduces the canonical base
-(~483.6 GWh net) — method-consistent with the headline AEP. (The legacy
-23 x EN-171/6.5 base, ~402.6 GWh, regenerates from its own config.)
+(~473.8 GWh net / CF 0.339) — method-consistent with the headline AEP. (The legacy
+declared A=8.32/k=2.1 and 23 x EN-171/6.5 base, ~402.6 GWh, regenerate from their own config.)
 
 Drivers:
     - ``wind_speed_bias``   ± on mean wind speed (scales Weibull A)
