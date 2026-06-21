@@ -28,10 +28,22 @@ def test_canonical_breakdown_sums_to_total() -> None:
 
 
 def test_canonical_wbs_has_real_line_items() -> None:
-    """The stale decorative breakdown (epc_usd lump) is gone; real WBS lines present."""
+    """The stale decorative breakdown (epc_usd lump) is gone; the lumped balance_of_plant
+    is split into named LandBOSSE activities; real WBS lines present."""
     bd = load_scenario_config(LENDER)["capex"]["breakdown"]
     assert "epc_usd" not in bd  # the old lumped decorative line
-    for line in ("wtg_supply_usd", "balance_of_plant_usd", "grid_connection_usd"):
+    assert "balance_of_plant_usd" not in bd  # now decomposed into LandBOSSE activities
+    for line in (
+        "wtg_supply_usd",
+        "foundation_usd",
+        "erection_usd",
+        "collection_system_usd",
+        "site_preparation_usd",
+        "site_development_usd",
+        "project_management_usd",
+        "grid_connection_usd",
+        "substation_usd",
+    ):
         assert line in bd and bd[line] > 0
 
 

@@ -45,6 +45,19 @@ defaults:
     # top-down anchor a bottom-up cost stack is sanity-checked against (range 727-2110).
     irena_benchmark_per_kw: 1041
     irena_benchmark_year: 2024
+    # AACE estimate class — the default maturity of an unlabelled estimate. A real
+    # bottom-up WBS sanity-checked against a benchmark is ~Class 3 (budget authorization).
+    estimate_class: 3
+    # AACE RP 17R-97/18R-97 expected accuracy range per class (asymmetric low/high % of
+    # the point estimate). Used to (a) report the estimate's accuracy band and (b) provide
+    # a sanity-FLOOR for the probabilistic-CAPEX 1-sigma (a tighter configured spread than
+    # the class implies is flagged). Implied 1-sigma ~= (|low|+high)/2/2 (band ~= +/-2-sigma).
+    estimate_class_bands:
+      "5": {low_pct: -35.0, high_pct: 65.0}   # concept screening
+      "4": {low_pct: -22.0, high_pct: 35.0}   # study / feasibility
+      "3": {low_pct: -15.0, high_pct: 22.0}   # budget authorization
+      "2": {low_pct: -10.0, high_pct: 13.0}   # control / bid
+      "1": {low_pct: -6.0,  high_pct: 9.0}    # check estimate
 
   # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
