@@ -13,7 +13,6 @@ on:
       - feature/fx-*
     paths:
       - 'analytics/fx/**'
-      - 'analytics/fx_integration.py'
       - 'analytics/pipeline_v14.py'
       - 'analytics/contracts_v14.py'
       - 'tests/analytics_layer/test_fx_sensitivity_real.py'
@@ -23,7 +22,6 @@ on:
       - main
     paths:
       - 'analytics/fx/**'
-      - 'analytics/fx_integration.py'
       - 'analytics/pipeline_v14.py'
       - 'analytics/contracts_v14.py'
       - 'tests/analytics_layer/test_fx_sensitivity_real.py'
@@ -58,7 +56,6 @@ jobs:
         run: |
           pytest tests/analytics_layer/test_fx_sensitivity_real.py -v \
             --cov=analytics.fx \
-            --cov=analytics.fx_integration \
             --cov=analytics.pipeline_v14 \
             --cov-report=xml \
             --cov-report=term-missing \
