@@ -3,7 +3,7 @@
 #   - FAST regression tests (~30s) using realistic distributions.
 #   - Single base_case scenario mirroring lender base assumptions.
 #   - Reduced iterations (20) for rapid dev/CI feedback loops.
-#   - Use monte_carlo_regression_production.yaml for full-scale validation.
+#   - Increase n_trials / scenarios for full-scale validation.
 
 simulation:
   iterations: 20              # FAST: Reduced for rapid testing (was 500)
