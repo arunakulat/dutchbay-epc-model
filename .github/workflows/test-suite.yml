@@ -56,9 +56,16 @@ jobs:
         # test_casper_payload_equity_contract / test_aep_loader). Those are now triaged
         # (migrated or xfailed), so the whole tree is green and the gate can no longer be
         # dodged by omission — the same class of hole as the #149 Test Summary rubber-stamp.
+        # -n auto runs the suite across all runner cores via pytest-xdist (a
+        # pinned, already-installed dependency that was never being invoked, so
+        # the suite ran serially). The full 984-test tree is xdist-safe and drops
+        # from minutes to seconds. pytest-cov combines per-worker coverage
+        # automatically, so the Codecov upload below is unaffected. --verbose is
+        # dropped: under xdist it interleaves worker output into noise, and the
+        # junit/html artifacts already carry per-test detail.
         pytest \
           tests/ \
-          --verbose \
+          -n auto \
           --tb=short \
           --maxfail=10 \
           --junit-xml=test-results-${{ matrix.python-version }}.xml \
