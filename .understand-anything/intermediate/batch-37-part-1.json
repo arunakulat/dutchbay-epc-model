@@ -1,0 +1,349 @@
+{
+  "nodes": [
+    {
+      "id": "file:VERSION",
+      "type": "file",
+      "name": "VERSION",
+      "summary": "Single-line version marker file holding the current semantic version (14.15.0) of the DutchBay EPC model, consumed by release tooling and changelog injection.",
+      "tags": ["configuration", "utility", "ci-cd"],
+      "complexity": "simple",
+      "filePath": "VERSION"
+    },
+    {
+      "id": "file:scripts/github/gh_tools.py",
+      "type": "file",
+      "name": "gh_tools.py",
+      "summary": "GitHub helper CLI wrapping git/gh commands for status checks, bulk issue closing, and a guarded commit-bump-push workflow that updates VERSION and the changelog. Implements the GWTF governance commit step.",
+      "tags": ["cli", "ci-cd", "utility", "pipeline"],
+      "complexity": "complex",
+      "filePath": "scripts/github/gh_tools.py"
+    },
+    {
+      "id": "function:scripts/github/gh_tools.py:run",
+      "type": "function",
+      "name": "run",
+      "summary": "Thin wrapper around subprocess.run that optionally echoes the command, sets cwd, captures output, and raises on non-zero exit when check is set.",
+      "tags": ["utility", "cli"],
+      "complexity": "simple",
+      "lineRange": [33, 57]
+    },
+    {
+      "id": "function:scripts/github/gh_tools.py:cmd_close_issues",
+      "type": "function",
+      "name": "cmd_close_issues",
+      "summary": "Subcommand handler that closes one or more GitHub issues via the gh CLI, attaching an optional closing comment.",
+      "tags": ["cli", "ci-cd", "utility"],
+      "complexity": "simple",
+      "lineRange": [87, 106]
+    },
+    {
+      "id": "function:scripts/github/gh_tools.py:inject_changelog_entry",
+      "type": "function",
+      "name": "inject_changelog_entry",
+      "summary": "Inserts a dated version entry at the top of the changelog, creating the file if missing and preserving any leading title heading.",
+      "tags": ["utility", "ci-cd", "documentation"],
+      "complexity": "moderate",
+      "lineRange": [121, 160]
+    },
+    {
+      "id": "function:scripts/github/gh_tools.py:cmd_commit",
+      "type": "function",
+      "name": "cmd_commit",
+      "summary": "Orchestrates the governed commit flow: validates version/message, bumps VERSION, injects the changelog entry, stages, commits, and pushes with branch handling.",
+      "tags": ["cli", "ci-cd", "utility", "pipeline"],
+      "complexity": "complex",
+      "lineRange": [168, 255]
+    },
+    {
+      "id": "function:scripts/github/gh_tools.py:build_parser",
+      "type": "function",
+      "name": "build_parser",
+      "summary": "Constructs the argparse parser with status, close-issues, and commit subcommands and their arguments for the GitHub tools CLI.",
+      "tags": ["cli", "utility"],
+      "complexity": "complex",
+      "lineRange": [263, 324]
+    },
+    {
+      "id": "file:scripts/go_with_the_flow_ci.py",
+      "type": "file",
+      "name": "go_with_the_flow_ci.py",
+      "summary": "Typer-based local CI driver (Go With The Flow) that runs black, isort, pytest, and mypy in sequence, records step results, exports a JSON summary, and emits artifacts. Core of the project's GWTF green-CI gate.",
+      "tags": ["ci-cd", "cli", "validation", "pipeline"],
+      "complexity": "complex",
+      "filePath": "scripts/go_with_the_flow_ci.py"
+    },
+    {
+      "id": "class:scripts/go_with_the_flow_ci.py:CIResults",
+      "type": "class",
+      "name": "CIResults",
+      "summary": "Accumulates per-step CI outcomes and timing, then serializes a structured JSON report with pass/fail status and remediation recommendations.",
+      "tags": ["ci-cd", "validation", "data-model"],
+      "complexity": "complex",
+      "lineRange": [98, 220]
+    },
+    {
+      "id": "function:scripts/go_with_the_flow_ci.py:run_step",
+      "type": "function",
+      "name": "run_step",
+      "summary": "Executes a single CI step as a subprocess, times it, prints status, and raises a Typer exit on failure unless allow_fail is set.",
+      "tags": ["ci-cd", "validation", "utility"],
+      "complexity": "moderate",
+      "lineRange": [232, 259]
+    },
+    {
+      "id": "function:scripts/go_with_the_flow_ci.py:split_code_and_tests",
+      "type": "function",
+      "name": "split_code_and_tests",
+      "summary": "Partitions a list of changed file paths into code files and test files so the CI driver can scope linting and pytest selection.",
+      "tags": ["ci-cd", "utility", "validation"],
+      "complexity": "simple",
+      "lineRange": [285, 296]
+    },
+    {
+      "id": "function:scripts/go_with_the_flow_ci.py:main",
+      "type": "function",
+      "name": "main",
+      "summary": "Primary Typer command that orchestrates the full local CI run (format, lint, test, type-check) with flags to skip stages, exporting results and warnings.",
+      "tags": ["ci-cd", "cli", "validation", "pipeline"],
+      "complexity": "complex",
+      "lineRange": [310, 513]
+    },
+    {
+      "id": "function:scripts/go_with_the_flow_ci.py:generate_artifacts",
+      "type": "function",
+      "name": "generate_artifacts",
+      "summary": "Reads listed module files, deduplicates imports, and writes a concatenated code-snapshot artifact for review or LLM ingestion.",
+      "tags": ["ci-cd", "utility", "pipeline"],
+      "complexity": "complex",
+      "lineRange": [517, 615]
+    },
+    {
+      "id": "function:scripts/go_with_the_flow_ci.py:info",
+      "type": "function",
+      "name": "info",
+      "summary": "Typer subcommand that prints usage guidance, available CI stages, and environment details for the Go With The Flow driver.",
+      "tags": ["ci-cd", "cli", "documentation"],
+      "complexity": "moderate",
+      "lineRange": [619, 668]
+    },
+    {
+      "id": "file:scripts/import_fixer_v2_debug.py",
+      "type": "file",
+      "name": "import_fixer_v2_debug.py",
+      "summary": "Diagnostic refactoring tool that scans repo Python files for legacy import patterns and rewrites them to the new package layout, with verbose logging and a dry-run confirmation prompt.",
+      "tags": ["utility", "validation", "cli"],
+      "complexity": "complex",
+      "filePath": "scripts/import_fixer_v2_debug.py"
+    },
+    {
+      "id": "class:scripts/import_fixer_v2_debug.py:ImportFixerV2Debug",
+      "type": "class",
+      "name": "ImportFixerV2Debug",
+      "summary": "Walks the repository, finds and applies import-statement fixes via AST validation and string replacement, tracking stats and errors and emitting a summary report.",
+      "tags": ["utility", "validation", "data-model"],
+      "complexity": "complex",
+      "lineRange": [68, 335]
+    },
+    {
+      "id": "function:scripts/import_fixer_v2_debug.py:main",
+      "type": "function",
+      "name": "main",
+      "summary": "Entry point that locates the repo root, sanity-checks expected packages, runs the import fixer in dry-run then applies fixes after user confirmation.",
+      "tags": ["cli", "utility", "validation"],
+      "complexity": "complex",
+      "lineRange": [338, 392]
+    },
+    {
+      "id": "file:scripts/inspect_era5.py",
+      "type": "file",
+      "name": "inspect_era5.py",
+      "summary": "Quick diagnostic that opens an ERA5 reanalysis NetCDF file and prints its dimensions, coordinates, and data variables to understand the wind-resource dataset structure.",
+      "tags": ["wind-resource", "utility", "cli"],
+      "complexity": "simple",
+      "filePath": "scripts/inspect_era5.py"
+    },
+    {
+      "id": "file:scripts/instrument_statutory_debug.py",
+      "type": "file",
+      "name": "instrument_statutory_debug.py",
+      "summary": "Code-instrumentation utility that injects (or removes) debug logging lines around statutory/tax-related code matches across the codebase to trace computation paths.",
+      "tags": ["utility", "validation", "finance"],
+      "complexity": "moderate",
+      "filePath": "scripts/instrument_statutory_debug.py"
+    },
+    {
+      "id": "function:scripts/instrument_statutory_debug.py:ensure_logger_import",
+      "type": "function",
+      "name": "ensure_logger_import",
+      "summary": "Guarantees a module has a logging import and module-level logger, inserting them after the docstring/imports if absent.",
+      "tags": ["utility", "validation"],
+      "complexity": "moderate",
+      "lineRange": [55, 79]
+    },
+    {
+      "id": "function:scripts/instrument_statutory_debug.py:instrument_file",
+      "type": "function",
+      "name": "instrument_file",
+      "summary": "Inserts indented debug-logging statements at each statutory-keyword match in a file, supporting a dry-run preview mode.",
+      "tags": ["utility", "finance", "validation"],
+      "complexity": "moderate",
+      "lineRange": [82, 118]
+    },
+    {
+      "id": "function:scripts/instrument_statutory_debug.py:main",
+      "type": "function",
+      "name": "main",
+      "summary": "CLI entry that walks scannable files and either instruments them with debug logging or cleans previously injected lines based on arguments.",
+      "tags": ["cli", "utility", "validation"],
+      "complexity": "moderate",
+      "lineRange": [131, 155]
+    },
+    {
+      "id": "document:scripts/legacy_runners/README.md",
+      "type": "document",
+      "name": "legacy_runners/README.md",
+      "summary": "Explains the purpose of the legacy_runners directory, what scripts moved out, and guidance that nothing here should be used for current runs.",
+      "tags": ["documentation", "utility"],
+      "complexity": "simple",
+      "filePath": "scripts/legacy_runners/README.md"
+    },
+    {
+      "id": "file:scripts/make_clean_zip.py",
+      "type": "file",
+      "name": "make_clean_zip.py",
+      "summary": "Packaging script that walks the project skipping junk dirs, zips included source files, and optionally emits a JSON manifest and a concatenated code snapshot for sharing or review.",
+      "tags": ["utility", "cli", "pipeline"],
+      "complexity": "complex",
+      "filePath": "scripts/make_clean_zip.py"
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:should_include_file",
+      "type": "function",
+      "name": "should_include_file",
+      "summary": "Decides whether a given file should be included in the clean zip based on name, extension allowlist, and size limits.",
+      "tags": ["utility", "validation"],
+      "complexity": "moderate",
+      "lineRange": [115, 135]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:iter_files",
+      "type": "function",
+      "name": "iter_files",
+      "summary": "Generator that walks the project tree under root, pruning skipped directories and yielding only files that pass the inclusion filter.",
+      "tags": ["utility"],
+      "complexity": "moderate",
+      "lineRange": [138, 153]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:create_manifest",
+      "type": "function",
+      "name": "create_manifest",
+      "summary": "Builds a JSON manifest of all packaged files with sizes, timestamps, extensions, and aggregate compression metadata.",
+      "tags": ["utility", "data-model"],
+      "complexity": "moderate",
+      "lineRange": [161, 206]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:create_concatenated_snapshot",
+      "type": "function",
+      "name": "create_concatenated_snapshot",
+      "summary": "Concatenates all included files into a single annotated text snapshot with per-file headers and fenced code blocks for review or LLM ingestion.",
+      "tags": ["utility", "documentation"],
+      "complexity": "complex",
+      "lineRange": [217, 284]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:make_zip",
+      "type": "function",
+      "name": "make_zip",
+      "summary": "Drives the packaging pipeline: zips filtered files, reports compression, and optionally writes the JSON manifest and concatenated snapshot.",
+      "tags": ["utility", "pipeline", "cli"],
+      "complexity": "complex",
+      "lineRange": [292, 354]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:parse_args",
+      "type": "function",
+      "name": "parse_args",
+      "summary": "Hand-rolled argument parser that interprets positional and flag tokens into a config dict for the packaging script.",
+      "tags": ["cli", "utility"],
+      "complexity": "moderate",
+      "lineRange": [375, 433]
+    },
+    {
+      "id": "function:scripts/make_clean_zip.py:main",
+      "type": "function",
+      "name": "main",
+      "summary": "CLI entry point that parses arguments, resolves root and output paths, and invokes make_zip with the requested options.",
+      "tags": ["cli", "utility"],
+      "complexity": "moderate",
+      "lineRange": [436, 466]
+    }
+  ],
+  "edges": [
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:run", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:cmd_close_issues", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:inject_changelog_entry", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:cmd_commit", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:build_parser", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:run", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:cmd_close_issues", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:inject_changelog_entry", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:cmd_commit", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/github/gh_tools.py", "target": "function:scripts/github/gh_tools.py:build_parser", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/github/gh_tools.py:cmd_commit", "target": "function:scripts/github/gh_tools.py:inject_changelog_entry", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/github/gh_tools.py:cmd_commit", "target": "function:scripts/github/gh_tools.py:run", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/github/gh_tools.py:cmd_close_issues", "target": "function:scripts/github/gh_tools.py:run", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "class:scripts/go_with_the_flow_ci.py:CIResults", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:run_step", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:split_code_and_tests", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:generate_artifacts", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:info", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "class:scripts/go_with_the_flow_ci.py:CIResults", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:run_step", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:split_code_and_tests", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:generate_artifacts", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/go_with_the_flow_ci.py", "target": "function:scripts/go_with_the_flow_ci.py:info", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/go_with_the_flow_ci.py:main", "target": "function:scripts/go_with_the_flow_ci.py:run_step", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/go_with_the_flow_ci.py:main", "target": "function:scripts/go_with_the_flow_ci.py:split_code_and_tests", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/import_fixer_v2_debug.py", "target": "class:scripts/import_fixer_v2_debug.py:ImportFixerV2Debug", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/import_fixer_v2_debug.py", "target": "function:scripts/import_fixer_v2_debug.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/import_fixer_v2_debug.py", "target": "class:scripts/import_fixer_v2_debug.py:ImportFixerV2Debug", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/import_fixer_v2_debug.py", "target": "function:scripts/import_fixer_v2_debug.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/import_fixer_v2_debug.py:main", "target": "class:scripts/import_fixer_v2_debug.py:ImportFixerV2Debug", "type": "depends_on", "direction": "forward", "weight": 0.6},
+
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:ensure_logger_import", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:instrument_file", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:ensure_logger_import", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:instrument_file", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/instrument_statutory_debug.py", "target": "function:scripts/instrument_statutory_debug.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/instrument_statutory_debug.py:instrument_file", "target": "function:scripts/instrument_statutory_debug.py:ensure_logger_import", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/instrument_statutory_debug.py:main", "target": "function:scripts/instrument_statutory_debug.py:instrument_file", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:should_include_file", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:iter_files", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:create_manifest", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:create_concatenated_snapshot", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:make_zip", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:parse_args", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:should_include_file", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:iter_files", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:create_manifest", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:create_concatenated_snapshot", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:make_zip", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:parse_args", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/make_clean_zip.py", "target": "function:scripts/make_clean_zip.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:iter_files", "target": "function:scripts/make_clean_zip.py:should_include_file", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:make_zip", "target": "function:scripts/make_clean_zip.py:iter_files", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:make_zip", "target": "function:scripts/make_clean_zip.py:create_manifest", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:make_zip", "target": "function:scripts/make_clean_zip.py:create_concatenated_snapshot", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:main", "target": "function:scripts/make_clean_zip.py:parse_args", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/make_clean_zip.py:main", "target": "function:scripts/make_clean_zip.py:make_zip", "type": "calls", "direction": "forward", "weight": 0.8}
+  ]
+}

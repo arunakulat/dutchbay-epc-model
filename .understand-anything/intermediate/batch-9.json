@@ -1,0 +1,1575 @@
+{
+ "nodes": [
+  {
+   "id": "file:analytics/core/metrics.py",
+   "type": "file",
+   "name": "metrics.py",
+   "summary": "Canonical v14 KPI computation engine and single source of truth for scenario-level KPI aggregation: project NPV/IRR, DSCR statistics, equity metrics, CFADS aggregates and lender KPIs.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "aep",
+    "validation",
+    "utility"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/core/metrics.py"
+  },
+  {
+   "id": "function:analytics/core/metrics.py:_summary_stats",
+   "type": "function",
+   "name": "_summary_stats",
+   "summary": "Computes min/max/mean/median/stddev and percentile summary statistics over a numeric series, filtering non-finite values.",
+   "tags": [
+    "finance",
+    "utility",
+    "risk"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    30,
+    74
+   ]
+  },
+  {
+   "id": "function:analytics/core/metrics.py:_derive_capex_usd",
+   "type": "function",
+   "name": "_derive_capex_usd",
+   "summary": "Extracts total CAPEX in USD from a scenario config, handling case-insensitive keys and alternate cost sections.",
+   "tags": [
+    "capex",
+    "finance",
+    "config"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    132,
+    164
+   ]
+  },
+  {
+   "id": "function:analytics/core/metrics.py:_derive_cfads_series",
+   "type": "function",
+   "name": "_derive_cfads_series",
+   "summary": "Builds the CFADS (cash flow available for debt service) series in USD from annual cashflow rows.",
+   "tags": [
+    "cashflow",
+    "finance",
+    "debt"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    167,
+    189
+   ]
+  },
+  {
+   "id": "function:analytics/core/metrics.py:calculate_scenario_kpis",
+   "type": "function",
+   "name": "calculate_scenario_kpis",
+   "summary": "Aggregates all scenario-level KPIs (project NPV/IRR, DSCR stats, equity metrics, LLCR/PLCR, lender covenants) from config, annual rows and debt results.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "debt",
+    "equity",
+    "aep"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    192,
+    371
+   ]
+  },
+  {
+   "id": "function:analytics/core/metrics.py:compute_kpis",
+   "type": "function",
+   "name": "compute_kpis",
+   "summary": "Thin public wrapper delegating to calculate_scenario_kpis with default discount/prudential rates and valuation inputs.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    374,
+    391
+   ]
+  },
+  {
+   "id": "file:analytics/stress_tests_v14.py",
+   "type": "file",
+   "name": "stress_tests_v14.py",
+   "summary": "Stress-testing module that applies interest-rate, market-downturn and inflation shocks to project cashflows and reports VaR/CVaR, NPV/IRR impacts and break-even risk metrics.",
+   "tags": [
+    "risk",
+    "sensitivity",
+    "finance",
+    "cashflow",
+    "monte-carlo"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/stress_tests_v14.py"
+  },
+  {
+   "id": "class:analytics/stress_tests_v14.py:StressResult",
+   "type": "class",
+   "name": "StressResult",
+   "summary": "Dataclass capturing the outcome of one stress scenario including base/stressed NPV and IRR, VaR95, CVaR95 and break-even point, with JSON serialization.",
+   "tags": [
+    "risk",
+    "data-model",
+    "finance"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    50,
+    67
+   ]
+  },
+  {
+   "id": "class:analytics/stress_tests_v14.py:StressTestEngine",
+   "type": "class",
+   "name": "StressTestEngine",
+   "summary": "Engine that applies interest-rate, market-downturn and inflation shocks to base cashflows, runs individual and full scenario suites, and exports stress results to JSON.",
+   "tags": [
+    "risk",
+    "sensitivity",
+    "finance",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    70,
+    229
+   ]
+  },
+  {
+   "id": "file:finance/equity/__init__.py",
+   "type": "file",
+   "name": "equity/__init__.py",
+   "summary": "Public equity namespace for the v14 finance stack, re-exporting core equity metrics from equity_v14 and the distribution waterfall from equity_distribution_v14_hydra.",
+   "tags": [
+    "equity",
+    "finance",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "filePath": "finance/equity/__init__.py"
+  },
+  {
+   "id": "file:finance/equity_distribution_v14_hydra.py",
+   "type": "file",
+   "name": "equity_distribution_v14_hydra.py",
+   "summary": "Production equity distribution waterfall: builds distribution config from Hydra/OmegaConf, derives equity investment, constructs the DSCR/reserve-gated annual distribution schedule and computes equity returns.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance",
+    "scenario",
+    "cli"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/equity_distribution_v14_hydra.py"
+  },
+  {
+   "id": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionConfig",
+   "type": "class",
+   "name": "EquityDistributionConfig",
+   "summary": "Validated configuration dataclass for the equity distribution waterfall covering project life, equity stake, DSCR/LLCR thresholds, reserves, sweep and discount rate.",
+   "tags": [
+    "equity",
+    "config",
+    "validation",
+    "data-model"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    48,
+    124
+   ]
+  },
+  {
+   "id": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionEngine",
+   "type": "class",
+   "name": "EquityDistributionEngine",
+   "summary": "Orchestrates the multi-year equity distribution waterfall, applying priority debt/mezzanine, reserves and sweep to compute annual distributions and equity outcomes.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    633,
+    780
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:_extract_capex_usd",
+   "type": "function",
+   "name": "_extract_capex_usd",
+   "summary": "Extracts total project CAPEX in USD from a config mapping using case-insensitive section/key lookups.",
+   "tags": [
+    "capex",
+    "config",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    162,
+    183
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:_build_distribution_config",
+   "type": "function",
+   "name": "_build_distribution_config",
+   "summary": "Constructs an EquityDistributionConfig from a raw config mapping, normalising percentages and resolving equity-section defaults.",
+   "tags": [
+    "equity",
+    "config",
+    "validation"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    225,
+    294
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:_derive_equity_investment_usd",
+   "type": "function",
+   "name": "_derive_equity_investment_usd",
+   "summary": "Derives the equity investment amount in USD from CAPEX, debt results and config defaults for use as the IRR initial outflow.",
+   "tags": [
+    "equity",
+    "capex",
+    "debt",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    297,
+    328
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:build_equity_distribution_schedule",
+   "type": "function",
+   "name": "build_equity_distribution_schedule",
+   "summary": "Builds the year-by-year equity distribution schedule from annual rows and debt results, applying DSCR gates, reserves and cash sweep.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "debt",
+    "finance"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    379,
+    471
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:calculate_equity_distribution_from_pipeline",
+   "type": "function",
+   "name": "calculate_equity_distribution_from_pipeline",
+   "summary": "Pipeline entry point that builds the distribution schedule and computes equity IRR, NPV, MOIC, payback and cash-on-cash returns for a scenario.",
+   "tags": [
+    "equity",
+    "finance",
+    "cashflow",
+    "pipeline"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    474,
+    597
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:load_config",
+   "type": "function",
+   "name": "load_config",
+   "summary": "Loads and validates a scenario config from a YAML path via OmegaConf, returning a plain dict after v14 schema validation.",
+   "tags": [
+    "config",
+    "validation",
+    "cli"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    600,
+    630
+   ]
+  },
+  {
+   "id": "function:finance/equity_distribution_v14_hydra.py:main",
+   "type": "function",
+   "name": "main",
+   "summary": "CLI/main entry point that loads a config, runs the EquityDistributionEngine and emits the JSON result to stdout.",
+   "tags": [
+    "cli",
+    "entry-point",
+    "equity"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    783,
+    816
+   ]
+  },
+  {
+   "id": "file:finance/equity_v14.py",
+   "type": "file",
+   "name": "equity_v14.py",
+   "summary": "Core equity-return metrics for the v14 stack: equity IRR/NPV, cash-on-cash, MOIC, payback period, PE triad (DPI/RVPI/TVPI) and a combined equity performance calculation.",
+   "tags": [
+    "equity",
+    "finance",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/equity_v14.py"
+  },
+  {
+   "id": "class:finance/equity_v14.py:EquityCashflowSummary",
+   "type": "class",
+   "name": "EquityCashflowSummary",
+   "summary": "Dataclass summarizing equity cashflows: total invested, total distributed, cumulative distributions and total capital called.",
+   "tags": [
+    "equity",
+    "data-model",
+    "cashflow"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    26,
+    33
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:summarise_equity_cashflows",
+   "type": "function",
+   "name": "summarise_equity_cashflows",
+   "summary": "Summarizes a raw equity cashflow series into invested/distributed/called totals as an EquityCashflowSummary.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    52,
+    64
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:calculate_equity_npv",
+   "type": "function",
+   "name": "calculate_equity_npv",
+   "summary": "Computes the equity NPV of a cashflow series at a given discount rate via the finance.irr engine.",
+   "tags": [
+    "equity",
+    "finance",
+    "cashflow"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    72,
+    89
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:calculate_moic",
+   "type": "function",
+   "name": "calculate_moic",
+   "summary": "Computes the multiple on invested capital (MOIC) from cumulative distributions, current NAV and total invested.",
+   "tags": [
+    "equity",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    102,
+    111
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:calculate_payback_period",
+   "type": "function",
+   "name": "calculate_payback_period",
+   "summary": "Computes the equity payback period in years from annual distributions and the initial equity outlay, interpolating the crossover year.",
+   "tags": [
+    "equity",
+    "finance",
+    "cashflow"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    114,
+    139
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:calculate_pe_triad",
+   "type": "function",
+   "name": "calculate_pe_triad",
+   "summary": "Computes the private-equity reporting triad (DPI, RVPI, TVPI) from cumulative distributions, current NAV and capital called.",
+   "tags": [
+    "equity",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    142,
+    154
+   ]
+  },
+  {
+   "id": "function:finance/equity_v14.py:calculate_equity_performance",
+   "type": "function",
+   "name": "calculate_equity_performance",
+   "summary": "Aggregates the full equity performance profile (IRR, NPV, cash-on-cash, MOIC, payback, PE triad) into an EquityPerformance result.",
+   "tags": [
+    "equity",
+    "finance",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    157,
+    210
+   ]
+  },
+  {
+   "id": "file:finance/irr.py",
+   "type": "file",
+   "name": "irr.py",
+   "summary": "Investment-grade NPV/IRR engine (the R7-mandated singleton) providing periodic and date-aware (XNPV/XIRR) discounting, robust bisection solvers and project-level CFADS NPV/IRR helpers.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility",
+    "validation"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/irr.py"
+  },
+  {
+   "id": "function:finance/irr.py:npv",
+   "type": "function",
+   "name": "npv",
+   "summary": "Computes the net present value of a regular periodic cashflow series at a given rate with non-finite guards.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    64,
+    95
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:irr",
+   "type": "function",
+   "name": "irr",
+   "summary": "Computes the internal rate of return for periodic cashflows using numpy-financial with a robust bisection fallback and configurable bounds.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    98,
+    152
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:_irr_bisect",
+   "type": "function",
+   "name": "_irr_bisect",
+   "summary": "Fallback bisection IRR solver that brackets a root of the NPV function across the configured rate interval.",
+   "tags": [
+    "finance",
+    "utility",
+    "validation"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    155,
+    194
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:xnpv",
+   "type": "function",
+   "name": "xnpv",
+   "summary": "Computes a date-aware net present value for irregularly timed cashflows using actual day-count discounting.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    202,
+    247
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:xirr",
+   "type": "function",
+   "name": "xirr",
+   "summary": "Computes the date-aware internal rate of return (XIRR) for irregularly timed cashflows with a bisection fallback.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    250,
+    276
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:_xirr_bisect",
+   "type": "function",
+   "name": "_xirr_bisect",
+   "summary": "Fallback bisection solver for XIRR, bracketing a root of the date-aware NPV function.",
+   "tags": [
+    "finance",
+    "utility",
+    "validation"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    279,
+    315
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:project_npv_from_cfads",
+   "type": "function",
+   "name": "project_npv_from_cfads",
+   "summary": "Computes project NPV from a CFADS series and total CAPEX, treating CAPEX as the initial outflow.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "capex"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    325,
+    349
+   ]
+  },
+  {
+   "id": "function:finance/irr.py:approx_project_irr",
+   "type": "function",
+   "name": "approx_project_irr",
+   "summary": "Approximates the project IRR by bisecting the CFADS-vs-CAPEX NPV gap over a configurable rate interval.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "capex"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    352,
+    407
+   ]
+  },
+  {
+   "id": "file:finance/tax_optimization_v14.py",
+   "type": "file",
+   "name": "tax_optimization_v14.py",
+   "summary": "Tax-aware distribution-timing optimizer that tracks the TLCF schedule and compares immediate vs deferred distribution strategies to maximise tax savings and equity IRR.",
+   "tags": [
+    "finance",
+    "equity",
+    "cashflow",
+    "scenario"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/tax_optimization_v14.py"
+  },
+  {
+   "id": "function:finance/tax_optimization_v14.py:track_tlcf_schedule",
+   "type": "function",
+   "name": "track_tlcf_schedule",
+   "summary": "Tracks the tax-loss-carryforward (TLCF) balance, utilization and exhaustion year across the project life given taxable income and the corporate tax rate.",
+   "tags": [
+    "finance",
+    "scenario",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    137,
+    192
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14.py:calculate_immediate_distributions",
+   "type": "function",
+   "name": "calculate_immediate_distributions",
+   "summary": "Computes the immediate-distribution baseline schedule and resulting equity IRR from an FCFE schedule and equity invested.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    195,
+    238
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14.py:calculate_deferred_distributions",
+   "type": "function",
+   "name": "calculate_deferred_distributions",
+   "summary": "Computes a deferred-distribution schedule that delays payouts to maximise TLCF utilization, returning the resulting equity IRR.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance",
+    "scenario"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    241,
+    318
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14.py:calculate_tax_savings",
+   "type": "function",
+   "name": "calculate_tax_savings",
+   "summary": "Computes nominal and NPV tax savings between a base and optimized distribution case using the TLCF schedule and distribution tax rate.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "scenario"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    321,
+    373
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14.py:optimize_distribution_timing",
+   "type": "function",
+   "name": "optimize_distribution_timing",
+   "summary": "Top-level optimizer comparing immediate vs deferred distribution timing to recommend the strategy maximising tax savings and equity returns.",
+   "tags": [
+    "finance",
+    "equity",
+    "scenario",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    376,
+    483
+   ]
+  },
+  {
+   "id": "file:finance/tax_optimization_v14_enhanced.py",
+   "type": "file",
+   "name": "tax_optimization_v14_enhanced.py",
+   "summary": "Enhanced tax-aware distribution optimizer using proper corporate-tax mechanics (CAFOD-based distributions and full TLCF shielding) on top of tax_schedule_v14.",
+   "tags": [
+    "finance",
+    "equity",
+    "cashflow",
+    "scenario"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/tax_optimization_v14_enhanced.py"
+  },
+  {
+   "id": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_immediate",
+   "type": "function",
+   "name": "calculate_distributions_immediate",
+   "summary": "Computes the immediate-distribution baseline from a CAFOD schedule and equity invested, returning distributions and equity IRR.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    101,
+    141
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_deferred",
+   "type": "function",
+   "name": "calculate_distributions_deferred",
+   "summary": "Computes a deferred-distribution schedule from CAFOD that maximises TLCF balance utilization before distributing, returning the equity IRR.",
+   "tags": [
+    "equity",
+    "cashflow",
+    "finance",
+    "scenario"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    144,
+    230
+   ]
+  },
+  {
+   "id": "function:finance/tax_optimization_v14_enhanced.py:optimize_distribution_timing_enhanced",
+   "type": "function",
+   "name": "optimize_distribution_timing_enhanced",
+   "summary": "Enhanced optimizer that builds a proper corporate-tax schedule from revenue/opex/depreciation/interest and compares immediate vs deferred distribution timing.",
+   "tags": [
+    "finance",
+    "equity",
+    "scenario",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    233,
+    379
+   ]
+  },
+  {
+   "id": "file:finance/tax_schedule_v14.py",
+   "type": "file",
+   "name": "tax_schedule_v14.py",
+   "summary": "Corporate tax and depreciation engine: straight-line and MACRS depreciation, full EBITDA\u2192EBT\u2192taxable-income\u2192tax-liability schedule with TLCF carryforward, and TLCF tax-savings calculation.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "capex",
+    "data-model"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/tax_schedule_v14.py"
+  },
+  {
+   "id": "class:finance/tax_schedule_v14.py:TaxSchedule",
+   "type": "class",
+   "name": "TaxSchedule",
+   "summary": "Dataclass holding the full annual corporate-tax schedule: revenue, opex, depreciation, interest, EBITDA/EBIT/EBT, TLCF balance/utilization, taxable income, tax liability and CAFOD.",
+   "tags": [
+    "finance",
+    "data-model",
+    "cashflow"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    81,
+    111
+   ]
+  },
+  {
+   "id": "function:finance/tax_schedule_v14.py:calculate_straight_line_depreciation",
+   "type": "function",
+   "name": "calculate_straight_line_depreciation",
+   "summary": "Computes a straight-line depreciation schedule (annual, cumulative and book value) from CAPEX, useful life, salvage value and project life.",
+   "tags": [
+    "finance",
+    "capex",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    114,
+    168
+   ]
+  },
+  {
+   "id": "function:finance/tax_schedule_v14.py:calculate_macrs_depreciation",
+   "type": "function",
+   "name": "calculate_macrs_depreciation",
+   "summary": "Computes a MACRS accelerated depreciation schedule for a given MACRS class over the project life.",
+   "tags": [
+    "finance",
+    "capex",
+    "cashflow"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    171,
+    236
+   ]
+  },
+  {
+   "id": "function:finance/tax_schedule_v14.py:calculate_corporate_tax_schedule",
+   "type": "function",
+   "name": "calculate_corporate_tax_schedule",
+   "summary": "Builds the full annual corporate-tax schedule from revenue/opex/depreciation/interest, applying TLCF accumulation and utilization to derive taxable income, tax liability and CAFOD.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "scenario",
+    "data-model"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    239,
+    379
+   ]
+  },
+  {
+   "id": "function:finance/tax_schedule_v14.py:calculate_tax_savings_from_tlcf",
+   "type": "function",
+   "name": "calculate_tax_savings_from_tlcf",
+   "summary": "Computes nominal and NPV tax savings attributable to TLCF by differencing tax schedules with and without carryforward.",
+   "tags": [
+    "finance",
+    "cashflow",
+    "scenario"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    382,
+    427
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_summary_stats",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_summary_stats",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_derive_capex_usd",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_derive_capex_usd",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_derive_cfads_series",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:_derive_cfads_series",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:calculate_scenario_kpis",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:calculate_scenario_kpis",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:compute_kpis",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "function:analytics/core/metrics.py:compute_kpis",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/stress_tests_v14.py",
+   "target": "class:analytics/stress_tests_v14.py:StressResult",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/stress_tests_v14.py",
+   "target": "class:analytics/stress_tests_v14.py:StressResult",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/stress_tests_v14.py",
+   "target": "class:analytics/stress_tests_v14.py:StressTestEngine",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/stress_tests_v14.py",
+   "target": "class:analytics/stress_tests_v14.py:StressTestEngine",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionConfig",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionConfig",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionEngine",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "class:finance/equity_distribution_v14_hydra.py:EquityDistributionEngine",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_extract_capex_usd",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_extract_capex_usd",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_build_distribution_config",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_build_distribution_config",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_derive_equity_investment_usd",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:_derive_equity_investment_usd",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:build_equity_distribution_schedule",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:build_equity_distribution_schedule",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:calculate_equity_distribution_from_pipeline",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:calculate_equity_distribution_from_pipeline",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:load_config",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:load_config",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:main",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "function:finance/equity_distribution_v14_hydra.py:main",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "class:finance/equity_v14.py:EquityCashflowSummary",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "class:finance/equity_v14.py:EquityCashflowSummary",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:summarise_equity_cashflows",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:summarise_equity_cashflows",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_equity_npv",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_equity_npv",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_moic",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_moic",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_payback_period",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_payback_period",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_pe_triad",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_pe_triad",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_equity_performance",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "function:finance/equity_v14.py:calculate_equity_performance",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:npv",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:npv",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:irr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:irr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:_irr_bisect",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:_irr_bisect",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:xnpv",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:xnpv",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:xirr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:xirr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:_xirr_bisect",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:_xirr_bisect",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:project_npv_from_cfads",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:project_npv_from_cfads",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:approx_project_irr",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/irr.py",
+   "target": "function:finance/irr.py:approx_project_irr",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:track_tlcf_schedule",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:track_tlcf_schedule",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_immediate_distributions",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_immediate_distributions",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_deferred_distributions",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_deferred_distributions",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_tax_savings",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:calculate_tax_savings",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:optimize_distribution_timing",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "function:finance/tax_optimization_v14.py:optimize_distribution_timing",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_immediate",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_immediate",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_deferred",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:calculate_distributions_deferred",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:optimize_distribution_timing_enhanced",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "function:finance/tax_optimization_v14_enhanced.py:optimize_distribution_timing_enhanced",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "class:finance/tax_schedule_v14.py:TaxSchedule",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "class:finance/tax_schedule_v14.py:TaxSchedule",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_straight_line_depreciation",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_straight_line_depreciation",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_macrs_depreciation",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_macrs_depreciation",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_corporate_tax_schedule",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_corporate_tax_schedule",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_tax_savings_from_tlcf",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/tax_schedule_v14.py",
+   "target": "function:finance/tax_schedule_v14.py:calculate_tax_savings_from_tlcf",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/core/metrics.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/stress_tests_v14.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity/__init__.py",
+   "target": "file:finance/equity_distribution_v14_hydra.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity/__init__.py",
+   "target": "file:finance/equity_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "file:analytics/schema_guard.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "file:finance/equity_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "file:analytics/contracts_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/equity_v14.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/tax_optimization_v14.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "file:finance/irr.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/tax_optimization_v14_enhanced.py",
+   "target": "file:finance/tax_schedule_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "function:analytics/core/metrics.py:calculate_scenario_kpis",
+   "target": "function:finance/irr.py:project_npv_from_cfads",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/core/metrics.py:calculate_scenario_kpis",
+   "target": "function:finance/irr.py:approx_project_irr",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/tax_optimization_v14_enhanced.py:optimize_distribution_timing_enhanced",
+   "target": "function:finance/tax_schedule_v14.py:calculate_corporate_tax_schedule",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/tax_optimization_v14_enhanced.py:optimize_distribution_timing_enhanced",
+   "target": "function:finance/tax_schedule_v14.py:calculate_straight_line_depreciation",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/equity_distribution_v14_hydra.py",
+   "target": "file:finance/equity_v14.py",
+   "type": "depends_on",
+   "direction": "forward",
+   "weight": 0.6
+  }
+ ]
+}

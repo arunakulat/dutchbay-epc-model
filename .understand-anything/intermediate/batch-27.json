@@ -1,0 +1,292 @@
+{
+  "nodes": [
+    {
+      "id": "file:scripts/APPLY_FIX_NOW.sh",
+      "type": "file",
+      "name": "APPLY_FIX_NOW.sh",
+      "filePath": "scripts/APPLY_FIX_NOW.sh",
+      "summary": "Shell script that applies the correct fix for the Pydantic v2 migration, reverting prior bad Phase 2 changes and re-applying the intended edits to finance contract models.",
+      "tags": ["script", "validation", "contracts", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:scripts/README.md",
+      "type": "document",
+      "name": "scripts/README.md",
+      "filePath": "scripts/README.md",
+      "summary": "Documents the GWTF R25 branch-protection compliance scripts (preflight checklist and daily audit), including usage commands and recommended shell aliases.",
+      "tags": ["documentation", "ci-cd", "validation", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/cleanup_fix_modified_files.sh",
+      "type": "file",
+      "name": "cleanup_fix_modified_files.sh",
+      "filePath": "scripts/cleanup_fix_modified_files.sh",
+      "summary": "Remediation script that removes files which were mistakenly modified instead of deleted during a prior cleanup, eliminating broken imports left behind.",
+      "tags": ["script", "utility", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/cleanup_non_core_tests.sh",
+      "type": "file",
+      "name": "cleanup_non_core_tests.sh",
+      "filePath": "scripts/cleanup_non_core_tests.sh",
+      "summary": "Removes non-core test files (integration/API/CLI, legacy, output artifacts) to keep the feature branch pristine while retaining the core module test suite.",
+      "tags": ["script", "utility", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/cleanup_non_core_tests_COMPLETE.sh",
+      "type": "file",
+      "name": "cleanup_non_core_tests_COMPLETE.sh",
+      "filePath": "scripts/cleanup_non_core_tests_COMPLETE.sh",
+      "summary": "Complete variant of the test-cleanup routine that removes 79 enumerated non-core test files and keeps 63 core tests, with summary reporting.",
+      "tags": ["script", "utility", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/deploy_cashflow_refactor.sh",
+      "type": "file",
+      "name": "deploy_cashflow_refactor.sh",
+      "filePath": "scripts/deploy_cashflow_refactor.sh",
+      "summary": "Automates deployment of the refactored cashflow v14 tax module: backs up the current file, swaps in the refactored version and tests, runs mypy and unit tests, and shows integration points.",
+      "tags": ["script", "cashflow", "finance", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/dutchbay_repo_cleanup.sh",
+      "type": "file",
+      "name": "dutchbay_repo_cleanup.sh",
+      "filePath": "scripts/dutchbay_repo_cleanup.sh",
+      "summary": "Automatic repository cleanup tool that archives or deletes legacy/experimental files into legacy_* directories for the v14 focus, supporting dry-run, archive, and delete modes with a JSON inventory report.",
+      "tags": ["script", "utility", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/dutchbay_repo_cleanup.sh:move_file",
+      "type": "function",
+      "name": "move_file",
+      "summary": "Moves a file into the appropriate legacy archive directory, tracking byte size and per-category counters for the cleanup inventory report.",
+      "tags": ["utility", "script"],
+      "complexity": "simple",
+      "lineRange": [96, 114]
+    },
+    {
+      "id": "function:scripts/dutchbay_repo_cleanup.sh:delete_file",
+      "type": "function",
+      "name": "delete_file",
+      "summary": "Permanently deletes a file when running in delete mode, incrementing the deletion counter and accumulating reclaimed size for the report.",
+      "tags": ["utility", "script"],
+      "complexity": "simple",
+      "lineRange": [116, 133]
+    },
+    {
+      "id": "file:scripts/dutchbay_repo_cleanup_fixed.sh",
+      "type": "file",
+      "name": "dutchbay_repo_cleanup_fixed.sh",
+      "filePath": "scripts/dutchbay_repo_cleanup_fixed.sh",
+      "summary": "Corrected version of the repository cleanup tool, identical in structure to dutchbay_repo_cleanup.sh, archiving or deleting legacy files into legacy_* directories with dry-run support and JSON reporting.",
+      "tags": ["script", "utility", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/dutchbay_repo_cleanup_fixed.sh:move_file",
+      "type": "function",
+      "name": "move_file",
+      "summary": "Moves a file into the matching legacy archive directory while tracking size and per-category counters for the cleanup inventory.",
+      "tags": ["utility", "script"],
+      "complexity": "simple",
+      "lineRange": [96, 114]
+    },
+    {
+      "id": "function:scripts/dutchbay_repo_cleanup_fixed.sh:delete_file",
+      "type": "function",
+      "name": "delete_file",
+      "summary": "Permanently removes a file in delete mode, updating the deletion count and reclaimed-size totals for reporting.",
+      "tags": ["utility", "script"],
+      "complexity": "simple",
+      "lineRange": [116, 133]
+    },
+    {
+      "id": "document:scripts/dutchbay_thread_migration_package.txt",
+      "type": "document",
+      "name": "dutchbay_thread_migration_package.txt",
+      "filePath": "scripts/dutchbay_thread_migration_package.txt",
+      "summary": "Migration handoff package describing the project's 'Go With The Flow' ruleset, proven YAML/config-driven patterns, phased to-do list, and diagnostic checklists for the DutchBay analytics stack.",
+      "tags": ["documentation", "configuration", "validation", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/fix_ruff_e402.sh",
+      "type": "file",
+      "name": "fix_ruff_e402.sh",
+      "filePath": "scripts/fix_ruff_e402.sh",
+      "summary": "Adds 'ruff: noqa: E402' suppression to specific analytics modules (evaluation_v14, sensitivity_v14) so module-level imports after code pass linting.",
+      "tags": ["script", "ci-cd", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/fix_vulnerabilities.sh",
+      "type": "file",
+      "name": "fix_vulnerabilities.sh",
+      "filePath": "scripts/fix_vulnerabilities.sh",
+      "summary": "Automated remediation for Dependabot security alerts that activates the venv and upgrades the flagged vulnerable Python packages.",
+      "tags": ["script", "ci-cd", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/freeze_validation_sprint17.sh",
+      "type": "file",
+      "name": "freeze_validation_sprint17.sh",
+      "filePath": "scripts/freeze_validation_sprint17.sh",
+      "summary": "Un-gameable freeze-validation gate for Sprint 17 (Pydantic v2 + pipeline verification) that runs a colored, multi-check suite to confirm the model is release-ready.",
+      "tags": ["script", "validation", "ci-cd", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/gwtf-daily-audit.sh",
+      "type": "file",
+      "name": "gwtf-daily-audit.sh",
+      "filePath": "scripts/gwtf-daily-audit.sh",
+      "summary": "GWTF R25 daily compliance audit that checks for direct commits to main and other branch-protection violations at the end of a work session.",
+      "tags": ["script", "ci-cd", "validation", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/gwtf-preflight.sh",
+      "type": "file",
+      "name": "gwtf-preflight.sh",
+      "filePath": "scripts/gwtf-preflight.sh",
+      "summary": "GWTF R25 pre-flight checklist run before any git merge, pull, or push to verify the current branch and branch-protection state.",
+      "tags": ["script", "ci-cd", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/phase1_quickstart.sh",
+      "type": "file",
+      "name": "phase1_quickstart.sh",
+      "filePath": "scripts/phase1_quickstart.sh",
+      "summary": "Automates the critical Phase 1 validation steps for the sensitivity_v14.py golden-reference implementation, checking the file exists and validating its syntax and behavior.",
+      "tags": ["script", "sensitivity", "validation", "pipeline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/rollback_phase2_and_fix_properly.sh",
+      "type": "file",
+      "name": "rollback_phase2_and_fix_properly.sh",
+      "filePath": "scripts/rollback_phase2_and_fix_properly.sh",
+      "summary": "Emergency rollback script that reverts harmful Phase 2 Pydantic-migration changes and re-applies the correct fixes.",
+      "tags": ["script", "contracts", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/run_all_fixes.sh",
+      "type": "file",
+      "name": "run_all_fixes.sh",
+      "filePath": "scripts/run_all_fixes.sh",
+      "summary": "Master orchestration script that executes the full set of Pydantic v2 migration fixes (Phase 2) after verifying the active git branch.",
+      "tags": ["script", "contracts", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/run_phase2_fixes.sh",
+      "type": "file",
+      "name": "run_phase2_fixes.sh",
+      "filePath": "scripts/run_phase2_fixes.sh",
+      "summary": "Applies targeted Phase 2 fixes for remaining test failures, such as replacing TornadoResult.model_validate() calls with direct construction based on actual pytest errors.",
+      "tags": ["script", "contracts", "validation", "sensitivity"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/run_phase_1_2_tests.sh",
+      "type": "file",
+      "name": "run_phase_1_2_tests.sh",
+      "filePath": "scripts/run_phase_1_2_tests.sh",
+      "summary": "Test runner that activates the Python 3.11 venv and executes the Phase 1-2 refactoring test suite to verify the implementation.",
+      "tags": ["script", "validation", "ci-cd", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/run_sprint10_gates.sh",
+      "type": "file",
+      "name": "run_sprint10_gates.sh",
+      "filePath": "scripts/run_sprint10_gates.sh",
+      "summary": "Minimal Sprint 10 gate suite that runs import/compile gates on the core pipeline, cashflow, and debt modules to confirm they build cleanly.",
+      "tags": ["script", "validation", "pipeline", "ci-cd"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/dutchbay_repo_cleanup.sh",
+      "target": "function:scripts/dutchbay_repo_cleanup.sh:move_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/dutchbay_repo_cleanup.sh",
+      "target": "function:scripts/dutchbay_repo_cleanup.sh:delete_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/dutchbay_repo_cleanup_fixed.sh",
+      "target": "function:scripts/dutchbay_repo_cleanup_fixed.sh:move_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/dutchbay_repo_cleanup_fixed.sh",
+      "target": "function:scripts/dutchbay_repo_cleanup_fixed.sh:delete_file",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "document:scripts/README.md",
+      "target": "file:scripts/gwtf-preflight.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:scripts/README.md",
+      "target": "file:scripts/gwtf-daily-audit.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/dutchbay_repo_cleanup_fixed.sh",
+      "target": "file:scripts/dutchbay_repo_cleanup.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/cleanup_non_core_tests_COMPLETE.sh",
+      "target": "file:scripts/cleanup_non_core_tests.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/rollback_phase2_and_fix_properly.sh",
+      "target": "file:scripts/run_phase2_fixes.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/run_all_fixes.sh",
+      "target": "file:scripts/run_phase2_fixes.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

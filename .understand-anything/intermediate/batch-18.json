@@ -1,0 +1,326 @@
+{
+  "nodes": [
+    {
+      "id": "document:docs/AEP_PROVENANCE.md",
+      "type": "document",
+      "name": "AEP_PROVENANCE.md",
+      "filePath": "docs/AEP_PROVENANCE.md",
+      "summary": "Defines the lender-grade, test-enforced AEP provenance chain: an approved-source manifest, how scenarios declare AEP provenance in config, and the enforcement API/tests that gate it.",
+      "tags": ["documentation", "aep", "wind-resource", "validation", "provenance"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/ANALYTICS_INTEGRATION.md",
+      "type": "document",
+      "name": "ANALYTICS_INTEGRATION.md",
+      "filePath": "docs/ANALYTICS_INTEGRATION.md",
+      "summary": "Integration guide for the V14 analytics suite covering returns analysis, risk metrics, sensitivity, Monte Carlo, and scenario comparison, including usage, result schema, and module readiness status.",
+      "tags": ["documentation", "risk", "monte-carlo", "sensitivity", "equity"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/AUDIT_CASHFLOW_V14_FINAL.md",
+      "type": "document",
+      "name": "AUDIT_CASHFLOW_V14_FINAL.md",
+      "filePath": "docs/AUDIT_CASHFLOW_V14_FINAL.md",
+      "summary": "Final audit of the cashflow v14 tax-engine integration, documenting loss carry-forward fixes, tax-holiday logic, interest withholding tax, and backward-compatibility for the CFADS/tax pipeline.",
+      "tags": ["documentation", "cashflow", "finance", "validation", "tax"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/AUDIT_IMPORT_GATEWAY_PATTERN.md",
+      "type": "document",
+      "name": "AUDIT_IMPORT_GATEWAY_PATTERN.md",
+      "filePath": "docs/AUDIT_IMPORT_GATEWAY_PATTERN.md",
+      "summary": "Sprint 9 audit confirming the contract-gateway import pattern where modules import through analytics/contracts_v14 as the single source of truth, with a compliance checklist and verified files.",
+      "tags": ["documentation", "contracts", "validation", "architecture"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/CASPER_MC_INTEGRATION.md",
+      "type": "document",
+      "name": "CASPER_MC_INTEGRATION.md",
+      "filePath": "docs/CASPER_MC_INTEGRATION.md",
+      "summary": "Guide for integrating Monte Carlo results into CASPER lender-pack payloads, documenting the payload schema, lender risk table, covenant block, and the build_casper_risk_blocks API.",
+      "tags": ["documentation", "monte-carlo", "risk", "debt", "contracts"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/DEBT_NAMING_CONVENTIONS_v14.md",
+      "type": "document",
+      "name": "DEBT_NAMING_CONVENTIONS_v14.md",
+      "filePath": "docs/DEBT_NAMING_CONVENTIONS_v14.md",
+      "summary": "Clarifies debt-module field naming and unit conventions in v14 (the _m suffix meaning USD millions), with usage examples, testing guidance, and a v14-to-v15 migration path.",
+      "tags": ["documentation", "debt", "finance", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/DSCR_SENSITIVITY_INTEGRATION.md",
+      "type": "document",
+      "name": "DSCR_SENSITIVITY_INTEGRATION.md",
+      "filePath": "docs/DSCR_SENSITIVITY_INTEGRATION.md",
+      "summary": "Integration guide for dual-DSCR (P50/P99) debt sizing and sensitivity analysis, covering methodology, config structure, CLI/Python usage, tornado charts, and binding-constraint interpretation.",
+      "tags": ["documentation", "debt", "sensitivity", "risk", "cashflow"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/FX_FLAG_TRACKING_GUIDELINES.md",
+      "type": "document",
+      "name": "FX_FLAG_TRACKING_GUIDELINES.md",
+      "filePath": "docs/FX_FLAG_TRACKING_GUIDELINES.md",
+      "summary": "Guidelines for truthful FX-integration flag tracking, defining anti-patterns and validation patterns so flags reflect whether FX curves and hedging were actually applied in the cashflow.",
+      "tags": ["documentation", "validation", "cashflow", "risk"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/FX_INTEGRATION_v14R6.md",
+      "type": "document",
+      "name": "FX_INTEGRATION_v14R6.md",
+      "filePath": "docs/FX_INTEGRATION_v14R6.md",
+      "summary": "FX integration guide (v14R6) describing the FX module architecture and core data structures (FXVolumetry, FXCurveOutput, FXRiskProfile, FXStructuredBlock) and their wiring into ScenarioResult and lender reports.",
+      "tags": ["documentation", "finance", "risk", "data-model", "contracts"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/FX_WACC_EQUITY_INTEGRATION_v14.md",
+      "type": "document",
+      "name": "FX_WACC_EQUITY_INTEGRATION_v14.md",
+      "filePath": "docs/FX_WACC_EQUITY_INTEGRATION_v14.md",
+      "summary": "Maps the canonical financial entry point covering FX structured blocks, WACC v14 computation, and equity-performance contracts, with field provenance on ScenarioResult.",
+      "tags": ["documentation", "equity", "finance", "contracts"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/GIS_GEOTIFF_EXPORT.md",
+      "type": "document",
+      "name": "GIS_GEOTIFF_EXPORT.md",
+      "filePath": "docs/GIS_GEOTIFF_EXPORT.md",
+      "summary": "Short how-to for exporting per-cell CF/AEP wind-resource rasters to GeoTIFF (issue #20), covering the rasterio dependency, run instructions, and a QGIS smoke-test.",
+      "tags": ["documentation", "wind-resource", "aep", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/INTERNAL_HARDENING_AUDIT_20251219.md",
+      "type": "document",
+      "name": "INTERNAL_HARDENING_AUDIT_20251219.md",
+      "filePath": "docs/INTERNAL_HARDENING_AUDIT_20251219.md",
+      "summary": "Sprint 12 hardening audit of the refinancing and equity-distribution modules and their pipeline integration, listing 14 findings/fixes for NPV placeholders, division-by-zero, validation, and covenant gates.",
+      "tags": ["documentation", "debt", "equity", "validation", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/LINT_WARNINGS_E402_DEFERRED.md",
+      "type": "document",
+      "name": "LINT_WARNINGS_E402_DEFERRED.md",
+      "filePath": "docs/LINT_WARNINGS_E402_DEFERRED.md",
+      "summary": "Decision log explaining why E402 import-ordering lint warnings are deferred in the Monte Carlo and sensitivity packages and legacy shims, with fix options for a future sprint.",
+      "tags": ["documentation", "monte-carlo", "sensitivity", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/MISSING_FUNCTIONS_SPRINT_18.md",
+      "type": "document",
+      "name": "MISSING_FUNCTIONS_SPRINT_18.md",
+      "filePath": "docs/MISSING_FUNCTIONS_SPRINT_18.md",
+      "summary": "Sprint 18+ backlog of missing/unimplemented functions (e.g. size_debt_with_dual_dscr, tax-optimization sensitivity, FXSensitivityConfig) with priorities, test-skip strategy, and an implementation checklist.",
+      "tags": ["documentation", "debt", "sensitivity", "tax", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/MODULE_INTEGRATION_STATUS.md",
+      "type": "document",
+      "name": "MODULE_INTEGRATION_STATUS.md",
+      "filePath": "docs/MODULE_INTEGRATION_STATUS.md",
+      "summary": "Status report classifying analytics/finance modules as fully integrated, orphaned, or partially integrated, flagging tax-module fragmentation and the Sprint 16 wiring/cleanup plan.",
+      "tags": ["documentation", "pipeline", "finance", "tax"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "type": "document",
+      "name": "PIPELINE_ANALYSIS_SPRINT15.md",
+      "filePath": "docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "summary": "Sprint 15 module-by-module analysis of the V14 pipeline (entry point, orchestrator, CFADS engine, debt planning, schema guard, contracts), documenting critical refinancing/equity bug fixes and test status.",
+      "tags": ["documentation", "pipeline", "cashflow", "debt", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/PIPELINE_ARCHITECTURE.md",
+      "type": "document",
+      "name": "PIPELINE_ARCHITECTURE.md",
+      "filePath": "docs/PIPELINE_ARCHITECTURE.md",
+      "summary": "Describes the two-pipeline design (lender-grade enhanced vs wind-only legacy), the canonical entry points (run_full_pipeline_v14, evaluation gateway), and the correct integration pattern with golden tests.",
+      "tags": ["documentation", "pipeline", "entry-point", "architecture"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/SPRINT15_SECOND_ITERATION_FIXES.md",
+      "type": "document",
+      "name": "SPRINT15_SECOND_ITERATION_FIXES.md",
+      "filePath": "docs/SPRINT15_SECOND_ITERATION_FIXES.md",
+      "summary": "Sprint 15 second-iteration review of analytics modules, flagging CESSPIT violations like the hardcoded Monte Carlo discount rate, missing Latin Hypercube sampling, and FX-sensitivity gaps with a priority matrix.",
+      "tags": ["documentation", "monte-carlo", "sensitivity", "validation", "risk"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/SPRINT_16_FINAL_PIPELINE_ANALYSIS.md",
+      "type": "document",
+      "name": "SPRINT_16_FINAL_PIPELINE_ANALYSIS.md",
+      "filePath": "docs/SPRINT_16_FINAL_PIPELINE_ANALYSIS.md",
+      "summary": "Final Sprint 16 pipeline analysis (iteration 7) covering pipeline strengths, P0 hardcoded-value issues in WACC/refinancing/equity, Sprint 17 remediation phases, benchmarks, and a production-readiness scorecard.",
+      "tags": ["documentation", "pipeline", "equity", "debt", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/SPRINT_16_REORGANIZATION_COMPLETE.md",
+      "type": "document",
+      "name": "SPRINT_16_REORGANIZATION_COMPLETE.md",
+      "filePath": "docs/SPRINT_16_REORGANIZATION_COMPLETE.md",
+      "summary": "Summarizes the Sprint 16 reorganization into sensitivity, scenario, contracts, tax, and finance packages, with backward-compatibility guarantees, testing strategy, and framework-compliance results.",
+      "tags": ["documentation", "pipeline", "sensitivity", "tax", "contracts"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:docs/PIPELINE_ARCHITECTURE.md",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/PIPELINE_ARCHITECTURE.md",
+      "target": "file:analytics/evaluation_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "target": "file:analytics/pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "target": "file:finance/cashflow_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/PIPELINE_ANALYSIS_SPRINT15.md",
+      "target": "file:finance/debt_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/AUDIT_CASHFLOW_V14_FINAL.md",
+      "target": "file:finance/cashflow_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/AUDIT_CASHFLOW_V14_FINAL.md",
+      "target": "file:finance/tax_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/AUDIT_IMPORT_GATEWAY_PATTERN.md",
+      "target": "file:analytics/contracts_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/AUDIT_IMPORT_GATEWAY_PATTERN.md",
+      "target": "file:analytics/evaluation_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/CASPER_MC_INTEGRATION.md",
+      "target": "file:analytics/monte_carlo_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/DEBT_NAMING_CONVENTIONS_v14.md",
+      "target": "file:finance/debt_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/DSCR_SENSITIVITY_INTEGRATION.md",
+      "target": "file:finance/debt_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/INTERNAL_HARDENING_AUDIT_20251219.md",
+      "target": "file:finance/refinancing_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/INTERNAL_HARDENING_AUDIT_20251219.md",
+      "target": "file:finance/equity_distribution_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/INTERNAL_HARDENING_AUDIT_20251219.md",
+      "target": "file:analytics/pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/FX_WACC_EQUITY_INTEGRATION_v14.md",
+      "target": "file:finance/wacc_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/MODULE_INTEGRATION_STATUS.md",
+      "target": "file:analytics/pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/SPRINT15_SECOND_ITERATION_FIXES.md",
+      "target": "file:analytics/monte_carlo_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/SPRINT_16_FINAL_PIPELINE_ANALYSIS.md",
+      "target": "file:analytics/pipeline_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

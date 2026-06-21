@@ -1,0 +1,247 @@
+{
+  "nodes": [
+    {
+      "id": "config:.dutchbay_bootstrap_report.json",
+      "type": "config",
+      "name": ".dutchbay_bootstrap_report.json",
+      "summary": "Generated bootstrap health-check report listing the resolved repo root, virtualenv, key config files, entry-point scripts, and the Go-With-The-Flow ruleset (51 rules, v3.0) with per-check ok/details status.",
+      "tags": ["configuration", "validation", "pipeline", "ci-cd"],
+      "complexity": "moderate",
+      "filePath": ".dutchbay_bootstrap_report.json"
+    },
+    {
+      "id": "config:.pre-commit-config.yaml",
+      "type": "config",
+      "name": ".pre-commit-config.yaml",
+      "summary": "Pre-commit hook configuration for the Go-With-The-Flow CI gate, wiring black, ruff (--fix), isort (black profile), and the standard pre-commit-hooks set; mypy is intentionally deferred to CI.",
+      "tags": ["configuration", "ci-cd", "validation", "pipeline"],
+      "complexity": "moderate",
+      "filePath": ".pre-commit-config.yaml"
+    },
+    {
+      "id": "service:Makefile",
+      "type": "service",
+      "name": "Makefile",
+      "summary": "Developer task runner defining setup, lint, type, security, test, coverage, package, freeze, lock, and clean targets that wrap pip, black/ruff/flake8, mypy, bandit, coverage, and the project zip/build steps.",
+      "tags": ["ci-cd", "pipeline", "utility", "configuration"],
+      "complexity": "simple",
+      "filePath": "Makefile"
+    },
+    {
+      "id": "document:AAA - instructions for make clean zip.md",
+      "type": "document",
+      "name": "AAA - instructions for make clean zip.md",
+      "summary": "Short operator note describing the workflow to commit changes, generate a codebase snapshot, and drag the resulting markdown into the Perplexity desktop app for analysis.",
+      "tags": ["documentation", "utility"],
+      "complexity": "simple",
+      "filePath": "AAA - instructions for make clean zip.md"
+    },
+    {
+      "id": "document:CHANGELOG.md",
+      "type": "document",
+      "name": "CHANGELOG.md",
+      "summary": "Versioned change history of the DutchBay model spanning v0.1.6 through v14.15.0, documenting sprint deliverables such as the wind-to-finance integration bridge, CASPER contract alignment, equity distribution, and sensitivity-suite unification.",
+      "tags": ["documentation", "finance", "wind-resource", "pipeline"],
+      "complexity": "complex",
+      "filePath": "CHANGELOG.md"
+    },
+    {
+      "id": "document:DEGRADATION_IMPLEMENTATION_STATUS.md",
+      "type": "document",
+      "name": "DEGRADATION_IMPLEMENTATION_STATUS.md",
+      "summary": "Status report for the wind-turbine degradation feature, covering its config layer, parameter extraction, production application, verification of no double-counting, and the 20-year revenue impact on AEP.",
+      "tags": ["documentation", "wind-resource", "aep", "validation"],
+      "complexity": "complex",
+      "filePath": "DEGRADATION_IMPLEMENTATION_STATUS.md"
+    },
+    {
+      "id": "document:PYDANTIC_V2_RUNTIME_RISKS.md",
+      "type": "document",
+      "name": "PYDANTIC_V2_RUNTIME_RISKS.md",
+      "summary": "Risk analysis of the Pydantic V2 migration enumerating high-priority runtime hazards (frozen-model mutation, .dict() vs .model_dump(), computed fields) and the defensive adapter/dataclass patterns applied across the contracts layer.",
+      "tags": ["documentation", "contracts", "validation", "risk"],
+      "complexity": "complex",
+      "filePath": "PYDANTIC_V2_RUNTIME_RISKS.md"
+    },
+    {
+      "id": "document:QUICK_START.md",
+      "type": "document",
+      "name": "QUICK_START.md",
+      "summary": "Concise getting-started guide for the DutchBay model covering venv setup, running the four CLI routines, the Python API, tests, and where key modules live.",
+      "tags": ["documentation", "cli", "entry-point", "utility"],
+      "complexity": "moderate",
+      "filePath": "QUICK_START.md"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "summary": "Top-level project overview for the 150MW wind-farm financial model describing architecture, core modules, financial-modeling and analytics features, development standards, usage examples, and the roadmap.",
+      "tags": ["documentation", "entry-point", "finance", "wind-resource"],
+      "complexity": "complex",
+      "filePath": "README.md"
+    },
+    {
+      "id": "document:RELEASING.md",
+      "type": "document",
+      "name": "RELEASING.md",
+      "summary": "Release runbook for v14.15.0 detailing the steps to ensure a clean state, freeze/lock dependencies, bump the version, tag and push, and trigger GitHub Actions.",
+      "tags": ["documentation", "ci-cd", "pipeline", "utility"],
+      "complexity": "simple",
+      "filePath": "RELEASING.md"
+    },
+    {
+      "id": "document:RETROSPECTIVE_SPRINT9_ITERATION1.md",
+      "type": "document",
+      "name": "RETROSPECTIVE_SPRINT9_ITERATION1.md",
+      "summary": "Sprint 9 iteration-1 retrospective with a full codebase analysis of the entry point, pipeline, configuration, and each module (wind, finance, analytics, scenarios, schema, tests) plus a GWTF compliance matrix and recommendations.",
+      "tags": ["documentation", "pipeline", "finance", "wind-resource"],
+      "complexity": "complex",
+      "filePath": "RETROSPECTIVE_SPRINT9_ITERATION1.md"
+    },
+    {
+      "id": "document:RETROSPECTIVE_SPRINT9_ITERATION2.md",
+      "type": "document",
+      "name": "RETROSPECTIVE_SPRINT9_ITERATION2.md",
+      "summary": "Expert Sprint 9 iteration-2 retrospective verifying GWTF/CASPER/CESSPIT/CCCDIR framework compliance and identifying critical domain gaps in wind degradation, dual-DSCR debt sizing, and time-varying availability with an implementation roadmap.",
+      "tags": ["documentation", "debt", "wind-resource", "risk"],
+      "complexity": "complex",
+      "filePath": "RETROSPECTIVE_SPRINT9_ITERATION2.md"
+    },
+    {
+      "id": "document:SECURITY.md",
+      "type": "document",
+      "name": "SECURITY.md",
+      "summary": "Minimal security policy stating supported versions and how to privately report a vulnerability for the project.",
+      "tags": ["documentation", "validation", "utility"],
+      "complexity": "simple",
+      "filePath": "SECURITY.md"
+    },
+    {
+      "id": "document:SPRINT_17_ITERATION_3_AUDIT.md",
+      "type": "document",
+      "name": "SPRINT_17_ITERATION_3_AUDIT.md",
+      "summary": "Comprehensive Sprint 17 codebase audit assessing the pipeline architecture, finance module (degradation, dual-DSCR, tax), Monte-Carlo and sensitivity analytics, framework compliance, production readiness, and a risk register.",
+      "tags": ["documentation", "finance", "monte-carlo", "debt"],
+      "complexity": "complex",
+      "filePath": "SPRINT_17_ITERATION_3_AUDIT.md"
+    },
+    {
+      "id": "document:SPRINT_9_HANDOVER.md",
+      "type": "document",
+      "name": "SPRINT_9_HANDOVER.md",
+      "summary": "Thread-handover document for Sprint 9 summarizing the verified degradation implementation, branch status, outstanding testing/validation items, key decisions, and a quick-start plan for the next working thread.",
+      "tags": ["documentation", "wind-resource", "validation", "utility"],
+      "complexity": "complex",
+      "filePath": "SPRINT_9_HANDOVER.md"
+    },
+    {
+      "id": "file:VERIFY_PACKAGES.sh",
+      "type": "file",
+      "name": "VERIFY_PACKAGES.sh",
+      "summary": "Verification shell script that activates the project virtualenv and runs mypy type checking and pytest across the core packages, reporting colored pass/fail status for each phase.",
+      "tags": ["script", "ci-cd", "validation", "utility"],
+      "complexity": "complex",
+      "filePath": "VERIFY_PACKAGES.sh",
+      "languageNotes": "Bash script; uses set -e and sources .venv311/bin/activate."
+    },
+    {
+      "id": "document:WIND_RESOURCE_IMPLEMENTATION_PLAN.md",
+      "type": "document",
+      "name": "WIND_RESOURCE_IMPLEMENTATION_PLAN.md",
+      "summary": "Phased build plan for the wind-resource module covering the analyzer, energy calculator, and pipeline modules plus Hydra-based CLI tools and config, with a GWTF compliance checklist and progress tracking.",
+      "tags": ["documentation", "wind-resource", "aep", "pipeline"],
+      "complexity": "complex",
+      "filePath": "WIND_RESOURCE_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "id": "document:WIND_RESOURCE_STATUS.md",
+      "type": "document",
+      "name": "WIND_RESOURCE_STATUS.md",
+      "summary": "Completion status report for the wind-resource module confirming all phases done, full GWTF compliance, module/CLI statistics, usage examples, and validated DutchBay results at 150m hub height.",
+      "tags": ["documentation", "wind-resource", "aep", "validation"],
+      "complexity": "complex",
+      "filePath": "WIND_RESOURCE_STATUS.md"
+    },
+    {
+      "id": "file:check_venv.sh",
+      "type": "file",
+      "name": "check_venv.sh",
+      "summary": "Virtualenv guard script that validates the active Python environment (interpreter path, version, required packages) with logging helpers and a usage banner, fataling out when the venv is misconfigured.",
+      "tags": ["script", "validation", "ci-cd", "utility"],
+      "complexity": "complex",
+      "filePath": "check_venv.sh",
+      "languageNotes": "Bash script; most helper functions (info/ok/warn/err/fatal) are one-line logging wrappers."
+    },
+    {
+      "id": "function:check_venv.sh:print_usage",
+      "type": "function",
+      "name": "print_usage",
+      "summary": "Prints the command-line usage banner and supported options for the check_venv.sh environment-verification script.",
+      "tags": ["script", "cli", "utility"],
+      "complexity": "simple",
+      "lineRange": [55, 71]
+    },
+    {
+      "id": "file:fix_precommit.sh",
+      "type": "file",
+      "name": "fix_precommit.sh",
+      "summary": "One-off Sprint 9 repair script that runs isort on specific analytics/finance modules and re-checks flake8/ruff to resolve import-ordering pre-commit hook violations.",
+      "tags": ["script", "ci-cd", "validation", "utility"],
+      "complexity": "moderate",
+      "filePath": "fix_precommit.sh",
+      "languageNotes": "Bash script targeting analytics/evaluation_v14.py and finance/cashflow_v14*.py."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:check_venv.sh",
+      "target": "function:check_venv.sh:print_usage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:.pre-commit-config.yaml",
+      "target": "service:Makefile",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:QUICK_START.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:QUICK_START.md",
+      "target": "service:Makefile",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:RELEASING.md",
+      "target": "service:Makefile",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:DEGRADATION_IMPLEMENTATION_STATUS.md",
+      "target": "document:SPRINT_9_HANDOVER.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:WIND_RESOURCE_IMPLEMENTATION_PLAN.md",
+      "target": "document:WIND_RESOURCE_STATUS.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

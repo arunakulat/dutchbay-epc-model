@@ -1,0 +1,208 @@
+{
+  "nodes": [
+    {
+      "id": "file:analytics/gis/geotiff_export.py",
+      "type": "file",
+      "name": "geotiff_export.py",
+      "filePath": "analytics/gis/geotiff_export.py",
+      "summary": "Writes single-band float32 GeoTIFF rasters (one per wind/AEP variable) with an EPSG:4326 affine transform from a grid bbox, plus a data-lake manifest entry carrying extent, resolution, variables and provenance. Rasterio is an optional [gis] dependency guarded at call time so the base install never needs GDAL.",
+      "tags": ["wind-resource", "aep", "data-model", "utility", "validation"],
+      "complexity": "moderate",
+      "languageNotes": "rasterio import is deferred behind _require_rasterio to keep GDAL out of the base install."
+    },
+    {
+      "id": "function:analytics/gis/geotiff_export.py:_require_rasterio",
+      "type": "function",
+      "name": "_require_rasterio",
+      "summary": "Returns the optional rasterio module or raises an actionable error instructing the user to install the [gis] extra when GDAL/rasterio is absent.",
+      "tags": ["utility", "validation", "wind-resource"],
+      "complexity": "simple",
+      "lineRange": [28, 38]
+    },
+    {
+      "id": "function:analytics/gis/geotiff_export.py:write_geotiff",
+      "type": "function",
+      "name": "write_geotiff",
+      "summary": "Writes a 2D float32 array to a single-band GeoTIFF using a from_bounds affine transform derived from the bbox and CRS, and emits a sidecar provenance JSON. Core raster-writing primitive for the GIS export.",
+      "tags": ["wind-resource", "aep", "utility", "data-model"],
+      "complexity": "moderate",
+      "lineRange": [41, 92]
+    },
+    {
+      "id": "function:analytics/gis/geotiff_export.py:export_grid_rasters",
+      "type": "function",
+      "name": "export_grid_rasters",
+      "summary": "Iterates a mapping of variable-name to grid array, writing each to a prefixed GeoTIFF in an output directory and returning the resulting file paths. Batch wrapper over write_geotiff.",
+      "tags": ["wind-resource", "aep", "utility", "pipeline"],
+      "complexity": "simple",
+      "lineRange": [95, 113]
+    },
+    {
+      "id": "function:analytics/gis/geotiff_export.py:build_manifest_entry",
+      "type": "function",
+      "name": "build_manifest_entry",
+      "summary": "Assembles a data-lake manifest entry dict describing a grid's name, bbox extent, resolution, exported variables, output paths, CRS and provenance block.",
+      "tags": ["data-model", "utility", "wind-resource", "validation"],
+      "complexity": "moderate",
+      "lineRange": [116, 137]
+    },
+    {
+      "id": "function:analytics/gis/geotiff_export.py:append_manifest",
+      "type": "function",
+      "name": "append_manifest",
+      "summary": "Appends grid manifest entries to a JSON data-lake manifest file, creating parent directories and merging with any existing document on disk.",
+      "tags": ["data-model", "utility", "pipeline", "wind-resource"],
+      "complexity": "moderate",
+      "lineRange": [140, 158]
+    },
+    {
+      "id": "file:analytics/gis/gis_export.py",
+      "type": "file",
+      "name": "gis_export.py",
+      "filePath": "analytics/gis/gis_export.py",
+      "summary": "Orchestrates the GIS export pipeline: samples coarse ws150/CF/AEP grids from ERA5, bilinearly downscales named fine grids, writes GeoTIFFs and appends a data-lake manifest. Config-first via a scenario gis: block with an injectable cell-result source for network-free unit testing.",
+      "tags": ["wind-resource", "aep", "pipeline", "cli", "config"],
+      "complexity": "moderate",
+      "languageNotes": "Uses Hydra/OmegaConf for config loading; no argparse/input()."
+    },
+    {
+      "id": "function:analytics/gis/gis_export.py:grid_specs",
+      "type": "function",
+      "name": "grid_specs",
+      "summary": "Builds GridSpec objects from a scenario gis: config block, deriving center lat/lon, cell count, cell resolution and native/interpolated mode for each grid.",
+      "tags": ["config", "wind-resource", "data-model", "validation"],
+      "complexity": "moderate",
+      "lineRange": [33, 49]
+    },
+    {
+      "id": "function:analytics/gis/gis_export.py:default_era5_source",
+      "type": "function",
+      "name": "default_era5_source",
+      "summary": "Constructs the default live ERA5 cell-result source from an era5 config block, building an ERA5RequestConfig and returning a closure that fetches per-cell results via the wind pipeline.",
+      "tags": ["wind-resource", "aep", "config", "pipeline"],
+      "complexity": "moderate",
+      "lineRange": [52, 81]
+    },
+    {
+      "id": "function:analytics/gis/gis_export.py:run_gis_export",
+      "type": "function",
+      "name": "run_gis_export",
+      "summary": "Main export driver: fetches coarse ERA5 grids, bilinearly downscales fine grids from their named native sources, exports GeoTIFFs and writes manifest entries. Returns the manifest path and grid summary.",
+      "tags": ["wind-resource", "aep", "pipeline", "config"],
+      "complexity": "moderate",
+      "lineRange": [84, 168]
+    },
+    {
+      "id": "function:analytics/gis/gis_export.py:main",
+      "type": "function",
+      "name": "main",
+      "summary": "CLI entry point that loads the scenario config via OmegaConf, runs the GIS export and prints the resulting manifest summary as JSON.",
+      "tags": ["cli", "entry-point", "pipeline", "config"],
+      "complexity": "simple",
+      "lineRange": [171, 185]
+    },
+    {
+      "id": "file:wind_resource/era5_grid.py",
+      "type": "file",
+      "name": "era5_grid.py",
+      "filePath": "wind_resource/era5_grid.py",
+      "summary": "Builds coarse (native ~0.25 ERA5) and fine (bilinearly downscaled ~0.05) n-by-n grids of ws150_mean, capacity_factor and per-turbine AEP over a project site by sampling the ERA5 point pipeline at cell centres and reusing the EnergyCalculator. Pure assembly/downscale functions take injected results for network-free testing.",
+      "tags": ["wind-resource", "aep", "data-model", "validation"],
+      "complexity": "moderate",
+      "languageNotes": "Uses scipy RegularGridInterpolator for bilinear downscaling; dataclasses for GridSpec/CellResult."
+    },
+    {
+      "id": "class:wind_resource/era5_grid.py:GridSpec",
+      "type": "class",
+      "name": "GridSpec",
+      "summary": "Dataclass describing an n-by-n grid (center lat/lon, cell count, cell resolution, native/interpolated mode) with validation and helpers for the degree span, bounding box and per-cell center coordinates.",
+      "tags": ["data-model", "wind-resource", "validation", "config"],
+      "complexity": "moderate",
+      "lineRange": [36, 88]
+    },
+    {
+      "id": "class:wind_resource/era5_grid.py:CellResult",
+      "type": "class",
+      "name": "CellResult",
+      "summary": "Immutable dataclass holding the per-cell ERA5 result fields: latitude, longitude, mean 150m wind speed, capacity factor and per-turbine AEP in GWh. The data-model carrier passed between grid assembly and raster export.",
+      "tags": ["data-model", "wind-resource", "aep", "cashflow"],
+      "complexity": "simple",
+      "lineRange": [92, 99]
+    },
+    {
+      "id": "function:wind_resource/era5_grid.py:assemble_grids",
+      "type": "function",
+      "name": "assemble_grids",
+      "summary": "Reshapes a flat list of n-by-n CellResults into float32 grid arrays for ws150_mean, capacity_factor and aep_per_turbine, validating the cell count matches n squared.",
+      "tags": ["wind-resource", "aep", "data-model", "validation"],
+      "complexity": "simple",
+      "lineRange": [102, 109]
+    },
+    {
+      "id": "function:wind_resource/era5_grid.py:downscale_bilinear",
+      "type": "function",
+      "name": "downscale_bilinear",
+      "summary": "Bilinearly interpolates coarse-grid variable arrays onto a finer grid using scipy RegularGridInterpolator, producing smooth wind-farm-scale fields explicitly labelled as interpolation rather than measurement.",
+      "tags": ["wind-resource", "aep", "utility", "validation"],
+      "complexity": "moderate",
+      "lineRange": [112, 155]
+    },
+    {
+      "id": "function:wind_resource/era5_grid.py:fetch_cell_results",
+      "type": "function",
+      "name": "fetch_cell_results",
+      "summary": "Performs the live ERA5 fetch: retrieves a timeseries for each grid cell center, builds the hub-height series, computes site AEP/CF via the energy calculator and returns CellResults. The network-bound source feeding grid assembly.",
+      "tags": ["wind-resource", "aep", "pipeline", "data-model"],
+      "complexity": "moderate",
+      "lineRange": [158, 207]
+    }
+  ],
+  "edges": [
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:_require_rasterio", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:write_geotiff", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:export_grid_rasters", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:build_manifest_entry", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:append_manifest", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:write_geotiff", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:export_grid_rasters", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:build_manifest_entry", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/geotiff_export.py", "target": "function:analytics/gis/geotiff_export.py:append_manifest", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/geotiff_export.py:write_geotiff", "target": "function:analytics/gis/geotiff_export.py:_require_rasterio", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/geotiff_export.py:export_grid_rasters", "target": "function:analytics/gis/geotiff_export.py:write_geotiff", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/gis/gis_export.py", "target": "file:analytics/gis/geotiff_export.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/gis/gis_export.py", "target": "file:wind_resource/era5_grid.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:grid_specs", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:default_era5_source", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:run_gis_export", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:grid_specs", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:default_era5_source", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:run_gis_export", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/gis/gis_export.py", "target": "function:analytics/gis/gis_export.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:analytics/gis/gis_export.py:grid_specs", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:analytics/gis/gis_export.py:default_era5_source", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:wind_resource/era5_grid.py:assemble_grids", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:wind_resource/era5_grid.py:downscale_bilinear", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:analytics/gis/geotiff_export.py:export_grid_rasters", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:analytics/gis/geotiff_export.py:build_manifest_entry", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:run_gis_export", "target": "function:analytics/gis/geotiff_export.py:append_manifest", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:default_era5_source", "target": "function:wind_resource/era5_grid.py:fetch_cell_results", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/gis/gis_export.py:grid_specs", "target": "class:wind_resource/era5_grid.py:GridSpec", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "function:analytics/gis/gis_export.py:main", "target": "function:analytics/gis/gis_export.py:run_gis_export", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/era5_grid.py", "target": "class:wind_resource/era5_grid.py:GridSpec", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_grid.py", "target": "class:wind_resource/era5_grid.py:CellResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:assemble_grids", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:downscale_bilinear", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:fetch_cell_results", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_grid.py", "target": "class:wind_resource/era5_grid.py:GridSpec", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_grid.py", "target": "class:wind_resource/era5_grid.py:CellResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:assemble_grids", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:downscale_bilinear", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_grid.py", "target": "function:wind_resource/era5_grid.py:fetch_cell_results", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/era5_grid.py:assemble_grids", "target": "class:wind_resource/era5_grid.py:CellResult", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "function:wind_resource/era5_grid.py:fetch_cell_results", "target": "class:wind_resource/era5_grid.py:CellResult", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "function:wind_resource/era5_grid.py:fetch_cell_results", "target": "class:wind_resource/era5_grid.py:GridSpec", "type": "depends_on", "direction": "forward", "weight": 0.6}
+  ]
+}

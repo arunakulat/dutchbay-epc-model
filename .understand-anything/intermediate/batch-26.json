@@ -1,0 +1,50 @@
+{
+  "nodes": [
+    {
+      "id": "config:scenarios/good_unit_test.yaml",
+      "type": "config",
+      "name": "good_unit_test.yaml",
+      "filePath": "scenarios/good_unit_test.yaml",
+      "summary": "Minimal 50 MW deterministic test scenario supplying project, tariff, FX, OPEX, CAPEX, tax, risk and financing-terms inputs to drive the project-finance model in unit tests. Used as a known-good fixture for asserting model outputs.",
+      "tags": ["scenario", "config", "validation", "finance", "test-fixture"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:scenarios/kalpitiya_lendercase_160m_fitted.yaml",
+      "type": "config",
+      "name": "kalpitiya_lendercase_160m_fitted.yaml",
+      "filePath": "scenarios/kalpitiya_lendercase_160m_fitted.yaml",
+      "summary": "Full DutchBay (Kalpitiya) 159.6 MW lender-case scenario at 160 m hub height with an ERA5-fitted Weibull (A=8.259, k=2.664) driving wind-resource/AEP, CAPEX/OPEX, tax, debt sizing, returns, Monte-Carlo and sensitivity blocks. Primary bankability input deck for the model.",
+      "tags": ["scenario", "config", "wind-resource", "debt", "monte-carlo"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/mullikulam_2x50mw_mannar.yaml",
+      "type": "config",
+      "name": "mullikulam_2x50mw_mannar.yaml",
+      "filePath": "scenarios/mullikulam_2x50mw_mannar.yaml",
+      "summary": "Config-driven Mullikulam (Mannar) 2x50 MW wind-farm scenario using a Vestas V150-5.6 proxy at 125 m hub with an ERA5-fitted Weibull, defining resource/AEP, tariff/FX, CAPEX/OPEX, tax, financing, returns and risk inputs. Alternative-site lender deck for the model.",
+      "tags": ["scenario", "config", "wind-resource", "aep", "finance"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:scenarios/sensitivity_parameters_examples.yaml",
+      "type": "config",
+      "name": "sensitivity_parameters_examples.yaml",
+      "filePath": "scenarios/sensitivity_parameters_examples.yaml",
+      "summary": "Example sensitivity-analysis suite listing tornado variables (CAPEX, tariff, OPEX, capacity factor) with base values and low/high percentage ranges. Serves as a template for the model's one-way sensitivity tooling.",
+      "tags": ["sensitivity", "config", "risk", "scenario", "finance"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:scenarios/test_base_scenario.yaml",
+      "type": "config",
+      "name": "test_base_scenario.yaml",
+      "filePath": "scenarios/test_base_scenario.yaml",
+      "summary": "Baseline 50 MW test scenario providing project, tariff, FX, OPEX, CAPEX, tax, risk and financing-terms inputs for regression and unit testing of the project-finance engine. Acts as the canonical small-case input deck.",
+      "tags": ["scenario", "config", "validation", "finance", "test-fixture"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": []
+}

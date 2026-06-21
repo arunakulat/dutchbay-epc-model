@@ -34,6 +34,12 @@ def test_location_and_turbine_are_yaml_sourced(cfg: dict) -> None:
     assert cfg["turbine"]["n_turbines"] == 10
     assert cfg["turbine"]["rotor_diameter_m"] == 150  # <= 160 m spec cap
     assert cfg["turbine"]["rated_power_mw"] == pytest.approx(5.6, abs=0.01)
+    # Identity must be Mannar/56 MW, NOT a Kalpitiya/159.6 MW lender inheritance.
+    # (capacity_mw drives revenue: capacity x CF x 8760, so a stale 159.6 silently
+    # inflated generation ~3x — this guards against that regression recurring.)
+    assert "Mannar" in cfg["project"]["location"]
+    assert "Kalpitiya" not in cfg["project"]["location"]
+    assert cfg["project"]["capacity_mw"] == pytest.approx(56.0, abs=0.01)
 
 
 def test_hub_height_is_yaml_sourced_and_consistent(cfg: dict) -> None:
@@ -84,7 +90,12 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    # honest fitted-Weibull economics for one 50 MW lot at Mannar (CF ~0.27)
-    assert kpis["project_irr"] == pytest.approx(0.1083, abs=0.01)
-    assert kpis["equity_irr"] > 0.0
-    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
+    # HONEST economics for one 56 MW Lot at Mannar (CF ~0.27) at the real 3.96 USc/kWh
+    # WindForce bid: the project is uneconomic (LCOE ~5.5c > tariff). The earlier
+    # project_irr~0.108 / equity_irr>0 asserts were an artifact of a 3x-inflated
+    # capacity_mw (159.6 vs the real 56) — see the scenario's expected_results note.
+    assert kpis["project_irr"] == pytest.approx(0.0, abs=0.001)  # no positive root
+    assert kpis["equity_irr"] == pytest.approx(-0.0707, abs=0.01)
+    assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
+    assert kpis["project_npv"] < 0.0
+    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)  # sizer holds DSCR, sizes debt down

@@ -1,0 +1,452 @@
+{
+  "nodes": [
+    {
+      "id": "file:analytics/pipeline_analytics_v14.py",
+      "type": "file",
+      "name": "pipeline_analytics_v14.py",
+      "filePath": "analytics/pipeline_analytics_v14.py",
+      "summary": "Enhanced V14 pipeline that wraps the base wind-to-finance pipeline with optional, config-driven analytics: returns (project/equity IRR/NPV/MIRR), tail-risk (VaR/CVaR), sensitivity tornados, scenario comparison, and Monte Carlo. Each analytics module degrades gracefully when its dependency is unavailable.",
+      "tags": ["finance", "analytics", "risk", "monte-carlo", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:AnalyticsEnablement",
+      "type": "class",
+      "name": "AnalyticsEnablement",
+      "lineRange": [69, 87],
+      "summary": "Pydantic contract recording which analytics modules were requested versus actually available at runtime (returns, risk, sensitivity, monte_carlo, scenario_comparison).",
+      "tags": ["analytics", "data-model", "validation", "configuration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:SensitivityPoint",
+      "type": "class",
+      "name": "SensitivityPoint",
+      "lineRange": [90, 99],
+      "summary": "Data record for a single sensitivity sample, capturing a parameter, its variation percentage, and the resulting project NPV, project IRR, and minimum DSCR.",
+      "tags": ["sensitivity", "finance", "data-model", "risk"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:SensitivityAnalysisResult",
+      "type": "class",
+      "name": "SensitivityAnalysisResult",
+      "lineRange": [102, 118],
+      "summary": "Aggregated sensitivity result holding the parameters tested, all sensitivity points, base-case NPV/IRR/DSCR, and the NPV-impact ranking used to build tornado charts.",
+      "tags": ["sensitivity", "finance", "data-model", "risk"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:ScenarioComparisonResult",
+      "type": "class",
+      "name": "ScenarioComparisonResult",
+      "lineRange": [121, 135],
+      "summary": "Comparison contract across named scenarios, collecting project and equity NPV/IRR, min DSCR, and the NPV/IRR ranges spanning the scenario set.",
+      "tags": ["scenario", "finance", "data-model", "equity"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:MonteCarloResult",
+      "type": "class",
+      "name": "MonteCarloResult",
+      "lineRange": [138, 159],
+      "summary": "Monte Carlo output contract storing iteration count, project NPV mean/std/P10/P50/P90, project IRR mean/std, and the full NPV and IRR distributions.",
+      "tags": ["monte-carlo", "risk", "finance", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:analytics/pipeline_analytics_v14.py:EnhancedAnalyticsResult",
+      "type": "class",
+      "name": "EnhancedAnalyticsResult",
+      "lineRange": [162, 190],
+      "summary": "Top-level analytics envelope combining the base pipeline result with the optional returns, risk, sensitivity, monte_carlo, and scenario_comparison sub-results and an enablement flag set.",
+      "tags": ["analytics", "finance", "data-model", "pipeline"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:_calculate_returns_analysis",
+      "type": "function",
+      "name": "_calculate_returns_analysis",
+      "lineRange": [198, 250],
+      "summary": "Builds the equity/project returns analysis from the base pipeline result by extracting CFADS and debt-service series and delegating to the returns engine's summarize_all_returns.",
+      "tags": ["finance", "equity", "cashflow", "analytics"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:_calculate_risk_analysis",
+      "type": "function",
+      "name": "_calculate_risk_analysis",
+      "lineRange": [253, 313],
+      "summary": "Computes tail-risk metrics (VaR/CVaR and percentile analysis) over the cashflow distribution using TailRiskAnalyzer configured from the scenario's risk and returns blocks.",
+      "tags": ["risk", "monte-carlo", "finance", "analytics"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:_calculate_sensitivity_analysis",
+      "type": "function",
+      "name": "_calculate_sensitivity_analysis",
+      "lineRange": [316, 329],
+      "summary": "Placeholder/stub hook for one-at-a-time sensitivity analysis that logs a warning when the feature is not yet wired in.",
+      "tags": ["sensitivity", "finance", "analytics", "risk"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:_calculate_monte_carlo",
+      "type": "function",
+      "name": "_calculate_monte_carlo",
+      "lineRange": [332, 346],
+      "summary": "Placeholder/stub hook for Monte Carlo simulation that logs a warning, returning no result until the simulation engine is connected.",
+      "tags": ["monte-carlo", "risk", "finance", "analytics"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:_calculate_scenario_comparison",
+      "type": "function",
+      "name": "_calculate_scenario_comparison",
+      "lineRange": [349, 362],
+      "summary": "Placeholder/stub hook for multi-scenario comparison that logs a warning when scenario comparison is requested but not implemented.",
+      "tags": ["scenario", "finance", "analytics", "equity"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics",
+      "type": "function",
+      "name": "run_v14_pipeline_with_analytics",
+      "lineRange": [370, 532],
+      "summary": "Public entry point that runs the base V14 pipeline then conditionally layers returns, risk, sensitivity, Monte Carlo, and scenario-comparison analytics based on enable flags, returning a serialized EnhancedAnalyticsResult.",
+      "tags": ["entry-point", "finance", "analytics", "pipeline", "risk"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:analytics/pipeline_v14.py",
+      "type": "file",
+      "name": "pipeline_v14.py",
+      "filePath": "analytics/pipeline_v14.py",
+      "summary": "Core V14 wind-to-finance pipeline that loads a scenario YAML, validates it against the schema guard, runs the WindPipeline wind-resource assessment, and exports cashflow-model inputs as JSON. The integration point between wind-resource AEP and the financial model.",
+      "tags": ["pipeline", "finance", "wind-resource", "entry-point", "aep"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:analytics/pipeline_v14.py:run_v14_pipeline",
+      "type": "function",
+      "name": "run_v14_pipeline",
+      "lineRange": [50, 206],
+      "summary": "Loads and schema-validates the scenario config, orchestrates the WindPipeline complete assessment to produce AEP, and writes the cashflow-model export JSON; returns the assembled results dict.",
+      "tags": ["entry-point", "pipeline", "wind-resource", "aep", "finance"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/export_to_excel.py",
+      "type": "file",
+      "name": "export_to_excel.py",
+      "filePath": "scripts/export_to_excel.py",
+      "summary": "Excel reporting script that runs the V14 pipeline and writes a multi-sheet openpyxl workbook covering annual cashflow, debt-service detail, debt covenants (DSCR/tenor), and a KPI summary. Produces the lender-facing deliverable.",
+      "tags": ["finance", "debt", "cashflow", "utility", "cli"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/export_to_excel.py:add_annual_cashflow_sheet",
+      "type": "function",
+      "name": "add_annual_cashflow_sheet",
+      "lineRange": [50, 113],
+      "summary": "Builds the Annual Cashflow worksheet, laying out yearly P&L rows with revenue, OPEX, and debt-service components and styled headers/totals.",
+      "tags": ["cashflow", "finance", "debt", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/export_to_excel.py:add_debt_service_detail_sheet",
+      "type": "function",
+      "name": "add_debt_service_detail_sheet",
+      "lineRange": [116, 190],
+      "summary": "Builds the Debt Service Detail worksheet, breaking each period's debt service into interest versus principal with formatted headers and merged title cells.",
+      "tags": ["debt", "finance", "cashflow", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/export_to_excel.py:add_debt_covenants_sheet",
+      "type": "function",
+      "name": "add_debt_covenants_sheet",
+      "lineRange": [193, 267],
+      "summary": "Builds the Debt Covenants worksheet, tracking DSCR by period plus debt tenor and gearing metrics drawn from the debt-sizing result.",
+      "tags": ["debt", "finance", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/export_to_excel.py:add_kpi_summary_sheet",
+      "type": "function",
+      "name": "add_kpi_summary_sheet",
+      "lineRange": [270, 324],
+      "summary": "Builds the KPI Summary worksheet, aggregating headline financial metrics such as total revenue, IRRs, NPV, and minimum DSCR for at-a-glance review.",
+      "tags": ["finance", "equity", "debt", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/export_to_excel.py:export_to_excel",
+      "type": "function",
+      "name": "export_to_excel",
+      "lineRange": [327, 367],
+      "summary": "Top-level driver that runs the V14 pipeline for a config, creates the workbook, adds all sheets, and saves the Excel file to the output path.",
+      "tags": ["entry-point", "finance", "cashflow", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/legacy_runners/run_complete_analysis_fixed.py",
+      "type": "file",
+      "name": "run_complete_analysis_fixed.py",
+      "filePath": "scripts/legacy_runners/run_complete_analysis_fixed.py",
+      "summary": "Legacy command-line runner that executes the V14 pipeline for a scenario path, saves the JSON results, and prints a formatted summary of KPIs, debt, refinancing, equity distributions, and FX. Superseded by the Hydra runners.",
+      "tags": ["cli", "finance", "pipeline", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:save_results",
+      "type": "function",
+      "name": "save_results",
+      "lineRange": [35, 50],
+      "summary": "Writes the pipeline results dict to a JSON file, creating the parent output directory as needed.",
+      "tags": ["utility", "pipeline", "cli"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:print_summary",
+      "type": "function",
+      "name": "print_summary",
+      "lineRange": [53, 105],
+      "summary": "Prints a human-readable console summary of the analysis: KPIs, debt-service terms, refinancing, equity distributions, scenario FX block, and cashflow row count.",
+      "tags": ["cli", "finance", "debt", "equity"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main",
+      "type": "function",
+      "name": "main",
+      "lineRange": [108, 147],
+      "summary": "CLI entry point that resolves the scenario path from argv, runs the V14 pipeline, saves results, and prints the summary, exiting with an error if the scenario is missing.",
+      "tags": ["entry-point", "cli", "pipeline", "finance"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/legacy_runners/run_wind_download_v14.py",
+      "type": "file",
+      "name": "run_wind_download_v14.py",
+      "filePath": "scripts/legacy_runners/run_wind_download_v14.py",
+      "summary": "Legacy Hydra CLI that downloads ERA5 wind data for a configured location, extrapolates wind speed to hub height, writes the processed CSV, and emits JSON wind-speed statistics. Predecessor to the promoted scripts/ runner.",
+      "tags": ["cli", "wind-resource", "aep", "pipeline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/legacy_runners/run_wind_download_v14.py:cli",
+      "type": "function",
+      "name": "cli",
+      "lineRange": [61, 209],
+      "summary": "Hydra-decorated CLI body that selects a location, instantiates ERA5Fetcher, downloads and hub-height-extrapolates wind data, saves the CSV, and prints JSON wind-speed summary statistics.",
+      "tags": ["entry-point", "cli", "wind-resource", "aep"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/run_wind_analysis_v14.py",
+      "type": "file",
+      "name": "run_wind_analysis_v14.py",
+      "filePath": "scripts/run_wind_analysis_v14.py",
+      "summary": "Hydra CLI (GWTF R3, JSON-first) for the complete wind-resource assessment: ERA5 download, Weibull/temporal/variability analysis, gross/net AEP at P50/P75/P90, revenue, and cashflow-model JSON export. The promoted production wind runner.",
+      "tags": ["cli", "entry-point", "wind-resource", "aep", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/run_wind_analysis_v14.py:cli",
+      "type": "function",
+      "name": "cli",
+      "lineRange": [76, 244],
+      "summary": "Hydra-decorated CLI body that resolves the location and turbine settings, runs the WindPipeline complete assessment, exports the chosen P-level scenario for the cashflow model, and prints JSON results.",
+      "tags": ["entry-point", "cli", "wind-resource", "aep", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:wind_resource/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "wind_resource/__init__.py",
+      "summary": "Package init for the wind-resource module, re-exporting the four public classes (ERA5Fetcher, WindAnalyzer, EnergyCalculator, WindPipeline) and the package version. Defines the module's public API surface.",
+      "tags": ["wind-resource", "aep", "data-model", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:wind_resource/energy_calculator.py",
+      "type": "file",
+      "name": "energy_calculator.py",
+      "filePath": "wind_resource/energy_calculator.py",
+      "summary": "Computes Annual Energy Production from hub-height wind-speed series using turbine power curves and a stack of loss factors, producing gross/net AEP, P50/P75/P90 scenarios, monthly energy, and tariff-based revenue. The core AEP engine.",
+      "tags": ["wind-resource", "aep", "finance", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/energy_calculator.py:EnergyCalculator",
+      "type": "class",
+      "name": "EnergyCalculator",
+      "lineRange": [43, 502],
+      "summary": "Loads a turbine power curve and loss-factor config, then calculates gross AEP, net AEP with combined losses, monthly energy distribution, revenue, and a complete P-level assessment from a wind-speed DataFrame.",
+      "tags": ["wind-resource", "aep", "finance", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:wind_resource/era5_fetcher.py",
+      "type": "file",
+      "name": "era5_fetcher.py",
+      "filePath": "wind_resource/era5_fetcher.py",
+      "summary": "Downloads ERA5 reanalysis wind data from the Copernicus CDS, converts NetCDF to a DataFrame, derives wind speed/direction and shear coefficient from u/v components, and extrapolates wind speed to hub height. The wind-data ingestion layer.",
+      "tags": ["wind-resource", "aep", "data-model", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/era5_fetcher.py:ERA5Fetcher",
+      "type": "class",
+      "name": "ERA5Fetcher",
+      "lineRange": [49, 489],
+      "summary": "Manages ERA5 wind-data retrieval with caching: downloads from the CDS API, converts NetCDF to a tidy DataFrame, computes wind metrics and shear alpha, extrapolates to hub height via the log law, and persists metadata.",
+      "tags": ["wind-resource", "aep", "data-model", "pipeline"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:wind_resource/wind_analyzer.py",
+      "type": "file",
+      "name": "wind_analyzer.py",
+      "filePath": "wind_resource/wind_analyzer.py",
+      "summary": "Statistical wind-resource analyzer that fits a Weibull distribution (with K-S goodness-of-fit), characterizes diurnal/seasonal/monthly patterns, and quantifies interannual variability, producing a summary report for the assessment.",
+      "tags": ["wind-resource", "aep", "risk", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/wind_analyzer.py:WindAnalyzer",
+      "type": "class",
+      "name": "WindAnalyzer",
+      "lineRange": [38, 426],
+      "summary": "Fits a Weibull distribution to the wind-speed series, analyzes temporal patterns (month/season/hour), computes interannual variability, and assembles summary statistics and a text report.",
+      "tags": ["wind-resource", "aep", "risk", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:wind_resource/wind_pipeline.py",
+      "type": "file",
+      "name": "wind_pipeline.py",
+      "filePath": "wind_resource/wind_pipeline.py",
+      "summary": "Orchestrates the end-to-end wind-resource assessment by chaining ERA5Fetcher download, WindAnalyzer statistics, and EnergyCalculator AEP, then exporting a P-level scenario as JSON for the cashflow model. The wind-resource entry point.",
+      "tags": ["wind-resource", "aep", "pipeline", "entry-point"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/wind_pipeline.py:WindPipeline",
+      "type": "class",
+      "name": "WindPipeline",
+      "lineRange": [49, 370],
+      "summary": "Coordinates the complete wind-to-finance assessment: fetches and extrapolates ERA5 data, runs statistical analysis and energy calculations, generates a summary, and exports cashflow-model inputs for a chosen P-level scenario.",
+      "tags": ["wind-resource", "aep", "pipeline", "entry-point"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "file:analytics/pipeline_v14.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:analytics/pipeline_v14.py", "target": "file:wind_resource/__init__.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:scripts/export_to_excel.py", "target": "file:analytics/pipeline_v14.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "file:analytics/pipeline_v14.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:scripts/legacy_runners/run_wind_download_v14.py", "target": "file:wind_resource/__init__.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:scripts/run_wind_analysis_v14.py", "target": "file:wind_resource/__init__.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/__init__.py", "target": "file:wind_resource/energy_calculator.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/__init__.py", "target": "file:wind_resource/era5_fetcher.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/__init__.py", "target": "file:wind_resource/wind_analyzer.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/__init__.py", "target": "file:wind_resource/wind_pipeline.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/wind_pipeline.py", "target": "file:wind_resource/energy_calculator.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/wind_pipeline.py", "target": "file:wind_resource/era5_fetcher.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/wind_pipeline.py", "target": "file:wind_resource/wind_analyzer.py", "type": "imports", "direction": "forward", "weight": 0.7},
+
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:AnalyticsEnablement", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:SensitivityPoint", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:SensitivityAnalysisResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:ScenarioComparisonResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:MonteCarloResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:EnhancedAnalyticsResult", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_returns_analysis", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_risk_analysis", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_sensitivity_analysis", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_monte_carlo", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_scenario_comparison", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:AnalyticsEnablement", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:SensitivityPoint", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:SensitivityAnalysisResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:ScenarioComparisonResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:MonteCarloResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "class:analytics/pipeline_analytics_v14.py:EnhancedAnalyticsResult", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_returns_analysis", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_risk_analysis", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_sensitivity_analysis", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_monte_carlo", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_scenario_comparison", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:analytics/pipeline_analytics_v14.py", "target": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_returns_analysis", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_risk_analysis", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_sensitivity_analysis", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_monte_carlo", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_analytics_v14.py:_calculate_scenario_comparison", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_analytics_v14.py:run_v14_pipeline_with_analytics", "target": "function:analytics/pipeline_v14.py:run_v14_pipeline", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:analytics/pipeline_v14.py", "target": "function:analytics/pipeline_v14.py:run_v14_pipeline", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:analytics/pipeline_v14.py", "target": "function:analytics/pipeline_v14.py:run_v14_pipeline", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:analytics/pipeline_v14.py:run_v14_pipeline", "target": "class:wind_resource/wind_pipeline.py:WindPipeline", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_annual_cashflow_sheet", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_debt_service_detail_sheet", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_debt_covenants_sheet", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_kpi_summary_sheet", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:export_to_excel", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_annual_cashflow_sheet", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_debt_service_detail_sheet", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_debt_covenants_sheet", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:add_kpi_summary_sheet", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/export_to_excel.py", "target": "function:scripts/export_to_excel.py:export_to_excel", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/export_to_excel.py:export_to_excel", "target": "function:analytics/pipeline_v14.py:run_v14_pipeline", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/export_to_excel.py:export_to_excel", "target": "function:scripts/export_to_excel.py:add_annual_cashflow_sheet", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/export_to_excel.py:export_to_excel", "target": "function:scripts/export_to_excel.py:add_debt_service_detail_sheet", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/export_to_excel.py:export_to_excel", "target": "function:scripts/export_to_excel.py:add_debt_covenants_sheet", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/export_to_excel.py:export_to_excel", "target": "function:scripts/export_to_excel.py:add_kpi_summary_sheet", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:save_results", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:print_summary", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:save_results", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:print_summary", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:scripts/legacy_runners/run_complete_analysis_fixed.py", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main", "target": "function:analytics/pipeline_v14.py:run_v14_pipeline", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:save_results", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:main", "target": "function:scripts/legacy_runners/run_complete_analysis_fixed.py:print_summary", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/legacy_runners/run_wind_download_v14.py", "target": "function:scripts/legacy_runners/run_wind_download_v14.py:cli", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/legacy_runners/run_wind_download_v14.py", "target": "function:scripts/legacy_runners/run_wind_download_v14.py:cli", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/legacy_runners/run_wind_download_v14.py:cli", "target": "class:wind_resource/era5_fetcher.py:ERA5Fetcher", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:scripts/run_wind_analysis_v14.py", "target": "function:scripts/run_wind_analysis_v14.py:cli", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:scripts/run_wind_analysis_v14.py", "target": "function:scripts/run_wind_analysis_v14.py:cli", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "function:scripts/run_wind_analysis_v14.py:cli", "target": "class:wind_resource/wind_pipeline.py:WindPipeline", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/__init__.py", "target": "class:wind_resource/energy_calculator.py:EnergyCalculator", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "file:wind_resource/__init__.py", "target": "class:wind_resource/era5_fetcher.py:ERA5Fetcher", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "file:wind_resource/__init__.py", "target": "class:wind_resource/wind_analyzer.py:WindAnalyzer", "type": "depends_on", "direction": "forward", "weight": 0.6},
+    {"source": "file:wind_resource/__init__.py", "target": "class:wind_resource/wind_pipeline.py:WindPipeline", "type": "depends_on", "direction": "forward", "weight": 0.6},
+
+    {"source": "file:wind_resource/energy_calculator.py", "target": "class:wind_resource/energy_calculator.py:EnergyCalculator", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/energy_calculator.py", "target": "class:wind_resource/energy_calculator.py:EnergyCalculator", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/era5_fetcher.py", "target": "class:wind_resource/era5_fetcher.py:ERA5Fetcher", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_fetcher.py", "target": "class:wind_resource/era5_fetcher.py:ERA5Fetcher", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/wind_analyzer.py", "target": "class:wind_resource/wind_analyzer.py:WindAnalyzer", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/wind_analyzer.py", "target": "class:wind_resource/wind_analyzer.py:WindAnalyzer", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/wind_pipeline.py", "target": "class:wind_resource/wind_pipeline.py:WindPipeline", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/wind_pipeline.py", "target": "class:wind_resource/wind_pipeline.py:WindPipeline", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "class:wind_resource/wind_pipeline.py:WindPipeline", "target": "class:wind_resource/era5_fetcher.py:ERA5Fetcher", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "class:wind_resource/wind_pipeline.py:WindPipeline", "target": "class:wind_resource/wind_analyzer.py:WindAnalyzer", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "class:wind_resource/wind_pipeline.py:WindPipeline", "target": "class:wind_resource/energy_calculator.py:EnergyCalculator", "type": "calls", "direction": "forward", "weight": 0.8}
+  ]
+}

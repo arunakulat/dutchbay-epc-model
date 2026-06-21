@@ -1,0 +1,106 @@
+{
+  "nodes": [
+    {
+      "id": "config:conf/cli_monte_carlo.yaml",
+      "type": "config",
+      "name": "cli_monte_carlo.yaml",
+      "filePath": "conf/cli_monte_carlo.yaml",
+      "summary": "Hydra base config for the Monte Carlo analysis CLI (analytics/cli/cli_monte_carlo_hydra.py). Supplies scenario path, output dir, trial count (10000) and random seed (42); stochastic distributions are read from the scenario's monte_carlo block, not here.",
+      "tags": ["config", "monte-carlo", "risk", "cli", "scenario"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/cli_sensitivity.yaml",
+      "type": "config",
+      "name": "cli_sensitivity.yaml",
+      "filePath": "conf/cli_sensitivity.yaml",
+      "summary": "Hydra base config for the sensitivity analysis CLI (analytics/cli/cli_sensitivity_hydra.py). Provides scenario path, output dir and the tornado target metrics list (project_irr); parameter ranges are derived by the sensitivity_runner engine.",
+      "tags": ["config", "sensitivity", "risk", "cli", "scenario"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/run_full_pipeline_v14.yaml",
+      "type": "config",
+      "name": "run_full_pipeline_v14.yaml",
+      "filePath": "conf/run_full_pipeline_v14.yaml",
+      "summary": "Hydra base config for run_full_pipeline_v14.py driving the end-to-end finance evaluation: schema validation mode, artifact export dir, and the Sprint-19 wind to finance integration knobs (frozen wind-export JSON path, auto-orchestrate, adapter merge mode, drift tolerance, P-level scenario).",
+      "tags": ["config", "pipeline", "entry-point", "wind-resource", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:conf/run_scenario_analytics_v14.yaml",
+      "type": "config",
+      "name": "run_scenario_analytics_v14.yaml",
+      "filePath": "conf/run_scenario_analytics_v14.yaml",
+      "summary": "Primary Hydra config for the v14 scenario analytics runner: scenarios directory, Excel/JSON output paths, strict schema-guard, parallel toggle, chart export, name filter and default discount rate (0.12), with Hydra runtime settings to keep the working directory stable.",
+      "tags": ["config", "scenario", "cashflow", "configuration", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/scanner.yaml",
+      "type": "config",
+      "name": "scanner.yaml",
+      "filePath": "conf/scanner.yaml",
+      "summary": "Hydra config for the Dolphin D01 repository scanner (Sprint 18 / GWTF ARCH-01 config-first compliance), setting the repo root to scan and the reports output directory.",
+      "tags": ["config", "scenario", "utility", "configuration", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/scenario_analytics_v14.yaml",
+      "type": "config",
+      "name": "scenario_analytics_v14.yaml",
+      "filePath": "conf/scenario_analytics_v14.yaml",
+      "summary": "Base config for v14 scenario analytics: scenarios directory, Excel output path, no-excel/charts toggles, strict schema-guard, parallel processing toggle, optional name filter, batch default discount rate and optional JSON summary output.",
+      "tags": ["config", "scenario", "cashflow", "configuration", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/wind_analysis.yaml",
+      "type": "config",
+      "name": "wind_analysis.yaml",
+      "filePath": "conf/wind_analysis.yaml",
+      "summary": "Hydra config for run_wind_analysis_v14.py, the complete wind-resource assessment: location, ERA5 date range, 150m hub height, turbine model (envision_en171_6p5), 15-turbine farm, cache/output dirs and the P75 lender base-case export scenario.",
+      "tags": ["config", "wind-resource", "aep", "scenario", "configuration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:conf/wind_download.yaml",
+      "type": "config",
+      "name": "wind_download.yaml",
+      "filePath": "conf/wind_download.yaml",
+      "summary": "Hydra config for run_wind_download_v14.py, which downloads ERA5 reanalysis wind data and extrapolates it to hub height: location, date range, 150m hub height, force-download flag and cache/output directories.",
+      "tags": ["config", "wind-resource", "data-model", "configuration", "utility"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:conf/cli_monte_carlo.yaml",
+      "target": "file:analytics/cli/cli_monte_carlo_hydra.py",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:conf/cli_sensitivity.yaml",
+      "target": "file:analytics/cli/cli_sensitivity_hydra.py",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:conf/run_full_pipeline_v14.yaml",
+      "target": "file:run_full_pipeline_v14.py",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:conf/wind_analysis.yaml",
+      "target": "file:scripts/run_wind_analysis_v14.py",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

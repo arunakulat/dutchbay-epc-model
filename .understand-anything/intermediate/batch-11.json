@@ -1,0 +1,273 @@
+{
+  "nodes": [
+    {
+      "id": "file:wind_resource/arco_assessment.py",
+      "type": "file",
+      "name": "arco_assessment.py",
+      "filePath": "wind_resource/arco_assessment.py",
+      "summary": "Wires the ARCO single-point ERA5 retrieval into the canonical analytic AEP chain: maps a scenario into an ERA5 request, fits a Weibull on the hub-height series, computes implied AEP and reports drift against the declared lender baseline in VALIDATE mode (never overwriting it).",
+      "tags": ["wind-resource", "aep", "validation", "scenario", "orchestration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:_require",
+      "type": "function",
+      "name": "_require",
+      "lineRange": [46, 58],
+      "summary": "Strict nested-key accessor that walks a scenario mapping along a dotted trail and raises KeyError when a required site/turbine key is missing, enforcing no-masking-defaults config discipline.",
+      "tags": ["validation", "config", "utility", "wind-resource"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:_resolve_reference_window",
+      "type": "function",
+      "name": "_resolve_reference_window",
+      "lineRange": [61, 77],
+      "summary": "Resolves the ERA5 reference period from the scenario's era5 block, supporting latest-mode (compute the most recent complete year window) and fixed-mode (explicit span) for reproducible vintages.",
+      "tags": ["wind-resource", "config", "aep", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:era5_config_from_scenario",
+      "type": "function",
+      "name": "era5_config_from_scenario",
+      "lineRange": [80, 124],
+      "summary": "Maps a scenario's resource.era5 and turbine blocks into an ERA5RequestConfig with no masking defaults, cross-asserting that the ERA5 extrapolation hub height matches the finance hub height so they can never silently diverge.",
+      "tags": ["wind-resource", "config", "validation", "aep", "scenario"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:_implied_aep",
+      "type": "function",
+      "name": "_implied_aep",
+      "lineRange": [127, 147],
+      "summary": "Runs the canonical analytic AEP engine on a probe scenario whose Weibull A/k are replaced by the fitted parameters, yielding the AEP implied by the ARCO fit without mutating the declared baseline.",
+      "tags": ["wind-resource", "aep", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:build_arco_assessment",
+      "type": "function",
+      "name": "build_arco_assessment",
+      "lineRange": [150, 217],
+      "summary": "Takes a hub-height wind-speed series, fits a Weibull, computes the implied AEP via the analytic engine, and reports the drift of the fit versus the scenario's declared Weibull A/k, warning when drift exceeds tolerance (VALIDATE mode, no overwrite).",
+      "tags": ["wind-resource", "aep", "validation", "scenario", "risk"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:wind_resource/arco_assessment.py:assess",
+      "type": "function",
+      "name": "assess",
+      "lineRange": [220, 250],
+      "summary": "Live end-to-end orchestrator that retrieves the ERA5 timeseries, builds the hub-height series, runs the coverage guard, and produces the ARCO assessment for a given scenario.",
+      "tags": ["wind-resource", "aep", "orchestration", "pipeline", "scenario"],
+      "complexity": "moderate"
+    },
+
+    {
+      "id": "file:wind_resource/era5_retrieval.py",
+      "type": "file",
+      "name": "era5_retrieval.py",
+      "filePath": "wind_resource/era5_retrieval.py",
+      "summary": "Config-driven retrieval of the Copernicus CDS ERA5 single-levels timeseries product for a single lat/lon point, building a clean hourly hub-height wind series with a leap-aware coverage guard and computing net site AEP through the canonical power curve.",
+      "tags": ["wind-resource", "aep", "data-model", "pipeline", "config"],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:wind_resource/era5_retrieval.py:ERA5RequestConfig",
+      "type": "class",
+      "name": "ERA5RequestConfig",
+      "lineRange": [98, 164],
+      "summary": "Typed dataclass describing a single-point ERA5 request (site lat/lon, year span, hub height, shear bounds, turbine identity, reference mode), with a from_yaml loader and helpers for date range and expected leap-aware hour count.",
+      "tags": ["wind-resource", "config", "data-model", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:_resolve_reference",
+      "type": "function",
+      "name": "_resolve_reference",
+      "lineRange": [73, 94],
+      "summary": "Resolves the ERA5 download reference window from a YAML download block, handling latest-mode (most recent complete years with a final-data lag) and fixed-mode explicit spans.",
+      "tags": ["wind-resource", "config", "utility", "aep"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:ensure_cdsapirc",
+      "type": "function",
+      "name": "ensure_cdsapirc",
+      "lineRange": [167, 192],
+      "summary": "Ensures a ~/.cdsapirc credential file exists for the Copernicus CDS client, materialising it from environment variables when present and raising if no credentials can be found, keeping secrets out of the repo.",
+      "tags": ["wind-resource", "config", "utility", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:retrieve_era5_timeseries",
+      "type": "function",
+      "name": "retrieve_era5_timeseries",
+      "lineRange": [195, 242],
+      "summary": "Downloads the ERA5 single-levels timeseries product via the cdsapi client (call-time guarded import), unzips the response and returns the path to the extracted NetCDF for the configured site and window.",
+      "tags": ["wind-resource", "aep", "pipeline", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:build_hub_height_series",
+      "type": "function",
+      "name": "build_hub_height_series",
+      "lineRange": [245, 286],
+      "summary": "Opens the ERA5 NetCDF, derives 10 m and 100 m wind magnitudes from u/v components and log-law extrapolates to the configured hub height with a clamped shear exponent, returning a clean hourly hub-height wind-speed DataFrame.",
+      "tags": ["wind-resource", "aep", "data-model", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:validate_coverage",
+      "type": "function",
+      "name": "validate_coverage",
+      "lineRange": [289, 315],
+      "summary": "Coverage guard that asserts the retrieved hourly series fully spans the requested leap-aware window, raising ERA5CoverageError (or warning) so a partial or latency-truncated series never silently passes.",
+      "tags": ["wind-resource", "validation", "risk", "aep"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:compute_site_aep",
+      "type": "function",
+      "name": "compute_site_aep",
+      "lineRange": [318, 340],
+      "summary": "Computes net site AEP from the hub-height wind series by running the project's EnergyCalculator power-curve engine, returning P50 AEP plus diagnostic series statistics.",
+      "tags": ["wind-resource", "aep", "cashflow", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:run",
+      "type": "function",
+      "name": "run",
+      "lineRange": [343, 373],
+      "summary": "End-to-end driver that retrieves the ERA5 timeseries, builds the hub-height series, validates coverage and computes site AEP, assembling the result dict including the frozen vintage block.",
+      "tags": ["wind-resource", "aep", "orchestration", "pipeline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/era5_retrieval.py:main",
+      "type": "function",
+      "name": "main",
+      "lineRange": [376, 382],
+      "summary": "CLI entry point that loads an ERA5 request config from a YAML path given via environment variable, runs the retrieval-and-AEP pipeline and prints the JSON result.",
+      "tags": ["wind-resource", "cli", "entry-point", "aep"],
+      "complexity": "simple"
+    },
+
+    {
+      "id": "file:wind_resource/weibull_fit.py",
+      "type": "file",
+      "name": "weibull_fit.py",
+      "filePath": "wind_resource/weibull_fit.py",
+      "summary": "Fits a 2-parameter Weibull (scipy weibull_min MLE with floc=0) to a wind-speed series and reports the drift of the fitted A/k against the scenario's declared baseline, surfacing silent resource erosion without overwriting the auditable headline.",
+      "tags": ["wind-resource", "aep", "validation", "risk"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:wind_resource/weibull_fit.py:WeibullFit",
+      "type": "class",
+      "name": "WeibullFit",
+      "lineRange": [35, 55],
+      "summary": "Dataclass holding the result of a Weibull fit (scale A, shape k, mean/std wind speed, R-squared, KS p-value, sample count) with an as_dict serializer for rounded reporting.",
+      "tags": ["wind-resource", "data-model", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:wind_resource/weibull_fit.py:WeibullDrift",
+      "type": "class",
+      "name": "WeibullDrift",
+      "lineRange": [59, 81],
+      "summary": "Dataclass capturing the drift of a fitted Weibull versus the declared baseline (declared vs fitted A/k, percentage drifts, tolerance and a within-tolerance flag) with an as_dict serializer.",
+      "tags": ["wind-resource", "data-model", "validation", "risk"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:wind_resource/weibull_fit.py:weibull_std",
+      "type": "function",
+      "name": "weibull_std",
+      "lineRange": [84, 93],
+      "summary": "Computes the standard deviation of a Weibull distribution from its scale A and shape k using the gamma-function moment formula.",
+      "tags": ["wind-resource", "utility", "aep"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:wind_resource/weibull_fit.py:fit_weibull_on_series",
+      "type": "function",
+      "name": "fit_weibull_on_series",
+      "lineRange": [96, 141],
+      "summary": "Fits a 2-parameter Weibull to a wind-speed series via scipy weibull_min MLE (floc=0), returning a WeibullFit with goodness-of-fit diagnostics (R-squared and KS p-value).",
+      "tags": ["wind-resource", "aep", "validation", "risk"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:wind_resource/weibull_fit.py:weibull_drift",
+      "type": "function",
+      "name": "weibull_drift",
+      "lineRange": [144, 169],
+      "summary": "Computes the percentage drift of a fitted Weibull A/k against a declared baseline and flags whether the drift stays within the configured tolerance, the core of VALIDATE-mode erosion detection.",
+      "tags": ["wind-resource", "validation", "risk", "utility"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {"source": "file:wind_resource/arco_assessment.py", "target": "file:wind_resource/era5_retrieval.py", "type": "imports", "direction": "forward", "weight": 0.7},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "file:wind_resource/weibull_fit.py", "type": "imports", "direction": "forward", "weight": 0.7},
+
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:_require", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:_resolve_reference_window", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:era5_config_from_scenario", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:_implied_aep", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:build_arco_assessment", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:assess", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:era5_config_from_scenario", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:build_arco_assessment", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/arco_assessment.py", "target": "function:wind_resource/arco_assessment.py:assess", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "class:wind_resource/era5_retrieval.py:ERA5RequestConfig", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:_resolve_reference", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:ensure_cdsapirc", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:retrieve_era5_timeseries", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:build_hub_height_series", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:validate_coverage", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:compute_site_aep", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:run", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:main", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "class:wind_resource/era5_retrieval.py:ERA5RequestConfig", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:ensure_cdsapirc", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:retrieve_era5_timeseries", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:build_hub_height_series", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:validate_coverage", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:compute_site_aep", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:run", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/era5_retrieval.py", "target": "function:wind_resource/era5_retrieval.py:main", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "file:wind_resource/weibull_fit.py", "target": "class:wind_resource/weibull_fit.py:WeibullFit", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "class:wind_resource/weibull_fit.py:WeibullDrift", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:weibull_std", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:fit_weibull_on_series", "type": "contains", "direction": "forward", "weight": 1.0},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:weibull_drift", "type": "contains", "direction": "forward", "weight": 1.0},
+
+    {"source": "file:wind_resource/weibull_fit.py", "target": "class:wind_resource/weibull_fit.py:WeibullFit", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "class:wind_resource/weibull_fit.py:WeibullDrift", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:weibull_std", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:fit_weibull_on_series", "type": "exports", "direction": "forward", "weight": 0.8},
+    {"source": "file:wind_resource/weibull_fit.py", "target": "function:wind_resource/weibull_fit.py:weibull_drift", "type": "exports", "direction": "forward", "weight": 0.8},
+
+    {"source": "function:wind_resource/arco_assessment.py:era5_config_from_scenario", "target": "class:wind_resource/era5_retrieval.py:ERA5RequestConfig", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/arco_assessment.py:build_arco_assessment", "target": "function:wind_resource/weibull_fit.py:fit_weibull_on_series", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/arco_assessment.py:build_arco_assessment", "target": "function:wind_resource/weibull_fit.py:weibull_drift", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/arco_assessment.py:assess", "target": "function:wind_resource/era5_retrieval.py:retrieve_era5_timeseries", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/arco_assessment.py:assess", "target": "function:wind_resource/era5_retrieval.py:build_hub_height_series", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/arco_assessment.py:assess", "target": "function:wind_resource/era5_retrieval.py:validate_coverage", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "function:wind_resource/era5_retrieval.py:run", "target": "function:wind_resource/era5_retrieval.py:retrieve_era5_timeseries", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/era5_retrieval.py:run", "target": "function:wind_resource/era5_retrieval.py:build_hub_height_series", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/era5_retrieval.py:run", "target": "function:wind_resource/era5_retrieval.py:validate_coverage", "type": "calls", "direction": "forward", "weight": 0.8},
+    {"source": "function:wind_resource/era5_retrieval.py:run", "target": "function:wind_resource/era5_retrieval.py:compute_site_aep", "type": "calls", "direction": "forward", "weight": 0.8},
+
+    {"source": "function:wind_resource/weibull_fit.py:fit_weibull_on_series", "target": "function:wind_resource/weibull_fit.py:weibull_std", "type": "calls", "direction": "forward", "weight": 0.8}
+  ]
+}

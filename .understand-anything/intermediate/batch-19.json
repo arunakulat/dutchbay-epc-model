@@ -1,0 +1,137 @@
+{
+  "nodes": [
+    {
+      "id": "document:docs/SPRINT_18_IMPLEMENTATION_PLAN.md",
+      "type": "document",
+      "name": "Sprint 18 Implementation Plan",
+      "summary": "Phased Dolphin-Strategy implementation plan for Sprint 18 refactoring of the DutchBay EPC model, detailing orchestrator/scanner/contract work, a Hydra config system, an optimization engine, and execution phases aligned to the GWTF, CASPER, CESSPIT and CCCDIR compliance frameworks.",
+      "tags": ["documentation", "pipeline", "configuration", "ci-cd", "validation"],
+      "complexity": "complex",
+      "filePath": "docs/SPRINT_18_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "id": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "type": "document",
+      "name": "Wind to AEP Chain of Custody",
+      "summary": "Lender/DFI technical-advisor provenance trace from ERA5 reanalysis through Weibull fit, power curve, losses and P50/P75/P90 AEP into the v14 finance model, distinguishing the financed wind_resource path from the auxiliary Monte-Carlo analytics path with a red-flag register.",
+      "tags": ["documentation", "wind-resource", "aep", "monte-carlo", "validation"],
+      "complexity": "moderate",
+      "filePath": "docs/WIND_AEP_CHAIN_OF_CUSTODY.md"
+    },
+    {
+      "id": "document:docs/WIND_INTERFACE_SCHEMA.md",
+      "type": "document",
+      "name": "GIS to EPC Wind Interface Schema",
+      "summary": "Specification of the normalized resource.wind handoff block between the GIS resource assessment and the EPC finance model, defining the wind-speed/capacity-factor/AEP/source fields, their validation rules, and how the schema is enforced via the analytics schema guard and approved-source manifest.",
+      "tags": ["documentation", "wind-resource", "aep", "data-model", "validation"],
+      "complexity": "simple",
+      "filePath": "docs/WIND_INTERFACE_SCHEMA.md"
+    },
+    {
+      "id": "document:docs/analytics_restructure_migration_plan.md",
+      "type": "document",
+      "name": "Analytics Package Restructuring Migration Plan",
+      "summary": "Migration plan to restructure the flat 60+ module analytics package into clean subpackages, eliminating import hell, Monte-Carlo duplication and production/research mixing, with phased priorities (CASPER, CLI, FX, wind, core metrics) and a proven module-move pattern preserving backward compatibility.",
+      "tags": ["documentation", "pipeline", "monte-carlo", "validation", "utility"],
+      "complexity": "complex",
+      "filePath": "docs/analytics_restructure_migration_plan.md"
+    },
+    {
+      "id": "document:docs/tax_mechanics_fix_v2.md",
+      "type": "document",
+      "name": "Corporate Tax Mechanics Fix v2",
+      "summary": "Explains the corrected corporate-tax waterfall in tax_schedule_v14.py and tax_optimization_v14_enhanced.py, fixing the prior model that wrongly treated distributions as taxable, and documenting proper taxable income, TLCF shielding, depreciation tax shields and CAFOD-based distributions with quantified NPV impact.",
+      "tags": ["documentation", "finance", "equity", "cashflow", "validation"],
+      "complexity": "complex",
+      "filePath": "docs/tax_mechanics_fix_v2.md"
+    },
+    {
+      "id": "document:docs/tax_optimization_methodology.md",
+      "type": "document",
+      "name": "Tax Optimization Methodology",
+      "summary": "Methodology for tax-aware equity distribution optimization that defers distributions during Tax Loss Carryforward periods to maximize after-tax returns, covering the mathematical framework, DutchBay 150MW application, sensitivity/tornado analysis and lender-presentation guidance.",
+      "tags": ["documentation", "finance", "equity", "sensitivity", "cashflow"],
+      "complexity": "complex",
+      "filePath": "docs/tax_optimization_methodology.md"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:wind_resource/cashflow_adapter.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:wind_resource/wind_pipeline.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:wind_resource/energy_calculator.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:wind_resource/wind_analyzer.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:wind_resource/era5_fetcher.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:analytics/loader/aep_loader.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_AEP_CHAIN_OF_CUSTODY.md",
+      "target": "file:analytics/simulation/monte_carlo_aep.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_INTERFACE_SCHEMA.md",
+      "target": "file:analytics/wind/wind_interface_schema.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/WIND_INTERFACE_SCHEMA.md",
+      "target": "file:analytics/schema_guard.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/tax_mechanics_fix_v2.md",
+      "target": "file:finance/tax_schedule_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/tax_optimization_methodology.md",
+      "target": "file:finance/tax_optimization_v14.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

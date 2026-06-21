@@ -1,0 +1,68 @@
+{
+  "nodes": [
+    {
+      "id": "config:inputs/fxdata/fx_data_historical_Decade4_2005_2014.yaml",
+      "type": "config",
+      "name": "fx_data_historical_Decade4_2005_2014.yaml",
+      "summary": "Historical USD/LKR monthly FX dataset for 2005-2014, providing lender-focused average/min/max/std rates and rolling volatility used to baseline currency assumptions in the DutchBay model.",
+      "tags": ["config", "fx", "currency", "wind-resource", "risk"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_historical_Decade4_2005_2014.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_historical_Decade5_2015_2025.yaml",
+      "type": "config",
+      "name": "fx_data_historical_Decade5_2015_2025.yaml",
+      "summary": "Historical USD/LKR monthly FX dataset spanning 2015-2025, capturing the post-2022 crisis devaluation regime used to calibrate FX correction and currency risk in the project-finance model.",
+      "tags": ["config", "fx", "currency", "risk", "scenario"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_historical_Decade5_2015_2025.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_recent_Period1_2016_2017.yaml",
+      "type": "config",
+      "name": "fx_data_recent_Period1_2016_2017.yaml",
+      "summary": "Recent-regime USD/LKR monthly FX dataset for the 2016-2017 pre-crisis pegged baseline (~150 LKR/USD), supplying lender-focused rate and volatility series to the model.",
+      "tags": ["config", "fx", "currency", "scenario", "risk"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_recent_Period1_2016_2017.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_recent_Period2_2018_2019.yaml",
+      "type": "config",
+      "name": "fx_data_recent_Period2_2018_2019.yaml",
+      "summary": "Recent-regime USD/LKR monthly FX dataset for 2018-2019, providing average/min/max/std rates and rolling volatility for the model's currency assumptions.",
+      "tags": ["config", "fx", "currency", "scenario", "risk"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_recent_Period2_2018_2019.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_recent_Period3_2020_2021.yaml",
+      "type": "config",
+      "name": "fx_data_recent_Period3_2020_2021.yaml",
+      "summary": "Recent-regime USD/LKR monthly FX dataset for the 2020-2021 period, supplying rate and volatility series used in FX correction and currency risk analysis.",
+      "tags": ["config", "fx", "currency", "scenario", "risk"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_recent_Period3_2020_2021.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_recent_Period4_2022_2023.yaml",
+      "type": "config",
+      "name": "fx_data_recent_Period4_2022_2023.yaml",
+      "summary": "Recent-regime USD/LKR monthly FX dataset for 2022-2023 capturing the Sri Lankan currency-crisis devaluation, used to stress-test FX assumptions in the model.",
+      "tags": ["config", "fx", "currency", "risk", "scenario"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_recent_Period4_2022_2023.yaml"
+    },
+    {
+      "id": "config:inputs/fxdata/fx_data_recent_Period5_2024_2025.yaml",
+      "type": "config",
+      "name": "fx_data_recent_Period5_2024_2025.yaml",
+      "summary": "Recent-regime USD/LKR monthly FX dataset for 2024-2025 covering the post-crisis stabilization, providing current rate and volatility series for the model's currency baseline.",
+      "tags": ["config", "fx", "currency", "risk", "scenario"],
+      "complexity": "complex",
+      "filePath": "inputs/fxdata/fx_data_recent_Period5_2024_2025.yaml"
+    }
+  ],
+  "edges": []
+}

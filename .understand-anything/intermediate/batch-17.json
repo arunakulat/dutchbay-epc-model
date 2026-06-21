@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "id": "config:config/defaults.yaml",
+      "type": "config",
+      "name": "defaults.yaml",
+      "summary": "Centralized single-source-of-truth defaults for the DutchBay model (CESSPIT compliance), pinning the fallback USD/LKR FX reference (333.79, 2026-Q2 vintage) and the anchored CAPEX/OPEX cost-basis year so no parameter defaults live in Python code. Scenario configs import and override these values.",
+      "tags": ["config", "configuration", "finance", "validation", "scenario"],
+      "complexity": "complex",
+      "filePath": "config/defaults.yaml"
+    },
+    {
+      "id": "config:config/monte_carlo_regression_production.yaml",
+      "type": "config",
+      "name": "monte_carlo_regression_production.yaml",
+      "summary": "Production-scale Monte Carlo configuration (~3000 LHS iterations, seed 42) defining realistic distributions across CAPEX, capacity factor, OPEX and other parameters plus base/upside scenarios and correlations for lender-grade risk assessment. Counterpart to the fast toy config.",
+      "tags": ["monte-carlo", "risk", "config", "scenario", "finance"],
+      "complexity": "complex",
+      "filePath": "config/monte_carlo_regression_production.yaml"
+    },
+    {
+      "id": "config:config/monte_carlo_regression_toy.yaml",
+      "type": "config",
+      "name": "monte_carlo_regression_toy.yaml",
+      "summary": "Fast Monte Carlo regression configuration (20 LHS iterations, ~30s) mirroring lender base-case assumptions for rapid dev/CI feedback loops. Reduced-scale counterpart to the production Monte Carlo config.",
+      "tags": ["monte-carlo", "risk", "config", "ci-cd", "scenario"],
+      "complexity": "complex",
+      "filePath": "config/monte_carlo_regression_toy.yaml"
+    },
+    {
+      "id": "config:config/sensitivity_defaults.yaml",
+      "type": "config",
+      "name": "sensitivity_defaults.yaml",
+      "summary": "Default parameter ranges for tornado sensitivity analysis, supplying base values (CAPEX/kW, tariff, capacity factor, discount/debt rates, OPEX) and per-parameter low/high shock percentages validated by the Pydantic ParameterRangeConfig model. Follows CFA/DFI standards for renewable projects.",
+      "tags": ["sensitivity", "risk", "config", "validation", "finance"],
+      "complexity": "moderate",
+      "filePath": "config/sensitivity_defaults.yaml"
+    },
+    {
+      "id": "config:config/sensitivity_parameters.yaml",
+      "type": "config",
+      "name": "sensitivity_parameters.yaml",
+      "summary": "Lender-case baseline tornado parameter list for the v14 pipeline, defining one-way plus/minus shocks (CAPEX, capacity factor, OPEX and more) around base values with variable_name paths matching the v14 scenario schema. CASPER-ready conservative shock set.",
+      "tags": ["sensitivity", "risk", "config", "scenario", "finance"],
+      "complexity": "moderate",
+      "filePath": "config/sensitivity_parameters.yaml"
+    },
+    {
+      "id": "config:config/wind_dutchbay_150mw.yaml",
+      "type": "config",
+      "name": "wind_dutchbay_150mw.yaml",
+      "summary": "Hydra scenario configuration for the DutchBay 149.5 MW wind farm (23 x Envision EN-171/6.5), specifying project, turbine, Weibull wind resource, loss stack, layout, financial, Monte Carlo and pipeline settings plus expected AEP/revenue validation targets for the full wind-to-finance pipeline.",
+      "tags": ["wind-resource", "aep", "scenario", "config", "finance"],
+      "complexity": "moderate",
+      "filePath": "config/wind_dutchbay_150mw.yaml"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:config/monte_carlo_regression_production.yaml",
+      "target": "config:config/monte_carlo_regression_toy.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:config/sensitivity_defaults.yaml",
+      "target": "config:config/sensitivity_parameters.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:config/wind_dutchbay_150mw.yaml",
+      "target": "config:config/defaults.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:config/monte_carlo_regression_production.yaml",
+      "target": "config:config/defaults.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

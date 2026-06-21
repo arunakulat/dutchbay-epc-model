@@ -1,0 +1,1096 @@
+{
+ "nodes": [
+  {
+   "id": "file:analytics/config_schema.py",
+   "type": "file",
+   "name": "config_schema",
+   "summary": "Defines the canonical RequiredFieldSpec dataclass and a module registry so each finance engine (cashflow, debt, irr, monte_carlo) can declare the config fields it needs, and builds a schema DataFrame of all registered required fields.",
+   "tags": [
+    "config",
+    "validation",
+    "data-model",
+    "schema",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/config_schema.py"
+  },
+  {
+   "id": "file:analytics/core/epc_helper.py",
+   "type": "file",
+   "name": "epc_helper",
+   "summary": "Thin re-export shim exposing epc_breakdown_from_config and epc_breakdown_dict from finance.epc_helper_v14 under the analytics.core namespace.",
+   "tags": [
+    "capex",
+    "utility",
+    "re-export",
+    "finance"
+   ],
+   "complexity": "simple",
+   "filePath": "analytics/core/epc_helper.py"
+  },
+  {
+   "id": "file:analytics/dscr_sensitivity.py",
+   "type": "file",
+   "name": "dscr_sensitivity",
+   "summary": "Dual-DSCR sensitivity analysis tool that perturbs key project parameters (CAPEX, AEP, tariff, OPEX, degradation) to show lenders how debt capacity and binding DSCR constraint shift, producing tornado charts and binding-constraint analysis.",
+   "tags": [
+    "debt",
+    "sensitivity",
+    "risk",
+    "cli",
+    "finance"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/dscr_sensitivity.py"
+  },
+  {
+   "id": "file:analytics/scenario_analytics.py",
+   "type": "file",
+   "name": "scenario_analytics",
+   "summary": "Library-only batch orchestrator that discovers scenario YAMLs, runs the v14 cashflow and debt engines per scenario (optionally in parallel), computes KPIs and EPC breakdowns, and exports a summary DataFrame, Excel workbook and charts.",
+   "tags": [
+    "scenario",
+    "pipeline",
+    "finance",
+    "cashflow",
+    "debt"
+   ],
+   "complexity": "complex",
+   "filePath": "analytics/scenario_analytics.py"
+  },
+  {
+   "id": "file:analytics/schema_guard.py",
+   "type": "file",
+   "name": "schema_guard",
+   "summary": "Validates YAML/JSON scenario configs against the registered v14 finance-engine required-field schema (including a dedicated FX-section check) before cashflow or debt calculations run, raising ConfigValidationError on failures.",
+   "tags": [
+    "validation",
+    "config",
+    "schema",
+    "finance",
+    "utility"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/schema_guard.py"
+  },
+  {
+   "id": "file:analytics/wind/era5_interface_schema.py",
+   "type": "file",
+   "name": "era5_interface_schema",
+   "summary": "Declares and registers the required-field specs for the resource.era5 block (site centroid, reference window, hub height) so the ARCO ERA5 retrieval config lives in the same scenario file as the finance model.",
+   "tags": [
+    "wind-resource",
+    "validation",
+    "config",
+    "schema",
+    "aep"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/wind/era5_interface_schema.py"
+  },
+  {
+   "id": "file:analytics/wind/wind_interface_schema.py",
+   "type": "file",
+   "name": "wind_interface_schema",
+   "summary": "Declares and registers the required-field specs for the normalized resource.wind block (mean/std wind speed, capacity factor, AEP, approved source), the stable contract for passing GIS wind/AEP into the EPC finance model.",
+   "tags": [
+    "wind-resource",
+    "aep",
+    "validation",
+    "schema",
+    "config"
+   ],
+   "complexity": "moderate",
+   "filePath": "analytics/wind/wind_interface_schema.py"
+  },
+  {
+   "id": "file:finance/cashflow_v14.py",
+   "type": "file",
+   "name": "cashflow_v14",
+   "summary": "Core v14 CFADS engine: prepares a cashflow context from config, computes single-year and full annual cash-flow-available-for-debt-service (revenue, statutory deductions, OPEX, tax, risk haircut) and builds annual row tables for the debt and metrics layers.",
+   "tags": [
+    "cashflow",
+    "finance",
+    "aep",
+    "opex",
+    "contracts"
+   ],
+   "complexity": "complex",
+   "filePath": "finance/cashflow_v14.py"
+  },
+  {
+   "id": "file:finance/cashflow_v14_contracts.py",
+   "type": "file",
+   "name": "cashflow_v14_contracts",
+   "summary": "Defines the CashflowParams dataclass, the typed contract of all parameters (capacity, capacity factor, tariff, OPEX, tax, degradation, levies) consumed by the v14 cashflow engine.",
+   "tags": [
+    "cashflow",
+    "data-model",
+    "contracts",
+    "finance"
+   ],
+   "complexity": "simple",
+   "filePath": "finance/cashflow_v14_contracts.py"
+  },
+  {
+   "id": "class:analytics/config_schema.py:RequiredFieldSpec",
+   "type": "class",
+   "name": "RequiredFieldSpec",
+   "summary": "Frozen dataclass describing one required config field for a module: its logical name, candidate dotted paths, required flag, severity and optional validator.",
+   "tags": [
+    "config",
+    "schema",
+    "data-model",
+    "validation"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    13,
+    43
+   ]
+  },
+  {
+   "id": "function:analytics/config_schema.py:register_required_fields",
+   "type": "function",
+   "name": "register_required_fields",
+   "summary": "Registers a list of RequiredFieldSpec entries for a module into the global schema registry.",
+   "tags": [
+    "config",
+    "schema",
+    "validation"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    50,
+    67
+   ]
+  },
+  {
+   "id": "function:analytics/config_schema.py:get_required_fields",
+   "type": "function",
+   "name": "get_required_fields",
+   "summary": "Returns the required-field specs for a given module, or all registered specs when no module is named.",
+   "tags": [
+    "config",
+    "schema",
+    "validation"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    70,
+    85
+   ]
+  },
+  {
+   "id": "function:analytics/config_schema.py:build_schema_dataframe",
+   "type": "function",
+   "name": "build_schema_dataframe",
+   "summary": "Materializes all registered required-field specs into a sorted pandas DataFrame for documentation/inspection.",
+   "tags": [
+    "config",
+    "schema",
+    "validation"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    88,
+    131
+   ]
+  },
+  {
+   "id": "class:analytics/dscr_sensitivity.py:SensitivityConfig",
+   "type": "class",
+   "name": "SensitivityConfig",
+   "summary": "Dataclass of base-case inputs and DSCR/gearing targets driving the dual-DSCR sensitivity sweep.",
+   "tags": [
+    "debt",
+    "sensitivity",
+    "data-model"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    60,
+    93
+   ]
+  },
+  {
+   "id": "function:analytics/dscr_sensitivity.py:_build_cfads_array",
+   "type": "function",
+   "name": "_build_cfads_array",
+   "summary": "Builds a per-year CFADS array from AEP, tariff, OPEX and degradation over the project life for debt-sizing inputs.",
+   "tags": [
+    "cashflow",
+    "debt",
+    "sensitivity"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    96,
+    146
+   ]
+  },
+  {
+   "id": "function:analytics/dscr_sensitivity.py:_perturb_parameter",
+   "type": "function",
+   "name": "_perturb_parameter",
+   "summary": "Returns a copy of the config with one named variable perturbed by a percentage for sensitivity sweeps.",
+   "tags": [
+    "sensitivity",
+    "debt",
+    "utility"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    149,
+    193
+   ]
+  },
+  {
+   "id": "function:analytics/dscr_sensitivity.py:analyze_single_variable",
+   "type": "function",
+   "name": "analyze_single_variable",
+   "summary": "Runs the full one-way sensitivity sweep for a single variable, sizing debt with dual-DSCR at each step and recording binding-constraint transitions.",
+   "tags": [
+    "debt",
+    "sensitivity",
+    "risk"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    196,
+    370
+   ]
+  },
+  {
+   "id": "function:analytics/dscr_sensitivity.py:analyze_dscr_sensitivity",
+   "type": "function",
+   "name": "analyze_dscr_sensitivity",
+   "summary": "Top-level entry that builds the SensitivityConfig from a scenario config and runs sensitivity across all requested variables, producing a tornado chart.",
+   "tags": [
+    "debt",
+    "sensitivity",
+    "risk"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    373,
+    547
+   ]
+  },
+  {
+   "id": "function:analytics/dscr_sensitivity.py:main",
+   "type": "function",
+   "name": "main",
+   "summary": "CLI entry that loads a scenario config via OmegaConf and prints the DSCR sensitivity results as JSON.",
+   "tags": [
+    "cli",
+    "sensitivity",
+    "debt"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    550,
+    575
+   ]
+  },
+  {
+   "id": "class:analytics/scenario_analytics.py:ScenarioResult",
+   "type": "class",
+   "name": "ScenarioResult",
+   "summary": "Dataclass capturing one scenario run's outputs: KPIs, annual rows, debt result, discount rate and any failure reason.",
+   "tags": [
+    "scenario",
+    "data-model",
+    "finance"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    52,
+    61
+   ]
+  },
+  {
+   "id": "class:analytics/scenario_analytics.py:BatchResultSummary",
+   "type": "class",
+   "name": "BatchResultSummary",
+   "summary": "Dataclass aggregating successful and failed scenario results plus a batch summary record.",
+   "tags": [
+    "scenario",
+    "data-model",
+    "finance"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    65,
+    72
+   ]
+  },
+  {
+   "id": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "type": "class",
+   "name": "ScenarioAnalytics",
+   "summary": "Orchestrator class that discovers scenarios, resolves per-scenario discount rates, runs cashflow and debt engines (optionally in parallel) and exports DataFrames, Excel and charts.",
+   "tags": [
+    "scenario",
+    "pipeline",
+    "finance",
+    "cashflow",
+    "debt"
+   ],
+   "complexity": "complex",
+   "lineRange": [
+    80,
+    528
+   ]
+  },
+  {
+   "id": "class:analytics/schema_guard.py:ConfigValidationError",
+   "type": "class",
+   "name": "ConfigValidationError",
+   "summary": "Exception raised when a scenario config fails v14 schema validation.",
+   "tags": [
+    "validation",
+    "config"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    29,
+    40
+   ]
+  },
+  {
+   "id": "function:analytics/schema_guard.py:_get_nested",
+   "type": "function",
+   "name": "_get_nested",
+   "summary": "Resolves a dotted path within a nested mapping, returning None when any segment is missing.",
+   "tags": [
+    "validation",
+    "utility",
+    "config"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    65,
+    81
+   ]
+  },
+  {
+   "id": "function:analytics/schema_guard.py:_first_resolved_value",
+   "type": "function",
+   "name": "_first_resolved_value",
+   "summary": "Returns the first non-null value among candidate dotted paths in the raw config.",
+   "tags": [
+    "validation",
+    "utility",
+    "config"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    84,
+    103
+   ]
+  },
+  {
+   "id": "function:analytics/schema_guard.py:_validate_fx_section",
+   "type": "function",
+   "name": "_validate_fx_section",
+   "summary": "Validates the fx config section's structure and types, appending human-readable errors.",
+   "tags": [
+    "validation",
+    "config",
+    "fx"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    106,
+    144
+   ]
+  },
+  {
+   "id": "function:analytics/schema_guard.py:validate_config_for_v14",
+   "type": "function",
+   "name": "validate_config_for_v14",
+   "summary": "Validates a raw config against all registered module required-field specs (plus FX), raising ConfigValidationError with a consolidated message on failure.",
+   "tags": [
+    "validation",
+    "config",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    147,
+    227
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "type": "function",
+   "name": "_prepare_cashflow_context",
+   "summary": "Validates parameters and assembles the cashflow context: params dict, FX curve, depreciation schedule and tax profile for the annual CFADS loop.",
+   "tags": [
+    "cashflow",
+    "finance",
+    "tax",
+    "fx"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    98,
+    249
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "type": "function",
+   "name": "calculate_single_year_cfads",
+   "summary": "Computes a single project year's CFADS: net production, revenue, statutory deductions, OPEX, tax and risk haircut.",
+   "tags": [
+    "cashflow",
+    "finance",
+    "tax",
+    "aep"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    257,
+    413
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:build_annual_cfads",
+   "type": "function",
+   "name": "build_annual_cfads",
+   "summary": "Builds the full per-year CFADS list across the project life by iterating calculate_single_year_cfads.",
+   "tags": [
+    "cashflow",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    416,
+    476
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:build_annual_rows",
+   "type": "function",
+   "name": "build_annual_rows",
+   "summary": "Builds detailed annual cashflow rows (dicts) across the project life for the debt and metrics layers.",
+   "tags": [
+    "cashflow",
+    "finance"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    479,
+    545
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:build_annual_rows_efficient",
+   "type": "function",
+   "name": "build_annual_rows_efficient",
+   "summary": "Vectorized variant that builds annual rows with batched EBIT/tax series computation for performance.",
+   "tags": [
+    "cashflow",
+    "finance",
+    "tax"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    548,
+    721
+   ]
+  },
+  {
+   "id": "function:finance/cashflow_v14.py:_register_cashflow_schema",
+   "type": "function",
+   "name": "_register_cashflow_schema",
+   "summary": "Registers the cashflow module's required-field specs and validators with the config schema registry.",
+   "tags": [
+    "cashflow",
+    "schema",
+    "validation",
+    "config"
+   ],
+   "complexity": "moderate",
+   "lineRange": [
+    729,
+    861
+   ]
+  },
+  {
+   "id": "class:finance/cashflow_v14_contracts.py:CashflowParams",
+   "type": "class",
+   "name": "CashflowParams",
+   "summary": "Typed contract dataclass of all parameters consumed by the v14 cashflow engine (capacity, factor, tariff, OPEX, tax, degradation, levies, escalation).",
+   "tags": [
+    "cashflow",
+    "data-model",
+    "contracts",
+    "finance"
+   ],
+   "complexity": "simple",
+   "lineRange": [
+    7,
+    47
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "file:analytics/core/epc_helper.py",
+   "target": "file:finance/epc_helper_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "file:finance/debt_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:analytics/core/epc_helper.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:analytics/core/metrics.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:analytics/scenario_loader.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:analytics/schema_guard.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:finance/cashflow_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "file:finance/debt_v14.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "file:analytics/config_schema.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/wind/era5_interface_schema.py",
+   "target": "file:analytics/config_schema.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/wind/wind_interface_schema.py",
+   "target": "file:analytics/config_schema.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/wind/wind_interface_schema.py",
+   "target": "file:analytics/loader/aep_loader.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:analytics/config_schema.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_contracts.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_fx.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_params.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_production.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_tax.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "file:finance/cashflow_v14_utils.py",
+   "type": "imports",
+   "direction": "forward",
+   "weight": 0.7
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "class:analytics/config_schema.py:RequiredFieldSpec",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "class:analytics/config_schema.py:RequiredFieldSpec",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:register_required_fields",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:register_required_fields",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:get_required_fields",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:get_required_fields",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:build_schema_dataframe",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/config_schema.py",
+   "target": "function:analytics/config_schema.py:build_schema_dataframe",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "class:analytics/dscr_sensitivity.py:SensitivityConfig",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "class:analytics/dscr_sensitivity.py:SensitivityConfig",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:_build_cfads_array",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:_build_cfads_array",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:_perturb_parameter",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:_perturb_parameter",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:analyze_single_variable",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:analyze_single_variable",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:analyze_dscr_sensitivity",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:analyze_dscr_sensitivity",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:main",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/dscr_sensitivity.py",
+   "target": "function:analytics/dscr_sensitivity.py:main",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:ScenarioResult",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:ScenarioResult",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:BatchResultSummary",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:BatchResultSummary",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/scenario_analytics.py",
+   "target": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "class:analytics/schema_guard.py:ConfigValidationError",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "class:analytics/schema_guard.py:ConfigValidationError",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "function:analytics/schema_guard.py:_get_nested",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "function:analytics/schema_guard.py:_first_resolved_value",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "function:analytics/schema_guard.py:_validate_fx_section",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "function:analytics/schema_guard.py:validate_config_for_v14",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:analytics/schema_guard.py",
+   "target": "function:analytics/schema_guard.py:validate_config_for_v14",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_cfads",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_cfads",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_rows",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_rows",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_rows_efficient",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:build_annual_rows_efficient",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "file:finance/cashflow_v14.py",
+   "target": "function:finance/cashflow_v14.py:_register_cashflow_schema",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14_contracts.py",
+   "target": "class:finance/cashflow_v14_contracts.py:CashflowParams",
+   "type": "contains",
+   "direction": "forward",
+   "weight": 1.0
+  },
+  {
+   "source": "file:finance/cashflow_v14_contracts.py",
+   "target": "class:finance/cashflow_v14_contracts.py:CashflowParams",
+   "type": "exports",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "target": "function:finance/cashflow_v14.py:build_annual_rows",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "target": "function:finance/debt_v14.py:apply_debt_layer",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "target": "function:finance/epc_helper_v14.py:epc_breakdown_from_config",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "class:analytics/scenario_analytics.py:ScenarioAnalytics",
+   "target": "function:analytics/schema_guard.py:validate_config_for_v14",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/dscr_sensitivity.py:analyze_single_variable",
+   "target": "function:finance/debt_v14.py:size_debt_with_dual_dscr",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "target": "function:finance/cashflow_v14_params.py:validate_parameters",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "target": "function:finance/cashflow_v14_params.py:_build_cashflow_params",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "target": "function:finance/cashflow_v14_fx.py:_fx_curve",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:_prepare_cashflow_context",
+   "target": "function:finance/cashflow_v14_tax.py:build_tax_profile",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "target": "function:finance/cashflow_v14_production.py:_calculate_net_production",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "target": "function:finance/cashflow_v14_production.py:_calculate_statutory_deductions",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:calculate_single_year_cfads",
+   "target": "function:finance/cashflow_v14_tax.py:calculate_tax",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:build_annual_rows_efficient",
+   "target": "function:finance/cashflow_v14_tax.py:build_tax_series",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:finance/cashflow_v14.py:_register_cashflow_schema",
+   "target": "function:analytics/config_schema.py:register_required_fields",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  },
+  {
+   "source": "function:analytics/schema_guard.py:validate_config_for_v14",
+   "target": "function:analytics/config_schema.py:get_required_fields",
+   "type": "calls",
+   "direction": "forward",
+   "weight": 0.8
+  }
+ ]
+}
