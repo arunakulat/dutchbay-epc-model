@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 from typing import Any, Dict, List, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -26,6 +25,7 @@ from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
+from api.path_safety import UnsafePathError, confined_path
 from finance.debt_v14 import _extract_capex_usd
 
 router = APIRouter()
@@ -215,10 +215,14 @@ def _extract_aep(cfg: Mapping[str, Any]) -> AepBlock:
     wind = _as_map(resource.get("wind"))
     summary: Dict[str, Any] = {}
     path = resource.get("aep_summary_path")
-    if isinstance(path, str) and os.path.exists(path):
+    if isinstance(path, str) and path.strip():
+        # Confine a caller-supplied summary path to the allowed roots; an
+        # out-of-bounds path (traversal/absolute) reads nothing rather than
+        # leaking an arbitrary file.
         try:
-            summary = _as_map(json.loads(open(path).read()))
-        except (OSError, ValueError):
+            safe = confined_path(path, must_exist=True)
+            summary = _as_map(json.loads(safe.read_text()))
+        except (UnsafePathError, OSError, ValueError):
             summary = {}
     exc = _as_map(summary.get("exceedance"))
     return AepBlock(
@@ -374,8 +378,9 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     """Run the full v14 finance pipeline and return KPIs + sculpted debt + AEP."""
     if payload.config_path:
         try:
-            cfg: Dict[str, Any] = dict(load_scenario_config(payload.config_path))
-        except (OSError, ValueError) as exc:
+            safe_path = confined_path(payload.config_path, must_exist=True)
+            cfg: Dict[str, Any] = dict(load_scenario_config(str(safe_path)))
+        except (UnsafePathError, OSError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=f"Could not load config_path: {exc}")
     else:
         cfg = dict(payload.config or {})
