@@ -326,41 +326,61 @@ def project_npv_from_cfads(
     rate: float,
     cfads_series: Sequence[float],
     capex_total: float,
+    construction_years: int = 0,
 ) -> float:
-    """Compute project NPV as NPV(CFADS) - capex_total.
+    """Compute project NPV from a properly time-aligned cashflow vector.
 
-    This is the canonical project NPV calculation where:
-    - NPV(CFADS) represents discounted value of all CFADS over project life.
-    - capex_total is the upfront capital investment (positive value).
+    The project cashflow is assembled as a single signed series::
 
-    Higher capex reduces project NPV (holding CFADS and discount rate constant).
+        [-capex_total] + [0.0] * construction_years + list(cfads_series)
+
+    so capex sits at t=0, the ``construction_years`` build period produces no
+    operating cash, and the FIRST operating CFADS is discounted at
+    t=(construction_years + 1) — not at t=0.
+
+    History (audit 2026-06-22, finding 2.0): the prior implementation returned
+    ``NPV(cfads) - capex`` with ``npv`` enumerating ``cfads`` from t=0, so operating
+    year 1 was undiscounted and the whole operating stream was pulled forward one
+    period while the 2-year construction lag was ignored entirely. That overstated
+    the canonical lender NPV (the reported +$2.03M was a timing artifact; correctly
+    discounted it is negative). This convention now matches analytics.core.returns
+    (``[-capex] + cfads``) and additionally honours the construction lag the debt
+    engine already models.
     """
-    try:
-        npv_cfads = float(npv(rate, cfads_series))
-    except Exception:
-        # Defensive: if NPV calculation fails, treat as neutral.
-        return 0.0
-
     try:
         capex = float(capex_total)
     except (TypeError, ValueError):
         capex = 0.0
 
-    return npv_cfads - capex
+    try:
+        lag = max(0, int(construction_years))
+    except (TypeError, ValueError):
+        lag = 0
+
+    project_vector = [-capex] + [0.0] * lag + [float(cf) for cf in cfads_series]
+
+    try:
+        return float(npv(rate, project_vector))
+    except Exception:
+        # Defensive: if NPV calculation fails, treat as neutral.
+        return 0.0
 
 
 def approx_project_irr(
     cfads_series: Sequence[float],
     capex_total: float,
     *,
+    construction_years: int = 0,
     r_low: float = 0.0,
     r_high: float = 0.5,
     tol: float = 1e-6,
     max_iter: int = 50,
 ) -> float:
-    """Approximate project IRR where NPV(CFADS) - capex_total ≈ 0.
+    """Approximate project IRR — the rate at which project NPV ≈ 0.
 
-    Uses bisection method to find the discount rate that makes project NPV ~ 0.
+    Uses the SAME time-aligned cashflow vector as ``project_npv_from_cfads``
+    (capex at t=0, ``construction_years`` zero-cash build periods, then CFADS),
+    so the IRR and NPV conventions cannot diverge (audit 2026-06-22, finding 2.0).
 
     Returns 0.0 if:
     - capex_total <= 0
@@ -376,7 +396,9 @@ def approx_project_irr(
         return 0.0
 
     def npv_gap(rate: float) -> float:
-        return project_npv_from_cfads(rate, cfads_series, capex)
+        return project_npv_from_cfads(
+            rate, cfads_series, capex, construction_years=construction_years
+        )
 
     try:
         f_low = npv_gap(r_low)

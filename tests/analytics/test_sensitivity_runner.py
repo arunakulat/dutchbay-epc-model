@@ -48,7 +48,9 @@ def test_basecase_project_irr_pins() -> None:
     suite = run_sensitivity_analysis(str(BASECASE), metric="project_irr")
     base = suite.base_kpis.get("project_irr")
     assert base is not None
-    assert 0.12 < base < 0.14
+    # Construction-lag-correct project IRR (audit finding 2.0): basecase ~7.9% (was ~13%
+    # before the operating-year-1 off-by-one + 2-yr build lag were corrected).
+    assert 0.07 < base < 0.09
 
 
 def test_explicit_parameters_override_defaults() -> None:

@@ -51,7 +51,8 @@ def test_audit_fields_populated_end_to_end() -> None:
     # base_kpis carries the canonical baseline (not a degenerate run).
     base = suite.base_kpis.get("project_irr")
     assert base is not None
-    assert 0.12 < base < 0.14
+    # construction-lag-correct basecase project IRR ~7.9% (audit finding 2.0)
+    assert 0.07 < base < 0.09
 
     # scenario_name is stamped from the config for provenance.
     assert suite.scenario_name is not None
