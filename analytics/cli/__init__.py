@@ -31,13 +31,8 @@ Usage:
     python analytics/cli/cli_sensitivity.py scenarios/example.yaml
 
 Imports:
-    # Preferred (clean API)
     from analytics.cli.cli_monte_carlo_hydra import main
     from analytics.cli.cli_sensitivity_hydra import main
-    
-    # Legacy (still works via shims)
-    from analytics.cli_monte_carlo_hydra import main
-    from analytics.cli_sensitivity_hydra import main
 
 Framework Compliance:
     - GWTF R3: All Hydra-based (except deprecated cli_sensitivity.py)

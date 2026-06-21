@@ -25,13 +25,8 @@ Public API:
 
 Migration Note:
     Files moved from analytics/ root to analytics/casper/ in Sprint 9.
-    Old import paths still work via backward compatibility shims.
-    
-    Preferred imports:
+    Import from the package directly:
         from analytics.casper import evaluate_with_casper_tail_risk_and_payload
-    
-    Legacy imports (still work):
-        from analytics.casper_v14 import evaluate_with_casper_tail_risk_and_payload
 """
 
 from analytics.casper.casper_v14 import evaluate_with_casper_tail_risk_and_payload
