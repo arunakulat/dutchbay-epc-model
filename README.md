@@ -301,5 +301,5 @@ Proprietary - All Rights Reserved
 
 ---
 
-**Last Updated**: November 24, 2025
-**Version**: 1.0.0 (v14 production-ready)
+**Last Updated**: June 21, 2026
+**Version**: see the `VERSION` file (single source of truth; currently 14.15.0)

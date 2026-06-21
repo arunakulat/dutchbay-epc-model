@@ -771,11 +771,10 @@ Completes: Sprint 18
 ## 📚 References
 
 ### Internal Documentation
-- [GWTF Ruleset](../../GWTF.md)
-- [Dolphin Strategy](../../docs/strategies/DOLPHIN_STRATEGY.md)
+- [GWTF Ruleset](../../go_with_the_flow_rules_v3_0_clean.csv) (the canonical CSV contract; Dolphin Strategy = rule `REFACTOR-01`)
 - [Discount Rate Policy](../policies/DISCOUNT_RATE_POLICY.md)
-- [FX Flag Tracking Guidelines](../guidelines/FX_FLAG_TRACKING_GUIDELINES.md)
-- [Debt Naming Conventions](../conventions/DEBT_NAMING_CONVENTIONS.md)
+- [FX Flag Tracking Guidelines](../FX_FLAG_TRACKING_GUIDELINES.md)
+- [Debt Naming Conventions](../DEBT_NAMING_CONVENTIONS_v14.md)
 
 ### External Standards
 - Damodaran, A. (2012). *Investment Valuation* - WACC methodology

@@ -17,9 +17,9 @@ This module:
 AEP basis: analytic Weibull integral on the selected curve with the IEC
 61400-12-1 velocity-cube air-density correction (config ``air_density_site/ref``,
 falling back to no correction) + the #23 multiplicative loss stack. For the
-15 x IEA-10MW lender case this reproduces net 483.6 GWh / CF 0.346, matching the
-bankable engine; the legacy 23 x EN-171/6.5 base (402.6 / 0.307) still regenerates
-from its own config.
+15 x IEA-10MW lender case this reproduces net 473.8 GWh / CF 0.339 (ERA5-fitted
+Weibull A=8.199/k=2.665), matching the bankable engine; the legacy 23 x EN-171/6.5
+base (402.6 / 0.307) still regenerates from its own config.
 
 Context:
     Sprint 11 follow-up — power-curve sourcing wiring (#181 thread).
