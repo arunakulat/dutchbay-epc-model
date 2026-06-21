@@ -10,35 +10,46 @@ representations of the same physical quantity and MUST agree, but nothing enforc
 A stale ``capacity_mw`` or ``capacity_factor`` therefore silently diverged from the
 bankable AEP: a 3×-inflated ``project.capacity_mw`` (159.6 vs the real 56 MW) made the
 Mullikulam scenario book ~3× its real generation while the bankable export said
-otherwise (PR #263; the same class as red-flag-register item #175, "financed P50 vs
-auxiliary summary disagree, finance using the higher").
+otherwise (PR #263; the same class as red-flag-register item #175).
 
-This guard reconciles them. When a scenario carries BOTH a bankable net-AEP reference
-AND ``project.capacity_mw`` + ``project.capacity_factor`` it asserts::
+**This is a DETECTOR, not a single-source-of-truth fix.** It makes the contradiction
+fail loud; it does not make the bankable AEP authoritative (``capacity_mw × CF`` remains
+the billed quantity). A scenario with a stale capacity and *no* bankable AEP still sails
+through, and widening ``aep_reconciliation.tolerance_pct`` is an *audited override*, not
+a fix — a non-default tolerance is logged at WARNING so it is visible in run output.
+
+When a scenario carries BOTH a bankable net-AEP reference AND a resolvable capacity +
+capacity_factor it asserts::
 
     | capacity_mw · capacity_factor · 8.760  −  net_aep |  /  net_aep   ≤   tolerance
 
-against every bankable reference present, and **fails loud** otherwise (CESSPIT).
-Scenarios without a bankable AEP are unaffected — the ``capacity_factor`` path stands
-alone. The guard changes no computed number, so it preserves byte-identical economics;
-it only refuses configs whose two generation sources disagree.
+against every bankable reference present, and **fails loud** otherwise (CESSPIT). It
+changes no computed number, so it preserves byte-identical economics.
+
+Crucially, capacity_mw and capacity_factor are resolved through the **same path lists and
+the same ``pct_to_decimal`` normalization the finance engine uses** (the shared
+``finance.cashflow_v14_utils.CAPACITY_MW_PATHS`` / ``CAPACITY_FACTOR_PATHS``), so the
+guard reconciles *exactly* the values the engine bills off — including percent-form CF
+(``project.capacity_factor: 33.9`` → 0.339) and the ``capacity_factor_pct`` / nested
+authoring forms — rather than one of several aliases.
 
 Why a guard and not "have finance read the bankable AEP directly": the opt-in
 wind→finance bridge (``analytics.wind.wind_integration``) already drives finance off the
-bankable export when a project opts in, and most scenarios legitimately have only a
-``capacity_factor``. The defect was the *silent* divergence, which this makes explicit.
-
-The bankable net AEP is net of the wind-loss stack and the scenario ``capacity_factor``
-is the *net* capacity factor, so ``capacity_mw · CF · 8.760 == net AEP`` by construction
-when consistent (the engine then applies an additional ``grid_loss_pct`` to reach billed
-energy — out of scope here).
+bankable export when a project opts in, and most scenarios legitimately carry only a
+``capacity_factor``. The bankable summary's net is net-of-*wind*-losses only, while the
+engine applies an additional ``grid_loss_pct`` downstream — so wiring finance straight
+off the summary would double-count grid loss. The defect was the *silent* divergence,
+which this makes explicit.
 
 Tolerance is config-first (CESSPIT / CCCDIR — never a Python literal)::
 
     scenario ``aep_reconciliation.tolerance_pct``  →  else
     ``config/defaults.yaml`` ``defaults.aep_reconciliation.tolerance_pct``
 
-This mirrors ``analytics.cost.cost_basis`` and ``analytics.fx.fx_fetch``.
+This mirrors ``analytics.cost.cost_basis`` and ``analytics.fx.fx_fetch``. The guard runs
+at AUTHORED-scenario LOAD time (``analytics.scenario_loader``) and on authored configs at
+the API boundary, NOT on every derived run — so deliberate sensitivity/Monte-Carlo
+perturbations of capacity_factor (in-memory dicts, never re-loaded) are unaffected.
 """
 
 from __future__ import annotations
@@ -47,7 +58,7 @@ import json
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, TypeGuard
 
 logger = logging.getLogger(__name__)
 
@@ -95,20 +106,52 @@ def resolve_tolerance_pct(config: Mapping[str, Any]) -> float:
     return default_tolerance_pct()
 
 
+def _is_number(value: Any) -> TypeGuard[float]:
+    """True for a real numeric (bool is a subclass of int — explicitly excluded)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def resolve_billed_capacity_and_factor(
+    config: dict[str, Any],
+) -> tuple[Optional[float], Optional[float]]:
+    """Resolve the (capacity_mw, capacity_factor) the finance engine bills off.
+
+    Uses the SAME path-precedence lists and the SAME ``pct_to_decimal`` normalization as
+    ``finance.cashflow_v14_params._build_cashflow_params`` (imported lazily to avoid any
+    load-order cycle), so the guard tracks the engine's actual revenue basis — including
+    percent-form CF and the ``capacity_factor_pct`` / nested authoring forms — rather than
+    one of several aliases. Returns ``(None, None)`` components when unresolved.
+    """
+    from finance.cashflow_v14_utils import (
+        CAPACITY_FACTOR_PATHS,
+        CAPACITY_MW_PATHS,
+        as_float_or_none,
+        pct_to_decimal,
+        resolve_first,
+    )
+
+    capacity_mw = as_float_or_none(resolve_first(config, *CAPACITY_MW_PATHS))
+    capacity_factor = pct_to_decimal(
+        as_float_or_none(resolve_first(config, *CAPACITY_FACTOR_PATHS))
+    )
+    return capacity_mw, capacity_factor
+
+
 def collect_bankable_net_aep_gwh(config: Mapping[str, Any]) -> dict[str, float]:
     """Collect available bankable net-AEP references (GWh), labelled by source.
 
     Reads ``expected_results.net_aep_p50_gwh`` and, if present and readable, the
     ``resource.aep_summary_path`` JSON's ``net_site_aep_gwh`` (falling back to
-    ``net_aep_p50_gwh``). An unreadable/absent summary is skipped — surfacing that is a
-    separate concern, not this guard's job.
+    ``net_aep_p50_gwh``). A declared-but-unreadable summary is *logged at WARNING* (a
+    silently-disarmed reference would itself be the silent-divergence failure mode this
+    guard exists to kill) and then skipped.
     """
     refs: dict[str, float] = {}
 
     expected = config.get("expected_results")
     if isinstance(expected, Mapping):
         value = expected.get("net_aep_p50_gwh")
-        if isinstance(value, (int, float)):
+        if _is_number(value):
             refs["expected_results.net_aep_p50_gwh"] = float(value)
 
     resource = config.get("resource")
@@ -116,51 +159,66 @@ def collect_bankable_net_aep_gwh(config: Mapping[str, Any]) -> dict[str, float]:
         path = resource.get("aep_summary_path")
         if isinstance(path, str) and path:
             summary_path = Path(path)
-            if summary_path.exists():
+            if not summary_path.exists():
+                logger.warning(
+                    "resource.aep_summary_path %r is not readable from cwd; its AEP "
+                    "reference is skipped by the reconciliation guard.",
+                    path,
+                )
+            else:
                 try:
                     data = json.loads(summary_path.read_text())
                 except (OSError, ValueError):
+                    logger.warning(
+                        "resource.aep_summary_path %r could not be parsed; skipped.",
+                        path,
+                    )
                     data = None
                 if isinstance(data, Mapping):
                     value = data.get("net_site_aep_gwh")
                     if value is None:
                         value = data.get("net_aep_p50_gwh")
-                    if isinstance(value, (int, float)):
+                    if _is_number(value):
                         refs[f"{path}:net_site_aep_gwh"] = float(value)
     return refs
 
 
 def reconcile_capacity_factor_with_bankable_aep(
-    config: Mapping[str, Any], config_path: str | None = None
+    config: dict[str, Any], config_path: str | None = None
 ) -> None:
     """Fail loud if ``capacity_mw · CF · 8.760`` diverges from any bankable net AEP.
 
-    No-op when the scenario lacks ``project.capacity_mw``, ``project.capacity_factor``,
-    or any bankable net-AEP reference. Raises :class:`AepReconciliationError` when an
-    implied generation diverges from a bankable reference beyond the configured
-    tolerance.
+    No-op when the scenario lacks a resolvable capacity_mw / capacity_factor or any
+    bankable net-AEP reference. Raises :class:`AepReconciliationError` when an implied
+    generation diverges from a bankable reference beyond the configured tolerance, or when
+    a declared bankable reference is non-positive.
     """
-    project = config.get("project")
-    if not isinstance(project, Mapping):
-        return
-    capacity_mw = project.get("capacity_mw")
-    capacity_factor = project.get("capacity_factor")
-    if not isinstance(capacity_mw, (int, float)) or not isinstance(
-        capacity_factor, (int, float)
-    ):
+    capacity_mw, capacity_factor = resolve_billed_capacity_and_factor(config)
+    if capacity_mw is None or capacity_factor is None:
         return
 
     references = collect_bankable_net_aep_gwh(config)
     if not references:
         return
 
-    implied_gwh = float(capacity_mw) * float(capacity_factor) * _GWH_PER_MW_AT_CF1
-    tolerance = resolve_tolerance_pct(config) / 100.0
+    implied_gwh = capacity_mw * capacity_factor * _GWH_PER_MW_AT_CF1
+    tolerance_pct = resolve_tolerance_pct(config)
+    if tolerance_pct != default_tolerance_pct():
+        logger.warning(
+            "AEP reconciliation tolerance widened to %.3f%% (audited override) for %s",
+            tolerance_pct,
+            config_path or "<config>",
+        )
+    tolerance = tolerance_pct / 100.0
 
+    where = f" in '{config_path}'" if config_path else ""
     problems: list[str] = []
     for label, reference_gwh in references.items():
         if reference_gwh <= 0:
-            continue
+            raise AepReconciliationError(
+                f"Bankable AEP {label}={reference_gwh} GWh is non-positive{where} — a "
+                "zero/negative net AEP is nonsensical; fix the export or expected_results."
+            )
         relative = abs(implied_gwh - reference_gwh) / reference_gwh
         if relative > tolerance:
             problems.append(
@@ -170,7 +228,6 @@ def reconcile_capacity_factor_with_bankable_aep(
             )
 
     if problems:
-        where = f" in '{config_path}'" if config_path else ""
         raise AepReconciliationError(
             f"Bankable AEP does not reconcile with capacity_mw x capacity_factor{where}: "
             + "; ".join(problems)
@@ -193,6 +250,7 @@ __all__ = [
     "AepReconciliationError",
     "default_tolerance_pct",
     "resolve_tolerance_pct",
+    "resolve_billed_capacity_and_factor",
     "collect_bankable_net_aep_gwh",
     "reconcile_capacity_factor_with_bankable_aep",
 ]

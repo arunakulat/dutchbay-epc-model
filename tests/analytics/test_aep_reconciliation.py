@@ -197,3 +197,130 @@ def test_perturbed_dict_is_not_reguarded() -> None:
     # Passing the perturbed DICT must not raise a reconciliation error.
     result = run_v14_pipeline(config=cfg)
     assert "kpis" in result
+
+
+# --- the guard resolves capacity/CF exactly like the engine (multi-path + pct) ---------
+
+
+def _lender() -> dict:
+    return load_scenario_config(
+        str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+    )
+
+
+def test_percent_form_capacity_factor_does_not_false_positive() -> None:
+    """project.capacity_factor authored as a percent (>1.0) is normalized like the engine."""
+    cfg = _lender()
+    cfg["project"]["capacity_factor"] = 33.9  # engine reads 0.339 via pct_to_decimal
+    reconcile_capacity_factor_with_bankable_aep(cfg, "pct-cf")  # must NOT raise
+
+
+def test_capacity_factor_pct_path_correct_does_not_raise() -> None:
+    """The capacity_factor_pct authoring form (an established alias) resolves correctly."""
+    cfg = _lender()
+    del cfg["project"]["capacity_factor"]
+    cfg["project"]["capacity_factor_pct"] = 33.9
+    reconcile_capacity_factor_with_bankable_aep(cfg, "cf_pct-ok")  # must NOT raise
+
+
+def test_capacity_factor_pct_divergence_raises() -> None:
+    """A 3× stale capacity expressed via the capacity_factor_pct form still fails loud."""
+    cfg = _lender()
+    del cfg["project"]["capacity_factor"]
+    cfg["project"]["capacity_factor_pct"] = 33.9
+    cfg["project"]["capacity_mw"] = cfg["project"]["capacity_mw"] * 3
+    with pytest.raises(AepReconciliationError):
+        reconcile_capacity_factor_with_bankable_aep(cfg, "cf_pct-3x")
+
+
+def test_resolve_billed_matches_engine_normalization() -> None:
+    """resolve_billed_capacity_and_factor mirrors the engine's pct + path resolution."""
+    from analytics.aep_reconciliation import resolve_billed_capacity_and_factor
+
+    cap, cf = resolve_billed_capacity_and_factor(
+        {"project": {"capacity_mw": 100.0, "capacity_factor_pct": 42.0}}
+    )
+    assert cap == 100.0
+    assert cf == pytest.approx(0.42)  # percent → decimal, capacity_factor_pct preferred
+
+
+# --- robustness: non-positive AEP, bool, JSON-only source -------------------------------
+
+
+def test_non_positive_bankable_aep_raises() -> None:
+    cfg = _lender()
+    cfg["expected_results"]["net_aep_p50_gwh"] = 0.0
+    with pytest.raises(AepReconciliationError, match="non-positive"):
+        reconcile_capacity_factor_with_bankable_aep(cfg, "zero-aep")
+
+
+def test_bool_is_not_admitted_as_aep() -> None:
+    """A YAML true/false must not be coerced to 1.0/0.0 and treated as a reference."""
+    refs = collect_bankable_net_aep_gwh({"expected_results": {"net_aep_p50_gwh": True}})
+    assert refs == {}
+
+
+def test_json_only_source_catches_divergence(tmp_path: Path) -> None:
+    """With NO expected_results, a divergence is still caught via the aep_summary JSON."""
+    import json as _json
+
+    summary = tmp_path / "aep.json"
+    summary.write_text(_json.dumps({"net_site_aep_gwh": 133.1}))
+    cfg = {
+        "project": {
+            "capacity_mw": 159.6,
+            "capacity_factor": 0.2713,
+        },  # implies ~379 GWh
+        "resource": {"aep_summary_path": str(summary)},
+    }
+    with pytest.raises(AepReconciliationError, match="net_site_aep_gwh"):
+        reconcile_capacity_factor_with_bankable_aep(cfg, "json-only")
+
+
+def test_config_default_missing_raises(tmp_path: Path, monkeypatch) -> None:
+    """default_tolerance_pct fails loud when defaults.yaml lacks the key."""
+    import analytics.aep_reconciliation as mod
+
+    bad = tmp_path / "defaults.yaml"
+    bad.write_text("defaults:\n  fx_reference:\n    start_lkr_per_usd: 1\n")
+    monkeypatch.setattr(mod, "_DEFAULTS_PATH", bad)
+    mod.default_tolerance_pct.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="aep_reconciliation.tolerance_pct"):
+            mod.default_tolerance_pct()
+    finally:
+        mod.default_tolerance_pct.cache_clear()  # don't leak the cached miss
+
+
+# --- the API authored-config path is guarded -------------------------------------------
+
+
+def test_api_inline_divergent_config_is_rejected() -> None:
+    """POST /run-pipeline with an inline (dict) authored config still gets reconciled."""
+    pytest.importorskip("fastapi")
+    from fastapi import HTTPException
+
+    from api.pipeline_api import RunPipelineRequest, run_pipeline
+
+    cfg = _lender()
+    cfg["project"]["capacity_mw"] = cfg["project"]["capacity_mw"] * 3  # stale 3×
+    with pytest.raises(HTTPException) as exc_info:
+        run_pipeline(RunPipelineRequest(config=cfg))
+    assert exc_info.value.status_code == 422
+    assert "reconcile" in str(exc_info.value.detail)
+
+
+def test_api_capacity_override_breaking_reconciliation_is_rejected() -> None:
+    """A capacity override applied after load is re-reconciled (stale injection caught)."""
+    pytest.importorskip("fastapi")
+    from fastapi import HTTPException
+
+    from api.pipeline_api import RunPipelineRequest, run_pipeline
+
+    req = RunPipelineRequest(
+        config_path=str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"),
+        overrides={"project.capacity_mw": 479.0},  # 3× — diverges from the bankable AEP
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        run_pipeline(req)
+    assert exc_info.value.status_code == 422
