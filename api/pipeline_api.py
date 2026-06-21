@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
+from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
@@ -127,6 +128,9 @@ class CostBlock(BaseModel):
     ratio_to_benchmark: Optional[float] = None
     within_band: Optional[bool] = None
     note: Optional[str] = None
+    estimate_class: Optional[int] = None  # AACE class 5..1 (estimate maturity)
+    accuracy_low_pct: Optional[float] = None  # AACE expected-accuracy band (low side)
+    accuracy_high_pct: Optional[float] = None  # AACE expected-accuracy band (high side)
 
 
 class ManifestBlock(BaseModel):
@@ -287,6 +291,14 @@ def _extract_cost(cfg: Mapping[str, Any]) -> CostBlock:
     if cap_mw <= 0:
         return CostBlock(capex_total_usd=capex)
     b = capex_benchmark(capex, cap_mw)
+    ec: Optional[int] = None
+    lo: Optional[float] = None
+    hi: Optional[float] = None
+    try:
+        band = resolve_accuracy_band(cfg)
+        ec, lo, hi = band.estimate_class, band.low_pct, band.high_pct
+    except Exception:
+        pass
     return CostBlock(
         capex_total_usd=capex,
         capex_per_kw_usd=b["capex_per_kw_usd"],
@@ -294,6 +306,9 @@ def _extract_cost(cfg: Mapping[str, Any]) -> CostBlock:
         ratio_to_benchmark=b["ratio_to_benchmark"],
         within_band=b["within_band"],
         note=b["note"],
+        estimate_class=ec,
+        accuracy_low_pct=lo,
+        accuracy_high_pct=hi,
     )
 
 

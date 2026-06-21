@@ -239,6 +239,8 @@ fx:
 # ═════════════════════════════════════════════════════════════════════════════
 capex:
   cost_basis_year: 2026  # USD vintage of the whole cost stack (anchored, ATB-style)
+  estimate_class: 3  # AACE Class 3 (budget authorization) — bottom-up WBS sanity-checked
+  #                    vs the IRENA benchmark; accuracy band resolved from config/defaults.yaml
   # Bottom-up WBS (NREL SAM/LandBOSSE structure; IRENA/NREL consensus shares: turbine
   # ~69% / BoP ~16% / grid ~8% / dev ~3.5% / financing ~2% / contingency ~1.5%). The
   # breakdown SUMS to usd_total (guarded by tests/.../test_canonical_cost_wbs.py) — it
@@ -252,8 +254,17 @@ capex:
   capex_per_kw_usd: 1000  # 159.6M / 159.6MW (15 x IEA-10MW)
   breakdown:
     wtg_supply_usd: 110124000        # turbines: rotor+nacelle+tower, CIF + inland transport
-    balance_of_plant_usd: 25536000   # foundations, access roads, 33 kV collection, civil
-    grid_connection_usd: 12768000    # 220 kV line + Puttalam substation bay
+    # Balance of plant — NREL SAM/LandBOSSE activity decomposition (sums to the prior
+    # $25.536M BoP line; engine still reads usd_total so economics are unchanged):
+    foundation_usd: 7660800          # foundations (30% of BoP)
+    erection_usd: 5107200            # turbine erection/assembly (20%)
+    collection_system_usd: 5107200   # 33 kV array collection cabling (20%)
+    site_preparation_usd: 3064320    # access roads, crane pads, civil (12%)
+    site_development_usd: 2042880     # clearing, survey, environmental (8%)
+    project_management_usd: 2553600  # BoP construction management (10%)
+    # Grid (sums to the prior $12.768M grid_connection line):
+    grid_connection_usd: 7660800     # 220 kV transmission line (60%)
+    substation_usd: 5107200          # Puttalam substation bay (40%)
     development_owners_usd: 5586000  # permitting, engineering, owner's costs, land
     financing_fees_usd: 3192000      # commitment + legal + advisory + DSRA funding
     contingency_usd: 2394000         # ~1.5% (fixed; switch to QRA via capex.contingency)

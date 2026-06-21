@@ -14,8 +14,35 @@ For CAPEX, p90 is the HIGH (adverse) cost; for project/equity IRR, NPV and min D
 from __future__ import annotations
 
 import copy
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
+
+logger = logging.getLogger(__name__)
+
+
+def _apply_estimate_class_floor(config: Mapping[str, Any], sigma_pct: float) -> float:
+    """Sanity-floor the CAPEX 1-sigma to the AACE estimate class's implied spread.
+
+    A configured spread tighter than the estimate's class implies understates cost risk;
+    the band (config/defaults.yaml) provides the floor and a warning. Resolution failures
+    are non-fatal (the floor is a guard, not a gate).
+    """
+    try:
+        from analytics.cost.estimate_class import resolve_accuracy_band
+
+        band = resolve_accuracy_band(config)
+    except Exception:  # pragma: no cover - missing/blank config must not break the MC
+        return sigma_pct
+    implied = band.implied_sigma_pct
+    if sigma_pct < implied:
+        logger.warning(
+            "CAPEX MC sigma %.2f%% is tighter than AACE Class %d implies (%.2f%%); "
+            "flooring to the class band.",
+            sigma_pct, band.estimate_class, implied,
+        )
+        return implied
+    return sigma_pct
 
 
 @dataclass(frozen=True)
@@ -80,6 +107,7 @@ def run_capex_mc(
         dict(load_scenario_config(config)) if isinstance(config, str) else dict(config)
     )
     sigma = resolve_capex_sigma_pct(cfg, sigma_pct)
+    sigma = _apply_estimate_class_floor(cfg, sigma)
     base = _extract_capex_usd(cfg)
     if base <= 0:
         raise ValueError("base CAPEX must be > 0 for a probabilistic run")
