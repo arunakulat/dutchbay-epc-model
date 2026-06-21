@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, model_validator
 from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from finance.debt_v14 import _extract_capex_usd
 
@@ -127,6 +128,18 @@ class CostBlock(BaseModel):
     note: Optional[str] = None
 
 
+class ManifestBlock(BaseModel):
+    """Auditable reproducibility stamp: ties the output to inputs + engine + commit."""
+
+    config_sha256: str
+    engine_version: str
+    git_sha: str
+    generated_at: str
+    seed: Optional[int] = None
+    validation_mode: Optional[str] = None
+    manifest_schema_version: str
+
+
 class RunPipelineResponse(BaseModel):
     scenario_name: str
     config_path: Optional[str] = None
@@ -136,6 +149,7 @@ class RunPipelineResponse(BaseModel):
     aep: AepBlock
     debt: DebtBlock
     cost: CostBlock
+    manifest: ManifestBlock  # reproducibility stamp over the RESOLVED config
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +336,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
 
     kpis = result.get("kpis") or {}
     debt = result.get("debt_result") or {}
+    manifest = build_run_manifest(cfg, validation_mode=payload.validation_mode)
     return RunPipelineResponse(
         scenario_name=str(kpis.get("scenario_name") or cfg.get("name") or "<inline>"),
         config_path=payload.config_path,
@@ -331,4 +346,5 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
         cost=_extract_cost(cfg),
+        manifest=ManifestBlock(**manifest.as_dict()),
     )
