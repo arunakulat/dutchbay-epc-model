@@ -48,9 +48,6 @@ from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import _extract_capex_usd, plan_debt
-from finance.equity_distribution_v14_hydra import (
-    calculate_equity_distribution_from_pipeline,
-)
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_build_up_wacc, compute_wacc_from_config
 
@@ -676,6 +673,14 @@ def run_v14_pipeline_enhanced(
             equity_block = dict(equity_cfg.get("equity", {}) or {})
             equity_block["discount_rate"] = equity_discount
             equity_cfg["equity"] = equity_block
+        # Lazy import: breaks the analytics<->finance module-load cycle. This
+        # module is pulled in by the analytics package init, and the hydra module
+        # imports back into analytics, so a cold finance-side import would hit a
+        # partially-initialized module (ImportError). Imported at its one call site.
+        from finance.equity_distribution_v14_hydra import (
+            calculate_equity_distribution_from_pipeline,
+        )
+
         equity_distribution = calculate_equity_distribution_from_pipeline(
             config=equity_cfg,
             annual_rows=annual_rows_enriched,
