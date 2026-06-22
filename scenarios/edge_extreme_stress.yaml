@@ -35,7 +35,7 @@ project:
   capacity_factor: 0.28                    # ← EXTREME: 28% (P99 wind resource)
   curtailment_pct: 0.10                    # ← EXTREME: 10% grid curtailment, now LIVE via
                                            #   the financed lever (was a dead statutory no-op)
-  degradation: 0.012                       # ← SEVERE: 1.2% annual degradation
+  degradation: 1.2                         # ← SEVERE: 1.2%/yr (percent; engine /100s it)
   life_years: 20
   boi_approved: true
   boi_agreement_date: "2025-01-15"

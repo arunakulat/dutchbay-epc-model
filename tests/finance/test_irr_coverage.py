@@ -24,6 +24,7 @@ no economic magic number is hardcoded.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 import pytest
@@ -466,6 +467,25 @@ def test_approx_project_irr_respects_construction_lag() -> None:
     irr_no_lag = approx_project_irr(cfads, capex, construction_years=0, r_high=1.0)
     irr_lagged = approx_project_irr(cfads, capex, construction_years=2, r_high=1.0)
     assert 0.0 < irr_lagged < irr_no_lag
+
+
+def test_approx_project_irr_reports_negative_irr_by_default() -> None:
+    """A value-destructive project (CFADS < capex) reports its true NEGATIVE IRR.
+
+    Regression for the 2026-06-23 M3e honesty fix: the default search bracket now
+    spans negative rates (r_low = _DEFAULT_IRR_LOWER_BOUND), so a sub-break-even
+    project is no longer silently floored at 0.0. The 5usc Kalpitiya case (lifetime
+    CFADS below capex even undiscounted) surfaced this — its true project IRR is
+    ~-0.3%, previously clamped to exactly 0.0%.
+    """
+    capex = 1_000.0
+    cfads = [240.0, 240.0, 240.0, 240.0]  # sums to 960 < capex => negative IRR
+    honest = approx_project_irr(cfads, capex)  # default bracket spans negatives
+    assert math.isfinite(honest)
+    assert -0.10 < honest < 0.0  # just below break-even (4% undiscounted shortfall)
+    # The legacy positive-only bracket (r_low=0.0) clamps it to exactly 0.0 — the
+    # bug this fix removes from the live project-IRR path.
+    assert approx_project_irr(cfads, capex, r_low=0.0) == 0.0
 
 
 def test_approx_project_irr_zero_capex_returns_zero() -> None:

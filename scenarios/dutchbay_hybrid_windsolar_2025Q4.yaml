@@ -41,7 +41,7 @@ project:
   # Monte-Carlo variable (stress band 0-13% incremental = 2-15% total). The flat 2% is an
   # UNVALIDATED placeholder pending a CEB interconnection study (see docs red-flag note).
   curtailment_pct: 0.0
-  degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
+  degradation: 0.5  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
   developer: "DutchBay Wind Power Pvt Ltd"

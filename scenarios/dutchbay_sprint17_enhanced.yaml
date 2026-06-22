@@ -43,7 +43,7 @@ project:
     region: "Mannar"
   
   # Sprint 17: Degradation with uncertainty
-  degradation: 0.006  # 0.6%/year (base case)
+  degradation: 0.6  # 0.6%/yr (percent; engine /100s it)
   degradation_method: "compound"  # Compound degradation formula
   
   # Project timeline

@@ -371,7 +371,7 @@ def approx_project_irr(
     capex_total: float,
     *,
     construction_years: int = 0,
-    r_low: float = 0.0,
+    r_low: float = _DEFAULT_IRR_LOWER_BOUND,
     r_high: float = 0.5,
     tol: float = 1e-6,
     max_iter: int = 50,
@@ -382,10 +382,16 @@ def approx_project_irr(
     (capex at t=0, ``construction_years`` zero-cash build periods, then CFADS),
     so the IRR and NPV conventions cannot diverge (audit 2026-06-22, finding 2.0).
 
+    The default search bracket spans NEGATIVE rates (``_DEFAULT_IRR_LOWER_BOUND``
+    = -0.9999) so a value-destructive project whose lifetime CFADS fall short of
+    capex reports its true negative IRR rather than being silently floored at 0.0
+    (honesty fix, 2026-06-23 M3e: the prior ``r_low=0.0`` default clamped every
+    sub-zero project to exactly 0.0 — see the 5usc Kalpitiya case, true IRR ~-0.3%).
+
     Returns 0.0 if:
     - capex_total <= 0
     - cfads_series is empty
-    - no sign change / no sensible root can be found.
+    - no sign change / no sensible root can be found in [r_low, r_high].
     """
     try:
         capex = float(capex_total)

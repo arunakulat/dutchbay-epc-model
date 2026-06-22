@@ -94,8 +94,11 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # WindForce bid: the project is uneconomic (LCOE ~5.5c > tariff). The earlier
     # project_irr~0.108 / equity_irr>0 asserts were an artifact of a 3x-inflated
     # capacity_mw (159.6 vs the real 56) — see the scenario's expected_results note.
-    assert kpis["project_irr"] == pytest.approx(0.0, abs=0.001)  # no positive root
-    assert kpis["equity_irr"] == pytest.approx(-0.0707, abs=0.01)
+    # M3e: degradation 0.005 -> 0.5 (honest 0.5%/yr aging) deepened it, and the IRR-floor
+    # fix lets the project IRR report its true NEGATIVE value (-2.75%) rather than 0.0.
+    assert kpis["project_irr"] == pytest.approx(-0.0275, abs=0.005)
+    assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
+    assert kpis["equity_irr"] == pytest.approx(-0.0843, abs=0.01)
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)  # sizer holds DSCR, sizes debt down

@@ -58,7 +58,7 @@ project:
   project_life_years: 25
   
   # Degradation parameters
-  degradation: 0.006  # 0.6%/year (base case from defaults.yaml)
+  degradation: 0.6  # 0.6%/year (base case from defaults.yaml)
 
 # ════════════════════════════════════════════════════════════════════════
 # ENHANCED MONTE CARLO CONFIGURATION

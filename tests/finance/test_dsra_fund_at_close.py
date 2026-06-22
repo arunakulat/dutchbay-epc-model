@@ -34,8 +34,10 @@ def _run(dsra=None, **fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
-    assert kpis["project_irr"] == pytest.approx(0.0543, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(0.0003, abs=0.001)
+    # Canonical after the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr aging):
+    # projIRR 5.05%, equity IRR -2.47% (negative to sponsors), minDSCR 1.30.
+    assert kpis["project_irr"] == pytest.approx(0.0505, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.0247, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0

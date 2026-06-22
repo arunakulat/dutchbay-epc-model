@@ -24,9 +24,10 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
-    # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull).
-    assert resp.kpis.project_irr == pytest.approx(0.0543, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(0.0003, abs=0.005)
+    # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull +
+    # the M3e degradation re-baseline: projIRR 5.05%, equity IRR -2.47%).
+    assert resp.kpis.project_irr == pytest.approx(0.0505, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0247, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 
@@ -61,7 +62,7 @@ def test_inline_config_runs() -> None:
 
     cfg = dict(load_scenario_config(LENDER))
     resp = run_pipeline(RunPipelineRequest(config=cfg))
-    assert resp.kpis.project_irr == pytest.approx(0.0543, abs=0.005)
+    assert resp.kpis.project_irr == pytest.approx(0.0505, abs=0.005)
     assert resp.config_path is None
 
 

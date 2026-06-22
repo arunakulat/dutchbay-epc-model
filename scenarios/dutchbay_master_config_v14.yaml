@@ -124,7 +124,7 @@ project:
   boi_approved: true
   capacity_factor: 0.4
   capacity_mw: 150
-  degradation: 0.006
+  degradation: 0.6  # 0.6%/yr (percent; engine /100)
   jurisdiction: Sri Lanka
   location: Mannar District, Northern Province
   name: Dutch Bay Wind Project

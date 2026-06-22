@@ -140,10 +140,12 @@ app + deploy. **~2.5–3.5 focused sprints** to a production MVP.
 ## 7. One honest caveat to surface to clients
 
 The model's current canonical economics are **value-destructive** (project IRR
-~5.43% below WACC, equity IRR ~0%, project NPV ≈ −$31.9M, after the 2026-06
-honest re-baseline). The web tool will faithfully report that. This warrants a
-deliberate UX decision: show the verdict prominently vs. let clients explore
-scenarios that improve it.
+~5.05% below the ~8.18% WACC, equity IRR ~−2.5%, project NPV ≈ −$35.5M, after the
+2026-06 honest re-baseline — which now includes the M3e degradation correction:
+`project.degradation` had been read as ~0%/yr and is now an honest 0.5%/yr turbine
+aging). The web tool will faithfully report that. This warrants a deliberate UX
+decision: show the verdict prominently vs. let clients explore scenarios that
+improve it.
 
 ---
 
