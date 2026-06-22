@@ -10,9 +10,12 @@ the config-sourced reference rate from analytics.fx.fx_fetch.default_fx_lkr_per_
 (config/defaults.yaml), never a Python literal. We pin that here so the assertions
 stay meaningful even if the vintage is re-baselined.
 
-KNOWN BUG (xfail below): a zero-debt volumetry path makes compute_fx_risk_profile()
-return a "minimal" FXRiskProfile with debt_lkr_pct = debt_usd_pct = debt_cny_pct = 0.0,
-which then crashes FXRiskProfile.__post_init__ (debt percentages must sum to ~100%).
+REGRESSION PIN (bug fixed in #305): a zero-debt volumetry path once made
+compute_fx_risk_profile() return a "minimal" FXRiskProfile with
+debt_lkr_pct = debt_usd_pct = debt_cny_pct = 0.0, crashing
+FXRiskProfile.__post_init__ (debt percentages must sum to ~100%). The zero-debt
+branch now sets debt_usd_pct = 100.0; the test below pins the corrected
+behaviour (there is no xfail — the defect is closed).
 """
 
 from __future__ import annotations
