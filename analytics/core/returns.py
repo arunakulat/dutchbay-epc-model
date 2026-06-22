@@ -92,7 +92,14 @@ class ReturnsConfig(BaseModel):
         try:
             capex_usd = float(config["capex"]["usd_total"])
             capex_fx_rate = float(config["fx"]["start_lkr_per_usd"])
-            debt_ratio = float(config["financing"]["debt_ratio"])
+            # Canonical scenarios carry gearing under 'Financing_Terms'; older or
+            # lightweight configs use lowercase 'financing'. Accept either (the
+            # canonical block wins) so returns analytics run on the real lender
+            # scenarios, not just hand-authored test configs.
+            financing = config.get("Financing_Terms")
+            if not isinstance(financing, dict):
+                financing = config.get("financing", {})
+            debt_ratio = float(financing["debt_ratio"])
             project_dr = float(config["returns"]["project_discount_rate"])
             equity_dr = float(config["returns"]["equity_discount_rate"])
 
@@ -113,8 +120,8 @@ class ReturnsConfig(BaseModel):
             raise ValueError(
                 f"Required config key missing for ReturnsConfig: {e}. "
                 "Expected: capex.usd_total, fx.start_lkr_per_usd, "
-                "financing.debt_ratio, returns.project_discount_rate, "
-                "returns.equity_discount_rate"
+                "Financing_Terms.debt_ratio (or financing.debt_ratio), "
+                "returns.project_discount_rate, returns.equity_discount_rate"
             ) from e
 
 
