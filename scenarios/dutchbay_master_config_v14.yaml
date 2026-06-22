@@ -154,7 +154,7 @@ scenarios:
     name: DutchBay Base Case - Wind (P75 Resource, DFI)
     project_overrides:
       capacity_factor: 0.4
-      degradation: 0.006
+      degradation: 0.6  # percent; engine /100s it (decorative override, unconsumed)
     resource_assumption: P75 wind resource, 3% annual degradation
     tariff_overrides:
       lkr_per_kwh: 20.3
@@ -173,7 +173,7 @@ scenarios:
     name: DutchBay Conservative - Wind (P90 Resource)
     project_overrides:
       capacity_factor: 0.35
-      degradation: 0.008
+      degradation: 0.8  # percent; engine /100s it (decorative override, unconsumed)
       grid_loss_pct: 0.05
     resource_assumption: P90 wind resource, 3% annual degradation, 30% curtailment
     tariff_overrides:
@@ -195,7 +195,7 @@ scenarios:
     project_overrides:
       capacity_factor: 0.42
       capacity_mw: 150
-      degradation: 0.005
+      degradation: 0.5  # percent; engine /100s it (decorative override, unconsumed)
     resource_assumption: "Wind P75 + Solar 1,200 kWh/m\xB2/yr (annual avg)"
     tariff_overrides:
       lkr_per_kwh: 20.3
@@ -214,7 +214,7 @@ scenarios:
     name: DutchBay Optimistic - Wind (P50 Resource)
     project_overrides:
       capacity_factor: 0.43
-      degradation: 0.006
+      degradation: 0.6  # percent; engine /100s it (decorative override, unconsumed)
     resource_assumption: P50 wind resource, 3% annual degradation
     tariff_overrides:
       lkr_per_kwh: 20.3
@@ -238,7 +238,7 @@ scenarios:
     name: DutchBay Private Equity - Wind (75% Debt)
     project_overrides:
       capacity_factor: 0.4
-      degradation: 0.006
+      degradation: 0.6  # percent; engine /100s it (decorative override, unconsumed)
     resource_assumption: P75 wind resource, same as base case
     tariff_overrides:
       lkr_per_kwh: 20.3
