@@ -24,6 +24,7 @@ Version: 2.0 (YAML-configurable bounds)
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Iterable, List, Optional, Sequence
 
@@ -34,6 +35,14 @@ import numpy_financial as npf
 _DEFAULT_IRR_LOWER_BOUND = -0.9999  # Prevents division by zero at -100%
 _DEFAULT_IRR_UPPER_BOUND = 5.0  # 500% p.a. numerical stability cap
 _DEFAULT_XIRR_UPPER_BOUND = 2.0  # 200% p.a. cap for dated cashflows
+
+# Lower bound for the bespoke project-IRR bisection (approx_project_irr). Kept off the
+# theoretical -100% floor on purpose: at -0.9999 the discount base (1+r)=1e-4 underflows
+# over long CFADS series (~77+ periods), so npv() collapses to a spurious 0.0 and the
+# bisection mistakes the bracket floor for an exact root. -0.99 is already "essentially
+# total loss" (no real project IRR sits below it; DutchBay's are in [-3%, +6%]) and stays
+# numerically safe out to ~150 periods.
+_PROJECT_IRR_LOWER_BOUND = -0.99
 
 
 # ============================================================================
@@ -371,7 +380,7 @@ def approx_project_irr(
     capex_total: float,
     *,
     construction_years: int = 0,
-    r_low: float = 0.0,
+    r_low: float = _PROJECT_IRR_LOWER_BOUND,
     r_high: float = 0.5,
     tol: float = 1e-6,
     max_iter: int = 50,
@@ -382,10 +391,20 @@ def approx_project_irr(
     (capex at t=0, ``construction_years`` zero-cash build periods, then CFADS),
     so the IRR and NPV conventions cannot diverge (audit 2026-06-22, finding 2.0).
 
+    The default search bracket spans NEGATIVE rates (``_PROJECT_IRR_LOWER_BOUND``
+    = -0.99) so a value-destructive project whose lifetime CFADS fall short of
+    capex reports its true negative IRR rather than being silently floored at 0.0
+    (honesty fix, 2026-06-23 M3e: the prior ``r_low=0.0`` default clamped every
+    sub-zero project to exactly 0.0 — see the 5usc Kalpitiya case, true IRR ~-0.3%).
+    The floor sits at -0.99 rather than the theoretical -100% to stay numerically
+    safe over long horizons (see ``_PROJECT_IRR_LOWER_BOUND``); an explicit
+    overflow guard below additionally protects against an extreme caller-supplied
+    ``r_low``.
+
     Returns 0.0 if:
     - capex_total <= 0
     - cfads_series is empty
-    - no sign change / no sensible root can be found.
+    - no sign change / no sensible root can be found in [r_low, r_high].
     """
     try:
         capex = float(capex_total)
@@ -404,6 +423,23 @@ def approx_project_irr(
         f_low = npv_gap(r_low)
         f_high = npv_gap(r_high)
     except Exception:
+        return 0.0
+
+    # Overflow guard at extreme-negative rates: (1 + r_low)^-t explodes as r_low -> -1,
+    # so for a long CFADS series npv_gap(r_low) can overflow to +inf and collapse the
+    # bisection onto the bracket floor — a spurious near -100% "root" that moves the WRONG
+    # way as cashflows improve. Walk r_low toward 0 until the boundary NPV is finite, so the
+    # search still brackets the true root within the representable range. (No-op for the
+    # ~20-year DutchBay scenarios — overflow only bites horizons of ~77+ periods.)
+    _guard = 0
+    while not math.isfinite(f_low) and r_low < r_high and _guard < 64:
+        r_low *= 0.5
+        _guard += 1
+        try:
+            f_low = npv_gap(r_low)
+        except Exception:
+            return 0.0
+    if not math.isfinite(f_low):
         return 0.0
 
     # If no sign change, bail out – report 0.0 IRR

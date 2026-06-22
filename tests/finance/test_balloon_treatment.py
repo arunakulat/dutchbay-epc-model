@@ -3,7 +3,7 @@
 
 The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
 maturity. Previously the equity waterfall ignored it — equity collected 100% of
-post-maturity CFADS as a free pass, overstating equity IRR by ~3.8pp on the
+post-maturity CFADS as a free pass, overstating equity IRR by ~5.8pp on the
 lender case. These tests lock in the verified-correct treatments:
 
     legacy_ignore  — historical free pass (reproduces pre-fix numbers).
@@ -12,11 +12,13 @@ lender case. These tests lock in the verified-correct treatments:
     bullet         — single lump repayment at maturity.
     amortize       — resize debt DOWN so the sculpt fully amortises (no balloon).
 
-Ground truth: the lender case carries a ~36% balloon ($35.9M on $100.1M debt),
+Ground truth: the lender case carries a ~42% balloon ($42.5M on $100.1M debt),
 which breaches constraints.max_balloon_pct (10%). (Equity IRRs are at the corrected
-FX 333.79, the ERA5-fitted Weibull re-baseline AND the 2026-06 debt-service-orphan
-fix / audit finding 2.1 — markedly lower than the prior numbers; the canonical
-cash_sweep equity IRR is now ~0.0%.)
+FX 333.79, the ERA5-fitted Weibull re-baseline, the 2026-06 debt-service-orphan
+fix / audit finding 2.1 AND the M3e degradation re-baseline (0.005 -> 0.5, honest
+0.5%/yr aging) — markedly lower than the prior numbers; lower CFADS also enlarges
+the structural balloon 36% -> 42%, and the canonical cash_sweep equity IRR is now
+~-2.5%.)
 """
 
 from __future__ import annotations
@@ -47,10 +49,10 @@ def results() -> dict:
 
 
 def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None:
-    """The structural balloon is ~33% of debt and breaches max_balloon_pct (10%)."""
+    """The structural balloon is ~42% of debt and breaches max_balloon_pct (10%)."""
     dr = results["cash_sweep"]["debt_result"]
-    assert dr["balloon_remaining"] == pytest.approx(35_914_899, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.359, abs=0.01)
+    assert dr["balloon_remaining"] == pytest.approx(42_475_853, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.424, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -59,7 +61,7 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """legacy_ignore preserves the pre-fix (inflated) equity IRR and never services."""
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(0.0388, abs=0.002)
+    assert kpis["equity_irr"] == pytest.approx(0.0334, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -75,8 +77,8 @@ def test_cash_sweep_clears_balloon_and_lowers_equity_irr(results: dict) -> None:
     assert sum(dr["balloon_resolution"]) == pytest.approx(
         dr["balloon_remaining"], rel=0.02
     )
-    assert sweep < legacy - 0.03  # ~3.8pp lower, honest
-    assert sweep == pytest.approx(0.0003, abs=0.003)
+    assert sweep < legacy - 0.03  # ~5.8pp lower, honest
+    assert sweep == pytest.approx(-0.0247, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -84,7 +86,7 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     refi = results["refinance"]["kpis"]["equity_irr"]
     assert refi <= sweep
-    assert refi == pytest.approx(-0.0113, abs=0.004)
+    assert refi == pytest.approx(-0.0436, abs=0.004)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:

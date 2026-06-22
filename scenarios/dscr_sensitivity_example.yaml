@@ -31,7 +31,7 @@ project:
   # Degradation rate (decimal form)
   # Industry standard: 0.5-0.7%/year for modern turbines
   # Conservative assumption for coastal environment
-  degradation: 0.006  # 0.6%/year
+  degradation: 0.6  # 0.6%/year
   
   # Operational life (years)
   life_years: 25

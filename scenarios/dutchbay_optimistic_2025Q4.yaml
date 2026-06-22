@@ -31,7 +31,7 @@ project:
   name: "Dutch Bay Wind Project - Optimistic Case"
   capacity_mw: 150
   capacity_factor: 0.43                    # ← OPTIMISTIC: 43% vs 40% base
-  degradation: 0.006                       # 0.6% annual degradation
+  degradation: 0.6                         # 0.6%/yr (percent; engine /100s it)
   life_years: 20
   boi_approved: true
   boi_agreement_date: "2025-01-15"

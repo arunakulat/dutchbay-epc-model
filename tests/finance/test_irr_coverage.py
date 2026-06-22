@@ -24,6 +24,7 @@ no economic magic number is hardcoded.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 import pytest
@@ -466,6 +467,45 @@ def test_approx_project_irr_respects_construction_lag() -> None:
     irr_no_lag = approx_project_irr(cfads, capex, construction_years=0, r_high=1.0)
     irr_lagged = approx_project_irr(cfads, capex, construction_years=2, r_high=1.0)
     assert 0.0 < irr_lagged < irr_no_lag
+
+
+def test_approx_project_irr_reports_negative_irr_by_default() -> None:
+    """A value-destructive project (CFADS < capex) reports its true NEGATIVE IRR.
+
+    Regression for the 2026-06-23 M3e honesty fix: the default search bracket now
+    spans negative rates (r_low = _DEFAULT_IRR_LOWER_BOUND), so a sub-break-even
+    project is no longer silently floored at 0.0. The 5usc Kalpitiya case (lifetime
+    CFADS below capex even undiscounted) surfaced this — its true project IRR is
+    ~-0.3%, previously clamped to exactly 0.0%.
+    """
+    capex = 1_000.0
+    cfads = [240.0, 240.0, 240.0, 240.0]  # sums to 960 < capex => negative IRR
+    honest = approx_project_irr(cfads, capex)  # default bracket spans negatives
+    assert math.isfinite(honest)
+    assert -0.10 < honest < 0.0  # just below break-even (4% undiscounted shortfall)
+    # The legacy positive-only bracket (r_low=0.0) clamps it to exactly 0.0 — the
+    # bug this fix removes from the live project-IRR path.
+    assert approx_project_irr(cfads, capex, r_low=0.0) == 0.0
+
+
+def test_approx_project_irr_no_discontinuity_over_long_horizon() -> None:
+    """The negative-IRR search is overflow-safe: no spurious cliff as the horizon grows.
+
+    Regression for the M3e floor: at r_low=-0.9999 the discount base (1e-4) underflows
+    over ~77+ period series, so npv() returned a spurious 0.0 and the bisection reported
+    the bracket floor (~-100%) as the IRR — a nonsensical discontinuity where ADDING a
+    cashflow made the reported IRR collapse from ~-8% to ~-100%. The dedicated
+    _PROJECT_IRR_LOWER_BOUND (-0.99) keeps the search numerically sane across realistic
+    long-lived-asset horizons.
+    """
+    capex = 1_000_000.0
+    irrs = [approx_project_irr([100.0] * n, capex) for n in (79, 80, 81, 90, 120)]
+    for rate in irrs:
+        assert math.isfinite(rate)
+        assert -0.15 < rate < 0.0, f"unexpected IRR {rate} (should be a mild negative)"
+    # Monotonic non-decreasing: more cashflow never lowers the IRR.
+    for lower, higher in zip(irrs, irrs[1:]):
+        assert higher >= lower - 1e-9, f"IRR fell as horizon grew: {irrs}"
 
 
 def test_approx_project_irr_zero_capex_returns_zero() -> None:

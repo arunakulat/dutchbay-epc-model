@@ -196,14 +196,19 @@ def test_negative_per_tech_degradation_raises() -> None:
 
 # --------------------------------------------------------------------------- #
 # Byte-identical regression: the canonical wind-only economics must not move.
+# Re-baselined 2026-06-23 (M3e) for the degradation correction: project.degradation
+# was 0.005 (read as a PERCENT -> 0.005%/yr, effectively zero) and is now 0.5
+# (-> honest 0.5%/yr turbine aging). Project IRR 5.43% -> 5.05%, equity IRR ~0% ->
+# -2.47%, NPV -$31.9M -> -$35.5M, CFADS $268.07M -> $257.10M. minDSCR unchanged
+# (the dual-DSCR sculpt re-pins it at the 1.30 covenant target).
 # --------------------------------------------------------------------------- #
 def test_canonical_lendercase_economics_unchanged() -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    assert kpis["project_irr"] == pytest.approx(0.05433752727321384, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(0.00025995068190565185, abs=1e-9)
-    assert kpis["project_npv"] == pytest.approx(-31926643.350233816, rel=1e-9)
-    assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
-    assert kpis["total_cfads_usd"] == pytest.approx(268070016.03115833, rel=1e-9)
+    assert kpis["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.02474929293069905, abs=1e-9)
+    assert kpis["project_npv"] == pytest.approx(-35505958.84579508, rel=1e-9)
+    assert kpis["min_dscr"] == pytest.approx(1.2999999999999996, abs=1e-9)
+    assert kpis["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)

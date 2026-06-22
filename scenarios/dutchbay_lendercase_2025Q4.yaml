@@ -28,7 +28,7 @@ project:
   # Monte-Carlo variable (stress band 0-13% incremental = 2-15% total). The flat 2% is an
   # UNVALIDATED placeholder pending a CEB interconnection study (see docs red-flag note).
   curtailment_pct: 0.0
-  degradation: 0.005  # Annual production degradation (0.5%/year for turbine aging)
+  degradation: 0.5  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
   developer: "DutchBay Wind Power Pvt Ltd"
@@ -515,30 +515,32 @@ expected_results:
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
   annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
   annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 192394.0  # With degradation + CPI (scaled by 473.8/483.6)
+  revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e) + CPI
   
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
   # asserts the live pipeline matches them, so they cannot silently drift.
-  # HONEST after THREE corrections: (1) FX 300 -> 333.79, (2) the ERA5-fitted Weibull
+  # HONEST after FOUR corrections: (1) FX 300 -> 333.79, (2) the ERA5-fitted Weibull
   # re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, net AEP 483.6 -> 473.8 GWh),
-  # and (3) the 2026-06 project-discounting fix (audit finding 2.0): the project NPV/IRR
+  # (3) the 2026-06 project-discounting fix (audit finding 2.0): the project NPV/IRR
   # had discounted operating year 1 at t=0 (undiscounted) and ignored the 2-year
   # construction lag the debt engine models, pulling the whole operating stream forward
-  # one period. Correctly discounting capex at t=0, two zero-cash build years, then CFADS
-  # gives project IRR 5.43% — BELOW the ~8.18% WACC — so the project is value-destructive,
-  # NPV -$31.9M. The prior +$2.03M / 8.44% headline was a timing artifact. (The stale 300
-  # FX + overstated Weibull had earlier shown a flattered 11.12% / $27.4M.)
-  project_irr: 0.0543       # BELOW WACC (~8.18%) — value-destructive
-  equity_irr: 0.0003        # ~0% — finding 2.1 debt-service-orphan fix applied (was a
-                            # flattered 1.4%: ~$8.5M of scheduled debt service had been
-                            # orphaned from the equity waterfall). MOIC ~1.00.
-  project_npv_m_usd: -31.93 # construction-lag-correct discount at build-up WACC ~8.18%
+  # one period (fixed -> project IRR 5.43%); and (4) the 2026-06 DEGRADATION re-baseline:
+  # `project.degradation` was 0.005 but the engine reads it as a PERCENT and /100s it, so
+  # turbines aged at 0.005%/yr — effectively zero — contradicting the intended 0.5%/yr.
+  # Correcting it to 0.5 applies honest 0.5%/yr aging and lowers project IRR 5.43% -> 5.05%
+  # (still BELOW the ~8.18% WACC), pushes equity IRR ~0% -> -2.47%, and NPV -$31.9M ->
+  # -$35.5M — the project is value-destructive. The prior +$2.03M / 8.44% headline was a
+  # timing artifact. (The stale 300 FX + overstated Weibull had earlier shown 11.12% / $27.4M.)
+  project_irr: 0.0505       # BELOW WACC (~8.18%) — value-destructive
+  equity_irr: -0.0247       # NEGATIVE to sponsors — finding 2.1 debt-service-orphan fix +
+                            # the 0.5%/yr degradation re-baseline. MOIC < 1.00 (loss).
+  project_npv_m_usd: -35.51 # construction-lag-correct discount at build-up WACC ~8.18%
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.13
-  plcr: 1.19
+  llcr: 1.09
+  plcr: 1.15
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA

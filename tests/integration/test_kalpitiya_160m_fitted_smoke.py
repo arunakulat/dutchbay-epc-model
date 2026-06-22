@@ -48,9 +48,12 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    # honest fitted-Weibull economics at 160 m, at the corrected FX 333.79 AND the 2026-06
-    # construction-lag/off-by-one project-discounting fix (audit finding 2.0): project IRR
-    # 5.60% (below the ~8.18% WACC), down from the pre-fix 8.73%.
-    assert kpis["project_irr"] == pytest.approx(0.0560, abs=0.01)
-    assert kpis["equity_irr"] > 0.0
+    # honest fitted-Weibull economics at 160 m, at the corrected FX 333.79, the 2026-06
+    # construction-lag/off-by-one project-discounting fix (audit finding 2.0) AND the M3e
+    # degradation re-baseline (0.005 -> 0.5, honest 0.5%/yr aging): project IRR 5.22%
+    # (below the ~8.18% WACC) and equity IRR now NEGATIVE (-2.19%) — the 0.5%/yr aging
+    # tips the marginal equity return below zero.
+    assert kpis["project_irr"] == pytest.approx(0.0522, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0219, abs=0.01)
+    assert kpis["equity_irr"] < 0.0  # marginal equity turns negative under honest aging
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)

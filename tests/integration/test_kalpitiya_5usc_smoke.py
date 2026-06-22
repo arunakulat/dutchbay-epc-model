@@ -95,19 +95,23 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     """The live pipeline reproduces the pinned economics — and the deal is UNDERWATER.
 
     At 5c/kWh on the granular bottom-up costs ($1,300/kW CAPEX + $22/kW-yr escalating
-    OPEX) the project IRR (0.23%) falls far below the ~9.72% WACC, equity IRR is deeply
-    NEGATIVE (-6.33%), and project NPV is -$86.9M. The DSCR sculpt still floors min DSCR
-    at 1.30 by deleveraging.
+    OPEX) the project IRR is NEGATIVE (-0.27%) — lifetime CFADS fall short of capex even
+    undiscounted — far below the ~9.72% WACC; equity IRR is deeply NEGATIVE (-9.05%) and
+    project NPV is -$118.8M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
     """
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    # Deepened by the 2026-06 construction-lag/off-by-one project-discounting fix
-    # (audit finding 2.0): project IRR 0.16% and NPV -$116.2M (was 0.23% / -$86.9M).
-    assert kpis["project_irr"] == pytest.approx(0.0016, abs=0.005)
-    assert kpis["equity_irr"] == pytest.approx(-0.0633, abs=0.005)
+    # Deepened by (a) the 2026-06 construction-lag/off-by-one project-discounting fix
+    # (audit finding 2.0) and (b) the M3e degradation re-baseline (0.005 -> 0.5, honest
+    # 0.5%/yr aging). The latter pushed the project below break-even, and the IRR-floor
+    # fix (approx_project_irr now searches negative rates) lets it report the true
+    # -0.27% instead of a clamped 0.0%. NPV -$118.8M, equity IRR -9.05%.
+    assert kpis["project_irr"] == pytest.approx(-0.0027, abs=0.005)
+    assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
+    assert kpis["equity_irr"] == pytest.approx(-0.0905, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-116.18e6, rel=0.05)
+    assert kpis["project_npv"] == pytest.approx(-118.78e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(77.8e6, rel=0.02)  # deleveraged (DSCR-bound)

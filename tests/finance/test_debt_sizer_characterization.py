@@ -9,7 +9,9 @@ sweeping ``Financing_Terms.debt_ratio`` (see the #30 optimization facade):
 2. ``equity_npv`` is monotonic non-decreasing in gearing — but this is an equity
    *sizing* artifact (higher gearing → less equity invested → smaller absolute
    negative NPV), NOT evidence that more leverage improves return quality. Equity
-   *IRR* actually FALLS with gearing here (debt ~7.63% vs project ~8.35%).
+   *IRR* actually FALLS with gearing here: post-M3e degradation re-baseline the
+   project return (~5.05%) is BELOW the cost of debt (~7.63%), so every turn of
+   leverage is negative carry and the IRR sweep crosses from positive to negative.
    (NOTE: the equity_irr non-monotonicity / sub-target achieved DSCR first seen
    here was later traced to a real debt-service ALIGNMENT bug — period- vs
    annual-row indexing of debt service — and FIXED. The base case now holds DSCR
@@ -76,11 +78,26 @@ def test_equity_npv_monotonic_in_gearing() -> None:
         assert higher >= lower - 1.0, f"equity_npv not monotonic: {npvs}"
 
 
-def test_equity_irr_finite_and_positive() -> None:
-    """Equity IRR stays finite and positive across the gearing sweep."""
-    for dr in GEARINGS:
-        irr = _kpis(dr)["equity_irr"]
-        assert 0.0 < irr < 0.5, f"dr={dr}: irr={irr}"
+def test_equity_irr_finite_and_falls_with_gearing() -> None:
+    """Equity IRR stays finite, falls monotonically with gearing, and crosses zero.
+
+    Post-M3e degradation re-baseline (0.5%/yr aging), the project IRR (~5.05%) sits
+    BELOW the cost of debt (~7.63%), so leverage is value-destructive: each extra
+    turn of gearing dilutes equity return (negative carry). The sweep therefore runs
+    strictly downhill and crosses zero — positive to sponsors at low gearing (~3.3%
+    at 0.45), negative at the DSCR-bound high end (~-2.5% at 0.70). This is the honest
+    economics, NOT a sign that more leverage helps (cf. the equity_npv sizing artifact).
+    """
+    import math
+
+    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]
+    for dr, irr in zip(GEARINGS, irrs):
+        assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
+    # Monotonically falling as gearing rises (value-destructive leverage).
+    for lower, higher in zip(irrs, irrs[1:]):
+        assert higher < lower, f"equity_irr not strictly falling with gearing: {irrs}"
+    # The sweep brackets zero: positive at low gearing, negative at high gearing.
+    assert irrs[0] > 0.0 > irrs[-1], f"sweep does not cross zero: {irrs}"
 
 
 def test_interest_rate_nominal_is_noop_on_schedule() -> None:

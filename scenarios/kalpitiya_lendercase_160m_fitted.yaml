@@ -8,7 +8,7 @@ project:
   location: Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka
   capacity_mw: 159.6
   capacity_factor: 0.344
-  degradation: 0.005
+  degradation: 0.5  # percent; 0.5 => 0.5%/yr turbine aging (engine reads as % and /100s)
   life_years: 20
   cod_year: 2027
   developer: DutchBay Wind Power Pvt Ltd
@@ -360,18 +360,19 @@ expected_results:
   capacity_factor: 0.344
   annual_revenue_p50_m_lkr: 9762.3  # 480.9 GWh x 20.3 LKR/kWh (LKR-native tariff)
   annual_revenue_p50_m_eur: 29.6    # reference: 9762.3 M LKR / 330 LKR/EUR
-  revenue_20yr_undiscounted_m_lkr: 195300.0  # with degradation + CPI
+  revenue_20yr_undiscounted_m_lkr: 186261.1  # with 0.5%/yr degradation (M3e) + CPI
   # Financials at the corrected FX 333.79 (LKR-native tariff -> full FX drag on USD returns).
-  # Re-baselined by the 2026-06 project-discounting fix (audit finding 2.0): construction
-  # lag + operating-year-1 off-by-one moved project IRR 8.73% -> 5.60% and NPV +$4.88M ->
-  # -$29.46M (below the ~8.18% WACC, like the canonical lender case).
-  project_irr: 0.0560
-  equity_irr: 0.0034   # ~0.3% after the 2026-06 debt-service-orphan fix (was 1.85%)
-  project_npv_m_usd: -29.46
+  # Re-baselined by (a) the 2026-06 project-discounting fix (audit finding 2.0: construction
+  # lag + operating-year-1 off-by-one) and (b) the M3e degradation re-baseline (0.005 -> 0.5,
+  # honest 0.5%/yr aging): project IRR 8.73% -> 5.22% (below the ~8.18% WACC) and equity IRR
+  # +0.3% -> -2.19% (the 0.5%/yr aging tips marginal equity below zero). NPV -$33.12M.
+  project_irr: 0.0522
+  equity_irr: -0.0219  # NEGATIVE after the degradation re-baseline (debt-orphan fix + 0.5%/yr)
+  project_npv_m_usd: -33.12
   min_dscr: 1.30
   avg_dscr: 1.387
-  llcr: 1.124
-  plcr: 1.190
+  llcr: 1.086
+  plcr: 1.146  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'

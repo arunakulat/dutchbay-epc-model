@@ -35,7 +35,7 @@ project:
   curtailment_pct: 0.05                    # ← PESSIMISTIC: 5% grid curtailment, now LIVE
                                            #   via the financed lever (was a dead
                                            #   regulatory.grid_loss_pct that never applied)
-  degradation: 0.008                       # ← WORSE: 0.8% annual degradation
+  degradation: 0.8                         # ← WORSE: 0.8%/yr (percent; engine /100s it)
   life_years: 20
   boi_approved: true
   boi_agreement_date: "2025-01-15"

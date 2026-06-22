@@ -8,7 +8,7 @@ project:
   location: Musali DS, Mannar District, Northern Province, Sri Lanka
   capacity_mw: 56.0
   capacity_factor: 0.2713
-  degradation: 0.005
+  degradation: 0.5  # percent; 0.5 => 0.5%/yr turbine aging (engine reads as % and /100s)
   life_years: 20
   cod_year: 2027
   developer: DutchBay Wind Power Pvt Ltd
@@ -363,7 +363,7 @@ expected_results:
   capacity_factor: 0.2713
   annual_revenue_p50_m_lkr: 1759.6  # 133.1 GWh x 13.22 LKR/kWh (3.96 USDc bid @ FX 333.79)
   annual_revenue_p50_m_eur: 5.3     # reference: 1759.6 M LKR / 330 LKR/EUR
-  revenue_20yr_undiscounted_m_lkr: 33400.0  # with degradation
+  revenue_20yr_undiscounted_m_lkr: 33566.3  # with 0.5%/yr degradation (M3e)
   # HONEST re-baseline (2026-06-21). The prior +9.63M / 10.84% headline was fiction:
   # capacity_mw carried a stale lender 159.6 (3x the real 56 MW Lot 1), and the engine
   # drives revenue from capacity_mw x capacity_factor x 8760, so it booked ~3x the real
@@ -371,15 +371,16 @@ expected_results:
   # GWh) AND opex corrected to the benchmark 1.12M, Lot 1 is uneconomic: LCOE ~5.5 USc
   # exceeds the aggressive 3.96 USc WindForce bid. The dual-DSCR sizer holds min DSCR
   # 1.30 by sizing debt down to ~15.9M (gearing ~0.25), pushing the loss onto equity.
-  project_irr: 0.0          # no positive root (project NPV is negative)
-  equity_irr: -0.0727  # deepened by the 2026-06 debt-service-orphan fix (was -7.07%)
-  project_npv_m_usd: -44.29  # deepened by the 2026-06 project-discounting fix (finding 2.0)
-  equity_npv_m_usd: -41.24
-  equity_moic: 0.379        # equity recovers only ~38% of its outlay
+  project_irr: -0.0275      # NEGATIVE — below break-even even undiscounted (true root now
+                            # reported; the IRR solver no longer floors sub-zero at 0.0)
+  equity_irr: -0.0843  # deepened by the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr)
+  project_npv_m_usd: -44.89  # deepened by the project-discounting fix + 0.5%/yr degradation
+  equity_npv_m_usd: -42.98
+  equity_moic: 0.295        # equity recovers only ~29% of its outlay
   min_dscr: 1.30
   avg_dscr: 1.388
-  llcr: 1.302
-  plcr: 1.364
+  llcr: 1.241  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
+  plcr: 1.303
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'
