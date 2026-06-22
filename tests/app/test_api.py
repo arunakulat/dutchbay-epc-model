@@ -185,24 +185,33 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
     import app.api.jobs_router as jr
     from fastapi.testclient import TestClient
 
+    from app.jobs.store import InMemoryJobStore
+
     # Stub the runner so the TestClient's background task does NOT hit real ERA5.
     monkeypatch.setattr(jr, "run_wind_job", lambda *a, **k: None)
+    # Override the store dependency (proves the DI seam is real and swappable).
+    custom_store = InMemoryJobStore()
+    app.dependency_overrides[jr.get_store] = lambda: custom_store
+    try:
+        client = TestClient(app)
+        body = {
+            "inputs": _valid_kwargs(),
+            "site_lat": 8.33,
+            "site_lon": 79.76,
+            "turbine_model": "IEA-10MW",
+            "num_turbines": 15,
+            "hub_height_m": 119.0,
+        }
+        accepted = client.post("/jobs", json=body)
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
 
-    client = TestClient(app)
-    body = {
-        "inputs": _valid_kwargs(),
-        "site_lat": 8.33,
-        "site_lon": 79.76,
-        "turbine_model": "IEA-10MW",
-        "num_turbines": 15,
-        "hub_height_m": 119.0,
-    }
-    accepted = client.post("/jobs", json=body)
-    assert accepted.status_code == 202
-    job_id = accepted.json()["job_id"]
+        got = client.get(f"/jobs/{job_id}")
+        assert got.status_code == 200
+        assert got.json()["job_id"] == job_id
 
-    got = client.get(f"/jobs/{job_id}")
-    assert got.status_code == 200
-    assert got.json()["job_id"] == job_id
-
-    assert client.get("/jobs/unknown-id").status_code == 404
+        assert client.get("/jobs/unknown-id").status_code == 404
+        # The injected store — not the module default — received the job.
+        assert custom_store.get(job_id) is not None
+    finally:
+        app.dependency_overrides.clear()

@@ -11,9 +11,11 @@ backends (Dolphin: one orchestration, swappable persistence).
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Dict, Optional, Protocol
+from collections import OrderedDict
+from typing import Any, Callable, Optional, Protocol
 
-from app.jobs.models import JobRecord, utc_now_iso
+from app.jobs.config import MAX_RETAINED_JOBS
+from app.jobs.models import TERMINAL_STATES, JobRecord, utc_now_iso
 
 
 class JobStore(Protocol):
@@ -36,20 +38,39 @@ class JobStore(Protocol):
 
 
 class InMemoryJobStore:
-    """A thread-safe, in-process :class:`JobStore` backed by a dict.
+    """A thread-safe, in-process :class:`JobStore` with bounded retention.
 
     Reads and writes are guarded by a lock and return deep copies, so a caller
-    can never mutate stored state by reference. The clock is injectable for
-    deterministic tests (CASPER).
+    can never mutate stored state by reference. The dict is **bounded**
+    (``max_retained``) so a long-running server cannot leak memory as jobs
+    accumulate: on insert at capacity it evicts the oldest *terminal* job first
+    (preserving in-flight work), falling back to the oldest record. The clock and
+    cap are injectable for deterministic tests (CASPER).
     """
 
-    def __init__(self, *, clock: Callable[[], str] = utc_now_iso) -> None:
-        self._jobs: Dict[str, JobRecord] = {}
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], str] = utc_now_iso,
+        max_retained: int = MAX_RETAINED_JOBS,
+    ) -> None:
+        self._jobs: "OrderedDict[str, JobRecord]" = OrderedDict()
         self._lock = threading.Lock()
         self._clock = clock
+        self._max_retained = max(1, max_retained)
+
+    def _evict_if_full(self) -> None:
+        """Evict oldest terminal (else oldest) records until below capacity."""
+        while len(self._jobs) >= self._max_retained:
+            victim = next(
+                (jid for jid, rec in self._jobs.items() if rec.state in TERMINAL_STATES),
+                next(iter(self._jobs)),
+            )
+            del self._jobs[victim]
 
     def create(self, record: JobRecord) -> None:
         with self._lock:
+            self._evict_if_full()
             self._jobs[record.job_id] = record.model_copy(deep=True)
 
     def get(self, job_id: str) -> Optional[JobRecord]:

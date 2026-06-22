@@ -106,7 +106,7 @@ def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_assessment_failure_marks_failed() -> None:
     def _boom(_req: WindJobRequest, _progress: Any) -> Mapping[str, Any]:
-        raise RuntimeError("era5 unavailable")
+        raise RuntimeError("secret path /etc/era5/credentials")
 
     store = InMemoryJobStore()
     _seed_queued(store)
@@ -114,8 +114,11 @@ def test_assessment_failure_marks_failed() -> None:
     rec = store.get("j1")
     assert rec is not None
     assert rec.state is JobState.FAILED
+    # Exception class is surfaced for triage, but the raw message (which can leak
+    # internal paths/config) is NOT echoed to the client.
     assert "RuntimeError" in (rec.error or "")
-    assert "era5 unavailable" in (rec.error or "")
+    assert "secret path" not in (rec.error or "")
+    assert "/etc/era5" not in (rec.error or "")
 
 
 def test_finance_failure_marks_failed(monkeypatch: pytest.MonkeyPatch) -> None:
