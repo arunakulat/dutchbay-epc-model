@@ -16,6 +16,13 @@ is excluded from coverage (like the ERA5 ingestion path). Run with:
 This module is intentionally thin: the blocking job (``run_wind_job``) is offloaded
 to a thread so it never stalls the arq event loop, and all job state lives in
 Redis via :class:`~app.jobs.redis_store.RedisJobStore`.
+
+NOT YET WIRED TO THE HTTP API. ``POST /jobs`` still runs via ``BackgroundTasks``
+against the in-process store; nothing enqueues onto this arq queue yet. The final
+cutover — the route producing to arq and ``get_store`` returning a RedisJobStore —
+is a deliberate, Redis-gated follow-up (it cannot be CI-verified without a live
+Redis). This worker plus :class:`RedisJobStore` are the verified building blocks
+for that step; ``RedisJobStore`` is unit-tested against a fake client.
 """
 
 from __future__ import annotations

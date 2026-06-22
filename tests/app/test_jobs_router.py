@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 import app.api.jobs_router as jr
 from app.jobs.models import JobState, WindJobRequest
+from app.jobs.store import InMemoryJobStore
 from app.models.inputs import WindFarmInputs
 
 
@@ -32,33 +33,46 @@ def _request() -> WindJobRequest:
     )
 
 
+class _FakeRequest:
+    """Minimal stand-in for a Starlette Request (only is_disconnected is used)."""
+
+    async def is_disconnected(self) -> bool:  # pragma: no cover - not awaited here
+        return False
+
+
+def test_get_store_returns_default() -> None:
+    assert jr.get_store() is jr._default_store
+
+
 def test_enqueue_creates_queued_record_and_schedules_task() -> None:
+    store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background)
+    accepted = jr.enqueue_job(_request(), background, store=store)
     assert accepted.state is JobState.QUEUED
     assert accepted.status_url == f"/jobs/{accepted.job_id}"
     assert accepted.events_url == f"/jobs/{accepted.job_id}/events"
     # A background task was scheduled (NOT executed here -> no real ERA5).
     assert len(background.tasks) == 1
-    # The store holds the queued record.
-    record = jr._store.get(accepted.job_id)
+    # The injected store holds the queued record.
+    record = store.get(accepted.job_id)
     assert record is not None and record.state is JobState.QUEUED
 
 
 def test_get_job_found() -> None:
+    store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background)
-    record = jr.get_job(accepted.job_id)
+    accepted = jr.enqueue_job(_request(), background, store=store)
+    record = jr.get_job(accepted.job_id, store=store)
     assert record.job_id == accepted.job_id
 
 
 def test_get_job_unknown_404() -> None:
     with pytest.raises(HTTPException) as exc:
-        jr.get_job("does-not-exist")
+        jr.get_job("does-not-exist", store=InMemoryJobStore())
     assert exc.value.status_code == 404
 
 
 def test_job_events_returns_sse_stream() -> None:
-    resp = jr.job_events("any-id")
+    resp = jr.job_events("any-id", request=_FakeRequest(), store=InMemoryJobStore())  # type: ignore[arg-type]
     assert isinstance(resp, StreamingResponse)
     assert resp.media_type == "text/event-stream"

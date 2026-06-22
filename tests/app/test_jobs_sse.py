@@ -99,3 +99,36 @@ def test_progress_dedup_and_sleep_between_polls() -> None:
     # running emitted once (dedup), then succeeded progress + terminal.
     assert kinds == ["event: progress", "event: progress", "event: succeeded"]
     assert sleeps == [0.1, 0.1]  # slept between the three polls
+
+
+async def _noop_sleep(_seconds: float) -> None:
+    return None
+
+
+def test_stream_times_out_on_stuck_job() -> None:
+    # A job that never reaches a terminal state must not busy-poll forever.
+    store = _SeqStore([_record(JobState.RUNNING, 1, "stuck")])
+    frames = _collect(
+        job_event_stream(store, "j1", max_polls=3, sleep=_noop_sleep)
+    )
+    kinds = [f.split("\n", 1)[0] for f in frames]
+    assert kinds == ["event: progress", "event: timeout"]
+    assert "stream timed out" in frames[-1]
+
+
+def test_stream_stops_on_client_disconnect() -> None:
+    disconnect_calls: List[int] = []
+
+    async def _disconnected() -> bool:
+        disconnect_calls.append(1)
+        return True  # disconnected on the first check
+
+    store = _SeqStore([_record(JobState.RUNNING, 1, "working")])
+    frames = _collect(
+        job_event_stream(
+            store, "j1", max_polls=100, sleep=_noop_sleep, is_disconnected=_disconnected
+        )
+    )
+    kinds = [f.split("\n", 1)[0] for f in frames]
+    assert kinds == ["event: progress"]  # one progress frame, then stop (no terminal)
+    assert len(disconnect_calls) == 1

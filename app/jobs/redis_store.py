@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
+from app.jobs.config import JOB_TTL_SECONDS
 from app.jobs.models import JobRecord, utc_now_iso
 
 
@@ -22,7 +23,9 @@ class RedisLike:
     """Structural type documenting the sync client methods used (get/set)."""
 
     def get(self, key: str) -> Any: ...  # pragma: no cover - typing shim
-    def set(self, key: str, value: str) -> Any: ...  # pragma: no cover - typing shim
+    def set(  # pragma: no cover - typing shim
+        self, key: str, value: str, ex: Optional[int] = None
+    ) -> Any: ...
 
 
 class RedisJobStore:
@@ -34,13 +37,20 @@ class RedisJobStore:
         *,
         namespace: str = "dutchbay:job",
         clock: Callable[[], str] = utc_now_iso,
+        ttl_seconds: int = JOB_TTL_SECONDS,
     ) -> None:
         self._client = client
         self._namespace = namespace
         self._clock = clock
+        #: Per-record expiry so Redis cannot grow without bound; 0 disables it.
+        self._ttl_seconds = ttl_seconds
 
     def _key(self, job_id: str) -> str:
         return f"{self._namespace}:{job_id}"
+
+    def _write(self, job_id: str, record: JobRecord) -> None:
+        ttl = self._ttl_seconds if self._ttl_seconds > 0 else None
+        self._client.set(self._key(job_id), record.model_dump_json(), ex=ttl)
 
     @staticmethod
     def _decode(raw: Any) -> Optional[str]:
@@ -49,7 +59,7 @@ class RedisJobStore:
         return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
 
     def create(self, record: JobRecord) -> None:
-        self._client.set(self._key(record.job_id), record.model_dump_json())
+        self._write(record.job_id, record)
 
     def get(self, job_id: str) -> Optional[JobRecord]:
         raw = self._decode(self._client.get(self._key(job_id)))
@@ -61,5 +71,5 @@ class RedisJobStore:
             raise KeyError(job_id)
         record = JobRecord.model_validate_json(raw)
         updated = record.model_copy(update={**changes, "updated_at": self._clock()})
-        self._client.set(self._key(job_id), updated.model_dump_json())
+        self._write(job_id, updated)
         return updated

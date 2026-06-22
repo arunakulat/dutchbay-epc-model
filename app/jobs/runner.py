@@ -10,12 +10,15 @@ finance or wind logic (Dolphin).
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Dict, Mapping
 
 from app.api.responses import CaseResult
 from app.jobs.models import JobProgress, JobState, WindJobRequest
 from app.jobs.store import JobStore
 from app.services.pipeline_service import run_integrated_case
+
+logger = logging.getLogger(__name__)
 
 #: Coarse step budget for progress reporting (assessment 1–3, finance 4).
 TOTAL_STEPS = 4
@@ -99,7 +102,18 @@ def run_wind_job(
             ),
         )
     except Exception as exc:  # noqa: BLE001 - boundary: record, don't crash worker
-        store.update(job_id, state=JobState.FAILED, error=f"{type(exc).__name__}: {exc}")
+        # Log the full exception server-side; expose only the exception class +
+        # a generic message to the client (the raw message can leak internal
+        # paths/config). The job id ties the two together for support.
+        logger.exception("Async job %s failed", job_id)
+        store.update(
+            job_id,
+            state=JobState.FAILED,
+            error=(
+                f"{type(exc).__name__}: the wind-assessment job failed; "
+                "see the server logs for this job id."
+            ),
+        )
 
 
 def new_queued_record(job_id: str, *, now: str) -> Dict[str, Any]:

@@ -15,12 +15,14 @@ class _FakeRedis:
 
     def __init__(self) -> None:
         self._data: Dict[str, bytes] = {}
+        self.last_ex: Optional[int] = None
 
     def get(self, key: str) -> Optional[bytes]:
         return self._data.get(key)
 
-    def set(self, key: str, value: str) -> None:
+    def set(self, key: str, value: str, ex: Optional[int] = None) -> None:
         self._data[key] = value.encode("utf-8")
+        self.last_ex = ex
 
 
 def _record(job_id: str = "j1", state: JobState = JobState.QUEUED) -> JobRecord:
@@ -75,3 +77,26 @@ def test_decodes_str_values_too() -> None:
     store = RedisJobStore(_StrRedis())
     store.create(_record())
     assert store.get("j1") is not None  # type: ignore[union-attr]
+
+
+# --------------------------------------------------------------------------- #
+# TTL (Redis must not grow unbounded)
+# --------------------------------------------------------------------------- #
+def test_create_applies_ttl() -> None:
+    client = _FakeRedis()
+    RedisJobStore(client, ttl_seconds=3600).create(_record())
+    assert client.last_ex == 3600
+
+
+def test_update_applies_ttl() -> None:
+    client = _FakeRedis()
+    store = RedisJobStore(client, ttl_seconds=120)
+    store.create(_record())
+    store.update("j1", state=JobState.RUNNING)
+    assert client.last_ex == 120
+
+
+def test_zero_ttl_disables_expiry() -> None:
+    client = _FakeRedis()
+    RedisJobStore(client, ttl_seconds=0).create(_record())
+    assert client.last_ex is None
