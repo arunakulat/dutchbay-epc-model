@@ -64,6 +64,15 @@ gis = [
 report = [
   "weasyprint>=60",
 ]
+# Async live-ERA5 job path (Sprint 2). The default in-process path
+# (app.api.jobs_router + BackgroundTasks) needs none of these; arq + Redis is the
+# durable, cross-process upgrade driven by app.jobs.worker (loaded only by the arq
+# CLI). CI does not install this extra, so the Redis/arq code is never imported in
+# tests; RedisJobStore is unit-tested against a fake client instead.
+jobs = [
+  "arq>=0.25",
+  "redis>=5.0",
+]
 
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]

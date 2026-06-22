@@ -19,6 +19,9 @@ omit =
     */analytics/sensitivity/viz.py
     */analytics/sensitivity/dashboard_demo.py
     */analytics/pipeline_v14.py
+    # arq + Redis worker entrypoint (Sprint 2): loaded only by the `arq` CLI with
+    # the optional [jobs] extra + a live Redis; never imported by app/tests.
+    */app/jobs/worker.py
 
 [report]
 precision = 2
@@ -34,6 +37,9 @@ exclude_lines =
     if TYPE_CHECKING:
     @abstractmethod
     @abc.abstractmethod
+    @overload
+    # Ellipsis-only stub bodies (Protocol methods, typing shims) — never executed.
+    ^\s*\.\.\.\s*$
 
 [html]
 directory = htmlcov
