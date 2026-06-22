@@ -166,10 +166,18 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
             f"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling."
         )
 
-    if project_viable and equity_positive and dscr_covenant_met:
+    # The headline must never contradict the covenant table: a "Bankable" claim
+    # requires BOTH hard covenants (DSCR floor and balloon ceiling) to hold, not
+    # just the DSCR one. A breach with otherwise-acceptable returns is called out
+    # explicitly rather than softened to "Marginal".
+    covenants_met = dscr_covenant_met and balloon_within_limit
+    returns_ok = project_viable and equity_positive
+    if returns_ok and covenants_met:
         headline = "Bankable at the modeled assumptions."
     elif not project_viable and not equity_positive:
         headline = "Value-destructive at the modeled assumptions."
+    elif not covenants_met:
+        headline = "Not bankable — covenant breach at the modeled assumptions."
     else:
         headline = "Marginal — covenant-sensitive at the modeled assumptions."
 
