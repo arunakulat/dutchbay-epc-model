@@ -52,6 +52,9 @@ def test_app_exposes_expected_routes() -> None:
     assert "/run-pipeline" in spec_paths  # included from api.pipeline_api.router
     assert "/cases/report.html" in spec_paths
     assert "/cases/report.pdf" in spec_paths
+    assert "/jobs" in spec_paths  # async live-ERA5 path (PR E)
+    assert "/jobs/{job_id}" in spec_paths
+    assert "/jobs/{job_id}/events" in spec_paths
     # the sensitivity sub-app is mounted as a sub-application
     assert any(getattr(r, "path", "") == "/sensitivity" for r in app.routes)
 
@@ -175,3 +178,31 @@ def test_http_smoke_if_httpx_available() -> None:
 
     # malformed body -> FastAPI 422
     assert client.post("/cases", json={"site_name": ""}).status_code == 422
+
+
+def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("httpx")
+    import app.api.jobs_router as jr
+    from fastapi.testclient import TestClient
+
+    # Stub the runner so the TestClient's background task does NOT hit real ERA5.
+    monkeypatch.setattr(jr, "run_wind_job", lambda *a, **k: None)
+
+    client = TestClient(app)
+    body = {
+        "inputs": _valid_kwargs(),
+        "site_lat": 8.33,
+        "site_lon": 79.76,
+        "turbine_model": "IEA-10MW",
+        "num_turbines": 15,
+        "hub_height_m": 119.0,
+    }
+    accepted = client.post("/jobs", json=body)
+    assert accepted.status_code == 202
+    job_id = accepted.json()["job_id"]
+
+    got = client.get(f"/jobs/{job_id}")
+    assert got.status_code == 200
+    assert got.json()["job_id"] == job_id
+
+    assert client.get("/jobs/unknown-id").status_code == 404

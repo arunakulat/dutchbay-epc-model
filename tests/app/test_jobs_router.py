@@ -1,0 +1,64 @@
+"""Tests for the async jobs router (endpoint functions called directly)."""
+
+from __future__ import annotations
+
+import pytest
+from fastapi import BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse
+
+import app.api.jobs_router as jr
+from app.jobs.models import JobState, WindJobRequest
+from app.models.inputs import WindFarmInputs
+
+
+def _request() -> WindJobRequest:
+    return WindJobRequest(
+        inputs=WindFarmInputs(
+            site_name="Dutch Bay",
+            capacity_mw=150.0,
+            capacity_factor=0.339,
+            project_life_years=20,
+            ppa_price_lkr_per_kwh=26.0,
+            ppa_term_years=20,
+            capex_total_usd=195_000_000,
+            opex_annual_usd=6_000_000,
+            fx_start_lkr_per_usd=333.79,
+        ),
+        site_lat=8.33,
+        site_lon=79.76,
+        turbine_model="IEA-10MW",
+        num_turbines=15,
+        hub_height_m=119.0,
+    )
+
+
+def test_enqueue_creates_queued_record_and_schedules_task() -> None:
+    background = BackgroundTasks()
+    accepted = jr.enqueue_job(_request(), background)
+    assert accepted.state is JobState.QUEUED
+    assert accepted.status_url == f"/jobs/{accepted.job_id}"
+    assert accepted.events_url == f"/jobs/{accepted.job_id}/events"
+    # A background task was scheduled (NOT executed here -> no real ERA5).
+    assert len(background.tasks) == 1
+    # The store holds the queued record.
+    record = jr._store.get(accepted.job_id)
+    assert record is not None and record.state is JobState.QUEUED
+
+
+def test_get_job_found() -> None:
+    background = BackgroundTasks()
+    accepted = jr.enqueue_job(_request(), background)
+    record = jr.get_job(accepted.job_id)
+    assert record.job_id == accepted.job_id
+
+
+def test_get_job_unknown_404() -> None:
+    with pytest.raises(HTTPException) as exc:
+        jr.get_job("does-not-exist")
+    assert exc.value.status_code == 404
+
+
+def test_job_events_returns_sse_stream() -> None:
+    resp = jr.job_events("any-id")
+    assert isinstance(resp, StreamingResponse)
+    assert resp.media_type == "text/event-stream"

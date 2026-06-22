@@ -7,6 +7,7 @@ Composes the existing surfaces under one app and adds the wizard-facing
                            (synchronous, frozen-AEP; returns ``CaseResult``).
 * ``POST /cases/report.html`` — the same run, rendered as an HTML report.
 * ``POST /cases/report.pdf``  — the same run, rendered as a PDF (optional WeasyPrint).
+* ``POST /jobs`` + ``/jobs/{id}`` + ``/jobs/{id}/events`` — the async live-ERA5 path.
 * ``POST /run-pipeline`` — the lower-level inline-config route (``api.pipeline_api``).
 * ``/sensitivity/*``     — the tornado/sensitivity app (``api.sensitivity_api``).
 * ``GET /health``        — liveness probe.
@@ -29,6 +30,7 @@ from fastapi.responses import HTMLResponse, Response
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
 from api.sensitivity_api import app as sensitivity_app
+from app.api.jobs_router import router as jobs_router
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_model import ReportContext, build_report_context
@@ -47,6 +49,7 @@ app = FastAPI(
 
 # Unify the pre-existing surfaces under one app (Sprint 1 roadmap).
 app.include_router(pipeline_router, tags=["pipeline"])
+app.include_router(jobs_router)  # async live-ERA5 job path (Sprint 2 PR E)
 app.mount("/sensitivity", sensitivity_app)
 
 

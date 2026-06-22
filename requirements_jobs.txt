@@ -1,0 +1,14 @@
+# Async live-ERA5 job path (Sprint 2) — OPTIONAL.
+#
+# The default async path (POST /jobs via FastAPI BackgroundTasks + an in-memory
+# store) needs NONE of these — it ships in the base install. arq + Redis is the
+# durable, cross-process upgrade: a separate worker (app.jobs.worker) survives
+# restarts and scales horizontally, sharing job state via RedisJobStore.
+#
+# Needs a running Redis. Install + run:
+#   pip install -r requirements_jobs.txt   (or  pip install -e '.[jobs]')
+#   arq app.jobs.worker.WorkerSettings
+# CI does NOT install this file; the arq/redis worker is never imported in tests.
+
+arq>=0.25
+redis>=5.0
