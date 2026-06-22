@@ -372,7 +372,7 @@ expected_results:
   min_dscr: 1.30
   avg_dscr: 1.387
   llcr: 1.086
-  plcr: 1.190
+  plcr: 1.146  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'

@@ -488,6 +488,26 @@ def test_approx_project_irr_reports_negative_irr_by_default() -> None:
     assert approx_project_irr(cfads, capex, r_low=0.0) == 0.0
 
 
+def test_approx_project_irr_no_discontinuity_over_long_horizon() -> None:
+    """The negative-IRR search is overflow-safe: no spurious cliff as the horizon grows.
+
+    Regression for the M3e floor: at r_low=-0.9999 the discount base (1e-4) underflows
+    over ~77+ period series, so npv() returned a spurious 0.0 and the bisection reported
+    the bracket floor (~-100%) as the IRR — a nonsensical discontinuity where ADDING a
+    cashflow made the reported IRR collapse from ~-8% to ~-100%. The dedicated
+    _PROJECT_IRR_LOWER_BOUND (-0.99) keeps the search numerically sane across realistic
+    long-lived-asset horizons.
+    """
+    capex = 1_000_000.0
+    irrs = [approx_project_irr([100.0] * n, capex) for n in (79, 80, 81, 90, 120)]
+    for rate in irrs:
+        assert math.isfinite(rate)
+        assert -0.15 < rate < 0.0, f"unexpected IRR {rate} (should be a mild negative)"
+    # Monotonic non-decreasing: more cashflow never lowers the IRR.
+    for lower, higher in zip(irrs, irrs[1:]):
+        assert higher >= lower - 1e-9, f"IRR fell as horizon grew: {irrs}"
+
+
 def test_approx_project_irr_zero_capex_returns_zero() -> None:
     """capex_total <= 0 short-circuits to 0.0 (line 396)."""
     assert approx_project_irr([100.0, 100.0], 0.0) == 0.0

@@ -379,8 +379,8 @@ expected_results:
   equity_moic: 0.295        # equity recovers only ~29% of its outlay
   min_dscr: 1.30
   avg_dscr: 1.388
-  llcr: 1.302
-  plcr: 1.364
+  llcr: 1.241  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
+  plcr: 1.303
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'
