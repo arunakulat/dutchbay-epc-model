@@ -29,6 +29,9 @@ if str(REPO_ROOT) not in sys.path:
 # ---------------------------------------------------------------------------
 
 from finance import cashflow_v14 as cf_mod  # type: ignore  # noqa: E402
+from finance.cashflow_v14_production import (  # noqa: E402
+    _calculate_net_production,
+)
 
 
 def test_cashflow_module_path_is_v14chat():
@@ -46,7 +49,7 @@ def test_net_production_uses_hours_per_year_constant():
     grid_loss_pct = 0.0
     year = 0
 
-    gross_kwh, net_kwh = cf_mod._calculate_net_production(  # type: ignore[attr-defined]
+    gross_kwh, net_kwh = _calculate_net_production(
         capacity_mw,
         capacity_factor,
         degradation,

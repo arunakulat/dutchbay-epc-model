@@ -78,3 +78,38 @@ def test_hybrid_runs_through_engine_and_reports_per_tech() -> None:
     # Serializes through the contract's JSON helper (what casper_payload emits).
     payload = gen.to_dict()
     assert set(payload["technologies"]) == {"wind", "solar"}
+
+
+def test_per_tech_degradation_flows_through_the_real_cashflow() -> None:
+    """M3: a generation.technologies block carrying per-tech capacity/CF/degradation
+    drives the finance engine — the hybrid run differs from the single-tech run
+    because wind and solar degrade at different rates."""
+    base = WindFarmInputs(
+        site_name="DutchBay Hybrid",
+        capacity_mw=200.0,
+        capacity_factor=0.304250,  # (150*0.339 + 50*0.20) / 200 — reconciles per-tech
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=26.0,
+        ppa_term_years=20,
+        capex_total_usd=230_000_000,
+        opex_annual_usd=6_500_000,
+        fx_start_lkr_per_usd=333.79,
+    ).to_scenario_config()
+
+    single = run_finance_case(dict(base))
+
+    hybrid = dict(base)
+    hybrid["generation"] = {
+        "technologies": {
+            "wind": {"capacity_mw": 150, "capacity_factor": 0.339, "degradation_pct": 0.006},
+            "solar": {"capacity_mw": 50, "capacity_factor": 0.20, "degradation_pct": 0.004},
+        }
+    }
+    multi = run_finance_case(hybrid)
+
+    assert single["status"] == "success" and multi["status"] == "success"
+    # Per-tech degradation genuinely changes lifetime CFADS / returns (not a no-op).
+    assert multi["kpis"]["total_cfads_usd"] != pytest.approx(
+        single["kpis"]["total_cfads_usd"]
+    )
+    assert multi["kpis"]["project_irr"] != pytest.approx(single["kpis"]["project_irr"])

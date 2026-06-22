@@ -11,10 +11,11 @@ from .cashflow_v14_fx import _fx_curve
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
 from .cashflow_v14_production import (
     _apply_risk_haircut,
-    _calculate_net_production,
     _calculate_opex_lkr,
     _calculate_revenue_lkr,
     _calculate_statutory_deductions,
+    calculate_net_production_for_year,
+    resolve_tech_generation_specs,
 )
 from .cashflow_v14_tax import (
     DepreciationSchedule,
@@ -126,6 +127,13 @@ def _prepare_cashflow_context(
 
     params_obj: CashflowParams = _build_cashflow_params(config)
     params_dict: Dict[str, Any] = asdict(params_obj)
+
+    # Multi-tech generation (M3): when a generation.technologies block is present,
+    # carry per-tech specs so production sums each tech with its own degradation.
+    # None for the legacy single-tech path (byte-identical wind-only behaviour).
+    params_dict["tech_generation_specs"] = resolve_tech_generation_specs(
+        config, params_dict
+    )
 
     years = int(params_obj.project_life_years)
 
@@ -308,14 +316,7 @@ def calculate_single_year_cfads(
     # Year is 1-based; production calculation expects 0-based index
     year_index = year - 1
 
-    gross_kwh, net_kwh = _calculate_net_production(
-        float(params["capacity_mw"]),
-        float(params["capacity_factor"]),
-        float(params["degradation"]),
-        float(params["grid_loss_pct"]),
-        year_index,
-        curtailment_pct=float(params.get("curtailment_pct", 0.0)),
-    )
+    gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
     revenue_lkr = _calculate_revenue_lkr(net_kwh, float(params["tariff_lkr_per_kwh"]))
 
@@ -588,14 +589,7 @@ def build_annual_rows_efficient(
         year = year_index + 1
         fx_rate = fx_curve_resolved[year_index]
 
-        gross_kwh, net_kwh = _calculate_net_production(
-            float(params["capacity_mw"]),
-            float(params["capacity_factor"]),
-            float(params["degradation"]),
-            float(params["grid_loss_pct"]),
-            year_index,
-            curtailment_pct=float(params.get("curtailment_pct", 0.0)),
-        )
+        gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
         revenue_lkr = _calculate_revenue_lkr(
             net_kwh, float(params["tariff_lkr_per_kwh"])
