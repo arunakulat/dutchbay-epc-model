@@ -1,12 +1,8 @@
 """Finance module for DutchBay EPC Model.
 
-Sprint 12 Status:
-- Refinancing module: Hydra + compatibility stubs
-- Equity distribution module: Pydantic v2 contracts
-- Tax module: Stable (Sprint 11)
+Refinancing: the canonical engine is ``finance.refinancing_v14_hardened`` (it
+reads the real sized debt result — ``avg_debt_rate``, ``min_dscr``, etc.). The
+Hydra duplicate (``refinancing_v14_hydra``) and the pydantic compatibility stubs
+(``refinancing_v14_compat``, re-exported here) were retired — they had no
+production or test consumers.
 """
-
-# Re-export compatibility stubs for legacy tests
-from finance.refinancing_v14_compat import RefinancingEngine, RefinancingV14
-
-__all__ = ["RefinancingEngine", "RefinancingV14"]
