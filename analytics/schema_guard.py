@@ -41,12 +41,19 @@ class ConfigValidationError(ValueError):
 
 
 # Logical module -> import path
-_MODULE_IMPORTS: dict[str, str] = {
-    "cashflow": "finance.cashflow_v14",
-    "debt": "finance.debt_v14",
-    "irr": "finance.irr",
-    "wind": "analytics.wind.wind_interface_schema",
-    "era5": "analytics.wind.era5_interface_schema",
+# A logical module's specs may be split across SEVERAL Python modules; every one
+# must be imported so registration is deterministic regardless of import order.
+# In particular the EPC capex specs (epc_usd_total, ...) live in
+# finance.epc_helper_v14, NOT finance.cashflow_v14 — omitting it silently skipped
+# epc_usd_total validation whenever epc_helper_v14 happened not to be imported
+# yet (which, since the pipeline's lazy import in #298, is the common case on a
+# fresh process). Map each logical module to ALL of its registering modules.
+_MODULE_IMPORTS: dict[str, tuple[str, ...]] = {
+    "cashflow": ("finance.cashflow_v14", "finance.epc_helper_v14"),
+    "debt": ("finance.debt_v14",),
+    "irr": ("finance.irr",),
+    "wind": ("analytics.wind.wind_interface_schema",),
+    "era5": ("analytics.wind.era5_interface_schema",),
 }
 
 
@@ -57,8 +64,7 @@ def _ensure_module_registered(name: str) -> None:
     The finance/analytics modules are expected to register their
     required-field specifications with analytics.config_schema on import.
     """
-    module_path = _MODULE_IMPORTS.get(name)
-    if module_path:
+    for module_path in _MODULE_IMPORTS.get(name, ()):
         importlib.import_module(module_path)
 
 

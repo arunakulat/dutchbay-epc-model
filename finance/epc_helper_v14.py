@@ -425,27 +425,45 @@ def _register_epc_schema() -> None:
       - `epc_usd_total` is REQUIRED, error severity.
       - `epc_freight_pct` and `epc_contingency_pct` are OPTIONAL, warning severity.
 
-    Paths for `epc_usd_total`:
+    Paths for `epc_usd_total` — these MUST mirror the resolvers that actually
+    feed the cashflow (``debt_v14._extract_capex_usd`` /
+    ``analytics.core.metrics._derive_capex_usd``); otherwise strict validation
+    rejects a config the engine reads fine:
 
-      1. capex.usd_total       ← canonical v14 lender-grade path
-      2. capex.epc_usd         ← backwards-compatible alias
-      3. finance.capex_usd     ← legacy alias for toy/test configs
+      - capex.usd_total        ← canonical v14 lender-grade path
+      - capex.{epc_usd, capex_total_usd, total_capex_usd, total_capex}
+      - finance.{capex_total_usd, capex_usd}   ← toy / test / legacy aliases
+      - costs.{capex_total_usd, capex_usd, total_capex_usd, total_capex}
 
     Migration Path (informal plan):
 
       - Production configs: use capex.usd_total (canonical).
-      - Test / toy configs: tolerate finance.capex_usd (legacy).
-      - Later sprint: optionally emit warnings when legacy path is used.
-      - Subsequent sprint: remove finance.* paths entirely.
+      - Test / toy configs: tolerate the finance.* / costs.* aliases (legacy).
+      - Later sprint: optionally emit warnings when a legacy path is used.
+      - Subsequent sprint: remove finance.* / costs.* paths entirely.
     """
     specs: list[RequiredFieldSpec] = [
         RequiredFieldSpec(
             module="cashflow",
             name="epc_usd_total",
             paths=[
-                ("capex", "usd_total"),  # canonical v14 lender-grade path
-                ("capex", "epc_usd"),  # backwards-compatible alias
-                ("finance", "capex_usd"),  # legacy alias for toy/test configs
+                # Canonical v14 lender-grade path.
+                ("capex", "usd_total"),
+                # capex.* aliases the engine actually honours when it resolves
+                # capex (debt_v14._extract_capex_usd / metrics._derive_capex_usd).
+                # The validation spec MUST mirror those resolvers, or strict mode
+                # rejects configs the cashflow reads fine.
+                ("capex", "epc_usd"),
+                ("capex", "capex_total_usd"),
+                ("capex", "total_capex_usd"),
+                ("capex", "total_capex"),
+                # finance.* / costs.* aliases for toy / test / legacy configs.
+                ("finance", "capex_total_usd"),
+                ("finance", "capex_usd"),
+                ("costs", "capex_total_usd"),
+                ("costs", "capex_usd"),
+                ("costs", "total_capex_usd"),
+                ("costs", "total_capex"),
             ],
             required=True,
             severity="error",
