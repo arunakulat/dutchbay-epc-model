@@ -27,7 +27,7 @@ Usage:
 """
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 from analytics.fx.fx_contracts import (
     FXCurveOutput,
@@ -349,11 +349,15 @@ def compute_fx_risk_profile(
             "returning minimal profile.",
             total_debt,
         )
+        # With no debt there is no FX exposure, but FXRiskProfile still requires
+        # the debt-currency percentages to sum to ~100. Mirror the no-volumetry
+        # branch above (nominal 100% USD) so the minimal profile is valid rather
+        # than tripping its own __post_init__ validator.
         return FXRiskProfile(
             var_95_usd_million=0.0,
             cvar_95_usd_million=0.0,
             debt_lkr_pct=0.0,
-            debt_usd_pct=0.0,
+            debt_usd_pct=100.0,
             debt_cny_pct=0.0,
         )
 

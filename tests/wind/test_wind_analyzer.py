@@ -160,13 +160,11 @@ def test_fit_weibull_unsupported_method_raises(tmp_path) -> None:
         a.fit_weibull()
 
 
-@pytest.mark.xfail(
-    reason="BUG: quality_control ws_min/ws_max are loaded but never applied; "
-    "out-of-range speeds reach the MLE instead of being filtered.",
-    strict=False,
-)
 def test_fit_weibull_filters_out_of_range_speeds() -> None:
-    """Correct behaviour: speeds outside [ws_min, ws_max] should be excluded.
+    """Speeds outside [ws_min, ws_max] are excluded before the MLE.
+
+    Regression: the quality_control ws_min/ws_max bounds were loaded in __init__
+    but never applied; out-of-range spikes reached the fit and dragged scale_c.
 
     We inject a block of absurd 500 m/s spikes (well above ws_max=50). A QC
     filter would drop them and leave the fit close to the clean one; without
