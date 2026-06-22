@@ -206,12 +206,22 @@ def resolve_tech_generation_specs(
     when the multi-tech block is present (so the cashflow sums per-tech generation,
     each with its **own** degradation), or ``None`` for the legacy single-tech path
     (which then runs byte-identically). Per-tech ``degradation_pct`` falls back to
-    the project degradation. Technologies without a ``capacity_mw``/``capacity_factor``
-    (e.g. storage) contribute no generation and are skipped here.
+    the project degradation; it is a free per-tech input (there is no project-level
+    per-tech-degradation counterpart, so only year-1 *capacity* is reconciled).
 
-    CESSPIT/CCCDIR: the per-tech year-1 generation must reconcile with the project
-    headline (``capacity_mw × capacity_factor``) within ``tolerance``; otherwise it
-    raises, so ``project.capacity_factor`` is a cross-checked input, not decorative.
+    CESSPIT/CCCDIR fail-loud contract:
+
+    * A technology that declares ANY generation intent (``aep_gwh`` — the reporting
+      key — or ``capacity_mw``/``capacity_factor`` — the finance keys) MUST declare
+      both finance keys, or this raises. This prevents a tech that is mis-keyed for
+      one of the two consumers (the cashflow here vs. the reporting aggregator) from
+      being silently dropped from generation.
+    * A technology with no generation keys at all (e.g. storage: ``power_mw`` /
+      ``energy_mwh``) contributes no generation and is skipped silently.
+    * The per-tech year-1 generation must reconcile with the project headline
+      (``capacity_mw × capacity_factor``) within ``tolerance``; a non-positive
+      headline, or a mismatch, raises (so ``project.capacity_factor`` is a
+      cross-checked input, never decorative).
     """
     generation = config.get("generation")
     techs = generation.get("technologies") if isinstance(generation, dict) else None
@@ -226,7 +236,21 @@ def resolve_tech_generation_specs(
         cap = block.get("capacity_mw")
         cap_factor = block.get("capacity_factor")
         if cap is None or cap_factor is None:
-            continue
+            # aep_gwh (the reporting key) or capacity_factor signals a *generation*
+            # tech; capacity_mw alone does not (storage carries a power rating).
+            declares_generation = (
+                block.get("aep_gwh") is not None
+                or block.get("capacity_factor") is not None
+            )
+            if declares_generation:
+                raise ValueError(
+                    f"generation.technologies['{name}'] declares generation "
+                    "(aep_gwh / capacity_factor) but is missing capacity_mw and/or "
+                    "capacity_factor — the cashflow needs both to model its output. "
+                    "Declare both, or remove the generation keys if this is a "
+                    "non-generating technology (e.g. storage)."
+                )
+            continue  # not a generation tech (e.g. storage) -> intentionally skipped
         deg = block.get("degradation_pct", block.get("degradation"))
         specs.append(
             {
@@ -240,8 +264,13 @@ def resolve_tech_generation_specs(
         return None
 
     expected = float(params["capacity_mw"]) * float(params["capacity_factor"])
+    if expected <= 0:
+        raise ValueError(
+            "Cannot reconcile generation.technologies: the project headline "
+            f"capacity_mw*capacity_factor={expected:.4f} is non-positive."
+        )
     actual = sum(s["capacity_mw"] * s["capacity_factor"] for s in specs)
-    if expected > 0 and abs(actual - expected) / expected > tolerance:
+    if abs(actual - expected) / expected > tolerance:
         raise ValueError(
             "generation.technologies year-1 capacity (sum capacity_mw*capacity_factor"
             f"={actual:.4f}) does not reconcile with project capacity_mw*capacity_factor"

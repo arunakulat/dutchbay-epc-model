@@ -72,12 +72,40 @@ def test_storage_without_capacity_factor_skipped() -> None:
         "generation": {
             "technologies": {
                 "wind": {"capacity_mw": 200, "capacity_factor": 0.304250},
-                "bess": {"capacity_mw": 50, "power_mw": 50},  # no capacity_factor
+                "bess": {"capacity_mw": 50, "power_mw": 50},  # no capacity_factor/aep_gwh
             }
         }
     }
     specs = resolve_tech_generation_specs(cfg, _PROJECT_PARAMS)
     assert {s["technology"] for s in specs} == {"wind"}  # type: ignore[union-attr]
+
+
+def test_generation_tech_missing_finance_keys_raises() -> None:
+    # A tech declaring aep_gwh (a generation key) but no capacity_mw/capacity_factor
+    # must FAIL LOUD — it cannot be silently dropped from the cashflow (audit #1/#2).
+    cfg = {
+        "generation": {
+            "technologies": {
+                "wind": {"capacity_mw": 200, "capacity_factor": 0.304250},
+                "solar": {"aep_gwh": 87.6, "capex_usd": 40_000_000},  # reporting-only
+            }
+        }
+    }
+    with pytest.raises(ValueError, match="missing capacity_mw"):
+        resolve_tech_generation_specs(cfg, _PROJECT_PARAMS)
+
+
+def test_capacity_factor_without_capacity_mw_raises() -> None:
+    cfg = {"generation": {"technologies": {"solar": {"capacity_factor": 0.20}}}}
+    with pytest.raises(ValueError, match="missing capacity_mw"):
+        resolve_tech_generation_specs(cfg, _PROJECT_PARAMS)
+
+
+def test_non_positive_headline_raises() -> None:
+    # The reconciliation must not silently skip on a non-positive headline (audit #3).
+    cfg = {"generation": {"technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.3}}}}
+    with pytest.raises(ValueError, match="non-positive"):
+        resolve_tech_generation_specs(cfg, {"capacity_mw": 0.0, "capacity_factor": 0.3, "degradation": 0.005})
 
 
 # --------------------------------------------------------------------------- #

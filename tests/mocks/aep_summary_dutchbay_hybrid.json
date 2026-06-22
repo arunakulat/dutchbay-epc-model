@@ -1,6 +1,6 @@
 {
   "capacity_factor": 0.305842,
-  "net_site_aep_gwh": 561.5,
+  "net_site_aep_gwh": 561.4,
   "gross_aep_gwh": 655.0,
   "source_id": "DUTCHBAY_HYBRID_WIND_SOLAR",
   "source_type": "REFERENCE",
@@ -34,7 +34,7 @@
     "cod_year": 2027
   },
   "exceedance": {
-    "net_aep_p50_gwh": 561.5,
+    "net_aep_p50_gwh": 561.4,
     "net_aep_p90_1yr_gwh": 489.1
   },
   "created_date": "2026-06-22",
