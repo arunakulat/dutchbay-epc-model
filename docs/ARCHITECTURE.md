@@ -100,6 +100,63 @@ wind analytics from the cashflow engine and gives lender-grade reproducibility.
 
 ---
 
+## Off-path analytics — built & tested, but not on a live run
+
+A whole-codebase audit (2026-06-22) found a body of wind-AEP analytics that is
+implemented and green-tested but **reachable from no live entrypoint**
+(`run_full_pipeline_v14.py`, `run_scenario_analytics_v14.py`,
+`scripts/run_wind_analysis_v14.py`, `api/`, `app/`). It executes only in its own
+tests. Two facts put it off-path:
+
+1. The financed cashflow ingests a **pre-computed AEP from the scenario YAML**
+   through `wind_resource/cashflow_adapter.py` (which imports **zero**
+   analytics-AEP modules) — the frozen-export contract above. The analytics-AEP
+   cluster is therefore not on the finance path.
+2. No production caller passes the `'wind'` / `'era5'` validation modules to
+   `validate_config_for_v14` (every live call uses `['cashflow']` or
+   `['cashflow','debt']`), so the schemas registered at
+   `analytics/schema_guard.py:55-56` never run outside their tests.
+
+### The orphaned AEP cluster
+
+| Module | Status | Role |
+|---|---|---|
+| `analytics/wind/losses_model.py` | **LIVE** | IEC loss taxonomy; reached via `wind_resource/bankable_aep.py` on the live WindPipeline |
+| `analytics/loader/aep_loader.py` | orphaned | AEP-provenance guard (`APPROVED_SOURCES`); the lender control of [`AEP_PROVENANCE.md`](AEP_PROVENANCE.md) — **dormant in production** |
+| `analytics/wind/aep_summary_builder.py` | orphaned | builds the AEP summary block |
+| `analytics/wind/pipeline_aep_v14.py` | orphaned | a parallel AEP pipeline |
+| `analytics/wind/mc_aep_weibull.py` | orphaned | Monte-Carlo AEP from ECMWF-derived Weibull |
+| `analytics/wind/aep_tornado.py` | orphaned | wind/shear/losses/power-curve AEP sensitivities |
+| `analytics/wind/wind_interface_schema.py`, `era5_interface_schema.py` | orphaned | GIS→EPC schemas ([`WIND_INTERFACE_SCHEMA.md`](WIND_INTERFACE_SCHEMA.md)); registered but never invoked |
+| `analytics/simulation/monte_carlo_aep.py` | orphaned | MC-AEP driver |
+| `analytics/capital_risk_layer_v14.py` | orphaned | sole importer of `mc_aep_weibull` |
+
+These import **each other** into a self-consistent cluster that sits parallel to
+the **live** wind producer (`wind_resource/`: `WindPipeline` → `energy_calculator`
+→ `bankable_aep` → `losses_model`), which is what actually makes the frozen export.
+
+**Material gap, not merely dead code:** the **AEP-provenance guard** and the
+**wind-interface schema** are lender-grade integrity controls **enforced only in
+tests** — a real model run trusts the frozen YAML AEP without the approved-source
+check ever firing (see [`WIND_AEP_CHAIN_OF_CUSTODY.md`](WIND_AEP_CHAIN_OF_CUSTODY.md)).
+Closing this is a decision, **not yet actioned**: either wire the provenance guard
+into the financed run, or retire the cluster so `wind_resource/` is the single AEP
+engine.
+
+### Orphaned multi-tech generation scaffold
+
+`analytics/contracts_v14.py:412-471` (`GenerationProfile`,
+`MultiTechGenerationResult`, `TechnologyBreakdown`) + `analytics/casper/` build and
+serialize a **multi-technology (wind/solar/BESS)** generation payload, but nothing
+**produces** a `MultiTechGenerationResult` from real generation — there is no solar
+engine and no aggregator. This is Sprint 9/10 scaffolding (re-instated Sprint 18D).
+The multi-tech build reuses these contracts and adds the producers (wind adapter →
+`GenerationProfile`, solar engine, portfolio aggregation). Note: a *second*,
+field-distinct `TechnologyBreakdown` lives in `finance.contracts` — same name,
+different surface.
+
+---
+
 ## Governance & quality posture
 
 - **GWTF**: branch → PR → green CI → self-merge; never commit to `main`.
