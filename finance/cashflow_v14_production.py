@@ -189,6 +189,100 @@ def _calculate_net_production(
     return gross_kwh, net_kwh
 
 
+def resolve_tech_generation_specs(
+    config: Dict[str, Any],
+    params: Dict[str, Any],
+    *,
+    tolerance: float = 0.01,
+) -> Optional[List[Dict[str, Any]]]:
+    """Resolve per-technology generation specs from ``generation.technologies``.
+
+    Returns a list of ``{technology, capacity_mw, capacity_factor, degradation}``
+    when the multi-tech block is present (so the cashflow sums per-tech generation,
+    each with its **own** degradation), or ``None`` for the legacy single-tech path
+    (which then runs byte-identically). Per-tech ``degradation_pct`` falls back to
+    the project degradation. Technologies without a ``capacity_mw``/``capacity_factor``
+    (e.g. storage) contribute no generation and are skipped here.
+
+    CESSPIT/CCCDIR: the per-tech year-1 generation must reconcile with the project
+    headline (``capacity_mw × capacity_factor``) within ``tolerance``; otherwise it
+    raises, so ``project.capacity_factor`` is a cross-checked input, not decorative.
+    """
+    generation = config.get("generation")
+    techs = generation.get("technologies") if isinstance(generation, dict) else None
+    if not isinstance(techs, dict) or not techs:
+        return None
+
+    project_degradation = float(params.get("degradation", 0.0))
+    specs: List[Dict[str, Any]] = []
+    for name, block in techs.items():
+        if not isinstance(block, dict):
+            continue
+        cap = block.get("capacity_mw")
+        cap_factor = block.get("capacity_factor")
+        if cap is None or cap_factor is None:
+            continue
+        deg = block.get("degradation_pct", block.get("degradation"))
+        specs.append(
+            {
+                "technology": str(name),
+                "capacity_mw": float(cap),
+                "capacity_factor": float(cap_factor),
+                "degradation": float(deg) if deg is not None else project_degradation,
+            }
+        )
+    if not specs:
+        return None
+
+    expected = float(params["capacity_mw"]) * float(params["capacity_factor"])
+    actual = sum(s["capacity_mw"] * s["capacity_factor"] for s in specs)
+    if expected > 0 and abs(actual - expected) / expected > tolerance:
+        raise ValueError(
+            "generation.technologies year-1 capacity (sum capacity_mw*capacity_factor"
+            f"={actual:.4f}) does not reconcile with project capacity_mw*capacity_factor"
+            f"={expected:.4f} within {tolerance:.0%}. Align the hybrid scenario."
+        )
+    return specs
+
+
+def calculate_net_production_for_year(
+    params: Dict[str, Any], year_index: int
+) -> tuple[float, float]:
+    """Gross/net kWh for a year — multi-tech sum if specs are present, else single.
+
+    With ``params["tech_generation_specs"]`` set (by ``_prepare_cashflow_context``)
+    the result is the sum over technologies of :func:`_calculate_net_production`,
+    each with its own capacity / capacity factor / degradation. Absent that key, it
+    is exactly the legacy single-tech call (byte-identical wind-only behaviour).
+    """
+    grid_loss = float(params["grid_loss_pct"])
+    curtailment = float(params.get("curtailment_pct", 0.0))
+    specs = params.get("tech_generation_specs")
+    if specs:
+        gross_total = 0.0
+        net_total = 0.0
+        for spec in specs:
+            gross, net = _calculate_net_production(
+                spec["capacity_mw"],
+                spec["capacity_factor"],
+                spec["degradation"],
+                grid_loss,
+                year_index,
+                curtailment_pct=curtailment,
+            )
+            gross_total += gross
+            net_total += net
+        return gross_total, net_total
+    return _calculate_net_production(
+        float(params["capacity_mw"]),
+        float(params["capacity_factor"]),
+        float(params["degradation"]),
+        grid_loss,
+        year_index,
+        curtailment_pct=curtailment,
+    )
+
+
 def _calculate_revenue_lkr(net_kwh: float, tariff_lkr_per_kwh: float) -> float:
     """Compute revenue in LKR = net energy * tariff."""
     return net_kwh * tariff_lkr_per_kwh
