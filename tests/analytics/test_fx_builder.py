@@ -424,18 +424,13 @@ def test_risk_profile_all_usd_debt_concentration() -> None:
     assert profile.var_95_usd_million == pytest.approx(0.0)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN BUG: zero-debt volumetry makes compute_fx_risk_profile return a "
-        "minimal FXRiskProfile with all debt percentages = 0.0, which violates "
-        "FXRiskProfile.__post_init__ (debt percentages must sum to ~100%). "
-        "Correct behaviour would be to return a profile that validates."
-    ),
-    strict=False,
-    raises=ValueError,
-)
 def test_risk_profile_zero_debt_should_not_crash() -> None:
-    """A zero-debt volumetry should yield a valid profile, not crash its validator."""
+    """A zero-debt volumetry yields a valid profile, not a crashed validator.
+
+    Regression: the zero-debt branch returned all debt percentages = 0.0, which
+    violated FXRiskProfile.__post_init__ (must sum to ~100%). It now mirrors the
+    no-volumetry branch (nominal 100% USD) so the minimal profile validates.
+    """
     block = FXStructuredBlock(
         volumetry=[
             FXVolumetry(
