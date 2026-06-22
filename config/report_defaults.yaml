@@ -1,0 +1,42 @@
+# Lender-grade report presentation defaults.
+#
+# CCCDIR: every constant the report layer needs — branding, covenant thresholds,
+# and the KPI display spec — lives here, not hardcoded in Python. The cost-of-
+# capital hurdle is deliberately NOT listed: the verdict reads it from the run's
+# own `discount_rate_used` KPI, so it always reflects the scenario's actual WACC.
+
+report:
+  title: "Lender Information Memorandum"
+  subtitle: "Utility-Scale Wind — Project-Finance Summary"
+  organization: "DutchBay Capital"
+  version: "1.0"
+  confidentiality: "Strictly Private & Confidential"
+  disclaimer: >
+    This document is a model-generated summary prepared for discussion purposes
+    only. Figures are derived from the DutchBay v14 project-finance engine on the
+    stated assumptions and do not constitute investment advice, an offer, or a
+    commitment to lend. Recipients must form their own independent assessment.
+
+# Covenant thresholds the report flags KPIs against. These are lender policy
+# inputs (not engine outputs), so they belong in config.
+covenants:
+  min_dscr_floor: 1.20      # hard lender floor on the minimum DSCR
+  min_dscr_target: 1.30     # sculpt / structuring target
+  max_balloon_pct: 0.40     # refinance-risk ceiling on the bullet/balloon share
+
+# KPI display table: order, human label, and formatting `kind`:
+#   pct       -> value * 100, two decimals, "%"   (returns, rates, shares)
+#   multiple  -> value, two decimals, "x"          (DSCR, LLCR, PLCR, MOIC)
+#   usd       -> value, thousands separator, "$"    (NPV, CFADS)
+kpi_table:
+  - {key: project_irr,        label: "Project IRR (nominal)",   kind: pct}
+  - {key: equity_irr,         label: "Equity IRR",              kind: pct}
+  - {key: project_npv,        label: "Project NPV",             kind: usd}
+  - {key: equity_npv,         label: "Equity NPV",              kind: usd}
+  - {key: min_dscr,           label: "Minimum DSCR",            kind: multiple}
+  - {key: avg_dscr,           label: "Average DSCR",            kind: multiple}
+  - {key: llcr,               label: "LLCR",                    kind: multiple}
+  - {key: plcr,               label: "PLCR",                    kind: multiple}
+  - {key: equity_moic,        label: "Equity MOIC",             kind: multiple}
+  - {key: discount_rate_used, label: "WACC (project hurdle)",   kind: pct}
+  - {key: balloon_pct,        label: "Balloon / bullet share",  kind: pct}
