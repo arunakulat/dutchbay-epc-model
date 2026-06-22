@@ -1,0 +1,44 @@
+{
+  "capacity_factor": 0.305842,
+  "net_site_aep_gwh": 561.5,
+  "gross_aep_gwh": 655.0,
+  "source_id": "DUTCHBAY_HYBRID_WIND_SOLAR",
+  "source_type": "REFERENCE",
+  "power_curve_key": "iea_reference_10mw",
+  "iec_standard": "IEC 61400-12-1:2022",
+  "derived_from": [
+    "IEA_REFERENCE_10MW_198_PC",
+    "ERA5_WIND_RESOURCE_DUTCHBAY",
+    "PYWAKE_BASTANKHAH_PORTEAGEL_2014",
+    "PVWATTS_PUTTALAM_GHI_P50",
+    "IEC_61400_15_2_UNCERTAINTY"
+  ],
+  "technology_split_gwh": {
+    "wind": 473.8,
+    "solar": 87.6
+  },
+  "wind_resource": {
+    "mean_wind_speed_ms": 7.29,
+    "weibull_a": 8.199,
+    "weibull_k": 2.665,
+    "shear_exponent": 0.14,
+    "air_density_kgm3": 1.15,
+    "data_years": "2020-2024"
+  },
+  "project_info": {
+    "name": "DutchBay Hybrid Wind+Solar",
+    "location": "Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka",
+    "capacity_mw": 209.6,
+    "wind_capacity_mw": 159.6,
+    "solar_capacity_mw": 50.0,
+    "cod_year": 2027
+  },
+  "exceedance": {
+    "net_aep_p50_gwh": 561.5,
+    "net_aep_p90_1yr_gwh": 489.1
+  },
+  "created_date": "2026-06-22",
+  "created_by": "M3 hybrid (canonical wind bankable export + declared solar P50)",
+  "version": "1.0",
+  "notes": "Combined bankable AEP for the 209.6 MW hybrid = wind 473.8 GWh (15 x IEA-10MW-198 via wind_resource.bankable_aep; ERA5-fitted Weibull A=8.199/k=2.665; PyWake 7.28% wake; 14.48% total losses) + solar 87.6 GWh (50 MW fixed-tilt, Puttalam GHI, declared P50). Net CF 0.305842 over 209.6 MW nameplate reconciles with capacity_mw*capacity_factor (the engine bills revenue off that). The solar P50 is a declared config value pending the pvlib producer (multi-tech build item 3); the per-tech split drives the lender reporting (generation.technologies)."
+}
