@@ -101,7 +101,7 @@ class WindAnalyzer:
         # Load configuration (CCCDIR compliance)
         self._load_config(config_path)
         
-        logger.info(f"WindAnalyzer v1.0.0 initialized")
+        logger.info("WindAnalyzer v1.0.0 initialized")
         logger.info(f"  Data points: {len(self.df):,}")
         logger.info(f"  Wind speed column: {ws_column}")
         logger.info(f"  Mean WS: {self.df[ws_column].mean():.2f} m/s")
@@ -164,7 +164,14 @@ class WindAnalyzer:
             Shape k=2.65, Scale c=8.27
         """
         ws_data = self.df[self.ws_column].dropna()
-        
+
+        # Quality control (CCCDIR config bounds): drop speeds outside
+        # [ws_min, ws_max] before the MLE so suspicious spikes don't drag the
+        # Weibull scale. These bounds were loaded in __init__ but never applied.
+        # Real ERA5 speeds sit well within [0, 50] m/s, so this is a no-op for
+        # clean data and only removes physically-implausible outliers.
+        ws_data = ws_data[(ws_data >= self.ws_min) & (ws_data <= self.ws_max)]
+
         # Fit Weibull using config method (CCCDIR: no hardcoded 'mle')
         if self.weibull_method == 'mle':
             # scipy.stats.weibull_min uses (c, loc, scale) parameterization
