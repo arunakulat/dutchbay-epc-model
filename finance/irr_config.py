@@ -99,16 +99,20 @@ def get_irr_bounds(
         upper = irr_cfg.get("equity_irr_upper_bound")
         if lower is not None or upper is not None:
             # Found role-specific, use it (may still fall back to project-level for one)
-            lower = lower or irr_cfg.get("irr_lower_bound")
-            upper = upper or irr_cfg.get("irr_upper_bound")
+            # Use an explicit None check: a legitimate 0.0 role bound is falsy,
+            # so `lower or project_lower` would silently clobber it.
+            lower = lower if lower is not None else irr_cfg.get("irr_lower_bound")
+            upper = upper if upper is not None else irr_cfg.get("irr_upper_bound")
             return lower, upper
 
     elif role == "debt":
         lower = irr_cfg.get("debt_irr_lower_bound")
         upper = irr_cfg.get("debt_irr_upper_bound")
         if lower is not None or upper is not None:
-            lower = lower or irr_cfg.get("irr_lower_bound")
-            upper = upper or irr_cfg.get("irr_upper_bound")
+            # Use an explicit None check: a legitimate 0.0 role bound is falsy,
+            # so `lower or project_lower` would silently clobber it.
+            lower = lower if lower is not None else irr_cfg.get("irr_lower_bound")
+            upper = upper if upper is not None else irr_cfg.get("irr_upper_bound")
             return lower, upper
 
     # Default: project-level bounds
