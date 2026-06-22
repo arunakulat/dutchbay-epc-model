@@ -1,5 +1,5 @@
 [run]
-source = finance,analytics
+source = analytics,finance,wind_resource,api
 omit =
     */tests/*
     */__pycache__/*
@@ -8,6 +8,17 @@ omit =
     */.venv*/*
     */venv/*
     */setup.py
+    # Untestable infra excluded from the coverage denominator (2026-06-22): these
+    # are not unit-testable, so a coverage % over them is meaningless. Hydra/
+    # argparse CLI entrypoints, the exploratory PySAM sandbox, the Streamlit/
+    # matplotlib dashboards & plotting, and the legacy wind-only pipeline_v14
+    # (only scripts/ + legacy_runners/ consume it; the engine was routed off it
+    # in #286). Test the engine logic; exclude the shells.
+    */analytics/cli/*
+    */analytics/pysam_sandbox/*
+    */analytics/sensitivity/viz.py
+    */analytics/sensitivity/dashboard_demo.py
+    */analytics/pipeline_v14.py
 
 [report]
 precision = 2
