@@ -180,17 +180,12 @@ def test_get_irr_bounds_debt_partial_fills_missing_from_project() -> None:
     assert upper == 0.35  # borrowed from project-level
 
 
-@pytest.mark.xfail(
-    reason="BUG: role fallback uses `lower = lower or project_lower`; a legitimate "
-    "0.0 bound is falsy and gets silently replaced by the project-level value.",
-    strict=False,
-)
 def test_get_irr_bounds_zero_equity_lower_bound_not_clobbered() -> None:
     """A role lower bound of exactly 0.0 must be preserved, not overwritten.
 
-    Correct behaviour: equity_irr_lower_bound=0.0 should return 0.0. The current
-    `or`-based fallback treats 0.0 as falsy and substitutes the project lower
-    bound (-0.7) instead.
+    Regression for the `or`-based fallback that treated a legitimate 0.0 bound as
+    falsy and substituted the project lower bound (-0.7); now an explicit
+    `is not None` check preserves it.
     """
     config: Dict[str, Any] = {
         "irr_validation": {
@@ -203,25 +198,16 @@ def test_get_irr_bounds_zero_equity_lower_bound_not_clobbered() -> None:
     lower, _ = get_irr_bounds(config, role="equity")
     assert lower == 0.0
 
-
-def test_get_irr_bounds_zero_equity_lower_bound_current_behaviour() -> None:
-    """Document the CURRENT (buggy) behaviour for the 0.0 lower-bound case.
-
-    Pairs with the xfail above: until the `or` is fixed, a 0.0 equity lower
-    bound is clobbered by the project-level -0.7.
-    """
-    config: Dict[str, Any] = {
+    # Project-level fallback still applies when a role bound is genuinely absent.
+    cfg2: Dict[str, Any] = {
         "irr_validation": {
             "irr_lower_bound": -0.7,
-            "irr_upper_bound": 0.35,
-            "equity_irr_lower_bound": 0.0,
             "equity_irr_upper_bound": 0.5,
         }
     }
-    lower, upper = get_irr_bounds(config, role="equity")
-    # BUG: 0.0 is falsy -> replaced by project-level lower bound.
-    assert lower == -0.7
-    assert upper == 0.5
+    lo2, up2 = get_irr_bounds(cfg2, role="equity")
+    assert lo2 == -0.7  # equity lower absent -> falls back to project level
+    assert up2 == 0.5
 
 
 # ---------------------------------------------------------------------------
