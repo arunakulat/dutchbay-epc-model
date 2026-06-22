@@ -34,3 +34,15 @@ def test_equity_distribution_hydra_cold_import() -> None:
     """
     result = _cold_import("finance.equity_distribution_v14_hydra")
     assert result.returncode == 0, f"cold import failed:\n{result.stderr}"
+
+
+def test_cashflow_v14_cold_import() -> None:
+    """`import finance.cashflow_v14` must succeed standalone.
+
+    Same class as the equity case: cashflow_v14 imports analytics.config_schema,
+    which pulls in the analytics package -> pipeline_v14_enhanced, which imported
+    `build_annual_rows` back from cashflow_v14 mid-init. That back-edge is now a
+    lazy import.
+    """
+    result = _cold_import("finance.cashflow_v14")
+    assert result.returncode == 0, f"cold import failed:\n{result.stderr}"

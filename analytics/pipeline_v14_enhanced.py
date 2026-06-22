@@ -46,7 +46,6 @@ from analytics.contracts_v14 import WaccResult
 from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
-from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import _extract_capex_usd, plan_debt
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_build_up_wacc, compute_wacc_from_config
@@ -609,6 +608,12 @@ def run_v14_pipeline_enhanced(
         metrics.validation_time_sec = time.time() - phase_start
 
         phase_start = time.time()
+        # Lazy import: breaks the cashflow_v14 <-> analytics cold-import cycle
+        # (cashflow_v14 imports analytics.config_schema, which pulls in this module
+        # via the analytics package init). debt_v14 has no such edge, so its
+        # imports above stay eager.
+        from finance.cashflow_v14 import build_annual_rows
+
         annual_rows = build_annual_rows(cfg)
         annual_rows = _validate_annual_rows_structure(annual_rows)
         metrics.annual_rows_count = len(annual_rows)
