@@ -159,10 +159,15 @@ def _calculate_net_production(
     year: int,
     curtailment_pct: float = 0.0,
 ) -> tuple[float, float]:
-    """Calculate gross and net kWh for a given year.
+    """Calculate gross and net kWh for a given year from capacity + capacity factor.
 
-    DEPRECATED: Use apply_degradation_profile() for new code.
-    This function maintained for backward compatibility.
+    This is the LIVE production primitive: the cashflow (via
+    ``calculate_net_production_for_year``) computes each year's gross/net energy
+    here, including grid losses and the financed curtailment lever. ``M3`` reuses
+    it per technology to sum a multi-tech plant. (It is distinct from
+    ``apply_degradation_profile``, which applies a degradation *curve* to an
+    already-computed AEP base and does not model grid loss/curtailment — the two
+    are not interchangeable; the earlier "DEPRECATED" note was incorrect.)
 
     Parameters
     ----------
