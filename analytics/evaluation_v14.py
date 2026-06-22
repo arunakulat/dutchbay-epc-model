@@ -488,11 +488,23 @@ def evaluate_with_casper_tail_risk(
     if tail_risk_snapshots:
         metadata["tail_risk_summary"] = tail_risk_snapshots
 
+    # Multi-tech generation view (de-orphans the never-fed generation contracts).
+    # Built from the run's real AEP/CFADS — additive, no economics recomputation;
+    # (None, None) when AEP is unresolvable. Lazy import preserves this module's
+    # no-heavy-imports-at-module-scope invariant.
+    from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
+
+    generation, generation_breakdown = build_multi_tech_from_run(
+        baseline_kpis, base_config
+    )
+
     return CasperResult(
         scenario=scenario,
         baseline_kpis=baseline_kpis,
         sensitivities=sensitivity_suite,
         monte_carlo=monte_carlo,
+        generation=generation,
+        multi_tech_generation_breakdown=generation_breakdown,
         metadata=metadata,
     )
 
