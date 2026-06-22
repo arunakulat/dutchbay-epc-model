@@ -1,20 +1,23 @@
 """Build multi-technology generation views from a finance run (Dolphin).
 
 Turns the **real** outputs of a v14 run — the run KPIs (CFADS) and the scenario's
-resolved AEP — into the multi-tech generation contracts defined in
-``analytics.contracts_v14`` (``GenerationProfile``, ``MultiTechGenerationResult``,
-``TechnologyBreakdown``). It re-uses those contracts rather than inventing new ones,
-and performs **no finance recomputation**: every value is read from the run/config,
-so it cannot perturb the economics (it is an additive output slice).
+declared per-technology AEP — into the multi-tech generation contracts in
+``analytics.contracts_v14`` (``GenerationProfile`` / ``MultiTechGenerationResult`` /
+``TechnologyBreakdown``). It re-uses those contracts and performs **no finance
+recomputation**: it is an additive output slice that cannot perturb the economics.
 
-Wind-only today; a solar/BESS ``GenerationProfile`` slots into the same
-``aggregate_generation`` call as the multi-tech build lands. This is the producer
-that de-orphans the previously never-fed multi-tech contracts.
+Per-technology AEP is read from a ``generation.technologies.<tech>`` block
+(preferred) or the legacy ``resource.<tech>``. The run's combined operational CFADS
+is split across technologies **in proportion to their AEP** — an *indicative*
+allocation of one combined-plant run, clearly distinct from true per-tech project
+finance (separate solar CAPEX/OPEX/degradation through the cashflow), which is a
+later step. Wind-only collapses to a 100% wind share (identical to the prior
+behaviour).
 """
 
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from analytics.contracts_v14 import (
     GenerationProfile,
@@ -24,6 +27,9 @@ from analytics.contracts_v14 import (
 
 #: GWh → kWh (the contracts carry AEP in kWh).
 GWH_TO_KWH = 1_000_000.0
+
+#: Technologies recognised, in display order. BESS/storage slots in later.
+SUPPORTED_TECHNOLOGIES: Tuple[str, ...] = ("wind", "solar")
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -36,43 +42,84 @@ def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
     return cur
 
 
-def resolve_wind_aep_kwh(config: Mapping[str, Any]) -> Optional[float]:
-    """Resolve the run's net P50 wind AEP (kWh) from the scenario config.
+def resolve_tech_aep_kwh(config: Mapping[str, Any], tech: str) -> Optional[float]:
+    """Resolve a technology's net P50 AEP (kWh) from the scenario config.
 
-    Tries the canonical ``resource.wind.aep_gwh`` then ``aep_summary
-    .net_aep_p50_gwh``. Returns ``None`` if neither is present (the caller then
-    skips the generation view rather than fabricating a number).
+    Looks at ``generation.technologies.<tech>.aep_gwh`` first, then the legacy
+    ``resource.<tech>.aep_gwh``, then (wind only) ``aep_summary.net_aep_p50_gwh``.
+    Returns ``None`` if none is present.
     """
-    for path in (("resource", "wind", "aep_gwh"), ("aep_summary", "net_aep_p50_gwh")):
+    candidates = [
+        ("generation", "technologies", tech, "aep_gwh"),
+        ("resource", tech, "aep_gwh"),
+    ]
+    if tech == "wind":
+        candidates.append(("aep_summary", "net_aep_p50_gwh"))
+    for path in candidates:
         value = _nested_get(config, *path)
         if value is not None:
             return float(value) * GWH_TO_KWH
     return None
 
 
-def build_wind_generation_profile(
-    kpis: Mapping[str, Any], config: Mapping[str, Any]
-) -> Optional[GenerationProfile]:
-    """Build the wind ``GenerationProfile`` from a run's KPIs + scenario config.
+def resolve_wind_aep_kwh(config: Mapping[str, Any]) -> Optional[float]:
+    """Back-compat alias: the wind AEP (kWh). See :func:`resolve_tech_aep_kwh`."""
+    return resolve_tech_aep_kwh(config, "wind")
 
-    AEP comes from the scenario (the frozen P50 the finance run used); the
-    representative annual CFADS comes from the run KPIs
-    (``mean_operational_cfads_usd``, falling back to ``final_cfads_usd``).
-    Returns ``None`` if the AEP cannot be resolved.
-    """
-    aep_kwh = resolve_wind_aep_kwh(config)
-    if aep_kwh is None:
-        return None
+
+def _tech_availability(config: Mapping[str, Any], tech: str) -> Optional[float]:
+    for path in (
+        ("generation", "technologies", tech, "availability_pct"),
+        ("resource", tech, "availability_pct"),
+    ):
+        value = _nested_get(config, *path)
+        if value is not None:
+            return float(value)
+    return None
+
+
+def _tech_capex_usd(config: Mapping[str, Any], tech: str) -> Optional[float]:
+    value = _nested_get(config, "generation", "technologies", tech, "capex_usd")
+    return float(value) if value is not None else None
+
+
+def _run_cfads_usd(kpis: Mapping[str, Any]) -> float:
+    """Representative annual operational CFADS from the run KPIs."""
     cfads = kpis.get("mean_operational_cfads_usd")
     if cfads is None:
         cfads = kpis.get("final_cfads_usd", 0.0)
-    availability = _nested_get(config, "resource", "wind", "availability_pct")
+    return float(cfads)
+
+
+def build_tech_generation_profile(
+    tech: str,
+    aep_kwh: float,
+    cfads_usd: float,
+    config: Mapping[str, Any],
+) -> GenerationProfile:
+    """Assemble one technology's :class:`GenerationProfile`."""
+    availability = _tech_availability(config, tech)
     return GenerationProfile(
-        technology="wind",
+        technology=tech,
         annual_aep_kwh=aep_kwh,
-        annual_cfads_usd=float(cfads),
-        availability_pct=float(availability) if availability is not None else None,
+        annual_cfads_usd=cfads_usd,
+        availability_pct=availability,
         losses_breakdown=None,
+    )
+
+
+def build_wind_generation_profile(
+    kpis: Mapping[str, Any], config: Mapping[str, Any]
+) -> Optional[GenerationProfile]:
+    """Back-compat: the wind profile carrying the run's full operational CFADS.
+
+    Returns ``None`` if the wind AEP cannot be resolved.
+    """
+    aep_kwh = resolve_tech_aep_kwh(config, "wind")
+    if aep_kwh is None:
+        return None
+    return build_tech_generation_profile(
+        "wind", aep_kwh, _run_cfads_usd(kpis), config
     )
 
 
@@ -127,16 +174,37 @@ def technology_breakdown(
 def build_multi_tech_from_run(
     kpis: Mapping[str, Any],
     config: Mapping[str, Any],
-    *,
-    capex_by_tech: Optional[Mapping[str, float]] = None,
 ) -> Tuple[Optional[MultiTechGenerationResult], Optional[List[TechnologyBreakdown]]]:
-    """Build the (wind-only) multi-tech generation view from a finance run.
+    """Build the multi-tech generation view from a finance run.
 
-    Returns ``(None, None)`` when the AEP cannot be resolved, so callers can
-    attach the view opportunistically without breaking runs that lack it.
+    Collects every supported technology with a declared AEP, splits the run's
+    combined operational CFADS across them **in proportion to AEP** (indicative
+    allocation of one combined run), and returns the aggregate plus the per-tech
+    breakdown. Wind-only yields a single 100%-wind technology. Returns
+    ``(None, None)`` when no technology AEP is resolvable, so callers can attach
+    the view opportunistically without breaking runs that lack it.
     """
-    wind = build_wind_generation_profile(kpis, config)
-    if wind is None:
+    aeps: Dict[str, float] = {}
+    for tech in SUPPORTED_TECHNOLOGIES:
+        aep = resolve_tech_aep_kwh(config, tech)
+        if aep is not None:
+            aeps[tech] = aep
+    if not aeps:
         return None, None
-    result = aggregate_generation([wind])
+
+    total_aep = sum(aeps.values())
+    run_cfads = _run_cfads_usd(kpis)
+    profiles: List[GenerationProfile] = []
+    for tech, aep in aeps.items():
+        cfads_alloc = run_cfads * (aep / total_aep) if total_aep else 0.0
+        profiles.append(
+            build_tech_generation_profile(tech, aep, cfads_alloc, config)
+        )
+
+    result = aggregate_generation(profiles)
+    capex_by_tech = {
+        tech: capex
+        for tech in aeps
+        if (capex := _tech_capex_usd(config, tech)) is not None
+    } or None
     return result, technology_breakdown(result, capex_by_tech=capex_by_tech)

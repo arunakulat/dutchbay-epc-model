@@ -113,3 +113,64 @@ def test_build_multi_tech_from_run_wind_only() -> None:
 def test_build_multi_tech_from_run_none_without_aep() -> None:
     result, breakdown = build_multi_tech_from_run(_KPIS, {})
     assert result is None and breakdown is None
+
+
+# --------------------------------------------------------------------------- #
+# M2: solar resolution + the generation.technologies block + hybrid split
+# --------------------------------------------------------------------------- #
+from analytics.portfolio.generation_aggregator import resolve_tech_aep_kwh  # noqa: E402
+
+_HYBRID_CONFIG = {
+    "generation": {
+        "technologies": {
+            "wind": {"aep_gwh": 473.8, "availability_pct": 97.0, "capex_usd": 195_000_000},
+            "solar": {"aep_gwh": 87.6, "availability_pct": 99.0, "capex_usd": 35_000_000},
+        }
+    }
+}
+
+
+def test_resolve_tech_aep_prefers_generation_block() -> None:
+    cfg = {
+        "generation": {"technologies": {"wind": {"aep_gwh": 500.0}}},
+        "resource": {"wind": {"aep_gwh": 473.8}},  # legacy; should be overridden
+    }
+    assert resolve_tech_aep_kwh(cfg, "wind") == pytest.approx(500.0e6)
+
+
+def test_resolve_solar_aep_from_generation_and_resource() -> None:
+    assert resolve_tech_aep_kwh(_HYBRID_CONFIG, "solar") == pytest.approx(87.6e6)
+    assert resolve_tech_aep_kwh({"resource": {"solar": {"aep_gwh": 60.0}}}, "solar") == pytest.approx(60.0e6)
+    assert resolve_tech_aep_kwh({}, "solar") is None
+
+
+def test_hybrid_run_splits_cfads_by_aep_share() -> None:
+    kpis = {"mean_operational_cfads_usd": 50_000_000.0}
+    result, breakdown = build_multi_tech_from_run(kpis, _HYBRID_CONFIG)
+    assert result is not None and breakdown is not None
+    # Both technologies present.
+    assert set(result.technologies) == {"wind", "solar"}
+    total_aep = 473.8 + 87.6
+    # CFADS split in proportion to AEP; the allocation conserves the run total.
+    assert result.total_cfads_usd == pytest.approx(50_000_000.0)
+    assert result.technologies["wind"].annual_cfads_usd == pytest.approx(
+        50_000_000.0 * 473.8 / total_aep
+    )
+    assert result.technologies["solar"].annual_cfads_usd == pytest.approx(
+        50_000_000.0 * 87.6 / total_aep
+    )
+    rows = {r.technology: r for r in breakdown}
+    assert rows["wind"].share_of_aep_pct == pytest.approx(100.0 * 473.8 / total_aep)
+    assert rows["solar"].share_of_aep_pct == pytest.approx(100.0 * 87.6 / total_aep)
+    # CAPEX shares come from the generation block.
+    assert rows["wind"].share_of_capex_pct == pytest.approx(100.0 * 195 / 230)
+    assert rows["solar"].share_of_capex_pct == pytest.approx(100.0 * 35 / 230)
+    # Per-tech availability flows through.
+    assert result.technologies["solar"].availability_pct == pytest.approx(99.0)
+
+
+def test_tech_without_availability_is_none() -> None:
+    cfg = {"generation": {"technologies": {"wind": {"aep_gwh": 400.0}}}}
+    result, _ = build_multi_tech_from_run({"final_cfads_usd": 1.0}, cfg)
+    assert result is not None
+    assert result.technologies["wind"].availability_pct is None
