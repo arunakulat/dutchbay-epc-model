@@ -265,7 +265,7 @@ def solve_for_max_debt_given_dscr(
             achieved_dscr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover - rare path, defensive
             logger.warning(
-                "Evaluation failed at debt=$%,.0f: %s. Assuming debt too high.",
+                "Evaluation failed at debt=$%.0f: %s. Assuming debt too high.",
                 mid,
                 exc,
             )
@@ -285,8 +285,8 @@ def solve_for_max_debt_given_dscr(
         # than tolerance (in USD), we stop.
         if (high - low) < tolerance:
             logger.debug(
-                "DSCR solver converged in %d iterations: debt=$%,.0f, "
-                "DSCR_min=%.3f (target=%.3f), bounds=[$%,.0f, $%,.0f]",
+                "DSCR solver converged in %d iterations: debt=$%.0f, "
+                "DSCR_min=%.3f (target=%.3f), bounds=[$%.0f, $%.0f]",
                 iteration + 1,
                 mid,
                 achieved_dscr,
@@ -299,7 +299,7 @@ def solve_for_max_debt_given_dscr(
     if last_good_mid is not None:
         logger.warning(
             "DSCR solver did not fully converge after %d iterations. "
-            "Returning last midpoint: debt=$%,.0f, bounds=[$%,.0f, $%,.0f], "
+            "Returning last midpoint: debt=$%.0f, bounds=[$%.0f, $%.0f], "
             "target_dscr=%.3f",
             max_iterations,
             last_good_mid,
@@ -410,7 +410,7 @@ def solve_for_tariff_given_npv(
         if error < tolerance:
             logger.debug(
                 "NPV solver converged in %d iterations: tariff=%.2f LKR/kWh, "
-                "target_%s=$%,.0f, achieved=$%,.0f, delta=$%,.0f",
+                "target_%s=$%.0f, achieved=$%.0f, delta=$%.0f",
                 iteration + 1,
                 mid,
                 metric,
@@ -432,7 +432,7 @@ def solve_for_tariff_given_npv(
         logger.warning(
             "NPV solver did not fully converge after %d iterations. "
             "Returning last midpoint: tariff=%.2f, bounds=[%.2f, %.2f], "
-            "target_%s=$%,.0f",
+            "target_%s=$%.0f",
             max_iterations,
             last_good_mid,
             low,
@@ -529,7 +529,7 @@ def solve_for_max_debt_multi_covenant(
             achieved_dscr, achieved_llcr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "Evaluation failed at debt=$%,.0f: %s. Assuming debt too high.",
+                "Evaluation failed at debt=$%.0f: %s. Assuming debt too high.",
                 mid,
                 exc,
             )
@@ -555,7 +555,7 @@ def solve_for_max_debt_multi_covenant(
             binding = "DSCR" if dscr_slack < llcr_slack else "LLCR"
 
             logger.debug(
-                "Multi-covenant solver converged in %d iterations: debt=$%,.0f, "
+                "Multi-covenant solver converged in %d iterations: debt=$%.0f, "
                 "DSCR=%.3f (target=%.3f, slack=%.3f), "
                 "LLCR=%.3f (target=%.3f, slack=%.3f), binding=%s",
                 iteration + 1,
@@ -573,7 +573,7 @@ def solve_for_max_debt_multi_covenant(
     if last_good_mid is not None:
         logger.warning(
             "Multi-covenant solver did not fully converge after %d iterations. "
-            "Returning last midpoint: debt=$%,.0f, bounds=[$%,.0f, $%,.0f]",
+            "Returning last midpoint: debt=$%.0f, bounds=[$%.0f, $%.0f]",
             max_iterations,
             last_good_mid,
             low,
@@ -663,7 +663,7 @@ def solve_for_min_capex_given_irr_floor(
             achieved_irr = _evaluate_at(mid)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "Evaluation failed at capex=$%,.0f: %s. Assuming capex too low.",
+                "Evaluation failed at capex=$%.0f: %s. Assuming capex too low.",
                 mid,
                 exc,
             )
@@ -681,8 +681,8 @@ def solve_for_min_capex_given_irr_floor(
 
         if (high - low) < tolerance:
             logger.debug(
-                "Capex optimizer converged in %d iterations: capex=$%,.0f, "
-                "IRR=%.4f (floor=%.4f), savings=$%,.0f",
+                "Capex optimizer converged in %d iterations: capex=$%.0f, "
+                "IRR=%.4f (floor=%.4f), savings=$%.0f",
                 iteration + 1,
                 mid,
                 achieved_irr,
@@ -694,7 +694,7 @@ def solve_for_min_capex_given_irr_floor(
     if last_good_mid is not None:
         logger.warning(
             "Capex optimizer did not fully converge after %d iterations. "
-            "Returning last midpoint: capex=$%,.0f, bounds=[$%,.0f, $%,.0f]",
+            "Returning last midpoint: capex=$%.0f, bounds=[$%.0f, $%.0f]",
             max_iterations,
             last_good_mid,
             low,
