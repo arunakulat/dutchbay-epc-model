@@ -15,6 +15,7 @@ semantics, exact dict-navigation rules, the documented percent-vs-decimal pivot 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any, Dict
 
 import pytest
@@ -327,8 +328,9 @@ def test_helpers_read_canonical_lendercase_scenario() -> None:
     """
     yaml = pytest.importorskip("yaml")
     path = (
-        "/Users/aruna/Downloads/dutchbay-wt-fixes/"
-        "scenarios/dutchbay_lendercase_2025Q4.yaml"
+        Path(__file__).resolve().parents[2]
+        / "scenarios"
+        / "dutchbay_lendercase_2025Q4.yaml"
     )
     with open(path, encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
