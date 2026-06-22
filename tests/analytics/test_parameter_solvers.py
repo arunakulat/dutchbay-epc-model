@@ -208,17 +208,17 @@ def test_npv_solver_rejects_invalid_metric() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Multi-covenant (DSCR + LLCR) solver  -- carries the known LLCR bug
+# Multi-covenant (DSCR + LLCR) solver
 # ---------------------------------------------------------------------------
 
 
-def test_multi_covenant_collapses_to_floor_due_to_missing_llcr_key() -> None:
-    """Current (buggy) behaviour: debt is driven to the lower bound.
+def test_multi_covenant_unsatisfiable_llcr_collapses_to_floor() -> None:
+    """An LLCR target the project cannot meet drives debt to the lower bound.
 
-    DSCR (1.30) satisfies target (1.10), but llcr is read as kpis["llcr_min"]
-    which the engine never sets, so it defaults to 0.0 and never meets the
-    target_llcr. ``both_satisfied`` is therefore always False and the bracket
-    collapses toward the low bound.
+    DSCR (1.30) clears its target (1.10), but the engine's llcr (~1.13) cannot
+    meet target_llcr=1.50 at any debt level, so ``both_satisfied`` stays False
+    and the bracket collapses toward the low bound — LLCR is correctly the
+    binding covenant here.
     """
     low, high = 1.0e6, 1.0e9
     debt = solve_for_max_debt_multi_covenant(
@@ -229,27 +229,16 @@ def test_multi_covenant_collapses_to_floor_due_to_missing_llcr_key() -> None:
         bounds=(low, high),
         tolerance=1000.0,
     )
-    # BUG: should be able to raise debt (DSCR has slack) but LLCR reads 0.0,
-    # so debt collapses to the floor. Assert the current behaviour.
+    # LLCR (~1.13) < target (1.50) everywhere -> floor.
     assert debt == pytest.approx(low, rel=1e-3)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN BUG: solver reads kpis['llcr_min'] but the engine emits 'llcr'; "
-        "the missing key defaults LLCR to 0.0 so a satisfiable LLCR covenant "
-        "never binds and debt collapses to the floor instead of rising with "
-        "the available DSCR/LLCR slack."
-    ),
-    strict=False,
-)
 def test_multi_covenant_satisfiable_llcr_should_not_collapse_to_floor() -> None:
-    """Correct behaviour (fix-me): a satisfiable LLCR should let debt rise.
+    """A satisfiable LLCR lets debt rise (regression for the llcr-key fix).
 
     The engine reports llcr ~= 1.13 and dscr_min == 1.30 for this case. With
-    target_dscr=1.10 and target_llcr=1.00 (both genuinely satisfied), a correct
-    solver would behave like the DSCR-only solver and push debt toward the high
-    bound rather than the floor.
+    target_dscr=1.10 and target_llcr=1.00 (both genuinely satisfied), the solver
+    behaves like the DSCR-only solver and pushes debt toward the high bound.
     """
     low, high = 1.0e6, 1.0e9
     debt = solve_for_max_debt_multi_covenant(
