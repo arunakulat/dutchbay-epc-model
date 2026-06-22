@@ -39,10 +39,24 @@ def _hybrid_scenario() -> dict:
         fx_start_lkr_per_usd=333.79,
     )
     scenario = inputs.to_scenario_config()
+    # A COMPLETE generation block: finance keys (capacity_mw/capacity_factor — the
+    # cashflow sums these) AND the reporting key (aep_gwh). Per-tech CF derives from
+    # the declared AEP, so the per-tech sum reconciles with the project headline.
+    wind_mw, solar_mw = 150.0, 50.0
     scenario["generation"] = {
         "technologies": {
-            "wind": {"aep_gwh": WIND_AEP_GWH, "capex_usd": 195_000_000},
-            "solar": {"aep_gwh": SOLAR_AEP_GWH, "capex_usd": 35_000_000},
+            "wind": {
+                "capacity_mw": wind_mw,
+                "capacity_factor": WIND_AEP_GWH * 1e6 / (wind_mw * 1000 * HOURS_PER_YEAR),
+                "aep_gwh": WIND_AEP_GWH,
+                "capex_usd": 195_000_000,
+            },
+            "solar": {
+                "capacity_mw": solar_mw,
+                "capacity_factor": SOLAR_AEP_GWH * 1e6 / (solar_mw * 1000 * HOURS_PER_YEAR),
+                "aep_gwh": SOLAR_AEP_GWH,
+                "capex_usd": 35_000_000,
+            },
         }
     }
     return scenario

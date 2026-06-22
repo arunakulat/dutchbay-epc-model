@@ -146,7 +146,7 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
-  aep_summary_path: "tests/mocks/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (561.5 GWh)
+  aep_summary_path: "tests/mocks/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (561.4 GWh)
 
   # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
@@ -284,22 +284,13 @@ fx:
 # ═════════════════════════════════════════════════════════════════════════════
 capex:
   cost_basis_year: 2026  # USD vintage of the whole cost stack (anchored, ATB-style)
-  estimate_class: 3  # AACE Class 3 (budget authorization) — bottom-up WBS sanity-checked
-  #                    vs the IRENA benchmark; accuracy band resolved from config/defaults.yaml
-  # Bottom-up WBS (NREL SAM/LandBOSSE structure; IRENA/NREL consensus shares: turbine
-  # ~69% / BoP ~16% / grid ~8% / dev ~3.5% / financing ~2% / contingency ~1.5%). The
-  # breakdown SUMS to usd_total (guarded by tests/.../test_canonical_cost_wbs.py) — it
-  # replaces the prior stale decorative breakdown that summed to $150M != the $159.6M
-  # total. The engine still reads usd_total (so the MC/sensitivity capex.usd_total
-  # perturbation keeps working); setting `derive_from_breakdown: true` would make the
-  # engine sum the breakdown instead, but the capex sensitivity perturbs usd_total, so
-  # the full single-source switch is a separate change. $/kW sanity-checked vs the IRENA
-  # 2024 global benchmark ($1,041/kW) -- see the /run-pipeline `cost` block.
+  estimate_class: 3  # AACE Class 3 (budget authorization); $/kW sanity-checked vs
+  #                    the IRENA 2024 benchmark (wind ~$1,041/kW, SL utility PV ~$800/kW)
+  # Combined cost stack: wind $159.6M + solar $40M. The engine reads usd_total; the
+  # per-technology capex split is in the `generation:` block above (a granular
+  # per-tech WBS, like the lendercase wind breakdown, is future work).
   usd_total: 199600000  # combined: wind $159.6M ($1,000/kW x 159.6 MW) + solar $40M ($800/kW x 50 MW)
   capex_per_kw_usd: 952  # 199.6M / 209.6 MW combined nameplate
-  # Per-technology capex is declared in the `generation:` block above
-  # (wind $159.6M / solar $40M). A granular per-tech WBS — like the lendercase
-  # wind breakdown — is future work; the engine reads usd_total.
 
 opex:
   usd_per_year: 3500000  # combined: wind $3.0M (fixed O&M) + solar $0.5M (~$10/kW-yr x 50 MW)
@@ -486,9 +477,9 @@ monte_carlo:
       low: 2100000.0
       high: 3900000.0
       distribution: uniform
-    - name: capex.usd_total           # base 150e6, rel_std 0.08 -> +/-16%
-      low: 126000000.0
-      high: 174000000.0
+    - name: capex.usd_total           # base 199.6e6 (combined), rel_std 0.08 -> +/-16%
+      low: 167664000.0
+      high: 231536000.0
       distribution: uniform
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
@@ -530,8 +521,8 @@ expected_results:
   # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 87.6 GWh (50 MW
   # fixed-tilt P50). The aep_reconciliation guard cross-checks this against
   # capacity_mw * capacity_factor (561.56 GWh), so a stale headline cannot creep in.
-  net_aep_p50_gwh: 561.5
-  net_aep_p90_gwh: 489.1   # ~0.871 x P50 (carried from the wind P90/P50 shape)
+  net_aep_p50_gwh: 561.4   # wind 473.8 + solar 87.6 (exact)
+  net_aep_p90_gwh: 489.0   # ~0.871 x P50 (carried from the wind P90/P50 shape)
   capacity_factor: 0.305842
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of
