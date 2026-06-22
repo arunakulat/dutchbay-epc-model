@@ -22,8 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _HYBRID = {
     "generation": {
         "technologies": {
-            "wind": {"capacity_mw": 150, "capacity_factor": 0.339, "degradation_pct": 0.006},
-            "solar": {"capacity_mw": 50, "capacity_factor": 0.20, "degradation_pct": 0.004},
+            # degradation_pct is a PERCENT (0.6 -> 0.6%/yr), matching the single-tech
+            # convention (_build_cashflow_params divides by 100). Resolved to 0.006 dec.
+            "wind": {"capacity_mw": 150, "capacity_factor": 0.339, "degradation_pct": 0.6},
+            "solar": {"capacity_mw": 50, "capacity_factor": 0.20, "degradation_pct": 0.4},
         }
     }
 }
@@ -142,6 +144,54 @@ def test_per_tech_degradation_diverges_from_single_blend() -> None:
     _, n10_multi = calculate_net_production_for_year(multi, 10)
     _, n10_single = calculate_net_production_for_year(single, 10)
     assert n10_multi != pytest.approx(n10_single)  # per-tech degradation genuinely matters
+
+
+# --------------------------------------------------------------------------- #
+# Unit consistency (degradation): the two paths must be interchangeable.
+# --------------------------------------------------------------------------- #
+_LIFE_PROJECT = {
+    "capacity_mw": 200.0,
+    "capacity_factor": 0.304250,
+    "degradation": 0.005,  # decimal, as _build_cashflow_params would emit (0.5%/yr)
+    "grid_loss_pct": 0.02,
+    "curtailment_pct": 0.0,
+}
+
+
+def test_wind_only_block_percent_degradation_matches_single_tech_full_life() -> None:
+    # A single wind tech equal to the project headline, with degradation_pct as a
+    # PERCENT (0.5 == the 0.005 decimal the single-tech path uses), must reproduce
+    # the legacy single-tech generation EVERY year — not just year 1.
+    config = {
+        "generation": {
+            "technologies": {
+                "wind": {"capacity_mw": 200.0, "capacity_factor": 0.304250, "degradation_pct": 0.5}
+            }
+        }
+    }
+    specs = resolve_tech_generation_specs(config, _LIFE_PROJECT)
+    assert specs is not None and specs[0]["degradation"] == pytest.approx(0.005)
+    multi = {**_LIFE_PROJECT, "tech_generation_specs": specs}
+    single = {**_LIFE_PROJECT, "tech_generation_specs": None}
+    for year in range(20):
+        assert calculate_net_production_for_year(multi, year) == calculate_net_production_for_year(single, year)
+
+
+def test_wind_only_block_no_degradation_falls_back_full_life() -> None:
+    # No per-tech degradation -> falls back to the (already-decimal) project value;
+    # byte-identical to single-tech across the full project life.
+    config = {"generation": {"technologies": {"wind": {"capacity_mw": 200.0, "capacity_factor": 0.304250}}}}
+    specs = resolve_tech_generation_specs(config, _LIFE_PROJECT)
+    multi = {**_LIFE_PROJECT, "tech_generation_specs": specs}
+    single = {**_LIFE_PROJECT, "tech_generation_specs": None}
+    for year in range(20):
+        assert calculate_net_production_for_year(multi, year) == calculate_net_production_for_year(single, year)
+
+
+def test_negative_per_tech_degradation_raises() -> None:
+    config = {"generation": {"technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.30, "degradation_pct": -0.5}}}}
+    with pytest.raises(ValueError, match="degradation_pct"):
+        resolve_tech_generation_specs(config, {"capacity_mw": 200, "capacity_factor": 0.30, "degradation": 0.005})
 
 
 # --------------------------------------------------------------------------- #

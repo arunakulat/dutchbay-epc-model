@@ -251,13 +251,28 @@ def resolve_tech_generation_specs(
                     "non-generating technology (e.g. storage)."
                 )
             continue  # not a generation tech (e.g. storage) -> intentionally skipped
-        deg = block.get("degradation_pct", block.get("degradation"))
+        # Unit convention MUST match the single-tech path: _build_cashflow_params
+        # reads project.degradation(_pct) as a PERCENT and divides by 100. So a
+        # per-tech degradation_pct here is also a percent (e.g. 0.6 -> 0.6%/yr).
+        # The project fallback comes from params["degradation"], which is ALREADY
+        # the divided decimal, so it is used as-is (no second /100).
+        deg_raw = block.get("degradation_pct", block.get("degradation"))
+        if deg_raw is not None:
+            deg_value = float(deg_raw)
+            if deg_value < 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].degradation_pct={deg_value} "
+                    "is invalid (must be >= 0, percent)."
+                )
+            degradation = deg_value / 100.0
+        else:
+            degradation = project_degradation  # already a decimal (post /100)
         specs.append(
             {
                 "technology": str(name),
                 "capacity_mw": float(cap),
                 "capacity_factor": float(cap_factor),
-                "degradation": float(deg) if deg is not None else project_degradation,
+                "degradation": degradation,
             }
         )
     if not specs:

@@ -5,10 +5,12 @@
 # Path: scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml
 #
 # A combined wind+solar plant on a single PPA/debt facility. The `generation:`
-# block declares each technology (own capacity factor + degradation); the cashflow
-# sums them (M3). Everything else inherits the lendercase debt/tax/FX/WACC stack.
-# The `aep_summary:` below remains the WIND resource summary (the solar split is in
-# `generation:`); it is not on the financed path (cashflow reads capacity_factor).
+# block IS on the financed path: the cashflow sums each technology's generation
+# (own capacity factor AND degradation) — M3. Everything else inherits the
+# lendercase debt/tax/FX/WACC stack. The `aep_summary:` below is the wind-resource
+# summary (the solar split lives in `generation:`); the aep_summary itself is not
+# read by the cashflow — only its bankable AEP is cross-checked by the
+# aep_reconciliation guard.
 #
 # Usage:
 #   python run_full_pipeline_v14.py config=scenarios/dutchbay_hybrid_windsolar_2025Q4
@@ -66,14 +68,14 @@ generation:
     wind:
       capacity_mw: 159.6
       capacity_factor: 0.339      # net P50 (15 x IEA-10MW, ERA5-fitted Weibull)
-      degradation_pct: 0.006      # 0.6%/yr turbine aging
+      degradation_pct: 0.6        # 0.6%/yr turbine aging (percent, /100 by the engine)
       aep_gwh: 473.8              # net P50 AEP (reporting)
       capex_usd: 159600000        # $1,000/kW x 159.6 MW
       availability_pct: 97.0
     solar:
       capacity_mw: 50.0
       capacity_factor: 0.20       # net P50 fixed-tilt, Puttalam GHI
-      degradation_pct: 0.004      # 0.4%/yr module aging
+      degradation_pct: 0.4        # 0.4%/yr module aging (percent, /100 by the engine)
       aep_gwh: 87.6              # 50 MW * 8760 * 0.20
       capex_usd: 40000000         # $800/kW x 50 MW (SL utility-scale PV)
       availability_pct: 99.0
