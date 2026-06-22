@@ -56,6 +56,14 @@ wind = [
 gis = [
   "rasterio>=1.3",
 ]
+# PDF report rendering (Sprint 2). Jinja2 (in core deps) drives the HTML report;
+# WeasyPrint is opt-in because it needs the pango/cairo system libraries that a
+# bare CI runner lacks. The renderer guards the import (app.reports.renderer ->
+# ReportDependencyError) so the base install always serves the HTML report, and
+# the PDF tests are gated behind ``pytest.importorskip('weasyprint')`` (CASPER).
+report = [
+  "weasyprint>=60",
+]
 
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]

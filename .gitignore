@@ -156,6 +156,9 @@ _freeze_artifacts/
 _out_reporting_cli/
 _regression/
 reports/
+# app/reports/ is the SOURCE reporting package (Sprint 2), NOT a generated
+# artifact — re-include it despite the broad reports/ rule above.
+!app/reports/
 inputs/*.zip
 inputs/*.zip
 

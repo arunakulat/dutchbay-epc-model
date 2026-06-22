@@ -14,7 +14,13 @@ from fastapi import HTTPException
 
 import app.api.main as api_main
 from analytics.schema_guard import ConfigValidationError
-from app.api.main import app, health, run_case
+from app.api.main import (
+    app,
+    health,
+    run_case,
+    run_case_report_html,
+    run_case_report_pdf,
+)
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 
@@ -44,6 +50,8 @@ def test_app_exposes_expected_routes() -> None:
     assert "/cases" in spec_paths
     assert "/health" in spec_paths
     assert "/run-pipeline" in spec_paths  # included from api.pipeline_api.router
+    assert "/cases/report.html" in spec_paths
+    assert "/cases/report.pdf" in spec_paths
     # the sensitivity sub-app is mounted as a sub-application
     assert any(getattr(r, "path", "") == "/sensitivity" for r in app.routes)
 
@@ -75,6 +83,53 @@ def test_run_case_maps_engine_validation_error_to_400(
         run_case(WindFarmInputs(**_valid_kwargs()))
     assert exc.value.status_code == 400
     assert "Invalid scenario" in str(exc.value.detail)
+
+
+# --------------------------------------------------------------------------- #
+# Report routes (called directly)
+# --------------------------------------------------------------------------- #
+def test_run_case_report_html_renders() -> None:
+    resp = run_case_report_html(WindFarmInputs(**_valid_kwargs(site_name="ReportSite")))
+    assert resp.status_code == 200
+    assert resp.media_type == "text/html"
+    body = resp.body.decode("utf-8")
+    assert "ReportSite" in body
+    assert "Executive Summary" in body
+
+
+def test_run_case_report_html_maps_validation_error_to_400(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _boom(*_a: Any, **_k: Any) -> Dict[str, Any]:
+        raise ConfigValidationError("bad scenario")
+
+    monkeypatch.setattr(api_main, "run_finance_case", _boom)
+    with pytest.raises(HTTPException) as exc:
+        run_case_report_html(WindFarmInputs(**_valid_kwargs()))
+    assert exc.value.status_code == 400
+
+
+def test_run_case_report_pdf_503_without_weasyprint() -> None:
+    try:
+        import weasyprint  # noqa: F401
+    except ImportError:
+        with pytest.raises(HTTPException) as exc:
+            run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
+        assert exc.value.status_code == 503
+        assert "WeasyPrint" in str(exc.value.detail)
+    else:  # pragma: no cover - only when the optional extra is installed
+        resp = run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
+        assert resp.media_type == "application/pdf"
+
+
+def test_run_case_report_pdf_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Cover the Response assembly without requiring WeasyPrint: stub the renderer.
+    monkeypatch.setattr(api_main, "render_report_pdf", lambda _ctx: b"%PDF-1.7 stub")
+    resp = run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
+    assert resp.media_type == "application/pdf"
+    assert resp.body == b"%PDF-1.7 stub"
+    assert "attachment; filename=" in resp.headers["content-disposition"]
+    assert "lendercase" in resp.headers["content-disposition"]
 
 
 # --------------------------------------------------------------------------- #
