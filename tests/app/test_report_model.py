@@ -124,7 +124,39 @@ def test_verdict_bankable() -> None:
     }
     v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
     assert v.project_viable and v.equity_positive and v.dscr_covenant_met
+    assert v.balloon_within_limit
     assert v.headline == "Bankable at the modeled assumptions."
+
+
+def test_verdict_not_bankable_on_balloon_breach() -> None:
+    # Returns and DSCR all pass, but the balloon covenant breaches: the headline
+    # must NOT claim "Bankable" (it would contradict the covenant table).
+    kpis = {
+        "project_irr": 0.12,
+        "discount_rate_used": 0.08,
+        "equity_npv": 25_000_000.0,
+        "equity_irr": 0.15,
+        "min_dscr": 1.55,
+        "balloon_pct": 0.55,  # > 0.40 ceiling
+    }
+    v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+    assert v.project_viable and v.equity_positive and v.dscr_covenant_met
+    assert v.balloon_within_limit is False
+    assert v.headline == "Not bankable — covenant breach at the modeled assumptions."
+
+
+def test_verdict_not_bankable_on_dscr_breach() -> None:
+    # DSCR floor breached while returns are acceptable -> explicit covenant breach.
+    kpis = {
+        "project_irr": 0.12,
+        "discount_rate_used": 0.08,
+        "equity_npv": 25_000_000.0,
+        "min_dscr": 1.05,  # < 1.20 floor
+        "balloon_pct": 0.20,
+    }
+    v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+    assert v.dscr_covenant_met is False
+    assert v.headline == "Not bankable — covenant breach at the modeled assumptions."
 
 
 def test_verdict_marginal() -> None:
