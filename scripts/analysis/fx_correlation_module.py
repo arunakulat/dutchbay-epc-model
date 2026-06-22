@@ -17,6 +17,26 @@ import numpy as np
 import pandas as pd
 
 
+def _var_cvar_from_losses(
+    losses: np.ndarray, confidence_level: float
+) -> tuple[float, float]:
+    """VaR and CVaR (expected shortfall) of a non-negative LOSS distribution.
+
+    Losses are deficits where *larger is worse*. VaR at ``confidence_level`` is
+    the UPPER-tail quantile — the loss exceeded only ``1 - confidence_level`` of
+    the time (e.g. the 95th percentile for 0.95). CVaR is the mean of the losses
+    at or beyond VaR. The prior code took the ``1 - confidence_level`` quantile
+    (~the 5th percentile), returning a near-minimum loss and drastically
+    understating risk; CVaR then averaged ~95% of the distribution.
+    """
+    if losses.size == 0:
+        return 0.0, 0.0
+    var_val = float(np.percentile(losses, confidence_level * 100.0))
+    tail = losses[losses >= var_val]
+    cvar_val = float(tail.mean()) if tail.size > 0 else var_val
+    return var_val, cvar_val
+
+
 class FXCorrelationModule:
     """
     Multi-Currency FX Correlation & Stress Module - PRODUCTION VERSION
@@ -353,13 +373,9 @@ class FXCorrelationModule:
         deficits = np.array(deficits)
         coverages = np.array(coverages)
 
-        # Calculate VaR
-        var_idx = int((1 - confidence_level) * num_simulations)
-        var_val = float(np.sort(deficits)[var_idx])
-
-        # Calculate CVaR (conditional VaR / expected shortfall)
-        cvar_vals = deficits[deficits >= var_val]
-        cvar_val = float(cvar_vals.mean()) if len(cvar_vals) > 0 else var_val
+        # VaR/CVaR from the UPPER tail of the deficit (loss) distribution: VaR_95
+        # is the deficit exceeded only 5% of the time, CVaR the mean beyond it.
+        var_val, cvar_val = _var_cvar_from_losses(deficits, confidence_level)
 
         return {
             "var_deficit_lkr": var_val,

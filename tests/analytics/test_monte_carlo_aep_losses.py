@@ -64,3 +64,20 @@ def test_mc_aep_applies_curtailment_and_other(tmp_path: Path) -> None:
         f"MC-AEP did not apply curtailment+other: ratio {ratio:.6f} != "
         f"{expected_retention:.6f}"
     )
+
+
+def test_mc_aep_uses_exceedance_convention() -> None:
+    """P-values follow the wind EXCEEDANCE convention: P99 <= P90 <= P75 <= P50.
+
+    P90 is the AEP exceeded in 90% of years (the conservative 10th percentile of
+    the sampled distribution), NOT the upside 90th percentile. Guards the
+    inverted-percentile bug where a "P90" *higher* than P50 was injected into
+    revenue/DSCR/IRR as a non-conservative lender number.
+    """
+    res = run_monte_carlo_aep(
+        aep_summary_path=str(AEP_MOCK), n_scenarios=500, seed=7, export_scenarios=False
+    )
+    p = res["percentiles"]
+    assert p["p99"] <= p["p90"] <= p["p75"] <= p["p50"], f"exceedance ordering violated: {p}"
+    # The headline guard: the conservative P90 must sit below the median.
+    assert p["p90"] < p["p50"]

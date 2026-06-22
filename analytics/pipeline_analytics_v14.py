@@ -31,8 +31,11 @@ from typing import Any, Dict, List, Mapping, Optional
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-# Base pipeline
-from analytics.pipeline_v14 import run_v14_pipeline
+# Base pipeline: the FINANCE engine (returns annual_rows / debt_result / kpis).
+# NOT analytics.pipeline_v14, which is the wind-resource pipeline — a different
+# result shape that lacks the finance keys the analytics below consume.
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.scenario_loader import load_scenario_config
 
 # Analytics modules (optional imports with graceful degradation)
 try:
@@ -447,11 +450,24 @@ def run_v14_pipeline_with_analytics(
         validation_modules=validation_modules,
     )
 
+    # Fail loud if the base pipeline did not return the finance result shape the
+    # analytics consume (annual_rows / debt_result / kpis). This wrapper used to
+    # import the *wind* run_v14_pipeline, whose result lacks these keys, so the
+    # returns/risk analytics silently always returned None.
+    missing = [k for k in ("annual_rows", "debt_result", "kpis") if k not in base_result]
+    if missing:
+        raise RuntimeError(
+            f"Base pipeline result is missing finance keys {missing}; "
+            "run_v14_pipeline_with_analytics must drive the finance pipeline "
+            "(analytics.pipeline_v14_enhanced)."
+        )
+
     logger.info("Base pipeline complete. Starting analytics modules...")
 
     # config is guaranteed path-based (guarded above); resolve for analytics.
+    # The finance result does not echo the input config, so load it explicitly.
     config_path = str(config)
-    cfg = base_result["config"]
+    cfg = dict(load_scenario_config(config_path))
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Calculate optional analytics

@@ -16,6 +16,23 @@
 
 defaults:
   # ═══════════════════════════════════════════════════════════════════
+  # API path-safety — roots the HTTP API may read caller-supplied files under
+  # ═══════════════════════════════════════════════════════════════════
+  # CESSPIT: the path-traversal policy for /run-pipeline and /run-tornado lives
+  # in config, not a Python literal. Any caller-supplied config_path /
+  # aep_summary_path that resolves outside these repo-relative roots is rejected
+  # (see api/path_safety.confined_path). tests/mocks is included because the
+  # canonical lender scenario references tests/mocks/aep_summary_dutchbay_10mw.json.
+  api:
+    allowed_path_roots:
+      - scenarios
+      - inputs
+      - config
+      - conf
+      - exports
+      - tests/mocks
+
+  # ═══════════════════════════════════════════════════════════════════
   # FX REFERENCE (USD/LKR) — single fallback source of truth
   # ═══════════════════════════════════════════════════════════════════
   # CESSPIT: legacy code paths that lack an explicit scenario `fx` block resolve
