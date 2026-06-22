@@ -517,7 +517,10 @@ def solve_for_max_debt_multi_covenant(
             overrides=overrides,
         )
         dscr = float(kpis.get("dscr_min", 0.0))
-        llcr = float(kpis.get("llcr_min", 0.0))
+        # The engine emits the loan-life coverage ratio under "llcr"; the old
+        # "llcr_min" key never existed, so LLCR read 0.0 and the covenant could
+        # never be satisfied -> debt always collapsed to the floor.
+        llcr = float(kpis.get("llcr", 0.0))
         return dscr, llcr
 
     last_good_mid: Optional[float] = None
