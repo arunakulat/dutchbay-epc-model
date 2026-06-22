@@ -124,18 +124,24 @@ class StressTestEngine:
         factor = 1 - downturn_pct
         return [cf * factor for cf in self.base_cash_flows]
 
-    def apply_inflation_stress(self, inflation_pct: float) -> Tuple[List[float], float]:
+    def apply_inflation_stress(
+        self, inflation_pct: float, cash_flows: Optional[List[float]] = None
+    ) -> Tuple[List[float], float]:
         """
         Apply inflation stress to both cash flows and discount rate.
 
         Args:
             inflation_pct: Inflation rate (e.g., 0.04 for 4%)
+            cash_flows: Series to erode. Defaults to the base cash flows; pass an
+                already-stressed series to COMPOSE stresses (e.g. a downturn
+                followed by inflation) without resetting to base.
 
         Returns:
             Tuple of (adjusted cash flows, adjusted discount rate)
         """
+        source_cfs = self.base_cash_flows if cash_flows is None else cash_flows
         # Adjust CF for inflation erosion
-        adjusted_cfs = [cf * (1 - inflation_pct * 0.3) for cf in self.base_cash_flows]
+        adjusted_cfs = [cf * (1 - inflation_pct * 0.3) for cf in source_cfs]
         # Adjust discount rate by Fisher equation
         adjusted_rate = self.base_discount_rate + inflation_pct
         return adjusted_cfs, adjusted_rate
@@ -173,10 +179,18 @@ class StressTestEngine:
         elif scenario == StressScenario.INFLATION_6PCT:
             stressed_cfs, stressed_rate = self.apply_inflation_stress(0.06)
         elif scenario == StressScenario.COMBINED_SEVERE:
-            # Combined: rate shock + downturn + inflation
-            stressed_cfs = self.apply_market_downturn(0.30)
-            stressed_cfs, stressed_rate = self.apply_inflation_stress(0.04)
-            stressed_rate = self.apply_interest_rate_shock(300)
+            # A genuinely severe combined scenario must COMPOUND the worst of each
+            # single-stress dimension, otherwise it is not the most severe case
+            # (a standalone 60% downturn would dominate it). The previous code
+            # applied a mild 30% downturn and then overwrote it with
+            # inflation-on-base, silently dropping the downturn entirely.
+            stressed_cfs = self.apply_market_downturn(0.60)
+            stressed_cfs, inflation_rate = self.apply_inflation_stress(
+                0.06, cash_flows=stressed_cfs
+            )
+            # Discount rate carries BOTH the inflation Fisher adjustment and the
+            # +500bps rate shock (capped like apply_interest_rate_shock).
+            stressed_rate = max(0.001, min(0.5, inflation_rate + 500 / 10000))
 
         # Calculate stressed metrics using finance.irr (R7)
         stressed_npv = npv(stressed_rate, stressed_cfs)
@@ -190,9 +204,13 @@ class StressTestEngine:
         )
         irr_change_bps = (stressed_irr - self.base_irr) * 100
 
-        # VaR and CVaR (simplified: using stressed NPV as reference)
-        var_95 = stressed_npv * 0.05  # 5% of stressed NPV
-        cvar_95 = var_95 * 1.25  # Typical CVaR ~ 1.25x VaR
+        # Downside risk under this scenario: the LOSS relative to the base case
+        # (non-negative; zero if the stress is actually accretive). This is a
+        # deterministic stress loss — the per-scenario analogue of VaR — not the
+        # old fabricated "5% of stressed NPV", which scaled with NPV and was
+        # meaningless. cvar_95 keeps the conventional ~1.25x tail multiplier.
+        var_95 = max(0.0, self.base_npv - stressed_npv)
+        cvar_95 = var_95 * 1.25
 
         return StressResult(
             scenario=scenario.value,

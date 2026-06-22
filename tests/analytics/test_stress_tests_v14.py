@@ -212,72 +212,56 @@ def test_npv_change_pct_zero_base_guard() -> None:
 
 
 # ---------------------------------------------------------------------------
-# VaR / CVaR - documented placeholder behaviour (NOT real quantiles)
+# VaR / CVaR - downside loss vs base under each stress
 # ---------------------------------------------------------------------------
 
 
-def test_var_cvar_current_placeholder_formula(engine: StressTestEngine) -> None:
-    """Pin the placeholder formula: var = stressed_npv*0.05, cvar = var*1.25.
+def test_var_is_a_real_loss_not_a_flat_npv_fraction(engine: StressTestEngine) -> None:
+    """var_95 is the downside LOSS vs base, not a fixed 5% slice of NPV.
 
-    # BUG: var_95/cvar_95 are flat fractions of the stressed NPV, not tail
-    # quantiles of a loss distribution.  These assertions document the
-    # current (incorrect) behaviour rather than a bankable risk metric.
+    Regression: var_95 used to be stressed_npv*0.05 (a flat fraction). It is now
+    max(0, base_npv - stressed_npv) -- a non-negative stress loss -- and cvar_95
+    keeps the conventional ~1.25x tail multiplier on it.
     """
     res = engine.run_scenario(StressScenario.RATE_SHOCK_UP_5PCT)
-    assert res.var_95_usd == pytest.approx(res.stressed_npv_usd * 0.05)
+    expected_loss = max(0.0, engine.base_npv - res.stressed_npv_usd)
+    assert res.var_95_usd == pytest.approx(expected_loss)
+    assert res.var_95_usd > 0.0  # a rate shock erodes a profitable base NPV
+    assert res.var_95_usd != pytest.approx(res.stressed_npv_usd * 0.05)
     assert res.cvar_95_usd == pytest.approx(res.var_95_usd * 1.25)
 
 
-@pytest.mark.xfail(
-    reason="BUG: var_95 = stressed_npv*0.05 is a flat fraction, not a 95% "
-    "loss quantile; a real VaR would not scale linearly with NPV.",
-    strict=False,
-)
-def test_var_is_a_real_quantile(engine: StressTestEngine) -> None:
-    """Correct-behaviour expectation (visible fix-me).
-
-    A genuine 95% VaR should represent a tail loss magnitude and therefore be
-    non-negative for a profitable scenario, not a fixed 5% slice of NPV.
-    """
-    res = engine.run_scenario(StressScenario.RATE_SHOCK_UP_5PCT)
-    # A true VaR of a positive-NPV position is not literally stressed_npv*0.05.
-    assert res.var_95_usd != pytest.approx(res.stressed_npv_usd * 0.05)
+def test_var_is_zero_for_accretive_stress(engine: StressTestEngine) -> None:
+    """A stress that *raises* NPV (a rate cut) yields zero downside loss."""
+    res = engine.run_scenario(StressScenario.RATE_SHOCK_DOWN_2PCT)
+    assert res.stressed_npv_usd >= engine.base_npv
+    assert res.var_95_usd == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
-# COMBINED_SEVERE - documented bug (downturn dropped)
+# COMBINED_SEVERE - compounds the worst of each single stress
 # ---------------------------------------------------------------------------
 
 
-def test_combined_severe_matches_buggy_path(engine: StressTestEngine) -> None:
-    """Pin the actual COMBINED_SEVERE output.
+def test_combined_severe_compounds_downturn_and_inflation(
+    engine: StressTestEngine,
+) -> None:
+    """COMBINED_SEVERE applies a 60% downturn THEN 6% inflation erosion.
 
-    # BUG: run_scenario applies the 30% downturn, then calls
-    # apply_inflation_stress(0.04) which re-reads base_cash_flows and
-    # OVERWRITES the downturned series.  The net effect equals an
-    # inflation-4% cash flow stress discounted at the +300bps shocked rate;
-    # the 30% downturn is silently dropped.
+    Regression: the old code overwrote the downturned series with
+    inflation-on-base, dropping the downturn. The cash flows are now
+    base * 0.40 * (1 - 0.06*0.3) and the rate carries inflation (+6%) + 500bps.
     """
     res = engine.run_scenario(StressScenario.COMBINED_SEVERE)
-    infl_cfs, _ = engine.apply_inflation_stress(0.04)
-    shocked_rate = engine.apply_interest_rate_shock(300)
-    assert res.stressed_npv_usd == pytest.approx(npv(shocked_rate, infl_cfs))
+    expected_cfs = [cf * 0.40 * (1 - 0.06 * 0.3) for cf in engine.base_cash_flows]
+    expected_rate = min(0.5, engine.base_discount_rate + 0.06 + 0.05)
+    assert res.stressed_npv_usd == pytest.approx(npv(expected_rate, expected_cfs))
 
 
-@pytest.mark.xfail(
-    reason="BUG: COMBINED_SEVERE re-reads base_cash_flows in "
-    "apply_inflation_stress, dropping the 30% downturn, so it is NOT "
-    "strictly worse than every single stressor.",
-    strict=False,
-)
 def test_combined_severe_strictly_worse_than_singles(
     engine: StressTestEngine,
 ) -> None:
-    """Correct-behaviour expectation: combined should dominate each single.
-
-    With the downturn dropped, COMBINED_SEVERE's NPV is actually higher than
-    the 60% downturn and the 6% inflation cases, so this fails today.
-    """
+    """The compounded combined scenario dominates every single stressor."""
     combined = engine.run_scenario(StressScenario.COMBINED_SEVERE).stressed_npv_usd
     worst_single = min(
         engine.run_scenario(s).stressed_npv_usd
