@@ -148,7 +148,7 @@ pytest --cov=analytics --cov=finance --cov-report=html
 
 - **Quick Smoke**: CLI + core analytics (fast feedback)
 - **Full Regression**: Complete v14 pipeline + coverage
-- **Coverage Floor**: 65% minimum (current: ~70%)
+- **Coverage**: engine packages (`analytics`, `finance`, `wind_resource`, `api`) all ≥95% — **98.1% overall**, 2,210 tests (`pyproject.toml` enforces a `--cov-fail-under` regression floor)
 - **FX Schema**: Strict enforcement (mapping-only, no scalars)
 
 ---
