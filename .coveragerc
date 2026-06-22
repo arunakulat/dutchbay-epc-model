@@ -1,5 +1,5 @@
 [run]
-source = analytics,finance,wind_resource,api
+source = analytics,finance,wind_resource,api,app
 omit =
     */tests/*
     */__pycache__/*
