@@ -1,0 +1,476 @@
+"""Coverage harness for ``analytics.fx_sensitivity_real``.
+
+Exercises the FX-sensitivity compatibility surface end-to-end without paying for
+the real (heavy) v14 evaluation pipeline: ``evaluate_with_overrides`` and
+``run_v14_pipeline_with_analytics`` are monkeypatched with deterministic stubs so
+we can assert the module's own arithmetic — linear fits, variance attribution,
+metric extraction, the VaR/CVaR-shaped tail direction of the FX sweep, and the
+documented ``ValueError`` / ``KeyError`` raises.
+
+All repo paths resolve relative to this file (CI checks out the repo at a
+different absolute root), and every file write lands under ``tmp_path``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from analytics import fx_sensitivity_real as mod
+from analytics.fx_sensitivity_real import (
+    FXSensitivityAnalyzer,
+    FXSensitivityConfig,
+    FXSensitivityPoint,
+    FXSensitivityResult,
+    RealFXSensitivityResult,
+    SensitivityCoefficient,
+    evaluate_with_overrides,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LENDER = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+
+
+# ---------------------------------------------------------------------------
+# FXSensitivityConfig validation
+# ---------------------------------------------------------------------------
+def test_config_defaults_are_populated() -> None:
+    cfg = FXSensitivityConfig()
+    assert cfg.target_metric == "project_irr"
+    assert cfg.confidence_level == 0.95
+    assert cfg.fx_rate_shocks == [-0.10, -0.05, 0.0, 0.05, 0.10]
+    assert cfg.hedge_ratio_values == [0.0, 0.5, 1.0]
+    assert cfg.spread_shocks_bps == [-100, 0, 100]
+
+
+def test_config_rejects_out_of_range_confidence() -> None:
+    with pytest.raises(ValueError, match="confidence_level must be between 0 and 1"):
+        FXSensitivityConfig(confidence_level=1.0)
+    with pytest.raises(ValueError, match="confidence_level must be between 0 and 1"):
+        FXSensitivityConfig(confidence_level=0.0)
+
+
+def test_config_rejects_unknown_target_metric() -> None:
+    with pytest.raises(ValueError, match="target_metric must be one of"):
+        FXSensitivityConfig(target_metric="bogus_metric")
+
+
+def test_config_accepts_all_valid_metrics() -> None:
+    for metric in mod.VALID_TARGET_METRICS:
+        assert FXSensitivityConfig(target_metric=metric).target_metric == metric
+
+
+# ---------------------------------------------------------------------------
+# evaluate_with_overrides delegation
+# ---------------------------------------------------------------------------
+def test_evaluate_with_overrides_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake(path: str, overrides: dict[str, Any]) -> dict[str, Any]:
+        captured["path"] = path
+        captured["overrides"] = overrides
+        return {"project_irr": 0.07}
+
+    monkeypatch.setattr("analytics.evaluation_v14.evaluate_with_overrides", fake)
+    out = evaluate_with_overrides("cfg.yaml", {"fx": {"fx_shock": 0.1}})
+    assert out == {"project_irr": 0.07}
+    assert captured["path"] == "cfg.yaml"
+    assert captured["overrides"] == {"fx": {"fx_shock": 0.1}}
+
+
+# ---------------------------------------------------------------------------
+# _metric_from_result — every resolution branch
+# ---------------------------------------------------------------------------
+def test_metric_from_result_direct_key() -> None:
+    assert mod._metric_from_result({"project_irr": 0.08}, "project_irr") == 0.08
+
+
+def test_metric_from_result_nested_kpis() -> None:
+    result = {"kpis": {"equity_irr": 0.12}}
+    assert mod._metric_from_result(result, "equity_irr") == 0.12
+
+
+def test_metric_from_result_nested_baseline_kpis() -> None:
+    result = {"baseline_kpis": {"dscr_min": 1.31}}
+    assert mod._metric_from_result(result, "dscr_min") == 1.31
+
+
+def test_metric_from_result_analytics_returns_bucket() -> None:
+    result = {
+        "analytics_result": {
+            "returns_analysis": {
+                "project_returns": {"project_irr": 0.054},
+                "equity_returns": {"equity_irr": 0.0},
+            }
+        }
+    }
+    assert mod._metric_from_result(result, "project_irr") == 0.054
+    assert mod._metric_from_result(result, "equity_irr") == 0.0
+
+
+def test_metric_from_result_equity_returns_bucket_when_project_missing() -> None:
+    result = {
+        "analytics_result": {
+            "returns_analysis": {
+                "project_returns": {"other": 1.0},
+                "equity_returns": {"equity_irr": 0.033},
+            }
+        }
+    }
+    assert mod._metric_from_result(result, "equity_irr") == 0.033
+
+
+def test_metric_from_result_missing_raises_keyerror() -> None:
+    with pytest.raises(KeyError, match="project_irr"):
+        mod._metric_from_result({"unrelated": 1.0}, "project_irr")
+
+
+def test_metric_from_result_ignores_non_dict_nested() -> None:
+    # nested keys present but not dicts -> falls through to KeyError
+    result = {"kpis": "not-a-dict", "analytics_result": "nope"}
+    with pytest.raises(KeyError):
+        mod._metric_from_result(result, "project_irr")
+
+
+# ---------------------------------------------------------------------------
+# _linear_fit — slope, degenerate cases, r2, stderr
+# ---------------------------------------------------------------------------
+def test_linear_fit_positive_slope() -> None:
+    coef, variance = mod._linear_fit("fx_rate", [0.0, 1.0, 2.0], [1.0, 3.0, 5.0])
+    assert coef.parameter == "fx_rate"
+    assert coef.coefficient == pytest.approx(2.0)
+    assert coef.r_squared == pytest.approx(1.0)
+    assert variance > 0.0
+
+
+def test_linear_fit_single_point_zero_slope() -> None:
+    coef, variance = mod._linear_fit("p", [3.0], [9.0])
+    assert coef.coefficient == 0.0
+    assert coef.std_error == 0.0
+    assert variance == 0.0
+
+
+def test_linear_fit_zero_denominator_constant_x() -> None:
+    coef, _ = mod._linear_fit("p", [2.0, 2.0, 2.0], [1.0, 2.0, 3.0])
+    assert coef.coefficient == 0.0
+
+
+def test_linear_fit_constant_y_r2_is_one() -> None:
+    coef, _ = mod._linear_fit("p", [0.0, 1.0, 2.0], [4.0, 4.0, 4.0])
+    assert coef.r_squared == 1.0
+
+
+def test_linear_fit_mismatched_lengths_raises() -> None:
+    with pytest.raises(ValueError, match="equal non-zero length"):
+        mod._linear_fit("p", [0.0, 1.0], [1.0])
+
+
+def test_linear_fit_empty_raises() -> None:
+    with pytest.raises(ValueError, match="equal non-zero length"):
+        mod._linear_fit("p", [], [])
+
+
+# ---------------------------------------------------------------------------
+# RealFXSensitivityResult.calculate_summary_metrics
+# ---------------------------------------------------------------------------
+def test_calculate_summary_metrics_no_base_irr_is_noop() -> None:
+    res = RealFXSensitivityResult(333.79, 0.0, 0.0, base_project_irr=None)
+    res.fx_rate_points.append(FXSensitivityPoint(300.0, 0.0, 0.0, project_irr=0.05))
+    res.fx_rate_points.append(FXSensitivityPoint(360.0, 0.0, 0.0, project_irr=0.07))
+    res.calculate_summary_metrics()
+    assert res.fx_rate_irr_sensitivity == 0.0  # untouched
+
+
+def test_calculate_summary_metrics_fits_slope() -> None:
+    res = RealFXSensitivityResult(333.79, 0.0, 0.0, base_project_irr=0.06)
+    res.fx_rate_points.append(FXSensitivityPoint(300.0, 0.0, 0.0, project_irr=0.04))
+    res.fx_rate_points.append(FXSensitivityPoint(400.0, 0.0, 0.0, project_irr=0.10))
+    res.calculate_summary_metrics()
+    # slope = (0.10 - 0.04) / (400 - 300) = 6e-4
+    assert res.fx_rate_irr_sensitivity == pytest.approx(6e-4)
+
+
+def test_calculate_summary_metrics_too_few_points_is_noop() -> None:
+    res = RealFXSensitivityResult(333.79, 0.0, 0.0, base_project_irr=0.06)
+    res.fx_rate_points.append(FXSensitivityPoint(300.0, 0.0, 0.0, project_irr=0.04))
+    res.calculate_summary_metrics()
+    assert res.fx_rate_irr_sensitivity == 0.0
+
+
+def test_calculate_summary_metrics_skips_when_irrs_missing() -> None:
+    # two points, but project_irr is None on one -> ys shorter than xs -> skipped
+    res = RealFXSensitivityResult(333.79, 0.0, 0.0, base_project_irr=0.06)
+    res.fx_rate_points.append(FXSensitivityPoint(300.0, 0.0, 0.0, project_irr=None))
+    res.fx_rate_points.append(FXSensitivityPoint(400.0, 0.0, 0.0, project_irr=0.10))
+    res.calculate_summary_metrics()
+    assert res.fx_rate_irr_sensitivity == 0.0
+
+
+# ---------------------------------------------------------------------------
+# FXSensitivityAnalyzer constructor
+# ---------------------------------------------------------------------------
+def test_analyzer_requires_a_path() -> None:
+    with pytest.raises(ValueError, match="Either config_path or base_config_path"):
+        FXSensitivityAnalyzer()
+
+
+def test_analyzer_loads_real_lender_scenario() -> None:
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    assert analyzer.base_config_path == str(LENDER)
+    assert isinstance(analyzer.base_config, dict)
+    assert "fx" in analyzer.base_config
+    # lender scenario declares its own top-level fx.start_lkr_per_usd
+    assert analyzer._base_fx() == pytest.approx(333.79)
+
+
+def test_analyzer_base_config_path_keyword_alias(tmp_path: Path) -> None:
+    cfg = tmp_path / "scenario.yaml"
+    cfg.write_text("fx:\n  spot_rate: 320.0\n")
+    analyzer = FXSensitivityAnalyzer(base_config_path=cfg)
+    assert analyzer._base_fx() == pytest.approx(320.0)
+
+
+def test_analyzer_missing_file_leaves_empty_base_config(tmp_path: Path) -> None:
+    analyzer = FXSensitivityAnalyzer(str(tmp_path / "does_not_exist.yaml"))
+    assert analyzer.base_config == {}
+
+
+def test_analyzer_non_dict_yaml_ignored(tmp_path: Path) -> None:
+    cfg = tmp_path / "list.yaml"
+    cfg.write_text("- a\n- b\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    assert analyzer.base_config == {}
+
+
+def test_base_fx_falls_back_to_config_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = tmp_path / "no_fx.yaml"
+    cfg.write_text("project:\n  name: x\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    monkeypatch.setattr(
+        "analytics.fx.fx_fetch.default_fx_lkr_per_usd", lambda: 305.0
+    )
+    assert analyzer._base_fx() == pytest.approx(305.0)
+
+
+# ---------------------------------------------------------------------------
+# FXSensitivityAnalyzer.run — full path with stubbed evaluation
+# ---------------------------------------------------------------------------
+def _stub_evaluate_with_overrides(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Patch the module-level ``evaluate_with_overrides`` with a deterministic
+    monotone response so the linear fits have real, non-degenerate slopes."""
+    calls: list[dict[str, Any]] = []
+
+    def fake(path: str, overrides: dict[str, Any]) -> dict[str, Any]:
+        calls.append(overrides)
+        fx = overrides.get("fx", {})
+        shock = float(fx.get("fx_shock", 0.0))
+        hedge = float(fx.get("hedge_ratio", 0.0))
+        spread = float(fx.get("spread_shock_bps", 0.0))
+        # IRR falls as LKR weakens (positive fx_shock), rises with hedging,
+        # falls as the spread widens — a plausible, monotone tail.
+        irr = 0.06 - 0.20 * shock + 0.01 * hedge - 0.00001 * spread
+        return {"project_irr": irr}
+
+    monkeypatch.setattr(mod, "evaluate_with_overrides", fake)
+    return calls
+
+
+def test_run_produces_three_coefficients_and_variance(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_evaluate_with_overrides(monkeypatch)
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = analyzer.run()
+
+    assert isinstance(result, FXSensitivityResult)
+    assert result.base_value == pytest.approx(0.06)
+    params = {c.parameter for c in result.coefficients}
+    assert params == {"fx_rate", "hedge_ratio", "spread"}
+
+    # fx_rate IRR sensitivity is negative (weaker LKR -> lower IRR): tail direction
+    fx_coef = next(c for c in result.coefficients if c.parameter == "fx_rate")
+    assert fx_coef.coefficient < 0.0
+    # variance contributions sum to ~1 across the three drivers
+    contribs = [c.variance_contribution or 0.0 for c in result.coefficients]
+    assert sum(contribs) == pytest.approx(1.0)
+    assert result.total_variance is not None and result.total_variance > 0.0
+    assert result.explained_variance is not None
+
+    # the base evaluation anchors the fx_shock at 0.0
+    assert calls[0] == {"fx": {"fx_shock": 0.0}}
+    # fx shocks re-price spot relative to the scenario's base fx (333.79)
+    fx_call = calls[1]["fx"]
+    assert fx_call["spot_rate_lkr_usd"] == pytest.approx(333.79 * (1.0 + fx_call["fx_shock"]))
+
+
+def test_run_constant_metric_has_flat_sensitivities(monkeypatch: pytest.MonkeyPatch) -> None:
+    # a constant metric makes every linear fit flat (zero slope) and the
+    # per-driver variance effectively zero (float dust only).
+    monkeypatch.setattr(
+        mod, "evaluate_with_overrides", lambda path, overrides: {"project_irr": 0.05}
+    )
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = analyzer.run()
+    assert result.base_value == pytest.approx(0.05)
+    assert result.total_variance is not None
+    assert result.total_variance < 1e-20
+    assert all(c.coefficient == pytest.approx(0.0) for c in result.coefficients)
+
+
+def test_run_exact_zero_variance_takes_zero_contribution_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    # single-element shock lists -> each np.var over one value is exactly 0.0,
+    # so total_variance == 0.0 and the `else 0.0` contribution branch fires.
+    monkeypatch.setattr(
+        mod, "evaluate_with_overrides", lambda path, overrides: {"project_irr": 0.05}
+    )
+    cfg = FXSensitivityConfig(
+        fx_rate_shocks=[0.0], hedge_ratio_values=[0.0], spread_shocks_bps=[0.0]
+    )
+    analyzer = FXSensitivityAnalyzer(str(LENDER), config=cfg)
+    result = analyzer.run()
+    assert result.total_variance == 0.0
+    assert all(c.variance_contribution == 0.0 for c in result.coefficients)
+
+
+# ---------------------------------------------------------------------------
+# _run_pipeline_with_fx_params / _extract_metrics / analyze_fx_sensitivity
+# ---------------------------------------------------------------------------
+def _patch_pipeline(monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    captured: list[dict[str, Any]] = []
+
+    def fake_pipeline(*, config: dict[str, Any], enable_returns: bool, enable_risk: bool) -> dict[str, Any]:
+        captured.append(config)
+        spot = float(config["fx"]["spot_rate"])
+        if fixed is not None:
+            return fixed
+        # IRR/NPV decline as LKR weakens (spot rises): VaR/CVaR tail lives at high spot.
+        return {
+            "kpis": {
+                "project_irr": 0.06 - 0.0002 * (spot - 333.79),
+                "project_npv": -31.9e6 - 1.0e5 * (spot - 333.79),
+                "equity_irr": 0.0 - 0.0001 * (spot - 333.79),
+                "equity_npv": -10.0e6,
+            },
+            "debt_result": {"min_dscr": 1.30},
+        }
+
+    import analytics.pipeline_analytics_v14 as pipe
+
+    monkeypatch.setattr(pipe, "run_v14_pipeline_with_analytics", fake_pipeline)
+    return captured
+
+
+def test_run_pipeline_with_fx_params_injects_fx_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _patch_pipeline(monkeypatch)
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    analyzer._run_pipeline_with_fx_params(333.79, 0.5, 100.0)
+    injected = captured[0]["fx"]
+    assert injected["spot_rate"] == pytest.approx(333.79)
+    assert injected["hedge_ratio"] == pytest.approx(0.5)
+    assert injected["spread_bps"] == pytest.approx(100.0)
+    # deep copy: the analyzer's own base_config is not mutated
+    assert analyzer.base_config["fx"].get("spot_rate") != 333.79 or "spot_rate" not in analyzer.base_config["fx"]
+
+
+def test_run_pipeline_with_fx_params_creates_fx_when_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured = _patch_pipeline(monkeypatch)
+    cfg = tmp_path / "no_fx.yaml"
+    cfg.write_text("project:\n  name: x\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    analyzer._run_pipeline_with_fx_params(310.0, 0.0, 0.0)
+    assert captured[0]["fx"]["spot_rate"] == pytest.approx(310.0)
+
+
+def test_extract_metrics_from_kpis() -> None:
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = {
+        "kpis": {
+            "project_irr": 0.054,
+            "project_npv": -31.9e6,
+            "equity_irr": 0.0,
+            "equity_npv": -10.0e6,
+        },
+        "debt_result": {"min_dscr": 1.30},
+    }
+    pirr, pnpv, eirr, enpv, dscr = analyzer._extract_metrics(result)
+    assert pirr == 0.054
+    assert pnpv == pytest.approx(-31.9e6)
+    assert eirr == 0.0
+    assert enpv == pytest.approx(-10.0e6)
+    assert dscr == pytest.approx(1.30)
+
+
+def test_extract_metrics_falls_back_to_top_level() -> None:
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = {
+        "project_irr": 0.05,
+        "project_npv": 1.0,
+        "equity_irr": 0.02,
+        "equity_npv": 2.0,
+        "dscr_min": 1.25,
+    }
+    pirr, pnpv, eirr, enpv, dscr = analyzer._extract_metrics(result)
+    assert pirr == 0.05
+    assert pnpv == 1.0
+    assert eirr == 0.02
+    assert enpv == 2.0
+    assert dscr == pytest.approx(1.25)
+
+
+def test_extract_metrics_defaults_when_empty() -> None:
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    pirr, pnpv, eirr, enpv, dscr = analyzer._extract_metrics({})
+    assert pirr is None
+    assert pnpv == 0.0
+    assert eirr is None
+    assert enpv == 0.0
+    assert dscr == 0.0
+
+
+def test_analyze_fx_sensitivity_sweeps_and_orders_tail(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_pipeline(monkeypatch)
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = analyzer.analyze_fx_sensitivity(fx_variation_pct=10.0, fx_steps=5)
+
+    assert isinstance(result, RealFXSensitivityResult)
+    assert result.base_fx_rate == pytest.approx(333.79)
+    assert len(result.fx_rate_points) == 5
+
+    rates = [p.fx_rate for p in result.fx_rate_points]
+    # symmetric sweep around base: spans 90%..110% of base fx
+    assert rates[0] == pytest.approx(333.79 * 0.9)
+    assert rates[-1] == pytest.approx(333.79 * 1.1)
+
+    # VaR/CVaR tail direction: IRR worst at the weakest-LKR (highest spot) point
+    irrs = [p.project_irr for p in result.fx_rate_points if p.project_irr is not None]
+    assert irrs[-1] < irrs[0]
+    # summary slope is negative (declining IRR as LKR weakens)
+    assert result.fx_rate_irr_sensitivity < 0.0
+
+
+def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured = _patch_pipeline(monkeypatch)
+    cfg = tmp_path / "with_fx.yaml"
+    cfg.write_text("fx:\n  spot_rate: 300.0\n  hedge_ratio: 0.75\n  spread_bps: 120.0\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    result = analyzer.analyze_fx_sensitivity(fx_steps=3)
+    assert result.base_hedge_ratio == pytest.approx(0.75)
+    assert result.base_spread_bps == pytest.approx(120.0)
+    # every swept call carries the scenario hedge/spread, only spot varies
+    for config in captured:
+        assert config["fx"]["hedge_ratio"] == pytest.approx(0.75)
+        assert config["fx"]["spread_bps"] == pytest.approx(120.0)
+
+
+# ---------------------------------------------------------------------------
+# Dataclass surfaces / __all__
+# ---------------------------------------------------------------------------
+def test_sensitivity_coefficient_fields() -> None:
+    c = SensitivityCoefficient("fx_rate", -0.2, 0.01, 0.99, 0.4)
+    assert c.parameter == "fx_rate"
+    assert c.variance_contribution == 0.4
+
+
+def test_public_exports() -> None:
+    for name in mod.__all__:
+        assert hasattr(mod, name)

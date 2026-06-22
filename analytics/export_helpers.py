@@ -651,7 +651,10 @@ class ChartGenerator:
             y = df[kpi_name]
         else:
             numeric_cols = df.select_dtypes("number").columns
-            if not numeric_cols:
+            # `numeric_cols` is a pandas Index; `if not numeric_cols` raises
+            # "truth value of an Index is ambiguous" for ANY index, which both
+            # crashed the numeric fallback and made the raise below dead code.
+            if len(numeric_cols) == 0:
                 raise ValueError("No numeric columns available for KPI chart")
             kpi_name = str(numeric_cols[0])
             y = df[kpi_name]
