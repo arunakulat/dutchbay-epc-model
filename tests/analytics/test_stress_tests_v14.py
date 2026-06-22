@@ -11,8 +11,11 @@ Covers the public surface of ``analytics.stress_tests_v14``:
 - ``StressResult.to_dict`` / ``export_to_json`` JSON serialisation (CLI-03).
 
 All metrics are recomputed independently from ``finance.irr`` so the assertions
-are deterministic.  Two known defects are pinned: COMBINED_SEVERE drops its 30%
-downturn (xfail), and VaR/CVaR are placeholders rather than quantiles.
+are deterministic.  Two former defects are now pinned as regressions (both fixed
+in #308): COMBINED_SEVERE once dropped its downturn component (it now compounds a
+60% downturn + 6% inflation + 500bps shock), and VaR/CVaR were placeholders
+rather than real loss measures (``var_95`` is now ``max(0, base_npv -
+stressed_npv)``). There is no xfail — the defects are closed.
 
 Context:
     Coverage backfill for analytics.stress_tests_v14 (previously ~0%).

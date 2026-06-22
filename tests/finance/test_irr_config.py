@@ -14,10 +14,11 @@ Coverage here:
   * The values wired into the canonical master config match the docstring
     examples (a regression pin on the shipped numbers).
 
-KNOWN BUG (guarded with a strict=False xfail below): the role-specific
-fallback uses ``lower = lower or irr_cfg.get("irr_lower_bound")``. A
-legitimate bound of ``0.0`` is falsy, so ``0.0`` is silently replaced by the
-project-level fallback instead of being returned.
+REGRESSION PIN (bug fixed in #304): the role-specific fallback once used
+``lower = lower or irr_cfg.get("irr_lower_bound")``, so a legitimate bound of
+``0.0`` (falsy) was silently replaced by the project-level fallback. It now uses
+``lower if lower is not None else ...``; the test below pins the corrected
+``0.0``-bound behaviour (there is no xfail — the defect is closed).
 """
 
 from __future__ import annotations

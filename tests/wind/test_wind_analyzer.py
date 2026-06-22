@@ -4,9 +4,10 @@ Weibull MLE fitting, temporal/seasonal/diurnal patterns, inter-annual
 variability, summary stats, and the text report are unit-tested on small
 deterministic synthetic wind series. No network or live data is exercised.
 
-KNOWN BUG: config quality_control.ws_min/ws_max are loaded but never applied,
-so out-of-range speeds still reach the Weibull MLE. The correct-behaviour QC
-filtering test is xfail'd as a visible fix-me.
+REGRESSION PIN (bug fixed in #306): config quality_control.ws_min/ws_max were
+once loaded but never applied, so out-of-range speeds still reached the Weibull
+MLE. The analyzer now filters ws_data to [ws_min, ws_max]; the QC-filtering test
+below pins the corrected behaviour (there is no xfail — the defect is closed).
 """
 
 from __future__ import annotations

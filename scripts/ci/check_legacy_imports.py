@@ -17,6 +17,11 @@ FORBIDDEN_PATTERNS = [
 
 PROTECTED_DIRS = ["analytics", "finance", "tests/api", "tests/analytics"]
 
+#: Repo root: scripts/ci/check_legacy_imports.py -> parents[2]. (The previous
+#: ``parent.parent`` pointed at ``scripts/``, so the scan found none of the
+#: protected dirs and passed vacuously — the guard checked nothing.)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def check_file(filepath: Path) -> list[str]:
     """Check single file for forbidden imports."""
@@ -35,17 +40,21 @@ def check_file(filepath: Path) -> list[str]:
     return violations
 
 
-def main():
-    """Scan protected directories for violations."""
-    repo_root = Path(__file__).parent.parent
-    violations = []
-
+def find_violations(repo_root: Path = REPO_ROOT) -> list[str]:
+    """Return all forbidden-legacy-import violations under the protected dirs."""
+    violations: list[str] = []
     for dir_name in PROTECTED_DIRS:
         dir_path = repo_root / dir_name
         if not dir_path.exists():
             continue
         for py_file in dir_path.rglob("*.py"):
             violations.extend(check_file(py_file))
+    return violations
+
+
+def main():
+    """Scan protected directories for violations (CLI; nonzero exit on any)."""
+    violations = find_violations()
 
     if violations:
         print("❌ FORBIDDEN IMPORTS DETECTED:\n")

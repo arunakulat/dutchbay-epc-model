@@ -21,12 +21,13 @@ Engine note (load-bearing for the assertions below):
       - base min_dscr / dscr_min == 1.30
     All boundary assertions are derived from these constants.
 
-KNOWN BUG (Sprint 16 P3-2 multi-covenant solver):
-    solve_for_max_debt_multi_covenant reads kpis["llcr_min"], a key the engine
-    never produces (it emits "llcr"). kpis.get("llcr_min", 0.0) is therefore
-    always 0.0, so any positive LLCR covenant is never satisfied and debt is
-    driven to the lower bound regardless of the true (DSCR/LLCR) slack. The
-    correct-behaviour test for a binding-but-satisfiable LLCR is xfailed.
+REGRESSION PIN (Sprint 16 P3-2 multi-covenant solver; bug fixed in #307):
+    solve_for_max_debt_multi_covenant once read kpis["llcr_min"], a key the
+    engine never produces (it emits "llcr"), so any positive LLCR covenant was
+    never satisfied and debt was driven to the lower bound regardless of the true
+    (DSCR/LLCR) slack. It now reads kpis.get("llcr", 0.0); the
+    binding-but-satisfiable LLCR test below pins the corrected behaviour (there
+    is no xfail — the defect is closed).
 """
 
 from __future__ import annotations
