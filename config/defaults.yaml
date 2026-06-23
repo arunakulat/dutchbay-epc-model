@@ -90,6 +90,20 @@ defaults:
     tolerance_pct: 2.0   # all canonical scenarios reconcile within ~0.04%; 2% catches
                          # any material divergence while tolerating capacity_factor rounding
 
+  # AEP SOURCE PROVENANCE (#18 — lender-grade). The bankable AEP backing a financed run
+  # derives from a turbine power curve; a lender requires that curve to come from an
+  # APPROVED, traceable source (a certified OEM curve or a vetted reference), never an
+  # un-vetted / placeholder curve when a certified one exists. analytics.aep_provenance
+  # enforces analytics.loader.aep_loader.validate_config_aep_provenance at scenario load /
+  # API boundary. It is a no-op for a scenario that declares no resource.power_curve.
+  # source_id (simplified base cases, test fixtures) unless require_source_id is set.
+  # Scenarios override any key via an aep_provenance.{...} block; these are the fallbacks.
+  aep_provenance:
+    enforce: true            # run the provenance guard on authored scenarios
+    require_source_id: false # if true, a scenario MUST name resource.power_curve.source_id
+    allow_placeholder: false # if true, permit a placeholder source even when a certified
+                             # OEM curve exists (early-stage escape hatch; off for lenders)
+
   # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
   # ═══════════════════════════════════════════════════════════════════

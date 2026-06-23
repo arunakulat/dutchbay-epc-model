@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 
+from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
 
 logger = logging.getLogger(__name__)
@@ -202,6 +203,12 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # time, NOT on every derived run, so deliberate sensitivity/Monte-Carlo perturbations
     # of capacity_factor (which pass in-memory dicts, never re-loaded) are unaffected.
     reconcile_capacity_factor_with_bankable_aep(cfg, str(config_path))
+
+    # A scenario that names a turbine power-curve source must name an APPROVED one — the
+    # #18 lender-grade provenance control. No-op when no source_id is declared (graceful
+    # for simplified base cases / fixtures); fails loud on an unapproved or refused
+    # placeholder source. Changes no computed number (byte-identical economics).
+    enforce_aep_provenance(cfg, str(config_path))
 
     return cfg
 

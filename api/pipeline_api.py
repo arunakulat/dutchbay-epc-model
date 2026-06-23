@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
 from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
@@ -395,6 +396,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     # override is a stale-value injection, NOT a deliberate sensitivity perturbation).
     try:
         reconcile_capacity_factor_with_bankable_aep(cfg, payload.config_path or "<inline>")
+        enforce_aep_provenance(cfg, payload.config_path or "<inline>")
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
     except Exception as exc:  # config/validation/engine errors -> 422, not 500
         raise HTTPException(status_code=422, detail=f"Pipeline run failed: {exc}")

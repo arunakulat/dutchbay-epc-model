@@ -122,7 +122,7 @@ tests. Two facts put it off-path:
 | Module | Status | Role |
 |---|---|---|
 | `analytics/wind/losses_model.py` | **LIVE** | IEC loss taxonomy; reached via `wind_resource/bankable_aep.py` on the live WindPipeline |
-| `analytics/loader/aep_loader.py` | orphaned | AEP-provenance guard (`APPROVED_SOURCES`); the lender control of [`AEP_PROVENANCE.md`](AEP_PROVENANCE.md) — **dormant in production** |
+| `analytics/loader/aep_loader.py` | **LIVE** (provenance) | AEP-provenance guard (`APPROVED_SOURCES`); the lender control of [`AEP_PROVENANCE.md`](AEP_PROVENANCE.md) — **now wired into the financed run** via `analytics/aep_provenance.py` (scenario load + API boundary). The summary-loading / MC helpers in the module remain off-path. |
 | `analytics/wind/aep_summary_builder.py` | orphaned | builds the AEP summary block |
 | `analytics/wind/pipeline_aep_v14.py` | orphaned | a parallel AEP pipeline |
 | `analytics/wind/mc_aep_weibull.py` | orphaned | Monte-Carlo AEP from ECMWF-derived Weibull |
@@ -135,13 +135,24 @@ These import **each other** into a self-consistent cluster that sits parallel to
 the **live** wind producer (`wind_resource/`: `WindPipeline` → `energy_calculator`
 → `bankable_aep` → `losses_model`), which is what actually makes the frozen export.
 
-**Material gap, not merely dead code:** the **AEP-provenance guard** and the
-**wind-interface schema** are lender-grade integrity controls **enforced only in
-tests** — a real model run trusts the frozen YAML AEP without the approved-source
-check ever firing (see [`WIND_AEP_CHAIN_OF_CUSTODY.md`](WIND_AEP_CHAIN_OF_CUSTODY.md)).
-Closing this is a decision, **not yet actioned**: either wire the provenance guard
-into the financed run, or retire the cluster so `wind_resource/` is the single AEP
-engine.
+**Material gap, partly closed:** the **AEP-provenance guard** and the
+**wind-interface schema** were lender-grade integrity controls **enforced only in
+tests** (see [`WIND_AEP_CHAIN_OF_CUSTODY.md`](WIND_AEP_CHAIN_OF_CUSTODY.md)).
+The **provenance half is now wired** (2026-06-23, item 2): `analytics/aep_provenance.py`
+folds `aep_loader.validate_config_aep_provenance` into the financed path at **all three
+live entrypoints** — scenario load (`analytics/scenario_loader.py`), the API boundary
+(`api/pipeline_api.py`), and the framework-agnostic service seam
+(`app/services/pipeline_service.py`, the web app's `POST /cases` + job runner, which
+passes an in-memory dict that bypasses the load-time guard) — config-driven via
+`defaults.aep_provenance` and a no-op when a scenario declares no
+`resource.power_curve.source_id`, so a real run now refuses an unapproved or
+placeholder turbine-curve source. (The sibling `aep_reconciliation` guard has the same
+inline-dict bypass at the service seam; wiring it there is a tracked follow-up — it would
+trip the synthetic non-reconciling scenarios several app/integration tests exercise.) The remaining off-path control is the
+**wind-interface schema** (`'wind'`/`'era5'` validation modules, still passed by no
+production caller); the rest of the AEP-analytics cluster (summary builder / parallel
+pipeline / MC-AEP / tornado) is a decision to wire or retire so `wind_resource/` is the
+single AEP engine.
 
 ### Orphaned multi-tech generation scaffold
 
