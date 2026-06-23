@@ -316,14 +316,18 @@ def build_financial_model(
         tax_y = max(0, ebit_y * proj.tax_rate)
         op_cf_y = ebit_y - tax_y + da_y
         op_cf_avail = op_cf_y - usd_int - lkr_int_usd
-        if year == 1 and proj.grace_period == 1:
+        if year <= proj.grace_period:
+            # Grace period: no USD principal repaid. Previously this was hard-coded
+            # to a single year and gated on grace_period == 1 (so any other grace
+            # value was inert — year-1 principal was 0 regardless and no later year
+            # was affected). Honouring the full grace length makes grace a real
+            # lever; grace_period == 1 (the default) is unchanged: year 1 -> 0,
+            # years 2-4 -> pct_1_4, years 5+ -> pct_5_on.
             usd_prin = 0
-        elif 2 <= year <= 4:
+        elif year <= 4:
             usd_prin = min(usd_bal, proj.principal_pct_1_4 * op_cf_avail)
-        elif year > 4:
+        else:  # year > 4 (and past grace)
             usd_prin = min(usd_bal, proj.principal_pct_5_on * op_cf_avail)
-        else:
-            usd_prin = 0
         usd_bal = max(0.0, usd_bal - usd_prin)
         if year <= debt.debt_tenor_years:
             lkr_prin = lkr_bal / (debt.debt_tenor_years - year + 1)

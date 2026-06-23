@@ -350,6 +350,7 @@ def optimize_debt_pareto_yaml(
             base_json = outdir / "pareto_frontier.json"
             base_png = outdir / "pareto.png"
             base_grid = outdir / "pareto_grid_results.csv"
+            base_util = outdir / "pareto_utopia_ranked.csv"
             if base.exists():
                 base.rename(outdir / f"pareto_frontier_{name}.csv")
             if base_json.exists():
@@ -358,6 +359,10 @@ def optimize_debt_pareto_yaml(
                 base_png.rename(outdir / f"pareto_{name}.png")
             if base_grid.exists():
                 base_grid.rename(outdir / f"pareto_grid_results_{name}.csv")
+            # Without this rename the per-grid utopia ranking was overwritten by
+            # the next grid (every other per-grid file was suffixed but this one).
+            if base_util.exists():
+                base_util.rename(outdir / f"pareto_utopia_ranked_{name}.csv")
     if outdir:
         # Write master summary
         (outdir / "pareto_summary.json").write_text(
