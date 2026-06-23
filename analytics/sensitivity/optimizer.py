@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.optimizer
 
@@ -29,13 +27,13 @@ IMPORTANT:
 - This module performs multi-scenario evaluation and can be compute-heavy.
   It intentionally enforces plan-size bounds to avoid accidental blow-ups.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import copy
-import math
 import numpy as np
 
 from analytics.evaluation_v14 import evaluate_with_overrides

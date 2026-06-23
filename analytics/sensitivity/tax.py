@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.tax
 
@@ -14,6 +12,7 @@ Typical tax knobs (examples; adapt to your schema):
 - tax.holiday_years
 - tax.wht_dividends
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping

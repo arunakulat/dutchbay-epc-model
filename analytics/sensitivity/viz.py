@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.viz
 
@@ -12,8 +10,9 @@ Import-safe policy:
 Placeholder:
 - Provides tiny plot helpers that accept tables/records and return fig objects.
 """
+from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any, Mapping
 
 
 def plot_tornado(

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -56,12 +56,12 @@ def optimize_capital_structure(
             )
             model = build_financial_model(params, debt)
             if objective == "equity_irr":
-                return -model["equity_irr"]
+                return -cast(float, model["equity_irr"])
             if objective == "project_irr":
-                return -model["project_irr"]
+                return -cast(float, model["project_irr"])
             if objective == "npv":
-                return -model["npv_12pct"]
-            return -model["equity_irr"]
+                return -cast(float, model["npv_12pct"])
+            return -cast(float, model["equity_irr"])
         except Exception as e:
             warnings.warn(f"Objective evaluation failed: {e}")
             return 1e10
@@ -82,7 +82,7 @@ def optimize_capital_structure(
                 }
             )
             model = build_financial_model(params, debt)
-            return model["equity_irr"] - constraints["min_irr"]
+            return cast(float, model["equity_irr"]) - constraints["min_irr"]
         except Exception:
             return -1e10
 
@@ -102,16 +102,18 @@ def optimize_capital_structure(
                 }
             )
             model = build_financial_model(params, debt)
-            return model["min_dscr"] - constraints["min_dscr"]
+            return cast(float, model["min_dscr"]) - constraints["min_dscr"]
         except Exception:
             return -1e10
 
     bounds = Bounds([0.50, 0.0, 0.0], [0.80, 1.0, 0.20])
-    nlc_irr = NonlinearConstraint(constraint_min_irr, 0, np.inf)
-    nlc_dscr = NonlinearConstraint(constraint_min_dscr, 0, np.inf)
+    # scipy stubs require an invariant ndarray[tuple[int], dtype[float64]] callable
+    # signature that mypy cannot reconcile with our generic np.ndarray params.
+    nlc_irr = NonlinearConstraint(constraint_min_irr, 0, np.inf)  # type: ignore[arg-type]  # scipy stub demands invariant 1-D float64 ndarray callable
+    nlc_dscr = NonlinearConstraint(constraint_min_dscr, 0, np.inf)  # type: ignore[arg-type]  # scipy stub demands invariant 1-D float64 ndarray callable
     x0 = np.array([0.8, 0.45, 0.10])
     try:
-        res = minimize(
+        res = minimize(  # type: ignore[call-overload]  # scipy stub demands invariant 1-D float64 ndarray callable for objective_func
             objective_func,
             x0,
             method="SLSQP",
@@ -240,11 +242,13 @@ def optimize_debt_pareto(
     # Pareto filter
     dominated = np.zeros(len(df), dtype=bool)
     for i in range(len(df)):
-        ai, ad = df.loc[i, "equity_irr"], df.loc[i, "min_dscr"]
+        ai = cast(float, df.loc[i, "equity_irr"])
+        ad = cast(float, df.loc[i, "min_dscr"])
         for j in range(len(df)):
             if i == j:
                 continue
-            bi, bd = df.loc[j, "equity_irr"], df.loc[j, "min_dscr"]
+            bi = cast(float, df.loc[j, "equity_irr"])
+            bd = cast(float, df.loc[j, "min_dscr"])
             if _is_dominated(ai, ad, bi, bd):
                 dominated[i] = True
                 break
@@ -267,16 +271,16 @@ def optimize_debt_pareto(
     )
 
     if outdir:
-        outdir = Path(outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        df.to_csv(outdir / "pareto_grid_results.csv", index=False)
-        frontier_df.to_csv(outdir / "pareto_frontier.csv", index=False)
-        frontier_df.to_json(outdir / "pareto_frontier.json", orient="records", indent=2)
+        out_path = Path(outdir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        df.to_csv(out_path / "pareto_grid_results.csv", index=False)
+        frontier_df.to_csv(out_path / "pareto_frontier.csv", index=False)
+        frontier_df.to_json(out_path / "pareto_frontier.json", orient="records", indent=2)
         # Utopia-ranked CSV (best first)
         frontier_ranked = frontier_df.sort_values(by="utopia_distance", ascending=True)
-        frontier_ranked.to_csv(outdir / "pareto_utopia_ranked.csv", index=False)
+        frontier_ranked.to_csv(out_path / "pareto_utopia_ranked.csv", index=False)
         try:
-            pareto_chart(frontier_df, outdir / "pareto.png", grid_df=df)
+            pareto_chart(frontier_df, out_path / "pareto.png", grid_df=df)
         except Exception:
             pass
 
@@ -289,7 +293,7 @@ def optimize_debt_pareto(
     }
 
 
-def _normalize_grid(val, is_int: bool = False):
+def _normalize_grid(val: Any, is_int: bool = False) -> List[float]:
     if isinstance(val, str):
         return _parse_grid(val, is_int=is_int)
     if isinstance(val, (list, tuple)):
@@ -353,7 +357,9 @@ def __test_shim_optimization__():
     return True
 
 
-def solve_tariff(target_equity_irr: float, params: dict | None = None):
+def solve_tariff(
+    target_equity_irr: float, params: dict | None = None
+) -> Dict[str, float]:
     """Closed-form inverse of the shim IRR mapping: irr = 0.01 + (t - 20)*0.002."""
     if target_equity_irr is None:
         target_equity_irr = 0.15

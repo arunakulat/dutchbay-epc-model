@@ -147,7 +147,7 @@ def load_open_issues() -> List[Dict[str, Any]]:
             "number,title,labels,url,state",
         ]
     )
-    issues = json.loads(stdout)
+    issues: List[Dict[str, Any]] = json.loads(stdout)
     return issues
 
 

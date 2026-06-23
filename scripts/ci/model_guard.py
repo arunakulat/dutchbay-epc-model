@@ -17,14 +17,14 @@ params = [
         base_value=900,
         low_pct=-25,
         high_pct=25,
-        steps=5,
+        points=5,
     ),
     ParameterRangeConfig(
         variable_name="generation.capacity_factor_pct",
         base_value=42,
         low_pct=-10,
         high_pct=10,
-        steps=5,
+        points=5,
     ),
 ]
 config_path = (

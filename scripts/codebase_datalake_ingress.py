@@ -161,18 +161,20 @@ def parse_file(
             exports.append(node.target.id)
 
     imports: List[Tuple[str, str, str, int]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for a in node.names:
+    for walk_node in ast.walk(tree):
+        if isinstance(walk_node, ast.Import):
+            for a in walk_node.names:
                 imports.append(("import", a.name, "", 0))
-        elif isinstance(node, ast.ImportFrom):
-            for a in node.names:
-                imports.append(("from", node.module or "", a.name, node.level or 0))
+        elif isinstance(walk_node, ast.ImportFrom):
+            for a in walk_node.names:
+                imports.append(
+                    ("from", walk_node.module or "", a.name, walk_node.level or 0)
+                )
 
     calls: List[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            s = callee_str(node.func)
+    for call_node in ast.walk(tree):
+        if isinstance(call_node, ast.Call):
+            s = callee_str(call_node.func)
             if s:
                 calls.append(s)
 
@@ -229,8 +231,8 @@ def main() -> int:
     blobs = dl / "blobs"
     derived = dl / "derived"
 
-    for p in (snapshots, blobs, derived):
-        p.mkdir(parents=True, exist_ok=True)
+    for d in (snapshots, blobs, derived):
+        d.mkdir(parents=True, exist_ok=True)
 
     latest_ptr = dl / "latest_snapshot.txt"
     if not latest_ptr.exists():
@@ -264,16 +266,16 @@ def main() -> int:
     # Build module mappings
     module_to_path: Dict[str, str] = {}
     package_to_init: Dict[str, str] = {}
-    for p in py_paths:
-        if not p.endswith(".py"):
+    for rel_path in py_paths:
+        if not rel_path.endswith(".py"):
             continue
-        mod = p[:-3].replace("/", ".")
+        mod = rel_path[:-3].replace("/", ".")
         if mod.endswith(".__init__"):
             pkg = mod[:-9]
-            package_to_init[pkg] = p
-            module_to_path[pkg] = p
+            package_to_init[pkg] = rel_path
+            module_to_path[pkg] = rel_path
         else:
-            module_to_path[mod] = p
+            module_to_path[mod] = rel_path
 
     # Seed = analytics/** + finance/** that exist on disk
     seed = [
@@ -303,13 +305,13 @@ def main() -> int:
         except Exception:
             continue
 
-        for e in exps:
+        for exp in exps:
             exports_rows.append(
                 {
                     "snapshot_id": snapshot_id,
                     "snapshot_created_at": created_at,
                     "path": importer,
-                    "exported_name": e,
+                    "exported_name": exp,
                 }
             )
 
@@ -361,27 +363,27 @@ def main() -> int:
     # index_files
     files_rows: List[dict] = []
     for f in files:
-        p = (f.get("path") or "").replace("\\", "/")
+        rel_path = (f.get("path") or "").replace("\\", "/")
         ext = f.get("extension", "")
         module_name = ""
-        if ext == ".py" and p.endswith(".py"):
-            module_name = p[:-3].replace("/", ".")
+        if ext == ".py" and rel_path.endswith(".py"):
+            module_name = rel_path[:-3].replace("/", ".")
             if module_name.endswith(".__init__"):
                 module_name = module_name[:-9]
-        package_root = p.split("/")[0] if "/" in p else ""
+        package_root = rel_path.split("/")[0] if "/" in rel_path else ""
 
         files_rows.append(
             {
                 "snapshot_id": snapshot_id,
                 "snapshot_created_at": created_at,
-                "path": p,
+                "path": rel_path,
                 "extension": ext,
                 "size_bytes": f.get("size_bytes"),
                 "modified_at": f.get("modified_at"),
                 "package_root": package_root,
                 "module_name": module_name,
                 "is_python": ext == ".py",
-                "is_relevant": p in relevant,
+                "is_relevant": rel_path in relevant,
             }
         )
 
@@ -423,18 +425,20 @@ def main() -> int:
         call_counts[r["path"]] = call_counts.get(r["path"], 0) + 1
 
     relevant_rows: List[dict] = []
-    for p in sorted(relevant):
+    for rel_path in sorted(relevant):
         relevant_rows.append(
             {
                 "snapshot_id": snapshot_id,
                 "snapshot_created_at": created_at,
-                "path": p,
-                "package_root": p.split("/")[0] if "/" in p else "",
-                "module_name": p[:-3].replace("/", ".") if p.endswith(".py") else "",
-                "internal_imports": internal_import_counts.get(p, 0),
-                "external_imports": external_import_counts.get(p, 0),
-                "exports": export_counts.get(p, 0),
-                "unique_calls": call_counts.get(p, 0),
+                "path": rel_path,
+                "package_root": rel_path.split("/")[0] if "/" in rel_path else "",
+                "module_name": (
+                    rel_path[:-3].replace("/", ".") if rel_path.endswith(".py") else ""
+                ),
+                "internal_imports": internal_import_counts.get(rel_path, 0),
+                "external_imports": external_import_counts.get(rel_path, 0),
+                "exports": export_counts.get(rel_path, 0),
+                "unique_calls": call_counts.get(rel_path, 0),
             }
         )
 

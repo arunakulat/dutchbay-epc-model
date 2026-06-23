@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.export
 
@@ -14,8 +12,9 @@ Public API (keep stable):
 - suite_to_tables(...)
 - suite_to_records(...)
 """
+from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional, Sequence, Union
+from typing import Any, Dict
 
 try:
     import pandas as pd

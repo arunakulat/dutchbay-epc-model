@@ -16,8 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from analytics.contracts_v14 import ParameterRangeConfig  # type: ignore[import]
-from analytics.sensitivity_v14 import (  # type: ignore[import]
+from analytics.contracts_v14 import ParameterRangeConfig
+from analytics.sensitivity_v14 import (  # type: ignore[attr-defined]  # deprecated star-import shim; names unresolvable to mypy (repointing is out of single-file scope & would change behavior)
     SensitivityRequest,
     load_parameters_from_yaml,
     multi_metric_suite_to_dataframe,

@@ -49,6 +49,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import hydra
 import yaml
@@ -91,7 +92,7 @@ def cli(cfg: DictConfig) -> None:
     # Validate required parameter
     location_name = cfg.get("location")
     if not location_name:
-        error_result = {
+        error_result: dict[str, Any] = {
             "status": "error",
             "error": "Missing required parameter 'location'",
             "usage": "python run_wind_analysis_v14.py location=dutchbay",
@@ -165,7 +166,7 @@ def cli(cfg: DictConfig) -> None:
         cashflow_export = pipeline.export_for_cashflow_model(scenario=export_scenario)
         
         # Build comprehensive result (JSON-first, CLI-03 compliance)
-        result = {
+        result: dict[str, Any] = {
             "status": "success",
             "location": {
                 "name": location_name,

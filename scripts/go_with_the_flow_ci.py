@@ -522,7 +522,7 @@ def main(
     show_fire_warning()
 
 
-@app.command
+@app.command  # type: ignore[arg-type]  # Typer stubs don't model bare-decorator form (no parens); func passed as `name`
 def generate_artifacts() -> None:
     """Generate concatenated scripts artifact for distribution."""
     typer.echo("=" * 70)
@@ -624,7 +624,7 @@ EOF
     typer.echo("   Use for: Review, audit, distribution to stakeholders")
 
 
-@app.command
+@app.command  # type: ignore[arg-type]  # Typer stubs don't model bare-decorator form (no parens); func passed as `name`
 def info() -> None:
     """Show CI pipeline information and configuration."""
     typer.echo("=" * 70)
@@ -677,7 +677,7 @@ def info() -> None:
     typer.echo("  • pytest runs only on the selected test files (paths under tests/)")
 
 
-@app.command
+@app.command  # type: ignore[arg-type]  # Typer stubs don't model bare-decorator form (no parens); func passed as `name`
 def fire_warning() -> None:
     """Show available emergency fire-fighting tools."""
     show_fire_warning()

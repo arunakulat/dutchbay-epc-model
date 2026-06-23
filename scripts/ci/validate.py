@@ -9,15 +9,15 @@ from typing import Any, Dict, List, Optional, Union
 Pathish = Union[str, Path]
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except Exception:  # pragma: no cover
-    yaml = None  # type: ignore
+    yaml = None
 
 # Try optional jsonschema if present; otherwise we do a lightweight structural check.
 try:  # pragma: no cover
-    import jsonschema  # type: ignore
+    import jsonschema
 except Exception:  # pragma: no cover
-    jsonschema = None  # type: ignore
+    jsonschema = None
 
 
 # ---------------------------
@@ -40,7 +40,7 @@ def _schema_paths() -> List[Path]:
 
     # optional code-level hint
     try:
-        from dutchbay_v13 import schema as _schema_mod  # type: ignore
+        from dutchbay_v13 import schema as _schema_mod
 
         extra = getattr(_schema_mod, "EXTRA_SCHEMA_PATHS", [])
         for p in extra or []:
@@ -207,7 +207,7 @@ def validate_params_dict(
     schema = _load_financing_schema() if jsonschema is not None else None
     if schema and jsonschema is not None:
         try:
-            jsonschema.validate(instance=d, schema=schema)  # type: ignore
+            jsonschema.validate(instance=d, schema=schema)
         except Exception:
             if not strict:
                 # In relaxed mode, only re-raise structural errors; unknown fields are allowed.

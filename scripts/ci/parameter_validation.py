@@ -3,9 +3,9 @@
 #   from parameter_validation import validate_project_parameters
 try:
     # Preferred: use package validator
-    from dutchbay_v13.validate import validate_project_parameters  # type: ignore
+    from dutchbay_v13.validate import validate_project_parameters
 except Exception:
     # Fallback no-op validator to avoid hard crashes in smoke/import tests.
     # It simply returns the given params unchanged.
-    def validate_project_parameters(params, where=None):  # type: ignore
+    def validate_project_parameters(params, where=None):
         return params

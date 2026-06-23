@@ -341,7 +341,6 @@ def export_to_excel(config_path: str, output_path: str) -> None:
     results = run_v14_pipeline(
         config_path,
         validation_mode='off',
-        allow_fx_degradation=True
     )
     
     # Create workbook

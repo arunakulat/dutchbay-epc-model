@@ -4,14 +4,18 @@
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analytics.contracts_v14 import ParameterRangeConfig
-from analytics.sensitivity_v14 import SensitivityRequest, run_tornado_sensitivity
+from analytics.sensitivity_v14 import (  # type: ignore[attr-defined]  # names absent from this deprecated module at runtime; preserving the script's existing (broken) import as-is per no-behavior-change rule
+    SensitivityRequest,
+    run_tornado_sensitivity,
+)
 
 
-def benchmark_tornado(n_params: int):
+def benchmark_tornado(n_params: int) -> Dict[str, Any]:
     """Benchmark with N parameters."""
     params = [
         ParameterRangeConfig(

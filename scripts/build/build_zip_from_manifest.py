@@ -17,7 +17,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List
 from zipfile import ZIP_DEFLATED, ZipFile
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def load_manifest(path: Path) -> Dict:
     logger.info("Loading manifest from %s", path)
     with path.open("r", encoding="utf-8") as f:
-        manifest = json.load(f)
+        manifest: Dict[str, Any] = json.load(f)
 
     if "include" not in manifest or not isinstance(manifest["include"], list):
         raise ValueError("Manifest must contain an 'include' list.")
@@ -96,7 +96,7 @@ def build_zip_from_manifest(manifest_path: Path) -> Path:
     manifest = load_manifest(manifest_path)
 
     base_dir = (manifest_path.parent / manifest["base_dir"]).resolve()
-    output_zip = (manifest_path.parent / manifest["output_zip"]).resolve()
+    output_zip: Path = (manifest_path.parent / manifest["output_zip"]).resolve()
     includes: List[str] = manifest["include"]
     exclude: List[str] = manifest["exclude"]
     rename_map: Dict[str, str] = manifest["rename_map"]
