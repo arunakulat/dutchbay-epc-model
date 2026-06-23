@@ -215,10 +215,24 @@ def optimize_debt_pareto(
                 # ensure grace <= tenor - 1 for feasibility
                 if G > max(0, T - 1):
                     continue
-                params = {
-                    "debt": {"debt_ratio": dr, "tenor_years": T, "grace_years": G}
-                }
-                res = build_financial_model(params)
+                # build_financial_model takes (ProjectParameters, DebtStructure) —
+                # not a dict. Map the swept grid onto those: debt_ratio scales total
+                # debt (preserving the default USD/LKR split), tenor sets the debt
+                # tenor, and grace sets the project grace period.
+                proj = create_default_parameters()
+                proj.grace_period = int(G)
+                debt = create_default_debt_structure()
+                usd_ratio = debt.usd_debt / debt.total_debt
+                debt.total_debt = proj.total_capex * dr
+                debt.usd_debt = debt.total_debt * usd_ratio
+                debt.lkr_debt = debt.total_debt - debt.usd_debt
+                debt.debt_tenor_years = int(T)
+                res = build_financial_model(proj, debt)
+                # build_financial_model returns None IRR/NPV for grid points where
+                # the IRR solver does not converge (e.g. infeasible debt geometry);
+                # such points are not part of any frontier, so skip them.
+                if res["equity_irr"] is None or res["project_irr"] is None:
+                    continue
                 irr = float(res["equity_irr"])
                 dscr = float(res["min_dscr"])
                 best_irr = max(best_irr, irr)
