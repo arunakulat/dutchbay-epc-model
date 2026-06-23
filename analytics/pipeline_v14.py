@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import yaml
 from omegaconf import OmegaConf
@@ -100,23 +100,39 @@ def run_v14_pipeline(
     # Step 1: Schema validation (if enabled)
     if validation_mode == "strict":
         logger.info("\n[1/4] Running schema validation...")
-        from schema import schema_guard
-        
-        validation_result = schema_guard.validate_config(
-            cfg,
-            modules=validation_modules or ["all"]
+        # Canonical v14 validator (same entry point pipeline_v14_enhanced uses).
+        # The historical `from schema import schema_guard` import resolved to no
+        # module that exists in this repo, and `schema_guard.validate_config(...)`
+        # is not a real function — the API is `validate_config_for_v14`, which
+        # returns None and raises ConfigValidationError on failure. So this whole
+        # branch always raised at runtime; any strict-mode caller of the base
+        # pipeline (e.g. scripts/legacy_runners/run_complete_analysis_fixed.py)
+        # never got past it.
+        from analytics.schema_guard import (
+            ConfigValidationError,
+            validate_config_for_v14,
         )
-        
-        if not validation_result["valid"]:
-            error_msg = f"Schema validation failed: {validation_result['errors']}"
+
+        modules = validation_modules or ["cashflow", "debt"]
+        # validate_config_for_v14 wants a plain mapping; cfg is an OmegaConf
+        # DictConfig, so to_container yields a dict (the broad union return type
+        # covers list/scalar configs we never produce here).
+        raw_cfg = cast(Dict[str, Any], OmegaConf.to_container(cfg, resolve=True))
+        try:
+            validate_config_for_v14(
+                raw_config=raw_cfg,
+                config_path=str(config_path),
+                modules=modules,
+            )
+        except ConfigValidationError as exc:
+            error_msg = f"Schema validation failed: {exc}"
             logger.error(error_msg)
             return {
                 "status": "error",
                 "error": error_msg,
-                "validation_result": validation_result
             }
-        
-        logger.info("✓ Schema validation passed")
+
+        logger.info("✓ Schema validation passed: %s", ", ".join(modules))
     
     # Step 2: Wind Resource Assessment
     logger.info("\n[2/4] Running wind resource assessment...")
