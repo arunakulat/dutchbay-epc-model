@@ -66,3 +66,17 @@ def test_optimize_debt_pareto_produces_frontier():
     for k in ("debt_ratio", "tenor_years", "equity_irr", "min_dscr", "project_irr", "npv_12pct"):
         assert k in pt
     assert pt["project_irr"] is not None
+
+
+def test_grace_above_supported_is_rejected():
+    # The vintage V12 amortisation cannot fully retire USD debt for grace > 3
+    # (USD principal is not tenor-bound), so the sweep must reject it rather than
+    # report DSCR/IRR inflated by stranded principal.
+    with pytest.raises(ValueError, match="grace"):
+        opt.optimize_debt_pareto(grid_dr="0.7:0.7:0.1", grid_tenor="15:15:1", grid_grace="4:4:1")
+
+
+def test_supported_grace_grid_runs():
+    # The default-style grid (grace 0..3) is within the supported range and runs.
+    res = opt.optimize_debt_pareto(grid_dr="0.6:0.8:0.1", grid_tenor="12:16:2", grid_grace="0:3:1")
+    assert res["frontier_count"] > 0

@@ -24,6 +24,11 @@ from .legacy_v12 import (
     create_default_parameters,
 )
 
+# Largest grace period the vintage V12 amortisation fully retires (USD principal is
+# swept off operating cash flow, not bound to the debt tenor). Beyond this, residual
+# principal is stranded; optimize_debt_pareto rejects such grids.
+_MAX_SUPPORTED_GRACE = 3
+
 
 def optimize_capital_structure(
     objective: str = "equity_irr",
@@ -205,6 +210,21 @@ def optimize_debt_pareto(
     dr_vals = _parse_grid(grid_dr, is_int=False)
     tenor_vals = _parse_grid(grid_tenor, is_int=True)
     grace_vals = _parse_grid(grid_grace, is_int=True)
+
+    # Guard the vintage V12 amortisation limit. The model's USD principal is swept
+    # off operating cash flow and is NOT tied to the debt tenor (no maturity balloon),
+    # so it only fully retires the USD tranche for grace <= 3; at grace >= 4 the early
+    # high-repayment band is fully inside the grace window and residual principal is
+    # left unpaid — silently inflating DSCR/IRR. Reject rather than report corrupt
+    # economics. (Fixing the amortisation to honour tenor is deferred: this is a
+    # vintage research instrument, not the canonical v14 engine.)
+    if grace_vals and max(grace_vals) > _MAX_SUPPORTED_GRACE:
+        raise ValueError(
+            f"grid_grace includes grace > {_MAX_SUPPORTED_GRACE}, which the vintage V12 "
+            f"model cannot fully amortise (USD principal is not tenor-bound, so residual "
+            f"debt would be stranded and DSCR/IRR overstated). Use grace in "
+            f"0..{_MAX_SUPPORTED_GRACE}."
+        )
 
     rows: List[Dict[str, Any]] = []
     best_irr, best_dscr = -1e9, -1e9
