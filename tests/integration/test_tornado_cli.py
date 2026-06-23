@@ -20,6 +20,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+_PARAMS_EXAMPLE = _REPO / "scenarios" / "sensitivity_parameters_examples.yaml"
 
 pd = pytest.importorskip("pandas")
 
@@ -118,6 +119,33 @@ def test_multi_metric_tags_each_metric(tmp_path: Path):
     assert rc == 0
     df = pd.read_csv(out)
     assert set(df["metric"]) == {"project_irr", "min_dscr"}
+
+
+@pytest.mark.skipif(
+    not (_CONFIG.exists() and _PARAMS_EXAMPLE.exists()),
+    reason="lendercase scenario or shipped example params not present",
+)
+def test_shipped_example_command_runs(tmp_path: Path):
+    """The exact command advertised in --help / the module docstring must work.
+
+    Regression guard: every path in scenarios/sensitivity_parameters_examples.yaml
+    must RESOLVE in the lendercase scenario (the engine rejects unresolved paths),
+    so the copy-pasteable example cannot silently exit 2 with an empty CSV.
+    """
+    cli = _load_cli()
+    out = tmp_path / "example.csv"
+    rc = cli.main([
+        "--config", str(_CONFIG),
+        "--parameters", str(_PARAMS_EXAMPLE),
+        "--metric", "project_irr",
+        "--output", str(out),
+    ])
+    assert rc == 0
+    df = pd.read_csv(out)
+    assert not df.empty
+    assert set(df["variable_name"]) == {
+        "capex.usd_total", "tariff.lkr_per_kwh", "opex.usd_per_year", "project.capacity_factor",
+    }
 
 
 @pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
