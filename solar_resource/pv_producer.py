@@ -105,6 +105,14 @@ class SolarResourceConfig:
             raise ValueError(
                 f"system_loss_pct must be in [0, 100); got {self.system_loss_pct}"
             )
+        if not 0.0 < self.inverter_eff_nom <= 1.0:
+            raise ValueError(
+                f"inverter_eff_nom must be in (0, 1]; got {self.inverter_eff_nom}"
+            )
+        if not 0.0 <= self.azimuth_deg <= 360.0:
+            raise ValueError(f"azimuth_deg must be in [0, 360]; got {self.azimuth_deg}")
+        if not 0.0 <= self.tilt_deg <= 90.0:
+            raise ValueError(f"tilt_deg must be in [0, 90]; got {self.tilt_deg}")
 
     @classmethod
     def from_scenario(cls, scenario: Mapping[str, Any]) -> "SolarResourceConfig":
@@ -126,8 +134,15 @@ class SolarResourceConfig:
             raise KeyError(f"resource.solar is missing required field(s): {missing}")
 
         known = cls.__dataclass_fields__  # noqa: SLF001 - dataclass introspection
-        kwargs = {k: v for k, v in block.items() if k in known}
-        return cls(**kwargs)
+        # CESSPIT: reject unknown keys rather than silently dropping them, so a typo'd
+        # field (e.g. system_los_pct) fails loud instead of reverting to a default.
+        unknown = [k for k in block if k not in known]
+        if unknown:
+            raise KeyError(
+                f"resource.solar has unknown field(s): {sorted(unknown)}; "
+                f"valid keys: {sorted(known)}"
+            )
+        return cls(**block)
 
 
 @dataclass(frozen=True)
@@ -196,6 +211,7 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
     cos_zen = np.cos(np.radians(solpos["zenith"]))
     dhi = (ghi - dni * cos_zen).clip(lower=0.0)
 
+    dni_extra = pvlib.irradiance.get_extra_radiation(times)
     poa = pvlib.irradiance.get_total_irradiance(
         surface_tilt=config.tilt_deg,
         surface_azimuth=config.azimuth_deg,
@@ -204,6 +220,8 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
         dni=dni,
         ghi=ghi,
         dhi=dhi,
+        dni_extra=dni_extra,
+        model="haydavies",  # anisotropic (lender-preferred over the isotropic default)
     )["poa_global"].clip(lower=0.0)
 
     cell_temp = pvlib.temperature.faiman(

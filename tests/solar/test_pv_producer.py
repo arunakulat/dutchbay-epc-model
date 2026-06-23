@@ -117,11 +117,22 @@ def test_from_scenario_missing_required_field_raises() -> None:
         {"longitude": -200.0},
         {"dc_ac_ratio": 0.0},
         {"system_loss_pct": 100.0},
+        {"inverter_eff_nom": 0.0},  # would be a raw ZeroDivisionError without the guard
+        {"inverter_eff_nom": 1.5},
+        {"azimuth_deg": 400.0},
+        {"tilt_deg": 120.0},
     ],
 )
 def test_config_rejects_invalid_inputs(bad: dict) -> None:
     with pytest.raises(ValueError):
         _cfg(**bad)
+
+
+def test_from_scenario_rejects_unknown_key() -> None:
+    # CESSPIT: a typo'd field must fail loud, not silently revert to a default.
+    block = {**KALPITIYA, "system_los_pct": 14.0}  # typo of system_loss_pct
+    with pytest.raises(KeyError, match="unknown field"):
+        SolarResourceConfig.from_scenario({"resource": {"solar": block}})
 
 
 # ── VALIDATE a declared P50 CF against the producer (no overwrite) ─────────────
