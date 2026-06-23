@@ -132,7 +132,10 @@ def test_to_scenario_config_merges_over_base() -> None:
 
 def test_form_to_pipeline_end_to_end() -> None:
     """A validated form submission runs through the canonical pipeline."""
-    cfg = WindFarmInputs(**_valid_kwargs()).to_scenario_config()
+    # Use the real 159.6 MW nameplate so capacity x CF reconciles with the lendercase
+    # frozen AEP (473.8) at the service-seam reconciliation guard (the round 150.0 used
+    # elsewhere for structure checks would trip it: 150 x 0.339 x 8.760 = 445 vs 473.8).
+    cfg = WindFarmInputs(**_valid_kwargs(capacity_mw=159.6)).to_scenario_config()
     result = run_finance_case(cfg)
     assert result["status"] == "success"
     assert {"project_irr", "equity_irr", "min_dscr"} <= set(result["kpis"])

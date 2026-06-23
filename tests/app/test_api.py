@@ -28,7 +28,10 @@ from app.models.inputs import WindFarmInputs
 def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
     base: Dict[str, Any] = {
         "site_name": "DutchBay",
-        "capacity_mw": 150.0,
+        # The real 15 x 10.64 MW nameplate (not the round "150 MW" label): 159.6 x 0.339
+        # x 8.760 = 473.9 GWh reconciles with the lendercase frozen AEP (473.8), so the
+        # service-seam reconciliation guard passes.
+        "capacity_mw": 159.6,
         "capacity_factor": 0.339,
         "project_life_years": 20,
         "ppa_price_lkr_per_kwh": 20.30,

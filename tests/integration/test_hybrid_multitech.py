@@ -59,6 +59,12 @@ def _hybrid_scenario() -> dict:
             },
         }
     }
+    # This synthetic hybrid keeps the lendercase variant's frozen WIND-ONLY AEP (473.8),
+    # but the combined wind+solar nameplate x blended CF is ~561 GWh — the per-tech
+    # generation block above is the real generation driver. Relax the headline-vs-wind-only
+    # reconciliation guard for this illustrative combined plant (an audited override; logged
+    # at WARNING). The single-tech scenarios elsewhere reconcile at the default 2%.
+    scenario["aep_reconciliation"] = {"tolerance_pct": 25.0}
     return scenario
 
 
@@ -109,6 +115,9 @@ def test_per_tech_degradation_flows_through_the_real_cashflow() -> None:
         opex_annual_usd=6_500_000,
         fx_start_lkr_per_usd=333.79,
     ).to_scenario_config()
+    # 200 MW x 0.30425 = ~533 GWh combined vs the inherited wind-only 473.8 — relax the
+    # headline reconciliation for this synthetic per-tech scenario (audited override).
+    base["aep_reconciliation"] = {"tolerance_pct": 25.0}
 
     single = run_finance_case(dict(base))
 

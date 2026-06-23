@@ -146,9 +146,10 @@ live entrypoints** — scenario load (`analytics/scenario_loader.py`), the API b
 passes an in-memory dict that bypasses the load-time guard) — config-driven via
 `defaults.aep_provenance` and a no-op when a scenario declares no
 `resource.power_curve.source_id`, so a real run now refuses an unapproved or
-placeholder turbine-curve source. (The sibling `aep_reconciliation` guard has the same
-inline-dict bypass at the service seam; wiring it there is a tracked follow-up — it would
-trip the synthetic non-reconciling scenarios several app/integration tests exercise.) The remaining off-path control is the
+placeholder turbine-curve source. (The sibling `aep_reconciliation` guard, which shared
+the same inline-dict bypass at the service seam, is now also wired there — the synthetic
+non-reconciling app/integration scenarios were given explicit audited tolerance overrides
+or aligned to the real 159.6 MW nameplate.) The remaining off-path control is the
 **wind-interface schema** (`'wind'`/`'era5'` validation modules, still passed by no
 production caller); the rest of the AEP-analytics cluster (summary builder / parallel
 pipeline / MC-AEP / tornado) is a decision to wire or retire so `wind_resource/` is the
