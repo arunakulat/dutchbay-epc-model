@@ -26,8 +26,16 @@ from .legacy_v12 import (
 
 # Largest grace period the vintage V12 amortisation fully retires (USD principal is
 # swept off operating cash flow, not bound to the debt tenor). Beyond this, residual
-# principal is stranded; optimize_debt_pareto rejects such grids.
+# principal is stranded; optimize_debt_pareto rejects such grids as a fast-fail.
 _MAX_SUPPORTED_GRACE = 3
+
+# Per-point amortisation tolerance ($M). USD principal is not tenor-bound, so the
+# debt_ratio x grace interaction can strand principal even for grace <= 3 (e.g.
+# dr=0.9, grace=3). Any grid point whose USD residual exceeds this is dropped from
+# the frontier, because the unpaid balance is never billed into Total_DS and would
+# spuriously inflate DSCR/IRR. Clean points amortise to ~1e-9; stranded ones leave
+# multiple $M, so the separation is wide.
+_USD_AMORT_TOL = 1e-3
 
 
 def optimize_capital_structure(
@@ -228,6 +236,7 @@ def optimize_debt_pareto(
 
     rows: List[Dict[str, Any]] = []
     best_irr, best_dscr = -1e9, -1e9
+    skipped_unamortised = 0
 
     for dr in dr_vals:
         for T in tenor_vals:
@@ -252,6 +261,16 @@ def optimize_debt_pareto(
                 # the IRR solver does not converge (e.g. infeasible debt geometry);
                 # such points are not part of any frontier, so skip them.
                 if res["equity_irr"] is None or res["project_irr"] is None:
+                    continue
+                # Drop points where the vintage model leaves USD principal stranded
+                # (USD repayment is not tenor-bound). The unpaid balance is never
+                # billed into Total_DS, so DSCR/IRR would be spuriously inflated. The
+                # grace>3 guard above is a fast-fail for the always-stranded regime;
+                # this catches the debt_ratio x grace interaction (e.g. dr=0.9,
+                # grace=3) that strands principal even within the supported grace range.
+                usd_resid = float(debt.usd_debt - res["annual_data"]["USD_Prin"].sum())
+                if usd_resid > _USD_AMORT_TOL:
+                    skipped_unamortised += 1
                     continue
                 irr = float(res["equity_irr"])
                 dscr = float(res["min_dscr"])
@@ -324,6 +343,7 @@ def optimize_debt_pareto(
         "frontier_count": int(len(frontier_df)),
         "best_equity_irr": best_irr,
         "best_min_dscr": best_dscr,
+        "skipped_unamortised": int(skipped_unamortised),
     }
 
 

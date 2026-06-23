@@ -80,3 +80,15 @@ def test_supported_grace_grid_runs():
     # The default-style grid (grace 0..3) is within the supported range and runs.
     res = opt.optimize_debt_pareto(grid_dr="0.6:0.8:0.1", grid_tenor="12:16:2", grid_grace="0:3:1")
     assert res["frontier_count"] > 0
+
+
+def test_frontier_excludes_stranded_usd_principal():
+    # The grace<=3 guard is necessary but not sufficient: the debt_ratio x grace
+    # interaction (e.g. dr=0.9, grace=3) strands USD principal even within the
+    # supported grace range. Such points must be dropped from the frontier — their
+    # DSCR/IRR are inflated by principal never billed into Total_DS. This grid
+    # includes the stranding point (dr=0.9, grace=3) alongside clean ones.
+    res = opt.optimize_debt_pareto(grid_dr="0.8:0.9:0.1", grid_tenor="10:14:2", grid_grace="2:3:1")
+    assert res["skipped_unamortised"] > 0  # the dr=0.9/grace=3 points were dropped
+    for r in res["frontier"]:
+        assert not (abs(r["debt_ratio"] - 0.9) < 1e-9 and r["grace_years"] == 3)
