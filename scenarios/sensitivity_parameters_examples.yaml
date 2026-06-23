@@ -1,22 +1,33 @@
 # Sensitivity Analysis Parameter Examples
-
+#
+# One-way tornado sweep definitions for scripts/run_tornado_from_cli.py.
+#
+#   python scripts/run_tornado_from_cli.py \
+#     --config scenarios/dutchbay_lendercase_2025Q4.yaml \
+#     --parameters scenarios/sensitivity_parameters_examples.yaml \
+#     --metric project_irr
+#
+# Each variable_name is a dotted path that must RESOLVE in the scenario config
+# (the engine rejects unresolved paths rather than draw a silent flat bar), so
+# these use the canonical v14 config keys and base_value mirrors the lendercase
+# scenario above so the +/- percentage bands are anchored to the real values.
 standard_suite:
-  - variable_name: finance.capex_usd
-    base_value: 10000000.0
-    low_pct: -20.0
-    high_pct: 20.0
-
-  - variable_name: finance.tariff_lkr_per_kwh
-    base_value: 25.0
-    low_pct: -15.0
-    high_pct: 15.0
-
-  - variable_name: finance.opex_annual_usd
-    base_value: 200000.0
+  - variable_name: capex.usd_total
+    base_value: 159600000.0
     low_pct: -10.0
     high_pct: 10.0
 
-  - variable_name: generation.capacity_factor_pct
-    base_value: 25.0
+  - variable_name: tariff.lkr_per_kwh
+    base_value: 20.3
+    low_pct: -10.0
+    high_pct: 10.0
+
+  - variable_name: opex.usd_per_year
+    base_value: 3000000.0
+    low_pct: -15.0
+    high_pct: 15.0
+
+  - variable_name: project.capacity_factor
+    base_value: 0.339
     low_pct: -10.0
     high_pct: 10.0
