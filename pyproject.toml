@@ -72,6 +72,9 @@ gis = [
 # the PDF tests are gated behind ``pytest.importorskip('weasyprint')`` (CASPER).
 report = [
   "weasyprint>=60",
+  # reportlab powers the standalone assessment-report generator
+  # (scripts/generate_solar_assessment_report.py); gated behind importorskip in its test.
+  "reportlab>=4.0",
 ]
 # Async live-ERA5 job path (Sprint 2). The default in-process path
 # (app.api.jobs_router + BackgroundTasks) needs none of these; arq + Redis is the
