@@ -43,7 +43,7 @@ import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 from analytics.loader.aep_loader import validate_config_aep_provenance
 
@@ -129,8 +129,13 @@ def resolve_provenance_policy(config: Mapping[str, Any]) -> ProvenancePolicy:
     )
 
 
-def _declared_source_id(config: Mapping[str, Any]) -> Optional[str]:
-    """Return ``resource.power_curve.source_id`` if the scenario declares one."""
+def _declared_source_id(config: Mapping[str, Any]) -> Any:
+    """Return the raw ``resource.power_curve.source_id`` (or None if not declared).
+
+    Returns the value verbatim — the caller validates it is a usable string — so a
+    malformed non-scalar source_id (a list/dict) becomes a clean guard error rather
+    than an unhashable-type ``TypeError`` inside the manifest membership test.
+    """
     resource = config.get("resource")
     if not isinstance(resource, Mapping):
         return None
@@ -138,7 +143,9 @@ def _declared_source_id(config: Mapping[str, Any]) -> Optional[str]:
     if not isinstance(power_curve, Mapping):
         return None
     source_id = power_curve.get("source_id")
-    return str(source_id) if source_id else None
+    if source_id is None or source_id == "":
+        return None
+    return source_id
 
 
 def enforce_aep_provenance(
@@ -179,6 +186,16 @@ def enforce_aep_provenance(
             where,
         )
         return
+
+    if not isinstance(source_id, str):
+        # A non-scalar source_id would crash the manifest membership test with an
+        # unhashable-type TypeError that escapes the except below; reject it cleanly.
+        raise AepProvenanceError(
+            "resource.power_curve.source_id must be a string"
+            + where
+            + f"; got {type(source_id).__name__} — a malformed AEP source cannot be "
+            "provenance-checked."
+        )
 
     try:
         block = validate_config_aep_provenance(

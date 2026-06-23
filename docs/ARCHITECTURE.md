@@ -139,11 +139,16 @@ the **live** wind producer (`wind_resource/`: `WindPipeline` → `energy_calcula
 **wind-interface schema** were lender-grade integrity controls **enforced only in
 tests** (see [`WIND_AEP_CHAIN_OF_CUSTODY.md`](WIND_AEP_CHAIN_OF_CUSTODY.md)).
 The **provenance half is now wired** (2026-06-23, item 2): `analytics/aep_provenance.py`
-folds `aep_loader.validate_config_aep_provenance` into the financed path at scenario
-load (`analytics/scenario_loader.py`) and the API boundary (`api/pipeline_api.py`),
-config-driven via `defaults.aep_provenance` and a no-op when a scenario declares no
-`resource.power_curve.source_id` — so a real run now refuses an unapproved or
-placeholder turbine-curve source. The remaining off-path control is the
+folds `aep_loader.validate_config_aep_provenance` into the financed path at **all three
+live entrypoints** — scenario load (`analytics/scenario_loader.py`), the API boundary
+(`api/pipeline_api.py`), and the framework-agnostic service seam
+(`app/services/pipeline_service.py`, the web app's `POST /cases` + job runner, which
+passes an in-memory dict that bypasses the load-time guard) — config-driven via
+`defaults.aep_provenance` and a no-op when a scenario declares no
+`resource.power_curve.source_id`, so a real run now refuses an unapproved or
+placeholder turbine-curve source. (The sibling `aep_reconciliation` guard has the same
+inline-dict bypass at the service seam; wiring it there is a tracked follow-up — it would
+trip the synthetic non-reconciling scenarios several app/integration tests exercise.) The remaining off-path control is the
 **wind-interface schema** (`'wind'`/`'era5'` validation modules, still passed by no
 production caller); the rest of the AEP-analytics cluster (summary builder / parallel
 pipeline / MC-AEP / tornado) is a decision to wire or retire so `wind_resource/` is the

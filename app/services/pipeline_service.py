@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Mapping, Sequence
 
+from analytics.aep_provenance import enforce_aep_provenance
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
 
@@ -62,6 +63,18 @@ def run_finance_case(
             scenario is missing or has invalid required fields.
         Other engine exceptions propagate unchanged (fail-fast).
     """
+    # This seam accepts an in-memory scenario dict, which reaches run_v14_pipeline via the
+    # Mapping branch that bypasses load_scenario_config — so the load-time AEP-provenance
+    # guard does NOT fire here. Re-apply it at the seam (the symmetric fix to the API
+    # boundary in api.pipeline_api) so a web / notebook / batch caller cannot run an
+    # unapproved or placeholder AEP source. Pure detector: it raises or no-ops, changing no
+    # number (byte-identical economics); the input is not mutated.
+    # NB: the sibling capacity↔AEP reconciliation guard has the SAME inline-dict bypass at
+    # this seam, but wiring it here is a separate change (it would fail loud on the synthetic
+    # non-reconciling scenarios several app/integration tests legitimately exercise) — left
+    # as a tracked follow-up, not bundled into this provenance wire-in.
+    enforce_aep_provenance(dict(scenario), "<inline>")
+
     modules = list(validation_modules) if validation_modules is not None else None
     return run_v14_pipeline(
         config=scenario,

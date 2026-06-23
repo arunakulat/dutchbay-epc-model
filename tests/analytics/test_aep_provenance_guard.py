@@ -139,3 +139,45 @@ def test_scenario_load_rejects_unapproved_source(tmp_path: Path) -> None:
     bad.write_text(yaml.safe_dump(base))
     with pytest.raises(AepProvenanceError, match="not lender-grade"):
         load_scenario_config(str(bad))
+
+
+# ── Malformed input fails cleanly (not an uncaught TypeError) ──────────────────
+
+
+def test_non_scalar_source_id_raises_clean_error() -> None:
+    """A list/dict source_id is a clean AepProvenanceError, not an unhashable TypeError."""
+    with pytest.raises(AepProvenanceError, match="must be a string"):
+        enforce_aep_provenance(_cfg(None) | {"resource": {"power_curve": {"source_id": ["x"]}}}, "<list>")
+
+
+# ── The guard also fires at the dict-accepting seams (API + app service) ───────
+# These pin the run_pipeline / run_finance_case wire-ins so deleting either call
+# (which accepts an in-memory dict that bypasses the load-time guard) fails the suite.
+
+
+def test_api_boundary_rejects_unapproved_inline_source() -> None:
+    from fastapi import HTTPException
+
+    from api.pipeline_api import RunPipelineRequest, run_pipeline
+
+    cfg = yaml.safe_load(LENDER.read_text())
+    cfg["resource"]["power_curve"]["source_id"] = "OEM_NOT_IN_MANIFEST"
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(config=cfg))
+    assert exc.value.status_code == 422  # config error, not a 500
+
+
+def test_app_service_seam_rejects_unapproved_source() -> None:
+    from app.services.pipeline_service import run_finance_case
+
+    cfg = yaml.safe_load(LENDER.read_text())
+    cfg["resource"]["power_curve"]["source_id"] = "OEM_NOT_IN_MANIFEST"
+    with pytest.raises(AepProvenanceError):
+        run_finance_case(cfg)
+
+
+def test_app_service_seam_runs_approved_source() -> None:
+    from app.services.pipeline_service import run_finance_case
+
+    result = run_finance_case(yaml.safe_load(LENDER.read_text()))  # approved IEA source
+    assert result["status"] == "success"
