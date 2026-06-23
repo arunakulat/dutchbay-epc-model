@@ -74,7 +74,9 @@ generation:
       availability_pct: 97.0
     solar:
       capacity_mw: 50.0
-      capacity_factor: 0.20       # net P50 fixed-tilt, Puttalam GHI
+      capacity_factor: 0.20       # net P50 fixed-tilt, Puttalam GHI (the financed driver;
+                                  # the optional [solar] pvlib producer on the resource.solar
+                                  # block below reproduces this within ~11% — modelled ~0.18)
       degradation_pct: 0.4        # 0.4%/yr module aging (percent, /100 by the engine)
       aep_gwh: 87.6              # 50 MW * 8760 * 0.20
       capex_usd: 40000000         # $800/kW x 50 MW (SL utility-scale PV)
@@ -195,6 +197,23 @@ resource:
     output_dir: "outputs/era5_cache"
     weibull_fit:
       drift_tolerance_pct: 5.0  # warn/flag if |A_fit-A_declared| or |k_fit-k_declared| exceeds this
+
+  # OPTIONAL pvlib solar producer (the [solar] extra). The financed run uses the declared
+  # P50 generation.technologies.solar.capacity_factor (0.20); this block lets the
+  # solar_resource.pv_producer compute a physics-grounded CF to VALIDATE that P50 (never
+  # overwrite it) — the photovoltaic analogue of resource.era5 / wind_resource for wind.
+  # The pvlib model on these inputs yields CF ~0.18 (within ~11% of the declared 0.20).
+  solar:
+    latitude: 8.27               # PV array centroid, Kalpitiya (co-located with wind)
+    longitude: 79.75
+    timezone: "Asia/Colombo"
+    altitude_m: 5.0
+    annual_ghi_kwh_m2: 2000.0    # measured Puttalam annual GHI (~5.48 kWh/m2/day)
+    dc_capacity_mw: 50.0         # DC nameplate (MWp); matches the solar tech block
+    tilt_deg: 8.0                # fixed tilt near site latitude (low-latitude tropics)
+    azimuth_deg: 180.0           # equator-facing (N hemisphere)
+    dc_ac_ratio: 1.2             # inverter loading ratio
+    system_loss_pct: 14.0        # soiling/wiring/mismatch/availability stack
 
 # ═════════════════════════════════════════════════════════════════════════════
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
