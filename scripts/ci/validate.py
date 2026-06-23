@@ -4,14 +4,21 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 Pathish = Union[str, Path]
 
-try:
+# Optional dependency. Under the type-checker we import it directly so yaml.* stays
+# typed; at runtime we degrade gracefully (callers guard on ``yaml is None``). Splitting
+# the two keeps the fallback ``yaml = None`` out of mypy's view, so the gate stays clean
+# whether or not the runner's environment ships PyYAML's type information.
+if TYPE_CHECKING:
     import yaml
-except Exception:  # pragma: no cover
-    yaml = None
+else:
+    try:
+        import yaml
+    except Exception:  # pragma: no cover
+        yaml = None
 
 # Try optional jsonschema if present; otherwise we do a lightweight structural check.
 try:  # pragma: no cover
