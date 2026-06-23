@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.adapters
 
@@ -26,6 +24,7 @@ full compliance with the established Pydantic contracts.
 GWTF: Single conversion layer, no scattered adaptations.
 CASPER: Contract-explicit transformations.
 """
+from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Tuple
 

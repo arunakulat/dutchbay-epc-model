@@ -11,7 +11,7 @@ Sprint: 10 (Wind AEP Pipeline)
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -57,7 +57,7 @@ class WindStats:
     hours_data: int
 
 
-def load_era5_netcdf(filepath: str) -> xr.Dataset:
+def load_era5_netcdf(filepath: str) -> Tuple[xr.Dataset, str]:
     """Load ERA5 NetCDF file."""
     print(f"Loading ERA5 data from: {filepath}")
     ds = xr.open_dataset(filepath)
@@ -83,7 +83,7 @@ def load_era5_netcdf(filepath: str) -> xr.Dataset:
 
 def calculate_wind_speed(u: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Calculate wind speed magnitude from u/v components."""
-    return np.sqrt(u**2 + v**2)
+    return cast(np.ndarray, np.sqrt(u**2 + v**2))
 
 
 def extrapolate_to_hub_height(

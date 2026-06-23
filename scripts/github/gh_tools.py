@@ -23,7 +23,7 @@ import datetime as _dt
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
 # Low-level helpers
@@ -45,7 +45,7 @@ def run(
     """
     display = " ".join(cmd)
     print(f"\n$ {display}")
-    kwargs = {
+    kwargs: Dict[str, Any] = {
         "cwd": str(cwd) if cwd is not None else None,
         "check": check,
         "text": True,
@@ -53,7 +53,7 @@ def run(
     if capture:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
-    proc = subprocess.run(cmd, **kwargs)  # type: ignore[arg-type]
+    proc = subprocess.run(cmd, **kwargs)
     return proc
 
 

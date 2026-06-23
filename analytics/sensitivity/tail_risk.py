@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.tail_risk
 
@@ -20,9 +18,10 @@ IMPORTANT:
 This skeleton implements the metadata schema and hooks.
 You will wire it to your Monte Carlo engine in your repo (recommended).
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 

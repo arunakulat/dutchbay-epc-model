@@ -11,12 +11,12 @@ import ast
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
-def get_python_imports(file_path: str) -> Dict[str, List[str]]:
+def get_python_imports(file_path: str) -> Dict[str, Any]:
     """Extract imports from a Python file."""
-    imports = {"stdlib": [], "third_party": [], "local": []}
+    imports: Dict[str, Any] = {"stdlib": [], "third_party": [], "local": []}
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -53,7 +53,7 @@ def analyze_directory(root_path: str, include_hidden: bool = False) -> Dict[str,
     root = Path(root_path).resolve()
 
     def traverse(path: Path) -> Dict[str, Any]:
-        result = {
+        result: Dict[str, Any] = {
             "name": path.name,
             "path": str(path.relative_to(root)),
             "absolute_path": str(path),
@@ -95,11 +95,12 @@ def analyze_directory(root_path: str, include_hidden: bool = False) -> Dict[str,
 
 def format_size(size_bytes: int) -> str:
     """Format bytes to human-readable size."""
+    size: float = size_bytes
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.2f} PB"
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} PB"
 
 
 def generate_summary(structure: Dict[str, Any]) -> Dict[str, Any]:

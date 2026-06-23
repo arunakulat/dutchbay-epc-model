@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping
 
 _DEFAULTS_PATH = Path(__file__).resolve().parents[2] / "config" / "defaults.yaml"
 

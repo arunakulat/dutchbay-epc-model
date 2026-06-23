@@ -1,10 +1,11 @@
 # Save as: make_essential_zip.py
 import os
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path
 
 
-def iter_essential_files(root: Path):
+def iter_essential_files(root: Path) -> Iterator[Path]:
     """Yield only essential code/config files, skip outputs and legacy."""
 
     SKIP_DIRS = {

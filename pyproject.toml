@@ -75,6 +75,12 @@ report = [
   # reportlab powers the standalone assessment-report generator
   # (scripts/generate_solar_assessment_report.py); gated behind importorskip in its test.
   "reportlab>=4.0",
+  # geopandas clips the national GHI choropleth to the country land polygon and
+  # contextily composites the Esri World Imagery satellite tile for the site
+  # close-up. Both are optional: make_location_map degrades to a coastline outline
+  # and make_site_context_map returns False (figure omitted) when they are absent.
+  "geopandas>=1.0",
+  "contextily>=1.6",
 ]
 # Async live-ERA5 job path (Sprint 2). The default in-process path
 # (app.api.jobs_router + BackgroundTasks) needs none of these; arq + Redis is the

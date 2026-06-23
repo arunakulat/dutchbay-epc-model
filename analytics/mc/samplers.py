@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """
 analytics.mc.samplers
 
 Sampling utilities (LHS baseline).
 Keep import-light: numpy only.
 """
+from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import numpy as np
 

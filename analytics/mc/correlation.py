@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.mc.correlation
 
@@ -13,6 +11,7 @@ Implements:
 
 NOTE: This module should NOT depend on the MC engine (no circulars).
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, cast
@@ -94,9 +93,6 @@ def apply_correlation_structure(
     n, k = x.shape
     if mat.shape != (k, k):
         raise ValueError(f"Correlation matrix shape {mat.shape} does not match samples columns {k}.")
-
-    # rank transform
-    ranks = np.argsort(np.argsort(x, axis=0), axis=0)
 
     # correlated normals
     rng = np.random.default_rng(int(seed))

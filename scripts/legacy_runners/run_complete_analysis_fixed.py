@@ -124,11 +124,16 @@ def main():
     
     try:
         # Run full pipeline with all modules enabled
+        # NB: analytics.pipeline_v14.run_v14_pipeline takes only
+        # (config, validation_mode, validation_modules). The historical
+        # allow_fx_degradation=True kwarg was never accepted by this entrypoint,
+        # so every invocation raised TypeError and was swallowed by the except
+        # below — i.e. this runner never actually produced output. Dropping the
+        # invalid kwarg restores the intended behaviour (mypy [call-arg] caught it).
         results = run_v14_pipeline(
             config=scenario_path,
             validation_mode="strict",
             validation_modules=["cashflow", "debt"],
-            allow_fx_degradation=True,  # Continue even if FX fails
         )
         
         # Save results

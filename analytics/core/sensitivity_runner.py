@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.core.sensitivity_runner
 
@@ -13,6 +11,7 @@ assembly to the canonical engine
 orchestration hub avoids the duplicate-and-drift failure mode that previously
 left this entry point calling a non-existent ``StandardShockLibrary`` API.
 """
+from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone

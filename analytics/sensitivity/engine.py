@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.sensitivity.engine
 
@@ -20,16 +18,15 @@ Public API (keep stable):
 - run_sensitivity_analysis(...)
 - build_one_way_sensitivity_suite(...)
 """
+from __future__ import annotations
 
 import copy
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence
 
 # Contracts: use your canonical contracts_v14 surfaces.
 from analytics.contracts_v14 import (
-    MultiMetricSensitivitySuite,
-    MultiMetricTornadoResult,
     ParameterRangeConfig,
     SensitivitySuite,
     TornadoResult,

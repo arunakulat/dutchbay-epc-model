@@ -37,7 +37,7 @@ import copy
 import json
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 _REPO = Path(__file__).resolve().parents[1]
 _ASSETS = Path(__file__).resolve().parent / "assets"
@@ -193,7 +193,7 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     yaml.safe_dump(make(comp), open(scen_path, "w"), sort_keys=False)
     params = _default_parameters(load_cfg(scen_path))
     suite = run_sensitivity_analysis(str(scen_path), metric="project_irr")
-    torn = []
+    torn: list[Dict[str, Any]] = []
     for p, tr in zip(params, suite.tornado_results):
         sh = tr.shock_results[0]
         torn.append({"param": p.label, "base": tr.base_metric,
@@ -284,22 +284,48 @@ def make_location_map(charts: Path) -> bool:
         gs = np.nan_to_num(grid, nan=float(np.nanmean(grid)))
     west, south, east, north = bbox
     fig, ax = plt.subplots(figsize=(5.2, 7.2))
-    im = ax.imshow(gs, origin="lower", extent=[west, east, south, north], cmap="YlOrRd",
+    im = ax.imshow(gs, origin="lower", extent=(west, east, south, north), cmap="YlOrRd",
                    vmin=1500, vmax=2100, aspect="equal", alpha=0.92)
-    poly = None
-    for url in ("https://raw.githubusercontent.com/johan/world.geo.json/master/countries/LKA.geo.json",):
+
+    # Clip the choropleth to Sri Lanka's land polygon (geopandas) so the raster
+    # follows the real coastline instead of a rectangle; gracefully degrade to a
+    # plain coastline outline if geopandas/shapely or the network is unavailable.
+    masked = False
+    try:
+        import geopandas as gpd
+        from matplotlib.patches import PathPatch
+        from matplotlib.path import Path as MPath
+        gdf = gpd.read_file(
+            "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/LKA.geo.json")
+        geom = gdf.geometry.union_all() if hasattr(gdf.geometry, "union_all") else gdf.geometry.unary_union
+        geoms = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+        verts: list = []
+        codes: list = []
+        for g in geoms:
+            ring = list(g.exterior.coords)
+            verts.extend(ring)
+            codes.extend([MPath.MOVETO] + [MPath.LINETO] * (len(ring) - 1))
+        clip = PathPatch(MPath(verts, codes), transform=ax.transData, fc="none", ec="#333", lw=0.8, zorder=5)
+        ax.add_patch(clip)
+        im.set_clip_path(clip)
+        masked = True
+    except Exception:
+        pass
+    if not masked:  # outline-only fallback
+        poly = None
         try:
-            with urllib.request.urlopen(url, timeout=20) as r:
+            with urllib.request.urlopen(
+                    "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/LKA.geo.json",
+                    timeout=20) as r:
                 poly = json.load(r)["features"][0]["geometry"]["coordinates"]
-            break
         except Exception:
             pass
-    if poly:
-        for part in poly:
-            rings = part if isinstance(part[0][0], list) else [part]
-            for ring in rings:
-                a = np.array(ring)
-                ax.plot(a[:, 0], a[:, 1], color="#333", lw=0.8)
+        if poly:
+            for part in poly:
+                rings = part if isinstance(part[0][0], list) else [part]
+                for ring in rings:
+                    a = np.array(ring)
+                    ax.plot(a[:, 0], a[:, 1], color="#333", lw=0.8)
     ax.plot(SITE["longitude"], SITE["latitude"], marker="*", ms=22, color="#1f3a5f", mec="white", mew=1.2, zorder=6)
     ax.annotate(f"PROJECT SITE\n{SITE['location_name']}\n({SITE['latitude']:.3f}N, {SITE['longitude']:.3f}E)",
                 xy=(SITE["longitude"], SITE["latitude"]), xytext=(80.55, 6.55), fontsize=7.5,
@@ -314,6 +340,40 @@ def make_location_map(charts: Path) -> bool:
     ax.set_title("Sri Lanka Solar Resource (GHI) & Project Site", fontweight="bold", color="#1f3a5f", fontsize=10)
     ax.set_xlim(west, east); ax.set_ylim(south, north); ax.tick_params(labelsize=7)
     fig.tight_layout(); fig.savefig(charts / "00_location_map.png", dpi=160, bbox_inches="tight"); plt.close(fig)
+    return True
+
+
+def make_site_context_map(charts: Path) -> bool:
+    """Render a satellite/aerial close-up of the exact coordinate over an Esri
+    World Imagery basemap (contextily). This makes the land-use reality of the
+    site explicit. Returns False (and writes no file) when contextily or the
+    tile network is unavailable, in which case the PDF omits the figure."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    try:
+        import contextily as cx
+    except Exception:
+        return False
+    lat, lon = SITE["latitude"], SITE["longitude"]
+    d = 0.018  # ~2 km half-window in degrees
+    fig, ax = plt.subplots(figsize=(6.0, 6.0))
+    ax.set_xlim(lon - d, lon + d)
+    ax.set_ylim(lat - d, lat + d)
+    try:
+        cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.Esri.WorldImagery, zoom=16, attribution_size=5)
+    except Exception:
+        plt.close(fig)
+        return False
+    ax.plot(lon, lat, marker="*", ms=30, color="#ffd400", mec="#1f3a5f", mew=1.6, zorder=6)
+    ax.annotate("PROJECT COORDINATE\n6.8868N, 79.9187E",
+                xy=(lon, lat), xytext=(lon - d * 0.9, lat + d * 0.72), fontsize=8, fontweight="bold",
+                color="white", arrowprops=dict(arrowstyle="->", color="white", lw=1.4),
+                bbox=dict(boxstyle="round,pad=0.3", fc="#1f3a5f", ec="white", alpha=0.85))
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title(f"Site context — {SITE['location_name']} (Esri World Imagery)",
+                 fontweight="bold", color="#1f3a5f", fontsize=10)
+    fig.tight_layout(); fig.savefig(charts / "00b_site_satellite.png", dpi=170, bbox_inches="tight"); plt.close(fig)
     return True
 
 
@@ -361,7 +421,7 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     save(fig, "01_monthly")
 
     # 02 tariff breakeven
-    ts = R["tariff_sweep"]; t = [s["tariff"] for s in ts]; pi = [s["projIRR"] * 100 for s in ts]; dscr = [s["dscr"] for s in ts]
+    ts = R["tariff_sweep"]; t = cast(Any, [s["tariff"] for s in ts]); pi = [s["projIRR"] * 100 for s in ts]; dscr = [s["dscr"] for s in ts]
     fig, ax = plt.subplots(figsize=(7, 3.8)); ax2 = ax.twinx()
     ax.plot(t, pi, "-o", color=NAVY, lw=2); ax2.plot(t, dscr, "-s", color=AMBER, lw=1.6)
     ax.axhline(10, color=RED, ls=":", lw=1.4); ax.text(15, 10.4, "WACC ~ 10%", color=RED, fontsize=8)
@@ -530,7 +590,7 @@ def render_pdf(R: Dict[str, Any], narrative: Dict[str, Any], charts: Path, out_p
         canvas.saveState(); canvas.setFillColor(NAVY); canvas.rect(0, A4[1] - 7.5 * cm, A4[0], 7.5 * cm, fill=1, stroke=0)
         canvas.setFillColor(TEAL); canvas.rect(0, A4[1] - 7.75 * cm, A4[0], 0.25 * cm, fill=1, stroke=0); canvas.restoreState()
 
-    class Doc(BaseDocTemplate):
+    class Doc(BaseDocTemplate):  # type: ignore[misc]  # reportlab ships no type stubs, base class resolves to Any
         def afterFlowable(self, fl):
             if fl.__class__.__name__ == "Paragraph":
                 st = fl.style.name
@@ -621,7 +681,9 @@ def render_pdf(R: Dict[str, Any], narrative: Dict[str, Any], charts: Path, out_p
 
     # ---- BODY (narrative + data) ----
     render_section("site")
-    FIG("00_location_map", w=11 * cm); CAP("Sri Lanka solar resource (GHI, NASA POWER) and the project site. The site sits in the lower-resource south-west; the dry north-east/south-east is materially sunnier. A georeferenced GeoTIFF of this layer is produced alongside the report.")
+    FIG("00_location_map", w=11 * cm); CAP("Sri Lanka solar resource (GHI, NASA POWER) clipped to the national land polygon, and the project site. The site sits in the lower-resource south-west; the dry north-east/south-east is materially sunnier. A georeferenced GeoTIFF of this layer is produced alongside the report.")
+    if (charts / "00b_site_satellite.png").exists():
+        FIG("00b_site_satellite", w=11 * cm); CAP("Satellite close-up of the exact coordinate (Esri World Imagery, ~2&nbsp;km window). The marker sits on the Diyawanna&nbsp;Oya wetland / Sri Jayewardenepura&nbsp;Kotte administrative core &mdash; a dense urban and protected-wetland setting with no contiguous land for a 10&nbsp;MW ground-mount array. This is a project-defining land-use constraint, made explicit here.")
 
     render_section("resource")
     datatable(["Resource metric", "Value", "Source"],
@@ -711,15 +773,18 @@ def render_pdf(R: Dict[str, Any], narrative: Dict[str, Any], charts: Path, out_p
                "IEA - capital costs of utility-scale solar PV in selected emerging economies (~USD 1,120/kW).",
                "World Bank / Solargis - Sri Lanka solar resource maps (national GHI 1,247-2,106 kWh/m2/yr).",
                "Manufacturer datasheets - Trina Vertex N, Risen Hyper-ion, Huasun Himalaya G12, Astronergy ASTRO N7 Pro.",
-               "OpenStreetMap / Nominatim - reverse geocoding of the site coordinate."]:
+               "OpenStreetMap / Nominatim - reverse geocoding of the site coordinate.",
+               "Esri World Imagery (via contextily) - satellite basemap for the site-context close-up.",
+               "Natural Earth / johan world.geo.json (via geopandas) - Sri Lanka land polygon used to clip the GHI choropleth."]:
         B(r_)
 
     H1("Appendix D &mdash; Model Provenance & Reproducibility")
     P(f"All figures are model-derived and reproducible. Energy: the DutchBay <font face='Courier'>solar_resource</font> pvlib "
       f"producer. Finance: the canonical v14 pipeline (CFADS &rarr; dual-DSCR sculpt &rarr; construction-lag-correct IRR/NPV). "
       f"Monte&nbsp;Carlo: {mc['n']:,} Latin-Hypercube trials (seed 123, common random numbers). Sensitivity and optimisation: "
-      f"the platform&rsquo;s standard one-way and constrained-sweep routines. The location map is a NASA&nbsp;POWER GHI raster "
-      f"written to a georeferenced GeoTIFF via the codebase&rsquo;s GIS export. This document is a sample of automated model "
+      f"the platform&rsquo;s standard one-way and constrained-sweep routines. The national map is a NASA&nbsp;POWER GHI raster "
+      f"written to a georeferenced GeoTIFF via the codebase&rsquo;s GIS export and clipped to the country polygon with "
+      f"geopandas; the site close-up is an Esri&nbsp;World&nbsp;Imagery tile composited with contextily. This document is a sample of automated model "
       f"output and is <b>not investment advice</b>; a financing decision should rest on a full site-specific bankability study, "
       f"measured ground data and binding commercial terms.")
 
@@ -745,8 +810,12 @@ def main() -> None:
     R = run_routines(trials=args.trials)
     json.dump(R, open(out / "results.json", "w"), indent=1, default=float)
 
-    print("[2/4] Building location map (GeoTIFF + render)...")
+    print("[2/4] Building location maps (national GHI + GeoTIFF, satellite site context)...")
     make_location_map(charts)
+    if make_site_context_map(charts):
+        print("      satellite site-context map: OK")
+    else:
+        print("      satellite site-context map: skipped (contextily/tiles unavailable)")
 
     print("[3/4] Generating charts...")
     make_charts(R, charts)

@@ -76,7 +76,7 @@ def cli(cfg: DictConfig) -> None:
     # Validate required parameter
     location_name = cfg.get("location")
     if not location_name:
-        error_result = {
+        error_result: dict[str, str | list[str] | None] = {
             "status": "error",
             "error": "Missing required parameter 'location'",
             "usage": "python run_wind_download_v14.py location=dutchbay",

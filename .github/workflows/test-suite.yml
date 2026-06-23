@@ -142,14 +142,27 @@ jobs:
         python -m pip install -e ".[wind,gis]"
         pip install ruff black mypy==1.19.0
 
-    - name: Run ruff
-      run: ruff check . --output-format=github || true
+    - name: Run ruff (mandatory gate)
+      # MANDATORY: no '|| true'. A lint regression now fails the 'lint' job and,
+      # via the Test Summary gate below, blocks the merge. The repo is ruff-clean.
+      run: ruff check . --output-format=github
 
     - name: Run black (check only)
       run: black --check --diff . || true
 
-    - name: Run mypy
+    - name: Run mypy (library surface — strict)
       run: mypy finance/ analytics/ --ignore-missing-imports
+
+    - name: Run mypy (scripts/ — real-error gate)
+      # scripts/ are operational/reporting utilities, not the typed public API, so the
+      # annotation-COMPLETENESS mandates are relaxed (--allow-untyped-*), but mypy's
+      # REAL bug-detection stays on: attr-defined, arg-type, bad index/operator, wrong
+      # assignment, call-arg/overload and return-type errors all fail CI. A separate
+      # invocation (not a [mypy-scripts.*] section) is required because scripts/ has no
+      # __init__.py, so mypy names those modules by basename and a section never matches.
+      run: >-
+        mypy scripts/ --ignore-missing-imports
+        --allow-untyped-defs --allow-untyped-calls --allow-any-generics
 
   summary:
     name: Test Summary
@@ -167,11 +180,12 @@ jobs:
         # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
         # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
         # any failure/cancel/skip is non-success and blocks the merge.
-        # The 'lint' job is now a mypy gate: ruff/black still run with '|| true'
-        # (advisory), but the mypy step does NOT, so a type-check regression in
-        # finance/ or analytics/ fails 'lint' and — via the second check below —
-        # blocks the merge. (PR4: fix-first mypy gate, landed once the surface
-        # reached zero errors.)
+        # The 'lint' job is a ruff + mypy gate: ruff (whole repo) is now MANDATORY
+        # (no '|| true'), mypy runs strict over finance/ + analytics/ and a relaxed
+        # real-error pass over scripts/, and only black stays advisory ('|| true').
+        # Any ruff or mypy regression fails 'lint' and — via the second check below —
+        # blocks the merge. (PR4: fix-first mypy gate; ruff promoted to mandatory and
+        # scripts/ added to the mypy gate once both reached zero errors.)
         if [ "${{ needs.test.result }}" != "success" ]; then
           echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"
           exit 1

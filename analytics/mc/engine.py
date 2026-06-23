@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.mc.engine
 
@@ -12,6 +10,7 @@ Design goals
 - All production scenario evaluation goes through analytics.evaluation_v14.evaluate_with_overrides
 - Correlation + degradation are optional steps (plug-ins), not separate engines.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple

@@ -12,7 +12,7 @@ from typing import Any, Dict
 def create_manifest_from_zip(zip_path: Path) -> Dict[str, Any]:
     """Extract file list from existing zip and create manifest."""
 
-    manifest = {
+    manifest: Dict[str, Any] = {
         "metadata": {
             "created_at": datetime.now().isoformat(),
             "zip_file": str(zip_path.name),

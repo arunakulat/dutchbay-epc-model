@@ -341,12 +341,13 @@ def export_to_excel(config_path: str, output_path: str) -> None:
     results = run_v14_pipeline(
         config_path,
         validation_mode='off',
-        allow_fx_degradation=True
     )
     
     # Create workbook
     wb = openpyxl.Workbook()
-    wb.remove(wb.active)  # Remove default sheet
+    default_ws = wb.active  # a fresh Workbook always has one, but it is typed Optional
+    if default_ws is not None:
+        wb.remove(default_ws)  # Remove default sheet
     
     # Add sheets
     add_annual_cashflow_sheet(wb, results)

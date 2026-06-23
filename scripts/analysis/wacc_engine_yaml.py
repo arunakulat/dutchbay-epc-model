@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except ImportError as exc:  # pragma: no cover - simple env guard
     raise SystemExit(
         "PyYAML is required. Install with:\n    pip install pyyaml"

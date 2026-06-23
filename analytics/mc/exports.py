@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.mc.exports
 
@@ -22,9 +20,10 @@ Notes:
 GWTF/CASPER:
 - Keep this import-safe; pandas is optional (guarded import).
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 

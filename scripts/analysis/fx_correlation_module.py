@@ -350,8 +350,8 @@ class FXCorrelationModule:
         monthly_revenue = annual_usd_revenue / 12
         monthly_debt = annual_lkr_debt_service / 12
 
-        deficits = []
-        coverages = []
+        deficits: list[float] = []
+        coverages: list[float] = []
 
         # Run Monte Carlo simulations
         for _ in range(num_simulations):
@@ -370,23 +370,23 @@ class FXCorrelationModule:
             if 0 < coverage_ratio < 10000:  # Filter outliers
                 coverages.append(coverage_ratio)
 
-        deficits = np.array(deficits)
-        coverages = np.array(coverages)
+        deficits_arr = np.array(deficits)
+        coverages_arr = np.array(coverages)
 
         # VaR/CVaR from the UPPER tail of the deficit (loss) distribution: VaR_95
         # is the deficit exceeded only 5% of the time, CVaR the mean beyond it.
-        var_val, cvar_val = _var_cvar_from_losses(deficits, confidence_level)
+        var_val, cvar_val = _var_cvar_from_losses(deficits_arr, confidence_level)
 
         return {
             "var_deficit_lkr": var_val,
             "cvar_deficit_lkr": cvar_val,
-            "mean_deficit_lkr": float(deficits.mean()),
-            "std_deficit_lkr": float(deficits.std()),
-            "max_deficit_lkr": float(deficits.max()),
-            "prob_deficit": float((deficits > 0).sum() / num_simulations),
-            "mean_coverage_ratio": float(np.nanmean(coverages)),
-            "percentile_5_coverage": float(np.nanpercentile(coverages, 5)),
-            "percentile_95_coverage": float(np.nanpercentile(coverages, 95)),
+            "mean_deficit_lkr": float(deficits_arr.mean()),
+            "std_deficit_lkr": float(deficits_arr.std()),
+            "max_deficit_lkr": float(deficits_arr.max()),
+            "prob_deficit": float((deficits_arr > 0).sum() / num_simulations),
+            "mean_coverage_ratio": float(np.nanmean(coverages_arr)),
+            "percentile_5_coverage": float(np.nanpercentile(coverages_arr, 5)),
+            "percentile_95_coverage": float(np.nanpercentile(coverages_arr, 95)),
             "num_simulations": num_simulations,
         }
 
