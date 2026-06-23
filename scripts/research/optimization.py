@@ -215,10 +215,24 @@ def optimize_debt_pareto(
                 # ensure grace <= tenor - 1 for feasibility
                 if G > max(0, T - 1):
                     continue
-                params = {
-                    "debt": {"debt_ratio": dr, "tenor_years": T, "grace_years": G}
-                }
-                res = build_financial_model(params)
+                # build_financial_model takes (ProjectParameters, DebtStructure) —
+                # not a dict. Map the swept grid onto those: debt_ratio scales total
+                # debt (preserving the default USD/LKR split), tenor sets the debt
+                # tenor, and grace sets the project grace period.
+                proj = create_default_parameters()
+                proj.grace_period = int(G)
+                debt = create_default_debt_structure()
+                usd_ratio = debt.usd_debt / debt.total_debt
+                debt.total_debt = proj.total_capex * dr
+                debt.usd_debt = debt.total_debt * usd_ratio
+                debt.lkr_debt = debt.total_debt - debt.usd_debt
+                debt.debt_tenor_years = int(T)
+                res = build_financial_model(proj, debt)
+                # build_financial_model returns None IRR/NPV for grid points where
+                # the IRR solver does not converge (e.g. infeasible debt geometry);
+                # such points are not part of any frontier, so skip them.
+                if res["equity_irr"] is None or res["project_irr"] is None:
+                    continue
                 irr = float(res["equity_irr"])
                 dscr = float(res["min_dscr"])
                 best_irr = max(best_irr, irr)
@@ -336,6 +350,7 @@ def optimize_debt_pareto_yaml(
             base_json = outdir / "pareto_frontier.json"
             base_png = outdir / "pareto.png"
             base_grid = outdir / "pareto_grid_results.csv"
+            base_util = outdir / "pareto_utopia_ranked.csv"
             if base.exists():
                 base.rename(outdir / f"pareto_frontier_{name}.csv")
             if base_json.exists():
@@ -344,6 +359,10 @@ def optimize_debt_pareto_yaml(
                 base_png.rename(outdir / f"pareto_{name}.png")
             if base_grid.exists():
                 base_grid.rename(outdir / f"pareto_grid_results_{name}.csv")
+            # Without this rename the per-grid utopia ranking was overwritten by
+            # the next grid (every other per-grid file was suffixed but this one).
+            if base_util.exists():
+                base_util.rename(outdir / f"pareto_utopia_ranked_{name}.csv")
     if outdir:
         # Write master summary
         (outdir / "pareto_summary.json").write_text(
