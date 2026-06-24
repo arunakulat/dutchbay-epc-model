@@ -294,9 +294,12 @@ class DepreciationSchedule:
         capex_lkr: float,
         useful_life: int,
         project_life: int,
+        start_year: int = 1,
     ) -> "DepreciationSchedule":
         if useful_life <= 0:
             raise ValueError("useful_life must be > 0 for straight_line")
+        if start_year < 1:
+            raise ValueError("depreciation start_year must be >= 1")
 
         annual_depr = capex_lkr / useful_life
         annual_amounts: List[float] = []
@@ -304,8 +307,11 @@ class DepreciationSchedule:
         book_values: List[float] = []
         acc = 0.0
 
+        # Depreciation runs for ``useful_life`` years beginning at ``start_year`` (1-based).
+        # start_year=1 is the standard case and is byte-identical to ``year <= useful_life``.
+        last_depr_year = start_year + useful_life - 1
         for year in range(1, project_life + 1):
-            depr = annual_depr if year <= useful_life else 0.0
+            depr = annual_depr if start_year <= year <= last_depr_year else 0.0
             annual_amounts.append(depr)
             acc += depr
             accumulated.append(acc)
@@ -327,6 +333,7 @@ class DepreciationSchedule:
         plant_useful_life: int,
         civil_useful_life: int,
         project_life: int,
+        start_year: int = 1,
     ) -> "DepreciationSchedule":
         """Combined straight-line schedule for a split capex base.
 
@@ -339,10 +346,10 @@ class DepreciationSchedule:
         if not (0.0 <= plant_capex_share <= 1.0):
             raise ValueError("plant_capex_share must be in [0,1]")
         plant = DepreciationSchedule.build_straight_line(
-            total_capex * plant_capex_share, plant_useful_life, project_life
+            total_capex * plant_capex_share, plant_useful_life, project_life, start_year
         )
         civil = DepreciationSchedule.build_straight_line(
-            total_capex * (1.0 - plant_capex_share), civil_useful_life, project_life
+            total_capex * (1.0 - plant_capex_share), civil_useful_life, project_life, start_year
         )
         annual_amounts = [
             p + c for p, c in zip(plant.annual_amounts, civil.annual_amounts)
