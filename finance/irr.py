@@ -384,7 +384,7 @@ def approx_project_irr(
     r_high: float = 0.5,
     tol: float = 1e-6,
     max_iter: int = 50,
-) -> float:
+) -> Optional[float]:
     """Approximate project IRR — the rate at which project NPV ≈ 0.
 
     Uses the SAME time-aligned cashflow vector as ``project_npv_from_cfads``
@@ -401,10 +401,19 @@ def approx_project_irr(
     overflow guard below additionally protects against an extreme caller-supplied
     ``r_low``.
 
-    Returns 0.0 if:
+    If no sign change is found in the initial ``[r_low, r_high]`` bracket, ``r_high``
+    is expanded geometrically toward the numerical cap (``_DEFAULT_IRR_UPPER_BOUND``
+    = 5.0 / 500%) before declaring no root — this removes the upper "cliff" where a
+    project whose true IRR exceeds the default ``r_high`` (0.5) had POSITIVE NPV at
+    both ends and was wrongly reported as 0.0. The initial bracket is left untouched
+    whenever a sign change already exists (every real DutchBay scenario, IRR in
+    [-0.99, 0.5]), so those results are byte-identical.
+
+    Returns ``None`` (IRR undefined) — distinct from a genuine 0% IRR — if:
     - capex_total <= 0
     - cfads_series is empty
-    - no sign change / no sensible root can be found in [r_low, r_high].
+    - the NPV cannot be evaluated, or
+    - no sign change / no sensible root can be found in [r_low, 5.0].
     """
     try:
         capex = float(capex_total)
@@ -412,7 +421,7 @@ def approx_project_irr(
         capex = 0.0
 
     if capex <= 0.0 or not cfads_series:
-        return 0.0
+        return None
 
     def npv_gap(rate: float) -> float:
         return project_npv_from_cfads(
@@ -423,7 +432,7 @@ def approx_project_irr(
         f_low = npv_gap(r_low)
         f_high = npv_gap(r_high)
     except Exception:
-        return 0.0
+        return None
 
     # Overflow guard at extreme-negative rates: (1 + r_low)^-t explodes as r_low -> -1,
     # so for a long CFADS series npv_gap(r_low) can overflow to +inf and collapse the
@@ -438,17 +447,39 @@ def approx_project_irr(
         try:
             f_low = npv_gap(r_low)
         except Exception:
-            return 0.0
+            return None
     if not math.isfinite(f_low):
-        return 0.0
+        return None
 
-    # If no sign change, bail out – report 0.0 IRR
     if f_low == 0.0:
         return float(r_low)
     if f_high == 0.0:
         return float(r_high)
+
+    # Upper-cliff guard: if the bracket holds no sign change, the true IRR may exceed
+    # r_high (a project returning > r_high has POSITIVE NPV at both ends). Expand r_high
+    # geometrically toward the numerical cap before declaring no root. This only runs when
+    # the initial bracket already FAILED to bracket a root, so cases that do bracket one
+    # (every real DutchBay scenario) are byte-identical.
+    _g = 0
+    while (
+        not _have_opposite_signs(f_low, f_high)
+        and r_high < _DEFAULT_IRR_UPPER_BOUND
+        and _g < 64
+    ):
+        r_high = min(r_high * 2.0 if r_high > 0.0 else 0.5, _DEFAULT_IRR_UPPER_BOUND)
+        _g += 1
+        try:
+            f_high = npv_gap(r_high)
+        except Exception:
+            return None
+        if not math.isfinite(f_high):
+            return None
+        if f_high == 0.0:
+            return float(r_high)
+
     if not _have_opposite_signs(f_low, f_high):
-        return 0.0
+        return None
 
     a, b = float(r_low), float(r_high)
     fa = f_low

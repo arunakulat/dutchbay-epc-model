@@ -327,6 +327,13 @@ def calculate_scenario_kpis(
             project_irr = approx_project_irr(
                 cfads, capex_total, construction_years=construction_years
             )
+            if project_irr is None:
+                # IRR genuinely undefined (no root in [-0.99, 5.0]); leave it unset rather
+                # than report a misleading 0.0. Downstream KPI readers default a missing
+                # project_irr to 0.0 for display.
+                logger.warning(
+                    "Project IRR undefined (no root in [-0.99, 5.0]); leaving unset."
+                )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Project IRR calculation failed: %s", exc)
             project_irr = 0.0
