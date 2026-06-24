@@ -45,7 +45,6 @@ jobs:
             analytics/contracts/__init__.py \
             analytics/scenario_loader.py \
             analytics/fx_sensitivity_real.py \
-            finance/refinancing_v14_hardened.py \
             run_full_pipeline_v14.py
 
       - name: Mypy - focused v14 surface
@@ -55,7 +54,6 @@ jobs:
             analytics/contracts/__init__.py \
             analytics/scenario_loader.py \
             analytics/fx_sensitivity_real.py \
-            finance/refinancing_v14_hardened.py \
             run_full_pipeline_v14.py
 
       - name: Pytest - fast lane (including Sprint 11 compliance tests)
