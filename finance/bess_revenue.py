@@ -30,9 +30,12 @@ sub-97% availability month, are *downside* levers; they are exposed here as opti
 multipliers (``availability_factor`` / ``dispatchable_ratio``) rather than modelled
 from a dispatch simulation, which the engine does not run.
 
-A second CEB scheme (BESS charged by an existing solar PV plant, paid an energy tariff
-for night-peak export) is a different ``revenue.model`` and is **not** implemented here
-— this module covers ``model: capacity_charge`` only.
+This module covers ``model: capacity_charge`` only. Two other CEB BESS structures are
+out of scope: (1) a BESS charged by an existing solar PV plant paid an energy tariff for
+night-peak export — a different ``revenue.model`` (energy / time-shift); and (2) the
+Kolonnawa 100 MW single-site project, a CEB-owned night-peak supply procured via an EPC
+contract — a construction-margin deal, not an operational tolling/tariff stream, so it
+does not belong on this operational cashflow path at all.
 """
 
 from __future__ import annotations
@@ -65,6 +68,31 @@ def _as_float(value: Any) -> Optional[float]:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+def _unit_factor(value: Any, *, tech: str, field: str) -> float:
+    """Validate a downside multiplier in ``[0, 1]``; default ``1.0`` when absent.
+
+    Both BESS downside levers (``availability_factor``, ``dispatchable_ratio``) are
+    derate factors bounded by ``[0, 1]``. A value outside that range (e.g. ``97``
+    instead of ``0.97``, or a stray sign) is a config error and **raises** rather than
+    silently inflating or negating the capacity charge (CESSPIT fail-loud), symmetric
+    with the module's other guards.
+    """
+    coerced = _as_float(value)
+    if coerced is None:
+        if value is None:
+            return 1.0
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.{field}={value!r} is not "
+            "numeric; it is a derate factor in [0, 1] (e.g. 0.97)."
+        )
+    if not 0.0 <= coerced <= 1.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.{field}={coerced} is out of "
+            "range; it is a derate factor and must be in [0, 1] (e.g. 0.97, not 97)."
+        )
+    return coerced
 
 
 def resolve_bess_specs(
@@ -102,7 +130,22 @@ def resolve_bess_specs(
 
     specs: List[Dict[str, Any]] = []
     for name, block in techs.items():
-        if not isinstance(block, Mapping) or block.get("type") != BESS_TYPE:
+        if not isinstance(block, Mapping):
+            continue
+        if block.get("type") != BESS_TYPE:
+            # A block that declares a BESS revenue model but is NOT typed as a BESS is a
+            # mis-key that would silently earn zero — fail loud (CESSPIT). A plain
+            # storage block (power/energy, no BESS revenue model) is just skipped.
+            rev_block = block.get("revenue")
+            if (
+                isinstance(rev_block, Mapping)
+                and rev_block.get("model") in SUPPORTED_BESS_REVENUE_MODELS
+            ):
+                raise ValueError(
+                    f"generation.technologies['{name}'] declares a BESS revenue model "
+                    f"({rev_block.get('model')!r}) but is not type: {BESS_TYPE!r}. Add "
+                    f"`type: {BESS_TYPE}`, or remove the revenue block."
+                )
             continue
 
         power_mw = _as_float(block.get("power_mw"))
@@ -111,6 +154,23 @@ def resolve_bess_specs(
                 f"generation.technologies['{name}'] is type: bess but has no positive "
                 "power_mw — a capacity charge needs the contracted power rating (MW)."
             )
+
+        # Cross-assert the (informational) energy rating against power x duration so a
+        # typo cannot masquerade as a valid spec — the capacity charge itself is
+        # POWER-based (LKR/MW/month), so energy_mwh / duration_h only document the
+        # 4-hour / 0.25C nature. Other reporting-only fields: capex_usd (the financed
+        # capex is capex.usd_total, as for wind/solar) and availability_pct (the live
+        # derate is revenue.availability_factor).
+        energy_mwh = _as_float(block.get("energy_mwh"))
+        duration_h = _as_float(block.get("duration_h"))
+        if energy_mwh is not None and duration_h is not None:
+            implied_mwh = power_mw * duration_h
+            if implied_mwh <= 0 or abs(energy_mwh - implied_mwh) / implied_mwh > 0.01:
+                raise ValueError(
+                    f"generation.technologies['{name}']: energy_mwh={energy_mwh} does "
+                    f"not reconcile with power_mw*duration_h={implied_mwh:.4f} (within "
+                    "1%). Align the BESS rating."
+                )
 
         revenue = block.get("revenue")
         if not isinstance(revenue, Mapping):
@@ -134,19 +194,23 @@ def resolve_bess_specs(
             )
 
         contract_years_raw = revenue.get("contract_years")
-        contract_years = (
-            int(contract_years_raw) if contract_years_raw is not None else None
-        )
-        if contract_years is not None and contract_years <= 0:
-            raise ValueError(
-                f"generation.technologies['{name}'].revenue.contract_years="
-                f"{contract_years} is invalid (must be a positive number of years)."
-            )
+        contract_years: Optional[int] = None
+        if contract_years_raw is not None:
+            cy_float = _as_float(contract_years_raw)
+            if cy_float is None or cy_float != int(cy_float) or cy_float <= 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.contract_years="
+                    f"{contract_years_raw!r} is invalid; expected a positive whole "
+                    "number of years."
+                )
+            contract_years = int(cy_float)
 
-        availability = _as_float(revenue.get("availability_factor"))
-        availability = 1.0 if availability is None else availability
-        dispatchable = _as_float(revenue.get("dispatchable_ratio"))
-        dispatchable = 1.0 if dispatchable is None else max(0.0, min(1.0, dispatchable))
+        availability = _unit_factor(
+            revenue.get("availability_factor"), tech=str(name), field="availability_factor"
+        )
+        dispatchable = _unit_factor(
+            revenue.get("dispatchable_ratio"), tech=str(name), field="dispatchable_ratio"
+        )
 
         specs.append(
             {

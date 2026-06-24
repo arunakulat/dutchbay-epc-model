@@ -71,9 +71,48 @@ def test_factor_and_contract_defaults():
     assert s["contract_years"] is None  # paid for full project life when unset
 
 
-def test_dispatchable_ratio_is_clamped_to_unit():
-    assert resolve_bess_specs(_cfg(dispatchable_ratio=1.5))[0]["dispatchable_ratio"] == 1.0
-    assert resolve_bess_specs(_cfg(dispatchable_ratio=-0.2))[0]["dispatchable_ratio"] == 0.0
+@pytest.mark.parametrize("field", ["availability_factor", "dispatchable_ratio"])
+@pytest.mark.parametrize("bad", [1.5, -0.2, 97, "x"])
+def test_derate_factors_out_of_range_fail_loud(field, bad):
+    """Both downside levers must be in [0, 1] — a mis-keyed value (97 vs 0.97, or a
+    stray sign) raises rather than silently inflating/negating the capacity charge."""
+    with pytest.raises(ValueError, match=field):
+        resolve_bess_specs(_cfg(**{field: bad}))
+
+
+@pytest.mark.parametrize("field", ["availability_factor", "dispatchable_ratio"])
+def test_derate_factors_accept_valid_range(field):
+    spec = resolve_bess_specs(_cfg(**{field: 0.85}))[0]
+    assert spec[field] == 0.85
+
+
+@pytest.mark.parametrize("bad", [0, -5, 2.5, "ten"])
+def test_contract_years_must_be_positive_whole_number(bad):
+    with pytest.raises(ValueError, match="contract_years"):
+        resolve_bess_specs(_cfg(contract_years=bad))
+
+
+def test_energy_duration_cross_assert():
+    # power 10 x duration 4 = 40 MWh -> ok; a mismatched energy_mwh raises
+    ok = {"generation": {"technologies": {"b": {
+        "type": "bess", "power_mw": 10.0, "energy_mwh": 40.0, "duration_h": 4.0,
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    assert resolve_bess_specs(ok) is not None
+    bad = {"generation": {"technologies": {"b": {
+        "type": "bess", "power_mw": 10.0, "energy_mwh": 80.0, "duration_h": 4.0,  # 80 != 40
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    with pytest.raises(ValueError, match="reconcile"):
+        resolve_bess_specs(bad)
+
+
+def test_bess_revenue_model_without_type_fails_loud():
+    """A block declaring a BESS revenue model but not typed bess is a mis-key that would
+    silently earn zero — it must raise."""
+    cfg = {"generation": {"technologies": {"b": {
+        "power_mw": 10.0,  # no type: bess
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    with pytest.raises(ValueError, match="not type"):
+        resolve_bess_specs(cfg)
 
 
 @pytest.mark.parametrize(

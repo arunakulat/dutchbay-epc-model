@@ -14,6 +14,8 @@ import pytest
 
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
+from finance.bess_revenue import resolve_bess_specs
+from finance.cashflow_v14_production import resolve_tech_generation_specs
 
 _REPO = Path(__file__).resolve().parents[2]
 _CEB = _REPO / "scenarios" / "ceb_bess_10mw_capacity_charge.yaml"
@@ -73,3 +75,29 @@ def test_bess_is_additive_on_the_hybrid():
     assert out["annual_rows"][0]["bess_revenue_lkr"] == pytest.approx(5_000_000 * 50 * 12)
     assert out["annual_rows"][0]["generation_revenue_lkr"] > 0
     assert out["kpis"]["project_irr"] > base["project_irr"]
+
+
+def test_type_bess_is_not_double_counted_as_generation():
+    """`type` is authoritative: a (mis-keyed) BESS block carrying a stray capacity_factor
+    is excluded from generation (no tariff revenue) and earns only its capacity charge —
+    so it is never double-counted (generation tariff AND capacity charge)."""
+    cfg = {
+        "project": {"capacity_mw": 100.0, "capacity_factor": 0.34},
+        "generation": {"technologies": {
+            "wind": {"capacity_mw": 100.0, "capacity_factor": 0.34},
+            "bess": {
+                "type": "bess", "power_mw": 50.0,
+                "capacity_mw": 50.0, "capacity_factor": 0.20,  # stray generation keys
+                "revenue": {"model": "capacity_charge",
+                            "capacity_charge_lkr_per_mw_month": 1_000_000},
+            },
+        }},
+    }
+    params = {"degradation": 0.0, "capacity_mw": 100.0, "capacity_factor": 0.34}
+    gen_specs = resolve_tech_generation_specs(cfg, params)
+    # only wind is a generation tech; the type: bess block is excluded (reconciles, and
+    # had it been included the per-tech sum would breach the ±1% reconciliation).
+    assert [s["technology"] for s in gen_specs] == ["wind"]
+    # ...and the same block is resolved as a BESS earning the capacity charge.
+    bess_specs = resolve_bess_specs(cfg)
+    assert [s["technology"] for s in bess_specs] == ["bess"]
