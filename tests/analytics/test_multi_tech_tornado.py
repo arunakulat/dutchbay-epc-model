@@ -22,7 +22,9 @@ from analytics.portfolio.multi_tech_tornado import (
     MultiTechTornadoBar,
     applicable_drivers,
     build_coupled_override,
-    discover_technologies,
+    discover_generation_technologies,
+    discover_non_generation_technologies,
+    discover_storage_technologies,
     flat_metrics,
     impact_by_technology,
     run_multi_tech_tornado,
@@ -51,27 +53,46 @@ def hybrid_bars(hybrid_config: dict) -> list[MultiTechTornadoBar]:
 
 # ── tech / driver discovery (pure, no evaluation) ──────────────────────────────
 
-
-def test_discover_technologies_is_generic_and_skips_non_generation():
-    config = {
-        "generation": {
-            "technologies": {
-                "wind": {"capacity_mw": 100, "capacity_factor": 0.35},
-                "solar": {"capacity_mw": 50, "capacity_factor": 0.20},
-                "tidal": {"capacity_mw": 10, "capacity_factor": 0.40},  # 3rd tech
-                "battery": {"power_mw": 20, "energy_mwh": 80},  # storage: no CF -> skip
-            }
+# A heterogeneous portfolio: two canonical gen techs, an arbitrary third gen tech
+# (proving no wind/solar special-casing), and a BESS storage block.
+_MIXED = {
+    "generation": {
+        "technologies": {
+            "wind": {"capacity_mw": 100, "capacity_factor": 0.35},
+            "solar": {"capacity_mw": 50, "capacity_factor": 0.20},
+            "tidal": {"capacity_mw": 10, "capacity_factor": 0.40},  # 3rd gen tech
+            "battery": {"power_mw": 20, "energy_mwh": 80},  # BESS: power/energy, no CF
         }
     }
-    assert discover_technologies(config) == ["wind", "solar", "tidal"]
+}
 
 
-def test_discover_technologies_empty_without_block():
-    assert discover_technologies({"project": {"capacity_mw": 100}}) == []
+def test_discover_generation_is_class_agnostic_and_skips_storage():
+    # wind == solar == tidal (any block with a capacity_factor); battery excluded.
+    assert discover_generation_technologies(_MIXED) == ["wind", "solar", "tidal"]
+
+
+def test_discover_storage_finds_bess():
+    assert discover_storage_technologies(_MIXED) == ["battery"]
+
+
+def test_discover_non_generation_is_robust_superset():
+    # catches storage AND any non-generation block, so nothing is silently dropped.
+    weird = {"generation": {"technologies": {
+        "battery": {"power_mw": 20, "energy_mwh": 80},
+        "mystery": {"foo": 1},  # neither generation nor recognised storage
+    }}}
+    assert discover_non_generation_technologies(weird) == ["battery", "mystery"]
+    assert discover_storage_technologies(weird) == ["battery"]
+
+
+def test_discover_generation_empty_without_block():
+    assert discover_generation_technologies({"project": {"capacity_mw": 100}}) == []
 
 
 def test_hybrid_discovers_wind_and_solar(hybrid_config: dict):
-    assert discover_technologies(hybrid_config) == ["wind", "solar"]
+    assert discover_generation_technologies(hybrid_config) == ["wind", "solar"]
+    assert discover_storage_technologies(hybrid_config) == []
 
 
 def test_applicable_drivers_skips_absent_field():
@@ -189,6 +210,40 @@ def test_unknown_metric_fails_loud(hybrid_config: dict):
 def test_no_technologies_yields_no_bars():
     # No generation.technologies block -> empty result, without any evaluation.
     assert run_multi_tech_tornado({"project": {"capacity_mw": 100}}) == []
+
+
+# ── tech-independence: storage / BESS handled, never silently dropped ───────────
+
+
+def test_storage_only_scenario_yields_no_bars_and_warns(caplog):
+    """A BESS-only scenario has no generation -> no bars (no evaluation), and the
+    storage block is surfaced rather than silently dropped."""
+    bess_only = {"generation": {"technologies": {
+        "battery": {"power_mw": 50, "energy_mwh": 200},
+    }}}
+    with caplog.at_level("WARNING"):
+        assert run_multi_tech_tornado(bess_only) == []
+    assert "battery" in caplog.text
+    assert discover_storage_technologies(bess_only) == ["battery"]
+
+
+def test_storage_alongside_generation_is_reported_not_swept(hybrid_config: dict, caplog):
+    """wind + solar + BESS: the generation techs are swept exactly as before, and the
+    storage block is warned about (so the tornado can't be mistaken for complete)."""
+    cfg = dict(hybrid_config)
+    techs = dict(cfg["generation"]["technologies"])
+    techs["battery"] = {"power_mw": 50, "energy_mwh": 200}  # add a BESS block
+    cfg["generation"] = {"technologies": techs}
+
+    with caplog.at_level("WARNING"):
+        bars = run_multi_tech_tornado(cfg)
+
+    # storage is skipped by the engine's reconciliation, so the run is unaffected:
+    assert {b.technology for b in bars} == {"wind", "solar"}
+    assert len(bars) == len(DEFAULT_METRICS) * 2 * len(DEFAULT_DRIVERS)
+    # ...but the BESS block is loudly reported, not silently dropped.
+    assert "battery" in caplog.text
+    assert discover_storage_technologies(cfg) == ["battery"]
 
 
 # ── why coupling exists: pin the uncoupled failure modes (regression guard) ─────

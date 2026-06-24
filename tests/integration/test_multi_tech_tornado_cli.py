@@ -18,6 +18,7 @@ _HYBRID = _REPO / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 _WIND_ONLY = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 pd = pytest.importorskip("pandas")
+yaml = pytest.importorskip("yaml")
 
 
 def _load_cli():
@@ -87,6 +88,25 @@ def test_summary_reports_wind_leader_and_flat_dscr(tmp_path: Path, capsys):
     err = capsys.readouterr().err
     assert "wind drives project_irr volatility" in err
     assert "min_dscr is structurally flat" in err
+
+
+@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
+def test_storage_block_reported_not_swept(tmp_path: Path, capsys):
+    """wind + solar + BESS: the CSV sweeps only the generation techs, and stderr
+    names the storage block as present-but-not-swept (no silent drop)."""
+    raw = yaml.safe_load(_HYBRID.read_text())
+    raw["generation"]["technologies"]["battery"] = {"power_mw": 50, "energy_mwh": 200}
+    scenario = tmp_path / "hybrid_with_bess.yaml"
+    scenario.write_text(yaml.safe_dump(raw))
+
+    cli = _load_cli()
+    out = tmp_path / "mtt.csv"
+    rc = cli.main(["--config", str(scenario), "--metric", "project_irr", "--output", str(out)])
+    assert rc == 0
+    assert set(pd.read_csv(out)["technology"]) == {"wind", "solar"}
+    err = capsys.readouterr().err
+    assert "battery" in err
+    assert "NOT swept" in err
 
 
 @pytest.mark.skipif(not _WIND_ONLY.exists(), reason="wind-only scenario not present")

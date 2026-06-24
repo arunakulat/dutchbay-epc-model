@@ -7,6 +7,19 @@ finance levers that actually flow through the M3 per-tech cashflow
 (:mod:`finance.cashflow_v14_production`) and reports the swing each one induces on
 a set of KPIs, tagged by technology and sorted by absolute impact.
 
+Technology independence
+-----------------------
+Nothing here is wind-specific: a *generation* technology is any block carrying a
+``capacity_factor`` (wind, solar, tidal, run-of-river, …), discovered and swept on
+the same footing, so the tool works for wind-only, solar-only, or any hybrid. A
+*storage* technology (e.g. BESS — a ``power_mw`` / ``energy_mwh`` rating, no
+capacity factor) contributes no generation/CFADS in the current finance engine
+(:func:`finance.cashflow_v14_production.resolve_tech_generation_specs` skips it), so
+it is **detected and reported but not swept** — sweeping it would be a phantom axis
+until storage economics are modelled. Non-generation blocks are surfaced (a
+``WARNING`` from :func:`run_multi_tech_tornado`; an explicit line in the CLI) so a
+hybrid-with-storage tornado is never mistaken for a complete one.
+
 Why *coupled* overrides (and not a plain one-way path sweep)
 ------------------------------------------------------------
 A naive one-way sweep of a single ``generation.technologies.<tech>.<field>`` path
@@ -54,10 +67,21 @@ misleading.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+
+logger = logging.getLogger(__name__)
+
+#: Config keys that mark a technology block as **storage** (e.g. BESS): a power
+#: and/or energy rating rather than a capacity factor. Storage carries no
+#: ``capacity_factor`` and contributes no generation/CFADS in the current finance
+#: engine (``finance.cashflow_v14_production.resolve_tech_generation_specs`` skips
+#: it), so it is detected and reported but **not swept** — sweeping it would be a
+#: phantom axis until storage economics are modelled.
+_STORAGE_KEYS: Tuple[str, ...] = ("power_mw", "energy_mwh")
 
 #: Per-tech finance levers swept, in display order. Each maps to a coupled override
 #: (see module docstring). ``capex_usd`` / ``capacity_factor`` / ``degradation_pct``
@@ -135,26 +159,84 @@ class MultiTechTornadoBar:
         return f"{self.technology}.{self.driver}"
 
 
-def discover_technologies(config: Mapping[str, Any]) -> List[str]:
-    """List technologies under ``generation.technologies`` that declare generation.
+def _technology_blocks(config: Mapping[str, Any]) -> List[Tuple[str, Mapping[str, Any]]]:
+    """Every ``(name, block)`` under ``generation.technologies``, in declared order."""
+    techs = _nested_get(config, "generation", "technologies")
+    if not isinstance(techs, Mapping):
+        return []
+    return [
+        (str(name), block)
+        for name, block in techs.items()
+        if isinstance(block, Mapping)
+    ]
 
-    A generation technology is one carrying a ``capacity_factor`` (the finance
-    driver). Non-generating entries (e.g. storage, which carries a power rating but
-    no capacity factor) are skipped. Order follows the config's declaration order.
+
+def _is_generation(block: Mapping[str, Any]) -> bool:
+    """A *generation* technology carries a ``capacity_factor`` (the finance driver).
+
+    This is class-agnostic: wind, solar, tidal, run-of-river, … all qualify on the
+    same footing — there is no wind-specific special-casing.
+    """
+    return block.get("capacity_factor") is not None
+
+
+def _is_storage(block: Mapping[str, Any]) -> bool:
+    """A *storage* technology (e.g. BESS) carries a power/energy rating, no CF."""
+    return not _is_generation(block) and any(
+        block.get(key) is not None for key in _STORAGE_KEYS
+    )
+
+
+def discover_generation_technologies(config: Mapping[str, Any]) -> List[str]:
+    """List the **generation** technologies under ``generation.technologies``.
+
+    A generation technology is any block carrying a ``capacity_factor`` — the lever
+    the cashflow prices revenue on. The check is class-agnostic (wind == solar ==
+    tidal == …): nothing here is specific to wind. Non-generating blocks (storage /
+    BESS, or anything else without a capacity factor) are excluded — see
+    :func:`discover_storage_technologies` / :func:`discover_non_generation_technologies`.
 
     Args:
         config: A loaded scenario config mapping.
 
     Returns:
-        Technology names, in declaration order.
+        Generation-technology names, in declaration order.
     """
-    techs = _nested_get(config, "generation", "technologies")
-    if not isinstance(techs, Mapping):
-        return []
+    return [name for name, block in _technology_blocks(config) if _is_generation(block)]
+
+
+def discover_storage_technologies(config: Mapping[str, Any]) -> List[str]:
+    """List the **storage** technologies (e.g. BESS) under ``generation.technologies``.
+
+    Storage blocks carry a power/energy rating (:data:`_STORAGE_KEYS`) and no
+    capacity factor. They contribute no generation/CFADS in the current finance
+    engine, so the tornado reports them but does not sweep them (see the module
+    docstring).
+
+    Args:
+        config: A loaded scenario config mapping.
+
+    Returns:
+        Storage-technology names, in declaration order.
+    """
+    return [name for name, block in _technology_blocks(config) if _is_storage(block)]
+
+
+def discover_non_generation_technologies(config: Mapping[str, Any]) -> List[str]:
+    """Every technology block that is **not** a generation technology.
+
+    The robust superset of :func:`discover_storage_technologies`: it also catches
+    blocks that are neither generation nor recognised storage, so a future or
+    mis-keyed technology is surfaced rather than silently dropped from the tornado.
+
+    Args:
+        config: A loaded scenario config mapping.
+
+    Returns:
+        Non-generation technology names, in declaration order.
+    """
     return [
-        str(name)
-        for name, block in techs.items()
-        if isinstance(block, Mapping) and block.get("capacity_factor") is not None
+        name for name, block in _technology_blocks(config) if not _is_generation(block)
     ]
 
 
@@ -203,7 +285,7 @@ def _blended_capacity_factor(
         )
     techs = _nested_get(config, "generation", "technologies")
     weighted = 0.0
-    for name in discover_technologies(config):
+    for name in discover_generation_technologies(config):
         block = techs[name]
         mw = _as_float(block.get("capacity_mw"))
         cf = shocked_cf if name == shocked_tech else _as_float(block.get("capacity_factor"))
@@ -332,7 +414,23 @@ def run_multi_tech_tornado(
     if not 0.0 < shock_pct < 1.0:
         raise ValueError(f"shock_pct must be in (0, 1); got {shock_pct}.")
 
-    technologies = discover_technologies(config)
+    technologies = discover_generation_technologies(config)
+
+    # Never silently drop a non-generation block. Storage/BESS (and any other
+    # non-generation tech) contributes no CFADS in the current engine, so it is not
+    # swept; warn so a hybrid-with-storage tornado cannot be mistaken for complete.
+    skipped = discover_non_generation_technologies(config)
+    if skipped:
+        storage = discover_storage_technologies(config)
+        logger.warning(
+            "multi-tech tornado: not sweeping %d non-generation technology block(s) "
+            "%s (storage/BESS economics are not modelled in the finance engine yet, "
+            "so a sensitivity sweep of them would be a phantom). Storage blocks: %s.",
+            len(skipped),
+            skipped,
+            storage or "none",
+        )
+
     if not technologies:
         return []
 
