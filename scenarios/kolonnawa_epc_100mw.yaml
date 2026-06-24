@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Kolonnawa 100 MW / 400 MWh BESS — EPC supply contract (construction margin)
+# ═══════════════════════════════════════════════════════════════════════════════
+# The Kolonnawa project is a CEB-OWNED night-peak supply BESS. The tender is an EPC
+# contract for the batteries + ancillaries: the developer engineers, procures and
+# constructs the BESS and hands it over to CEB (which then owns and operates it). The
+# developer's economics are therefore a CONSTRUCTION MARGIN (EPC price - build cost)
+# realised over the construction period — NOT a 15/20-year operational CFADS stream.
+#
+# This scenario is consumed by finance.epc_margin.compute_epc_margin (run via
+# scripts/run_epc_margin.py), a SEPARATE module from the operational v14 cashflow engine
+# (finance.cashflow_v14) — an EPC supply deal does not belong on the operational path.
+#
+# ⚠️ ALL FIGURES ILLUSTRATIVE — the EPC contract price and the cost breakdown are the
+# bid/commercial variables; replace with the actual tender numbers.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+epc:
+  description: "Kolonnawa 100 MW / 400 MWh BESS EPC (batteries + ancillaries), CEB-owned"
+
+  # The EPC contract price CEB pays the developer.
+  contract_value_usd: 54000000
+
+  # The developer's supply + build cost (what it spends to deliver the EPC).
+  cost:
+    batteries_usd: 40000000        # LFP supply (~$100/kWh core x 400 MWh)
+    ancillaries_usd: 6000000       # PCS, balance-of-plant, 33 kV grid connection
+    install_logistics_usd: 2000000 # installation, logistics, contingency
+  #   -> total cost $48,000,000 ; gross margin $6,000,000 (11.1% of value / 12.5% on cost)
+
+  construction_months: 18
+
+  # Milestone receipts (% of contract_value received at each month). Must sum to 1.0.
+  payment_schedule:
+    - {month: 0,  pct: 0.10}       # advance / mobilisation
+    - {month: 6,  pct: 0.30}       # equipment delivery
+    - {month: 12, pct: 0.30}       # installation
+    - {month: 18, pct: 0.30}       # commissioning / handover
+
+  # cost_schedule omitted -> costs spread evenly over construction months 1..18.
+  # (A {month, pct} list summing to 1.0 may be supplied to model lumpy procurement.)
+
+metadata:
+  version: '1.0'
+  last_updated: '2026-06-24'
+  review_status: Illustrative — EPC price + cost breakdown are placeholder commercial values
+  sprint: 'BESS EPC construction-margin model'
