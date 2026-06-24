@@ -340,15 +340,21 @@ def test_solve_gearing_top_level_debt_ratio_branch() -> None:
     assert solved == pytest.approx(0.7)
 
 
-def test_solve_gearing_fallthrough_when_target_unmet() -> None:
-    # Very weak CFADS: no gearing on the scan meets the target, so the loop
-    # exhausts and returns the documented floor max(step, max_ratio - step).
+def test_solve_gearing_fallthrough_when_target_unmet(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Very weak CFADS: no gearing on the scan meets the target, so the loop exhausts.
+    # Fix: it now fails LOUD and returns the conservative FLOOR (least debt = step), not
+    # the old near-MAXIMUM leverage (max_ratio - step) that silently over-levered an
+    # unbankable structure.
     rows = _rows(0.001, n=8)
-    solved = _solve_gearing_for_dscr(
-        _flat_config(), rows, target_dscr=5.0, max_ratio=0.05, step=0.0025
-    )
-    assert solved == pytest.approx(max(0.0025, 0.05 - 0.0025), abs=1e-9)
+    with caplog.at_level("WARNING"):
+        solved = _solve_gearing_for_dscr(
+            _flat_config(), rows, target_dscr=5.0, max_ratio=0.05, step=0.0025
+        )
+    assert solved == pytest.approx(0.0025, abs=1e-9)  # conservative floor, NOT 0.0475
     assert solved > 0.0
+    assert any("did not converge" in r.message for r in caplog.records)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
