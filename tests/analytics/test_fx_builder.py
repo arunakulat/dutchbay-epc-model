@@ -265,6 +265,29 @@ def test_curve_default_flat_uses_config_reference_rate() -> None:
     assert curve.lkr_cny is None
 
 
+def test_curve_explicit_spot_builds_flat_curve_at_that_rate() -> None:
+    """A provided fx.curve.spot_lkr_usd builds a flat curve at exactly that rate."""
+    cfg = {"fx": {"curve": {"spot_lkr_usd": 350.0}}}
+    curve = compute_fx_curve(config=cfg, annual_rows=_annual_rows())
+    assert curve.lkr_usd == [350.0, 350.0]
+
+
+def test_curve_absent_spot_falls_back_to_reference_rate() -> None:
+    """An absent spot_lkr_usd (key missing) still defaults to the config reference rate."""
+    cfg = {"fx": {"curve": {"source": "no_spot_here"}}}
+    curve = compute_fx_curve(config=cfg, annual_rows=_annual_rows())
+    assert curve.lkr_usd == [DEFAULT_RATE, DEFAULT_RATE]
+
+
+def test_curve_zero_or_negative_spot_fails_loud() -> None:
+    """A supplied 0.0/negative spot is a config error and must RAISE, not be silently
+    replaced by the default (the old `... or default()` falsy-or trap)."""
+    for bad in (0.0, -5.0):
+        cfg = {"fx": {"curve": {"spot_lkr_usd": bad}}}
+        with pytest.raises(ValueError, match="spot_lkr_usd"):
+            compute_fx_curve(config=cfg, annual_rows=_annual_rows())
+
+
 def test_curve_default_flat_honors_explicit_spot() -> None:
     """spot_lkr_usd overrides the reference rate for the flat default curve."""
     curve = compute_fx_curve(

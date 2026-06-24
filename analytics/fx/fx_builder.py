@@ -201,7 +201,18 @@ def compute_fx_curve(
         # reference rate (config/defaults.yaml) — never a Python literal (CESSPIT).
         from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
-        spot = float(curve_config.get("spot_lkr_usd") or default_fx_lkr_per_usd())
+        # Explicit absence check (CESSPIT fail-loud): a supplied 0.0/negative spot is a
+        # config error, not "absent" — the old `... or default()` idiom silently masked it
+        # by substituting the default rate. Default only when the key is genuinely absent.
+        raw_spot = curve_config.get("spot_lkr_usd")
+        if raw_spot is None:
+            spot = float(default_fx_lkr_per_usd())
+        else:
+            spot = float(raw_spot)
+            if spot <= 0.0:
+                raise ValueError(
+                    f"fx.curve.spot_lkr_usd must be > 0; got {raw_spot!r}"
+                )
         lkr_usd = [spot] * len(years)
         logger.debug(
             "compute_fx_curve: No lkr_usd provided; using flat curve at %.2f",

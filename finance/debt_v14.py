@@ -706,7 +706,18 @@ def _solve_gearing_for_dscr(
         if _min_dscr_at(ratio) >= target_dscr - fp_eps:
             return round(ratio, 6)
         ratio -= step
-    return round(max(step, max_ratio - step), 6)
+    # Non-convergence: no gearing down to the floor holds the target DSCR (an unbankable
+    # CFADS profile). Fail LOUD and size DOWN to the conservative floor (least debt) — the
+    # old fallback returned max_ratio - step (near-MAXIMUM leverage), silently sizing an
+    # unbankable structure UP, the opposite of prudent and with no signal.
+    logger.warning(
+        "Gearing solver did not converge: no gearing in (0, %.4f] holds min DSCR >= "
+        "target %.3f. Falling back to the conservative floor %.4f (least debt).",
+        max_ratio,
+        target_dscr,
+        step,
+    )
+    return round(step, 6)
 
 
 def _resolve_downside_ratio(
