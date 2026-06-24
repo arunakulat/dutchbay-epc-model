@@ -6,6 +6,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
 
+from .bess_revenue import (
+    bess_capacity_charge_lkr_for_year,
+    resolve_bess_specs,
+)
 from .cashflow_v14_contracts import CashflowParams
 from .cashflow_v14_fx import _fx_curve
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
@@ -134,6 +138,11 @@ def _prepare_cashflow_context(
     params_dict["tech_generation_specs"] = resolve_tech_generation_specs(
         config, params_dict
     )
+
+    # BESS (storage) capacity-charge revenue: a `type: bess` technology earns an
+    # availability-based Capacity Charge (LKR/MW/month), NOT generation revenue.
+    # None when no BESS block is present -> wind/solar runs stay byte-identical.
+    params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
 
     years = int(params_obj.project_life_years)
 
@@ -318,7 +327,16 @@ def calculate_single_year_cfads(
 
     gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-    revenue_lkr = _calculate_revenue_lkr(net_kwh, float(params["tariff_lkr_per_kwh"]))
+    generation_revenue_lkr = _calculate_revenue_lkr(
+        net_kwh, float(params["tariff_lkr_per_kwh"])
+    )
+
+    # BESS capacity-charge revenue (availability tolling), additive to generation
+    # revenue. 0.0 when no `type: bess` block -> byte-identical wind/solar behaviour.
+    bess_revenue_lkr = bess_capacity_charge_lkr_for_year(
+        params.get("bess_revenue_specs"), year_index
+    )
+    revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
     # --- Statutory charges and OPEX -------------------------------------------
     statutory = _calculate_statutory_deductions(
@@ -380,6 +398,8 @@ def calculate_single_year_cfads(
         "grid_loss": gross_kwh - net_kwh,
         "net_kwh": net_kwh,
         "revenue_lkr": revenue_lkr,
+        "generation_revenue_lkr": generation_revenue_lkr,
+        "bess_revenue_lkr": bess_revenue_lkr,
         "success_fee_lkr": statutory["success_fee"],
         "env_surcharge_lkr": statutory["environmental_surcharge"],
         "social_levy_lkr": statutory["social_services_levy"],
@@ -591,9 +611,15 @@ def build_annual_rows_efficient(
 
         gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-        revenue_lkr = _calculate_revenue_lkr(
+        generation_revenue_lkr = _calculate_revenue_lkr(
             net_kwh, float(params["tariff_lkr_per_kwh"])
         )
+        # BESS capacity-charge revenue (additive; 0.0 when no `type: bess` block) —
+        # mirrors calculate_single_year_cfads so the two builders stay identical.
+        bess_revenue_lkr = bess_capacity_charge_lkr_for_year(
+            params.get("bess_revenue_specs"), year_index
+        )
+        revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
         statutory = _calculate_statutory_deductions(
             revenue_lkr,
@@ -618,6 +644,8 @@ def build_annual_rows_efficient(
                 "grid_loss": gross_kwh - net_kwh,
                 "net_kwh": net_kwh,
                 "revenue_lkr": revenue_lkr,
+                "generation_revenue_lkr": generation_revenue_lkr,
+                "bess_revenue_lkr": bess_revenue_lkr,
                 "success_fee_lkr": statutory["success_fee"],
                 "env_surcharge_lkr": statutory["environmental_surcharge"],
                 "social_levy_lkr": statutory["social_services_levy"],
