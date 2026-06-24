@@ -5,6 +5,9 @@ Builds the multi-tech generation contracts (``GenerationProfile`` /
 ``analytics.contracts_v14``) from a real finance run. Supports wind + solar
 (declared via a ``generation.technologies`` block); the run's combined CFADS is
 split across technologies in proportion to AEP. Storage slots in next.
+
+Also exposes the per-technology tornado sensitivity (``multi_tech_tornado``,
+Epic 6.1): which technology drives the hybrid's IRR / covenant volatility.
 """
 
 from __future__ import annotations
@@ -19,6 +22,20 @@ from analytics.portfolio.generation_aggregator import (
     resolve_wind_aep_kwh,
     technology_breakdown,
 )
+from analytics.portfolio.multi_tech_tornado import (
+    DEFAULT_DRIVERS,
+    DEFAULT_METRICS,
+    DEFAULT_SHOCK_PCT,
+    MultiTechTornadoBar,
+    applicable_drivers,
+    build_coupled_override,
+    discover_generation_technologies,
+    discover_non_generation_technologies,
+    discover_storage_technologies,
+    flat_metrics,
+    impact_by_technology,
+    run_multi_tech_tornado,
+)
 
 __all__ = [
     "SUPPORTED_TECHNOLOGIES",
@@ -29,4 +46,17 @@ __all__ = [
     "resolve_tech_aep_kwh",
     "resolve_wind_aep_kwh",
     "technology_breakdown",
+    # Epic 6.1 — per-technology tornado
+    "DEFAULT_DRIVERS",
+    "DEFAULT_METRICS",
+    "DEFAULT_SHOCK_PCT",
+    "MultiTechTornadoBar",
+    "applicable_drivers",
+    "build_coupled_override",
+    "discover_generation_technologies",
+    "discover_non_generation_technologies",
+    "discover_storage_technologies",
+    "flat_metrics",
+    "impact_by_technology",
+    "run_multi_tech_tornado",
 ]
