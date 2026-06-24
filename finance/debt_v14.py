@@ -296,7 +296,6 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
             "construction_periods": int(_as_float(debt_cfg.get("construction_periods"), 2)),
             "construction_schedule": debt_cfg.get("construction_schedule", [40.0, 60.0]),
             "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
-            "grace_years": int(_as_float(debt_cfg.get("grace_years"), 0)),
             "debt_ratio": debt_ratio_value,
             "tenor_years": int(_as_float(tenor_value, 15)),
             "interest_only_years": int(_as_float(debt_cfg.get("interest_only_years"), 0)),
@@ -470,7 +469,6 @@ def apply_debt_layer(
     construction_periods = max(0, int(_as_float(p.get("construction_periods"), 2)))
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
     drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
-    grace_years = int(_as_float(p.get("grace_years"), 0))
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
     tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
@@ -640,7 +638,6 @@ def apply_debt_layer(
         "idc_by_tranche": total_idc_by_tranche,
         "principal_after_idc": principal_after_idc,
         "total_idc_capitalized": sum(total_idc_by_tranche.values()),
-        "grace_periods": grace_years,
         "timeline_periods": timeline_periods,
         "tenor_years": tenor,
         "cfads_extended": cfads_ext,

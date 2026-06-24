@@ -45,7 +45,6 @@ def main():
     ft["debt_drawdown_pct"] = (
         [float(x) for x in dd_inp.split(",")] if dd_inp.strip() else [0.5, 0.5]
     )
-    ft["grace_years"] = prompt_int("Grace years", 1)
     ft["interest_only_years"] = prompt_int("Interest only years", 0)
     ft["amortization_style"] = (
         input("Amortization style (annuity/linear) [annuity]: ") or "annuity"

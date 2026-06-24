@@ -38,7 +38,6 @@ Financing_Terms:
   debt_drawdown_pct:
   - 0.6
   - 0.4
-  grace_years: 2
   interest_only_years: 0
   amortization_style: annuity
   target_dscr: 1.25
