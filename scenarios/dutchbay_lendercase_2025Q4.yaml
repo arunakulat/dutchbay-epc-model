@@ -534,8 +534,11 @@ expected_results:
   # -$35.5M — the project is value-destructive. The prior +$2.03M / 8.44% headline was a
   # timing artifact. (The stale 300 FX + overstated Weibull had earlier shown 11.12% / $27.4M.)
   project_irr: 0.0505       # BELOW WACC (~8.18%) — value-destructive
-  equity_irr: -0.0247       # NEGATIVE to sponsors — finding 2.1 debt-service-orphan fix +
+  equity_irr: -0.0082       # NEGATIVE to sponsors — finding 2.1 debt-service-orphan fix +
                             # the 0.5%/yr degradation re-baseline. MOIC < 1.00 (loss).
+                            # Wave-1 equity-waterfall fix: the DSRA (and any held-back/un-swept
+                            # SPV cash) is now RELEASED to the sponsor at maturity instead of
+                            # being destroyed — was -0.0247, +164bps to -0.0082. Still loss-making.
   project_npv_m_usd: -35.51 # construction-lag-correct discount at build-up WACC ~8.18%
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39

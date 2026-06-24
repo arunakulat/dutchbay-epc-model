@@ -349,18 +349,25 @@ def test_pipeline_waterfall_invariants_hold() -> None:
     assert result["success"] is True
     assert result["status"] == "computed"
     cf_after_debt = 12.0e6 - 5.0e6
+    total_distributed = 0.0
     for row in result["annual_distributions"]:
         # cash flow after debt is conserved
         assert row["cf_after_debt_usd"] == pytest.approx(cf_after_debt)
-        # distribution is non-negative and bounded by cash after debt service
+        # distribution is non-negative
         assert row["equity_distribution_usd"] >= 0.0
-        assert row["equity_distribution_usd"] <= cf_after_debt + 1e-6
-        # conservation: cash after debt = reserve + retained + distribution
+        # the terminal release returns reserves built up over PRIOR years and sits on top of
+        # this year's operating cash; the OPERATING distribution is still bounded by, and
+        # conserves, that year's cash after debt service.
+        operating_dist = row["equity_distribution_usd"] - row["terminal_release_usd"]
+        assert operating_dist <= cf_after_debt + 1e-6
         assert (
-            row["reserve_funded_usd"]
-            + row["retained_cash_usd"]
-            + row["equity_distribution_usd"]
+            row["reserve_funded_usd"] + row["retained_cash_usd"] + operating_dist
         ) == pytest.approx(cf_after_debt)
+        total_distributed += row["equity_distribution_usd"]
+    # Schedule-level conservation: with no seeded DSRA, every dollar of cash-after-debt is
+    # ultimately distributed — reserves built up during operations are released at maturity.
+    n_years = len(result["annual_distributions"])
+    assert total_distributed == pytest.approx(cf_after_debt * n_years)
     # IRR sign: positive distributions on a positive investment -> finite IRR
     summary = result["equity_summary"]
     assert summary["equity_investment_usd"] == 30.0e6
@@ -385,8 +392,10 @@ def test_pipeline_covenant_lock_blocks_distribution() -> None:
     assert result["equity_summary"]["covenant_locked_years"] == 4
     for row in result["annual_distributions"]:
         assert row["covenant_locked"] is True
-        # locked + no balloon shortfall -> exactly zero distribution
-        assert row["equity_distribution_usd"] == 0.0
+        # locked + no balloon shortfall -> zero OPERATING distribution. At the terminal
+        # period the reserve built up over the locked years is released to the sponsor, so
+        # net the terminal release out before asserting the lock blocked the distribution.
+        assert (row["equity_distribution_usd"] - row["terminal_release_usd"]) == 0.0
 
 
 def test_pipeline_defaulted_status_propagates() -> None:
@@ -467,35 +476,58 @@ def test_schedule_balloon_shortfall_is_cash_call() -> None:
 
 
 def test_schedule_fund_at_close_seeds_reserve() -> None:
-    """fund_at_close seeds the reserve so no operating top-up is needed when full."""
+    """fund_at_close seeds the reserve (no operating top-up when full); it is held during
+    operations and RELEASED to the sponsor at the terminal period (Wave-1 fix)."""
     cfg = EquityDistributionConfig(min_dscr_threshold=0.0, min_reserve_months=6)
-    rows = [{"year": 1, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6}]
+    rows = [
+        {"year": 1, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6},
+        {"year": 2, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6},
+    ]
     # reserve required = ds * 6/12 = 2.0M; seed it fully at close
     debt_result = {"funding": {"fund_at_close": True, "initial_dsra_usd": 2.0e6}}
     schedule = build_equity_distribution_schedule(
         annual_rows=rows, debt_result=debt_result, distribution_config=cfg
     )
-    row = schedule[0]
-    assert row["reserve_funded_usd"] == 0.0  # already full -> no top-up
-    assert row["reserve_balance_usd"] == pytest.approx(2.0e6)
+    # Operating year: reserve already full -> no top-up, balance held at 2.0M, nothing released.
+    assert schedule[0]["reserve_funded_usd"] == 0.0
+    assert schedule[0]["reserve_balance_usd"] == pytest.approx(2.0e6)
+    assert schedule[0]["terminal_release_usd"] == 0.0
+    assert schedule[0]["equity_distribution_usd"] == pytest.approx(6.0e6)
+    # Terminal year: the seeded DSRA is released to the sponsor, not destroyed.
+    assert schedule[-1]["reserve_balance_usd"] == pytest.approx(0.0)
+    assert schedule[-1]["terminal_release_usd"] == pytest.approx(2.0e6)
+    assert schedule[-1]["equity_distribution_usd"] == pytest.approx(8.0e6)  # 6M op + 2M DSRA
 
 
 def test_schedule_holdback_retains_cash() -> None:
-    """A non-zero holdback moves cash from distribution to retained, conserved."""
+    """A non-zero holdback moves cash from distribution to retained DURING operations; the
+    accumulated retention is released to the sponsor at the terminal period (Wave-1 fix)."""
     cfg = EquityDistributionConfig(
         min_dscr_threshold=0.0,
         min_reserve_months=0,
         distribution_sweep_pct=100.0,
         holdback_pct=20.0,
     )
-    rows = [{"year": 1, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6}]
+    rows = [
+        {"year": 1, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6},
+        {"year": 2, "cf_pre_debt": 10.0e6, "debt_service_total": 4.0e6},
+    ]
     schedule = build_equity_distribution_schedule(
         annual_rows=rows, debt_result={}, distribution_config=cfg
     )
-    row = schedule[0]
     cash_for_equity = 6.0e6  # 10 - 4, no reserve
-    assert row["equity_distribution_usd"] == pytest.approx(cash_for_equity * 0.80)
-    assert row["retained_cash_usd"] == pytest.approx(cash_for_equity * 0.20)
+    # Operating year: 20% held back from the distribution, retained in the SPV.
+    assert schedule[0]["equity_distribution_usd"] == pytest.approx(cash_for_equity * 0.80)
+    assert schedule[0]["retained_cash_usd"] == pytest.approx(cash_for_equity * 0.20)
+    assert schedule[0]["terminal_release_usd"] == 0.0
+    # Terminal year: both years' holdbacks (2 x 1.2M) are released to the sponsor; nothing lost.
+    assert schedule[-1]["terminal_release_usd"] == pytest.approx(2 * cash_for_equity * 0.20)
+    assert schedule[-1]["equity_distribution_usd"] == pytest.approx(
+        cash_for_equity * 0.80 + 2 * cash_for_equity * 0.20
+    )
+    # Conservation: every dollar of cash-for-equity reaches the sponsor across the schedule.
+    total_dist = sum(r["equity_distribution_usd"] for r in schedule)
+    assert total_dist == pytest.approx(2 * cash_for_equity)
 
 
 # ---------------------------------------------------------------------------

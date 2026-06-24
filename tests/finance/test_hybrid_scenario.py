@@ -24,8 +24,11 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     kpis = run_v14_pipeline(config=HYBRID, validation_mode="strict")["kpis"]
     # Honest engine output (per-tech wind 0.6% / solar 0.4% degradation through the
     # cashflow). Value-destructive: projIRR below the ~8% build-up WACC.
+    # equity_irr re-baselined by the Wave-1 equity-waterfall fix (DSRA released to the sponsor
+    # at maturity, was -0.0331031452337186, +~149bps); projIRR/npv/dscr/cfads are upstream of
+    # the equity waterfall and remain byte-identical.
     assert kpis["project_irr"] == pytest.approx(0.0449082466193822, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.0331031452337186, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.01818807171553316, rel=1e-6)
     assert kpis["project_npv"] == pytest.approx(-53832909.235, rel=1e-6)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     assert kpis["total_cfads_usd"] == pytest.approx(305943086.43, rel=1e-6)

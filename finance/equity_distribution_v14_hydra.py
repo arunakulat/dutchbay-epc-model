@@ -301,8 +301,21 @@ def _derive_equity_investment_usd(
     distribution_config: EquityDistributionConfig,
 ) -> tuple[Optional[float], str]:
     """Derive the initial equity investment and status metadata."""
+    # When the DSRA is funded at financial close (Financing_Terms.dsra.fund_at_close), the
+    # reserve is an additional EQUITY use at t0 (prudent-lender structure), so it raises the
+    # initial equity drawn. This applies SYMMETRICALLY whether equity is given explicitly or
+    # derived (previously only the derived path added it, asymmetrically boosting the equity
+    # IRR of an explicit-equity + fund_at_close scenario). Default-off -> dsra 0 (unchanged).
+    funding = debt_result.get("funding") or {}
+    dsra = (
+        float(_as_float(funding.get("initial_dsra_usd"), 0.0) or 0.0)
+        if bool(funding.get("fund_at_close"))
+        else 0.0
+    )
+
     if distribution_config.equity_investment_usd is not None:
-        return float(distribution_config.equity_investment_usd), "explicit"
+        equity = float(distribution_config.equity_investment_usd) + dsra
+        return equity, "explicit_plus_dsra" if dsra > 0.0 else "explicit"
 
     capex_usd = _extract_capex_usd(config)
     debt_total = _as_float(
@@ -313,12 +326,7 @@ def _derive_equity_investment_usd(
 
     if capex_usd is not None and debt_total is not None:
         base = max(0.0, float(capex_usd) - float(debt_total))
-        # When the DSRA is funded at financial close (Financing_Terms.dsra.fund_at_close),
-        # the reserve is an additional EQUITY use at t0 (prudent-lender structure), so it
-        # raises the initial equity drawn. Default-off -> initial_dsra is 0 (unchanged).
-        funding = debt_result.get("funding") or {}
-        if bool(funding.get("fund_at_close")):
-            dsra = float(_as_float(funding.get("initial_dsra_usd"), 0.0) or 0.0)
+        if dsra > 0.0:
             return base + dsra, "capex_less_debt_plus_dsra"
         return base, "capex_less_debt"
 
@@ -399,6 +407,14 @@ def build_equity_distribution_schedule(
     sweep = distribution_config.distribution_sweep_pct / 100.0
     holdback = distribution_config.holdback_pct / 100.0
 
+    # Cash that is retained rather than distributed must not be DESTROYED — it belongs to
+    # the sponsor and is released to equity, not lost (which would understate equity IRR):
+    #  * locked_cash_balance: cash trapped during a covenant lockup, released once the
+    #    covenant cures (the next unlocked year);
+    #  * retained_balance: per-year holdback + un-swept cash, released at project end.
+    locked_cash_balance = 0.0
+    retained_balance = 0.0
+
     for index, row in enumerate(annual_rows):
         year_value = row.get("year", index + 1)
         year = int(float(year_value)) if year_value is not None else index + 1
@@ -408,14 +424,21 @@ def build_equity_distribution_schedule(
         cf_after_debt = max(0.0, cf_pre_debt - debt_service)
         dscr = _extract_dscr(row, cf_pre_debt, debt_service)
 
+        # Reserve: top up toward the requirement; RELEASE the excess back to equity as the
+        # requirement falls (debt amortizes) — the reserve cash is the sponsor's, not lost.
         reserve_required = debt_service * (
             float(distribution_config.min_reserve_months) / 12.0
         )
-        reserve_topup_required = max(0.0, reserve_required - reserve_balance)
-        reserve_funded = min(cf_after_debt, reserve_topup_required)
-        reserve_balance += reserve_funded
+        if reserve_required >= reserve_balance:
+            reserve_funded = min(cf_after_debt, reserve_required - reserve_balance)
+            reserve_balance += reserve_funded
+            reserve_released = 0.0
+        else:
+            reserve_funded = 0.0
+            reserve_released = reserve_balance - reserve_required
+            reserve_balance = reserve_required
 
-        cash_after_reserve = max(0.0, cf_after_debt - reserve_funded)
+        cash_after_reserve = max(0.0, cf_after_debt - reserve_funded) + reserve_released
 
         # Balloon repayment (cash_sweep / refinance / bullet) is senior to equity
         # but is NOT scheduled senior debt service, so it never enters the DSCR.
@@ -431,18 +454,25 @@ def build_equity_distribution_schedule(
         )
 
         if covenant_locked:
-            # No positive distribution while locked; a balloon shortfall is still a cash call.
+            # No positive distribution while locked; the trapped cash is carried (not lost)
+            # and released once the covenant cures. A balloon shortfall is still a cash call.
             equity_distribution = min(0.0, cash_for_equity)
-            retained_cash = max(0.0, cash_for_equity)
+            trapped = max(0.0, cash_for_equity)
+            locked_cash_balance += trapped
+            retained_cash = trapped
         elif cash_for_equity < 0.0:
             equity_distribution = cash_for_equity  # sponsor cash call to fund the balloon
             retained_cash = 0.0
         else:
-            gross_distribution = cash_for_equity * sweep
-            retained_cash = cash_for_equity - gross_distribution
+            # Unlocked: release any lockup-trapped cash now that the covenant has cured.
+            available = cash_for_equity + locked_cash_balance
+            locked_cash_balance = 0.0
+            gross_distribution = available * sweep
             holdback_amount = gross_distribution * holdback
             equity_distribution = max(0.0, gross_distribution - holdback_amount)
-            retained_cash += holdback_amount
+            # Un-swept + held-back cash is retained in the SPV and released at project end.
+            retained_cash = available - equity_distribution
+            retained_balance += retained_cash
 
         debt_outstanding = (
             _as_float(debt_outstanding_series[index])
@@ -464,9 +494,24 @@ def build_equity_distribution_schedule(
                 "reserve_balance_usd": reserve_balance,
                 "retained_cash_usd": retained_cash,
                 "equity_distribution_usd": equity_distribution,
+                "terminal_release_usd": 0.0,
                 "debt_outstanding_usd": debt_outstanding,
             }
         )
+
+    # Terminal release: at project end the DSRA is no longer needed and any cash still held
+    # in the SPV (un-swept retentions, holdbacks, cash trapped by a terminal lockup) belongs
+    # to the sponsor — release it all into the final distribution so it is not destroyed.
+    # This is a discrete close-out event folded into the final period's distribution; the
+    # per-row retained_cash_usd remains the within-year flow and is left untouched.
+    if schedule:
+        residual = reserve_balance + retained_balance + locked_cash_balance
+        if residual > 1e-9:
+            last = schedule[-1]
+            prior_dist = _as_float(last.get("equity_distribution_usd"), 0.0) or 0.0
+            last["equity_distribution_usd"] = prior_dist + residual
+            last["terminal_release_usd"] = residual
+            last["reserve_balance_usd"] = 0.0
 
     return schedule
 

@@ -49,12 +49,16 @@ def test_equity_distribution_from_canonical_payload_computes_metrics() -> None:
     assert result["scenario_name"] == "equity_payload_base"
     assert result["equity_summary"]["equity_investment_usd"] == 40_000_000.0
     assert result["equity_summary"]["equity_investment_source"] == "capex_less_debt"
-    assert result["equity_summary"]["total_equity_distributed_usd"] == 32_000_000.0
-    assert result["equity_summary"]["equity_multiple"] == 0.8
+    # The $4M reserve seeded in year 1 is RELEASED to the sponsor at maturity (Wave-1
+    # equity-waterfall fix) instead of being destroyed: total distributed 32M -> 36M and the
+    # equity multiple 0.8 -> 0.9. The release shows up on the terminal row's distribution.
+    assert result["equity_summary"]["total_equity_distributed_usd"] == 36_000_000.0
+    assert result["equity_summary"]["equity_multiple"] == 0.9
     assert result["annual_distributions"][0]["reserve_funded_usd"] == 4_000_000.0
     assert result["annual_distributions"][0]["equity_distribution_usd"] == 6_000_000.0
     assert result["annual_distributions"][1]["equity_distribution_usd"] == 12_000_000.0
-    assert result["annual_distributions"][2]["equity_distribution_usd"] == 14_000_000.0
+    assert result["annual_distributions"][2]["equity_distribution_usd"] == 18_000_000.0  # 14M op + 4M DSRA
+    assert result["annual_distributions"][2]["terminal_release_usd"] == 4_000_000.0
     assert result["metadata"]["computed_from"] == "canonical_v14_pipeline"
 
 
@@ -89,7 +93,10 @@ def test_equity_distribution_locks_when_dscr_breaches_threshold() -> None:
     assert result["annual_distributions"][0]["covenant_locked"] is True
     assert result["annual_distributions"][0]["equity_distribution_usd"] == 0.0
     assert result["annual_distributions"][1]["covenant_locked"] is False
-    assert result["annual_distributions"][1]["equity_distribution_usd"] == 6_000_000.0
+    # The $1M trapped by the year-1 lockup (cf_after_debt 1M) is carried forward and RELEASED
+    # once the covenant cures in year 2 (Wave-1 fix), so year 2 distributes its own 6M plus the
+    # 1M freed from the lockup = 7M, instead of destroying the trapped cash.
+    assert result["annual_distributions"][1]["equity_distribution_usd"] == 7_000_000.0
     assert result["equity_summary"]["covenant_locked_years"] == 1
 
 

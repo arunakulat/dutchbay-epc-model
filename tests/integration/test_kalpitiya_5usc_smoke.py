@@ -106,10 +106,12 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # (audit finding 2.0) and (b) the M3e degradation re-baseline (0.005 -> 0.5, honest
     # 0.5%/yr aging). The latter pushed the project below break-even, and the IRR-floor
     # fix (approx_project_irr now searches negative rates) lets it report the true
-    # -0.27% instead of a clamped 0.0%. NPV -$118.8M, equity IRR -9.05%.
+    # -0.27% instead of a clamped 0.0%. NPV -$118.8M. The Wave-1 equity-waterfall fix then
+    # releases the DSRA to the sponsor at maturity, lifting equity IRR -9.05% -> -8.07%
+    # (project IRR is upstream of the equity waterfall and is unchanged).
     assert kpis["project_irr"] == pytest.approx(-0.0027, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.0905, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.0807, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(-118.78e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
