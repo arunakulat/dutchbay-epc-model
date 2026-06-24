@@ -35,9 +35,11 @@ def _run(dsra=None, **fin_overrides):
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
     # Canonical after the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr aging):
-    # projIRR 5.05%, equity IRR -2.47% (negative to sponsors), minDSCR 1.30.
+    # projIRR 5.05%, minDSCR 1.30. Wave-1 equity-waterfall fix: the DSRA and any held-back
+    # SPV cash are RELEASED to the sponsor at maturity instead of being destroyed, lifting
+    # equity IRR -2.47% -> -0.82% (still negative to sponsors). project IRR is unchanged.
     assert kpis["project_irr"] == pytest.approx(0.0505, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0247, abs=0.001)
+    assert kpis["equity_irr"] == pytest.approx(-0.0082, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0
@@ -45,14 +47,17 @@ def test_default_off_preserves_canonical() -> None:
     assert f["sources_and_uses"]["balanced"] is True
 
 
-def test_fund_at_close_funds_dsra_and_modestly_lowers_eqirr() -> None:
+def test_fund_at_close_funds_dsra_and_is_roughly_eqirr_neutral() -> None:
     base_kpis, _ = _run()
     kpis, f = _run(dsra={"fund_at_close": True, "target_months": 6})
     assert f["fund_at_close"] is True
     assert f["initial_dsra_usd"] > 0.0  # ~6 months of yr-1 debt service
     assert f["sources_and_uses"]["balanced"] is True
-    # the reserve is funded by additional equity at close -> eqIRR no higher than base
-    assert kpis["equity_irr"] <= base_kpis["equity_irr"] + 1e-6
+    # The DSRA is now RECOVERED by the sponsor at maturity (Wave-1 equity-waterfall fix), so
+    # pre-funding it from equity at close is roughly timing-neutral versus diverting early
+    # operating cash to build it — the two eqIRRs differ only marginally (here fund_at_close
+    # is a few bps higher because early operating cash is no longer diverted into the reserve).
+    assert kpis["equity_irr"] == pytest.approx(base_kpis["equity_irr"], abs=0.002)
     # project-level economics are debt-structure independent
     assert kpis["project_irr"] == pytest.approx(base_kpis["project_irr"], abs=1e-4)
 

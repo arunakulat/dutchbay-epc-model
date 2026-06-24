@@ -51,9 +51,11 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # honest fitted-Weibull economics at 160 m, at the corrected FX 333.79, the 2026-06
     # construction-lag/off-by-one project-discounting fix (audit finding 2.0) AND the M3e
     # degradation re-baseline (0.005 -> 0.5, honest 0.5%/yr aging): project IRR 5.22%
-    # (below the ~8.18% WACC) and equity IRR now NEGATIVE (-2.19%) — the 0.5%/yr aging
-    # tips the marginal equity return below zero.
+    # (below the ~8.18% WACC) and equity IRR NEGATIVE — the 0.5%/yr aging tips the marginal
+    # equity return below zero. The Wave-1 equity-waterfall fix then releases the DSRA to the
+    # sponsor at maturity, lifting equity IRR -2.19% -> -0.48% (still negative; project IRR
+    # is upstream of the equity waterfall and is unchanged).
     assert kpis["project_irr"] == pytest.approx(0.0522, abs=0.01)
-    assert kpis["equity_irr"] == pytest.approx(-0.0219, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0048, abs=0.01)
     assert kpis["equity_irr"] < 0.0  # marginal equity turns negative under honest aging
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
