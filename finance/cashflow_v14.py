@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
 
 from .bess_revenue import (
-    bess_capacity_charge_lkr_for_year,
+    bess_revenue_lkr_for_year,
     resolve_bess_specs,
 )
 from .cashflow_v14_contracts import CashflowParams
@@ -333,7 +333,7 @@ def calculate_single_year_cfads(
 
     # BESS capacity-charge revenue (availability tolling), additive to generation
     # revenue. 0.0 when no `type: bess` block -> byte-identical wind/solar behaviour.
-    bess_revenue_lkr = bess_capacity_charge_lkr_for_year(
+    bess_revenue_lkr = bess_revenue_lkr_for_year(
         params.get("bess_revenue_specs"), year_index
     )
     revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
@@ -616,7 +616,7 @@ def build_annual_rows_efficient(
         )
         # BESS capacity-charge revenue (additive; 0.0 when no `type: bess` block) —
         # mirrors calculate_single_year_cfads so the two builders stay identical.
-        bess_revenue_lkr = bess_capacity_charge_lkr_for_year(
+        bess_revenue_lkr = bess_revenue_lkr_for_year(
             params.get("bess_revenue_specs"), year_index
         )
         revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
