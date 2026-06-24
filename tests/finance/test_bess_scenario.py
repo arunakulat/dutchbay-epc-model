@@ -8,6 +8,7 @@ vintage economics (the capacity charge rate is a placeholder bid value).
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ import pytest
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
 from finance.bess_revenue import resolve_bess_specs
+from finance.cashflow_v14 import build_annual_rows, build_annual_rows_efficient
 from finance.cashflow_v14_production import resolve_tech_generation_specs
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -101,3 +103,23 @@ def test_type_bess_is_not_double_counted_as_generation():
     # ...and the same block is resolved as a BESS earning the capacity charge.
     bess_specs = resolve_bess_specs(cfg)
     assert [s["technology"] for s in bess_specs] == ["bess"]
+
+
+@pytest.mark.skipif(not _CEB.exists(), reason="CEB BESS scenario not present")
+def test_both_cashflow_builders_agree_on_bess_revenue():
+    """The BESS revenue is mirrored into BOTH builders (calculate_single_year_cfads and
+    build_annual_rows_efficient). Pin that they stay identical on a scenario with a
+    NON-ZERO capacity charge — a one-sided edit to either builder's BESS branch then
+    fails the suite (the canonical equivalence test runs only on a BESS-free scenario)."""
+    cfg = load_scenario_config(_CEB)
+    rows = build_annual_rows(cfg)
+    eff = build_annual_rows_efficient(cfg)
+    assert len(rows) == len(eff)
+    for base_row, eff_row in zip(rows, eff):
+        assert set(base_row.keys()) == set(eff_row.keys())
+        for key in base_row:
+            assert math.isclose(
+                base_row[key], eff_row[key], rel_tol=1e-9, abs_tol=1e-6
+            ), f"mismatch on {key}"
+    # guard the guard: the BESS branch is actually exercised (non-zero capacity charge)
+    assert rows[0]["bess_revenue_lkr"] > 0
