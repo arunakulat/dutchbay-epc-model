@@ -481,11 +481,12 @@ def test_approx_project_irr_reports_negative_irr_by_default() -> None:
     capex = 1_000.0
     cfads = [240.0, 240.0, 240.0, 240.0]  # sums to 960 < capex => negative IRR
     honest = approx_project_irr(cfads, capex)  # default bracket spans negatives
-    assert math.isfinite(honest)
+    assert honest is not None and math.isfinite(honest)
     assert -0.10 < honest < 0.0  # just below break-even (4% undiscounted shortfall)
-    # The legacy positive-only bracket (r_low=0.0) clamps it to exactly 0.0 — the
-    # bug this fix removes from the live project-IRR path.
-    assert approx_project_irr(cfads, capex, r_low=0.0) == 0.0
+    # The positive-only bracket (r_low=0.0) cannot bracket a negative IRR; after the
+    # upper-cliff expansion still finds no root in [0.0, 5.0], so the IRR is undefined
+    # (None) rather than the old misleading 0.0 sentinel.
+    assert approx_project_irr(cfads, capex, r_low=0.0) is None
 
 
 def test_approx_project_irr_no_discontinuity_over_long_horizon() -> None:
@@ -508,31 +509,52 @@ def test_approx_project_irr_no_discontinuity_over_long_horizon() -> None:
         assert higher >= lower - 1e-9, f"IRR fell as horizon grew: {irrs}"
 
 
-def test_approx_project_irr_zero_capex_returns_zero() -> None:
-    """capex_total <= 0 short-circuits to 0.0 (line 396)."""
-    assert approx_project_irr([100.0, 100.0], 0.0) == 0.0
-    assert approx_project_irr([100.0, 100.0], -50.0) == 0.0
+def test_approx_project_irr_zero_capex_returns_none() -> None:
+    """capex_total <= 0 short-circuits to None (IRR undefined, not a real 0%)."""
+    assert approx_project_irr([100.0, 100.0], 0.0) is None
+    assert approx_project_irr([100.0, 100.0], -50.0) is None
 
 
-def test_approx_project_irr_empty_cfads_returns_zero() -> None:
-    """An empty CFADS series short-circuits to 0.0 (line 396)."""
-    assert approx_project_irr([], 1000.0) == 0.0
+def test_approx_project_irr_empty_cfads_returns_none() -> None:
+    """An empty CFADS series short-circuits to None (IRR undefined)."""
+    assert approx_project_irr([], 1000.0) is None
 
 
-def test_approx_project_irr_capex_typeerror_coerced_to_zero() -> None:
-    """A non-numeric capex is coerced to 0.0 and short-circuits (392-393, 396)."""
-    assert approx_project_irr([100.0, 100.0], None) == 0.0  # type: ignore[arg-type]
+def test_approx_project_irr_capex_typeerror_coerced_to_none() -> None:
+    """A non-numeric capex is coerced to 0.0 and short-circuits to None."""
+    assert approx_project_irr([100.0, 100.0], None) is None  # type: ignore[arg-type]
 
 
-def test_approx_project_irr_no_sign_change_returns_zero() -> None:
-    """With CFADS too small to recover capex in the bracket, no root => 0.0 (415).
+def test_approx_project_irr_no_sign_change_returns_none() -> None:
+    """CFADS too small to recover capex anywhere in [r_low, 5.0] => no root => None.
 
-    Tiny CFADS relative to capex keeps project NPV negative across [r_low, r_high],
-    so there is no sign change and the documented 0.0 is returned.
+    Tiny CFADS relative to capex keeps project NPV negative even after the upper-cliff
+    r_high expansion, so there is no sign change and the IRR is reported undefined (None)
+    rather than the old 0.0 sentinel that masqueraded as a genuine 0% return.
     """
     capex = 1_000_000.0
     cfads = [1.0, 1.0, 1.0]
-    assert approx_project_irr(cfads, capex, r_low=0.0, r_high=0.5) == 0.0
+    assert approx_project_irr(cfads, capex, r_low=0.0, r_high=0.5) is None
+
+
+def test_approx_project_irr_high_return_clears_the_upper_cliff() -> None:
+    """A project whose IRR exceeds the default r_high (0.5) now SOLVES via the geometric
+    r_high expansion instead of being wrongly reported as 0.0 (the upper-cliff bug)."""
+    capex = 100.0
+    cfads = [55.0] * 15  # true IRR ~54.9%, above the 0.5 default bracket
+    rate = approx_project_irr(cfads, capex)
+    assert rate is not None
+    assert rate == pytest.approx(0.5492, abs=1e-3)
+    # NPV at the solved rate is ~0 (root definition holds at the expanded bracket).
+    assert project_npv_from_cfads(rate, cfads, capex) == pytest.approx(0.0, abs=1e-3)
+
+
+def test_approx_project_irr_genuine_zero_is_distinguishable_from_undefined() -> None:
+    """A genuine ~0% IRR returns a real (near-zero) float, NOT None — so callers can
+    tell a break-even project apart from an undefined one."""
+    rate = approx_project_irr([10.0] * 10, 100.0)  # sum == capex => ~0% IRR
+    assert rate is not None
+    assert rate == pytest.approx(0.0, abs=1e-6)
 
 
 def test_approx_project_irr_root_exactly_at_r_low() -> None:
@@ -561,10 +583,10 @@ def test_approx_project_irr_root_exactly_at_r_high() -> None:
     assert got == pytest.approx(r_high)
 
 
-def test_approx_project_irr_npv_gap_exception_returns_zero(
+def test_approx_project_irr_npv_gap_exception_returns_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If the initial npv_gap evaluations raise, the result is 0.0 (lines 406-407)."""
+    """If the initial npv_gap evaluations raise, the IRR is undefined (None)."""
     import finance.irr as irr_mod
 
     calls = {"n": 0}
@@ -576,7 +598,7 @@ def test_approx_project_irr_npv_gap_exception_returns_zero(
     # project_npv_from_cfads swallows exceptions and returns 0.0, so patch it
     # directly to force the npv_gap call inside approx_project_irr to raise.
     monkeypatch.setattr(irr_mod, "project_npv_from_cfads", _boom)
-    assert approx_project_irr([400.0, 400.0], 1000.0) == 0.0
+    assert approx_project_irr([400.0, 400.0], 1000.0) is None
     assert calls["n"] >= 1
 
 
