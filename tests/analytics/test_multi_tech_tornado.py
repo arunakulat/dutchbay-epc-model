@@ -21,7 +21,9 @@ from analytics.portfolio.multi_tech_tornado import (
     DEFAULT_METRICS,
     MultiTechTornadoBar,
     applicable_drivers,
+    applicable_storage_drivers,
     build_coupled_override,
+    build_storage_override,
     discover_generation_technologies,
     discover_non_generation_technologies,
     discover_storage_technologies,
@@ -257,6 +259,54 @@ def test_storage_alongside_generation_is_reported_not_swept(hybrid_config: dict,
     # ...but the BESS block is loudly reported, not silently dropped.
     assert "battery" in caplog.text
     assert discover_storage_technologies(cfg) == ["battery"]
+
+
+# ── storage (BESS) is now SWEPT on its capacity-charge driver ───────────────────
+
+
+def test_applicable_storage_drivers_needs_a_revenue_lever():
+    cfg = {"generation": {"technologies": {
+        "bess": {"type": "bess", "power_mw": 10, "revenue": {
+            "model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 2_000_000}},
+        "bare": {"type": "bess", "power_mw": 5},  # no revenue -> not sweepable
+    }}}
+    assert applicable_storage_drivers(cfg, "bess") == ["capacity_charge_lkr_per_mw_month"]
+    assert applicable_storage_drivers(cfg, "bare") == []
+
+
+def test_build_storage_override_is_direct_single_key():
+    cfg = {"generation": {"technologies": {"bess": {"type": "bess", "power_mw": 10,
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 2_000_000}}}}}
+    ov = build_storage_override(cfg, "bess", "capacity_charge_lkr_per_mw_month", 1.1)
+    assert ov == {
+        "generation.technologies.bess.revenue.capacity_charge_lkr_per_mw_month":
+        pytest.approx(2_200_000)
+    }
+
+
+def test_build_storage_override_rejects_unknown_driver():
+    cfg = {"generation": {"technologies": {"bess": {"type": "bess", "power_mw": 10,
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    with pytest.raises(ValueError, match="unknown storage driver"):
+        build_storage_override(cfg, "bess", "bogus", 1.1)
+
+
+def test_bess_with_revenue_lever_is_swept_alongside_generation(hybrid_config):
+    cfg = dict(hybrid_config)
+    techs = dict(cfg["generation"]["technologies"])
+    techs["bess_1"] = {
+        "type": "bess", "power_mw": 50.0, "energy_mwh": 200.0,
+        "revenue": {"model": "capacity_charge",
+                    "capacity_charge_lkr_per_mw_month": 5_000_000, "contract_years": 15},
+    }
+    cfg["generation"] = {"technologies": techs}
+    bars = run_multi_tech_tornado(cfg, metrics=["project_irr"])
+    bess_bars = [b for b in bars if b.technology == "bess_1"]
+    assert len(bess_bars) == 1  # one storage driver
+    assert bess_bars[0].driver == "capacity_charge_lkr_per_mw_month"
+    assert bess_bars[0].impact_abs > 1e-9  # the bid rate is a live driver
+    # wind/solar still swept too
+    assert {"wind", "solar"} <= {b.technology for b in bars}
 
 
 # ── why coupling exists: pin the uncoupled failure modes (regression guard) ─────
