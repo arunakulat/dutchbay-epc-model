@@ -144,6 +144,11 @@ def _prepare_cashflow_context(
     # None when no BESS block is present -> wind/solar runs stay byte-identical.
     params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
 
+    # Tax-loss carry-forward ledger (vintage-aware): the live per-year builders thread
+    # this through calculate_single_year_cfads so losses expire after the statutory
+    # window (loss_carryforward_years) and survive holiday years. Starts empty.
+    params_dict["loss_vintages"] = ()
+
     years = int(params_obj.project_life_years)
 
     if fx_curve is None:
@@ -362,6 +367,11 @@ def calculate_single_year_cfads(
     # Use new calculate_tax with unified TaxProfile
     depreciation_for_year = depreciation_schedule.annual_amounts[year_index]
 
+    # Loss carry-forward state threads through the per-evaluation params context as a
+    # vintage ledger (so losses expire after the statutory window and survive holiday
+    # years). When params carries no ledger (direct unit-test callers) we fall back to
+    # the legacy scalar prior_year_losses path (byte-identical).
+    loss_vintages = params.get("loss_vintages")
     tax_result: TaxResult = calculate_tax(
         year=year,  # 1-based (matches tax_profile.tax_holidays_by_year keys)
         ebit=ebit,
@@ -369,7 +379,10 @@ def calculate_single_year_cfads(
         depreciation=depreciation_for_year,
         tax_profile=tax_profile,
         prior_year_losses=prior_year_losses,
+        prior_loss_vintages=loss_vintages,
     )
+    if loss_vintages is not None:
+        params["loss_vintages"] = tax_result.carried_forward_vintages
 
     tax = tax_result.tax_liability
     total_depr = tax_result.depreciation

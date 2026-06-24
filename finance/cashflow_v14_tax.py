@@ -8,7 +8,13 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+#: A tax-loss carry-forward ledger: an immutable tuple of (origin_year, amount)
+#: vintages. Tracking vintages (not a single scalar) lets losses EXPIRE after the
+#: statutory carry-forward window (Sri Lanka: 6 years) and be preserved through
+#: tax-holiday years instead of being silently consumed.
+LossVintages = Tuple[Tuple[int, float], ...]
 
 
 DEFAULT_TAX_CONFIG = {
@@ -253,6 +259,11 @@ class TaxProfile:
     allowable_losses_carryforward: bool
     withholding_tax_rate: float
     tax_holidays_by_year: Dict[int, bool]
+    #: Statutory carry-forward window in years (Sri Lanka: 6). ``0`` means no cap
+    #: (unlimited carry — the historical behaviour, kept as the default so direct
+    #: TaxProfile constructions stay byte-identical). A loss originating in year ``y``
+    #: can offset income through year ``y + loss_carryforward_years``.
+    loss_carryforward_years: int = 0
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.tax_rate <= 1.0):
@@ -364,6 +375,9 @@ class TaxResult:
     tax_holiday_applied: bool
     carried_forward_losses: float
     wht_on_interest: float
+    #: The updated loss-vintage ledger to thread into the next year (empty for the
+    #: legacy scalar path). ``carried_forward_losses`` is its running total.
+    carried_forward_vintages: LossVintages = ()
 
 
 def build_tax_holiday_map(
@@ -395,9 +409,48 @@ def build_tax_profile(
         depreciation_method=config.depreciation_method,
         depreciation_schedule=list(depreciation_schedule.annual_amounts),
         allowable_losses_carryforward=config.loss_carryforward_years > 0,
+        loss_carryforward_years=config.loss_carryforward_years,
         withholding_tax_rate=wht_rate,
         tax_holidays_by_year=tax_holidays,
     )
+
+
+def _apply_loss_vintages(
+    year: int,
+    pre_offset_taxable: float,
+    is_holiday: bool,
+    prior_vintages: Sequence[Tuple[int, float]],
+    cap: int,
+    allowable: bool,
+) -> Tuple[float, LossVintages]:
+    """Expire, (conditionally) offset, and update the loss-vintage ledger.
+
+    Returns ``(taxable_after_offset, new_vintages)``. Vintages older than ``cap`` years
+    expire before any offset (``cap <= 0`` means unlimited). A holiday year does NOT
+    consume losses (the shield would be wasted — tax is 0 regardless). A year with
+    negative pre-offset income adds a new vintage. Offsets are FIFO (oldest first).
+    """
+    if not allowable:
+        return max(pre_offset_taxable, 0.0), ()
+    live = [
+        (oy, amt)
+        for (oy, amt) in prior_vintages
+        if amt > 0.0 and (cap <= 0 or (year - oy) <= cap)
+    ]
+    if pre_offset_taxable < 0.0:
+        new = sorted(live) + [(year, -pre_offset_taxable)]
+        return 0.0, tuple(new)
+    if is_holiday:
+        return pre_offset_taxable, tuple(sorted(live))
+    budget = pre_offset_taxable
+    remaining: List[Tuple[int, float]] = []
+    for oy, amt in sorted(live):
+        use = min(amt, budget)
+        budget -= use
+        leftover = amt - use
+        if leftover > 1e-9:
+            remaining.append((oy, leftover))
+    return budget, tuple(remaining)
 
 
 def calculate_tax(
@@ -407,22 +460,41 @@ def calculate_tax(
     depreciation: float,
     tax_profile: TaxProfile,
     prior_year_losses: float = 0.0,
+    prior_loss_vintages: Optional[Sequence[Tuple[int, float]]] = None,
 ) -> TaxResult:
+    """Per-year tax. When ``prior_loss_vintages`` is supplied (the live path) losses are
+    tracked per vintage so they EXPIRE after ``loss_carryforward_years`` and are PRESERVED
+    through holiday years. When it is ``None`` the legacy scalar carry-forward applies
+    (no expiry) — kept byte-identical for direct scalar callers."""
     is_holiday = tax_profile.tax_holidays_by_year.get(year, False)
     taxable = ebit
     if tax_profile.interest_deductibility:
         taxable -= interest_expense
     taxable -= depreciation
 
-    carried_forward = 0.0
-    if tax_profile.allowable_losses_carryforward and prior_year_losses > 0.0:
-        loss_offset = min(prior_year_losses, max(taxable, 0.0))
-        taxable -= loss_offset
-        carried_forward = prior_year_losses - loss_offset
+    new_vintages: LossVintages = ()
+    if prior_loss_vintages is None:
+        # Legacy scalar path (no expiry, consumes during holidays) — byte-identical.
+        carried_forward = 0.0
+        if tax_profile.allowable_losses_carryforward and prior_year_losses > 0.0:
+            loss_offset = min(prior_year_losses, max(taxable, 0.0))
+            taxable -= loss_offset
+            carried_forward = prior_year_losses - loss_offset
+        taxable_income = max(taxable, 0.0)
+        new_losses = max(-taxable, 0.0) + carried_forward
+    else:
+        taxable_after, new_vintages = _apply_loss_vintages(
+            year,
+            taxable,
+            is_holiday,
+            prior_loss_vintages,
+            tax_profile.loss_carryforward_years,
+            tax_profile.allowable_losses_carryforward,
+        )
+        taxable_income = max(taxable_after, 0.0)
+        new_losses = sum(amt for _, amt in new_vintages)
 
-    taxable_income = max(taxable, 0.0)
     tax_liability = 0.0 if is_holiday else taxable_income * tax_profile.tax_rate
-    new_losses = max(-taxable, 0.0) + carried_forward
     effective_rate = tax_liability / ebit if ebit > 0.0 else 0.0
     wht_on_interest = interest_expense * tax_profile.withholding_tax_rate
 
@@ -437,6 +509,7 @@ def calculate_tax(
         tax_holiday_applied=is_holiday,
         carried_forward_losses=new_losses,
         wht_on_interest=wht_on_interest,
+        carried_forward_vintages=new_vintages,
     )
 
 
@@ -456,7 +529,7 @@ def build_tax_series(
         raise ValueError("Mismatched lengths in tax series inputs")
 
     results: List[TaxResult] = []
-    carried_losses = 0.0
+    carried_vintages: LossVintages = ()
     for idx, year in enumerate(years):
         tax_result = calculate_tax(
             year=year,
@@ -464,10 +537,10 @@ def build_tax_series(
             interest_expense=interest_series[idx],
             depreciation=depreciation_schedule.annual_amounts[idx],
             tax_profile=tax_profile,
-            prior_year_losses=carried_losses,
+            prior_loss_vintages=carried_vintages,
         )
         results.append(tax_result)
-        carried_losses = tax_result.carried_forward_losses
+        carried_vintages = tax_result.carried_forward_vintages
     return results
 
 
