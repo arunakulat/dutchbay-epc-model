@@ -11,9 +11,12 @@
 #   escalation, and CEB dispatches the asset. There is no per-kWh energy revenue. The
 #   engine's `type: bess` path (finance/bess_revenue.py) books this as:
 #     annual_lkr = R x power_mw x 12 x availability_factor x dispatchable_ratio
-#   This is DISTINCT from the second CEB scheme (a BESS charged by an existing solar PV
-#   plant, paid an energy tariff for night-peak export) and from the Kolonnawa 100 MW
-#   single-site tender, which has its own economic model.
+#   This is DISTINCT from two other CEB BESS structures: (1) a BESS charged by an
+#   existing solar PV plant, paid an energy tariff for night-peak export (an energy /
+#   time-shift model); and (2) the Kolonnawa 100 MW single-site project, which is a
+#   CEB-OWNED night-peak supply procured via an EPC contract for the batteries +
+#   ancillaries — a construction-margin deal (EPC price - build cost), NOT an operational
+#   tolling/tariff stream, so it does not belong on this operational cashflow path.
 #
 # STORAGE-ONLY: there is no generation, so `tariff.lkr_per_kwh` is 0.0 and the nominal
 # `project.capacity_factor` is a validation placeholder only (it earns nothing). All

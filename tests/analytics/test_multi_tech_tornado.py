@@ -86,6 +86,19 @@ def test_discover_non_generation_is_robust_superset():
     assert discover_storage_technologies(weird) == ["battery"]
 
 
+def test_type_bess_is_storage_not_generation_even_with_capacity_factor():
+    # `type` is authoritative: a BESS mis-keyed with a capacity_factor must NOT be
+    # classified as generation (it would be swept as a phantom driver) — it is storage,
+    # consistent with the cashflow excluding it from generation revenue.
+    cfg = {"generation": {"technologies": {
+        "wind": {"capacity_mw": 100, "capacity_factor": 0.34},
+        "bess": {"type": "bess", "power_mw": 50, "capacity_factor": 0.20},
+    }}}
+    assert discover_generation_technologies(cfg) == ["wind"]
+    assert discover_storage_technologies(cfg) == ["bess"]
+    assert discover_non_generation_technologies(cfg) == ["bess"]
+
+
 def test_discover_generation_empty_without_block():
     assert discover_generation_technologies({"project": {"capacity_mw": 100}}) == []
 

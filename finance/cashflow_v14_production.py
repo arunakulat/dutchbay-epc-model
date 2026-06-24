@@ -28,6 +28,8 @@ import numpy as np
 import yaml
 from pathlib import Path
 
+from .bess_revenue import BESS_TYPE
+
 logger = logging.getLogger(__name__)
 
 
@@ -232,6 +234,12 @@ def resolve_tech_generation_specs(
     specs: List[Dict[str, Any]] = []
     for name, block in techs.items():
         if not isinstance(block, dict):
+            continue
+        # `type` is authoritative: a storage block (type: bess) is NOT a generation
+        # technology even if it (mis-)carries a capacity_factor, so it never earns
+        # tariff revenue here — only its BESS capacity charge (finance.bess_revenue).
+        # This closes the double-count: generation tariff AND capacity charge.
+        if block.get("type") == BESS_TYPE:
             continue
         cap = block.get("capacity_mw")
         cap_factor = block.get("capacity_factor")

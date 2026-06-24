@@ -68,6 +68,7 @@ misleading.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -82,6 +83,11 @@ logger = logging.getLogger(__name__)
 #: it), so it is detected and reported but **not swept** — sweeping it would be a
 #: phantom axis until storage economics are modelled.
 _STORAGE_KEYS: Tuple[str, ...] = ("power_mw", "energy_mwh")
+
+#: The explicit storage type discriminator (mirrors ``finance.bess_revenue.BESS_TYPE``;
+#: kept as a local literal to avoid an analytics→finance import). ``type`` is
+#: authoritative: a ``type: bess`` block is storage, never a generation tech.
+_BESS_TYPE = "bess"
 
 #: Per-tech finance levers swept, in display order. Each maps to a coupled override
 #: (see module docstring). ``capex_usd`` / ``capacity_factor`` / ``degradation_pct``
@@ -118,11 +124,12 @@ def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
 
 
 def _as_float(value: Any) -> Optional[float]:
-    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool."""
+    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool/non-finite."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        coerced = float(value)
+        return coerced if math.isfinite(coerced) else None
     return None
 
 
@@ -174,14 +181,22 @@ def _technology_blocks(config: Mapping[str, Any]) -> List[Tuple[str, Mapping[str
 def _is_generation(block: Mapping[str, Any]) -> bool:
     """A *generation* technology carries a ``capacity_factor`` (the finance driver).
 
-    This is class-agnostic: wind, solar, tidal, run-of-river, … all qualify on the
-    same footing — there is no wind-specific special-casing.
+    Class-agnostic (wind, solar, tidal, run-of-river … all qualify on the same footing
+    — no wind-specific special-casing). ``type`` is authoritative: a ``type: bess``
+    block is storage and is never generation, even if it (mis-)carries a
+    ``capacity_factor`` — consistent with the cashflow, which excludes it from
+    generation revenue.
     """
+    if block.get("type") == _BESS_TYPE:
+        return False
     return block.get("capacity_factor") is not None
 
 
 def _is_storage(block: Mapping[str, Any]) -> bool:
-    """A *storage* technology (e.g. BESS) carries a power/energy rating, no CF."""
+    """A *storage* technology (e.g. BESS): explicitly ``type: bess``, or a power/energy
+    rating without a capacity factor."""
+    if block.get("type") == _BESS_TYPE:
+        return True
     return not _is_generation(block) and any(
         block.get(key) is not None for key in _STORAGE_KEYS
     )
