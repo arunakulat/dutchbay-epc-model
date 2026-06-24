@@ -68,10 +68,12 @@ def test_npv_empty_and_degenerate_rate() -> None:
 
 def test_clean_public_dscr_series_drops_nonfinite_and_nonnumeric() -> None:
     cleaned = _clean_public_dscr_series(
-        [None, "not-a-number", float("inf"), 0.0, -1.0, 1.30, 2.0]
+        [None, "not-a-number", float("inf"), float("nan"), 0.0, -1.0, 1.30, 2.0]
     )
-    # Only the strictly-positive finite values survive.
-    assert cleaned == [1.30, 2.0]
+    # Only None / non-numeric / non-finite (inf, nan) are dropped. A FINITE value <= 0.0
+    # is RETAINED — a 0.0 (CFADS=0 vs live debt service) or a negative DSCR is a real
+    # total-coverage breach that must surface in the lender-facing min (Wave-1 fix).
+    assert cleaned == [0.0, -1.0, 1.30, 2.0]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

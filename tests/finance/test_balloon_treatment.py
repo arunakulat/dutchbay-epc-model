@@ -49,10 +49,16 @@ def results() -> dict:
 
 
 def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None:
-    """The structural balloon is ~42% of debt and breaches max_balloon_pct (10%)."""
+    """The structural balloon is ~38% of debt and breaches max_balloon_pct (10%).
+
+    Wave-1 fix: balloon_pct now divides the (IDC-inclusive) balloon_remaining by the
+    IDC-inclusive amortizing principal (sum of principal_after_idc, ~$111.9M), not the
+    pre-IDC debt_total (~$100.1M) — a consistent base. The $ balloon is unchanged
+    ($42.48M); only the reported fraction corrects from 0.424 to 0.380.
+    """
     dr = results["cash_sweep"]["debt_result"]
     assert dr["balloon_remaining"] == pytest.approx(42_475_853, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.424, abs=0.01)
+    assert dr["balloon_pct"] == pytest.approx(0.380, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 

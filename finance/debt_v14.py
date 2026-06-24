@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.utils import as_float, get_nested
@@ -224,7 +225,15 @@ def _rate_decimal(value: Any, default: float = 0.0) -> float:
 
 
 def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
-    """Return lender-facing DSCR values suitable for min/max comparisons."""
+    """Return lender-facing DSCR values suitable for min/max comparisons.
+
+    Only the *undefined* sentinel is dropped: ``None`` and non-finite values (``inf`` /
+    ``nan``), which arise when a period has no debt service (DSCR = CFADS/0). A FINITE
+    value <= 0.0 is RETAINED — a 0.0 (CFADS = 0 against live debt service) or a negative
+    DSCR is a real total-coverage breach and must surface in the lender-facing min, not be
+    hidden behind an at-target headline. (Previously ``<= 0.0`` was filtered, conflating a
+    real 0.0 breach with the missing/inf sentinel.)
+    """
     clean: List[float] = []
     for value in values:
         if value is None:
@@ -233,7 +242,7 @@ def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
             numeric = float(value)
         except (TypeError, ValueError):
             continue
-        if numeric == float("inf") or numeric <= 0.0:
+        if not math.isfinite(numeric):
             continue
         clean.append(numeric)
     return clean
@@ -1060,8 +1069,15 @@ def plan_debt(
         refi_tenor_years=refi_tenor,
         refi_rate_premium=refi_premium,
     )
-    debt_total_final = _as_float(core.get("debt_total"), 0.0)
-    balloon_pct = structural_balloon / debt_total_final if debt_total_final > 0 else 0.0
+    # balloon_remaining is the residual of the IDC-INCLUSIVE amortizing principal
+    # (sum of principal_after_idc), so the fraction must use that same base — not the
+    # pre-IDC debt_total, which mixes bases and overstates the balloon.
+    amortizing_base = sum(
+        _as_float(v, 0.0) for v in (core.get("principal_after_idc", {}) or {}).values()
+    )
+    if amortizing_base <= 0.0:  # fallback if IDC detail is absent
+        amortizing_base = _as_float(core.get("debt_total"), 0.0)
+    balloon_pct = structural_balloon / amortizing_base if amortizing_base > 0 else 0.0
     max_balloon_pct = _as_float(
         (_section_case_insensitive(config, "constraints") or {}).get("max_balloon_pct"),
         0.10,
