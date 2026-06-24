@@ -479,3 +479,49 @@ def test_calculate_tax_holiday_zeroes_liability() -> None:
     assert res.wht_on_interest == pytest.approx(10.0 * 0.10)
     # effective rate is zero in a holiday year.
     assert res.effective_tax_rate == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Wave-1: depreciation_start_year is now WIRED (was validated but ignored)
+# ---------------------------------------------------------------------------
+
+
+def test_depreciation_start_year_offsets_the_schedule() -> None:
+    """depreciation_start_year defers the schedule: years before it are zero and the
+    useful-life window shifts later (was validated but silently ignored)."""
+    sched = DepreciationSchedule.build_straight_line(
+        capex_lkr=1_000.0, useful_life=5, project_life=10, start_year=3
+    )
+    annual_depr = 1_000.0 / 5  # 200
+    # years 1-2 zero, years 3..7 depreciate, years 8+ zero
+    assert sched.annual_amounts[0] == 0.0
+    assert sched.annual_amounts[1] == 0.0
+    assert sched.annual_amounts[2] == pytest.approx(annual_depr)
+    assert sched.annual_amounts[6] == pytest.approx(annual_depr)  # year 7 = start+life-1
+    assert sched.annual_amounts[7] == 0.0  # year 8 past the window
+    # full base still recovered, just deferred
+    assert sum(sched.annual_amounts) == pytest.approx(1_000.0)
+
+
+def test_depreciation_start_year_one_is_byte_identical() -> None:
+    """start_year=1 (the default) reproduces the historical year<=useful_life schedule."""
+    s1 = DepreciationSchedule.build_straight_line(900.0, 3, 6, start_year=1)
+    assert s1.annual_amounts == pytest.approx([300.0, 300.0, 300.0, 0.0, 0.0, 0.0])
+
+
+def test_depreciation_start_year_below_one_raises() -> None:
+    with pytest.raises(ValueError, match="start_year"):
+        DepreciationSchedule.build_straight_line(900.0, 3, 6, start_year=0)
+
+
+def test_depreciation_start_year_changes_economics_end_to_end() -> None:
+    """Deferring depreciation shifts the tax shield and genuinely moves CFADS / IRR — proving
+    the lever is live in the pipeline, not just the builder."""
+    from analytics.evaluation_v14 import evaluate_with_overrides
+
+    lender = "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    base = evaluate_with_overrides(lender, overrides={})
+    deferred = evaluate_with_overrides(lender, overrides={"tax.depreciation_start_year": 3})
+    assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
+    # start_year=1 default is byte-identical to the canonical baseline
+    assert base["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)

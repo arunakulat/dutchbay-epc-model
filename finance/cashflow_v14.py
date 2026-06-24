@@ -238,12 +238,14 @@ def _prepare_cashflow_context(
                 plant_useful_life=plant_life,
                 civil_useful_life=civil_life,
                 project_life=years,
+                start_year=tax_config.depreciation_start_year,
             )
         else:
             depreciation_schedule = DepreciationSchedule.build_straight_line(
                 capex_lkr=capex_for_depreciation,
                 useful_life=tax_config.depreciation_years,
                 project_life=years,
+                start_year=tax_config.depreciation_start_year,
             )
     else:
         # No depreciation: all-zero schedule
