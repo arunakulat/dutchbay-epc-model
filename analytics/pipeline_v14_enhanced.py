@@ -199,6 +199,11 @@ def _enrich_annual_rows_with_debt(
 ) -> list[dict[str, Any]]:
     """Overlay lender-facing debt columns onto annual rows."""
     debt_service = list(debt_result.get("debt_service_total") or [])
+    # Per-period scheduled INTEREST, same PERIOD index as debt_service_total. Surfaced on
+    # each operating row (interest_usd) so the equity waterfall can charge a grossed-up
+    # non-resident interest WHT; informational here — it does NOT touch cf_after_debt
+    # (which feeds DSCR). The WHT deduction happens only in the equity path.
+    interest_series = list(debt_result.get("interest_total") or [])
     # Post-maturity cash diverted from equity to retire the balloon (sweep/refi/
     # bullet). Same PERIOD index as debt_service_total; senior to equity but NOT
     # part of scheduled debt service, so it does not enter the DSCR.
@@ -237,6 +242,18 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             bridge_extra_service = 0.0
 
+    # Bridge-period interest, folded into operating year 1 the same way as its service.
+    bridge_extra_interest = 0.0
+    if (
+        bridge_period is not None
+        and int(bridge_period) not in mapped_periods
+        and 0 <= int(bridge_period) < len(interest_series)
+    ):
+        try:
+            bridge_extra_interest = float(interest_series[int(bridge_period)] or 0.0)
+        except (TypeError, ValueError):
+            bridge_extra_interest = 0.0
+
     enriched: list[dict[str, Any]] = []
 
     for idx, row in enumerate(annual_rows):
@@ -272,8 +289,21 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             balloon_resolution_value = 0.0
 
+        interest = (
+            interest_series[period_idx]
+            if 0 <= period_idx < len(interest_series)
+            else 0.0
+        )
+        try:
+            interest_value = float(interest or 0.0)
+        except (TypeError, ValueError):
+            interest_value = 0.0
+        if idx == 0 and bridge_extra_interest > 0.0:
+            interest_value += bridge_extra_interest
+
         out["cf_pre_debt"] = cf_pre_debt
         out["debt_service_total"] = debt_service_value
+        out["interest_usd"] = interest_value
         out["balloon_resolution"] = balloon_resolution_value
         out["cf_after_debt"] = cf_pre_debt - debt_service_value - balloon_resolution_value
         enriched.append(out)

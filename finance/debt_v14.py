@@ -525,6 +525,10 @@ def apply_debt_layer(
 
     dscr_series: List[Optional[float]] = []
     debt_service_total: List[float] = []
+    # Per-period INTEREST (the [0] element of each (interest, principal, service) tuple),
+    # parallel to debt_service_total and on the SAME period index. Used by the equity
+    # waterfall to charge a grossed-up non-resident interest WHT (CESSPIT wht_gross_up).
+    interest_total: List[float] = []
     debt_outstanding: List[float] = []
 
     out_bals = {k: t.principal for k, t in tranches.items()}
@@ -532,12 +536,15 @@ def apply_debt_layer(
     for period in range(timeline_periods):
         debt_outstanding.append(sum(out_bals.values()))
         svc = 0.0
+        intr = 0.0
         for k in schedules:
             if period < len(schedules[k]):
-                _, princ, service = schedules[k][period]
+                interest_k, princ, service = schedules[k][period]
                 svc += service
+                intr += interest_k
                 out_bals[k] = max(0.0, out_bals[k] - princ)
         debt_service_total.append(svc)
+        interest_total.append(intr)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
 
         if period < construction_periods:
@@ -630,6 +637,7 @@ def apply_debt_layer(
         "dscr_by_year": dscr_by_year,
         "dscr_min": dscr_min,
         "debt_service_total": debt_service_total,
+        "interest_total": interest_total,
         "debt_outstanding": debt_outstanding,
         "balloon_remaining": sum(out_bals.values()),
         "construction_periods": construction_periods,
@@ -1092,6 +1100,7 @@ def plan_debt(
     timeline = core.get("timeline_periods", 0)
     debt_outstanding = core.get("debt_outstanding", []) or []
     debt_service_total = core.get("debt_service_total", []) or []
+    interest_total = core.get("interest_total", []) or []
     public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
     min_dscr = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
 
@@ -1125,6 +1134,7 @@ def plan_debt(
         "audit_status": core.get("audit_status", "REVIEW"),
         "debt_outstanding": debt_outstanding,
         "debt_service_total": debt_service_total,
+        "interest_total": interest_total,
         "total_service": debt_service_total,
         "dscr_series": public_dscr_series,
         "raw_dscr_series": core.get("dscr_series", []),
