@@ -1,0 +1,203 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CEB Solar+BESS night-peak — 10 MW / 40 MWh BESS (energy-tariff scheme)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Models the incremental BESS economics under the CEB Solar-PV + BESS night-peak scheme
+# (Cabinet approval 16/06/2025): a BESS co-located with an EXISTING solar PV plant is
+# charged from that PV during the day and exports during the night peak (18:30-22:30),
+# paid a flat tariff of 45.80 LKR/kWh over a 10-year term.
+#
+# REVENUE MODEL — ENERGY TARIFF (night-peak export), NOT a capacity charge.
+#   The engine's `type: bess` path (finance/bess_revenue.py, model: energy_tariff) books:
+#     annual_lkr = energy_mwh x 1000 x cycles_per_year x round_trip_efficiency
+#                  x availability_factor x tariff_lkr_per_kwh
+#   This is DISTINCT from (1) the CEB distributed capacity-charge tender (LKR/MW/month
+#   availability tolling — see ceb_bess_10mw_capacity_charge.yaml); and (2) the Kolonnawa
+#   100 MW EPC project (a construction-margin deal, out of the operational engine).
+#
+# SCOPE: this models the BESS's INCREMENTAL night-peak revenue; the existing solar PV (the
+# charging source) is treated as a separate asset, so generation `tariff.lkr_per_kwh` is
+# 0.0 and `project.capacity_factor` is a nominal validation placeholder.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "CEB Solar+BESS night-peak 10MW/40MWh (energy tariff)"
+  location: "Existing ground-mounted solar PV site, Sri Lanka (CEB Solar+BESS scheme)"
+  capacity_mw: 10.0           # BESS power rating (MW)
+  capacity_factor: 0.0001     # NOMINAL placeholder (BESS-incremental; generation tariff is 0)
+  degradation: 0.0            # generation degradation N/A (storage)
+  life_years: 10             # matches the 10-year night-peak BESS contract term
+  cod_year: 2027
+  developer: "DutchBay Storage SPV (illustrative)"
+  jurisdiction: Sri Lanka
+  boi_approved: false
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MULTI-TECHNOLOGY — a single BESS (type: bess) earning a night-peak energy tariff
+# ═════════════════════════════════════════════════════════════════════════════
+generation:
+  technologies:
+    bess_unit:
+      type: bess               # explicit class discriminator (storage, not generation)
+      power_mw: 10.0           # power rating (MW)
+      energy_mwh: 40.0         # 4-hour duration (40 MWh / 10 MW); drives the night-peak export
+      duration_h: 4.0          # matches the 4-hour 18:30-22:30 export window
+      capex_usd: 5000000       # reporting split; the financed capex is capex.usd_total below
+      availability_pct: 97.0   # availability target (reporting)
+      revenue:
+        model: energy_tariff
+        # Night-peak export tariff (CEB Solar+BESS scheme, Cabinet 16/06/2025): the BESS
+        # is charged by the existing PV and exports during the 18:30-22:30 window.
+        tariff_lkr_per_kwh: 45.80
+        cycles_per_year: 365       # one charge/discharge per day
+        round_trip_efficiency: 0.90  # AC-AC; exported energy = stored x RTE
+        availability_factor: 1.0
+        contract_years: 10         # the scheme's 10-year BESS contract term
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TARIFF — generation tariff is 0: this scenario models only the BESS night-peak
+# export; the existing solar PV (the charging source) is a separate asset.
+# ═════════════════════════════════════════════════════════════════════════════
+tariff:
+  lkr_per_kwh: 0.0
+  tariff_type: fixed
+  ppa_term_years: 10
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CAPEX & OPEX (LFP, 2026 ex-China/US benchmark ~ $125/kWh turnkey; ~2%/yr opex)
+# ═════════════════════════════════════════════════════════════════════════════
+capex:
+  cost_basis_year: 2026
+  estimate_class: 3
+  usd_total: 5000000          # 40,000 kWh x ~$125/kWh (Ember ex-China/US turnkey benchmark)
+  capex_per_kw_usd: 500       # 5,000,000 / 10,000 kW
+
+opex:
+  usd_per_year: 100000        # ~2% of capex (~$2.5/kWh/yr, Ember; excl. augmentation)
+  opex_per_kw_yr_usd: 10.0
+  escalation_pct: 0.0
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TAX & STATUTORY (current SL regime — same stack as the wind/hybrid lender case)
+# ═════════════════════════════════════════════════════════════════════════════
+tax:
+  corporate_tax_rate: 0.30
+  tax_holiday_route: none
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 5
+  depreciation_start_year: 1
+  plant_capex_share: 0.90        # BESS is overwhelmingly plant & machinery (5-yr class)
+  plant_depreciation_years: 5
+  civil_depreciation_years: 20
+  enhanced_capital_allowance_pct: 1.5
+  enhanced_allowance_applies: false
+  loss_carryforward_years: 6
+  wht_on_interest_to_nonresidents: 0.1
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+  interest_deductibility: true
+
+statutory:
+  success_fee_pct: 0.01
+  env_surcharge_pct: 0.005
+  social_services_levy_pct: 0.025    # SSCL on revenue (here, on the night-peak energy tariff)
+
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FX (LKR-primary; the night-peak tariff 45.80 LKR/kWh is LKR-denominated)
+# ═════════════════════════════════════════════════════════════════════════════
+fx:
+  enabled: true
+  mode: deterministic
+  base_currency: USD
+  quote_currency: LKR
+  rates:
+    lkr_per_usd: 333.79
+  start_lkr_per_usd: 333.79
+  annual_depr: 0.03
+  uncertainty_pct: 0.05
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DEBT (same multi-currency dual-DSCR stack as the lender case)
+# ═════════════════════════════════════════════════════════════════════════════
+Financing_Terms:
+  debt_ratio: 0.7
+  debt_sizing: dual_dscr
+  dscr_p99_downside_factor: 0.80
+  balloon_treatment: cash_sweep
+  tenor_years: 12
+  interest_only_years: 1
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  mix:
+    lkr_max: 0.45
+    dfi_max: 0.1
+    usd_commercial_min: 0.45
+  rates:
+    lkr_nominal: 0.08
+    lkr_min: 0.08
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  target_dscr: 1.3
+  min_dscr: 1.2
+  reserves:
+    dsra_months: 6
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+  enforce_hard_covenants: false
+
+metrics:
+  llcr_min_covenant: 1.2
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.1
+  plcr_min_covenant: 1.4
+  plcr_target: 1.6
+  plcr_discount_rate: 0.1
+
+returns:
+  project_life_years: 10
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.12
+
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.3
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  max_tenor_years: 12
+  warn_tenor_years: 14
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: DFI
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 1
+  ops_years: 10
+  lifetime_years: 11
+
+wacc:
+  mode: build_up
+  drives_discount_rate: true
+  cost_of_equity: 0.12
+  prudential_spread_bps: 100
+  description: "Build-up WACC drives the project discount rate."
+
+metadata:
+  version: '1.0'
+  last_updated: '2026-06-24'
+  author: DutchBay V14 Financial Modeling Team
+  review_status: Illustrative — night-peak tariff per the CEB Solar+BESS scheme
+  sprint: 'BESS energy-tariff model'

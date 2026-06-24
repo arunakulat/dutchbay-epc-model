@@ -12,7 +12,7 @@ import pytest
 
 from finance.bess_revenue import (
     SUPPORTED_BESS_REVENUE_MODELS,
-    bess_capacity_charge_lkr_for_year,
+    bess_revenue_lkr_for_year,
     resolve_bess_specs,
 )
 
@@ -132,8 +132,8 @@ def test_malformed_bess_fails_loud(block, match):
         resolve_bess_specs(cfg)
 
 
-def test_capacity_charge_is_the_only_supported_model():
-    assert SUPPORTED_BESS_REVENUE_MODELS == ("capacity_charge",)
+def test_supported_models():
+    assert SUPPORTED_BESS_REVENUE_MODELS == ("capacity_charge", "energy_tariff")
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -157,27 +157,27 @@ def test_non_finite_capacity_charge_rate_is_rejected(bad):
 
 def test_charge_is_r_times_mw_times_12():
     specs = resolve_bess_specs(_cfg(contract_years=15))
-    assert bess_capacity_charge_lkr_for_year(specs, 0) == pytest.approx(2_000_000 * 10 * 12)
+    assert bess_revenue_lkr_for_year(specs, 0) == pytest.approx(2_000_000 * 10 * 12)
 
 
 def test_charge_is_flat_across_the_contract_then_zero():
     specs = resolve_bess_specs(_cfg(contract_years=15))
     full = 2_000_000 * 10 * 12
-    assert bess_capacity_charge_lkr_for_year(specs, 0) == pytest.approx(full)
-    assert bess_capacity_charge_lkr_for_year(specs, 14) == pytest.approx(full)  # last yr
-    assert bess_capacity_charge_lkr_for_year(specs, 15) == 0.0  # contract expired
+    assert bess_revenue_lkr_for_year(specs, 0) == pytest.approx(full)
+    assert bess_revenue_lkr_for_year(specs, 14) == pytest.approx(full)  # last yr
+    assert bess_revenue_lkr_for_year(specs, 15) == 0.0  # contract expired
 
 
 def test_charge_factors_derate():
     specs = resolve_bess_specs(_cfg(availability_factor=0.9, dispatchable_ratio=0.8))
-    assert bess_capacity_charge_lkr_for_year(specs, 0) == pytest.approx(
+    assert bess_revenue_lkr_for_year(specs, 0) == pytest.approx(
         2_000_000 * 10 * 12 * 0.9 * 0.8
     )
 
 
 def test_none_and_empty_are_zero():
-    assert bess_capacity_charge_lkr_for_year(None, 0) == 0.0
-    assert bess_capacity_charge_lkr_for_year([], 3) == 0.0
+    assert bess_revenue_lkr_for_year(None, 0) == 0.0
+    assert bess_revenue_lkr_for_year([], 3) == 0.0
 
 
 def test_multiple_bess_are_summed():
@@ -188,6 +188,51 @@ def test_multiple_bess_are_summed():
             "model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 2_000_000}},
     }}}
     specs = resolve_bess_specs(cfg)
-    assert bess_capacity_charge_lkr_for_year(specs, 0) == pytest.approx(
+    assert bess_revenue_lkr_for_year(specs, 0) == pytest.approx(
         (10 * 1_000_000 + 5 * 2_000_000) * 12
     )
+
+
+# ── energy_tariff model (night-peak Solar+BESS) ─────────────────────────────────
+
+
+def _energy_cfg(**revenue_overrides) -> dict:
+    revenue = {"model": "energy_tariff", "tariff_lkr_per_kwh": 45.80,
+               "cycles_per_year": 365, "round_trip_efficiency": 0.90}
+    revenue.update(revenue_overrides)
+    return {"generation": {"technologies": {"bess_pv": {
+        "type": "bess", "power_mw": 10.0, "energy_mwh": 40.0, "revenue": revenue}}}}
+
+
+def test_energy_tariff_revenue_formula():
+    specs = resolve_bess_specs(_energy_cfg(contract_years=10))
+    assert specs[0]["model"] == "energy_tariff"
+    # energy_mwh × 1000 × cycles × RTE × availability × tariff
+    expected = 40.0 * 1000 * 365 * 0.90 * 1.0 * 45.80
+    assert bess_revenue_lkr_for_year(specs, 0) == pytest.approx(expected)
+    assert bess_revenue_lkr_for_year(specs, 9) == pytest.approx(expected)  # last yr
+    assert bess_revenue_lkr_for_year(specs, 10) == 0.0  # contract expired
+
+
+def test_energy_tariff_defaults_cycles_and_rte():
+    s = resolve_bess_specs({"generation": {"technologies": {"b": {
+        "type": "bess", "power_mw": 10.0, "energy_mwh": 40.0,
+        "revenue": {"model": "energy_tariff", "tariff_lkr_per_kwh": 45.80}}}}})[0]
+    assert s["cycles_per_year"] == 365.0       # one cycle/day default
+    assert s["round_trip_efficiency"] == 0.90  # default RTE
+
+
+@pytest.mark.parametrize("block, match", [
+    ({"type": "bess", "power_mw": 10, "revenue": {"model": "energy_tariff"}}, "energy_mwh"),
+    ({"type": "bess", "power_mw": 10, "energy_mwh": 40,
+      "revenue": {"model": "energy_tariff"}}, "tariff_lkr_per_kwh"),
+    ({"type": "bess", "power_mw": 10, "energy_mwh": 40, "revenue": {
+        "model": "energy_tariff", "tariff_lkr_per_kwh": 45.8, "cycles_per_year": 0}},
+     "cycles_per_year"),
+    ({"type": "bess", "power_mw": 10, "energy_mwh": 40, "revenue": {
+        "model": "energy_tariff", "tariff_lkr_per_kwh": 45.8, "round_trip_efficiency": 1.5}},
+     "round_trip_efficiency"),
+])
+def test_energy_tariff_malformed_fails_loud(block, match):
+    with pytest.raises(ValueError, match=match):
+        resolve_bess_specs({"generation": {"technologies": {"b": block}}})

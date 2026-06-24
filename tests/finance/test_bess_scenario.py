@@ -21,6 +21,7 @@ from finance.cashflow_v14_production import resolve_tech_generation_specs
 
 _REPO = Path(__file__).resolve().parents[2]
 _CEB = _REPO / "scenarios" / "ceb_bess_10mw_capacity_charge.yaml"
+_NIGHTPEAK = _REPO / "scenarios" / "ceb_solar_bess_nightpeak_10mw.yaml"
 _HYBRID = _REPO / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 _LENDER = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
@@ -40,6 +41,20 @@ def test_standalone_bess_books_flat_capacity_charge():
     kpis = out["kpis"]
     assert kpis["min_dscr"] > 0
     assert isinstance(kpis["project_irr"], float)  # runs end-to-end (debt/IRR resolve)
+
+
+@pytest.mark.skipif(not _NIGHTPEAK.exists(), reason="night-peak scenario not present")
+def test_energy_tariff_scenario_books_night_peak_revenue():
+    out = evaluate_with_overrides(
+        raw_config=load_scenario_config(_NIGHTPEAK), overrides={}, return_full_result=True
+    )
+    rows = out["annual_rows"]
+    assert len(rows) == 10  # 10-year night-peak contract term
+    expected = 40 * 1000 * 365 * 0.90 * 1.0 * 45.80  # energy_mwh×1000×cycles×RTE×avail×tariff
+    for row in rows:
+        assert row["bess_revenue_lkr"] == pytest.approx(expected)
+        assert row["generation_revenue_lkr"] == pytest.approx(0.0)  # BESS-incremental
+    assert out["kpis"]["project_irr"] > 0  # the 45.80 LKR/kWh night-peak tariff is lucrative
 
 
 @pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")

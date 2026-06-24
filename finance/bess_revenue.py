@@ -32,12 +32,18 @@ sub-97% availability month, are *downside* levers; they are exposed here as opti
 multipliers (``availability_factor`` / ``dispatchable_ratio``) rather than modelled
 from a dispatch simulation, which the engine does not run.
 
-This module covers ``model: capacity_charge`` only. Two other CEB BESS structures are
-out of scope: (1) a BESS charged by an existing solar PV plant paid an energy tariff for
-night-peak export — a different ``revenue.model`` (energy / time-shift); and (2) the
-Kolonnawa 100 MW single-site project, a CEB-owned night-peak supply procured via an EPC
-contract — a construction-margin deal, not an operational tolling/tariff stream, so it
-does not belong on this operational cashflow path at all.
+This module covers two ``revenue.model`` values: ``capacity_charge`` (above) and
+``energy_tariff`` — a BESS charged by an existing solar PV plant and paid a flat tariff
+for night-peak energy exported (the CEB Solar+BESS night-peak scheme, 45.80 LKR/kWh)::
+
+    annual_lkr = energy_mwh × 1000 × cycles_per_year × round_trip_efficiency
+                 × availability_factor × tariff_lkr_per_kwh
+
+flat over ``contract_years`` (``cycles_per_year`` defaults to 365 — one cycle/day;
+``round_trip_efficiency`` to 0.90). Out of scope: the Kolonnawa 100 MW single-site
+project — a CEB-owned night-peak supply procured via an EPC contract, i.e. a
+construction-margin deal, not an operational tolling/tariff stream, so it does not belong
+on this operational cashflow path at all.
 """
 
 from __future__ import annotations
@@ -49,9 +55,20 @@ from typing import Any, Dict, List, Mapping, Optional
 BESS_TYPE = "bess"
 
 #: Revenue models this module understands.
-SUPPORTED_BESS_REVENUE_MODELS = ("capacity_charge",)
+#:
+#: * ``capacity_charge`` — availability tolling: ``R × power_mw × 12`` (LKR/MW/month),
+#:   the CEB distributed standalone-BESS tender.
+#: * ``energy_tariff`` — a BESS charged by an existing solar PV plant, paid a flat tariff
+#:   for night-peak energy exported: ``energy_mwh × 1000 × cycles_per_year × RTE ×
+#:   tariff_lkr_per_kwh`` (the CEB Solar+BESS night-peak scheme, 45.80 LKR/kWh).
+SUPPORTED_BESS_REVENUE_MODELS = ("capacity_charge", "energy_tariff")
 
 _MONTHS_PER_YEAR = 12.0
+_KWH_PER_MWH = 1000.0
+#: Default cycles/year for an energy-tariff BESS (one charge/discharge per day).
+_DEFAULT_CYCLES_PER_YEAR = 365.0
+#: Default AC-AC round-trip efficiency (Ember 2025, upper-end LFP utility).
+_DEFAULT_ROUND_TRIP_EFFICIENCY = 0.90
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -193,14 +210,6 @@ def resolve_bess_specs(
                 f"supported; expected one of {SUPPORTED_BESS_REVENUE_MODELS}."
             )
 
-        r_lkr = _as_float(revenue.get("capacity_charge_lkr_per_mw_month"))
-        if r_lkr is None or r_lkr < 0:
-            raise ValueError(
-                f"generation.technologies['{name}'].revenue."
-                "capacity_charge_lkr_per_mw_month must be a non-negative number "
-                "(LKR/MW/month, the bid Capacity Charge Rate)."
-            )
-
         contract_years_raw = revenue.get("contract_years")
         contract_years: Optional[int] = None
         if contract_years_raw is not None:
@@ -213,44 +222,109 @@ def resolve_bess_specs(
                 )
             contract_years = int(cy_float)
 
+        # availability_factor is a common derate ([0, 1]); the rest is model-specific.
         availability = _unit_factor(
             revenue.get("availability_factor"), tech=str(name), field="availability_factor"
         )
-        dispatchable = _unit_factor(
-            revenue.get("dispatchable_ratio"), tech=str(name), field="dispatchable_ratio"
-        )
+        spec: Dict[str, Any] = {
+            "technology": str(name),
+            "model": model,
+            "power_mw": power_mw,
+            "contract_years": contract_years,
+            "availability_factor": availability,
+        }
 
-        specs.append(
-            {
-                "technology": str(name),
-                "power_mw": power_mw,
-                "r_lkr_per_mw_month": r_lkr,
-                "contract_years": contract_years,
-                "availability_factor": availability,
-                "dispatchable_ratio": dispatchable,
-            }
-        )
+        if model == "capacity_charge":
+            r_lkr = _as_float(revenue.get("capacity_charge_lkr_per_mw_month"))
+            if r_lkr is None or r_lkr < 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue."
+                    "capacity_charge_lkr_per_mw_month must be a non-negative number "
+                    "(LKR/MW/month, the bid Capacity Charge Rate)."
+                )
+            spec["r_lkr_per_mw_month"] = r_lkr
+            spec["dispatchable_ratio"] = _unit_factor(
+                revenue.get("dispatchable_ratio"), tech=str(name), field="dispatchable_ratio"
+            )
+        elif model == "energy_tariff":
+            if energy_mwh is None or energy_mwh <= 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].energy_mwh must be a positive "
+                    "number for the energy_tariff model (it sets the energy exported "
+                    "per cycle)."
+                )
+            tariff = _as_float(revenue.get("tariff_lkr_per_kwh"))
+            if tariff is None or tariff < 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.tariff_lkr_per_kwh must "
+                    "be a non-negative number (the night-peak export tariff)."
+                )
+            cycles = _as_float(revenue.get("cycles_per_year"))
+            cycles = _DEFAULT_CYCLES_PER_YEAR if cycles is None else cycles
+            if cycles <= 0:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.cycles_per_year="
+                    f"{cycles} is invalid (must be > 0)."
+                )
+            rte_raw = revenue.get("round_trip_efficiency")
+            spec["round_trip_efficiency"] = (
+                _DEFAULT_ROUND_TRIP_EFFICIENCY
+                if rte_raw is None
+                else _unit_factor(rte_raw, tech=str(name), field="round_trip_efficiency")
+            )
+            spec["energy_mwh"] = energy_mwh
+            spec["tariff_lkr_per_kwh"] = tariff
+            spec["cycles_per_year"] = cycles
+        else:  # pragma: no cover - guarded by the SUPPORTED_BESS_REVENUE_MODELS check
+            raise AssertionError(f"unhandled BESS revenue model {model!r}")
+
+        specs.append(spec)
 
     return specs or None
 
 
-def bess_capacity_charge_lkr_for_year(
+def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
+    """The flat annual BESS revenue (LKR) for one resolved spec, by its model."""
+    model = spec["model"]
+    if model == "capacity_charge":
+        return float(
+            spec["r_lkr_per_mw_month"]
+            * spec["power_mw"]
+            * _MONTHS_PER_YEAR
+            * spec["availability_factor"]
+            * spec["dispatchable_ratio"]
+        )
+    if model == "energy_tariff":
+        return float(
+            spec["energy_mwh"]
+            * _KWH_PER_MWH
+            * spec["cycles_per_year"]
+            * spec["round_trip_efficiency"]
+            * spec["availability_factor"]
+            * spec["tariff_lkr_per_kwh"]
+        )
+    raise AssertionError(  # pragma: no cover - specs only carry supported models
+        f"unhandled BESS revenue model {model!r}"
+    )
+
+
+def bess_revenue_lkr_for_year(
     specs: Optional[List[Dict[str, Any]]], year_index: int
 ) -> float:
-    """Total BESS capacity-charge revenue (LKR) for one operating year.
+    """Total BESS revenue (LKR) for one operating year, summed over every spec.
 
-    Sums the flat annual capacity charge over every BESS spec, paying each only while
-    the operating year is within its ``contract_years`` window (a spec with
-    ``contract_years is None`` is paid every year). ``year_index`` is 0-based
-    (operating year 1 → 0).
+    Dispatches by each spec's ``model`` (``capacity_charge`` or ``energy_tariff``) and
+    pays each only while the operating year is within its ``contract_years`` window (a
+    spec with ``contract_years is None`` is paid every year). ``year_index`` is 0-based
+    (operating year 1 → 0). The per-spec revenue is flat — no escalation.
 
     Args:
         specs: Resolved BESS specs from :func:`resolve_bess_specs`, or ``None``.
         year_index: Zero-based operating-year index.
 
     Returns:
-        The combined capacity-charge revenue in LKR (``0.0`` when ``specs`` is empty
-        or every BESS contract has expired for this year).
+        The combined BESS revenue in LKR (``0.0`` when ``specs`` is empty or every BESS
+        contract has expired for this year).
     """
     if not specs:
         return 0.0
@@ -259,13 +333,7 @@ def bess_capacity_charge_lkr_for_year(
         contract_years = spec["contract_years"]
         if contract_years is not None and year_index >= contract_years:
             continue
-        total += (
-            spec["r_lkr_per_mw_month"]
-            * spec["power_mw"]
-            * _MONTHS_PER_YEAR
-            * spec["availability_factor"]
-            * spec["dispatchable_ratio"]
-        )
+        total += _spec_annual_revenue_lkr(spec)
     return total
 
 
@@ -273,5 +341,5 @@ __all__ = [
     "BESS_TYPE",
     "SUPPORTED_BESS_REVENUE_MODELS",
     "resolve_bess_specs",
-    "bess_capacity_charge_lkr_for_year",
+    "bess_revenue_lkr_for_year",
 ]
