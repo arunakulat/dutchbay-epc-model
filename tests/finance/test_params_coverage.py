@@ -210,6 +210,48 @@ def test_build_clean_config_passes_required_guard() -> None:
 
 
 # ---------------------------------------------------------------------------
+# enhanced_capital_allowance_pct — Wave-1 unit-trap remediation
+#
+# Regression pins for the fix that removed the buggy `raw > 1 -> raw/100` percent
+# heuristic. The lever is an explicit MULTIPLIER on the depreciable base; the old
+# heuristic silently mangled the 1.5 (150%) multiplier that 9 of 10 scenarios use
+# into 0.015 — a 100x-too-small depreciation base.
+# ---------------------------------------------------------------------------
+
+
+def test_enhanced_allowance_multiplier_taken_as_is() -> None:
+    """A 1.5 (150% enhanced) multiplier resolves to 1.5, NOT the old buggy 0.015."""
+    cfg = _cfg()
+    cfg["tax"]["enhanced_capital_allowance_pct"] = 1.5
+    params = _build_cashflow_params(cfg)
+    assert params.enhanced_capital_allowance_pct == pytest.approx(1.5)
+
+
+def test_enhanced_allowance_zero_is_preserved_not_defaulted() -> None:
+    """A legitimate 0.0 is preserved (CESSPIT), not coerced to 1.0 by an `or`."""
+    cfg = _cfg()
+    cfg["tax"]["enhanced_capital_allowance_pct"] = 0.0
+    params = _build_cashflow_params(cfg)
+    assert params.enhanced_capital_allowance_pct == 0.0
+
+
+def test_enhanced_allowance_absent_defaults_to_unity() -> None:
+    """When the key is absent the multiplier defaults to 1.0 (standard allowance)."""
+    cfg = _cfg()
+    cfg["tax"].pop("enhanced_capital_allowance_pct", None)
+    params = _build_cashflow_params(cfg)
+    assert params.enhanced_capital_allowance_pct == pytest.approx(1.0)
+
+
+def test_enhanced_allowance_negative_raises() -> None:
+    """A negative multiplier fails loud rather than silently corrupting depreciation."""
+    cfg = _cfg()
+    cfg["tax"]["enhanced_capital_allowance_pct"] = -0.5
+    with pytest.raises(ValueError, match="enhanced_capital_allowance_pct"):
+        _build_cashflow_params(cfg)
+
+
+# ---------------------------------------------------------------------------
 # _extract_parameters
 # ---------------------------------------------------------------------------
 
