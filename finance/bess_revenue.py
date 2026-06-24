@@ -20,10 +20,12 @@ Revenue, per BESS, per year within the contract term::
 where ``R`` is the bid Capacity Charge Rate. ``availability_factor`` (default ``1.0``)
 derates the charge when monthly availability falls below the 97% guarantee — at or
 above 97% the tender applies no availability derate, hence the ``1.0`` default.
-``dispatchable_ratio`` (default ``1.0``) is the ADSC/MDSC degradation factor (capped at
-1.0): the BESS is assumed augmented/sized to hold its Minimum Dispatchable Storage
-Capacity schedule, so the charge is undiminished. The charge is **flat — no
-escalation** — per the tender, paid for ``contract_years`` (then zero).
+``dispatchable_ratio`` (default ``1.0``) is the ADSC/MDSC degradation factor: the BESS is
+assumed augmented/sized to hold its Minimum Dispatchable Storage Capacity schedule, so the
+charge is undiminished. Both ``availability_factor`` and ``dispatchable_ratio`` are derate
+factors that must lie in ``[0, 1]``; a value outside that range is a config error and
+**raises** (it is not silently clamped). The charge is **flat — no escalation** — per the
+tender, paid for ``contract_years`` (then zero).
 
 NB: the round-trip-efficiency and functional-performance liquidated damages, and a
 sub-97% availability month, are *downside* levers; they are exposed here as optional
@@ -40,6 +42,7 @@ does not belong on this operational cashflow path at all.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Mapping, Optional
 
 #: The explicit per-technology type discriminator value marking a storage block.
@@ -62,11 +65,16 @@ def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
 
 
 def _as_float(value: Any) -> Optional[float]:
-    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool."""
+    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool/non-finite.
+
+    NaN and ±inf return ``None`` so they are caught by the callers' fail-loud guards
+    rather than silently poisoning the capacity charge (and thence CFADS/IRR/DSCR).
+    """
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        coerced = float(value)
+        return coerced if math.isfinite(coerced) else None
     return None
 
 
@@ -109,8 +117,8 @@ def resolve_bess_specs(
     non-numeric value raises (CESSPIT fail-loud — a mis-keyed BESS must not silently
     earn zero). Optional: ``revenue.contract_years`` (default ``None`` → paid for the
     full project life), ``revenue.availability_factor`` and
-    ``revenue.dispatchable_ratio`` (default ``1.0``; ``dispatchable_ratio`` is clamped
-    to ``[0, 1]``).
+    ``revenue.dispatchable_ratio`` (each default ``1.0``; a derate factor that must lie
+    in ``[0, 1]`` — a value outside that range raises, it is not clamped).
 
     Args:
         config: A loaded scenario config mapping.

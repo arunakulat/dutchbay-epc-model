@@ -136,6 +136,22 @@ def test_capacity_charge_is_the_only_supported_model():
     assert SUPPORTED_BESS_REVENUE_MODELS == ("capacity_charge",)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_power_mw_is_rejected(bad):
+    cfg = {"generation": {"technologies": {"b": {"type": "bess", "power_mw": bad,
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    with pytest.raises(ValueError, match="power_mw"):
+        resolve_bess_specs(cfg)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_non_finite_capacity_charge_rate_is_rejected(bad):
+    cfg = {"generation": {"technologies": {"b": {"type": "bess", "power_mw": 10,
+        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": bad}}}}}
+    with pytest.raises(ValueError, match="capacity_charge_lkr_per_mw_month"):
+        resolve_bess_specs(cfg)
+
+
 # ── the annual charge ───────────────────────────────────────────────────────────
 
 

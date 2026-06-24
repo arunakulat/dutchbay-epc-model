@@ -68,6 +68,7 @@ misleading.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -123,11 +124,12 @@ def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
 
 
 def _as_float(value: Any) -> Optional[float]:
-    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool."""
+    """Coerce a config scalar to ``float``; ``None`` for absent/non-numeric/bool/non-finite."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        coerced = float(value)
+        return coerced if math.isfinite(coerced) else None
     return None
 
 
