@@ -49,6 +49,7 @@ from analytics.portfolio.multi_tech_tornado import (  # noqa: E402
     DEFAULT_METRICS,
     DEFAULT_SHOCK_PCT,
     MultiTechTornadoBar,
+    applicable_storage_drivers,
     discover_generation_technologies,
     discover_non_generation_technologies,
     discover_storage_technologies,
@@ -93,20 +94,28 @@ def bars_to_dataframe(bars: List[MultiTechTornadoBar]) -> pd.DataFrame:
 def _print_coverage(config: dict) -> None:
     """Report which technologies were swept vs present-but-not-swept (stderr).
 
-    Keeps a hybrid-with-storage tornado honest: storage/BESS carries no generation
-    in the current finance engine, so it is named here rather than silently dropped.
+    Keeps a hybrid-with-storage tornado honest: a storage/BESS block is swept on its
+    capacity-charge driver if it carries one; anything not sweepable is named here
+    rather than silently dropped.
     """
-    swept = discover_generation_technologies(config)
-    not_swept = discover_non_generation_technologies(config)
-    print(f"\n=== Technologies swept (generation): {', '.join(swept) or 'none'} ===",
-          file=sys.stderr)
+    gen = discover_generation_technologies(config)
+    storage_swept = [
+        t for t in discover_storage_technologies(config) if applicable_storage_drivers(config, t)
+    ]
+    swept = gen + storage_swept
+    not_swept = [
+        t for t in discover_non_generation_technologies(config) if t not in set(storage_swept)
+    ]
+    print(
+        f"\n=== Technologies swept: {', '.join(swept) or 'none'} "
+        f"(generation: {', '.join(gen) or 'none'}; storage/BESS: "
+        f"{', '.join(storage_swept) or 'none'}) ===",
+        file=sys.stderr,
+    )
     if not_swept:
-        storage = discover_storage_technologies(config)
-        storage_note = f" (storage/BESS: {', '.join(storage)})" if storage else ""
         print(
-            f"  NOT swept (non-generation){storage_note}: {', '.join(not_swept)} — "
-            "storage economics are not yet modelled in the finance engine, so these "
-            "carry no IRR/covenant sensitivity to sweep.",
+            f"  NOT swept (no sweepable driver): {', '.join(not_swept)} — e.g. storage "
+            "without a revenue.capacity_charge_lkr_per_mw_month lever.",
             file=sys.stderr,
         )
 
@@ -195,17 +204,16 @@ def main(argv: List[str] | None = None) -> int:
         storage = discover_storage_technologies(config)
         if storage:
             print(
-                "[run_multi_tech_tornado] ERROR: scenario declares only "
-                f"non-generation technologies {discover_non_generation_technologies(config)} "
-                f"(storage/BESS: {', '.join(storage)}). Storage economics are not yet "
-                "modelled in the finance engine, so there is nothing to sweep.",
+                "[run_multi_tech_tornado] ERROR: the storage/BESS technologies "
+                f"({', '.join(storage)}) carry no sweepable revenue lever — a BESS needs "
+                "revenue.capacity_charge_lkr_per_mw_month to be swept.",
                 file=sys.stderr,
             )
         else:
             print(
-                "[run_multi_tech_tornado] ERROR: no generation technologies found under "
-                "generation.technologies — this CLI needs a scenario with at least one "
-                "generation technology (wind/solar/…).",
+                "[run_multi_tech_tornado] ERROR: no sweepable technologies found under "
+                "generation.technologies — needs a generation tech (wind/solar/…) or a "
+                "type: bess block with a capacity-charge rate.",
                 file=sys.stderr,
             )
         return 2

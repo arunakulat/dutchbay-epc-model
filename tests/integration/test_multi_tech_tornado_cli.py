@@ -16,6 +16,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 _HYBRID = _REPO / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 _WIND_ONLY = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+_CEB_BESS = _REPO / "scenarios" / "ceb_bess_10mw_capacity_charge.yaml"
 
 pd = pytest.importorskip("pandas")
 yaml = pytest.importorskip("yaml")
@@ -109,13 +110,26 @@ def test_storage_block_reported_not_swept(tmp_path: Path, capsys):
     assert "NOT swept" in err
 
 
+@pytest.mark.skipif(not _CEB_BESS.exists(), reason="CEB BESS scenario not present")
+def test_standalone_bess_scenario_is_swept(tmp_path: Path, capsys):
+    """A standalone storage-only scenario is now swept on its capacity-charge driver."""
+    cli = _load_cli()
+    out = tmp_path / "bess.csv"
+    rc = cli.main(["--config", str(_CEB_BESS), "--metric", "project_irr", "--output", str(out)])
+    assert rc == 0
+    df = pd.read_csv(out)
+    assert set(df["technology"]) == {"bess_unit"}
+    assert (df["driver"] == "capacity_charge_lkr_per_mw_month").all()
+    assert "storage/BESS: bess_unit" in capsys.readouterr().err
+
+
 @pytest.mark.skipif(not _WIND_ONLY.exists(), reason="wind-only scenario not present")
 def test_non_multitech_scenario_exits_clean(capsys):
     """A wind-only scenario has no generation.technologies -> clean exit 2, no CSV."""
     cli = _load_cli()
     rc = cli.main(["--config", str(_WIND_ONLY)])
     assert rc == 2
-    assert "no generation technologies" in capsys.readouterr().err
+    assert "no sweepable technologies" in capsys.readouterr().err
 
 
 @pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")

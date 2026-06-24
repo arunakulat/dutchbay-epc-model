@@ -12,13 +12,14 @@ Technology independence
 Nothing here is wind-specific: a *generation* technology is any block carrying a
 ``capacity_factor`` (wind, solar, tidal, run-of-river, …), discovered and swept on
 the same footing, so the tool works for wind-only, solar-only, or any hybrid. A
-*storage* technology (e.g. BESS — a ``power_mw`` / ``energy_mwh`` rating, no
-capacity factor) contributes no generation/CFADS in the current finance engine
-(:func:`finance.cashflow_v14_production.resolve_tech_generation_specs` skips it), so
-it is **detected and reported but not swept** — sweeping it would be a phantom axis
-until storage economics are modelled. Non-generation blocks are surfaced (a
-``WARNING`` from :func:`run_multi_tech_tornado`; an explicit line in the CLI) so a
-hybrid-with-storage tornado is never mistaken for a complete one.
+*storage* technology (``type: bess`` — a ``power_mw`` rating, no capacity factor) is
+**also swept**, on its own driver: the bid Capacity Charge Rate
+(``revenue.capacity_charge_lkr_per_mw_month``), which is now a live finance driver
+(the BESS capacity charge ``R × power_mw × 12`` flows through the cashflow —
+:mod:`finance.bess_revenue`). So a wind+solar+BESS hybrid, or a standalone BESS,
+ranks the BESS alongside the generation techs. Any block that is neither a generation
+tech nor a sweepable storage tech (e.g. storage without a revenue lever) is surfaced
+via a ``WARNING`` so a tornado is never mistaken for a complete one.
 
 Why *coupled* overrides (and not a plain one-way path sweep)
 ------------------------------------------------------------
@@ -93,6 +94,14 @@ _BESS_TYPE = "bess"
 #: (see module docstring). ``capex_usd`` / ``capacity_factor`` / ``degradation_pct``
 #: are the per-tech config fields under ``generation.technologies.<tech>``.
 DEFAULT_DRIVERS: Tuple[str, ...] = ("capex_usd", "capacity_factor", "degradation_pct")
+
+#: Per-storage (``type: bess``) finance levers swept. ``capacity_charge_lkr_per_mw_month``
+#: is the bid Capacity Charge Rate ``R`` — now a LIVE driver (the BESS capacity charge
+#: ``R × power_mw × 12`` flows through the cashflow), so a storage block is swept rather
+#: than merely detected. Each is a per-tech field under
+#: ``generation.technologies.<tech>.revenue`` and shocks directly (no coupling needed —
+#: the charge is additive and not part of the generation reconciliation).
+DEFAULT_STORAGE_DRIVERS: Tuple[str, ...] = ("capacity_charge_lkr_per_mw_month",)
 
 #: KPIs reported per bar, in display order. ``min_dscr`` is retained (the canonical
 #: lender covenant) even though dual-DSCR sizing pins it; ``balloon_pct`` carries the
@@ -376,6 +385,52 @@ def build_coupled_override(
     raise AssertionError(f"unhandled driver {driver!r}")  # pragma: no cover
 
 
+def applicable_storage_drivers(
+    config: Mapping[str, Any],
+    tech: str,
+    drivers: Sequence[str] = DEFAULT_STORAGE_DRIVERS,
+) -> List[str]:
+    """Return the storage drivers whose per-tech ``revenue`` field is present.
+
+    A storage driver is only swept when its field exists under
+    ``generation.technologies.<tech>.revenue`` (e.g. a BESS without a capacity-charge
+    rate yields no bar rather than a phantom one).
+    """
+    present: List[str] = []
+    for driver in drivers:
+        value = _nested_get(config, "generation", "technologies", tech, "revenue", driver)
+        if _as_float(value) is not None:
+            present.append(driver)
+    return present
+
+
+def build_storage_override(
+    config: Mapping[str, Any], tech: str, driver: str, multiplier: float
+) -> Dict[str, float]:
+    """Build the (direct, single-key) override for one storage (tech, driver) shock.
+
+    Unlike a generation driver, a storage revenue lever needs no coupling: the BESS
+    capacity charge is additive and not part of the year-1 generation reconciliation,
+    so the per-tech ``revenue`` field is shocked directly.
+
+    Raises:
+        ValueError: The driver is unknown, or the per-tech field is absent/invalid.
+    """
+    if driver not in DEFAULT_STORAGE_DRIVERS:
+        raise ValueError(
+            f"unknown storage driver {driver!r}; expected one of {DEFAULT_STORAGE_DRIVERS}."
+        )
+    base = _as_float(
+        _nested_get(config, "generation", "technologies", tech, "revenue", driver)
+    )
+    if base is None:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.{driver} is absent or "
+            "non-numeric; cannot build a storage override for it."
+        )
+    return {f"generation.technologies.{tech}.revenue.{driver}": base * multiplier}
+
+
 def _metric_value(kpis: Mapping[str, Any], metric: str) -> float:
     """Extract a numeric KPI, failing loud if it is absent or non-numeric."""
     if metric not in kpis:
@@ -403,6 +458,7 @@ def run_multi_tech_tornado(
     *,
     metrics: Sequence[str] = DEFAULT_METRICS,
     drivers: Sequence[str] = DEFAULT_DRIVERS,
+    storage_drivers: Sequence[str] = DEFAULT_STORAGE_DRIVERS,
     shock_pct: float = DEFAULT_SHOCK_PCT,
 ) -> List[MultiTechTornadoBar]:
     """Run the per-technology tornado for a multi-tech scenario.
@@ -429,24 +485,30 @@ def run_multi_tech_tornado(
     if not 0.0 < shock_pct < 1.0:
         raise ValueError(f"shock_pct must be in (0, 1); got {shock_pct}.")
 
-    technologies = discover_generation_technologies(config)
+    gen_techs = discover_generation_technologies(config)
+    # Storage (BESS) is now swept too — its capacity charge is a live finance driver.
+    # Only storage blocks carrying a sweepable revenue lever are included.
+    storage_techs = [
+        t
+        for t in discover_storage_technologies(config)
+        if applicable_storage_drivers(config, t, storage_drivers)
+    ]
 
-    # Never silently drop a non-generation block. Storage/BESS (and any other
-    # non-generation tech) contributes no CFADS in the current engine, so it is not
-    # swept; warn so a hybrid-with-storage tornado cannot be mistaken for complete.
-    skipped = discover_non_generation_technologies(config)
-    if skipped:
-        storage = discover_storage_technologies(config)
+    # Never silently drop a tech block. Anything non-generation that we cannot sweep
+    # (storage without a sweepable revenue lever, or some other kind) is warned about so
+    # a tornado is never mistaken for complete.
+    swept_storage = set(storage_techs)
+    unswept = [t for t in discover_non_generation_technologies(config) if t not in swept_storage]
+    if unswept:
         logger.warning(
-            "multi-tech tornado: not sweeping %d non-generation technology block(s) "
-            "%s (storage/BESS economics are not modelled in the finance engine yet, "
-            "so a sensitivity sweep of them would be a phantom). Storage blocks: %s.",
-            len(skipped),
-            skipped,
-            storage or "none",
+            "multi-tech tornado: not sweeping %d technology block(s) %s — they are "
+            "non-generation and carry no sweepable driver (e.g. storage without a "
+            "revenue lever).",
+            len(unswept),
+            unswept,
         )
 
-    if not technologies:
+    if not gen_techs and not storage_techs:
         return []
 
     base_kpis = _evaluate(config, {})
@@ -454,22 +516,39 @@ def run_multi_tech_tornado(
 
     low_mult, high_mult = 1.0 - shock_pct, 1.0 + shock_pct
     bars: List[MultiTechTornadoBar] = []
-    for tech in technologies:
-        for driver in applicable_drivers(config, tech, drivers):
-            low_kpis = _evaluate(config, build_coupled_override(config, tech, driver, low_mult))
-            high_kpis = _evaluate(config, build_coupled_override(config, tech, driver, high_mult))
-            for metric in metrics:
-                bars.append(
-                    MultiTechTornadoBar(
-                        technology=tech,
-                        driver=driver,
-                        metric=metric,
-                        base_case=base_by_metric[metric],
-                        low_case=_metric_value(low_kpis, metric),
-                        high_case=_metric_value(high_kpis, metric),
-                        shock_pct=shock_pct,
-                    )
+
+    def _emit(
+        tech: str, driver: str, low_kpis: Mapping[str, Any], high_kpis: Mapping[str, Any]
+    ) -> None:
+        for metric in metrics:
+            bars.append(
+                MultiTechTornadoBar(
+                    technology=tech,
+                    driver=driver,
+                    metric=metric,
+                    base_case=base_by_metric[metric],
+                    low_case=_metric_value(low_kpis, metric),
+                    high_case=_metric_value(high_kpis, metric),
+                    shock_pct=shock_pct,
                 )
+            )
+
+    for tech in gen_techs:
+        for driver in applicable_drivers(config, tech, drivers):
+            _emit(
+                tech,
+                driver,
+                _evaluate(config, build_coupled_override(config, tech, driver, low_mult)),
+                _evaluate(config, build_coupled_override(config, tech, driver, high_mult)),
+            )
+    for tech in storage_techs:
+        for driver in applicable_storage_drivers(config, tech, storage_drivers):
+            _emit(
+                tech,
+                driver,
+                _evaluate(config, build_storage_override(config, tech, driver, low_mult)),
+                _evaluate(config, build_storage_override(config, tech, driver, high_mult)),
+            )
 
     # Group by metric (preserve requested order), sort each group by |impact| desc.
     metric_order = {m: i for i, m in enumerate(metrics)}
