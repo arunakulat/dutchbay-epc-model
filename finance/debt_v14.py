@@ -680,7 +680,7 @@ def _solve_gearing_for_dscr(
     a tolerance ``dscr_tol`` is used to treat the plateau as "meets target" and converge on
     its upper edge rather than chasing floating-point noise deep inside it. Unlike the
     closed-form :func:`size_debt_with_dual_dscr`, this drives the actual amortization engine
-    (grace period, declining-CFADS tail), so the achieved DSCR lands on target. If min DSCR
+    (interest-only period, declining-CFADS tail), so the achieved DSCR lands on target. If min DSCR
     at ``max_ratio`` already meets the target, ``max_ratio`` is returned unchanged.
     """
 
