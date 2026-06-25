@@ -140,9 +140,25 @@ def _derive_scenario_name(config: Optional[Mapping[str, Any]]) -> str:
 
 
 def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
-    """Extract total CAPEX from canonical, legacy, or compact lender schemas."""
+    """Extract total CAPEX from canonical, legacy, or compact lender schemas.
+
+    When ``capex.derive_from_breakdown`` is set, the capex is the bottom-up breakdown
+    sum (recomputed via the AACE QRA contingency when ``contingency.method == 'qra'``).
+    This MUST match the basis the debt engine sizes on, so we delegate to the single
+    resolver ``finance.debt_v14._extract_capex_usd`` rather than reading the flat
+    ``usd_total`` here — otherwise the NPV/IRR capex base could silently diverge from the
+    debt capex base (up to the 0.5% breakdown tolerance, or the full QRA delta). The flat
+    ``usd_total`` path below is unchanged for scenarios that do not derive from breakdown
+    (the canonical lendercase), so they stay byte-identical.
+    """
     if not config:
         return 0.0
+
+    capex_section = _section_case_insensitive(config, "capex")
+    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+        from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
+
+        return float(_resolve_capex_bottom_up(dict(config)))
 
     section_candidates = [
         ("finance", ("capex_total_usd", "capex_usd")),
