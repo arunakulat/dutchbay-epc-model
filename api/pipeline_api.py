@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -201,6 +202,19 @@ def _as_map(value: Any) -> Dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _avg_finite_dscr(debt: Mapping[str, Any]) -> Optional[float]:
+    """Mean of the finite DSCR values, or None. The debt_result has no 'dscr_mean' key, so
+    DebtBlock.avg_dscr was structurally always null; derive it from the raw (full-timeline)
+    DSCR series, dropping None/non-finite construction-period sentinels."""
+    series = debt.get("raw_dscr_series") or debt.get("dscr_series") or []
+    vals = [
+        float(x)
+        for x in series
+        if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(float(x))
+    ]
+    return sum(vals) / len(vals) if vals else None
+
+
 # The LKR/USD spot is pinned in three places (the cashflow reads fx.start_lkr_per_usd, the
 # FX reporting block reads fx.rates.lkr_per_usd first); _assert_fx_spot_consistency requires
 # them equal. A client tuning the documented fx.start_lkr_per_usd override would otherwise
@@ -224,6 +238,16 @@ def _sync_fx_spot_override(
     """
     touched = [k for k in _FX_SPOT_OVERRIDE_KEYS if k in overrides]
     if not touched:
+        return cfg
+    # Only fan out when the touched spot keys AGREE (or just one was set). If a client
+    # overrides two/three spot keys to DIFFERENT values, do NOT silently pick a winner —
+    # leave them as-authored so the downstream _assert_fx_spot_consistency rejects the
+    # contradiction with a clear 422 (its whole purpose; round-4 fix).
+    try:
+        distinct = {float(overrides[k]) for k in touched}
+    except (TypeError, ValueError):
+        return cfg  # non-numeric override -> let the engine/validator handle it
+    if len(distinct) > 1:
         return cfg
     # Prefer the canonical start key; otherwise the first key the client actually set.
     new_rate = overrides.get("fx.start_lkr_per_usd", overrides[touched[0]])
@@ -290,7 +314,16 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         for name in principals
     }
 
-    dscr_series = debt.get("dscr_series") or list((debt.get("dscr_by_year") or {}).values())
+    # Use the FULL-TIMELINE raw_dscr_series (length matches debt_outstanding /
+    # debt_service_total, with None in construction periods), NOT the compacted public
+    # dscr_series (operating years only) — zipping the compacted series row-by-row against
+    # the full-timeline outstanding/service misaligned each row's DSCR by the construction
+    # offset (round-4 fix). Falls back to the compacted series only if raw is absent.
+    dscr_series = (
+        debt.get("raw_dscr_series")
+        or debt.get("dscr_series")
+        or list((debt.get("dscr_by_year") or {}).values())
+    )
     outstanding = debt.get("debt_outstanding") or []
     service = debt.get("debt_service_total") or debt.get("total_service") or []
     n_rows = max(len(dscr_series), len(outstanding), len(service))
@@ -318,7 +351,7 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         ),
         avg_debt_rate_pct=None if avg_rate is None else round(avg_rate * 100.0, 4),
         min_dscr=_f(debt.get("min_dscr")),
-        avg_dscr=_f(debt.get("dscr_mean")),
+        avg_dscr=_avg_finite_dscr(debt),
         tranches=tranches,
         balloon_pct=_f(debt.get("balloon_pct")),
         balloon_remaining_usd=_f(debt.get("balloon_remaining")),
