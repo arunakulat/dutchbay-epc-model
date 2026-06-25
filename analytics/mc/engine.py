@@ -120,6 +120,53 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
     }
 
 
+def _resolve_percentiles(raw: Any) -> Optional[Tuple[int, ...]]:
+    """Resolve a scenario's monte_carlo.percentiles into a sorted int tuple, else None.
+
+    Returns None (so the aggregator's documented default applies) when the key is absent
+    or malformed, rather than silently ignoring a well-formed request.
+    """
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return None
+    out: List[int] = []
+    for p in raw:
+        try:
+            out.append(int(p))
+        except (TypeError, ValueError):
+            return None
+    return tuple(sorted(out))
+
+
+def _tail_risk(
+    trial_metrics: Sequence[Mapping[str, Any]], confidence: float
+) -> Dict[str, Dict[str, float]]:
+    """Downside VaR/CVaR per metric at ``confidence`` from the raw trial arrays.
+
+    For return-style metrics (higher is better) the downside lives in the lower tail, so
+    VaR is the (1 - confidence) quantile and CVaR is the mean of the trials at or below it.
+    Consumes the scenario's var_confidence / cvar_confidence (previously ignored).
+    """
+    if not (0.0 < confidence < 1.0) or not trial_metrics:
+        return {}
+    q = 1.0 - confidence
+    keys = {k for tm in trial_metrics for k, v in tm.items()
+            if not k.startswith("_") and isinstance(v, (int, float)) and not isinstance(v, bool)}
+    out: Dict[str, Dict[str, float]] = {}
+    for k in sorted(keys):
+        vals = np.array(
+            [float(tm[k]) for tm in trial_metrics
+             if isinstance(tm.get(k), (int, float)) and not isinstance(tm.get(k), bool)],
+            dtype=float,
+        )
+        if vals.size == 0:
+            continue
+        var = float(np.quantile(vals, q))
+        tail = vals[vals <= var]
+        cvar = float(tail.mean()) if tail.size else var
+        out[k] = {"var": var, "cvar": cvar}
+    return out
+
+
 class MonteCarloEngine:
     """Canonical Monte Carlo engine."""
 
@@ -296,22 +343,45 @@ class MonteCarloEngine:
                 )
                 trial_metrics.append(_toy_metric_fallback(overrides))
 
-        result = aggregate_trials(
+        # Honor the scenario's monte_carlo reporting config (previously ignored): the
+        # requested percentiles drive the aggregator, and var_confidence / cvar_confidence
+        # compute downside VaR/CVaR per metric from the raw trial arrays.
+        mc_cfg = self._base_config.get("monte_carlo", {})
+        if not isinstance(mc_cfg, Mapping):
+            mc_cfg = {}
+        percentiles = _resolve_percentiles(mc_cfg.get("percentiles"))
+
+        meta: Dict[str, Any] = {
+            "seed": self._seed,
+            "sampler": "lhs",
+            "common_random_numbers": self._crn,
+            "n_trials": n,
+            "config_hash": self._meta.config_hash,
+            "param_names": list(self._param_names),
+            "dead_param_names": list(self._dead_param_names),
+            "correlation_enabled": bool(self._correlation and self._correlation.enabled),
+        }
+        var_conf = float(mc_cfg.get("var_confidence", 0.0) or 0.0)
+        cvar_conf = float(mc_cfg.get("cvar_confidence", 0.0) or 0.0)
+        if var_conf > 0.0:
+            meta["var_confidence"] = var_conf
+            meta["var_cvar"] = _tail_risk(trial_metrics, var_conf)
+        if cvar_conf > 0.0 and cvar_conf != var_conf:
+            meta["cvar_confidence"] = cvar_conf
+            meta["cvar_at_cvar_confidence"] = _tail_risk(trial_metrics, cvar_conf)
+        elif cvar_conf > 0.0:
+            meta["cvar_confidence"] = cvar_conf
+
+        kwargs: Dict[str, Any] = dict(
             trial_metrics=trial_metrics,
             base_config=self._base_config,
             param_names=self._param_names,
             samples=samples,
-            meta={
-                "seed": self._seed,
-                "sampler": "lhs",
-                "common_random_numbers": self._crn,
-                "n_trials": n,
-                "config_hash": self._meta.config_hash,
-                "param_names": list(self._param_names),
-                "dead_param_names": list(self._dead_param_names),
-                "correlation_enabled": bool(self._correlation and self._correlation.enabled),
-            },
+            meta=meta,
         )
+        if percentiles is not None:
+            kwargs["percentiles"] = percentiles
+        result = aggregate_trials(**kwargs)
         self._flag_degenerate_sweep(result)
         return result
 
