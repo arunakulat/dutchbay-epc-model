@@ -223,7 +223,8 @@ class TestFXSensitivityAnalyzer:
         """FX rate sensitivity should run pipeline for each shock."""
         # Mock pipeline to return different IRRs for different FX rates
         def mock_pipeline_call(base_config_path, overrides):
-            fx_rate = overrides.get("fx", {}).get("spot_rate_lkr_usd", 320.0)
+            # The fx_rate sweep drives the LIVE key start_lkr_per_usd.
+            fx_rate = overrides.get("fx", {}).get("start_lkr_per_usd", 320.0)
             # Simple linear response for testing
             irr_impact = -0.001 * (fx_rate - 320.0)
             result = mock_pipeline_results.copy()
@@ -247,19 +248,25 @@ class TestFXSensitivityAnalyzer:
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
     def test_sensitivity_coefficient_calculation(self, mock_evaluate, sample_config, mock_pipeline_results):
         """Sensitivity coefficients should be calculated from regression."""
-        # Mock linear relationship: IRR = 0.12 - 0.15 * fx_shock
-        def mock_pipeline_call(base_config_path, overrides):
-            fx_shock = overrides.get("fx", {}).get("fx_shock", 0.0)
-            result = mock_pipeline_results.copy()
-            result["project_irr"] = 0.12 - 0.15 * fx_shock
-            return result
-
-        mock_evaluate.side_effect = mock_pipeline_call
-
         analyzer = FXSensitivityAnalyzer(
             base_config_path="scenarios/test.yaml",
             config=sample_config,
         )
+        base_fx = analyzer._base_fx()
+
+        # Mock the LIVE key: the fx_rate sweep sends start_lkr_per_usd = base_fx*(1+shock),
+        # so the implied shock is start/base_fx - 1; IRR = 0.12 - 0.15 * shock.
+        def mock_pipeline_call(base_config_path, overrides):
+            fx = overrides.get("fx", {})
+            start = fx.get("start_lkr_per_usd")
+            shock = (float(start) / base_fx - 1.0) if start is not None else float(
+                fx.get("fx_shock", 0.0)
+            )
+            result = mock_pipeline_results.copy()
+            result["project_irr"] = 0.12 - 0.15 * shock
+            return result
+
+        mock_evaluate.side_effect = mock_pipeline_call
 
         result = analyzer.run()
 
