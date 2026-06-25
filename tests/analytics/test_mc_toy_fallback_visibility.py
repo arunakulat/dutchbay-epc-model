@@ -36,3 +36,23 @@ def test_degenerate_all_toy_run_is_detectable() -> None:
     minimal = {"monte_carlo": {"parameters": [{"name": "capex", "low": 80, "high": 120}]}}
     result = run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
     assert result.metadata["toy_fallback_count"] == 8
+
+
+# --------------------------------------------------------------------------- #
+# CLI status no longer hardcoded "success" (Wave-2 fix)
+# --------------------------------------------------------------------------- #
+from analytics.cli.cli_monte_carlo_hydra import _derive_run_status  # noqa: E402
+
+
+def test_cli_status_degenerate_when_all_toy() -> None:
+    """All trials toy (no real eval) -> degenerate, never a clean success."""
+    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=200) == "degenerate"
+
+
+def test_cli_status_degraded_when_some_toy_or_failed() -> None:
+    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=5) == "degraded"
+    assert _derive_run_status(iterations=200, failed_iterations=3, toy_fallback_count=0) == "degraded"
+
+
+def test_cli_status_success_only_when_all_real() -> None:
+    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=0) == "success"

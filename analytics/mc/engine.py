@@ -104,6 +104,13 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
     return {
         "project_irr": float(project_irr),
         "project_npv": float(project_npv),
+        # Emit the SAME 7 canonical metric keys a real trial returns (incl. equity_irr /
+        # equity_npv) so a run that MIXES real and toy-fallback trials yields uniform-length
+        # metric arrays. Previously the toy path omitted the equity keys, so any run with
+        # >=1 real trial built ragged arrays and tripped the equal-length guard, crashing
+        # the whole MC. These remain toy smoke values (levered slightly off the project KPIs).
+        "equity_irr": float(max(0.0, project_irr * 0.95)),
+        "equity_npv": float(project_npv * 0.85),
         "dscr_min": float(dscr_min),
         "llcr": float(max(dscr_min * 1.10, 0.01)),
         "plcr": float(max(dscr_min * 1.05, 0.01)),
