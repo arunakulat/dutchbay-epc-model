@@ -95,13 +95,21 @@ _BESS_TYPE = "bess"
 #: are the per-tech config fields under ``generation.technologies.<tech>``.
 DEFAULT_DRIVERS: Tuple[str, ...] = ("capex_usd", "capacity_factor", "degradation_pct")
 
-#: Per-storage (``type: bess``) finance levers swept. ``capacity_charge_lkr_per_mw_month``
-#: is the bid Capacity Charge Rate ``R`` — now a LIVE driver (the BESS capacity charge
-#: ``R × power_mw × 12`` flows through the cashflow), so a storage block is swept rather
-#: than merely detected. Each is a per-tech field under
-#: ``generation.technologies.<tech>.revenue`` and shocks directly (no coupling needed —
-#: the charge is additive and not part of the generation reconciliation).
-DEFAULT_STORAGE_DRIVERS: Tuple[str, ...] = ("capacity_charge_lkr_per_mw_month",)
+#: Per-storage (``type: bess``) finance levers swept — both BESS revenue models:
+#:   * ``capacity_charge_lkr_per_mw_month`` — the bid Capacity Charge Rate ``R`` (capacity
+#:     charge ``R × power_mw × 12``), the distributed 10MW capacity-tolling tender;
+#:   * ``tariff_lkr_per_kwh`` — the night-peak Solar+BESS energy tariff (energy revenue
+#:     ``energy_mwh × 1000 × cycles × RTE × availability × tariff``).
+#: Both are LIVE drivers that flow through the cashflow (finance.bess_revenue), so the
+#: applicable one is swept per scenario. Each is a per-tech field under
+#: ``generation.technologies.<tech>.revenue`` and shocks directly (no coupling needed — BESS
+#: revenue is additive and not part of the generation reconciliation). ``applicable_storage_drivers``
+#: only sweeps the lever actually present, so a capacity-charge BESS is not given a phantom
+#: tariff bar and vice-versa.
+DEFAULT_STORAGE_DRIVERS: Tuple[str, ...] = (
+    "capacity_charge_lkr_per_mw_month",
+    "tariff_lkr_per_kwh",
+)
 
 #: KPIs reported per bar, in display order. ``min_dscr`` is retained (the canonical
 #: lender covenant) even though dual-DSCR sizing pins it; ``balloon_pct`` carries the

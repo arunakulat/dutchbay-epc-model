@@ -22,9 +22,11 @@ def apply_degradation_if_enabled(*, base_cfg: Mapping[str, Any], overrides: Dict
     if not enabled:
         return overrides
 
-    # Example: if your model accepts a degradation_rate override key
-    # Replace with your real override keys.
+    # Drive the LIVE engine key project.degradation (a percent, /100'd by
+    # finance.cashflow_v14_params). The previous key 'wind.degradation_rate' was not read by
+    # the cashflow engine, so an enabled degradation block silently did nothing. Default off
+    # (enabled: false) -> overrides returned unchanged (byte-identical).
     default_rate = float(degr.get("default_rate", 0.0))
-    rate = float(overrides.get("wind.degradation_rate", default_rate))
-    overrides["wind.degradation_rate"] = rate
+    rate = float(overrides.get("project.degradation", default_rate))
+    overrides["project.degradation"] = rate
     return overrides
