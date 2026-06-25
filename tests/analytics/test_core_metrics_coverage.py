@@ -287,10 +287,13 @@ def test_calculate_kpis_npv_irr_match_finance_engine() -> None:
     assert math.isclose(result["project_irr"], expected_irr, rel_tol=1e-9)
     assert math.isclose(result["irr"], expected_irr, rel_tol=1e-9)
     # Profitable: total CFADS exceeds capex, so NPV at this rate is positive and
-    # equity_irr mirrors project_irr when no equity-specific value is supplied.
+    # equity_irr does NOT mirror the (unlevered) project_irr when no equity-distribution
+    # value is supplied — that would present one metric as another. It defaults to the
+    # neutral 0.0 sentinel (Wave-2 fix); the live pipeline overwrites it with the real
+    # levered waterfall equity IRR.
     assert result["project_npv"] > 0.0
     assert result["project_irr"] > 0.0
-    assert result["equity_irr"] == result["project_irr"]
+    assert result["equity_irr"] == 0.0
 
 
 def test_calculate_kpis_construction_lag_lowers_npv() -> None:
@@ -594,3 +597,24 @@ def test_derive_capex_matches_debt_engine_for_breakdown() -> None:
 
     # No derive_from_breakdown -> flat-total path, unchanged.
     assert _derive_capex_usd({"capex": {"usd_total": 250_000_000}}) == 250_000_000.0
+
+
+def test_prudential_rate_surfaces_a_distinct_prudential_npv() -> None:
+    """A supplied prudential_rate now yields a prudential-basis NPV under a distinct key
+    (it was previously accepted but never consumed — decorative). Additive: the base
+    project_npv is unchanged and the key is absent when no prudential rate is given."""
+    capex = 1_000.0
+    cfads = [300.0] * 6
+    base = calculate_scenario_kpis(
+        config={"capex_total_usd": capex}, cfads_series_usd=cfads, discount_rate=0.08
+    )
+    prud = calculate_scenario_kpis(
+        config={"capex_total_usd": capex},
+        cfads_series_usd=cfads,
+        discount_rate=0.08,
+        prudential_rate=0.12,
+    )
+    assert "project_npv_prudential" not in base  # not computed without a prudential rate
+    assert prud["prudential_rate_used"] == 0.12
+    assert prud["project_npv_prudential"] < prud["project_npv"]  # higher discount -> lower
+    assert prud["project_npv"] == base["project_npv"]  # base unchanged (additive)

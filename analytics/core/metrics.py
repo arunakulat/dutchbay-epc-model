@@ -363,6 +363,22 @@ def calculate_scenario_kpis(
             logger.error("Project NPV calculation failed: %s", exc)
             project_npv = 0.0
 
+    # Prudential-basis project NPV: discount the SAME time-aligned CFADS at the prudential
+    # (haircut) rate when one is supplied. prudential_rate was previously accepted by the
+    # signature and passed by the pipeline (wacc_prudential) but never consumed — decorative.
+    # It is now surfaced as a distinct key (additive; the base project_npv is unchanged).
+    if prudential_rate is not None and cfads and capex_total > 0.0:
+        try:
+            result["project_npv_prudential"] = project_npv_from_cfads(
+                float(prudential_rate),
+                cfads,
+                capex_total,
+                construction_years=construction_years,
+            )
+            result["prudential_rate_used"] = float(prudential_rate)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Prudential NPV calculation failed: %s", exc)
+
     if project_irr is None and cfads and capex_total > 0.0:
         try:
             project_irr = approx_project_irr(
@@ -404,7 +420,16 @@ def calculate_scenario_kpis(
 
     result["avg_dscr"] = result["dscr_mean"]
     if "equity_irr" not in result:
-        result["equity_irr"] = result.get("project_irr", 0.0)
+        # Do NOT substitute the (unlevered) project IRR for the (levered) equity IRR — that
+        # silently presents one metric as another. When no real equity IRR is available
+        # (no equity-distribution waterfall ran), default to the neutral 0.0 sentinel like
+        # the other KPIs and warn. The live pipeline overwrites this with the real waterfall
+        # equity IRR, so the canonical run is unaffected.
+        logger.warning(
+            "equity_irr not computed (no equity-distribution result); defaulting to 0.0 "
+            "rather than substituting the unlevered project_irr."
+        )
+        result["equity_irr"] = 0.0
 
     if debt_result and isinstance(debt_result, Mapping):
         for metric_name in ("llcr", "plcr"):
@@ -434,7 +459,7 @@ def calculate_scenario_kpis(
     result.setdefault("npv", float(result.get("project_npv", 0.0)))
     result.setdefault("project_irr", 0.0)
     result.setdefault("irr", float(result.get("project_irr", 0.0)))
-    result.setdefault("equity_irr", float(result.get("project_irr", 0.0)))
+    result.setdefault("equity_irr", 0.0)  # neutral sentinel, NOT the unlevered project_irr
     result.setdefault("avg_dscr", float(result.get("dscr_mean", 0.0)))
     result.setdefault("llcr", float(result.get("llcr", 0.0)))
     result.setdefault("plcr", float(result.get("plcr", 0.0)))
