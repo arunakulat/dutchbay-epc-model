@@ -45,15 +45,20 @@ class FXVolumetry:
     Captures total debt and revenue exposure by currency for a given period.
     Used to compute portfolio-level FX risk (VaR, CVaR, concentration).
 
+    All debt amounts are USD-EQUIVALENT (the engine's native debt unit), labelled by the
+    currency the debt is DENOMINATED in, so the currency-share split and the VaR combine
+    like-for-like figures without a spot round-trip. ``total_debt_lkr`` is therefore the
+    USD-equivalent value of the LKR-denominated tranche(s), etc.
+
     Fields:
         period: Period index (0 = Year 0, 1 = Year 1, etc.)
-        total_debt_lkr: Total debt outstanding in LKR at end of period.
-        total_debt_usd: Total debt outstanding in USD at end of period.
-        total_debt_cny: Total debt outstanding in CNY at end of period (if applicable).
+        total_debt_lkr: USD-equivalent committed debt denominated in LKR.
+        total_debt_usd: USD-equivalent committed debt denominated in USD (incl. DFI).
+        total_debt_cny: USD-equivalent committed debt denominated in CNY (if applicable).
         revenue_lkr: Annual revenue in LKR during period.
         revenue_usd: Annual revenue in USD during period (if any).
-        interest_lkr: Annual interest expense in LKR.
-        principal_lkr: Annual principal repayment in LKR.
+        interest_lkr: Annual interest expense (USD-equivalent) on LKR debt.
+        principal_lkr: Annual principal repayment (USD-equivalent) on LKR debt.
     """
 
     period: int
@@ -67,18 +72,18 @@ class FXVolumetry:
 
     @property
     def total_usd_exposure_equivalent(self) -> float:
-        """Sum of all debt and debt service (interest + principal) in USD equiv.
+        """Total debt + interest exposure in USD-equivalent.
 
-        Approximation: assumes all LKR denominations remain at spot rate
-        (not risk-adjusted). For risk analysis, use FXRiskProfile instead.
+        All fields are already USD-equivalent (labelled by denomination currency), so this
+        is a straight sum — no spot conversion. For risk-adjusted analysis (VaR/CVaR/
+        concentration) use FXRiskProfile instead.
         """
-        # Config-sourced reference spot (config/defaults.yaml); actual rates from
-        # fx_curve when risk-adjusted. Never a Python literal (CESSPIT).
-        from analytics.fx.fx_fetch import default_fx_lkr_per_usd
-
-        assumed_spot_lkr_usd = default_fx_lkr_per_usd()
-        lkr_in_usd = (self.total_debt_lkr + self.interest_lkr) / assumed_spot_lkr_usd
-        return self.total_debt_usd + lkr_in_usd
+        return (
+            self.total_debt_lkr
+            + self.total_debt_usd
+            + self.total_debt_cny
+            + self.interest_lkr
+        )
 
 
 # ═════════════════════════════════════════════════════════════════════════════

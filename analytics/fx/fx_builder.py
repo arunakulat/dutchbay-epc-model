@@ -39,6 +39,38 @@ from analytics.fx.fx_contracts import (
 
 logger = logging.getLogger(__name__)
 
+# v14 debt tranche name -> reporting currency. The DFI development-finance tranche is
+# USD-denominated, so it carries USD FX risk against the LKR-primary revenue. All debt
+# amounts in this module are kept in a single consistent unit (USD-equivalent — the
+# native unit of debt_result['principal_by_tranche'] / debt_total), so the currency-share
+# split and the VaR are computed on like-for-like figures.
+_TRANCHE_CURRENCY: Dict[str, str] = {
+    "lkr": "LKR",
+    "usd": "USD",
+    "dfi": "USD",
+    "cny": "CNY",
+}
+
+
+def _tranche_principal_usd(debt_result: Mapping[str, Any]) -> Dict[str, float]:
+    """Committed principal per *reporting currency* (USD-equivalent) from debt_result.
+
+    Reads debt_result['principal_by_tranche'] (keys lkr/usd/dfi), the engine's real
+    per-tranche principal, and buckets each tranche into its reporting currency via
+    _TRANCHE_CURRENCY (DFI -> USD). Returns {'LKR': x, 'USD': y, 'CNY': z}. Empty/absent
+    -> all zero (the caller warns).
+    """
+    out: Dict[str, float] = {"LKR": 0.0, "USD": 0.0, "CNY": 0.0}
+    principal_by_tranche = debt_result.get("principal_by_tranche", {}) or {}
+    if isinstance(principal_by_tranche, Mapping):
+        for tranche_name, amount in principal_by_tranche.items():
+            ccy = _TRANCHE_CURRENCY.get(str(tranche_name).lower(), "USD")
+            try:
+                out[ccy] = out.get(ccy, 0.0) + float(amount)
+            except (TypeError, ValueError):
+                continue
+    return out
+
 
 def compute_fx_structured_block(
     *,
@@ -80,20 +112,23 @@ def compute_fx_structured_block(
     fx_match_ratio = float(fx_config.get("fx_match_ratio", 0.0))
     hedging_coverage_pct = float(fx_config.get("hedging_coverage_pct", 0.0))
 
-    # Extract debt tranches from debt_result
-    debt_tranches_raw = debt_result.get("tranches", {}) or {}
+    # Extract debt tranches from the v14 debt_result. The engine emits the per-currency
+    # principal under `principal_by_tranche` (keys lkr/usd/dfi); there is NO `tranches`
+    # key (reading it produced an empty map -> a degenerate FX risk profile). The DFI
+    # tranche is a hard-currency (USD-denominated) development-finance loan, so it carries
+    # USD FX risk and is bucketed with USD.
+    principal_by_tranche = debt_result.get("principal_by_tranche", {}) or {}
     debt_tranches: Dict[str, str] = {}
-    if isinstance(debt_tranches_raw, Mapping):
-        for tranche_name, tranche_data in debt_tranches_raw.items():
-            if isinstance(tranche_data, Mapping):
-                currency = str(tranche_data.get("currency", "USD"))
-                debt_tranches[str(tranche_name)] = currency
+    if isinstance(principal_by_tranche, Mapping):
+        for tranche_name in principal_by_tranche:
+            currency = _TRANCHE_CURRENCY.get(str(tranche_name).lower(), "USD")
+            debt_tranches[str(tranche_name)] = currency
 
     # CESSPIT: Warn if no debt tranches found
     if not debt_tranches:
         logger.warning(
-            "compute_fx_structured_block: No debt tranches found in debt_result; "
-            "FX block will have empty tranches dict. Check debt_result structure."
+            "compute_fx_structured_block: No debt tranches found in debt_result "
+            "(expected key 'principal_by_tranche'); FX block will have empty tranches."
         )
 
     # Revenue currencies (default: LKR). Explicit None check, NOT `... or ["LKR"]`: a
@@ -107,20 +142,29 @@ def compute_fx_structured_block(
     else:
         revenue_currencies = list(revenue_currencies_raw)
 
-    # Build volumetry from annual rows
+    # Per-currency committed debt (USD-equivalent) from debt_result['principal_by_tranche'].
+    # NOTE: the engine's per-period 'debt_schedules' are a sculpting sub-structure, NOT the
+    # outstanding balance (their peak is ~1/10th of the committed principal), and the annual
+    # cashflow rows carry no total_debt_* keys — reading either produced a degenerate profile.
+    # The committed principal is the stable, correctly-scaled measure of the financing's FX
+    # exposure; it is carried on every period (debt currency mix does not change with
+    # amortisation), with the per-period REVENUE still sourced from the cashflow rows.
+    debt_by_ccy = _tranche_principal_usd(debt_result)
+
+    # Build volumetry — committed debt (USD-equiv) + per-period revenue from the rows.
     volumetry: List[FXVolumetry] = []
     for idx, row in enumerate(annual_rows):
         try:
             volumetry.append(
                 FXVolumetry(
                     period=idx,
-                    total_debt_lkr=float(row.get("total_debt_lkr", 0.0)),
-                    total_debt_usd=float(row.get("total_debt_usd", 0.0)),
-                    total_debt_cny=float(row.get("total_debt_cny", 0.0)),
+                    total_debt_lkr=debt_by_ccy["LKR"],
+                    total_debt_usd=debt_by_ccy["USD"],
+                    total_debt_cny=debt_by_ccy["CNY"],
                     revenue_lkr=float(row.get("revenue_lkr", 0.0)),
                     revenue_usd=float(row.get("revenue_usd", 0.0)),
-                    interest_lkr=float(row.get("interest_lkr", 0.0)),
-                    principal_lkr=float(row.get("principal_lkr", 0.0)),
+                    interest_lkr=float(row.get("interest_expense_lkr", 0.0)),
+                    principal_lkr=0.0,
                 )
             )
         except (ValueError, TypeError) as e:
@@ -384,13 +428,18 @@ def compute_fx_risk_profile(
             debt_cny_pct=0.0,
         )
 
-    # Get final period volumetry
-    final_vol = fx_block.volumetry[-1]
+    # Use the PEAK-debt period, not the final period. Debt amortises toward zero by
+    # maturity, so the last row understates (here zeroes out) the financing's FX exposure;
+    # the lender-relevant concentration/VaR snapshot is the period of largest outstanding.
+    peak_vol = max(
+        fx_block.volumetry,
+        key=lambda v: v.total_debt_lkr + v.total_debt_usd + v.total_debt_cny,
+    )
 
     # Calculate total debt by currency
-    total_debt_lkr = final_vol.total_debt_lkr
-    total_debt_usd = final_vol.total_debt_usd
-    total_debt_cny = final_vol.total_debt_cny
+    total_debt_lkr = peak_vol.total_debt_lkr
+    total_debt_usd = peak_vol.total_debt_usd
+    total_debt_cny = peak_vol.total_debt_cny
     total_debt = total_debt_lkr + total_debt_usd + total_debt_cny
 
     # Avoid division by zero
@@ -417,19 +466,19 @@ def compute_fx_risk_profile(
     debt_usd_pct = 100.0 * total_debt_usd / total_debt if total_debt > 0 else 0.0
     debt_cny_pct = 100.0 * total_debt_cny / total_debt if total_debt > 0 else 0.0
 
-    # Get spot rate from curve (final year); empty curve -> config reference rate
-    # (config/defaults.yaml), never a Python literal (CESSPIT).
+    # Spot rate (final-year curve point, else config reference) — retained for the log.
     from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
     spot_lkr_usd = fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else default_fx_lkr_per_usd()
 
-    # Compute VaR/CVaR as simplified estimate:
-    # VaR_95 = 5% potential LKR depreciation impact on LKR-denominated debt
-    # This is a simplified calculation; full Monte Carlo would be more rigorous
-    lkr_debt_usd_equiv = total_debt_lkr / spot_lkr_usd
-    var_shock_pct = 0.05  # 5% LKR depreciation shock
-    var_95_usd = lkr_debt_usd_equiv * var_shock_pct
-    cvar_95_usd = var_95_usd * 1.5  # CVaR typically 1.5x VaR in normal scenarios
+    # Compute VaR/CVaR as a simplified estimate. total_debt_lkr is already USD-equivalent
+    # (the engine's native debt unit), so the USD value of the LKR-denominated debt moves by
+    # the FX shock directly — NO division by spot (the prior code divided an already-USD
+    # figure by spot AND stored raw USD in a *_million field; both unit bugs were masked
+    # while the profile was all-zero). Result is in USD MILLIONS, matching the field name.
+    var_shock_pct = 0.05  # 5% adverse LKR/USD move
+    var_95_usd_million = (total_debt_lkr * var_shock_pct) / 1e6
+    cvar_95_usd_million = var_95_usd_million * 1.5  # CVaR ~1.5x VaR (normal-tail heuristic)
 
     # Revenue percentages (assume all in LKR unless specified otherwise)
     revenues_lkr_pct = 100.0 if "LKR" in fx_block.revenue_currencies else 0.0
@@ -443,8 +492,8 @@ def compute_fx_risk_profile(
     )
 
     fx_risk = FXRiskProfile(
-        var_95_usd_million=var_95_usd,
-        cvar_95_usd_million=cvar_95_usd,
+        var_95_usd_million=var_95_usd_million,
+        cvar_95_usd_million=cvar_95_usd_million,
         debt_lkr_pct=debt_lkr_pct,
         debt_usd_pct=debt_usd_pct,
         debt_cny_pct=debt_cny_pct,
@@ -459,8 +508,8 @@ def compute_fx_risk_profile(
         "compute_fx_risk_profile: var_95=%.3f USD_M, cvar_95=%.3f USD_M, "
         "hhi=%.3f, debt_composition: lkr=%.1f%%, usd=%.1f%%, cny=%.1f%%, "
         "spot_rate=%.2f, total_debt=%.2f",
-        var_95_usd,
-        cvar_95_usd,
+        var_95_usd_million,
+        cvar_95_usd_million,
         hhi,
         debt_lkr_pct,
         debt_usd_pct,

@@ -34,16 +34,18 @@ DEFAULT_RATE = default_fx_lkr_per_usd()  # config-sourced (~333.79), never the s
 # ---------------------------------------------------------------------------
 
 
-def test_volumetry_usd_exposure_equivalent_uses_config_rate() -> None:
-    """total_usd_exposure_equivalent converts LKR debt+interest at the config spot."""
+def test_volumetry_usd_exposure_equivalent_sums_usd_equiv_fields() -> None:
+    """total_usd_exposure_equivalent is a straight sum: all fields are already
+    USD-equivalent (labelled by denomination currency), so there is no spot conversion."""
     vol = FXVolumetry(
         period=3,
-        total_debt_lkr=DEFAULT_RATE * 1000.0,  # exactly 1000 USD at spot
+        total_debt_lkr=1000.0,  # USD-equivalent value of LKR-denominated debt
         total_debt_usd=500.0,
-        interest_lkr=DEFAULT_RATE * 200.0,  # exactly 200 USD at spot
+        total_debt_cny=300.0,
+        interest_lkr=200.0,
     )
-    # 500 (USD) + 1000 (LKR debt) + 200 (LKR interest) = 1700 USD equiv
-    assert vol.total_usd_exposure_equivalent == pytest.approx(1700.0)
+    # 1000 + 500 + 300 + 200 = 2000 USD-equivalent
+    assert vol.total_usd_exposure_equivalent == pytest.approx(2000.0)
 
 
 def test_volumetry_defaults_are_zero() -> None:
