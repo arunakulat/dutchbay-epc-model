@@ -163,7 +163,13 @@ def compute_fx_structured_block(
                     total_debt_cny=debt_by_ccy["CNY"],
                     revenue_lkr=float(row.get("revenue_lkr", 0.0)),
                     revenue_usd=float(row.get("revenue_usd", 0.0)),
-                    interest_lkr=float(row.get("interest_expense_lkr", 0.0)),
+                    # Live pipeline carries debt interest under 'interest_usd' (USD-equiv,
+                    # overlaid by _enrich_annual_rows_with_debt); 'interest_expense_lkr' is
+                    # 0.0 in operating rows. Read interest_usd first so the exported FX
+                    # interest exposure is non-zero (was always 0 for every year).
+                    interest_lkr=float(
+                        row.get("interest_usd", row.get("interest_expense_lkr", 0.0))
+                    ),
                     principal_lkr=0.0,
                 )
             )
@@ -297,11 +303,26 @@ def compute_fx_curve(
                 raise ValueError(
                     f"fx spot rate must be > 0; got {raw_spot!r}"
                 )
-        lkr_usd = [spot] * len(years)
-        logger.debug(
-            "compute_fx_curve: No lkr_usd provided; using flat curve at %.2f",
-            spot,
-        )
+        # SINGLE SOURCE OF TRUTH: when the scenario's fx block resolves to a parametric
+        # curve (start + annual_depr), reuse the cashflow's resolver so the REPORTED FX
+        # curve EQUALS the curve the USD economics are computed at. Previously this built a
+        # FLAT curve and silently ignored fx.annual_depr — the reported curve diverged from
+        # the depreciating curve the cashflow/IRR actually used. Falls back to a flat curve
+        # at the resolved spot when there is no fx block with a usable start (e.g. a config
+        # carrying only fx.rates.lkr_per_usd, or no fx block at all).
+        lkr_usd = None
+        if isinstance(fx_config, Mapping) and fx_config:
+            try:
+                from finance.cashflow_v14_fx import _fx_curve as _cashflow_fx_curve
+
+                lkr_usd = _cashflow_fx_curve({"fx": dict(fx_config)}, len(years))
+            except (ValueError, KeyError, TypeError):
+                lkr_usd = None
+        if lkr_usd is None:
+            lkr_usd = [spot] * len(years)
+            logger.debug(
+                "compute_fx_curve: No lkr_usd / parametric curve; flat at %.2f", spot
+            )
     else:
         lkr_usd = [float(x) for x in lkr_usd_raw]
 
@@ -401,6 +422,7 @@ def compute_fx_risk_profile(
     *,
     fx_block: FXStructuredBlock,
     fx_curve: FXCurveOutput,
+    var_shock_pct: float = 0.05,
 ) -> FXRiskProfile:
     """Calculate FX risk metrics (VaR, CVaR, concentration).
 
@@ -476,7 +498,10 @@ def compute_fx_risk_profile(
     # the FX shock directly — NO division by spot (the prior code divided an already-USD
     # figure by spot AND stored raw USD in a *_million field; both unit bugs were masked
     # while the profile was all-zero). Result is in USD MILLIONS, matching the field name.
-    var_shock_pct = 0.05  # 5% adverse LKR/USD move
+    # var_shock_pct is the adverse LKR/USD move; the caller sources it from
+    # fx.uncertainty_pct (was a hardcoded 0.05 that ignored the declared FX volatility).
+    if var_shock_pct <= 0.0:
+        raise ValueError(f"var_shock_pct must be > 0; got {var_shock_pct!r}")
     var_95_usd_million = (total_debt_lkr * var_shock_pct) / 1e6
     cvar_95_usd_million = var_95_usd_million * 1.5  # CVaR ~1.5x VaR (normal-tail heuristic)
 
