@@ -19,7 +19,7 @@ tax:
   depreciation_start_year: 1
   depreciation_years: 20
   enhanced_allowance_applies: false
-  enhanced_capital_allowance_pct: 100
+  enhanced_capital_allowance_pct: 1.0  # multiplier (100% = standard allowance); NOT a percent
   loss_carryforward_years: 25
   tax_holiday_start_year: 1
   tax_holiday_years: 5
