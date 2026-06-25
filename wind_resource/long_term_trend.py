@@ -57,7 +57,7 @@ class TrendResult:
 
 def annual_mean_series(series: pd.DataFrame, ws_col: str) -> pd.Series:
     """Calendar-year mean of the hub-height wind series."""
-    return series.groupby(series.index.year)[ws_col].mean()
+    return series.groupby(pd.DatetimeIndex(series.index).year)[ws_col].mean()
 
 
 def _decade_means(annual: pd.Series) -> Dict[str, float]:
@@ -98,7 +98,9 @@ def compute_trend(annual: pd.Series) -> TrendResult:
     """Mann-Kendall + Theil-Sen (Sen's slope) + OLS trend on the annual-mean series."""
     yrs = np.asarray(annual.index.values, dtype="float64")
     vals = np.asarray(annual.values, dtype="float64")
-    tau, p_mk = _st.kendalltau(yrs, vals)
+    _kt = _st.kendalltau(yrs, vals)
+    tau = float(_kt.statistic)
+    p_mk = float(_kt.pvalue)
     sen = _st.theilslopes(vals, yrs)
     ols = _st.linregress(yrs, vals)
     r2 = float(ols.rvalue ** 2)
@@ -141,8 +143,9 @@ def period_aep_table(
     from wind_resource.era5_retrieval import compute_site_aep
 
     rows: List[Dict[str, Any]] = []
+    idx_year = pd.DatetimeIndex(series.index).year
     for (s, e, key, role) in periods:
-        sub = series[(series.index.year >= s) & (series.index.year <= e)]
+        sub = series[(idx_year >= s) & (idx_year <= e)]
         if sub.empty:
             continue
         r = compute_site_aep(sub, config)
