@@ -21,6 +21,7 @@ import yaml
 from analytics.fx.fx_fetch import FXRequestConfig
 from analytics.scenario_loader import (
     ScenarioConfigError,
+    _assert_fx_spot_consistency,
     _ensure_meta_source,
     _load_raw_config,
     _resolve_fx,
@@ -260,3 +261,37 @@ def test_load_scenario_config_minimal_no_fx_no_aep(tmp_path: Path) -> None:
     cfg = load_scenario_config(target)
     assert cfg["project"]["name"] == "minimal"
     assert cfg["meta"]["source_path"] == str(target)
+
+
+# ---------------------------------------------------------------------------
+# Wave-2 re-audit #6: FX spot cross-assertion (two-sources-of-truth guard)
+# ---------------------------------------------------------------------------
+def test_fx_spot_consistency_passes_when_keys_agree() -> None:
+    """All three FX spot keys equal -> no error (the canonical pinned-vintage case)."""
+    cfg = {
+        "fx": {
+            "rates": {"lkr_per_usd": 333.79},
+            "start_lkr_per_usd": 333.79,
+            "source": {"pinned_rate": 333.79},
+        }
+    }
+    _assert_fx_spot_consistency(cfg, "test")  # must not raise
+
+
+def test_fx_spot_consistency_raises_when_keys_diverge() -> None:
+    """A stale fx.start vs an edited fx.rates.lkr_per_usd is the #236 class -> fail loud."""
+    cfg = {
+        "fx": {
+            "rates": {"lkr_per_usd": 350.0},   # author edited this
+            "start_lkr_per_usd": 333.79,        # forgot to update this
+        }
+    }
+    with pytest.raises(ValueError, match="inconsistent LKR/USD spot"):
+        _assert_fx_spot_consistency(cfg, "diverging-scenario")
+
+
+def test_fx_spot_consistency_noop_with_single_key() -> None:
+    """Fewer than two pinned keys -> nothing to cross-assert."""
+    _assert_fx_spot_consistency({"fx": {"start_lkr_per_usd": 333.79}}, "test")
+    _assert_fx_spot_consistency({"fx": {}}, "test")
+    _assert_fx_spot_consistency({}, "test")

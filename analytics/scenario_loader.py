@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any
 
 import yaml
@@ -177,6 +178,53 @@ def _resolve_fx(config: dict[str, Any]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
+def _assert_fx_spot_consistency(config: dict[str, Any], label: str) -> None:
+    """Fail loud if a scenario pins the LKR/USD spot in more than one place inconsistently.
+
+    The same spot is read by two LIVE paths with different key precedence — the cashflow
+    USD-reporting curve (``finance.cashflow_v14_fx`` reads ``fx.start_lkr_per_usd``) and the
+    FX reporting block (``analytics.fx.fx_builder`` reads ``fx.rates.lkr_per_usd`` first).
+    If a scenario sets ``fx.rates.lkr_per_usd``, ``fx.start_lkr_per_usd`` and
+    ``fx.source.pinned_rate`` and they DISAGREE, the lender pack's headline USD economics
+    and its FX curve would be computed at different rates (the #236 stale-FX class). The
+    scenario YAML documents these as "cross-asserted"; enforce it here so the two sources of
+    truth cannot silently diverge. No-op when fewer than two are present.
+    """
+    fx = config.get("fx")
+    if not isinstance(fx, Mapping):
+        return
+    rates = fx.get("rates")
+    candidates: dict[str, float] = {}
+    if isinstance(rates, Mapping) and rates.get("lkr_per_usd") is not None:
+        try:
+            candidates["fx.rates.lkr_per_usd"] = float(rates["lkr_per_usd"])
+        except (TypeError, ValueError):
+            pass
+    if fx.get("start_lkr_per_usd") is not None:
+        try:
+            candidates["fx.start_lkr_per_usd"] = float(fx["start_lkr_per_usd"])
+        except (TypeError, ValueError):
+            pass
+    source = fx.get("source")
+    if isinstance(source, Mapping) and source.get("pinned_rate") is not None:
+        try:
+            candidates["fx.source.pinned_rate"] = float(source["pinned_rate"])
+        except (TypeError, ValueError):
+            pass
+    if len(candidates) < 2:
+        return
+    lo, hi = min(candidates.values()), max(candidates.values())
+    # Relative tolerance: pinned vintages are exact equals; allow FP noise only.
+    if hi - lo > 1e-6 * max(1.0, abs(hi)):
+        detail = ", ".join(f"{k}={v}" for k, v in sorted(candidates.items()))
+        raise ValueError(
+            f"Scenario '{label}': inconsistent LKR/USD spot across FX keys ({detail}). "
+            "These must be equal (cross-asserted) — the cashflow USD economics read "
+            "fx.start_lkr_per_usd while the FX reporting block reads fx.rates.lkr_per_usd, "
+            "so a mismatch yields a self-inconsistent lender pack."
+        )
+
+
 def load_scenario_config(path: str | Path) -> dict[str, Any]:
     """Load and lightly normalize a scenario configuration.
 
@@ -209,6 +257,10 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # for simplified base cases / fixtures); fails loud on an unapproved or refused
     # placeholder source. Changes no computed number (byte-identical economics).
     enforce_aep_provenance(cfg, str(config_path))
+
+    # Cross-assert the LKR/USD spot pinned under fx.rates / fx.start / fx.source so the
+    # cashflow economics and the FX reporting block cannot read divergent rates.
+    _assert_fx_spot_consistency(cfg, str(config_path))
 
     return cfg
 

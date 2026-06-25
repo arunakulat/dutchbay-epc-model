@@ -84,7 +84,8 @@ def _fx_config() -> Dict[str, Any]:
 
 
 def _debt_result() -> Dict[str, Any]:
-    return {"tranches": {"T1": {"currency": "USD"}, "T2": {"currency": "LKR"}}}
+    # Real v14 shape: per-currency committed principal (USD-equivalent). usd->USD, lkr->LKR.
+    return {"principal_by_tranche": {"usd": 2000.0, "lkr": 1000.0}}
 
 
 def _base_result() -> ScenarioResult:
@@ -130,7 +131,7 @@ def test_overlay_populates_fx_fields_and_preserves_base() -> None:
 
     # The block reflects the driving config.
     assert out.fx_block.strategy == "hedged"
-    assert out.fx_block.debt_tranches == {"T1": "USD", "T2": "LKR"}
+    assert out.fx_block.debt_tranches == {"usd": "USD", "lkr": "LKR"}
 
     # Base financial fields survive the round-trip.
     assert out.scenario_name == "cov-fx"
