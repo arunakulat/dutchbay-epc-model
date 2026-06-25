@@ -333,3 +333,28 @@ def test_uncoupled_per_tech_capacity_factor_breaks_reconciliation(hybrid_config:
             raw_config=hybrid_config,
             overrides={"generation.technologies.wind.capacity_factor": 0.339 * 1.10},
         )
+
+
+# ---------------------------------------------------------------------------
+# Wave-2: energy_tariff BESS is now a swept storage driver (was only capacity_charge)
+# ---------------------------------------------------------------------------
+_NIGHTPEAK = str(
+    Path(__file__).resolve().parents[2] / "scenarios" / "ceb_solar_bess_nightpeak_10mw.yaml"
+)
+
+
+def test_energy_tariff_bess_is_swept_with_real_impact() -> None:
+    """An energy-tariff BESS (revenue.tariff_lkr_per_kwh) is now a live storage driver:
+    the tornado produces a non-phantom bar for it (was only capacity_charge before)."""
+    cfg = load_scenario_config(_NIGHTPEAK)
+    # discovery picks the tariff lever (present), not capacity_charge (absent here)
+    techs = [t for t in cfg["generation"]["technologies"] if cfg["generation"]["technologies"][t].get("type") == "bess"]
+    assert techs, "expected a type:bess block in the night-peak scenario"
+    drivers = applicable_storage_drivers(cfg, techs[0])
+    assert "tariff_lkr_per_kwh" in drivers
+    assert "capacity_charge_lkr_per_mw_month" not in drivers  # absent -> not a phantom
+
+    bars = run_multi_tech_tornado(cfg, metrics=["project_irr"])
+    tariff_bars = [b for b in bars if b.driver == "tariff_lkr_per_kwh"]
+    assert tariff_bars, "energy-tariff BESS produced no tornado bar"
+    assert any(abs(b.impact_abs) > 1e-6 for b in tariff_bars)  # real sensitivity, not ~0
