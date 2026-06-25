@@ -22,6 +22,7 @@ to be JSON-safe. No network, cdsapi, or matplotlib is touched.
 from __future__ import annotations
 
 import json
+import pytest
 from typing import Any
 
 from analytics.casper.casper_payload import (
@@ -429,3 +430,32 @@ def test_baseline_kpis_coerced_to_float() -> None:
     kpis = payload["baseline_kpis"]
     assert kpis == {"project_irr": 0.1, "min_dscr": 1.0}
     assert isinstance(kpis["min_dscr"], float)
+
+
+def test_payload_survives_live_dict_shaped_scenario() -> None:
+    """The LIVE pipeline populates ScenarioResult.kpis with non-numeric entries
+    (scenario_name str, dscr_series list) and debt_profile/wacc/equity_performance as
+    DICTS, not the typed dataclasses. build_casper_payload crashed on all of these
+    (float() over the kpis dict; .attr access on dict sub-objects). It must now build a
+    valid payload from that real shape (round-3 fix)."""
+    scenario = _bare_scenario(
+        kpis={
+            "scenario_name": "DutchBay Wind Farm",   # str — must be skipped, not float()'d
+            "wacc_label": "build_up",                # str
+            "dscr_series": [1.3, 1.45],              # list
+            "project_irr": 0.0505,                   # numeric — kept
+            "min_dscr": 1.30,                        # numeric — kept
+        },
+        debt_profile={"construction_years": 2, "total_debt": 1.0e8},  # dict, not typed
+        wacc={"wacc_nominal": 0.081},                                  # dict
+        equity_performance={"equity_irr": -0.008, "equity_npv": -3.5e7, "metadata": {}},
+        debt_covenants="computed",                                     # bare status str
+    )
+    payload = build_casper_payload(scenario=scenario)
+    assert json.dumps(payload, default=str)  # serialises without raising
+    summary = payload["scenario"]
+    assert summary["debt_profile"] == {"construction_years": 2, "total_debt": 1.0e8}
+    assert summary["wacc"] == {"wacc_nominal": 0.081}
+    # numeric KPIs survive; the str/list ones are dropped (not coerced)
+    assert payload["baseline_kpis"]["project_irr"] == pytest.approx(0.0505)
+    assert "scenario_name" not in payload["baseline_kpis"]

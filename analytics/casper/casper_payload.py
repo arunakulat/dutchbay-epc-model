@@ -73,7 +73,16 @@ def build_casper_payload(
     baseline_kpis: dict[str, float] = {}
     raw_kpis = getattr(scenario, "kpis", None)
     if isinstance(raw_kpis, Mapping):
-        baseline_kpis = {str(k): float(v) for k, v in raw_kpis.items()}
+        # The live ScenarioResult.kpis mapping carries NON-numeric entries alongside the
+        # numbers — scenario_name / wacc_label (str), equity_distribution_status (str),
+        # dscr_series (list). float() over the whole dict crashed the CASPER export on every
+        # real run (it only survived in tests that fed numeric-only fixtures). Keep the
+        # numeric scalars (excluding bool) and skip the rest.
+        baseline_kpis = {
+            str(k): float(v)
+            for k, v in raw_kpis.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
 
     # Normalise metadata into a mutable dict so we can safely read/augment it.
     metadata_dict: dict[str, Any] = dict(metadata) if metadata is not None else {}
@@ -159,32 +168,43 @@ def _scenario_summary_to_dict(
                 "meta": dict(w.meta),
             }
 
-    # Debt profile (if attached)
+    # Debt profile (if attached). The live ScenarioResult carries this as a DICT (the raw
+    # debt_result), not the typed TrancheDebtProfile — same dict-or-object split the wacc
+    # block handles. Reading .attrs on a dict crashed the whole CASPER export; emit the dict
+    # as-is, only walk attributes for the typed form.
     if s.debt_profile is not None:
         dp = s.debt_profile
-        data["debt_profile"] = {
-            "construction_years": dp.construction_years,
-            "tenor_years": dp.tenor_years,
-            "timeline_periods": dp.timeline_periods,
-            "total_debt": dp.total_debt,
-            "total_idc": dp.total_idc,
-            "lkr_principal": dp.lkr_principal,
-            "usd_principal": dp.usd_principal,
-            "dfi_principal": dp.dfi_principal,
-            "lkr_idc": dp.lkr_idc,
-            "usd_idc": dp.usd_idc,
-            "dfi_idc": dp.dfi_idc,
-            "lkr_rate": dp.lkr_rate,
-            "usd_rate": dp.usd_rate,
-            "dfi_rate": dp.dfi_rate,
-            "interest_only_years": dp.interest_only_years,
-            "amortization_style": dp.amortization_style,
-            "dscr_target": dp.dscr_target,
-        }
+        if isinstance(dp, Mapping):
+            data["debt_profile"] = dict(dp)
+        else:
+            data["debt_profile"] = {
+                "construction_years": dp.construction_years,
+                "tenor_years": dp.tenor_years,
+                "timeline_periods": dp.timeline_periods,
+                "total_debt": dp.total_debt,
+                "total_idc": dp.total_idc,
+                "lkr_principal": dp.lkr_principal,
+                "usd_principal": dp.usd_principal,
+                "dfi_principal": dp.dfi_principal,
+                "lkr_idc": dp.lkr_idc,
+                "usd_idc": dp.usd_idc,
+                "dfi_idc": dp.dfi_idc,
+                "lkr_rate": dp.lkr_rate,
+                "usd_rate": dp.usd_rate,
+                "dfi_rate": dp.dfi_rate,
+                "interest_only_years": dp.interest_only_years,
+                "amortization_style": dp.amortization_style,
+                "dscr_target": dp.dscr_target,
+            }
 
-    # Debt covenants (if attached)
+    # Debt covenants (if attached). Pydantic model -> model_dump; a dict passes through; a
+    # bare status string (the live shape) is not a structured covenant set -> omit.
     if s.debt_covenants is not None:
-        data["debt_covenants"] = s.debt_covenants.model_dump()
+        dc = s.debt_covenants
+        if hasattr(dc, "model_dump"):
+            data["debt_covenants"] = dc.model_dump()
+        elif isinstance(dc, Mapping):
+            data["debt_covenants"] = dict(dc)
 
     # Equity performance overlay (if available).
     #
@@ -199,10 +219,6 @@ def _scenario_summary_to_dict(
     # ScenarioResult in the current pipeline.
     if s.equity_performance is not None:
         ep = s.equity_performance
-        ep_meta: Mapping[str, Any] = (
-            ep.metadata if isinstance(ep.metadata, Mapping) else {}
-        )
-
         downside_dict: dict[str, Any] | None = None
         if mc is not None:
             downside_dict = {
@@ -210,19 +226,27 @@ def _scenario_summary_to_dict(
                 "project_npv_p10": mc.project_npv_p10,
                 "dscr_min_p10": mc.dscr_min_p10,
             }
-
-        data["equity_performance"] = {
-            "equity_irr": ep.equity_irr,
-            "equity_npv": ep.equity_npv,
-            "equity_multiple": ep.equity_multiple,
-            "moic": ep_meta.get("moic"),
-            "dpi": ep_meta.get("dpi"),
-            "rvpi": ep_meta.get("rvpi"),
-            "tvpi": ep_meta.get("tvpi"),
-            "average_coc": ep_meta.get("average_coc"),
-            "payback_period_years": ep_meta.get("payback_period_years"),
-            "downside": downside_dict,
-        }
+        if isinstance(ep, Mapping):
+            # Live shape: a dict {equity_irr, equity_npv, equity_multiple, metadata}.
+            ep_dict = dict(ep)
+            ep_dict["downside"] = downside_dict
+            data["equity_performance"] = ep_dict
+        else:
+            ep_meta: Mapping[str, Any] = (
+                ep.metadata if isinstance(ep.metadata, Mapping) else {}
+            )
+            data["equity_performance"] = {
+                "equity_irr": ep.equity_irr,
+                "equity_npv": ep.equity_npv,
+                "equity_multiple": ep.equity_multiple,
+                "moic": ep_meta.get("moic"),
+                "dpi": ep_meta.get("dpi"),
+                "rvpi": ep_meta.get("rvpi"),
+                "tvpi": ep_meta.get("tvpi"),
+                "average_coc": ep_meta.get("average_coc"),
+                "payback_period_years": ep_meta.get("payback_period_years"),
+                "downside": downside_dict,
+            }
 
     return data
 

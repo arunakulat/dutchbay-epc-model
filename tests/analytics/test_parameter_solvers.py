@@ -218,14 +218,16 @@ def test_min_capex_solves_breakeven_capex_at_the_floor() -> None:
     assert achieved == pytest.approx(0.04, abs=1e-3)
 
 
-def test_min_capex_floor_unreachable_even_at_min_capex_lands_on_low_bound() -> None:
-    """A floor above the IRR achievable even at the minimum capex collapses to the low
-    bound (cheapest project still cannot clear it)."""
-    low, high = 100.0e6, 500.0e6
-    capex = solve_for_min_capex_given_irr_floor(
-        LENDER_CONFIG, None, irr_floor=0.20, bounds=(low, high), tolerance=10_000.0
-    )
-    assert capex == pytest.approx(low, rel=1e-3)
+def test_min_capex_floor_unreachable_raises() -> None:
+    """A floor above the IRR achievable even at the minimum capex is not bracketed: the
+    solver fails loud (round-3 fix, extending the round-2 bracketing guard to the capex
+    solver) instead of silently collapsing to the low bound. The cheapest project here
+    (~$100M) clears well under 20% IRR, so a 0.20 floor is unreachable in-range."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_min_capex_given_irr_floor(
+            LENDER_CONFIG, None, irr_floor=0.20, bounds=(100.0e6, 500.0e6),
+            tolerance=10_000.0,
+        )
 
 
 # ---------------------------------------------------------------------------

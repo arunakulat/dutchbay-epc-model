@@ -206,6 +206,24 @@ class MonteCarloEngine:
             high = float(p.get("high", p.get("max", 1.0)))
             kind = str(p.get("distribution", p.get("kind", "uniform")))
 
+            # A param name that does not resolve to an EXISTING dotted path in the base config
+            # is a likely DEAD lever: a non-dotted alias is placed at the top level where the
+            # v14 engine never reads it, so every trial falls to the toy metric and the risk
+            # distribution is degenerate (the deterministic sensitivity engine hard-fails the
+            # identical mistake). We WARN rather than raise because non-dotted names are an
+            # accepted (if degenerate) legacy input; the toy_fallback_count surfaces the
+            # degeneracy downstream. Surfacing it here makes the silent case visible.
+            from analytics.sensitivity.engine import _resolves_in_config
+
+            if not _resolves_in_config(cfg, name):
+                logger.warning(
+                    "monte_carlo.parameters[%d].name %r does not resolve to an existing "
+                    "config path; its sampled override is a likely DEAD key -> trials will "
+                    "fall to the toy metric and the MC risk distribution will be degenerate. "
+                    "Use a valid dotted path (e.g. capex.usd_total, project.capacity_factor).",
+                    idx, name,
+                )
+
             param_names.append(name)
             bounds.append((low, high))
             kinds.append(kind)
