@@ -96,15 +96,35 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # capacity_mw (159.6 vs the real 56) — see the scenario's expected_results note.
     # M3e: degradation 0.005 -> 0.5 (honest 0.5%/yr aging) deepened it, and the IRR-floor
     # fix lets the project IRR report its true NEGATIVE value rather than 0.0.
-    # TLCF-EXPIRY re-baseline (Wave-1 audit): this loss-making deal carried early-year
-    # losses that, under the never-expiring-losses bug, shielded later profit forever and
-    # understated cash tax. With losses now expiring after the SL 6-year window, later-year
-    # tax rises and the (already negative) economics correctly deepen: projIRR -2.75% ->
-    # -3.46%, eqIRR -8.43% -> -10.53%. The fix only bites scenarios with persistent
-    # unused losses; the canonical wind lendercase is byte-identical.
+    # TLCF-EXPIRY re-baseline (Wave-1 audit) deepened the already-negative economics
+    # (losses now expire after the SL 6-year window, raising later-year cash tax). The
+    # round-5 #5 interest-tax-shield fix then lifted equity slightly (the deal has little
+    # taxable income to shield): current projIRR -3.46%, eqIRR -8.62%. The fixes only bite
+    # scenarios with persistent unused losses; the canonical wind lendercase is byte-identical.
     assert kpis["project_irr"] == pytest.approx(-0.0346, abs=0.005)
     assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.0877, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0862, abs=0.01)
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)  # sizer holds DSCR, sizes debt down
+
+
+def test_expected_results_block_matches_live_engine() -> None:
+    """Bind the scenario's expected_results financial pins to the live engine so they cannot
+    silently drift again (round-7 stale-pin fix). The mullikulam expected_results had gone
+    stale — its LLCR/PLCR predated PR #389 and no test read the block."""
+    import yaml
+
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+
+    exp = yaml.safe_load(SCENARIO.read_text())["expected_results"]
+    kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
+    assert kpis["project_irr"] == pytest.approx(exp["project_irr"], abs=2e-3)
+    assert kpis["equity_irr"] == pytest.approx(exp["equity_irr"], abs=2e-3)
+    assert kpis["project_npv"] / 1e6 == pytest.approx(exp["project_npv_m_usd"], abs=0.1)
+    assert kpis["equity_npv"] / 1e6 == pytest.approx(exp["equity_npv_m_usd"], abs=0.1)
+    assert kpis["equity_moic"] == pytest.approx(exp["equity_moic"], abs=2e-3)
+    assert kpis["min_dscr"] == pytest.approx(exp["min_dscr"], abs=1e-2)
+    assert kpis["avg_dscr"] == pytest.approx(exp["avg_dscr"], abs=2e-3)
+    assert kpis["llcr"] == pytest.approx(exp["llcr"], abs=2e-3)
+    assert kpis["plcr"] == pytest.approx(exp["plcr"], abs=2e-3)
