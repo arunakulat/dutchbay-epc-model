@@ -215,3 +215,9 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     assert kpis["project_npv"] == pytest.approx(-35505958.84579508, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999996, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)
+    # Round-7: the prudential (downside) NPV is now WIRED in the live pipeline — the metrics
+    # branch + WaccResult.prudential_npv were de-decorated by PR #369 but never fed. The CFADS
+    # discounted at the haircut WACC (~9.18% > the base discount) is below the base NPV.
+    assert kpis["project_npv_prudential"] == pytest.approx(-44426308.78605164, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.09179219736442805, abs=1e-9)
+    assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV
