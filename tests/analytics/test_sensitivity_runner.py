@@ -95,3 +95,24 @@ def test_adapter_percentage_mode() -> None:
     spec = parameter_to_engine_spec(param)
     assert spec["low"] == pytest.approx(900.0)
     assert spec["high"] == pytest.approx(1100.0)
+
+
+# ---------------------------------------------------------------------------
+# Wave-2 #23: degenerate (structurally flat) metric flag. A covenant-pinned
+# DSCR tornado under dual_dscr sizing returns all-zero bars; the suite must say
+# so loudly instead of silently presenting a chart of zeros as "no risk".
+# ---------------------------------------------------------------------------
+def test_live_metric_is_not_flagged_flat() -> None:
+    """project_irr genuinely moves, so flat_metric is False."""
+    suite = run_sensitivity_analysis(str(BASECASE), metric="project_irr")
+    assert suite.metadata.get("flat_metric") is False
+    assert "flat_metric_reason" not in suite.metadata
+
+
+def test_covenant_pinned_dscr_tornado_is_flagged_flat() -> None:
+    """min_dscr is pinned by dual_dscr debt sizing: every bar is ~0, so the suite
+    is flagged flat with a covenant-pinned reason rather than misrepresenting it."""
+    suite = run_sensitivity_analysis(str(BASECASE), metric="min_dscr")
+    assert max(abs(t.impact_abs) for t in suite.tornado_results) < 1e-9
+    assert suite.metadata.get("flat_metric") is True
+    assert "covenant" in suite.metadata.get("flat_metric_reason", "").lower()

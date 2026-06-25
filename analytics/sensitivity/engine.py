@@ -99,6 +99,51 @@ def _coerce_kpis(out: Mapping[str, Any]) -> Mapping[str, Any]:
     return out
 
 
+# DSCR/LLCR/PLCR are covenant-pinned under dual_dscr (target-DSCR) debt sizing: the
+# debt quantum is sized to hold the min ratio AT the covenant target, so a CAPEX/OPEX/
+# CF/tariff/tenor shock that would move the ratio is absorbed into the debt amount and
+# every tornado bar comes back ~0. A lender reading an all-zero DSCR tornado must be
+# told it is *structurally* flat (sweep gearing/balloon instead), not that the project
+# is risk-free. The _resolves_in_config guard only catches non-resolving KEYS; this
+# catches a resolving metric that simply cannot move.
+_COVENANT_METRIC_TOKENS = ("dscr", "llcr", "plcr")
+_FLAT_IMPACT_TOL = 1e-9
+
+
+def _flag_degenerate_metric(suite: SensitivitySuite, metric_key: str) -> SensitivitySuite:
+    """Stamp ``metadata['flat_metric']`` and warn when a metric's whole tornado is flat.
+
+    Sets ``flat_metric`` True only when there is at least one bar and every bar's
+    ``|impact_abs|`` is within ``_FLAT_IMPACT_TOL`` of zero; otherwise False. When flat,
+    adds a ``flat_metric_reason`` (covenant-pinned wording for DSCR-family metrics) and
+    logs a loud warning. ``SensitivitySuite.metadata`` is a mutable dict on a frozen
+    dataclass, so it is updated in place and the same suite returned.
+    """
+    bars = suite.tornado_results
+    max_impact = max((abs(t.impact_abs) for t in bars), default=0.0)
+    is_flat = bool(bars) and max_impact <= _FLAT_IMPACT_TOL
+    suite.metadata["flat_metric"] = is_flat
+    if is_flat:
+        covenant = any(tok in metric_key.lower() for tok in _COVENANT_METRIC_TOKENS)
+        reason = (
+            "covenant-pinned: debt is sized to the DSCR target under dual_dscr, so this "
+            "ratio is structurally invariant to the swept drivers — sweep a "
+            "covenant-relevant lever (gearing, balloon) instead"
+            if covenant
+            else "every driver bar is ~0 impact; the metric does not move under these sweeps"
+        )
+        suite.metadata["flat_metric_reason"] = reason
+        logger.warning(
+            "sensitivity metric '%s' is structurally FLAT (max |impact|=%.2e across "
+            "%d driver(s)): %s",
+            metric_key,
+            max_impact,
+            len(bars),
+            reason,
+        )
+    return suite
+
+
 def build_one_way_sensitivity_suite(
     *,
     base_config: Mapping[str, Any],
@@ -183,7 +228,7 @@ def build_one_way_sensitivity_suite(
             suite=suite, base_config=base_cfg, run_cfg=run_cfg.tail_risk
         )
 
-    return suite
+    return _flag_degenerate_metric(suite, metric_key)
 
 
 def run_sensitivity_analysis(
@@ -269,4 +314,4 @@ def run_sensitivity_analysis(
             suite=suite, base_config=base_cfg, run_cfg=run_cfg.tail_risk
         )
 
-    return suite
+    return _flag_degenerate_metric(suite, primary_metric)
