@@ -284,7 +284,7 @@ def test_curve_zero_or_negative_spot_fails_loud() -> None:
     replaced by the default (the old `... or default()` falsy-or trap)."""
     for bad in (0.0, -5.0):
         cfg = {"fx": {"curve": {"spot_lkr_usd": bad}}}
-        with pytest.raises(ValueError, match="spot_lkr_usd"):
+        with pytest.raises(ValueError, match="spot rate must be > 0"):
             compute_fx_curve(config=cfg, annual_rows=_annual_rows())
 
 
@@ -472,3 +472,48 @@ def test_risk_profile_zero_debt_should_not_crash() -> None:
     # If the bug is ever fixed, the returned profile must validate (sum ~100%).
     total_pct = profile.debt_lkr_pct + profile.debt_usd_pct + profile.debt_cny_pct
     assert 95.0 <= total_pct <= 105.0
+
+
+# ---------------------------------------------------------------------------
+# Wave-2: curve resolves the scenario's own rate; revenue_currencies [] preserved
+# ---------------------------------------------------------------------------
+
+
+def test_curve_resolves_scenario_rates_key() -> None:
+    """No scenario ships an fx.curve block — the rate is under fx.rates.lkr_per_usd. The
+    curve must use it, not silently fall back to the global default (Wave-2 fix)."""
+    curve = compute_fx_curve(
+        config={"fx": {"rates": {"lkr_per_usd": 350.0}}}, annual_rows=_annual_rows()
+    )
+    assert curve.lkr_usd == [350.0, 350.0]
+
+
+def test_curve_resolves_start_lkr_per_usd_then_pinned_rate() -> None:
+    """fx.start_lkr_per_usd and fx.source.pinned_rate are accepted fallbacks for the spot."""
+    c1 = compute_fx_curve(
+        config={"fx": {"start_lkr_per_usd": 310.0}}, annual_rows=_annual_rows()
+    )
+    assert c1.lkr_usd == [310.0, 310.0]
+    c2 = compute_fx_curve(
+        config={"fx": {"source": {"pinned_rate": 305.0}}}, annual_rows=_annual_rows()
+    )
+    assert c2.lkr_usd == [305.0, 305.0]
+
+
+def test_curve_canonical_is_byte_identical_rate_equals_default() -> None:
+    """The canonical lender case pins 333.79 (== the config default), so resolving from the
+    scenario rate is byte-identical to the previous default-only behaviour."""
+    curve = compute_fx_curve(
+        config={"fx": {"rates": {"lkr_per_usd": float(DEFAULT_RATE)}}},
+        annual_rows=_annual_rows(),
+    )
+    assert curve.lkr_usd == [DEFAULT_RATE, DEFAULT_RATE]
+
+
+def test_block_revenue_currencies_empty_list_is_preserved() -> None:
+    """An explicit empty revenue_currencies list is NOT silently replaced by ['LKR']
+    (the falsy-or family, same as the fx spot trap)."""
+    block = compute_fx_structured_block(
+        config={"FX": {"revenue_currencies": []}}, debt_result={}, annual_rows=[]
+    )
+    assert block.revenue_currencies == []
