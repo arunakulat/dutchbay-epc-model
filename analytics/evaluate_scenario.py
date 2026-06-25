@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from analytics.contracts_v14 import ScenarioResult
+from analytics.evaluation_v14 import _expand_dotted_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
@@ -93,8 +94,18 @@ def evaluate_with_overrides(
     # 1. Load base v14 config via the canonical loader.
     raw_cfg = load_scenario_config(base_path)
 
-    # 2. Apply nested overrides (if any).
-    merged_cfg = _deep_merge_dicts(raw_cfg, overrides or {}) if overrides else raw_cfg
+    # 2. Apply overrides (if any). Expand flat *dotted* keys
+    #    ("capex.usd_total": 5e8) into nested dicts FIRST, using the SAME expander as
+    #    evaluation_v14.evaluate_with_overrides, so both gateways share one override
+    #    contract. Without this, _deep_merge_dicts treated a dotted key as a literal
+    #    top-level key and silently dropped it — the phantom-solver footgun where a
+    #    solver sweeping "capex.usd_total" through this gateway no-ops while the
+    #    optimizer's gateway honours it. Nested-dict overrides pass through unchanged.
+    merged_cfg = (
+        _deep_merge_dicts(raw_cfg, _expand_dotted_overrides(overrides))
+        if overrides
+        else raw_cfg
+    )
 
     # 3. Call the canonical v14 pipeline.
     pipeline_result = run_v14_pipeline(
