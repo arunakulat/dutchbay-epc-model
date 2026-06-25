@@ -118,3 +118,33 @@ def test_single_fx_spot_override_fans_out_to_all_pinned_keys() -> None:
         RunPipelineRequest(config_path=LENDER, overrides={"fx.start_lkr_per_usd": 360.0})
     )
     assert resp.scenario_name  # ran to completion, no 422
+
+
+def test_debt_schedule_dscr_aligns_with_outstanding_and_avg_dscr_nonnull() -> None:
+    """Round-4: the debt schedule must align DSCR with debt_outstanding/service (use the
+    full-timeline raw_dscr_series, not the compacted operating-only series) and avg_dscr must
+    be derived (was structurally null — read a nonexistent dscr_mean key)."""
+    resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
+    assert resp.debt.avg_dscr is not None and resp.debt.avg_dscr > 1.0
+    # construction-period rows (no debt service yet) carry DSCR None — proving the per-row
+    # DSCR shares the full timeline with outstanding/service (not the compacted operating
+    # series, which would have put an operating DSCR on construction row 1).
+    con = [r for r in resp.debt.schedule if (r.debt_service_usd or 0) == 0.0]
+    assert con and all(r.dscr is None for r in con)
+    op = [r for r in resp.debt.schedule if (r.debt_service_usd or 0) > 0]
+    assert op and all(r.dscr is not None for r in op)
+
+
+def test_contradictory_fx_spot_override_is_rejected_not_silently_collapsed() -> None:
+    """Round-4: two FX-spot keys overridden to DIFFERENT values must NOT be silently
+    collapsed to one — the contradiction reaches _assert_fx_spot_consistency -> 422."""
+    import yaml
+    from fastapi import HTTPException
+
+    cfg = yaml.safe_load(Path(LENDER).read_text())
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(
+            config=cfg,
+            overrides={"fx.rates.lkr_per_usd": 350.0, "fx.source.pinned_rate": 400.0},
+        ))
+    assert exc.value.status_code == 422
