@@ -92,3 +92,19 @@ def test_validation_mode_rejects_undocumented_value() -> None:
 def test_validation_mode_accepts_strict_and_off() -> None:
     assert RunPipelineRequest(config_path=LENDER, validation_mode="strict").validation_mode == "strict"
     assert RunPipelineRequest(config_path=LENDER, validation_mode="off").validation_mode == "off"
+
+
+def test_inline_config_with_divergent_fx_spot_rejected() -> None:
+    """An inline/API config that bypasses load_scenario_config still gets the FX spot
+    cross-assert (round-2 gap): divergent fx.rates/start/pinned -> 422, not a
+    self-inconsistent lender pack. (MC/sensitivity perturbations go straight to
+    run_v14_pipeline and are intentionally NOT cross-asserted.)"""
+    import yaml
+    from fastapi import HTTPException
+
+    cfg = yaml.safe_load(Path(LENDER).read_text())
+    cfg["fx"]["rates"]["lkr_per_usd"] = 250.0  # diverge from start_lkr_per_usd
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(config=cfg))
+    assert exc.value.status_code == 422
+    assert "inconsistent LKR/USD spot" in str(exc.value.detail)
