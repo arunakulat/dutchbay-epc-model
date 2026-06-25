@@ -332,3 +332,20 @@ class TestMonteCarloRegressionPins:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_degradation_hook_drives_live_project_degradation_key() -> None:
+    """The MC degradation hook now writes the LIVE engine key project.degradation (was the
+    dead wind.degradation_rate, silently ignored). Default-off returns overrides unchanged."""
+    from analytics.mc.degradation import apply_degradation_if_enabled
+
+    off = apply_degradation_if_enabled(
+        base_cfg={"monte_carlo": {"degradation": {"enabled": False}}}, overrides={}
+    )
+    assert off == {}  # disabled -> no-op
+    on = apply_degradation_if_enabled(
+        base_cfg={"monte_carlo": {"degradation": {"enabled": True, "default_rate": 0.6}}},
+        overrides={},
+    )
+    assert on == {"project.degradation": 0.6}  # live key, not wind.degradation_rate
+    assert "wind.degradation_rate" not in on
