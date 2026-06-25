@@ -16,6 +16,7 @@ from typing import Any, Dict
 import pytest
 
 from analytics.fx.fx_fetch import default_fx_lkr_per_usd
+from finance.cashflow_v14_tax import TaxConfig
 from finance.cashflow_v14_params import (
     _build_cashflow_params,
     _extract_parameters,
@@ -210,45 +211,60 @@ def test_build_clean_config_passes_required_guard() -> None:
 
 
 # ---------------------------------------------------------------------------
-# enhanced_capital_allowance_pct — Wave-1 unit-trap remediation
+# enhanced_capital_allowance_pct — resolved + validated by the LIVE TaxConfig path
 #
-# Regression pins for the fix that removed the buggy `raw > 1 -> raw/100` percent
-# heuristic. The lever is an explicit MULTIPLIER on the depreciable base; the old
-# heuristic silently mangled the 1.5 (150%) multiplier that 9 of 10 scenarios use
-# into 0.015 — a 100x-too-small depreciation base.
+# Re-audit #1: the parallel resolution that once lived in _build_cashflow_params fed a
+# CashflowParams field NO computation read (the live depreciation path reads
+# tax_config.enhanced_capital_allowance_pct). That dead second source of truth was removed;
+# the multiplier is now resolved + validated exactly once, in cashflow_v14_tax.TaxConfig.
+# These pins moved with it.
 # ---------------------------------------------------------------------------
 
 
+def _tax_config(**overrides: Any) -> TaxConfig:
+    """A valid TaxConfig; override individual fields for the assertion under test."""
+    base: Dict[str, Any] = dict(
+        corporate_tax_rate=0.30,
+        depreciation_method="straight_line",
+        depreciation_start_year=1,
+        depreciation_years=10,
+        enhanced_allowance_applies=True,
+        enhanced_capital_allowance_pct=1.0,
+        loss_carryforward_years=6,
+        tax_holiday_start_year=1,
+        tax_holiday_years=0,
+        wht_on_interest_to_nonresidents=0.0,
+        wht_on_interest_enabled=False,
+        wht_gross_up=False,
+    )
+    base.update(overrides)
+    return TaxConfig(**base)
+
+
 def test_enhanced_allowance_multiplier_taken_as_is() -> None:
-    """A 1.5 (150% enhanced) multiplier resolves to 1.5, NOT the old buggy 0.015."""
-    cfg = _cfg()
-    cfg["tax"]["enhanced_capital_allowance_pct"] = 1.5
-    params = _build_cashflow_params(cfg)
-    assert params.enhanced_capital_allowance_pct == pytest.approx(1.5)
+    """A 1.5 (150% enhanced) multiplier is taken as-is, NOT the old buggy 0.015."""
+    assert _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct == 1.5
 
 
 def test_enhanced_allowance_zero_is_preserved_not_defaulted() -> None:
-    """A legitimate 0.0 is preserved (CESSPIT), not coerced to 1.0 by an `or`."""
-    cfg = _cfg()
-    cfg["tax"]["enhanced_capital_allowance_pct"] = 0.0
-    params = _build_cashflow_params(cfg)
-    assert params.enhanced_capital_allowance_pct == 0.0
+    """A legitimate 0.0 is preserved (CESSPIT), not coerced to 1.0."""
+    assert _tax_config(enhanced_capital_allowance_pct=0.0).enhanced_capital_allowance_pct == 0.0
 
 
-def test_enhanced_allowance_absent_defaults_to_unity() -> None:
-    """When the key is absent the multiplier defaults to 1.0 (standard allowance)."""
-    cfg = _cfg()
-    cfg["tax"].pop("enhanced_capital_allowance_pct", None)
-    params = _build_cashflow_params(cfg)
-    assert params.enhanced_capital_allowance_pct == pytest.approx(1.0)
-
-
-def test_enhanced_allowance_negative_raises() -> None:
-    """A negative multiplier fails loud rather than silently corrupting depreciation."""
-    cfg = _cfg()
-    cfg["tax"]["enhanced_capital_allowance_pct"] = -0.5
+def test_enhanced_allowance_negative_raises_in_taxconfig() -> None:
+    """A negative multiplier fails loud in TaxConfig.__post_init__ (the live single source)."""
     with pytest.raises(ValueError, match="enhanced_capital_allowance_pct"):
-        _build_cashflow_params(cfg)
+        _tax_config(enhanced_capital_allowance_pct=-0.5)
+
+
+def test_enhanced_allowance_is_not_a_cashflowparams_field() -> None:
+    """The dead second source of truth is gone: CashflowParams no longer carries it."""
+    import dataclasses
+
+    from finance.cashflow_v14_contracts import CashflowParams
+
+    field_names = {f.name for f in dataclasses.fields(CashflowParams)}
+    assert "enhanced_capital_allowance_pct" not in field_names
 
 
 # ---------------------------------------------------------------------------

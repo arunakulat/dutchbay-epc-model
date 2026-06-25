@@ -29,8 +29,11 @@ class CashflowParams:
     - depreciation_years: int (years)
     - tax_holiday_years: int (years)
     - tax_holiday_start_year: int (1-based year index)
-    - enhanced_capital_allowance_pct: float (decimal factor, e.g. 1.2 = 120%)
     - risk_haircut_pct: float (decimal, 0–1)
+
+    NOTE: enhanced_capital_allowance_pct is NOT a CashflowParams field — the live
+    depreciation path resolves + validates it via finance.cashflow_v14_tax.TaxConfig
+    (single source of truth); a parallel CashflowParams field here was dead and removed.
     """
 
     project_life_years: int
@@ -47,7 +50,6 @@ class CashflowParams:
     depreciation_years: int
     tax_holiday_years: int
     tax_holiday_start_year: int
-    enhanced_capital_allowance_pct: float
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
     curtailment_pct: float = 0.0

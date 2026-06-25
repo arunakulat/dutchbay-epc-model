@@ -146,6 +146,20 @@ class TaxConfig:
     plant_depreciation_years: Optional[int] = None  # SL Class 2 plant & machinery = 5 yr
     civil_depreciation_years: Optional[int] = None  # SL Class 4 buildings/civils = 20 yr
 
+    def __post_init__(self) -> None:
+        # enhanced_capital_allowance_pct is an explicit MULTIPLIER on the depreciable base
+        # (1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance) — only applied
+        # when enhanced_allowance_applies is true (see cashflow_v14.py). This is the SINGLE
+        # live resolution point; validate here so a negative multiplier fails loud
+        # regardless of construction path (the parallel CashflowParams resolver that once
+        # carried this check fed a dead field and was removed).
+        if self.enhanced_capital_allowance_pct < 0.0:
+            raise ValueError(
+                "tax.enhanced_capital_allowance_pct must be a non-negative multiplier "
+                "(1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance); got "
+                f"{self.enhanced_capital_allowance_pct}"
+            )
+
     @classmethod
     def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":
         """Build TaxConfig from the full scenario dict.
