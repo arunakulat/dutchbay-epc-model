@@ -42,8 +42,18 @@ except ImportError as e:
     pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
 
 
-# Canonical KPI keys the aggregator produces for the toy-fallback path.
-EXPECTED_KPIS = {"project_npv", "project_irr", "dscr_min", "llcr", "plcr"}
+# Canonical KPI keys the aggregator produces. The toy fallback now emits the SAME 7-key
+# set a real trial returns (incl. equity_irr / equity_npv) so mixed real+toy runs build
+# uniform-length arrays and never trip the equal-length guard (Wave-2 MC robustness fix).
+EXPECTED_KPIS = {
+    "project_npv",
+    "project_irr",
+    "equity_irr",
+    "equity_npv",
+    "dscr_min",
+    "llcr",
+    "plcr",
+}
 EXPECTED_PERCENTILE_LEVELS = {5, 10, 50, 90, 95}
 
 

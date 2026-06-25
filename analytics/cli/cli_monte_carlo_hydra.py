@@ -87,6 +87,23 @@ from analytics.mc.engine import run_monte_carlo_analysis
 logger = logging.getLogger(__name__)
 
 
+def _derive_run_status(
+    iterations: int, failed_iterations: int, toy_fallback_count: int
+) -> str:
+    """Classify an MC run for the CLI payload instead of hardcoding "success".
+
+    - ``degenerate``: every trial fell back to TOY KPIs (no real evaluation succeeded) —
+      the reported metrics are fabricated and must not read as a clean success.
+    - ``degraded``: some trials failed real evaluation or fell back to toy.
+    - ``success``: all trials evaluated for real.
+    """
+    if iterations > 0 and toy_fallback_count >= iterations:
+        return "degenerate"
+    if toy_fallback_count > 0 or failed_iterations > 0:
+        return "degraded"
+    return "success"
+
+
 @hydra.main(
     version_base="1.3",
     config_path="../../conf",
@@ -174,8 +191,24 @@ def main(cfg: DictConfig) -> None:
         # MonteCarloResult is a frozen dataclass (analytics.contracts_v14), not a
         # dict: consume its attributes rather than subscripting. There is no
         # execution_time_seconds field on the result, so the CLI measures it.
+        #
+        # Derive status from the actual run instead of hardcoding "success": a run where
+        # every trial fell back to TOY KPIs (real evaluation failed on all of them) was
+        # previously reported as success with fabricated metrics. toy_fallback_count ==
+        # iterations means NO real evaluation succeeded -> degenerate; any toy fallback or
+        # failed trial -> degraded; otherwise -> success.
+        iterations = result.iterations or n_trials
+        toy_fallback_count = int((result.metadata or {}).get("toy_fallback_count", 0) or 0)
+        success_rate_pct = result.success_rate()
+        status = _derive_run_status(
+            iterations, result.failed_iterations, toy_fallback_count
+        )
+
         payload: dict[str, Any] = {
-            "status": "success",
+            "status": status,
+            "success_rate_pct": round(success_rate_pct, 2),
+            "failed_iterations": result.failed_iterations,
+            "toy_fallback_count": toy_fallback_count,
             "n_trials": n_trials,
             "seed": seed,
             "execution_time_seconds": round(execution_time_seconds, 4),
@@ -185,6 +218,17 @@ def main(cfg: DictConfig) -> None:
             "config_path": str(config_path),
             "output_dir": str(output_dir),
         }
+
+        if status != "success":
+            logger.warning(
+                "Monte Carlo run is %s: %d/%d trials fell back to toy KPIs, %d failed "
+                "(success_rate=%.1f%%) — reported metrics are NOT fully real.",
+                status,
+                toy_fallback_count,
+                iterations,
+                result.failed_iterations,
+                success_rate_pct,
+            )
 
         logger.info(
             "Monte Carlo analysis complete: %d trials, execution_time=%.2fs",
