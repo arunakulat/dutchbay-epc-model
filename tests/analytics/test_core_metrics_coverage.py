@@ -92,8 +92,18 @@ def test_clean_dscr_series_none_and_empty() -> None:
 def test_clean_dscr_series_drops_invalid_entries() -> None:
     raw = [None, "not-a-number", float("nan"), float("inf"), -1.0, 0.0, "1.5", 2.0]
     cleaned = list(_clean_dscr_series(raw))
-    # Only the positive, finite, coercible values remain.
-    assert cleaned == [1.5, 2.0]
+    # Drop ONLY None / non-coercible / non-finite. A finite DSCR <= 0.0 is a REAL
+    # coverage BREACH and is RETAINED (Wave-2 fix: align with the debt engine's
+    # _clean_public_dscr_series so the KPI min_dscr cannot hide a breach year).
+    assert cleaned == [-1.0, 0.0, 1.5, 2.0]
+
+
+def test_clean_dscr_series_retains_finite_breach_so_min_matches_debt_engine() -> None:
+    """A breaching series' KPI min must equal the worst finite year, not an optimistic
+    positive value (the bug: 0.0 / negative breaches were silently dropped)."""
+    cleaned = list(_clean_dscr_series([1.5, 1.4, 0.0, -0.3, 1.2]))
+    assert cleaned == [1.5, 1.4, 0.0, -0.3, 1.2]
+    assert min(cleaned) == -0.3
 
 
 # ---------------------------------------------------------------------------
