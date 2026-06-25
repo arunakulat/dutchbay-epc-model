@@ -502,7 +502,15 @@ def compute_fx_risk_profile(
     # fx.uncertainty_pct (was a hardcoded 0.05 that ignored the declared FX volatility).
     if var_shock_pct <= 0.0:
         raise ValueError(f"var_shock_pct must be > 0; got {var_shock_pct!r}")
-    var_95_usd_million = (total_debt_lkr * var_shock_pct) / 1e6
+    # Apply the declared FX hedge: only the UN-hedged residual of the exposed (LKR-
+    # denominated, USD-equivalent) debt carries VaR. hedging_coverage_pct was read onto the
+    # block but never reduced the VaR — a declared mitigant that left risk overstated.
+    # Clamp to [0,1]; 0% coverage -> full exposure (byte-identical for unhedged scenarios).
+    # (fx_match_ratio is a natural-hedge concept — matching FX revenue to FX debt — not
+    # modelled in this simplified single-shock VaR.)
+    hedge_frac = max(0.0, min(1.0, fx_block.hedging_coverage_pct / 100.0))
+    residual_lkr = total_debt_lkr * (1.0 - hedge_frac)
+    var_95_usd_million = (residual_lkr * var_shock_pct) / 1e6
     cvar_95_usd_million = var_95_usd_million * 1.5  # CVaR ~1.5x VaR (normal-tail heuristic)
 
     # Revenue percentages (assume all in LKR unless specified otherwise)

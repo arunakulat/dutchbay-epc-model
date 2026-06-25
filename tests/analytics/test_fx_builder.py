@@ -391,7 +391,8 @@ def test_risk_profile_happy_path_percentages_and_var() -> None:
     assert profile.debt_concentration_hhi == pytest.approx(0.46)
     # VaR_95 = LKR-denominated debt (already USD-equiv) * 5%, in USD millions.
     # No spot division (the figure is already USD). CVaR = 1.5 * VaR.
-    expected_var = (900.0 * 0.05) / 1e6
+    # _full_fx_config declares hedging_coverage_pct=30, so VaR is on the 70% residual.
+    expected_var = (900.0 * 0.05 * 0.70) / 1e6
     assert profile.var_95_usd_million == pytest.approx(expected_var)
     assert profile.cvar_95_usd_million == pytest.approx(expected_var * 1.5)
     assert profile.cvar_95_usd_million >= profile.var_95_usd_million
@@ -413,7 +414,8 @@ def test_risk_profile_var_is_independent_of_curve_spot() -> None:
     p_b = compute_fx_risk_profile(
         fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 400.0])
     )
-    expected_var = (900.0 * 0.05) / 1e6
+    # _full_fx_config declares hedging_coverage_pct=30 -> VaR on the 70% residual.
+    expected_var = (900.0 * 0.05 * 0.70) / 1e6
     assert p_a.var_95_usd_million == pytest.approx(expected_var)
     assert p_b.var_95_usd_million == pytest.approx(expected_var)
 
@@ -527,3 +529,18 @@ def test_block_revenue_currencies_empty_list_is_preserved() -> None:
         config={"FX": {"revenue_currencies": []}}, debt_result={}, annual_rows=[]
     )
     assert block.revenue_currencies == []
+
+
+def test_hedging_coverage_reduces_var() -> None:
+    """A declared FX hedge (hedging_coverage_pct) reduces the VaR on the residual exposure;
+    0% coverage is byte-identical to the unhedged VaR (round-3 fix — the field was read onto
+    the block but never reduced risk)."""
+    vol = [FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=1000.0)]
+    curve = compute_fx_curve(config={}, annual_rows=[{"year": 0}])
+    v_unhedged = compute_fx_risk_profile(
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=0.0), fx_curve=curve
+    ).var_95_usd_million
+    v_hedged = compute_fx_risk_profile(
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=40.0), fx_curve=curve
+    ).var_95_usd_million
+    assert v_hedged == pytest.approx(v_unhedged * 0.60)  # 40% hedged -> 60% residual
