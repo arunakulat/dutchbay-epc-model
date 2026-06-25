@@ -26,7 +26,17 @@ def apply_degradation_if_enabled(*, base_cfg: Mapping[str, Any], overrides: Dict
     # finance.cashflow_v14_params). The previous key 'wind.degradation_rate' was not read by
     # the cashflow engine, so an enabled degradation block silently did nothing. Default off
     # (enabled: false) -> overrides returned unchanged (byte-identical).
-    default_rate = float(degr.get("default_rate", 0.0))
-    rate = float(overrides.get("project.degradation", default_rate))
-    overrides["project.degradation"] = rate
+    #
+    # A Monte-Carlo SAMPLED draw may arrive either as the flat dotted key
+    # 'project.degradation' OR nested under overrides['project']['degradation']. If EITHER
+    # is present, the sampler already drives the live key — do NOT clobber it with the
+    # static default_rate (the previous flat .get missed the nested form and overwrote the
+    # sampled draw, collapsing the degradation distribution to a constant).
+    if "project.degradation" in overrides:
+        return overrides
+    project_block = overrides.get("project")
+    if isinstance(project_block, Mapping) and "degradation" in project_block:
+        return overrides
+
+    overrides["project.degradation"] = float(degr.get("default_rate", 0.0))
     return overrides
