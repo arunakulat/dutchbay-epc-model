@@ -35,10 +35,10 @@ def _run(**fin_overrides):
 def test_default_off_preserves_canonical() -> None:
     kpis, d = _run()  # no bind_downside -> default off
     # Canonical after the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr aging):
-    # projIRR 5.05%, minDSCR 1.30. Wave-1 equity-waterfall fix releases the DSRA to the
-    # sponsor at maturity (was -2.47%, +164bps to -0.82%); still negative to sponsors.
+    # projIRR 5.05%, minDSCR 1.30. The round-5 interest-tax-shield fix lifts equity IRR
+    # -0.82% -> +2.42% (the levered equity path now bears levered tax); project IRR unchanged.
     assert kpis["project_irr"] == pytest.approx(0.0505, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0082, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(0.0242, abs=0.003)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"

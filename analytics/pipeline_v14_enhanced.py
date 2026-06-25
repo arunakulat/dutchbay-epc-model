@@ -714,6 +714,32 @@ def run_v14_pipeline_enhanced(
             equity_block = dict(equity_cfg.get("equity", {}) or {})
             equity_block["discount_rate"] = equity_discount
             equity_cfg["equity"] = equity_block
+        # Two-pass interest tax shield (round-5 #5). The first build_annual_rows pass
+        # computed CFADS with UNLEVERED tax (interest_expense=0) — correct for the DSCR
+        # sizing and the project-IRR-vs-after-tax-WACC path (there the shield is captured in
+        # the after-tax cost of debt inside the WACC, so adding it to CFADS would double
+        # count). But the levered EQUITY waterfall must bear LEVERED tax: the SPV legally
+        # deducts its actual debt interest and that tax saving accrues to equity. The prior
+        # single-pass charged equity unlevered tax, understating equity cash and equity IRR,
+        # and left tax.interest_deductibility decorative (toggling it changed nothing).
+        # Rebuild an EQUITY-FACING cashflow with the real per-operating-year interest (the
+        # enriched rows already carry interest_usd with the bridge folded into year 1; the
+        # tax engine deducts it in LKR). Unlevered annual_rows_enriched stays the basis for
+        # the project KPIs/DSCR/LLCR/PLCR above — the shield is confined to the equity path.
+        tax_block = cfg.get("tax", {}) or {}
+        interest_deductible = bool(tax_block.get("interest_deductibility", True))
+        if interest_deductible:
+            op_interest_lkr = [
+                float(row.get("interest_usd") or 0.0) * float(row.get("fx_rate") or 0.0)
+                for row in annual_rows_enriched
+            ]
+            equity_rows = _enrich_annual_rows_with_debt(
+                build_annual_rows(cfg, interest_expense_series=op_interest_lkr),
+                debt_result,
+            )
+        else:
+            equity_rows = annual_rows_enriched
+
         # Lazy import: breaks the analytics<->finance module-load cycle. This
         # module is pulled in by the analytics package init, and the hydra module
         # imports back into analytics, so a cold finance-side import would hit a
@@ -724,7 +750,7 @@ def run_v14_pipeline_enhanced(
 
         equity_distribution = calculate_equity_distribution_from_pipeline(
             config=equity_cfg,
-            annual_rows=annual_rows_enriched,
+            annual_rows=equity_rows,
             debt_result=debt_result,
             kpis=kpis,
         )
