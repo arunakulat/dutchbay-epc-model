@@ -236,35 +236,30 @@ def compute_aep_p_values(
 def derive_capacity_factor_from_aep(
     net_aep_gwh: float,
     capacity_mw: float,
-    project_life_years: int = 25,
 ) -> float:
-    """Reverse-engineer capacity factor from net AEP.
-    
-    Formula:
-        CF = net_aep_gwh / (capacity_mw * 8760 * project_life_years / 1000)
-    
-    Note: This gives the AVERAGE capacity factor over project life,
-    assuming constant AEP. For year-specific CF, use degradation curves.
-    
+    """Reverse-engineer the (annual) capacity factor from net AEP.
+
+    Formula (matches the implementation):
+        CF = net_aep_gwh / (capacity_mw * 8.760)
+    where 8.760 GWh/MW is one year at 100% output (8760 h). net_aep_gwh is an ANNUAL
+    figure, so project life does not enter — the previous ``project_life_years`` parameter
+    and the ``... * project_life_years / 1000`` docstring formula were both dead/wrong (the
+    code never used the parameter).
+
     Args:
-        net_aep_gwh: Net annual energy production (GWh/year)
+        net_aep_gwh: Net ANNUAL energy production (GWh/year)
         capacity_mw: Installed capacity (MW)
-        project_life_years: Project lifetime (years)
-    
+
     Returns:
         Capacity factor (0-1 decimal)
-    
+
     Raises:
         ValueError: If inputs invalid or CF outside realistic range
-    
+
     Example:
-        >>> cf = derive_capacity_factor_from_aep(
-        ...     net_aep_gwh=485.32,
-        ...     capacity_mw=149.5,
-        ...     project_life_years=25
-        ... )
-        >>> cf
-        0.371
+        >>> cf = derive_capacity_factor_from_aep(net_aep_gwh=473.8, capacity_mw=150.0)
+        >>> round(cf, 3)
+        0.36
     """
     if capacity_mw <= 0:
         raise ValueError(f"capacity_mw must be positive, got {capacity_mw}")

@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
 # Canonical post-Wave-1 KPIs (equity-waterfall + irr fixes already merged).
-_CANON_EQ_IRR = -0.008246893771461483
+_CANON_EQ_IRR = -0.006837694668605732
 _CANON_CFADS = 257097035.71124893
 
 

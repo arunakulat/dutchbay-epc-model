@@ -78,3 +78,73 @@ def test_bad_config_path_raises_http_400() -> None:
     with pytest.raises(HTTPException) as exc:
         run_pipeline(RunPipelineRequest(config_path="scenarios/does_not_exist.yaml"))
     assert exc.value.status_code == 400
+
+
+def test_validation_mode_rejects_undocumented_value() -> None:
+    """validation_mode is constrained to the engine's actual modes (strict|off). The
+    previously-documented 'lenient' is not accepted by run_v14_pipeline, so it is now
+    rejected at the API boundary with a Pydantic ValidationError (422), not deep in the
+    engine."""
+    with pytest.raises(ValidationError):
+        RunPipelineRequest(config_path=LENDER, validation_mode="lenient")
+
+
+def test_validation_mode_accepts_strict_and_off() -> None:
+    assert RunPipelineRequest(config_path=LENDER, validation_mode="strict").validation_mode == "strict"
+    assert RunPipelineRequest(config_path=LENDER, validation_mode="off").validation_mode == "off"
+
+
+def test_inline_config_with_divergent_fx_spot_rejected() -> None:
+    """An inline/API config that bypasses load_scenario_config still gets the FX spot
+    cross-assert (round-2 gap): divergent fx.rates/start/pinned -> 422, not a
+    self-inconsistent lender pack. (MC/sensitivity perturbations go straight to
+    run_v14_pipeline and are intentionally NOT cross-asserted.)"""
+    import yaml
+    from fastapi import HTTPException
+
+    cfg = yaml.safe_load(Path(LENDER).read_text())
+    cfg["fx"]["rates"]["lkr_per_usd"] = 250.0  # diverge from start_lkr_per_usd
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(config=cfg))
+    assert exc.value.status_code == 422
+    assert "inconsistent LKR/USD spot" in str(exc.value.detail)
+
+
+def test_single_fx_spot_override_fans_out_to_all_pinned_keys() -> None:
+    """The documented single-lever fx.start_lkr_per_usd override is fanned out to
+    fx.rates.lkr_per_usd and fx.source.pinned_rate, so it stays self-consistent and runs
+    (it previously tripped the spot cross-assert -> 422). Round-3 fix."""
+    resp = run_pipeline(
+        RunPipelineRequest(config_path=LENDER, overrides={"fx.start_lkr_per_usd": 360.0})
+    )
+    assert resp.scenario_name  # ran to completion, no 422
+
+
+def test_debt_schedule_dscr_aligns_with_outstanding_and_avg_dscr_nonnull() -> None:
+    """Round-4: the debt schedule must align DSCR with debt_outstanding/service (use the
+    full-timeline raw_dscr_series, not the compacted operating-only series) and avg_dscr must
+    be derived (was structurally null — read a nonexistent dscr_mean key)."""
+    resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
+    assert resp.debt.avg_dscr is not None and resp.debt.avg_dscr > 1.0
+    # construction-period rows (no debt service yet) carry DSCR None — proving the per-row
+    # DSCR shares the full timeline with outstanding/service (not the compacted operating
+    # series, which would have put an operating DSCR on construction row 1).
+    con = [r for r in resp.debt.schedule if (r.debt_service_usd or 0) == 0.0]
+    assert con and all(r.dscr is None for r in con)
+    op = [r for r in resp.debt.schedule if (r.debt_service_usd or 0) > 0]
+    assert op and all(r.dscr is not None for r in op)
+
+
+def test_contradictory_fx_spot_override_is_rejected_not_silently_collapsed() -> None:
+    """Round-4: two FX-spot keys overridden to DIFFERENT values must NOT be silently
+    collapsed to one — the contradiction reaches _assert_fx_spot_consistency -> 422."""
+    import yaml
+    from fastapi import HTTPException
+
+    cfg = yaml.safe_load(Path(LENDER).read_text())
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(
+            config=cfg,
+            overrides={"fx.rates.lkr_per_usd": 350.0, "fx.source.pinned_rate": 400.0},
+        ))
+    assert exc.value.status_code == 422

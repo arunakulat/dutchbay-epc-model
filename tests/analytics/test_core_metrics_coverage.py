@@ -71,14 +71,25 @@ def test_summary_stats_percentile_edges_hit_min_and_max() -> None:
     assert stats["min"] <= stats["p10"] <= stats["median"] <= stats["p90"] <= stats["max"]
 
 
-def test_summary_stats_percentile_internal_q_clamps() -> None:
-    # Directly drive the nested _percentile via a series so q<=0 / q>=1 / empty
-    # are observable: build a series and call helper through _summary_stats keys
-    # plus assert the bare-edges using the public stats (p10/p90 internal call).
+def test_summary_stats_percentile_is_linear_interpolated() -> None:
+    # _percentile now uses linear interpolation between order statistics (the same
+    # convention statistics.median uses), not nearest-rank rounding. For [2, 4]:
+    #   p10 -> pos = 0.10*(2-1) = 0.10 -> 2*(0.90) + 4*(0.10) = 2.2
+    #   p90 -> pos = 0.90*(2-1) = 0.90 -> 2*(0.10) + 4*(0.90) = 3.8
     stats = _summary_stats([2.0, 4.0])
-    # Two-element series: p10 -> first, p90 -> last.
-    assert stats["p10"] == 2.0
-    assert stats["p90"] == 4.0
+    assert math.isclose(stats["p10"], 2.2, rel_tol=1e-12)
+    assert math.isclose(stats["p90"], 3.8, rel_tol=1e-12)
+
+
+def test_summary_stats_p50_equals_median() -> None:
+    # The whole point of aligning _percentile to interpolation: an interpolated p50
+    # equals the reported median for an even-length series (was 2.0 vs 2.5 under the
+    # old nearest-rank convention).
+    vals = [1.0, 2.0, 3.0, 4.0]
+    stats = _summary_stats(vals)
+    # reconstruct p50 the same way _percentile does (pos = 0.5*(n-1) = 1.5 -> 2.5)
+    interp_p50 = (vals[1] + vals[2]) / 2.0
+    assert math.isclose(stats["median"], interp_p50, rel_tol=1e-12)
 
 
 # ---------------------------------------------------------------------------

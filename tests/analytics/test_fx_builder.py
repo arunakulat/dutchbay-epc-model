@@ -51,29 +51,29 @@ DEFAULT_RATE = default_fx_lkr_per_usd()  # config-sourced (~333.79), never the s
 
 
 def _annual_rows() -> List[Dict[str, Any]]:
-    """Two well-formed annual rows with mixed-currency debt and LKR revenue."""
+    """Two well-formed annual rows. Per-currency DEBT is no longer read from the rows
+    (it comes from debt_result['principal_by_tranche']); the builder reads revenue_lkr,
+    revenue_usd and interest_expense_lkr from the rows."""
     return [
         {
             "year": 2025,
-            "total_debt_lkr": 1000.0,
-            "total_debt_usd": 2000.0,
-            "total_debt_cny": 0.0,
             "revenue_lkr": 500.0,
             "revenue_usd": 0.0,
-            "interest_lkr": 80.0,
-            "principal_lkr": 50.0,
+            "interest_expense_lkr": 80.0,
         },
         {
             "year": 2026,
-            "total_debt_lkr": 900.0,
-            "total_debt_usd": 1800.0,
-            "total_debt_cny": 300.0,
             "revenue_lkr": 550.0,
             "revenue_usd": 0.0,
-            "interest_lkr": 72.0,
-            "principal_lkr": 50.0,
+            "interest_expense_lkr": 72.0,
         },
     ]
+
+
+def _debt_result() -> Dict[str, Any]:
+    """Real v14 debt_result shape: per-currency committed principal (USD-equivalent).
+    LKR=900, USD=1800, CNY=300 -> 30/60/10 currency split."""
+    return {"principal_by_tranche": {"lkr": 900.0, "usd": 1800.0, "cny": 300.0}}
 
 
 def _full_fx_config() -> Dict[str, Any]:
@@ -106,7 +106,7 @@ def test_block_full_config_happy_path() -> None:
     """A fully-specified FX config maps straight through to the block fields."""
     block = compute_fx_structured_block(
         config=_full_fx_config(),
-        debt_result={"tranches": {"T1": {"currency": "USD"}, "T2": {"currency": "LKR"}}},
+        debt_result={"principal_by_tranche": {"usd": 1000.0, "lkr": 2000.0}},
         annual_rows=_annual_rows(),
     )
     assert isinstance(block, FXStructuredBlock)
@@ -117,24 +117,30 @@ def test_block_full_config_happy_path() -> None:
     assert block.hedging_coverage_pct == pytest.approx(30.0)
     assert block.revenue_currencies == ["LKR"]
     assert block.notes == "lender case"
-    assert block.debt_tranches == {"T1": "USD", "T2": "LKR"}
+    # tranche names map to their reporting currency (usd->USD, lkr->LKR)
+    assert block.debt_tranches == {"usd": "USD", "lkr": "LKR"}
     assert block.total_periods() == 2
 
 
 def test_block_volumetry_is_built_per_row() -> None:
-    """One FXVolumetry per annual row, with floats copied in and period = index."""
+    """One FXVolumetry per annual row; committed debt (USD-equiv) is constant across
+    periods (from principal_by_tranche), revenue/interest come from the rows."""
     rows = _annual_rows()
     block = compute_fx_structured_block(
-        config={}, debt_result={}, annual_rows=rows
+        config={}, debt_result=_debt_result(), annual_rows=rows
     )
     assert len(block.volumetry) == len(rows)
     first, last = block.volumetry[0], block.volumetry[-1]
     assert first.period == 0
     assert last.period == 1
-    assert first.total_debt_lkr == pytest.approx(1000.0)
+    # committed debt is the same every period: LKR=900, USD=1800, CNY=300
+    assert first.total_debt_lkr == pytest.approx(900.0)
+    assert first.total_debt_usd == pytest.approx(1800.0)
     assert last.total_debt_cny == pytest.approx(300.0)
-    assert last.interest_lkr == pytest.approx(72.0)
-    assert last.principal_lkr == pytest.approx(50.0)
+    # revenue/interest are per-period from the cashflow rows
+    assert last.revenue_lkr == pytest.approx(550.0)
+    assert last.interest_lkr == pytest.approx(72.0)  # from interest_expense_lkr
+    assert last.principal_lkr == pytest.approx(0.0)
 
 
 def test_block_defaults_when_no_fx_section() -> None:
@@ -183,14 +189,14 @@ def test_block_revenue_currencies_string_is_wrapped() -> None:
     assert block.revenue_currencies == ["USD"]
 
 
-def test_block_tranches_default_currency_is_usd() -> None:
-    """A tranche entry with no 'currency' key defaults to USD."""
+def test_block_unknown_tranche_name_defaults_to_usd() -> None:
+    """A tranche whose name is not in the LKR/USD/DFI/CNY map defaults to USD."""
     block = compute_fx_structured_block(
         config={},
-        debt_result={"tranches": {"DFI": {}}},
+        debt_result={"principal_by_tranche": {"mezzanine": 100.0}},
         annual_rows=[],
     )
-    assert block.debt_tranches == {"DFI": "USD"}
+    assert block.debt_tranches == {"mezzanine": "USD"}
 
 
 def test_block_non_mapping_fx_section_is_ignored() -> None:
@@ -205,11 +211,11 @@ def test_block_non_mapping_fx_section_is_ignored() -> None:
 
 
 def test_block_malformed_row_raises_valueerror() -> None:
-    """A non-numeric debt value in a row fails fast with a ValueError naming the row."""
-    bad_rows = [{"total_debt_lkr": "not_a_number"}]
+    """A non-numeric revenue value in a row fails fast with a ValueError naming the row."""
+    bad_rows = [{"revenue_lkr": "not_a_number"}]
     with pytest.raises(ValueError, match="Row 0 malformed"):
         compute_fx_structured_block(
-            config={}, debt_result={}, annual_rows=bad_rows
+            config={}, debt_result=_debt_result(), annual_rows=bad_rows
         )
 
 
@@ -224,7 +230,7 @@ def test_block_from_lender_scenario_yaml() -> None:
     assert "fx" in scenario  # sanity: the section we expect to drive defaults
     block = compute_fx_structured_block(
         config=scenario,
-        debt_result={"tranches": {"DFI_USD": {"currency": "USD"}}},
+        debt_result={"principal_by_tranche": {"dfi": 11.0}},
         annual_rows=_annual_rows(),
     )
     assert isinstance(block, FXStructuredBlock)
@@ -232,7 +238,8 @@ def test_block_from_lender_scenario_yaml() -> None:
     assert block.base_currency == "USD"
     # strategy not specified in this scenario shape -> safe default.
     assert block.strategy == "blended"
-    assert block.debt_tranches == {"DFI_USD": "USD"}
+    # DFI is a USD-denominated development-finance tranche.
+    assert block.debt_tranches == {"dfi": "USD"}
     assert block.total_periods() == 2
 
 
@@ -284,7 +291,7 @@ def test_curve_zero_or_negative_spot_fails_loud() -> None:
     replaced by the default (the old `... or default()` falsy-or trap)."""
     for bad in (0.0, -5.0):
         cfg = {"fx": {"curve": {"spot_lkr_usd": bad}}}
-        with pytest.raises(ValueError, match="spot_lkr_usd"):
+        with pytest.raises(ValueError, match="spot rate must be > 0"):
             compute_fx_curve(config=cfg, annual_rows=_annual_rows())
 
 
@@ -366,14 +373,14 @@ def test_risk_profile_happy_path_percentages_and_var() -> None:
     """Debt mix drives currency percentages, HHI, and a positive simplified VaR."""
     block = compute_fx_structured_block(
         config=_full_fx_config(),
-        debt_result={},
+        debt_result=_debt_result(),
         annual_rows=_annual_rows(),
     )
     curve = compute_fx_curve(config=_full_fx_config(), annual_rows=_annual_rows())
     profile = compute_fx_risk_profile(fx_block=block, fx_curve=curve)
 
     assert isinstance(profile, FXRiskProfile)
-    # final period: LKR=900, USD=1800, CNY=300 -> total 3000
+    # committed debt: LKR=900, USD=1800, CNY=300 -> total 3000 (USD-equiv)
     assert profile.debt_lkr_pct == pytest.approx(30.0)
     assert profile.debt_usd_pct == pytest.approx(60.0)
     assert profile.debt_cny_pct == pytest.approx(10.0)
@@ -382,25 +389,35 @@ def test_risk_profile_happy_path_percentages_and_var() -> None:
     assert total_pct == pytest.approx(100.0)
     # HHI = 0.3^2 + 0.6^2 + 0.1^2 = 0.46
     assert profile.debt_concentration_hhi == pytest.approx(0.46)
-    # VaR_95 = (LKR debt / final spot) * 5% ; CVaR = 1.5 * VaR
-    expected_var = (900.0 / 335.0) * 0.05
+    # VaR_95 = LKR-denominated debt (already USD-equiv) * 5%, in USD millions.
+    # No spot division (the figure is already USD). CVaR = 1.5 * VaR.
+    # _full_fx_config declares hedging_coverage_pct=30, so VaR is on the 70% residual.
+    expected_var = (900.0 * 0.05 * 0.70) / 1e6
     assert profile.var_95_usd_million == pytest.approx(expected_var)
     assert profile.cvar_95_usd_million == pytest.approx(expected_var * 1.5)
     assert profile.cvar_95_usd_million >= profile.var_95_usd_million
     assert profile.revenues_lkr_pct == pytest.approx(100.0)
 
 
-def test_risk_profile_uses_final_curve_spot_for_var() -> None:
-    """VaR scales with the LKR/USD spot taken from the curve's final year."""
+def test_risk_profile_var_is_independent_of_curve_spot() -> None:
+    """VaR is computed on USD-equivalent debt, so it does NOT depend on the curve spot
+    (the prior code wrongly divided an already-USD figure by spot). Two different curves
+    must yield the same VaR for the same debt."""
     block = compute_fx_structured_block(
         config=_full_fx_config(),
-        debt_result={},
+        debt_result=_debt_result(),
         annual_rows=_annual_rows(),
     )
-    # Build a curve with a deliberately different final spot to verify it's used.
-    curve = FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 300.0])
-    profile = compute_fx_risk_profile(fx_block=block, fx_curve=curve)
-    assert profile.var_95_usd_million == pytest.approx((900.0 / 300.0) * 0.05)
+    p_a = compute_fx_risk_profile(
+        fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 300.0])
+    )
+    p_b = compute_fx_risk_profile(
+        fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 400.0])
+    )
+    # _full_fx_config declares hedging_coverage_pct=30 -> VaR on the 70% residual.
+    expected_var = (900.0 * 0.05 * 0.70) / 1e6
+    assert p_a.var_95_usd_million == pytest.approx(expected_var)
+    assert p_b.var_95_usd_million == pytest.approx(expected_var)
 
 
 def test_risk_profile_no_volumetry_returns_minimal_usd_profile() -> None:
@@ -419,7 +436,7 @@ def test_risk_profile_revenue_not_lkr_sets_zero_pct() -> None:
     """If revenues are not in LKR, revenues_lkr_pct is 0.0."""
     block = compute_fx_structured_block(
         config={"FX": {"revenue_currencies": ["USD"]}},
-        debt_result={},
+        debt_result=_debt_result(),
         annual_rows=_annual_rows(),
     )
     curve = compute_fx_curve(config=_full_fx_config(), annual_rows=_annual_rows())
@@ -429,16 +446,11 @@ def test_risk_profile_revenue_not_lkr_sets_zero_pct() -> None:
 
 def test_risk_profile_all_usd_debt_concentration() -> None:
     """Single-currency (all USD) debt -> HHI of 1.0 and 100% USD attribution."""
-    rows = [
-        {
-            "year": 2025,
-            "total_debt_lkr": 0.0,
-            "total_debt_usd": 5000.0,
-            "total_debt_cny": 0.0,
-        }
-    ]
+    rows = [{"year": 2025, "revenue_lkr": 100.0}]
     block = compute_fx_structured_block(
-        config=_full_fx_config(), debt_result={}, annual_rows=rows
+        config=_full_fx_config(),
+        debt_result={"principal_by_tranche": {"usd": 5000.0}},
+        annual_rows=rows,
     )
     curve = compute_fx_curve(
         config={"FX": {"curve": {"lkr_usd": [330.0]}}}, annual_rows=rows
@@ -472,3 +484,63 @@ def test_risk_profile_zero_debt_should_not_crash() -> None:
     # If the bug is ever fixed, the returned profile must validate (sum ~100%).
     total_pct = profile.debt_lkr_pct + profile.debt_usd_pct + profile.debt_cny_pct
     assert 95.0 <= total_pct <= 105.0
+
+
+# ---------------------------------------------------------------------------
+# Wave-2: curve resolves the scenario's own rate; revenue_currencies [] preserved
+# ---------------------------------------------------------------------------
+
+
+def test_curve_resolves_scenario_rates_key() -> None:
+    """No scenario ships an fx.curve block — the rate is under fx.rates.lkr_per_usd. The
+    curve must use it, not silently fall back to the global default (Wave-2 fix)."""
+    curve = compute_fx_curve(
+        config={"fx": {"rates": {"lkr_per_usd": 350.0}}}, annual_rows=_annual_rows()
+    )
+    assert curve.lkr_usd == [350.0, 350.0]
+
+
+def test_curve_resolves_start_lkr_per_usd_then_pinned_rate() -> None:
+    """fx.start_lkr_per_usd and fx.source.pinned_rate are accepted fallbacks for the spot."""
+    c1 = compute_fx_curve(
+        config={"fx": {"start_lkr_per_usd": 310.0}}, annual_rows=_annual_rows()
+    )
+    assert c1.lkr_usd == [310.0, 310.0]
+    c2 = compute_fx_curve(
+        config={"fx": {"source": {"pinned_rate": 305.0}}}, annual_rows=_annual_rows()
+    )
+    assert c2.lkr_usd == [305.0, 305.0]
+
+
+def test_curve_canonical_is_byte_identical_rate_equals_default() -> None:
+    """The canonical lender case pins 333.79 (== the config default), so resolving from the
+    scenario rate is byte-identical to the previous default-only behaviour."""
+    curve = compute_fx_curve(
+        config={"fx": {"rates": {"lkr_per_usd": float(DEFAULT_RATE)}}},
+        annual_rows=_annual_rows(),
+    )
+    assert curve.lkr_usd == [DEFAULT_RATE, DEFAULT_RATE]
+
+
+def test_block_revenue_currencies_empty_list_is_preserved() -> None:
+    """An explicit empty revenue_currencies list is NOT silently replaced by ['LKR']
+    (the falsy-or family, same as the fx spot trap)."""
+    block = compute_fx_structured_block(
+        config={"FX": {"revenue_currencies": []}}, debt_result={}, annual_rows=[]
+    )
+    assert block.revenue_currencies == []
+
+
+def test_hedging_coverage_reduces_var() -> None:
+    """A declared FX hedge (hedging_coverage_pct) reduces the VaR on the residual exposure;
+    0% coverage is byte-identical to the unhedged VaR (round-3 fix — the field was read onto
+    the block but never reduced risk)."""
+    vol = [FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=1000.0)]
+    curve = compute_fx_curve(config={}, annual_rows=[{"year": 0}])
+    v_unhedged = compute_fx_risk_profile(
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=0.0), fx_curve=curve
+    ).var_95_usd_million
+    v_hedged = compute_fx_risk_profile(
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=40.0), fx_curve=curve
+    ).var_95_usd_million
+    assert v_hedged == pytest.approx(v_unhedged * 0.60)  # 40% hedged -> 60% residual

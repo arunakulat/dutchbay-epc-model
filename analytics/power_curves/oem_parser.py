@@ -173,10 +173,20 @@ def _apply_air_density_correction(
 
     curve = base_curve.copy()
     rho_ref = cast(float, specs["air_density_ref_kgm3"])
-    density_ratio = air_density_kgm3 / rho_ref
 
-    # Power scales with rho**(1/3) for a fixed blade design (IEC 61400-12-1).
-    curve["power_kw"] = curve["power_kw"] * (density_ratio ** (1.0 / 3.0))
+    # IEC 61400-12-1 air-density correction is a WIND-SPEED normalisation, NOT a power
+    # scaling: site power at wind speed v = the reference-density curve read at the shifted
+    # speed v * (rho_site/rho_ref)**(1/3). The previous code scaled POWER by
+    # (rho/rho_ref)**(1/3) — it applied the *velocity* exponent to power, overstating site
+    # AEP (~+2% at 1.15 kg/m^3) and diverging from the canonical wind_resource.bankable_aep
+    # engine. Reuse that engine's factor so the two AEP paths agree. Byte-identical at the
+    # reference density (factor == 1.0 -> the curve reads itself).
+    from wind_resource.bankable_aep import density_velocity_factor
+
+    factor = density_velocity_factor(air_density_kgm3, rho_ref)
+    ws = curve["wind_speed_ms"].to_numpy(dtype=float)
+    power_ref = curve["power_kw"].to_numpy(dtype=float)
+    curve["power_kw"] = np.interp(ws * factor, ws, power_ref)
     curve["power_mw"] = curve["power_kw"] / 1000.0
 
     curve.attrs["model"] = specs["model"]
@@ -188,11 +198,11 @@ def _apply_air_density_correction(
 
     logger.info(
         "Loaded %s power curve: rated %.1f MW, air density %.3f kg/m^3 "
-        "(correction factor %.4f)",
+        "(IEC wind-speed factor %.4f)",
         specs["model"],
         specs["rated_power_mw"],
         air_density_kgm3,
-        density_ratio ** (1.0 / 3.0),
+        factor,
     )
     return curve
 

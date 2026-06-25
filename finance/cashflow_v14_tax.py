@@ -146,6 +146,32 @@ class TaxConfig:
     plant_depreciation_years: Optional[int] = None  # SL Class 2 plant & machinery = 5 yr
     civil_depreciation_years: Optional[int] = None  # SL Class 4 buildings/civils = 20 yr
 
+    def __post_init__(self) -> None:
+        # enhanced_capital_allowance_pct is an explicit MULTIPLIER on the depreciable base
+        # (1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance) — only applied
+        # when enhanced_allowance_applies is true (see cashflow_v14.py). This is the SINGLE
+        # live resolution point; validate here so a negative multiplier fails loud
+        # regardless of construction path (the parallel CashflowParams resolver that once
+        # carried this check fed a dead field and was removed).
+        if self.enhanced_capital_allowance_pct < 0.0:
+            raise ValueError(
+                "tax.enhanced_capital_allowance_pct must be a non-negative multiplier "
+                "(1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance); got "
+                f"{self.enhanced_capital_allowance_pct}"
+            )
+        # Upper-bound sanity: the field is a MULTIPLIER, not a percent. A value > 3.0 is
+        # almost certainly a percent-for-multiplier unit error (e.g. 150 meaning 1.5),
+        # which would inflate the depreciable base ~100x and zero out tax for the whole
+        # tenor. Real enhanced allowances are <= ~3.0 (300%); reject above that loudly.
+        # Caught for ALL configs (not just applied ones) so a latent typo cannot lie
+        # dormant until enhanced_allowance_applies flips to true.
+        if self.enhanced_capital_allowance_pct > 3.0:
+            raise ValueError(
+                "tax.enhanced_capital_allowance_pct looks like a PERCENT, not a multiplier:"
+                f" got {self.enhanced_capital_allowance_pct} (> 3.0). Use the multiplier "
+                "convention: 100% allowance = 1.0, 150% = 1.5."
+            )
+
     @classmethod
     def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":
         """Build TaxConfig from the full scenario dict.

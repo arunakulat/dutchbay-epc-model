@@ -52,8 +52,8 @@ def integrate_fx_into_scenario_result(
     """
     Wire FX blocks into an existing ScenarioResult.
 
-    This function is called from pipeline_v14.run_full_pipeline_v14() after
-    core scenario evaluation. It:
+    This function is called from analytics.pipeline_v14_enhanced.run_v14_pipeline
+    (the live pipeline) after the ScenarioResult is assembled. It:
     1. Computes FX structured block from config and debt output
     2. Generates FX curve (time-series rates)
     3. Calculates FX risk profile (VaR, CVaR, concentration)
@@ -118,9 +118,18 @@ def integrate_fx_into_scenario_result(
             config=config,
             annual_rows=annual_rows,
         )
+        # Source the VaR shock from the scenario's declared FX volatility
+        # (fx.uncertainty_pct) instead of a hardcoded 5%; default 0.05 when absent.
+        fx_cfg = config.get("FX") or config.get("fx") or {}
+        shock = 0.05
+        if isinstance(fx_cfg, Mapping):
+            raw_shock = fx_cfg.get("uncertainty_pct")
+            if raw_shock is not None and float(raw_shock) > 0.0:
+                shock = float(raw_shock)
         fx_risk_profile = compute_fx_risk_profile(
             fx_block=fx_block,
             fx_curve=fx_curve,
+            var_shock_pct=shock,
         )
     except (ValueError, TypeError) as e:
         # CESSPIT: Clear error propagation

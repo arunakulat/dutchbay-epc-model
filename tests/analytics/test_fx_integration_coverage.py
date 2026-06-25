@@ -84,7 +84,8 @@ def _fx_config() -> Dict[str, Any]:
 
 
 def _debt_result() -> Dict[str, Any]:
-    return {"tranches": {"T1": {"currency": "USD"}, "T2": {"currency": "LKR"}}}
+    # Real v14 shape: per-currency committed principal (USD-equivalent). usd->USD, lkr->LKR.
+    return {"principal_by_tranche": {"usd": 2000.0, "lkr": 1000.0}}
 
 
 def _base_result() -> ScenarioResult:
@@ -130,7 +131,7 @@ def test_overlay_populates_fx_fields_and_preserves_base() -> None:
 
     # The block reflects the driving config.
     assert out.fx_block.strategy == "hedged"
-    assert out.fx_block.debt_tranches == {"T1": "USD", "T2": "LKR"}
+    assert out.fx_block.debt_tranches == {"usd": "USD", "lkr": "LKR"}
 
     # Base financial fields survive the round-trip.
     assert out.scenario_name == "cov-fx"
@@ -211,3 +212,22 @@ def test_fx_builder_failure_is_wrapped_as_valueerror() -> None:
             debt_result=_debt_result(),
             annual_rows=bad_rows,
         )
+
+
+def test_live_pipeline_populates_fx_block_curve_risk() -> None:
+    """The FX integrator is now wired into the LIVE pipeline (was orphaned), so a real
+    run populates ScenarioResult.fx_block / fx_curve / fx_risk_profile — and it is purely
+    additive (reporting only): the canonical economics are byte-identical."""
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+
+    lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+    out = run_v14_pipeline(config=lender)
+    sr = out["scenario_result"]
+    assert sr.get("fx_block") is not None
+    assert sr.get("fx_curve") is not None
+    assert sr.get("fx_risk_profile") is not None
+    # additive — no effect on the financed economics
+    k = out["kpis"]
+    assert k["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.006837694668605732, abs=1e-9)
+    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)

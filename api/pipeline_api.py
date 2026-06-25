@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Dict, List, Mapping, Optional
+import math
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -25,7 +26,7 @@ from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
-from analytics.scenario_loader import load_scenario_config
+from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario_config
 from api.path_safety import UnsafePathError, confined_path
 from finance.debt_v14 import _extract_capex_usd
 
@@ -54,8 +55,11 @@ class RunPipelineRequest(BaseModel):
         default=None,
         description="Dotted-key overrides applied on top, e.g. {'capex.usd_total': 2.075e8}.",
     )
-    validation_mode: str = Field(
-        default="strict", description="schema_guard validation mode (strict|lenient)."
+    validation_mode: Literal["strict", "off"] = Field(
+        default="strict",
+        description="schema_guard validation mode: 'strict' (enforce) or 'off' (skip). "
+        "Constrained to these two — run_v14_pipeline accepts no others; an unsupported "
+        "value is rejected at the API boundary with a 422 rather than deep in the engine.",
     )
 
     @model_validator(mode="after")
@@ -198,6 +202,68 @@ def _as_map(value: Any) -> Dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _avg_finite_dscr(debt: Mapping[str, Any]) -> Optional[float]:
+    """Mean of the finite DSCR values, or None. The debt_result has no 'dscr_mean' key, so
+    DebtBlock.avg_dscr was structurally always null; derive it from the raw (full-timeline)
+    DSCR series, dropping None/non-finite construction-period sentinels."""
+    series = debt.get("raw_dscr_series") or debt.get("dscr_series") or []
+    vals = [
+        float(x)
+        for x in series
+        if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(float(x))
+    ]
+    return sum(vals) / len(vals) if vals else None
+
+
+# The LKR/USD spot is pinned in three places (the cashflow reads fx.start_lkr_per_usd, the
+# FX reporting block reads fx.rates.lkr_per_usd first); _assert_fx_spot_consistency requires
+# them equal. A client tuning the documented fx.start_lkr_per_usd override would otherwise
+# leave the other two stale and trip a 422.
+_FX_SPOT_OVERRIDE_KEYS = (
+    "fx.start_lkr_per_usd",
+    "fx.rates.lkr_per_usd",
+    "fx.source.pinned_rate",
+)
+
+
+def _sync_fx_spot_override(
+    cfg: Dict[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Fan a single-lever FX-spot override out to all three pinned spot keys.
+
+    If the client overrode any of fx.start_lkr_per_usd / fx.rates.lkr_per_usd /
+    fx.source.pinned_rate, set ALL three to the new rate so the post-override config stays
+    self-consistent (else the documented single-key FX-rate override would fail the spot
+    cross-assert). No-op when no FX-spot key was overridden.
+    """
+    touched = [k for k in _FX_SPOT_OVERRIDE_KEYS if k in overrides]
+    if not touched:
+        return cfg
+    # Only fan out when the touched spot keys AGREE (or just one was set). If a client
+    # overrides two/three spot keys to DIFFERENT values, do NOT silently pick a winner —
+    # leave them as-authored so the downstream _assert_fx_spot_consistency rejects the
+    # contradiction with a clear 422 (its whole purpose; round-4 fix).
+    try:
+        distinct = {float(overrides[k]) for k in touched}
+    except (TypeError, ValueError):
+        return cfg  # non-numeric override -> let the engine/validator handle it
+    if len(distinct) > 1:
+        return cfg
+    # Prefer the canonical start key; otherwise the first key the client actually set.
+    new_rate = overrides.get("fx.start_lkr_per_usd", overrides[touched[0]])
+    fx = cfg.get("fx")
+    if not isinstance(fx, dict):
+        return cfg
+    fx["start_lkr_per_usd"] = new_rate
+    rates = fx.setdefault("rates", {})
+    if isinstance(rates, dict):
+        rates["lkr_per_usd"] = new_rate
+    source = fx.setdefault("source", {})
+    if isinstance(source, dict):
+        source["pinned_rate"] = new_rate
+    return cfg
+
+
 def _f(value: Any) -> Optional[float]:
     try:
         return None if value is None else float(value)
@@ -248,7 +314,16 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         for name in principals
     }
 
-    dscr_series = debt.get("dscr_series") or list((debt.get("dscr_by_year") or {}).values())
+    # Use the FULL-TIMELINE raw_dscr_series (length matches debt_outstanding /
+    # debt_service_total, with None in construction periods), NOT the compacted public
+    # dscr_series (operating years only) — zipping the compacted series row-by-row against
+    # the full-timeline outstanding/service misaligned each row's DSCR by the construction
+    # offset (round-4 fix). Falls back to the compacted series only if raw is absent.
+    dscr_series = (
+        debt.get("raw_dscr_series")
+        or debt.get("dscr_series")
+        or list((debt.get("dscr_by_year") or {}).values())
+    )
     outstanding = debt.get("debt_outstanding") or []
     service = debt.get("debt_service_total") or debt.get("total_service") or []
     n_rows = max(len(dscr_series), len(outstanding), len(service))
@@ -276,7 +351,7 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         ),
         avg_debt_rate_pct=None if avg_rate is None else round(avg_rate * 100.0, 4),
         min_dscr=_f(debt.get("min_dscr")),
-        avg_dscr=_f(debt.get("dscr_mean")),
+        avg_dscr=_avg_finite_dscr(debt),
         tranches=tranches,
         balloon_pct=_f(debt.get("balloon_pct")),
         balloon_remaining_usd=_f(debt.get("balloon_remaining")),
@@ -388,6 +463,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
 
     if payload.overrides:
         cfg = _apply_overrides(cfg, payload.overrides)
+        cfg = _sync_fx_spot_override(cfg, payload.overrides)
 
     # An inline payload.config and any post-load overrides reach the engine as a dict,
     # which bypasses the load-time reconciliation in load_scenario_config. Re-check the
@@ -397,6 +473,11 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     try:
         reconcile_capacity_factor_with_bankable_aep(cfg, payload.config_path or "<inline>")
         enforce_aep_provenance(cfg, payload.config_path or "<inline>")
+        # Same rationale for the FX spot keys: an inline/overridden authored config bypasses
+        # the load-time cross-assert, so a divergent fx.rates/start/pinned would yield a
+        # self-inconsistent lender pack (#236 class). A client authoring/overriding the
+        # config is NOT a deliberate MC perturbation, so enforce it here.
+        _assert_fx_spot_consistency(cfg, payload.config_path or "<inline>")
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
     except Exception as exc:  # config/validation/engine errors -> 422, not 500
         raise HTTPException(status_code=422, detail=f"Pipeline run failed: {exc}")

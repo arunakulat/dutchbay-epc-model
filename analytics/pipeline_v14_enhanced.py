@@ -109,6 +109,12 @@ def _validate_config_type_and_structure(config: Any) -> dict[str, Any]:
         cfg = dict(config)
         if not cfg:
             raise PipelineConfigError("Config mapping is empty")
+        # NOTE: the FX spot cross-assert is deliberately NOT run here. Like the AEP
+        # reconciliation / provenance guards, it is a LOAD-TIME (authored-config) check —
+        # run_v14_pipeline is also the per-trial entry for Monte-Carlo / sensitivity, which
+        # legitimately perturb fx.start_lkr_per_usd in-memory while leaving fx.rates/pinned
+        # at the base. Enforcing it here would reject every MC draw. Authored inline/API
+        # configs are cross-asserted at their own entry point (api.pipeline_api).
         return cfg
 
     raise PipelineConfigError(
@@ -766,6 +772,28 @@ def run_v14_pipeline_enhanced(
             equity_performance=equity_performance,
             metadata={"equity_distribution_status": equity_distribution.get("status")},
         )
+
+        # Populate the FX structured block / curve / risk profile on the ScenarioResult. The
+        # integrator was previously never called from the live pipeline, so fx_block /
+        # fx_curve / fx_risk_profile stayed None in production despite the contract fields and
+        # docstrings claiming otherwise. It is additive (reporting only — no effect on
+        # IRR/NPV/DSCR) and non-fatal: a malformed fx config must not fail the financed run.
+        _fx_t0 = time.perf_counter()
+        try:
+            from analytics.fx.fx_integration import integrate_fx_into_scenario_result
+
+            scenario_result = integrate_fx_into_scenario_result(
+                scenario_result=scenario_result,
+                config=cfg,
+                debt_result=debt_result,
+                annual_rows=annual_rows_enriched,
+            )
+            metrics.fx_integration_succeeded = True
+        except Exception as exc:  # pragma: no cover - defensive (reporting-only slice)
+            logger.warning("FX integration failed (non-fatal, reporting-only): %s", exc)
+            metrics.fx_integration_succeeded = False
+        metrics.fx_integration_attempted = True
+        metrics.fx_integration_time_sec = time.perf_counter() - _fx_t0
 
         logger.info(
             "ScenarioResult assembled: project_irr=%.2f%%, min_dscr=%.2f, project_npv=%.0f",

@@ -616,7 +616,25 @@ def calculate_equity_distribution_from_pipeline(
         )
         annual_distributions[-1]["equity_distribution_usd"] = distribution_values[-1]
 
-    cashflows = [-float(equity_investment)] + distribution_values
+    # Match the PROJECT IRR/NPV convention (finance.irr / analytics.core.metrics): capex AND
+    # equity are committed at FINANCIAL CLOSE (construction start), and operating cash is
+    # discounted AFTER the build. annual_rows are operating years only (no construction zeros),
+    # so prepend construction_years zeros to the equity return vector — otherwise the equity
+    # timeline LEADS the project timeline by construction_years, crediting the first operating
+    # distribution at t=1 instead of t=construction_years+1 (round-3 re-audit fix). Sourced
+    # from the same debt_result['construction_years'] metrics.py uses, so the two IRRs of one
+    # project share a single timeline.
+    construction_years = int(debt_result.get("construction_years", 0) or 0)
+    if construction_years == 0:
+        # Mirror analytics.core.metrics' project-IRR sourcing: when debt_result omits the
+        # key (partial/stubbed callers of this public API), fall back to the config so the
+        # equity timeline matches what the project IRR would use for the same project.
+        construction_years = int(
+            _as_float(_lookup_case_insensitive(config, "construction_years"), 0.0) or 0.0
+        )
+    cashflows = (
+        [-float(equity_investment)] + [0.0] * construction_years + distribution_values
+    )
 
     equity_irr = calculate_equity_irr(cashflows)
     equity_npv = calculate_equity_npv(
@@ -631,7 +649,15 @@ def calculate_equity_distribution_from_pipeline(
         current_nav=0.0,
         total_invested=float(equity_investment),
     )
-    payback = calculate_payback_period(distribution_values, float(equity_investment))
+    # Payback is measured from FINANCIAL CLOSE, matching the equity IRR/NPV above: the
+    # construction_years zeros precede the operating distributions so the cumulative-recovery
+    # crossing lands at the true year-from-close (was operating-year-only, understating
+    # payback by construction_years and disagreeing with the lagged IRR it sits beside).
+    # cash_on_cash / MOIC / equity_multiple are ratios (timeline-invariant) and stay on
+    # distribution_values.
+    payback = calculate_payback_period(
+        [0.0] * construction_years + distribution_values, float(equity_investment)
+    )
     cash_on_cash = calculate_cash_on_cash(distribution_values, float(equity_investment))
     average_cash_on_cash = (
         float(sum(cash_on_cash) / len(cash_on_cash)) if cash_on_cash else 0.0
