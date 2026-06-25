@@ -4,6 +4,8 @@ This reference establishes a defensible cost basis for onshore wind EPC in Sri L
 
 For the downstream finance treatment of these capex figures (IRR / NPV / DSCR, gearing, the flat-LKR tariff constraint), see the model's scenario set and the project economics documented elsewhere in this repository.
 
+> **External-benchmark note (deep-research update, 2026-06-25).** The published-benchmark claims in §2 and §4 were re-verified against primary sources (IRENA *Renewable Power Generation Costs in 2024*, released 22 July 2025; Lazard *LCOE+ v18.0*, June 2025; NREL *Cost of Wind Energy Review: 2024 Edition*; ADB/CEB Mannar project disclosures; Sri Lanka Customs / KPMG on the bonded-warehouse scheme). Confirmed figures, corrections, and items that could not be independently verified are catalogued in **"External validation & sources"** near the end of this document. The project-specific tender, EIA and PPA figures are internal/non-public and are not externally verifiable; they are preserved as-is.
+
 ## 1. A Tendered 50 MW Coastal-Wind EPC Benchmark (Sri Lanka)
 
 The single most useful anchor for Sri Lankan onshore wind capex is a tendered, fully line-itemed EPC cost summary for a **50 MW wind farm on Sri Lanka's northwest coast, under a bonded-warehouse scheme** — a Chinese EPC contractor paired with a Chinese turbine OEM. It sits in the same northwest-coast wind corridor as the projects in this repository's scenarios, so it is a direct, in-corridor comparable rather than a global proxy.
@@ -24,11 +26,11 @@ The fleet is **10 turbines of 5.6 MW nameplate, derated to 5.0 MW each** — 56 
 | Engineering & design | $1.14M | $22.85/kW |
 | Transportation (sea + inland) | $5.62M | **$112.50/kW (12.6%)** |
 
-This **~$890/kW pre-tax / ~$977/kW all-in** benchmark sits materially below the conventional ~$1,300/kW Sri Lanka anchor (§2): Chinese EPC-plus-turbine packages set the low end of the cost curve.
+This **~$890/kW pre-tax / ~$977/kW all-in** benchmark sits materially below the conventional ~$1,300/kW Sri Lanka anchor (§2): Chinese EPC-plus-turbine packages set the low end of the cost curve. It also sits well below the only fully-disclosed *built* Sri Lankan onshore reference — CEB's 103.5 MW Mannar wind farm at $256.7M (~$2,480/kW all-in, COD 2021), which is a sovereign-financed, grid-inclusive utility build rather than a lean private EPC (see §2 and external validation).
 
 ### 1.2 The turbine as the dominant line item
 
-Turbine supply alone is **43.8% of the pre-tax EPC** ($389.80/kW). This concentration is consistent with the published benchmark that turbines represent roughly 64–84% of *total installed cost* on a global modeled basis (IRENA); the lower share here reflects the the northwest-coast site tender's heavier loading of in-country logistics, civil works and local services. Because the turbine dominates, it is the single largest swing variable in any scaled estimate — Chinese OEM pricing (~$390/kW) versus US/NREL turbine pricing (~$1,100/kW) is the difference between a sub-$1,000/kW and a >$1,700/kW project (see §4).
+Turbine supply alone is **43.8% of the pre-tax EPC** ($389.80/kW). On a *global modeled* basis, turbines have historically represented the bulk of total installed cost — roughly **64–84%** in IRENA's wind cost-analysis work (a range that originates in IRENA's 2012 *Wind Power* cost study and is widely quoted since; treat it as an order-of-magnitude share, not a current figure). The lower share in this tender reflects the northwest-coast site's heavier loading of in-country logistics, civil works and local services. Because the turbine dominates, it is the single largest swing variable in any scaled estimate — Chinese OEM pricing (~$390/kW) versus US/NREL-class turbine pricing (~$1,100/kW, NREL reference order of magnitude) is the difference between a sub-$1,000/kW and a >$1,700/kW project (see §4).
 
 ### 1.3 Logistics share — an island cost driver
 
@@ -44,23 +46,27 @@ The 5.6 → 5.0 MW derate is a **CEB grid-connection / PPA export cap, not a tur
 
 ### 1.5 The bonded-warehouse import-duty shelter
 
-Under the **bonded-warehouse scheme**, duty and VAT on imported equipment are deferred so that SSCL (2.5%) and VAT (18%) fall only on the local services / civil / installation base (≈$20.8M / $21.3M), **not** on the bonded turbine and BOP imports. The all-in tax burden is therefore far below the nominal 20.5% of subtotal it would otherwise imply (here ~$4.35M, ~9.8% of subtotal). This is a **capex-side import-tax shelter** and must be kept distinct from income-tax treatment (corporate tax regime documented separately).
+Under the **bonded-warehouse scheme**, duty and VAT on imported equipment are deferred/exempted during construction so that SSCL (2.5%) and VAT (18%) fall only on the local services / civil / installation base (≈$20.8M / $21.3M), **not** on the bonded turbine and BOP imports. The all-in tax burden is therefore far below the nominal 20.5% of subtotal it would otherwise imply (here ~$4.35M, ~9.8% of subtotal). This is a **capex-side import-tax shelter** and must be kept distinct from income-tax treatment (corporate tax regime documented separately).
+
+This treatment is consistent with Sri Lanka's published bonded-warehouse facility rules: the scheme grants "exemptions from selected duties and taxes on approved capital goods during the construction period" (plant, machinery, equipment, spares and sector-specific construction materials), administered by Sri Lanka Customs. A Ministry of Finance amendment effective 15 October 2025 explicitly extended eligibility to **renewable energy storage facilities (≥1 MWh)** — relevant if a BESS is later brought inside the bonded scope. See external validation for the primary references.
 
 ## 2. South-Asia Onshore Wind Cost Benchmarks
 
-The tendered the northwest-coast site figure is corroborated and bounded by published industry benchmarks. The important caveat throughout: IRENA / Lazard / Wood Mackenzie figures are **global or US modeled costs** (China-weighted), while most country-level evidence is **auction PPA tariffs** (≠ capex ≠ all-in LCOE). No clean primary South-Asia capex/MW figure survives independent verification, so the anchor below is constructed, not cited.
+The tendered northwest-coast figure is corroborated and bounded by published industry benchmarks. The important caveat throughout: IRENA / Lazard / Wood Mackenzie figures are **global or US modeled costs** (China-weighted in IRENA's case), while most country-level evidence is **auction PPA tariffs or single utility builds** (≠ lean EPC capex ≠ all-in LCOE). No clean primary South-Asia *private-EPC* capex/MW figure survives independent verification, so the SL anchor below is constructed, not cited.
 
 | Source / basis | Total installed cost | O&M | Notes |
 |---|---|---|---|
-| **IRENA — Renewable Power Generation Costs in 2024** | $1,041/kW global wtd-avg (range $727–2,110) | — | LCOE $34/MWh, CF 34%; **Asia 5-yr projection ~$850/kW**; turbines 64–84% of total |
-| **Lazard LCOE+ v18.0 (Jun 2025, US basis)** | $1,900–2,300/kW | $24.50–40/kW-yr fixed; no variable | 30-yr life, LCOE $37–86/MWh (up ~55% YoY) |
-| **Wood Mackenzie (Oct 2025)** | — | — | China/India/Vietnam onshore LCOE leadership $25–70/MWh |
-| **Bangladesh (import-dependent proxy)** | ~$1,900–2,100/kW | — | — |
-| **Sri Lanka anchor (constructed)** | **$1,300/kW** | **$22/kW-yr**, 2.5%/yr USD escalation | Above IRENA-global (imported turbines + 220 kV grid + remote NW-coast BoP); well below US/Bangladesh |
+| **IRENA — Renewable Power Generation Costs in 2024** (released 22 Jul 2025) | **$1,041/kW** global wtd-avg (2024 USD) | — | LCOE **$0.034/kWh**, CF **34%**; LCOE +3% vs 2023; **5-yr global TIC stabilising $850–1,000/kW**, **Asia ~$850/kW**; **China LCOE $0.029/kWh** (lowest), China = 70% of 2024 installs |
+| **Lazard LCOE+ v18.0 (Jun 2025, US basis)** | **$1,900–2,300/kW** (total capital cost) | **$24.50–40.00/kW-yr** fixed; **$0 variable** | 30-yr life, CF 30–55%, LCOE **$37–86/MWh**; onshore-wind LCOE up ~49% since 2020 (CAGR ~8%) |
+| **NREL — Cost of Wind Energy Review: 2024 Edition** | US land-based reference (turbine ~$1,100/kW class; full $/kW [unverified here]) | — | Reference project 25-yr life, 5-yr MACRS, 2.5% inflation; used in this repo for energy-side identity & CF only |
+| **Sri Lanka — Mannar (CEB1), built 2021** | **~$2,480/kW all-in** ($256.7M / 103.5 MW) | — | 30× Vestas V126-3.45MW; CEB-owned, ADB-financed ($200M loan + $56.7M CEB), grid + sovereign-cost inclusive → upper bound, not a lean private EPC |
+| **Sri Lanka anchor (constructed)** | **$1,300/kW** | **$22/kW-yr**, 2.5%/yr USD escalation | Above IRENA-global (imported turbines + 220 kV grid + remote NW-coast BoP); below US (Lazard) and well below the grid-inclusive Mannar utility build |
+
+> Notes on corrections vs the prior draft: the previous "Bangladesh ~$1,900–2,100/kW" line was an unsourced proxy and has been replaced with the **verifiable, in-country Mannar reference**. The previous "Lazard up ~55% YoY" was imprecise — Lazard v18.0 reports an onshore-wind LCOE rise of **~49% over 2020–2025 (≈8% CAGR)**, not a single-year 55% jump; corrected above.
 
 ### 2.1 The Sri Lanka $1,300/kW anchor and its composition
 
-The $1,300/kW anchor is set above IRENA's global average to reflect imported turbines, 220 kV grid interconnection, and remote northwest-coast balance-of-plant, while staying well below US/Bangladesh modeled costs. The indicative component split used:
+The $1,300/kW anchor is set above IRENA's 2024 global average ($1,041/kW) to reflect imported turbines, 220 kV grid interconnection, and remote northwest-coast balance-of-plant, while staying well below US modeled costs (Lazard $1,900–2,300/kW) and the grid-inclusive Mannar build (~$2,480/kW). The indicative component split used:
 
 | Component | Share |
 |---|---|
@@ -71,11 +77,11 @@ The $1,300/kW anchor is set above IRENA's global average to reflect imported tur
 | Financing | ~2% |
 | Contingency | ~1.5% |
 
-Operating expenditure is anchored at **$22/kW-yr** (the SL-adjusted Lazard low end), escalated at **2.5%/yr in USD** so that LKR-denominated O&M carries both USD inflation and FX depreciation.
+Operating expenditure is anchored at **$22/kW-yr** (just below the Lazard low end of $24.50/kW-yr, SL-adjusted), escalated at **2.5%/yr in USD** so that LKR-denominated O&M carries both USD inflation and FX depreciation. This O&M anchor is conservative-low against Lazard's US fixed-O&M band ($24.50–40.00/kW-yr); it is justified by lower local labour cost but should be stress-tested upward in sensitivity.
 
-### 2.2 Reconciling the two anchors
+### 2.2 Reconciling the anchors
 
-The the northwest-coast site tender ($890–977/kW) and the SL anchor ($1,300/kW) are not in conflict — they bracket the realistic range. The tender is the **lean Chinese-EPC floor**; the $1,300/kW anchor is the **prudent feasibility/lender base** that absorbs grid, financing and contingency the tender either externalizes or omits. Both are used: the prudent anchor for base-case underwriting, the tendered figure as the optimistic / cost-discipline case.
+The northwest-coast tender ($890–977/kW) and the SL anchor ($1,300/kW) are not in conflict — they bracket the realistic *private-EPC* range. The tender is the **lean Chinese-EPC floor**; the $1,300/kW anchor is the **prudent feasibility/lender base** that absorbs grid, financing and contingency the tender either externalizes or omits. The IRENA 2024 global average ($1,041/kW) sits between them, and the Lazard US band ($1,900–2,300/kW) and the Mannar utility build (~$2,480/kW) sit above — confirming that the SL anchor is conservatively placed but not implausibly high. Both internal anchors are used: the prudent anchor for base-case underwriting, the tendered figure as the optimistic / cost-discipline case.
 
 ## 3. Bottom-Up Scaling Methodology
 
@@ -121,17 +127,17 @@ The lean case is built by substituting the tendered-benchmark-scaled hard costs 
 | **A — Financial cost** | **$212.97M ($1,420/kW)** | **$146.55M ($977/kW)** |
 | **C — Economic cost (× SCF 0.95)** | **$200.90M ($1,339/kW)** | **$137.80M ($919/kW)** |
 
-The lean rebuild lands **−$66.4M / −31%** below the EIA's own number, placing DutchBay almost exactly at the the northwest-coast site tender $/kW (~$977). The spread is driven almost entirely by turbine/equipment pricing (Chinese-bid ~$390/kW vs the EIA's implied ~$700–900/kW).
+The lean rebuild lands **−$66.4M / −31%** below the EIA's own number, placing DutchBay almost exactly at the northwest-coast site tender $/kW (~$977). The spread is driven almost entirely by turbine/equipment pricing (Chinese-bid ~$390/kW vs the EIA's implied ~$700–900/kW). Both the EIA ($1,420/kW) and lean ($977/kW) figures bracket the IRENA-2024 global average ($1,041/kW) and sit below the Lazard US band — an externally-sane envelope.
 
 ### 4.2 Turbine sensitivity (the swing)
 
 | Turbine basis | Implied project $/kW (150 MW) | Status |
 |---|---|---|
-| the tendered benchmark Chinese-bid (~$390/kW) | **$977/kW** | Primary lean case |
+| tendered-benchmark Chinese-bid (~$390/kW) | **$977/kW** | Primary lean case |
 | EIA implied (~$700–900/kW equipment) | **$1,420/kW** | Prudent / feasibility base |
-| NREL US turbine (~$1,100/kW) | ~$1,723/kW | Discarded — overshoots the EIA's own anchor |
+| NREL US turbine (~$1,100/kW class) | ~$1,723/kW | Discarded — overshoots the EIA's own anchor |
 
-A US/NREL 10 MW turbine is used only for energy-side identity and capacity factor (CF ~35.4%); its *cost* is not adopted, since it overshoots even the conservative EIA capex.
+A US/NREL 10 MW-class turbine is used only for energy-side identity and capacity factor (CF ~35.4%); its *cost* is not adopted, since it overshoots even the conservative EIA capex and pushes the project toward the Lazard US band rather than a South-Asia cost basis.
 
 ### 4.3 Kalpitiya 50 MW
 
@@ -141,13 +147,68 @@ On the same tendered-benchmark basis, EPC-only and excluding BESS: **$44.40M = $
 
 Both DutchBay cost cases are carried as capex-sensitivity variants of the canonical lender case — resource, tariff and debt assumptions held identical, only capex differing — so the marginal effect of capex is cleanly isolated. Against a flat-LKR tariff the lean $977/kW case only marginally improves returns over the canonical ~$1,000/kW base, while the prudent $1,420/kW case drives gearing and returns down sharply. The consistent finding across both is that the **flat-LKR tariff, not capex, is the binding economic constraint** — capex discipline narrows but does not close the gap. See this repository's scenario files and the EIA/PPA reference documents for the downstream finance treatment.
 
-## Sources
+## External validation & sources
 
+Deep-research re-verification of the externally-verifiable claims (2026-06-25). Figures are quoted in the source's own basis/units. Project-specific tender/EIA/PPA numbers are internal and not externally verifiable; they are unchanged.
+
+**IRENA — *Renewable Power Generation Costs in 2024*** (IRENA, released 22 July 2025; all values in 2024 USD)
+- Onshore wind **global weighted-average total installed cost = USD 1,041/kW** — **CONFIRMED** (was $1,041/kW). Source: https://www.irena.org/Publications/2025/Jul/Renewable-Power-Generation-Costs-in-2024 and the summary PDF https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2025/Jul/IRENA_TEC_RPGC_in_2024_Summary_2025.pdf
+- Onshore wind **global weighted-average LCOE = USD 0.034/kWh**; **+3% vs 2023** — **CONFIRMED** (document's "increased" direction is correct). Same source.
+- Onshore wind **global weighted-average capacity factor = 34%** (2024; 27% in 2010) — **CONFIRMED**. Same source (Table S1).
+- **5-year global TIC projection: onshore wind stabilising USD 850–1,000/kW; Asia ~USD 850/kW** — **CONFIRMED** (document's "Asia ~$850/kW" is correct; clarified it is a forward projection, not a 2024 actual). Same source.
+- **China onshore-wind LCOE = USD 0.029/kWh (lowest globally); China = 70% of 2024 onshore installations** — **ADDED** (newly cited corroboration). Same source.
+- **Turbine = 64–84% of total installed cost** — **FLAGGED / RE-ATTRIBUTED.** This range originates in IRENA's **2012** *Renewable Energy Technologies: Cost Analysis Series — Wind Power* (https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2012/RE_Technologies_Cost_Analysis-WIND_POWER.pdf), not the 2024 report. Retained as an order-of-magnitude historical share with the correct provenance.
+- **TIC range "$727–2,110/kW"** — **[unverified]**. Could not be confirmed from the 2024 summary; likely a country-level data-table range from the full report. Removed from the headline table; treat as indicative only.
+
+**Lazard — *LCOE+ v18.0*** (June 2025; US illustrative-project basis). Source: https://www.lazard.com/media/uounhon4/lazards-lcoeplus-june-2025.pdf
+- Onshore wind **Total Capital Cost = $1,900–2,300/kW** — **CONFIRMED** (Key Assumptions, Renewable Energy cont'd). EPC cost $1,900/kW in the low-case sample calc.
+- Onshore wind **Fixed O&M = $24.50–40.00/kW-yr; Variable O&M = $0** — **CONFIRMED** (document's "$24.50–40/kW-yr fixed; no variable" verified).
+- Onshore wind **Facility life = 30 years; capacity factor 30–55%; unsubsidized LCOE = $37–86/MWh** — **CONFIRMED**.
+- **"Up ~55% YoY"** — **CORRECTED** to **+49% over 2020–2025 (≈8% CAGR)** per Lazard's own historical-trend chart; the single-year 55% framing was not supported.
+
+**NREL — *Cost of Wind Energy Review: 2024 Edition*** (NREL, Nov 2024). Source: https://docs.nrel.gov/docs/fy25osti/91775.pdf (also OSTI https://www.osti.gov/biblio/2479271)
+- Reference land-based project: **25-year operating life, 5-yr MACRS depreciation, 2.5% inflation** — **CONFIRMED** (from NREL landing/abstract).
+- **Turbine ~$1,100/kW class** and the precise land-based total CapEx $/kW — **[unverified]** from this environment: NREL's document hosts (docs.nrel.gov / atb.nrel.gov / research-hub) were not reachable for full-text extraction during this pass. The ~$1,100/kW US-turbine figure is retained as an order-of-magnitude reference consistent with NREL ATB land-based wind; verify against the PDF before quoting as exact.
+
+**Sri Lanka onshore reference — Mannar Wind Farm (CEB1)**
+- **103.5 MW; total cost $256.7M (~$2,480/kW all-in); 30× Vestas V126-3.45 MW; COD 2021; ADB $200M loan + $56.7M CEB** — **ADDED** as a verifiable in-country onshore reference (utility/grid-inclusive upper bound). Sources: https://www.power-technology.com/marketdata/mannar-wind-farm-ceb1-sri-lanka/ ; ADB project 49345-002 https://www.adb.org/projects/49345-002/main . (Replaces the prior unsourced "Bangladesh ~$1,900–2,100/kW" proxy.)
+
+**Sri Lanka bonded-warehouse import-duty treatment**
+- **Exemptions from selected duties and taxes on approved capital goods (plant, machinery, equipment, spares, sector-specific construction materials) during the construction period; administered by Sri Lanka Customs** — **CONFIRMED.** Sources: Sri Lanka Customs, Bonded Operation https://www.customs.gov.lk/services/bonded-operation/ ; KPMG, "Sri Lanka: Amended bonded warehouse facility regulations" https://kpmg.com/us/en/taxnewsflash/news/2025/10/sri-lanka-amended-bonded-warehouse-facility-regulations.html
+- **2025 amendment (effective 15 Oct 2025) adds renewable-energy storage facilities (≥1 MWh) as an eligible sector** — **ADDED** (relevant if BESS is later brought inside the bonded scope). Same KPMG source.
+- **SSCL 2.5% / VAT 18%** rates — consistent with Sri Lanka Inland Revenue (documented in the separate corporate-tax-regime reference); unchanged.
+
+**Project-internal sources (not externally verifiable — preserved)**
 - Tendered 50 MW Sri Lanka coastal-wind EPC summary (Chinese EPC + turbine, bonded-warehouse scheme).
 - Project EIA (disclosed financial and economic capex build).
 - CEB Standardized PPA template (tariff and grid-connection terms).
-- IRENA, *Renewable Power Generation Costs in 2024*.
-- Lazard, *LCOE+ v18.0* (June 2025).
-- Wood Mackenzie onshore wind LCOE commentary (October 2025).
 - NREL / IEA reference turbine (10 MW class) for energy-side identity and capacity factor.
-- Sri Lankan tax law (SSCL 2.5%, VAT 18%) and bonded-warehouse import scheme.
+
+## Changelog (deep-research update 2026-06-25)
+
+**Confirmed (verified against primary sources, unchanged):**
+- IRENA 2024 onshore wind: TIC **$1,041/kW**, LCOE **$0.034/kWh** (+3% YoY), CF **34%**, Asia 5-yr projection **~$850/kW**.
+- Lazard v18.0 (Jun 2025) onshore wind: capex **$1,900–2,300/kW**, fixed O&M **$24.50–40.00/kW-yr**, no variable O&M, 30-yr life, LCOE **$37–86/MWh**.
+- Lazard report vintage (June 2025, v18.0) and the unsubsidized LCOE range.
+- Sri Lanka bonded-warehouse duty/VAT shelter on imported capital goods during construction (Sri Lanka Customs / KPMG).
+- IRENA report basis is 2024 USD; clarified Lazard is a US illustrative basis.
+
+**Corrected:**
+- Lazard LCOE-trend wording: "up ~55% YoY" → **+49% over 2020–2025 (≈8% CAGR)**.
+- IRENA Asia "$850/kW" clarified as a **forward 5-yr projection**, not a 2024 actual; global TIC band given as $850–1,000/kW.
+- Turbine "64–84% of total installed cost" **re-attributed to IRENA's 2012** Wind Power cost study (not the 2024 report) and labelled as a historical/order-of-magnitude share.
+- Replaced the unsourced "Bangladesh ~$1,900–2,100/kW" proxy with the verifiable **Mannar (CEB1) ~$2,480/kW** in-country reference.
+- O&M anchor note: $22/kW-yr is conservative-low vs Lazard's $24.50–40/kW-yr band; flagged for upward sensitivity.
+- IRENA *Renewable Power Generation Costs in 2024* release date corrected from "June 2025" to **22 July 2025** (the IRENA URL path itself reads `/2025/Jul/`); all IRENA figures unchanged.
+
+**Added:**
+- **External validation & sources** section with full URLs for every externally-verifiable claim.
+- IRENA China onshore LCOE **$0.029/kWh** and **70% of 2024 global onshore installs**.
+- Mannar Wind Farm reference row (103.5 MW, $256.7M, 30× Vestas V126-3.45MW, COD 2021, ADB-financed).
+- Bonded-warehouse 2025 amendment extending eligibility to renewable-energy storage (≥1 MWh).
+- NREL reference-project assumptions (25-yr life, 5-yr MACRS, 2.5% inflation).
+
+**Flagged / unverified:**
+- IRENA TIC range **"$727–2,110/kW"** — could not confirm from the 2024 summary; removed from the headline table, treat as indicative.
+- NREL precise land-based total CapEx $/kW and **turbine ~$1,100/kW** — **[unverified]** from this environment (NREL document hosts unreachable); retained as order-of-magnitude with the canonical NREL URL for verification.
+- Wood Mackenzie Oct-2025 LCOE-leadership line — not independently re-verified this pass; left out of the strengthened table pending a primary citation.
