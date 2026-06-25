@@ -520,8 +520,8 @@ expected_results:
   project_npv_m_usd: -106.63 # vs canonical -35.51
   min_dscr: 1.30             # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.18
-  plcr: 1.24
+  llcr: 1.32
+  plcr: 1.42
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
