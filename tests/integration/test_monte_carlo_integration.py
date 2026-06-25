@@ -349,3 +349,21 @@ def test_degradation_hook_drives_live_project_degradation_key() -> None:
     )
     assert on == {"project.degradation": 0.6}  # live key, not wind.degradation_rate
     assert "wind.degradation_rate" not in on
+
+
+def test_degradation_hook_does_not_clobber_a_sampled_value() -> None:
+    """An MC SAMPLED degradation draw (flat OR nested) must NOT be overwritten by the static
+    default_rate — the round-2 clobber bug collapsed the degradation distribution to a
+    constant. Only inject the default when no sampled value is present."""
+    from analytics.mc.degradation import apply_degradation_if_enabled
+
+    base = {"monte_carlo": {"degradation": {"enabled": True, "default_rate": 0.6}}}
+    # nested form (as MC overrides arrive): the 0.9 draw survives, no flat clobber key
+    nested = apply_degradation_if_enabled(base_cfg=base, overrides={"project": {"degradation": 0.9}})
+    assert nested == {"project": {"degradation": 0.9}}
+    # flat form: the sampled flat key survives
+    flat = apply_degradation_if_enabled(base_cfg=base, overrides={"project.degradation": 0.9})
+    assert flat["project.degradation"] == 0.9
+    # absent: the default is injected on the live key
+    absent = apply_degradation_if_enabled(base_cfg=base, overrides={})
+    assert absent == {"project.degradation": 0.6}

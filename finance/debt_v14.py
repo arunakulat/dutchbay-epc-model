@@ -607,9 +607,14 @@ def apply_debt_layer(
     llcr_discount_rate = _as_float(cov_cfg.get("llcr_discount_rate"), avg_debt_rate)
     plcr_discount_rate = _as_float(cov_cfg.get("plcr_discount_rate"), avg_debt_rate)
 
-    project_cfads = (
-        cfads[construction_periods:] if construction_periods < len(cfads) else []
-    )
+    # cfads is built from annual_rows, which are OPERATING years only (no construction
+    # periods) — see the `cfads = [... for a in annual_rows]` above. The old
+    # `cfads[construction_periods:]` therefore dropped the first construction_periods
+    # OPERATING years (the highest-CFADS years, which DO carry debt service from operating
+    # year 1) and pushed the window past the loan life — understating LLCR/PLCR. The loan
+    # amortises over operating years 1..tenor (debt service starts in operating year 1, debt
+    # period = construction_periods+1), and the project life is all operating years, so:
+    project_cfads = list(cfads)
     cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
 
     llcr = (

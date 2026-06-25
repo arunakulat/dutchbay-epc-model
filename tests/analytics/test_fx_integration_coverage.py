@@ -84,7 +84,8 @@ def _fx_config() -> Dict[str, Any]:
 
 
 def _debt_result() -> Dict[str, Any]:
-    return {"tranches": {"T1": {"currency": "USD"}, "T2": {"currency": "LKR"}}}
+    # Real v14 shape: per-currency committed principal (USD-equivalent). usd->USD, lkr->LKR.
+    return {"principal_by_tranche": {"usd": 2000.0, "lkr": 1000.0}}
 
 
 def _base_result() -> ScenarioResult:
@@ -130,7 +131,7 @@ def test_overlay_populates_fx_fields_and_preserves_base() -> None:
 
     # The block reflects the driving config.
     assert out.fx_block.strategy == "hedged"
-    assert out.fx_block.debt_tranches == {"T1": "USD", "T2": "LKR"}
+    assert out.fx_block.debt_tranches == {"usd": "USD", "lkr": "LKR"}
 
     # Base financial fields survive the round-trip.
     assert out.scenario_name == "cov-fx"
@@ -228,5 +229,5 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     # additive — no effect on the financed economics
     k = out["kpis"]
     assert k["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.008246893771461483, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.006837694668605732, abs=1e-9)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)

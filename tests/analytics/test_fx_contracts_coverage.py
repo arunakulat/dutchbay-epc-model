@@ -34,16 +34,18 @@ DEFAULT_RATE = default_fx_lkr_per_usd()  # config-sourced (~333.79), never the s
 # ---------------------------------------------------------------------------
 
 
-def test_volumetry_usd_exposure_equivalent_uses_config_rate() -> None:
-    """total_usd_exposure_equivalent converts LKR debt+interest at the config spot."""
+def test_volumetry_usd_exposure_equivalent_sums_usd_equiv_fields() -> None:
+    """total_usd_exposure_equivalent is a straight sum: all fields are already
+    USD-equivalent (labelled by denomination currency), so there is no spot conversion."""
     vol = FXVolumetry(
         period=3,
-        total_debt_lkr=DEFAULT_RATE * 1000.0,  # exactly 1000 USD at spot
+        total_debt_lkr=1000.0,  # USD-equivalent value of LKR-denominated debt
         total_debt_usd=500.0,
-        interest_lkr=DEFAULT_RATE * 200.0,  # exactly 200 USD at spot
+        total_debt_cny=300.0,
+        interest_lkr=200.0,
     )
-    # 500 (USD) + 1000 (LKR debt) + 200 (LKR interest) = 1700 USD equiv
-    assert vol.total_usd_exposure_equivalent == pytest.approx(1700.0)
+    # 1000 + 500 + 300 + 200 = 2000 USD-equivalent
+    assert vol.total_usd_exposure_equivalent == pytest.approx(2000.0)
 
 
 def test_volumetry_defaults_are_zero() -> None:
@@ -271,8 +273,9 @@ def test_structured_block_bad_reporting_currency_raises() -> None:
         FXStructuredBlock(reporting_currency="JPY")
 
 
-def test_structured_block_total_debt_usd_equivalent_explicit_rate() -> None:
-    """With an explicit spot, the final-period debt converts deterministically."""
+def test_structured_block_total_debt_usd_equivalent_is_straight_sum() -> None:
+    """All debt fields are USD-equivalent, so the total is a straight final-period sum —
+    NO spot conversion (the spot arg is accepted for back-compat but ignored)."""
     block = FXStructuredBlock(
         volumetry=[
             FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=10.0),
@@ -284,20 +287,16 @@ def test_structured_block_total_debt_usd_equivalent_explicit_rate() -> None:
             ),
         ]
     )
-    # final period: 50 USD + 2000/200 LKR + 5 CNY = 65
-    assert block.total_debt_usd_equivalent(spot_rate_lkr_usd=200.0) == pytest.approx(65.0)
+    # final period: 50 USD + 2000 (USD-equiv LKR) + 5 CNY = 2055
+    assert block.total_debt_usd_equivalent() == pytest.approx(2055.0)
+    # the back-compat spot arg is ignored — same result
+    assert block.total_debt_usd_equivalent(spot_rate_lkr_usd=200.0) == pytest.approx(2055.0)
     assert block.total_periods() == 2
 
 
-def test_structured_block_total_debt_usd_equivalent_config_rate() -> None:
-    """With no spot supplied, the config-sourced reference rate is used."""
-    block = FXStructuredBlock(
-        volumetry=[
-            FXVolumetry(period=0, total_debt_lkr=DEFAULT_RATE * 100.0, total_debt_usd=7.0),
-        ]
-    )
-    # 7 USD + (DEFAULT_RATE*100)/DEFAULT_RATE = 7 + 100 = 107
-    assert block.total_debt_usd_equivalent() == pytest.approx(107.0)
+def test_structured_block_total_debt_usd_equivalent_empty_is_zero() -> None:
+    """No volumetry -> 0.0."""
+    assert FXStructuredBlock().total_debt_usd_equivalent() == 0.0
 
 
 def test_structured_block_to_dict_serializes_volumetry() -> None:

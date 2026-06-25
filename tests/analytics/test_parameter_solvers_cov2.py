@@ -80,34 +80,26 @@ def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_npv_solver_target_above_achieved_collapses_to_high_bound() -> None:
-    """Target NPV above achieved => npv_delta < 0 each step => bracket -> high.
-
-    project_npv (~ -3.19e7) is invariant for this config. Asking for a target far
-    above it makes ``achieved - target`` strictly negative on every probe, so the
-    solver repeatedly executes ``low = mid`` and the bracket collapses to the high
-    bound. (This exercises the ``npv_delta < 0`` branch the sibling file's
-    below-target case does not reach.)
-    """
-    low, high = 40.0, 100.0
-    tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG,
-        None,
-        target_npv=5.0e8,  # well above the achieved (negative) NPV
-        metric="project_npv",
-        bounds=(low, high),
-    )
-    assert low <= tariff <= high
-    assert tariff == pytest.approx(high, abs=1e-6)
+def test_npv_solver_target_above_range_raises() -> None:
+    """A target project_npv above the achievable range over [40, 100] LKR/kWh (~85M..439M
+    with the LIVE tariff path) is not bracketed: the solver fails loud (round-2 fix) instead
+    of silently collapsing to the high bound. 5e8 (500M) exceeds the max -> unreachable."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_tariff_given_npv(
+            LENDER_CONFIG, None, target_npv=5.0e8, metric="project_npv",
+            bounds=(40.0, 100.0),
+        )
 
 
 def test_npv_solver_zero_iterations_raises_no_midpoint() -> None:
-    """max_iterations=0 leaves last_good_mid None -> hard ValueError raise."""
+    """max_iterations=0 leaves last_good_mid None -> hard ValueError raise. Uses a BRACKETED
+    target (200M is within the ~85M..439M reachable band) so the precheck passes and the
+    0-iteration loop is what raises."""
     with pytest.raises(ValueError, match="failed to converge"):
         solve_for_tariff_given_npv(
             LENDER_CONFIG,
             None,
-            target_npv=BASE_PROJECT_NPV,
+            target_npv=200.0e6,
             metric="project_npv",
             bounds=(40.0, 100.0),
             max_iterations=0,

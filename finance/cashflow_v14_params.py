@@ -390,33 +390,10 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         or 1
     )
 
-    enhanced_capital_allowance_raw = _as_float_or_none(
-        _resolve_first(
-            raw,
-            ("tax", "enhanced_capital_allowance_pct"),
-            ("parameters", "enhanced_capital_allowance_pct"),
-            "enhanced_capital_allowance_pct",
-        )
-    )
-    # Explicit MULTIPLIER on the depreciable base: 1.0 = standard 100% allowance, 1.5 = a
-    # 150% enhanced allowance. CESSPIT: take the configured value as-is. The old
-    # `raw > 1 -> raw/100` heuristic assumed a percent and silently mangled the multiplier
-    # convention that 9 of 10 scenarios actually use — a 1.5 (150%) allowance became 0.015,
-    # a 100x-too-SMALL depreciation base (which is nonsensical: you could never recover the
-    # asset). It was inert only for the canonical lendercase (enhanced_allowance_applies:
-    # false) but LIVE in the pessimistic / edge_extreme_stress / master_config scenarios.
-    # Also do NOT coerce a legitimate 0.0 to 1.0; default to 1.0 only on genuine absence.
-    # Only consumed when tax.enhanced_allowance_applies is true (see cashflow_v14.py).
-    if enhanced_capital_allowance_raw is None:
-        enhanced_capital_allowance_pct = 1.0
-    else:
-        enhanced_capital_allowance_pct = float(enhanced_capital_allowance_raw)
-        if enhanced_capital_allowance_pct < 0.0:
-            raise ValueError(
-                "tax.enhanced_capital_allowance_pct must be a non-negative multiplier "
-                "(1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance); got "
-                f"{enhanced_capital_allowance_pct}"
-            )
+    # NOTE: enhanced_capital_allowance_pct is resolved + validated by finance.cashflow_v14_tax
+    # .TaxConfig (the LIVE depreciation path reads tax_config.enhanced_capital_allowance_pct).
+    # The parallel resolution that once lived here fed a CashflowParams field no computation
+    # ever read — a dead second source of truth — so it was removed (CCCDIR).
 
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
@@ -454,7 +431,6 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         depreciation_years=int(depreciation_years),
         tax_holiday_years=int(tax_holiday_years),
         tax_holiday_start_year=int(tax_holiday_start_year),
-        enhanced_capital_allowance_pct=float(enhanced_capital_allowance_pct),
         risk_haircut_pct=float(risk_haircut_pct),
     )
 

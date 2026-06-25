@@ -113,13 +113,20 @@ def test_reference_curve_structure(reference_curve: pd.DataFrame) -> None:
 def test_air_density_correction(
     reference_curve: pd.DataFrame, site_curve: pd.DataFrame
 ) -> None:
-    """Power scales with (rho_site/rho_ref)^(1/3) per IEC 61400-12-1."""
-    p_ref = reference_curve.loc[
-        reference_curve["wind_speed_ms"] == 8.0, "power_kw"
-    ].iloc[0]
-    p_site = site_curve.loc[site_curve["wind_speed_ms"] == 8.0, "power_kw"].iloc[0]
-    expected_ratio = (1.15 / 1.225) ** (1.0 / 3.0)
-    assert p_site / p_ref == pytest.approx(expected_ratio, rel=1e-3)
+    """IEC 61400-12-1 is a WIND-SPEED normalisation: site power at speed v equals the
+    reference curve read at v * (rho_site/rho_ref)**(1/3) — NOT a power scaling. (The old
+    code scaled power by that factor, applying the velocity exponent to power.)"""
+    factor = (1.15 / 1.225) ** (1.0 / 3.0)  # < 1: thinner air -> leftward speed shift
+    ref_ws = reference_curve["wind_speed_ms"].to_numpy(dtype=float)
+    ref_p = reference_curve["power_kw"].to_numpy(dtype=float)
+    # At each grid speed the corrected curve == the reference read at the shifted speed.
+    for v in (6.0, 8.0, 10.0):
+        p_site = site_curve.loc[site_curve["wind_speed_ms"] == v, "power_kw"].iloc[0]
+        assert p_site == pytest.approx(float(np.interp(v * factor, ref_ws, ref_p)), rel=1e-6)
+    # Thinner air -> no more power than the reference at a given speed (rising region).
+    p_ref_8 = reference_curve.loc[reference_curve["wind_speed_ms"] == 8.0, "power_kw"].iloc[0]
+    p_site_8 = site_curve.loc[site_curve["wind_speed_ms"] == 8.0, "power_kw"].iloc[0]
+    assert p_site_8 <= p_ref_8
 
 
 def test_invalid_air_density() -> None:

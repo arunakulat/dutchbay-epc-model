@@ -37,8 +37,13 @@ from analytics.wind.losses_model import apply_losses, default_loss_taxonomy
 from wind_resource.bankable_aep import density_velocity_factor
 
 HOURS_PER_YEAR = 8760.0
-# Fine wind-speed grid (m/s) for the analytic Weibull integral.
-_WS_GRID = np.arange(0.0, 30.0001, 0.05)
+# Fine wind-speed grid (m/s) for the analytic Weibull integral. Starts just above 0 (not
+# 0.0): the Weibull pdf (v/a)**(k-1) is +inf at v=0 for shape k<1, which would poison the
+# trapezoid normalisation and return NaN gross AEP. The 1e-4 floor (the bankable engine
+# uses 0.01) keeps the integral finite for all k; for k>=1 the pdf is ~0 near zero so the
+# floor shifts net AEP by <1e-3 GWh/turbine — negligible at reporting precision (canonical
+# base AEP 473.84 GWh unchanged) but NOT bit-for-bit identical to a 0.01 lower bound.
+_WS_GRID = np.arange(1e-4, 30.0001, 0.05)
 
 # The losses driver scales whatever the config-resolved taxonomy declares (see
 # _scaled_losses); there is no hardcoded reduction-key tuple here any more, so a

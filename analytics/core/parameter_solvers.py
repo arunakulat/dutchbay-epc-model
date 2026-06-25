@@ -106,6 +106,46 @@ def _assert_override_is_live(
         )
 
 
+def _assert_target_bracketed(
+    delta_low: float,
+    delta_high: float,
+    *,
+    label: str,
+    low: float,
+    high: float,
+    target: float,
+    tolerance: float,
+) -> None:
+    """Fail loud when a bisection target is not bracketed by ``[f(low), f(high)]``.
+
+    Each delta-root solver's ``_evaluate_at`` returns ``achieved - target``. A root lies in
+    ``[low, high]`` only if the two endpoint deltas straddle zero. If both share a sign (and
+    neither is within tolerance), the target is unreachable in the bounds and bisection
+    would silently converge to a bound and return a meaningless answer — raise instead,
+    naming the achievable range.
+    """
+    if abs(delta_low) <= tolerance or abs(delta_high) <= tolerance:
+        return  # a bound already (nearly) hits the target
+    if (delta_low > 0.0) == (delta_high > 0.0):  # same sign -> no root bracketed
+        raise ValueError(
+            f"{label}: target {target:.6g} is not achievable within bounds "
+            f"[{low:.6g}, {high:.6g}]; achievable range is "
+            f"[{target + min(delta_low, delta_high):.6g}, "
+            f"{target + max(delta_low, delta_high):.6g}]. Widen the bounds."
+        )
+
+
+def _bracket_deltas(
+    evaluate_at: Callable[[float], float], low: float, high: float
+) -> Tuple[Optional[float], Optional[float]]:
+    """Return (f(low), f(high)) for the bracketing precheck, or (None, None) if a bound
+    evaluation raises (let the solver's own loop handle that degenerate case)."""
+    try:
+        return evaluate_at(low), evaluate_at(high)
+    except Exception:  # pragma: no cover - defensive; main loop handles eval failures
+        return None, None
+
+
 # ---------------------------------------------------------------------------
 # IRR-based tariff solver (production-ready)
 # ---------------------------------------------------------------------------
@@ -188,6 +228,15 @@ def solve_for_tariff_given_irr(
         )
         achieved_irr = float(kpis["project_irr"])
         return achieved_irr - float(target_irr)
+
+    # Bracketing precheck: fail loud if target_irr is outside the achievable IRR range over
+    # [low, high] tariff, rather than silently bisecting to a bound (round-2 finding).
+    _d_low, _d_high = _bracket_deltas(_evaluate_at, low, high)
+    if _d_low is not None and _d_high is not None:
+        _assert_target_bracketed(
+            _d_low, _d_high, label="solve_for_tariff_given_irr",
+            low=low, high=high, target=float(target_irr), tolerance=tolerance,
+        )
 
     last_good_mid: Optional[float] = None
 
@@ -468,6 +517,15 @@ def solve_for_tariff_given_npv(
         )
         achieved_npv = float(kpis[metric])
         return achieved_npv - float(target_npv)
+
+    # Bracketing precheck: fail loud if target_npv is unreachable over [low, high] tariff
+    # rather than bisecting to a meaningless bound (round-2 finding).
+    _d_low, _d_high = _bracket_deltas(_evaluate_at, low, high)
+    if _d_low is not None and _d_high is not None:
+        _assert_target_bracketed(
+            _d_low, _d_high, label="solve_for_tariff_given_npv",
+            low=low, high=high, target=float(target_npv), tolerance=tolerance,
+        )
 
     last_good_mid: Optional[float] = None
 
@@ -756,6 +814,18 @@ def solve_for_min_capex_given_irr_floor(
             overrides=overrides,
         )
         return float(kpis["project_irr"])
+
+    # Bracketing precheck (round-2 finding, extended here in round 3): fail loud if irr_floor
+    # is unreachable over [low, high] capex rather than silently bisecting to a bound. IRR
+    # DECREASES as capex rises, so the achievable IRR range is [irr(high), irr(low)]; the
+    # delta = irr(capex) - irr_floor and the same-sign test detects an unbracketed floor
+    # regardless of monotonicity direction. (IRR tolerance, not the USD capex tolerance.)
+    _d_low, _d_high = _bracket_deltas(lambda c: _evaluate_at(c) - irr_floor, low, high)
+    if _d_low is not None and _d_high is not None:
+        _assert_target_bracketed(
+            _d_low, _d_high, label="solve_for_min_capex_given_irr_floor",
+            low=low, high=high, target=float(irr_floor), tolerance=1e-4,
+        )
 
     last_good_mid: Optional[float] = None
 

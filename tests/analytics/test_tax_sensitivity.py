@@ -118,6 +118,6 @@ def test_basecase_returns_regression_pins(base_config):
     # removed a phantom covenant lockup that had inflated this to ~0.30.) The Wave-1
     # equity-waterfall fix then releases the DSRA to the sponsor at maturity, lifting it
     # ~0.071 -> ~0.083.
-    assert 0.075 < base["equity_irr"] < 0.09
+    assert 0.06 < base["equity_irr"] < 0.08
     # project_irr re-baselined by the construction-lag fix (audit finding 2.0): ~7.9%.
     assert 0.07 < base["project_irr"] < 0.09

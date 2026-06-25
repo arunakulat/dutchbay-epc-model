@@ -61,7 +61,7 @@ def _common_project_block() -> Dict[str, Any]:
             "depreciation_start_year": 1,
             "depreciation_years": 20,
             "enhanced_allowance_applies": False,
-            "enhanced_capital_allowance_pct": 150.0,
+            "enhanced_capital_allowance_pct": 1.5,  # multiplier (150%), not percent
             "loss_carryforward_years": 25,
             "tax_holiday_start_year": 1,
             "tax_holiday_years": 10,

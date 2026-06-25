@@ -104,7 +104,7 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # unused losses; the canonical wind lendercase is byte-identical.
     assert kpis["project_irr"] == pytest.approx(-0.0346, abs=0.005)
     assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.1053, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0877, abs=0.01)
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)  # sizer holds DSCR, sizes debt down

@@ -61,27 +61,24 @@ BASE_DSCR = 1.30
 # ---------------------------------------------------------------------------
 
 
-def test_irr_solver_target_below_achieved_lands_on_low_bound() -> None:
-    """Target IRR < achieved => delta > 0 every step => bracket collapses to low."""
-    low, high = 40.0, 100.0
-    tariff = solve_for_tariff_given_irr(
-        LENDER_CONFIG, None, target_irr=0.04, bounds=(low, high)
-    )
-    assert low <= tariff <= high
-    assert tariff == pytest.approx(low, abs=1e-6)
+def test_irr_solver_target_below_range_raises() -> None:
+    """A target IRR below the achievable range over [low, high] is not bracketed: the solver
+    fails loud (round-2 fix) instead of silently returning the low bound. At tariff 40-100
+    LKR/kWh projIRR is ~0.137-0.298, so a 0.04 target is unreachable in-range."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_tariff_given_irr(
+            LENDER_CONFIG, None, target_irr=0.04, bounds=(40.0, 100.0)
+        )
 
 
-def test_irr_solver_target_above_reachable_range_lands_on_high_bound() -> None:
-    """A target IRR above what even the max tariff achieves collapses to the high bound.
-
-    With the LIVE tariff path, projIRR rises with tariff (~0.137 at 40 -> ~0.298 at 100
-    LKR/kWh). A 0.40 target is unreachable in-range, so the solver pushes to high.
-    """
-    low, high = 40.0, 100.0
-    tariff = solve_for_tariff_given_irr(
-        LENDER_CONFIG, None, target_irr=0.40, bounds=(low, high)
-    )
-    assert tariff == pytest.approx(high, abs=1e-6)
+def test_irr_solver_target_above_range_raises() -> None:
+    """A target IRR above what even the max tariff achieves is not bracketed: fail loud
+    (round-2 fix) rather than silently returning the high bound. projIRR tops out ~0.298
+    at tariff 100, so a 0.40 target is unreachable in-range."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_tariff_given_irr(
+            LENDER_CONFIG, None, target_irr=0.40, bounds=(40.0, 100.0)
+        )
 
 
 def test_irr_solver_converges_to_a_real_tariff_for_reachable_target() -> None:
@@ -110,8 +107,10 @@ def test_irr_solver_rejects_non_bisection_method() -> None:
 def test_irr_solver_zero_iterations_raises_no_midpoint() -> None:
     """With no iterations the loop never sets last_good_mid -> hard ValueError."""
     with pytest.raises(ValueError, match="failed to converge"):
+        # target 0.20 is bracketed by [irr(40), irr(100)] so the precheck passes; with 0
+        # iterations the loop never sets last_good_mid -> hard ValueError.
         solve_for_tariff_given_irr(
-            LENDER_CONFIG, None, target_irr=0.10, max_iterations=0
+            LENDER_CONFIG, None, target_irr=0.20, bounds=(40.0, 100.0), max_iterations=0
         )
 
 
@@ -157,29 +156,21 @@ def test_npv_solver_equity_metric_is_accepted_and_live() -> None:
     """equity_npv is a valid metric and the override is live (else the self-check raises);
     the solver returns a tariff within bounds."""
     tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG, None, target_npv=0.0, metric="equity_npv",
+        LENDER_CONFIG, None, target_npv=100.0e6, metric="equity_npv",
         bounds=(40.0, 100.0), tolerance=1.0e6,
     )
-    assert 40.0 <= tariff <= 100.0
+    assert 40.0 <= tariff <= 100.0  # target 100M is within the ~54M..365M reachable band
 
 
-def test_npv_solver_unreachable_target_should_return_boundary_not_raise() -> None:
-    """An unreachable target lands on a bound instead of raising.
-
-    project_npv is invariant for this config, so a target far below it yields a
-    constant positive delta => the bracket collapses to the low bound and the
-    solver returns it. (Previously the non-convergence warning's '%,.0f' logging
-    format raised ValueError on this path; this regression-guards that fix.)
-    """
-    low, high = 40.0, 100.0
-    tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG,
-        None,
-        target_npv=-1.0e9,
-        metric="project_npv",
-        bounds=(low, high),
-    )
-    assert tariff == pytest.approx(low, abs=1e-6)
+def test_npv_solver_unreachable_target_raises() -> None:
+    """An unreachable project_npv target is not bracketed over [low, high], so the solver
+    fails loud (round-2 fix) instead of silently returning a bound. project_npv is positive
+    (~85M..439M) over 40-100 LKR/kWh, so a -1e9 target is unreachable in-range."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_tariff_given_npv(
+            LENDER_CONFIG, None, target_npv=-1.0e9, metric="project_npv",
+            bounds=(40.0, 100.0),
+        )
 
 
 def test_npv_solver_rejects_invalid_metric() -> None:
@@ -227,14 +218,16 @@ def test_min_capex_solves_breakeven_capex_at_the_floor() -> None:
     assert achieved == pytest.approx(0.04, abs=1e-3)
 
 
-def test_min_capex_floor_unreachable_even_at_min_capex_lands_on_low_bound() -> None:
-    """A floor above the IRR achievable even at the minimum capex collapses to the low
-    bound (cheapest project still cannot clear it)."""
-    low, high = 100.0e6, 500.0e6
-    capex = solve_for_min_capex_given_irr_floor(
-        LENDER_CONFIG, None, irr_floor=0.20, bounds=(low, high), tolerance=10_000.0
-    )
-    assert capex == pytest.approx(low, rel=1e-3)
+def test_min_capex_floor_unreachable_raises() -> None:
+    """A floor above the IRR achievable even at the minimum capex is not bracketed: the
+    solver fails loud (round-3 fix, extending the round-2 bracketing guard to the capex
+    solver) instead of silently collapsing to the low bound. The cheapest project here
+    (~$100M) clears well under 20% IRR, so a 0.20 floor is unreachable in-range."""
+    with pytest.raises(ValueError, match="not achievable within bounds"):
+        solve_for_min_capex_given_irr_floor(
+            LENDER_CONFIG, None, irr_floor=0.20, bounds=(100.0e6, 500.0e6),
+            tolerance=10_000.0,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -276,8 +269,8 @@ def test_get_solver_unknown_label_raises_keyerror_listing_options() -> None:
 
 def test_get_solver_result_is_callable_and_solves() -> None:
     solver = get_solver("target_project_irr")
-    tariff = solver(LENDER_CONFIG, None, target_irr=0.04, bounds=(40.0, 100.0))
-    assert tariff == pytest.approx(40.0, abs=1e-6)
+    tariff = solver(LENDER_CONFIG, None, target_irr=0.20, bounds=(40.0, 100.0))
+    assert 40.0 < tariff < 100.0  # bracketed target -> interior solution
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +282,7 @@ def test_base_overrides_not_mutated_by_solver() -> None:
     """The solver shallow-clones overrides; the caller's dict is left intact."""
     base = {"sentinel": {"keep": 1}}
     solve_for_tariff_given_irr(
-        LENDER_CONFIG, base, target_irr=0.04, bounds=(40.0, 100.0), max_iterations=2
+        LENDER_CONFIG, base, target_irr=0.20, bounds=(40.0, 100.0), max_iterations=2
     )
     assert base == {"sentinel": {"keep": 1}}
     # The solver injects "financial" into its *clone*, not the caller's dict.
@@ -299,6 +292,6 @@ def test_base_overrides_not_mutated_by_solver() -> None:
 def test_none_overrides_supported() -> None:
     """base_overrides=None is a supported happy path (fresh dict internally)."""
     tariff = solve_for_tariff_given_irr(
-        LENDER_CONFIG, None, target_irr=0.04, bounds=(40.0, 100.0)
+        LENDER_CONFIG, None, target_irr=0.20, bounds=(40.0, 100.0)
     )
-    assert tariff == pytest.approx(40.0, abs=1e-6)
+    assert 40.0 < tariff < 100.0
