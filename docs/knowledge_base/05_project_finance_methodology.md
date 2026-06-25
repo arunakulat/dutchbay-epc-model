@@ -4,6 +4,8 @@ This document sets out the project-finance methodology used to underwrite and st
 
 The financial engine that implements this methodology, and its scenario results, are published elsewhere in this repository. Where a number is cited below it is a *model result* for a disclosed scenario, not a commercial commitment. For the cost basis that feeds capex into these calculations see `01_wind_epc_costs_and_scaling.md`; for the resource and energy-yield methodology see `02_wind_resource_and_aep.md`; for the offtake and tariff framework see `03_offtake_ppa_and_grid.md`.
 
+External, publicly-verifiable benchmark and regime claims in this document were re-validated against primary sources on 2026-06-25; see **External validation & sources** near the end for the source list and any corrections.
+
 ---
 
 ## 1. Debt Sizing and the Covenant Package
@@ -16,13 +18,13 @@ Everything downstream is built on **Cash Flow Available for Debt Service (CFADS)
 CFADS = revenue − operating expenditure − tax − maintenance capex   (before financing)
 ```
 
-CFADS is defined once, per period, and every coverage ratio, sculpt and reserve is derived from it. Treating CFADS as the single upstream quantity — rather than recomputing cash from several places — is what keeps a model internally consistent and auditable.
+CFADS is defined once, per period, and every coverage ratio, sculpt and reserve is derived from it. Treating CFADS as the single upstream quantity — rather than recomputing cash from several places — is what keeps a model internally consistent and auditable. This CFADS-first construction, with debt sized backwards from the forecast CFADS stream, is standard lender practice (Yescombe, *Principles of Project Finance*).
 
 ### 1.2 Debt sizing — the more restrictive of two constraints
 
 Debt capacity at financial close is the **minimum** of:
 
-- **Gearing cap** — debt ≤ X% of project cost (typically 70–80% for contracted renewables).
+- **Gearing cap** — debt ≤ X% of project cost (typically 70–80% for contracted renewables; lender term sheets commonly express a maximum gearing such as 75% debt / 25% equity).
 - **DSCR-sized debt** — the maximum debt such that `CFADS / DebtService ≥ target DSCR` in every period. This is solved *backwards* from the forecast CFADS stream.
 
 The binding constraint flips between projects. A strong-resource, fully-contracted asset is usually gearing-bound; a weaker or FX-stressed asset becomes DSCR-bound at a lower gearing. In the disclosed Dutch Bay base case the FX correction (Section 3) pushed the asset from gearing-bound (~0.70) to DSCR-bound (~0.63) — a direct illustration that gearing is a *cap*, not an *entitlement*.
@@ -42,7 +44,7 @@ Sculpting **maximises debt capacity** versus a level/annuity profile. A grace or
 
 | Ratio | Definition | Horizon | Role |
 |---|---|---|---|
-| **DSCR** | period CFADS ÷ period debt service | point-in-time | Target ≈ 1.30× for contracted infra; min ≈ 1.20×. Merchant/higher-risk → higher. |
+| **DSCR** | period CFADS ÷ period debt service | point-in-time | Target ≈ 1.30× for contracted infra; min ≈ 1.20×. Industry benchmarks put contracted-solar P50 DSCR at ~1.20–1.30× and contracted-wind at ~1.30–1.40×, with merchant/higher-risk projects materially higher (~1.75–2.00×). |
 | **LLCR** | PV(CFADS over loan life, net of DSRA) ÷ debt outstanding | forward, loan term | Repayment capacity over the loan; triggers cash sweeps. Typical min ≈ 1.10–1.15×. |
 | **PLCR** | as LLCR but over *project* life | forward, project term | Always ≥ LLCR; measures the tail-value cushion. |
 
@@ -51,7 +53,7 @@ A subtlety routinely mis-modelled: in the LLCR the **DSRA balance is deducted fr
 ### 1.5 DSRA and the lender protections that make a model a *credit*
 
 - **DSRA (Debt Service Reserve Account):** a cash buffer, commonly the **next six months** of debt service, funded at close and topped up from the waterfall. It steps *down* as the debt amortises and the residual is released to equity at maturity (a release that, if omitted, materially understates the equity return).
-- **Distribution lock-up:** no equity distributions when DSCR or LLCR falls below a lock-up threshold; the trapped cash is *carried forward and released when the covenant cures*, not destroyed.
+- **Distribution lock-up:** no equity distributions when DSCR or LLCR falls below a lock-up threshold (commonly set at or just above the minimum-DSCR covenant, e.g. ~1.20×); the trapped cash is *carried forward and released when the covenant cures*, not destroyed.
 - **Cash sweep:** excess cash prepays senior debt as DSCR approaches a mid threshold (~1.10–1.15×). At a 100% sweep, principal rises until debt service equals CFADS, i.e. DSCR → 1.00×.
 - **Events of default** below the floor.
 
@@ -63,14 +65,14 @@ Debt size drives interest-during-construction (IDC), which is part of project co
 
 ### 1.7 Bankability — P50 / P75 / P90 and sizing off the downside
 
-Energy-yield uncertainty is expressed as **exceedance (P-) values**:
+Energy-yield uncertainty is expressed as **exceedance (P-) values** — the probability that actual AEP is exceeded — and is the framework codified in IEC 61400-15-2 for pre-construction energy-yield assessment (which outputs a P50 median and a σ_AEP from which all Pxx levels are derived):
 
 - **P50** — median; the equity base case.
 - **P75** — a common European-lender compromise.
 - **P90** — exceeded nine years in ten; the conventional **debt-sizing** standard.
 - **P99** — deep downside / covenant stress.
 
-The **P50→P90 spread** (≈1.10–1.20× depending on climate variability) is the bankability headroom: lenders size on the conservative case, equity is rewarded on the gap. The general rule is *size debt off the downside resource, run equity off P50* — but see Section 2.1 for how this rule must be refined.
+The **P50→P90 spread** (≈1.10–1.20× depending on climate variability and total assessment uncertainty) is the bankability headroom: lenders size on the conservative case, equity is rewarded on the gap. The general rule is *size debt off the downside resource, run equity off P50* — but see Section 2.1 for how this rule must be refined.
 
 ---
 
@@ -83,7 +85,7 @@ These are non-obvious, primary-source-grounded refinements. Each is stated as **
 Two facts complicate "just use P50, then P90":
 
 1. **The P50 base case is often biased optimistic.** Operational studies have found systematic over-prediction of energy in the order of a few percent. The defensible habit is to *interrogate the gross-energy-and-losses build*, not to accept the headline P50.
-2. **A near-zero *net* P50 bias can be a mirage.** Independent multi-consultant work shows the net bias can wash out only because gross-turbine energy is over-predicted *and* downstream losses are over-predicted, and the two errors cancel — sample-, method- and era-dependent, with large unreconciled inter-consultant disagreement. A small net bias does **not** mean the estimate is sound; the **choice of yield consultant is itself a material model risk**.
+2. **A near-zero *net* P50 bias can be a mirage.** The independent NREL-led multi-consultant benchmark (Todd et al., *Wind Energy*, 2022) found a mean net P50 bias of only **−1.2%** across 10 North American plants and 68 EYA submissions — but with a **4.8% standard deviation**, and that near-zero mean arises *only because consultants over-predict gross turbine energy and then over-predict downstream losses, so the two errors cancel*, while inter-consultant disagreement stays roughly flat through the loss stack (differences worth up to ~$10/MWh in LCOE). A small net bias does **not** mean the estimate is sound; the **choice of yield consultant is itself a material model risk**.
 
 Two further structural points:
 - **Uncertainty has a floor that does not decay.** Only interannual variability shrinks with √N; measurement and energy-model errors are systematic and persist. Total P50 uncertainty floors above a few percent regardless of record length.
@@ -98,7 +100,7 @@ A hard-currency coupon that *looks* cheap against a local-currency loan usually 
 effective all-in cost of USD debt = USD rate + cost of hedging the FX ≈ local-currency loan rate
 ```
 
-Feasibility must be tested at the **effective (hedged)** cost, not the headline USD coupon. And FX risk has *no natural private owner* — the developer cannot move the rate and the offtaker's control is limited — so it is, in the literature's words, "largely unmanageable for the private sector." It lands on equity, on the tariff, on the offtaker, or on a DFI hedge instrument; never assume the lender silently absorbs it. (See Section 3.)
+Feasibility must be tested at the **effective (hedged)** cost, not the headline USD coupon. And FX risk has *no natural private owner* — the developer cannot move the rate and the offtaker's control is limited — so it is, in the literature's words, "largely unmanageable for the private sector." The long-tenor private-to-private hedge market is itself thin (the "missing risk market" problem). FX/country risk lands on equity, on the tariff, on the offtaker, or on a DFI hedge instrument; never assume the lender silently absorbs it. (See Section 3.)
 
 ### 2.3 Merchant-tail red flag (the finite-life twist)
 
@@ -107,10 +109,10 @@ For a going concern, a high terminal-value share of NPV is unremarkable. For a *
 ### 2.4 Monte-Carlo, copula and CVaR traps
 
 - **A hand-edited correlation matrix is probably invalid.** A correlation matrix must be symmetric, unit-diagonal and **positive semi-definite**. Manual stress overrides and asynchronous estimates routinely produce non-PSD matrices that silently break Cholesky sampling. Repair with the **nearest-correlation-matrix (Higham)** projection, and check PSD before trusting any simulation.
-- **The Gaussian copula understates joint tail risk** — it has zero asymptotic tail dependence for any ρ < 1, so the "everything goes wrong together" year (low capacity factor + weak FX + curtailment) is under-weighted. Use **t or Clayton copulas** for joint-tail dependence, and impose a target *rank* correlation on Latin-Hypercube draws via **Iman–Conover** rather than naive Cholesky-on-levels.
-- **CVaR ≠ "average of the worst x%" for discrete data.** VaR is not coherent (it ignores the tail beyond the threshold); CVaR/Expected Shortfall is coherent and is the right tail metric, but for *discrete* simulation output the naive tail average is not exact — compute CVaR via the **Rockafellar–Uryasev minimisation formula**.
+- **The Gaussian copula understates joint tail risk** — it has **zero asymptotic tail dependence for any ρ < 1** (asymptotic independence), so the "everything goes wrong together" year (low capacity factor + weak FX + curtailment) is under-weighted; this is the well-documented reason the Gaussian copula is regarded as unsuitable for tail-sensitive risk work. Use a **t-copula** (symmetric tail dependence growing as the degrees-of-freedom fall) or a **Clayton copula** (lower-tail dependence) for joint-tail behaviour, and impose a target *rank* correlation on Latin-Hypercube draws via **Iman–Conover** rather than naive Cholesky-on-levels.
+- **CVaR ≠ "average of the worst x%" for discrete data.** VaR is not coherent (it ignores the tail beyond the threshold); CVaR/Expected Shortfall is coherent (for both continuous and discrete distributions) and is the right tail metric, but for *discrete* simulation output the naive tail average is not exact — compute CVaR via the **Rockafellar–Uryasev (2000) minimisation formula**, `CVaR_α(X) = min_β { β + (1/(1−α))·E[(X−β)₊] }`, which is convex and (for linear constraints) reduces to an LP.
 - **Sobol total-order minus first-order > 0 reveals interactions** (FX × tariff × capacity factor) that a one-way tornado is blind to. Use cheap Morris screening first, then Sobol.
-- **Model-risk hygiene:** a large fraction of real-world spreadsheets contain errors; a formal independent model audit before financial close is standard lender practice. Pin a fixed random seed and a single RNG API, surface NPV at the hurdle alongside IRR (cash flows with multiple sign changes can have multiple or no IRRs — prefer MIRR/XIRR or a bracketed solve), and **execute every load-bearing number rather than hand-tracing it**.
+- **Model-risk hygiene:** audits of real-world operational spreadsheets find errors in the great majority of them (Coopers & Lybrand and later studies report defects in ~90% of audited sheets; KPMG-type model reviews find material errors in a large share of financial models), so a formal independent model audit before financial close is standard lender practice. Pin a fixed random seed and a single RNG API, surface NPV at the hurdle alongside IRR (cash flows with multiple sign changes can have multiple or no IRRs — prefer MIRR/XIRR or a bracketed solve), and **execute every load-bearing number rather than hand-tracing it**.
 
 ### 2.5 Graham discipline, adapted to cash-yielding infrastructure
 
@@ -120,7 +122,7 @@ The transferable ideas are the **margin of safety** and the **conservative base 
 
 ## 3. FX and Currency-Mismatch Handling
 
-Currency mismatch — **local-currency revenue against hard-currency debt and hard-currency capex/O&M** — is the structural value driver and the dominant project-killer for an emerging-market IPP. For a flat-LKR-tariff wind asset it is the single most important sensitivity.
+Currency mismatch — **local-currency revenue against hard-currency debt and hard-currency capex/O&M** — is the structural value driver and the dominant project-killer for an emerging-market IPP. IRENA's cost-of-capital work makes the macro point concrete: WACC assumptions range from ~3.8% in Europe to ~12% in Africa, the cost of capital sits ~200–300 bps above the underlying country risk, and in higher-risk markets financing cost — not capex — dominates LCOE. For a flat-LKR-tariff wind asset, currency is the single most important sensitivity.
 
 ### 3.1 LKR-primary numeraire
 
@@ -145,8 +147,8 @@ The mechanism is sound and is not a double-count: LKR revenue is FX-independent 
 The emerging-market answer to the mismatch is not a hard-currency-indexed PPA backed by a sovereign guarantee — those *shift* FX risk onto the state's balance sheet rather than resolve it, and are increasingly unsustainable. The forward-looking tools to screen for:
 
 - **Local-currency PPA with partial indexation**, or a *capped* public contribution toward hedging cost (bounding the public liability) rather than a full FX guarantee.
-- **Currency-hedge facilities** providing long-tenor (covering a 20–25-year PPA) cross-currency swaps and forwards, subject to per-deal ticket and tenor caps.
-- **Political-risk / breach-of-contract cover** that explicitly addresses PPA repudiation (denial of recourse and non-payment of an award).
+- **Currency-hedge facilities** providing long-tenor (covering a 20–25-year PPA) cross-currency swaps and forwards, subject to per-deal ticket and tenor caps — the thin private hedge market is exactly the gap DFI facilities exist to fill.
+- **Political-risk / breach-of-contract cover** (e.g. MIGA's breach-of-contract and Non-Honoring of Sovereign Obligations products, available up to ~20 years and used on PPAs with state offtakers) that explicitly addresses PPA repudiation — denial of recourse and non-payment of an award.
 - **A Put-and-Call Option Agreement (PCOA)** as a termination-cover alternative deliberately structured *not* to be a sovereign guarantee — a direct government↔project-company obligation over termination payments recast as a purchase price, which can avoid breaching fiscal commitments and avoid sovereign-liability recognition.
 
 Throughout, **additionality is the gating DFI question, and it is asserted more often than proven**: financial additionality may be shown at the deal level, but the concessional-subsidy element is rarely separately justified or verified ex post, and concessional capital is disproportionately captured by large repeat clients with existing commercial access. Probe *why the concession, and why this sponsor*.
@@ -155,22 +157,22 @@ Throughout, **additionality is the gating DFI question, and it is asserted more 
 
 ## 4. Sri Lankan Corporate-Tax Regime for a Renewable IPP
 
-The post-2022 IMF-EFF reforms removed the incentives a renewable IPP historically relied on. The regime is fast-moving — rates and holidays changed in 2022, 2023, 2024 and 2025 — so **re-verify against the latest amendment act before relying on any figure**. The figures below are primary-source-verified for a new wind IPP.
+The post-2022 IMF-EFF reforms removed the incentives a renewable IPP historically relied on. The regime is fast-moving — rates and holidays changed in 2022, 2023, 2024 and 2025 — so **re-verify against the latest amendment act before relying on any figure**. The figures below were re-confirmed against the Sri Lanka Inland Revenue Department (IRD) published tax chart for the **2025/26 year of assessment** on 2026-06-25.
 
 | Item | Current treatment | Note |
 |---|---|---|
-| **Corporate income tax (CIT)** | **30%** | Up from 24% w.e.f. 1 Oct 2022; unchanged through 2026. |
+| **Corporate income tax (CIT)** | **30%** | Up from 24% w.e.f. 1 Oct 2022; the standard rate in the IRD 2025/26 chart (45% special rate applies only to betting/gaming, liquor and tobacco). |
 | **Renewable CIT concession** | **Removed** | The old 14% rate for renewable supply to the grid was abolished → 30% from 1 Oct 2022. |
 | **≥100 MW solar/wind holiday** | **Removed for new projects** | The 7-year holiday was withdrawn w.e.f. 1 Apr 2023; grandfathered only for undertakings commenced before 31 Mar 2023. |
-| **Discretionary holiday (SDP route)** | **≤10 years, discretionary** | Re-opened but curtailed (capped at 10 yr from 25, no extensions, mandatory ex-ante cost-benefit). Not assumable as a base case. |
-| **Dividend WHT** | **15% final** | Reintroduced 1 Jan 2023; the relevant lever for distribution-timing optimisation. |
-| **Interest WHT** | **10%** | Raised from 5% w.e.f. 1 Apr 2025; applies to interest paid to lenders, including non-resident USD/DFI lenders; a double-tax treaty may reduce the ceiling. |
-| **Depreciation** | **Straight-line**; plant & machinery 5 yr (20%/yr), buildings 20 yr (5%/yr) | Split plant/civil lives, not a single blended life. |
-| **Tax-loss carry-forward (TLCF)** | **6 years** | The 25-year carry-forward applies only to >US$1bn depreciable-asset projects — irrelevant to a 150 MW wind farm. |
-| **SSCL** | **2.5%** on liable turnover | Activity-weighted. |
-| **VAT** | **18%** | Up from 15% w.e.f. 1 Jan 2024; VAT treatment of electricity supply by an IPP should be confirmed case by case. |
+| **Discretionary holiday (SDP route)** | **≤10 years, discretionary** | Re-opened but curtailed (capped at 10 yr, no extensions, mandatory ex-ante cost-benefit). Not assumable as a base case. |
+| **Dividend WHT** | **15% final** | Confirmed in the IRD 2025/26 chart; the relevant lever for distribution-timing optimisation. |
+| **Interest WHT** | **10%** | Confirmed in the IRD 2025/26 chart ("interest or discount paid"). Raised from 5% w.e.f. 1 Apr 2025; applies to interest paid to lenders, including non-resident USD/DFI lenders; a double-tax treaty may reduce the ceiling. |
+| **Depreciation (capital allowances)** | **Straight-line** per Second Schedule, Inland Revenue Act No. 24 of 2017; plant & machinery 5 yr (20%/yr), buildings/structures 20 yr (5%/yr) | Split plant/civil lives, not a single blended life. Confirm against the current Second Schedule. |
+| **Tax-loss carry-forward (TLCF)** | **6 years** | Confirmed: business losses carry forward up to six years under the Inland Revenue Act. The 25-year carry-forward applies only to >US$1bn depreciable-asset projects — irrelevant to a 150 MW wind farm. |
+| **SSCL** | **2.5%** on liable turnover | Confirmed in the IRD 2025/26 chart; registration threshold ~Rs.60m/12 months (or Rs.15m/quarter). Activity-weighted. |
+| **VAT** | **18%** | Confirmed in the IRD 2025/26 chart, effective 1 Jan 2024 (up from 15%); VAT treatment of electricity supply by an IPP should be confirmed case by case. |
 
-**Modelling implications.** A new renewable IPP should be modelled at **no statutory tax holiday**, with **split 5-year plant / 20-year civil straight-line depreciation**, a **6-year TLCF**, **30% CIT**, **10% interest WHT** (treaty-modulated), and a **15% dividend WHT** as the distribution-tax lever. The removal of the holiday is itself a value driver — it removes the shelter that older Sri Lankan renewable models assumed. An enhanced-capital-allowance multiplier, where it applies, must be carried as an explicit multiplier (not a mangled percentage) so the depreciation base is not silently understated.
+**Modelling implications.** A new renewable IPP should be modelled at **no statutory tax holiday**, with **split 5-year plant / 20-year civil straight-line depreciation**, a **6-year TLCF**, **30% CIT**, **10% interest WHT** (treaty-modulated), and a **15% dividend WHT** as the distribution-tax lever. The removal of the holiday is itself a value driver — it removes the shelter that older Sri Lankan renewable models assumed. An enhanced-capital-allowance multiplier (an Enhanced Depreciation Allowance does exist under the Act's Second Schedule), where it applies, must be carried as an explicit multiplier (not a mangled percentage) so the depreciation base is not silently understated.
 
 ---
 
@@ -212,4 +214,58 @@ The red flags are the mirror image: returns shown only at P50; a thin DSCR cushi
 
 ---
 
-The intended path for `docs/knowledge_base/05_project_finance_methodology.md`. The directory `docs/knowledge_base/` does not yet exist under `/Users/aruna/Downloads/dutchbay-epc-model/`; it (and sibling docs `01`–`04`) will need to be created when this KB is committed. Cross-references above point to `01_wind_epc_costs_and_scaling.md`, `02_wind_resource_and_aep.md`, and `03_offtake_ppa_and_grid.md`.
+## External validation & sources
+
+Each externally-verifiable benchmark/regime claim below was checked on 2026-06-25 against the cited authoritative source. Project-specific scenario numbers are *model results* and are not externally validated.
+
+**Debt sizing, DSCR/LLCR and sculpting**
+- DSCR is sized backwards from CFADS against a target, with gearing expressed as a maximum (e.g. 75/25) and a minimum DSCR (e.g. 1.4×) in the term sheet — confirmed (Yescombe, *Principles of Project Finance*; debt-sizing references): https://www.yescombe.com/PPF2bookframe.htm and https://www.wallstreetprep.com/knowledge/debt-sizing-in-project-finance/
+- DSCR benchmarks: contracted solar ~1.20–1.30×, contracted wind ~1.30–1.40×, merchant ~1.75–2.00× — confirmed: https://courses.renewablesvaluationinstitute.com/pages/academy/debt-sizing-with-target-dscr and https://greenbridgeinfra.com/resources/project-finance/project-finance-dscr (the document's "target ≈1.30× / min ≈1.20×" sits within this range; *strengthened* with the wind/solar/merchant split).
+
+**P50/P75/P90 and IEC 61400-15-2**
+- IEC 61400-15-2 frames pre-construction EYA as a P50 + σ_AEP distribution from which P75/P90/P95 follow, used for bank/investor risk management — confirmed: https://www.profec-ventus.com/services/uncertainty-assessments-of-wind-resource-and-energy-yield.html and the IEC 61400-15 standard family at https://github.com/IEC-61400/eya-def
+- P50-bias mirage: NREL-led multi-consultant benchmark found mean net P50 bias **−1.2%** (σ 4.8%) because gross over-prediction and loss over-prediction cancel, with persistent inter-consultant disagreement and up to ~$10/MWh LCOE spread — confirmed (Todd et al., *Wind Energy*, 2022): https://onlinelibrary.wiley.com/doi/full/10.1002/we.2768 and https://research-hub.nrel.gov/en/publications/an-independent-analysis-of-bias-sources-and-variability-in-wind-p-2/ (*added* the specific −1.2% / 4.8% figures).
+
+**FX / currency mismatch (emerging-market renewables)**
+- Country/currency risk drives a large cost-of-capital premium; IRENA WACC ~3.8% (Europe) to ~12% (Africa), CoC ~200–300 bps above country risk, financing cost dominates LCOE in high-risk markets — confirmed: https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2023/May/IRENA_The_cost_of_financing_renewable_power_2023.pdf and https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2016/IRENA_Risk_Mitigation_and_Structured_Finance_2016.pdf (*added* the WACC range and 200–300 bps premium).
+- The thin long-tenor private hedge market ("missing risk market") — confirmed in IRENA risk-mitigation/structured-finance work (same source).
+- MIGA breach-of-contract and Non-Honoring of Sovereign Obligations cover (up to ~20 yr, used on state-offtaker PPAs) — confirmed: https://www.miga.org/products and https://www.miga.org/fragile-and-conflict-affected-situations-fcs (*strengthened* the political-risk bullet).
+
+**Sri Lankan corporate-tax regime (primary source: IRD 2025/26 tax chart)**
+- CIT 30%; dividend WHT 15%; interest WHT 10%; VAT 18% (from 1 Jan 2024); SSCL 2.5% — **all confirmed directly** from the Inland Revenue Department 2025/26 tax chart: https://www.ird.gov.lk/en/publications/SitePages/tax_chart_2526.aspx?menuid=1404
+- TLCF 6 years; capital allowances / Enhanced Depreciation Allowance under the Second Schedule of Inland Revenue Act No. 24 of 2017 — confirmed (IRD Act guidance): https://www.ird.gov.lk/en/publications/acts_income%20tax_2017/guide%20to%20inland%20revenue%20act.pdf (exact 5-yr/20% plant and 20-yr/5% building lines should be checked against the current Second Schedule — see flag).
+- VAT/SSCL effective dates and thresholds — confirmed: https://www.ird.gov.lk/en/Type%20of%20Taxes/SitePages/Social%20Security%20Contribution%20Levy%20(SSCL).aspx
+
+**Monte-Carlo / copulas / CVaR**
+- Gaussian copula has zero asymptotic tail dependence for ρ<1 (asymptotic independence); t-copula gives symmetric tail dependence, Clayton lower-tail — confirmed: https://www.columbia.edu/~mh2078/QRM/Copulas_MasterSlides.pdf and https://arxiv.org/pdf/1607.04736
+- CVaR coherent for continuous and discrete distributions; computed via the Rockafellar–Uryasev (2000) minimisation/LP formula — confirmed: https://www.sciencedirect.com/science/article/abs/pii/S0378426602002716 and https://www2.mathematik.hu-berlin.de/~romisch/SP01/Uryasev.pdf (*added* the explicit formula and convexity/LP note).
+- Spreadsheet/financial-model error prevalence (~90% of audited sheets contain errors; large share of models carry material defects) supporting pre-close model audit — confirmed (spreadsheet-error literature, incl. EuSpRIG/Coopers & Lybrand and KPMG-type survey references): https://arxiv.org/pdf/0805.4224 and https://www.qashqade.com/insights/the-worst-financial-services-excel-errors-of-all-time
+
+**Flagged / not independently re-derivable**
+- [unverified] The exact Sri Lanka Second-Schedule line items "plant & machinery 5 yr (20%/yr)" and "buildings 20 yr (5%/yr)": the framework, straight-line basis, 6-yr TLCF and existence of an Enhanced Depreciation Allowance are confirmed from IRD sources, but the precise per-class rates were not retrievable in the published chart and should be checked against the current Second Schedule before reliance.
+- [unverified] The literal phrase that FX risk is "largely unmanageable for the private sector": the *substance* (FX/country risk has no natural private owner and is a dominant premium driver) is well-supported by IRENA, but the exact quotation is attributed to the underwriting literature and is retained as a paraphrase, not a sourced verbatim quote.
+- Project-specific scenario figures (gearing 0.63/0.70, the ~11% FX correction, AEP/IRR results) are model outputs, out of scope for external validation, and are preserved unchanged.
+
+## Changelog (deep-research update 2026-06-25)
+
+**Confirmed (left as stated, citations added):**
+- DSCR target ~1.30× / min ~1.20× for contracted infra; gearing 70–80%; CFADS-backwards debt sizing and sculpting (Yescombe / lender practice).
+- P50/P75/P90/P99 exceedance framework and IEC 61400-15-2 as the EYA bankability standard.
+- Gaussian-copula zero tail dependence; t/Clayton alternatives; CVaR coherence and the Rockafellar–Uryasev formula; spreadsheet-error prevalence justifying pre-close model audit.
+- **Sri Lanka CIT 30%, dividend WHT 15%, interest WHT 10%, VAT 18%, SSCL 2.5% — all confirmed directly against the IRD 2025/26 tax chart (primary source).** 6-year TLCF confirmed.
+
+**Corrected / refined:**
+- DSCR row in §1.4 now states the empirical wind/solar/merchant DSCR split (solar ~1.20–1.30×, wind ~1.30–1.40×, merchant ~1.75–2.00×) rather than a single generic band.
+- §1.5 lock-up threshold characterised more precisely (commonly at/just above the min-DSCR covenant).
+
+**Added:**
+- §2.1: the specific NREL/Todd-et-al-2022 figures (mean net P50 bias −1.2%, σ 4.8%, ~$10/MWh LCOE spread) as the primary anchor for the "P50-bias mirage."
+- §2.4: explicit Rockafellar–Uryasev CVaR formula and the convexity/LP property; sourced spreadsheet-error prevalence.
+- §3 intro and §3.4: IRENA cost-of-capital framing (3.8%→12% WACC range, ~200–300 bps over country risk, financing-cost-dominated LCOE), the "missing risk market" hedge-liquidity gap, and MIGA breach-of-contract / Non-Honoring-of-Sovereign-Obligations cover.
+- §4: notes that each rate was re-confirmed against the IRD 2025/26 chart, and that an Enhanced Depreciation Allowance exists under the Second Schedule.
+- New "External validation & sources" section with full URLs.
+
+**Flagged [unverified]:**
+- Exact Sri Lanka Second-Schedule depreciation line items (5 yr/20% plant, 20 yr/5% buildings) — framework confirmed, precise per-class rates to be checked against the current Second Schedule.
+- The verbatim "largely unmanageable for the private sector" quotation — substance supported by IRENA, retained as paraphrase.
+- All project-specific scenario numbers left unchanged (out of scope for external validation).

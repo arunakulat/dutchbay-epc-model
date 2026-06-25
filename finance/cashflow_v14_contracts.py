@@ -26,14 +26,13 @@ class CashflowParams:
       (see analytics.core.sensitivity_runner + the canonical scenario's monte_carlo block).
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - corporate_tax_rate: float (decimal, 0–1)
-    - depreciation_years: int (years)
-    - tax_holiday_years: int (years)
-    - tax_holiday_start_year: int (1-based year index)
     - risk_haircut_pct: float (decimal, 0–1)
 
-    NOTE: enhanced_capital_allowance_pct is NOT a CashflowParams field — the live
-    depreciation path resolves + validates it via finance.cashflow_v14_tax.TaxConfig
-    (single source of truth); a parallel CashflowParams field here was dead and removed.
+    NOTE: the tax-detail inputs (enhanced_capital_allowance_pct, depreciation_years,
+    tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams fields — the live
+    depreciation/holiday path resolves + validates them via finance.cashflow_v14_tax
+    .TaxConfig (single source of truth). Parallel CashflowParams fields here were dead
+    second sources of truth (no computation ever read them) and were removed (CCCDIR).
     """
 
     project_life_years: int
@@ -47,9 +46,6 @@ class CashflowParams:
     env_surcharge_pct: float
     social_levy_pct: float
     corporate_tax_rate: float
-    depreciation_years: int
-    tax_holiday_years: int
-    tax_holiday_start_year: int
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
     curtailment_pct: float = 0.0

@@ -349,51 +349,13 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     corporate_tax_rate = _pct_to_decimal(corporate_tax_raw)
 
-    depreciation_years = (
-        as_int(
-            _resolve_first(
-                raw,
-                ("tax", "depreciation_years"),
-                ("parameters", "depreciation_years"),
-                "depreciation_years",
-            ),
-            default=20,
-        )
-        or 20
-    )
-
-    tax_holiday_years = (
-        as_int(
-            _resolve_first(
-                raw,
-                ("tax", "holiday_years"),
-                ("tax", "tax_holiday_years"),
-                ("parameters", "tax_holiday_years"),
-                "tax_holiday_years",
-            ),
-            default=0,
-        )
-        or 0
-    )
-
-    tax_holiday_start_year = (
-        as_int(
-            _resolve_first(
-                raw,
-                ("tax", "holiday_start_year"),
-                ("tax", "tax_holiday_start_year"),
-                ("parameters", "tax_holiday_start_year"),
-                "tax_holiday_start_year",
-            ),
-            default=1,
-        )
-        or 1
-    )
-
-    # NOTE: enhanced_capital_allowance_pct is resolved + validated by finance.cashflow_v14_tax
-    # .TaxConfig (the LIVE depreciation path reads tax_config.enhanced_capital_allowance_pct).
-    # The parallel resolution that once lived here fed a CashflowParams field no computation
-    # ever read — a dead second source of truth — so it was removed (CCCDIR).
+    # NOTE: the tax-detail inputs (enhanced_capital_allowance_pct, depreciation_years,
+    # tax_holiday_years, tax_holiday_start_year) are resolved + validated by
+    # finance.cashflow_v14_tax.TaxConfig — the LIVE depreciation/holiday path reads them
+    # off that object (tax_config.depreciation_years, .tax_holiday_years, .holiday window).
+    # The parallel resolution that once lived here fed CashflowParams fields that NO
+    # computation ever read — dead second sources of truth that could silently drift from
+    # the live TaxConfig — so they were removed (CCCDIR).
 
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
@@ -428,9 +390,6 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         corporate_tax_rate=(
             float(corporate_tax_rate) if corporate_tax_rate is not None else 0.0
         ),
-        depreciation_years=int(depreciation_years),
-        tax_holiday_years=int(tax_holiday_years),
-        tax_holiday_start_year=int(tax_holiday_start_year),
         risk_haircut_pct=float(risk_haircut_pct),
     )
 

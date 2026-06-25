@@ -614,6 +614,20 @@ def apply_debt_layer(
     # year 1) and pushed the window past the loan life — understating LLCR/PLCR. The loan
     # amortises over operating years 1..tenor (debt service starts in operating year 1, debt
     # period = construction_periods+1), and the project life is all operating years, so:
+    #
+    # LLCR-WINDOW CONVENTION (round-5 #2, deliberate — keep tenor window): the LLCR
+    # numerator is CFADS over the loan LIFE measured in operating years, i.e. cfads[:tenor]
+    # (the first `tenor` operating years). Note this is NOT byte-identical to the set of
+    # internal debt-service periods: the sculpting introduces a synthetic half-year "bridge"
+    # lead-in period that bears scheduled service but maps to no operating row (its service
+    # is folded into operating year 1 for the per-year DSCR — see dscr_by_year above). As a
+    # result cfads[:tenor] skips that sub-operating bridge period and includes one trailing
+    # operating year beyond the last service period; re-aligning the numerator to the exact
+    # debt-service-bearing periods would move LLCR by ~1.7% (≈1.243 -> ~1.222 on the lender
+    # case). We KEEP the tenor-in-operating-years window: it is the standard loan-life
+    # convention, internally consistent with PLCR (full operating horizon) and the project
+    # life, and the divergence is an artifact of the bridge period, not an economic extra
+    # year of loan life. PLCR uses the full operating horizon.
     project_cfads = list(cfads)
     cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
 
@@ -1122,7 +1136,24 @@ def plan_debt(
     debt_service_total = core.get("debt_service_total", []) or []
     interest_total = core.get("interest_total", []) or []
     public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
-    min_dscr = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
+    raw_min = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
+    # Single source of truth for the covenant minimum (round-5 #3). The lender-facing
+    # min_dscr must agree with the bridge-corrected per-year covenant table (dscr_by_year),
+    # not only the raw per-period series. The raw series carries the sub-annual bridge
+    # (period 2) and phantom interest-only (period 3) entries as separate values, whereas
+    # dscr_by_year folds the orphaned bridge service into operating year 1. Report the
+    # CONSERVATIVE minimum over both views so the headline can never overstate coverage
+    # relative to the per-year table the covenant is actually tested on. They coincide at the
+    # 1.30 sculpt floor for every current scenario (KPI-neutral) — this is a fail-safe against
+    # a future CFADS profile where the bridge/phantom period would let the two diverge.
+    by_year_min: Optional[float] = None
+    for _dscr in (core.get("dscr_by_year") or {}).values():
+        if _dscr is None:
+            continue
+        _val = _as_float(_dscr, float("nan"))
+        if math.isfinite(_val):
+            by_year_min = _val if by_year_min is None else min(by_year_min, _val)
+    min_dscr = min(raw_min, by_year_min) if by_year_min is not None else raw_min
 
     return {
         "construction_years": core.get("construction_periods", 0),
