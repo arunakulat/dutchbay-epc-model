@@ -17,6 +17,7 @@ import yaml
 
 from analytics.wind.aep_tornado import (
     AEPTornadoConfig,
+    _scaled_losses,
     run_aep_tornado,
     tornado_from_config,
     write_tornado_csv,
@@ -127,3 +128,46 @@ def test_write_tornado_csv(lender_cfg: dict, tmp_path: Path) -> None:
     assert out.exists()
     text = out.read_text()
     assert "wind_speed_bias" in text and "swing_gwh" in text
+
+
+# ---------------------------------------------------------------------------
+# Wave-2 #23: the losses driver scales the full config-resolved taxonomy, not
+# only the four back-compat reduction keys (finer IEC 61400-15-2 stacks).
+# ---------------------------------------------------------------------------
+def test_scaled_losses_byte_identical_for_canonical_stack() -> None:
+    """The canonical 4-reduction + availability stack scales exactly as before."""
+    canon = {
+        "wake_loss_pct": 7.28,
+        "electrical_loss_pct": 2.0,
+        "curtailment_pct": 0.5,
+        "other_pct": 1.0,
+        "availability_pct": 97.0,
+        "total_loss_pct": 99.9,  # result/metadata field — must ride through untouched
+    }
+    for rel in (-0.2, 0.2):
+        out = _scaled_losses(canon, rel)
+        for key in ("wake_loss_pct", "electrical_loss_pct", "curtailment_pct", "other_pct"):
+            assert out[key] == pytest.approx(canon[key] * (1.0 + rel))
+        assert out["availability_pct"] == pytest.approx(
+            100.0 - (100.0 - 97.0) * (1.0 + rel)
+        )
+        assert out["total_loss_pct"] == 99.9  # untouched metadata
+
+
+def test_scaled_losses_sweeps_finer_taxonomy_and_clamps() -> None:
+    """Finer IEC sub-losses (icing/soiling/transmission, grid_availability) are now
+    swept; values clamp into the [0, 100] band _retention_from_pct requires."""
+    fine = {
+        "wake_loss_pct": 7.0,
+        "icing_pct": 1.5,
+        "soiling_pct": 0.8,
+        "transmission_loss_pct": 0.9,
+        "grid_availability_pct": 98.0,
+    }
+    out = _scaled_losses(fine, 0.2)
+    assert out["icing_pct"] == pytest.approx(1.8)  # was unscaled before the fix
+    assert out["soiling_pct"] == pytest.approx(0.96)
+    assert out["transmission_loss_pct"] == pytest.approx(1.08)
+    assert out["grid_availability_pct"] == pytest.approx(100.0 - (100.0 - 98.0) * 1.2)
+    # extreme reduction clamps at 100 (cannot exceed full loss)
+    assert _scaled_losses({"wake_loss_pct": 90.0}, 1.0)["wake_loss_pct"] == 100.0

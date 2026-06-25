@@ -52,15 +52,24 @@ def _summary_stats(values: Iterable[float]) -> Dict[str, float]:
     sd = math.sqrt(sum((x - mu) ** 2 for x in cleaned) / n) if n > 1 else 0.0
 
     def _percentile(sorted_vals: list[float], q: float) -> float:
+        # Linear interpolation between order statistics (the same convention
+        # statistics.median uses), so the bundle is internally consistent: a p50
+        # from this helper equals the reported `median`. The previous nearest-rank
+        # rounding gave p50 != median for even-length series (a latent footgun the
+        # moment any p50 were surfaced).
         if not sorted_vals:
             return 0.0
         if q <= 0:
             return sorted_vals[0]
         if q >= 1:
             return sorted_vals[-1]
-        idx = int(round(q * (len(sorted_vals) - 1)))
-        idx = max(0, min(len(sorted_vals) - 1, idx))
-        return sorted_vals[idx]
+        pos = q * (len(sorted_vals) - 1)
+        lo = math.floor(pos)
+        hi = math.ceil(pos)
+        if lo == hi:
+            return sorted_vals[int(lo)]
+        frac = pos - lo
+        return sorted_vals[int(lo)] * (1.0 - frac) + sorted_vals[int(hi)] * frac
 
     return {
         "n": float(n),
@@ -296,6 +305,12 @@ def calculate_scenario_kpis(
         dscr_max=dscr_stats["max"],
         dscr_mean=dscr_stats["mean"],
         dscr_median=dscr_stats["median"],
+        # Surface the previously-computed-but-discarded DSCR distribution tails so a
+        # lender sees the spread, not just min/mean/median. Additive keys — the
+        # existing min/max/mean/median are unchanged (byte-identical).
+        dscr_p10=dscr_stats["p10"],
+        dscr_p90=dscr_stats["p90"],
+        dscr_std=dscr_stats["std"],
     )
 
     if max_debt_usd is not None:
