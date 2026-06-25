@@ -616,7 +616,18 @@ def calculate_equity_distribution_from_pipeline(
         )
         annual_distributions[-1]["equity_distribution_usd"] = distribution_values[-1]
 
-    cashflows = [-float(equity_investment)] + distribution_values
+    # Match the PROJECT IRR/NPV convention (finance.irr / analytics.core.metrics): capex AND
+    # equity are committed at FINANCIAL CLOSE (construction start), and operating cash is
+    # discounted AFTER the build. annual_rows are operating years only (no construction zeros),
+    # so prepend construction_years zeros to the equity return vector — otherwise the equity
+    # timeline LEADS the project timeline by construction_years, crediting the first operating
+    # distribution at t=1 instead of t=construction_years+1 (round-3 re-audit fix). Sourced
+    # from the same debt_result['construction_years'] metrics.py uses, so the two IRRs of one
+    # project share a single timeline.
+    construction_years = int(debt_result.get("construction_years", 0) or 0)
+    cashflows = (
+        [-float(equity_investment)] + [0.0] * construction_years + distribution_values
+    )
 
     equity_irr = calculate_equity_irr(cashflows)
     equity_npv = calculate_equity_npv(

@@ -211,7 +211,7 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     # released to the sponsor at maturity (was -0.02474929293069905, +164bps). project_irr,
     # npv, dscr and cfads are upstream of the equity waterfall and remain byte-identical.
     assert kpis["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(-0.008246893771461483, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.006837694668605732, abs=1e-9)
     assert kpis["project_npv"] == pytest.approx(-35505958.84579508, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999996, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)

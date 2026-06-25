@@ -111,7 +111,7 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # (project IRR is upstream of the equity waterfall and is unchanged).
     assert kpis["project_irr"] == pytest.approx(-0.0027, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.0807, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.0702, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(-118.78e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
