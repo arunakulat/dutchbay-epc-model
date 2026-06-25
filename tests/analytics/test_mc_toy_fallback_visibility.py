@@ -69,10 +69,11 @@ def test_mc_warns_on_non_resolving_parameter_name(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A monte_carlo.parameters name that does not resolve to a real config path is a likely
-    dead key -> trials fall to the toy metric and the risk distribution is degenerate. The MC
-    engine now WARNS (round-3 fix), so the previously-silent degeneracy is visible. (Not a
-    hard raise: non-dotted aliases are an accepted legacy input that the toy_fallback_count
-    already surfaces.)"""
+    dead key. Contrary to the old story it does NOT fall to the toy metric — the override is
+    merged as an unread key, so trials succeed with real KPIs but the lever moves nothing.
+    The MC engine WARNS at construction (round-3) and the dead name is recorded; whether the
+    sweep actually collapsed is confirmed post-run by metadata['degenerate_sweep'] (round-5).
+    (Not a hard raise: non-dotted aliases are an accepted legacy input.)"""
     import logging
 
     from analytics.mc.engine import MonteCarloEngine
@@ -84,3 +85,41 @@ def test_mc_warns_on_non_resolving_parameter_name(
     with caplog.at_level(logging.WARNING, logger="analytics.mc.engine"):
         MonteCarloEngine(base_config=cfg)  # constructs (no raise)
     assert "does not resolve" in caplog.text
+
+
+def test_dead_param_name_flags_degenerate_sweep() -> None:
+    """Round-5: a non-resolving (dead) dotted param name silently merges as an unread config
+    key, so every real trial succeeds with IDENTICAL KPIs (toy_fallback_count == 0,
+    failed_iterations == 0) and the risk distribution is fake-stable. The prior warn-only fix
+    did not reach the result object; the run is now flagged in-band so a lender can see it."""
+    base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
+
+    dead = dict(base)
+    dead["monte_carlo"] = {
+        "parameters": [{"name": "project.capacity_factorr", "low": 0.30, "high": 0.34}]
+    }
+    r = run_monte_carlo_analysis(base_config=dead, n_trials=8, seed=1)
+    # Real evaluation succeeded on every trial (NOT a toy-fallback degeneracy)...
+    assert r.metadata["toy_fallback_count"] == 0
+    assert r.failed_iterations == 0
+    # ...but the sweep moved nothing -> zero dispersion, now surfaced in the result.
+    assert r.project_irr_std == 0.0
+    assert r.metadata["degenerate_sweep"] is True
+    assert "project.capacity_factorr" in r.metadata["dead_param_names"]
+    assert "project_irr" in r.metadata["zero_variance_metrics"]
+
+
+def test_live_param_name_is_not_flagged_degenerate() -> None:
+    """The control: a resolving dotted lever moves outputs, so degenerate_sweep stays False
+    and nothing lands in dead_param_names (guards against false positives that would cry wolf
+    on every real sweep)."""
+    base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
+
+    live = dict(base)
+    live["monte_carlo"] = {
+        "parameters": [{"name": "project.capacity_factor", "low": 0.30, "high": 0.34}]
+    }
+    r = run_monte_carlo_analysis(base_config=live, n_trials=8, seed=1)
+    assert r.project_irr_std is not None and r.project_irr_std > 0.0
+    assert r.metadata["degenerate_sweep"] is False
+    assert r.metadata["dead_param_names"] == []

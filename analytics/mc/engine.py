@@ -153,9 +153,12 @@ class MonteCarloEngine:
         self._crn = bool(common_random_numbers)
         self._correlation = correlation
 
-        self._param_names, self._param_bounds, self._param_kinds = self._extract_param_definitions(
-            self._base_config
-        )
+        (
+            self._param_names,
+            self._param_bounds,
+            self._param_kinds,
+            self._dead_param_names,
+        ) = self._extract_param_definitions(self._base_config)
 
         self._meta = MonteCarloRunMeta(
             n_trials=0,
@@ -169,7 +172,7 @@ class MonteCarloEngine:
     @staticmethod
     def _extract_param_definitions(
         cfg: Mapping[str, Any],
-    ) -> Tuple[List[str], List[Tuple[float, float]], List[str]]:
+    ) -> Tuple[List[str], List[Tuple[float, float]], List[str], List[str]]:
         mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
         params = mc.get("parameters", []) or mc.get("params", [])
 
@@ -193,6 +196,7 @@ class MonteCarloEngine:
         param_names: List[str] = []
         bounds: List[Tuple[float, float]] = []
         kinds: List[str] = []
+        dead_names: List[str] = []
 
         for idx, p in enumerate(params):
             if not isinstance(p, Mapping) or "name" not in p:
@@ -206,21 +210,29 @@ class MonteCarloEngine:
             high = float(p.get("high", p.get("max", 1.0)))
             kind = str(p.get("distribution", p.get("kind", "uniform")))
 
-            # A param name that does not resolve to an EXISTING dotted path in the base config
-            # is a likely DEAD lever: a non-dotted alias is placed at the top level where the
-            # v14 engine never reads it, so every trial falls to the toy metric and the risk
-            # distribution is degenerate (the deterministic sensitivity engine hard-fails the
-            # identical mistake). We WARN rather than raise because non-dotted names are an
-            # accepted (if degenerate) legacy input; the toy_fallback_count surfaces the
-            # degeneracy downstream. Surfacing it here makes the silent case visible.
+            # A param name that does not resolve to an EXISTING dotted path in the base
+            # config is a likely DEAD lever. Contrary to the toy-fallback story, the
+            # sampled override is NOT rejected: _build_overrides_from_sample expands it and
+            # _deep_merge_config silently ADDS it as a brand-new config key the v14 pipeline
+            # never reads, so full evaluation SUCCEEDS on every trial with REAL KPIs — but
+            # the swept value moves NOTHING. The result is a fake-stable, zero-variance risk
+            # distribution with toy_fallback_count == 0, which the prior warning mis-described
+            # (it claimed trials fall to the toy metric — they do not). We WARN rather than
+            # raise because non-dotted ALIASES are an accepted legacy input and DO move
+            # outputs; the genuinely dead names are caught downstream by the post-run
+            # zero-dispersion check (metadata['degenerate_sweep']) and recorded in
+            # metadata['dead_param_names'].
             from analytics.sensitivity.engine import _resolves_in_config
 
             if not _resolves_in_config(cfg, name):
+                dead_names.append(name)
                 logger.warning(
                     "monte_carlo.parameters[%d].name %r does not resolve to an existing "
-                    "config path; its sampled override is a likely DEAD key -> trials will "
-                    "fall to the toy metric and the MC risk distribution will be degenerate. "
-                    "Use a valid dotted path (e.g. capex.usd_total, project.capacity_factor).",
+                    "config path; its sampled override may be merged as an UNREAD key, so "
+                    "trials succeed with real KPIs but the lever moves nothing -> a possibly "
+                    "DEGENERATE (zero-variance) risk distribution. Prefer a valid dotted "
+                    "path (e.g. capex.usd_total, project.capacity_factor). The post-run "
+                    "degenerate_sweep flag confirms whether dispersion actually collapsed.",
                     idx, name,
                 )
 
@@ -234,7 +246,7 @@ class MonteCarloEngine:
                 "(monte_carlo.parameters is empty)."
             )
 
-        return param_names, bounds, kinds
+        return param_names, bounds, kinds, dead_names
 
     def run(self, *, n_trials: int) -> MonteCarloResult:
         n = int(n_trials)
@@ -296,10 +308,57 @@ class MonteCarloEngine:
                 "n_trials": n,
                 "config_hash": self._meta.config_hash,
                 "param_names": list(self._param_names),
+                "dead_param_names": list(self._dead_param_names),
                 "correlation_enabled": bool(self._correlation and self._correlation.enabled),
             },
         )
+        self._flag_degenerate_sweep(result)
         return result
+
+    @staticmethod
+    def _flag_degenerate_sweep(result: MonteCarloResult) -> None:
+        """Detect (and record) a no-op sweep: a sampled run whose outputs never moved.
+
+        A swept Monte Carlo over more than one real trial that produces ZERO dispersion
+        in every canonical metric is degenerate — the sampled lever(s) touched nothing.
+        That is the silent symptom of a DEAD param name (a non-resolving dotted path
+        merged as an unread config key): real evaluation succeeds on every trial with
+        identical KPIs, so toy_fallback_count stays 0 and the percentiles look rock-stable
+        while being meaningless. A transient WARNING is not enough — it never reaches the
+        result object or any report — so we record ``degenerate_sweep`` (bool) and the
+        flat ``zero_variance_metrics`` list in ``result.metadata`` and re-warn loudly.
+        """
+        real_trials = int(result.iterations) - int(result.failed_iterations)
+        flat_metrics: List[str] = []
+        any_measured = False
+        for metric, values in (result.trials or {}).items():
+            vals = [float(v) for v in values if v is not None]
+            if len(vals) <= 1:
+                continue
+            any_measured = True
+            arr = np.asarray(vals, dtype=float)
+            mean = float(arr.mean())
+            std = float(arr.std(ddof=1))
+            if std <= 1e-9 * (abs(mean) + 1e-9):
+                flat_metrics.append(metric)
+        degenerate = bool(
+            real_trials > 1
+            and any_measured
+            and len(flat_metrics) == sum(
+                1 for v in (result.trials or {}).values() if len([x for x in v if x is not None]) > 1
+            )
+        )
+        result.metadata["degenerate_sweep"] = degenerate
+        result.metadata["zero_variance_metrics"] = flat_metrics if degenerate else []
+        if degenerate:
+            logger.warning(
+                "Monte Carlo sweep is DEGENERATE: %d real trials produced ZERO dispersion "
+                "in every metric %r — the sampled parameter(s) moved no output (dead key(s): "
+                "%r). The percentiles are NOT a real risk distribution.",
+                real_trials,
+                flat_metrics,
+                list(result.metadata.get("dead_param_names", [])),
+            )
 
     @staticmethod
     def _build_overrides_from_sample(sample_row: np.ndarray, param_names: Sequence[str]) -> Dict[str, Any]:
