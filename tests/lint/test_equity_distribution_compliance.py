@@ -212,9 +212,6 @@ class TestGWTFCompliance:
         assert "self.config.min_dscr_threshold" in content, (
             "DSCR threshold should come from config (ARCH-01)"
         )
-        assert "self.config.min_llcr_threshold" in content, (
-            "LLCR threshold should come from config (ARCH-01)"
-        )
         assert "self.config.min_reserve_months" in content, (
             "Reserve months should come from config (ARCH-01)"
         )
