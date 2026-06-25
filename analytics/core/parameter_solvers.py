@@ -815,6 +815,18 @@ def solve_for_min_capex_given_irr_floor(
         )
         return float(kpis["project_irr"])
 
+    # Bracketing precheck (round-2 finding, extended here in round 3): fail loud if irr_floor
+    # is unreachable over [low, high] capex rather than silently bisecting to a bound. IRR
+    # DECREASES as capex rises, so the achievable IRR range is [irr(high), irr(low)]; the
+    # delta = irr(capex) - irr_floor and the same-sign test detects an unbracketed floor
+    # regardless of monotonicity direction. (IRR tolerance, not the USD capex tolerance.)
+    _d_low, _d_high = _bracket_deltas(lambda c: _evaluate_at(c) - irr_floor, low, high)
+    if _d_low is not None and _d_high is not None:
+        _assert_target_bracketed(
+            _d_low, _d_high, label="solve_for_min_capex_given_irr_floor",
+            low=low, high=high, target=float(irr_floor), tolerance=1e-4,
+        )
+
     last_good_mid: Optional[float] = None
 
     for iteration in range(max_iterations):
