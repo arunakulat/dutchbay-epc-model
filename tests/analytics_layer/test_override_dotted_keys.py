@@ -91,3 +91,37 @@ def test_one_way_sensitivity_reports_nonzero_impact(basecase):
     )
     tornado = suite.tornado_results[0]
     assert tornado.impact_abs > 0.0, "one-way tax sensitivity still reports zero impact"
+
+
+# ── Cross-gateway contract parity (Wave-2 #23) ───────────────────────────────
+# The path-based analytics.evaluate_scenario.evaluate_with_overrides previously had
+# NO dotted-key expansion: a dotted key was treated as a literal top-level key and
+# silently dropped, while analytics.evaluation_v14.evaluate_with_overrides honoured
+# it. That divergence was the root enabler of the phantom-solver class. Both gateways
+# now share one override contract (evaluate_scenario reuses the same expander).
+def test_evaluate_scenario_gateway_honours_dotted_keys() -> None:
+    if not BASECASE.is_file():
+        pytest.skip(f"canonical scenario missing: {BASECASE}")
+    from analytics.evaluate_scenario import evaluate_with_overrides as es_eval
+
+    base = es_eval(str(BASECASE))["project_irr"]
+    dotted = es_eval(str(BASECASE), {"capex.usd_total": 5e8})["project_irr"]
+    nested = es_eval(str(BASECASE), {"capex": {"usd_total": 5e8}})["project_irr"]
+    assert dotted != pytest.approx(base), "dotted override no-op on evaluate_scenario (regression)"
+    assert dotted == pytest.approx(nested), "dotted and nested forms must agree"
+
+
+def test_both_gateways_agree_on_dotted_override() -> None:
+    if not BASECASE.is_file():
+        pytest.skip(f"canonical scenario missing: {BASECASE}")
+    import yaml
+
+    from analytics.evaluate_scenario import evaluate_with_overrides as es_eval
+
+    raw = yaml.safe_load(BASECASE.read_text())
+    es = es_eval(str(BASECASE), {"capex.usd_total": 5e8})["project_irr"]
+    v14_out = evaluate_with_overrides(
+        config_path=None, raw_config=raw, overrides={"capex.usd_total": 5e8}
+    )
+    v14 = (v14_out.get("kpis", v14_out) if hasattr(v14_out, "get") else v14_out)["project_irr"]
+    assert es == pytest.approx(v14), "the two evaluate_with_overrides gateways disagree on dotted keys"
