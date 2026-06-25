@@ -75,7 +75,17 @@ def _summary_stats(values: Iterable[float]) -> Dict[str, float]:
 
 
 def _clean_dscr_series(raw: Optional[Sequence[Any]]) -> Sequence[float]:
-    """Clean DSCR series: drop None, non-finite, and non-positive values."""
+    """Clean DSCR series: drop only None and non-finite (inf/nan) values.
+
+    A FINITE DSCR of 0.0 (CFADS == 0 against live debt service) or negative (CFADS
+    negative) is a REAL total-coverage BREACH and is RETAINED — it is not a missing/inf
+    sentinel. Previously finite values <= 0.0 were filtered, which conflated a genuine
+    breach with the undefined sentinel and let the KPI-surface min_dscr optimistically
+    DISAGREE with the debt engine's authoritative min (finance/debt_v14._clean_public_dscr_series,
+    which already retains finite <= 0.0). The two cleaners must use the same contract so the
+    lender-facing min_dscr cannot hide a breach year (it also feeds the optimizer floor and
+    the DSCR VaR/CVaR tail).
+    """
     if not raw:
         return []
     out: list[float] = []
@@ -86,7 +96,7 @@ def _clean_dscr_series(raw: Optional[Sequence[Any]]) -> Sequence[float]:
             x = float(v)
         except (TypeError, ValueError):
             continue
-        if not math.isfinite(x) or x <= 0.0:
+        if not math.isfinite(x):
             continue
         out.append(x)
     return out
