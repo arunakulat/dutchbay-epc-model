@@ -542,8 +542,8 @@ expected_results:
   project_npv_m_usd: -35.51 # construction-lag-correct discount at build-up WACC ~8.18%
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.09
-  plcr: 1.15
+  llcr: 1.24
+  plcr: 1.34
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
