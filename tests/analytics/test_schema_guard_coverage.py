@@ -344,3 +344,43 @@ def test_spec_with_no_paths_uses_placeholder_label() -> None:
     msg = str(exc.value)
     assert "pathless_field" in msg
     assert "<no paths>" in msg
+
+
+# ---------------------------------------------------------------------------
+# Wave-2: wind/era5 interface guards auto-enforce when the block is present
+# ---------------------------------------------------------------------------
+def _lender_config() -> dict[str, Any]:
+    from pathlib import Path
+
+    import yaml
+
+    repo = Path(__file__).resolve().parents[2]
+    return yaml.safe_load((repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml").read_text())
+
+
+def test_era5_guard_auto_enforced_when_block_present() -> None:
+    """The canonical declares resource.era5, so even with the DEFAULT module set
+    (cashflow/debt) the era5 interface schema is now enforced: corrupting it (dropping the
+    required latitude) raises, where before it was silently never validated (Wave-2 fix)."""
+    cfg = _lender_config()
+    cfg["resource"]["era5"].pop("latitude", None)
+    with pytest.raises(ConfigValidationError, match="latitude"):
+        validate_config_for_v14(cfg, "lender", ["cashflow", "debt"])
+
+
+def test_clean_lender_config_passes_with_wind_era5_enforced() -> None:
+    """The unmodified canonical satisfies the wind + era5 schemas (byte-identical: the
+    guard fires but finds nothing wrong)."""
+    validate_config_for_v14(_lender_config(), "lender", ["cashflow", "debt"])  # no raise
+
+
+def test_wind_era5_not_enforced_when_absent() -> None:
+    """A config without resource.wind/era5 is not subjected to those guards (no spurious
+    failure for non-wind scenarios)."""
+    cfg = _lender_config()
+    cfg.pop("resource", None)
+    # cashflow/debt/fx still validate; absence of resource must not raise a wind/era5 error.
+    try:
+        validate_config_for_v14(cfg, "no-resource", ["cashflow", "debt"])
+    except ConfigValidationError as exc:
+        assert "latitude" not in str(exc) and "hub_height" not in str(exc)
