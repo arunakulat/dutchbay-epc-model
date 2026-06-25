@@ -228,7 +228,7 @@ def add_curve_to_store(
     if issues:
         raise ValueError(f"Curve {pc.key!r} failed validation: {issues}")
 
-    existing = {}
+    existing: Dict[str, Any] = {}
     if store_path.exists():
         existing = yaml.safe_load(store_path.read_text()) or {}
     if pc.key in existing and not overwrite:
@@ -361,12 +361,12 @@ def from_wasp_wtg(
 
     table = min(tables, key=lambda t: abs(_density(t) - air_density_kgm3))
     points = table.findall(".//DataPoint")
-    ws = [float(p.get("WindSpeed")) for p in points if p.get("WindSpeed") is not None]
-    power = [float(p.get("PowerOutput")) / 1000.0 for p in points if p.get("PowerOutput") is not None]
+    ws = [float(_ws) for p in points if (_ws := p.get("WindSpeed")) is not None]
+    power = [float(_po) / 1000.0 for p in points if (_po := p.get("PowerOutput")) is not None]
     rated = max(power) if power else 0.0
     strat = table.find(".//StartStopStrategy")
-    cut_in = float(strat.get("LowSpeedCutIn")) if (strat is not None and strat.get("LowSpeedCutIn")) else 3.0
-    cut_out = float(strat.get("HighSpeedCutOut")) if (strat is not None and strat.get("HighSpeedCutOut")) else 25.0
+    cut_in = float(_ci) if (strat is not None and (_ci := strat.get("LowSpeedCutIn"))) else 3.0
+    cut_out = float(_co) if (strat is not None and (_co := strat.get("HighSpeedCutOut"))) else 25.0
     return PowerCurve(
         key=key or _slugify(str(desc)),
         manufacturer=manufacturer or "unknown",

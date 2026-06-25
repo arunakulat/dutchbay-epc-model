@@ -93,7 +93,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import hydra
 import yaml
@@ -108,6 +108,7 @@ from analytics.scenario_loader import load_scenario_config
 # heavy dependencies, so importing it unconditionally is safe even when
 # the [wind] extra is not installed.
 from wind_resource.cashflow_adapter import (
+    AdapterMode,
     WindAdapterDriftError,
     wind_export_to_scenario_patch,
 )
@@ -217,7 +218,7 @@ def _run_wind_producer(
     # Probe for [wind] extra before spawning the subprocess so we fail fast
     # with a clear message rather than a cryptic subprocess error.
     try:
-        import cdsapi  # type: ignore  # noqa: F401  (availability probe; bare ignore is deliberate — mypy's import-error code varies by env: import-not-found without the [wind] extra vs import-untyped once cdsapi is installed, as it ships no stubs, so a coded ignore would be flagged unused in one env or the other)
+        import cdsapi  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: F401  (availability probe; the ignore lists every code mypy may raise across envs — import-not-found without the [wind] extra vs import-untyped once cdsapi is installed, as it ships no stubs — plus unused-ignore so the suppression is silent in whichever env doesn't need the other two)
     except ImportError as exc:
         raise RuntimeError(
             "wind_auto_orchestrate=true requires the [wind] extra. "
@@ -290,7 +291,10 @@ def _apply_wind_to_scenario(
         export_dict,
         scenario_dict,
         scenario_name=scenario_name,
-        adapter_mode=adapter_mode,
+        # adapter_mode is validated for membership inside the callee (it raises
+        # on an unknown mode); cast is a no-op at runtime, so the same string
+        # value flows through unchanged.
+        adapter_mode=cast(AdapterMode, adapter_mode),
         tolerance_pct=float(tolerance_pct),
     )
 
@@ -410,7 +414,7 @@ def cli(cfg: DictConfig) -> None:
     """
     config = cfg.get("config")
     if not config:
-        error_result = {
+        error_result: dict[str, Any] = {
             "status": "error",
             "error": "Missing 'config' parameter",
             "usage": (

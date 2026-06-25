@@ -150,8 +150,19 @@ jobs:
     - name: Run black (check only)
       run: black --check --diff . || true
 
-    - name: Run mypy (library surface — strict)
-      run: mypy finance/ analytics/ --ignore-missing-imports
+    - name: Run mypy (library + engine surface — strict, fail-loud)
+      # Strict, COMPLETE-annotation gate over EVERY typed package + entrypoint, not just
+      # finance/analytics. wind_resource, solar_resource, api, app and analysis_tools plus
+      # the root entrypoints were previously UNCHECKED, so real type bugs (float(str|None),
+      # DatetimeIndex.year on a plain Index, Series-vs-DataFrame in the wind AEP path) sat
+      # undetected. No --ignore-missing-imports: every untyped third-party dep is declared
+      # per-module in mypy.ini, so a NEW unstubbed import fails LOUDLY instead of being
+      # silently swallowed. (monte_carlo/ is a YAML config dir with no .py; scripts/ has its
+      # own relaxed real-error gate below.)
+      run: >-
+        mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/
+        run_full_pipeline_v14.py run_scenario_analytics_v14.py
+        dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 
     - name: Run mypy (scripts/ — real-error gate)
       # scripts/ are operational/reporting utilities, not the typed public API, so the

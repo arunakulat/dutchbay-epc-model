@@ -14,7 +14,7 @@ from typing import Iterable, List, Mapping, Optional, Sequence
 try:
     _DbgPath = Path
 except NameError:  # pragma: no cover - ultra defensive
-    from pathlib import Path as _DbgPath  # type: ignore[no-redef]
+    from pathlib import Path as _DbgPath
 
 print(">>> dutchbay_bootstrap.py: module imported")
 try:
