@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -54,8 +54,11 @@ class RunPipelineRequest(BaseModel):
         default=None,
         description="Dotted-key overrides applied on top, e.g. {'capex.usd_total': 2.075e8}.",
     )
-    validation_mode: str = Field(
-        default="strict", description="schema_guard validation mode (strict|lenient)."
+    validation_mode: Literal["strict", "off"] = Field(
+        default="strict",
+        description="schema_guard validation mode: 'strict' (enforce) or 'off' (skip). "
+        "Constrained to these two — run_v14_pipeline accepts no others; an unsupported "
+        "value is rejected at the API boundary with a 422 rather than deep in the engine.",
     )
 
     @model_validator(mode="after")

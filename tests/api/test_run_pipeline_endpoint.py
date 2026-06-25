@@ -78,3 +78,17 @@ def test_bad_config_path_raises_http_400() -> None:
     with pytest.raises(HTTPException) as exc:
         run_pipeline(RunPipelineRequest(config_path="scenarios/does_not_exist.yaml"))
     assert exc.value.status_code == 400
+
+
+def test_validation_mode_rejects_undocumented_value() -> None:
+    """validation_mode is constrained to the engine's actual modes (strict|off). The
+    previously-documented 'lenient' is not accepted by run_v14_pipeline, so it is now
+    rejected at the API boundary with a Pydantic ValidationError (422), not deep in the
+    engine."""
+    with pytest.raises(ValidationError):
+        RunPipelineRequest(config_path=LENDER, validation_mode="lenient")
+
+
+def test_validation_mode_accepts_strict_and_off() -> None:
+    assert RunPipelineRequest(config_path=LENDER, validation_mode="strict").validation_mode == "strict"
+    assert RunPipelineRequest(config_path=LENDER, validation_mode="off").validation_mode == "off"
