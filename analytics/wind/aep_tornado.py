@@ -33,20 +33,17 @@ import yaml
 
 from analytics.power_curves.oem_parser import (CANONICAL_CURVE_KEY,
                                                POWER_CURVE_STORE)
-from analytics.wind.losses_model import apply_losses
+from analytics.wind.losses_model import apply_losses, default_loss_taxonomy
 from wind_resource.bankable_aep import density_velocity_factor
 
 HOURS_PER_YEAR = 8760.0
 # Fine wind-speed grid (m/s) for the analytic Weibull integral.
 _WS_GRID = np.arange(0.0, 30.0001, 0.05)
 
-# Loss keys expressed as reductions (scaled directly by the losses driver).
-_REDUCTION_LOSS_KEYS = (
-    "wake_loss_pct",
-    "electrical_loss_pct",
-    "curtailment_pct",
-    "other_pct",
-)
+# The losses driver scales whatever the config-resolved taxonomy declares (see
+# _scaled_losses); there is no hardcoded reduction-key tuple here any more, so a
+# scenario that itemises finer IEC 61400-15-2 sub-losses is swept in full rather
+# than leaving the extra keys unscaled (which understated the losses sensitivity).
 
 
 @dataclass(frozen=True)
@@ -115,14 +112,32 @@ def _net_aep_gwh(
 
 
 def _scaled_losses(losses: Mapping[str, Any], rel: float) -> Dict[str, Any]:
-    """Scale the loss stack by a relative fraction (``+rel`` = heavier losses)."""
+    """Scale the loss stack by a relative fraction (``+rel`` = heavier losses).
+
+    Driven off the config-resolved loss taxonomy (``default_loss_taxonomy``) so every
+    itemised loss line the scenario declares is swept, not just four back-compat keys:
+
+    - ``reduction``-kind ``*_pct`` keys (wake, electrical, curtailment, transmission,
+      icing, soiling, …) scale directly — a larger pct is a heavier loss.
+    - ``uptime``-kind keys (availability, grid_availability) scale their *downtime*
+      complement, so heavier losses lower the uptime.
+
+    Keys absent from the taxonomy (result/metadata fields such as ``total_loss_pct``)
+    are left untouched. Scaled values are clamped to the ``[0, 100]`` band that
+    ``_retention_from_pct`` requires. Byte-identical to the previous 4-reduction +
+    availability behaviour for the canonical DutchBay stack.
+    """
+    taxonomy = default_loss_taxonomy()
     out: Dict[str, Any] = dict(losses)
-    for key in _REDUCTION_LOSS_KEYS:
-        if out.get(key) is not None:
-            out[key] = float(out[key]) * (1.0 + rel)
-    if out.get("availability_pct") is not None:
-        loss = (100.0 - float(out["availability_pct"])) * (1.0 + rel)
-        out["availability_pct"] = 100.0 - loss
+    for key, value in losses.items():
+        if value is None:
+            continue
+        kind = taxonomy.get(key)
+        if kind == "reduction":
+            out[key] = min(100.0, max(0.0, float(value) * (1.0 + rel)))
+        elif kind == "uptime":
+            downtime = (100.0 - float(value)) * (1.0 + rel)
+            out[key] = min(100.0, max(0.0, 100.0 - downtime))
     return out
 
 
