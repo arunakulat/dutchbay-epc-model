@@ -201,6 +201,45 @@ def _as_map(value: Any) -> Dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+# The LKR/USD spot is pinned in three places (the cashflow reads fx.start_lkr_per_usd, the
+# FX reporting block reads fx.rates.lkr_per_usd first); _assert_fx_spot_consistency requires
+# them equal. A client tuning the documented fx.start_lkr_per_usd override would otherwise
+# leave the other two stale and trip a 422.
+_FX_SPOT_OVERRIDE_KEYS = (
+    "fx.start_lkr_per_usd",
+    "fx.rates.lkr_per_usd",
+    "fx.source.pinned_rate",
+)
+
+
+def _sync_fx_spot_override(
+    cfg: Dict[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Fan a single-lever FX-spot override out to all three pinned spot keys.
+
+    If the client overrode any of fx.start_lkr_per_usd / fx.rates.lkr_per_usd /
+    fx.source.pinned_rate, set ALL three to the new rate so the post-override config stays
+    self-consistent (else the documented single-key FX-rate override would fail the spot
+    cross-assert). No-op when no FX-spot key was overridden.
+    """
+    touched = [k for k in _FX_SPOT_OVERRIDE_KEYS if k in overrides]
+    if not touched:
+        return cfg
+    # Prefer the canonical start key; otherwise the first key the client actually set.
+    new_rate = overrides.get("fx.start_lkr_per_usd", overrides[touched[0]])
+    fx = cfg.get("fx")
+    if not isinstance(fx, dict):
+        return cfg
+    fx["start_lkr_per_usd"] = new_rate
+    rates = fx.setdefault("rates", {})
+    if isinstance(rates, dict):
+        rates["lkr_per_usd"] = new_rate
+    source = fx.setdefault("source", {})
+    if isinstance(source, dict):
+        source["pinned_rate"] = new_rate
+    return cfg
+
+
 def _f(value: Any) -> Optional[float]:
     try:
         return None if value is None else float(value)
@@ -391,6 +430,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
 
     if payload.overrides:
         cfg = _apply_overrides(cfg, payload.overrides)
+        cfg = _sync_fx_spot_override(cfg, payload.overrides)
 
     # An inline payload.config and any post-load overrides reach the engine as a dict,
     # which bypasses the load-time reconciliation in load_scenario_config. Re-check the

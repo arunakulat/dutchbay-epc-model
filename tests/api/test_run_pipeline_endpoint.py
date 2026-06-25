@@ -108,3 +108,13 @@ def test_inline_config_with_divergent_fx_spot_rejected() -> None:
         run_pipeline(RunPipelineRequest(config=cfg))
     assert exc.value.status_code == 422
     assert "inconsistent LKR/USD spot" in str(exc.value.detail)
+
+
+def test_single_fx_spot_override_fans_out_to_all_pinned_keys() -> None:
+    """The documented single-lever fx.start_lkr_per_usd override is fanned out to
+    fx.rates.lkr_per_usd and fx.source.pinned_rate, so it stays self-consistent and runs
+    (it previously tripped the spot cross-assert -> 422). Round-3 fix."""
+    resp = run_pipeline(
+        RunPipelineRequest(config_path=LENDER, overrides={"fx.start_lkr_per_usd": 360.0})
+    )
+    assert resp.scenario_name  # ran to completion, no 422
