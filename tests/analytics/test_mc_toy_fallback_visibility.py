@@ -123,3 +123,29 @@ def test_live_param_name_is_not_flagged_degenerate() -> None:
     assert r.project_irr_std is not None and r.project_irr_std > 0.0
     assert r.metadata["degenerate_sweep"] is False
     assert r.metadata["dead_param_names"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Scenario monte_carlo reporting config is honored (Wave-2 fix)
+# --------------------------------------------------------------------------- #
+def test_scenario_percentiles_and_var_cvar_are_honored() -> None:
+    """The canonical scenario declares monte_carlo.percentiles [10,25,50,75,90] +
+    var_confidence/cvar_confidence. The engine previously ignored them (hardcoded
+    [5,10,50,90,95], no VaR/CVaR). It must now emit exactly the requested percentiles and
+    surface downside VaR/CVaR per metric in metadata."""
+    cfg = yaml.safe_load(LENDER.read_text())
+    result = run_monte_carlo_analysis(base_config=cfg, n_trials=40, seed=42)
+    assert set(result.percentiles) == {10, 25, 50, 75, 90}
+    assert result.metadata.get("var_confidence") == 0.95
+    var_cvar = result.metadata.get("var_cvar", {})
+    assert "project_irr" in var_cvar
+    # downside: VaR (5th pctile) <= CVaR is false; CVaR (mean of worst tail) <= VaR.
+    assert var_cvar["project_irr"]["cvar"] <= var_cvar["project_irr"]["var"]
+
+
+def test_absent_percentiles_falls_back_to_default_levels() -> None:
+    """A scenario without monte_carlo.percentiles keeps the documented default levels."""
+    cfg = yaml.safe_load(LENDER.read_text())
+    cfg["monte_carlo"].pop("percentiles", None)
+    result = run_monte_carlo_analysis(base_config=cfg, n_trials=40, seed=42)
+    assert set(result.percentiles) == {5, 10, 50, 90, 95}
