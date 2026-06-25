@@ -363,3 +363,12 @@ def test_validate_missing_tax_rate_reported() -> None:
     cfg = _cfg()
     cfg["tax"].pop("corporate_tax_rate")
     assert "corporate_tax_rate" in _validate_error(cfg)
+
+
+def test_enhanced_allowance_percent_typo_rejected_in_taxconfig() -> None:
+    """A percent-style value (150 meaning 1.5) is a unit error: > 3.0 fails loud so a
+    latent typo can't silently inflate the depreciable base ~100x."""
+    with pytest.raises(ValueError, match="looks like a PERCENT"):
+        _tax_config(enhanced_capital_allowance_pct=150.0)
+    # a real enhanced multiplier (<= 3.0) is accepted
+    assert _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct == 1.5

@@ -109,6 +109,12 @@ def _validate_config_type_and_structure(config: Any) -> dict[str, Any]:
         cfg = dict(config)
         if not cfg:
             raise PipelineConfigError("Config mapping is empty")
+        # NOTE: the FX spot cross-assert is deliberately NOT run here. Like the AEP
+        # reconciliation / provenance guards, it is a LOAD-TIME (authored-config) check —
+        # run_v14_pipeline is also the per-trial entry for Monte-Carlo / sensitivity, which
+        # legitimately perturb fx.start_lkr_per_usd in-memory while leaving fx.rates/pinned
+        # at the base. Enforcing it here would reject every MC draw. Authored inline/API
+        # configs are cross-asserted at their own entry point (api.pipeline_api).
         return cfg
 
     raise PipelineConfigError(
