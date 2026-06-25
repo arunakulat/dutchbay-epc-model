@@ -255,27 +255,21 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     )
     wht_gross_up = bool(_lookup_case_insensitive(tax_section, "wht_gross_up"))
 
+    # NOTE (CESSPIT, round-6): the LIVE financed schedule (build_equity_distribution_schedule)
+    # consumes only the fields parsed below — distribution_sweep_pct, holdback_pct,
+    # min_dscr_threshold, min_reserve_months, wht_*, discount_rate, terminal_value_usd,
+    # equity_investment_usd and construction_years. The six fields
+    # {annual_distributable_cash_usd, equity_stake_pct, target_equity_irr_pct,
+    # priority_senior_debt_usd, priority_mezzanine_usd, reserve_fund_pct} are consumed ONLY by
+    # the separate legacy EquityDistributionEngine (its own config builder + cascade), which is
+    # NOT on this pipeline path. Parsing them here read+validated YAML that changed no live KPI
+    # (proven byte-identical when swept), so this builder no longer reads them — they fall to
+    # the dataclass defaults, which the live schedule ignores. The dataclass keeps the fields
+    # for the legacy engine. (Same enforce-or-delete disposition as #393/#394.)
     return EquityDistributionConfig(
         scenario_name=scenario_name,
         enabled=bool(equity_section.get("enabled", True)),
         project_life_years=_as_int(project_life, 25),
-        annual_distributable_cash_usd=float(
-            _as_float(equity_section.get("annual_distributable_cash_usd"), 5e6)
-            or 0.0
-        ),
-        equity_stake_pct=_normalise_percent(
-            equity_section.get("equity_stake_pct"), 25.0
-        ),
-        target_equity_irr_pct=_normalise_percent(
-            equity_section.get("target_equity_irr_pct"), 16.0
-        ),
-        priority_senior_debt_usd=float(
-            _as_float(equity_section.get("priority_senior_debt_usd"), 100e6) or 0.0
-        ),
-        priority_mezzanine_usd=float(
-            _as_float(equity_section.get("priority_mezzanine_usd"), 50e6) or 0.0
-        ),
-        reserve_fund_pct=_normalise_percent(equity_section.get("reserve_fund_pct"), 10.0),
         min_dscr_threshold=float(
             _as_float(equity_section.get("min_dscr_threshold"), 1.25) or 0.0
         ),
