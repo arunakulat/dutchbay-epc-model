@@ -69,7 +69,6 @@ class EquityDistributionConfig(BaseModel):
     reserve_fund_pct: float = Field(default=10.0, ge=0, le=100)
 
     min_dscr_threshold: float = Field(default=1.25, ge=0.0, le=5.0)
-    min_llcr_threshold: float = Field(default=1.5, ge=0.0, le=5.0)
     min_reserve_months: int = Field(default=6, ge=0, le=24)
 
     distribution_sweep_pct: float = Field(default=100.0, ge=0.0, le=100.0)
@@ -113,14 +112,6 @@ class EquityDistributionConfig(BaseModel):
         """Validate DSCR threshold."""
         if not (0.0 <= v <= 5.0):
             raise ValueError(f"DSCR threshold must be 0.0-5.0, got {v}")
-        return v
-
-    @field_validator("min_llcr_threshold")
-    @classmethod
-    def validate_llcr_threshold(cls, v: float) -> float:
-        """Validate LLCR threshold."""
-        if not (0.0 <= v <= 5.0):
-            raise ValueError(f"LLCR threshold must be 0.0-5.0, got {v}")
         return v
 
     @field_validator("discount_rate")
@@ -287,9 +278,6 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         reserve_fund_pct=_normalise_percent(equity_section.get("reserve_fund_pct"), 10.0),
         min_dscr_threshold=float(
             _as_float(equity_section.get("min_dscr_threshold"), 1.25) or 0.0
-        ),
-        min_llcr_threshold=float(
-            _as_float(equity_section.get("min_llcr_threshold"), 1.5) or 0.0
         ),
         min_reserve_months=_as_int(equity_section.get("min_reserve_months"), 6),
         distribution_sweep_pct=_normalise_percent(
@@ -688,7 +676,6 @@ def calculate_equity_distribution_from_pipeline(
             "average_cash_on_cash": average_cash_on_cash,
             "covenant_locked_years": covenant_locked_years,
             "min_dscr_threshold": distribution_config.min_dscr_threshold,
-            "min_llcr_threshold": distribution_config.min_llcr_threshold,
             "min_reserve_months": distribution_config.min_reserve_months,
         },
         "metadata": {
@@ -772,7 +759,6 @@ class EquityDistributionEngine:
             priority_mezzanine_usd=config.equity.get("priority_mezzanine_usd", 50e6),
             reserve_fund_pct=config.equity.get("reserve_fund_pct", 10.0),
             min_dscr_threshold=config.equity.get("min_dscr_threshold", 1.25),
-            min_llcr_threshold=config.equity.get("min_llcr_threshold", 1.5),
             min_reserve_months=config.equity.get("min_reserve_months", 6),
             distribution_sweep_pct=config.equity.get("distribution_sweep_pct", 100.0),
             holdback_pct=config.equity.get("holdback_pct", 0.0),
@@ -780,7 +766,6 @@ class EquityDistributionEngine:
             discount_rate=config.equity.get("discount_rate", 0.10),
         )
         self.config.min_dscr_threshold = self.equity_config.min_dscr_threshold
-        self.config.min_llcr_threshold = self.equity_config.min_llcr_threshold
         self.config.min_reserve_months = self.equity_config.min_reserve_months
         self.logger.info(
             "Initialized EquityDistributionEngine: %s",
@@ -865,7 +850,6 @@ class EquityDistributionEngine:
                     "total_distributions_usd": total_equity_dist,
                     "equity_stake_pct": self.equity_config.equity_stake_pct,
                     "min_dscr_threshold": self.equity_config.min_dscr_threshold,
-                    "min_llcr_threshold": self.equity_config.min_llcr_threshold,
                 },
                 "success": True,
                 "status": "computed",
