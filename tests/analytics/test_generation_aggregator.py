@@ -174,3 +174,31 @@ def test_tech_without_availability_is_none() -> None:
     result, _ = build_multi_tech_from_run({"final_cfads_usd": 1.0}, cfg)
     assert result is not None
     assert result.technologies["wind"].availability_pct is None
+
+
+def test_third_generation_tech_is_not_dropped_and_bess_excluded() -> None:
+    """A generation tech beyond wind/solar (e.g. tidal) must appear in the lender split —
+    the old hardcoded SUPPORTED_TECHNOLOGIES gate silently dropped it. A type:bess storage
+    block must NOT be counted as generation (it carries no capacity_factor / CFADS)."""
+    cfg = {
+        "generation": {
+            "technologies": {
+                "wind": {"aep_gwh": 400.0, "capacity_factor": 0.34},
+                "solar": {"aep_gwh": 90.0, "capacity_factor": 0.20},
+                "tidal": {"aep_gwh": 50.0, "capacity_factor": 0.40},
+                "battery": {"type": "bess", "power_mw": 10.0, "energy_mwh": 40.0},
+            }
+        }
+    }
+    result, breakdown = build_multi_tech_from_run(
+        {"mean_operational_cfads_usd": 1.0e7}, cfg
+    )
+    assert result is not None and breakdown is not None
+    assert set(result.technologies) == {"wind", "solar", "tidal"}
+    # AEP split is conserved over the three generation techs (storage contributes none).
+    total = 400.0 + 90.0 + 50.0
+    assert result.technologies["tidal"].annual_aep_kwh == pytest.approx(50.0e6)
+    assert {r.technology for r in breakdown} == {"wind", "solar", "tidal"}
+    assert sum(r.share_of_aep_pct for r in breakdown) == pytest.approx(100.0)
+    assert result.technologies["wind"].annual_aep_kwh == pytest.approx(400.0e6)
+    assert total == pytest.approx(540.0)

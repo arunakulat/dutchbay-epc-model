@@ -184,8 +184,18 @@ def build_multi_tech_from_run(
     ``(None, None)`` when no technology AEP is resolvable, so callers can attach
     the view opportunistically without breaking runs that lack it.
     """
+    # Discover generation technologies tech-agnostically from the generation.technologies
+    # block (wind == solar == tidal == …; storage/BESS excluded) so a third tech is NOT
+    # silently dropped from the lender AEP/CFADS/capex split — the hardcoded
+    # SUPPORTED_TECHNOLOGIES gate did exactly that. Legacy single-tech scenarios carry no
+    # such block; fall back to the conventional generation techs resolved from resource.<tech>
+    # (this keeps the canonical wind-only run byte-identical). Reuses the same discovery the
+    # cashflow and the multi-tech tornado use, so the three cannot disagree (CCCDIR).
+    from analytics.portfolio.multi_tech_tornado import discover_generation_technologies
+
+    techs = discover_generation_technologies(config) or list(SUPPORTED_TECHNOLOGIES)
     aeps: Dict[str, float] = {}
-    for tech in SUPPORTED_TECHNOLOGIES:
+    for tech in techs:
         aep = resolve_tech_aep_kwh(config, tech)
         if aep is not None:
             aeps[tech] = aep
