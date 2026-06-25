@@ -265,10 +265,15 @@ def _stub_evaluate_with_overrides(monkeypatch: pytest.MonkeyPatch) -> list[dict[
     def fake(path: str, overrides: dict[str, Any]) -> dict[str, Any]:
         calls.append(overrides)
         fx = overrides.get("fx", {})
+        # The fx_rate sweep now drives the LIVE key start_lkr_per_usd (base 333.79); derive
+        # the implied shock from it. The base eval (fx_shock=0.0, no start) -> shock 0.
         shock = float(fx.get("fx_shock", 0.0))
+        start = fx.get("start_lkr_per_usd")
+        if start is not None:
+            shock = float(start) / 333.79 - 1.0
         hedge = float(fx.get("hedge_ratio", 0.0))
         spread = float(fx.get("spread_shock_bps", 0.0))
-        # IRR falls as LKR weakens (positive fx_shock), rises with hedging,
+        # IRR falls as LKR weakens (higher LKR/USD = positive shock), rises with hedging,
         # falls as the spread widens — a plausible, monotone tail.
         irr = 0.06 - 0.20 * shock + 0.01 * hedge - 0.00001 * spread
         return {"project_irr": irr}
@@ -296,11 +301,12 @@ def test_run_produces_three_coefficients_and_variance(monkeypatch: pytest.Monkey
     assert result.total_variance is not None and result.total_variance > 0.0
     assert result.explained_variance is not None
 
-    # the base evaluation anchors the fx_shock at 0.0
+    # the base evaluation anchors at the unshocked case
     assert calls[0] == {"fx": {"fx_shock": 0.0}}
-    # fx shocks re-price spot relative to the scenario's base fx (333.79)
+    # fx shocks re-price the LIVE engine key start_lkr_per_usd relative to base fx (333.79):
+    # the first sweep point is the -10% shock -> 333.79 * 0.90.
     fx_call = calls[1]["fx"]
-    assert fx_call["spot_rate_lkr_usd"] == pytest.approx(333.79 * (1.0 + fx_call["fx_shock"]))
+    assert fx_call["start_lkr_per_usd"] == pytest.approx(333.79 * (1.0 + (-0.10)))
 
 
 def test_run_constant_metric_has_flat_sensitivities(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -340,7 +346,7 @@ def _patch_pipeline(monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | Non
 
     def fake_pipeline(*, config: dict[str, Any], enable_returns: bool, enable_risk: bool) -> dict[str, Any]:
         captured.append(config)
-        spot = float(config["fx"]["spot_rate"])
+        spot = float(config["fx"]["start_lkr_per_usd"])
         if fixed is not None:
             return fixed
         # IRR/NPV decline as LKR weakens (spot rises): VaR/CVaR tail lives at high spot.
@@ -363,13 +369,14 @@ def _patch_pipeline(monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | Non
 def test_run_pipeline_with_fx_params_injects_fx_block(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = _patch_pipeline(monkeypatch)
     analyzer = FXSensitivityAnalyzer(str(LENDER))
-    analyzer._run_pipeline_with_fx_params(333.79, 0.5, 100.0)
+    base_rate = analyzer.base_config["fx"]["start_lkr_per_usd"]  # 333.79
+    analyzer._run_pipeline_with_fx_params(400.0, 0.5, 100.0)  # inject a DISTINCT rate
     injected = captured[0]["fx"]
-    assert injected["spot_rate"] == pytest.approx(333.79)
+    assert injected["start_lkr_per_usd"] == pytest.approx(400.0)
     assert injected["hedge_ratio"] == pytest.approx(0.5)
     assert injected["spread_bps"] == pytest.approx(100.0)
-    # deep copy: the analyzer's own base_config is not mutated
-    assert analyzer.base_config["fx"].get("spot_rate") != 333.79 or "spot_rate" not in analyzer.base_config["fx"]
+    # deep copy: the injected 400.0 did NOT mutate the analyzer's own base_config.
+    assert analyzer.base_config["fx"]["start_lkr_per_usd"] == pytest.approx(base_rate)
 
 
 def test_run_pipeline_with_fx_params_creates_fx_when_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -378,7 +385,7 @@ def test_run_pipeline_with_fx_params_creates_fx_when_absent(monkeypatch: pytest.
     cfg.write_text("project:\n  name: x\n")
     analyzer = FXSensitivityAnalyzer(str(cfg))
     analyzer._run_pipeline_with_fx_params(310.0, 0.0, 0.0)
-    assert captured[0]["fx"]["spot_rate"] == pytest.approx(310.0)
+    assert captured[0]["fx"]["start_lkr_per_usd"] == pytest.approx(310.0)
 
 
 def test_extract_metrics_from_kpis() -> None:
@@ -474,3 +481,24 @@ def test_sensitivity_coefficient_fields() -> None:
 def test_public_exports() -> None:
     for name in mod.__all__:
         assert hasattr(mod, name)
+
+
+def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
+    """End-to-end, NO mock: the fx_rate sweep now drives the live engine key
+    start_lkr_per_usd, so the fx_rate coefficient is genuinely non-zero on the real
+    lender scenario — proving the dead-key fake-zero (Wave-2 finding) is fixed. Project
+    IRR falls as the LKR/USD rate rises, so the coefficient is negative."""
+    cfg = FXSensitivityConfig(
+        fx_rate_shocks=[-0.05, 0.0, 0.05],
+        hedge_ratio_values=[0.0, 1.0],
+        spread_shocks_bps=[-100.0, 100.0],
+    )
+    analyzer = FXSensitivityAnalyzer(str(LENDER), config=cfg)
+    result = analyzer.run()
+    fx_coef = next(c for c in result.coefficients if c.parameter == "fx_rate")
+    assert abs(fx_coef.coefficient) > 1e-6  # REAL sensitivity, not a fake ~0
+    assert fx_coef.coefficient < 0.0  # weaker LKR (higher rate) -> lower IRR
+    # hedge/spread are not modeled by the cashflow engine -> structurally ~0 (honest).
+    for name in ("hedge_ratio", "spread"):
+        coef = next(c for c in result.coefficients if c.parameter == name)
+        assert abs(coef.coefficient) < 1e-9
