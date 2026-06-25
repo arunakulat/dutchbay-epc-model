@@ -9,8 +9,9 @@ and scenario data. All functions follow GWTF and CESSPIT standards:
 - No internal state or side effects
 
 Pipeline Integration:
-  Called from analytics.fx.fx_integration.integrate_fx_into_scenario_result()
-  which is invoked by pipeline_v14.run_full_pipeline_v14().
+  Called from analytics.fx.fx_integration.integrate_fx_into_scenario_result(),
+  which the LIVE pipeline analytics.pipeline_v14_enhanced.run_v14_pipeline invokes
+  after the ScenarioResult is assembled (populating fx_block/fx_curve/fx_risk_profile).
 
 Usage:
   from analytics.fx.fx_builder import compute_fx_structured_block
