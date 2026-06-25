@@ -74,6 +74,14 @@ class EquityDistributionConfig(BaseModel):
 
     distribution_sweep_pct: float = Field(default=100.0, ge=0.0, le=100.0)
     holdback_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+
+    # Withholding tax on non-resident interest. When wht_gross_up is True the SPV grosses
+    # up the WHT (bears interest * rate on TOP of interest, as a real cash cost reducing
+    # cash to equity); when False the lender bears it (no incremental SPV cost). The rate is
+    # tax.wht_on_interest_to_nonresidents gated by tax.wht_on_interest_enabled. Default-off
+    # (rate 0 / gross_up False) -> byte-identical.
+    wht_gross_up: bool = Field(default=False)
+    wht_on_interest_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     terminal_value_usd: float = Field(default=0.0, ge=0.0)
     discount_rate: float = Field(default=0.10, ge=0.0, le=1.0)
 
@@ -244,6 +252,18 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         if project:
             project_life = _lookup_case_insensitive(project, "project_life_years")
 
+    # Non-resident interest WHT (same derivation as finance.cashflow_v14_tax.build_tax_profile,
+    # CCCDIR: one rule for the rate). Rate applies only when wht_on_interest_enabled; the SPV
+    # bears it as a cash cost only when wht_gross_up. Both default off -> byte-identical.
+    tax_section = _section_case_insensitive(config, "tax") or {}
+    wht_enabled = bool(_lookup_case_insensitive(tax_section, "wht_on_interest_enabled"))
+    wht_rate = (
+        float(_as_float(_lookup_case_insensitive(tax_section, "wht_on_interest_to_nonresidents"), 0.0) or 0.0)
+        if wht_enabled
+        else 0.0
+    )
+    wht_gross_up = bool(_lookup_case_insensitive(tax_section, "wht_gross_up"))
+
     return EquityDistributionConfig(
         scenario_name=scenario_name,
         enabled=bool(equity_section.get("enabled", True)),
@@ -276,6 +296,8 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
             equity_section.get("distribution_sweep_pct"), 100.0
         ),
         holdback_pct=_normalise_percent(equity_section.get("holdback_pct"), 0.0),
+        wht_gross_up=wht_gross_up,
+        wht_on_interest_rate=wht_rate,
         terminal_value_usd=float(
             _as_float(equity_section.get("terminal_value_usd"), 0.0) or 0.0
         ),
@@ -421,7 +443,17 @@ def build_equity_distribution_schedule(
 
         cf_pre_debt = _extract_cf_pre_debt(row)
         debt_service = _extract_debt_service(row, debt_service_series, index)
-        cf_after_debt = max(0.0, cf_pre_debt - debt_service)
+        # Grossed-up non-resident interest WHT is a real cash cost senior to equity (the SPV
+        # tops it up alongside interest). It reduces cash to equity but is NOT scheduled debt
+        # service, so — like the balloon resolution — it stays out of the DSCR (the row's own
+        # cf_after_debt, used for covenant reporting, is untouched upstream).
+        interest_usd = _as_float(row.get("interest_usd"), 0.0) or 0.0
+        wht_cost = (
+            interest_usd * distribution_config.wht_on_interest_rate
+            if distribution_config.wht_gross_up
+            else 0.0
+        )
+        cf_after_debt = max(0.0, cf_pre_debt - debt_service - wht_cost)
         dscr = _extract_dscr(row, cf_pre_debt, debt_service)
 
         # Reserve: top up toward the requirement; RELEASE the excess back to equity as the
@@ -485,6 +517,7 @@ def build_equity_distribution_schedule(
                 "year": year,
                 "cf_pre_debt_usd": cf_pre_debt,
                 "debt_service_usd": debt_service,
+                "wht_on_interest_usd": wht_cost,
                 "cf_after_debt_usd": cf_after_debt,
                 "balloon_resolution_usd": balloon_resolution,
                 "dscr": dscr,

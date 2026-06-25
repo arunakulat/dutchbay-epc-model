@@ -1,0 +1,84 @@
+"""WHT-on-interest gross-up as a real equity cash cost (Wave-1 A2 wiring).
+
+tax.wht_gross_up was decorative config: parsed but never used, and the computed
+wht_on_interest never reduced any cash line. It is now wired at the debt/equity layer:
+the scheduled per-period interest (debt_result['interest_total']) is surfaced on each
+operating row as interest_usd (same alignment as debt_service), and when wht_gross_up is
+True the equity waterfall charges interest * tax.wht_on_interest_to_nonresidents against
+cash to equity — senior to equity but OUT of the DSCR (covenant unaffected).
+
+Every shipped scenario sets wht_gross_up: false, so the canonical economics are
+byte-identical; the cost only bites once a scenario grosses up.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from analytics.evaluation_v14 import evaluate_with_overrides
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+
+# Canonical post-Wave-1 KPIs (equity-waterfall + irr fixes already merged).
+_CANON_EQ_IRR = -0.008246893771461483
+_CANON_CFADS = 257097035.71124893
+
+
+def test_default_off_is_byte_identical() -> None:
+    """Default (wht_gross_up: false everywhere) leaves the canonical economics unchanged."""
+    k = evaluate_with_overrides(LENDER, overrides={})
+    assert k["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
+    assert k["total_cfads_usd"] == pytest.approx(_CANON_CFADS, rel=1e-9)
+    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+
+
+def test_gross_up_off_with_a_rate_is_still_a_no_op() -> None:
+    """A non-zero non-resident rate but wht_gross_up: false -> lender bears it, no SPV cost."""
+    k = evaluate_with_overrides(
+        LENDER,
+        overrides={
+            "tax.wht_on_interest_to_nonresidents": 0.10,
+            "tax.wht_gross_up": False,
+        },
+    )
+    assert k["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
+    assert k["total_cfads_usd"] == pytest.approx(_CANON_CFADS, rel=1e-9)
+
+
+def test_gross_up_charges_a_real_cash_cost_without_touching_dscr() -> None:
+    """gross_up + a rate lowers equity IRR (real cash leakage) but NOT the DSCR/CFADS
+    (the WHT is senior to equity yet out of scheduled debt service)."""
+    off = evaluate_with_overrides(
+        LENDER,
+        overrides={"tax.wht_on_interest_to_nonresidents": 0.10, "tax.wht_gross_up": False},
+    )
+    on = evaluate_with_overrides(
+        LENDER,
+        overrides={"tax.wht_on_interest_to_nonresidents": 0.10, "tax.wht_gross_up": True},
+    )
+    assert on["equity_irr"] < off["equity_irr"] - 1e-4  # materially lower
+    # DSCR and project-level CFADS are upstream of the equity WHT deduction.
+    assert on["min_dscr"] == pytest.approx(off["min_dscr"], abs=1e-9)
+    assert on["total_cfads_usd"] == pytest.approx(off["total_cfads_usd"], rel=1e-9)
+
+
+def test_per_year_wht_equals_interest_times_rate_aligned() -> None:
+    """Proves the period alignment: each year's charged WHT equals that year's scheduled
+    interest * rate (including the bridge-period interest folded into operating year 1)."""
+    rate = 0.10
+    full = evaluate_with_overrides(
+        LENDER,
+        overrides={"tax.wht_on_interest_to_nonresidents": rate, "tax.wht_gross_up": True},
+        return_full_result=True,
+    )
+    rows = full["annual_rows"]
+    dist = full["equity_distribution"]["annual_distributions"]
+    assert len(rows) == len(dist)
+    # year 1 must carry real (bridge-inclusive) interest, not zero
+    assert rows[0]["interest_usd"] > 0.0
+    for row, d in zip(rows, dist):
+        expected = float(row["interest_usd"]) * rate
+        assert d["wht_on_interest_usd"] == pytest.approx(expected, abs=1.0)
