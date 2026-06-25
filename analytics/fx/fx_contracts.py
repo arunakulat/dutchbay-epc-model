@@ -371,28 +371,29 @@ class FXStructuredBlock:
         return len(self.volumetry)
 
     def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float | None = None) -> float:
-        """Approximate total debt in USD equivalent at spot rate.
+        """Total debt in USD-equivalent (straight sum across currencies).
+
+        All FXVolumetry debt fields are USD-EQUIVALENT (labelled by denomination
+        currency), so this is a plain sum — NO spot conversion. The previous code
+        divided the already-USD ``total_debt_lkr`` by spot (the same unit bug fixed in
+        the VaR and total_usd_exposure_equivalent), under-counting the total by ~half.
 
         Args:
-            spot_rate_lkr_usd: Exchange rate for LKR/USD. When ``None``, resolves
-                the single config-sourced reference rate (``config/defaults.yaml``);
-                never a Python literal (CESSPIT / ARCH-01).
+            spot_rate_lkr_usd: Accepted for back-compat but UNUSED — the figures are
+                already in USD-equivalent.
 
         Returns:
-            Sum of all debt in USD equivalent (approx).
+            Sum of final-period debt in USD-equivalent.
         """
+        del spot_rate_lkr_usd  # unused: fields are already USD-equivalent
         if not self.volumetry:
             return 0.0
-
-        if spot_rate_lkr_usd is None:
-            from analytics.fx.fx_fetch import default_fx_lkr_per_usd
-
-            spot_rate_lkr_usd = default_fx_lkr_per_usd()
-
-        # Use final period debt (end of loan tenor)
         final_period = self.volumetry[-1]
-        lkr_in_usd = final_period.total_debt_lkr / spot_rate_lkr_usd
-        return final_period.total_debt_usd + lkr_in_usd + final_period.total_debt_cny
+        return (
+            final_period.total_debt_usd
+            + final_period.total_debt_lkr
+            + final_period.total_debt_cny
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON-serializable dict for export/dashboarding."""
