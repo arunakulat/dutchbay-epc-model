@@ -52,8 +52,8 @@ def integrate_fx_into_scenario_result(
     """
     Wire FX blocks into an existing ScenarioResult.
 
-    This function is called from pipeline_v14.run_full_pipeline_v14() after
-    core scenario evaluation. It:
+    This function is called from analytics.pipeline_v14_enhanced.run_v14_pipeline
+    (the live pipeline) after the ScenarioResult is assembled. It:
     1. Computes FX structured block from config and debt output
     2. Generates FX curve (time-series rates)
     3. Calculates FX risk profile (VaR, CVaR, concentration)

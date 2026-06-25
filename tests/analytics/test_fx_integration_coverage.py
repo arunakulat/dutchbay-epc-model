@@ -211,3 +211,22 @@ def test_fx_builder_failure_is_wrapped_as_valueerror() -> None:
             debt_result=_debt_result(),
             annual_rows=bad_rows,
         )
+
+
+def test_live_pipeline_populates_fx_block_curve_risk() -> None:
+    """The FX integrator is now wired into the LIVE pipeline (was orphaned), so a real
+    run populates ScenarioResult.fx_block / fx_curve / fx_risk_profile — and it is purely
+    additive (reporting only): the canonical economics are byte-identical."""
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+
+    lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+    out = run_v14_pipeline(config=lender)
+    sr = out["scenario_result"]
+    assert sr.get("fx_block") is not None
+    assert sr.get("fx_curve") is not None
+    assert sr.get("fx_risk_profile") is not None
+    # additive — no effect on the financed economics
+    k = out["kpis"]
+    assert k["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.008246893771461483, abs=1e-9)
+    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
