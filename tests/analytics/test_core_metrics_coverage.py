@@ -558,3 +558,28 @@ def test_module_exports_public_surface() -> None:
         "calculate_scenario_kpis",
         "compute_kpis",
     }
+
+
+def test_derive_capex_matches_debt_engine_for_breakdown() -> None:
+    """When capex.derive_from_breakdown is set, the NPV capex base must EQUAL the debt
+    engine's basis (one shared resolver) so the two cannot diverge (Wave-2 fix). A
+    flat-total config (no derive) stays on the metrics flat path, unchanged."""
+    from finance.debt_v14 import _extract_capex_usd
+
+    # bottom-up breakdown: NPV capex == debt capex == the breakdown sum (100M)
+    cfg_breakdown = {
+        "capex": {
+            "derive_from_breakdown": True,
+            "usd_total": 100_000_000,
+            "breakdown": {
+                "epc_usd": 80_000_000,
+                "grid_usd": 18_500_000,
+                "contingency_usd": 1_500_000,
+            },
+        }
+    }
+    assert _derive_capex_usd(cfg_breakdown) == _extract_capex_usd(dict(cfg_breakdown))
+    assert _derive_capex_usd(cfg_breakdown) == 100_000_000.0
+
+    # No derive_from_breakdown -> flat-total path, unchanged.
+    assert _derive_capex_usd({"capex": {"usd_total": 250_000_000}}) == 250_000_000.0

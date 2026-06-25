@@ -159,6 +159,10 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
         from analytics.cost.contingency import contingency_is_qra, resolve_contingency
 
         if contingency_is_qra(capex_section):
+            # QRA intentionally OVERRIDES any stated capex.usd_total (the contingency is
+            # recomputed from the risk inputs), so there is no usd_total cross-check here.
+            # The NPV/IRR capex base is kept consistent by routing metrics._derive_capex_usd
+            # through this same resolver when derive_from_breakdown is set (no divergence).
             contingency_line = float(_lookup_case_insensitive(breakdown, "contingency_usd") or 0.0)
             base_cost = line_total - contingency_line
             derived = base_cost + resolve_contingency(base_cost, capex_section).contingency_usd
