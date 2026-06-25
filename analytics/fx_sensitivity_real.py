@@ -189,7 +189,14 @@ class FXSensitivityAnalyzer:
         from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
         fx_config = self.base_config.get("fx", {})
-        spot = fx_config.get("spot_rate", fx_config.get("start_lkr_per_usd"))
+        rates = fx_config.get("rates") if isinstance(fx_config.get("rates"), dict) else {}
+        # Prefer the LIVE engine key (start_lkr_per_usd), then the scenario rates block,
+        # then the legacy spot_rate, then the global config default.
+        spot = (
+            fx_config.get("start_lkr_per_usd")
+            or rates.get("lkr_per_usd")
+            or fx_config.get("spot_rate")
+        )
         return float(spot) if spot is not None else default_fx_lkr_per_usd()
 
     def run(self) -> FXSensitivityResult:
@@ -198,16 +205,24 @@ class FXSensitivityAnalyzer:
         base_value = _metric_from_result(base, metric)
         pairs: list[tuple[SensitivityCoefficient, float]] = []
 
+        # FX-RATE sweep drives the LIVE engine key fx.start_lkr_per_usd (the rate the
+        # cashflow actually discounts at). The old keys fx.fx_shock / fx.spot_rate_lkr_usd
+        # were not consumed by the engine, so this coefficient was a fake ~0 (Wave-2 fix).
         base_fx = self._base_fx()
         fx_values = []
         for shock in self.config.fx_rate_shocks:
             out = evaluate_with_overrides(
                 self.base_config_path,
-                {"fx": {"fx_shock": float(shock), "spot_rate_lkr_usd": base_fx * (1.0 + float(shock))}},
+                {"fx": {"start_lkr_per_usd": base_fx * (1.0 + float(shock))}},
             )
             fx_values.append(_metric_from_result(out, metric))
         pairs.append(_linear_fit("fx_rate", self.config.fx_rate_shocks, fx_values))
 
+        # NOTE: the v14 cashflow engine does NOT model FX hedging or an FX bid/ask spread,
+        # so hedge_ratio / spread have no live lever — their production sensitivity is
+        # structurally ~0. The sweeps are retained (the regression machinery is exercised
+        # under test and will report real coefficients once the engine models them), but a
+        # ~0 here is an unmodeled-lever signal, not an FX-rate-style cash sensitivity.
         hedge_values = []
         for hedge_ratio in self.config.hedge_ratio_values:
             out = evaluate_with_overrides(self.base_config_path, {"fx": {"hedge_ratio": float(hedge_ratio)}})
@@ -219,6 +234,14 @@ class FXSensitivityAnalyzer:
             out = evaluate_with_overrides(self.base_config_path, {"fx": {"spread_shock_bps": float(spread_bps)}})
             spread_values.append(_metric_from_result(out, metric))
         pairs.append(_linear_fit("spread", self.config.spread_shocks_bps, spread_values))
+        if all(abs(v - hedge_values[0]) < 1e-12 for v in hedge_values) and all(
+            abs(v - spread_values[0]) < 1e-12 for v in spread_values
+        ):
+            logger.warning(
+                "FX hedge_ratio / spread show zero sensitivity: the cashflow engine does "
+                "not model FX hedging or spread, so these are unmodeled levers (not an "
+                "FX-rate cash sensitivity). Only the fx_rate coefficient is engine-driven."
+            )
 
         total_variance = float(sum(variance for _, variance in pairs))
         coefficients = [
@@ -237,8 +260,14 @@ class FXSensitivityAnalyzer:
     def _run_pipeline_with_fx_params(self, fx_rate: float, hedge_ratio: float, spread_bps: float) -> dict[str, Any]:
         config = copy.deepcopy(self.base_config)
         config.setdefault("fx", {})
+        # start_lkr_per_usd is the LIVE engine key (spot_rate was not consumed). hedge_ratio /
+        # spread_bps are retained but not modeled by the cashflow engine (see run()).
         config["fx"].update(
-            {"spot_rate": float(fx_rate), "hedge_ratio": float(hedge_ratio), "spread_bps": float(spread_bps)}
+            {
+                "start_lkr_per_usd": float(fx_rate),
+                "hedge_ratio": float(hedge_ratio),
+                "spread_bps": float(spread_bps),
+            }
         )
         from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
 
