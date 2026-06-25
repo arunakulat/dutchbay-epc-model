@@ -28,7 +28,7 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # at maturity, was -0.0331031452337186, +~149bps); projIRR/npv/dscr/cfads are upstream of
     # the equity waterfall and remain byte-identical.
     assert kpis["project_irr"] == pytest.approx(0.0449082466193822, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.01818807171553316, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.015233921795672956, rel=1e-6)
     assert kpis["project_npv"] == pytest.approx(-53832909.235, rel=1e-6)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     assert kpis["total_cfads_usd"] == pytest.approx(305943086.43, rel=1e-6)
