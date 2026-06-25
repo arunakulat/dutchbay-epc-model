@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional
@@ -693,6 +693,12 @@ def run_v14_pipeline_enhanced(
         )
 
         phase_start = time.time()
+        # Prudential (downside) NPV: discount the same CFADS at the haircut WACC
+        # (wacc_dict['wacc_prudential']) so the lender surface carries a conservative
+        # valuation alongside the base NPV. The metrics consumer + WaccResult.prudential_npv
+        # were de-decorated by PR #369 but never fed here, so project_npv_prudential was never
+        # computed live and the CASPER payload published a prudential RATE with a None NPV.
+        prudential_rate = wacc_dict.get("wacc_prudential") if wacc_dict else None
         kpis = calculate_scenario_kpis(
             config=cfg,
             annual_rows=annual_rows_enriched,
@@ -700,7 +706,15 @@ def run_v14_pipeline_enhanced(
             discount_rate=project_discount,
             wacc_is_real=wacc_drives,
             wacc_label=wacc_label_val,
+            prudential_rate=prudential_rate,
         )
+        # Populate the (frozen) WaccResult contract's prudential_npv from the freshly
+        # computed metric so the CASPER payload no longer advertises a rate beside a None NPV.
+        if wacc_contract is not None and kpis.get("project_npv_prudential") is not None:
+            wacc_contract = replace(
+                wacc_contract,
+                prudential_npv=float(kpis["project_npv_prudential"]),
+            )
         metrics.kpis_count = len(kpis)
         metrics.kpi_time_sec = time.time() - phase_start
         logger.info(
