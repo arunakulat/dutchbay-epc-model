@@ -1,0 +1,562 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DutchBay 150 MW Wind Farm — CAPEX CASE: EIA prudent ($1,420/kW)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Path: scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml
+# Variant of dutchbay_lendercase_2025Q4.yaml: resource / debt / tariff are IDENTICAL,
+# ONLY the capex differs ($1,420/kW vs the canonical $1,000/kW), to isolate capex
+# sensitivity. CAPEX $1,420/kW = the Envision Dutch Bay Final EIA (Sep-2025) Annexure
+# III-M financial capex ($212.97M for the 150 MW project); BESS excluded (the EIA capex
+# excludes BESS). See ~/Downloads/EIA_DutchBay_KEY_FACTS.md.
+#
+# Honest finding: at the prudent EIA capex the deal is DEEPLY value-destructive (project
+# IRR 1.80% << WACC ~8.1%, equity IRR -3.95%, NPV -$106.6M; higher capex forces gearing
+# down to 0.440 at the DSCR covenant). expected_results are binding (asserted by
+# tests/integration/test_capex_cases_smoke.py).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "DutchBay Wind Farm"
+  location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
+  capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
+  capacity_factor: 0.339  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
+  # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
+  # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
+  # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
+  # ADDITIONAL constrained-CEB-grid curtailment risk and is a first-class tornado +
+  # Monte-Carlo variable (stress band 0-13% incremental = 2-15% total). The flat 2% is an
+  # UNVALIDATED placeholder pending a CEB interconnection study (see docs red-flag note).
+  curtailment_pct: 0.0
+  degradation: 0.5  # Annual production degradation (0.5%/year for turbine aging)
+  life_years: 20  # Project operational life
+  cod_year: 2027  # Commercial Operation Date
+  developer: "DutchBay Wind Power Pvt Ltd"
+  grid_poi: "Puttalam 220kV Substation"
+  
+  # Tax & regulatory (Sri Lanka BOI)
+  boi_approved: false
+  boi_agreement_date: '2025-01-15'
+  jurisdiction: Sri Lanka
+  # Tax inputs are the single source of truth in the `tax:` block (CESSPIT).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TURBINE & WIND RESOURCE (Wind Energy Calculator Inputs)
+# ═════════════════════════════════════════════════════════════════════════════
+turbine:
+  model: "IEA Reference 10MW (198m)"
+  n_turbines: 15
+  rated_power_mw: 10.6383
+  rated_power_kw: 10638
+  total_capacity_mw: 159.6
+  rotor_diameter_m: 198
+  hub_height_m: 150
+  cut_in_ms: 3.0
+  cut_out_ms: 25.0
+  rated_wind_speed_ms: 11.0
+  certification_status: "OPEN_REFERENCE"  # IEA Wind Task 37 reference design (not OEM-certified)
+  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
+
+wind_resource:
+  # Weibull distribution parameters (for AEP calculation). ERA5-FITTED (3-method
+  # consensus MLE/MoM/scipy on the 2020-2024 ARCO single-point timeseries at 150 m,
+  # r2=0.998) — re-baselined from the prior DECLARED A=8.32/k=2.1/mean 7.85, which
+  # overstated the resource (net AEP 483.6 -> 473.8 GWh, -2.0%).
+  weibull_a: 8.199  # Scale parameter (m/s) - ERA5-fitted
+  weibull_k: 2.665  # Shape parameter - ERA5-fitted (declared 2.1 was too broad)
+  mean_wind_speed_ms: 7.29  # At hub height (150m), ERA5-fitted
+  shear_exponent: 0.14
+  air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level (tropical)
+  air_density_ref_kgm3: 1.225  # Standard air density for power curve
+  
+  # Data provenance
+  data_source: "ECMWF ERA5 Reanalysis"
+  data_years: "2020-2024"
+  data_confidence: "Medium (5-year ERA5 validated against 1-year met mast)"
+
+layout:
+  turbine_spacing_avg_m: 650
+  turbine_spacing_avg_D: 3.8  # In rotor diameters (650m / 171m)
+  iec_compliant_pairs: 6
+  iec_marginal_pairs: 3
+  iec_violation_pairs: 6
+  layout_orientation: "linear_north_south_coastal"
+  coordinates_reference: "WGS84_EPSG4326"
+  utm_zone: "44N"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# RESOURCE ASSESSMENT & LOSSES
+# ═════════════════════════════════════════════════════════════════════════════
+resource:
+  # Turbine specifications (for backward compatibility)
+  turbines:
+    count: 15
+    rated_power_mw: 10.6383
+    total_capacity_mw: 159.6
+    model: "IEA Reference 10MW (198m)"
+    rotor_diameter_m: 198
+    hub_height_m: 150
+
+  # Power curve & AEP calculation
+  power_curve:
+    source_id: "IEA_REFERENCE_10MW_198_PC"
+    source_type: "REFERENCE"
+    curve_key: "iea_reference_10mw"   # power_curves.yaml store slug; must match the manifest's curve_key (asserted)
+    iec_standard: "IEC 61400-12-1:2022"
+    certificate_ref: "IEA Wind Task 37 reference design (open, not OEM-certified)"
+    air_density_site_kgm3: 1.15
+    air_density_ref_kgm3: 1.225
+    alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
+
+  aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
+
+  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
+  # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
+  losses:
+    wake_loss_pct: 7.28  # PyWake Bastankhah-Porte-Agel granular wake (15-turbine layout); TurbOPark bound 8.93%
+    availability_pct: 97.0  # Contractual availability target
+    electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
+    curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
+    other_pct: 1.0  # Environmental / icing / blade degradation
+  
+  # Wind resource (for backward compatibility). ERA5-FITTED (see top-level block).
+  wind_resource:
+    mean_wind_speed_ms: 7.29
+    weibull_a: 8.199
+    weibull_k: 2.665
+    shear_exponent: 0.14
+    data_years: "2020-2024"
+    data_source: "ECMWF_ERA5_2020_2024_DUTCHBAY"
+
+  # Normalized GIS -> EPC wind interface (#22). Stable handoff contract validated
+  # by analytics.wind.wind_interface_schema; consumed by cashflow/metrics.
+  wind:
+    ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
+    ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
+    capacity_factor: 0.339    # Net P50 CF (canonical; matches aep_summary)
+    aep_gwh: 473.8            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    source_id: "IEA_REFERENCE_10MW_198_PC"
+    source_type: "REFERENCE"
+
+  # ARCO single-point ERA5 retrieval (validated by analytics.wind.era5_interface_schema;
+  # consumed by wind_resource.arco_assessment). Co-located so ONE scenario drives both the
+  # finance pipeline and the ERA5 fit. FIXED vintage = reproducible: the frozen 2005-2024
+  # 20-yr window backs the ERA5-FITTED wind_resource.weibull_a/k (8.199/2.665). VALIDATE mode:
+  # the ARCO fit reports drift vs the declared baseline; it never overwrites it.
+  era5:
+    latitude: 8.27            # turbine-array centroid (T1-T15), Kalpitiya, Puttalam
+    longitude: 79.75
+    hub_height_m: 150         # MUST equal turbine.hub_height_m (cross-asserted)
+    reference:
+      mode: fixed             # reproducible (NEVER 'latest' for the lender case)
+      start_year: 2005
+      end_year: 2024          # the 20-yr window backing the declared Weibull
+    strict_coverage: true     # fail (not warn) on a latency-truncated series
+    output_dir: "outputs/era5_cache"
+    weibull_fit:
+      drift_tolerance_pct: 5.0  # warn/flag if |A_fit-A_declared| or |k_fit-k_declared| exceeds this
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
+# ═════════════════════════════════════════════════════════════════════════════
+ppa:
+  # INFORMATIONAL ONLY (not read by code). The model is structurally LKR-primary: the
+  # engine reads the LKR tariff (tariff.lkr_per_kwh below), computes LKR revenue -> LKR
+  # CFADS -> LKR tax, and reports USD only as a post-hoc division by the FX curve. NO
+  # Python reads primary_currency to choose the revenue numeraire. A USD-primary flip
+  # would touch the whole cashflow/debt/tax stack; until then this field MUST be "LKR"
+  # (locked by tests/finance/test_currency_lkr_primary.py). The former ppa.tariff_per_kwh
+  # / tariff_per_mwh were unread duplicates of tariff.lkr_per_kwh (a manual-sync footgun)
+  # and have been removed — the tariff lives ONLY in the `tariff:` block.
+  primary_currency: "LKR"  # informational only; must equal "LKR" (see note above)
+
+  # PPA terms
+  ppa_term_years: 20
+  tariff_type: "fixed"  # vs "indexed" (CPI-linked) or "merchant"
+  indexation_start_year: 2  # Year when CPI indexation begins (if indexed)
+  cpi_annual_pct: 2.0  # Annual CPI escalation (if tariff_type=indexed)
+  
+  # Multi-currency reporting equivalents (REFERENCE ONLY - not used in calculations)
+  # FX at 2026-Q2 pinned vintage: 1 USD = 333.79 LKR (was a stale 300). EUR/CNY cross
+  # rates not refreshed (USD/LKR is the only fetched vintage); recompute when needed.
+  equivalent_tariffs_reference:
+    usd_per_mwh: 60.82  # 20300 ÷ 333.79 (for lender reports)
+    eur_per_mwh: 61.5   # 20300 ÷ 330 (EUR/LKR not refreshed)
+    cny_per_mwh: 487.0  # 20300 ÷ 41.7 (CNY/LKR not refreshed)
+  
+  # Off-taker details
+  offtaker: "Ceylon Electricity Board (CEB)"
+  offtaker_credit_rating: "B+ (S&P)"
+  payment_terms_days: 30
+  
+  # Revenue guarantee (optional)
+  revenue_guarantee:
+    enabled: false
+    guarantee_pct: 0.75  # % of P50 AEP guaranteed
+    penalty_rate_same_currency: 5.0  # Penalty in same currency as tariff
+
+# Legacy tariff field (for backward compatibility with old pipeline code)
+tariff:
+  lkr_per_kwh: 20.3
+  tariff_type: fixed
+  ppa_term_years: 20
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FX INTEGRATION (Multi-Currency Debt + LKR Revenue)
+# ═════════════════════════════════════════════════════════════════════════════
+fx:
+  enabled: true
+  mode: "deterministic"  # Base case (vs "monte_carlo")
+  base_currency: "USD"
+  quote_currency: "LKR"
+
+  # FX rates (2026-Q2 pinned vintage; USD/LKR refreshed from 300 -> 333.79)
+  rates:
+    lkr_per_usd: 333.79
+    lkr_per_eur: 330.0    # EUR/LKR not refreshed (USD/LKR is the fetched vintage)
+    lkr_per_cny: 41.7     # CNY/LKR not refreshed
+    usd_per_eur: 1.10
+
+  # Config-driven FX source (analytics.fx.fx_fetch). FIXED vintage = reproducible:
+  # CI/lender runs read the pinned rate, ZERO network. VALIDATE mode reports drift vs
+  # the live provider but never mutates the pinned rate (re-baseline is a dated edit).
+  # CBSL daily indicative is the authoritative reference (documented, never fetched).
+  source:
+    mode: "fixed"                  # fixed (reproducible/lender) | latest (exploratory)
+    provider: "open_er_api"
+    endpoint: "https://open.er-api.com/v6/latest/USD"
+    reference_url: "https://www.cbsl.gov.lk/en/rates-and-indicators/exchange-rates/daily-indicative-usd-spot-exchange-rates"
+    pinned_rate: 333.79            # 2026-Q2; MUST equal start_lkr_per_usd (cross-asserted)
+    pinned_as_of: "2026-06-20T00:02:31Z"
+    drift_tolerance_pct: 5.0
+
+  # FX curve parameters
+  start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
+  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
+  
+  # FX exposure analysis
+  exposure_summary:
+    usd_debt_principal: 82500000  # USD DFI + Commercial
+    lkr_revenue_pct: 100.0  # All revenue in LKR
+    fx_mismatch: "Material - requires hedging or sculpted debt service"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CAPEX & OPEX
+# ═════════════════════════════════════════════════════════════════════════════
+capex:
+  cost_basis_year: 2026  # USD vintage of the cost stack
+  estimate_class: 3  # AACE Class 3 (budget authorization)
+  # CAPEX CASE: EIA prudent $1420/kW. Derived from the canonical lender case
+  # (15 x IEA-10MW, 159.6 MW; resource/debt/tariff IDENTICAL) — ONLY the capex level
+  # differs, to isolate capex sensitivity vs the canonical $1,000/kW base.
+  # Source: Envision Dutch Bay Final EIA (Sep-2025) Annexure III-M financial capex $212.97M/$1,420kW for
+  # the 150MW project; BESS excluded (the EIA capex excludes it). See ~/Downloads/EIA_DutchBay_KEY_FACTS.md.
+  # The engine reads usd_total; the breakdown is the canonical NREL/LandBOSSE WBS
+  # proportionally rescaled (sums to usd_total; derive_from_breakdown off).
+  usd_total: 226632000  # = $1420/kW x 159.6 MW
+  capex_per_kw_usd: 1420
+  breakdown:
+    wtg_supply_usd: 156376080
+    foundation_usd: 10878336
+    erection_usd: 7252224
+    collection_system_usd: 7252224
+    site_preparation_usd: 4351334
+    site_development_usd: 2900890
+    project_management_usd: 3626112
+    grid_connection_usd: 10878336
+    substation_usd: 7252224
+    development_owners_usd: 7932120
+    financing_fees_usd: 4532640
+    contingency_usd: 3399480
+
+opex:
+  usd_per_year: 3000000  # Fixed O&M contract
+  opex_per_kw_yr_usd: 20.0  # 3M / 150MW
+  
+  breakdown:
+    om_contract_usd: 2000000  # Full-service O&M
+    insurance_usd: 500000  # Property + BI
+    land_lease_usd: 300000  # 15 turbine sites
+    admin_usd: 200000  # SPV overhead
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TAX & STATUTORY
+# ═════════════════════════════════════════════════════════════════════════════
+tax:
+  # Single source of truth for tax inputs (CESSPIT). Current SL regime (post-2025):
+  # CIT 30%, no renewable holiday for new IPPs, TLCF 6yr, split straight-line
+  # depreciation (plant&machinery 5yr / civils 20yr), interest WHT 10%.
+  corporate_tax_rate: 0.30
+  tax_holiday_route: none
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 5  # placeholder; the split fields below drive the calc
+  depreciation_start_year: 1
+  plant_capex_share: 0.80
+  plant_depreciation_years: 5  # SL Fourth Sched Class 2 (plant & machinery)
+  civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
+  enhanced_capital_allowance_pct: 1.5
+  enhanced_allowance_applies: false
+  loss_carryforward_years: 6
+  wht_on_interest_to_nonresidents: 0.1
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+  interest_deductibility: true
+
+statutory:
+  success_fee_pct: 0.01  # PUCSL approval fee
+  env_surcharge_pct: 0.005  # Environmental levy
+  social_services_levy_pct: 0.025  # SSL on revenue
+
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MULTI-CURRENCY DEBT STRUCTURE
+# ═════════════════════════════════════════════════════════════════════════════
+Financing_Terms:
+  debt_ratio: 0.7                  # MAX gearing cap; actual gearing auto-solved to target_dscr
+  debt_sizing: dual_dscr           # auto-size debt on the real schedule to target_dscr (capped at debt_ratio); robust to AEP (#180)
+  dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
+  # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
+  # maturity. balloon_treatment governs how the equity waterfall resolves it
+  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
+  # the prudent-lender default: post-maturity CFADS is trapped to retire the
+  # balloon before any equity distribution. NB: this structure carries a ~36%
+  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  balloon_treatment: cash_sweep
+  tenor_years: 15
+  interest_only_years: 2
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  
+  # ── Multi-currency debt structure (CANONICAL) ───────────────────────────
+  # The engine (finance/debt_v14._solve_mix) sizes total debt via dual_dscr,
+  # then splits it by these mix PROPORTIONS at the per-currency rates below.
+  # Proportions (not absolute principals) are required because the debt amount
+  # is AUTO-SIZED, not fixed. The realised per-tranche principal + IDC are
+  # reported in debt_result.principal_by_tranche / idc_by_tranche.
+  # NB: a `debt_tranches:` list (absolute principals/per-tranche tenors) is NOT
+  # an engine input — plan_debt warns if one is present. Edit mix + rates here.
+  mix:
+    lkr_max: 0.45              # LKR_Local share (45%)
+    dfi_max: 0.1               # USD_DFI concessional share (10%)
+    usd_commercial_min: 0.45   # USD_Commercial share (45%)
+  rates:
+    lkr_nominal: 0.08          # LKR_Local rate (8.0%)
+    lkr_min: 0.08
+    dfi_nominal: 0.065         # USD_DFI rate (6.5%)
+    dfi_min: 0.065
+    usd_nominal: 0.075         # USD_Commercial rate (7.5%)
+    usd_commercial_min: 0.075
+  
+  # DSCR targets
+  target_dscr: 1.3
+  min_dscr: 1.2
+  
+  # Reserves
+  reserves:
+    dsra_months: 6  # Debt Service Reserve Account
+    receivables_guarantee_months: 9  # CEB payment risk
+  
+  use_revenue_guarantee: false
+  guarantee_revenue_pct: 0.0075
+  
+  fees:
+    upfront_pct: 0.01
+    commitment_pct: 0.01
+  
+  enforce_hard_covenants: false
+
+# ═════════════════════════════════════════════════════════════════════════════
+# LENDER COVENANTS & METRICS
+# ═════════════════════════════════════════════════════════════════════════════
+metrics:
+  llcr_min_covenant: 1.2  # Loan Life Coverage Ratio
+  llcr_warn_threshold: 1.25
+  llcr_discount_rate: 0.1
+  plcr_min_covenant: 1.4  # Project Life Coverage Ratio
+  plcr_target: 1.6
+  plcr_discount_rate: 0.1
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.12
+
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.3
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  refinancing:
+    enabled: true
+    max_refinance_pct: 0.1
+    refinance_rate_premium: 0.02
+    refinance_tenor_years: 3
+    requires_documentation: true
+  max_tenor_years: 20
+  warn_tenor_years: 18
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: DFI
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MONTE CARLO & SENSITIVITY
+# ═════════════════════════════════════════════════════════════════════════════
+monte_carlo:
+  enabled: true
+  n_scenarios: 100000
+  sampling_method: lhs  # Latin Hypercube Sampling
+  seed: 42
+  
+  # Wind resource uncertainty (dominant risk driver)
+  weibull_uncertainty_pct: 10.0  # ±10% on A and k
+  wake_loss_std_pct: 2.0
+  availability_std_pct: 1.0
+  electrical_loss_std_pct: 0.5
+  
+  # Legacy scenario parameters (toy model - TO BE DEPRECATED)
+  discount_rate_pct: 8.0
+  capex_total_usd: 150000000
+  revenue_mean_usd: 50000000
+  revenue_std_pct: 10
+  cost_mean_usd: 3000000
+  cost_std_pct: 8
+  fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
+  fx_std_pct: 3
+  project_life_years: 20
+  
+  # Distribution parameters (for pipeline-backed MC).
+  # Canonical engine contract (analytics.mc.engine): an explicit LIST of
+  # {name, low, high, distribution} where `name` is a dotted config path the
+  # pipeline understands. Bounds are the uniform LHS support, derived as
+  # base * (1 +/- 2 * relative_std) from the per-driver spreads documented inline
+  # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
+  # no implicit name->path mapping. ARCH-01: all values from config.
+  parameters:
+    - name: project.capacity_factor   # base 0.307, rel_std 0.05 -> +/-10%
+      low: 0.2763
+      high: 0.3377
+      distribution: uniform
+    - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
+      low: 16.24
+      high: 24.36
+      distribution: uniform
+    - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%
+      low: 2100000.0
+      high: 3900000.0
+      distribution: uniform
+    - name: capex.usd_total           # base 150e6, rel_std 0.08 -> +/-16%
+      low: 126000000.0
+      high: 174000000.0
+      distribution: uniform
+    - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
+      low: 300.0
+      high: 367.0
+      distribution: uniform
+    - name: project.curtailment_pct   # INCREMENTAL grid curtailment over the ~2% embedded
+      low: 0.0                         # in CF; 0-13% incremental = 2-15% total grid curtailment.
+      high: 0.13                       # Deliberately downside-weighted: the flat 2% is an
+      distribution: uniform            # unvalidated optimistic placeholder for a constrained grid.
+  
+  # Output configuration
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles: [10, 25, 50, 75, 90]
+  min_dscr_covenant: 1.2
+  min_llcr_covenant: 1.25
+  output_path: "outputs/mc_aep_dutchbay_100k.parquet"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PIPELINE CONFIGURATION
+# ═════════════════════════════════════════════════════════════════════════════
+pipeline:
+  output_dir: "outputs/dutchbay_lendercase_2025Q4"
+  seed: 42
+  export_scenarios: true
+  export_provenance: true
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 2
+  ops_years: 20
+  lifetime_years: 22
+
+# ═════════════════════════════════════════════════════════════════════════════
+# EXPECTED RESULTS (For Pipeline Validation)
+# ═════════════════════════════════════════════════════════════════════════════
+expected_results:
+  # Wind resource assessment — 15 x IEA Reference 10MW (198m) via
+  # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
+  # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
+  # (IEC 61400-15-2 = the Energy Yield Assessment loss/uncertainty part, still DRAFT
+  #  as of 2025 — NOT the published -15-1:2025, which is the separate site-suitability
+  #  part. Knobs to vary it: resource.uncertainty.p50_haircut_pct / .correlation.)
+  # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
+  net_aep_p50_gwh: 473.8  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
+  net_aep_p90_gwh: 412.7  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
+  capacity_factor: 0.339
+
+  # Revenue (LKR-basis calculations, EUR-equivalent for reference)
+  annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
+  annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
+  revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e) + CPI
+  
+  # Financial metrics — BINDING targets asserted against the live pipeline by
+  # tests/integration/test_capex_cases_smoke.py (CESSPIT pre-flight integrity), so they
+  # cannot silently drift. This case differs from the canonical lender ONLY in capex
+  # ($1,420/kW vs $1,000/kW); resource / tariff / debt are identical. Higher capex forces
+  # the dual-DSCR gearing down to 0.440 (the covenant binds harder), so equity thins and
+  # the deal is DEEPLY value-destructive — the flat-nominal-LKR tariff compounds it.
+  project_irr: 0.0180        # vs canonical 0.0505 — deeply BELOW WACC (~8.1%)
+  equity_irr: -0.0395        # vs canonical -0.0082 — sharply NEGATIVE (loss)
+  project_npv_m_usd: -106.63 # vs canonical -35.51
+  min_dscr: 1.30             # dual-DSCR sculpt pins min at the covenant target
+  avg_dscr: 1.39
+  llcr: 1.18
+  plcr: 1.24
+
+# ═════════════════════════════════════════════════════════════════════════════
+# METADATA
+# ═════════════════════════════════════════════════════════════════════════════
+metadata:
+  version: '3.0'
+  last_updated: '2025-12-23'
+  author: DutchBay V14 Financial Modeling Team
+  review_status: Draft - Pending Board Approval
+  assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
+  sprint: 'Sprint 17 - Multi-Currency PPA + Wind Resource Integration'
+  gwtf_compliance: 'All 51 rules audited + wind energy calculator integration'
+  
+  changes:
+    - 'v3.0: Added multi-currency PPA structure (LKR/USD/EUR/CNY)'
+    - 'v3.0: Integrated wind resource parameters (Weibull, air density, ERA5)'
+    - 'v3.0: Added turbine technical specs for energy calculator'
+    - 'v3.0: Added layout parameters for wake loss validation'
+    - 'v3.0: Unified losses structure across resource + statutory'
+    - 'v3.0: Added expected_results for end-to-end validation'
+    - 'v2.7: Enabled FX integration for multi-currency debt'
+    - 'v2.7: Added debt_tranches structure'
+    - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input); mix + rates are canonical (plan_debt warns if re-added)'
+
+
+wacc:
+  # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
+  #   after-tax WACC = (1-g)*ke + g*(blended kd + fees)*(1-tax)
+  # using the ACTUAL sized gearing (~62.5%) and blended rate (~7.63%) from the debt
+  # engine (Financing_Terms.mix+rates). drives_discount_rate routes the WACC to the
+  # project-NPV discount and cost_of_equity to the equity-NPV discount.
+  mode: build_up
+  drives_discount_rate: true
+  cost_of_equity: 0.12   # USD house base (~ US rf 4.5% + Sri Lanka country risk 3.5% + equity 4.0%).
+                         # Post-default Sri Lanka ke is contested — project NPV is on a knife-edge
+                         # vs project IRR 8.35%; see the ke-band (12–20%) sensitivity.
+  prudential_spread_bps: 100
+  description: "Build-up WACC drives the discount rate (replaces a decorative fixed 12%)."
