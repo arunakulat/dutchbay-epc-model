@@ -247,6 +247,20 @@ def _prepare_cashflow_context(
                 project_life=years,
                 start_year=tax_config.depreciation_start_year,
             )
+        # Guard the newly-wired depreciation_start_year: if start_year pushes the useful-life
+        # window past project_life the tail years are silently forfeited. Warn so the
+        # truncated capital allowance is visible (dormant at the canonical start_year=1).
+        _scheduled = sum(depreciation_schedule.annual_amounts)
+        if capex_for_depreciation > 0.0 and _scheduled < capex_for_depreciation - 1.0:
+            logger.warning(
+                "Depreciation recovers only %.0f of %.0f capex base: "
+                "depreciation_start_year=%d plus the useful life overruns project_life=%d, "
+                "forfeiting the tail-year allowance.",
+                _scheduled,
+                capex_for_depreciation,
+                tax_config.depreciation_start_year,
+                years,
+            )
     else:
         # No depreciation: all-zero schedule
         depreciation_schedule = DepreciationSchedule.build_straight_line(

@@ -525,3 +525,37 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
     assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
     # start_year=1 default is byte-identical to the canonical baseline
     assert base["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)
+
+
+def test_depreciation_start_year_overrun_warns_about_forfeited_tail(
+    caplog: "pytest.LogCaptureFixture",
+) -> None:
+    """A start_year that pushes the useful-life window past project_life forfeits the tail
+    allowance; the engine must WARN (Wave-1 re-audit hardening of the newly-wired field)."""
+    from pathlib import Path
+
+    from analytics.scenario_loader import load_scenario_config
+    from finance.cashflow_v14 import build_annual_rows
+
+    lender = Path(__file__).resolve().parents[2] / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    cfg = load_scenario_config(str(lender))
+    cfg["tax"]["depreciation_start_year"] = 18  # life 20 -> window 18..(18+life-1) overruns
+    with caplog.at_level("WARNING", logger="finance.cashflow_v14"):
+        build_annual_rows(cfg)
+    assert any("forfeiting the tail-year allowance" in r.message for r in caplog.records)
+
+
+def test_depreciation_start_year_one_does_not_warn(
+    caplog: "pytest.LogCaptureFixture",
+) -> None:
+    """The canonical start_year=1 fully amortizes within life -> no forfeit warning."""
+    from pathlib import Path
+
+    from analytics.scenario_loader import load_scenario_config
+    from finance.cashflow_v14 import build_annual_rows
+
+    lender = Path(__file__).resolve().parents[2] / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    cfg = load_scenario_config(str(lender))
+    with caplog.at_level("WARNING", logger="finance.cashflow_v14"):
+        build_annual_rows(cfg)
+    assert not any("forfeiting the tail-year allowance" in r.message for r in caplog.records)
