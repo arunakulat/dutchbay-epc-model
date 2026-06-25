@@ -13,6 +13,8 @@ import pytest
 from fastapi import HTTPException
 
 import app.api.main as api_main
+from analytics.aep_provenance import AepProvenanceError
+from analytics.aep_reconciliation import AepReconciliationError
 from analytics.schema_guard import ConfigValidationError
 from app.api.main import (
     app,
@@ -84,6 +86,31 @@ def test_run_case_maps_engine_validation_error_to_400(
         raise ConfigValidationError("missing required field xyz")
 
     # The endpoint catches ConfigValidationError -> HTTP 400 (fail-loud, graceful).
+    monkeypatch.setattr(api_main, "run_finance_case", _boom)
+    with pytest.raises(HTTPException) as exc:
+        run_case(WindFarmInputs(**_valid_kwargs()))
+    assert exc.value.status_code == 400
+    assert "Invalid scenario" in str(exc.value.detail)
+
+
+@pytest.mark.parametrize(
+    "error_factory",
+    [
+        lambda: AepReconciliationError("capacity*CF diverges from bankable AEP by >2%"),
+        lambda: AepProvenanceError("power-curve source not in APPROVED_SOURCES"),
+    ],
+)
+def test_run_case_maps_engine_integrity_errors_to_400(
+    monkeypatch: pytest.MonkeyPatch, error_factory: Any
+) -> None:
+    """A wizard capacity/CF edit beyond the AEP-reconciliation tolerance (or an
+    unapproved provenance) raises AepReconciliationError / AepProvenanceError inside
+    run_finance_case. These subclass ValueError but NOT ConfigValidationError, so before
+    the fix they propagated uncaught -> HTTP 500; now they map to a graceful 400."""
+
+    def _boom(*_a: Any, **_k: Any) -> Dict[str, Any]:
+        raise error_factory()
+
     monkeypatch.setattr(api_main, "run_finance_case", _boom)
     with pytest.raises(HTTPException) as exc:
         run_case(WindFarmInputs(**_valid_kwargs()))

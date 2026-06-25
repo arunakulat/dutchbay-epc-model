@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response
 
+from analytics.aep_provenance import AepProvenanceError
+from analytics.aep_reconciliation import AepReconciliationError
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
 from api.sensitivity_api import app as sensitivity_app
@@ -70,7 +72,14 @@ def run_case(inputs: WindFarmInputs) -> CaseResult:
     try:
         scenario = inputs.to_scenario_config()
         result = run_finance_case(scenario)
-    except ConfigValidationError as exc:
+    except (
+        ConfigValidationError,
+        AepReconciliationError,
+        AepProvenanceError,
+    ) as exc:
+        # All three are engine integrity rejections (the AEP guards subclass ValueError
+        # but NOT ConfigValidationError): a wizard capacity/CF edit beyond the AEP
+        # reconciliation tolerance must surface as a graceful 400, not an uncaught 500.
         raise HTTPException(status_code=400, detail=f"Invalid scenario: {exc}") from exc
     return CaseResult.from_pipeline_result(
         result, scenario_variant=inputs.scenario_variant
@@ -87,7 +96,11 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
     try:
         scenario = inputs.to_scenario_config()
         result = run_finance_case(scenario)
-    except ConfigValidationError as exc:
+    except (
+        ConfigValidationError,
+        AepReconciliationError,
+        AepProvenanceError,
+    ) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid scenario: {exc}") from exc
     case_result = CaseResult.from_pipeline_result(
         result, scenario_variant=inputs.scenario_variant
