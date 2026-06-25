@@ -64,40 +64,14 @@ BASE_PROJECT_NPV = -3.19e7
 # ---------------------------------------------------------------------------
 
 
-def test_dscr_solver_non_convergence_warns_and_returns_last_midpoint(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """A zero tolerance with a finite iteration cap exhausts the loop.
-
-    The bracket-width convergence check ``(high - low) < tolerance`` can never
-    fire for tolerance=0, so the solver runs all iterations and falls through to
-    the warning branch, returning the last evaluated midpoint inside the bracket.
-    """
-    low, high = 1.0e6, 1.0e9
-    with caplog.at_level(logging.WARNING, logger="analytics.core.parameter_solvers"):
-        debt = solve_for_max_debt_given_dscr(
-            LENDER_CONFIG,
-            None,
-            target_dscr=1.10,  # loose: DSCR 1.30 > target every step -> low = mid
-            bounds=(low, high),
-            tolerance=0.0,
-            max_iterations=3,
-        )
-    assert low <= debt <= high
-    assert "did not fully converge" in caplog.text
-    # Loose covenant pushes low upward each step; the last midpoint stays interior.
-    assert debt > low
-
-
-def test_dscr_solver_zero_iterations_raises_no_midpoint() -> None:
-    """max_iterations=0 means last_good_mid is never set -> hard ValueError."""
-    with pytest.raises(ValueError, match="failed to converge"):
+def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
+    """The single-covenant max-debt solver sweeps an absolute debt amount the v14 engine
+    never reads (debt is auto-sized via dual_dscr), so the entry self-check fails loud rather
+    than running the (now guarded-unreachable) bisection — its old non-convergence / zero-
+    iteration branches can no longer be reached on a real scenario (Wave-2 fix)."""
+    with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_given_dscr(
-            LENDER_CONFIG,
-            None,
-            target_dscr=1.10,
-            bounds=(1.0e6, 1.0e9),
-            max_iterations=0,
+            LENDER_CONFIG, None, target_dscr=1.10, bounds=(1.0e6, 1.0e9), tolerance=0.0,
         )
 
 
@@ -145,42 +119,14 @@ def test_npv_solver_zero_iterations_raises_no_midpoint() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_multi_covenant_non_convergence_warns_and_returns_last_midpoint(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Zero tolerance + finite cap exhausts the loop on the warning branch.
-
-    Both covenants are genuinely satisfied here (DSCR 1.30 >= 1.10, LLCR 1.13 >=
-    1.00), so ``both_satisfied`` is True and ``low = mid`` every step; with
-    tolerance=0 the bracket never narrows enough to early-return, so the solver
-    warns and returns the last midpoint.
-    """
-    low, high = 1.0e6, 1.0e9
-    with caplog.at_level(logging.WARNING, logger="analytics.core.parameter_solvers"):
-        debt = solve_for_max_debt_multi_covenant(
-            LENDER_CONFIG,
-            None,
-            target_dscr=1.10,
-            target_llcr=1.00,
-            bounds=(low, high),
-            tolerance=0.0,
-            max_iterations=3,
-        )
-    assert low <= debt <= high
-    assert "did not fully converge" in caplog.text
-    assert debt > low
-
-
-def test_multi_covenant_zero_iterations_raises_no_midpoint() -> None:
-    """max_iterations=0 -> last_good_mid stays None -> hard ValueError."""
-    with pytest.raises(ValueError, match="failed to converge"):
+def test_multi_covenant_fails_loud_under_dual_dscr_sizing() -> None:
+    """Same as the single-covenant solver: the absolute debt-amount sweep is not a live
+    engine input under dual_dscr sizing, so the entry self-check fails loud (the old
+    non-convergence / zero-iteration bisection branches are now guarded-unreachable)."""
+    with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_multi_covenant(
-            LENDER_CONFIG,
-            None,
-            target_dscr=1.10,
-            target_llcr=1.00,
-            bounds=(1.0e6, 1.0e9),
-            max_iterations=0,
+            LENDER_CONFIG, None, target_dscr=1.10, target_llcr=1.00,
+            bounds=(1.0e6, 1.0e9), tolerance=0.0,
         )
 
 

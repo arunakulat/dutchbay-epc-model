@@ -14,10 +14,24 @@ Architecture / Go-with-the-Flow rules
   clear logging for non-convergence.
 - Supports both bisection (robust) and gradient-based (fast) methods.
 
+Override paths drive the LIVE engine inputs
+-------------------------------------------
+Each solver perturbs the real nested config keys the v14 engine reads
+(``tariff.lkr_per_kwh``, ``capex.usd_total``) — NOT the flat ``financial.*`` /
+``project.capex_usd`` keys, which are not in the schema and never reached the engine
+(Wave-2 fix). Every solver runs :func:`_assert_override_is_live` first: if the override
+does not actually move the targeted KPI it raises rather than bisecting to a meaningless
+bound. The max-debt solvers therefore fail loud on the default ``dual_dscr`` sizing —
+the engine sizes debt to the covenant itself, so "max debt given DSCR" is its solved
+gearing, not a sweepable absolute debt amount.
+
 Frozen surfaces used
 --------------------
 - analytics.evaluate_scenario.evaluate_with_overrides
-- analytics.contracts_v14.DerivedParameter (via monte_carlo_v14)
+
+Status: standalone solver utility. It is NOT wired into a live caller yet (the historical
+"via monte_carlo_v14" claim was false — that module never imported these solvers); exposing
+it through a CLI / the sensitivity runner is a follow-up.
 
 Sprint 16 P3-2 Enhancements (12h)
 ----------------------------------
@@ -53,6 +67,43 @@ def _clone_overrides(base_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]
     drive that change explicitly.
     """
     return dict(base_overrides) if base_overrides else {}
+
+
+def _assert_override_is_live(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]],
+    apply: Callable[[Dict[str, Any], float], None],
+    probes: Tuple[float, float],
+    kpi_key: str,
+    *,
+    lever: str,
+) -> None:
+    """Fail loud if the solver's override does not actually move the targeted KPI.
+
+    A solver that bisects on an override the engine never reads silently converges to a
+    bound and reports a meaningless answer (the Wave-2 finding: tariff/capex/debt solvers
+    wrote dead paths). Before solving, evaluate the base config at two probe values; if
+    ``kpi_key`` is unchanged the override is a DEAD lever for this scenario — a wrong key,
+    or one the engine auto-overrides (e.g. debt amount/ratio under dual_dscr sizing). Raise
+    rather than return a fake bound.
+    """
+    lo_over = _clone_overrides(base_overrides)
+    apply(lo_over, float(probes[0]))
+    hi_over = _clone_overrides(base_overrides)
+    apply(hi_over, float(probes[1]))
+    lo = float(
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=lo_over)[kpi_key]
+    )
+    hi = float(
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=hi_over)[kpi_key]
+    )
+    if abs(hi - lo) < 1e-9:
+        raise ValueError(
+            f"Solver lever {lever!r} does not move {kpi_key} for this scenario "
+            f"({kpi_key}={lo:.6g} at both probe values {probes}). The override is not a "
+            f"live engine input here (wrong key, or auto-sized by the engine — e.g. debt "
+            f"under dual_dscr) — refusing to return a meaningless solver bound."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -117,11 +168,19 @@ def solve_for_tariff_given_irr(
 
     low, high = float(bounds[0]), float(bounds[1])
 
+    def _apply_tariff(overrides: Dict[str, Any], tariff: float) -> None:
+        # LIVE engine path is tariff.lkr_per_kwh (NOT the dead financial.tariff_lkr_per_kwh).
+        overrides.setdefault("tariff", {})["lkr_per_kwh"] = float(tariff)
+
+    _assert_override_is_live(
+        base_config_path, base_overrides, _apply_tariff, (low, high),
+        "project_irr", lever="tariff.lkr_per_kwh",
+    )
+
     def _evaluate_at(tariff: float) -> float:
         """Return IRR - target_irr at a given tariff."""
         overrides = _clone_overrides(base_overrides)
-        financial = overrides.setdefault("financial", {})
-        financial["tariff_lkr_per_kwh"] = float(tariff)
+        _apply_tariff(overrides, tariff)
 
         kpis = evaluate_with_overrides(
             base_config_path=base_config_path,
@@ -244,11 +303,23 @@ def solve_for_max_debt_given_dscr(
     """
     low, high = float(bounds[0]), float(bounds[1])
 
+    def _apply_debt(overrides: Dict[str, Any], debt_amount: float) -> None:
+        overrides.setdefault("financial", {})["debt_amount_usd"] = float(debt_amount)
+
+    # The v14 engine SIZES debt itself (Financing_Terms.debt_sizing: dual_dscr auto-solves
+    # gearing to target DSCR); there is no absolute debt-amount input. So sweeping
+    # debt_amount_usd does not move dscr_min and the self-check fails loud — "max debt given
+    # DSCR" IS the engine's solved gearing, not a solver sweep. (Kept fail-loud rather than
+    # returning a silent bound; see the Wave-2 audit finding.)
+    _assert_override_is_live(
+        base_config_path, base_overrides, _apply_debt, (low, high),
+        "dscr_min", lever="financial.debt_amount_usd",
+    )
+
     def _evaluate_at(debt_amount: float) -> float:
         """Return DSCR_min for a given debt amount."""
         overrides = _clone_overrides(base_overrides)
-        financial = overrides.setdefault("financial", {})
-        financial["debt_amount_usd"] = float(debt_amount)
+        _apply_debt(overrides, debt_amount)
 
         kpis = evaluate_with_overrides(
             base_config_path=base_config_path,
@@ -377,11 +448,19 @@ def solve_for_tariff_given_npv(
 
     low, high = float(bounds[0]), float(bounds[1])
 
+    def _apply_tariff(overrides: Dict[str, Any], tariff: float) -> None:
+        # LIVE engine path is tariff.lkr_per_kwh (NOT the dead financial.tariff_lkr_per_kwh).
+        overrides.setdefault("tariff", {})["lkr_per_kwh"] = float(tariff)
+
+    _assert_override_is_live(
+        base_config_path, base_overrides, _apply_tariff, (low, high),
+        metric, lever="tariff.lkr_per_kwh",
+    )
+
     def _evaluate_at(tariff: float) -> float:
         """Return NPV - target_npv at a given tariff."""
         overrides = _clone_overrides(base_overrides)
-        financial = overrides.setdefault("financial", {})
-        financial["tariff_lkr_per_kwh"] = float(tariff)
+        _apply_tariff(overrides, tariff)
 
         kpis = evaluate_with_overrides(
             base_config_path=base_config_path,
@@ -506,11 +585,20 @@ def solve_for_max_debt_multi_covenant(
     """
     low, high = float(bounds[0]), float(bounds[1])
 
+    def _apply_debt(overrides: Dict[str, Any], debt_amount: float) -> None:
+        overrides.setdefault("financial", {})["debt_amount_usd"] = float(debt_amount)
+
+    # As with solve_for_max_debt_given_dscr: debt is engine-sized (dual_dscr), so an absolute
+    # debt-amount sweep does not move the covenants — fail loud instead of returning a bound.
+    _assert_override_is_live(
+        base_config_path, base_overrides, _apply_debt, (low, high),
+        "dscr_min", lever="financial.debt_amount_usd",
+    )
+
     def _evaluate_at(debt_amount: float) -> Tuple[float, float]:
         """Return (DSCR_min, LLCR_min) for a given debt amount."""
         overrides = _clone_overrides(base_overrides)
-        financial = overrides.setdefault("financial", {})
-        financial["debt_amount_usd"] = float(debt_amount)
+        _apply_debt(overrides, debt_amount)
 
         kpis = evaluate_with_overrides(
             base_config_path=base_config_path,
@@ -607,11 +695,15 @@ def solve_for_min_capex_given_irr_floor(
     **_kwargs: Any,
 ) -> float:
     """
-    Find minimum capex that still achieves a floor project IRR.
+    Find the MAXIMUM capex at which the project IRR still meets a floor (the
+    affordable-capex ceiling / breakeven).
 
-    Useful for cost optimization scenarios where you want to minimize
-    capital expenditure while maintaining minimum return requirements.
-    Lower capex = fewer assets, but still meeting IRR target.
+    In this engine ``capex.usd_total`` is pure cost — revenue is driven by
+    ``capacity_factor x capacity_mw``, independent of it — so project IRR DECREASES
+    as capex rises. The feasible set is therefore ``capex <= breakeven`` and the
+    useful answer is the largest capex budget that still clears ``irr_floor`` (used
+    for "how much can we spend and still hit X% IRR"). The historical "minimize
+    capex" framing assumed capex scaled revenue, which it does not here.
 
     Example:
         >>> min_capex = solve_for_min_capex_given_irr_floor(
@@ -645,11 +737,19 @@ def solve_for_min_capex_given_irr_floor(
     """
     low, high = float(bounds[0]), float(bounds[1])
 
+    def _apply_capex(overrides: Dict[str, Any], capex: float) -> None:
+        # LIVE engine path is capex.usd_total (NOT the dead project.capex_usd).
+        overrides.setdefault("capex", {})["usd_total"] = float(capex)
+
+    _assert_override_is_live(
+        base_config_path, base_overrides, _apply_capex, (low, high),
+        "project_irr", lever="capex.usd_total",
+    )
+
     def _evaluate_at(capex: float) -> float:
         """Return project IRR for a given capex."""
         overrides = _clone_overrides(base_overrides)
-        project = overrides.setdefault("project", {})
-        project["capex_usd"] = float(capex)
+        _apply_capex(overrides, capex)
 
         kpis = evaluate_with_overrides(
             base_config_path=base_config_path,
@@ -673,12 +773,16 @@ def solve_for_min_capex_given_irr_floor(
             low = mid
             continue
 
-        # If IRR >= floor, we can try lower capex
+        # project IRR DECREASES as capex rises (capex.usd_total is pure cost; revenue is
+        # driven by capacity_factor x capacity_mw, independent of it). So the feasible region
+        # is capex <= the breakeven where IRR == floor, and the useful answer is the MAXIMUM
+        # capex still meeting the floor (the affordable-capex ceiling). Bisect toward it:
         if achieved_irr >= irr_floor:
-            high = mid
-        else:
-            # IRR < floor, need higher capex (more assets/revenue)
+            # clears the floor -> capex can rise toward the breakeven
             low = mid
+        else:
+            # IRR below floor -> capex is too high, reduce it
+            high = mid
 
         last_good_mid = mid
 

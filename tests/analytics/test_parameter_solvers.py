@@ -45,6 +45,7 @@ from analytics.core.parameter_solvers import (
     solve_for_tariff_given_irr,
     solve_for_tariff_given_npv,
 )
+from analytics.evaluate_scenario import evaluate_with_overrides
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -70,14 +71,33 @@ def test_irr_solver_target_below_achieved_lands_on_low_bound() -> None:
     assert tariff == pytest.approx(low, abs=1e-6)
 
 
-def test_irr_solver_target_above_achieved_lands_on_high_bound() -> None:
-    """Target IRR > achieved => delta < 0 every step => bracket collapses to high."""
+def test_irr_solver_target_above_reachable_range_lands_on_high_bound() -> None:
+    """A target IRR above what even the max tariff achieves collapses to the high bound.
+
+    With the LIVE tariff path, projIRR rises with tariff (~0.137 at 40 -> ~0.298 at 100
+    LKR/kWh). A 0.40 target is unreachable in-range, so the solver pushes to high.
+    """
     low, high = 40.0, 100.0
     tariff = solve_for_tariff_given_irr(
-        LENDER_CONFIG, None, target_irr=0.10, bounds=(low, high)
+        LENDER_CONFIG, None, target_irr=0.40, bounds=(low, high)
     )
-    assert low <= tariff <= high
     assert tariff == pytest.approx(high, abs=1e-6)
+
+
+def test_irr_solver_converges_to_a_real_tariff_for_reachable_target() -> None:
+    """A reachable target is genuinely SOLVED: the achieved projIRR at the returned tariff
+    matches the target (the override now drives the live engine, not a dead path)."""
+    target = 0.20  # within the ~0.137..0.298 reachable band
+    tariff = solve_for_tariff_given_irr(
+        LENDER_CONFIG, None, target_irr=target, bounds=(40.0, 100.0), tolerance=1e-4
+    )
+    assert 40.0 < tariff < 100.0  # interior solution, not a bound
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG, overrides={"tariff": {"lkr_per_kwh": tariff}}
+        )["project_irr"]
+    )
+    assert achieved == pytest.approx(target, abs=2e-3)
 
 
 def test_irr_solver_rejects_non_bisection_method() -> None:
@@ -95,53 +115,20 @@ def test_irr_solver_zero_iterations_raises_no_midpoint() -> None:
         )
 
 
-def test_irr_solver_converges_within_tolerance_when_target_reachable() -> None:
-    """A wide tolerance is met on the first probe; result stays inside bounds."""
-    low, high = 40.0, 100.0
-    tariff = solve_for_tariff_given_irr(
-        LENDER_CONFIG,
-        None,
-        target_irr=BASE_PROJECT_IRR,
-        bounds=(low, high),
-        tolerance=0.05,  # |achieved - target| ~ 0 << tolerance
-    )
-    assert tariff == pytest.approx((low + high) / 2.0, abs=1e-6)
-
-
 # ---------------------------------------------------------------------------
 # DSCR-based max-debt solver
 # ---------------------------------------------------------------------------
 
 
-def test_dscr_solver_loose_covenant_pushes_debt_to_high_bound() -> None:
-    """DSCR (1.30) > target (1.10) every step => can always raise debt => high."""
-    low, high = 1.0e6, 1.0e9
-    debt = solve_for_max_debt_given_dscr(
-        LENDER_CONFIG, None, target_dscr=1.10, bounds=(low, high), tolerance=1000.0
-    )
-    assert low <= debt <= high
-    assert debt == pytest.approx(high, rel=1e-5)
-
-
-def test_dscr_solver_tight_covenant_pushes_debt_to_low_bound() -> None:
-    """DSCR (1.30) < target (1.50) every step => must lower debt => low bound."""
-    low, high = 1.0e6, 1.0e9
-    debt = solve_for_max_debt_given_dscr(
-        LENDER_CONFIG, None, target_dscr=1.50, bounds=(low, high), tolerance=1000.0
-    )
-    assert low <= debt <= high
-    assert debt == pytest.approx(low, rel=1e-3)
-
-
-def test_dscr_solver_respects_tolerance_bracket_width() -> None:
-    """Returned debt is within tolerance of a bracket endpoint."""
-    low, high = 1.0e6, 1.0e9
-    tol = 5_000.0
-    debt = solve_for_max_debt_given_dscr(
-        LENDER_CONFIG, None, target_dscr=1.10, bounds=(low, high), tolerance=tol
-    )
-    # Loose covenant collapses toward high; final midpoint sits within tol of it.
-    assert abs(debt - high) < tol
+def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
+    """The v14 engine sizes debt itself (dual_dscr auto-solves gearing to target DSCR), so
+    there is no absolute debt-amount input: sweeping financial.debt_amount_usd does not move
+    dscr_min. The solver must FAIL LOUD (Wave-2 fix) rather than silently returning a bound —
+    "max debt given DSCR" IS the engine's solved gearing."""
+    with pytest.raises(ValueError, match="does not move dscr_min"):
+        solve_for_max_debt_given_dscr(
+            LENDER_CONFIG, None, target_dscr=1.10, bounds=(1.0e6, 1.0e9), tolerance=1000.0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -149,37 +136,31 @@ def test_dscr_solver_respects_tolerance_bracket_width() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_npv_solver_project_metric_converges_at_midpoint() -> None:
-    """Target == achieved project_npv with a wide tolerance => early convergence.
-
-    The first probe is the bracket midpoint; |achieved - target| < tolerance, so
-    the solver returns the midpoint before reaching the (buggy) non-convergence
-    warning path.
-    """
-    low, high = 40.0, 100.0
+def test_npv_solver_project_metric_converges_to_real_tariff() -> None:
+    """A reachable project_npv target is genuinely solved (live tariff path): the achieved
+    project_npv at the returned tariff matches the target."""
+    target = 200.0e6  # within the reachable ~85M..439M band over 40..100 LKR/kWh
     tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG,
-        None,
-        target_npv=BASE_PROJECT_NPV,
-        metric="project_npv",
-        bounds=(low, high),
-        tolerance=1.0e7,
+        LENDER_CONFIG, None, target_npv=target, metric="project_npv",
+        bounds=(40.0, 100.0), tolerance=1.0e5,
     )
-    assert tariff == pytest.approx((low + high) / 2.0, abs=1e-6)
+    assert 40.0 < tariff < 100.0
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG, overrides={"tariff": {"lkr_per_kwh": tariff}}
+        )["project_npv"]
+    )
+    assert achieved == pytest.approx(target, abs=2.0e6)
 
 
-def test_npv_solver_equity_metric_accepted_and_converges() -> None:
-    """equity_npv is a valid metric; with a wide tolerance it converges cleanly."""
-    low, high = 40.0, 100.0
+def test_npv_solver_equity_metric_is_accepted_and_live() -> None:
+    """equity_npv is a valid metric and the override is live (else the self-check raises);
+    the solver returns a tariff within bounds."""
     tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG,
-        None,
-        target_npv=-3.8e7,  # ~ achieved equity_npv for the lender case
-        metric="equity_npv",
-        bounds=(low, high),
-        tolerance=1.0e7,
+        LENDER_CONFIG, None, target_npv=0.0, metric="equity_npv",
+        bounds=(40.0, 100.0), tolerance=1.0e6,
     )
-    assert tariff == pytest.approx((low + high) / 2.0, abs=1e-6)
+    assert 40.0 <= tariff <= 100.0
 
 
 def test_npv_solver_unreachable_target_should_return_boundary_not_raise() -> None:
@@ -213,45 +194,15 @@ def test_npv_solver_rejects_invalid_metric() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_multi_covenant_unsatisfiable_llcr_collapses_to_floor() -> None:
-    """An LLCR target the project cannot meet drives debt to the lower bound.
-
-    DSCR (1.30) clears its target (1.10), but the engine's llcr (~1.13) cannot
-    meet target_llcr=1.50 at any debt level, so ``both_satisfied`` stays False
-    and the bracket collapses toward the low bound — LLCR is correctly the
-    binding covenant here.
-    """
-    low, high = 1.0e6, 1.0e9
-    debt = solve_for_max_debt_multi_covenant(
-        LENDER_CONFIG,
-        None,
-        target_dscr=1.10,
-        target_llcr=1.50,
-        bounds=(low, high),
-        tolerance=1000.0,
-    )
-    # LLCR (~1.13) < target (1.50) everywhere -> floor.
-    assert debt == pytest.approx(low, rel=1e-3)
-
-
-def test_multi_covenant_satisfiable_llcr_should_not_collapse_to_floor() -> None:
-    """A satisfiable LLCR lets debt rise (regression for the llcr-key fix).
-
-    The engine reports llcr ~= 1.13 and dscr_min == 1.30 for this case. With
-    target_dscr=1.10 and target_llcr=1.00 (both genuinely satisfied), the solver
-    behaves like the DSCR-only solver and pushes debt toward the high bound.
-    """
-    low, high = 1.0e6, 1.0e9
-    debt = solve_for_max_debt_multi_covenant(
-        LENDER_CONFIG,
-        None,
-        target_dscr=1.10,
-        target_llcr=1.00,
-        bounds=(low, high),
-        tolerance=1000.0,
-    )
-    # Would pass only if LLCR were read correctly (1.13 >= 1.00).
-    assert debt > 10.0 * low
+def test_multi_covenant_fails_loud_under_dual_dscr_sizing() -> None:
+    """Like the single-covenant debt solver, the multi-covenant solver sweeps an absolute
+    debt amount the engine never reads (debt is auto-sized via dual_dscr). The self-check
+    fails loud rather than collapsing to a meaningless bound (Wave-2 fix)."""
+    with pytest.raises(ValueError, match="does not move dscr_min"):
+        solve_for_max_debt_multi_covenant(
+            LENDER_CONFIG, None, target_dscr=1.10, target_llcr=1.50,
+            bounds=(1.0e6, 1.0e9), tolerance=1000.0,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -259,24 +210,31 @@ def test_multi_covenant_satisfiable_llcr_should_not_collapse_to_floor() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_min_capex_floor_below_achieved_minimizes_to_low_bound() -> None:
-    """IRR (0.0543) >= floor (0.04) every step => keep lowering capex => low."""
+def test_min_capex_solves_breakeven_capex_at_the_floor() -> None:
+    """Returns the MAX capex at which projIRR still meets the floor (breakeven). With the
+    live capex path + the corrected bisection direction (IRR falls as capex rises), the
+    achieved IRR at the returned capex equals the floor."""
     low, high = 100.0e6, 500.0e6
     capex = solve_for_min_capex_given_irr_floor(
         LENDER_CONFIG, None, irr_floor=0.04, bounds=(low, high), tolerance=10_000.0
     )
-    assert low <= capex <= high
-    assert capex == pytest.approx(low, rel=1e-3)
+    assert low < capex < high  # interior breakeven, not a bound
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG, overrides={"capex": {"usd_total": capex}}
+        )["project_irr"]
+    )
+    assert achieved == pytest.approx(0.04, abs=1e-3)
 
 
-def test_min_capex_floor_above_achieved_pushes_to_high_bound() -> None:
-    """IRR (0.0543) < floor (0.10) every step => need more capex => high bound."""
+def test_min_capex_floor_unreachable_even_at_min_capex_lands_on_low_bound() -> None:
+    """A floor above the IRR achievable even at the minimum capex collapses to the low
+    bound (cheapest project still cannot clear it)."""
     low, high = 100.0e6, 500.0e6
     capex = solve_for_min_capex_given_irr_floor(
-        LENDER_CONFIG, None, irr_floor=0.10, bounds=(low, high), tolerance=10_000.0
+        LENDER_CONFIG, None, irr_floor=0.20, bounds=(low, high), tolerance=10_000.0
     )
-    assert low <= capex <= high
-    assert capex == pytest.approx(high, rel=1e-3)
+    assert capex == pytest.approx(low, rel=1e-3)
 
 
 # ---------------------------------------------------------------------------
