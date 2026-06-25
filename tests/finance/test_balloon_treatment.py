@@ -67,12 +67,12 @@ def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None
 def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """legacy_ignore preserves the (inflated) free-pass equity IRR and never services.
 
-    The free-pass IRR also benefits from the Wave-1 equity-waterfall fix (the DSRA is now
-    released to the sponsor at maturity), lifting it 0.0334 -> 0.0418.
+    The free-pass IRR also benefits from the round-5 #5 interest-tax-shield fix (the levered
+    equity path now bears levered tax), lifting it 0.0355 -> 0.0544.
     """
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(0.0355, abs=0.002)
+    assert kpis["equity_irr"] == pytest.approx(0.0544, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -88,9 +88,9 @@ def test_cash_sweep_clears_balloon_and_lowers_equity_irr(results: dict) -> None:
     assert sum(dr["balloon_resolution"]) == pytest.approx(
         dr["balloon_remaining"], rel=0.02
     )
-    assert sweep < legacy - 0.03  # ~5.8pp lower, honest
-    # Wave-1 equity-waterfall fix releases the DSRA to the sponsor at maturity: -0.0247 -> -0.0082.
-    assert sweep == pytest.approx(-0.0082, abs=0.003)
+    assert sweep < legacy - 0.025  # ~3pp lower than the free pass, honest
+    # round-5 #5 interest-tax-shield re-baseline (levered equity tax): -0.0082 -> +0.0242.
+    assert sweep == pytest.approx(0.0242, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -98,8 +98,8 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     refi = results["refinance"]["kpis"]["equity_irr"]
     assert refi <= sweep
-    # Re-baselined with the equity-waterfall DSRA-release fix (was -0.0436).
-    assert refi == pytest.approx(-0.0210, abs=0.004)
+    # Re-baselined with the round-5 #5 interest-tax-shield fix (was -0.0210).
+    assert refi == pytest.approx(0.0137, abs=0.004)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:

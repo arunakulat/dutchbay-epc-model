@@ -35,11 +35,11 @@ def _run(dsra=None, **fin_overrides):
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
     # Canonical after the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr aging):
-    # projIRR 5.05%, minDSCR 1.30. Wave-1 equity-waterfall fix: the DSRA and any held-back
-    # SPV cash are RELEASED to the sponsor at maturity instead of being destroyed, lifting
-    # equity IRR -2.47% -> -0.82% (still negative to sponsors). project IRR is unchanged.
+    # projIRR 5.05%, minDSCR 1.30. The round-5 interest-tax-shield fix lifts equity IRR
+    # -0.82% -> +2.42% (the levered equity path now bears levered tax). project IRR is
+    # unchanged (the shield is confined to the equity path).
     assert kpis["project_irr"] == pytest.approx(0.0505, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0068, abs=0.001)
+    assert kpis["equity_irr"] == pytest.approx(0.0242, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0

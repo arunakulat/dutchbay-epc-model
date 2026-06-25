@@ -25,10 +25,10 @@ def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
     # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull + the M3e
-    # degradation re-baseline: projIRR 5.05%. The Wave-1 equity-waterfall fix releases the
-    # DSRA to the sponsor at maturity, lifting equity IRR -2.47% -> -0.82%).
+    # degradation re-baseline: projIRR 5.05%). The round-5 interest-tax-shield fix lifts
+    # equity IRR -0.82% -> +2.42% (the levered equity path now bears levered tax).
     assert resp.kpis.project_irr == pytest.approx(0.0505, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(-0.0082, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(0.0242, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 

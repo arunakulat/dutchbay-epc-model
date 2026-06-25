@@ -22,8 +22,10 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
-# Canonical post-Wave-1 KPIs (equity-waterfall + irr fixes already merged).
-_CANON_EQ_IRR = -0.006837694668605732
+# Canonical KPIs after the round-5 #5 interest-tax-shield re-baseline (the levered equity
+# path now bears LEVERED tax; eqIRR -0.006837694668605732 -> +0.024168498307616693). CFADS
+# is the UNLEVERED project series and is unchanged (the shield is confined to equity).
+_CANON_EQ_IRR = 0.024168498307616693
 _CANON_CFADS = 257097035.71124893
 
 
@@ -82,3 +84,21 @@ def test_per_year_wht_equals_interest_times_rate_aligned() -> None:
     for row, d in zip(rows, dist):
         expected = float(row["interest_usd"]) * rate
         assert d["wht_on_interest_usd"] == pytest.approx(expected, abs=1.0)
+
+
+def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
+    """Round-5 #5: tax.interest_deductibility was decorative (toggling it changed nothing
+    because the live pipeline computed CFADS with interest_expense=0). The levered equity
+    path now applies the interest tax shield, so True (default) yields the canonical
+    +0.0242 and False recovers the unlevered -0.006837694668605732. The project IRR / DSCR /
+    CFADS are upstream of the equity waterfall and are byte-identical either way — the shield
+    is confined to the equity path (the project path captures it via the after-tax kd)."""
+    on = evaluate_with_overrides(LENDER, overrides={})  # default True
+    off = evaluate_with_overrides(LENDER, overrides={"tax.interest_deductibility": False})
+    assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
+    assert off["equity_irr"] == pytest.approx(-0.006837694668605732, abs=1e-9)
+    assert on["equity_irr"] > off["equity_irr"] + 0.02  # the shield is material (+310bps)
+    # The shield is confined to the equity path: project KPIs identical both ways.
+    assert on["project_irr"] == pytest.approx(off["project_irr"], abs=1e-12)
+    assert on["min_dscr"] == pytest.approx(off["min_dscr"], abs=1e-12)
+    assert on["total_cfads_usd"] == pytest.approx(off["total_cfads_usd"], rel=1e-12)

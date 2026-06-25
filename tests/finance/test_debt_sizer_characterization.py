@@ -79,14 +79,15 @@ def test_equity_npv_monotonic_in_gearing() -> None:
 
 
 def test_equity_irr_finite_and_falls_with_gearing() -> None:
-    """Equity IRR stays finite, falls monotonically with gearing, and crosses zero.
+    """Equity IRR stays finite and falls monotonically with gearing (negative carry).
 
     Post-M3e degradation re-baseline (0.5%/yr aging), the project IRR (~5.05%) sits
     BELOW the cost of debt (~7.63%), so leverage is value-destructive: each extra
     turn of gearing dilutes equity return (negative carry). The sweep therefore runs
-    strictly downhill and crosses zero — positive to sponsors at low gearing (~3.3%
-    at 0.45), negative at the DSCR-bound high end (~-2.5% at 0.70). This is the honest
-    economics, NOT a sign that more leverage helps (cf. the equity_npv sizing artifact).
+    strictly downhill. The round-5 #5 interest-tax-shield fix lifts the whole curve
+    positive (the levered equity path now bears levered tax), so it no longer crosses
+    zero — but the monotonic decline with gearing (the value-destruction signal) is
+    unchanged: ~+3.96% at low gearing falling to ~+2.42% at the DSCR-bound high end.
     """
     import math
 
@@ -96,8 +97,9 @@ def test_equity_irr_finite_and_falls_with_gearing() -> None:
     # Monotonically falling as gearing rises (value-destructive leverage).
     for lower, higher in zip(irrs, irrs[1:]):
         assert higher < lower, f"equity_irr not strictly falling with gearing: {irrs}"
-    # The sweep brackets zero: positive at low gearing, negative at high gearing.
-    assert irrs[0] > 0.0 > irrs[-1], f"sweep does not cross zero: {irrs}"
+    # The decline is MATERIAL: more leverage measurably erodes the equity return (negative
+    # carry), even though the interest shield keeps the whole curve positive.
+    assert irrs[0] - irrs[-1] > 0.01, f"gearing barely moves equity_irr: {irrs}"
 
 
 def test_interest_rate_nominal_is_noop_on_schedule() -> None:

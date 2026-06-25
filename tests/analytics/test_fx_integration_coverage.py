@@ -229,5 +229,5 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     # additive — no effect on the financed economics
     k = out["kpis"]
     assert k["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.006837694668605732, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(0.024168498307616693, abs=1e-9)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
