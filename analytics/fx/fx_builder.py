@@ -27,7 +27,7 @@ Usage:
 """
 
 import logging
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from analytics.fx.fx_contracts import (
     FXCurveOutput,
@@ -95,9 +95,13 @@ def compute_fx_structured_block(
             "FX block will have empty tranches dict. Check debt_result structure."
         )
 
-    # Revenue currencies (default: LKR)
-    revenue_currencies_raw = fx_config.get("revenue_currencies") or ["LKR"]
-    if isinstance(revenue_currencies_raw, str):
+    # Revenue currencies (default: LKR). Explicit None check, NOT `... or ["LKR"]`: a
+    # supplied empty list is a real (if odd) choice and must not be silently replaced by the
+    # LKR default (the same falsy-or family as the fx spot trap fixed earlier).
+    revenue_currencies_raw = fx_config.get("revenue_currencies")
+    if revenue_currencies_raw is None:
+        revenue_currencies = ["LKR"]
+    elif isinstance(revenue_currencies_raw, str):
         revenue_currencies = [revenue_currencies_raw]
     else:
         revenue_currencies = list(revenue_currencies_raw)
@@ -160,6 +164,34 @@ def compute_fx_structured_block(
     return fx_block
 
 
+def _resolve_scenario_spot(fx_config: Mapping[str, Any]) -> Optional[float]:
+    """Resolve the LKR/USD spot from the keys scenarios actually declare.
+
+    Scenarios pin the rate under ``fx.rates.lkr_per_usd``, ``fx.start_lkr_per_usd`` or
+    ``fx.source.pinned_rate`` (NOT under an ``fx.curve`` block, which none of them use).
+    Returns the first present positive value, else ``None`` so the caller falls back to the
+    global config default.
+    """
+    rates = fx_config.get("rates")
+    candidates = [
+        rates.get("lkr_per_usd") if isinstance(rates, Mapping) else None,
+        fx_config.get("start_lkr_per_usd"),
+        (fx_config.get("source") or {}).get("pinned_rate")
+        if isinstance(fx_config.get("source"), Mapping)
+        else None,
+    ]
+    for value in candidates:
+        if value is None:
+            continue
+        try:
+            spot = float(value)
+        except (TypeError, ValueError):
+            continue
+        if spot > 0.0:
+            return spot
+    return None
+
+
 def compute_fx_curve(
     *,
     config: Mapping[str, Any],
@@ -201,17 +233,24 @@ def compute_fx_curve(
         # reference rate (config/defaults.yaml) — never a Python literal (CESSPIT).
         from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
-        # Explicit absence check (CESSPIT fail-loud): a supplied 0.0/negative spot is a
-        # config error, not "absent" — the old `... or default()` idiom silently masked it
-        # by substituting the default rate. Default only when the key is genuinely absent.
+        # Resolve the flat-curve spot from the keys a scenario ACTUALLY declares before
+        # falling back to the global default. No scenario ships an fx.curve block, so the
+        # old code always built the curve at default_fx_lkr_per_usd() and ignored the
+        # scenario's own pinned rate (fx.rates.lkr_per_usd / fx.start_lkr_per_usd /
+        # fx.source.pinned_rate) — wrong whenever that rate diverges from the default.
+        # Order: explicit per-curve spot -> scenario rate -> global default.
+        # Explicit absence check (CESSPIT fail-loud): a supplied 0.0/negative is a config
+        # error, not "absent".
         raw_spot = curve_config.get("spot_lkr_usd")
+        if raw_spot is None:
+            raw_spot = _resolve_scenario_spot(fx_config)
         if raw_spot is None:
             spot = float(default_fx_lkr_per_usd())
         else:
             spot = float(raw_spot)
             if spot <= 0.0:
                 raise ValueError(
-                    f"fx.curve.spot_lkr_usd must be > 0; got {raw_spot!r}"
+                    f"fx spot rate must be > 0; got {raw_spot!r}"
                 )
         lkr_usd = [spot] * len(years)
         logger.debug(
