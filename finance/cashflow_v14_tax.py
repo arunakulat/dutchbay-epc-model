@@ -159,6 +159,18 @@ class TaxConfig:
                 "(1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance); got "
                 f"{self.enhanced_capital_allowance_pct}"
             )
+        # Upper-bound sanity: the field is a MULTIPLIER, not a percent. A value > 3.0 is
+        # almost certainly a percent-for-multiplier unit error (e.g. 150 meaning 1.5),
+        # which would inflate the depreciable base ~100x and zero out tax for the whole
+        # tenor. Real enhanced allowances are <= ~3.0 (300%); reject above that loudly.
+        # Caught for ALL configs (not just applied ones) so a latent typo cannot lie
+        # dormant until enhanced_allowance_applies flips to true.
+        if self.enhanced_capital_allowance_pct > 3.0:
+            raise ValueError(
+                "tax.enhanced_capital_allowance_pct looks like a PERCENT, not a multiplier:"
+                f" got {self.enhanced_capital_allowance_pct} (> 3.0). Use the multiplier "
+                "convention: 100% allowance = 1.0, 150% = 1.5."
+            )
 
     @classmethod
     def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":

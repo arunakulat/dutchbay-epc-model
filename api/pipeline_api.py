@@ -25,7 +25,7 @@ from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
-from analytics.scenario_loader import load_scenario_config
+from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario_config
 from api.path_safety import UnsafePathError, confined_path
 from finance.debt_v14 import _extract_capex_usd
 
@@ -400,6 +400,11 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     try:
         reconcile_capacity_factor_with_bankable_aep(cfg, payload.config_path or "<inline>")
         enforce_aep_provenance(cfg, payload.config_path or "<inline>")
+        # Same rationale for the FX spot keys: an inline/overridden authored config bypasses
+        # the load-time cross-assert, so a divergent fx.rates/start/pinned would yield a
+        # self-inconsistent lender pack (#236 class). A client authoring/overriding the
+        # config is NOT a deliberate MC perturbation, so enforce it here.
+        _assert_fx_spot_consistency(cfg, payload.config_path or "<inline>")
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
     except Exception as exc:  # config/validation/engine errors -> 422, not 500
         raise HTTPException(status_code=422, detail=f"Pipeline run failed: {exc}")
