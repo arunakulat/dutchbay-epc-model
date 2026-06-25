@@ -57,7 +57,7 @@ def _resolve_ruleset_path(env_var: str = "DUTCHBAY_FLOW_RULESET_CSV") -> Path:
     return path
 
 
-def _load_rules(path: Path) -> List[dict]:
+def _load_rules(path: Path) -> List[Dict[str, str]]:
     """Load the CSV as a list of dict rows and validate the header."""
     with path.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
@@ -129,7 +129,7 @@ def run_ruleset_check(quiet: bool = False) -> RulesetSummary:
     return summary
 
 
-def main(argv: Optional[list] = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     """
     CLI entrypoint:
 
