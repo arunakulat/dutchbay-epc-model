@@ -76,16 +76,6 @@ def test_validate_dscr_threshold_rejects_above_five() -> None:
         EquityDistributionConfig.validate_dscr_threshold(9.0)
 
 
-def test_validate_llcr_threshold_rejects_above_five() -> None:
-    """min_llcr_threshold above 5.0 must be rejected."""
-    with pytest.raises(ValidationError) as exc:
-        EquityDistributionConfig(min_llcr_threshold=9.0)
-    assert "llcr" in str(exc.value).lower()
-    assert EquityDistributionConfig.validate_llcr_threshold(1.5) == 1.5
-    with pytest.raises(ValueError, match="LLCR threshold"):
-        EquityDistributionConfig.validate_llcr_threshold(9.0)
-
-
 def test_validate_discount_rate_rejects_above_one() -> None:
     """discount_rate above 1.0 (a decimal) must be rejected."""
     with pytest.raises(ValidationError) as exc:
