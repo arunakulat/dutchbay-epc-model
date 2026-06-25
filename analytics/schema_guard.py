@@ -180,6 +180,18 @@ def validate_config_for_v14(
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
+
+    # Auto-enforce the wind / era5 interface schemas whenever the scenario actually
+    # declares a resource.wind / resource.era5 block. These lender-grade interface guards
+    # were registered but DORMANT: every live caller passes ['cashflow','debt'], so a
+    # scenario could carry a malformed wind/era5 block that never got validated. Adding the
+    # module only when the block is present keeps non-wind scenarios untouched (and all
+    # shipped wind scenarios already satisfy the schema, so this is byte-identical today).
+    resource = raw_config.get("resource") if isinstance(raw_config, Mapping) else None
+    if isinstance(resource, Mapping):
+        for _block in ("wind", "era5"):
+            if isinstance(resource.get(_block), Mapping) and _block not in module_list:
+                module_list.append(_block)
     for name in module_list:
         _ensure_module_registered(name)
 
