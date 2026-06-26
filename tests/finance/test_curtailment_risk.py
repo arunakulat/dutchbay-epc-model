@@ -75,10 +75,10 @@ def test_default_curtailment_is_byte_identical() -> None:
     k = run_v14_pipeline(config=LENDER)["kpis"]
     # Construction-lag-correct project economics (audit finding 2.0): operating year 1
     # is discounted after the 2-yr build, not at t=0. After the M3e degradation
-    # re-baseline (0.005 -> 0.5, honest 0.5%/yr aging): projIRR 5.05% (< ~8.18% WACC),
-    # NPV -$35.5M. minDSCR unchanged (dual-DSCR sculpt pins it at the 1.30 covenant).
+    # re-baseline (0.005 -> 0.5, honest 0.5%/yr aging): projIRR 5.05% (< ~7.85% WACC),
+    # NPV -$32.3M (round-9 guarantee-gate). minDSCR unchanged (dual-DSCR pins it at 1.30).
     assert k["project_irr"] == pytest.approx(0.050522, abs=1e-5)
-    assert k["project_npv"] == pytest.approx(-35505958.85, abs=1.0)
+    assert k["project_npv"] == pytest.approx(-32343603.01, abs=1.0)  # round-9 guarantee-gate (WACC -75bps)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
 
 

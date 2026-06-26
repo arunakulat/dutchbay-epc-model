@@ -29,7 +29,7 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # projIRR/npv/dscr/cfads are upstream of the equity waterfall and remain byte-identical.
     assert kpis["project_irr"] == pytest.approx(0.0449082466193822, rel=1e-6)
     assert kpis["equity_irr"] == pytest.approx(0.012725321153804758, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-53832909.235, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-50345594.84827695, rel=1e-6)  # round-9 guarantee-gate (WACC -75bps)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     assert kpis["total_cfads_usd"] == pytest.approx(305943086.43, rel=1e-6)
 

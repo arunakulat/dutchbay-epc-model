@@ -54,10 +54,10 @@ def test_wacc_drives_project_discount_rate() -> None:
     kpis = _kpis({})
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
-    assert used == pytest.approx(0.0810, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive
-    # The construction-lag-correct project IRR (5.43%, audit finding 2.0) is BELOW the WACC
-    # (~8.10%), so the project NPV is NEGATIVE (-$31.9M). The prior "+$5.9M / IRR 8.85%" was
-    # the operating-year-1 off-by-one (year 1 undiscounted + the 2-yr build lag ignored).
+    assert used == pytest.approx(0.0785, abs=0.002)  # ke=12%, gearing 70%, fee-inclusive (round-9 guarantee-gate -75bps)
+    # The project IRR (5.05%) is BELOW the WACC (~7.85% after the round-9 guarantee-gate
+    # dropped it 75bps), so the project NPV is NEGATIVE (-$32.3M). The prior "+$5.9M / IRR
+    # 8.85%" was the operating-year-1 off-by-one (year 1 undiscounted + the 2-yr lag ignored).
     assert kpis["project_npv"] < 0
 
 

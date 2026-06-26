@@ -522,7 +522,7 @@ expected_results:
   equity_irr: -0.0668       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
                             # constraint; round-5 #5 interest shield only lifts -0.0702 -> -0.0668
                             # (+34bps; little taxable income to shield in a loss-making deal).
-  project_npv_m_usd: -118.78 # deeply underwater
+  project_npv_m_usd: -117.52 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.388
   llcr: 1.147
