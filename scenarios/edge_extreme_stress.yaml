@@ -175,22 +175,12 @@ Financing_Terms:
 
   fees:
     upfront_pct: 0.015
-    commitment_pct: 0.015
 
   enforce_hard_covenants: false
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Metrics & Covenants (Relaxed for stress testing)
 # ──────────────────────────────────────────────────────────────────────────────
-
-metrics:
-  llcr_min_covenant: 1.15
-  llcr_warn_threshold: 1.20
-  llcr_discount_rate: 0.12
-  plcr_min_covenant: 1.30
-  plcr_target: 1.50
-  plcr_discount_rate: 0.12
-  dscr_min_covenant: 1.20
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constraints (Relaxed for edge case testing)

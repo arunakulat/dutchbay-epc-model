@@ -318,7 +318,14 @@ def _enrich_annual_rows_with_debt(
 
 
 def _debt_fee_rate(config: Mapping[str, Any]) -> float:
-    """Annualised debt fee load (guarantee/PRI + amortised upfront) for a fee-inclusive kd."""
+    """Annualised debt fee load (guarantee/PRI + amortised upfront) for a fee-inclusive kd.
+
+    Only guarantee_revenue_pct and fees.upfront_pct (amortised over the tenor) load the kd.
+    NOTE: Financing_Terms.fees.commitment_pct was DECORATIVE — never read here, so it was
+    removed from the scenarios (round-8) rather than wired. A commitment fee on the undrawn
+    balance is a real cost, but modelling it needs the construction drawdown profile this
+    function does not have; if added later, charge it on the committed-but-undrawn balance.
+    """
     fin = config.get("Financing_Terms") or {}
     if not isinstance(fin, Mapping):
         return 0.0

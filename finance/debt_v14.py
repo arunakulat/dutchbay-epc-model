@@ -603,6 +603,14 @@ def apply_debt_layer(
     else:
         avg_debt_rate = 0.0
 
+    # LLCR/PLCR discount convention (CCCDIR, single source): coverage ratios discount CFADS
+    # at the COST OF DEBT — avg_debt_rate (the weighted tranche rate) — which is the textbook
+    # LLCR/PLCR convention. Override per scenario via Financing_Terms.covenants.{llcr,plcr}
+    # _discount_rate. NOTE: the old top-level `metrics.{llcr,plcr}_discount_rate: 0.10` keys
+    # were DECORATIVE — never read here (this reads Financing_Terms.covenants) so they were
+    # silently ignored; they were removed from the scenarios (round-8) rather than honoured,
+    # since avg_debt_rate is the intended convention (honouring 0.10 would have understated
+    # coverage ~11-12%: LLCR 1.243->1.108, PLCR 1.340->1.174).
     cov_cfg = (p.get("covenants") or {}) if isinstance(p, dict) else {}
     llcr_discount_rate = _as_float(cov_cfg.get("llcr_discount_rate"), avg_debt_rate)
     plcr_discount_rate = _as_float(cov_cfg.get("plcr_discount_rate"), avg_debt_rate)
