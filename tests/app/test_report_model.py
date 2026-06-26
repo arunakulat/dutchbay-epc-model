@@ -145,6 +145,41 @@ def test_verdict_not_bankable_on_balloon_breach() -> None:
     assert v.headline == "Not bankable — covenant breach at the modeled assumptions."
 
 
+def test_verdict_honors_engine_balloon_breach_over_report_ceiling() -> None:
+    # Round-9 fix: the report must honor the engine's published balloon_covenant_breach
+    # (evaluated against the SCENARIO's own covenant, e.g. 10%) and NOT re-derive "within
+    # limit" against its more lenient presentation default (40%). 37.96% is BELOW the report
+    # 40% ceiling but the engine flagged a breach against the scenario's 10% covenant.
+    kpis = {
+        "project_irr": 0.12,
+        "discount_rate_used": 0.08,
+        "equity_npv": 25_000_000.0,
+        "equity_irr": 0.15,
+        "min_dscr": 1.55,
+        "balloon_pct": 0.3796,  # < 0.40 report default, but...
+        "balloon_covenant_breach": 1.0,  # ...the engine flagged a breach (vs scenario 10%)
+    }
+    v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+    assert v.balloon_within_limit is False  # honors the engine, not the 40% report default
+    assert any("BREACHES the modeled refinance-risk covenant" in n for n in v.notes)
+    assert v.headline == "Not bankable — covenant breach at the modeled assumptions."
+
+
+def test_verdict_falls_back_to_report_ceiling_without_engine_flag() -> None:
+    # When the engine did NOT publish a breach flag, the report-config ceiling still governs.
+    kpis = {
+        "project_irr": 0.12,
+        "discount_rate_used": 0.08,
+        "equity_npv": 25_000_000.0,
+        "equity_irr": 0.15,
+        "min_dscr": 1.55,
+        "balloon_pct": 0.3467,  # <= 0.40, no engine flag -> within limit
+    }
+    v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+    assert v.balloon_within_limit is True
+    assert any("within the 40% refinance-risk ceiling" in n for n in v.notes)
+
+
 def test_verdict_not_bankable_on_dscr_breach() -> None:
     # DSCR floor breached while returns are acceptable -> explicit covenant breach.
     kpis = {
