@@ -108,16 +108,7 @@ Financing_Terms:
   guarantee_revenue_pct: 0.0075
   fees:
     upfront_pct: 0.01
-    commitment_pct: 0.01
   enforce_hard_covenants: false
-metrics:
-  llcr_min_covenant: 1.2
-  llcr_warn_threshold: 1.25
-  llcr_discount_rate: 0.1
-  plcr_min_covenant: 1.4
-  plcr_target: 1.6
-  plcr_discount_rate: 0.1
-  dscr_min_covenant: 1.2
 constraints:
   max_debt_ratio: 0.8
   warn_debt_ratio: 0.45

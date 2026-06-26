@@ -3,7 +3,6 @@ Financing_Terms:
   debt_ratio: 0.7
   enforce_hard_covenants: false
   fees:
-    commitment_pct: 0.01
     upfront_pct: 0.01
   guarantee_revenue_pct: 0.0075
   interest_only_years: 2
@@ -86,14 +85,6 @@ metadata:
   last_updated: '2025-11-23'
   review_status: Draft - Pending Board Approval
   version: '2.4'
-metrics:
-  dscr_min_covenant: 1.3
-  llcr_discount_rate: 0.1
-  llcr_min_covenant: 1.2
-  llcr_warn_threshold: 1.25
-  plcr_discount_rate: 0.1
-  plcr_min_covenant: 1.4
-  plcr_target: 1.6
 monte_carlo:
   cvar_confidence: 0.95
   min_dscr_covenant: 1.2
