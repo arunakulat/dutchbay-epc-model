@@ -320,7 +320,11 @@ def _enrich_annual_rows_with_debt(
 def _debt_fee_rate(config: Mapping[str, Any]) -> float:
     """Annualised debt fee load (guarantee/PRI + amortised upfront) for a fee-inclusive kd.
 
-    Only guarantee_revenue_pct and fees.upfront_pct (amortised over the tenor) load the kd.
+    The guarantee/PRI premium (guarantee_revenue_pct) loads the kd ONLY when the deal buys
+    it — gated on Financing_Terms.use_revenue_guarantee (default off). Previously the premium
+    was charged unconditionally, so a scenario with use_revenue_guarantee: false advertised
+    the guarantee OFF yet still paid its 75bps fee in the WACC (round-9 fix). fees.upfront_pct
+    (amortised over the tenor) always loads.
     NOTE: Financing_Terms.fees.commitment_pct was DECORATIVE — never read here, so it was
     removed from the scenarios (round-8) rather than wired. A commitment fee on the undrawn
     balance is a real cost, but modelling it needs the construction drawdown profile this
@@ -329,7 +333,8 @@ def _debt_fee_rate(config: Mapping[str, Any]) -> float:
     fin = config.get("Financing_Terms") or {}
     if not isinstance(fin, Mapping):
         return 0.0
-    guarantee = float(fin.get("guarantee_revenue_pct") or 0.0)
+    use_guarantee = bool(fin.get("use_revenue_guarantee", False))
+    guarantee = float(fin.get("guarantee_revenue_pct") or 0.0) if use_guarantee else 0.0
     fees = fin.get("fees") or {}
     upfront = float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
     tenor = float(fin.get("tenor_years") or 15.0) or 15.0

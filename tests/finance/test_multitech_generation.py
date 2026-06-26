@@ -212,12 +212,16 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     # npv, dscr and cfads are upstream of the equity waterfall and remain byte-identical.
     assert kpis["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
     assert kpis["equity_irr"] == pytest.approx(0.024168498307616693, abs=1e-9)
-    assert kpis["project_npv"] == pytest.approx(-35505958.84579508, rel=1e-9)
+    # project_npv re-baselined by the round-9 revenue-guarantee gate: the 75bps guarantee
+    # premium no longer loads the WACC when use_revenue_guarantee is false (the default), so
+    # the discount rate falls 0.0818->0.0785 and the NPV rises -35.51M -> -32.34M. projIRR /
+    # eqIRR / DSCR / LLCR / PLCR / CFADS are cashflow/debt-side and stay byte-identical.
+    assert kpis["project_npv"] == pytest.approx(-32343603.01435253, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999996, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)
-    # Round-7: the prudential (downside) NPV is now WIRED in the live pipeline — the metrics
-    # branch + WaccResult.prudential_npv were de-decorated by PR #369 but never fed. The CFADS
-    # discounted at the haircut WACC (~9.18% > the base discount) is below the base NPV.
-    assert kpis["project_npv_prudential"] == pytest.approx(-44426308.78605164, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.09179219736442805, abs=1e-9)
+    # Round-7 prudential (downside) NPV, re-baselined by the same gate (the prudential rate is
+    # WACC + spread, so it also falls 0.0918->0.0885): CFADS discounted at the haircut WACC,
+    # below the base NPV.
+    assert kpis["project_npv_prudential"] == pytest.approx(-41595147.41773051, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.08849782236442803, abs=1e-9)
     assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV

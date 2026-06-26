@@ -524,7 +524,7 @@ expected_results:
   # (still BELOW the ~8.18% WACC), pushes equity IRR ~0% -> -2.47%, and NPV -$31.9M ->
   # -$35.5M — the project is value-destructive. The prior +$2.03M / 8.44% headline was a
   # timing artifact. (The stale 300 FX + overstated Weibull had earlier shown 11.12% / $27.4M.)
-  project_irr: 0.0505       # BELOW WACC (~8.18%) — value-destructive (UNLEVERED, shield-free)
+  project_irr: 0.0505       # BELOW WACC (~7.85%) — value-destructive (UNLEVERED, shield-free)
   equity_irr: 0.0242        # +2.42% — POSITIVE but below cost of equity. Round-5 #5
                             # interest-tax-shield re-baseline: the SPV legally deducts its
                             # debt interest, and that tax saving accrues to equity. The prior
@@ -534,7 +534,9 @@ expected_results:
                             # the shield is confined to equity (the project path captures it via
                             # the after-tax kd in the WACC). Set tax.interest_deductibility:false
                             # to recover the unlevered -0.0082. MOIC now > 1.00 but still below kE.
-  project_npv_m_usd: -35.51 # construction-lag-correct discount at build-up WACC ~8.18%
+  project_npv_m_usd: -32.34 # discount at build-up WACC ~7.85% (round-9 guarantee-gate: the
+                            # 75bps guarantee premium no longer loads the kd when the
+                            # revenue guarantee is off, lifting NPV -35.51M -> -32.34M)
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
   llcr: 1.24

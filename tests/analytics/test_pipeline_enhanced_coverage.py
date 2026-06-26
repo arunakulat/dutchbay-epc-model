@@ -268,16 +268,23 @@ def test_debt_fee_rate_non_mapping_financing_returns_zero() -> None:
     assert _debt_fee_rate({"Financing_Terms": ["not", "a", "mapping"]}) == 0.0
 
 
-def test_debt_fee_rate_combines_guarantee_and_amortised_upfront() -> None:
-    """Fee load = guarantee + upfront/tenor (invariant check on the arithmetic)."""
-    cfg = {
+def test_debt_fee_rate_guarantee_gated_on_flag() -> None:
+    """Fee load = upfront/tenor always; the guarantee premium loads ONLY when
+    use_revenue_guarantee is true (round-9 gate). Without the flag the 75bps is NOT charged."""
+    base = {
         "Financing_Terms": {
             "guarantee_revenue_pct": 0.01,
             "fees": {"upfront_pct": 0.03},
             "tenor_years": 15.0,
         }
     }
-    assert math.isclose(_debt_fee_rate(cfg), 0.01 + 0.03 / 15.0, rel_tol=1e-12)
+    # Flag absent / false -> guarantee gated OFF, only upfront/tenor loads.
+    assert math.isclose(_debt_fee_rate(base), 0.03 / 15.0, rel_tol=1e-12)
+    off = {"Financing_Terms": {**base["Financing_Terms"], "use_revenue_guarantee": False}}
+    assert math.isclose(_debt_fee_rate(off), 0.03 / 15.0, rel_tol=1e-12)
+    # Flag true -> guarantee premium loads alongside the amortised upfront.
+    on = {"Financing_Terms": {**base["Financing_Terms"], "use_revenue_guarantee": True}}
+    assert math.isclose(_debt_fee_rate(on), 0.01 + 0.03 / 15.0, rel_tol=1e-12)
 
 
 def test_debt_fee_rate_zero_tenor_falls_back_to_default() -> None:
