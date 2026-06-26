@@ -138,9 +138,19 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
     else:
         equity_positive = False
     dscr_covenant_met = min_dscr is not None and min_dscr >= covenants.min_dscr_floor
-    balloon_within_limit = (
-        balloon_pct is None or balloon_pct <= covenants.max_balloon_pct
-    )
+    # Honor the engine's authoritative covenant judgment when it published one: the engine
+    # evaluates balloon_pct against the SCENARIO's own max_balloon_pct (e.g. 10%), so the
+    # report must NOT re-derive "within limit" against its more lenient presentation default
+    # (report_defaults 40%) and silently contradict the engine's breach flag (CCCDIR — the
+    # report and engine must not be two sources of truth for the same covenant). Fall back to
+    # the report-config ceiling only when the engine did not publish a balloon breach flag.
+    balloon_breach = kpis.get("balloon_covenant_breach")
+    if balloon_breach is not None:
+        balloon_within_limit = not bool(balloon_breach)
+    else:
+        balloon_within_limit = (
+            balloon_pct is None or balloon_pct <= covenants.max_balloon_pct
+        )
 
     notes: List[str] = []
     if project_irr is not None and hurdle is not None:
@@ -160,11 +170,19 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
             f"(target {covenants.min_dscr_target:.2f}x)."
         )
     if balloon_pct is not None:
-        rel = "within" if balloon_within_limit else "exceeds"
-        notes.append(
-            f"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the "
-            f"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling."
-        )
+        if balloon_breach is not None:
+            # The engine judged it against the scenario's own covenant.
+            rel = "is within" if balloon_within_limit else "BREACHES"
+            notes.append(
+                f"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the modeled "
+                f"refinance-risk covenant."
+            )
+        else:
+            rel = "within" if balloon_within_limit else "exceeds"
+            notes.append(
+                f"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the "
+                f"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling."
+            )
 
     # The headline must never contradict the covenant table: a "Bankable" claim
     # requires BOTH hard covenants (DSCR floor and balloon ceiling) to hold, not
