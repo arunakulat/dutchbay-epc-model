@@ -139,7 +139,7 @@ class ProjectReturns(BaseModel):
     )
     project_npv: float = Field(description="Project NPV in LKR")
     project_mirr: Optional[float] = Field(default=None, description="Modified IRR")
-    profitability_index: float = Field(ge=0.0, description="NPV / CAPEX")
+    profitability_index: float = Field(ge=0.0, description="PV(inflows) / CAPEX")
     payback_period: Optional[int] = Field(default=None, ge=0, description="Years")
 
     # Full cashflow series (for audit/debugging)
@@ -402,17 +402,19 @@ def calculate_project_returns(
     finance_rate = config.finance_rate or config.project_discount_rate
     reinvest_rate = config.reinvest_rate or config.project_discount_rate
 
-    # Core metrics
+    # Core metrics. NPV discounts the SAME signed vector as the IRR — [-capex] + cfads —
+    # so the initial outlay is netted (a "Net" PV must subtract the investment). Previously
+    # the NPV discounted cfads_series alone (PV of inflows only), overstating it by the entire
+    # capex and inflating the profitability index — and diverging from the IRR's own vector.
     project_irr = calculate_irr(full_cashflows)
-    project_npv = calculate_npv(
-        cfads_series,
-        config.project_discount_rate,
-        start_period=config.operation_start_year,
-    )
+    project_npv = calculate_npv(full_cashflows, config.project_discount_rate)
     project_mirr = calculate_mirr(full_cashflows, finance_rate, reinvest_rate)
 
     # Profitability Index = NPV / CAPEX
-    pi = project_npv / capex_lkr if capex_lkr > 0 else 0.0
+    # Profitability index = PV(inflows) / CAPEX (the standard PI: >1 creates value, >=0
+    # always). project_npv now nets the outlay, so PV(inflows) = project_npv + capex; the PI
+    # therefore equals (project_npv + capex)/capex and is unchanged by the NPV fix.
+    pi = (project_npv + capex_lkr) / capex_lkr if capex_lkr > 0 else 0.0
 
     # Payback period: years until cumulative CFADS >= CAPEX
     payback_period: Optional[int] = None
@@ -495,18 +497,21 @@ def calculate_equity_returns(
     finance_rate = config.finance_rate or config.equity_discount_rate
     reinvest_rate = config.reinvest_rate or config.equity_discount_rate
 
-    # Core metrics
+    # Core metrics. NPV discounts the SAME signed vector as the IRR — [-equity] + ECF — so
+    # the equity outlay is netted (see calculate_project_returns). Previously it discounted
+    # equity_cashflows alone, overstating equity_npv by the whole equity investment and
+    # inflating equity_pi.
     equity_irr = calculate_irr(full_equity_cashflows)
-    equity_npv = calculate_npv(
-        equity_cashflows,
-        config.equity_discount_rate,
-        start_period=config.equity_start_year,
-    )
+    equity_npv = calculate_npv(full_equity_cashflows, config.equity_discount_rate)
     equity_mirr = calculate_mirr(full_equity_cashflows, finance_rate, reinvest_rate)
 
     # Equity Profitability Index
+    # Standard PI = PV(equity CF) / equity investment (>=0); equity_npv now nets the outlay,
+    # so this equals (equity_npv + equity_investment)/equity_investment.
     equity_pi = (
-        equity_npv / equity_investment_lkr if equity_investment_lkr > 0.0 else 0.0
+        (equity_npv + equity_investment_lkr) / equity_investment_lkr
+        if equity_investment_lkr > 0.0
+        else 0.0
     )
 
     # Equity payback period

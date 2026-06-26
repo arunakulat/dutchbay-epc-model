@@ -289,14 +289,13 @@ def test_project_returns_invariants_against_live_engine() -> None:
     assert pr.cashflows_with_capex == [-capex_lkr] + cfads
     # IRR matches the live engine on the identical full series.
     assert pr.project_irr == pytest.approx(_live_irr(pr.cashflows_with_capex))
-    # NPV matches the live engine with the operation-start zero-padding.
-    expected_npv = _live_npv(
-        cfg.project_discount_rate,
-        [0.0] * cfg.operation_start_year + cfads,
-    )
+    # NPV nets the initial outlay: it discounts the SAME [-capex] + cfads vector as the IRR
+    # (was inflows-only, overstating NPV by the entire capex).
+    expected_npv = _live_npv(cfg.project_discount_rate, pr.cashflows_with_capex)
     assert pr.project_npv == pytest.approx(expected_npv)
+    assert pr.project_npv < _live_npv(cfg.project_discount_rate, cfads)  # outlay is netted
     # Profitability index is NPV / CAPEX by construction.
-    assert pr.profitability_index == pytest.approx(pr.project_npv / capex_lkr)
+    assert pr.profitability_index == pytest.approx((pr.project_npv + capex_lkr) / capex_lkr)
     # Profitable stream pays back within the operating horizon.
     assert pr.payback_period is not None and 1 <= pr.payback_period <= len(cfads)
 
@@ -332,12 +331,11 @@ def test_equity_returns_invariants_against_live_engine() -> None:
     assert er.equity_cashflows_with_investment == [-equity_investment] + expected_ecf
     # IRR / NPV must match the live engine on the equity vectors.
     assert er.equity_irr == pytest.approx(_live_irr(er.equity_cashflows_with_investment))
-    expected_npv = _live_npv(
-        cfg.equity_discount_rate,
-        [0.0] * cfg.equity_start_year + expected_ecf,
-    )
+    # NPV nets the equity outlay: discounts the same [-equity] + ECF vector as the IRR.
+    expected_npv = _live_npv(cfg.equity_discount_rate, er.equity_cashflows_with_investment)
     assert er.equity_npv == pytest.approx(expected_npv)
-    assert er.equity_pi == pytest.approx(er.equity_npv / equity_investment)
+    assert er.equity_npv < _live_npv(cfg.equity_discount_rate, expected_ecf)  # outlay netted
+    assert er.equity_pi == pytest.approx((er.equity_npv + equity_investment) / equity_investment)
 
 
 def test_equity_returns_payback_none_when_never_recovered() -> None:
