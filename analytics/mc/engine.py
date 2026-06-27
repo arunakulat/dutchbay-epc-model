@@ -207,6 +207,15 @@ class MonteCarloEngine:
             self._dead_param_names,
         ) = self._extract_param_definitions(self._base_config)
 
+        # Market-calibrated FX driver (opt-in via a distribution: fx_calibrated param).
+        self._fx_sampler: Any = None
+        self._fx_param_index: Optional[int] = None
+        self._fx_param_name: Optional[str] = None
+        self._fx_drive_drift: bool = True
+        self._fx_calibration: Any = None
+        if "fx_calibrated" in self._param_kinds:
+            self._init_fx_calibration()
+
         self._meta = MonteCarloRunMeta(
             n_trials=0,
             seed=self._seed,
@@ -215,6 +224,82 @@ class MonteCarloEngine:
             param_names=tuple(self._param_names),
             config_hash=_stable_config_hash(self._base_config),
         )
+
+    def _init_fx_calibration(self) -> None:
+        """Resolve + calibrate the market FX driver once (opt-in fx_calibrated param).
+
+        The pinned anchor spot is the scenario's own ``fx.start_lkr_per_usd``; the
+        calibration (drift + regime-mixture vol) is built from the provenance-pinned
+        historical vintage via :func:`analytics.fx.fx_calibration.calibrate_from_config`.
+        """
+        from analytics.fx.fx_calibration import calibrate_from_config
+
+        idx = self._param_kinds.index("fx_calibrated")
+        self._fx_param_index = idx
+        self._fx_param_name = self._param_names[idx]
+
+        fx_cfg = self._base_config.get("fx", {})
+        fx_cfg = fx_cfg if isinstance(fx_cfg, Mapping) else {}
+        rates = fx_cfg.get("rates", {})
+        pinned = fx_cfg.get("start_lkr_per_usd") or (
+            rates.get("lkr_per_usd") if isinstance(rates, Mapping) else None
+        )
+        if pinned is None:
+            raise MonteCarloConfigError(
+                "A distribution: fx_calibrated parameter requires fx.start_lkr_per_usd "
+                "(the pinned anchor spot the calibrated shocks scale around)."
+            )
+        calibration = calibrate_from_config(self._base_config, pinned_spot=float(pinned))
+        mc = self._base_config.get("monte_carlo", {})
+        fxc = mc.get("fx_calibration", {}) if isinstance(mc, Mapping) else {}
+        self._fx_drive_drift = bool(fxc.get("drive_drift", True)) if isinstance(fxc, Mapping) else True
+        self._fx_calibration = calibration
+        self._fx_sampler = calibration.sampler()
+        logger.info(
+            "MC FX calibrated from %s vintage (%s..%s): annual_depr=%.4f, crisis_prob=%.3f, "
+            "sigma_normal_1y=%.3f, sigma_crisis_1y=%.3f",
+            calibration.provider,
+            calibration.date_range[0],
+            calibration.date_range[1],
+            calibration.annual_depr,
+            calibration.crisis_prob,
+            calibration.sigma_normal_1y,
+            calibration.sigma_crisis_1y,
+        )
+
+    @staticmethod
+    def _set_dotted(overrides: Dict[str, Any], dotted: str, value: Any) -> None:
+        """Set a (possibly dotted) key in the nested override dict."""
+        keys = dotted.split(".")
+        d = overrides
+        for k in keys[:-1]:
+            nxt = d.get(k)
+            if not isinstance(nxt, dict):
+                nxt = {}
+                d[k] = nxt
+            d = nxt
+        d[keys[-1]] = value
+
+    def _apply_fx_calibration(
+        self, overrides: Dict[str, Any], sample_row: np.ndarray
+    ) -> Dict[str, Any]:
+        """Map the unit LHS draw for the fx_calibrated dim to a calibrated spot.
+
+        Reads the unit draw u∈[0,1] for the FX dimension, maps it through the
+        regime-mixture inverse-CDF to a spot, overwrites the fx override (the static
+        builder placed the raw u there), injects the data-derived fx.annual_depr when
+        drive_drift, and records the realised spot back into ``sample_row`` so the
+        aggregated/reported MC input is the spot (not the unit draw).
+        """
+        if self._fx_sampler is None or self._fx_param_index is None or self._fx_param_name is None:
+            return overrides
+        u = float(sample_row[self._fx_param_index])
+        spot = self._fx_sampler.spot_from_unit(u)
+        self._set_dotted(overrides, self._fx_param_name, spot)
+        if self._fx_drive_drift:
+            self._set_dotted(overrides, "fx.annual_depr", self._fx_sampler.drift)
+        sample_row[self._fx_param_index] = spot  # record the spot for aggregation/reporting
+        return overrides
 
     @staticmethod
     def _extract_param_definitions(
@@ -253,9 +338,21 @@ class MonteCarloEngine:
                     f"{p!r}."
                 )
             name = str(p["name"])
+            kind = str(p.get("distribution", p.get("kind", "uniform")))
+
+            # Market-calibrated FX spot driver: the LHS samples a UNIT uniform [0,1]
+            # for this dimension; _apply_fx_calibration maps it through the regime-mixture
+            # inverse-CDF (analytics.fx.fx_calibration) to a spot and also injects the
+            # data-derived fx.annual_depr. low/high are engine-set (not authored) and the
+            # name resolves (fx.start_lkr_per_usd), so the dead-key check does not apply.
+            if kind == "fx_calibrated":
+                param_names.append(name)
+                bounds.append((0.0, 1.0))
+                kinds.append(kind)
+                continue
+
             low = float(p.get("low", p.get("min", 0.0)))
             high = float(p.get("high", p.get("max", 1.0)))
-            kind = str(p.get("distribution", p.get("kind", "uniform")))
 
             # A param name that does not resolve to an EXISTING dotted path in the base
             # config is a likely DEAD lever. Contrary to the toy-fallback story, the
@@ -318,6 +415,7 @@ class MonteCarloEngine:
 
         for i in range(n):
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
+            overrides = self._apply_fx_calibration(overrides, samples[i])
             overrides = apply_degradation_if_enabled(base_cfg=self._base_config, overrides=overrides)
 
             try:
