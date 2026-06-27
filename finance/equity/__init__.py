@@ -20,7 +20,6 @@ Core equity metrics:
 
 Distribution waterfall:
     - EquityDistributionConfig
-    - EquityDistributionEngine
     - build_equity_distribution_schedule
     - calculate_equity_distribution_from_pipeline
 
@@ -36,7 +35,6 @@ from __future__ import annotations
 
 from finance.equity_distribution_v14_hydra import (
     EquityDistributionConfig,
-    EquityDistributionEngine,
     build_equity_distribution_schedule,
     calculate_equity_distribution_from_pipeline,
 )
@@ -55,7 +53,6 @@ from finance.equity_v14 import (
 __all__ = [
     "EquityCashflowSummary",
     "EquityDistributionConfig",
-    "EquityDistributionEngine",
     "build_equity_distribution_schedule",
     "calculate_cash_on_cash",
     "calculate_equity_distribution_from_pipeline",
