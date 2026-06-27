@@ -180,6 +180,32 @@ def test_verdict_falls_back_to_report_ceiling_without_engine_flag() -> None:
     assert any("within the 40% refinance-risk ceiling" in n for n in v.notes)
 
 
+def test_equity_irr_note_reflects_irr_sign_not_npv_flag() -> None:
+    """Round-11 fix: the equity-IRR note's sign word must follow the IRR's OWN sign, not the
+    equity-NPV value flag. A positive IRR below the hurdle (NPV<0) was falsely printed as
+    'negative to sponsors' — the canonical lender case (+2.42%, NPV<0) hits exactly this."""
+    def note(kpis):
+        v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+        return next(n for n in v.notes if "Equity IRR" in n)
+
+    # positive IRR, negative NPV (the canonical lender/basecase reality) -> NOT "negative"
+    pos_below = note({"project_irr": 0.05, "discount_rate_used": 0.078,
+                      "equity_irr": 0.0242, "equity_npv": -35_000_000.0, "min_dscr": 1.30})
+    assert "2.42%" in pos_below
+    assert "positive but below the equity hurdle" in pos_below
+    assert "negative" not in pos_below  # the bug: it used to say "negative to sponsors"
+
+    # genuinely negative IRR -> "negative to sponsors"
+    neg = note({"project_irr": -0.03, "discount_rate_used": 0.078,
+                "equity_irr": -0.0862, "equity_npv": -43_000_000.0, "min_dscr": 1.30})
+    assert "negative to sponsors" in neg
+
+    # positive IRR clearing the hurdle (NPV>0) -> "positive to sponsors"
+    pos_ok = note({"project_irr": 0.12, "discount_rate_used": 0.08,
+                   "equity_irr": 0.15, "equity_npv": 25_000_000.0, "min_dscr": 1.55})
+    assert "positive to sponsors" in pos_ok
+
+
 def test_verdict_not_bankable_on_dscr_breach() -> None:
     # DSCR floor breached while returns are acceptable -> explicit covenant breach.
     kpis = {
