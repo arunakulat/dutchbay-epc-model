@@ -206,13 +206,16 @@ class TestGWTFCompliance:
         )
 
     def test_no_hardcoded_magic_numbers(self) -> None:
-        """ARCH-01: Business logic should use config, not magic numbers."""
+        """ARCH-01: Business logic should use config, not magic numbers.
+
+        The live waterfall reads thresholds off the distribution_config dataclass
+        (the legacy self.config.* engine was retired)."""
         content = MODULE_PATH.read_text(encoding="utf-8")
 
-        assert "self.config.min_dscr_threshold" in content, (
+        assert "distribution_config.min_dscr_threshold" in content, (
             "DSCR threshold should come from config (ARCH-01)"
         )
-        assert "self.config.min_reserve_months" in content, (
+        assert "distribution_config.min_reserve_months" in content, (
             "Reserve months should come from config (ARCH-01)"
         )
 
