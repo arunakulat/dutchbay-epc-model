@@ -160,8 +160,17 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
             f"{hurdle * 100:.2f}% cost of capital."
         )
     if equity_irr is not None:
-        sign = "positive" if equity_positive else "negative"
-        notes.append(f"Equity IRR {equity_irr * 100:.2f}% — {sign} to sponsors.")
+        # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag
+        # (equity_positive). A positive IRR that is still below the equity hurdle has a
+        # negative NPV; labelling it "negative to sponsors" off the NPV flag printed a
+        # literally false statement (round-11 fix). Distinguish all three cases.
+        if equity_irr <= 0:
+            desc = "negative to sponsors"
+        elif not equity_positive:
+            desc = "positive but below the equity hurdle"
+        else:
+            desc = "positive to sponsors"
+        notes.append(f"Equity IRR {equity_irr * 100:.2f}% — {desc}.")
     if min_dscr is not None:
         rel = "meets" if dscr_covenant_met else "breaches"
         notes.append(
