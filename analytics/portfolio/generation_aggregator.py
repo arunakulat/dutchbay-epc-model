@@ -24,12 +24,23 @@ from analytics.contracts_v14 import (
     MultiTechGenerationResult,
     TechnologyBreakdown,
 )
+from finance.tech_types import GENERATION_TYPES
 
 #: GWh → kWh (the contracts carry AEP in kWh).
 GWH_TO_KWH = 1_000_000.0
 
-#: Technologies recognised, in display order. BESS/storage slots in later.
-SUPPORTED_TECHNOLOGIES: Tuple[str, ...] = ("wind", "solar")
+#: Generation technologies recognised in the LEGACY single-tech fallback (scenarios with
+#: no ``generation.technologies`` block), in a conventional display order. DERIVED from
+#: finance.tech_types.GENERATION_TYPES (the single source of truth) so the two cannot drift
+#: and a new generation type (e.g. tidal) is included automatically — the old hardcoded
+#: ("wind", "solar") silently dropped any third generation technology. Storage (BESS) is
+#: excluded; it earns a capacity charge, not generation revenue.
+_DISPLAY_ORDER: Tuple[str, ...] = (
+    "wind", "solar", "tidal", "hydro", "run_of_river", "geothermal",
+)
+SUPPORTED_TECHNOLOGIES: Tuple[str, ...] = tuple(
+    t for t in _DISPLAY_ORDER if t in GENERATION_TYPES
+) + tuple(sorted(GENERATION_TYPES.difference(_DISPLAY_ORDER)))
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -53,6 +64,11 @@ def resolve_tech_aep_kwh(config: Mapping[str, Any], tech: str) -> Optional[float
         ("generation", "technologies", tech, "aep_gwh"),
         ("resource", tech, "aep_gwh"),
     ]
+    # The top-level `aep_summary.net_aep_p50_gwh` is the WIND plant's bankable AEP artifact
+    # (tests/mocks/aep_summary_*.json), so it is attributed to wind only — this is a data
+    # attribution, NOT a class gate (tech CLASS is type-driven via finance.tech_types, so
+    # tidal/solar/… aggregate on their own footing via their declared aep_gwh). A non-wind
+    # single-tech plant carries its AEP in resource.<tech>.aep_gwh (the candidate above).
     if tech == "wind":
         candidates.append(("aep_summary", "net_aep_p50_gwh"))
     for path in candidates:

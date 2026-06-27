@@ -74,6 +74,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from finance.tech_types import is_generation_type, is_storage_type
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +85,6 @@ logger = logging.getLogger(__name__)
 #: it), so it is detected and reported but **not swept** — sweeping it would be a
 #: phantom axis until storage economics are modelled.
 _STORAGE_KEYS: Tuple[str, ...] = ("power_mw", "energy_mwh")
-
-#: The explicit storage type discriminator (mirrors ``finance.bess_revenue.BESS_TYPE``;
-#: kept as a local literal to avoid an analytics→finance import). ``type`` is
-#: authoritative: a ``type: bess`` block is storage, never a generation tech.
-_BESS_TYPE = "bess"
 
 #: Per-tech finance levers swept, in display order. Each maps to a coupled override
 #: (see module docstring). ``capex_usd`` / ``capacity_factor`` / ``degradation_pct``
@@ -196,24 +192,34 @@ def _technology_blocks(config: Mapping[str, Any]) -> List[Tuple[str, Mapping[str
 
 
 def _is_generation(block: Mapping[str, Any]) -> bool:
-    """A *generation* technology carries a ``capacity_factor`` (the finance driver).
+    """A *generation* technology earns capacity_factor x tariff revenue.
 
     Class-agnostic (wind, solar, tidal, run-of-river … all qualify on the same footing
-    — no wind-specific special-casing). ``type`` is authoritative: a ``type: bess``
-    block is storage and is never generation, even if it (mis-)carries a
-    ``capacity_factor`` — consistent with the cashflow, which excludes it from
-    generation revenue.
+    — no wind-specific special-casing). An explicit ``type`` is AUTHORITATIVE: a
+    recognised generation type (finance.tech_types.GENERATION_TYPES) is generation, a
+    storage type (``type: bess``) never is — even if it mis-carries a ``capacity_factor``.
+    An absent or unrecognised ``type`` falls back to the key-sniff (a ``capacity_factor``
+    marks generation) so legacy scenarios authored before the enum still work.
     """
-    if block.get("type") == _BESS_TYPE:
-        return False
+    tech_type = block.get("type")
+    if tech_type is not None:
+        if is_storage_type(tech_type):
+            return False
+        if is_generation_type(tech_type):
+            return True
+        # unrecognised explicit type -> fall through to the key-sniff (never silently drop)
     return block.get("capacity_factor") is not None
 
 
 def _is_storage(block: Mapping[str, Any]) -> bool:
-    """A *storage* technology (e.g. BESS): explicitly ``type: bess``, or a power/energy
-    rating without a capacity factor."""
-    if block.get("type") == _BESS_TYPE:
-        return True
+    """A *storage* technology (e.g. BESS): a recognised storage ``type`` (authoritative),
+    or — absent/unrecognised type — a power/energy rating without a capacity factor."""
+    tech_type = block.get("type")
+    if tech_type is not None:
+        if is_storage_type(tech_type):
+            return True
+        if is_generation_type(tech_type):
+            return False
     return not _is_generation(block) and any(
         block.get(key) is not None for key in _STORAGE_KEYS
     )
