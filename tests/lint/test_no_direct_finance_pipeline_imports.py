@@ -107,6 +107,17 @@ ALLOWLIST: dict[str, str] = {
         "[PERMANENT] 6-line re-export shim for finance.epc_helper_v14 EPC "
         "breakdown helpers; exists precisely to give analytics one import seam."
     ),
+    "analytics/portfolio/generation_aggregator.py": (
+        "[PERMANENT] Imports finance.tech_types (GENERATION_TYPES) — a pure leaf "
+        "registry of technology TYPE discriminators with no engine logic. It is the "
+        "single source of truth shared by the cashflow and the analytics multi-tech "
+        "views; importing the contract directly is the point (CCCDIR), not a breach."
+    ),
+    "analytics/portfolio/multi_tech_tornado.py": (
+        "[PERMANENT] Imports finance.tech_types (is_generation_type / is_storage_type) "
+        "to classify generation vs storage by the shared TYPE registry. A pure leaf "
+        "contract import, identical in spirit to the analytics.core finance adapters."
+    ),
     # --- [TODO] real layering violations to refactor toward the gateway -----
     "analytics/dscr_sensitivity.py": (
         "[TODO #36] Imports finance.debt_v14.size_debt_with_dual_dscr directly "
