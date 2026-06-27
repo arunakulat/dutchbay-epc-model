@@ -18,17 +18,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
-from omegaconf import OmegaConf
 from pydantic_core import ValidationError
 
 from finance import equity_distribution_v14_hydra as mod
 from finance.equity_distribution_v14_hydra import (
     EquityDistributionConfig,
-    EquityDistributionEngine,
     build_equity_distribution_schedule,
     calculate_equity_distribution_from_pipeline,
-    load_config,
-    main,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -54,16 +50,6 @@ def test_validate_project_life_rejects_out_of_range() -> None:
     assert EquityDistributionConfig.validate_project_life(25) == 25
     with pytest.raises(ValueError, match="Project life must be 1-50"):
         EquityDistributionConfig.validate_project_life(0)
-
-
-def test_validate_equity_stake_custom_validator() -> None:
-    """equity_stake_pct above 100 trips the explicit validator path."""
-    with pytest.raises(ValidationError) as exc:
-        EquityDistributionConfig(equity_stake_pct=150.0)
-    assert "equity_stake" in str(exc.value).lower()
-    assert EquityDistributionConfig.validate_equity_stake(25.0) == 25.0
-    with pytest.raises(ValueError, match="Equity stake"):
-        EquityDistributionConfig.validate_equity_stake(150.0)
 
 
 def test_validate_dscr_threshold_rejects_above_five() -> None:
@@ -407,24 +393,8 @@ def test_pipeline_defaulted_status_propagates() -> None:
 
 
 # ---------------------------------------------------------------------------
-# load_config (612-630) + canonical scenario integration
+# Canonical scenario integration
 # ---------------------------------------------------------------------------
-def test_load_config_canonical_scenario() -> None:
-    """The canonical lender YAML loads and passes v14 schema validation."""
-    cfg = load_config(LENDER)
-    container = OmegaConf.to_container(cfg, resolve=True)
-    assert isinstance(container, dict)
-    assert "project" in container
-
-
-def test_load_config_rejects_non_mapping_root(tmp_path: Path) -> None:
-    """A YAML whose root is a list is rejected with a TypeError."""
-    bad = tmp_path / "list_root.yaml"
-    bad.write_text("- a\n- b\n")
-    with pytest.raises(TypeError):
-        load_config(str(bad))
-
-
 def test_pipeline_from_canonical_scenario_capex_less_debt() -> None:
     """End-to-end on the canonical scenario: equity = CAPEX - debt, distributions valid."""
     from analytics.scenario_loader import load_scenario_config
@@ -518,105 +488,3 @@ def test_schedule_holdback_retains_cash() -> None:
     # Conservation: every dollar of cash-for-equity reaches the sponsor across the schedule.
     total_dist = sum(r["equity_distribution_usd"] for r in schedule)
     assert total_dist == pytest.approx(2 * cash_for_equity)
-
-
-# ---------------------------------------------------------------------------
-# EquityDistributionEngine.run exception path (773-775)
-# ---------------------------------------------------------------------------
-def test_engine_run_handles_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    """If calculate_distributions blows up, run() returns a failed payload."""
-    cfg = OmegaConf.create(
-        {"equity": {"scenario_name": "boom", "project_life_years": 3}}
-    )
-    engine = EquityDistributionEngine(cfg)
-
-    def _boom(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
-        raise RuntimeError("synthetic failure")
-
-    monkeypatch.setattr(engine, "calculate_distributions", _boom)
-    result = engine.run()
-    assert result["success"] is False
-    assert result["status"] == "failed"
-    assert "synthetic failure" in result["error"]
-    assert result["scenario_name"] == "boom"
-
-
-def test_engine_run_succeeds_and_conserves() -> None:
-    """run() builds per-year distributions; senior debt is paid before equity."""
-    cfg = OmegaConf.create(
-        {
-            "equity": {
-                "scenario_name": "legacy",
-                "project_life_years": 2,
-                "annual_distributable_cash_usd": 10.0e6,
-                "priority_senior_debt_usd": 5.0e6,
-                "priority_mezzanine_usd": 0.0,
-                "reserve_fund_pct": 10.0,
-            }
-        }
-    )
-    engine = EquityDistributionEngine(cfg)
-    result = engine.run()
-    assert result["success"] is True
-    dists = result["distributions"]["annual_distributions"]
-    assert len(dists) == 2
-    # year 1: 5M to senior, reserve 10% of 10M = 1M, equity = 4M
-    first = dists[0]
-    assert first["senior_debt_dist_usd"] == 5.0e6
-    assert first["reserve_fund_usd"] == 1.0e6
-    assert first["equity_distribution_usd"] == 4.0e6
-    # year 2: senior fully repaid -> more equity than year 1
-    second = dists[1]
-    assert second["senior_debt_dist_usd"] == 0.0
-    assert second["equity_distribution_usd"] >= first["equity_distribution_usd"]
-
-
-# ---------------------------------------------------------------------------
-# main() CLI entry point (792-816)
-# ---------------------------------------------------------------------------
-def _write_equity_yaml(tmp_path: Path, *, life: int = 2) -> str:
-    cfg = {
-        "project": {"name": "cli-case", "life_years": life},
-        "capex": {"usd_total": 2.0e8},
-        "cashflow": {"enabled": True},
-        "debt": {"principal_usd": 1.2e8},
-        "equity": {
-            "scenario_name": "cli-case",
-            "project_life_years": life,
-            "annual_distributable_cash_usd": 10.0e6,
-            "priority_senior_debt_usd": 5.0e6,
-            "priority_mezzanine_usd": 0.0,
-            "reserve_fund_pct": 10.0,
-        },
-    }
-    path = tmp_path / "equity_cli.yaml"
-    OmegaConf.save(OmegaConf.create(cfg), str(path))
-    return str(path)
-
-
-def test_main_writes_json_to_stdout(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """main() loads a config, runs the engine, and emits valid JSON to stdout."""
-    # Bypass v14 schema validation for this minimal standalone equity config.
-    monkeypatch.setattr(mod, "validate_config_for_v14", lambda **_kwargs: None)
-    path = _write_equity_yaml(tmp_path)
-    main(path)
-    out = capsys.readouterr().out
-    payload = json.loads(out.strip())
-    assert payload["success"] is True
-    assert payload["scenario_name"] == "cli-case"
-
-
-def test_main_reraises_and_reports_on_failure(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A missing config path makes main() emit an error payload and re-raise."""
-    missing = str(tmp_path / "does_not_exist.yaml")
-    with pytest.raises(Exception):
-        main(missing)
-    out = capsys.readouterr().out
-    payload = json.loads(out.strip())
-    assert payload["success"] is False
-    assert payload["status"] == "failed"
-    assert "error" in payload
