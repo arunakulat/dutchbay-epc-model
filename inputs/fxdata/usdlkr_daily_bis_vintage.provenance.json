@@ -1,0 +1,21 @@
+{
+  "series": "USD/LKR daily spot exchange rate",
+  "provider": "BIS",
+  "dataset": "WS_XRU",
+  "sdmx_key": "D.LK.LKR.A",
+  "endpoint": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_XRU/1.0/D.LK.LKR.A",
+  "frequency": "daily",
+  "collection": "A \u2014 average of observations through period",
+  "unit": "LKR per 1 USD",
+  "rows": 5379,
+  "date_range": [
+    "2005-01-03",
+    "2026-06-23"
+  ],
+  "latest_value": 334.34,
+  "fetched_as_of": "2026-06-27",
+  "sha256": "62ccc751f2dfbdca140906d54d6e9f24e31214239bba1994398b5a47bb491780",
+  "authoritative_reference": "CBSL daily indicative USD/LKR spot (https://www.cbsl.gov.lk/en/rates-and-indicators/exchange-rates/daily-indicative-usd-spot-exchange-rates) \u2014 BIS is an aggregator one step removed; reconcile recent levels to CBSL where exactness matters.",
+  "preferred_live_backbone": "FRED DEXSLUS (https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXSLUS) \u2014 daily Fed H.10 noon-NYC quote; preferred per research but network-restricted from the build environment, so BIS (keyless, reachable, full-window) is the pinned backbone. fx_history supports FRED as an alternate live provider.",
+  "notes": "Pinned reproducible/offline vintage (mirrors analytics.fx.fx_fetch FIXED mode). Re-baseline only via a deliberate dated edit. Daily code 'A' is an average-of-period, not a true spot, and BIS is one step removed from CBSL \u2014 acceptable for drift/vol/regime calibration. Non-finite holiday placeholders (US market holidays carried by BIS as NaN) dropped."
+}
