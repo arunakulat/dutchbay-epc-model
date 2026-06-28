@@ -40,6 +40,13 @@ from finance.equity_v14 import (
 
 logger = logging.getLogger(__name__)
 
+# Floating-point tolerance for the distribution-lockup DSCR comparison. The debt sizer
+# sculpts the floor year to the covenant target but lands it at ~target − 2e-16; a DSCR
+# within this band of the covenant is treated as MEETING it (not a breach), so the lockup
+# never fires on sub-ULP rounding at the sculpt floor. Far below any covenant margin that
+# matters, so genuine sub-covenant years still lock.
+_DSCR_LOCKUP_EPS = 1e-9
+
 
 class EquityDistributionConfig(BaseModel):
     """Configuration for equity distribution calculations.
@@ -272,6 +279,27 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         else 0.0
     )
 
+    # A2b/#33: the distribution-lockup DSCR covenant is the scenario's AUTHORED covenant,
+    # not an orphan library default. Resolve a fallback chain:
+    #   equity_distribution.min_dscr_threshold -> constraints.min_dscr_covenant -> 1.25
+    # so the lockup tests distributions against the value the debt sizer / covenant report
+    # actually use (1.30) instead of an unauthored 1.25 that matches no stated covenant.
+    # Paired with the FP-tolerant lockup comparison (_DSCR_LOCKUP_EPS), this is KPI-neutral
+    # for every real scenario: their dual-DSCR sculpt holds the floor AT the covenant, which
+    # MEETS (does not breach) the 1.30 lockup, so zero years lock and equity_irr/npv are
+    # byte-identical. The reconcile only bites where a year's DSCR is MATERIALLY below the
+    # covenant — a genuine breach (e.g. the synthetic edge_extreme_stress fixture), which is
+    # exactly when a lender lockup SHOULD trap distributions. (Finding #33 assumed the orphan
+    # 1.25-vs-1.30 gap was inert; it is real but only engages on genuine sub-covenant years —
+    # and naively raising it WITHOUT the FP tolerance would have spuriously locked the sculpt
+    # floor on sub-ULP rounding, a fake +27bps equity re-baseline.)
+    constraints_section = _section_case_insensitive(config, "constraints") or {}
+    lockup_threshold = equity_section.get("min_dscr_threshold")
+    if lockup_threshold is None:
+        lockup_threshold = _lookup_case_insensitive(
+            constraints_section, "min_dscr_covenant"
+        )
+
     # The financed schedule (build_equity_distribution_schedule) consumes only the fields
     # parsed below. (The former priority-waterfall fields — target_equity_irr_pct,
     # equity_stake_pct, reserve_fund_pct, priority_senior/mezzanine_usd,
@@ -281,9 +309,7 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         scenario_name=scenario_name,
         enabled=bool(equity_section.get("enabled", True)),
         project_life_years=_as_int(project_life, 25),
-        min_dscr_threshold=float(
-            _as_float(equity_section.get("min_dscr_threshold"), 1.25) or 0.0
-        ),
+        min_dscr_threshold=float(_as_float(lockup_threshold, 1.25) or 0.0),
         min_reserve_months=_as_int(equity_section.get("min_reserve_months"), 6),
         distribution_sweep_pct=_normalise_percent(
             equity_section.get("distribution_sweep_pct"), 100.0
@@ -480,10 +506,17 @@ def build_equity_distribution_schedule(
         balloon_resolution = _as_float(row.get("balloon_resolution"), 0.0) or 0.0
         cash_for_equity = cash_after_reserve - balloon_resolution
 
+        # FP-tolerant lockup: a DSCR that MEETS the covenant to machine precision is not a
+        # breach. The dual-DSCR sculpt lands the floor year at the covenant target but in
+        # floating point that is ~1.2999999999999998, so a strict `dscr < 1.30` would lock
+        # the floor year on sub-ULP noise (re-baselining KPIs on rounding — the exact
+        # boundary-flip anti-pattern). Subtracting _DSCR_LOCKUP_EPS locks only when DSCR is
+        # MATERIALLY below the covenant (a real breach), keeping sculpted-to-floor scenarios
+        # byte-identical while still trapping genuine sub-covenant years (stress cases).
         covenant_locked = bool(
             dscr is not None
             and distribution_config.min_dscr_threshold > 0.0
-            and dscr < distribution_config.min_dscr_threshold
+            and dscr < distribution_config.min_dscr_threshold - _DSCR_LOCKUP_EPS
         )
 
         # Dividend WHT applies only to positive distributions actually paid to the sponsor
