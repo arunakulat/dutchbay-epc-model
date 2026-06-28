@@ -278,7 +278,7 @@ capex:
 # OPEX — bottom-up line items, with BOTH O&M inflation and FX. Base $3.51M/yr =
 # $22.0/kW-yr (Lazard v18.0 US fixed O&M $24.50-40/kW-yr; SL set slightly below the low
 # end for cheaper local labour). escalation_pct: O&M inflates 2.5%/yr in USD, THEN the
-# LKR cost escalates further via the per-year FX curve (annual_depr 3%/yr) -> ~5.5%/yr LKR.
+# LKR cost escalates further via the per-year FX curve (annual_depr ~5.89%/yr) -> ~8.5%/yr LKR.
 opex:
   usd_per_year: 3510000   # year-1 base (engine escalates it); $22.0/kW-yr at 159.6 MW
   opex_per_kw_yr_usd: 22.0
