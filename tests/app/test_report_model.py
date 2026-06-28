@@ -7,6 +7,7 @@ from typing import Dict
 
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
+from app.reports.report_config import Covenants, ReportConfig, ReportMeta
 from app.reports.report_model import (
     ReportContext,
     Verdict,
@@ -83,6 +84,31 @@ def test_build_context_basic_shape() -> None:
     assert ctx.site_name == "Dutch Bay"
     assert ctx.status == "success"
     assert ctx.scenario_variant == "lendercase"
+
+
+def test_risk_register_projected_from_config() -> None:
+    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    assert ctx.risk_register, "the default config seeds risks"
+    # Rows are faithful passthroughs with a renderable severity.
+    for row in ctx.risk_register:
+        assert row.category and row.risk and row.mitigation
+        assert row.severity in {"low", "medium", "high"}
+    assert any(r.severity == "high" for r in ctx.risk_register)
+
+
+def test_risk_register_empty_when_config_has_none() -> None:
+    cfg = ReportConfig(
+        report=ReportMeta(
+            title="t", subtitle="s", organization="o", version="1.0",
+            confidentiality="c", disclaimer="d",
+        ),
+        covenants=Covenants(min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4),
+        kpi_table=[],
+    )  # no risk_register -> defaults to []
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, config=cfg
+    )
+    assert ctx.risk_register == []
 
 
 def test_kpi_rows_formatted_in_config_order() -> None:
