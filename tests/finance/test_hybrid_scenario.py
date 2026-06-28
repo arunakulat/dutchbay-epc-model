@@ -25,13 +25,12 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # Honest engine output (per-tech wind 0.6% / solar 0.4% degradation through the
     # cashflow). Value-destructive: projIRR below the ~8% build-up WACC.
     # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
-    # data-derived BIS 2005-2026 LKR depreciation), the 2% P50 over-prediction haircut, and
-    # PR A (group-C #36): the fabricated levies are removed (lifting CFADS 238.15M -> 242.00M
-    # and projIRR), while the 15% dividend WHT + IDC-in-depreciable-base bite equity only,
-    # taking equity_irr -0.0209 -> -0.0320 (dividend WHT dominates the IDC shield gain).
+    # PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR + CFADS unchanged
+    # (upstream of the debt rate); the costlier LKR tranche raises WACC (NPV -74.74M -> -87.60M)
+    # and takes equity_irr -0.0320 -> -0.0576 while the DSCR sculpt de-levers the deal.
     assert kpis["project_irr"] == pytest.approx(0.021615093204366574, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.03196383121302304, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-74741028.18498641, rel=1e-6)  # PR-A levy removal
+    assert kpis["equity_irr"] == pytest.approx(-0.057640792059825086, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-87603951.22250022, rel=1e-6)  # PR-B UIP LKR rate
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     assert kpis["total_cfads_usd"] == pytest.approx(242004699.5841927, rel=1e-6)
 

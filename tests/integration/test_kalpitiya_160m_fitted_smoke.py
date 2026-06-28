@@ -52,11 +52,10 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # construction-lag/off-by-one project-discounting fix (audit finding 2.0) AND the M3e
     # degradation re-baseline (0.005 -> 0.5, honest 0.5%/yr aging). After the 5.9% FX-drift
     # re-baseline (fx.annual_depr 0.03 -> 0.0589, data-derived from BIS 2005-2026 LKR
-    # depreciation), the flat-LKR tariff erodes faster in USD terms: project IRR ~3.12%
-    # after PR-A's fabricated-levy removal (still below the ~8.0% WACC). Levered equity IRR
-    # is NEGATIVE at ~-1.03% — PR-A's 15% dividend WHT pushes it down (the IDC shield only
-    # partly offsets); project IRR is upstream of the equity waterfall.
+    # project IRR ~3.12% (unchanged by PR B — unlevered). PR B's UIP LKR debt rate (13.39%)
+    # takes levered equity IRR to ~-4.12% (the costlier LKR tranche); project IRR is upstream
+    # of the equity waterfall.
     assert kpis["project_irr"] == pytest.approx(0.0312, abs=0.01)
-    assert kpis["equity_irr"] == pytest.approx(-0.0103, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0412, abs=0.01)
     assert kpis["equity_irr"] < kpis["project_irr"]  # levered equity below the project return
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)

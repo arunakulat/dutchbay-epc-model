@@ -365,8 +365,8 @@ Financing_Terms:
     dfi_max: 0.1               # USD_DFI concessional share (10%)
     usd_commercial_min: 0.45   # USD_Commercial share (45%)
   rates:
-    lkr_nominal: 0.08          # LKR_Local rate (8.0%)
-    lkr_min: 0.08
+    lkr_nominal: 0.1339  # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_min: 0.1339
     dfi_nominal: 0.065         # USD_DFI rate (6.5%)
     dfi_min: 0.065
     usd_nominal: 0.075         # USD_Commercial rate (7.5%)
@@ -529,14 +529,14 @@ expected_results:
   # ~0%/yr). The negative IRR is now reported truthfully: the project-IRR solver was floored
   # at r_low=0.0 and clamped sub-zero projects to exactly 0.0; it now searches negative rates.
   project_irr: -0.0336      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
-  equity_irr: -0.1314       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
+  equity_irr: -0.1409       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
                             # constraint; round-5 #5 interest shield only lifts -0.0702 -> -0.0668
                             # (+34bps; little taxable income to shield in a loss-making deal).
-  project_npv_m_usd: -133.74 # deeply underwater
+  project_npv_m_usd: -138.00 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.41
-  llcr: 1.21
-  plcr: 1.25
+  avg_dscr: 1.39
+  llcr: 1.32
+  plcr: 1.35
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA

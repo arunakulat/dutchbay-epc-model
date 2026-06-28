@@ -145,8 +145,8 @@ Financing_Terms:
     dfi_max: 0.1
     usd_commercial_min: 0.45
   rates:
-    lkr_nominal: 0.08
-    lkr_min: 0.08
+    lkr_nominal: 0.1339  # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_min: 0.1339
     dfi_nominal: 0.065
     dfi_min: 0.065
     usd_nominal: 0.075

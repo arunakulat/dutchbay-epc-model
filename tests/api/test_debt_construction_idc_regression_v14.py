@@ -122,27 +122,29 @@ def test_lendercase_idc_totals_pinned() -> None:
     dfi = _extract_tranche(result, "dfi")
     tol = 0.002  # 0.2% relative tolerance
 
-    # Principals by tranche (absolute USD amounts, not "millions"). PR A (group-C #36)
-    # removed the fabricated revenue levies, lifting CFADS so the DSCR sizer takes more debt
-    # (gearing ~0.578 -> ~0.588); the IDC-inclusive tranche principals scale up accordingly.
-    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(47_392_581.6, rel=tol)
-    assert float(usd.get("principal_m", 0.0)) == pytest.approx(47_059_774.453125, rel=tol)
-    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(10_310_516.60625, rel=tol)
+    # Principals by tranche (absolute USD amounts, not "millions"). PR B (group-C #3) raised
+    # the LKR tranche rate to the UIP-implied 13.39%, so the DSCR sizer DE-LEVERS (gearing
+    # ~0.588 -> ~0.45); the IDC-inclusive tranche principals scale down accordingly (the LKR
+    # tranche's per-unit IDC rises with its rate, but the much smaller total debt dominates).
+    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(39_099_998.218995, rel=tol)
+    assert float(usd.get("principal_m", 0.0)) == pytest.approx(36_045_784.6875, rel=tol)
+    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(7_897_416.975, rel=tol)
 
     total_principal = (
         float(lkr.get("principal_m", 0.0))
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(104_762_872.659375, rel=tol)
+    assert total_principal == pytest.approx(83_043_199.881495, rel=tol)
 
-    # IDC by tranche (scales up with the larger PR-A debt sizing)
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_198_331.6, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(4_865_524.453125, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(934_016.60625, rel=tol)
+    # IDC by tranche. Total IDC RISES vs PR A (10.998M -> 11.223M) despite the smaller debt:
+    # the LKR tranche's 13.39% rate accrues much more construction interest per unit principal.
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(6_780_998.218995, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(3_726_784.6875, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(715_416.975, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(10_997_872.659375, rel=tol)
+    assert total_idc == pytest.approx(11_223_199.881495, rel=tol)
 
     # Min DSCR and audit status
     min_dscr = float(result.get("min_dscr"))

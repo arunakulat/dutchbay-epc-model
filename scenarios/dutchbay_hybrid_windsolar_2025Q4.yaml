@@ -398,8 +398,8 @@ Financing_Terms:
     dfi_max: 0.1               # USD_DFI concessional share (10%)
     usd_commercial_min: 0.45   # USD_Commercial share (45%)
   rates:
-    lkr_nominal: 0.08          # LKR_Local rate (8.0%)
-    lkr_min: 0.08
+    lkr_nominal: 0.1339  # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_min: 0.1339
     dfi_nominal: 0.065         # USD_DFI rate (6.5%)
     dfi_min: 0.065
     usd_nominal: 0.075         # USD_Commercial rate (7.5%)

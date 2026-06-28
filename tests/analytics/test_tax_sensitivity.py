@@ -131,8 +131,8 @@ def test_suite_structure_and_base_kpis(base_config):
 def test_basecase_returns_regression_pins(base_config):
     """Pin baseline returns so a tax-model regression is caught."""
     base = _one_way(base_config, "tax.corporate_tax_rate", 0.30).base_kpis
-    # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%): the steeper
-    # LKR depreciation erodes the USD value of the flat-LKR revenue, pulling the basecase
-    # equity IRR ~0.092 -> ~0.058 and project IRR ~0.079 -> ~0.057.
-    assert 0.04 < base["equity_irr"] < 0.07
+    # Basecase project IRR ~0.059 is unchanged by the tax/debt re-baselines (unlevered).
+    # PR A (dividend WHT) then PR B (UIP LKR debt rate 13.39%) pulled the LEVERED basecase
+    # equity IRR down to ~0.030 (the costlier LKR tranche; basecase is fixed-70%-geared).
+    assert 0.01 < base["equity_irr"] < 0.05
     assert 0.04 < base["project_irr"] < 0.07

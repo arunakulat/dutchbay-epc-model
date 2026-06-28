@@ -211,17 +211,17 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by PR A (group-C #36): the fabricated success-fee/env-surcharge levies
-    # (1.5% of revenue) are removed -> CFADS 199.10M -> 202.33M, project_irr 0.0250 -> 0.0268,
-    # NPV -56.10M -> -53.99M; the 15% dividend WHT + IDC-in-depreciable-base bite equity only,
-    # netting equity_irr -0.0100 -> -0.0193 (the dividend WHT dominates the IDC shield gain).
+    # Re-baselined by PR B (group-C #3): LKR debt rate 8% -> UIP-implied 13.39% (USD 7.5% +
+    # 5.89% LKR drift). projIRR + CFADS are UNCHANGED (both upstream of the debt rate); the
+    # costlier LKR tranche raises WACC (8.1% -> 9.8%) so NPV -53.99M -> -65.46M, and hits
+    # levered equity (-0.0193 -> -0.0486) while the DSCR sculpt de-levers (gearing ~0.59 -> ~0.45).
     assert kpis["project_irr"] == pytest.approx(0.02683686114665262, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(-0.019289278896401862, abs=1e-9)
-    assert kpis["project_npv"] == pytest.approx(-53985936.79875486, rel=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.048585780806075674, abs=1e-9)
+    assert kpis["project_npv"] == pytest.approx(-65455817.14404039, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(202332872.38974944, rel=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
-    # WACC + spread), below the base NPV. -62.87M -> -60.92M with the levy removal.
-    assert kpis["project_npv_prudential"] == pytest.approx(-60918744.742364414, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.09114337950454418, abs=1e-9)
+    # WACC + spread), below the base NPV. -60.92M -> -71.32M (higher WACC from the LKR rate).
+    assert kpis["project_npv_prudential"] == pytest.approx(-71316323.02802612, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.10827115075628828, abs=1e-9)
     assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV

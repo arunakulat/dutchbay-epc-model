@@ -365,8 +365,8 @@ Financing_Terms:
     dfi_max: 0.1               # USD_DFI concessional share (10%)
     usd_commercial_min: 0.45   # USD_Commercial share (45%)
   rates:
-    lkr_nominal: 0.08          # LKR_Local rate (8.0%)
-    lkr_min: 0.08
+    lkr_nominal: 0.1339  # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_min: 0.1339
     dfi_nominal: 0.065         # USD_DFI rate (6.5%)
     dfi_min: 0.065
     usd_nominal: 0.075         # USD_Commercial rate (7.5%)
@@ -542,21 +542,26 @@ expected_results:
   # success-fee/env-surcharge levies (#43, +CFADS ~1.5% -> project IRR 2.50% -> 2.68%, NPV
   # -$56.1M -> -$54.0M), add the SL 15% dividend WHT (#81) and capitalize debt IDC into the
   # depreciable base (#36/#75) — both equity-path only, netting equity IRR -1.00% -> -1.93%
-  # (the dividend WHT dominates the IDC shield gain).
-  # Net current canonical: project IRR 2.68% (BELOW the ~8.10% WACC), equity IRR -1.93% (NEGATIVE),
-  # NPV -$54.0M, DSCR-solved gearing ~0.588. The project is value-destructive, honestly so.
-  project_irr: 0.027       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
-  equity_irr: -0.019       # NEGATIVE — below cost of equity. Chain: +0.0242 (interest shield) ->
-                            # -0.0046 (5.9% FX-drift) -> -0.0100 (2% AEP haircut) -> -0.0193
-                            # (PR-A: +15% dividend WHT dominates the IDC-shield gain & levy removal).
-                            # The flat-nominal-LKR tariff cannot clear equity. (Set
-                            # tax.interest_deductibility: false to recover the unlevered case.) MOIC < 1.
-  project_npv_m_usd: -54.0 # discount at build-up WACC ~8.10%. NPV -32.34M -> -53.29M (FX-drift) ->
-                            # -56.1M (2% AEP haircut) -> -54.0M (PR-A fabricated-levy removal lifts CFADS).
+  # (the dividend WHT dominates the IDC shield gain); and (8) the 2026-06-28 PR-B group-C #3
+  # UIP LKR DEBT RATE: Financing_Terms.rates.lkr 8% -> UIP-implied 13.39% (USD 7.5% + the same
+  # 5.89% data-derived LKR drift) — the 8% implied a concessional facility; this is the
+  # market-rate assumption (pending a real LKR term-sheet). projIRR UNCHANGED (unlevered); the
+  # costlier LKR tranche lifts WACC 8.11% -> 9.83%, deepens NPV -$54.0M -> -$65.5M, takes equity
+  # IRR -1.93% -> -4.86%, and de-levers the DSCR-solved gearing 0.588 -> ~0.45.
+  # Net current canonical: project IRR 2.68% (BELOW the ~9.83% WACC), equity IRR -4.86% (NEGATIVE),
+  # NPV -$65.5M, DSCR-solved gearing ~0.45. The project is value-destructive, honestly so.
+  project_irr: 0.027       # UNLEVERED (shield-free) — unchanged by the debt-rate change; << WACC
+  equity_irr: -0.049       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
+                            # -0.0100 (2% AEP haircut) -> -0.0193 (PR-A dividend WHT + IDC) ->
+                            # -0.0486 (PR-B UIP LKR debt rate 13.39%). The flat-nominal-LKR tariff
+                            # cannot clear equity. (Set tax.interest_deductibility: false to recover
+                            # the unlevered case.) MOIC < 1.
+  project_npv_m_usd: -65.5 # discount at build-up WACC ~9.83%. NPV -32.34M -> -53.29M (FX) -> -56.1M
+                            # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up).
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.4
-  llcr: 1.15
-  plcr: 1.21
+  llcr: 1.30
+  plcr: 1.35
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
