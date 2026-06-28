@@ -377,7 +377,8 @@ def cli(cfg: DictConfig) -> None:
                   modules to validate (default: None → all modules).
                 - export_dir: Artifact output directory
                   (default: '_out/run_full_pipeline_v14').
-                - write_artifacts: Write JSON/CSV files (default: true).
+                - write_artifacts: Write JSON/CSV files (default: false;
+                  the runtime reads bool(cfg.get("write_artifacts", False))).
             Optional fields (Sprint 19 W.6 — wind→finance ingestion;
             OFF by default — setting neither of the first two preserves
             pre-Sprint-19 behaviour exactly):
