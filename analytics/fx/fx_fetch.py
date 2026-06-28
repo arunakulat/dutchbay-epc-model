@@ -258,8 +258,12 @@ def fetch_live_fx(cfg: FXRequestConfig) -> FXRate:
     Uses the stdlib only (``urllib``) — no third-party dependency, so the package
     always imports cleanly and CI (which never calls this) needs nothing extra.
     """
+    if not cfg.endpoint.lower().startswith("https://"):
+        raise ValueError(
+            f"FX endpoint must use https (refusing file:/ or plaintext): {cfg.endpoint!r}"
+        )
     req = urllib.request.Request(cfg.endpoint, headers={"User-Agent": "dutchbay-fx/1.0"})
-    with urllib.request.urlopen(req, timeout=cfg.timeout_s) as resp:  # noqa: S310 (https only)
+    with urllib.request.urlopen(req, timeout=cfg.timeout_s) as resp:  # nosec B310 - https scheme enforced above
         payload = json.loads(resp.read().decode("utf-8"))
 
     rates = payload.get("rates") or {}

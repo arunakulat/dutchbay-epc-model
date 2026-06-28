@@ -24,9 +24,10 @@ cd dutchbay-epc-model
 python3.11 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (requirements.txt = the pinned reproducibility lock;
+# pyproject.toml is the abstract source of truth — see the [dev] extra for tooling)
 pip install -r requirements.txt
-pip install -r requirements_dev.txt
+pip install -e ".[dev]"
 
 # Run tests
 pytest tests/
@@ -247,8 +248,8 @@ build_executive_workbook(
 ## ⚙️ Technical Requirements
 
 - **Python**: 3.11+
-- **Dependencies**: See `requirements.txt`
-- **Dev Tools**: See `requirements_dev.txt`
+- **Dependencies**: `pyproject.toml` (abstract source of truth) + `requirements.txt` (pinned lock for CI/reproducibility)
+- **Dev Tools**: the `[dev]` extra — `pip install -e ".[dev]"`
 - **Environment**: macOS, Linux, or Windows with WSL
 
 ---

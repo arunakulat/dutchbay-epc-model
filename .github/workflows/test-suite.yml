@@ -175,10 +175,40 @@ jobs:
         mypy scripts/ --ignore-missing-imports
         --allow-untyped-defs --allow-untyped-calls --allow-any-generics
 
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install security tooling
+      # Bandit does static analysis (no import) and pip-audit audits the
+      # requirements.txt FILE (resolves from PyPI), so neither needs the project
+      # deps installed — keep this job fast.
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit pip-audit
+
+    - name: Run security gate (bandit SAST + pip-audit dependency CVEs)
+      # MANDATORY. `make security` is the single source of truth for BOTH the bandit
+      # invocation (fail on MEDIUM+ severity/confidence over the engine surface; known-
+      # safe findings carry inline `# nosec` justifications) AND the pip-audit dependency
+      # scan with the reviewed, documented allowlist of version-capped advisories. Running
+      # it here keeps local `make security` and CI byte-identical. Any NEW vulnerability
+      # (or a new bandit MEDIUM+) fails this job and — via Test Summary — blocks the merge.
+      run: make security
+
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: [test, lint, security]
     if: always()
 
     steps:
@@ -203,5 +233,9 @@ jobs:
         fi
         if [ "${{ needs.lint.result }}" != "success" ]; then
           echo "::error::Lint job did not succeed (result=${{ needs.lint.result }}) — mypy gate failed; blocking Test Summary"
+          exit 1
+        fi
+        if [ "${{ needs.security.result }}" != "success" ]; then
+          echo "::error::Security job did not succeed (result=${{ needs.security.result }}) — bandit/pip-audit gate failed; blocking Test Summary"
           exit 1
         fi

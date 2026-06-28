@@ -26,12 +26,19 @@ make setup
 make lint type security test cov
 ```
 
-## 2) Freeze/lock deps (deterministic deployments)
+## 2) Refresh the dependency lock (deterministic deployments)
+
+`pyproject.toml` is the single ABSTRACT source of truth (core deps + extras);
+`requirements.txt` is the ONE pinned lock CI installs. There is no separate
+`constraints.txt` / `requirements.lock` (retired). Regenerate the lock from a
+CLEAN venv so it cannot drift or re-accrete non-dependencies:
 
 ```bash
-make freeze   # writes constraints.txt from the current env
-make lock     # writes requirements.lock for CI/Prod
+make lock     # pip install -e ".[dev,api,dashboard,wind,gis,report]" + freeze -> requirements.txt
+make audit    # re-check the regenerated lock for new CVEs (pip-audit + allowlist)
 ```
+
+Review the `requirements.txt` diff before committing.
 
 ## 3) Verify the wheel builds and imports
 
@@ -49,7 +56,7 @@ Move the `## [Unreleased]` items in `CHANGELOG.md` under a new dated heading:
 
 ```bash
 VERSION=$(cat VERSION)
-git add VERSION pyproject.toml CHANGELOG.md constraints.txt requirements.lock
+git add VERSION pyproject.toml CHANGELOG.md requirements.txt
 git commit -m "chore(release): v${VERSION}"
 git push -u origin "release/v${VERSION}"
 gh pr create --title "chore(release): v${VERSION}" --fill
@@ -77,5 +84,5 @@ git push origin "v${VERSION}"                        # push the TAG, not main
 
 - `VERSION` is the single source of truth for the release number; keep
   `pyproject.toml [project].version` in sync with it.
-- Runtime installs use `requirements.lock` or `constraints.txt` per environment policy.
-- Dev installs keep `-e .[dev,test]` so local and CI behave the same.
+- Runtime/CI installs use the pinned `requirements.txt` lock (the single lock file).
+- Dev installs use `-e ".[dev]"` (the toolchain extra) so local and CI behave the same.

@@ -143,7 +143,7 @@ else
   echo "     python3 -m venv .venv311"
   echo "     source .venv311/bin/activate"
   echo "     pip install --upgrade pip"
-  echo "     pip install -r requirements_dev.txt"
+  echo "     pip install -r requirements.txt && pip install -e \".[dev]\""
   echo ""
   echo "R21 – Standard local workflow will not run cleanly without .venv311."
   exit 1
