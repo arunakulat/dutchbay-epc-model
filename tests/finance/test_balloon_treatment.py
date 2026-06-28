@@ -12,14 +12,16 @@ lender case. These tests lock in the verified-correct treatments:
     bullet         — single lump repayment at maturity.
     amortize       — resize debt DOWN so the sculpt fully amortises (no balloon).
 
-Ground truth: the lender case carries a ~42% balloon ($42.5M on $100.1M debt),
+Ground truth: the lender case carries a ~58% balloon ($60.8M on $94.16M debt),
 which breaches constraints.max_balloon_pct (10%). (Equity IRRs are at the corrected
 FX 333.79, the ERA5-fitted Weibull re-baseline, the 2026-06 debt-service-orphan
-fix / audit finding 2.1 AND the M3e degradation re-baseline (0.005 -> 0.5, honest
-0.5%/yr aging) — markedly lower than the prior numbers; lower CFADS also enlarges
-the structural balloon 36% -> 42%. The Wave-1 equity-waterfall fix then RELEASES the DSRA
-(and any held-back / un-swept SPV cash) to the sponsor at maturity instead of destroying
-it, lifting the canonical cash_sweep equity IRR ~-2.5% -> ~-0.8%.)
+fix / audit finding 2.1, the M3e degradation re-baseline (0.005 -> 0.5, honest
+0.5%/yr aging) AND the 2026-06-28 5.9% FX-drift re-baseline (fx.annual_depr 3% ->
+5.89%) — the dominant driver: lower CFADS shrinks the dual_dscr-solved debt
+($100.1M -> $94.16M) and amortises less, so the structural balloon grew 36% -> 58%
+($42.5M -> $60.8M), and the canonical cash_sweep equity IRR fell to ~-0.46% (NEGATIVE).
+The Wave-1 equity-waterfall fix releases the DSRA and any un-swept SPV cash to the
+sponsor at maturity instead of destroying it.)
 """
 
 from __future__ import annotations

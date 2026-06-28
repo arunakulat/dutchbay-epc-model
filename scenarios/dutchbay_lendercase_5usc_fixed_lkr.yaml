@@ -14,9 +14,9 @@
 #     CAPEX $207.5M = $1,300/kW (line items derived; IRENA/Lazard/NREL-sourced); OPEX
 #     $3.51M/yr = $22/kW-yr with 2.5%/yr O&M inflation (USD) on top of the FX curve.
 # Honest result: at 5c/kWh on realistic costs the deal is DEEPLY UNECONOMIC — project
-# IRR -0.27% (NEGATIVE; below break-even even undiscounted), equity IRR -9.05%, project
-# NPV -$118.8M (after the 2026-06 discounting fix and the M3e 0.5%/yr degradation
-# re-baseline). See test_kalpitiya_5usc_smoke.
+# IRR -3.28% (NEGATIVE; below break-even even undiscounted), equity IRR -11.89%, project
+# NPV -$133.1M (after the 2026-06 discounting fix, the M3e 0.5%/yr degradation re-baseline,
+# and the 2026-06-28 5.9% FX-drift re-baseline). See test_kalpitiya_5usc_smoke.
 #
 # Usage:
 #   python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4
@@ -511,9 +511,9 @@ expected_results:
   # 16.69 LKR/kWh (5.0 US cents fixed LKR) vs 20.3 (6.1c); (2) GRANULAR costs — CAPEX
   # $207.5M ($1,300/kW, bottom-up) vs flat $159.6M ($1,000/kW), and OPEX $3.51M/yr with
   # 2.5%/yr O&M escalation vs flat $3M. Realistic costs at 5c/kWh leave the deal DEEPLY
-  # UNECONOMIC: project IRR is NEGATIVE (-0.27%) — lifetime CFADS fall short of capex even
-  # undiscounted, far below the ~9.72% WACC; equity IRR -9.05%, project NPV -$118.8M. Debt
-  # deleverages to $77.8M (DSCR-bound). Deepened by the 2026-06 project-discounting fix
+  # UNECONOMIC: project IRR is NEGATIVE (-3.28%) — lifetime CFADS fall short of capex even
+  # undiscounted, far below the ~9.72% WACC; equity IRR -11.89%, project NPV -$133.1M. Debt
+  # deleverages to $71.07M (DSCR-bound). Deepened by the 2026-06 project-discounting fix
   # (audit finding 2.0) AND the M3e degradation re-baseline (project.degradation 0.005 -> 0.5,
   # honest 0.5%/yr aging; the engine reads it as a percent and /100s it, so 0.005 had meant
   # ~0%/yr). The negative IRR is now reported truthfully: the project-IRR solver was floored

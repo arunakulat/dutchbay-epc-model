@@ -10,7 +10,7 @@
 #   - Higher grid curtailment risk
 #   - Same DFI financing structure as lender case
 #
-# Expected P50 IRR: ~14.2% (vs ~17.9% lender base)
+# Expected P50 project IRR: ~3.89% (vs ~2.75% lender base, post the 5.9% FX-drift re-baseline)
 #
 # Author: CESSPIT Integration Team
 # Date: 2025-12-10

@@ -354,9 +354,10 @@ expected_results:
   revenue_20yr_undiscounted_m_lkr: 186261.1  # with 0.5%/yr degradation (M3e) + CPI
   # Financials at the corrected FX 333.79 (LKR-native tariff -> full FX drag on USD returns).
   # Re-baselined by (a) the 2026-06 project-discounting fix (audit finding 2.0: construction
-  # lag + operating-year-1 off-by-one) and (b) the M3e degradation re-baseline (0.005 -> 0.5,
-  # honest 0.5%/yr aging): project IRR 8.73% -> 5.22% (below the ~8.18% WACC) and equity IRR
-  # +0.3% -> -2.19% (the 0.5%/yr aging tips marginal equity below zero). NPV -$33.12M.
+  # lag + operating-year-1 off-by-one), (b) the M3e degradation re-baseline (0.005 -> 0.5,
+  # honest 0.5%/yr aging) which took project IRR 8.73% -> 5.22%, and (c) the 2026-06-28 5.9%
+  # FX-drift re-baseline (fx.annual_depr 3% -> 5.89%) which dominates: project IRR -> 2.93%
+  # (below the ~8.03% WACC), equity IRR -> -0.03% (~breakeven), NPV -> -$51.22M.
   project_irr: 0.0293
   equity_irr: -0.0003   # ~breakeven, marginally NEGATIVE after the 5.9% FX-drift re-baseline
                        # (fx.annual_depr 3% -> 5.89%); was +0.0280 pre-drift. Below cost of equity.

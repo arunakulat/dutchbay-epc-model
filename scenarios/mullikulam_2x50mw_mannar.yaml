@@ -361,7 +361,7 @@ expected_results:
   # generation. With capacity_mw corrected to 56 (now consistent with aep_summary 133.1
   # GWh) AND opex corrected to the benchmark 1.12M, Lot 1 is uneconomic: LCOE ~5.5 USc
   # exceeds the aggressive 3.96 USc WindForce bid. The dual-DSCR sizer holds min DSCR
-  # 1.30 by sizing debt down to ~15.9M (gearing ~0.25), pushing the loss onto equity.
+  # 1.30 by sizing debt down to ~14.7M (gearing ~0.23), pushing the loss onto equity.
   # Regenerated from the live engine 2026-06-26 (round-7 stale-pin fix) and now bound by
   # tests/integration/test_mullikulam_mannar_smoke.py so it cannot drift again. project_irr/
   # npv/moic/llcr/plcr had gone stale — the LLCR/PLCR pins predated PR #389 (operating-year

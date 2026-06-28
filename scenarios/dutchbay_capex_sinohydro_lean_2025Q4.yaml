@@ -322,8 +322,9 @@ Financing_Terms:
   # maturity. balloon_treatment governs how the equity waterfall resolves it
   # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
   # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~36%
-  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  # balloon before any equity distribution. NB: this structure carries a ~58%
+  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
+  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
   balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
@@ -504,7 +505,7 @@ expected_results:
   # tests/integration/test_capex_cases_smoke.py (CESSPIT pre-flight integrity), so they
   # cannot silently drift. This case differs from the canonical lender ONLY in capex
   # ($977/kW vs $1,000/kW); resource / tariff / debt are identical. Lower capex raises the
-  # dual-DSCR gearing (0.642 vs 0.627) and the returns slightly, but the deal stays
+  # dual-DSCR gearing (0.6025 vs 0.590) and the returns slightly, but the deal stays
   # value-destructive — the flat-nominal-LKR tariff, not capex, is the binding constraint.
   project_irr: 0.0299       # vs canonical 0.0275 — still BELOW WACC (~8.1%)
   equity_irr: 0.0009        # vs canonical -0.0046 — marginally POSITIVE (the lean capex offsets

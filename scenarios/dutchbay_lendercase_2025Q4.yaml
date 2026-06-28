@@ -330,8 +330,9 @@ Financing_Terms:
   # maturity. balloon_treatment governs how the equity waterfall resolves it
   # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
   # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~36%
-  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  # balloon before any equity distribution. NB: this structure carries a ~58%
+  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
+  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
   balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
@@ -512,18 +513,19 @@ expected_results:
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
   # asserts the live pipeline matches them, so they cannot silently drift.
-  # HONEST after FOUR corrections: (1) FX 300 -> 333.79, (2) the ERA5-fitted Weibull
-  # re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, net AEP 483.6 -> 473.8 GWh),
-  # (3) the 2026-06 project-discounting fix (audit finding 2.0): the project NPV/IRR
-  # had discounted operating year 1 at t=0 (undiscounted) and ignored the 2-year
-  # construction lag the debt engine models, pulling the whole operating stream forward
-  # one period (fixed -> project IRR 5.43%); and (4) the 2026-06 DEGRADATION re-baseline:
-  # `project.degradation` was 0.005 but the engine reads it as a PERCENT and /100s it, so
-  # turbines aged at 0.005%/yr — effectively zero — contradicting the intended 0.5%/yr.
-  # Correcting it to 0.5 applies honest 0.5%/yr aging and lowers project IRR 5.43% -> 5.05%
-  # (still BELOW the ~8.18% WACC), pushes equity IRR ~0% -> -2.47%, and NPV -$31.9M ->
-  # -$35.5M — the project is value-destructive. The prior +$2.03M / 8.44% headline was a
-  # timing artifact. (The stale 300 FX + overstated Weibull had earlier shown 11.12% / $27.4M.)
+  # HONEST after the 2026 correction sequence: (1) FX 300 -> 333.79; (2) the ERA5-fitted
+  # Weibull re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, AEP 483.6 -> 473.8 GWh);
+  # (3) the 2026-06 project-discounting fix (audit finding 2.0): operating year 1 had been
+  # discounted at t=0, ignoring the 2-year construction lag, pulling the operating stream
+  # forward one period (fixed -> project IRR 5.43%); (4) the 2026-06 DEGRADATION re-baseline
+  # (`project.degradation` 0.005 was read as 0.005%/yr ~ zero; corrected to honest 0.5%/yr
+  # aging -> project IRR 5.43% -> 5.05%), and the interest-tax-shield re-baseline that lifted
+  # equity IRR to +2.42%; and (5) the 2026-06-28 FX-DRIFT re-baseline — the DOMINANT driver:
+  # fx.annual_depr 3% -> 5.89% (the data-derived BIS 2005-2026 long-run LKR depreciation,
+  # replacing the hand-set 3%), which erodes the flat-LKR revenue faster in USD terms.
+  # Net current canonical: project IRR 5.05% -> 2.75% (BELOW the ~8.10% WACC — the DSCR-solved
+  # gearing fell 0.628 -> 0.590, lifting the WACC from ~7.85%), equity IRR +2.42% -> -0.46%
+  # (now NEGATIVE), NPV -$32.3M -> -$53.3M. The project is value-destructive, honestly so.
   project_irr: 0.0275       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
   equity_irr: -0.0046        # NEGATIVE — below cost of equity. The 5.9% FX-drift re-baseline
                             # (fx.annual_depr 3% -> 5.89%, data-derived BIS 2005-2026) flipped this
