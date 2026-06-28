@@ -9,7 +9,7 @@
 # excluded (the EIA capex excludes BESS). See ~/Downloads/EIA_Annexures_KEY_FACTS.md.
 #
 # Honest finding: even at this lean capex the deal stays value-destructive (project IRR
-# 5.29% < WACC ~8.1%, equity IRR -0.44%, NPV -$31.4M) — the flat-nominal-LKR tariff, not
+# 2.99% < WACC ~8.1%, equity IRR +0.09%, NPV -$49.4M) — the flat-nominal-LKR tariff, not
 # capex, is the binding constraint. expected_results are binding (asserted by
 # tests/integration/test_capex_cases_smoke.py).
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -543,13 +543,13 @@ metadata:
 wacc:
   # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
   #   after-tax WACC = (1-g)*ke + g*(blended kd + fees)*(1-tax)
-  # using the ACTUAL sized gearing (~62.5%) and blended rate (~7.63%) from the debt
+  # using the ACTUAL sized gearing and blended rate (~7.63%) from the debt
   # engine (Financing_Terms.mix+rates). drives_discount_rate routes the WACC to the
   # project-NPV discount and cost_of_equity to the equity-NPV discount.
   mode: build_up
   drives_discount_rate: true
   cost_of_equity: 0.12   # USD house base (~ US rf 4.5% + Sri Lanka country risk 3.5% + equity 4.0%).
                          # Post-default Sri Lanka ke is contested — project NPV is on a knife-edge
-                         # vs project IRR 8.35%; see the ke-band (12–20%) sensitivity.
+                         # relative to the project IRR; see the ke-band (12–20%) sensitivity.
   prudential_spread_bps: 100
   description: "Build-up WACC drives the discount rate (replaces a decorative fixed 12%)."
