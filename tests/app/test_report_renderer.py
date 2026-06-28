@@ -58,6 +58,15 @@ def test_html_contains_core_content() -> None:
     assert "Covenant Assessment" in html
 
 
+def test_html_contains_risk_register() -> None:
+    html = render_report_html(_context())
+    assert "Risk Register" in html
+    assert "Mitigation" in html  # table header
+    assert "Revenue / FX" in html  # a seeded risk category
+    assert 'class="badge sev-high"' in html  # severity badge rendered
+    assert ">High<" in html  # severity label capitalized
+
+
 def test_html_covenant_badges_reflect_verdict() -> None:
     html = render_report_html(_context())
     # IRR below hurdle and equity negative -> both fail badges present.

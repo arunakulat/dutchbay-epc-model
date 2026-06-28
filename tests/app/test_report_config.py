@@ -38,6 +38,69 @@ def test_kpi_table_has_core_indicators() -> None:
     assert all(row.kind in {"pct", "multiple", "usd"} for row in cfg.kpi_table)
 
 
+def test_risk_register_loads_with_valid_severities() -> None:
+    cfg = load_report_config()
+    assert cfg.risk_register, "the committed default seeds a risk register"
+    for item in cfg.risk_register:
+        assert item.category and item.risk and item.mitigation
+        assert item.severity in {"low", "medium", "high"}
+    # The flat-LKR/FX erosion risk is the project's headline (high) risk.
+    fx = next(r for r in cfg.risk_register if "FX" in r.category)
+    assert fx.severity == "high"
+
+
+def test_risk_register_rejects_bad_severity(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(
+        textwrap.dedent(
+            """
+            report:
+              title: t
+              subtitle: s
+              organization: o
+              version: "1.0"
+              confidentiality: c
+              disclaimer: d
+            covenants:
+              min_dscr_floor: 1.2
+              min_dscr_target: 1.3
+              max_balloon_pct: 0.4
+            kpi_table: []
+            risk_register:
+              - {category: c, risk: r, mitigation: m, severity: catastrophic}
+            """
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):  # severity not in the RiskSeverity Literal
+        load_report_config(bad)
+
+
+def test_risk_register_is_optional(tmp_path: Path) -> None:
+    minimal = tmp_path / "minimal.yaml"
+    minimal.write_text(
+        textwrap.dedent(
+            """
+            report:
+              title: t
+              subtitle: s
+              organization: o
+              version: "1.0"
+              confidentiality: c
+              disclaimer: d
+            covenants:
+              min_dscr_floor: 1.2
+              min_dscr_target: 1.3
+              max_balloon_pct: 0.4
+            kpi_table: []
+            """
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_report_config(minimal)  # no risk_register key -> defaults to empty
+    assert cfg.risk_register == []
+
+
 def test_unknown_key_is_rejected(tmp_path: Path) -> None:
     bad = tmp_path / "bad.yaml"
     bad.write_text(
