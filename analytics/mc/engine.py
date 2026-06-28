@@ -28,6 +28,7 @@ from analytics.mc.aggregate import aggregate_trials
 from analytics.mc.correlation import (
     CorrelationSpec,
     apply_correlation_structure,
+    load_correlation_from_config,
 )
 from analytics.mc.degradation import apply_degradation_if_enabled
 from analytics.mc.samplers import generate_lhs_samples
@@ -251,7 +252,16 @@ class MonteCarloEngine:
 
         self._seed = int(seed)
         self._crn = bool(common_random_numbers)
-        self._correlation = correlation
+        # Honor an authored monte_carlo.correlation matrix by default: the complete, tested
+        # correlation facility was wired into NO live path, so an enabled:true matrix in a
+        # scenario was silently ignored and every driver sampled independently. An explicitly
+        # passed CorrelationSpec still takes precedence; absent both, it stays None (independent
+        # sampling, byte-identical for scenarios with no correlation block).
+        self._correlation = (
+            correlation
+            if correlation is not None
+            else load_correlation_from_config(self._base_config)
+        )
 
         (
             self._param_names,
