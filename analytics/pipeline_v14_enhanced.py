@@ -377,6 +377,20 @@ def _resolve_wacc_and_discounts(
         project_discount = float(wacc_dict.get("wacc_nominal") or DEFAULT_DISCOUNT_RATE)
         ke = wacc_dict.get("cost_of_equity")
         equity_discount = float(ke) if ke else None
+    elif wacc_dict and not wacc_cfg.get("drives_discount_rate"):
+        # A1/#45: the scenario built a WACC / cost-of-equity block but did not opt it in
+        # (drives_discount_rate falsy), so the published NPV is discounted at the bare
+        # DEFAULT_DISCOUNT_RATE — the computed WACC is informational-only and the declared
+        # equity hurdle is ignored for the equity NPV. Surface that loudly rather than let
+        # the gap pass silently. (Re-pointing the default to returns.equity_discount_rate
+        # would MOVE equity NPV — a re-baseline, deliberately out of scope for this guard.)
+        logger.warning(
+            "wacc block present but drives_discount_rate is not set — project/equity NPV is "
+            "discounted at the default %.2f, NOT the computed WACC (wacc_nominal=%s). Set "
+            "wacc.drives_discount_rate to discount at the built WACC.",
+            DEFAULT_DISCOUNT_RATE,
+            wacc_dict.get("wacc_nominal"),
+        )
     return wacc_dict, project_discount, equity_discount
 
 

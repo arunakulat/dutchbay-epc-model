@@ -138,10 +138,22 @@ def run_v14_pipeline(
     logger.info("\n[2/4] Running wind resource assessment...")
     
     # Extract wind farm configuration from scenario
+    lat = cfg.project.get("latitude")
+    lon = cfg.project.get("longitude")
+    if lat is None or lon is None:
+        # A1/#94: no project coordinates supplied. Silently substituting Dutch Bay /
+        # Kalpitiya (8.33, 79.76) would pull ERA5 wind data for the WRONG site for any
+        # non-Kalpitiya scenario, producing a plausible-but-wrong resource with no error.
+        # WARN rather than let one site's coordinates stand in as a global default.
+        logger.warning(
+            "project.latitude/longitude absent — defaulting to Dutch Bay/Kalpitiya "
+            "(8.33, 79.76); set the project coordinates so the wind-resource fetch is "
+            "site-correct (any non-Kalpitiya scenario would otherwise use the wrong site)."
+        )
     location = {
         "name": cfg.project.location,
-        "lat": cfg.project.get("latitude", 8.33),
-        "lon": cfg.project.get("longitude", 79.76)
+        "lat": lat if lat is not None else 8.33,
+        "lon": lon if lon is not None else 79.76,
     }
     
     # Initialize WindPipeline

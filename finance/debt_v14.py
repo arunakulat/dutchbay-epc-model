@@ -267,7 +267,20 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         if adapted.get("construction_periods") is None:
             adapted["construction_periods"] = adapted.get("construction_years", 2)
         if adapted.get("debt_drawdown_pct") is None:
-            adapted["debt_drawdown_pct"] = adapted.get("drawdown_pct", [0.5, 0.5])
+            fallback_drawdown = adapted.get("drawdown_pct")
+            if fallback_drawdown is None:
+                # A1/#91: no project EPC draw schedule supplied. IDC (capitalised interest)
+                # is sensitive to draw timing, so the even [0.5, 0.5] placeholder is an
+                # unfounded substitution for a missing project-specific input — WARN rather
+                # than silently substitute. Supply Financing_Terms.debt_drawdown_pct from the
+                # EPC milestone/payment schedule for an auditable, project-specific draw.
+                logger.warning(
+                    "Financing_Terms.debt_drawdown_pct / drawdown_pct absent — using a "
+                    "placeholder even draw [0.5, 0.5]; IDC is draw-timing-sensitive, so "
+                    "supply the EPC milestone draw schedule for a lender-grade figure."
+                )
+                fallback_drawdown = [0.5, 0.5]
+            adapted["debt_drawdown_pct"] = fallback_drawdown
         if adapted.get("construction_schedule") is None:
             adapted["construction_schedule"] = [40.0, 60.0]
         if adapted.get("mix") is None:
@@ -491,6 +504,24 @@ def apply_debt_layer(
     )
 
     tranches = _solve_mix(p, debt_total)
+
+    # A1/#65/#93: refuse to silently model COST-FREE debt. _solve_mix falls back to a 0.0
+    # tranche rate when a scenario sizes debt but omits an explicit Financing_Terms.rates /
+    # debt.rates block — servicing the whole facility at zero interest, which flatters
+    # CFADS-after-debt, DSCR and equity IRR (and, separately, defaults the currency split to
+    # 100% USD, stripping the LKR natural hedge). Fail loud unless allow_toy_fallback is
+    # explicitly set (the same opt-in already guarding toy CAPEX). Canonical scenarios
+    # declare their tranche rates, so this never trips for them.
+    if debt_total > 0 and not _allow_toy_capex_fallback(params):
+        funded_rates = [tr.rate for tr in tranches.values() if tr.principal > 0]
+        if funded_rates and all(rate <= 0.0 for rate in funded_rates):
+            raise ValueError(
+                f"Debt of {debt_total:,.0f} sized but every funded tranche resolves to a "
+                "0.0 interest rate — no explicit Financing_Terms.rates / debt.rates block. "
+                "Refusing to model cost-free debt; declare the tranche rates "
+                "(lkr_nominal / usd_nominal / dfi_nominal) or set allow_toy_fallback=true."
+            )
+
     idc_schedule: Dict[str, List[float]] = {}
     total_idc_by_tranche: Dict[str, float] = {}
 
