@@ -68,7 +68,7 @@ jobs:
         # dodged by omission — the same class of hole as the #149 Test Summary rubber-stamp.
         # -n auto runs the suite across all runner cores via pytest-xdist (a
         # pinned, already-installed dependency that was never being invoked, so
-        # the suite ran serially). The full 984-test tree is xdist-safe and drops
+        # the suite ran serially). The full ~2,625-test tree is xdist-safe and drops
         # from minutes to seconds. pytest-cov combines per-worker coverage
         # automatically, so the Codecov upload below is unaffected. --verbose is
         # dropped: under xdist it interleaves worker output into noise, and the
@@ -83,6 +83,9 @@ jobs:
           --self-contained-html \
           --cov=finance \
           --cov=analytics \
+          --cov=wind_resource \
+          --cov=api \
+          --cov=app \
           --cov-report=term-missing \
           --cov-report=xml \
           --cov-report=html

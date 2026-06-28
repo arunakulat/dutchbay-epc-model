@@ -129,14 +129,19 @@ This stack exists for **AEP uncertainty quantification (Monte Carlo)** and **Dat
 
 > **TA caveat — this is a mock under `tests/mocks/`.** The lender scenario points `resource.aep_summary_path` at `tests/mocks/aep_summary_dutchbay.json` (`scenarios/dutchbay_lendercase_2025Q4.yaml`). A figure consumed from a path under `tests/mocks/` is, by definition, **not production data**. The SHA-256/manifest machinery is sound, but the *content* is a placeholder.
 
-### 3b. OEM power-curve parser — `analytics/power_curves/oem_parser.py` (PLACEHOLDER 10 MW)
+### 3b. OEM power-curve parser — `analytics/power_curves/oem_parser.py` (config-sourced; placeholder retired)
 
-- The 10 MW curve is **explicitly a placeholder** extrapolated from 6.5 MW, per the module's own comments:
-  > "**CRITICAL: This is a PLACEHOLDER extrapolation from 6.5 MW / MUST be replaced with actual 10 MW OEM-certified data when available / Extrapolation assumes linear power scaling + same cut-in/cut-out**" (`oem_parser.py:39-42`).
-- The specs dict records `iec_certificate: "CGC-B-FNc-2024-184 (6.5MW base, 10MW extrapolated)"` and `power_curve_version: "v1.0_extrapolated_from_6.5MW"` (`oem_parser.py:70-71`).
-- The parser stamps a DataFrame attribute `warning = "EXTRAPOLATED from 6.5 MW - REPLACE with OEM 10 MW data"` and the docstring repeats the "CRITICAL WARNING" (`oem_parser.py:80-81`, `oem_parser.py:117`).
-- Air-density correction is applied per IEC 61400-12-1 `P_site = P_ref·(ρ_site/ρ_ref)^(1/3)` (`oem_parser.py:103-108`).
-- **Compatibility aliasing risk:** the legacy 6.5 MW symbol names are aliased onto the 10 MW placeholder (`ENVISION_EN171_65_POWER_CURVE = ENVISION_EN171_10MW_POWER_CURVE_IEC_61400_12_1`, `oem_parser.py:301-311`; `parse_envision_en171_curve` simply calls the 10 MW parser, `oem_parser.py:314-334`). So **any caller asking for the "6.5 MW" curve on this auxiliary path actually receives the extrapolated 10 MW placeholder.** The Monte Carlo path calls `parse_envision_en171_curve(...)` (`monte_carlo_aep.py:160`) and therefore runs on the placeholder.
+- **Updated 2026-06-28:** the hand-typed 10 MW *placeholder* curve and the 6.5↔10 MW symbol
+  *aliasing* this section previously described have been **REMOVED** from `oem_parser.py` (see the
+  module's own history note at the top of the file). The module no longer fabricates curve data
+  (GWTF ARCH-01); the canonical curve is the **config-sourced Envision EN-171/6.5** (`CANONICAL_CURVE_KEY
+  = "envision_en171_6p5"`, loaded from `wind_resource/config/power_curves.yaml`). There is no longer a
+  `iec_certificate` / `power_curve_version` placeholder field nor a "CRITICAL placeholder" warning.
+- Air-density correction is still applied per IEC 61400-12-1 (`P_site = P_ref·(ρ_site/ρ_ref)^(1/3)`).
+- `parse_envision_en171_curve(...)` now returns the real EN-171/6.5 curve from config, not an
+  extrapolated placeholder. (Note: this parser remains an **auxiliary** path — the financed bankable
+  AEP comes from the `wind_resource` pipeline; the OEM parser feeds only the secondary `monte_carlo_aep`
+  tooling. Real 10 MW *reference* curves (IEA/DTU/NREL) live in `power_curves.yaml`, selectable by slug.)
 
 ### 3c. Monte Carlo AEP — `analytics/simulation/monte_carlo_aep.py`
 
@@ -172,7 +177,7 @@ There are **two different energy-yield figures** in the repository for the same 
 ## 5. Controls, gating and reproducibility (what makes this auditable)
 
 - **CI gating (financed path is green):** the `[wind]` extra (xarray/netcdf4/cdsapi) is installed in the test and lint jobs (`.github/workflows/test-suite.yml` lines ~40 and ~125; `.github/workflows/ci_v14_fastlane.yml:38`), and the full `tests/` tree is run (no path-omission dodging — see the in-workflow note in `test-suite.yml`). The adapter round-trip test `tests/wind/test_cashflow_adapter.py` proves a wind P75 AEP flows through to `finance.cashflow_v14` within ±0.5%.
-- **mypy gate:** `mypy finance/ analytics/ --ignore-missing-imports` runs in CI (`test-suite.yml:135`, lint job) — the wind/finance surface is type-checked.
+- **mypy gate:** a strict, complete-annotation gate runs in CI (`test-suite.yml`, "Code Quality Checks" job) over the full typed surface — `mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/` plus the root entrypoints, with **no `--ignore-missing-imports`** (every untyped third-party dep is declared per-module in `mypy.ini`). The wind/finance surface is type-checked.
 - **Config centralisation (CCCDIR / GWTF ARCH-01):** loss factors, P-levels, shear limits, tariff and FX are all read from `wind_resource/config/era5_config.yaml`; turbine curves from `power_curves.yaml`. No hardcoded loss/P-level constants in the financed calculator (`energy_calculator.py:149-160`, `energy_calculator.py:252-261`, `energy_calculator.py:335-337`).
 - **Provenance artifacts to request in the data room:**
   1. ERA5 download sidecar(s): `inputs/wind_data/metadata/*_metadata.json` (Link 1).

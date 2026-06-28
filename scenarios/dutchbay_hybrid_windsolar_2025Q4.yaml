@@ -468,16 +468,10 @@ monte_carlo:
   availability_std_pct: 1.0
   electrical_loss_std_pct: 0.5
   
-  # Legacy scenario parameters (toy model - TO BE DEPRECATED)
-  discount_rate_pct: 8.0
-  capex_total_usd: 150000000
-  revenue_mean_usd: 50000000
-  revenue_std_pct: 10
-  cost_mean_usd: 3000000
-  cost_std_pct: 8
-  fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
-  fx_std_pct: 3
-  project_life_years: 20
+  # (Retired #doc-drift: the old "toy model - TO BE DEPRECATED" scalar block — an
+  #  obsolete pre-pipeline MC format (discount_rate_pct / capex_total_usd / revenue_* /
+  #  cost_* / fx_* / project_life_years) with ZERO Python readers. The live MC engine
+  #  consumes only the `parameters:` LIST below.)
   
   # Distribution parameters (for pipeline-backed MC).
   # Canonical engine contract (analytics.mc.engine): an explicit LIST of
