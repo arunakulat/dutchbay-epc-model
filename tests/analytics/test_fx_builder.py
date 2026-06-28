@@ -389,10 +389,11 @@ def test_risk_profile_happy_path_percentages_and_var() -> None:
     assert total_pct == pytest.approx(100.0)
     # HHI = 0.3^2 + 0.6^2 + 0.1^2 = 0.46
     assert profile.debt_concentration_hhi == pytest.approx(0.46)
-    # VaR_95 = LKR-denominated debt (already USD-equiv) * 5%, in USD millions.
+    # VaR_95 = HARD-CURRENCY (USD + CNY) debt (the legs MISMATCHED vs LKR revenue), already
+    # USD-equiv, * 5%, in USD millions. The LKR leg is a natural hedge and is EXCLUDED.
     # No spot division (the figure is already USD). CVaR = 1.5 * VaR.
     # _full_fx_config declares hedging_coverage_pct=30, so VaR is on the 70% residual.
-    expected_var = (900.0 * 0.05 * 0.70) / 1e6
+    expected_var = ((1800.0 + 300.0) * 0.05 * 0.70) / 1e6  # USD 1800 + CNY 300
     assert profile.var_95_usd_million == pytest.approx(expected_var)
     assert profile.cvar_95_usd_million == pytest.approx(expected_var * 1.5)
     assert profile.cvar_95_usd_million >= profile.var_95_usd_million
@@ -414,8 +415,9 @@ def test_risk_profile_var_is_independent_of_curve_spot() -> None:
     p_b = compute_fx_risk_profile(
         fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 400.0])
     )
-    # _full_fx_config declares hedging_coverage_pct=30 -> VaR on the 70% residual.
-    expected_var = (900.0 * 0.05 * 0.70) / 1e6
+    # _full_fx_config declares hedging_coverage_pct=30 -> VaR on the 70% residual of the
+    # hard-currency (USD + CNY) legs (the LKR leg is a natural hedge, excluded).
+    expected_var = ((1800.0 + 300.0) * 0.05 * 0.70) / 1e6
     assert p_a.var_95_usd_million == pytest.approx(expected_var)
     assert p_b.var_95_usd_million == pytest.approx(expected_var)
 
@@ -458,8 +460,9 @@ def test_risk_profile_all_usd_debt_concentration() -> None:
     profile = compute_fx_risk_profile(fx_block=block, fx_curve=curve)
     assert profile.debt_usd_pct == pytest.approx(100.0)
     assert profile.debt_concentration_hhi == pytest.approx(1.0)
-    # No LKR debt -> zero simplified VaR.
-    assert profile.var_95_usd_million == pytest.approx(0.0)
+    # All-USD debt is 100% hard-currency exposure (mismatched vs LKR revenue) -> positive VaR
+    # on the 70% residual (hedging_coverage_pct=30). (Previously this leg was wrongly excluded.)
+    assert profile.var_95_usd_million == pytest.approx((5000.0 * 0.05 * 0.70) / 1e6)
 
 
 def test_risk_profile_zero_debt_should_not_crash() -> None:
