@@ -71,6 +71,9 @@
     }
     .pass { background: #e3f4e8; color: #1d7a3e; }
     .fail { background: #fdeaea; color: #b23b3b; }
+    .sev-low { background: #e3f4e8; color: #1d7a3e; }
+    .sev-medium { background: #fff4e0; color: #9a6700; }
+    .sev-high { background: #fdeaea; color: #b23b3b; }
     ul.notes { margin: 6pt 0; padding-left: 18pt; }
     ul.notes li { margin-bottom: 3pt; }
     .disclaimer { font-size: 9pt; color: #555; }
@@ -170,7 +173,31 @@
     </table>
   </section>
 
-  {# 6. Assumptions register #}
+  {# 6. Risk register #}
+  <section class="page">
+    <h2>Risk Register</h2>
+    {% if ctx.risk_register %}
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Risk</th><th>Mitigation</th><th>Residual</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.risk_register %}
+        <tr>
+          <td>{{ r.category }}</td>
+          <td>{{ r.risk }}</td>
+          <td>{{ r.mitigation }}</td>
+          <td><span class="badge sev-{{ r.severity }}">{{ r.severity|capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No project risks were registered for this scenario.</p>
+    {% endif %}
+  </section>
+
+  {# 7. Assumptions register #}
   <section class="page">
     <h2>Assumptions Register</h2>
     {% if ctx.assumptions %}
@@ -187,7 +214,7 @@
     {% endif %}
   </section>
 
-  {# 7. Audit manifest & methodology #}
+  {# 8. Audit manifest & methodology #}
   <section class="page">
     <h2>Audit Manifest &amp; Methodology</h2>
     <h3>Run manifest</h3>

@@ -21,6 +21,7 @@ from app.reports.report_config import (
     KpiKind,
     ReportConfig,
     ReportMeta,
+    RiskItem,
     load_report_config,
 )
 
@@ -66,6 +67,17 @@ class AssumptionRow(BaseModel):
     display: str
 
 
+class RiskRow(BaseModel):
+    """One rendered risk-register line (category, risk, mitigation, residual severity)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    risk: str
+    mitigation: str
+    severity: str  # low | medium | high — drives the badge class in the template
+
+
 class Verdict(BaseModel):
     """Covenant/return flags and a one-line headline, all config-thresholded."""
 
@@ -93,6 +105,7 @@ class ReportContext(BaseModel):
     kpi_rows: List[KpiRow]
     verdict: Verdict
     assumptions: List[AssumptionRow]
+    risk_register: List[RiskRow] = Field(default_factory=list)
     manifest: Dict[str, Any]
 
 
@@ -252,6 +265,19 @@ def _build_assumptions(inputs: Optional[WindFarmInputs]) -> List[AssumptionRow]:
     return rows
 
 
+def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
+    """Project the config-authored risk register into render-ready rows (pure passthrough)."""
+    return [
+        RiskRow(
+            category=r.category,
+            risk=r.risk,
+            mitigation=r.mitigation,
+            severity=r.severity,
+        )
+        for r in risks
+    ]
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -285,5 +311,6 @@ def build_report_context(
         kpi_rows=_build_kpi_rows(case_result.kpis, cfg),
         verdict=_build_verdict(case_result.kpis, cfg.covenants),
         assumptions=_build_assumptions(inputs),
+        risk_register=_build_risk_register(cfg.risk_register),
         manifest=dict(case_result.run_manifest or {}),
     )

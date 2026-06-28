@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 #: Repo root, resolved relative to this file (app/reports/report_config.py).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +22,9 @@ DEFAULT_CONFIG_PATH = _REPO_ROOT / "config" / "report_defaults.yaml"
 #: How a KPI value is rendered. ``pct`` multiplies by 100 and appends ``%``;
 #: ``multiple`` appends ``x``; ``usd`` adds a thousands separator and ``$``.
 KpiKind = Literal["pct", "multiple", "usd"]
+
+#: Residual severity of a registered risk AFTER its mitigation — drives badge colour.
+RiskSeverity = Literal["low", "medium", "high"]
 
 
 class ReportMeta(BaseModel):
@@ -57,6 +60,19 @@ class KpiSpec(BaseModel):
     kind: KpiKind
 
 
+class RiskItem(BaseModel):
+    """One row of the lender risk register: a project risk, its mitigation, and the
+    RESIDUAL severity after that mitigation. Config-authored (CCCDIR) — the report layer
+    renders these; it does not derive them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    risk: str
+    mitigation: str
+    severity: RiskSeverity
+
+
 class ReportConfig(BaseModel):
     """The full validated report presentation config."""
 
@@ -65,6 +81,9 @@ class ReportConfig(BaseModel):
     report: ReportMeta
     covenants: Covenants
     kpi_table: List[KpiSpec]
+    # Optional so a minimal/legacy config (or a test fixture) without a register still
+    # validates; the committed default seeds the real DutchBay risk profile.
+    risk_register: List[RiskItem] = Field(default_factory=list)
 
 
 def load_report_config(path: Optional[Path] = None) -> ReportConfig:

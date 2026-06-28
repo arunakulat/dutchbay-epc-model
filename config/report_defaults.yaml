@@ -40,3 +40,58 @@ kpi_table:
   - {key: equity_moic,        label: "Equity MOIC",             kind: multiple}
   - {key: discount_rate_used, label: "WACC (project hurdle)",   kind: pct}
   - {key: balloon_pct,        label: "Balloon / bullet share",  kind: pct}
+
+# Risk register — the lender IM's qualitative project-risk matrix (#C8). CCCDIR: the risks
+# are config-authored (per-project analyst content), not hardcoded in Python; the report
+# layer only renders them. `severity` is the RESIDUAL rating after mitigation
+# (low | medium | high) and drives the badge colour. Seeded with the real DutchBay risk
+# profile of a flat-nominal-LKR tariff financed with hard-currency debt.
+risk_register:
+  - category: "Revenue / FX"
+    risk: >
+      The PPA tariff is fixed in nominal LKR with no escalation or FX indexation, while
+      debt and sponsor returns are measured in USD — LKR depreciation erodes the hard-
+      currency value of every future rupee of revenue.
+    mitigation: >
+      FX path stressed to CBSL/IMF projections; debt sized off the LKR-denominated DSCR;
+      the resulting negative equity IRR is disclosed to sponsors rather than masked.
+    severity: "high"
+  - category: "Resource"
+    risk: >
+      Energy-yield uncertainty — the realised net capacity factor may fall below the P50
+      used to size the debt.
+    mitigation: >
+      Bankable AEP from an ERA5->Weibull->certified-power-curve chain with enforced source
+      provenance; debt sculpted with DSCR headroom; P90 sensitivity reported.
+    severity: "medium"
+  - category: "Curtailment"
+    risk: >
+      Grid constraints may curtail dispatch below the modeled net availability.
+    mitigation: >
+      The CEB standardized PPA pays curtailed output as deemed energy, so economic
+      curtailment is not haircut from revenue.
+    severity: "medium"
+  - category: "Refinancing"
+    risk: >
+      A balloon / bullet repayment at debt maturity exposes the project to refinancing
+      risk if credit conditions tighten.
+    mitigation: >
+      Balloon share is covenant-capped and tested against the refinance-risk ceiling in
+      the covenant table.
+    severity: "medium"
+  - category: "Construction / EPC"
+    risk: >
+      Cost or schedule overrun during construction raises capex and interest-during-
+      construction.
+    mitigation: >
+      Fixed-price EPC on a SINOHYDRO bottom-up basis; an AACE estimate-class accuracy band
+      is carried and contingency is held in the cost stack.
+    severity: "medium"
+  - category: "Regulatory / Tariff"
+    risk: >
+      Changes to the renewable tax regime or the PPA framework could alter after-tax
+      returns over the 20-year term.
+    mitigation: >
+      The tax block is reconciled to the current IMF-reformed Sri Lankan regime with no
+      reliance on the removed renewable-energy tax holiday.
+    severity: "medium"
