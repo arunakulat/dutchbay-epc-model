@@ -211,20 +211,17 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by the 2.0% pre-construction P50 over-prediction haircut (net AEP
-    # 473.8 -> 464.3 GWh, CF 0.339 -> 0.332): the smaller energy yield drops USD revenue
-    # across the 20yr life, lowering every cashflow-driven KPI. project_irr 0.0275 -> 0.0250,
-    # equity_irr -0.0046 -> -0.0100 (still NEGATIVE — the flat-LKR tariff does not clear equity),
-    # CFADS $203.46M -> $199.10M.
-    assert kpis["project_irr"] == pytest.approx(0.02495054576508572, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(-0.010023065544243814, abs=1e-9)
-    # project_npv -53.29M -> -56.10M under the same AEP haircut. CFADS is discounted at the base
-    # WACC.
-    assert kpis["project_npv"] == pytest.approx(-56095004.90576855, rel=1e-9)
+    # Re-baselined by PR A (group-C #36): the fabricated success-fee/env-surcharge levies
+    # (1.5% of revenue) are removed -> CFADS 199.10M -> 202.33M, project_irr 0.0250 -> 0.0268,
+    # NPV -56.10M -> -53.99M; the 15% dividend WHT + IDC-in-depreciable-base bite equity only,
+    # netting equity_irr -0.0100 -> -0.0193 (the dividend WHT dominates the IDC shield gain).
+    assert kpis["project_irr"] == pytest.approx(0.02683686114665262, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.019289278896401862, abs=1e-9)
+    assert kpis["project_npv"] == pytest.approx(-53985936.79875486, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
-    assert kpis["total_cfads_usd"] == pytest.approx(199103726.01021385, rel=1e-9)
-    # Prudential (downside) NPV, re-baselined by the same AEP haircut: CFADS discounted at the
-    # haircut WACC (prudential_rate = WACC + spread), below the base NPV. -60.28M -> -62.87M.
-    assert kpis["project_npv_prudential"] == pytest.approx(-62873148.302381985, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.09180476878957321, abs=1e-9)
+    assert kpis["total_cfads_usd"] == pytest.approx(202332872.38974944, rel=1e-9)
+    # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
+    # WACC + spread), below the base NPV. -62.87M -> -60.92M with the levy removal.
+    assert kpis["project_npv_prudential"] == pytest.approx(-60918744.742364414, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.09114337950454418, abs=1e-9)
     assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV

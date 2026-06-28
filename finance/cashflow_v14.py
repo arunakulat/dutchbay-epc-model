@@ -105,6 +105,7 @@ def _prepare_cashflow_context(
     fx_curve: Optional[List[float]],
     capex_depreciable_lkr: Optional[float],
     interest_expense_series: Optional[List[float]],
+    extra_depreciable_usd: Optional[float] = None,
 ) -> Tuple[
     Dict[str, Any],
     List[float],
@@ -188,6 +189,16 @@ def _prepare_cashflow_context(
 
                 if capex_usd is not None:
                     capex_dep_resolved = capex_usd * fx_curve_resolved[0]
+
+    # Optionally augment the depreciable base with extra USD capex — used by the
+    # equity-facing pass to capitalize debt IDC into the tax base (#36/#75). The IDC is a
+    # debt-financing artifact (interest during construction), so it belongs to the levered
+    # equity view, exactly like the interest tax shield; the project/unlevered pass leaves
+    # this None and stays byte-identical. Translated at the SAME year-0 FX the USD capex
+    # base above uses, so the two are consistent. Applied only when a base was resolved
+    # (no base -> no depreciation regardless of any extra).
+    if extra_depreciable_usd is not None and capex_dep_resolved is not None:
+        capex_dep_resolved += float(extra_depreciable_usd) * fx_curve_resolved[0]
 
     # Interest series alignment
     if interest_expense_series is None:
@@ -532,6 +543,7 @@ def build_annual_rows(
     fx_curve: Optional[List[float]] = None,
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
+    extra_depreciable_usd: Optional[float] = None,
 ) -> List[Dict[str, float]]:
     """
     Return list of per-year breakdown rows including CFADS in LKR and USD.
@@ -543,6 +555,10 @@ def build_annual_rows(
     - analytics exports and dashboards.
 
     NOTE: This function now correctly tracks loss carry-forward across years.
+
+    ``extra_depreciable_usd`` augments the depreciable tax base by an extra USD capex
+    amount (translated at year-0 FX). It is used by the equity-facing pass to capitalize
+    debt IDC (#36/#75); the unlevered project pass leaves it None and is byte-identical.
     """
 
     (
@@ -558,6 +574,7 @@ def build_annual_rows(
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
+        extra_depreciable_usd=extra_depreciable_usd,
     )
 
     rows: List[Dict[str, float]] = []

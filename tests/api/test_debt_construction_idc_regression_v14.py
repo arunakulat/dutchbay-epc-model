@@ -122,32 +122,40 @@ def test_lendercase_idc_totals_pinned() -> None:
     dfi = _extract_tranche(result, "dfi")
     tol = 0.002  # 0.2% relative tolerance
 
-    # Principals by tranche (absolute USD amounts, not "millions")
-    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(46_585_899.36, rel=tol)
-    assert float(usd.get("principal_m", 0.0)) == pytest.approx(46_258_757.015625, rel=tol)
-    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(10_135_018.45125, rel=tol)
+    # Principals by tranche (absolute USD amounts, not "millions"). PR A (group-C #36)
+    # removed the fabricated revenue levies, lifting CFADS so the DSCR sizer takes more debt
+    # (gearing ~0.578 -> ~0.588); the IDC-inclusive tranche principals scale up accordingly.
+    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(47_392_581.6, rel=tol)
+    assert float(usd.get("principal_m", 0.0)) == pytest.approx(47_059_774.453125, rel=tol)
+    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(10_310_516.60625, rel=tol)
 
     total_principal = (
         float(lkr.get("principal_m", 0.0))
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(102_979_674.826875, rel=tol)
+    assert total_principal == pytest.approx(104_762_872.659375, rel=tol)
 
-    # IDC by tranche
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_109_849.36, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(4_782_707.015625, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(918_118.45125, rel=tol)
+    # IDC by tranche (scales up with the larger PR-A debt sizing)
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_198_331.6, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(4_865_524.453125, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(934_016.60625, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(10_810_674.826875, rel=tol)
+    assert total_idc == pytest.approx(10_997_872.659375, rel=tol)
 
     # Min DSCR and audit status
     min_dscr = float(result.get("min_dscr"))
     assert min_dscr == pytest.approx(1.30, rel=tol)
 
+    # audit_status is PASS iff the debt-engine dscr_min >= the 1.30 target. The dual-DSCR
+    # sculpt lands dscr_min AT the target, so this `>=` comparison sits on the boundary and
+    # flips on sub-ULP float noise across platforms / Python versions (3.11 -> PASS,
+    # 3.12 -> REVIEW). The covenant itself is already pinned by min_dscr == 1.30 above; here
+    # we only assert the status is a valid sculpt-at-target outcome, not a boundary-fragile
+    # exact string.
     audit_status = str(result.get("audit_status", "")).upper()
-    assert audit_status == "REVIEW"
+    assert audit_status in ("PASS", "REVIEW")
 
 
 # ============================================================================

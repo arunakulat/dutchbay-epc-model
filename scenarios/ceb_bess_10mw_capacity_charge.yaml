@@ -99,11 +99,16 @@ tax:
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false
+  # SL statutory dividend WHT 15% (#81) + capitalize debt IDC into the
+  # depreciable tax base (#36/#75). Both bite the equity path only.
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
   interest_deductibility: true
 
 statutory:
-  success_fee_pct: 0.01
-  env_surcharge_pct: 0.005
+  success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
+  env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   social_services_levy_pct: 0.025    # SSCL on revenue (here, on the capacity charge)
 
 risk_adjustment:

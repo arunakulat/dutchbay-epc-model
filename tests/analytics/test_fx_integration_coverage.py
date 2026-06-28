@@ -227,9 +227,10 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     assert sr.get("fx_curve") is not None
     assert sr.get("fx_risk_profile") is not None
     # additive — no effect on the financed economics
-    # (canonical KPIs re-baselined for the 2% pre-construction P50 over-prediction
-    #  haircut: DutchBay net AEP 473.8 -> 464.3 GWh, CF 0.339 -> 0.332)
+    # (canonical KPIs re-baselined by PR A group-C #36: fabricated levies removed ->
+    #  project_irr 0.0250 -> 0.0268; +15% dividend WHT & IDC-in-base -> equity_irr
+    #  -0.0100 -> -0.0193, equity-path only)
     k = out["kpis"]
-    assert k["project_irr"] == pytest.approx(0.02495054576508572, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.010023065544243814, abs=1e-9)
+    assert k["project_irr"] == pytest.approx(0.02683686114665262, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.019289278896401862, abs=1e-9)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)

@@ -317,11 +317,16 @@ tax:
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false
+  # SL statutory dividend WHT 15% (#81) + capitalize debt IDC into the
+  # depreciable tax base (#36/#75). Both bite the equity path only.
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
   interest_deductibility: true
 
 statutory:
-  success_fee_pct: 0.01  # PUCSL approval fee
-  env_surcharge_pct: 0.005  # Environmental levy
+  success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
+  env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   social_services_levy_pct: 0.025  # SSL on revenue
 
 risk_adjustment:
@@ -523,14 +528,14 @@ expected_results:
   # honest 0.5%/yr aging; the engine reads it as a percent and /100s it, so 0.005 had meant
   # ~0%/yr). The negative IRR is now reported truthfully: the project-IRR solver was floored
   # at r_low=0.0 and clamped sub-zero projects to exactly 0.0; it now searches negative rates.
-  project_irr: -0.0359      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
-  equity_irr: -0.1223       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
+  project_irr: -0.0336      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
+  equity_irr: -0.1314       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
                             # constraint; round-5 #5 interest shield only lifts -0.0702 -> -0.0668
                             # (+34bps; little taxable income to shield in a loss-making deal).
-  project_npv_m_usd: -135.48 # deeply underwater
+  project_npv_m_usd: -133.74 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.41
-  llcr: 1.22
+  llcr: 1.21
   plcr: 1.25
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -448,9 +448,10 @@ def _force_zero_years(
         fx_curve: Any,
         capex_depreciable_lkr: Any,
         interest_expense_series: Any,
+        **kwargs: Any,
     ) -> Any:
         (params, fxc, cd, ints, _years, tp, ds) = real(
-            config, fx_curve, capex_depreciable_lkr, interest_expense_series
+            config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
         return (params, fxc, cd, [], 0, tp, ds)
 
@@ -500,9 +501,10 @@ def test_build_annual_rows_efficient_zero_years_returns_empty(
         fx_curve: Any,
         capex_depreciable_lkr: Any,
         interest_expense_series: Any,
+        **kwargs: Any,
     ) -> Any:
         (params, fxc, cd, ints, _years, tp, ds) = real(
-            config, fx_curve, capex_depreciable_lkr, interest_expense_series
+            config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
         return (params, fxc, cd, [], 0, tp, ds)
 

@@ -59,11 +59,18 @@ def _equity_irr(cfg, overrides):
 
 
 def test_dotted_override_actually_applies(basecase):
-    """A near-tripled corporate tax rate must move equity IRR (pre-fix: no-op)."""
+    """A near-tripled corporate tax rate must move equity IRR (pre-fix: no-op).
+
+    Direction note: with PR A (group-C #36) capitalizing IDC into the depreciable base on
+    top of the existing interest deduction, the LEVERED equity IRR now RISES with the tax
+    rate — a higher rate makes the interest + depreciation shields worth proportionally more,
+    and for this thin-margin, highly-levered case the shield gain dominates the extra tax on
+    operating income (the documented tax-direction reversal). The test's point is unchanged:
+    the dotted override is live, i.e. it materially moves the output."""
     base = _equity_irr(basecase, {})
     shocked = _equity_irr(basecase, {"tax.corporate_tax_rate": 0.90})
     assert shocked != pytest.approx(base), "dotted override had no effect (regression)"
-    assert shocked < base
+    assert shocked > base  # shields dominate at high tax (reversal); see docstring
 
 
 def test_dotted_and_nested_overrides_are_equivalent(basecase):

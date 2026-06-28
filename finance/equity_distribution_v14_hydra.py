@@ -69,6 +69,15 @@ class EquityDistributionConfig(BaseModel):
     # (rate 0 / gross_up False) -> byte-identical.
     wht_gross_up: bool = Field(default=False)
     wht_on_interest_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # Dividend/distribution withholding tax (#81). When enabled, positive distributions to
+    # the sponsor (including the terminal close-out release) are paid NET of this rate — the
+    # sponsor receives distribution * (1 - rate); the withheld amount leaves the SPV to the
+    # tax authority (it is NOT retained). It bites equity cash only — project IRR/DSCR are
+    # upstream of the equity waterfall — mirroring the SL 15% statutory dividend WHT. Rate is
+    # tax.wht_on_dividends gated by tax.wht_on_dividends_enabled; default-off -> byte-identical.
+    wht_on_dividends_enabled: bool = Field(default=False)
+    wht_on_dividends_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     terminal_value_usd: float = Field(default=0.0, ge=0.0)
     discount_rate: float = Field(default=0.10, ge=0.0, le=1.0)
 
@@ -250,6 +259,19 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     )
     wht_gross_up = bool(_lookup_case_insensitive(tax_section, "wht_gross_up"))
 
+    # Dividend WHT (#81): same gated-rate idiom as interest WHT above. Default-off.
+    div_wht_enabled = bool(
+        _lookup_case_insensitive(tax_section, "wht_on_dividends_enabled")
+    )
+    div_wht_rate = (
+        float(
+            _as_float(_lookup_case_insensitive(tax_section, "wht_on_dividends"), 0.0)
+            or 0.0
+        )
+        if div_wht_enabled
+        else 0.0
+    )
+
     # The financed schedule (build_equity_distribution_schedule) consumes only the fields
     # parsed below. (The former priority-waterfall fields — target_equity_irr_pct,
     # equity_stake_pct, reserve_fund_pct, priority_senior/mezzanine_usd,
@@ -269,6 +291,8 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         holdback_pct=_normalise_percent(equity_section.get("holdback_pct"), 0.0),
         wht_gross_up=wht_gross_up,
         wht_on_interest_rate=wht_rate,
+        wht_on_dividends_enabled=div_wht_enabled,
+        wht_on_dividends_rate=div_wht_rate,
         terminal_value_usd=float(
             _as_float(equity_section.get("terminal_value_usd"), 0.0) or 0.0
         ),
@@ -399,6 +423,12 @@ def build_equity_distribution_schedule(
 
     sweep = distribution_config.distribution_sweep_pct / 100.0
     holdback = distribution_config.holdback_pct / 100.0
+    # Dividend WHT (#81): positive distributions are paid net of this rate; 0.0 when disabled.
+    div_wht_rate = (
+        distribution_config.wht_on_dividends_rate
+        if distribution_config.wht_on_dividends_enabled
+        else 0.0
+    )
 
     # Cash that is retained rather than distributed must not be DESTROYED — it belongs to
     # the sponsor and is released to equity, not lost (which would understate equity IRR):
@@ -456,6 +486,9 @@ def build_equity_distribution_schedule(
             and dscr < distribution_config.min_dscr_threshold
         )
 
+        # Dividend WHT applies only to positive distributions actually paid to the sponsor
+        # (the two non-distributing branches below are a lockup or a cash call -> no WHT).
+        dividend_wht = 0.0
         if covenant_locked:
             # No positive distribution while locked; the trapped cash is carried (not lost)
             # and released once the covenant cures. A balloon shortfall is still a cash call.
@@ -472,9 +505,14 @@ def build_equity_distribution_schedule(
             locked_cash_balance = 0.0
             gross_distribution = available * sweep
             holdback_amount = gross_distribution * holdback
-            equity_distribution = max(0.0, gross_distribution - holdback_amount)
-            # Un-swept + held-back cash is retained in the SPV and released at project end.
-            retained_cash = available - equity_distribution
+            # Pre-WHT distribution to the sponsor; the WHT is withheld from this and remitted
+            # to the tax authority (it leaves the SPV, so it is NOT part of retained cash).
+            distribution_pre_wht = max(0.0, gross_distribution - holdback_amount)
+            dividend_wht = distribution_pre_wht * div_wht_rate
+            equity_distribution = distribution_pre_wht - dividend_wht
+            # Un-swept + held-back cash is retained in the SPV and released at project end —
+            # measured against the PRE-WHT distribution (the WHT is paid out, not retained).
+            retained_cash = available - distribution_pre_wht
             retained_balance += retained_cash
 
         debt_outstanding = (
@@ -489,6 +527,7 @@ def build_equity_distribution_schedule(
                 "cf_pre_debt_usd": cf_pre_debt,
                 "debt_service_usd": debt_service,
                 "wht_on_interest_usd": wht_cost,
+                "wht_on_dividends_usd": dividend_wht,
                 "cf_after_debt_usd": cf_after_debt,
                 "balloon_resolution_usd": balloon_resolution,
                 "dscr": dscr,
@@ -513,8 +552,15 @@ def build_equity_distribution_schedule(
         if residual > 1e-9:
             last = schedule[-1]
             prior_dist = _as_float(last.get("equity_distribution_usd"), 0.0) or 0.0
-            last["equity_distribution_usd"] = prior_dist + residual
+            # The terminal release is cash distributed to the sponsor -> it bears dividend
+            # WHT too; the sponsor receives the residual net (0.0 rate -> byte-identical).
+            terminal_wht = residual * div_wht_rate
+            net_residual = residual - terminal_wht
+            last["equity_distribution_usd"] = prior_dist + net_residual
             last["terminal_release_usd"] = residual
+            last["wht_on_dividends_usd"] = (
+                _as_float(last.get("wht_on_dividends_usd"), 0.0) or 0.0
+            ) + terminal_wht
             last["reserve_balance_usd"] = 0.0
 
     return schedule

@@ -114,12 +114,12 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # upstream of the equity waterfall).
     assert kpis["project_irr"] == pytest.approx(-0.0359, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.1223, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.1314, abs=0.005)  # PR-A 15% dividend WHT deepens it
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-135.48e6, rel=0.05)
+    assert kpis["project_npv"] == pytest.approx(-133.74e6, rel=0.05)  # PR-A levy removal lifts it slightly
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
-    assert kpis["max_debt_usd"] == pytest.approx(68.99e6, rel=0.02)  # deleveraged (DSCR-bound)
+    assert kpis["max_debt_usd"] == pytest.approx(70.55e6, rel=0.02)  # PR-A levy removal lifts CFADS -> more debt
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:

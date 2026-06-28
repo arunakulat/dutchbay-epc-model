@@ -301,11 +301,16 @@ tax:
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false
+  # SL statutory dividend WHT 15% (#81) + capitalize debt IDC into the
+  # depreciable tax base (#36/#75). Both bite the equity path only.
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
   interest_deductibility: true
 
 statutory:
-  success_fee_pct: 0.01  # PUCSL approval fee
-  env_surcharge_pct: 0.005  # Environmental levy
+  success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
+  env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   social_services_levy_pct: 0.025  # SSL on revenue
 
 risk_adjustment:
@@ -507,13 +512,13 @@ expected_results:
   # ($977/kW vs $1,000/kW); resource / tariff / debt are identical. Lower capex raises the
   # dual-DSCR gearing (0.6025 vs 0.590) and the returns slightly, but the deal stays
   # value-destructive — the flat-nominal-LKR tariff, not capex, is the binding constraint.
-  project_irr: 0.0273       # vs canonical 0.0275 — still BELOW WACC (~8.1%)
-  equity_irr: -0.0047        # vs canonical -0.0046 — marginally POSITIVE (the lean capex offsets
-                            # the 5.9% FX-drift re-baseline that turned the canonical case negative).
-  project_npv_m_usd: -52.2 # vs canonical -53.29
+  project_irr: 0.0292       # vs canonical 0.0268 — still BELOW WACC (~8.1%)
+  equity_irr: -0.0146        # vs canonical -0.0193 — NEGATIVE; the lean capex lifts it above the
+                            # canonical but the PR-A 15% dividend WHT keeps equity below break-even.
+  project_npv_m_usd: -50.2 # vs canonical -54.0
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.4
-  llcr: 1.15
+  llcr: 1.16
   plcr: 1.21
 
 # ═════════════════════════════════════════════════════════════════════════════

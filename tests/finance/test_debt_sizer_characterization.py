@@ -98,11 +98,12 @@ def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap(
     irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]  # [0.45,0.50,0.55,0.60,0.625,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
-    # Above the ~0.578 DSCR-solved cap the sizer clamps to the solved gearing -> equity IRR
-    # plateaus at the canonical clamped value.
+    # Above the ~0.588 DSCR-solved cap (PR-A levy removal lifted CFADS, re-sizing it up from
+    # ~0.578) the sizer clamps to the solved gearing -> equity IRR plateaus at the canonical
+    # clamped value (now -0.0193 after the PR-A dividend WHT + IDC re-baseline).
     plateau = irrs[3:]
     assert max(plateau) - min(plateau) < 1e-6, f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0100, abs=0.002)
+    assert plateau[0] == pytest.approx(-0.0193, abs=0.002)
     # Value-destructive leverage: the least-levered point beats the clamped high-gearing plateau,
     # and the gap is material.
     assert irrs[0] > plateau[0], f"leverage not value-destructive: {irrs}"

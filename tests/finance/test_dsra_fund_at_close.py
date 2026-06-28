@@ -34,12 +34,11 @@ def _run(dsra=None, **fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
-    # Canonical after the 2% pre-construction P50 over-prediction haircut on the wind
-    # resource (net AEP 473.8 -> 464.3 GWh, CF 0.339 -> 0.332): projIRR ~2.50%, minDSCR
-    # 1.30. The lower AEP plus the faster nominal-LKR erosion pushes equity IRR negative
-    # (~-1.00%) at the flat-LKR tariff. project IRR is debt-structure independent.
-    assert kpis["project_irr"] == pytest.approx(0.02495, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.010023, abs=0.001)
+    # Canonical after PR A (group-C #36): fabricated levies removed -> projIRR ~2.68%,
+    # minDSCR 1.30. The 15% dividend WHT + IDC-in-depreciable-base bite equity only, netting
+    # equity IRR to ~-1.93% at the flat-LKR tariff. project IRR is debt-structure independent.
+    assert kpis["project_irr"] == pytest.approx(0.02684, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.019289, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0
