@@ -139,7 +139,22 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 
 def _extract_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
-    """Extract total CAPEX from canonical, compact, or legacy v14 schemas."""
+    """Extract total CAPEX from canonical, compact, or legacy v14 schemas.
+
+    CCCDIR: when ``capex.derive_from_breakdown`` is set, the equity base MUST use the same
+    bottom-up resolver the debt engine and ``analytics.core.metrics`` use, or the equity
+    CAPEX (and thus the derived equity investment) could silently diverge from the financed
+    CAPEX (up to the 0.5% breakdown tolerance / QRA delta). Delegating here keeps a single
+    source of truth — mirrors ``analytics.core.metrics._derive_capex_usd``. The flat
+    multi-section lookup below is unchanged for scenarios that do NOT derive from breakdown
+    (e.g. the canonical lendercase), so they stay byte-identical.
+    """
+    capex_section = _section_case_insensitive(config, "capex")
+    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+        from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
+
+        return float(_resolve_capex_bottom_up(dict(config)))
+
     section_candidates: Sequence[tuple[str, Sequence[str]]] = (
         ("finance", ("capex_total_usd", "capex_usd")),
         ("capex", ("usd_total", "capex_total_usd", "total_capex_usd", "total_capex")),
