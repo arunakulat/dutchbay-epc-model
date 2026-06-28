@@ -562,7 +562,9 @@ wacc:
   mode: build_up
   drives_discount_rate: true
   cost_of_equity: 0.12   # USD house base (~ US rf 4.5% + Sri Lanka country risk 3.5% + equity 4.0%).
-                         # Post-default Sri Lanka ke is contested — project NPV is on a knife-edge
-                         # relative to the project IRR; see the ke-band (12–20%) sensitivity.
+                         # Post-default Sri Lanka ke is contested, but it is not the binding issue:
+                         # at the flat-LKR tariff the project IRR sits well below BOTH the build-up
+                         # WACC and this 12% ke, so the deal is value-destructive (negative equity
+                         # NPV), not on a knife-edge; the ke-band (12–20%) sensitivity only deepens it.
   prudential_spread_bps: 100
   description: "Build-up WACC drives the discount rate (replaces a decorative fixed 12%)."
