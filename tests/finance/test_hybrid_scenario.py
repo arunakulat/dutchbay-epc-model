@@ -25,16 +25,15 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # Honest engine output (per-tech wind 0.6% / solar 0.4% degradation through the
     # cashflow). Value-destructive: projIRR below the ~8% build-up WACC.
     # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
-    # data-derived BIS 2005-2026 LKR depreciation) and a 2% pre-construction P50
-    # over-prediction haircut on the wind resource (wind AEP 473.8 -> 464.3 GWh):
-    # the steeper LKR slide plus lower wind energy erode the flat-LKR-tariff revenue
-    # in USD terms, dropping projIRR and flipping equity_irr NEGATIVE (-2.09%).
-    # projIRR/npv/cfads all shift with the FX drift and the AEP haircut.
-    assert kpis["project_irr"] == pytest.approx(0.019756869718573305, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.02085129211592429, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-77112608.1424778, rel=1e-6)  # 5.9% FX-drift + 2% AEP haircut
+    # data-derived BIS 2005-2026 LKR depreciation), the 2% P50 over-prediction haircut, and
+    # PR A (group-C #36): the fabricated levies are removed (lifting CFADS 238.15M -> 242.00M
+    # and projIRR), while the 15% dividend WHT + IDC-in-depreciable-base bite equity only,
+    # taking equity_irr -0.0209 -> -0.0320 (dividend WHT dominates the IDC shield gain).
+    assert kpis["project_irr"] == pytest.approx(0.021615093204366574, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.03196383121302304, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-74741028.18498641, rel=1e-6)  # PR-A levy removal
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(238151680.98955458, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(242004699.5841927, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:

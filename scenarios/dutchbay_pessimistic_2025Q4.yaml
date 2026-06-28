@@ -124,14 +124,19 @@ tax:
   wht_on_interest_to_nonresidents: 0.10    # 10% WHT
   wht_on_interest_enabled: false
   wht_gross_up: false
+  # SL statutory dividend WHT 15% (#81) + capitalize debt IDC into the
+  # depreciable tax base (#36/#75). Both bite the equity path only.
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Statutory Charges (PESSIMISTIC: Higher grid losses)
 # ──────────────────────────────────────────────────────────────────────────────
 
 regulatory:
-  success_fee_pct: 0.01                    # 1% success fee
-  env_surcharge_pct: 0.005                 # 0.5% environmental surcharge
+  success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
+  env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   social_services_levy_pct: 0.025          # 2.5% social services levy
 
 # ──────────────────────────────────────────────────────────────────────────────

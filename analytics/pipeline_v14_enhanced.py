@@ -755,15 +755,32 @@ def run_v14_pipeline_enhanced(
         # enriched rows already carry interest_usd with the bridge folded into year 1; the
         # tax engine deducts it in LKR). Unlevered annual_rows_enriched stays the basis for
         # the project KPIs/DSCR/LLCR/PLCR above — the shield is confined to the equity path.
+        # Capitalized debt IDC in the depreciable tax base (#36/#75) is the second
+        # equity-only adjustment: IDC is interest incurred during construction — a
+        # debt-financing artifact — so the extra depreciation it generates is a levered
+        # (equity) shield, applied here alongside the interest shield, never to the
+        # unlevered project/DSCR pass. Default-off -> byte-identical. total_idc is the
+        # USD IDC; build_annual_rows translates it at year-0 FX (same basis as USD capex).
         tax_block = cfg.get("tax", {}) or {}
         interest_deductible = bool(tax_block.get("interest_deductibility", True))
-        if interest_deductible:
-            op_interest_lkr = [
-                float(row.get("interest_usd") or 0.0) * float(row.get("fx_rate") or 0.0)
-                for row in annual_rows_enriched
-            ]
+        capitalize_idc = bool(tax_block.get("capitalize_idc_in_depreciable_base", False))
+        idc_usd = float(debt_result.get("total_idc") or 0.0) if capitalize_idc else None
+        if interest_deductible or capitalize_idc:
+            op_interest_lkr = (
+                [
+                    float(row.get("interest_usd") or 0.0)
+                    * float(row.get("fx_rate") or 0.0)
+                    for row in annual_rows_enriched
+                ]
+                if interest_deductible
+                else None
+            )
             equity_rows = _enrich_annual_rows_with_debt(
-                build_annual_rows(cfg, interest_expense_series=op_interest_lkr),
+                build_annual_rows(
+                    cfg,
+                    interest_expense_series=op_interest_lkr,
+                    extra_depreciable_usd=idc_usd,
+                ),
                 debt_result,
             )
         else:

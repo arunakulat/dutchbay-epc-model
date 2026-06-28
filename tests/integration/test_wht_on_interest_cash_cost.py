@@ -28,10 +28,12 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # over-prediction haircut on the DutchBay wind resource (net AEP 473.8 -> 464.3 GWh, CF
 # 0.339 -> 0.332), which lowers eqIRR and CFADS further:
 # eqIRR -0.006837694668605732 -> +0.024168 (interest-shield) -> -0.004615913736793376 (FX)
-# -> -0.010023065544243814 (2% AEP haircut).
-# CFADS is the UNLEVERED project series; the AEP haircut lowers it too.
-_CANON_EQ_IRR = -0.010023065544243814
-_CANON_CFADS = 199103726.01021385
+# -> -0.010023065544243814 (2% AEP haircut) -> -0.019289278896401862 (PR-A: +15% dividend WHT
+# dominates the IDC-shield gain and the fabricated-levy removal).
+# CFADS is the UNLEVERED project series; the PR-A fabricated-levy removal lifts it (199.10M ->
+# 202.33M); dividend WHT / IDC are equity-path only and do not touch CFADS.
+_CANON_EQ_IRR = -0.019289278896401862
+_CANON_CFADS = 202332872.38974944
 
 
 def test_default_off_is_byte_identical() -> None:
@@ -95,14 +97,15 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     """Round-5 #5: tax.interest_deductibility was decorative (toggling it changed nothing
     because the live pipeline computed CFADS with interest_expense=0). The levered equity
     path now applies the interest tax shield, so True (default) yields the canonical
-    -0.010023 and False recovers the unlevered -0.05084629459293544 (5.9% FX-drift +
-    2.0% AEP-haircut re-baseline). The project IRR / DSCR / CFADS are upstream of the
-    equity waterfall and are byte-identical either way — the shield is confined to the
-    equity path (the project path captures it via the after-tax kd)."""
+    -0.019289 and False recovers the unlevered -0.057900709020215935 (5.9% FX-drift +
+    2.0% AEP-haircut + PR-A tax/levy re-baseline; the off case still keeps PR-A's IDC
+    depreciation shield + dividend WHT, only dropping the interest deduction). The project
+    IRR / DSCR / CFADS are upstream of the equity waterfall and are byte-identical either
+    way — the shield is confined to the equity path (project captures it via after-tax kd)."""
     on = evaluate_with_overrides(LENDER, overrides={})  # default True
     off = evaluate_with_overrides(LENDER, overrides={"tax.interest_deductibility": False})
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.05084629459293544, abs=1e-9)
+    assert off["equity_irr"] == pytest.approx(-0.057900709020215935, abs=1e-9)
     assert on["equity_irr"] > off["equity_irr"] + 0.02  # the shield is material (+408bps)
     # The shield is confined to the equity path: project KPIs identical both ways.
     assert on["project_irr"] == pytest.approx(off["project_irr"], abs=1e-12)

@@ -24,13 +24,12 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
-    # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull + the M3e
-    # degradation re-baseline + the 5.9% FX-drift re-baseline, now with the 2.0% P50
-    # over-prediction haircut: projIRR ~2.50%). The data-derived fx.annual_depr 0.03 ->
-    # 0.0589 erodes the flat-LKR revenue in USD and the 2% AEP haircut pushes equity IRR
-    # further negative (~-1.00%) — honest at this tariff.
-    assert resp.kpis.project_irr == pytest.approx(0.0250, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(-0.0100, abs=0.005)
+    # KPIs reproduce the canonical lender case after PR A (group-C #36): the fabricated
+    # levies are removed (projIRR ~2.68%) and the 15% dividend WHT + IDC-in-depreciable-base
+    # bite equity only, taking equity IRR to ~-1.93% (the dividend WHT dominates) — honest
+    # at the flat-LKR tariff.
+    assert resp.kpis.project_irr == pytest.approx(0.0268, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0193, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 

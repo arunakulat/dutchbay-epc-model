@@ -34,13 +34,12 @@ def _run(**fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, d = _run()  # no bind_downside -> default off
-    # Canonical after the 2.0% pre-construction P50 over-prediction haircut (net AEP
-    # 473.8 -> 464.3 GWh, CF 0.339 -> 0.332) on top of the earlier 5.9% FX-drift
-    # re-baseline: the lower resource pulls projIRR to 2.50% and equity IRR to -1.00%
-    # (NEGATIVE), and the DSCR-solved gearing settles at 0.578; minDSCR stays at the
-    # 1.30 sculpt target (debt re-sized to ~92.169M).
-    assert kpis["project_irr"] == pytest.approx(0.0250, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0100, abs=0.003)
+    # Canonical after PR A (group-C #36): fabricated levies removed lift projIRR to 2.68%;
+    # the 15% dividend WHT + IDC-in-base take equity IRR to -1.93% (equity-path only). The
+    # higher CFADS re-sizes the DSCR-solved gearing up to ~0.588 (debt ~93.765M); minDSCR
+    # stays at the 1.30 sculpt target.
+    assert kpis["project_irr"] == pytest.approx(0.0268, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.0193, abs=0.003)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"

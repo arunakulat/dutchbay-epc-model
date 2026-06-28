@@ -74,13 +74,12 @@ def test_default_curtailment_is_byte_identical() -> None:
 
     k = run_v14_pipeline(config=LENDER)["kpis"]
     # Construction-lag-correct project economics (audit finding 2.0): operating year 1
-    # is discounted after the 2-yr build, not at t=0. After the 5.9% FX-drift re-baseline
-    # (fx.annual_depr 0.03 -> 0.0589, data-derived BIS 2005-2026 LKR depreciation) and the
-    # 2.0% pre-construction P50 over-prediction haircut (net AEP 473.8 -> 464.3 GWh,
-    # CF 0.339 -> 0.332): projIRR 2.50% (< ~8.18% WACC), NPV -$56.1M (round-9
-    # guarantee-gate). minDSCR unchanged (dual-DSCR pins it at 1.30).
-    assert k["project_irr"] == pytest.approx(0.024951, abs=1e-5)
-    assert k["project_npv"] == pytest.approx(-56095004.91, abs=1.0)  # round-9 guarantee-gate (WACC -75bps)
+    # is discounted after the 2-yr build, not at t=0. After the prior FX-drift + AEP-haircut
+    # re-baselines and PR A (group-C #36: fabricated success-fee/env-surcharge levies removed,
+    # lifting CFADS 1.5%): projIRR 2.68% (< ~8.18% WACC), NPV -$54.0M. minDSCR unchanged
+    # (dual-DSCR pins it at 1.30). Dividend WHT / IDC are equity-path only (not seen here).
+    assert k["project_irr"] == pytest.approx(0.026837, abs=1e-5)
+    assert k["project_npv"] == pytest.approx(-53985936.80, abs=1.0)  # PR-A levy removal
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
 
 

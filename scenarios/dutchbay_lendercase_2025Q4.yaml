@@ -317,11 +317,16 @@ tax:
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
   wht_gross_up: false
+  # SL statutory dividend WHT 15% (#81) + capitalize debt IDC into the
+  # depreciable tax base (#36/#75). Both bite the equity path only.
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
   interest_deductibility: true
 
 statutory:
-  success_fee_pct: 0.01  # PUCSL approval fee
-  env_surcharge_pct: 0.005  # Environmental levy
+  success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
+  env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   social_services_levy_pct: 0.025  # SSL on revenue
 
 risk_adjustment:
@@ -530,21 +535,24 @@ expected_results:
   # aging -> project IRR 5.43% -> 5.05%), and the interest-tax-shield re-baseline that lifted
   # equity IRR to +2.42%; (5) the 2026-06-28 FX-DRIFT re-baseline (fx.annual_depr 3% -> 5.89%,
   # data-derived BIS 2005-2026 long-run LKR depreciation): project IRR 5.05% -> 2.75%, equity
-  # IRR +2.42% -> -0.46%, NPV -$32.3M -> -$53.3M; and (6) the 2026-06-28 AEP OVER-PREDICTION
+  # IRR +2.42% -> -0.46%, NPV -$32.3M -> -$53.3M; (6) the 2026-06-28 AEP OVER-PREDICTION
   # HAIRCUT (2.0%, resource.uncertainty.p50_haircut_pct): modelled net P50 473.8 -> bankable
-  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA independent P50 464.5.
-  # Net current canonical: project IRR 2.50% (BELOW the ~8.10% WACC), equity IRR -1.00% (NEGATIVE),
-  # NPV -$56.1M, DSCR-solved gearing ~0.578. The project is value-destructive, honestly so.
-  project_irr: 0.025       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
-  equity_irr: -0.01        # NEGATIVE — below cost of equity. The FX-drift re-baseline flipped it
-                            # +0.0242 -> -0.0046 (data-derived 5.89% LKR depreciation), then the 2%
-                            # AEP over-prediction haircut deepened it -0.0046 -> -0.0100. The flat-
-                            # nominal-LKR tariff cannot clear equity. (The +0.0242 came from the
-                            # round-5 interest-tax-shield re-baseline; set tax.interest_deductibility:
-                            # false to recover the unlevered case.) MOIC < 1.00.
-  project_npv_m_usd: -56.1 # discount at build-up WACC ~8.10%. The FX-drift re-baseline deepened
-                            # NPV -32.34M -> -53.29M; the 2% AEP haircut took it -53.29M -> -56.1M
-                            # (lower bankable energy against the flat-nominal-LKR tariff).
+  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA independent P50 464.5;
+  # and (7) the 2026-06-28 PR-A group-C #36 tax/levy re-baseline: remove the non-statutory
+  # success-fee/env-surcharge levies (#43, +CFADS ~1.5% -> project IRR 2.50% -> 2.68%, NPV
+  # -$56.1M -> -$54.0M), add the SL 15% dividend WHT (#81) and capitalize debt IDC into the
+  # depreciable base (#36/#75) — both equity-path only, netting equity IRR -1.00% -> -1.93%
+  # (the dividend WHT dominates the IDC shield gain).
+  # Net current canonical: project IRR 2.68% (BELOW the ~8.10% WACC), equity IRR -1.93% (NEGATIVE),
+  # NPV -$54.0M, DSCR-solved gearing ~0.588. The project is value-destructive, honestly so.
+  project_irr: 0.027       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
+  equity_irr: -0.019       # NEGATIVE — below cost of equity. Chain: +0.0242 (interest shield) ->
+                            # -0.0046 (5.9% FX-drift) -> -0.0100 (2% AEP haircut) -> -0.0193
+                            # (PR-A: +15% dividend WHT dominates the IDC-shield gain & levy removal).
+                            # The flat-nominal-LKR tariff cannot clear equity. (Set
+                            # tax.interest_deductibility: false to recover the unlevered case.) MOIC < 1.
+  project_npv_m_usd: -54.0 # discount at build-up WACC ~8.10%. NPV -32.34M -> -53.29M (FX-drift) ->
+                            # -56.1M (2% AEP haircut) -> -54.0M (PR-A fabricated-levy removal lifts CFADS).
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.4
   llcr: 1.15

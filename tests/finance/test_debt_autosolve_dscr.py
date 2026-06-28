@@ -40,7 +40,7 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     res = plan_debt(annual_rows=rows, config=cfg)
 
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
-    assert res["debt_total"] == pytest.approx(0.5775 * CAPEX, rel=3e-3)  # DSCR-solved, below cap
+    assert res["debt_total"] == pytest.approx(0.5875 * CAPEX, rel=3e-3)  # DSCR-solved, below cap (PR-A levy removal lifted CFADS)
     detail = res["dual_dscr"]
     assert detail is not None
     assert 0.40 < detail["solved_gearing"] < 0.70  # DSCR-bound, strictly below the 0.70 cap
@@ -51,13 +51,13 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
 def test_opt_out_keeps_fixed_gearing(base_config):
     """Without the flag, debt stays fixed at capex * debt_ratio.
 
-    At the corrected FX 333.79 (and ERA5-fitted Weibull, now incl. the 2.0% P50
-    over-prediction haircut) a fixed 70% gearing OVER-levers the deal: min DSCR
-    falls to ~0.77 after the P50 haircut (was ~0.80 pre-haircut), a deep
-    sub-covenant breach of the 1.30 target. This is exactly why the dual_dscr
-    auto-sizer (the shipped default) sizes debt DOWN to ~0.578 — the fixed-gearing
-    path and the auto-sizer no longer coincide (they did under the stale 300 /
-    declared Weibull, which flattered CFADS).
+    At the corrected FX 333.79 (and ERA5-fitted Weibull incl. the 2.0% P50 over-prediction
+    haircut, then PR-A's fabricated-levy removal which lifts CFADS ~1.5%) a fixed 70% gearing
+    OVER-levers the deal: min DSCR sits at ~0.79 (up from ~0.77 pre-PR-A as the levy removal
+    helps CFADS), still a deep sub-covenant breach of the 1.30 target. This is exactly why the
+    dual_dscr auto-sizer (the shipped default) sizes debt DOWN to ~0.588 — the fixed-gearing
+    path and the auto-sizer no longer coincide (they did under the stale 300 / declared Weibull,
+    which flattered CFADS).
     """
     cfg = copy.deepcopy(base_config)
     cfg["Financing_Terms"].pop("debt_sizing", None)
@@ -66,7 +66,7 @@ def test_opt_out_keeps_fixed_gearing(base_config):
 
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
-    assert res["min_dscr"] == pytest.approx(0.769, abs=0.01)  # 70% over-levers -> deep sub-covenant
+    assert res["min_dscr"] == pytest.approx(0.795, abs=0.01)  # 70% over-levers -> deep sub-covenant
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):
