@@ -19,10 +19,13 @@ CESSPIT Compliance:
 - Graceful degradation for optional features
 
 CCCDIR Compliance:
-- All public APIs use typed contracts
-- No dict[str, Any] in signatures
 - Config-driven (not hardcoded)
 - Clear, DRY implementation
+- Pragmatic typing: Pydantic models for the equity-distribution config and dataclass
+  contracts where they add value, with Mapping[str, Any] / dict[str, Any] kept at the
+  flexible config-in / result-out boundary. Fully typed ScenarioConfig / DebtResult /
+  CashflowRow / KPIResult models are a tracked refinement, NOT a current guarantee — do
+  not read this as "no dict[str, Any] in any signature".
 """
 
 from __future__ import annotations
