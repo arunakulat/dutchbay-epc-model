@@ -277,6 +277,13 @@ class MonteCarloEngine:
         if "fx_calibrated" in self._param_kinds:
             self._init_fx_calibration()
 
+        # Hybrid CF coupling: when project.capacity_factor is swept on a multi-tech scenario,
+        # the per-tech capacity factors must move WITH it or the in-cashflow ±1% reconciliation
+        # raises (per-tech Σ cap·cf vs project cap·cf) — so the headline driver was inert
+        # (every shocked trial fell to toy fallback). Captured here, applied per trial.
+        self._cf_coupling: Optional[Tuple[float, Dict[str, float]]] = None
+        self._init_cf_coupling()
+
         self._meta = MonteCarloRunMeta(
             n_trials=0,
             seed=self._seed,
@@ -360,6 +367,55 @@ class MonteCarloEngine:
         if self._fx_drive_drift:
             self._set_dotted(overrides, "fx.annual_depr", self._fx_sampler.drift)
         sample_row[self._fx_param_index] = spot  # record the spot for aggregation/reporting
+        return overrides
+
+    def _init_cf_coupling(self) -> None:
+        """Capture base CFs for hybrid project.capacity_factor coupling (if applicable).
+
+        Active only when project.capacity_factor is a swept param AND the scenario carries
+        per-tech generation capacity factors (multi-tech). Wind-only scenarios have no
+        generation.technologies block, so the project.capacity_factor override drives
+        production directly and no coupling is needed (self._cf_coupling stays None).
+        """
+        if "project.capacity_factor" not in self._param_names:
+            return
+        gen = self._base_config.get("generation")
+        techs = gen.get("technologies") if isinstance(gen, Mapping) else None
+        if not isinstance(techs, Mapping):
+            return
+        base_tech_cfs: Dict[str, float] = {}
+        for name, blk in techs.items():
+            if isinstance(blk, Mapping) and blk.get("capacity_factor") is not None:
+                try:
+                    base_tech_cfs[str(name)] = float(blk["capacity_factor"])
+                except (TypeError, ValueError):
+                    continue
+        proj = self._base_config.get("project")
+        base_proj_cf = proj.get("capacity_factor") if isinstance(proj, Mapping) else None
+        if not base_tech_cfs or not base_proj_cf:
+            return
+        self._cf_coupling = (float(base_proj_cf), base_tech_cfs)
+
+    def _apply_cf_coupling(self, overrides: Dict[str, Any]) -> Dict[str, Any]:
+        """Scale per-tech capacity factors with a swept project.capacity_factor (hybrid).
+
+        Keeps the in-cashflow ±1% reconciliation valid (per-tech Σ cap·cf == project cap·cf)
+        by scaling every per-tech CF by the same shock ratio, so the headline CF driver
+        actually moves combined-plant production instead of raising. Mirrors the coupled
+        override in analytics.portfolio.multi_tech_tornado.
+        """
+        if self._cf_coupling is None:
+            return overrides
+        base_proj_cf, base_tech_cfs = self._cf_coupling
+        proj = overrides.get("project")
+        cf = proj.get("capacity_factor") if isinstance(proj, Mapping) else None
+        if cf is None or base_proj_cf == 0:
+            return overrides
+        ratio = float(cf) / base_proj_cf
+        for tech, base_cf in base_tech_cfs.items():
+            self._set_dotted(
+                overrides, f"generation.technologies.{tech}.capacity_factor", base_cf * ratio
+            )
         return overrides
 
     @staticmethod
@@ -519,6 +575,7 @@ class MonteCarloEngine:
 
         for i in range(n):
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
+            overrides = self._apply_cf_coupling(overrides)
             overrides = self._apply_fx_calibration(overrides, samples[i])
             overrides = apply_degradation_if_enabled(base_cfg=self._base_config, overrides=overrides)
 
