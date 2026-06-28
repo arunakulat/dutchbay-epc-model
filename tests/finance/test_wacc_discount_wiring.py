@@ -54,7 +54,7 @@ def test_wacc_drives_project_discount_rate() -> None:
     kpis = _kpis({})
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
-    assert used == pytest.approx(0.08098, abs=0.002)  # ke=12%, gearing 59%, fee-inclusive (5.9% FX-drift re-baseline)
+    assert used == pytest.approx(0.09827, abs=0.002)  # ke=12%, gearing ~45%, kd up (PR-B UIP LKR rate 13.39%)
     # The project IRR (2.75%) is BELOW the WACC (~8.10% after the 5.9% FX-drift re-baseline),
     # so the project NPV is NEGATIVE (-$53.3M). The prior "+$5.9M / IRR 8.85%" was the
     # operating-year-1 off-by-one (year 1 undiscounted + the 2-yr lag ignored).

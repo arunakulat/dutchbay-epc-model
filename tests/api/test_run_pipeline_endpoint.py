@@ -24,12 +24,12 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
-    # KPIs reproduce the canonical lender case after PR A (group-C #36): the fabricated
-    # levies are removed (projIRR ~2.68%) and the 15% dividend WHT + IDC-in-depreciable-base
-    # bite equity only, taking equity IRR to ~-1.93% (the dividend WHT dominates) — honest
-    # at the flat-LKR tariff.
+    # KPIs reproduce the canonical lender case after PR B (group-C #3): the LKR debt rate
+    # rises to the UIP-implied 13.39%. projIRR ~2.68% is unchanged (unlevered); the costlier
+    # LKR tranche takes equity IRR to ~-4.86% and de-levers the deal — honest at the flat-LKR
+    # tariff.
     assert resp.kpis.project_irr == pytest.approx(0.0268, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(-0.0193, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0486, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 
@@ -38,9 +38,10 @@ def test_run_pipeline_returns_full_report() -> None:
     assert resp.aep.net_p90_gwh == pytest.approx(404.4, abs=1.0)
     assert resp.aep.capacity_factor == pytest.approx(0.332, abs=0.005)
 
-    # Sculpted debt: DSCR-bound, three tranches, a per-period schedule.
-    assert resp.debt.debt_total_usd == pytest.approx(92.169e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.578, abs=0.01)
+    # Sculpted debt: DSCR-bound, three tranches, a per-period schedule. PR B's UIP LKR rate
+    # (13.39%) de-levers the deal to ~0.45 gearing (debt ~71.82M).
+    assert resp.debt.debt_total_usd == pytest.approx(71.82e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.45, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     assert set(resp.debt.tranches) == {"lkr", "usd", "dfi"}
     assert resp.debt.tranches["usd"].principal_usd > 0

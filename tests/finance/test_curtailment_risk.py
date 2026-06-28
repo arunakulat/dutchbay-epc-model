@@ -74,12 +74,11 @@ def test_default_curtailment_is_byte_identical() -> None:
 
     k = run_v14_pipeline(config=LENDER)["kpis"]
     # Construction-lag-correct project economics (audit finding 2.0): operating year 1
-    # is discounted after the 2-yr build, not at t=0. After the prior FX-drift + AEP-haircut
-    # re-baselines and PR A (group-C #36: fabricated success-fee/env-surcharge levies removed,
-    # lifting CFADS 1.5%): projIRR 2.68% (< ~8.18% WACC), NPV -$54.0M. minDSCR unchanged
-    # (dual-DSCR pins it at 1.30). Dividend WHT / IDC are equity-path only (not seen here).
+    # is discounted after the 2-yr build, not at t=0. After PR B (group-C #3: LKR debt rate
+    # -> UIP-implied 13.39%): projIRR 2.68% is UNCHANGED (unlevered), but the higher cost of
+    # debt lifts the WACC (8.1% -> 9.8%) so NPV deepens to -$65.5M. minDSCR unchanged (1.30).
     assert k["project_irr"] == pytest.approx(0.026837, abs=1e-5)
-    assert k["project_npv"] == pytest.approx(-53985936.80, abs=1.0)  # PR-A levy removal
+    assert k["project_npv"] == pytest.approx(-65455817.14, abs=1.0)  # PR-B UIP LKR debt rate
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
 
 

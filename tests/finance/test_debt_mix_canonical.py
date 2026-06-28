@@ -34,8 +34,11 @@ def _debt(overrides: dict) -> dict:
 
 
 def test_baseline_avg_rate_is_mix_weighted_rates() -> None:
-    """avg_debt_rate == sum(mix_share * rate): 0.45*8 + 0.10*6.5 + 0.45*7.5 = 7.625%."""
-    assert _debt({})["avg_debt_rate"] == pytest.approx(0.07625, abs=1e-4)
+    """avg_debt_rate tracks the mix-weighted tranche rates. PR B raised the LKR (45%) tranche
+    to the UIP-implied 13.39%: mix-weighted 0.45*13.39 + 0.10*6.5 + 0.45*7.5 = 10.05%; the
+    realised principal-after-IDC weighting (the high-rate LKR tranche accrues more IDC) lifts
+    it slightly to ~10.18%."""
+    assert _debt({})["avg_debt_rate"] == pytest.approx(0.10178143097234378, abs=1e-4)
 
 
 def test_rates_drive_avg_debt_rate() -> None:
@@ -51,7 +54,10 @@ def test_mix_drives_tranche_split() -> None:
     principal = dr["principal_by_tranche"]
     total = sum(principal.values())
     assert principal["dfi"] / total == pytest.approx(0.20, abs=0.02)
-    assert principal["lkr"] / total == pytest.approx(0.40, abs=0.02)
+    # PR B's 13.39% LKR rate accrues proportionally more IDC on the LKR tranche, so its
+    # principal-after-IDC share drifts ~2pp above its 0.40 mix share (the split still FOLLOWS
+    # the mix; the IDC distortion just widens at the higher rate -> loosened band).
+    assert principal["lkr"] / total == pytest.approx(0.40, abs=0.03)
 
 
 def test_decorative_debt_tranches_is_ignored() -> None:

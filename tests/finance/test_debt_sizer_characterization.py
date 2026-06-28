@@ -38,9 +38,10 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
-# Gearings spanning the ratio-capped region (< ~0.625 solved) and the DSCR-bound
-# region (>= ~0.625).
-GEARINGS = [0.45, 0.50, 0.55, 0.60, 0.625, 0.70]
+# Gearings spanning the sub-cap sculpt region (< ~0.45 DSCR-solved) and the clamped
+# region (>= ~0.45). PR B's UIP LKR debt rate (13.39%) dropped the DSCR-solved cap to ~0.45,
+# so the sweep now starts BELOW the cap (0.35/0.40) to retain genuinely sub-cap points.
+GEARINGS = [0.35, 0.40, 0.45, 0.50, 0.60, 0.70]
 
 
 def _kpis(debt_ratio: float) -> dict:
@@ -82,28 +83,28 @@ def test_equity_npv_monotonic_in_gearing() -> None:
 def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap() -> None:
     """Leverage is value-destructive and equity IRR plateaus at the DSCR-solved cap.
 
-    After the 5.9% FX-drift re-baseline AND the 2% AEP over-prediction haircut the project
-    return (~2.5%) sits well BELOW the cost of debt, so leverage is value-destructive and
-    equity IRR is NEGATIVE. The dual_dscr sizer caps the ACTUAL gearing at ~0.578, so every
-    requested gearing above that (0.60/0.625/0.70) clamps to the same solved structure and
-    equity IRR PLATEAUS at the canonical ~-0.0100. The least-levered point (0.45) carries a
-    HIGHER equity IRR than the clamped high-gearing plateau — i.e. more leverage erodes the
-    return end-to-end. NOTE: below the cap the response is no longer strictly monotonic
-    (the now-negative project IRR + the DSCR sculpt/balloon interaction make it U-shaped);
-    we therefore assert the value-destruction (lowest gearing beats the levered plateau) and
-    the supra-cap clamp, not a strict step-by-step decline.
+    The project return (~2.7%) sits well BELOW the cost of debt (the PR-B UIP LKR rate of
+    13.39% widened the gap), so leverage is value-destructive and equity IRR is NEGATIVE.
+    The dual_dscr sizer caps the ACTUAL gearing at ~0.45, so every requested gearing at or
+    above that (0.45/0.50/0.60/0.70) clamps to the same solved structure and equity IRR
+    PLATEAUS at the canonical ~-0.0486. The least-levered (sub-cap) point (0.35) carries a
+    HIGHER equity IRR than the clamped plateau — i.e. more leverage erodes the return
+    end-to-end. NOTE: below the cap the response is no longer strictly monotonic (the
+    negative project IRR + the DSCR sculpt/balloon interaction make it U-shaped); we therefore
+    assert the value-destruction (lowest gearing beats the levered plateau) and the supra-cap
+    clamp, not a strict step-by-step decline.
     """
     import math
 
-    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]  # [0.45,0.50,0.55,0.60,0.625,0.70]
+    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]  # [0.35,0.40,0.45,0.50,0.60,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
-    # Above the ~0.588 DSCR-solved cap (PR-A levy removal lifted CFADS, re-sizing it up from
-    # ~0.578) the sizer clamps to the solved gearing -> equity IRR plateaus at the canonical
-    # clamped value (now -0.0193 after the PR-A dividend WHT + IDC re-baseline).
+    # Above the ~0.45 DSCR-solved cap (PR-B's UIP LKR debt rate 13.39% de-levered the deal
+    # from ~0.588) the sizer clamps to the solved gearing -> equity IRR plateaus at the
+    # canonical clamped value (now -0.0486 after the PR-B debt-rate re-baseline).
     plateau = irrs[3:]
     assert max(plateau) - min(plateau) < 1e-6, f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0193, abs=0.002)
+    assert plateau[0] == pytest.approx(-0.0486, abs=0.002)
     # Value-destructive leverage: the least-levered point beats the clamped high-gearing plateau,
     # and the gap is material.
     assert irrs[0] > plateau[0], f"leverage not value-destructive: {irrs}"

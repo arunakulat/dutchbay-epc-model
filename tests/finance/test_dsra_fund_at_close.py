@@ -34,11 +34,11 @@ def _run(dsra=None, **fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
-    # Canonical after PR A (group-C #36): fabricated levies removed -> projIRR ~2.68%,
-    # minDSCR 1.30. The 15% dividend WHT + IDC-in-depreciable-base bite equity only, netting
-    # equity IRR to ~-1.93% at the flat-LKR tariff. project IRR is debt-structure independent.
+    # Canonical after PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR ~2.68%
+    # is unchanged (debt-structure independent), minDSCR 1.30. The costlier LKR tranche takes
+    # equity IRR to ~-4.86% at the flat-LKR tariff.
     assert kpis["project_irr"] == pytest.approx(0.02684, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.019289, abs=0.001)
+    assert kpis["equity_irr"] == pytest.approx(-0.048586, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0

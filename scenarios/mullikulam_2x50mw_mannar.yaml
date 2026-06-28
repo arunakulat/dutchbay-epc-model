@@ -228,8 +228,8 @@ Financing_Terms:
     dfi_max: 0.1
     usd_commercial_min: 0.45
   rates:
-    lkr_nominal: 0.08
-    lkr_min: 0.08
+    lkr_nominal: 0.1339  # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_min: 0.1339
     dfi_nominal: 0.065
     dfi_min: 0.065
     usd_nominal: 0.075
@@ -373,16 +373,16 @@ expected_results:
   # CFADS window) and were never re-propagated because no test read this block.
   project_irr: -0.0646      # NEGATIVE — below break-even even undiscounted (true root; the
                             # IRR solver no longer floors sub-zero at 0.0)
-  equity_irr: -0.1655  # deeply NEGATIVE — a loss-making deal at the 3.96c bid; the 5.9% FX-drift
+  equity_irr: -0.1732  # deeply NEGATIVE — a loss-making deal at the 3.96c bid; the 5.9% FX-drift
                        # re-baseline (fx.annual_depr 3% -> 5.89%) deepened it ~-0.086 -> -0.158 as
                        # the steeper LKR depreciation erodes the flat-LKR revenue in USD terms.
-  project_npv_m_usd: -48.10  # deepened by the project-discounting fix + 0.5%/yr degradation
-  equity_npv_m_usd: -45.60
-  equity_moic: 0.1343       # equity recovers only ~13% of its outlay (after the PR-A dividend WHT)
+  project_npv_m_usd: -48.74  # deepened by the project-discounting fix + 0.5%/yr degradation
+  equity_npv_m_usd: -49.18
+  equity_moic: 0.1201       # equity recovers only ~13% of its outlay (after the PR-A dividend WHT)
   min_dscr: 1.30
-  avg_dscr: 1.4069
-  llcr: 1.1955  # operating-year CFADS coverage window (PR #389)
-  plcr: 1.2349
+  avg_dscr: 1.3900
+  llcr: 1.3365  # operating-year CFADS coverage window (PR #389)
+  plcr: 1.3693
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'
