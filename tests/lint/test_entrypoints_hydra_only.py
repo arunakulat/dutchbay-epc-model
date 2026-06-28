@@ -1,11 +1,32 @@
-"""Lint tests to enforce Hydra-only entrypoint policy.
+"""Lint tests enforcing the entrypoint CLI policy.
+
+POLICY (the deliberate, principled split — read this before "making everything Hydra"):
+
+    Hydra (@hydra.main) is MANDATORY for the canonical *pipeline* entrypoints — the ones
+    that orchestrate the whole model off a composable config tree (run_full_pipeline_v14,
+    run_scenario_analytics_v14, the sensitivity / Monte-Carlo CLIs). There, Hydra earns its
+    keep: config composition (scenario + overrides), multirun sweeps, and structured config
+    are exactly what these CLIs need. That set is ``CANONICAL_CLIS`` below.
+
+    argparse is PERMITTED — by design, not as a gap — for the thin ``scripts/`` utilities
+    that wrap a SINGLE library call ("read one --config YAML, call one function, print
+    CSV/JSON": e.g. run_global_sensitivity, run_multi_tech_tornado, run_tornado_from_cli,
+    run_epc_margin, run_fx_calibration). For those, Hydra is pure ceremony AND imposes
+    intrusive runtime side-effects (``@hydra.main`` changes the working directory and writes
+    ``outputs/`` + ``.hydra/`` dirs by default) that are actively wrong for a tool whose job
+    is to emit a CSV. A blanket "ban argparse everywhere / convert all entrypoints to Hydra"
+    was evaluated and REJECTED: it is high-blast-radius (≈10 scripts) ceremony against the
+    Unix small-composable-tools grain, with zero compositional benefit for a thin wrapper.
+
+    So "Hydra-only" here means Hydra-only *for the canonical pipeline CLIs* — NOT repo-wide.
+    The CI gate scopes itself to ``CANONICAL_CLIS`` precisely because of this split.
 
 These tests ensure:
-1. Canonical CLIs use @hydra.main (GWTF R3)
-2. No argparse in canonical CLIs
+1. Canonical pipeline CLIs use @hydra.main (GWTF R3)
+2. No argparse in canonical pipeline CLIs (thin scripts/ utilities may use argparse)
 3. Workflows use Hydra syntax (key=value)
 4. No duplicate entrypoints (*_FIXED.py)
-5. All CLIs print JSON (GWTF CLI-03)
+5. All canonical CLIs print JSON (GWTF CLI-03)
 
 Run:
     pytest tests/lint/test_entrypoints_hydra_only.py -v
@@ -38,7 +59,10 @@ import pytest
 # Test Configuration
 # ═════════════════════════════════════════════════════════════════════════════
 
-# Canonical CLIs (MUST be Hydra-only)
+# Canonical PIPELINE CLIs (MUST be Hydra — config composition earns its keep here).
+# This is an intentional whitelist, not an arbitrary one: a CLI belongs here only if it
+# orchestrates the model off a composable config tree. Thin scripts/ utilities that wrap a
+# single library call are deliberately NOT listed and may use argparse (see module docstring).
 CANONICAL_CLIS = [
     "run_full_pipeline_v14.py",
     "run_scenario_analytics_v14.py",
