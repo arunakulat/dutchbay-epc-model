@@ -183,12 +183,14 @@ def test_verdict_falls_back_to_report_ceiling_without_engine_flag() -> None:
 def test_equity_irr_note_reflects_irr_sign_not_npv_flag() -> None:
     """Round-11 fix: the equity-IRR note's sign word must follow the IRR's OWN sign, not the
     equity-NPV value flag. A positive IRR below the hurdle (NPV<0) was falsely printed as
-    'negative to sponsors' — the canonical lender case (+2.42%, NPV<0) hits exactly this."""
+    'negative to sponsors'. The basecase (equity IRR ~+5.8%, below the ~12% equity hurdle,
+    NPV<0) is the real-world example; the synthetic fixture below uses +2.42%. (Post the 5.9%
+    FX-drift re-baseline the canonical LENDER equity IRR is itself negative, ~-0.46%.)"""
     def note(kpis):
         v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
         return next(n for n in v.notes if "Equity IRR" in n)
 
-    # positive IRR, negative NPV (the canonical lender/basecase reality) -> NOT "negative"
+    # positive IRR, negative NPV (the basecase reality) -> NOT "negative"
     pos_below = note({"project_irr": 0.05, "discount_rate_used": 0.078,
                       "equity_irr": 0.0242, "equity_npv": -35_000_000.0, "min_dscr": 1.30})
     assert "2.42%" in pos_below

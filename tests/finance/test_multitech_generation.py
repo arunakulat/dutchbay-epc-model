@@ -216,8 +216,9 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     # CFADS $257.10M -> $203.46M.
     assert kpis["project_irr"] == pytest.approx(0.027491386055047484, abs=1e-9)
     assert kpis["equity_irr"] == pytest.approx(-0.004615913736793376, abs=1e-9)
-    # project_npv -32.34M -> -53.29M under the same FX-drift re-baseline (CFADS discounted at the
-    # base WACC). The discount rate itself is debt/equity-side and unchanged at 0.0785.
+    # project_npv -32.34M -> -53.29M under the same FX-drift re-baseline. CFADS is discounted at
+    # the base WACC, which ITSELF rises 0.0785 -> 0.08098 as the DSCR-solved gearing falls
+    # 0.628 -> 0.590 (less debt -> the WACC weight shifts toward the costlier equity).
     assert kpis["project_npv"] == pytest.approx(-53292960.28506229, rel=1e-9)
     assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(203461128.35368362, rel=1e-9)

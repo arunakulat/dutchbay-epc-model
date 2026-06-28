@@ -114,11 +114,12 @@ def test_covenant_pinned_dscr_tornado_is_flagged_flat() -> None:
     """min_dscr is pinned by dual_dscr debt sizing: every bar is ~0, so the suite
     is flagged flat with a covenant-pinned reason rather than misrepresenting it.
 
-    Uses the LENDER case: after the 5.9% FX-drift re-baseline the weaker BASECASE
-    min_dscr is no longer perfectly covenant-flat (large CF/tariff shocks push the
-    dual_dscr re-sizing into a structural bound, so it deviates ~0.17 from 1.30 —
-    see test_basecase_min_dscr_no_longer_covenant_flat). The lender case stays
-    DSCR-bound with headroom, so its min_dscr remains structurally invariant."""
+    Uses the LENDER case (which actually uses debt_sizing: dual_dscr): after the 5.9%
+    FX-drift re-baseline the weaker BASECASE min_dscr is no longer perfectly covenant-flat
+    (the basecase uses FIXED debt + a DSCR sculpt; large CF/tariff shocks drop per-year CFADS
+    below what the sculpt needs to hold 1.30, so it deviates ~0.17 — see
+    test_basecase_min_dscr_no_longer_covenant_flat). The lender case stays DSCR-bound with
+    headroom, so its min_dscr remains structurally invariant."""
     suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
     assert max(abs(t.impact_abs) for t in suite.tornado_results) < 1e-9
     assert suite.metadata.get("flat_metric") is True

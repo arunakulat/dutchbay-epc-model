@@ -9,15 +9,16 @@ sweeping ``Financing_Terms.debt_ratio`` (see the #30 optimization facade):
 2. ``equity_npv`` is monotonic non-decreasing in gearing — but this is an equity
    *sizing* artifact (higher gearing → less equity invested → smaller absolute
    negative NPV), NOT evidence that more leverage improves return quality. Equity
-   *IRR* actually FALLS with gearing here: post-M3e degradation re-baseline the
-   project return (~5.05%) is BELOW the cost of debt (~7.63%), so every turn of
-   leverage is negative carry and the IRR sweep crosses from positive to negative.
+   *IRR* actually FALLS with gearing here: after the 5.9% FX-drift re-baseline the
+   project return (~2.75%; was ~5.05% at the old 3% drift) is BELOW the cost of debt
+   (~7.63%), so every turn of leverage is negative carry and the IRR sweep is negative.
    (NOTE: the equity_irr non-monotonicity / sub-target achieved DSCR first seen
    here was later traced to a real debt-service ALIGNMENT bug — period- vs
    annual-row indexing of debt service — and FIXED. The base case now holds DSCR
    at target with no covenant lockup; see test_no_phantom_covenant_lockup.)
-   SEPARATELY: the sculpt leaves a ~36% balloon at maturity; how the equity
-   waterfall resolves it is config-selectable — see test_balloon_treatment.py.
+   SEPARATELY: the sculpt leaves a ~58% balloon at maturity (was ~36% at the old 3%
+   drift; the weaker CFADS amortises less); how the equity waterfall resolves it is
+   config-selectable — see test_balloon_treatment.py.
 3. ``Financing_Terms.interest_rate_nominal`` is a no-op on the achieved schedule
    (per-tranche rates govern; the top-level key only discounts the dual-DSCR
    capacity detail).
