@@ -24,6 +24,7 @@ import yaml
 
 from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.evidence_register import validate_evidence_register
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +258,12 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # for simplified base cases / fixtures); fails loud on an unapproved or refused
     # placeholder source. Changes no computed number (byte-identical economics).
     enforce_aep_provenance(cfg, str(config_path))
+
+    # Validate the assumption EVIDENCE register (#C5): every material assumption a scenario
+    # declares should carry provenance {source, as_of, tier}. SOFT by default (warns, never
+    # blocks) and a no-op when no register is declared; a lender-grade scenario opts in to
+    # hard enforcement via its own evidence_register block. Changes no computed number.
+    validate_evidence_register(cfg, str(config_path))
 
     # Cross-assert the LKR/USD spot pinned under fx.rates / fx.start / fx.source so the
     # cashflow economics and the FX reporting block cannot read divergent rates.

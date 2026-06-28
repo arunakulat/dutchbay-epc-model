@@ -1,0 +1,53 @@
+# DutchBay EPC Model — assumption EVIDENCE TAXONOMY (review chunk C5)
+#
+# Purpose (CESSPIT / CCCDIR — single source):
+#   The vocabulary the assumption evidence register validates against, in ONE place:
+#     1. evidence_tiers       — the ordered DFI evidence hierarchy (STRONGEST → WEAKEST)
+#     2. material_assumptions — the canonical set of economics-moving assumptions a
+#                               lender-grade scenario is expected to evidence
+#
+#   A scenario declares the actual provenance in its own `evidence_register.entries`
+#   block (assumption -> {source, as_of, tier[, note]}); analytics.evidence_register
+#   validates that block against this taxonomy and the enforcement policy in
+#   config/defaults.yaml (defaults.evidence_register). This file carries NO per-project
+#   numbers and is read by exactly one resolver (analytics.evidence_register.load_taxonomy)
+#   — it never moves KPIs.
+#
+#   The model already enforces source provenance for the AEP power curve
+#   (analytics.aep_provenance, #18); this generalizes that control to every material
+#   assumption. Soft by default (warn-only) — see config/defaults.yaml.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evidence tiers — ordered STRONGEST → WEAKEST. A scenario entry's `tier` must be
+# one of these names; the policy's `min_tier` (if set) rejects anything weaker.
+# This is the lender's-engineer evidence hierarchy: a metered measurement or an
+# executed contract is the strongest basis for a number; an un-sourced placeholder
+# is the weakest and should never survive into a financed run.
+# ─────────────────────────────────────────────────────────────────────────────
+evidence_tiers:
+  - measured       # site measurement / metered data (met mast, SCADA, audited accounts)
+  - contracted     # executed contract: signed PPA tariff, awarded EPC price, term sheet
+  - vendor_quote   # firm/budgetary vendor or OEM quote (e.g. SINOHYDRO EPC, turbine OEM)
+  - benchmark      # vetted third-party benchmark (IRENA, Lazard, NREL ATB, IEA)
+  - derived        # computed/modeled from other evidenced inputs (e.g. CF from Weibull)
+  - assumption     # documented analyst judgement (rationale given, no external source)
+  - placeholder    # TBD / illustrative — weakest; must be retired before financial close
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Material assumptions — the canonical economics-moving inputs a lender-grade
+# scenario should evidence. An entry whose `assumption` is NOT in this list is
+# flagged (unknown_assumption); when policy.require_complete is set, every name
+# here must have an entry. Names are stable identifiers, not config dotted-paths
+# (one assumption can span several config keys, e.g. debt rate + tenor + DSCR).
+# ─────────────────────────────────────────────────────────────────────────────
+material_assumptions:
+  - tariff            # PPA energy price (LKR/kWh) and its escalation/indexation basis
+  - capex             # total installed cost (EPC + owner's + IDC) and its cost basis
+  - opex              # fixed + variable O&M and escalation
+  - capacity_factor   # net P50 capacity factor / bankable AEP
+  - fx                # USD/LKR start rate and depreciation path
+  - debt_terms        # gearing, interest rate, tenor, DSCR covenant
+  - degradation       # annual performance degradation rate
+  - inflation         # USD/LKR inflation assumptions feeding escalation
+  - tax               # corporate income tax, WHT, holiday status
+  - discount_rate     # WACC / cost of equity used for NPV
