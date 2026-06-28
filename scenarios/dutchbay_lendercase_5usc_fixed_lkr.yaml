@@ -34,7 +34,7 @@ project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
-  capacity_factor: 0.339  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
+  capacity_factor: 0.332  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
   degradation: 0.5  # Annual production degradation (0.5%/year for turbine aging)
   life_years: 20  # Project operational life
   cod_year: 2027  # Commercial Operation Date
@@ -117,6 +117,10 @@ resource:
 
   aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
 
+  uncertainty:
+
+    p50_haircut_pct: 2.0  # 2% pre-construction P50 over-prediction haircut (EIA EN220 P50 464.5 corroboration)
+
   # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:
@@ -140,8 +144,8 @@ resource:
   wind:
     ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
     ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
-    capacity_factor: 0.339    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 473.8            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    capacity_factor: 0.332    # Net P50 CF (canonical; matches aep_summary)
+    aep_gwh: 464.3            # Net P50 AEP, GWh (canonical; matches aep_summary)
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
@@ -497,9 +501,9 @@ expected_results:
   # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
   # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
   # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
-  net_aep_p50_gwh: 473.8  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
-  net_aep_p90_gwh: 412.7  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
-  capacity_factor: 0.339
+  net_aep_p50_gwh: 464.3  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
+  net_aep_p90_gwh: 404.4  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
+  capacity_factor: 0.332
 
   # Revenue (LKR-basis calculations, EUR-equivalent for reference). AEP unchanged from
   # the canonical; only the tariff differs (16.69 LKR/kWh = 5.0 US cents @ FX 333.79).
@@ -519,14 +523,14 @@ expected_results:
   # honest 0.5%/yr aging; the engine reads it as a percent and /100s it, so 0.005 had meant
   # ~0%/yr). The negative IRR is now reported truthfully: the project-IRR solver was floored
   # at r_low=0.0 and clamped sub-zero projects to exactly 0.0; it now searches negative rates.
-  project_irr: -0.0328      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
-  equity_irr: -0.1189       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
+  project_irr: -0.0359      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
+  equity_irr: -0.1223       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
                             # constraint; round-5 #5 interest shield only lifts -0.0702 -> -0.0668
                             # (+34bps; little taxable income to shield in a loss-making deal).
-  project_npv_m_usd: -133.14 # deeply underwater
+  project_npv_m_usd: -135.48 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.41
-  llcr: 1.21
+  llcr: 1.22
   plcr: 1.25
 
 # ═════════════════════════════════════════════════════════════════════════════

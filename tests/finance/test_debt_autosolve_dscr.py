@@ -28,18 +28,19 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     """The shipped lender scenario (debt_sizing: dual_dscr) is DSCR-bound at honest FX.
 
     At the corrected FX 333.79 (and the ERA5-fitted Weibull re-baseline that trims
-    AEP ~2%) the USD O&M costs more in LKR and CFADS is lower, so the DSCR debt
-    capacity falls BELOW the 70% gearing ceiling (it was gearing-bound under the
-    stale 300 / declared Weibull). The auto-sizer therefore binds on the P50 DSCR
-    (~0.590 gearing after the 5.9% FX-drift re-baseline; was ~0.628 at 3% drift),
-    below the cap, and the sculpt floors min DSCR at the 1.30 target.
+    AEP ~2%, now also incl. the 2.0% pre-construction P50 over-prediction haircut)
+    the USD O&M costs more in LKR and CFADS is lower, so the DSCR debt capacity
+    falls BELOW the 70% gearing ceiling (it was gearing-bound under the stale 300 /
+    declared Weibull). The auto-sizer therefore binds on the P50 DSCR (~0.578
+    gearing after the P50 haircut; was ~0.590 pre-haircut), below the cap, and the
+    sculpt floors min DSCR at the 1.30 target.
     """
     cfg = copy.deepcopy(base_config)
     rows = build_annual_rows(cfg)
     res = plan_debt(annual_rows=rows, config=cfg)
 
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
-    assert res["debt_total"] == pytest.approx(0.590 * CAPEX, rel=3e-3)  # DSCR-solved, below cap
+    assert res["debt_total"] == pytest.approx(0.5775 * CAPEX, rel=3e-3)  # DSCR-solved, below cap
     detail = res["dual_dscr"]
     assert detail is not None
     assert 0.40 < detail["solved_gearing"] < 0.70  # DSCR-bound, strictly below the 0.70 cap
@@ -50,12 +51,13 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
 def test_opt_out_keeps_fixed_gearing(base_config):
     """Without the flag, debt stays fixed at capex * debt_ratio.
 
-    At the corrected FX 333.79 (and ERA5-fitted Weibull) a fixed 70% gearing
-    OVER-levers the deal: min DSCR falls to ~0.80 after the 5.9% FX-drift re-baseline
-    (was ~1.17 at 3% drift), a deep sub-covenant breach of the 1.30 target. This is
-    exactly why the dual_dscr auto-sizer (the shipped default) sizes debt DOWN to
-    ~0.590 — the fixed-gearing path and the auto-sizer no longer coincide (they did
-    under the stale 300 / declared Weibull, which flattered CFADS).
+    At the corrected FX 333.79 (and ERA5-fitted Weibull, now incl. the 2.0% P50
+    over-prediction haircut) a fixed 70% gearing OVER-levers the deal: min DSCR
+    falls to ~0.77 after the P50 haircut (was ~0.80 pre-haircut), a deep
+    sub-covenant breach of the 1.30 target. This is exactly why the dual_dscr
+    auto-sizer (the shipped default) sizes debt DOWN to ~0.578 — the fixed-gearing
+    path and the auto-sizer no longer coincide (they did under the stale 300 /
+    declared Weibull, which flattered CFADS).
     """
     cfg = copy.deepcopy(base_config)
     cfg["Financing_Terms"].pop("debt_sizing", None)
@@ -64,15 +66,15 @@ def test_opt_out_keeps_fixed_gearing(base_config):
 
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
-    assert res["min_dscr"] == pytest.approx(0.804, abs=0.01)  # 70% over-levers -> deep sub-covenant
+    assert res["min_dscr"] == pytest.approx(0.769, abs=0.01)  # 70% over-levers -> deep sub-covenant
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):
     """When the deal is DSCR-bound, a lower DSCR target unlocks MORE leverage.
 
     At the corrected FX 333.79 the deal is DSCR-bound (below the 70% cap), so a
-    lower 1.20 target sizes MORE debt (~0.695 gearing) than the 1.30 target
-    (~0.640) — the opposite of the stale-300 gearing-bound case where both targets
+    lower 1.20 target sizes MORE debt (~0.625 gearing) than the 1.30 target
+    (~0.578) — the opposite of the stale-300 gearing-bound case where both targets
     sat at the same capped debt.
     """
     cfg = copy.deepcopy(base_config)  # 1.30 target

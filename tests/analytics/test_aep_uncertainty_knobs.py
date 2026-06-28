@@ -70,13 +70,13 @@ def test_exceedance_correlation_widens_lowers_p90_only() -> None:
 
 # --- builder: config-driven, default-off ---------------------------------------
 def test_builder_default_reproduces_canonical_exceedance() -> None:
-    """No uncertainty block -> bankable P50 == modelled net, canonical exceedance."""
+    """LENDER YAML carries the 2% pre-construction P50 haircut -> canonical post-haircut exceedance."""
     summary = build_aep_summary_from_config(load_scenario_config(LENDER))
-    assert summary["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)
+    assert summary["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)  # 464.36 post 2% haircut
     exc = summary["exceedance"]
     assert exc["sigma_1yr_pct"] == pytest.approx(10.07, abs=0.05)
-    assert exc["net_aep_p90_1yr_gwh"] == pytest.approx(412.7, abs=1.0)
-    assert summary["uncertainty"]["p50_haircut_pct"] == 0.0
+    assert exc["net_aep_p90_1yr_gwh"] == pytest.approx(404.4, abs=1.0)  # 412.7 -> 404.4 post 2% haircut
+    assert summary["uncertainty"]["p50_haircut_pct"] == 2.0  # 2% pre-construction P50 haircut now in LENDER YAML
     assert summary["uncertainty"]["correlation"] == 0.0
 
 

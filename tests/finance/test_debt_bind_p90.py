@@ -34,19 +34,20 @@ def _run(**fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, d = _run()  # no bind_downside -> default off
-    # Canonical after the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%): the
-    # steeper LKR depreciation erodes the flat-LKR revenue's USD value, pulling projIRR
-    # 5.05% -> 2.75% and equity IRR +2.42% -> -0.46% (now NEGATIVE), and the DSCR-solved
-    # gearing 0.628 -> 0.590; minDSCR stays at the 1.30 sculpt target (debt re-sized).
-    assert kpis["project_irr"] == pytest.approx(0.0275, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0046, abs=0.003)
+    # Canonical after the 2.0% pre-construction P50 over-prediction haircut (net AEP
+    # 473.8 -> 464.3 GWh, CF 0.339 -> 0.332) on top of the earlier 5.9% FX-drift
+    # re-baseline: the lower resource pulls projIRR to 2.50% and equity IRR to -1.00%
+    # (NEGATIVE), and the DSCR-solved gearing settles at 0.578; minDSCR stays at the
+    # 1.30 sculpt target (debt re-sized to ~92.169M).
+    assert kpis["project_irr"] == pytest.approx(0.0250, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.0100, abs=0.003)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"
     assert d["downside_source"] == "flat_factor"
     assert d["downside_ratio"] == pytest.approx(0.80, abs=1e-6)
     assert "solved_gearing_p90" not in d
-    assert d["solved_gearing_p50"] == pytest.approx(0.590, abs=0.01)
+    assert d["solved_gearing_p50"] == pytest.approx(0.578, abs=0.01)
 
 
 def test_p90_binds_when_floor_is_high() -> None:
@@ -54,9 +55,10 @@ def test_p90_binds_when_floor_is_high() -> None:
     assert d["binding_production_case"] == "P90"
     assert d["solved_gearing_p90"] < d["solved_gearing_p50"]  # downside deleverages
     assert d["solved_gearing"] == pytest.approx(d["solved_gearing_p90"], abs=1e-6)
-    # the real bankable P90/P50 AEP ratio (412.7/473.8 = 0.871), NOT the flat 0.80
+    # the real bankable P90/P50 AEP ratio (post 2% haircut: 404.4/464.3 = 0.871),
+    # NOT the flat 0.80
     assert d["downside_source"] == "p90_aep"
-    assert d["downside_ratio"] == pytest.approx(412.7 / 473.8, abs=0.001)
+    assert d["downside_ratio"] == pytest.approx(404.4 / 464.3, abs=0.001)
     # the base-case DSCR floor still holds (the structure is only ever MORE conservative)
     assert kpis["min_dscr"] >= 1.30 - 0.02
 

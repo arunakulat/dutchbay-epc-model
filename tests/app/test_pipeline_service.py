@@ -44,7 +44,7 @@ def _valid_wind_export() -> Dict[str, Any]:
     return {
         "scenario": "P75",
         "annual_generation_mwh": 286_300.0,
-        "capacity_factor_percent": 33.9,
+        "capacity_factor_percent": 33.2,
         "revenue_annual_usd": 19_400_000.0,
         "revenue_cumulative_usd": 388_000_000.0,
         "project_capacity_mw": 159.6,
@@ -98,9 +98,9 @@ def test_run_finance_case_rejects_stale_capacity_vs_bankable_aep() -> None:
     the same inline-dict bypass that lets an unapproved AEP source through, closed here)."""
     from analytics.aep_reconciliation import AepReconciliationError
 
-    scen = _scenario()  # lendercase: 159.6 MW reconciles with the frozen 473.8 GWh AEP
+    scen = _scenario()  # lendercase: 159.6 MW reconciles with the frozen 464.3 GWh AEP (post haircut)
     scen["project"] = dict(scen["project"])
-    scen["project"]["capacity_mw"] = 200.0  # 200 x 0.339 x 8.760 = 593 GWh >> 473.8
+    scen["project"]["capacity_mw"] = 200.0  # 200 x 0.332 x 8.760 = 582 GWh >> 464.3
     with pytest.raises(AepReconciliationError):
         run_finance_case(scen)
 

@@ -23,7 +23,7 @@ def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
     base: Dict[str, Any] = {
         "site_name": "DutchBay",
         "capacity_mw": 150.0,
-        "capacity_factor": 0.339,
+        "capacity_factor": 0.332,
         "project_life_years": 20,
         "ppa_price_lkr_per_kwh": 20.30,
         "ppa_term_years": 20,
@@ -73,7 +73,7 @@ def test_rejects_out_of_range(bad: Dict[str, Any]) -> None:
 def test_to_overrides_maps_core_fields() -> None:
     ov = WindFarmInputs(**_valid_kwargs()).to_overrides()
     assert ov["project"]["capacity_mw"] == pytest.approx(150.0)
-    assert ov["project"]["capacity_factor"] == pytest.approx(0.339)
+    assert ov["project"]["capacity_factor"] == pytest.approx(0.332)
     assert ov["project"]["life_years"] == 20
     assert ov["capex"]["usd_total"] == pytest.approx(159_600_000.0)
     assert ov["tariff"]["lkr_per_kwh"] == pytest.approx(20.30)
@@ -133,8 +133,9 @@ def test_to_scenario_config_merges_over_base() -> None:
 def test_form_to_pipeline_end_to_end() -> None:
     """A validated form submission runs through the canonical pipeline."""
     # Use the real 159.6 MW nameplate so capacity x CF reconciles with the lendercase
-    # frozen AEP (473.8) at the service-seam reconciliation guard (the round 150.0 used
-    # elsewhere for structure checks would trip it: 150 x 0.339 x 8.760 = 445 vs 473.8).
+    # frozen AEP (464.3, post 2% over-prediction haircut) at the service-seam reconciliation
+    # guard (the round 150.0 used elsewhere for structure checks would trip it: 150 x 0.332
+    # x 8.760 = 436 vs 464.3).
     cfg = WindFarmInputs(**_valid_kwargs(capacity_mw=159.6)).to_scenario_config()
     result = run_finance_case(cfg)
     assert result["status"] == "success"

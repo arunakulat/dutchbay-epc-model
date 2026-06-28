@@ -211,7 +211,7 @@ def _lender() -> dict:
 def test_percent_form_capacity_factor_does_not_false_positive() -> None:
     """project.capacity_factor authored as a percent (>1.0) is normalized like the engine."""
     cfg = _lender()
-    cfg["project"]["capacity_factor"] = 33.9  # engine reads 0.339 via pct_to_decimal
+    cfg["project"]["capacity_factor"] = 33.2  # engine reads 0.332 via pct_to_decimal (post 2% AEP haircut)
     reconcile_capacity_factor_with_bankable_aep(cfg, "pct-cf")  # must NOT raise
 
 
@@ -219,7 +219,7 @@ def test_capacity_factor_pct_path_correct_does_not_raise() -> None:
     """The capacity_factor_pct authoring form (an established alias) resolves correctly."""
     cfg = _lender()
     del cfg["project"]["capacity_factor"]
-    cfg["project"]["capacity_factor_pct"] = 33.9
+    cfg["project"]["capacity_factor_pct"] = 33.2
     reconcile_capacity_factor_with_bankable_aep(cfg, "cf_pct-ok")  # must NOT raise
 
 
