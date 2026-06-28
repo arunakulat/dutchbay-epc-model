@@ -67,6 +67,45 @@ def test_html_contains_risk_register() -> None:
     assert ">High<" in html  # severity label capitalized
 
 
+def test_html_contains_development_readiness_when_supplied() -> None:
+    inputs = WindFarmInputs(
+        site_name="Dutch Bay",
+        capacity_mw=150.0,
+        capacity_factor=0.339,
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=26.0,
+        ppa_term_years=20,
+        capex_total_usd=195_000_000,
+        opex_annual_usd=6_000_000,
+        fx_start_lkr_per_usd=333.79,
+    )
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    scenario = {
+        "development_readiness": {
+            "items": {
+                "environmental_social": {"status": "green", "note": "ESIA final"},
+                "financing": {"status": "red", "note": "not committed"},
+            }
+        }
+    }
+    ctx = build_report_context(
+        case, generated_at=GENERATED_AT, inputs=inputs, scenario_config=scenario
+    )
+    html = render_report_html(ctx)
+    assert "Development Readiness" in html
+    assert "environmental_social" in html
+    assert 'class="badge rag-red"' in html  # financing red badge
+    assert 'class="badge rag-green"' in html  # ESIA green badge
+
+
+def test_html_omits_readiness_section_body_when_absent() -> None:
+    # Default context passes no scenario_config -> the section renders its empty-state note.
+    html = render_report_html(_context())
+    assert "No development-readiness register was supplied" in html
+
+
 def test_html_covenant_badges_reflect_verdict() -> None:
     html = render_report_html(_context())
     # IRR below hurdle and equity negative -> both fail badges present.

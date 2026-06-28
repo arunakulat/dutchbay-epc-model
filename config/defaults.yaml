@@ -24,6 +24,7 @@
 #   aep_reconciliation            -> analytics.aep_reconciliation
 #   aep_provenance                -> analytics.aep_provenance
 #   evidence_register             -> analytics.evidence_register
+#   development_readiness         -> analytics.development_readiness
 #   degradation                   -> finance.cashflow_v14_production._load_degradation_config
 #   wind_resource.loss_taxonomy   -> analytics.wind.losses_model
 
@@ -136,6 +137,21 @@ defaults:
     enforce: false           # warn on findings (default); true => raise (block the run)
     require_complete: false  # if true, EVERY material_assumption must have an entry
     min_tier: null           # if set (e.g. "benchmark"), entries weaker than it are flagged
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DEVELOPMENT-READINESS / E&S STATUS REGISTER (#C11 — financial-close tracker)
+  # ═══════════════════════════════════════════════════════════════════
+  # A scenario may declare a `development_readiness.items` block mapping each development /
+  # E&S workstream (land, permits, environmental_social, grid_connection, ppa, epc,
+  # financing) to a Red/Amber/Green status; analytics.development_readiness validates it
+  # against the taxonomy in config/development_readiness.yaml at scenario load and rolls the
+  # statuses up to one overall RAG (the worst declared status). SOFT by design — a scenario
+  # with no/partial register is reported on, never broken (mirrors evidence_register, #C5).
+  # A lender-grade scenario opts in to hard enforcement via its own development_readiness
+  # block: enforce: true, require_complete: true. Pure detector — changes no computed number.
+  development_readiness:
+    enforce: false           # warn on findings (default); true => raise (block the run)
+    require_complete: false  # if true, EVERY workstream must have a declared status
 
   # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING

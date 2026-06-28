@@ -581,6 +581,34 @@ metadata:
     - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input); mix + rates are canonical (plan_debt warns if re-added)'
 
 
+# Development-readiness / E&S status register (#C11). Per-workstream R/A/G to financial
+# close; validated softly by analytics.development_readiness (no-op on the economics). An
+# honest picture: ESIA is final, but the PPA/EPC/grid are mid-development and financing is
+# unsecured at the value-destructive flat-LKR tariff — overall rolls up to RED.
+development_readiness:
+  items:
+    environmental_social:
+      status: green
+      note: "Final EIA approved (Envision, Sep-2025); E&S management plan in place."
+    land:
+      status: amber
+      note: "Site identified; acquisition / lease agreements in progress."
+    permits:
+      status: amber
+      note: "Generation licence + construction approvals under application."
+    grid_connection:
+      status: amber
+      note: "220kV evacuation line is a separate CEB-funded project, under development."
+    ppa:
+      status: amber
+      note: "CEB standardized PPA template; tariff not yet executed."
+    epc:
+      status: amber
+      note: "SINOHYDRO bottom-up EPC quote received; contract not yet awarded."
+    financing:
+      status: red
+      note: "Blended-finance case; equity IRR negative at the flat-LKR tariff — debt+equity not committed."
+
 wacc:
   # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
   #   after-tax WACC = (1-g)*ke + g*(blended kd + fees)*(1-tax)

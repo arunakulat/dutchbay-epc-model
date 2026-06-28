@@ -399,3 +399,31 @@ wacc:
     12%).
 meta:
   source_path: scenarios/dutchbay_lendercase_2025Q4.yaml
+
+# Development-readiness / E&S status register (#C11). Per-workstream R/A/G to financial
+# close; validated softly by analytics.development_readiness (no-op on the economics).
+# Illustrative development-stage statuses for the fitted 160m variant — overall RED while
+# financing is unsecured at the flat-LKR tariff.
+development_readiness:
+  items:
+    environmental_social:
+      status: amber
+      note: "ESIA scoping underway (avifauna/bat surveys); E&S management plan drafting."
+    land:
+      status: amber
+      note: "Site footprint identified; lease negotiations in progress."
+    permits:
+      status: amber
+      note: "Generation licence + construction approvals under application."
+    grid_connection:
+      status: amber
+      note: "Interconnection study in progress with CEB."
+    ppa:
+      status: amber
+      note: "CEB standardized PPA template; tariff not yet executed."
+    epc:
+      status: amber
+      note: "EPC scoped on the SINOHYDRO bottom-up basis; not yet awarded."
+    financing:
+      status: red
+      note: "Debt + equity not committed; returns value-destructive at the flat-LKR tariff."

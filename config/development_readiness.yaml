@@ -1,0 +1,41 @@
+# DutchBay EPC Model — DEVELOPMENT-READINESS / E&S status taxonomy (review chunk C11)
+#
+# Purpose (CESSPIT / CCCDIR — single source):
+#   The vocabulary the development-readiness register validates against, in ONE place:
+#     1. rag_statuses — the ordered Red/Amber/Green maturity scale (BEST -> WORST)
+#     2. workstreams  — the canonical development & E&S workstreams a DFI/lender tracks
+#                       to financial close
+#
+#   A scenario declares its actual status in its own `development_readiness.items` block
+#   (workstream -> {status, note}); analytics.development_readiness validates that block
+#   against this taxonomy and the policy in config/defaults.yaml
+#   (defaults.development_readiness), and rolls the per-workstream statuses up to one overall
+#   RAG. This file carries NO per-project status — it is read by exactly one resolver
+#   (analytics.development_readiness.load_readiness_taxonomy) and never moves KPIs.
+#
+#   Soft by default (warn-only) — a scenario with no register is reported on, not broken.
+#   Mirrors the evidence register (analytics.evidence_register, #C5).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RAG maturity scale — ordered BEST -> WORST. A scenario item's `status` must be one
+# of these; the overall project readiness rolls up to the WORST declared status (the
+# conservative lender view — a single red workstream is a red flag for financial close).
+# ─────────────────────────────────────────────────────────────────────────────
+rag_statuses:
+  - green   # secured / complete / executed
+  - amber   # in progress / partial / conditional
+  - red     # not started / blocked / at material risk
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical development & E&S workstreams a lender tracks to financial close. An item
+# whose `workstream` is NOT in this list is flagged (unknown_workstream); when policy
+# require_complete is set, every name here must have a declared status.
+# ─────────────────────────────────────────────────────────────────────────────
+workstreams:
+  - land                 # site land acquisition / lease secured
+  - permits              # development approvals & generation/construction licences
+  - environmental_social # ESIA approval + E&S management plan (IFC PS / Equator Principles)
+  - grid_connection      # grid connection / interconnection agreement
+  - ppa                  # power purchase agreement executed
+  - epc                  # EPC contract awarded / signed
+  - financing            # debt + equity commitments / financial close

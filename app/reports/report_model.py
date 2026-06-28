@@ -10,10 +10,11 @@ deterministic and unit-testable (CASPER).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.development_readiness import build_readiness_report
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
@@ -78,6 +79,16 @@ class RiskRow(BaseModel):
     severity: str  # low | medium | high — drives the badge class in the template
 
 
+class ReadinessRow(BaseModel):
+    """One rendered development-readiness line (workstream, R/A/G status, note)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workstream: str
+    status: str  # green | amber | red — drives the badge class in the template
+    note: str = ""
+
+
 class Verdict(BaseModel):
     """Covenant/return flags and a one-line headline, all config-thresholded."""
 
@@ -106,6 +117,8 @@ class ReportContext(BaseModel):
     verdict: Verdict
     assumptions: List[AssumptionRow]
     risk_register: List[RiskRow] = Field(default_factory=list)
+    readiness: List[ReadinessRow] = Field(default_factory=list)
+    overall_readiness: Optional[str] = None  # green | amber | red — worst declared status
     manifest: Dict[str, Any]
 
 
@@ -278,12 +291,33 @@ def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
     ]
 
 
+def _build_readiness(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> tuple[List[ReadinessRow], Optional[str]]:
+    """Project a scenario's development-readiness register into rows + an overall RAG.
+
+    Reads the register from the SCENARIO config (where the per-workstream R/A/G statuses
+    live) via the canonical :func:`analytics.development_readiness.build_readiness_report`.
+    Returns ([], None) when no scenario config is supplied or none is declared — so existing
+    callers (which pass no scenario config) render no readiness section. Pure presentation.
+    """
+    if scenario_config is None:
+        return [], None
+    report = build_readiness_report(scenario_config)
+    rows = [
+        ReadinessRow(workstream=i.workstream, status=i.status, note=i.note)
+        for i in report.items
+    ]
+    return rows, report.overall_status
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
     generated_at: str,
     inputs: Optional[WindFarmInputs] = None,
     config: Optional[ReportConfig] = None,
+    scenario_config: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -296,11 +330,15 @@ def build_report_context(
             register. Optional.
         config: Presentation config; loaded from the committed default when
             omitted.
+        scenario_config: The originating scenario config dict, used to surface the
+            development-readiness / E&S register (#C11). Optional — omitted by existing
+            callers, in which case no readiness section is rendered.
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
     """
     cfg = config if config is not None else load_report_config()
+    readiness_rows, overall_readiness = _build_readiness(scenario_config)
     return ReportContext(
         meta=cfg.report,
         covenants=cfg.covenants,
@@ -312,5 +350,7 @@ def build_report_context(
         verdict=_build_verdict(case_result.kpis, cfg.covenants),
         assumptions=_build_assumptions(inputs),
         risk_register=_build_risk_register(cfg.risk_register),
+        readiness=readiness_rows,
+        overall_readiness=overall_readiness,
         manifest=dict(case_result.run_manifest or {}),
     )
