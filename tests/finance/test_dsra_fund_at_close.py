@@ -83,6 +83,22 @@ def test_legacy_dsra_months_key_is_wired() -> None:
     assert f["initial_dsra_usd"] == pytest.approx(2.0 * f6["initial_dsra_usd"], rel=0.01)
 
 
+def test_reserves_nested_dsra_months_is_wired() -> None:
+    # Audit #95: the canonical nesting Financing_Terms.reserves.dsra_months must drive DSRA
+    # sizing. The prior resolver only read dsra.target_months / top-level dsra_months, so a
+    # reserves-nested value was silently ignored and matched the 6.0 default only by
+    # coincidence. (Canonical sets reserves.dsra_months: 6, so default-off is unchanged.)
+    _, f12 = _run(dsra={"fund_at_close": True}, reserves={"dsra_months": 12})
+    assert f12["dsra_target_months"] == pytest.approx(12.0)
+    _, f6 = _run(dsra={"fund_at_close": True}, reserves={"dsra_months": 6})
+    assert f12["initial_dsra_usd"] == pytest.approx(2.0 * f6["initial_dsra_usd"], rel=0.02)
+    # An explicit dsra.target_months still takes precedence over the reserves nesting.
+    _, f_override = _run(
+        dsra={"fund_at_close": True, "target_months": 6}, reserves={"dsra_months": 12}
+    )
+    assert f_override["dsra_target_months"] == pytest.approx(6.0)
+
+
 def test_api_surfaces_funding_block() -> None:
     from api.pipeline_api import RunPipelineRequest, run_pipeline
 
