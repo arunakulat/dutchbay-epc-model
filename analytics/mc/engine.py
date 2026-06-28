@@ -167,6 +167,20 @@ def _tail_risk(
     return out
 
 
+def _resolve_config_value(cfg: Mapping[str, Any], dotted: str) -> Optional[float]:
+    """Resolve a dotted path to its float base value in cfg, or None if absent/non-numeric."""
+    cur: Any = cfg
+    for k in dotted.split("."):
+        if isinstance(cur, Mapping) and k in cur:
+            cur = cur[k]
+        else:
+            return None
+    try:
+        return float(cur)
+    except (TypeError, ValueError):
+        return None
+
+
 class MonteCarloEngine:
     """Canonical Monte Carlo engine."""
 
@@ -205,6 +219,7 @@ class MonteCarloEngine:
             self._param_bounds,
             self._param_kinds,
             self._dead_param_names,
+            self._base_outside_bounds,
         ) = self._extract_param_definitions(self._base_config)
 
         # Market-calibrated FX driver (opt-in via a distribution: fx_calibrated param).
@@ -304,7 +319,7 @@ class MonteCarloEngine:
     @staticmethod
     def _extract_param_definitions(
         cfg: Mapping[str, Any],
-    ) -> Tuple[List[str], List[Tuple[float, float]], List[str], List[str]]:
+    ) -> Tuple[List[str], List[Tuple[float, float]], List[str], List[str], List[str]]:
         mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
         params = mc.get("parameters", []) or mc.get("params", [])
 
@@ -329,6 +344,7 @@ class MonteCarloEngine:
         bounds: List[Tuple[float, float]] = []
         kinds: List[str] = []
         dead_names: List[str] = []
+        base_outside: List[str] = []
 
         for idx, p in enumerate(params):
             if not isinstance(p, Mapping) or "name" not in p:
@@ -353,6 +369,13 @@ class MonteCarloEngine:
 
             low = float(p.get("low", p.get("min", 0.0)))
             high = float(p.get("high", p.get("max", 1.0)))
+
+            # Bounds must be well-ordered — a transposed/typo'd band is a hard config error.
+            if low > high:
+                raise MonteCarloConfigError(
+                    f"monte_carlo.parameters[{idx}].name {name!r}: low ({low}) > high ({high}) "
+                    "— MC bounds must be well-ordered (low <= high)."
+                )
 
             # A param name that does not resolve to an EXISTING dotted path in the base
             # config is a likely DEAD lever. Contrary to the toy-fallback story, the
@@ -379,6 +402,23 @@ class MonteCarloEngine:
                     "degenerate_sweep flag confirms whether dispersion actually collapsed.",
                     idx, name,
                 )
+            else:
+                # Distribution-integrity check: the sampled band SHOULD contain the
+                # scenario's own deterministic base, so MC P50 reconciles to the base case.
+                # A band that excludes its base (a stale/copy-pasted spread) yields real-
+                # looking percentiles that are silently mis-centered. Warn loudly + record
+                # in metadata (mirrors dead_param_names); not a hard raise, since an
+                # intentionally one-sided downside band (e.g. curtailment_pct base 0.0 in
+                # [0.0, 0.13]) legitimately sits at an edge.
+                base_val = _resolve_config_value(cfg, name)
+                if base_val is not None and not (low <= base_val <= high):
+                    base_outside.append(name)
+                    logger.warning(
+                        "monte_carlo.parameters[%d].name %r deterministic base %.6g is OUTSIDE "
+                        "its MC band [%.6g, %.6g]; the sampled distribution does not contain the "
+                        "base case, so MC P50 will not reconcile to the deterministic run.",
+                        idx, name, base_val, low, high,
+                    )
 
             param_names.append(name)
             bounds.append((low, high))
@@ -390,7 +430,7 @@ class MonteCarloEngine:
                 "(monte_carlo.parameters is empty)."
             )
 
-        return param_names, bounds, kinds, dead_names
+        return param_names, bounds, kinds, dead_names, base_outside
 
     def run(self, *, n_trials: int) -> MonteCarloResult:
         n = int(n_trials)
@@ -457,6 +497,7 @@ class MonteCarloEngine:
             "config_hash": self._meta.config_hash,
             "param_names": list(self._param_names),
             "dead_param_names": list(self._dead_param_names),
+            "base_outside_bounds": list(self._base_outside_bounds),
             "correlation_enabled": bool(self._correlation and self._correlation.enabled),
         }
         var_conf = float(mc_cfg.get("var_confidence", 0.0) or 0.0)
