@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import math
+from statistics import NormalDist
 
 import numpy as np
 
@@ -221,6 +222,39 @@ def _trial_fixed_debt_min_dscr(
     return min(vals) if vals else None
 
 
+#: Distribution shapes the sampler can honor (besides the calibrated FX driver). A declared
+#: shape outside this set is a config error (previously silently sampled uniform — decorative).
+_SUPPORTED_DISTRIBUTIONS = frozenset({"uniform", "triangular", "normal", "lognormal"})
+_Z975 = 1.959963984540054  # Phi^-1(0.975): low/high read as a 95% CI for normal/lognormal
+
+
+def _inv_cdf_shaped(u: float, kind: str, low: float, high: float, mode: float) -> float:
+    """Inverse-CDF of a non-uniform shape from a unit draw u in (0,1).
+
+    ``low``/``high`` are the support for ``triangular`` (peak at ``mode``) and the ~95%
+    confidence interval for ``normal``/``lognormal``. Keeping the draw a unit uniform lets
+    the engine source it from the existing stratified-LHS / CRN / correlation machinery.
+    """
+    u = min(1.0 - 1e-12, max(1e-12, float(u)))
+    if high <= low:
+        return low
+    if kind == "triangular":
+        fc = (mode - low) / (high - low)
+        if u < fc:
+            return low + math.sqrt(u * (high - low) * (mode - low))
+        return high - math.sqrt((1.0 - u) * (high - low) * (high - mode))
+    if kind == "normal":
+        mean = 0.5 * (low + high)
+        sd = (high - low) / (2.0 * _Z975)
+        return mean + sd * NormalDist(0.0, 1.0).inv_cdf(u) if sd > 0 else mean
+    if kind == "lognormal":
+        lo = low if low > 0 else 1e-12
+        mu = 0.5 * (math.log(lo) + math.log(high))
+        sigma = (math.log(high) - math.log(lo)) / (2.0 * _Z975)
+        return math.exp(mu + sigma * NormalDist(0.0, 1.0).inv_cdf(u)) if sigma > 0 else math.exp(mu)
+    return low + u * (high - low)  # uniform fallback (not normally reached)
+
+
 class MonteCarloEngine:
     """Canonical Monte Carlo engine."""
 
@@ -293,6 +327,11 @@ class MonteCarloEngine:
         # (every shocked trial fell to toy fallback). Captured here, applied per trial.
         self._cf_coupling: Optional[Tuple[float, Dict[str, float]]] = None
         self._init_cf_coupling()
+
+        # Non-uniform sampler shapes (triangular/normal/lognormal) — opt-in per param. Before
+        # this, a declared `distribution` was decorative (the sampler was uniform-only).
+        self._shaped_params: Dict[int, Tuple[str, float, float, float]] = {}
+        self._init_distribution_shapes()
 
         self._meta = MonteCarloRunMeta(
             n_trials=0,
@@ -406,6 +445,35 @@ class MonteCarloEngine:
             return
         self._cf_coupling = (float(base_proj_cf), base_tech_cfs)
 
+    def _init_distribution_shapes(self) -> None:
+        """Set up non-uniform shaped params: store (kind, low, high, mode) and rewrite the
+        LHS bound to (0,1) so the sampler yields a stratified unit draw to inverse-CDF.
+
+        Triangular mode defaults to the scenario's base value (peak at the deterministic case)
+        when it lies in [low, high], else the band midpoint.
+        """
+        for idx, kind in enumerate(self._param_kinds):
+            if kind not in ("triangular", "normal", "lognormal"):
+                continue
+            low, high = self._param_bounds[idx]
+            base = _resolve_config_value(self._base_config, self._param_names[idx])
+            mode = base if (base is not None and low <= base <= high) else 0.5 * (low + high)
+            self._shaped_params[idx] = (kind, float(low), float(high), float(mode))
+            self._param_bounds[idx] = (0.0, 1.0)
+
+    def _apply_distribution_shapes(
+        self, overrides: Dict[str, Any], sample_row: np.ndarray
+    ) -> Dict[str, Any]:
+        """Map each shaped param's unit LHS draw through its inverse-CDF, overwriting the raw
+        unit value the static builder placed and recording the shaped value for aggregation."""
+        if not self._shaped_params:
+            return overrides
+        for idx, (kind, low, high, mode) in self._shaped_params.items():
+            val = _inv_cdf_shaped(float(sample_row[idx]), kind, low, high, mode)
+            self._set_dotted(overrides, self._param_names[idx], val)
+            sample_row[idx] = val
+        return overrides
+
     def _apply_cf_coupling(self, overrides: Dict[str, Any]) -> Dict[str, Any]:
         """Scale per-tech capacity factors with a swept project.capacity_factor (hybrid).
 
@@ -478,6 +546,14 @@ class MonteCarloEngine:
                 bounds.append((0.0, 1.0))
                 kinds.append(kind)
                 continue
+
+            # A declared distribution shape the sampler can't produce must FAIL LOUD, not be
+            # silently sampled uniform (the shape was decorative before this guard).
+            if kind not in _SUPPORTED_DISTRIBUTIONS:
+                raise MonteCarloConfigError(
+                    f"monte_carlo.parameters[{idx}].name {name!r}: unsupported distribution "
+                    f"{kind!r}. Use one of {sorted(_SUPPORTED_DISTRIBUTIONS)} (or fx_calibrated)."
+                )
 
             low = float(p.get("low", p.get("min", 0.0)))
             high = float(p.get("high", p.get("max", 1.0)))
@@ -585,6 +661,7 @@ class MonteCarloEngine:
 
         for i in range(n):
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
+            overrides = self._apply_distribution_shapes(overrides, samples[i])
             overrides = self._apply_cf_coupling(overrides)
             overrides = self._apply_fx_calibration(overrides, samples[i])
             overrides = apply_degradation_if_enabled(base_cfg=self._base_config, overrides=overrides)
