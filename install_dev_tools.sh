@@ -1,35 +1,15 @@
 #!/bin/bash
+# Install the full dev/CI toolchain from pyproject's [dev] extra — the single
+# abstract source of truth (ruff / black / isort / flake8 / pylint, mypy + the
+# type stubs, bandit + pip-audit, pytest + xdist / cov / html / timeout,
+# hypothesis, httpx, libcst, build).
+#
+# Replaces the old "pip install <ad-hoc list>; pip freeze > requirements_dev.txt"
+# flow, which polluted the dev surface with non-dependencies (e.g. Django) and
+# drifted from pyproject. Run inside your activated virtualenv.
+set -euo pipefail
 
-# Activate your virtual environment (edit path if needed)
-source .venv311/bin/activate
-
-# Upgrade pip, setuptools, and wheel
 python -m pip install --upgrade pip setuptools wheel
+pip install -e ".[dev]"
 
-# Core testing frameworks
-pip install pytest
-pip install unittest2   # (unittest is built-in, unittest2 for enhancements)
-pip install hypothesis
-pip install coverage
-pip install mock        # (unittest.mock is built-in for Python 3.3+, included here for legacy use)
-
-# Static analysis and code quality tools
-pip install pylint
-pip install flake8
-pip install black
-pip install isort
-pip install mypy
-pip install bandit
-
-# Core web frameworks (security, modernity, validation)
-pip install django
-pip install fastapi
-
-# Dependency and secret management
-pip install python-decouple
-pip install python-dotenv
-
-# Good practice: Record versions for reproducibility
-pip freeze > requirements_dev.txt
-
-echo "✓ All developer tools and frameworks installed successfully."
+echo "✓ Dev toolchain installed from pyproject [dev]."

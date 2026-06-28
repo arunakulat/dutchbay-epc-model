@@ -33,10 +33,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          # Dev tooling now comes from the [dev] extra (pyproject is the source of truth);
+          # the former `requirements-dev.txt` conditional was a dead hyphen-typo no-op
+          # (the file is requirements_dev.txt) and that file has been retired.
           # wind extra (xarray/netcdf4/cdsapi) for the gated wind + NetCDF tests;
           # gis extra (rasterio) for the #20 GeoTIFF-export tests
-          pip install -e ".[wind,gis]"
+          pip install -e ".[dev,wind,gis]"
 
       - name: Ruff - lint focused v14 surface
         run: |

@@ -18,21 +18,52 @@ dependencies = [
   "scipy>=1.10",
   "omegaconf>=2.3",
   "pydantic>=2.0",
+  "jinja2>=3.1",          # drives the base HTML report (app.reports.renderer); PDF (weasyprint) is the [report] extra
 ]
 
 [project.optional-dependencies]
+# The single dev/CI toolchain. `pip install -e ".[dev]"` provides every gate CI runs
+# (ruff/black/isort/flake8/pylint, mypy + the type stubs, bandit + pip-audit, pytest +
+# xdist/cov/html/timeout, hypothesis, httpx TestClient, libcst, build). Supersedes the
+# retired requirements_dev.txt — pyproject is the single abstract source of truth.
 dev = [
   "ruff>=0.5",
   "black>=24.0",
+  "isort>=5.13",
+  "flake8>=7.0",
+  "pylint>=3.0",
   "mypy>=1.18",
   "mypy-extensions>=1.1",
+  "pandas-stubs",        # the mypy gate is only faithful WITH these stubs (else falsely clean)
+  "scipy-stubs",
+  "types-PyYAML",
+  "types-openpyxl",
   "bandit>=1.7",
+  "pip-audit>=2.7",
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "pytest-xdist>=3.5",
+  "pytest-html>=4.0",
+  "pytest-timeout>=2.2",
+  "hypothesis>=6.100",
+  "httpx>=0.27",         # FastAPI TestClient (tests/api, tests/app)
+  "libcst>=1.1",         # LibCST lint/codemod tests under tests/lint
+  "build>=1.2",
 ]
 test = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "pytest-xdist>=3.5",
+]
+# HTTP API surface (api/ + app/services): FastAPI app served by uvicorn. Opt-in —
+# the finance engine + CLI do not need a web server.
+api = [
+  "fastapi>=0.110",
+  "uvicorn>=0.30",
+]
+# Streamlit sensitivity dashboard (app/). Opt-in; peripheral to the finance engine.
+dashboard = [
+  "streamlit>=1.40",
 ]
 # Wind-resource ingestion path (ERA5 / Copernicus CDS). Kept as an opt-in
 # extra so lender-grade finance runs that consume a *frozen* wind export JSON
@@ -124,3 +155,11 @@ config_file = "mypy.ini"
 [tool.pytest.ini_options]
 addopts = "--cov=. --cov-report=term-missing --cov-fail-under=95"
 testpaths = ["tests"]
+
+[tool.bandit]
+# SAST over the engine/application surface only (tests/scripts/legacy are not the
+# shipped surface). The CI gate fails on MEDIUM+ severity at MEDIUM+ confidence; the
+# handful of known-safe findings carry inline `# nosec <ID>` with a justification (the
+# FX fetchers enforce an https-only scheme before urlopen; the .wtg parser reads a
+# local operator-supplied turbine file, not untrusted network input).
+exclude_dirs = ["tests", "scripts", "legacy", "legacy_scenarios", ".venv", "build", "dist"]

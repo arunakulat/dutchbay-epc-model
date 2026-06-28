@@ -12,9 +12,9 @@ cd dutchbay-epc-model
 python3.11 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-pip install -r requirements.txt
-pip install -r requirements_dev.txt
-# Optional wind/ERA5 extra (xarray, cdsapi, windpowerlib, ...):
+pip install -r requirements.txt   # pinned reproducibility lock
+pip install -e ".[dev]"            # dev/CI toolchain (from pyproject — the abstract source of truth)
+# Optional extras: wind/ERA5, solar, gis, report, api, dashboard, jobs — e.g.:
 # pip install -e ".[wind]"
 ```
 

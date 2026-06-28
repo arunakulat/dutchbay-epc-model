@@ -346,7 +346,7 @@ def from_wasp_wtg(
     Multi-mode files carry several ``PerformanceTable`` blocks (one per air density); the one
     nearest ``air_density_kgm3`` is used. ``PowerOutput`` (W) is converted to kW.
     """
-    root = ElementTree.parse(str(path)).getroot()
+    root = ElementTree.parse(str(path)).getroot()  # nosec B314 - local operator-supplied .wtg turbine file, not untrusted network input
     desc = root.get("Description") or root.get("ManufacturerName") or Path(str(path)).stem
     rotor = root.get("RotorDiameter")
     tables = root.findall(".//PerformanceTable")

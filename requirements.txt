@@ -1,3 +1,15 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GENERATED REPRODUCIBILITY LOCK — do NOT hand-add abstract dependencies here.
+#
+# pyproject.toml is the single ABSTRACT source of truth (core deps + the
+# dev/test/api/dashboard/wind/solar/gis/report/jobs extras). THIS file is the
+# fully-pinned environment lock CI installs for deterministic runs. Regenerate it
+# from a clean install of pyproject (`pip install -e '.[dev,api,dashboard,wind,gis,report]'`
+# then `pip freeze`), never by hand-appending packages.
+#
+# A mandatory `pip-audit -r requirements.txt` CI gate scans this lock for CVEs;
+# the currently-accepted (version-capped) advisories are listed in that gate.
+# ─────────────────────────────────────────────────────────────────────────────
 aiobotocore==2.25.2
 aiohappyeyeballs==2.6.1
 aiohttp==3.14.1
@@ -41,11 +53,10 @@ defusedxml==0.7.1
 dill==0.4.0
 distlib==0.4.0
 distro==1.9.0
-Django==5.2.9
 et_xmlfile==2.0.0
 execnet==2.1.2
 fastapi==0.121.2
-filelock==3.20.1
+filelock==3.20.3
 finmodels==2.0.4
 fissix==24.4.24
 flake8==7.3.0
@@ -57,7 +68,7 @@ frozendict==2.4.7
 frozenlist==1.8.0
 fsspec==2025.10.0
 gitdb==4.0.12
-GitPython==3.1.45
+GitPython==3.1.50
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
@@ -131,7 +142,7 @@ pydantic_core==2.41.5
 pydeck==0.9.1
 pyflakes==3.4.0
 pygad==3.5.0
-Pygments==2.19.2
+Pygments==2.20.0
 pylint==4.0.4
 pyparsing==3.2.5
 pyproject-api==1.10.0
@@ -164,7 +175,6 @@ smmap==5.0.2
 sniffio==1.3.1
 sortedcontainers==2.4.0
 soupsieve==2.8
-sqlparse==0.5.4
 starlette==0.49.3
 statsmodels==0.14.5
 stevedore==5.5.0
@@ -191,7 +201,7 @@ unittest2==1.1.0
 urllib3==2.7.0
 uvicorn==0.49.0
 vartools==0.1.22
-virtualenv==20.35.4
+virtualenv==20.36.1
 volatile==2.1.0
 websockets==15.0.1
 wrapt==1.17.3
