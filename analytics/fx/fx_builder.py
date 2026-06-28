@@ -493,24 +493,24 @@ def compute_fx_risk_profile(
 
     spot_lkr_usd = fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else default_fx_lkr_per_usd()
 
-    # Compute VaR/CVaR as a simplified estimate. total_debt_lkr is already USD-equivalent
-    # (the engine's native debt unit), so the USD value of the LKR-denominated debt moves by
-    # the FX shock directly — NO division by spot (the prior code divided an already-USD
-    # figure by spot AND stored raw USD in a *_million field; both unit bugs were masked
-    # while the profile was all-zero). Result is in USD MILLIONS, matching the field name.
-    # var_shock_pct is the adverse LKR/USD move; the caller sources it from
-    # fx.uncertainty_pct (was a hardcoded 0.05 that ignored the declared FX volatility).
+    # FX VaR is on the CURRENCY-MISMATCHED legs ONLY (audit fix). The project's revenue is
+    # LKR; LKR-denominated debt serviced from that LKR revenue is a NATURAL HEDGE — its
+    # USD-reporting swing is a translation artifact, NOT a lender cash risk — so it is
+    # EXCLUDED. The genuine, material exposure is the HARD-CURRENCY debt (USD + DFI[=USD] +
+    # CNY) serviced from LKR revenue: an adverse LKR depreciation of var_shock_pct raises the
+    # LKR cost (USD-equivalent loss) on that unhedged balance. The prior code based VaR on the
+    # LKR leg — the hedged leg — which inverted the exposure direction.
+    # All debt amounts are already USD-equivalent, so the shock applies directly; result in
+    # USD MILLIONS. var_shock_pct (the adverse LKR/USD move) is sourced from fx.uncertainty_pct.
     if var_shock_pct <= 0.0:
         raise ValueError(f"var_shock_pct must be > 0; got {var_shock_pct!r}")
-    # Apply the declared FX hedge: only the UN-hedged residual of the exposed (LKR-
-    # denominated, USD-equivalent) debt carries VaR. hedging_coverage_pct was read onto the
-    # block but never reduced the VaR — a declared mitigant that left risk overstated.
-    # Clamp to [0,1]; 0% coverage -> full exposure (byte-identical for unhedged scenarios).
-    # (fx_match_ratio is a natural-hedge concept — matching FX revenue to FX debt — not
-    # modelled in this simplified single-shock VaR.)
+    # Apply the declared FX hedge to the EXPOSED (hard-currency) balance only. hedging_
+    # coverage_pct was read onto the block but never reduced the VaR. Clamp to [0,1];
+    # 0% coverage -> full exposure.
     hedge_frac = max(0.0, min(1.0, fx_block.hedging_coverage_pct / 100.0))
-    residual_lkr = total_debt_lkr * (1.0 - hedge_frac)
-    var_95_usd_million = (residual_lkr * var_shock_pct) / 1e6
+    hard_currency_exposure = total_debt_usd + total_debt_cny  # mismatched vs LKR revenue
+    residual_exposure = hard_currency_exposure * (1.0 - hedge_frac)
+    var_95_usd_million = (residual_exposure * var_shock_pct) / 1e6
     cvar_95_usd_million = var_95_usd_million * 1.5  # CVaR ~1.5x VaR (normal-tail heuristic)
 
     # Revenue percentages (assume all in LKR unless specified otherwise)
