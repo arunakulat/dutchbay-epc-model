@@ -1024,7 +1024,17 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     _dsra = fin.get("dsra")
     dsra_cfg: Mapping[str, Any] = _dsra if isinstance(_dsra, Mapping) else {}
     fund_at_close = _truthy_flag(dsra_cfg.get("fund_at_close"))
-    target_months = _as_float(dsra_cfg.get("target_months", fin.get("dsra_months")), 6.0)
+    # DSRA months precedence: dsra.target_months -> Financing_Terms.dsra_months ->
+    # Financing_Terms.reserves.dsra_months -> 6.0. The canonical nests it under `reserves`
+    # (the path scenarios actually author); the prior resolver missed that nesting and only
+    # matched the 6.0 default by coincidence, so a scenario setting reserves.dsra_months != 6
+    # was silently ignored.
+    _reserves = fin.get("reserves")
+    reserves: Mapping[str, Any] = _reserves if isinstance(_reserves, Mapping) else {}
+    target_months = _as_float(
+        dsra_cfg.get("target_months", fin.get("dsra_months", reserves.get("dsra_months"))),
+        6.0,
+    )
 
     construction_periods = int(_as_float(core.get("construction_periods"), 0))
     ds = core.get("debt_service_total", []) or []
