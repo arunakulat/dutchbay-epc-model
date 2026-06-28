@@ -70,6 +70,13 @@ finance/                      # Financial calculation engine
   ├── wacc_v14.py            # WACC (ARCH-02 canonical source)
   └── cashflow_v14_tax.py    # Tax (SL plant/civil split, TLCF, interest WHT)
 
+wind_resource/                # Wind pipeline: ERA5 -> Weibull -> PyWake -> bankable AEP
+solar_resource/               # pvlib solar producer (hybrid multi-tech; optional [solar] extra)
+api/                          # FastAPI endpoints (pipeline, sensitivity)
+app/                          # Web service, jobs, report rendering, Streamlit dashboard
+
+# Coverage gate spans finance + analytics + wind_resource + api + app (>=95%, .coveragerc).
+
 scenarios/                    # Scenario configuration files
   ├── dutchbay_lendercase_2025Q4.yaml   # Canonical lender case
   ├── dutchbay_basecase_2025Q4.yaml
@@ -105,7 +112,7 @@ docs/                         # Documentation
 ### Analytics Capabilities
 - **Scenario Analysis**: Compare base, optimistic, pessimistic cases
 - **Sensitivity Analysis**: Tornado charts for key drivers
-- **Monte Carlo Simulation**: Probabilistic modeling (in development)
+- **Monte Carlo Simulation**: Probabilistic modeling (shipped; LHS engine + CASPER tail-risk)
 - **Parameter Validation**: Strict YAML schema enforcement
 
 ### Export & Reporting
@@ -128,28 +135,31 @@ These non-negotiable principles ensure production-grade quality:
 4. **Test-First**: Contract tests for all analytics
 5. **Type-Safe**: Full mypy compliance
 
-See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 60 rules) for the complete standards.
+See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 61 rules) for the complete standards.
 
 ### Code Quality
 
 ```bash
-# Type checking
-mypy analytics/ finance/
+# Type checking (the same strict, full-surface gate CI runs — no --ignore-missing-imports;
+# every untyped third-party dep is declared per-module in mypy.ini)
+mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/ \
+  run_full_pipeline_v14.py run_scenario_analytics_v14.py \
+  dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 
 # Linting
 flake8 analytics/ finance/
 black --check analytics/ finance/
 isort --check-only analytics/ finance/
 
-# Testing with coverage
-pytest --cov=analytics --cov=finance --cov-report=html
+# Testing with coverage (the 5 engine packages CI gates at >=95%)
+pytest --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov-report=html
 ```
 
 ### CI/CD Pipeline
 
 - **Quick Smoke**: CLI + core analytics (fast feedback)
 - **Full Regression**: Complete v14 pipeline + coverage
-- **Coverage**: engine packages (`analytics`, `finance`, `wind_resource`, `api`, `app`; untestable CLI/viz/worker infra excluded via `.coveragerc`) — **97.1% overall**, 2,589 tests. `pyproject.toml` enforces a **`--cov-fail-under=95`** regression floor, so coverage cannot silently regress below the documented ≥95%.
+- **Coverage**: the five engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`; untestable CLI/viz/worker infra excluded via `.coveragerc`) — **~97% overall** (96.95% measured), **2,625 tests** (2,621 pass, 4 skip). `pyproject.toml` enforces a **`--cov-fail-under=95`** regression floor over those five packages (CI's `--cov` flags scan all five), so coverage cannot silently regress below the documented ≥95%.
 - **FX Schema**: Strict enforcement (mapping-only, no scalars)
 
 ---
@@ -223,14 +233,14 @@ build_executive_workbook(
 
 ## 🛣️ Roadmap
 
-### Phase 2: Interactive Analytics (In Progress 🔄)
-- [ ] Streamlit dashboard for scenario exploration
-- [ ] REST API for sensitivity/Monte Carlo
+### Phase 2: Interactive Analytics (Mostly Complete ✅)
+- [x] Streamlit dashboard for scenario exploration (`analytics/dashboard/streamlit_app.py`)
+- [x] REST API for sensitivity/Monte Carlo (`api/sensitivity_api.py`, `api/pipeline_api.py`)
 - [ ] Real-time parameter validation UI
 
-### Phase 3: Advanced Reporting (Planned 📋)
-- [ ] Automated Excel report generation
-- [ ] Chart export (PNG/SVG)
+### Phase 3: Advanced Reporting (Mostly Complete ✅)
+- [x] Automated Excel report generation (`analytics/executive_workbook.py`)
+- [x] Chart export (PNG/SVG) (`analytics/export_helpers.py`)
 - [ ] Health/audit tracking
 
 ### Phase 4: Optimization (Planned 📋)

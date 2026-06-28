@@ -11,7 +11,7 @@
 
 ## 1. The canonical financial entry point
 
-The single financial-scenario entry point is `run_v14_pipeline_enhanced` in `analytics/pipeline_v14_enhanced.py:439`, aliased as `run_v14_pipeline` at `analytics/pipeline_v14_enhanced.py:629`. Downstream evaluation code imports it from there: `analytics/evaluate_scenario.py:9` and `analytics/evaluation_v14.py:12` both `from analytics.pipeline_v14_enhanced import run_v14_pipeline`. The top-level Hydra runner `run_full_pipeline_v14.py` also imports and calls this alias (`run_full_pipeline_v14.py:103,515`).
+The single financial-scenario entry point is `run_v14_pipeline_enhanced` in `analytics/pipeline_v14_enhanced.py:617`, aliased as `run_v14_pipeline` at `analytics/pipeline_v14_enhanced.py:928`. Downstream evaluation code imports it from there: `analytics/evaluate_scenario.py:9` and `analytics/evaluation_v14.py:12` both `from analytics.pipeline_v14_enhanced import run_v14_pipeline`. The top-level Hydra runner `run_full_pipeline_v14.py` also imports and calls this alias (`run_full_pipeline_v14.py:103,515`).
 
 > **Do not confuse with `analytics/pipeline_v14.py`.** Despite the name, `analytics/pipeline_v14.py:1` is the *wind-resource* pipeline (`from wind_resource import WindPipeline`, `analytics/pipeline_v14.py:43`). Its `run_v14_pipeline` (`analytics/pipeline_v14.py:50`) returns AEP/Weibull/revenue outputs, not a `ScenarioResult`, and it does **not** touch FX/WACC/equity. The FX docstrings that reference `pipeline_v14.run_full_pipeline_v14()` (e.g. `analytics/fx/fx_integration.py:55`, `analytics/fx/fx_builder.py:13`) point at a function that does not exist — there is no `run_full_pipeline_v14` function in the `analytics.pipeline_v14` module (its only Hydra entry is `cli`, `analytics/pipeline_v14.py:361`).
 
@@ -87,7 +87,7 @@ Supporting contract `FXVolumetry` (per-period exposure) is at `analytics/fx/fx_c
 
 `analytics/fx/fx_integration.py:45` defines `integrate_fx_into_scenario_result(scenario_result, config, debt_result, annual_rows)`, which calls the three builders (`:111-124`), then rebuilds the frozen `ScenarioResult` via `dataclasses.asdict(...)` + re-instantiation with `fx_block`/`fx_curve`/`fx_risk_profile` set (`analytics/fx/fx_integration.py:133-140`). It uses `TYPE_CHECKING` + a runtime in-function import of `ScenarioResult` to break the circular import (`:32`, `:86`). `analytics/fx_integration.py` is a backward-compat shim re-exporting from the new location, and `analytics/fx/__init__.py` lazily re-exports the function via `__getattr__`.
 
-### 2.4 How `ScenarioResult` carries FX — and the current wiring gap
+### 2.4 How `ScenarioResult` carries FX (wired into the live pipeline, #366)
 
 `ScenarioResult` declares the three optional FX fields at `analytics/contracts_v14.py:157-159`:
 
@@ -99,11 +99,11 @@ fx_risk_profile: FXRiskProfile | None = None
 
 `contracts_v14` imports these types directly from `analytics/fx/fx_contracts.py` (`analytics/contracts_v14.py:16`) and re-exports them (`:481-483`).
 
-**Current state (as-built):** `run_v14_pipeline_enhanced` does **not** call `integrate_fx_into_scenario_result`. No call site of that function exists in the live financial pipeline; the only references are its own definition/docstrings, the `analytics/fx/__init__.py` lazy re-export, the `analytics/fx_integration.py` compat shim, and import-smoke tests (`tests/lint/test_import_smoke.py`). Consequently, when the enhanced pipeline assembles `ScenarioResult` (`analytics/pipeline_v14_enhanced.py:563`), the three FX fields are left at their `None` defaults.
+**Current state (as-built, updated 2026-06-28):** `run_v14_pipeline_enhanced` **DOES** call `integrate_fx_into_scenario_result`. The call site is `analytics/pipeline_v14_enhanced.py:869-871` (inside a try/except), invoked after the base `ScenarioResult` is assembled. This was wired in by PR #366 (2026-06-25) — **superseding the original "wiring gap" described in earlier revisions of this section.** When it succeeds, the rebuilt `ScenarioResult` carries `fx_block` / `fx_curve` / `fx_risk_profile` populated.
 
-The enhanced pipeline carries **FX scaffolding that is never exercised**: `PipelineMetrics` declares `fx_integration_time_sec` (`analytics/pipeline_v14_enhanced.py:70`), `fx_integration_attempted = False` (`:76`), and `fx_integration_succeeded = False` (`:77`); the entry point accepts `allow_fx_degradation` but immediately discards it via `del allow_fx_degradation` (`analytics/pipeline_v14_enhanced.py:447`). None of these flags are ever flipped to `True`, and `fx_integration_time_sec` stays `0`.
+The enhanced pipeline's FX metrics are **exercised**: `PipelineMetrics` declares `fx_integration_time_sec`, `fx_integration_attempted`, and `fx_integration_succeeded`, and the live path flips them — `fx_integration_succeeded = True` (`analytics/pipeline_v14_enhanced.py:877`) on success and `fx_integration_attempted = True` (`:881`) in the `finally`, with the elapsed time recorded. (FX failure is caught and logged, leaving the result usable with `None` FX fields rather than crashing the financed run.)
 
-**Conclusion:** the FX *contracts, builder, and integration helper* are fully built and validated, and the `ScenarioResult` slots exist, but the **live financial pipeline does not populate them**. FX population today happens only if a caller invokes `integrate_fx_into_scenario_result` directly on an already-built `ScenarioResult`. No downstream consumer reads the FX fields off `ScenarioResult` today — in particular, the CASPER payload (`analytics/casper/casper_payload.py`) serializes WACC, equity, debt, and DSCR but does **not** read `fx_block`/`fx_curve`/`fx_risk_profile` at all — so the `None` defaults are simply never observed.
+**Conclusion:** the FX *contracts, builder, integration helper, AND the live pipeline wiring* are all in place: `run_v14_pipeline_enhanced` populates `fx_block` / `fx_curve` / `fx_risk_profile` on `ScenarioResult` for every financed run (#366). Note that downstream consumers are not required to read them — e.g. the CASPER payload (`analytics/casper/casper_payload.py`) serializes WACC, equity, debt, and DSCR and does not read the FX fields — but the fields are genuinely produced and available on the result.
 
 ---
 
@@ -202,19 +202,19 @@ The returned `EquityPerformance` is attached as `ScenarioResult.equity_performan
 | `discount_rate_used` | Yes — hard-coded `0.10` | `pipeline_v14_enhanced.py:572` |
 | `wacc_is_real` | **No** — stays `None` | declared `contracts_v14.py:156`; KPI sets `False` at `core/metrics.py:313` |
 | `equity_performance` | Yes when status ∈ {computed, defaulted}, else `None` | `pipeline_v14_enhanced.py:535,581`; adapter `:399` |
-| `fx_block` / `fx_curve` / `fx_risk_profile` | **No** — stay `None` (helper exists but is unwired) | declared `contracts_v14.py:157-159`; helper `fx/fx_integration.py:45` |
+| `fx_block` / `fx_curve` / `fx_risk_profile` | **Yes** — populated by `integrate_fx_into_scenario_result` when it succeeds (wired #366) | declared `contracts_v14.py:157-159`; helper `fx/fx_integration.py:45`; call site `pipeline_v14_enhanced.py:869` |
 
 ---
 
 ## 6. Relationship to existing docs (corrections)
 
 - **`docs/ANALYTICS_INTEGRATION.md` (2025-12-21, v1.0) is stale.** It documents a different module (`analytics/pipeline_analytics_v14.py`, `docs/ANALYTICS_INTEGRATION.md:5`) and marks several capabilities as "STUB" (sensitivity/Monte-Carlo/scenario-comparison at `docs/ANALYTICS_INTEGRATION.md:15-17`, `:154-158`, `:323-325`). For the FX/WACC/Equity surface specifically, treat **this** document as authoritative; the older guide predates the built-out FX contracts and the enhanced-pipeline WACC adapter and equity wiring described above.
-- **`docs/FX_INTEGRATION_v14R6.md` (2025-12-18) overstates pipeline wiring.** Its "Pipeline Execution" section shows `run_full_pipeline_v14()` calling `integrate_fx_into_scenario_result()` (`docs/FX_INTEGRATION_v14R6.md:160-173`) — that call site does not exist in the current code (see [§2.4](#24-how-scenarioresult-carries-fx--and-the-current-wiring-gap)). The FX **architecture, contracts, and builder** described in that doc remain accurate and are still valid references for the data shapes; only the "FX is wired into the live pipeline" claim is incorrect today. The aspirational docstrings inside `analytics/fx/fx_integration.py` and `analytics/fx/fx_builder.py` carry the same stale claim.
+- **`docs/FX_INTEGRATION_v14R6.md` (2025-12-18) — its pipeline-wiring claim is now ACCURATE.** Its "Pipeline Execution" section shows the financed pipeline calling `integrate_fx_into_scenario_result()`; as of PR #366 (2026-06-25) that call site genuinely exists (`analytics/pipeline_v14_enhanced.py:869`, see §2.4). When this document's earlier revision was written the call site did not yet exist, so this section previously flagged R6 as overstating the wiring — that flag is **withdrawn**: R6's architecture, contracts, builder, AND live-wiring description are all correct today.
 
 ---
 
 ## 7. Practical notes
 
-- To actually populate FX on a result today, a caller must invoke `integrate_fx_into_scenario_result` (`analytics/fx/fx_integration.py:45`) on a built `ScenarioResult`, passing the same `config`, `debt_result`, and enriched `annual_rows` the pipeline used. Wiring this into `run_v14_pipeline_enhanced` (between WACC and `ScenarioResult` assembly) and flipping the existing `fx_integration_*` metrics flags is the natural follow-up; the scaffolding in `PipelineMetrics` (`analytics/pipeline_v14_enhanced.py:70-77`) anticipates it. (Note: the only current references to the helper are its definition/docstrings, the `analytics/fx/__init__.py` re-export, the `analytics/fx_integration.py` compat shim, and import-smoke tests — there is no live call site.)
+- FX is populated automatically: `run_v14_pipeline_enhanced` calls `integrate_fx_into_scenario_result` (`analytics/pipeline_v14_enhanced.py:869`) and flips the `fx_integration_*` metrics flags (#366). To populate FX on a *standalone* `ScenarioResult` built outside the pipeline, invoke `integrate_fx_into_scenario_result` (`analytics/fx/fx_integration.py:45`) directly, passing the same `config`, `debt_result`, and enriched `annual_rows` the pipeline used.
 - WACC is computed and recorded but is **not** the NPV discount rate in this pipeline — KPIs use the hard-coded `0.10` (`analytics/pipeline_v14_enhanced.py:520,572`). Any reconciliation of "discount rate used" vs "computed WACC" must account for this.
 - FX `var_95`/`cvar_95` from `compute_fx_risk_profile` are deliberately simplified (5% shock, `cvar = 1.5 × var`), per the in-code caveat at `analytics/fx/fx_builder.py:367`.

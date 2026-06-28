@@ -56,7 +56,11 @@ print(kpis["project_irr"], kpis["min_dscr"], kpis["discount_rate_used"])
 ```bash
 pytest tests/                                   # full suite
 pytest tests/finance/ tests/integration/ -q     # finance + integration
-mypy finance/ analytics/ --ignore-missing-imports
+# Same strict, full-surface mypy gate CI runs (no --ignore-missing-imports; untyped
+# third-party deps are declared per-module in mypy.ini):
+mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/ \
+  run_full_pipeline_v14.py run_scenario_analytics_v14.py \
+  dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 ```
 
 ## Where things live

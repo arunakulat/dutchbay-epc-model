@@ -435,17 +435,11 @@ monte_carlo:
   availability_std_pct: 1.0
   electrical_loss_std_pct: 0.5
   
-  # Legacy scenario parameters (toy model - TO BE DEPRECATED)
-  discount_rate_pct: 8.0
-  capex_total_usd: 150000000
-  revenue_mean_usd: 50000000
-  revenue_std_pct: 10
-  cost_mean_usd: 3000000
-  cost_std_pct: 8
-  fx_mean_rate: 333.79  # 2026-Q2 pinned (was 300.0)
-  fx_std_pct: 3
-  project_life_years: 20
-  
+  # (Retired #doc-drift: the old "toy model - TO BE DEPRECATED" scalar block
+  #  — discount_rate_pct / capex_total_usd 150e6 / revenue_mean_usd / cost_mean_usd /
+  #  fx_mean_rate / project_life_years — was an obsolete pre-pipeline MC format with ZERO
+  #  Python readers. The live MC engine consumes only the `parameters:` LIST below.)
+
   # Distribution parameters (for pipeline-backed MC).
   # Canonical engine contract (analytics.mc.engine): an explicit LIST of
   # {name, low, high, distribution} where `name` is a dotted config path the
@@ -454,9 +448,9 @@ monte_carlo:
   # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
   # no implicit name->path mapping. ARCH-01: all values from config.
   parameters:
-    - name: project.capacity_factor   # base 0.339, +/-10%
-      low: 0.3051
-      high: 0.3729
+    - name: project.capacity_factor   # base 0.332 (post-2% haircut), rel_std 0.05 -> +/-10%
+      low: 0.2988
+      high: 0.3652
       distribution: uniform
     - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
       low: 16.24
@@ -466,9 +460,9 @@ monte_carlo:
       low: 2100000.0
       high: 3900000.0
       distribution: uniform
-    - name: capex.usd_total           # base 150e6, rel_std 0.08 -> +/-16%
-      low: 126000000.0
-      high: 174000000.0
+    - name: capex.usd_total           # base 159.6e6, rel_std 0.08 -> +/-16%
+      low: 134064000.0
+      high: 185136000.0
       distribution: uniform
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
