@@ -24,14 +24,15 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     kpis = run_v14_pipeline(config=HYBRID, validation_mode="strict")["kpis"]
     # Honest engine output (per-tech wind 0.6% / solar 0.4% degradation through the
     # cashflow). Value-destructive: projIRR below the ~8% build-up WACC.
-    # equity_irr re-baselined by the round-5 #5 interest-tax-shield fix (the levered equity
-    # path now bears levered tax, was -0.015233921795672956, +280bps to +0.0127);
-    # projIRR/npv/dscr/cfads are upstream of the equity waterfall and remain byte-identical.
-    assert kpis["project_irr"] == pytest.approx(0.0449082466193822, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(0.012725321153804758, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-50345594.84827695, rel=1e-6)  # round-9 guarantee-gate (WACC -75bps)
+    # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
+    # data-derived BIS 2005-2026 LKR depreciation): the steeper LKR slide erodes the
+    # flat-LKR-tariff revenue in USD terms, dropping projIRR and flipping equity_irr
+    # NEGATIVE (-1.63%). projIRR/npv/cfads all shift with the FX drift.
+    assert kpis["project_irr"] == pytest.approx(0.021860435363234842, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.016292579698420573, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-74338366.3993788, rel=1e-6)  # 5.9% FX-drift re-baseline
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(305943086.43, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(242515272.0903778, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:

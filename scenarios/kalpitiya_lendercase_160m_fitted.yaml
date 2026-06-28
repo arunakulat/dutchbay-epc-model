@@ -149,7 +149,7 @@ fx:
     pinned_as_of: "2026-06-20T00:02:31Z"
     drift_tolerance_pct: 5.0
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0)
-  annual_depr: 0.03
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05
   exposure_summary:
     usd_debt_principal: 82500000
@@ -357,14 +357,14 @@ expected_results:
   # lag + operating-year-1 off-by-one) and (b) the M3e degradation re-baseline (0.005 -> 0.5,
   # honest 0.5%/yr aging): project IRR 8.73% -> 5.22% (below the ~8.18% WACC) and equity IRR
   # +0.3% -> -2.19% (the 0.5%/yr aging tips marginal equity below zero). NPV -$33.12M.
-  project_irr: 0.0522
-  equity_irr: 0.0280   # now POSITIVE — round-5 #5 interest-tax-shield re-baseline lifts the
-                       # marginal equity from -0.0048 to +0.0280 (+328bps). Still below cost of equity.
-  project_npv_m_usd: -29.84
+  project_irr: 0.0293
+  equity_irr: -0.0003   # ~breakeven, marginally NEGATIVE after the 5.9% FX-drift re-baseline
+                       # (fx.annual_depr 3% -> 5.89%); was +0.0280 pre-drift. Below cost of equity.
+  project_npv_m_usd: -51.22
   min_dscr: 1.30
-  avg_dscr: 1.387
-  llcr: 1.086
-  plcr: 1.146  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
+  avg_dscr: 1.4
+  llcr: 1.15
+  plcr: 1.21  # lower coverage after the 0.5%/yr degradation re-baseline (M3e)
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'

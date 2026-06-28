@@ -44,9 +44,10 @@ def test_routines_run_and_produce_sane_results(tmp_path: Path) -> None:
     assert {"resource", "case_fit", "case_competitive", "mc", "sensitivity",
             "optimization", "dscr"} <= set(R)
 
-    # Wet-zone site at the competitive tariff: a low-but-positive unlevered return;
-    # the FiT case does not even recover capital (negative IRR).
-    assert 0.0 < R["case_competitive"]["project_irr"] < 0.05
+    # Wet-zone site at the competitive tariff: a marginal unlevered return, now slightly
+    # negative after the 5.9% FX-drift re-baseline (~-1.5%; was low-but-positive at 3%);
+    # the FiT case is deeper underwater still.
+    assert -0.03 < R["case_competitive"]["project_irr"] < 0.02
     assert R["case_fit"]["project_irr"] < 0.0
 
     # The Monte Carlo actually ran (no toy fallbacks).

@@ -77,7 +77,7 @@ tariff:
 
 fx:
   start_lkr_per_usd: 300.0
-  annual_depr: 0.03                        # 3% annual LKR depreciation
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CAPEX Configuration (PESSIMISTIC: Higher costs)

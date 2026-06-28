@@ -150,7 +150,7 @@ fx:
     pinned_as_of: "2026-06-20T00:02:31Z"
     drift_tolerance_pct: 5.0
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0)
-  annual_depr: 0.03
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05
   exposure_summary:
     usd_debt_principal: 82500000
@@ -366,18 +366,18 @@ expected_results:
   # tests/integration/test_mullikulam_mannar_smoke.py so it cannot drift again. project_irr/
   # npv/moic/llcr/plcr had gone stale — the LLCR/PLCR pins predated PR #389 (operating-year
   # CFADS window) and were never re-propagated because no test read this block.
-  project_irr: -0.0346      # NEGATIVE — below break-even even undiscounted (true root; the
+  project_irr: -0.0668      # NEGATIVE — below break-even even undiscounted (true root; the
                             # IRR solver no longer floors sub-zero at 0.0)
-  equity_irr: -0.0862  # deeply NEGATIVE — a loss-making deal with little taxable income to
-                       # shield, so the round-5 #5 interest shield barely moves it (-0.0843 ->
-                       # -0.0862; the small downward nudge is the WHT/timing interaction).
-  project_npv_m_usd: -45.32  # deepened by the project-discounting fix + 0.5%/yr degradation
-  equity_npv_m_usd: -43.86
-  equity_moic: 0.261        # equity recovers only ~26% of its outlay
+  equity_irr: -0.1576  # deeply NEGATIVE — a loss-making deal at the 3.96c bid; the 5.9% FX-drift
+                       # re-baseline (fx.annual_depr 3% -> 5.89%) deepened it ~-0.086 -> -0.158 as
+                       # the steeper LKR depreciation erodes the flat-LKR revenue in USD terms.
+  project_npv_m_usd: -48.47  # deepened by the project-discounting fix + 0.5%/yr degradation
+  equity_npv_m_usd: -45.70
+  equity_moic: 0.1528       # equity recovers only ~15% of its outlay (after the FX-drift re-baseline)
   min_dscr: 1.30
-  avg_dscr: 1.388
-  llcr: 1.327  # operating-year CFADS coverage window (PR #389)
-  plcr: 1.415
+  avg_dscr: 1.41
+  llcr: 1.2073  # operating-year CFADS coverage window (PR #389)
+  plcr: 1.2465
 metadata:
   version: '3.0'
   last_updated: '2025-12-23'

@@ -34,12 +34,12 @@ def _run(dsra=None, **fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
-    # Canonical after the M3e degradation re-baseline (0.005 -> 0.5, 0.5%/yr aging):
-    # projIRR 5.05%, minDSCR 1.30. The round-5 interest-tax-shield fix lifts equity IRR
-    # -0.82% -> +2.42% (the levered equity path now bears levered tax). project IRR is
-    # unchanged (the shield is confined to the equity path).
-    assert kpis["project_irr"] == pytest.approx(0.0505, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(0.0242, abs=0.001)
+    # Canonical after the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
+    # data-derived BIS 2005-2026 LKR depreciation): projIRR ~2.75%, minDSCR 1.30. The
+    # faster nominal-LKR erosion pushes equity IRR negative (~-0.46%) at the flat-LKR
+    # tariff. project IRR is debt-structure independent.
+    assert kpis["project_irr"] == pytest.approx(0.02749, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.004616, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0

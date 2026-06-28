@@ -56,7 +56,7 @@ constraints:
   warn_dscr: 1.25
   warn_tenor_years: 18
 fx:
-  annual_depr: 0.03
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   start_lkr_per_usd: 300.0
 irr_validation:
   debt_bounds_rationale: Debt IRR bounds reflect lender covenant requirements and

@@ -230,7 +230,7 @@ fx:
 
   # FX curve parameters
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
-  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
   
   # FX exposure analysis
@@ -506,14 +506,14 @@ expected_results:
   # ($1,420/kW vs $1,000/kW); resource / tariff / debt are identical. Higher capex forces
   # the dual-DSCR gearing down to 0.440 (the covenant binds harder), so equity thins and
   # the deal is DEEPLY value-destructive — the flat-nominal-LKR tariff compounds it.
-  project_irr: 0.0180        # vs canonical 0.0505 — deeply BELOW WACC (~8.1%)
-  equity_irr: -0.0244        # vs canonical +0.0242 — still NEGATIVE (loss). Round-5 #5
-                             # interest-tax-shield re-baseline: -0.0343 -> -0.0244 (+99bps).
-  project_npv_m_usd: -104.56 # vs canonical -35.51
+  project_irr: -0.0054        # vs canonical 0.0275 — deeply BELOW WACC (~8.1%)
+  equity_irr: -0.0757        # vs canonical -0.0046 — deeply NEGATIVE (loss); prudent capex on top
+                             # of the 5.9% FX-drift re-baseline (both canonical and this case fell).
+  project_npv_m_usd: -122.35 # vs canonical -53.29
   min_dscr: 1.30             # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.39
-  llcr: 1.32
-  plcr: 1.42
+  llcr: 1.15
+  plcr: 1.21
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA

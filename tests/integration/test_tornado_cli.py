@@ -99,8 +99,9 @@ def test_single_metric_tornado_csv(tmp_path: Path):
     assert set(df["variable_name"]) == {"capex.usd_total", "tariff.lkr_per_kwh"}
     assert (df["metric"] == "project_irr").all()
     # base_case is the unlevered project IRR (a finite fraction), identical across rows.
+    # ~2.75% under the 5.9% FX-drift re-baseline (was ~5.05% at the old 3% drift).
     assert df["base_case"].nunique() == 1
-    assert df["base_case"].iloc[0] == pytest.approx(0.0505, abs=0.02)
+    assert df["base_case"].iloc[0] == pytest.approx(0.0275, abs=0.02)
     # tornado convention: rows sorted by descending |impact|.
     assert df["impact_abs"].is_monotonic_decreasing
 

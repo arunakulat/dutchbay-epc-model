@@ -78,28 +78,33 @@ def test_equity_npv_monotonic_in_gearing() -> None:
         assert higher >= lower - 1.0, f"equity_npv not monotonic: {npvs}"
 
 
-def test_equity_irr_finite_and_falls_with_gearing() -> None:
-    """Equity IRR stays finite and falls monotonically with gearing (negative carry).
+def test_equity_irr_falls_with_gearing_then_plateaus_at_the_dscr_cap() -> None:
+    """Equity IRR falls with gearing up to the DSCR-solved cap, then plateaus.
 
-    Post-M3e degradation re-baseline (0.5%/yr aging), the project IRR (~5.05%) sits
-    BELOW the cost of debt (~7.63%), so leverage is value-destructive: each extra
-    turn of gearing dilutes equity return (negative carry). The sweep therefore runs
-    strictly downhill. The round-5 #5 interest-tax-shield fix lifts the whole curve
-    positive (the levered equity path now bears levered tax), so it no longer crosses
-    zero — but the monotonic decline with gearing (the value-destruction signal) is
-    unchanged: ~+3.96% at low gearing falling to ~+2.42% at the DSCR-bound high end.
+    After the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%) the project return
+    (~2.75%) sits well BELOW the cost of debt, so leverage is value-destructive (negative
+    carry) and equity IRR is now NEGATIVE. Over the sub-cap gearings (0.45-0.55, below the
+    ~0.59 DSCR-solved gearing) each extra turn erodes the IRR. Above the cap (0.60+) the
+    dual_dscr sizer clamps the ACTUAL gearing back to ~0.59, so the requested 0.60/0.625/
+    0.70 all resolve to the same solved structure and equity IRR PLATEAUS at the canonical
+    ~-0.46%. (At the old 3% drift the whole curve was positive and strictly falling end to
+    end; the steeper drift both pushed it negative and made the DSCR cap bind sooner.)
     """
     import math
 
-    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]
+    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]  # [0.45,0.50,0.55,0.60,0.625,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
-    # Monotonically falling as gearing rises (value-destructive leverage).
-    for lower, higher in zip(irrs, irrs[1:]):
-        assert higher < lower, f"equity_irr not strictly falling with gearing: {irrs}"
-    # The decline is MATERIAL: more leverage measurably erodes the equity return (negative
-    # carry), even though the interest shield keeps the whole curve positive.
-    assert irrs[0] - irrs[-1] > 0.01, f"gearing barely moves equity_irr: {irrs}"
+    # Sub-cap region (below the ~0.59 DSCR-solved gearing): strictly falling (negative carry).
+    sub_cap = irrs[:3]
+    for lower, higher in zip(sub_cap, sub_cap[1:]):
+        assert higher < lower, f"equity_irr not falling below the cap: {sub_cap}"
+    # Above the cap the sizer clamps to the solved gearing, so equity IRR plateaus at canonical.
+    plateau = irrs[3:]
+    assert max(plateau) - min(plateau) < 1e-6, f"supra-cap equity_irr not flat (clamped): {plateau}"
+    assert plateau[0] == pytest.approx(-0.0046, abs=0.002)
+    # The decline below the cap is MATERIAL: more leverage measurably erodes the equity return.
+    assert sub_cap[0] - sub_cap[-1] > 0.005, f"gearing barely moves equity_irr: {sub_cap}"
 
 
 def test_interest_rate_nominal_is_noop_on_schedule() -> None:

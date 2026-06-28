@@ -291,7 +291,7 @@ fx:
 
   # FX curve parameters
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
-  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
   
   # FX exposure analysis

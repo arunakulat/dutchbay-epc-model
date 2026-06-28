@@ -27,6 +27,7 @@ from analytics.core.sensitivity_runner import run_sensitivity_analysis
 from analytics.sensitivity.adapters import parameter_to_engine_spec
 
 BASECASE = Path("scenarios/dutchbay_basecase_2025Q4.yaml")
+LENDER = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
 
 def test_default_run_returns_suite_with_live_tornados() -> None:
@@ -48,9 +49,9 @@ def test_basecase_project_irr_pins() -> None:
     suite = run_sensitivity_analysis(str(BASECASE), metric="project_irr")
     base = suite.base_kpis.get("project_irr")
     assert base is not None
-    # Construction-lag-correct project IRR (audit finding 2.0): basecase ~7.9% (was ~13%
-    # before the operating-year-1 off-by-one + 2-yr build lag were corrected).
-    assert 0.07 < base < 0.09
+    # Basecase project IRR ~5.7% after the 5.9% FX-drift re-baseline (fx.annual_depr
+    # 3% -> 5.89%, data-derived BIS 2005-2026); was ~7.9% at the old 3% drift.
+    assert 0.04 < base < 0.07
 
 
 def test_explicit_parameters_override_defaults() -> None:
@@ -111,8 +112,24 @@ def test_live_metric_is_not_flagged_flat() -> None:
 
 def test_covenant_pinned_dscr_tornado_is_flagged_flat() -> None:
     """min_dscr is pinned by dual_dscr debt sizing: every bar is ~0, so the suite
-    is flagged flat with a covenant-pinned reason rather than misrepresenting it."""
-    suite = run_sensitivity_analysis(str(BASECASE), metric="min_dscr")
+    is flagged flat with a covenant-pinned reason rather than misrepresenting it.
+
+    Uses the LENDER case: after the 5.9% FX-drift re-baseline the weaker BASECASE
+    min_dscr is no longer perfectly covenant-flat (large CF/tariff shocks push the
+    dual_dscr re-sizing into a structural bound, so it deviates ~0.17 from 1.30 —
+    see test_basecase_min_dscr_no_longer_covenant_flat). The lender case stays
+    DSCR-bound with headroom, so its min_dscr remains structurally invariant."""
+    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
     assert max(abs(t.impact_abs) for t in suite.tornado_results) < 1e-9
     assert suite.metadata.get("flat_metric") is True
     assert "covenant" in suite.metadata.get("flat_metric_reason", "").lower()
+
+
+def test_basecase_min_dscr_no_longer_covenant_flat() -> None:
+    """Documents the 5.9% FX-drift consequence: the weaker basecase can no longer hold
+    min_dscr at the 1.30 covenant under large Capacity-Factor / Tariff shocks (the
+    dual_dscr re-sizing hits a structural bound), so the tornado has real bars and the
+    suite correctly reports flat_metric=False. (At the old 3% drift this was flat.)"""
+    suite = run_sensitivity_analysis(str(BASECASE), metric="min_dscr")
+    assert max(abs(t.impact_abs) for t in suite.tornado_results) > 0.01
+    assert suite.metadata.get("flat_metric") is False
