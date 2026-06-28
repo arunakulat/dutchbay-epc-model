@@ -96,6 +96,29 @@ def test_risk_register_projected_from_config() -> None:
     assert any(r.severity == "high" for r in ctx.risk_register)
 
 
+def test_readiness_projected_from_scenario_config() -> None:
+    scenario = {
+        "development_readiness": {
+            "items": {
+                "environmental_social": {"status": "green", "note": "ESIA done"},
+                "financing": {"status": "red"},
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert {r.workstream for r in ctx.readiness} == {"environmental_social", "financing"}
+    assert ctx.overall_readiness == "red"  # worst declared
+    assert all(r.status in {"green", "amber", "red"} for r in ctx.readiness)
+
+
+def test_readiness_empty_when_no_scenario_config() -> None:
+    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    assert ctx.readiness == []
+    assert ctx.overall_readiness is None
+
+
 def test_risk_register_empty_when_config_has_none() -> None:
     cfg = ReportConfig(
         report=ReportMeta(
