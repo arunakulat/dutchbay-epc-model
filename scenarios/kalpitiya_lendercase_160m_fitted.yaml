@@ -282,9 +282,9 @@ monte_carlo:
   fx_std_pct: 3
   project_life_years: 20
   parameters:
-  - name: project.capacity_factor
-    low: 0.2763
-    high: 0.3377
+  - name: project.capacity_factor  # base 0.344, +/-10%
+    low: 0.3096
+    high: 0.3784
     distribution: uniform
   - name: tariff.lkr_per_kwh
     low: 16.24

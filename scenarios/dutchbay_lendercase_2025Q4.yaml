@@ -440,9 +440,9 @@ monte_carlo:
   # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
   # no implicit name->path mapping. ARCH-01: all values from config.
   parameters:
-    - name: project.capacity_factor   # base 0.307, rel_std 0.05 -> +/-10%
-      low: 0.2763
-      high: 0.3377
+    - name: project.capacity_factor   # base 0.339, +/-10%
+      low: 0.3051
+      high: 0.3729
       distribution: uniform
     - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
       low: 16.24
