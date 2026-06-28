@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import hashlib
 import json
 import logging
+import math
 
 import numpy as np
 
@@ -181,6 +182,44 @@ def _resolve_config_value(cfg: Mapping[str, Any], dotted: str) -> Optional[float
         return None
 
 
+def _resolve_min_dscr_covenant(cfg: Mapping[str, Any]) -> float:
+    """The DSCR covenant a fixed-debt stress breaches, from the scenario (default 1.30)."""
+    for path in (
+        "constraints.min_dscr_covenant",
+        "Financing_Terms.target_dscr",
+        "Financing_Terms.min_dscr",
+        "monte_carlo.min_dscr_covenant",
+    ):
+        v = _resolve_config_value(cfg, path)
+        if v is not None:
+            return float(v)
+    return 1.30
+
+
+def _trial_fixed_debt_min_dscr(
+    base_debt_service: Sequence[float], trial_debt_result: Mapping[str, Any]
+) -> Optional[float]:
+    """Min DSCR of a trial's CFADS against the FIXED (financial-close) debt service.
+
+    A committed loan cannot retroactively shrink when a production year disappoints, yet the
+    per-trial pipeline RE-SIZES debt (DSCR sculpting), pinning every trial's min_dscr at the
+    covenant target and reporting ZERO breach probability. The trial's actual CFADS per
+    period is recovered exactly from its own outputs as ``raw_dscr_series[i] * debt_service
+    _total[i]`` (independent of how that trial sized debt), then divided by the BASE committed
+    debt service to give the honest fixed-debt DSCR. Returns the min over operating periods.
+    """
+    rd = trial_debt_result.get("raw_dscr_series") or []
+    ds = trial_debt_result.get("debt_service_total") or []
+    vals: List[float] = []
+    for i, bds in enumerate(base_debt_service):
+        if bds and bds > 0 and i < len(rd) and i < len(ds):
+            try:
+                vals.append((float(rd[i]) * float(ds[i])) / float(bds))
+            except (TypeError, ValueError, ZeroDivisionError):
+                continue
+    return min(vals) if vals else None
+
+
 class MonteCarloEngine:
     """Canonical Monte Carlo engine."""
 
@@ -221,6 +260,13 @@ class MonteCarloEngine:
             self._dead_param_names,
             self._base_outside_bounds,
         ) = self._extract_param_definitions(self._base_config)
+
+        # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
+        _mc_cfg = self._base_config.get("monte_carlo", {})
+        self._fixed_debt_stress: bool = (
+            bool(_mc_cfg.get("fixed_debt_stress", False)) if isinstance(_mc_cfg, Mapping) else False
+        )
+        self._fixed_debt_covenant: float = _resolve_min_dscr_covenant(self._base_config)
 
         # Market-calibrated FX driver (opt-in via a distribution: fx_calibrated param).
         self._fx_sampler: Any = None
@@ -453,6 +499,24 @@ class MonteCarloEngine:
 
         trial_metrics: List[Mapping[str, Any]] = []
 
+        # Fixed-debt covenant-stress: size debt ONCE on the base (financial-close) schedule,
+        # then test each trial's CFADS against that committed service (a committed loan cannot
+        # shrink when production disappoints). Off by default -> no base eval, full results not
+        # requested, byte-identical.
+        base_debt_service: List[float] = []
+        fixed_dscr_vals: List[float] = []
+        if self._fixed_debt_stress:
+            base_full = evaluate_with_overrides(
+                config_path=None, raw_config=self._base_config, overrides={},
+                return_full_result=True,
+            )
+            if isinstance(base_full, Mapping):
+                _bdr: Any = base_full.get("debt_result", {})
+                if isinstance(_bdr, Mapping):
+                    base_debt_service = [
+                        float(x) for x in (_bdr.get("debt_service_total") or [])
+                    ]
+
         for i in range(n):
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
             overrides = self._apply_fx_calibration(overrides, samples[i])
@@ -463,10 +527,18 @@ class MonteCarloEngine:
                     config_path=None,
                     raw_config=self._base_config,
                     overrides=overrides,
+                    return_full_result=self._fixed_debt_stress,
                 )
                 if isinstance(out, Mapping):
                     kpis = out.get("kpis", out)
                     trial_metrics.append(kpis if isinstance(kpis, Mapping) else out)
+                    if self._fixed_debt_stress and base_debt_service:
+                        _tdr: Any = out.get("debt_result", {})
+                        mfd = _trial_fixed_debt_min_dscr(
+                            base_debt_service, _tdr if isinstance(_tdr, Mapping) else {}
+                        )
+                        if mfd is not None:
+                            fixed_dscr_vals.append(mfd)
                 else:
                     trial_metrics.append({})
             except Exception as exc:
@@ -500,6 +572,26 @@ class MonteCarloEngine:
             "base_outside_bounds": list(self._base_outside_bounds),
             "correlation_enabled": bool(self._correlation and self._correlation.enabled),
         }
+        if self._fixed_debt_stress and fixed_dscr_vals:
+            arr = sorted(fixed_dscr_vals)
+            cov = float(self._fixed_debt_covenant)
+
+            def _q(p: float) -> float:
+                k = (len(arr) - 1) * p
+                lo = math.floor(k)
+                hi = math.ceil(k)
+                return arr[lo] if lo == hi else arr[lo] * (hi - k) + arr[hi] * (k - lo)
+
+            meta["fixed_debt_stress"] = {
+                "covenant": cov,
+                "breach_probability": sum(1 for v in arr if v < cov) / len(arr),
+                "n": len(arr),
+                "min_dscr_p10": _q(0.10),
+                "min_dscr_p50": _q(0.50),
+                "min_dscr_p90": _q(0.90),
+                "min_dscr_min": arr[0],
+                "min_dscr_max": arr[-1],
+            }
         var_conf = float(mc_cfg.get("var_confidence", 0.0) or 0.0)
         cvar_conf = float(mc_cfg.get("cvar_confidence", 0.0) or 0.0)
         if var_conf > 0.0:
