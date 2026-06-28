@@ -50,12 +50,13 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
     # honest fitted-Weibull economics at 160 m, at the corrected FX 333.79, the 2026-06
     # construction-lag/off-by-one project-discounting fix (audit finding 2.0) AND the M3e
-    # degradation re-baseline (0.005 -> 0.5, honest 0.5%/yr aging): project IRR 5.22%
-    # (below the ~8.18% WACC). The round-5 #5 interest-tax-shield fix lifts equity IRR
-    # -0.48% -> +2.80% (the levered equity path now bears levered tax) — marginal equity
-    # turns POSITIVE but stays well below the cost of equity; project IRR is upstream of the
-    # equity waterfall and is unchanged.
-    assert kpis["project_irr"] == pytest.approx(0.0522, abs=0.01)
-    assert kpis["equity_irr"] == pytest.approx(0.0280, abs=0.01)
+    # degradation re-baseline (0.005 -> 0.5, honest 0.5%/yr aging). After the 5.9% FX-drift
+    # re-baseline (fx.annual_depr 0.03 -> 0.0589, data-derived from BIS 2005-2026 LKR
+    # depreciation), the flat-LKR tariff erodes faster in USD terms: project IRR ~2.93%
+    # (well below the ~8.0% WACC). Levered equity IRR is now marginally NEGATIVE at ~-0.03%
+    # — the interest-tax-shield benefit no longer rescues equity once FX drag is honest;
+    # project IRR is upstream of the equity waterfall.
+    assert kpis["project_irr"] == pytest.approx(0.0293, abs=0.01)
+    assert kpis["equity_irr"] == pytest.approx(-0.0003, abs=0.01)
     assert kpis["equity_irr"] < kpis["project_irr"]  # levered equity below the project return
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)

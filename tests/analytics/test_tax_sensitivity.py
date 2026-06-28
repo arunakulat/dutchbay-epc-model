@@ -77,14 +77,25 @@ def test_corporate_tax_rate_has_material_impact(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_higher_corporate_tax_lowers_equity_irr(base_config):
-    """Lower tax (low case) should yield a higher equity IRR than the high case."""
+def test_corporate_tax_rate_direction_on_levered_equity_is_shield_dominated(base_config):
+    """At the realistic 5.9% FX-drift baseline the LEVERED equity IRR RISES with the
+    corporate tax rate — the interest tax shield dominates.
+
+    Direction REVERSED by the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%):
+    at the old 3% drift the conventional direction held (lower tax -> higher equity IRR,
+    e.g. 0.1050 at 15% vs 0.0819 at 45%). The steeper LKR depreciation shrinks the USD
+    value of the flat-LKR revenue (and taxable income), so the debt-interest deduction's
+    value to equity now OUTWEIGHS the higher tax on equity's profit share: equity IRR is
+    0.0540 at 15% vs 0.0712 at 45%. The UNLEVERED project IRR still falls with tax (the
+    conventional direction — see test_corporate_tax_rate_also_moves_project_irr).
+    """
     shock = (
         _one_way(base_config, "tax.corporate_tax_rate", 0.30)
         .tornado_results[0]
         .shock_results[0]
     )
-    assert shock.low_case > shock.high_case
+    # higher tax (high_case) -> HIGHER levered equity IRR (interest-shield dominated)
+    assert shock.high_case > shock.low_case
 
 
 def test_corporate_tax_rate_also_moves_project_irr(base_config):
@@ -95,9 +106,17 @@ def test_corporate_tax_rate_also_moves_project_irr(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_tax_holiday_improves_equity_irr(base_config):
-    """More tax-holiday years must improve (not reduce) equity IRR."""
-    assert _equity_irr(base_config, {"tax.tax_holiday_years": 10}) > _equity_irr(
+def test_tax_holiday_reduces_equity_irr_wasted_depreciation(base_config):
+    """At the realistic 5.9% FX-drift baseline MORE tax-holiday years REDUCE equity IRR.
+
+    Direction REVERSED by the 5.9% FX-drift re-baseline. A tax holiday wastes the
+    early-year depreciation (and interest) tax shields — they fall in years with no tax
+    to offset and cannot be carried far enough forward, while the steeper LKR depreciation
+    has already thinned the later (taxed) years' USD income. Net: equity IRR ~0.0581 at
+    0 holiday years vs ~0.0496 at 10. (At the old 3% drift more holiday improved equity
+    IRR — 0.1014 vs 0.0925 — the conventional direction.)
+    """
+    assert _equity_irr(base_config, {"tax.tax_holiday_years": 10}) < _equity_irr(
         base_config, {"tax.tax_holiday_years": 0}
     )
 
@@ -112,11 +131,8 @@ def test_suite_structure_and_base_kpis(base_config):
 def test_basecase_returns_regression_pins(base_config):
     """Pin baseline returns so a tax-model regression is caught."""
     base = _one_way(base_config, "tax.corporate_tax_rate", 0.30).base_kpis
-    # equity_irr re-baselined by the round-5 #5 interest-tax-shield fix: the levered equity
-    # path now bears LEVERED tax (the SPV deducts its debt interest). The basecase equity IRR
-    # rises ~0.083 -> ~0.092. (A tax-sensitivity basecase has more taxable income than the
-    # marginal lender case, so the shield bites harder here.) project_irr is upstream of the
-    # equity waterfall and is unchanged.
-    assert 0.08 < base["equity_irr"] < 0.10
-    # project_irr re-baselined by the construction-lag fix (audit finding 2.0): ~7.9%.
-    assert 0.07 < base["project_irr"] < 0.09
+    # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%): the steeper
+    # LKR depreciation erodes the USD value of the flat-LKR revenue, pulling the basecase
+    # equity IRR ~0.092 -> ~0.058 and project IRR ~0.079 -> ~0.057.
+    assert 0.04 < base["equity_irr"] < 0.07
+    assert 0.04 < base["project_irr"] < 0.07

@@ -523,8 +523,8 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
     base = evaluate_with_overrides(lender, overrides={})
     deferred = evaluate_with_overrides(lender, overrides={"tax.depreciation_start_year": 3})
     assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
-    # start_year=1 default is byte-identical to the canonical baseline
-    assert base["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)
+    # start_year=1 default is byte-identical to the canonical baseline (5.9% FX-drift re-baseline)
+    assert base["total_cfads_usd"] == pytest.approx(203461128.35368362, rel=1e-9)
 
 
 def test_depreciation_start_year_overrun_warns_about_forfeited_tail(

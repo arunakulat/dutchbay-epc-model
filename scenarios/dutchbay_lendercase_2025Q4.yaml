@@ -232,7 +232,7 @@ fx:
 
   # FX curve parameters
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
-  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
   
   # FX exposure analysis
@@ -330,8 +330,9 @@ Financing_Terms:
   # maturity. balloon_treatment governs how the equity waterfall resolves it
   # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
   # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~36%
-  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  # balloon before any equity distribution. NB: this structure carries a ~58%
+  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
+  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
   balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
@@ -512,35 +513,36 @@ expected_results:
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
   # asserts the live pipeline matches them, so they cannot silently drift.
-  # HONEST after FOUR corrections: (1) FX 300 -> 333.79, (2) the ERA5-fitted Weibull
-  # re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, net AEP 483.6 -> 473.8 GWh),
-  # (3) the 2026-06 project-discounting fix (audit finding 2.0): the project NPV/IRR
-  # had discounted operating year 1 at t=0 (undiscounted) and ignored the 2-year
-  # construction lag the debt engine models, pulling the whole operating stream forward
-  # one period (fixed -> project IRR 5.43%); and (4) the 2026-06 DEGRADATION re-baseline:
-  # `project.degradation` was 0.005 but the engine reads it as a PERCENT and /100s it, so
-  # turbines aged at 0.005%/yr — effectively zero — contradicting the intended 0.5%/yr.
-  # Correcting it to 0.5 applies honest 0.5%/yr aging and lowers project IRR 5.43% -> 5.05%
-  # (still BELOW the ~8.18% WACC), pushes equity IRR ~0% -> -2.47%, and NPV -$31.9M ->
-  # -$35.5M — the project is value-destructive. The prior +$2.03M / 8.44% headline was a
-  # timing artifact. (The stale 300 FX + overstated Weibull had earlier shown 11.12% / $27.4M.)
-  project_irr: 0.0505       # BELOW WACC (~7.85%) — value-destructive (UNLEVERED, shield-free)
-  equity_irr: 0.0242        # +2.42% — POSITIVE but below cost of equity. Round-5 #5
-                            # interest-tax-shield re-baseline: the SPV legally deducts its
-                            # debt interest, and that tax saving accrues to equity. The prior
-                            # single pass charged equity UNLEVERED tax (-0.0082); applying the
-                            # levered shield on the equity path lifts it +310bps to +0.0242
-                            # (eqNPV -41.7M -> -35.0M). Project IRR/DSCR/LLCR/PLCR unchanged —
-                            # the shield is confined to equity (the project path captures it via
-                            # the after-tax kd in the WACC). Set tax.interest_deductibility:false
-                            # to recover the unlevered -0.0082. MOIC now > 1.00 but still below kE.
-  project_npv_m_usd: -32.34 # discount at build-up WACC ~7.85% (round-9 guarantee-gate: the
-                            # 75bps guarantee premium no longer loads the kd when the
-                            # revenue guarantee is off, lifting NPV -35.51M -> -32.34M)
+  # HONEST after the 2026 correction sequence: (1) FX 300 -> 333.79; (2) the ERA5-fitted
+  # Weibull re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, AEP 483.6 -> 473.8 GWh);
+  # (3) the 2026-06 project-discounting fix (audit finding 2.0): operating year 1 had been
+  # discounted at t=0, ignoring the 2-year construction lag, pulling the operating stream
+  # forward one period (fixed -> project IRR 5.43%); (4) the 2026-06 DEGRADATION re-baseline
+  # (`project.degradation` 0.005 was read as 0.005%/yr ~ zero; corrected to honest 0.5%/yr
+  # aging -> project IRR 5.43% -> 5.05%), and the interest-tax-shield re-baseline that lifted
+  # equity IRR to +2.42%; and (5) the 2026-06-28 FX-DRIFT re-baseline — the DOMINANT driver:
+  # fx.annual_depr 3% -> 5.89% (the data-derived BIS 2005-2026 long-run LKR depreciation,
+  # replacing the hand-set 3%), which erodes the flat-LKR revenue faster in USD terms.
+  # Net current canonical: project IRR 5.05% -> 2.75% (BELOW the ~8.10% WACC — the DSCR-solved
+  # gearing fell 0.628 -> 0.590, lifting the WACC from ~7.85%), equity IRR +2.42% -> -0.46%
+  # (now NEGATIVE), NPV -$32.3M -> -$53.3M. The project is value-destructive, honestly so.
+  project_irr: 0.0275       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
+  equity_irr: -0.0046        # NEGATIVE — below cost of equity. The 5.9% FX-drift re-baseline
+                            # (fx.annual_depr 3% -> 5.89%, data-derived BIS 2005-2026) flipped this
+                            # from +0.0242 to -0.0046: a steeper LKR depreciation erodes the USD
+                            # value of the flat-nominal-LKR tariff. The prior +0.0242 came from the
+                            # round-5 interest-tax-shield re-baseline (the SPV deducts debt interest
+                            # and the tax saving accrues to equity); set tax.interest_deductibility:
+                            # false to recover the unlevered case. MOIC now < 1.00.
+  project_npv_m_usd: -53.29 # discount at build-up WACC ~8.10% (up from ~7.85% as the lower
+                            # DSCR-solved gearing 0.628 -> 0.590 shifts the WACC toward equity).
+                            # The 5.9% FX-drift re-baseline
+                            # deepened NPV from -32.34M to -53.29M (steeper LKR depreciation
+                            # against the flat-nominal-LKR tariff).
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.39
-  llcr: 1.24
-  plcr: 1.34
+  avg_dscr: 1.4
+  llcr: 1.15
+  plcr: 1.21
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
@@ -569,13 +571,13 @@ metadata:
 wacc:
   # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
   #   after-tax WACC = (1-g)*ke + g*(blended kd + fees)*(1-tax)
-  # using the ACTUAL sized gearing (~62.5%) and blended rate (~7.63%) from the debt
+  # using the ACTUAL sized gearing and blended rate (~7.63%) from the debt
   # engine (Financing_Terms.mix+rates). drives_discount_rate routes the WACC to the
   # project-NPV discount and cost_of_equity to the equity-NPV discount.
   mode: build_up
   drives_discount_rate: true
   cost_of_equity: 0.12   # USD house base (~ US rf 4.5% + Sri Lanka country risk 3.5% + equity 4.0%).
                          # Post-default Sri Lanka ke is contested — project NPV is on a knife-edge
-                         # vs project IRR 8.35%; see the ke-band (12–20%) sensitivity.
+                         # relative to the project IRR; see the ke-band (12–20%) sensitivity.
   prudential_spread_bps: 100
   description: "Build-up WACC drives the discount rate (replaces a decorative fixed 12%)."

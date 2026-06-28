@@ -9,7 +9,7 @@
 #   - P50 wind resource assumption
 #   - Same DFI financing structure as lender case
 #
-# Expected P50 IRR: ~21.5% (vs ~17.9% lender base)
+# Expected P50 project IRR: ~9.25% (vs ~2.75% lender base, post the 5.9% FX-drift re-baseline)
 #
 # Author: CESSPIT Integration Team
 # Date: 2025-12-10
@@ -73,7 +73,7 @@ tariff:
 
 fx:
   start_lkr_per_usd: 300.0
-  annual_depr: 0.03                        # 3% annual LKR depreciation
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CAPEX Configuration (OPTIMISTIC: Lower costs)

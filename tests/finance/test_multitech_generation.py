@@ -196,32 +196,34 @@ def test_negative_per_tech_degradation_raises() -> None:
 
 # --------------------------------------------------------------------------- #
 # Byte-identical regression: the canonical wind-only economics must not move.
-# Re-baselined 2026-06-23 (M3e) for the degradation correction: project.degradation
-# was 0.005 (read as a PERCENT -> 0.005%/yr, effectively zero) and is now 0.5
-# (-> honest 0.5%/yr turbine aging). Project IRR 5.43% -> 5.05%, equity IRR ~0% ->
-# -2.47%, NPV -$31.9M -> -$35.5M, CFADS $268.07M -> $257.10M. minDSCR unchanged
-# (the dual-DSCR sculpt re-pins it at the 1.30 covenant target).
+# Re-baselined 2026-06-28 for the 5.9% FX-drift re-baseline (fx.annual_depr
+# 0.03 -> 0.0589, data-derived BIS 2005-2026 LKR depreciation): the steeper LKR
+# drift erodes USD revenue across the 20yr life. Project IRR 5.05% -> 2.75%,
+# equity IRR +2.42% -> -0.46% (now negative), NPV -$32.34M -> -$53.29M, CFADS
+# $257.10M -> $203.46M. minDSCR unchanged (the dual-DSCR sculpt re-pins it at the
+# 1.30 covenant target). Prior history: re-baselined 2026-06-23 (M3e) for the
+# degradation correction (5.43% -> 5.05%, CFADS $268.07M -> $257.10M).
 # --------------------------------------------------------------------------- #
 def test_canonical_lendercase_economics_unchanged() -> None:
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # equity_irr re-baselined by the round-5 #5 interest-tax-shield fix: the levered equity
-    # path now bears LEVERED tax (was -0.006837694668605732, +310bps to +0.0242). project_irr,
-    # npv, dscr and cfads are upstream of the equity waterfall and remain byte-identical.
-    assert kpis["project_irr"] == pytest.approx(0.05052152597798987, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(0.024168498307616693, abs=1e-9)
-    # project_npv re-baselined by the round-9 revenue-guarantee gate: the 75bps guarantee
-    # premium no longer loads the WACC when use_revenue_guarantee is false (the default), so
-    # the discount rate falls 0.0818->0.0785 and the NPV rises -35.51M -> -32.34M. projIRR /
-    # eqIRR / DSCR / LLCR / PLCR / CFADS are cashflow/debt-side and stay byte-identical.
-    assert kpis["project_npv"] == pytest.approx(-32343603.01435253, rel=1e-9)
-    assert kpis["min_dscr"] == pytest.approx(1.2999999999999996, abs=1e-9)
-    assert kpis["total_cfads_usd"] == pytest.approx(257097035.71124893, rel=1e-9)
-    # Round-7 prudential (downside) NPV, re-baselined by the same gate (the prudential rate is
-    # WACC + spread, so it also falls 0.0918->0.0885): CFADS discounted at the haircut WACC,
-    # below the base NPV.
-    assert kpis["project_npv_prudential"] == pytest.approx(-41595147.41773051, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.08849782236442803, abs=1e-9)
+    # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589, the
+    # data-derived BIS 2005-2026 LKR depreciation): the steeper LKR drift erodes USD revenue
+    # across the 20yr life, dropping every cashflow-driven KPI. project_irr 0.0505 -> 0.0275,
+    # equity_irr +0.0242 -> -0.0046 (now NEGATIVE — the flat-LKR tariff no longer clears equity),
+    # CFADS $257.10M -> $203.46M.
+    assert kpis["project_irr"] == pytest.approx(0.027491386055047484, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.004615913736793376, abs=1e-9)
+    # project_npv -32.34M -> -53.29M under the same FX-drift re-baseline. CFADS is discounted at
+    # the base WACC, which ITSELF rises 0.0785 -> 0.08098 as the DSCR-solved gearing falls
+    # 0.628 -> 0.590 (less debt -> the WACC weight shifts toward the costlier equity).
+    assert kpis["project_npv"] == pytest.approx(-53292960.28506229, rel=1e-9)
+    assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
+    assert kpis["total_cfads_usd"] == pytest.approx(203461128.35368362, rel=1e-9)
+    # Prudential (downside) NPV, re-baselined by the same FX-drift shift: CFADS discounted at the
+    # haircut WACC (prudential_rate = WACC + spread), below the base NPV. -41.60M -> -60.28M.
+    assert kpis["project_npv_prudential"] == pytest.approx(-60275636.94385023, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.09097803218328693, abs=1e-9)
     assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV

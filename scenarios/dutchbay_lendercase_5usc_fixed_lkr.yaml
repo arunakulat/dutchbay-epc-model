@@ -14,9 +14,9 @@
 #     CAPEX $207.5M = $1,300/kW (line items derived; IRENA/Lazard/NREL-sourced); OPEX
 #     $3.51M/yr = $22/kW-yr with 2.5%/yr O&M inflation (USD) on top of the FX curve.
 # Honest result: at 5c/kWh on realistic costs the deal is DEEPLY UNECONOMIC — project
-# IRR -0.27% (NEGATIVE; below break-even even undiscounted), equity IRR -9.05%, project
-# NPV -$118.8M (after the 2026-06 discounting fix and the M3e 0.5%/yr degradation
-# re-baseline). See test_kalpitiya_5usc_smoke.
+# IRR -3.28% (NEGATIVE; below break-even even undiscounted), equity IRR -11.89%, project
+# NPV -$133.1M (after the 2026-06 discounting fix, the M3e 0.5%/yr degradation re-baseline,
+# and the 2026-06-28 5.9% FX-drift re-baseline). See test_kalpitiya_5usc_smoke.
 #
 # Usage:
 #   python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4
@@ -240,7 +240,7 @@ fx:
 
   # FX curve parameters
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
-  annual_depr: 0.03  # 3% annual LKR depreciation vs USD
+  annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
   
   # FX exposure analysis
@@ -278,7 +278,7 @@ capex:
 # OPEX — bottom-up line items, with BOTH O&M inflation and FX. Base $3.51M/yr =
 # $22.0/kW-yr (Lazard v18.0 US fixed O&M $24.50-40/kW-yr; SL set slightly below the low
 # end for cheaper local labour). escalation_pct: O&M inflates 2.5%/yr in USD, THEN the
-# LKR cost escalates further via the per-year FX curve (annual_depr 3%/yr) -> ~5.5%/yr LKR.
+# LKR cost escalates further via the per-year FX curve (annual_depr ~5.89%/yr) -> ~8.5%/yr LKR.
 opex:
   usd_per_year: 3510000   # year-1 base (engine escalates it); $22.0/kW-yr at 159.6 MW
   opex_per_kw_yr_usd: 22.0
@@ -334,8 +334,9 @@ Financing_Terms:
   # maturity. balloon_treatment governs how the equity waterfall resolves it
   # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
   # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~36%
-  # balloon (breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  # balloon before any equity distribution. NB: this structure carries a ~45%
+  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
+  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
   balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
@@ -511,22 +512,22 @@ expected_results:
   # 16.69 LKR/kWh (5.0 US cents fixed LKR) vs 20.3 (6.1c); (2) GRANULAR costs — CAPEX
   # $207.5M ($1,300/kW, bottom-up) vs flat $159.6M ($1,000/kW), and OPEX $3.51M/yr with
   # 2.5%/yr O&M escalation vs flat $3M. Realistic costs at 5c/kWh leave the deal DEEPLY
-  # UNECONOMIC: project IRR is NEGATIVE (-0.27%) — lifetime CFADS fall short of capex even
-  # undiscounted, far below the ~9.72% WACC; equity IRR -9.05%, project NPV -$118.8M. Debt
-  # deleverages to $77.8M (DSCR-bound). Deepened by the 2026-06 project-discounting fix
+  # UNECONOMIC: project IRR is NEGATIVE (-3.28%) — lifetime CFADS fall short of capex even
+  # undiscounted, far below the ~9.72% WACC; equity IRR -11.89%, project NPV -$133.1M. Debt
+  # deleverages to $71.07M (DSCR-bound). Deepened by the 2026-06 project-discounting fix
   # (audit finding 2.0) AND the M3e degradation re-baseline (project.degradation 0.005 -> 0.5,
   # honest 0.5%/yr aging; the engine reads it as a percent and /100s it, so 0.005 had meant
   # ~0%/yr). The negative IRR is now reported truthfully: the project-IRR solver was floored
   # at r_low=0.0 and clamped sub-zero projects to exactly 0.0; it now searches negative rates.
-  project_irr: -0.0027      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
-  equity_irr: -0.0668       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
+  project_irr: -0.0328      # NEGATIVE — below break-even even undiscounted; << WACC (~9.72%)
+  equity_irr: -0.1189       # deeply NEGATIVE — the 5 US¢ flat-LKR tariff is the binding
                             # constraint; round-5 #5 interest shield only lifts -0.0702 -> -0.0668
                             # (+34bps; little taxable income to shield in a loss-making deal).
-  project_npv_m_usd: -117.52 # deeply underwater
+  project_npv_m_usd: -133.14 # deeply underwater
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.388
-  llcr: 1.147
-  plcr: 1.193
+  avg_dscr: 1.41
+  llcr: 1.21
+  plcr: 1.25
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
@@ -555,13 +556,13 @@ metadata:
 wacc:
   # The discount rate is DERIVED from a build-up WACC (no longer hardcoded/decorative):
   #   after-tax WACC = (1-g)*ke + g*(blended kd + fees)*(1-tax)
-  # using the ACTUAL sized gearing (~62.5%) and blended rate (~7.63%) from the debt
+  # using the ACTUAL sized gearing and blended rate (~7.63%) from the debt
   # engine (Financing_Terms.mix+rates). drives_discount_rate routes the WACC to the
   # project-NPV discount and cost_of_equity to the equity-NPV discount.
   mode: build_up
   drives_discount_rate: true
   cost_of_equity: 0.12   # USD house base (~ US rf 4.5% + Sri Lanka country risk 3.5% + equity 4.0%).
                          # Post-default Sri Lanka ke is contested — project NPV is on a knife-edge
-                         # vs project IRR 8.35%; see the ke-band (12–20%) sensitivity.
+                         # relative to the project IRR; see the ke-band (12–20%) sensitivity.
   prudential_spread_bps: 100
   description: "Build-up WACC drives the discount rate (replaces a decorative fixed 12%)."

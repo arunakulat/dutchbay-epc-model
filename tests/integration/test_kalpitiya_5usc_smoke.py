@@ -9,7 +9,7 @@ CAPEX $207.5M ($1,300/kW, line items summed by the engine) and OPEX $3.51M/yr ($
 escalating 2.5%/yr in USD on top of the FX curve.
 
 Honest finding this guards: at 5c/kWh on realistic costs the deal is DEEPLY UNECONOMIC —
-equity IRR -6.33%, project NPV -$86.9M.
+equity IRR -11.89%, project NPV -$133.14M (5.9% FX-drift re-baseline).
 """
 
 from __future__ import annotations
@@ -95,28 +95,29 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     """The live pipeline reproduces the pinned economics — and the deal is UNDERWATER.
 
     At 5c/kWh on the granular bottom-up costs ($1,300/kW CAPEX + $22/kW-yr escalating
-    OPEX) the project IRR is NEGATIVE (-0.27%) — lifetime CFADS fall short of capex even
-    undiscounted — far below the ~9.72% WACC; equity IRR is deeply NEGATIVE (-9.05%) and
-    project NPV is -$118.8M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
+    OPEX) the project IRR is NEGATIVE (-3.28%) — lifetime CFADS fall short of capex even
+    undiscounted — far below the ~9.74% WACC; equity IRR is deeply NEGATIVE (-11.89%) and
+    project NPV is -$133.14M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
     """
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
     # Deepened by (a) the 2026-06 construction-lag/off-by-one project-discounting fix
-    # (audit finding 2.0) and (b) the M3e degradation re-baseline (0.005 -> 0.5, honest
-    # 0.5%/yr aging). The latter pushed the project below break-even, and the IRR-floor
-    # fix (approx_project_irr now searches negative rates) lets it report the true
-    # -0.27% instead of a clamped 0.0%. NPV -$118.8M. The Wave-1 equity-waterfall fix then
-    # releases the DSRA to the sponsor at maturity, lifting equity IRR -9.05% -> -8.07%
-    # (project IRR is upstream of the equity waterfall and is unchanged).
-    assert kpis["project_irr"] == pytest.approx(-0.0027, abs=0.005)
+    # (audit finding 2.0), (b) the M3e degradation re-baseline (0.005 -> 0.5, honest
+    # 0.5%/yr aging), and (c) the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
+    # BIS 2005-2026 LKR depreciation), which erodes the fixed-LKR revenue harder in USD.
+    # The IRR-floor fix (approx_project_irr now searches negative rates) lets it report
+    # the true -3.28% instead of a clamped 0.0%. NPV -$133.14M. The Wave-1 equity-waterfall
+    # fix releases the DSRA to the sponsor at maturity (equity IRR -11.89%; project IRR is
+    # upstream of the equity waterfall).
+    assert kpis["project_irr"] == pytest.approx(-0.0328, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.0702, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.1189, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-118.78e6, rel=0.05)
+    assert kpis["project_npv"] == pytest.approx(-133.14e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
-    assert kpis["max_debt_usd"] == pytest.approx(77.8e6, rel=0.02)  # deleveraged (DSCR-bound)
+    assert kpis["max_debt_usd"] == pytest.approx(71.07e6, rel=0.02)  # deleveraged (DSCR-bound)
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:

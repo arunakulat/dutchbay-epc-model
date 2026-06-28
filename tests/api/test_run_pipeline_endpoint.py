@@ -25,10 +25,11 @@ def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
     # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull + the M3e
-    # degradation re-baseline: projIRR 5.05%). The round-5 interest-tax-shield fix lifts
-    # equity IRR -0.82% -> +2.42% (the levered equity path now bears levered tax).
-    assert resp.kpis.project_irr == pytest.approx(0.0505, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(0.0242, abs=0.005)
+    # degradation re-baseline, now with the 5.9% FX-drift re-baseline: projIRR ~2.75%).
+    # The data-derived fx.annual_depr 0.03 -> 0.0589 erodes the flat-LKR revenue in USD,
+    # pushing equity IRR negative (~-0.46%) — honest at this tariff.
+    assert resp.kpis.project_irr == pytest.approx(0.0275, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0046, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 
@@ -38,8 +39,8 @@ def test_run_pipeline_returns_full_report() -> None:
     assert resp.aep.capacity_factor == pytest.approx(0.339, abs=0.005)
 
     # Sculpted debt: DSCR-bound, three tranches, a per-period schedule.
-    assert resp.debt.debt_total_usd == pytest.approx(100.1e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.6275, abs=0.01)
+    assert resp.debt.debt_total_usd == pytest.approx(94.164e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.590, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     assert set(resp.debt.tranches) == {"lkr", "usd", "dfi"}
     assert resp.debt.tranches["usd"].principal_usd > 0
@@ -63,7 +64,7 @@ def test_inline_config_runs() -> None:
 
     cfg = dict(load_scenario_config(LENDER))
     resp = run_pipeline(RunPipelineRequest(config=cfg))
-    assert resp.kpis.project_irr == pytest.approx(0.0505, abs=0.005)
+    assert resp.kpis.project_irr == pytest.approx(0.0275, abs=0.005)
     assert resp.config_path is None
 
 

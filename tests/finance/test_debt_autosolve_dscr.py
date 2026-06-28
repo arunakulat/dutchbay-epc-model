@@ -31,14 +31,15 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     AEP ~2%) the USD O&M costs more in LKR and CFADS is lower, so the DSCR debt
     capacity falls BELOW the 70% gearing ceiling (it was gearing-bound under the
     stale 300 / declared Weibull). The auto-sizer therefore binds on the P50 DSCR
-    (~0.628 gearing), below the cap, and the sculpt floors min DSCR at the 1.30 target.
+    (~0.590 gearing after the 5.9% FX-drift re-baseline; was ~0.628 at 3% drift),
+    below the cap, and the sculpt floors min DSCR at the 1.30 target.
     """
     cfg = copy.deepcopy(base_config)
     rows = build_annual_rows(cfg)
     res = plan_debt(annual_rows=rows, config=cfg)
 
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
-    assert res["debt_total"] == pytest.approx(0.6275 * CAPEX, rel=3e-3)  # DSCR-solved, below cap
+    assert res["debt_total"] == pytest.approx(0.590 * CAPEX, rel=3e-3)  # DSCR-solved, below cap
     detail = res["dual_dscr"]
     assert detail is not None
     assert 0.40 < detail["solved_gearing"] < 0.70  # DSCR-bound, strictly below the 0.70 cap
@@ -50,10 +51,11 @@ def test_opt_out_keeps_fixed_gearing(base_config):
     """Without the flag, debt stays fixed at capex * debt_ratio.
 
     At the corrected FX 333.79 (and ERA5-fitted Weibull) a fixed 70% gearing
-    OVER-levers the deal: min DSCR falls to ~1.17, a sub-covenant breach of the 1.30
-    target. This is exactly why the dual_dscr auto-sizer (the shipped default) sizes
-    debt DOWN to ~0.628 — the fixed-gearing path and the auto-sizer no longer coincide
-    (they did under the stale 300 / declared Weibull, which flattered CFADS).
+    OVER-levers the deal: min DSCR falls to ~0.80 after the 5.9% FX-drift re-baseline
+    (was ~1.17 at 3% drift), a deep sub-covenant breach of the 1.30 target. This is
+    exactly why the dual_dscr auto-sizer (the shipped default) sizes debt DOWN to
+    ~0.590 — the fixed-gearing path and the auto-sizer no longer coincide (they did
+    under the stale 300 / declared Weibull, which flattered CFADS).
     """
     cfg = copy.deepcopy(base_config)
     cfg["Financing_Terms"].pop("debt_sizing", None)
@@ -62,7 +64,7 @@ def test_opt_out_keeps_fixed_gearing(base_config):
 
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
-    assert res["min_dscr"] == pytest.approx(1.166, abs=0.01)  # 70% over-levers -> sub-covenant
+    assert res["min_dscr"] == pytest.approx(0.804, abs=0.01)  # 70% over-levers -> deep sub-covenant
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):
