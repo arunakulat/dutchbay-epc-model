@@ -8,22 +8,12 @@ SURFACE := finance analytics api app wind_resource solar_resource analysis_tools
 ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 	dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 
-# pip-audit allowlist — ACCEPTED, version-capped CVEs (reviewed; re-check at each release).
-# Each is non-core or blocked behind a coordinated major upgrade:
-#   starlette  PYSEC-2026-161/248/249, CVE-2026-48818/48817 — fixed in starlette 1.x, which
-#              needs a coordinated FastAPI 0.121->0.137 bump (separate upgrade PR).
-#   streamlit  PYSEC-2026-212, CVE-2026-33682 — fixed in streamlit 1.53/1.54; dashboard-only,
-#              and the bump also pulls pyarrow>=23 (coordinated dashboard upgrade).
-#   pyarrow    PYSEC-2026-113 — capped by streamlit's pin; clears with the streamlit upgrade.
-#   black      CVE-2026-32274 — dev-only formatter; black 26 forces a repo-wide reformat.
-#   curl-cffi  CVE-2026-33752 — transitive via yfinance (peripheral market-data), not in the
-#              finance engine's network path.
-PIP_AUDIT_IGNORES := \
-	--ignore-vuln PYSEC-2026-161 --ignore-vuln PYSEC-2026-248 --ignore-vuln PYSEC-2026-249 \
-	--ignore-vuln CVE-2026-48818 --ignore-vuln CVE-2026-48817 \
-	--ignore-vuln PYSEC-2026-212 --ignore-vuln CVE-2026-33682 \
-	--ignore-vuln PYSEC-2026-113 \
-	--ignore-vuln CVE-2026-32274 --ignore-vuln CVE-2026-33752
+# pip-audit allowlist — EMPTY. The coordinated major upgrade (fastapi 0.121->0.137 +
+# starlette 0.49->1.3.1, streamlit 1.51->1.54 + pyarrow 21->24, black 25->26 [+ pathspec/
+# pytokens], curl-cffi 0.13->0.15) cleared every previously-accepted advisory, so pip-audit
+# is clean with NO ignores. Keep this variable as the home for any FUTURE genuinely-capped
+# CVE (add `--ignore-vuln <ID>` with a one-line reason), and prefer fixing over ignoring.
+PIP_AUDIT_IGNORES :=
 
 # Install the pinned reproducibility lock + the dev/CI toolchain (pyproject [dev]).
 setup:
