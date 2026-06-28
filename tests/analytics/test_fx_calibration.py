@@ -9,6 +9,7 @@ read the committed BIS vintage, so CI never touches the network.
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import json
 import logging
 from pathlib import Path
@@ -215,3 +216,228 @@ class TestEngineIntegration:
         cfg.pop("fx", None)  # remove the anchor spot
         with pytest.raises(MonteCarloConfigError, match="fx.start_lkr_per_usd"):
             MonteCarloEngine(cfg, seed=1)
+
+
+# ── periodic refresh: trailing-window re-pin as-of TODAY (offline) ──────────
+
+
+def _synthetic_daily_series(
+    *, end: str = "2026-06-20", provider: str = "BIS"
+) -> fx_history.FXHistorySeries:
+    """A monotone monthly synthetic USD/LKR series 2000..end (offline fetcher stand-in)."""
+    dates: list[str] = []
+    rates: list[float] = []
+    rate = 100.0
+    for y in range(2000, 2027):
+        for m in range(1, 13):
+            d = f"{y:04d}-{m:02d}-15"
+            if d > end:
+                continue
+            rate += 1.0
+            dates.append(d)
+            rates.append(rate)
+    return fx_history.FXHistorySeries(
+        provider=provider,
+        frequency="daily",
+        unit="LKR per 1 USD",
+        dates=tuple(dates),
+        rates=tuple(rates),
+        fetched_as_of=end,
+        source_endpoint=fx_history.BIS_DAILY_ENDPOINT,
+        notes="synthetic test series",
+    )
+
+
+class TestFxRefresh:
+    def test_window_start_20y_and_10y(self) -> None:
+        as_of = dt.date(2026, 6, 20)
+        assert fx_history._window_start(as_of, 20) == dt.date(2006, 6, 20)
+        assert fx_history._window_start(as_of, 10) == dt.date(2016, 6, 20)
+
+    def test_window_start_leap_day_clamps(self) -> None:
+        # 2024-02-29 minus 20y -> 2004-02-29 (also leap) is fine; minus 1y -> 2023 not leap -> clamp 28
+        assert fx_history._window_start(dt.date(2024, 2, 29), 1) == dt.date(2023, 2, 28)
+
+    def test_window_start_rejects_nonpositive(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            fx_history._window_start(dt.date(2026, 6, 20), 0)
+
+    def test_filter_series_to_window_inclusive(self) -> None:
+        s = _synthetic_daily_series()
+        w = fx_history.filter_series_to_window(
+            s, dt.date(2016, 6, 20), dt.date(2026, 6, 20)
+        )
+        assert w.date_range[0] >= "2016-06-20"
+        assert w.date_range[1] <= "2026-06-20"
+        assert len(w.rates) < len(s.rates)
+        # roughly a 10y monthly window
+        assert 100 < len(w.rates) < 140
+
+    def test_filter_empty_window_raises(self) -> None:
+        s = _synthetic_daily_series()
+        with pytest.raises(ValueError, match="empty vintage"):
+            fx_history.filter_series_to_window(
+                s, dt.date(2030, 1, 1), dt.date(2031, 1, 1)
+            )
+
+    def test_dry_run_writes_nothing(self, tmp_path: Path) -> None:
+        csv_p = tmp_path / "v.csv"
+        prov_p = tmp_path / "v.provenance.json"
+        summary = fx_history.refresh_pinned_vintage(
+            window_years=10,
+            as_of=dt.date(2026, 6, 20),
+            csv_path=csv_p,
+            provenance_path=prov_p,
+            fetcher=_synthetic_daily_series,
+            dry_run=True,
+        )
+        assert summary["written"] is False
+        assert summary["window_years"] == 10
+        assert summary["window_start"] == "2016-06-20"
+        assert summary["fetched_as_of"] == "2026-06-20"
+        assert summary["date_range"][0] >= "2016-06-20"
+        assert not csv_p.exists() and not prov_p.exists()
+
+    def test_real_refresh_repins_and_roundtrips(self, tmp_path: Path) -> None:
+        csv_p = tmp_path / "v.csv"
+        prov_p = tmp_path / "v.provenance.json"
+        summary = fx_history.refresh_pinned_vintage(
+            window_years=20,
+            as_of=dt.date(2026, 6, 20),
+            csv_path=csv_p,
+            provenance_path=prov_p,
+            fetcher=_synthetic_daily_series,
+        )
+        assert summary["written"] is True
+        assert summary["window_years"] == 20
+        assert summary["fetched_as_of"] == "2026-06-20"
+        assert csv_p.exists() and prov_p.exists()
+        # provenance records the window + an approved provider + a matching sha
+        prov = json.loads(prov_p.read_text())
+        assert prov["window_years"] == 20
+        assert prov["fetched_as_of"] == "2026-06-20"
+        assert prov["provider"] in APPROVED_FX_SOURCES
+        # the file we wrote must load + pass the sha + provenance guards
+        reloaded = load_pinned_history(csv_p, prov_p)
+        assert reloaded.provider == "BIS"
+        assert reloaded.date_range[0] >= "2006-06-20"
+        assert reloaded.date_range[1] <= "2026-06-20"
+        assert reloaded.latest == pytest.approx(summary["latest_value"])
+
+    def test_refresh_uses_today_when_as_of_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(fx_history, "_today", lambda: dt.date(2026, 6, 20))
+        summary = fx_history.refresh_pinned_vintage(
+            window_years=10,
+            as_of=None,
+            csv_path=tmp_path / "v.csv",
+            provenance_path=tmp_path / "v.provenance.json",
+            fetcher=_synthetic_daily_series,
+        )
+        assert summary["fetched_as_of"] == "2026-06-20"
+
+    def test_refresh_rejects_unknown_provider(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="No default live fetcher"):
+            fx_history.refresh_pinned_vintage(
+                provider="RandomBlog",
+                as_of=dt.date(2026, 6, 20),
+                csv_path=tmp_path / "v.csv",
+                provenance_path=tmp_path / "v.provenance.json",
+            )
+
+    def test_write_vintage_rejects_unapproved_provider(self, tmp_path: Path) -> None:
+        bad = _synthetic_daily_series(provider="RandomBlog")
+        with pytest.raises(ValueError, match="APPROVED_FX_SOURCES"):
+            fx_history.write_vintage(
+                bad,
+                tmp_path / "v.csv",
+                tmp_path / "v.provenance.json",
+                window_years=20,
+                as_of=dt.date(2026, 6, 20),
+            )
+
+    def test_refresh_does_not_touch_committed_default(self, tmp_path: Path) -> None:
+        # A refresh aimed at tmp paths must leave the committed vintage byte-identical.
+        before = fx_history._sha256(Path(fx_history.DEFAULT_VINTAGE_CSV))
+        fx_history.refresh_pinned_vintage(
+            window_years=10,
+            as_of=dt.date(2026, 6, 20),
+            csv_path=tmp_path / "v.csv",
+            provenance_path=tmp_path / "v.provenance.json",
+            fetcher=_synthetic_daily_series,
+        )
+        after = fx_history._sha256(Path(fx_history.DEFAULT_VINTAGE_CSV))
+        assert before == after
+
+    def test_generator_reproduces_committed_descriptors(self) -> None:
+        # CCCDIR: _PROVIDER_METADATA is the single source for the sidecar's stable
+        # DESCRIPTOR fields, so a refresh must reproduce the committed BIS sidecar's
+        # descriptors exactly (guards against the generator drifting from the artifact).
+        committed = json.loads(
+            Path(fx_history.DEFAULT_VINTAGE_PROVENANCE).read_text()
+        )
+        s = _synthetic_daily_series(provider="BIS")
+        gen = fx_history._build_refresh_provenance(
+            s, window_years=20, as_of=dt.date(2026, 6, 28), sha256="deadbeef"
+        )
+        descriptor_keys = [
+            "series",
+            "provider",
+            "dataset",
+            "sdmx_key",
+            "endpoint",
+            "collection",
+            "frequency",
+            "unit",
+            "authoritative_reference",
+            "preferred_live_backbone",
+        ]
+        for k in descriptor_keys:
+            assert gen[k] == committed[k], f"descriptor {k!r} drifted from committed sidecar"
+
+    def test_write_vintage_fails_loud_on_silent_row_drop(self, tmp_path: Path) -> None:
+        # A rate that rounds to "0" at 4dp would be dropped on reload; the write
+        # round-trip must detect the row-count mismatch and refuse (CESSPIT fail-loud).
+        s = fx_history.FXHistorySeries(
+            provider="BIS",
+            frequency="daily",
+            unit="LKR per 1 USD",
+            dates=("2020-01-01", "2020-01-02", "2020-01-03"),
+            rates=(100.0, 0.00001, 150.0),  # middle rounds to "0" -> dropped on reload
+            fetched_as_of="2020-01-03",
+            source_endpoint=fx_history.BIS_DAILY_ENDPOINT,
+        )
+        with pytest.raises(ValueError, match="dropped rows"):
+            fx_history.write_vintage(
+                s,
+                tmp_path / "v.csv",
+                tmp_path / "v.provenance.json",
+                window_years=20,
+                as_of=dt.date(2020, 1, 3),
+            )
+
+    def test_provenance_latest_value_matches_on_disk(self, tmp_path: Path) -> None:
+        # latest_value in the sidecar must equal the rounded value actually written
+        # (not the raw >4dp float), so the sidecar describes its artifact exactly.
+        s = fx_history.FXHistorySeries(
+            provider="BIS",
+            frequency="daily",
+            unit="LKR per 1 USD",
+            dates=("2026-06-22", "2026-06-23"),
+            rates=(333.5, 333.916666),  # >4dp last value
+            fetched_as_of="2026-06-23",
+            source_endpoint=fx_history.BIS_DAILY_ENDPOINT,
+        )
+        csv_p = tmp_path / "v.csv"
+        prov_p = tmp_path / "v.provenance.json"
+        summary = fx_history.write_vintage(
+            s, csv_p, prov_p, window_years=20, as_of=dt.date(2026, 6, 23)
+        )
+        prov = json.loads(prov_p.read_text())
+        reloaded = load_pinned_history(csv_p, prov_p)
+        assert prov["latest_value"] == reloaded.latest  # exact, not approx
+        assert prov["latest_value"] == 333.9167
+        assert summary["latest_value"] == 333.9167
+        # the descriptor endpoint is the stable bare URL, not the ?format= request URL
+        assert "?format=" not in prov["endpoint"]
