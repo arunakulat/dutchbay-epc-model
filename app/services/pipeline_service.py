@@ -25,6 +25,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
 
@@ -74,6 +75,7 @@ def run_finance_case(
     guarded = dict(scenario)
     reconcile_capacity_factor_with_bankable_aep(guarded, "<inline>")
     enforce_aep_provenance(guarded, "<inline>")
+    validate_evidence_register(guarded, "<inline>")
 
     modules = list(validation_modules) if validation_modules is not None else None
     return run_v14_pipeline(

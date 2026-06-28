@@ -23,6 +23,7 @@
 #   cost_reference                -> analytics.cost.{cost_basis,estimate_class,benchmark}
 #   aep_reconciliation            -> analytics.aep_reconciliation
 #   aep_provenance                -> analytics.aep_provenance
+#   evidence_register             -> analytics.evidence_register
 #   degradation                   -> finance.cashflow_v14_production._load_degradation_config
 #   wind_resource.loss_taxonomy   -> analytics.wind.losses_model
 
@@ -115,6 +116,26 @@ defaults:
     require_source_id: false # if true, a scenario MUST name resource.power_curve.source_id
     allow_placeholder: false # if true, permit a placeholder source even when a certified
                              # OEM curve exists (early-stage escape hatch; off for lenders)
+
+  # ═══════════════════════════════════════════════════════════════════
+  # ASSUMPTION EVIDENCE REGISTER (#C5 — lender/DFI assumption provenance)
+  # ═══════════════════════════════════════════════════════════════════
+  # Generalizes the AEP-curve provenance control (aep_provenance, #18) to EVERY material
+  # assumption. A scenario may declare an `evidence_register.entries` block mapping each
+  # economics-moving assumption (tariff, capex, CF, fx, debt_terms, ...) to a provenance
+  # record {source, as_of, tier}; analytics.evidence_register validates it against the
+  # taxonomy in config/evidence_register.yaml at scenario load / API boundary.
+  #
+  # SOFT BY DESIGN (the deliberate difference from aep_provenance): the house policy WARNS
+  # rather than rejects, so a scenario with no register — or a partial one — is reported on,
+  # never broken. A lender-grade scenario opts in to hard enforcement by overriding these
+  # in its own evidence_register block: enforce: true, require_complete: true,
+  # min_tier: benchmark. Pure detector — changes no computed number. Scenarios override any
+  # key; these are the fallbacks (resolved by analytics.evidence_register, never a literal).
+  evidence_register:
+    enforce: false           # warn on findings (default); true => raise (block the run)
+    require_complete: false  # if true, EVERY material_assumption must have an entry
+    min_tier: null           # if set (e.g. "benchmark"), entries weaker than it are flagged
 
   # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
