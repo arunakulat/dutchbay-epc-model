@@ -234,9 +234,14 @@ monte_carlo_enhanced:
 # ════════════════════════════════════════════════════════════════════════
 # WARNING: these are stale pre-honest-baseline guesses, NOT validated targets,
 # and no test asserts them. The discredited ~$45M NPV / 9.5% IRR were repudiated
-# for the lender case (the honest engine yields project NPV ~$1.18M / IRR 8.35%
-# — see scenarios/dutchbay_lendercase_2025Q4.yaml, bound by
-# tests/finance/test_lendercase_expected_results.py). Do NOT cite these numbers.
+# for the lender case, which is in fact value-destructive at the flat-LKR tariff:
+# the honest engine yields project NPV ~ -$53.3M / project IRR ~2.75% (BELOW the
+# ~8.10% build-up WACC), equity IRR ~ -0.46% (NEGATIVE) as of the 2026-06-28 5.9%
+# FX-drift re-baseline. See scenarios/dutchbay_lendercase_2025Q4.yaml, bound by
+# tests/finance/test_lendercase_expected_results.py — those live values are the
+# source of truth and shift with each re-baseline. This file is a deliberately
+# frozen orphan MC fixture (no fx: block, capacity 30 MW) and is NOT re-baselined;
+# do NOT cite any of the numbers in it.
 
 expected_results:
   # [UNVALIDATED PLACEHOLDER — do not use; see warning above]

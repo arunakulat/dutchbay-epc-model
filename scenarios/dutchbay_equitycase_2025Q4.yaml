@@ -177,7 +177,19 @@ metadata:
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
 wacc:
   # ---------------------------------------------------------------------------
-  # CAPM / WACC calculation (documented)
+  # CAPM / WACC calculation (ILLUSTRATIVE — NOT the discount rate the engine uses)
+  #
+  # ⚠️ DOC-HONESTY NOTE (2026-06-28): the evaluation path (evaluate_with_overrides)
+  # discounts this scenario's project NPV at the FLAT returns.project_discount_rate
+  # (0.10 -> discount_rate_used = 0.1000), NOT the build-up below. The `mode: capm` /
+  # `apply_to_npv: true` block is retained only as a cost-of-capital illustration; the
+  # Step 3/4/5 figures (Ke 0.2567 / WACC 0.1162 / prudential 0.1262) are that
+  # illustration, not the base discount actually applied. NOTE TOO that the Step 1-5
+  # walkthrough narrates a 70:30 (D/E 2.3333) structure — that is the BASE case's
+  # gearing. This EQUITY case actually sets target_debt_to_equity: 0.6667 (40:60,
+  # matching Financing_Terms.debt_ratio 0.4), so the illustrative Ke/WACC do not
+  # correspond to this scenario's own capital structure either (its live
+  # prudential_rate_used is ~0.1528, not 0.1262).
   #
   # Inputs:
   # - Target capital structure: D/V = 0.70, E/V = 0.30  =>  D/E = 0.70/0.30 = 2.3333
