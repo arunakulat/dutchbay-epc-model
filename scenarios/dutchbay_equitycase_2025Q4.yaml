@@ -186,8 +186,8 @@ wacc:
   #
   # ⚠️ DOC-HONESTY NOTE (2026-06-28): the evaluation path (evaluate_with_overrides)
   # discounts this scenario's project NPV at the FLAT returns.project_discount_rate
-  # (0.10 -> discount_rate_used = 0.1000), NOT the build-up below. The `mode: capm` /
-  # `apply_to_npv: true` block is retained only as a cost-of-capital illustration; the
+  # (0.10 -> discount_rate_used = 0.1000), NOT the build-up below. The `mode: capm`
+  # block is retained only as a cost-of-capital illustration; the
   # Step 3/4/5 figures (Ke 0.2567 / WACC 0.1162 / prudential 0.1262) are that
   # illustration, not the base discount actually applied. NOTE TOO that the Step 1-5
   # walkthrough narrates a 70:30 (D/E 2.3333) structure — that is the BASE case's
@@ -257,7 +257,9 @@ wacc:
   # Prudential overlay
   prudential_spread_bps: 100
 
-  # GWTF opt-in: let pipeline use WACC nominal for NPV discounting
-  apply_to_npv: true
+  # NOTE (#45): the discount basis is controlled by `wacc.drives_discount_rate` (unset here,
+  # so NPV uses the flat returns.project_discount_rate per the DOC-HONESTY NOTE above). The
+  # former `apply_to_npv` key was a no-op (zero Python readers) and was removed so config
+  # does not imply a WACC-driven NPV the engine never applies.
 
   description: CAPM WACC (Sri Lanka) with beta unlever/relever from comparable and 70:30 D/V; includes 100 bps prudential uplift

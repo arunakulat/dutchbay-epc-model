@@ -231,7 +231,17 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         )
     )
     if degradation_pct_raw is None:
+        # A1/#92/#109: a missing degradation input means NO turbine aging — the most
+        # optimistic possible assumption. Keep the 0.0 default (byte-identical; every banked
+        # scenario sets degradation explicitly) but WARN so an omission cannot silently
+        # flatter output. The documented house default is 0.6/yr
+        # (config/defaults.yaml degradation.annual_rate_pct).
         degradation = 0.0
+        logger.warning(
+            "degradation input missing — assuming 0.0/yr (no aging), the most optimistic "
+            "case. Set project.degradation_pct explicitly; the documented house default is "
+            "0.6/yr (config/defaults.yaml degradation.annual_rate_pct)."
+        )
     else:
         if degradation_pct_raw < 0:
             raise ValueError(
