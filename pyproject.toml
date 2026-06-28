@@ -122,5 +122,5 @@ files = ["analytics", "finance"]
 config_file = "mypy.ini"
 
 [tool.pytest.ini_options]
-addopts = "--cov=. --cov-report=term-missing --cov-fail-under=20"
+addopts = "--cov=. --cov-report=term-missing --cov-fail-under=95"
 testpaths = ["tests"]
