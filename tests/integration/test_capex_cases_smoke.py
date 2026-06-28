@@ -14,8 +14,9 @@ integrity — they cannot silently drift), and (d) asserts the directional invar
 lower capex -> higher project IRR / NPV.
 
 Honest finding both cases guard: even the lean $977/kW deal is value-destructive
-(project IRR 5.29% < WACC ~8.1%, NPV -$31.4M); the prudent $1,420/kW case is deeply so
-(1.80% / -$106.6M). The flat-nominal-LKR tariff, not capex, is the binding constraint.
+(post 2% P50 haircut: project IRR 2.73% < WACC ~9.2%, NPV -$52.20M); the prudent
+$1,420/kW case is deeply so (-0.76% / -$125.01M). The flat-nominal-LKR tariff, not
+capex, is the binding constraint.
 """
 
 from __future__ import annotations
@@ -82,8 +83,8 @@ def test_resource_invariant_to_capex(name: str) -> None:
     """Only capex changed — resource fields equal the canonical lender case."""
     cfg = load_scenario_config(str(CASES[name]["file"]))
     assert float(cfg["project"]["capacity_mw"]) == pytest.approx(159.6, abs=0.01)
-    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(473.8, abs=0.5)
-    assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(0.339, abs=0.001)
+    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(464.3, abs=0.5)
+    assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(0.332, abs=0.001)
 
 
 @pytest.mark.parametrize("name", list(CASES))

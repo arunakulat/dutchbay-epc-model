@@ -1,6 +1,6 @@
 {
-  "capacity_factor": 0.305842,
-  "net_site_aep_gwh": 561.4,
+  "capacity_factor": 0.300584,
+  "net_site_aep_gwh": 551.9,
   "gross_aep_gwh": 655.0,
   "source_id": "DUTCHBAY_HYBRID_WIND_SOLAR",
   "source_type": "REFERENCE",
@@ -14,7 +14,7 @@
     "IEC_61400_15_2_UNCERTAINTY"
   ],
   "technology_split_gwh": {
-    "wind": 473.8,
+    "wind": 464.3,
     "solar": 87.6
   },
   "wind_resource": {
@@ -34,11 +34,11 @@
     "cod_year": 2027
   },
   "exceedance": {
-    "net_aep_p50_gwh": 561.4,
-    "net_aep_p90_1yr_gwh": 489.1
+    "net_aep_p50_gwh": 551.9,
+    "net_aep_p90_1yr_gwh": 480.8
   },
   "created_date": "2026-06-22",
   "created_by": "M3 hybrid (canonical wind bankable export + declared solar P50)",
   "version": "1.0",
-  "notes": "Combined bankable AEP for the 209.6 MW hybrid = wind 473.8 GWh (15 x IEA-10MW-198 via wind_resource.bankable_aep; ERA5-fitted Weibull A=8.199/k=2.665; PyWake 7.28% wake; 14.48% total losses) + solar 87.6 GWh (50 MW fixed-tilt, Puttalam GHI, declared P50). Net CF 0.305842 over 209.6 MW nameplate reconciles with capacity_mw*capacity_factor (the engine bills revenue off that). The solar P50 is a declared config value pending the pvlib producer (multi-tech build item 3); the per-tech split drives the lender reporting (generation.technologies)."
+  "notes": "Combined bankable AEP for the 209.6 MW hybrid = wind 464.3 GWh (15 x IEA-10MW-198 via wind_resource.bankable_aep, incl. a 2.0% pre-construction P50 over-prediction haircut from the modelled 473.8; ERA5-fitted Weibull A=8.199/k=2.665; PyWake 7.28% wake; 14.48% total losses) + solar 87.6 GWh (50 MW fixed-tilt, Puttalam GHI, declared P50). Net CF 0.305842 over 209.6 MW nameplate reconciles with capacity_mw*capacity_factor (the engine bills revenue off that). The solar P50 is a declared config value pending the pvlib producer (multi-tech build item 3); the per-tech split drives the lender reporting (generation.technologies)."
 }

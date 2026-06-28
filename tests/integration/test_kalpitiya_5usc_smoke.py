@@ -3,13 +3,14 @@ with a GRANULAR bottom-up cost build.
 
 Same resource/turbine as dutchbay_lendercase_2025Q4.yaml (15x IEA Reference 10 MW @150m,
 IEA 10.6 MW power + Ct curve, ERA5-fitted Weibull A=8.199/k=2.665, FX 333.79, net AEP
-473.8 GWh), with TWO differences: (1) tariff benchmarked at 5.0 US cents/kWh (0.05 USD)
+464.3 GWh post the 2% P50 over-prediction haircut), with TWO differences: (1) tariff
+benchmarked at 5.0 US cents/kWh (0.05 USD)
 SETTLED IN LKR, FIXED at 16.69 LKR/kWh, no escalation; (2) costs are a bottom-up build —
 CAPEX $207.5M ($1,300/kW, line items summed by the engine) and OPEX $3.51M/yr ($22/kW-yr)
 escalating 2.5%/yr in USD on top of the FX curve.
 
 Honest finding this guards: at 5c/kWh on realistic costs the deal is DEEPLY UNECONOMIC —
-equity IRR -11.89%, project NPV -$133.14M (5.9% FX-drift re-baseline).
+equity IRR -12.23%, project NPV -$135.48M (post 2% P50 AEP haircut).
 """
 
 from __future__ import annotations
@@ -52,8 +53,8 @@ def test_resource_and_turbine_equal_the_canonical(cfg: dict) -> None:
     assert float(cfg["wind_resource"]["weibull_a"]) == pytest.approx(8.199, abs=0.01)
     assert float(cfg["wind_resource"]["weibull_k"]) == pytest.approx(2.665, abs=0.01)
     assert cfg["resource"]["turbines"]["count"] == 15
-    # AEP is unchanged from the canonical (shared 10MW summary mock).
-    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(473.8, abs=0.5)
+    # AEP tracks the canonical (shared 10MW summary mock); 464.3 GWh post 2% P50 haircut.
+    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(464.3, abs=0.5)
 
 
 def test_capex_is_granular_bottom_up(cfg: dict) -> None:
@@ -95,29 +96,30 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     """The live pipeline reproduces the pinned economics — and the deal is UNDERWATER.
 
     At 5c/kWh on the granular bottom-up costs ($1,300/kW CAPEX + $22/kW-yr escalating
-    OPEX) the project IRR is NEGATIVE (-3.28%) — lifetime CFADS fall short of capex even
-    undiscounted — far below the ~9.74% WACC; equity IRR is deeply NEGATIVE (-11.89%) and
-    project NPV is -$133.14M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
+    OPEX) the project IRR is NEGATIVE (-3.59%) — lifetime CFADS fall short of capex even
+    undiscounted — far below the ~9.74% WACC; equity IRR is deeply NEGATIVE (-12.23%) and
+    project NPV is -$135.48M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
     """
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
     # Deepened by (a) the 2026-06 construction-lag/off-by-one project-discounting fix
     # (audit finding 2.0), (b) the M3e degradation re-baseline (0.005 -> 0.5, honest
-    # 0.5%/yr aging), and (c) the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
-    # BIS 2005-2026 LKR depreciation), which erodes the fixed-LKR revenue harder in USD.
+    # 0.5%/yr aging), (c) the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
+    # BIS 2005-2026 LKR depreciation), which erodes the fixed-LKR revenue harder in USD,
+    # and (d) the 2% pre-construction P50 over-prediction haircut (net AEP 473.8 -> 464.3).
     # The IRR-floor fix (approx_project_irr now searches negative rates) lets it report
-    # the true -3.28% instead of a clamped 0.0%. NPV -$133.14M. The Wave-1 equity-waterfall
-    # fix releases the DSRA to the sponsor at maturity (equity IRR -11.89%; project IRR is
+    # the true -3.59% instead of a clamped 0.0%. NPV -$135.48M. The Wave-1 equity-waterfall
+    # fix releases the DSRA to the sponsor at maturity (equity IRR -12.23%; project IRR is
     # upstream of the equity waterfall).
-    assert kpis["project_irr"] == pytest.approx(-0.0328, abs=0.005)
+    assert kpis["project_irr"] == pytest.approx(-0.0359, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.1189, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.1223, abs=0.005)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-133.14e6, rel=0.05)
+    assert kpis["project_npv"] == pytest.approx(-135.48e6, rel=0.05)
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
-    assert kpis["max_debt_usd"] == pytest.approx(71.07e6, rel=0.02)  # deleveraged (DSCR-bound)
+    assert kpis["max_debt_usd"] == pytest.approx(68.99e6, rel=0.02)  # deleveraged (DSCR-bound)
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:

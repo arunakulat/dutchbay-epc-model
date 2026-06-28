@@ -25,22 +25,23 @@ def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
     # KPIs reproduce the canonical lender case (FX 333.79 + fitted Weibull + the M3e
-    # degradation re-baseline, now with the 5.9% FX-drift re-baseline: projIRR ~2.75%).
-    # The data-derived fx.annual_depr 0.03 -> 0.0589 erodes the flat-LKR revenue in USD,
-    # pushing equity IRR negative (~-0.46%) — honest at this tariff.
-    assert resp.kpis.project_irr == pytest.approx(0.0275, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(-0.0046, abs=0.005)
+    # degradation re-baseline + the 5.9% FX-drift re-baseline, now with the 2.0% P50
+    # over-prediction haircut: projIRR ~2.50%). The data-derived fx.annual_depr 0.03 ->
+    # 0.0589 erodes the flat-LKR revenue in USD and the 2% AEP haircut pushes equity IRR
+    # further negative (~-1.00%) — honest at this tariff.
+    assert resp.kpis.project_irr == pytest.approx(0.0250, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0100, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 
-    # AEP (bankable, from the committed summary).
-    assert resp.aep.net_p50_gwh == pytest.approx(473.8, abs=0.5)
-    assert resp.aep.net_p90_gwh == pytest.approx(412.7, abs=1.0)
-    assert resp.aep.capacity_factor == pytest.approx(0.339, abs=0.005)
+    # AEP (bankable, from the committed summary; post 2% P50 over-prediction haircut).
+    assert resp.aep.net_p50_gwh == pytest.approx(464.3, abs=0.5)
+    assert resp.aep.net_p90_gwh == pytest.approx(404.4, abs=1.0)
+    assert resp.aep.capacity_factor == pytest.approx(0.332, abs=0.005)
 
     # Sculpted debt: DSCR-bound, three tranches, a per-period schedule.
-    assert resp.debt.debt_total_usd == pytest.approx(94.164e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.590, abs=0.01)
+    assert resp.debt.debt_total_usd == pytest.approx(92.169e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.578, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     assert set(resp.debt.tranches) == {"lkr", "usd", "dfi"}
     assert resp.debt.tranches["usd"].principal_usd > 0

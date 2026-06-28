@@ -1,6 +1,6 @@
 {
-  "capacity_factor": 0.339,
-  "net_site_aep_gwh": 473.8,
+  "capacity_factor": 0.332,
+  "net_site_aep_gwh": 464.3,
   "gross_aep_gwh": 554.1,
   "n_turbines": 15,
   "rated_power_kw": 10638.3,
@@ -52,15 +52,20 @@
   },
   "wake_model": "PyWake Bastankhah-Porte-Agel 2014 (Gaussian, k*=0.042); TurbOPark cross-check 8.93%",
   "exceedance": {
-    "net_aep_p50_gwh": 473.8,
-    "net_aep_p75_gwh": 441.7,
-    "net_aep_p90_1yr_gwh": 412.7,
-    "net_aep_p90_life_gwh": 417.4,
+    "net_aep_p50_gwh": 464.3,
+    "net_aep_p75_gwh": 432.9,
+    "net_aep_p90_1yr_gwh": 404.4,
+    "net_aep_p90_life_gwh": 409.1,
     "sigma_1yr_pct": 10.07,
     "sigma_life_pct": 9.29
+  },
+  "uncertainty": {
+    "p50_haircut_pct": 2.0,
+    "modelled_p50_gwh": 473.8,
+    "note": "2.0% pre-construction P50 over-prediction haircut applied to the modelled net P50 (473.8 -> 464.3) before the exceedance build-up. Justified by (a) the project's own Final EIA (Envision EN220/10.0 EYA) independently reporting P50 464.5 GWh -- a ~2% lower estimate from the actual turbine OEM -- and (b) the documented industry pattern of pre-construction P50 over-prediction (operational P50s run ~2-5% below pre-construction estimates). All net P-values scale by 0.98; gross + loss build-up are upstream and unchanged."
   },
   "created_date": "2026-06-20",
   "created_by": "wind_resource.bankable_aep",
   "version": "3.0",
-  "notes": "Net AEP for the 15 x IEA Reference 10MW (198 m, 345 W/m2) re-model via wind_resource.bankable_aep: IEC 61400-12-1 air-density correction (rho 1.15, v-shift x0.979) of the IEA power curve over the ERA5-FITTED Weibull A=8.199/k=2.665 (3-method consensus MLE/MoM/scipy on the 2020-2024 ARCO single-point timeseries at the 150 m hub, r2=0.998); PyWake Bastankhah-Porte-Agel 2014 granular wake = 7.28% (TurbOPark bound 8.93%) over a 15-turbine 650 m row; availability/electrical/curtailment/other = 14.48% total losses; P50/P75/P90 from an IEC 61400-15-2 uncertainty budget (sigma ~10%) -- NOTE: -15-2 is the Energy Yield Assessment part (the loss/uncertainty taxonomy + P-values), an IEC working-group framework still in DRAFT as of 2025; do NOT conflate it with the separately PUBLISHED IEC 61400-15-1:2025, which is the 'site suitability input conditions' part (wind-conditions characterization), not the energy-yield loss/uncertainty taxonomy. 15 x 10.638 = 159.6 MW nameplate, net CF 0.339. RE-BASELINED from the prior DECLARED Weibull A=8.32/k=2.1 (mean 7.85): the declared mean overstated the resource, so net AEP falls 483.6 -> 473.8 GWh (-2.0%). Supersedes the EN-171/6.5 base (402.6 GWh / 0.307, still on the declared Weibull); EN-171 retained as a characterization/sensitivity machine."
+  "notes": "Net AEP for the 15 x IEA Reference 10MW (198 m, 345 W/m2) re-model via wind_resource.bankable_aep: IEC 61400-12-1 air-density correction (rho 1.15, v-shift x0.979) of the IEA power curve over the ERA5-FITTED Weibull A=8.199/k=2.665 (3-method consensus MLE/MoM/scipy on the 2020-2024 ARCO single-point timeseries at the 150 m hub, r2=0.998); PyWake Bastankhah-Porte-Agel 2014 granular wake = 7.28% (TurbOPark bound 8.93%) over a 15-turbine 650 m row; availability/electrical/curtailment/other = 14.48% total losses; P50/P75/P90 from an IEC 61400-15-2 uncertainty budget (sigma ~10%) -- NOTE: -15-2 is the Energy Yield Assessment part (the loss/uncertainty taxonomy + P-values), an IEC working-group framework still in DRAFT as of 2025; do NOT conflate it with the separately PUBLISHED IEC 61400-15-1:2025, which is the 'site suitability input conditions' part (wind-conditions characterization), not the energy-yield loss/uncertainty taxonomy. 15 x 10.638 = 159.6 MW nameplate, net CF 0.339. RE-BASELINED from the prior DECLARED Weibull A=8.32/k=2.1 (mean 7.85): the declared mean overstated the resource, so net AEP falls 483.6 -> 473.8 GWh (-2.0%). Supersedes the EN-171/6.5 base (402.6 GWh / 0.307, still on the declared Weibull); EN-171 retained as a characterization/sensitivity machine. 2026-06-28: a 2.0% pre-construction P50 over-prediction HAIRCUT is now applied (modelled net 473.8 -> bankable 464.3 GWh, CF 0.339 -> 0.332), corroborated by the project's Final EIA (Envision EN220 EYA) independent P50 464.5 GWh; see the uncertainty block."
 }

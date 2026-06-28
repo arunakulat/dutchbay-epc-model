@@ -71,9 +71,9 @@ def test_unknown_source_raises(cfg: dict) -> None:
 
 def test_regen_reproduces_canonical(cfg: dict) -> None:
     summary = build_aep_summary_from_config(cfg)
-    assert summary["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)  # ERA5-fitted Weibull
+    assert summary["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)  # ERA5-fitted Weibull, post 2% P50 over-prediction haircut
     assert summary["gross_aep_gwh"] == pytest.approx(554.1, abs=1.0)
-    assert summary["capacity_factor"] == pytest.approx(0.339, abs=0.002)
+    assert summary["capacity_factor"] == pytest.approx(0.332, abs=0.002)
     assert summary["power_curve_key"] == "iea_reference_10mw"
     assert summary["source_id"] == "IEA_REFERENCE_10MW_198_PC"
     assert summary["provenance"]["aep"]["is_placeholder"] is False
@@ -84,6 +84,6 @@ def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
     out = write_aep_summary(cfg, str(tmp_path / "regen_summary.json"))
     assert out.exists()
     loaded = load_aep_from_summary(str(out), validate_manifest=True)
-    assert loaded["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)
+    assert loaded["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)
     assert loaded["power_curve_key"] == "iea_reference_10mw"
     assert "aep" in loaded["provenance"]

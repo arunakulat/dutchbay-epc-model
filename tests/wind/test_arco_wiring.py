@@ -144,8 +144,9 @@ def test_assessment_validates_without_mutating(scenario: dict) -> None:
     assert res["mode"] == "validate"
     assert scenario == before  # no mutation of the caller's scenario
     assert res["drift"]["within_tolerance"] is True
-    # implied AEP comes from the analytic engine on the fitted Weibull, near 473.8.
-    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(473.8, abs=8.0)
+    # implied AEP comes from the analytic engine on the fitted Weibull, near 464.3
+    # (post 2% pre-construction P50 over-prediction haircut).
+    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(464.3, abs=8.0)
 
 
 def test_assessment_implied_block_satisfies_wind_contract(scenario: dict) -> None:

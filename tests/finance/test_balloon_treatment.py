@@ -12,16 +12,17 @@ lender case. These tests lock in the verified-correct treatments:
     bullet         — single lump repayment at maturity.
     amortize       — resize debt DOWN so the sculpt fully amortises (no balloon).
 
-Ground truth: the lender case carries a ~58% balloon ($60.8M on $94.16M debt),
+Ground truth: the lender case carries a ~57% balloon ($59.16M on $92.17M debt),
 which breaches constraints.max_balloon_pct (10%). (Equity IRRs are at the corrected
 FX 333.79, the ERA5-fitted Weibull re-baseline, the 2026-06 debt-service-orphan
 fix / audit finding 2.1, the M3e degradation re-baseline (0.005 -> 0.5, honest
-0.5%/yr aging) AND the 2026-06-28 5.9% FX-drift re-baseline (fx.annual_depr 3% ->
-5.89%) — the dominant driver: lower CFADS shrinks the dual_dscr-solved debt
-($100.1M -> $94.16M) and amortises less, so the structural balloon grew 36% -> 58%
-($42.5M -> $60.8M), and the canonical cash_sweep equity IRR fell to ~-0.46% (NEGATIVE).
-The Wave-1 equity-waterfall fix releases the DSRA and any un-swept SPV cash to the
-sponsor at maturity instead of destroying it.)
+0.5%/yr aging), the 2026-06-28 5.9% FX-drift re-baseline (fx.annual_depr 3% ->
+5.89%) AND the 2026-06-28 2.0% pre-construction P50 over-prediction haircut
+(AEP 473.8 -> 464.3 GWh, CF 0.339 -> 0.332) — the lower CFADS shrinks the
+dual_dscr-solved debt ($100.1M -> $92.17M) and amortises less, so the structural
+balloon is ~57% ($59.16M), and the canonical cash_sweep equity IRR fell to ~-1.00%
+(NEGATIVE). The Wave-1 equity-waterfall fix releases the DSRA and any un-swept SPV
+cash to the sponsor at maturity instead of destroying it.)
 """
 
 from __future__ import annotations
@@ -52,16 +53,16 @@ def results() -> dict:
 
 
 def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None:
-    """The structural balloon is ~58% of debt and breaches max_balloon_pct (10%).
+    """The structural balloon is ~57% of debt and breaches max_balloon_pct (10%).
 
     balloon_pct divides the (IDC-inclusive) balloon_remaining by the IDC-inclusive
-    amortizing principal. The 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%)
-    lowered CFADS, so the dual_dscr sculpt amortises less and the structural balloon
-    grew $42.5M -> $60.8M (fraction 0.380 -> 0.578).
+    amortizing principal. The 5.9% FX-drift re-baseline plus the 2.0% AEP P50
+    over-prediction haircut (473.8 -> 464.3 GWh) lowered CFADS, so the dual_dscr
+    sculpt amortises less and the structural balloon is $59.16M (fraction 0.575).
     """
     dr = results["cash_sweep"]["debt_result"]
-    assert dr["balloon_remaining"] == pytest.approx(60_759_458, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.578, abs=0.01)
+    assert dr["balloon_remaining"] == pytest.approx(59_162_374, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.575, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -69,13 +70,13 @@ def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None
 def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """legacy_ignore preserves the (inflated) free-pass equity IRR and never services.
 
-    The 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%) pulls the free-pass IRR
-    down to ~+0.0259 (was ~0.0544 at 3% drift) — still well above the cash_sweep default
-    because the unretired balloon is never serviced.
+    The 5.9% FX-drift re-baseline plus the 2.0% AEP P50 over-prediction haircut
+    (473.8 -> 464.3 GWh) pull the free-pass IRR down to ~+0.0211 — still well above
+    the cash_sweep default because the unretired balloon is never serviced.
     """
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(0.0259, abs=0.002)
+    assert kpis["equity_irr"] == pytest.approx(0.0211, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -84,11 +85,12 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
 def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(results: dict) -> None:
     """cash_sweep traps post-maturity CFADS against the balloon; it is below the free pass.
 
-    After the 5.9% FX-drift re-baseline the structural balloon grew ($42.5M -> $60.8M) while
-    post-maturity CFADS shrank, so the sweep can no longer FULLY retire it: it pays down
-    ~$27.3M and leaves a ~$33.4M residual (cash conserves: swept + residual == balloon). The
-    equity IRR falls to the canonical ~-0.46% (the lender default IS cash_sweep), materially
-    below the legacy free pass. (At the old 3% drift the sweep fully cleared the smaller balloon.)
+    After the 5.9% FX-drift re-baseline plus the 2.0% AEP P50 over-prediction haircut the
+    structural balloon is $59.16M while post-maturity CFADS shrank, so the sweep can no longer
+    FULLY retire it: it pays down ~$26.6M and leaves a ~$32.6M residual (cash conserves: swept +
+    residual == balloon). The equity IRR falls to the canonical ~-1.00% (the lender default IS
+    cash_sweep), materially below the legacy free pass. (At the old 3% drift the sweep fully
+    cleared the smaller balloon.)
     """
     legacy = results["legacy_ignore"]["kpis"]["equity_irr"]
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
@@ -101,7 +103,7 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(results: dic
         dr["balloon_remaining"], rel=0.02
     )
     assert sweep < legacy - 0.025  # materially below the free pass, honest
-    assert sweep == pytest.approx(-0.0046, abs=0.003)
+    assert sweep == pytest.approx(-0.0100, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -109,8 +111,8 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     refi = results["refinance"]["kpis"]["equity_irr"]
     assert refi <= sweep
-    # The 5.9% FX-drift re-baseline enlarged the balloon ($60.8M); refinancing it at the
-    # penalty rate against the weaker CFADS is catastrophic for equity (~-0.40; was +0.0137).
+    # The 5.9% FX-drift re-baseline plus the 2.0% AEP haircut leave a large balloon ($59.16M);
+    # refinancing it at the penalty rate against the weaker CFADS is catastrophic for equity (~-0.40).
     assert refi == pytest.approx(-0.402, abs=0.005)
 
 

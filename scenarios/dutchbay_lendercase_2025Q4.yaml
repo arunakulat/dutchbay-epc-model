@@ -20,7 +20,7 @@ project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
-  capacity_factor: 0.339  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
+  capacity_factor: 0.332  # Net P50 CF after the 2% pre-construction over-prediction haircut (modelled 0.339 -> bankable 0.332); 15 x IEA-10MW-198, ERA5-fitted Weibull
   # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
   # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
   # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
@@ -110,6 +110,14 @@ resource:
 
   aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
 
+  # Pre-construction P50 over-prediction haircut (IEC 61400-15-2 bankability adjustment,
+  # applied before the exceedance build-up). 2.0% — corroborated by the project's Final EIA
+  # (Envision EN220/10.0 EYA) independent P50 464.5 GWh (~2% below the model's modelled 473.8)
+  # + the documented pattern of pre-construction P50 over-prediction. Modelled net 473.8 ->
+  # bankable 464.3 GWh, CF 0.339 -> 0.332.
+  uncertainty:
+    p50_haircut_pct: 2.0
+
   # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:
@@ -133,8 +141,8 @@ resource:
   wind:
     ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
     ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
-    capacity_factor: 0.339    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 473.8            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    capacity_factor: 0.332    # Net P50 CF, post 2% over-prediction haircut (canonical; matches aep_summary)
+    aep_gwh: 464.3            # Net P50 AEP, GWh, post 2% haircut (canonical; matches aep_summary)
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
@@ -500,9 +508,9 @@ expected_results:
   #  as of 2025 — NOT the published -15-1:2025, which is the separate site-suitability
   #  part. Knobs to vary it: resource.uncertainty.p50_haircut_pct / .correlation.)
   # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
-  net_aep_p50_gwh: 473.8  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
-  net_aep_p90_gwh: 412.7  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
-  capacity_factor: 0.339
+  net_aep_p50_gwh: 464.3  # ERA5-fitted Weibull, post 2% over-prediction haircut (modelled 473.8); 14.48% total losses
+  net_aep_p90_gwh: 404.4  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871), post haircut
+  capacity_factor: 0.332
 
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
   annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
@@ -520,25 +528,23 @@ expected_results:
   # forward one period (fixed -> project IRR 5.43%); (4) the 2026-06 DEGRADATION re-baseline
   # (`project.degradation` 0.005 was read as 0.005%/yr ~ zero; corrected to honest 0.5%/yr
   # aging -> project IRR 5.43% -> 5.05%), and the interest-tax-shield re-baseline that lifted
-  # equity IRR to +2.42%; and (5) the 2026-06-28 FX-DRIFT re-baseline — the DOMINANT driver:
-  # fx.annual_depr 3% -> 5.89% (the data-derived BIS 2005-2026 long-run LKR depreciation,
-  # replacing the hand-set 3%), which erodes the flat-LKR revenue faster in USD terms.
-  # Net current canonical: project IRR 5.05% -> 2.75% (BELOW the ~8.10% WACC — the DSCR-solved
-  # gearing fell 0.628 -> 0.590, lifting the WACC from ~7.85%), equity IRR +2.42% -> -0.46%
-  # (now NEGATIVE), NPV -$32.3M -> -$53.3M. The project is value-destructive, honestly so.
-  project_irr: 0.0275       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
-  equity_irr: -0.0046        # NEGATIVE — below cost of equity. The 5.9% FX-drift re-baseline
-                            # (fx.annual_depr 3% -> 5.89%, data-derived BIS 2005-2026) flipped this
-                            # from +0.0242 to -0.0046: a steeper LKR depreciation erodes the USD
-                            # value of the flat-nominal-LKR tariff. The prior +0.0242 came from the
-                            # round-5 interest-tax-shield re-baseline (the SPV deducts debt interest
-                            # and the tax saving accrues to equity); set tax.interest_deductibility:
-                            # false to recover the unlevered case. MOIC now < 1.00.
-  project_npv_m_usd: -53.29 # discount at build-up WACC ~8.10% (up from ~7.85% as the lower
-                            # DSCR-solved gearing 0.628 -> 0.590 shifts the WACC toward equity).
-                            # The 5.9% FX-drift re-baseline
-                            # deepened NPV from -32.34M to -53.29M (steeper LKR depreciation
-                            # against the flat-nominal-LKR tariff).
+  # equity IRR to +2.42%; (5) the 2026-06-28 FX-DRIFT re-baseline (fx.annual_depr 3% -> 5.89%,
+  # data-derived BIS 2005-2026 long-run LKR depreciation): project IRR 5.05% -> 2.75%, equity
+  # IRR +2.42% -> -0.46%, NPV -$32.3M -> -$53.3M; and (6) the 2026-06-28 AEP OVER-PREDICTION
+  # HAIRCUT (2.0%, resource.uncertainty.p50_haircut_pct): modelled net P50 473.8 -> bankable
+  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA independent P50 464.5.
+  # Net current canonical: project IRR 2.50% (BELOW the ~8.10% WACC), equity IRR -1.00% (NEGATIVE),
+  # NPV -$56.1M, DSCR-solved gearing ~0.578. The project is value-destructive, honestly so.
+  project_irr: 0.025       # BELOW WACC (~8.10%) — value-destructive (UNLEVERED, shield-free)
+  equity_irr: -0.01        # NEGATIVE — below cost of equity. The FX-drift re-baseline flipped it
+                            # +0.0242 -> -0.0046 (data-derived 5.89% LKR depreciation), then the 2%
+                            # AEP over-prediction haircut deepened it -0.0046 -> -0.0100. The flat-
+                            # nominal-LKR tariff cannot clear equity. (The +0.0242 came from the
+                            # round-5 interest-tax-shield re-baseline; set tax.interest_deductibility:
+                            # false to recover the unlevered case.) MOIC < 1.00.
+  project_npv_m_usd: -56.1 # discount at build-up WACC ~8.10%. The FX-drift re-baseline deepened
+                            # NPV -32.34M -> -53.29M; the 2% AEP haircut took it -53.29M -> -56.1M
+                            # (lower bankable energy against the flat-nominal-LKR tariff).
   min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
   avg_dscr: 1.4
   llcr: 1.15
