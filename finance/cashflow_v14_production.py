@@ -34,16 +34,22 @@ logger = logging.getLogger(__name__)
 
 
 def _load_degradation_config() -> Dict[str, Any]:
-    """Load degradation config from defaults.yaml.
+    """Load the degradation profile config from ``config/defaults.yaml``.
+
+    Reads ``defaults.degradation`` — the same ``defaults.<block>`` nesting every
+    other defaults.yaml resolver uses. (Previously read a top-level
+    ``wind_degradation`` key that the file never carried, so this always returned
+    ``{}`` and the documented 0.6%/yr default never reached a caller — #72.)
 
     Returns:
-        Dict with degradation configuration, or defaults if not found.
+        Dict with degradation configuration, or ``{}`` when the file/block is absent.
     """
     defaults_path = Path("config/defaults.yaml")
     if defaults_path.exists():
         with open(defaults_path) as f:
             config = yaml.safe_load(f) or {}
-            return cast("Dict[str, Any]", config.get("wind_degradation", {}))
+            block = config.get("defaults", {}).get("degradation", {})
+            return cast("Dict[str, Any]", block or {})
     return {}
 
 

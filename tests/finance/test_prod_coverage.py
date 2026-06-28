@@ -70,21 +70,22 @@ def test_load_config_empty_file_returns_empty(chdir_tmp: Path) -> None:
     assert _load_degradation_config() == {}
 
 
-def test_load_config_without_wind_key_returns_empty(chdir_tmp: Path) -> None:
-    """A populated config lacking ``wind_degradation`` returns ``{}``."""
-    _write_config(chdir_tmp, "some_other_block:\n  foo: 1\n")
+def test_load_config_without_degradation_key_returns_empty(chdir_tmp: Path) -> None:
+    """A populated config lacking ``defaults.degradation`` returns ``{}``."""
+    _write_config(chdir_tmp, "defaults:\n  some_other_block:\n    foo: 1\n")
     assert _load_degradation_config() == {}
 
 
-def test_load_config_with_wind_block_returns_block(chdir_tmp: Path) -> None:
-    """The ``wind_degradation`` sub-mapping is returned verbatim."""
+def test_load_config_with_degradation_block_returns_block(chdir_tmp: Path) -> None:
+    """The ``defaults.degradation`` sub-mapping is returned verbatim."""
     _write_config(
         chdir_tmp,
-        "wind_degradation:\n"
-        "  annual_rate_pct: 1.0\n"
-        "  start_year: 2\n"
-        "  method: exponential\n"
-        "  enabled: false\n",
+        "defaults:\n"
+        "  degradation:\n"
+        "    annual_rate_pct: 1.0\n"
+        "    start_year: 2\n"
+        "    method: exponential\n"
+        "    enabled: false\n",
     )
     cfg = _load_degradation_config()
     assert cfg == {
@@ -109,7 +110,7 @@ def test_none_rate_uses_config_linear_enabled(chdir_tmp: Path) -> None:
     rate_pct = 0.5
     _write_config(
         chdir_tmp,
-        f"wind_degradation:\n  annual_rate_pct: {rate_pct}\n",
+        f"defaults:\n  degradation:\n    annual_rate_pct: {rate_pct}\n",
     )
     aep_base = 100_000.0
     years = 4
@@ -137,11 +138,12 @@ def test_none_rate_uses_config_exponential_and_start_year(chdir_tmp: Path) -> No
     start_year = 2
     _write_config(
         chdir_tmp,
-        "wind_degradation:\n"
-        f"  annual_rate_pct: {rate_pct}\n"
-        f"  start_year: {start_year}\n"
-        "  method: exponential\n"
-        "  enabled: false\n",
+        "defaults:\n"
+        "  degradation:\n"
+        f"    annual_rate_pct: {rate_pct}\n"
+        f"    start_year: {start_year}\n"
+        "    method: exponential\n"
+        "    enabled: false\n",
     )
     aep_base = 100_000.0
     years = 5
