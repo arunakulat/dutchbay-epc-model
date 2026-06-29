@@ -10,10 +10,10 @@ Branches covered beyond the happy path:
   fail) so the ``except ImportError`` lines execute.
 - Missing ``annual_rows``, missing / short ``debt_service_total`` padding,
   and the broad ``except Exception`` paths in the returns/risk calculators.
-- The three stub functions (sensitivity / Monte Carlo / scenario comparison),
-  including via the public ``enable_*`` flags on the wrapper.
 - The fail-loud ``TypeError`` for a non-path (Mapping) config and the
   ``RuntimeError`` for a non-finance base result.
+- That the dead sensitivity / Monte-Carlo / scenario-comparison stub toggles are
+  gone (removed in #489 / PIPE-6) — no longer accepted, no longer in the result.
 
 All repo paths resolve relative to THIS file (CI checks out the repo at a
 different absolute root); writes (none here) would land under ``tmp_path``.
@@ -108,9 +108,6 @@ def test_live_pipeline_no_analytics_when_flags_off() -> None:
     ar = result["analytics_result"]
     assert ar["returns_analysis"] is None
     assert ar["risk_analysis"] is None
-    assert ar["sensitivity_analysis"] is None
-    assert ar["monte_carlo_analysis"] is None
-    assert ar["scenario_comparison"] is None
     enabled = ar["analytics_enabled"]
     assert enabled["returns_enabled"] is False
     assert enabled["risk_enabled"] is False
@@ -135,41 +132,42 @@ def test_non_finance_base_result_raises_runtimeerror(
 
 
 # ---------------------------------------------------------------------------
-# Fast wrapper path: monkeypatch the heavy engine so the enable_* branches
-# (sensitivity / MC / scenario stubs) and packaging run cheaply.
+# PIPE-6 (#489): the dead sensitivity / Monte-Carlo / scenario-comparison stub
+# toggles were removed (they silently returned None). Pin that they are gone and
+# the result surface no longer advertises them.
 # ---------------------------------------------------------------------------
-def test_wrapper_enable_stub_branches(
+def test_removed_stub_toggles_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
     finance_base_result: Dict[str, Any],
 ) -> None:
-    """All five enable flags route through their (stub) calculators."""
+    """The removed stub flags are no longer accepted, and the result surface drops them."""
     monkeypatch.setattr(
         mod, "run_v14_pipeline", lambda **_kw: dict(finance_base_result)
     )
-    # Avoid loading a real scenario config; the stubs ignore cfg.
     monkeypatch.setattr(mod, "load_scenario_config", lambda _p: {})
 
-    result = run_v14_pipeline_with_analytics(
-        config=str(LENDER),
-        enable_returns=False,
-        enable_risk=False,
-        enable_sensitivity=True,
-        enable_monte_carlo=True,
-        enable_scenario_comparison=True,
-        monte_carlo_iterations=1234,
-    )
+    for dead_flag in (
+        "enable_sensitivity",
+        "enable_monte_carlo",
+        "enable_scenario_comparison",
+    ):
+        with pytest.raises(TypeError):
+            run_v14_pipeline_with_analytics(config=str(LENDER), **{dead_flag: True})
+
+    result = run_v14_pipeline_with_analytics(config=str(LENDER), enable_returns=False)
     ar = result["analytics_result"]
-    # All three are stubs that return None.
-    assert ar["sensitivity_analysis"] is None
-    assert ar["monte_carlo_analysis"] is None
-    assert ar["scenario_comparison"] is None
-    enabled = ar["analytics_enabled"]
-    assert enabled["sensitivity_enabled"] is True
-    assert enabled["monte_carlo_enabled"] is True
-    assert enabled["scenario_comparison_enabled"] is True
-    # Stubs are advertised as unavailable.
-    assert enabled["sensitivity_available"] is False
-    assert enabled["monte_carlo_available"] is False
+    assert set(ar["analytics_enabled"]) == {
+        "returns_enabled",
+        "returns_available",
+        "risk_enabled",
+        "risk_available",
+    }
+    for dropped in (
+        "sensitivity_analysis",
+        "monte_carlo_analysis",
+        "scenario_comparison",
+    ):
+        assert dropped not in ar
 
 
 # ---------------------------------------------------------------------------
@@ -262,44 +260,16 @@ def test_risk_exception_caught_returns_none(
 
 
 # ---------------------------------------------------------------------------
-# Stub calculators called directly (sensitivity / MC / scenario).
-# ---------------------------------------------------------------------------
-def test_sensitivity_stub_returns_none(
-    finance_base_result: Dict[str, Any],
-) -> None:
-    """Sensitivity stub returns None (lines 328-332)."""
-    assert (
-        mod._calculate_sensitivity_analysis(str(LENDER), finance_base_result) is None
-    )
-
-
-def test_monte_carlo_stub_returns_none(
-    finance_base_result: Dict[str, Any],
-) -> None:
-    """Monte Carlo stub returns None (lines 345-349)."""
-    assert (
-        mod._calculate_monte_carlo(str(LENDER), finance_base_result, iterations=2000)
-        is None
-    )
-
-
-def test_scenario_comparison_stub_returns_none(
-    finance_base_result: Dict[str, Any],
-) -> None:
-    """Scenario comparison stub returns None (lines 361-365)."""
-    assert (
-        mod._calculate_scenario_comparison(str(LENDER), finance_base_result) is None
-    )
-
-
-# ---------------------------------------------------------------------------
 # Contract sanity (frozen pydantic models).
 # ---------------------------------------------------------------------------
 def test_enablement_defaults() -> None:
-    """AnalyticsEnablement defaults: scenario-comparison advertised available."""
+    """AnalyticsEnablement defaults: only the live returns/risk toggles remain (#489)."""
     e = AnalyticsEnablement()
     assert e.returns_enabled is False
-    assert e.scenario_comparison_available is True
+    assert e.risk_enabled is False
+    # The dead sensitivity / MC / scenario-comparison fields were removed (PIPE-6).
+    assert not hasattr(e, "scenario_comparison_available")
+    assert not hasattr(e, "sensitivity_enabled")
 
 
 def test_enhanced_result_round_trips() -> None:

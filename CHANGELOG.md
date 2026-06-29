@@ -121,6 +121,18 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Pipeline residuals (#489, PIPE-3/6): (PIPE-3) the FX spot cross-assert
+  (`_assert_fx_spot_consistency`) — the one load-time integrity guard the in-memory
+  service seam (`app.services.run_finance_case`, the web `/cases` + hybrid path) still
+  skipped — now runs there too, so a caller cannot submit a scenario whose FX spot keys
+  disagree and get a self-inconsistent lender pack (the #236 stale-FX class) silently; it
+  is a no-op for consistent scenarios (KPI-neutral) and MC paths do not route through this
+  seam. (PIPE-6) removed the dead `enable_sensitivity` / `enable_monte_carlo` /
+  `enable_scenario_comparison` toggles from `analytics.pipeline_analytics_v14` (their
+  helpers were stubs that silently returned `None`; real sensitivity lives in
+  `analytics.sensitivity` + the report tornado, real MC in `analytics.mc`) along with the
+  now-orphaned local result contracts and the `SCENARIO_COMPARISON_AVAILABLE` flag. The
+  live `enable_returns` / `enable_risk` path is unchanged. KPI-neutral.
 - Pipeline convergence + dead-validator removal (#472, PIPE-1/2): deleted the orphaned
   `analytics/contracts_v14_validators.py` (a post-execution result-bounds validator wired
   into no production path, duplicating the live `schema_guard` pre-flight; its `IRR_MIN`
