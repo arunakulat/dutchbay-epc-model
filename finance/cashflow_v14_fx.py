@@ -8,7 +8,9 @@ from .cashflow_v14_utils import _as_float_or_none, _pct_to_decimal, get_nested
 logger = logging.getLogger(__name__)
 
 
-def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
+def _fx_curve(
+    config: Dict[str, Any], years: int, *, allow_flat_fx: bool = False
+) -> List[float]:
     """
     Build an FX curve (LKR per USD) for `years`.
 
@@ -27,12 +29,16 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
          # or
          annual_depr: [0.02, 0.025, 0.03, ...]  # per-year list
 
-    Fallbacks
-    ---------
-    - If an `fx` block exists but has neither a curve nor a start value,
-      this function raises a ValueError (schema violation).
-    - If there is no `fx` block at all, it falls back to a flat 375 LKR/USD
-      with a WARNING log (legacy behaviour for very old scenarios).
+    Fail-loud (FIN-6)
+    -----------------
+    - If an `fx` block exists but has neither a curve nor a start value, this
+      function raises a ValueError (schema violation).
+    - If no FX curve can be resolved at all (no `fx` block, or a non-dict `fx`),
+      it raises a ValueError rather than fabricating a flat, non-depreciating
+      curve — for an unindexed-LKR model that flat curve is the single most
+      optimistic FX assumption and would silently erase the project's core
+      USD-erosion risk. Pass ``allow_flat_fx=True`` to opt into the flat
+      config-reference fallback (deliberately FX-agnostic unit tests only).
     """
     years = max(1, int(years))
     fx_cfg = config.get("fx")
@@ -137,13 +143,27 @@ def _fx_curve(config: Dict[str, Any], years: int) -> List[float]:
             cur2 *= 1.0 + depr
         return out2
 
-    # Final fallback when no fx block is present – single config-sourced reference
-    # rate (config/defaults.yaml), never a Python literal (CESSPIT / ARCH-01).
+    # No resolvable FX curve (no `fx` block, or a non-dict `fx`). FIN-6 / CESSPIT:
+    # refuse to fabricate a flat, non-depreciating curve — the single most optimistic
+    # FX assumption for an unindexed-LKR model, which would silently erase the core
+    # USD-erosion risk. Fail loud unless a caller has explicitly opted in.
+    if not allow_flat_fx:
+        raise ValueError(
+            "FX configuration missing or unresolvable: a scenario must declare an "
+            "`fx` block (an explicit `curve_lkr_per_usd`, or `start_lkr_per_usd` + "
+            "`annual_depr_pct`). Refusing to fabricate a flat, non-depreciating FX "
+            "curve for an unindexed-LKR model (FIN-6). Pass allow_flat_fx=True only "
+            "for deliberately FX-agnostic unit tests."
+        )
+
+    # Opt-in flat fallback: single config-sourced reference rate
+    # (config/defaults.yaml), never a Python literal (CESSPIT / ARCH-01).
     from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
     default_fx = default_fx_lkr_per_usd()
     logger.warning(
-        "FX configuration missing; falling back to config reference %.2f LKR/USD for %d years",
+        "FX configuration missing; using the flat config reference %.2f LKR/USD for "
+        "%d years (allow_flat_fx=True).",
         default_fx,
         years,
     )

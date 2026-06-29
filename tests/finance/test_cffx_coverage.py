@@ -230,26 +230,34 @@ def test_nested_peryear_empty_depr_list_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_no_fx_block_falls_back_to_config_reference_rate() -> None:
-    """With no fx block, the curve is a flat config-sourced reference rate.
+def test_no_fx_block_raises_unless_flat_fx_opt_in() -> None:
+    """FIN-6: a missing fx block fails loud by default; the flat config-reference
+    fallback is reachable only via the explicit ``allow_flat_fx`` opt-in.
 
     The expected rate is read from the SAME source of truth the module reads,
     so no FX literal is hardcoded in this test.
     """
     years = 4
+    # Fail-loud by default — no silent flat curve for an unindexed-LKR model.
+    with pytest.raises(ValueError, match="fx"):
+        _fx_curve({}, years)
+    # Opt-in restores the flat config-sourced reference rate.
     expected_rate = default_fx_lkr_per_usd()
-    result = _fx_curve({}, years)
+    result = _fx_curve({}, years, allow_flat_fx=True)
     assert result == [expected_rate] * years
     # Flat curve: every year is the identical reference rate.
     assert len(set(result)) == 1
 
 
-def test_non_dict_fx_block_without_nested_start_uses_fallback() -> None:
-    """A non-dict `fx` value with no resolvable nested start uses the fallback."""
+def test_non_dict_fx_block_raises_unless_flat_fx_opt_in() -> None:
+    """A non-dict `fx` value resolves no curve -> fail loud (FIN-6); the flat
+    fallback is reachable only with ``allow_flat_fx=True``."""
     years = 2
-    expected_rate = default_fx_lkr_per_usd()
     # fx is a list -> not a dict (skip Case 1); get_nested can't descend a list
-    # (skip Case 2) -> final config-sourced fallback.
+    # (skip Case 2) -> unresolvable -> raises by default.
     config: Dict[str, Any] = {"fx": [1, 2, 3]}
-    result = _fx_curve(config, years)
+    with pytest.raises(ValueError, match="fx"):
+        _fx_curve(config, years)
+    expected_rate = default_fx_lkr_per_usd()
+    result = _fx_curve(config, years, allow_flat_fx=True)
     assert result == [expected_rate] * years

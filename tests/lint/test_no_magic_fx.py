@@ -68,3 +68,30 @@ def test_default_fx_helper_is_the_single_source() -> None:
     from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
     assert default_fx_lkr_per_usd() > 320.0  # the corrected rate, not the stale 300
+
+
+def test_finance_run_scenarios_declare_fx() -> None:
+    """FIN-6: every finance RUN scenario (one with a top-level ``returns:`` block)
+    must declare an ``fx:`` block.
+
+    ``finance.cashflow_v14_fx._fx_curve`` now fails loud on a missing/unresolvable FX
+    curve rather than fabricating a flat, non-depreciating one (the single most
+    optimistic assumption for an unindexed-LKR model), so a shipped run-config without
+    ``fx`` would hard-fail at runtime. Param/overlay/example files (no ``returns:``
+    block) are not run through the cashflow and are exempt.
+    """
+    import yaml
+
+    scen_dir = REPO_ROOT / "scenarios"
+    offenders = []
+    for path in sorted(scen_dir.glob("*.yaml")):
+        try:
+            cfg = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            continue
+        if isinstance(cfg, dict) and "returns" in cfg and "fx" not in cfg:
+            offenders.append(path.name)
+    assert not offenders, (
+        "Finance run-scenario(s) declare `returns:` but no `fx:` block — _fx_curve now "
+        "fails loud on missing FX (FIN-6). Add an `fx` block:\n  " + "\n  ".join(offenders)
+    )
