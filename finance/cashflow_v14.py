@@ -268,6 +268,11 @@ def _prepare_cashflow_context(
         # Guard the newly-wired depreciation_start_year: if start_year pushes the useful-life
         # window past project_life the tail years are silently forfeited. Warn so the
         # truncated capital allowance is visible (dormant at the canonical start_year=1).
+        # FIN-7 (#482, reviewed): forfeiting the tail allowance is the INTENTIONAL, correct
+        # treatment — under the SL Inland Revenue Act the unrecovered basis on an asset held
+        # only to project end-of-life is not carried forward as a deduction. The warning is
+        # the right response (no silent understatement); no further change. KPI-neutral for
+        # the committed scenarios (all use start_year=1, so nothing is forfeited).
         _scheduled = sum(depreciation_schedule.annual_amounts)
         if capex_for_depreciation > 0.0 and _scheduled < capex_for_depreciation - 1.0:
             logger.warning(
@@ -418,6 +423,16 @@ def calculate_single_year_cfads(
         prior_loss_vintages=loss_vintages,
     )
     if loss_vintages is not None:
+        # FIN-8 (#482, reviewed): this writes the carried-forward loss VINTAGES back onto the
+        # caller's params dict to thread them across years (parallel to the scalar
+        # carried_losses, which threads via prior_year_losses + the returned row key). It is a
+        # callee side-effect, but a DELIBERATE and contained one: the vintages are a tuple and
+        # the per-year row is typed Dict[str, float], so they cannot ride back in the row —
+        # the params channel is the only float-free path. The behaviour is correct and
+        # byte-identical to build_annual_rows_efficient (build_tax_series), which the
+        # both-builders-agree tests pin. A full explicit-threading refactor (a (row, vintages)
+        # return tuple) is tracked but deferred as risk-disproportionate to a low-severity,
+        # KPI-neutral code-smell.
         params["loss_vintages"] = tax_result.carried_forward_vintages
 
     tax = tax_result.tax_liability

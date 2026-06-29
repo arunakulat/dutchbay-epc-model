@@ -124,7 +124,9 @@ def test_irr_no_sign_change_returns_none() -> None:
     assert irr([100.0, 50.0, 25.0]) is None
 
 
-def test_irr_library_failure_falls_back_to_bisection(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_irr_library_failure_falls_back_to_bisection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """If npf.irr raises, the NaN guard routes to bisection (lines 145-146).
 
     We monkeypatch the library entry point to raise; the robust bisection solver
@@ -160,7 +162,9 @@ def test_irr_bisect_exact_root_at_lower_bound() -> None:
     lo = -0.5
     payoff = 1.0 + lo  # 0.5
     assert npv(lo, [-1.0, payoff]) == pytest.approx(0.0, abs=1e-13)
-    assert _irr_bisect([-1.0, payoff], lower_bound=lo, upper_bound=5.0) == pytest.approx(lo)
+    assert _irr_bisect(
+        [-1.0, payoff], lower_bound=lo, upper_bound=5.0
+    ) == pytest.approx(lo)
 
 
 def test_irr_bisect_exact_root_at_upper_bound() -> None:
@@ -168,7 +172,9 @@ def test_irr_bisect_exact_root_at_upper_bound() -> None:
     hi = 1.0
     payoff = 1.0 + hi  # root is exactly r=hi: -1 + 2/(1+hi) = 0
     assert npv(hi, [-1.0, payoff]) == pytest.approx(0.0, abs=1e-13)
-    assert _irr_bisect([-1.0, payoff], lower_bound=-0.9999, upper_bound=hi) == pytest.approx(hi)
+    assert _irr_bisect(
+        [-1.0, payoff], lower_bound=-0.9999, upper_bound=hi
+    ) == pytest.approx(hi)
 
 
 def test_irr_bisect_no_sign_change_returns_none() -> None:
@@ -370,9 +376,9 @@ def test_project_npv_assembles_lagged_vector_shape() -> None:
     lag = 2
     expected_vector = [-capex] + [0.0] * lag + cfads
     expected = npv(rate, expected_vector)
-    assert project_npv_from_cfads(rate, cfads, capex, construction_years=lag) == pytest.approx(
-        expected
-    )
+    assert project_npv_from_cfads(
+        rate, cfads, capex, construction_years=lag
+    ) == pytest.approx(expected)
 
 
 def test_project_npv_lag_pushes_first_cfads_later_and_lowers_npv() -> None:
@@ -401,9 +407,9 @@ def test_project_npv_first_cfads_never_undiscounted() -> None:
     capex = 0.0  # isolate the operating stream
     cfads = [100.0]
     # Correct convention: 100 / (1+r)^1, because vector = [-0, 100].
-    assert project_npv_from_cfads(rate, cfads, capex, construction_years=0) == pytest.approx(
-        100.0 / (1.0 + rate)
-    )
+    assert project_npv_from_cfads(
+        rate, cfads, capex, construction_years=0
+    ) == pytest.approx(100.0 / (1.0 + rate))
 
 
 def test_project_npv_capex_typeerror_coerced_to_zero() -> None:
@@ -578,7 +584,9 @@ def test_approx_project_irr_root_exactly_at_r_high() -> None:
     capex = 100.0
     r_high = 0.25
     payoff = capex * (1.0 + r_high)  # root is exactly r_high
-    assert project_npv_from_cfads(r_high, [payoff], capex) == pytest.approx(0.0, abs=1e-9)
+    assert project_npv_from_cfads(r_high, [payoff], capex) == pytest.approx(
+        0.0, abs=1e-9
+    )
     got = approx_project_irr([payoff], capex, r_low=-0.5, r_high=r_high)
     assert got == pytest.approx(r_high)
 
@@ -602,14 +610,16 @@ def test_approx_project_irr_npv_gap_exception_returns_none(
     assert calls["n"] >= 1
 
 
-def test_approx_project_irr_best_effort_midpoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When tol is never met, the loop returns the final bracket midpoint (line 429).
+def test_approx_project_irr_returns_none_on_non_convergence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FIN-10 (#482): when the bisection exhausts max_iter without reaching tol it has NOT
+    converged, so it returns None (IRR undefined) — not the unverified final-bracket
+    midpoint, which could be far from a root.
 
-    Force a single bisection iteration (max_iter=1) with a tolerance impossible to
-    hit; the function must return 0.5*(a+b) without converging.
+    Force a single iteration (max_iter=1) with an impossible tolerance; the result is None.
     """
     capex = 1000.0
     cfads = [400.0, 400.0, 400.0]
     got = approx_project_irr(cfads, capex, r_low=0.0, r_high=0.5, tol=1e-30, max_iter=1)
-    # Still a finite rate inside the original bracket.
-    assert 0.0 <= got <= 0.5
+    assert got is None

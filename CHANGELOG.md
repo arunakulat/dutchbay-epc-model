@@ -121,6 +121,20 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Finance correctness cluster (#482, FIN-3/5/7/8/10/12; KPI-neutral): FIN-3 — the reported
+  `effective_tax_rate` now divides tax by TAXABLE INCOME, not EBIT (reporting-only, lender-
+  audit honesty). FIN-10 — `approx_project_irr` returns `None` on non-convergence instead of
+  an unverified final-bracket midpoint (FIN-01; converged cases unchanged). FIN-5 (reviewed):
+  sculpted principal is shared PRO-RATA BY BALANCE across tranches — documented as the
+  deliberate pari-passu inter-creditor convention; cost-weighted ("retire the dearest debt
+  first") allocation is non-standard and KPI-moving, so NOT adopted. FIN-7 (reviewed):
+  depreciation tail-forfeiture past project life is the intentional, correct SL-tax treatment
+  (the warning is the right response; committed scenarios use `start_year=1` so nothing is
+  forfeited) — documented. FIN-8 (reviewed): the loss-vintages params-dict threading is a
+  deliberate, byte-identical, contained side-effect (the vintages tuple cannot ride in the
+  float-typed row) — documented; a return-tuple refactor is deferred as risk-disproportionate.
+  No committed KPI moves (full finance+analytics suite green). FIN-12 (equity-WHT under-charge
+  guard) is tracked as a follow-up on #482 — a distinct module needing its own careful guard.
 - Money precision decision: keep float64 (#480, ADR): added
   `docs/MONEY_PRECISION_DECISION.md` recording the keep-`float` decision for the money path,
   backed by a measurement on the real lender cashflow — the float64-vs-exact-`Decimal` NPV
