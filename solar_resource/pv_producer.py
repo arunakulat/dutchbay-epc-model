@@ -15,10 +15,13 @@ Design (GWTF / CESSPIT / CCCDIR):
   resource knob, a measurable site property), then Erbs/DISC decomposition →
   Hay-Davies/isotropic transposition → PVWatts DC → PVWatts inverter clip → flat system
   losses. Same config → same number (a fixed reference calendar year, no ``Date.now``).
-* **VALIDATE, never overwrite** — :func:`validate_declared_solar_cf` compares the producer
-  to the config-declared P50 CF and flags drift (mirrors ``wind_resource.arco_assessment``
-  VALIDATE mode); it does not mutate the scenario. The declared P50 stays the default; the
-  producer is the optional, physics-grounded cross-check the user opted into.
+* **VALIDATE here; OVERWRITE in the adapter** — :func:`validate_declared_solar_cf` compares
+  the producer to the config-declared P50 CF and flags drift (mirrors
+  ``wind_resource.arco_assessment`` VALIDATE mode); it does not mutate the scenario, leaving
+  the declared P50 as the financed driver. To instead make the *modelled* CF the financed
+  driver, use the complementary OVERWRITE surface
+  :func:`solar_resource.cashflow_adapter.solar_export_to_scenario_patch` (pvlib-free, via a
+  frozen export — the photovoltaic analogue of ``wind_resource.cashflow_adapter``).
 
 Capacity-factor convention: CF is reported against the **DC nameplate** (``MWp``), i.e.
 ``annual_ac_energy / (dc_capacity_mw · 8760)`` — the same basis the
@@ -201,7 +204,9 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
     clearsky_ghi_annual_kwh = float(clearsky["ghi"].sum()) / 1000.0
     # Defensive guard: pvlib clear-sky is always positive for a valid site.
     if clearsky_ghi_annual_kwh <= 0:  # pragma: no cover
-        raise RuntimeError("Clear-sky GHI computed as non-positive — check site/timezone.")
+        raise RuntimeError(
+            "Clear-sky GHI computed as non-positive — check site/timezone."
+        )
     # Scale the clear-sky shape so its annual GHI equals the measured site total (the
     # clear-sky index). A sunny tropical site lands near ~0.8.
     scale = config.annual_ghi_kwh_m2 / clearsky_ghi_annual_kwh
@@ -229,9 +234,7 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
         poa, temp_air=config.ambient_temp_c, wind_speed=config.wind_speed_ms
     )
     pdc0_w = config.dc_capacity_mw * 1.0e6
-    dc_power = pvlib.pvsystem.pvwatts_dc(
-        poa, cell_temp, pdc0_w, config.gamma_pdc_per_c
-    )
+    dc_power = pvlib.pvsystem.pvwatts_dc(poa, cell_temp, pdc0_w, config.gamma_pdc_per_c)
     ac_nameplate_w = pdc0_w / config.dc_ac_ratio
     ac_power = pvlib.inverter.pvwatts(
         dc_power,
