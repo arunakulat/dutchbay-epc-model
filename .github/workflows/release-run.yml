@@ -8,6 +8,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Needed for the gh CLI to create/update the GitHub Release on the pushed tag.
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -56,3 +59,31 @@ jobs:
         with:
           name: dutchbay-v14-release-artifacts
           path: _out/release_run/
+
+      - name: Package the release zip
+        run: |
+          # Name the zip from the VERSION file (single source of truth, RELEASING.md §7):
+          # DutchBay_Model_V<version>.zip — independent of how the tag is spelled.
+          VERSION="$(cat VERSION)"
+          mkdir -p _out/release_zip
+          ZIP="_out/release_zip/DutchBay_Model_V${VERSION}.zip"
+          (cd _out/release_run && zip -r "${GITHUB_WORKSPACE}/${ZIP}" .)
+          echo "RELEASE_ZIP=${ZIP}" >> "$GITHUB_ENV"
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Idempotent (re-tagging a release re-uploads the asset rather than failing).
+          # Pre-release tags (a hyphen, e.g. v15.1.0-rc1) are marked as such.
+          PRERELEASE=""
+          case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$RELEASE_ZIP" --clobber
+          else
+            gh release create "$TAG" "$RELEASE_ZIP" \
+              --title "$TAG" \
+              --notes "Automated release for $TAG (artifacts built from scenarios/dutchbay_lendercase_2025Q4.yaml; see CHANGELOG.md)." \
+              $PRERELEASE
+          fi
