@@ -24,15 +24,20 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     kpis = run_v14_pipeline(config=HYBRID, validation_mode="strict")["kpis"]
     # Honest engine output (per-tech wind 0.6% / solar 0.4% degradation through the
     # cashflow). Value-destructive: projIRR below the ~8% build-up WACC.
-    # Re-baselined by the 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
-    # PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR + CFADS unchanged
-    # (upstream of the debt rate); the costlier LKR tranche raises WACC (NPV -74.74M -> -87.60M)
-    # and takes equity_irr -0.0320 -> -0.0576 while the DSCR sculpt de-levers the deal.
-    assert kpis["project_irr"] == pytest.approx(0.021615093204366574, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.057640792059825086, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-87603951.22250022, rel=1e-6)  # PR-B UIP LKR rate
+    # #469 (dolphin 2): the financed solar P50 CF was re-baselined 0.20 -> 0.179 — the
+    # pvlib-MODELLED P50 (solar_resource.pv_producer, -10.5%) now bills the cashflow
+    # instead of the prior declared 0.20. Less generation lowers CFADS 242.00M -> 237.78M
+    # (-1.7%), projIRR 0.02162 -> 0.01958 (-20bps), equity_irr -0.0576 -> -0.0612, and
+    # NPV -87.60M -> -89.78M; min_dscr stays 1.30 (debt sculpted to the target DSCR).
+    # (Prior lineage: 5.9% FX-drift re-baseline -> UIP-implied LKR debt 13.39%, which took
+    # NPV -74.74M -> -87.60M and equity_irr -0.0320 -> -0.0576.)
+    assert kpis["project_irr"] == pytest.approx(0.019577905010579898, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.06115322930577494, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(
+        -89777992.81676231, rel=1e-6
+    )  # #469 solar P50
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(242004699.5841927, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(237778073.29042047, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:
@@ -42,9 +47,9 @@ def test_hybrid_reports_per_technology_split() -> None:
     assert gen is not None and breakdown is not None
     assert set(gen.technologies) == {"wind", "solar"}
     rows = {r.technology: r for r in breakdown}
-    # wind 464.3 (post 2% haircut) / 551.9 = 84.1% ; solar 87.6 / 551.9 = 15.9%
-    assert rows["wind"].share_of_aep_pct == pytest.approx(84.1, abs=0.2)
-    assert rows["solar"].share_of_aep_pct == pytest.approx(15.9, abs=0.2)
+    # wind 464.3 (post 2% haircut) / 542.7 = 85.6% ; solar 78.4 (pvlib P50) / 542.7 = 14.4%
+    assert rows["wind"].share_of_aep_pct == pytest.approx(85.6, abs=0.2)
+    assert rows["solar"].share_of_aep_pct == pytest.approx(14.4, abs=0.2)
     # wind 159.6 / 199.6 = 80% ; solar 40 / 199.6 = 20%
     assert rows["wind"].share_of_capex_pct == pytest.approx(80.0, abs=0.2)
     assert rows["solar"].share_of_capex_pct == pytest.approx(20.0, abs=0.2)
