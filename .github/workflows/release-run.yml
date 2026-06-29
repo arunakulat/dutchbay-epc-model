@@ -19,8 +19,14 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Faithful release env — mirrors test-suite.yml (#454). The pinned lock carries
+          # the full surface (fastapi/uvicorn, pvlib, reportlab, …); the prior ".[dev]"-only
+          # install omitted fastapi, so the unguarded api/app test imports errored at
+          # collection (exit 2) and the release artifact never built. api/app are
+          # coverage-surface packages, so their tests must RUN here, not skip.
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -r requirements.txt
+          python -m pip install -e ".[dev,wind,gis]"
 
       - name: Run full tests
         run: |
