@@ -18,6 +18,7 @@ from analytics.development_readiness import build_readiness_report
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
+from app.services.report_tornado import TornadoBlock
 from app.reports.report_config import (
     Covenants,
     KpiKind,
@@ -158,6 +159,9 @@ class ReportContext(BaseModel):
     #: scenario_config (e.g. the legacy KPI-only report path), in which case those
     #: quantitative sections are simply not rendered.
     finance: Optional[FinanceReportBlocks] = None
+    #: One-at-a-time sensitivity tornado over the standard drivers (RPT-1). None when
+    #: not supplied or when the (best-effort) sweep failed — the section is then omitted.
+    tornado: Optional[TornadoBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -374,6 +378,7 @@ def build_report_context(
     config: Optional[ReportConfig] = None,
     scenario_config: Optional[Mapping[str, Any]] = None,
     debt_result: Optional[Mapping[str, Any]] = None,
+    tornado: Optional[TornadoBlock] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -393,6 +398,9 @@ def build_report_context(
         debt_result: The pipeline run's ``debt_result`` mapping, used for the
             sources-and-uses and DSCR-profile sections (RPT-1). Optional; omitted by
             legacy callers.
+        tornado: A pre-computed sensitivity tornado (RPT-1). Computed upstream (it runs
+            a multi-shock sweep) and passed in so this builder stays pure; omitted or
+            ``None`` when the best-effort sweep was skipped or failed.
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
@@ -413,5 +421,6 @@ def build_report_context(
         readiness=readiness_rows,
         overall_readiness=overall_readiness,
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
+        tornado=tornado,
         manifest=dict(case_result.run_manifest or {}),
     )

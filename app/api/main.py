@@ -44,6 +44,7 @@ from app.reports.renderer import (
     render_report_pdf,
 )
 from app.services.pipeline_service import run_finance_case
+from app.services.report_tornado import compute_report_tornado
 
 app = FastAPI(
     title="DutchBay EPC Model API",
@@ -142,13 +143,16 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
     )
     # Pass the resolved scenario + the run's debt_result so the report can render the
     # quantitative lender sections (production P50/P90, sources-and-uses, DSCR profile,
-    # readiness/E&S) — not just the KPI summary (RPT-1).
+    # readiness/E&S) — not just the KPI summary (RPT-1). The sensitivity tornado is
+    # computed here (it runs a multi-shock sweep) and passed in pre-built; it is
+    # best-effort (None on failure) so it never sinks the core report.
     return build_report_context(
         case_result,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         inputs=inputs,
         scenario_config=scenario,
         debt_result=result.get("debt_result"),
+        tornado=compute_report_tornado(scenario),
     )
 
 

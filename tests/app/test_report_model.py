@@ -175,6 +175,27 @@ def test_finance_blocks_none_without_scenario_config() -> None:
     assert ctx.finance is None
 
 
+def test_tornado_stored_when_supplied() -> None:
+    # build_report_context only stores the pre-computed tornado (it stays pure).
+    from app.services.report_tornado import TornadoBlock, TornadoRow
+
+    tornado = TornadoBlock(
+        metric="project_irr",
+        rows=[TornadoRow(label="Tariff", base=0.0116, impact_abs=0.028)],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, tornado=tornado
+    )
+    assert ctx.tornado is not None and ctx.tornado.rows[0].label == "Tariff"
+
+
+def test_tornado_none_by_default() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.tornado is None
+
+
 # --------------------------------------------------------------------------- #
 # Context assembly
 # --------------------------------------------------------------------------- #
