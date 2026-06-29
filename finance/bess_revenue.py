@@ -20,12 +20,19 @@ Revenue, per BESS, per year within the contract term::
 where ``R`` is the bid Capacity Charge Rate. ``availability_factor`` (default ``1.0``)
 derates the charge when monthly availability falls below the 97% guarantee — at or
 above 97% the tender applies no availability derate, hence the ``1.0`` default.
-``dispatchable_ratio`` (default ``1.0``) is the ADSC/MDSC degradation factor: the BESS is
-assumed augmented/sized to hold its Minimum Dispatchable Storage Capacity schedule, so the
-charge is undiminished. Both ``availability_factor`` and ``dispatchable_ratio`` are derate
-factors that must lie in ``[0, 1]``; a value outside that range is a config error and
-**raises** (it is not silently clamped). The charge is **flat — no escalation** — per the
-tender, paid for ``contract_years`` (then zero).
+``dispatchable_ratio`` (default ``1.0``) is a STATIC MDSC derate (a constant haircut over
+the whole life). Both ``availability_factor`` and ``dispatchable_ratio`` are derate factors
+that must lie in ``[0, 1]``; a value outside that range is a config error and **raises** (it
+is not silently clamped). The charge is **flat — no escalation** — per the tender, paid for
+``contract_years`` (then zero).
+
+A separate, TIME-VARYING degradation lever ``revenue.mdsc_fade_pct_annual`` (default ``0.0``
+→ no fade → byte-identical) models the year-over-year state-of-health decay:
+``soh(t) = max(mdsc_floor_soh, (1 - mdsc_fade_pct_annual) ** t)`` (0-based operating year
+``t``; floor default 0.70). The yearly revenue is the flat charge × ``soh(t)``, so a scenario
+that opts in sees the BESS revenue DECLINE over life (and, with an augmentation schedule,
+recover after a cell top-up — see ``mdsc_soh_for_year``). The static ``dispatchable_ratio``
+and the year-indexed ``soh(t)`` multiply.
 
 NB: the round-trip-efficiency and functional-performance liquidated damages, and a
 sub-97% availability month, are *downside* levers; they are exposed here as optional
@@ -69,6 +76,11 @@ _KWH_PER_MWH = 1000.0
 _DEFAULT_CYCLES_PER_YEAR = 365.0
 #: Default AC-AC round-trip efficiency (Ember 2025, upper-end LFP utility).
 _DEFAULT_ROUND_TRIP_EFFICIENCY = 0.90
+#: Default lower bound on the year-indexed state-of-health (MDSC) curve. LFP degrades
+#: near-linearly to its ~70% warranty / end-of-life threshold, below which fade turns
+#: non-linear and is unmodelled — so soh(t) floors here rather than extrapolating
+#: (NextG / Eway LFP warranty bands). Overridable per scenario via revenue.mdsc_floor_soh.
+_DEFAULT_MDSC_FLOOR_SOH = 0.70
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -116,6 +128,31 @@ def _unit_factor(value: Any, *, tech: str, field: str) -> float:
         raise ValueError(
             f"generation.technologies['{tech}'].revenue.{field}={coerced} is out of "
             "range; it is a derate factor and must be in [0, 1] (e.g. 0.97, not 97)."
+        )
+    return coerced
+
+
+def _fade_rate(value: Any, *, tech: str) -> float:
+    """Validate the annual MDSC fade rate in ``[0, 1)``; default ``0.0`` when absent.
+
+    ``0.0`` (the absent default) means NO year-over-year fade, so a scenario that does not
+    opt in is byte-identical. A value outside ``[0, 1)`` (e.g. ``1.1`` for 1.1% mis-entered
+    as a percent instead of the decimal ``0.011``, or a value ``>= 1`` that would zero the
+    asset in one year) is a config error and **raises** (CESSPIT fail-loud).
+    """
+    coerced = _as_float(value)
+    if coerced is None:
+        if value is None:
+            return 0.0
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.mdsc_fade_pct_annual={value!r} "
+            "is not numeric; it is a decimal annual fade rate (e.g. 0.011 for 1.1%/yr)."
+        )
+    if not 0.0 <= coerced < 1.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.mdsc_fade_pct_annual={coerced} is "
+            "out of range; it is a decimal annual fade rate in [0, 1) (e.g. 0.011 for "
+            "1.1%/yr, not 1.1)."
         )
     return coerced
 
@@ -224,7 +261,19 @@ def resolve_bess_specs(
 
         # availability_factor is a common derate ([0, 1]); the rest is model-specific.
         availability = _unit_factor(
-            revenue.get("availability_factor"), tech=str(name), field="availability_factor"
+            revenue.get("availability_factor"),
+            tech=str(name),
+            field="availability_factor",
+        )
+        # Year-indexed MDSC fade (default 0.0 -> no fade -> byte-identical). This is the
+        # TIME-VARYING state-of-health decay, distinct from the STATIC dispatchable_ratio
+        # derate above; the two multiply. floor_soh bounds the fade curve.
+        fade = _fade_rate(revenue.get("mdsc_fade_pct_annual"), tech=str(name))
+        floor_raw = revenue.get("mdsc_floor_soh")
+        floor_soh = (
+            _DEFAULT_MDSC_FLOOR_SOH
+            if floor_raw is None
+            else _unit_factor(floor_raw, tech=str(name), field="mdsc_floor_soh")
         )
         spec: Dict[str, Any] = {
             "technology": str(name),
@@ -232,6 +281,8 @@ def resolve_bess_specs(
             "power_mw": power_mw,
             "contract_years": contract_years,
             "availability_factor": availability,
+            "mdsc_fade_pct_annual": fade,
+            "mdsc_floor_soh": floor_soh,
         }
 
         if model == "capacity_charge":
@@ -244,7 +295,9 @@ def resolve_bess_specs(
                 )
             spec["r_lkr_per_mw_month"] = r_lkr
             spec["dispatchable_ratio"] = _unit_factor(
-                revenue.get("dispatchable_ratio"), tech=str(name), field="dispatchable_ratio"
+                revenue.get("dispatchable_ratio"),
+                tech=str(name),
+                field="dispatchable_ratio",
             )
         elif model == "energy_tariff":
             if energy_mwh is None or energy_mwh <= 0:
@@ -270,7 +323,9 @@ def resolve_bess_specs(
             spec["round_trip_efficiency"] = (
                 _DEFAULT_ROUND_TRIP_EFFICIENCY
                 if rte_raw is None
-                else _unit_factor(rte_raw, tech=str(name), field="round_trip_efficiency")
+                else _unit_factor(
+                    rte_raw, tech=str(name), field="round_trip_efficiency"
+                )
             )
             spec["energy_mwh"] = energy_mwh
             spec["tariff_lkr_per_kwh"] = tariff
@@ -308,6 +363,29 @@ def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
     )
 
 
+def mdsc_soh_for_year(spec: Dict[str, Any], year_index: int) -> float:
+    """The state-of-health (usable MDSC) factor for one operating year, in ``(0, 1]``.
+
+    ``soh(t) = max(floor_soh, (1 - mdsc_fade_pct_annual) ** year_index)``. With the absent
+    default fade ``0.0`` this is exactly ``1.0`` (no degradation -> byte-identical), so a
+    scenario that does not opt in is unchanged. ``year_index`` is 0-based (operating year 1
+    -> 0), so year 1 is undiminished and the asset fades thereafter, floored at
+    ``mdsc_floor_soh``.
+
+    Args:
+        spec: A resolved BESS spec (carries ``mdsc_fade_pct_annual`` / ``mdsc_floor_soh``).
+        year_index: Zero-based operating-year index.
+
+    Returns:
+        The multiplicative SoH derate to apply to the year's flat revenue.
+    """
+    fade = float(spec.get("mdsc_fade_pct_annual", 0.0))
+    if fade <= 0.0:
+        return 1.0
+    floor = float(spec.get("mdsc_floor_soh", _DEFAULT_MDSC_FLOOR_SOH))
+    return max(floor, (1.0 - fade) ** year_index)
+
+
 def bess_revenue_lkr_for_year(
     specs: Optional[List[Dict[str, Any]]], year_index: int
 ) -> float:
@@ -333,7 +411,9 @@ def bess_revenue_lkr_for_year(
         contract_years = spec["contract_years"]
         if contract_years is not None and year_index >= contract_years:
             continue
-        total += _spec_annual_revenue_lkr(spec)
+        # Flat per-spec revenue, derated by the year-indexed state-of-health (1.0 when
+        # the spec declares no MDSC fade -> byte-identical to the prior flat behaviour).
+        total += _spec_annual_revenue_lkr(spec) * mdsc_soh_for_year(spec, year_index)
     return total
 
 
@@ -342,4 +422,5 @@ __all__ = [
     "SUPPORTED_BESS_REVENUE_MODELS",
     "resolve_bess_specs",
     "bess_revenue_lkr_for_year",
+    "mdsc_soh_for_year",
 ]
