@@ -427,6 +427,62 @@ def test_wind_scenario_has_no_lcos(lender_analytics: ScenarioAnalytics) -> None:
     assert meta.batch_summary["bess_lcos"] == []
 
 
+# ---------------------------------------------------------------------------
+# Reproducibility manifest (analytics.run_manifest) — batch metadata
+# ---------------------------------------------------------------------------
+def test_scenario_result_run_manifest_defaults_none() -> None:
+    """ScenarioResult.run_manifest defaults to None (pre-manifest failures)."""
+    res = ScenarioResult(
+        name="x",
+        config_path=Path("x.yaml"),
+        kpis={},
+        annual_rows=[],
+        debt_result={},
+        discount_rate=0.1,
+    )
+    assert res.run_manifest is None
+
+
+def test_batch_stamps_per_scenario_run_manifest(
+    lender_analytics: ScenarioAnalytics,
+) -> None:
+    """Each successful scenario carries a manifest in batch_summary["run_manifests"]."""
+    from analytics.run_manifest import engine_version
+
+    _summary_df, _ts, meta = lender_analytics.run()
+    manifests = meta.batch_summary["run_manifests"]
+    assert len(manifests) == 1
+    entry = manifests[0]
+    assert entry["scenario"] == LENDER_STEM
+    manifest = entry["manifest"]
+    assert len(manifest["config_sha256"]) == 64  # full SHA-256 hex
+    assert manifest["engine_version"] == engine_version()
+    assert len(manifest["git_sha"]) > 0
+    assert manifest["validation_mode"] == "strict"
+
+
+def test_run_manifest_config_hash_is_per_scenario(tmp_path: Path) -> None:
+    """Distinct scenario configs get distinct manifest config hashes."""
+    shutil.copy(LENDER_YAML, tmp_path / LENDER_YAML.name)
+    shutil.copy(EXAMPLE_A_YAML, tmp_path / EXAMPLE_A_YAML.name)
+    _summary_df, _ts, meta = ScenarioAnalytics(scenarios_dir=tmp_path).run()
+    hashes = {
+        e["scenario"]: e["manifest"]["config_sha256"]
+        for e in meta.batch_summary["run_manifests"]
+    }
+    assert len(hashes) == 2
+    assert len(set(hashes.values())) == 2  # the two configs hash differently
+
+
+def test_run_manifests_metadata_is_json_serialisable(
+    lender_analytics: ScenarioAnalytics,
+) -> None:
+    """The enriched batch_summary (incl. run_manifests) round-trips through JSON."""
+    _summary_df, _ts, meta = lender_analytics.run()
+    dumped = json.dumps(meta.batch_summary)
+    assert "run_manifests" in dumped
+
+
 def test_batch_result_summary_fields() -> None:
     """BatchResultSummary stores success/failure lists and a summary mapping."""
     summary = BatchResultSummary(

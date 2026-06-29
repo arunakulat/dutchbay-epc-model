@@ -31,6 +31,7 @@ import pandas as pd
 
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
+from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.bess_lcos import compute_lcos_suite
@@ -64,6 +65,10 @@ class ScenarioResult:
     #: ``LcosResult.as_dict()`` per ``type: bess`` technology; empty for wind/solar-only
     #: scenarios, so non-storage scenarios are unaffected.
     lcos: List[Dict[str, Any]] = field(default_factory=list)
+    #: Reproducibility stamp (analytics.run_manifest): resolved-config SHA-256 + engine
+    #: version + commit for this scenario. ``None`` for a scenario that failed before the
+    #: manifest could be built.
+    run_manifest: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -277,6 +282,15 @@ class ScenarioAnalytics:
                 logger.warning("LCOS computation failed for %s: %s", name, exc)
                 lcos = []
 
+            # Reproducibility stamp (resolved-config SHA-256 + engine version + commit) so
+            # every batch scenario is auditable/tamper-evident (ICAEW posture), matching the
+            # run_full_pipeline_v14 CLI and the web service gateway. The config hash is
+            # per-scenario; engine version and commit are batch-constant. Metadata only.
+            run_manifest = build_run_manifest(
+                config,
+                validation_mode="strict" if self.strict else "off",
+            ).as_dict()
+
             return ScenarioResult(
                 name=name,
                 config_path=config_path,
@@ -285,6 +299,7 @@ class ScenarioAnalytics:
                 debt_result=debt_result,
                 discount_rate=discount_rate,
                 lcos=lcos,
+                run_manifest=run_manifest,
             )
         except Exception as exc:
             logger.error("Scenario %s failed: %s", name, exc)
@@ -386,6 +401,13 @@ class ScenarioAnalytics:
                 # wind/solar batch and the summary_json is otherwise byte-identical.
                 "bess_lcos": [
                     {"scenario": r.name, "results": r.lcos} for r in results if r.lcos
+                ],
+                # Per-scenario reproducibility manifests (analytics.run_manifest), stamping
+                # the batch CLI's summary_json the way run_full_pipeline_v14 stamps its own.
+                "run_manifests": [
+                    {"scenario": r.name, "manifest": r.run_manifest}
+                    for r in results
+                    if r.run_manifest is not None
                 ],
             },
         )
