@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
 
 from .bess_revenue import (
+    bess_augmentation_capex_lkr_for_year,
     bess_revenue_lkr_for_year,
     resolve_bess_specs,
 )
@@ -388,7 +389,9 @@ def calculate_single_year_cfads(
     # translated to LKR at the per-year FX rate — so the LKR cost carries both the
     # inflation and the FX-depreciation effect. year_index is 0-based (ops year 1 = base).
     opex_escalation = float(params.get("opex_escalation_pct", 0.0))
-    opex_usd_year = float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
+    opex_usd_year = (
+        float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
+    )
     opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
@@ -430,6 +433,14 @@ def calculate_single_year_cfads(
 
     risk_haircut_amount = posttax_cfads - cfads_final_lkr
 
+    # --- Mid-life BESS augmentation capex (cash outflow) ----------------------
+    # A scheduled cell top-up is a cash outflow netted out of CFADS in its year (so it
+    # depresses that year's DSCR). 0.0 without an augmentation_schedule -> byte-identical.
+    bess_augmentation_capex_lkr = bess_augmentation_capex_lkr_for_year(
+        params.get("bess_revenue_specs"), year_index, fx_rate
+    )
+    cfads_final_lkr = cfads_final_lkr - bess_augmentation_capex_lkr
+
     # --- USD views ------------------------------------------------------------
     if fx_rate > 0.0:
         revenue_usd = revenue_lkr / fx_rate
@@ -462,6 +473,7 @@ def calculate_single_year_cfads(
         "posttax_cfads_lkr": posttax_cfads,
         "risk_haircut_pct": risk_haircut_pct,
         "risk_haircut_amount_lkr": risk_haircut_amount,
+        "bess_augmentation_capex_lkr": bess_augmentation_capex_lkr,
         # Canonical CFADS after haircut (existing name, used by build_annual_rows logging, debt, etc.)
         "cfads_final_lkr": cfads_final_lkr,
         # Alias for readability in exports / dashboards
@@ -754,12 +766,19 @@ def build_annual_rows_efficient(
         risk_haircut_pct = float(params.get("risk_haircut_pct", 0.0))
         cfads_final_lkr = _apply_risk_haircut(posttax_cfads, risk_haircut_pct)
         risk_haircut_amount = posttax_cfads - cfads_final_lkr
+        # Mid-life BESS augmentation capex netted out of CFADS (mirrors
+        # calculate_single_year_cfads so the two builders stay identical).
+        bess_augmentation_capex_lkr = bess_augmentation_capex_lkr_for_year(
+            params.get("bess_revenue_specs"), year_index, fx_rate
+        )
+        cfads_final_lkr = cfads_final_lkr - bess_augmentation_capex_lkr
 
         row.update(
             {
                 "posttax_cfads_lkr": posttax_cfads,
                 "risk_haircut_pct": risk_haircut_pct,
                 "risk_haircut_amount_lkr": risk_haircut_amount,
+                "bess_augmentation_capex_lkr": bess_augmentation_capex_lkr,
                 "cfads_final_lkr": cfads_final_lkr,
                 "cfads_risk_adjusted_lkr": cfads_final_lkr,
             }

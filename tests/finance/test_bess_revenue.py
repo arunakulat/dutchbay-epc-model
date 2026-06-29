@@ -13,6 +13,7 @@ import pytest
 
 from finance.bess_revenue import (
     SUPPORTED_BESS_REVENUE_MODELS,
+    bess_augmentation_capex_lkr_for_year,
     bess_revenue_lkr_for_year,
     mdsc_soh_for_year,
     resolve_bess_specs,
@@ -463,3 +464,70 @@ def test_fade_applies_to_energy_tariff_model_too():
     }
     specs = resolve_bess_specs(cfg)
     assert bess_revenue_lkr_for_year(specs, 10) < bess_revenue_lkr_for_year(specs, 0)
+
+
+# ── Augmentation (#470 BESS-1b) ─────────────────────────────────────────────────
+
+
+def test_augmentation_default_is_empty_byte_identical():
+    spec = resolve_bess_specs(_cfg())[0]
+    assert spec["augmentation_events"] == []
+    # No schedule -> no capex any year, soh unaffected by augmentation.
+    assert bess_augmentation_capex_lkr_for_year([spec], 9, 300.0) == 0.0
+
+
+def test_augmentation_schedule_parsed_and_sorted():
+    spec = resolve_bess_specs(
+        _cfg(
+            augmentation_schedule=[
+                {"year": 10, "capex_usd": 5_000_000},
+                {"year": 5, "capex_usd": 1_000_000, "restore_to_soh": 0.95},
+            ]
+        )
+    )[0]
+    evs = spec["augmentation_events"]
+    assert [e["year"] for e in evs] == [5, 10]  # sorted ascending
+    assert evs[0]["restore_to_soh"] == 0.95
+    assert evs[1]["restore_to_soh"] == 1.0  # default full restore
+
+
+def test_augmentation_capex_lands_in_the_event_year_only():
+    specs = resolve_bess_specs(
+        _cfg(augmentation_schedule=[{"year": 10, "capex_usd": 5_000_000}])
+    )
+    # Year 10 is 0-based index 9; capex = 5e6 USD * fx.
+    assert bess_augmentation_capex_lkr_for_year(specs, 9, 300.0) == pytest.approx(
+        5_000_000 * 300.0
+    )
+    assert bess_augmentation_capex_lkr_for_year(specs, 8, 300.0) == 0.0
+    assert bess_augmentation_capex_lkr_for_year(specs, 10, 300.0) == 0.0
+
+
+def test_augmentation_restores_soh():
+    spec = resolve_bess_specs(
+        _cfg(
+            mdsc_fade_pct_annual=0.05,
+            augmentation_schedule=[{"year": 11, "capex_usd": 5_000_000}],
+        )
+    )[0]
+    soh_y10 = mdsc_soh_for_year(spec, 9)  # operating year 10, pre-augmentation
+    soh_y11 = mdsc_soh_for_year(spec, 10)  # operating year 11, the augmentation year
+    assert soh_y11 == pytest.approx(1.0)  # restored to full at the event
+    assert soh_y11 > soh_y10  # the curve jumps back up
+    # ...then re-fades from the restore point.
+    assert mdsc_soh_for_year(spec, 12) < soh_y11
+
+
+@pytest.mark.parametrize(
+    "bad, match",
+    [
+        ([{"year": 0, "capex_usd": 1}], "year"),
+        ([{"year": 2.5, "capex_usd": 1}], "year"),
+        ([{"year": 5, "capex_usd": -1}], "capex_usd"),
+        ([{"year": 5, "capex_usd": 1, "restore_to_soh": 1.5}], "restore_to_soh"),
+        ({"year": 5, "capex_usd": 1}, "must be a list"),
+    ],
+)
+def test_augmentation_schedule_malformed_fails_loud(bad, match):
+    with pytest.raises(ValueError, match=match):
+        resolve_bess_specs(_cfg(augmentation_schedule=bad))
