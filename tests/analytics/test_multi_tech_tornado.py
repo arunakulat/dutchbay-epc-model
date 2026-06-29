@@ -6,9 +6,12 @@ Pins the per-technology tornado contract for the hybrid wind+solar scenario:
   shock to the field finance actually reads — so no axis is a phantom (the failure
   mode a plain one-way ``generation.technologies.<tech>.capex_usd`` /
   ``capacity_factor`` sweep would hit: a zero-impact bar, or a reconciliation raise);
-* the lender headline holds: **wind drives the IRR / balloon volatility**;
-* ``min_dscr`` is correctly reported as structurally flat (dual-DSCR sculpting).
+* the lender headline holds: **wind drives the IRR volatility** (balloon_pct is no
+  longer responsive under D4.6 — the P90-bound debt fully amortises);
+* ``min_dscr`` and ``balloon_pct`` are correctly reported as structurally flat
+  (dual-DSCR sculpting to target; the P90-bound debt amortises with no balloon).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -80,10 +83,14 @@ def test_discover_storage_finds_bess():
 
 def test_discover_non_generation_is_robust_superset():
     # catches storage AND any non-generation block, so nothing is silently dropped.
-    weird = {"generation": {"technologies": {
-        "battery": {"power_mw": 20, "energy_mwh": 80},
-        "mystery": {"foo": 1},  # neither generation nor recognised storage
-    }}}
+    weird = {
+        "generation": {
+            "technologies": {
+                "battery": {"power_mw": 20, "energy_mwh": 80},
+                "mystery": {"foo": 1},  # neither generation nor recognised storage
+            }
+        }
+    }
     assert discover_non_generation_technologies(weird) == ["battery", "mystery"]
     assert discover_storage_technologies(weird) == ["battery"]
 
@@ -92,10 +99,14 @@ def test_type_bess_is_storage_not_generation_even_with_capacity_factor():
     # `type` is authoritative: a BESS mis-keyed with a capacity_factor must NOT be
     # classified as generation (it would be swept as a phantom driver) — it is storage,
     # consistent with the cashflow excluding it from generation revenue.
-    cfg = {"generation": {"technologies": {
-        "wind": {"capacity_mw": 100, "capacity_factor": 0.34},
-        "bess": {"type": "bess", "power_mw": 50, "capacity_factor": 0.20},
-    }}}
+    cfg = {
+        "generation": {
+            "technologies": {
+                "wind": {"capacity_mw": 100, "capacity_factor": 0.34},
+                "bess": {"type": "bess", "power_mw": 50, "capacity_factor": 0.20},
+            }
+        }
+    }
     assert discover_generation_technologies(cfg) == ["wind"]
     assert discover_storage_technologies(cfg) == ["bess"]
     assert discover_non_generation_technologies(cfg) == ["bess"]
@@ -132,7 +143,9 @@ def test_capex_override_couples_per_tech_to_financed_total(hybrid_config: dict):
     base_tech = hybrid_config["generation"]["technologies"]["wind"]["capex_usd"]
     base_total = hybrid_config["capex"]["usd_total"]
     delta = base_tech * 0.10
-    assert ov["generation.technologies.wind.capex_usd"] == pytest.approx(base_tech + delta)
+    assert ov["generation.technologies.wind.capex_usd"] == pytest.approx(
+        base_tech + delta
+    )
     assert ov["capex.usd_total"] == pytest.approx(base_total + delta)
 
 
@@ -145,7 +158,10 @@ def test_capacity_factor_override_reconciles_exactly(hybrid_config: dict):
     blended = ov["project.capacity_factor"]
     project_mw = hybrid_config["project"]["capacity_mw"]
     # sum(mw*cf) with shocked wind == project_mw * blended  (reconciliation == 0)
-    actual = techs["wind"]["capacity_mw"] * new_wind_cf + techs["solar"]["capacity_mw"] * techs["solar"]["capacity_factor"]
+    actual = (
+        techs["wind"]["capacity_mw"] * new_wind_cf
+        + techs["solar"]["capacity_mw"] * techs["solar"]["capacity_factor"]
+    )
     assert actual == pytest.approx(project_mw * blended)
 
 
@@ -179,20 +195,24 @@ def test_no_phantom_axis_every_driver_moves_project_irr(hybrid_bars):
 
 
 def test_wind_dominates_volatility(hybrid_bars):
-    """The lender headline: wind drives the IRR and balloon swing (it is ~88% of
-    generation), comfortably above solar on every responsive metric."""
-    for metric in ("project_irr", "equity_irr", "balloon_pct"):
+    """The lender headline: wind drives the IRR swing (it is ~88% of generation),
+    comfortably above solar on every RESPONSIVE metric. (balloon_pct is no longer a
+    responsive metric under D4.6 — the P90-bound debt fully amortises, so balloon_pct is
+    flat at zero; see test_min_dscr_is_flagged_flat.)"""
+    for metric in ("project_irr", "equity_irr"):
         ranking = impact_by_technology(hybrid_bars, metric)
         assert list(ranking)[0] == "wind"
         assert ranking["wind"] > ranking["solar"]
 
 
 def test_min_dscr_is_flagged_flat(hybrid_bars):
-    """min_dscr is sculpted to target by dual-DSCR sizing -> structurally flat."""
-    assert flat_metrics(hybrid_bars) == ["min_dscr"]
-    # and it is genuinely flat, not merely under-tolerance by luck:
+    """Two metrics are structurally flat under dual-DSCR + P90-bound sizing (D4.6): min_dscr
+    is sculpted to the target DSCR, and balloon_pct is zero because the smaller P90-bound
+    debt fully amortises over the tenor (the prior ~40% balloon is eliminated)."""
+    assert flat_metrics(hybrid_bars) == ["min_dscr", "balloon_pct"]
+    # and they are genuinely flat, not merely under-tolerance by luck:
     for bar in hybrid_bars:
-        if bar.metric == "min_dscr":
+        if bar.metric in ("min_dscr", "balloon_pct"):
             assert bar.impact_abs < 1e-9
 
 
@@ -233,16 +253,22 @@ def test_no_technologies_yields_no_bars():
 def test_storage_only_scenario_yields_no_bars_and_warns(caplog):
     """A BESS-only scenario has no generation -> no bars (no evaluation), and the
     storage block is surfaced rather than silently dropped."""
-    bess_only = {"generation": {"technologies": {
-        "battery": {"power_mw": 50, "energy_mwh": 200},
-    }}}
+    bess_only = {
+        "generation": {
+            "technologies": {
+                "battery": {"power_mw": 50, "energy_mwh": 200},
+            }
+        }
+    }
     with caplog.at_level("WARNING"):
         assert run_multi_tech_tornado(bess_only) == []
     assert "battery" in caplog.text
     assert discover_storage_technologies(bess_only) == ["battery"]
 
 
-def test_storage_alongside_generation_is_reported_not_swept(hybrid_config: dict, caplog):
+def test_storage_alongside_generation_is_reported_not_swept(
+    hybrid_config: dict, caplog
+):
     """wind + solar + BESS: the generation techs are swept exactly as before, and the
     storage block is warned about (so the tornado can't be mistaken for complete)."""
     cfg = dict(hybrid_config)
@@ -265,28 +291,65 @@ def test_storage_alongside_generation_is_reported_not_swept(hybrid_config: dict,
 
 
 def test_applicable_storage_drivers_needs_a_revenue_lever():
-    cfg = {"generation": {"technologies": {
-        "bess": {"type": "bess", "power_mw": 10, "revenue": {
-            "model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 2_000_000}},
-        "bare": {"type": "bess", "power_mw": 5},  # no revenue -> not sweepable
-    }}}
-    assert applicable_storage_drivers(cfg, "bess") == ["capacity_charge_lkr_per_mw_month"]
+    cfg = {
+        "generation": {
+            "technologies": {
+                "bess": {
+                    "type": "bess",
+                    "power_mw": 10,
+                    "revenue": {
+                        "model": "capacity_charge",
+                        "capacity_charge_lkr_per_mw_month": 2_000_000,
+                    },
+                },
+                "bare": {"type": "bess", "power_mw": 5},  # no revenue -> not sweepable
+            }
+        }
+    }
+    assert applicable_storage_drivers(cfg, "bess") == [
+        "capacity_charge_lkr_per_mw_month"
+    ]
     assert applicable_storage_drivers(cfg, "bare") == []
 
 
 def test_build_storage_override_is_direct_single_key():
-    cfg = {"generation": {"technologies": {"bess": {"type": "bess", "power_mw": 10,
-        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 2_000_000}}}}}
+    cfg = {
+        "generation": {
+            "technologies": {
+                "bess": {
+                    "type": "bess",
+                    "power_mw": 10,
+                    "revenue": {
+                        "model": "capacity_charge",
+                        "capacity_charge_lkr_per_mw_month": 2_000_000,
+                    },
+                }
+            }
+        }
+    }
     ov = build_storage_override(cfg, "bess", "capacity_charge_lkr_per_mw_month", 1.1)
     assert ov == {
-        "generation.technologies.bess.revenue.capacity_charge_lkr_per_mw_month":
-        pytest.approx(2_200_000)
+        "generation.technologies.bess.revenue.capacity_charge_lkr_per_mw_month": pytest.approx(
+            2_200_000
+        )
     }
 
 
 def test_build_storage_override_rejects_unknown_driver():
-    cfg = {"generation": {"technologies": {"bess": {"type": "bess", "power_mw": 10,
-        "revenue": {"model": "capacity_charge", "capacity_charge_lkr_per_mw_month": 1}}}}}
+    cfg = {
+        "generation": {
+            "technologies": {
+                "bess": {
+                    "type": "bess",
+                    "power_mw": 10,
+                    "revenue": {
+                        "model": "capacity_charge",
+                        "capacity_charge_lkr_per_mw_month": 1,
+                    },
+                }
+            }
+        }
+    }
     with pytest.raises(ValueError, match="unknown storage driver"):
         build_storage_override(cfg, "bess", "bogus", 1.1)
 
@@ -295,10 +358,15 @@ def test_bess_with_revenue_lever_is_swept_alongside_generation(hybrid_config):
     cfg = dict(hybrid_config)
     techs = dict(cfg["generation"]["technologies"])
     techs["bess_1"] = {
-        "type": "bess", "power_mw": 50.0, "energy_mwh": 200.0,
+        "type": "bess",
+        "power_mw": 50.0,
+        "energy_mwh": 200.0,
         "capex_usd": 25_000_000,  # BESS-3: a revenue-producing bess must declare capex
-        "revenue": {"model": "capacity_charge",
-                    "capacity_charge_lkr_per_mw_month": 5_000_000, "contract_years": 15},
+        "revenue": {
+            "model": "capacity_charge",
+            "capacity_charge_lkr_per_mw_month": 5_000_000,
+            "contract_years": 15,
+        },
     }
     cfg["generation"] = {"technologies": techs}
     bars = run_multi_tech_tornado(cfg, metrics=["project_irr"])
@@ -340,7 +408,9 @@ def test_uncoupled_per_tech_capacity_factor_breaks_reconciliation(hybrid_config:
 # Wave-2: energy_tariff BESS is now a swept storage driver (was only capacity_charge)
 # ---------------------------------------------------------------------------
 _NIGHTPEAK = str(
-    Path(__file__).resolve().parents[2] / "scenarios" / "ceb_solar_bess_nightpeak_10mw.yaml"
+    Path(__file__).resolve().parents[2]
+    / "scenarios"
+    / "ceb_solar_bess_nightpeak_10mw.yaml"
 )
 
 
@@ -349,7 +419,11 @@ def test_energy_tariff_bess_is_swept_with_real_impact() -> None:
     the tornado produces a non-phantom bar for it (was only capacity_charge before)."""
     cfg = load_scenario_config(_NIGHTPEAK)
     # discovery picks the tariff lever (present), not capacity_charge (absent here)
-    techs = [t for t in cfg["generation"]["technologies"] if cfg["generation"]["technologies"][t].get("type") == "bess"]
+    techs = [
+        t
+        for t in cfg["generation"]["technologies"]
+        if cfg["generation"]["technologies"][t].get("type") == "bess"
+    ]
     assert techs, "expected a type:bess block in the night-peak scenario"
     drivers = applicable_storage_drivers(cfg, techs[0])
     assert "tariff_lkr_per_kwh" in drivers
@@ -358,4 +432,6 @@ def test_energy_tariff_bess_is_swept_with_real_impact() -> None:
     bars = run_multi_tech_tornado(cfg, metrics=["project_irr"])
     tariff_bars = [b for b in bars if b.driver == "tariff_lkr_per_kwh"]
     assert tariff_bars, "energy-tariff BESS produced no tornado bar"
-    assert any(abs(b.impact_abs) > 1e-6 for b in tariff_bars)  # real sensitivity, not ~0
+    assert any(
+        abs(b.impact_abs) > 1e-6 for b in tariff_bars
+    )  # real sensitivity, not ~0

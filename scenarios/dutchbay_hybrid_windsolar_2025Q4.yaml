@@ -372,13 +372,26 @@ Financing_Terms:
   debt_ratio: 0.7                  # MAX gearing cap; actual gearing auto-solved to target_dscr
   debt_sizing: dual_dscr           # auto-size debt on the real schedule to target_dscr (capped at debt_ratio); robust to AEP (#180)
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
+  # Bind the bankable P90 downside to the gearing (D4.6): the engine sizes a SECOND gearing
+  # against a P90 cashflow (annual CFADS rescaled by the real net P90/P50 AEP ratio,
+  # 475.1/542.7 = 0.8754, from expected_results) and uses min(P50, P90) gearing — so the
+  # structure must clear the DSCR floor even at P90 production, not only at P50. This makes
+  # the MODELLED P90 (#469 dolphin 4c) actually bind debt rather than be reporting-only.
+  # downside_aep_source: p90 reads the real P90/P50 ratio (vs the legacy flat 0.80 proxy);
+  # target_dscr_p90 defaults to target_dscr (1.30) — the conservative choice: the same DSCR
+  # floor is required in the downside case. KPI-MOVING: smaller (P90-bound) debt re-levers
+  # the structure; see CHANGELOG.
+  bind_downside: true
+  downside_aep_source: p90
   # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
   # maturity. balloon_treatment governs how the equity waterfall resolves it
   # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
-  # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~57%
-  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
-  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
+  # the prudent-lender default: post-maturity CFADS is trapped to retire any
+  # balloon before any equity distribution. NB: with bind_downside (D4.6) the
+  # smaller P90-bound debt now FULLY AMORTISES over the tenor — balloon_pct is 0%
+  # (it was ~40-57% with the unconstrained P50 gearing, breaching
+  # constraints.max_balloon_pct 10%; the P90 sizing resolved it). cash_sweep is
+  # retained for robustness, but no balloon remains in the base case.
   balloon_treatment: cash_sweep
   tenor_years: 15
   interest_only_years: 2
@@ -538,7 +551,7 @@ expected_results:
   # fixed-tilt, pvlib-modelled P50 CF 0.179). The aep_reconciliation guard cross-checks
   # this against capacity_mw * capacity_factor (542.6 GWh), so a stale headline cannot creep in.
   net_aep_p50_gwh: 542.7   # wind 464.3 (post 2% over-prediction haircut) + solar 78.4 (pvlib P50)
-  net_aep_p90_gwh: 475.1   # wind 404.4 (post haircut) + solar 70.7 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%; #469 dolphin 4c replaced the ratio-preserved placeholder). Reporting-only: bind_downside is false, so P90 does not bind debt/IRR.
+  net_aep_p90_gwh: 475.1   # wind 404.4 (post haircut) + solar 70.7 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%; #469 dolphin 4c replaced the ratio-preserved placeholder). BINDS debt (D4.6): with Financing_Terms.bind_downside true, the P90/P50 ratio (475.1/542.7 = 0.8754) rescales CFADS to size the gearing, so this P90 now constrains debt/equity-IRR/DSCR (not reporting-only).
   capacity_factor: 0.295502
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of

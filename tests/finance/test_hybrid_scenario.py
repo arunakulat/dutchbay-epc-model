@@ -31,11 +31,18 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # NPV -87.60M -> -89.78M; min_dscr stays 1.30 (debt sculpted to the target DSCR).
     # (Prior lineage: 5.9% FX-drift re-baseline -> UIP-implied LKR debt 13.39%, which took
     # NPV -74.74M -> -87.60M and equity_irr -0.0320 -> -0.0576.)
+    # D4.6: Financing_Terms.bind_downside now makes the bankable P90 bind the gearing (debt
+    # sized to clear 1.30 DSCR even at P90 production, 0.8754 x CFADS). This SHRINKS debt
+    # ~13.8% (gearing 0.4225 -> 0.3675), which DE-LEVERS this negatively-levered structure
+    # (13.39% LKR debt >> ~2% project return): equity_irr -0.0612 -> -0.0272 (+339bps), LLCR
+    # 1.302 -> 1.497, PLCR 1.348 -> 1.550. project_irr is unlevered (UNCHANGED); min_dscr
+    # holds 1.30; total_cfads_usd is debt-independent (UNCHANGED). project_npv edges down
+    # -89.78M -> -91.65M (the smaller debt slice raises the build-up WACC).
     assert kpis["project_irr"] == pytest.approx(0.019577905010579898, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.06115322930577494, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.02721927328494267, rel=1e-6)  # D4.6
     assert kpis["project_npv"] == pytest.approx(
-        -89777992.81676231, rel=1e-6
-    )  # #469 solar P50
+        -91650154.42575124, rel=1e-6
+    )  # D4.6 P90-bound debt
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     assert kpis["total_cfads_usd"] == pytest.approx(237778073.29042047, rel=1e-6)
 
@@ -59,8 +66,9 @@ def test_hybrid_net_p90_is_model_derived() -> None:
     """The hybrid net_aep_p90 (#469 dolphin 4c) is reproducible from the solar model.
 
     Proves the frozen 475.1 GWh is wind 404.4 + the pvlib-modelled solar P90-1yr (not a
-    hand-maintained placeholder). Gated on the [solar] extra. P90 is reporting-only here
-    (bind_downside false), so this does not touch the pinned financed KPIs above.
+    hand-maintained placeholder). Gated on the [solar] extra. This P90 now BINDS the gearing
+    (bind_downside true, D4.6 — it drives the financed KPIs pinned in the economics test
+    above); here we only check the AEP arithmetic that feeds it.
     """
     pytest.importorskip("pvlib")
     import yaml
