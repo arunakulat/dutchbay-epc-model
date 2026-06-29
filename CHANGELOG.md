@@ -121,6 +121,14 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Property-based finance invariants (#491, audit §4.10): added the repo's first Hypothesis
+  property tests (`tests/finance/test_finance_invariants_property.py`) asserting structural
+  invariants across input ranges that pinned examples can't — NPV at 0% equals the
+  undiscounted sum, NPV is additive in cashflows and monotone-decreasing in the discount
+  rate for conventional series, a converged IRR is a numerical root of NPV, and the BESS
+  state-of-health curve stays in `[floor, 1]` and is non-increasing without augmentation.
+  Deterministic (`derandomize=True`, no deadline) for reproducible CI (MRM-01). Hypothesis
+  is already a dev dependency. Test-only, KPI-neutral.
 - Release workflow now publishes a GitHub Release (#457): `release-run.yml` (which fires
   only on a pushed `v*` tag) gained a step that packages the lendercase artifacts as
   `DutchBay_Model_V<version>.zip` (version from the `VERSION` file) and creates/updates the
