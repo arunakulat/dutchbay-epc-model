@@ -121,6 +121,14 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Money precision decision: keep float64 (#480, ADR): added
+  `docs/MONEY_PRECISION_DECISION.md` recording the keep-`float` decision for the money path,
+  backed by a measurement on the real lender cashflow — the float64-vs-exact-`Decimal` NPV
+  error over the 20-year schedule is 1.31e-5 LKR (~4e-8 USD; relative error 2.4e-16, i.e.
+  machine epsilon), ~10 orders of magnitude below lender precision. A `Decimal` migration
+  would be a large, KPI-moving change interacting badly with the numpy/scipy numerics for
+  zero material benefit. Documents the existing compute-in-float / present-rounded policy.
+  Docs-only, KPI-neutral.
 - Gate the enum-only generation technologies (#474, ARCH-1): `tidal` / `hydro` /
   `geothermal` / `run_of_river` are recognised generation types for classification and
   aggregation but are backed by no resource model, so billing one previously produced a
