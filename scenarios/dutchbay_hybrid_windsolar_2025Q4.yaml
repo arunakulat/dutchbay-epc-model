@@ -538,7 +538,7 @@ expected_results:
   # fixed-tilt, pvlib-modelled P50 CF 0.179). The aep_reconciliation guard cross-checks
   # this against capacity_mw * capacity_factor (542.6 GWh), so a stale headline cannot creep in.
   net_aep_p50_gwh: 542.7   # wind 464.3 (post 2% over-prediction haircut) + solar 78.4 (pvlib P50)
-  net_aep_p90_gwh: 472.7   # wind 404.4 (post haircut) + solar 68.3 (P90/P50 ratio preserved; Dolphin 4 = true PV P90)
+  net_aep_p90_gwh: 475.1   # wind 404.4 (post haircut) + solar 70.7 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%; #469 dolphin 4c replaced the ratio-preserved placeholder). Reporting-only: bind_downside is false, so P90 does not bind debt/IRR.
   capacity_factor: 0.295502
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of

@@ -196,23 +196,51 @@ def build_solar_cashflow_export(
     dict (or the values it carries) into the scenario. Kept separate from the producer
     so this adapter — and its consumers — never import ``pvlib``.
 
+    For ``scenario="P50"`` the deterministic energy/CF are used. For ``"P75"``/``"P90"`` the
+    energy is pulled from ``result.exceedance`` (the P50/P75/P90 build-up) and the capacity
+    factor is recomputed as a decimal against the DC nameplate; this requires the result to
+    have been produced with ``compute_solar_aep(..., emit_exceedance=True)``.
+
     Args:
         result: A ``solar_resource.pv_producer.SolarAEPResult`` (duck-typed: needs
-            ``annual_energy_gwh``, ``capacity_factor`` and ``specific_yield_kwh_per_kwp``).
+            ``annual_energy_gwh``, ``capacity_factor``, ``specific_yield_kwh_per_kwp`` and,
+            for a non-P50 ``scenario``, ``exceedance``).
         dc_capacity_mw: The PV DC nameplate (MWp) the result was produced for — the
             ``SolarResourceConfig.dc_capacity_mw`` input, echoed for the identity check.
-        scenario: P-level label (the producer is deterministic P50 today; P75/P90 are a
-            downstream uncertainty step).
+        scenario: The exceedance level to export: ``"P50"`` (default), ``"P75"`` or ``"P90"``
+            (the 1-year P90).
         technology: The ``generation.technologies`` key this export targets.
 
     Returns:
         A plain dict validated-compatible with :class:`SolarCashflowExport`.
+
+    Raises:
+        ValueError: a non-P50 ``scenario`` is requested but ``result.exceedance`` is None.
     """
+    if scenario == "P50":
+        annual_energy_gwh = float(result.annual_energy_gwh)
+        capacity_factor = float(result.capacity_factor)
+    else:
+        exceedance = getattr(result, "exceedance", None)
+        if exceedance is None:
+            raise ValueError(
+                f"scenario={scenario!r} requested but result.exceedance is None — run "
+                "compute_solar_aep(..., emit_exceedance=True) to populate P75/P90."
+            )
+        energy_by_level = {
+            "P75": exceedance.p75_gwh,
+            "P90": exceedance.p90_1yr_gwh,
+        }
+        annual_energy_gwh = float(energy_by_level[scenario])
+        # Recompute CF as a DECIMAL against the DC nameplate for the chosen P-level
+        # (energy MWh / (MWp * 8760 h)) — the same basis as the P50 capacity_factor.
+        capacity_factor = annual_energy_gwh * 1.0e3 / (float(dc_capacity_mw) * 8760.0)
+
     return {
         "scenario": scenario,
         "technology": technology,
-        "annual_energy_gwh": float(result.annual_energy_gwh),
-        "capacity_factor": float(result.capacity_factor),
+        "annual_energy_gwh": annual_energy_gwh,
+        "capacity_factor": capacity_factor,
         "dc_capacity_mw": float(dc_capacity_mw),
         "specific_yield_kwh_per_kwp": float(result.specific_yield_kwh_per_kwp),
     }

@@ -382,6 +382,46 @@ class TestAdapterContract:
         assert model.capacity_factor == pytest.approx(_SOLAR_CF_MODELLED)
         assert model.dc_capacity_mw == _SOLAR_MW
 
+    def test_build_solar_cashflow_export_p75_p90_from_exceedance(self):
+        # A result carrying an exceedance build-up: P75/P90 exports pull that energy and
+        # recompute the decimal CF against the DC nameplate (energy MWh / (MWp * 8760)).
+        class _Exc:
+            p75_gwh = 74.36
+            p90_1yr_gwh = 70.72
+
+        class _Result:
+            annual_energy_gwh = _SOLAR_AEP_MODELLED
+            capacity_factor = _SOLAR_CF_MODELLED
+            specific_yield_kwh_per_kwp = 1568.2
+            exceedance = _Exc()
+
+        p90 = build_solar_cashflow_export(
+            _Result(), dc_capacity_mw=_SOLAR_MW, scenario="P90"
+        )
+        m90 = SolarCashflowExport.model_validate(p90)
+        assert m90.scenario == "P90"
+        assert m90.annual_energy_gwh == pytest.approx(70.72)
+        assert m90.capacity_factor == pytest.approx(70.72e3 / (_SOLAR_MW * 8760.0))
+        assert m90.capacity_factor < _SOLAR_CF_MODELLED  # P90 CF below P50
+
+        p75 = build_solar_cashflow_export(
+            _Result(), dc_capacity_mw=_SOLAR_MW, scenario="P75"
+        )
+        assert p75["annual_energy_gwh"] == pytest.approx(74.36)
+
+    def test_build_solar_cashflow_export_non_p50_requires_exceedance(self):
+        # Requesting P90 from a P50-only result (no exceedance) must fail loud.
+        class _Result:
+            annual_energy_gwh = _SOLAR_AEP_MODELLED
+            capacity_factor = _SOLAR_CF_MODELLED
+            specific_yield_kwh_per_kwp = 1568.2
+            exceedance = None
+
+        with pytest.raises(ValueError, match="exceedance is None|emit_exceedance"):
+            build_solar_cashflow_export(
+                _Result(), dc_capacity_mw=_SOLAR_MW, scenario="P90"
+            )
+
 
 # ---------------------------------------------------------------------------
 # 2. Engine invariant: the recomputed headline reconciles per-tech (±1%)

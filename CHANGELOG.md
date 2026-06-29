@@ -5,6 +5,20 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Solar PV P50/P75/P90 uncertainty + itemised loss chain (#469, SOLAR-2).** The solar
+  producer gained a real bankable uncertainty model mirroring the wind IEC 61400-15-2
+  build-up: a config-first `SolarUncertaintyBudget` (IEA-PVPS Task 13 / IEC 61724-1
+  categories) and `exceedance_levels_solar` (`solar_resource/exceedance.py`), sharing the
+  one normal-distribution z-table now in `analytics/core/exceedance.py` (wind re-imports it —
+  parity-tested, no fork). `compute_solar_aep` gained an optional `emit_exceedance` build-up
+  and an itemised, config-first loss taxonomy (`defaults.solar_resource.loss_taxonomy` +
+  `solar_resource/loss_model.py`, reusing the generic wind retention engine) that decomposes
+  the flat `system_loss_pct`. `build_solar_cashflow_export` can now emit P75/P90. All of this
+  is pvlib-free and additive (existing P50-only calls byte-identical). The hybrid scenario's
+  `net_aep_p90` is now MODELLED (475.1 GWh = wind 404.4 + solar 70.7-1yr) rather than a
+  ratio-preserved placeholder; this is reporting-only (`bind_downside` is false, so P90 does
+  not bind debt/IRR — financed KPIs unchanged). The financing-policy switch to bind P90 to
+  gearing is deliberately NOT included (a separate, KPI-moving decision).
 - **GWTF governance rule `DELIVERY-01` ("Dolphins, not whales").** Codified the
   delivery-cadence principle as a new "Delivery Cadence" theme in
   `go_with_the_flow_rules_v3_0_clean.csv`: manage and ship all work as small,
