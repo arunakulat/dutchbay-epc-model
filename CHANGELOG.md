@@ -1,17 +1,16 @@
 # Changelog
 
-## v0.2.0 – 2025-11-21
-- v14 CI baseline
-
 All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-Work merged since the v14.15.0 tag — through the current head (well beyond the
-PRs #220–#264 originally listed here; that range was stale). Grouped by theme; see
-`git log` / `gh pr view <n>` for per-PR detail. A version bump + tag and a
-de-duplication of the legacy version headers below remain open in #443 (a tag/release
-triggers `release-run.yml`, so the bump is a deliberate release-policy step).
+_Nothing yet._
+
+## v15.0.0 - 2026-06-29
+
+Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` range
+"#220–#264" was stale — this also includes the audit-remediation cluster #439–#445).
+Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
 - Coverage-gate honesty (#439): retired `pytest.ini` / `pytest.ci.ini` / `tox.ini`;
@@ -530,25 +529,6 @@ not opt in.
 
 
 
-## v0.3.1 - 2025-12-11
-
-- Sprint 10 – evaluation_v14 + Monte Carlo gateway hardened (CASPER & tail-risk green)
-
-
-
-## v14.2.1 - 2025-12-11
-
-- Fix Sprint 9 CASPER tail-risk integration
-
-- Add scenario_config_path parameter to fake_run_monte_carlo_analysis
-- Remove invalid success_rate constructor argument
-- Add raw_results with Monte Carlo samples for tail-risk analysis
-- Fix Monte Carlo config path in test_casper_v14_smoke_iteration1
-- All CASPER tail-risk tests now passing (335/345 total)
-- Coverage: 66.51% (above 55% threshold)
-
-
-
 ## v14.2.1 - 2025-12-11
 
 - Fix Sprint 9 CASPER tail-risk integration
@@ -574,12 +554,6 @@ not opt in.
 
 
 
-## v0.3.1 - 2025-12-10
-
-- Sprint 9 – CASPER tail-risk wiring (v14 MC snapshots + payload)
-
-
-
 ## v0.3.0 - 2025-12-09
 
 - Sprint 9: Complete Integration Analysis & Design (CASPER/GWTF Compliant)
@@ -589,24 +563,6 @@ not opt in.
 ## v0.3.x - 2025-12-08
 
 - Sprint 9 – v14 Monte Carlo front door + regression guard
-
-
-
-## v0.3.x - 2025-12-08
-
-- Sprint 9 – v14 Monte Carlo front door + regression guard
-
-
-
-## v0.3.0 - 2025-12-07
-
-- Sprint 8 – v14 lender pipeline hardened (tests green, coverage 59.82%)
-
-
-
-## v0.3.0 - 2025-12-07
-
-- Sprint 8 – v14 lender pipeline hardened (tests green, coverage 59.82%)
 
 
 
@@ -649,30 +605,6 @@ Status: Day 1 complete - ready for Day 2-3 validation phase
 
 
 
-## v2.6.0 - 2025-12-04
-
-- Sprint 8 - IRR ring-fence + v14 sensitivity API (mypy-clean core)
-
-
-
-## v2.5.2 - 2025-12-04
-
-- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
-
-
-
-## v2.5.2 - 2025-12-04
-
-- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
-
-
-
-## v2.5.2 - 2025-12-04
-
-- Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
-
-
-
 ## v2.5.2 - 2025-12-04
 
 - Sprint 8 – v14 equity + cashflow contracts + run_full_pipeline_v14 wiring
@@ -703,12 +635,6 @@ Status: Day 1 complete - ready for Day 2-3 validation phase
 
 
 
-## v1.0.0 - 2025-11-24
-
-- docs: Add comprehensive Thread Migration Package
-
-
-
 ## v0.2.3.1 - 2025-11-24
 
 - docs: Add Thread Migration Package suite for seamless AI context restoration
@@ -718,12 +644,6 @@ Status: Day 1 complete - ready for Day 2-3 validation phase
 ## v0.2.3 - 2025-11-23
 
 - ScenarioAnalytics batch + Excel export helpers hardening
-
-
-
-## v0.2.2 - 2025-11-23
-
-- IRR engine hardening + v14 KPI refactor (project NPV/IRR, DSCR sanitiser)
 
 
 
@@ -838,6 +758,9 @@ Status: Day 1 complete - ready for Day 2-3 validation phase
   modules while keeping CLI and pipeline smokes green.
 
 - TBD
+
+## v0.2.0 - 2025-11-21
+- v14 CI baseline
 
 ## [1.0.0] - Initial public baseline
 - CI: matrix (Ubuntu/Windows/macOS) + Python 3.10–3.12, workflow_dispatch, nightly, concurrency guard
