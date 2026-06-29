@@ -28,7 +28,10 @@ def test_accepts_committed_scenario() -> None:
 
 
 def test_accepts_canonical_aep_summary_mock() -> None:
-    p = confined_path("tests/mocks/aep_summary_dutchbay_10mw.json", must_exist=True)
+    # The production lender AEP summaries were promoted to scenarios/ (WIND-7, #447);
+    # tests/mocks/aep_summary_dutchbay.json remains a genuine test mock under the
+    # tests/mocks allowed root, which is what this confinement test exercises.
+    p = confined_path("tests/mocks/aep_summary_dutchbay.json", must_exist=True)
     assert p.is_file()
 
 

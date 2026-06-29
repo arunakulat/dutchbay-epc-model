@@ -138,6 +138,14 @@ def test_no_bankable_reference_is_noop() -> None:
     reconcile_capacity_factor_with_bankable_aep(cfg, "no-ref")  # must not raise
 
 
+def test_declared_but_missing_aep_summary_path_raises() -> None:
+    """WIND-7: a declared aep_summary_path that does not resolve must FAIL LOUD, not be
+    silently skipped (which would disarm the AEP<->CF reconciliation guard)."""
+    cfg = {"resource": {"aep_summary_path": "scenarios/does_not_exist_aep_summary.json"}}
+    with pytest.raises(AepReconciliationError, match="aep_summary_path"):
+        collect_bankable_net_aep_gwh(cfg)
+
+
 def test_missing_capacity_is_noop() -> None:
     cfg = {
         "expected_results": {"net_aep_p50_gwh": 133.1},

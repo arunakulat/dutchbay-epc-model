@@ -36,7 +36,7 @@ defaults:
   # in config, not a Python literal. Any caller-supplied config_path /
   # aep_summary_path that resolves outside these repo-relative roots is rejected
   # (see api/path_safety.confined_path). tests/mocks is included because the
-  # canonical lender scenario references tests/mocks/aep_summary_dutchbay_10mw.json.
+  # canonical lender scenario references scenarios/aep_summary_dutchbay_10mw.json.
   api:
     allowed_path_roots:
       - scenarios
