@@ -121,6 +121,17 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Finance tax-scope + dead-code (#483, FIN-1/2/4): (FIN-1) deleted the parallel
+  `finance/tax_v14.py` engine (a legacy `TaxCalculatorV14` wrapper with contradictory
+  silent defaults — corporate rate 0.30 / 15-yr SL depreciation — that contradicted the
+  canonical schema-strict `finance/cashflow_v14_tax.py`) plus the dead `finance/tax/`
+  re-export package and its smoke test; nothing in production imported any of it.
+  (FIN-2) removed the unused, unexported, self-contradictory `DEFAULT_TAX_CONFIG`
+  (its `loss_carryforward_years=25` disagreed with the real `TaxProfile` default of 0).
+  (FIN-4) documented the tax scope in the canonical engine's docstring: SSCL (2.5%) is
+  modelled as a revenue deduction; VAT (18%) is deliberately excluded as a recoverable
+  pass-through (cashflow-neutral to a BOO SPV), not a project P&L cost. KPI-neutral
+  (no live consumer; no cashflow/debt path touched).
 - Pipeline residuals (#489, PIPE-3/6): (PIPE-3) the FX spot cross-assert
   (`_assert_fx_spot_consistency`) — the one load-time integrity guard the in-memory
   service seam (`app.services.run_finance_case`, the web `/cases` + hybrid path) still

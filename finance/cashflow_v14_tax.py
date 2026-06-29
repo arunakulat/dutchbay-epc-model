@@ -1,7 +1,23 @@
 """Tax Profile Module for DutchBay v14 cashflow.
 
 Configuration-driven corporate tax, depreciation, loss carry-forward and
-interest withholding-tax handling for the v14 CFADS engine.
+interest withholding-tax handling for the v14 CFADS engine. This is the single
+canonical tax engine (the parallel ``finance/tax_v14.py`` wrapper, which carried
+contradictory silent defaults, was deleted in #483 / FIN-1).
+
+Tax scope — what the model includes vs excludes (Sri Lanka regime, #483 / FIN-4):
+
+* MODELLED: corporate income tax (CIT, 30%), straight-line depreciation with a
+  plant/civil split, tax-loss carry-forward (6-year SL window, vintage-tracked),
+  withholding tax on interest to non-residents (10%) and on dividends (15%, on the
+  equity path), and the Social Services Contribution Levy (SSCL, 2.5% of revenue —
+  booked as ``social_levy_lkr`` in the cashflow via ``statutory.social_services_levy_pct``).
+* EXCLUDED — VAT (18%): deliberately NOT modelled as a project P&L cost. VAT on a
+  BOO IPP's energy sales is a pass-through — output VAT is collected from the offtaker
+  and remitted, input VAT on capex/opex is recoverable — so at steady state it is
+  cashflow-neutral to the SPV and would only distort the lender economics if booked as
+  a cost. (Any genuine VAT timing/cash-lock effect during construction is a working-
+  capital refinement, not an operating-cashflow tax, and is out of scope here.)
 """
 
 from __future__ import annotations
@@ -15,22 +31,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 #: statutory carry-forward window (Sri Lanka: 6 years) and be preserved through
 #: tax-holiday years instead of being silently consumed.
 LossVintages = Tuple[Tuple[int, float], ...]
-
-
-DEFAULT_TAX_CONFIG = {
-    "corporate_tax_rate": 0.30,
-    "depreciation_method": "straight_line",
-    "depreciation_start_year": 1,
-    "depreciation_years": 15,
-    "enhanced_allowance_applies": False,
-    "enhanced_capital_allowance_pct": 1.0,
-    "loss_carryforward_years": 25,
-    "tax_holiday_start_year": 1,
-    "tax_holiday_years": 0,
-    "wht_on_interest_to_nonresidents": 0.0,
-    "wht_on_interest_enabled": False,
-    "wht_gross_up": False,
-}
 
 
 def _lookup_case_insensitive(section: Mapping[str, Any], key: str) -> Any:
@@ -141,10 +141,18 @@ class TaxConfig:
     wht_gross_up: bool
     interest_deductibility: bool = True
     # Optional post-2025-regime fields — default-absent → legacy single-class mode.
-    tax_holiday_route: str = "none"  # "none" | "sdp" (descriptive; tax_holiday_years drives calc)
-    plant_capex_share: Optional[float] = None  # set → split depreciation (plant vs civil)
-    plant_depreciation_years: Optional[int] = None  # SL Class 2 plant & machinery = 5 yr
-    civil_depreciation_years: Optional[int] = None  # SL Class 4 buildings/civils = 20 yr
+    tax_holiday_route: str = (
+        "none"  # "none" | "sdp" (descriptive; tax_holiday_years drives calc)
+    )
+    plant_capex_share: Optional[float] = (
+        None  # set → split depreciation (plant vs civil)
+    )
+    plant_depreciation_years: Optional[int] = (
+        None  # SL Class 2 plant & machinery = 5 yr
+    )
+    civil_depreciation_years: Optional[int] = (
+        None  # SL Class 4 buildings/civils = 20 yr
+    )
 
     def __post_init__(self) -> None:
         # enhanced_capital_allowance_pct is an explicit MULTIPLIER on the depreciable base
@@ -375,7 +383,10 @@ class DepreciationSchedule:
             total_capex * plant_capex_share, plant_useful_life, project_life, start_year
         )
         civil = DepreciationSchedule.build_straight_line(
-            total_capex * (1.0 - plant_capex_share), civil_useful_life, project_life, start_year
+            total_capex * (1.0 - plant_capex_share),
+            civil_useful_life,
+            project_life,
+            start_year,
         )
         annual_amounts = [
             p + c for p, c in zip(plant.annual_amounts, civil.annual_amounts)
