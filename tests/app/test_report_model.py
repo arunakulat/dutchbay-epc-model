@@ -197,6 +197,76 @@ def test_tornado_none_by_default() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Evidence register (#435 -> RPT-1)
+# --------------------------------------------------------------------------- #
+def test_evidence_register_projected_from_scenario_config() -> None:
+    scenario = {
+        "evidence_register": {
+            "entries": {
+                "capex": {
+                    "source": "SINOHYDRO EPC quote",
+                    "as_of": "2025-09",
+                    "tier": "A",
+                },
+                "tariff": {
+                    "source": "CEB SPPA",
+                    "as_of": "2025-06",
+                    "tier": "A",
+                    "note": "flat LKR",
+                },
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
+    )
+    assert ctx.evidence is not None
+    assert ctx.evidence.covered == 2
+    assert (
+        ctx.evidence.total > ctx.evidence.covered
+    )  # uncovered material assumptions remain
+    labels = {r.assumption for r in ctx.evidence.rows}
+    assert {"capex", "tariff"} <= labels
+    tariff = next(r for r in ctx.evidence.rows if r.assumption == "tariff")
+    assert (
+        tariff.source == "CEB SPPA" and tariff.tier == "A" and tariff.note == "flat LKR"
+    )
+    assert (
+        "capex" not in ctx.evidence.missing
+    )  # capex has evidence; not in the gap list
+
+
+def test_evidence_block_shows_gap_when_no_entries() -> None:
+    # A scenario with no evidence block still gets a block: 0 covered, the gap listed.
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, scenario_config={}
+    )
+    assert ctx.evidence is not None
+    assert ctx.evidence.covered == 0 and ctx.evidence.rows == []
+    assert len(ctx.evidence.missing) == ctx.evidence.total > 0
+
+
+def test_evidence_none_without_scenario_config() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.evidence is None
+
+
+def test_evidence_none_on_malformed_register() -> None:
+    # A structurally malformed entries container degrades to no section (not a 500).
+    scenario = {"evidence_register": {"entries": 42}}
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
+    )
+    assert ctx.evidence is None
+
+
+# --------------------------------------------------------------------------- #
 # Context assembly
 # --------------------------------------------------------------------------- #
 def test_build_context_basic_shape() -> None:
@@ -211,7 +281,9 @@ def test_build_context_basic_shape() -> None:
 
 
 def test_risk_register_projected_from_config() -> None:
-    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
     assert ctx.risk_register, "the default config seeds risks"
     # Rows are faithful passthroughs with a renderable severity.
     for row in ctx.risk_register:
@@ -230,15 +302,22 @@ def test_readiness_projected_from_scenario_config() -> None:
         }
     }
     ctx = build_report_context(
-        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, scenario_config=scenario
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
     )
-    assert {r.workstream for r in ctx.readiness} == {"environmental_social", "financing"}
+    assert {r.workstream for r in ctx.readiness} == {
+        "environmental_social",
+        "financing",
+    }
     assert ctx.overall_readiness == "red"  # worst declared
     assert all(r.status in {"green", "amber", "red"} for r in ctx.readiness)
 
 
 def test_readiness_empty_when_no_scenario_config() -> None:
-    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
     assert ctx.readiness == []
     assert ctx.overall_readiness is None
 
@@ -246,10 +325,16 @@ def test_readiness_empty_when_no_scenario_config() -> None:
 def test_risk_register_empty_when_config_has_none() -> None:
     cfg = ReportConfig(
         report=ReportMeta(
-            title="t", subtitle="s", organization="o", version="1.0",
-            confidentiality="c", disclaimer="d",
+            title="t",
+            subtitle="s",
+            organization="o",
+            version="1.0",
+            confidentiality="c",
+            disclaimer="d",
         ),
-        covenants=Covenants(min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4),
+        covenants=Covenants(
+            min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4
+        ),
         kpi_table=[],
     )  # no risk_register -> defaults to []
     ctx = build_report_context(
@@ -259,7 +344,9 @@ def test_risk_register_empty_when_config_has_none() -> None:
 
 
 def test_kpi_rows_formatted_in_config_order() -> None:
-    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
     by_key = {row.key: row for row in ctx.kpi_rows}
     assert by_key["project_irr"].display == "4.22%"
     assert by_key["min_dscr"].display == "1.30x"
@@ -276,7 +363,9 @@ def test_missing_kpi_is_skipped() -> None:
 
 
 def test_verdict_value_destructive() -> None:
-    ctx = build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
     v: Verdict = ctx.verdict
     assert v.project_viable is False
     assert v.equity_positive is False
@@ -333,7 +422,9 @@ def test_verdict_honors_engine_balloon_breach_over_report_ceiling() -> None:
         "balloon_covenant_breach": 1.0,  # ...the engine flagged a breach (vs scenario 10%)
     }
     v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
-    assert v.balloon_within_limit is False  # honors the engine, not the 40% report default
+    assert (
+        v.balloon_within_limit is False
+    )  # honors the engine, not the 40% report default
     assert any("BREACHES the modeled refinance-risk covenant" in n for n in v.notes)
     assert v.headline == "Not bankable — covenant breach at the modeled assumptions."
 
@@ -358,26 +449,49 @@ def test_equity_irr_note_reflects_irr_sign_not_npv_flag() -> None:
     equity-NPV value flag. A positive IRR below the hurdle (NPV<0) was falsely printed as
     'negative to sponsors'. The basecase (equity IRR ~+5.8%, below the ~12% equity hurdle,
     NPV<0) is the real-world example; the synthetic fixture below uses +2.42%. (Post the 5.9%
-    FX-drift re-baseline the canonical LENDER equity IRR is itself negative, ~-0.46%.)"""
+    FX-drift re-baseline the canonical LENDER equity IRR is itself negative, ~-0.46%.)
+    """
+
     def note(kpis):
         v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
         return next(n for n in v.notes if "Equity IRR" in n)
 
     # positive IRR, negative NPV (the basecase reality) -> NOT "negative"
-    pos_below = note({"project_irr": 0.05, "discount_rate_used": 0.078,
-                      "equity_irr": 0.0242, "equity_npv": -35_000_000.0, "min_dscr": 1.30})
+    pos_below = note(
+        {
+            "project_irr": 0.05,
+            "discount_rate_used": 0.078,
+            "equity_irr": 0.0242,
+            "equity_npv": -35_000_000.0,
+            "min_dscr": 1.30,
+        }
+    )
     assert "2.42%" in pos_below
     assert "positive but below the equity hurdle" in pos_below
     assert "negative" not in pos_below  # the bug: it used to say "negative to sponsors"
 
     # genuinely negative IRR -> "negative to sponsors"
-    neg = note({"project_irr": -0.03, "discount_rate_used": 0.078,
-                "equity_irr": -0.0862, "equity_npv": -43_000_000.0, "min_dscr": 1.30})
+    neg = note(
+        {
+            "project_irr": -0.03,
+            "discount_rate_used": 0.078,
+            "equity_irr": -0.0862,
+            "equity_npv": -43_000_000.0,
+            "min_dscr": 1.30,
+        }
+    )
     assert "negative to sponsors" in neg
 
     # positive IRR clearing the hurdle (NPV>0) -> "positive to sponsors"
-    pos_ok = note({"project_irr": 0.12, "discount_rate_used": 0.08,
-                   "equity_irr": 0.15, "equity_npv": 25_000_000.0, "min_dscr": 1.55})
+    pos_ok = note(
+        {
+            "project_irr": 0.12,
+            "discount_rate_used": 0.08,
+            "equity_irr": 0.15,
+            "equity_npv": 25_000_000.0,
+            "min_dscr": 1.55,
+        }
+    )
     assert "positive to sponsors" in pos_ok
 
 

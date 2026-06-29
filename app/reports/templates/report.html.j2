@@ -381,6 +381,40 @@
     {% endif %}
   </section>
 
+  {# 8b. Assumption evidence register — #435 / RPT-1 #}
+  {% if ctx.evidence %}
+  <section class="page">
+    <h2>Assumption Evidence Register</h2>
+    <p>Material assumptions with declared evidence:
+      <strong>{{ ctx.evidence.covered }} of {{ ctx.evidence.total }}</strong>.</p>
+    {% if ctx.evidence.rows %}
+    <table>
+      <thead>
+        <tr><th>Assumption</th><th>Source</th><th>As of</th><th>Tier</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.evidence.rows %}
+        <tr>
+          <td>{{ r.assumption }}</td>
+          <td>{{ r.source or "—" }}</td>
+          <td>{{ r.as_of or "—" }}</td>
+          <td>{{ r.tier or "—" }}</td>
+          <td>{{ r.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No source evidence was declared for the material assumptions in this
+      scenario.</p>
+    {% endif %}
+    {% if ctx.evidence.missing %}
+    <h3>Assumptions without declared evidence</h3>
+    <p class="muted">{{ ctx.evidence.missing | join(", ") }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 9. Audit manifest & methodology #}
   <section class="page">
     <h2>Audit Manifest &amp; Methodology</h2>
