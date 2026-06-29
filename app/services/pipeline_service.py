@@ -28,6 +28,7 @@ from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.run_manifest import build_run_manifest
 from solar_resource.cashflow_adapter import solar_export_to_scenario_patch
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
 
@@ -81,11 +82,23 @@ def run_finance_case(
     validate_development_readiness(guarded, "<inline>")
 
     modules = list(validation_modules) if validation_modules is not None else None
-    return run_v14_pipeline(
+    result = run_v14_pipeline(
         config=scenario,
         validation_mode=validation_mode,
         validation_modules=modules,
     )
+    # Stamp the auditable run manifest (resolved-config SHA-256 + engine version + commit)
+    # so this gateway's result is reproducible and tamper-evident (ICAEW posture), matching
+    # the run_full_pipeline_v14 CLI. The shared run_v14_pipeline does not stamp one, so the
+    # web API (/cases, /cases/report.*) and the integrated/hybrid seam (run_integrated_case,
+    # which routes through here on its patched config) would otherwise omit the manifest the
+    # CaseResult and report pack already expose. Idempotent: defer to a manifest the pipeline
+    # may stamp itself in future. Metadata only — no KPI is touched.
+    if isinstance(result, dict) and not result.get("run_manifest"):
+        result["run_manifest"] = build_run_manifest(
+            scenario, validation_mode=validation_mode
+        ).as_dict()
+    return result
 
 
 def run_integrated_case(
