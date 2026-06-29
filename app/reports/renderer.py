@@ -14,7 +14,14 @@ from typing import cast
 
 from jinja2 import Environment, FileSystemLoader
 
-from app.reports.report_model import ReportContext
+from app.reports.report_model import (
+    ReportContext,
+    fmt_gwh,
+    fmt_pct,
+    fmt_ratio_pct,
+    fmt_usd,
+    fmt_x,
+)
 
 #: Template directory shipped alongside this module.
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -32,12 +39,22 @@ def _environment() -> Environment:
     ``.j2`` extension would otherwise defeat ``select_autoescape``) so any
     user-supplied value — e.g. a site name — is HTML-escaped (no injection).
     """
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
         autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    # Finance-table formatters (None -> em-dash), kept in Python so the formatting is
+    # unit-tested rather than embedded as fragile inline Jinja (RPT-1).
+    env.globals.update(
+        fmt_usd=fmt_usd,
+        fmt_gwh=fmt_gwh,
+        fmt_x=fmt_x,
+        fmt_ratio_pct=fmt_ratio_pct,
+        fmt_pct=fmt_pct,
+    )
+    return env
 
 
 def render_report_html(context: ReportContext) -> str:

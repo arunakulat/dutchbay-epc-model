@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.development_readiness import build_readiness_report
+from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
@@ -46,6 +47,39 @@ def format_kpi_value(value: float, kind: KpiKind) -> str:
     if value < 0:
         return f"-${abs(value):,.0f}"
     return f"${value:,.0f}"
+
+
+#: Em-dash placeholder for an absent (None) value in the finance tables.
+_ABSENT = "—"
+
+
+def fmt_usd(value: Optional[float]) -> str:
+    """Whole-dollar display with an accounting-style sign (None -> em-dash)."""
+    if value is None:
+        return _ABSENT
+    if value < 0:
+        return f"-${abs(value):,.0f}"
+    return f"${value:,.0f}"
+
+
+def fmt_gwh(value: Optional[float]) -> str:
+    """GWh display to one decimal (None -> em-dash)."""
+    return _ABSENT if value is None else f"{value:,.1f} GWh"
+
+
+def fmt_x(value: Optional[float]) -> str:
+    """Multiple display, e.g. ``1.30x`` (None -> em-dash)."""
+    return _ABSENT if value is None else f"{value:.2f}x"
+
+
+def fmt_ratio_pct(value: Optional[float]) -> str:
+    """Display a RATIO as a percentage, e.g. ``0.332 -> 33.20%`` (None -> em-dash)."""
+    return _ABSENT if value is None else f"{value * 100:.2f}%"
+
+
+def fmt_pct(value: Optional[float]) -> str:
+    """Display an ALREADY-percentage number, e.g. ``13.39 -> 13.39%`` (None -> em-dash)."""
+    return _ABSENT if value is None else f"{value:.2f}%"
 
 
 class KpiRow(BaseModel):
@@ -119,6 +153,11 @@ class ReportContext(BaseModel):
     risk_register: List[RiskRow] = Field(default_factory=list)
     readiness: List[ReadinessRow] = Field(default_factory=list)
     overall_readiness: Optional[str] = None  # green | amber | red — worst declared status
+    #: Serialised finance blocks (production P50/P90, sources-and-uses, DSCR profile,
+    #: exec KPI callout) — RPT-1. None when the caller supplies no debt_result /
+    #: scenario_config (e.g. the legacy KPI-only report path), in which case those
+    #: quantitative sections are simply not rendered.
+    finance: Optional[FinanceReportBlocks] = None
     manifest: Dict[str, Any]
 
 
@@ -311,6 +350,22 @@ def _build_readiness(
     return rows, report.overall_status
 
 
+def _build_finance_blocks(
+    case_result: CaseResult,
+    scenario_config: Optional[Mapping[str, Any]],
+    debt_result: Optional[Mapping[str, Any]],
+) -> Optional[FinanceReportBlocks]:
+    """Serialise the quantitative finance blocks for the report, or None (RPT-1).
+
+    Returns None when either the scenario config or the debt result is absent — the
+    legacy KPI-only report path passes neither, so those sections stay unrendered
+    rather than showing empty tables.
+    """
+    if scenario_config is None or debt_result is None:
+        return None
+    return extract_finance_report_blocks(scenario_config, debt_result, case_result.kpis)
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -318,6 +373,7 @@ def build_report_context(
     inputs: Optional[WindFarmInputs] = None,
     config: Optional[ReportConfig] = None,
     scenario_config: Optional[Mapping[str, Any]] = None,
+    debt_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -331,8 +387,12 @@ def build_report_context(
         config: Presentation config; loaded from the committed default when
             omitted.
         scenario_config: The originating scenario config dict, used to surface the
-            development-readiness / E&S register (#C11). Optional — omitted by existing
-            callers, in which case no readiness section is rendered.
+            development-readiness / E&S register (#C11) and the production (P50/P90)
+            and CAPEX blocks (RPT-1). Optional — omitted by legacy callers, in which
+            case those sections are not rendered.
+        debt_result: The pipeline run's ``debt_result`` mapping, used for the
+            sources-and-uses and DSCR-profile sections (RPT-1). Optional; omitted by
+            legacy callers.
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
@@ -352,5 +412,6 @@ def build_report_context(
         risk_register=_build_risk_register(cfg.risk_register),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,
+        finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         manifest=dict(case_result.run_manifest or {}),
     )

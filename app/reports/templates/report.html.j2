@@ -110,6 +110,19 @@
     <h2>Executive Summary</h2>
     <div class="headline">{{ ctx.verdict.headline }}</div>
     <p>Pipeline status: <strong>{{ ctx.status }}</strong></p>
+    {% if ctx.finance %}
+    <table>
+      <thead><tr><th>Headline metric</th><th style="text-align:right;">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Project IRR</td><td class="num">{{ fmt_ratio_pct(ctx.finance.kpis.project_irr) }}</td></tr>
+        <tr><td>Equity IRR</td><td class="num">{{ fmt_ratio_pct(ctx.finance.kpis.equity_irr) }}</td></tr>
+        <tr><td>Project NPV</td><td class="num">{{ fmt_usd(ctx.finance.kpis.project_npv_usd) }}</td></tr>
+        <tr><td>Minimum DSCR</td><td class="num">{{ fmt_x(ctx.finance.kpis.min_dscr) }}</td></tr>
+        <tr><td>LLCR / PLCR</td><td class="num">{{ fmt_x(ctx.finance.kpis.llcr) }} / {{ fmt_x(ctx.finance.kpis.plcr) }}</td></tr>
+        <tr><td>Equity multiple</td><td class="num">{{ fmt_x(ctx.finance.kpis.equity_multiple) }}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
     <ul class="notes">
       {% for note in ctx.verdict.notes %}
       <li>{{ note }}</li>
@@ -133,6 +146,102 @@
     <p class="muted">No KPIs were available for this run.</p>
     {% endif %}
   </section>
+
+  {# 4b. Energy production (P50/P90) — RPT-1 #}
+  {% if ctx.finance %}
+  <section class="page">
+    <h2>Energy Production (P50 / P90)</h2>
+    <table>
+      <thead><tr><th>Production basis</th><th style="text-align:right;">Net AEP</th></tr></thead>
+      <tbody>
+        <tr><td>P50 (central estimate)</td><td class="num">{{ fmt_gwh(ctx.finance.aep.net_p50_gwh) }}</td></tr>
+        <tr><td>P75</td><td class="num">{{ fmt_gwh(ctx.finance.aep.net_p75_gwh) }}</td></tr>
+        <tr><td>P90 (1-year downside)</td><td class="num">{{ fmt_gwh(ctx.finance.aep.net_p90_gwh) }}</td></tr>
+        <tr><td>Gross AEP</td><td class="num">{{ fmt_gwh(ctx.finance.aep.gross_gwh) }}</td></tr>
+        <tr><td>Net capacity factor</td><td class="num">{{ fmt_ratio_pct(ctx.finance.aep.capacity_factor) }}</td></tr>
+      </tbody>
+    </table>
+    {% if ctx.finance.aep.source_id %}
+    <p class="muted">Resource basis: {{ ctx.finance.aep.source_id }}. Debt is sized on the
+      downside production case where the dual-DSCR sizer so binds.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 4c. Sources & Uses of funds — RPT-1 #}
+  {% if ctx.finance %}
+  <section class="page">
+    <h2>Sources &amp; Uses of Funds</h2>
+    <h3>Uses</h3>
+    <table>
+      <tbody>
+        <tr><td>CAPEX (EPC + development)</td><td class="num">{{ fmt_usd(ctx.finance.funding.capex_usd) }}</td></tr>
+        <tr><td>Interest during construction (IDC)</td><td class="num">{{ fmt_usd(ctx.finance.funding.idc_usd) }}</td></tr>
+        {% if ctx.finance.funding.initial_dsra_usd %}
+        <tr><td>DSRA funded at close</td><td class="num">{{ fmt_usd(ctx.finance.funding.initial_dsra_usd) }}</td></tr>
+        {% endif %}
+        <tr><td><strong>Total uses</strong></td><td class="num"><strong>{{ fmt_usd(ctx.finance.funding.uses_total_usd) }}</strong></td></tr>
+      </tbody>
+    </table>
+    <h3>Sources</h3>
+    <table>
+      <tbody>
+        <tr><td>Senior debt</td><td class="num">{{ fmt_usd(ctx.finance.funding.senior_debt_usd) }}</td></tr>
+        <tr><td>Sponsor equity</td><td class="num">{{ fmt_usd(ctx.finance.funding.equity_usd) }}</td></tr>
+        <tr><td><strong>Total sources</strong></td><td class="num"><strong>{{ fmt_usd(ctx.finance.funding.sources_total_usd) }}</strong></td></tr>
+      </tbody>
+    </table>
+    <p>Sources &amp; uses balance:
+      {% if ctx.finance.funding.balanced %}<span class="badge pass">Balanced</span>
+      {% elif ctx.finance.funding.balanced is none %}<span class="muted">not reported</span>
+      {% else %}<span class="badge fail">Imbalanced</span>{% endif %}
+    </p>
+    <h3>CAPEX benchmark</h3>
+    <p>{{ fmt_usd(ctx.finance.cost.capex_total_usd) }} total{% if ctx.finance.cost.capex_per_kw_usd %} &mdash;
+      {{ fmt_usd(ctx.finance.cost.capex_per_kw_usd) }}/kW{% if ctx.finance.cost.irena_benchmark_per_kw %} vs IRENA {{ fmt_usd(ctx.finance.cost.irena_benchmark_per_kw) }}/kW{% endif %}{% endif %}
+      {% if ctx.finance.cost.within_band is not none %}
+      {% if ctx.finance.cost.within_band %}<span class="badge pass">Within band</span>{% else %}<span class="badge fail">Outside band</span>{% endif %}
+      {% endif %}
+    </p>
+    {% if ctx.finance.cost.note %}<p class="muted">{{ ctx.finance.cost.note }}</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {# 4d. Debt structure & DSCR profile — RPT-1 #}
+  {% if ctx.finance %}
+  <section class="page">
+    <h2>Debt Structure &amp; DSCR Profile</h2>
+    <table>
+      <tbody>
+        <tr><td>Senior debt sized</td><td class="num">{{ fmt_usd(ctx.finance.debt.debt_total_usd) }}</td></tr>
+        <tr><td>Gearing</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.gearing) }}</td></tr>
+        <tr><td>Tenor (operating years)</td><td class="num">{{ ctx.finance.debt.tenor_years if ctx.finance.debt.tenor_years is not none else "—" }}</td></tr>
+        <tr><td>Average debt rate</td><td class="num">{{ fmt_pct(ctx.finance.debt.avg_debt_rate_pct) }}</td></tr>
+        <tr><td>Minimum / average DSCR</td><td class="num">{{ fmt_x(ctx.finance.debt.min_dscr) }} / {{ fmt_x(ctx.finance.debt.avg_dscr) }}</td></tr>
+        <tr><td>Balloon at maturity</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.balloon_pct) }} ({{ fmt_usd(ctx.finance.debt.balloon_remaining_usd) }})</td></tr>
+        {% if ctx.finance.debt.binding_constraint %}
+        <tr><td>Binding sizing constraint</td><td class="num">{{ ctx.finance.debt.binding_constraint }}{% if ctx.finance.debt.binding_production_case %} ({{ ctx.finance.debt.binding_production_case }}){% endif %}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% if ctx.finance.debt.schedule %}
+    <h3>Annual DSCR profile</h3>
+    <table>
+      <thead><tr><th>Year</th><th style="text-align:right;">DSCR</th><th style="text-align:right;">Debt outstanding</th><th style="text-align:right;">Debt service</th></tr></thead>
+      <tbody>
+        {% for r in ctx.finance.debt.schedule %}
+        <tr>
+          <td>{{ r.year }}</td>
+          <td class="num">{{ fmt_x(r.dscr) }}</td>
+          <td class="num">{{ fmt_usd(r.debt_outstanding_usd) }}</td>
+          <td class="num">{{ fmt_usd(r.debt_service_usd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
 
   {# 5. Covenant assessment #}
   <section class="page">
