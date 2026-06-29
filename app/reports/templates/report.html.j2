@@ -273,6 +273,36 @@
   </section>
   {% endif %}
 
+  {# 4f. Global sensitivity (Morris screening) — MC-1 #}
+  {% if ctx.global_sa and ctx.global_sa.drivers %}
+  <section class="page">
+    <h2>Global Sensitivity &mdash; Morris Screening</h2>
+    <p class="muted">Variance-aware global importance of each driver for the project
+      IRR (Morris elementary effects over {{ ctx.global_sa.n_runs }} model evaluations);
+      the global complement to the one-at-a-time tornado above. Drivers are ranked by
+      &mu;* (overall influence, interactions included); a high &sigma; flags a
+      non-linear / interactive effect.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">&mu;* (importance)</th>
+          <th style="text-align:right;">&sigma; (non-linearity)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in ctx.global_sa.drivers %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.mu_star) }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.sigma) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>

@@ -19,7 +19,6 @@ from analytics.evidence_register import EvidenceRegisterError, build_evidence_re
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
-from app.services.report_tornado import TornadoBlock
 from app.reports.report_config import (
     Covenants,
     KpiKind,
@@ -28,6 +27,8 @@ from app.reports.report_config import (
     RiskItem,
     load_report_config,
 )
+from app.services.report_global_sa import GlobalSABlock
+from app.services.report_tornado import TornadoBlock
 
 
 def format_kpi_value(value: float, kind: KpiKind) -> str:
@@ -173,7 +174,9 @@ class ReportContext(BaseModel):
     assumptions: List[AssumptionRow]
     risk_register: List[RiskRow] = Field(default_factory=list)
     readiness: List[ReadinessRow] = Field(default_factory=list)
-    overall_readiness: Optional[str] = None  # green | amber | red — worst declared status
+    overall_readiness: Optional[str] = (
+        None  # green | amber | red — worst declared status
+    )
     #: Serialised finance blocks (production P50/P90, sources-and-uses, DSCR profile,
     #: exec KPI callout) — RPT-1. None when the caller supplies no debt_result /
     #: scenario_config (e.g. the legacy KPI-only report path), in which case those
@@ -182,6 +185,9 @@ class ReportContext(BaseModel):
     #: One-at-a-time sensitivity tornado over the standard drivers (RPT-1). None when
     #: not supplied or when the (best-effort) sweep failed — the section is then omitted.
     tornado: Optional[TornadoBlock] = None
+    #: Global (Morris) sensitivity screening over the MC drivers (MC-1). None when not
+    #: supplied or the (best-effort) screening failed/has no drivers — section omitted.
+    global_sa: Optional[GlobalSABlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -328,12 +334,8 @@ def _build_assumptions(inputs: Optional[WindFarmInputs]) -> List[AssumptionRow]:
             display=f"LKR {inputs.ppa_price_lkr_per_kwh:g}/kWh",
         ),
         AssumptionRow(label="PPA term", display=f"{inputs.ppa_term_years} years"),
-        AssumptionRow(
-            label="Total CAPEX", display=f"${inputs.capex_total_usd:,.0f}"
-        ),
-        AssumptionRow(
-            label="Annual OPEX", display=f"${inputs.opex_annual_usd:,.0f}"
-        ),
+        AssumptionRow(label="Total CAPEX", display=f"${inputs.capex_total_usd:,.0f}"),
+        AssumptionRow(label="Annual OPEX", display=f"${inputs.opex_annual_usd:,.0f}"),
         AssumptionRow(
             label="FX (start)",
             display=f"LKR {inputs.fx_start_lkr_per_usd:g}/USD",
@@ -439,6 +441,7 @@ def build_report_context(
     scenario_config: Optional[Mapping[str, Any]] = None,
     debt_result: Optional[Mapping[str, Any]] = None,
     tornado: Optional[TornadoBlock] = None,
+    global_sa: Optional[GlobalSABlock] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -461,6 +464,9 @@ def build_report_context(
         tornado: A pre-computed sensitivity tornado (RPT-1). Computed upstream (it runs
             a multi-shock sweep) and passed in so this builder stays pure; omitted or
             ``None`` when the best-effort sweep was skipped or failed.
+        global_sa: A pre-computed global (Morris) sensitivity block (MC-1). Computed
+            upstream (it runs a multi-evaluation screening) and passed in so this builder
+            stays pure; ``None`` when the best-effort screening was skipped or failed.
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
@@ -472,7 +478,9 @@ def build_report_context(
         covenants=cfg.covenants,
         generated_at=generated_at,
         scenario_variant=case_result.scenario_variant,
-        site_name=inputs.site_name if inputs is not None else case_result.scenario_variant,
+        site_name=(
+            inputs.site_name if inputs is not None else case_result.scenario_variant
+        ),
         status=case_result.status,
         kpi_rows=_build_kpi_rows(case_result.kpis, cfg),
         verdict=_build_verdict(case_result.kpis, cfg.covenants),
@@ -482,6 +490,7 @@ def build_report_context(
         overall_readiness=overall_readiness,
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
+        global_sa=global_sa,
         evidence=_build_evidence(scenario_config),
         manifest=dict(case_result.run_manifest or {}),
     )
