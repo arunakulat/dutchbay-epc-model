@@ -1,10 +1,11 @@
 """Integration tests for BESS capacity-charge revenue in the v14 cashflow.
 
-Pins: (1) the standalone CEB BESS scenario runs and books a flat capacity charge with
-zero generation revenue; (2) a BESS folded onto the hybrid is additive and lifts the
-project IRR; (3) a scenario with no ``type: bess`` block carries exactly zero BESS
-revenue (byte-identical wind/solar behaviour). RUN+SHAPE is pinned, not the illustrative
-vintage economics (the capacity charge rate is a placeholder bid value).
+Pins: (1) the standalone CEB BESS scenario runs and books a capacity charge that FADES
+with MDSC state-of-health and is restored by a year-10 augmentation (#470d), with zero
+generation revenue; (2) a BESS folded onto the hybrid is additive and finances its capex
+(BESS-3); (3) a scenario with no ``type: bess`` block carries exactly zero BESS revenue
+(byte-identical wind/solar behaviour). RUN+SHAPE is pinned, not the illustrative vintage
+economics (the capacity charge rate is a placeholder bid value).
 """
 
 from __future__ import annotations
@@ -28,24 +29,45 @@ _LENDER = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 
 @pytest.mark.skipif(not _CEB.exists(), reason="CEB BESS scenario not present")
-def test_standalone_bess_books_flat_capacity_charge():
+def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
+    """The committed CEB scenario opts into MDSC fade (0.011/yr) + a year-10 cell
+    augmentation (#470d): the capacity charge is full in year 1 (SoH 1.0), DECLINES with
+    fade, then the year-10 top-up restores it to the full charge. Generation revenue stays
+    zero (storage-only). SHAPE is pinned, not the illustrative economics (the bid rate is a
+    placeholder); the KPI deltas are recorded in the PR/CHANGELOG."""
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_CEB), overrides={}, return_full_result=True
     )
     rows = out["annual_rows"]
     assert len(rows) == 15  # 15-year tender term
-    expected = 2_500_000 * 10 * 12  # R x power_mw x 12 (from the scenario)
-    for row in rows:
-        assert row["bess_revenue_lkr"] == pytest.approx(expected)
-        assert row["generation_revenue_lkr"] == pytest.approx(0.0)  # storage-only
-        assert row["revenue_lkr"] == pytest.approx(expected)
+    full_charge = 2_500_000 * 10 * 12  # R x power_mw x 12 (SoH 1.0, year 1)
+    assert rows[0]["bess_revenue_lkr"] == pytest.approx(
+        full_charge
+    )  # year 1 undiminished
+    assert rows[0]["revenue_lkr"] == pytest.approx(full_charge)
+    assert all(
+        r["generation_revenue_lkr"] == pytest.approx(0.0) for r in rows
+    )  # storage-only
+    # Fade BEFORE the augmentation: operating year 9 (index 8) is below year 1.
+    assert rows[8]["bess_revenue_lkr"] < full_charge
+    # Year-10 (index 9) cell augmentation: the capex lands in that year only, and RESTORES
+    # the charge back to the year-1 full level (SoH -> 1.0), then it re-fades.
+    assert rows[9]["bess_augmentation_capex_lkr"] > 0
+    assert rows[8]["bess_augmentation_capex_lkr"] == 0
+    assert rows[10]["bess_augmentation_capex_lkr"] == 0
+    assert rows[9]["bess_revenue_lkr"] == pytest.approx(full_charge)
+    assert rows[10]["bess_revenue_lkr"] < full_charge  # re-fades after the top-up
     kpis = out["kpis"]
     assert kpis["min_dscr"] > 0
     assert isinstance(kpis["project_irr"], float)  # runs end-to-end (debt/IRR resolve)
 
 
 @pytest.mark.skipif(not _NIGHTPEAK.exists(), reason="night-peak scenario not present")
-def test_energy_tariff_scenario_books_night_peak_revenue():
+def test_energy_tariff_scenario_books_fading_night_peak_revenue():
+    """The committed night-peak scenario opts into MDSC fade (0.005/yr, #470d): year 1 is
+    the full night-peak export (SoH 1.0) and it DECLINES monotonically over the 10-year
+    contract, with no mid-life augmentation. Generation revenue stays zero
+    (BESS-incremental)."""
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_NIGHTPEAK),
         overrides={},
@@ -53,15 +75,21 @@ def test_energy_tariff_scenario_books_night_peak_revenue():
     )
     rows = out["annual_rows"]
     assert len(rows) == 10  # 10-year night-peak contract term
-    expected = (
+    full_export = (
         40 * 1000 * 365 * 0.90 * 1.0 * 45.80
-    )  # energy_mwh×1000×cycles×RTE×avail×tariff
-    for row in rows:
-        assert row["bess_revenue_lkr"] == pytest.approx(expected)
-        assert row["generation_revenue_lkr"] == pytest.approx(0.0)  # BESS-incremental
+    )  # energy_mwh×1000×cycles×RTE×avail×tariff (SoH 1.0, year 1)
+    assert rows[0]["bess_revenue_lkr"] == pytest.approx(
+        full_export
+    )  # year 1 undiminished
+    assert all(
+        r["generation_revenue_lkr"] == pytest.approx(0.0) for r in rows
+    )  # BESS-incremental
+    # Fade: revenue declines monotonically over the term; no augmentation is modelled.
+    assert rows[-1]["bess_revenue_lkr"] < rows[0]["bess_revenue_lkr"]
+    assert all(r["bess_augmentation_capex_lkr"] == 0 for r in rows)
     assert (
         out["kpis"]["project_irr"] > 0
-    )  # the 45.80 LKR/kWh night-peak tariff is lucrative
+    )  # the 45.80 LKR/kWh night-peak tariff stays lucrative
 
 
 @pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")

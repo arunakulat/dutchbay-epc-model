@@ -30,6 +30,32 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **CEB BESS scenarios opted into MDSC state-of-health fade + augmentation (#470d, BESS-1/4).**
+  The two committed CEB battery scenarios now exercise the year-indexed degradation and
+  augmentation levers shipped KPI-neutral in #501/#502 (they previously booked a perfectly
+  FLAT charge). `scenarios/ceb_bess_10mw_capacity_charge.yaml` gains
+  `revenue.mdsc_fade_pct_annual: 0.011` (conservative-low LFP; field average is 2-3%/yr, so a
+  2-3%/yr downside sensitivity is recommended) and a year-10 cell `augmentation_schedule`
+  restoring SoH to nameplate. The augmentation capex is the HONEST SoH-gap cost, **not** a full
+  replacement: by operating year 10 SoH has faded to `(1-0.011)^9 = 0.9052` (a 9.475% / 3.79 MWh
+  shortfall), so replacing only the lost cells at a year-10 LFP unit price (~$120/kWh; NREL ATB
+  2024 / Lazard LCOS) is `0.09475 x 40,000 kWh x $120/kWh = $455,000` (the directional unit test
+  uses a deliberately-oversized $5M full-replacement stress amplitude, ~11x the honest top-up).
+  `scenarios/ceb_solar_bess_nightpeak_10mw.yaml` gains `revenue.mdsc_fade_pct_annual: 0.005`
+  (an optimistic / calendar-dominated bound for its shallow-DoD daily cycle; no augmentation over
+  the shorter 10-year term). **KPI impact** (these two illustrative scenarios only; the wind-only
+  lender case and the hybrid are untouched):
+  - CEB capacity-charge: project IRR 0.02098 -> 0.00615 (-148 bps), equity IRR -0.04182 ->
+    -0.03840 (+34 bps, *up* — the lower CFADS profile resizes the dual-DSCR debt down, de-levering
+    a structure whose 13.4% LKR debt was destroying equity value), min DSCR holds 1.30, LLCR
+    1.269 -> 1.345, project NPV -$2.05M -> -$2.33M. The year-10 augmentation costs ~254M LKR
+    (= $455k after ~10 years of 5.89%/yr LKR depreciation on the USD-priced cells — honest FX
+    erosion of an imported-cell cost).
+  - CEB night-peak: project IRR 0.09995 -> 0.09719 (-28 bps), equity IRR 0.09029 -> 0.08438
+    (-59 bps), min DSCR holds 1.30, project NPV +$0.395M -> +$0.312M.
+
+  `tests/finance/test_bess_scenario.py` re-pinned from flat-revenue to the fade-then-augment
+  shape (RUN+SHAPE pinned, not the illustrative bid economics, per the file's convention).
 - **Solar P50 re-baselined to the pvlib-modelled CF for the hybrid lender case (#469).**
   `scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml` now bills solar off the pvlib-MODELLED
   P50 capacity factor (`generation.technologies.solar.capacity_factor` 0.20 -> 0.179, -10.5%)

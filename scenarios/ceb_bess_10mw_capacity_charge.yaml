@@ -56,6 +56,24 @@ generation:
         contract_years: 15      # paid flat for the 15-year term, no escalation
         availability_factor: 1.0   # 1.0 = meets the >=97% monthly availability guarantee
         dispatchable_ratio: 1.0    # ADSC/MDSC (<=1); 1.0 = BESS augmented/sized to hold MDSC
+        # MDSC state-of-health fade (#470d): the BESS loses usable capacity over the tender
+        # life, so the capacity charge it can hold declines year-over-year (revenue is
+        # R x power x 12 x ... x soh(t)). 0.011/yr (~1.1%) is a conservative-LOW LFP estimate
+        # for a 1-cycle/day, moderate-DoD, thermally-managed system — field LFP averages
+        # 2-3%/yr, so carry a 2-3%/yr downside sensitivity. The fade is NET of the static MDSC
+        # reservation, which dispatchable_ratio carries separately (no double-count).
+        mdsc_fade_pct_annual: 0.011
+        # Year-10 cell augmentation restoring SoH to nameplate (restore_to_soh: 1.0). HONEST
+        # SoH-gap cost, NOT a full replacement: by operating year 10 SoH has faded to
+        # (1-0.011)^9 = 0.9052, a 9.475% shortfall = 3.79 MWh of the 40 MWh pack. Replacing only
+        # the lost cells at a year-10 LFP unit price (~$120/kWh; NREL ATB 2024 / Lazard LCOS):
+        #   0.09475 x 40,000 kWh x $120/kWh = ~$455,000.
+        # (The directional unit test injects $5M = a full-replacement stress amplitude, ~11x the
+        # honest top-up; the committed scenario uses the marginal cell-replacement cost.)
+        augmentation_schedule:
+          - year: 10
+            capex_usd: 455000
+            restore_to_soh: 1.0
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TARIFF — storage-only: zero generation revenue (all revenue is the capacity charge)

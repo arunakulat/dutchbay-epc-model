@@ -52,6 +52,12 @@ generation:
         round_trip_efficiency: 0.90  # AC-AC; exported energy = stored x RTE
         availability_factor: 1.0
         contract_years: 10         # the scheme's 10-year BESS contract term
+        # MDSC state-of-health fade (#470d): the night-peak export energy declines as the pack
+        # degrades over the 10-year contract. 0.005/yr (~0.5%) is an OPTIMISTIC / calendar-
+        # dominated bound for a shallow-DoD daily cycle; a daily-cycling LFP at deeper DoD would
+        # fade faster (~0.010-0.015/yr), so treat 0.005 as the best-case edge. No mid-life
+        # augmentation is modelled over the shorter 10-year term.
+        mdsc_fade_pct_annual: 0.005
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TARIFF — generation tariff is 0: this scenario models only the BESS night-peak
