@@ -20,6 +20,7 @@ from .cashflow_v14_production import (
     _calculate_statutory_deductions,
     calculate_net_production_for_year,
     resolve_tech_generation_specs,
+    validate_storage_capex_declared,
 )
 from .cashflow_v14_tax import (
     DepreciationSchedule,
@@ -144,6 +145,11 @@ def _prepare_cashflow_context(
     # availability-based Capacity Charge (LKR/MW/month), NOT generation revenue.
     # None when no BESS block is present -> wind/solar runs stay byte-identical.
     params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
+
+    # BESS-3 / CESSPIT: reject a storage asset booked as free revenue — a revenue-
+    # producing type:bess block must declare a positive capex_usd (it must then be
+    # included in the financed capex.usd_total; full per-tech coupling is ARCH-3).
+    validate_storage_capex_declared(config)
 
     # Tax-loss carry-forward ledger (vintage-aware): the live per-year builders thread
     # this through calculate_single_year_cfads so losses expire after the statutory

@@ -70,10 +70,15 @@ def test_no_bess_block_means_zero_bess_revenue():
 
 
 @pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
-def test_bess_is_additive_on_the_hybrid():
+def test_bess_revenue_without_capex_is_rejected_on_the_hybrid():
+    """BESS-3: a type:bess block booking revenue with NO capex_usd must FAIL LOUD.
+
+    The prior test asserted that folding such a battery onto the hybrid *lifted* project
+    IRR — i.e. a ~$25M asset booked as pure free revenue (the cost-side twin of the
+    CF x tariff fallacy). The reconciliation guard now rejects it.
+    """
     cfg = load_scenario_config(_HYBRID)
-    base = evaluate_with_overrides(raw_config=cfg, overrides={})
-    bess = {
+    bess_no_capex = {
         "type": "bess",
         "power_mw": 50.0,
         "energy_mwh": 200.0,
@@ -83,15 +88,48 @@ def test_bess_is_additive_on_the_hybrid():
             "contract_years": 15,
         },
     }
+    # The finance guard raises ValueError; the pipeline wraps it in PipelineValidationError.
+    with pytest.raises(Exception, match="capex"):
+        evaluate_with_overrides(
+            raw_config=cfg,
+            overrides={"generation.technologies.bess_1": bess_no_capex},
+            return_full_result=True,
+        )
+
+
+@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
+def test_bess_with_capex_is_additive_and_financed_on_the_hybrid():
+    """A BESS folded onto the hybrid books its capacity charge AND finances its capex:
+    revenue is additive, and per-tech capex_usd must roll up to capex.usd_total so the
+    battery's cost is actually financed (BESS-3), not free."""
+    cfg = load_scenario_config(_HYBRID)
+    bess_capex = 25_000_000  # 200 MWh x ~$125/kWh turnkey
     out = evaluate_with_overrides(
         raw_config=cfg,
-        overrides={"generation.technologies.bess_1": bess},
+        overrides={
+            "generation.technologies.bess_1": {
+                "type": "bess",
+                "power_mw": 50.0,
+                "energy_mwh": 200.0,
+                "capex_usd": bess_capex,
+                "revenue": {
+                    "model": "capacity_charge",
+                    "capacity_charge_lkr_per_mw_month": 5_000_000,
+                    "contract_years": 15,
+                },
+            },
+            # The financed total MUST grow by the BESS capex: wind 159.6M + solar 40M
+            # (== the hybrid's base usd_total 199.6M) + BESS 25M.
+            "capex.usd_total": 199_600_000 + bess_capex,
+        },
         return_full_result=True,
     )
-    # the capacity charge is added on top of generation revenue and lifts project IRR
+    # Capacity charge is booked additively on top of generation revenue ...
     assert out["annual_rows"][0]["bess_revenue_lkr"] == pytest.approx(5_000_000 * 50 * 12)
     assert out["annual_rows"][0]["generation_revenue_lkr"] > 0
-    assert out["kpis"]["project_irr"] > base["project_irr"]
+    # ... and the run reconciles with the BESS capex financed, so project IRR reflects
+    # real economics (a finite number), not a free-revenue uplift.
+    assert math.isfinite(out["kpis"]["project_irr"])
 
 
 def test_type_bess_is_not_double_counted_as_generation():
