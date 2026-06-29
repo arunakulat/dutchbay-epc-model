@@ -41,6 +41,7 @@ from solar_resource.exceedance import (
     SolarUncertaintyBudget,
     exceedance_levels_solar,
 )
+from solar_resource.loss_model import compute_net_solar_loss_factor
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,10 @@ class SolarResourceConfig:
         dc_capacity_mw: DC nameplate (MWp). tilt_deg / azimuth_deg: array geometry
             (azimuth 180 = equator-facing in the N hemisphere). dc_ac_ratio: DC/AC (ILR).
         gamma_pdc_per_c: PVWatts power temp-coefficient (1/°C, negative).
-        system_loss_pct: flat soiling/wiring/mismatch/availability derate (% of AC).
+        system_loss_pct: flat soiling/wiring/mismatch/availability derate (% of AC). Ignored
+            when ``losses`` is provided.
+        losses: optional itemised gross->net loss stack (``resource.solar.losses``) that
+            REPLACES the flat ``system_loss_pct`` when present (config-first taxonomy).
         ambient_temp_c, wind_speed_ms: Faiman cell-temperature drivers (annual means).
         inverter_eff_nom: PVWatts nominal inverter efficiency.
     """
@@ -96,6 +100,11 @@ class SolarResourceConfig:
     wind_speed_ms: float = 2.0
     inverter_eff_nom: float = 0.96
     reference_year: int = _REFERENCE_YEAR
+    #: Optional itemised gross->net loss stack (``resource.solar.losses``). When present it
+    #: REPLACES the flat ``system_loss_pct`` derate, resolved through the config-first solar
+    #: loss taxonomy (solar_resource.loss_model). ``hash=False`` keeps the frozen dataclass
+    #: hashable despite the mapping field.
+    losses: Optional[Mapping[str, Any]] = field(default=None, hash=False)
 
     def __post_init__(self) -> None:
         if self.dc_capacity_mw <= 0:
@@ -122,6 +131,11 @@ class SolarResourceConfig:
             raise ValueError(f"azimuth_deg must be in [0, 360]; got {self.azimuth_deg}")
         if not 0.0 <= self.tilt_deg <= 90.0:
             raise ValueError(f"tilt_deg must be in [0, 90]; got {self.tilt_deg}")
+        if self.losses is not None and not isinstance(self.losses, Mapping):
+            raise TypeError(
+                "losses must be a mapping of *_pct components; got "
+                f"{type(self.losses).__name__}"
+            )
 
     @classmethod
     def from_scenario(cls, scenario: Mapping[str, Any]) -> "SolarResourceConfig":
@@ -150,6 +164,12 @@ class SolarResourceConfig:
             raise KeyError(
                 f"resource.solar has unknown field(s): {sorted(unknown)}; "
                 f"valid keys: {sorted(known)}"
+            )
+        # CESSPIT: a flat derate AND an itemised stack is ambiguous intent — pick one.
+        if "losses" in block and "system_loss_pct" in block:
+            raise KeyError(
+                "resource.solar declares BOTH system_loss_pct and losses, which is "
+                "ambiguous; use one — the flat system_loss_pct OR the itemised losses block."
             )
         return cls(**block)
 
@@ -195,7 +215,9 @@ def compute_solar_aep(
     Pipeline (all pvlib): clear-sky GHI (Ineichen) for a reference year → scale to the
     measured ``annual_ghi_kwh_m2`` → DISC decomposition to DNI → closure DHI → Hay-Davies
     plane-of-array transposition → Faiman cell temperature → PVWatts DC → PVWatts inverter
-    (clipped at the AC nameplate) → flat system-loss derate → annual AC energy.
+    (clipped at the AC nameplate) → system-loss derate → annual AC energy. The derate is the
+    flat ``system_loss_pct`` by default, or the itemised ``resource.solar.losses`` chain
+    (solar_resource.loss_model) when the config carries one.
 
     The deterministic P50 above is unchanged by the keyword-only arguments, which only add
     an OPTIONAL P50/P75/P90 exceedance build-up on top (mirroring the wind producer):
@@ -276,7 +298,12 @@ def compute_solar_aep(
         eta_inv_nom=config.inverter_eff_nom,
     ).clip(upper=ac_nameplate_w)
 
-    loss_factor = 1.0 - config.system_loss_pct / 100.0
+    # Itemised loss chain (config-first) when resource.solar.losses is declared, else the
+    # flat system_loss_pct derate (byte-identical to the prior behaviour when absent).
+    if config.losses is not None:
+        loss_factor = compute_net_solar_loss_factor(config.losses)
+    else:
+        loss_factor = 1.0 - config.system_loss_pct / 100.0
     annual_ac_wh = float(ac_power.sum()) * loss_factor
     annual_energy_gwh = annual_ac_wh / 1.0e9
     capacity_factor = annual_ac_wh / (pdc0_w * _HOURS_PER_YEAR)

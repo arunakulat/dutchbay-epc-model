@@ -208,6 +208,35 @@ defaults:
       availability_pct: uptime
       grid_availability_pct: uptime
 
+  # ═══════════════════════════════════════════════════════════════════
+  # SOLAR RESOURCE — loss taxonomy (only consumed solar_resource sub-block)
+  # ═══════════════════════════════════════════════════════════════════
+
+  solar_resource:
+    # Loss taxonomy (IEC 61724-1 / PVsyst DC->AC categories). Classifies every *_pct key
+    # a scenario may put in `resource.solar.losses` as a `reduction` (retention = 1 - pct/100)
+    # or an `uptime` (retention = pct/100). Consumed by solar_resource.loss_model — a
+    # loss-shaped key NOT listed here fails loud rather than being silently dropped. This
+    # itemises the flat `resource.solar.system_loss_pct` derate into named components; it
+    # deliberately EXCLUDES what the pvlib chain already models (inverter efficiency/clipping,
+    # cell-temperature) and recurring module degradation (the finance degradation schedule),
+    # to avoid double-counting (light-induced degradation `lid_pct` is the one-time year-1
+    # term and is fine here).
+    loss_taxonomy:
+      soiling_pct: reduction
+      dc_wiring_loss_pct: reduction
+      ac_wiring_loss_pct: reduction
+      mismatch_loss_pct: reduction
+      connection_loss_pct: reduction
+      nameplate_loss_pct: reduction
+      lid_pct: reduction
+      transformer_loss_pct: reduction
+      transmission_loss_pct: reduction
+      curtailment_pct: reduction
+      other_pct: reduction
+      availability_pct: uptime
+      grid_availability_pct: uptime
+
 # ═══════════════════════════════════════════════════════════════════
 # VERSION CONTROL
 # ═══════════════════════════════════════════════════════════════════
