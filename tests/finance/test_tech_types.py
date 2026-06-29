@@ -8,6 +8,7 @@ an explicit `type` aggregates everywhere automatically, retiring the old hardcod
 
 from __future__ import annotations
 
+import pytest
 
 from finance.tech_types import (
     GENERATION_TYPES,
@@ -27,7 +28,11 @@ def test_registry_contents() -> None:
 
 
 def test_classifiers_are_case_insensitive_and_strict() -> None:
-    assert is_generation_type("wind") and is_generation_type("Tidal") and is_generation_type("SOLAR")
+    assert (
+        is_generation_type("wind")
+        and is_generation_type("Tidal")
+        and is_generation_type("SOLAR")
+    )
     assert is_storage_type("bess") and is_storage_type("BESS")
     # unknown / absent types are neither (callers fall back to key-sniffing)
     assert not is_generation_type("bess")
@@ -79,16 +84,38 @@ def test_type_overrides_keysniff_for_storage() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# The cashflow includes a tidal generation tech (and skips storage)
+# ARCH-1 (#474): an explicitly-typed ENUM-ONLY generation tech (e.g. tidal) is GATED —
+# it has no validated resource model, so billing its flat CF requires an explicit opt-in.
 # --------------------------------------------------------------------------- #
-def test_cashflow_resolves_tidal_as_generation() -> None:
+def test_unmodelled_tidal_is_gated_without_optin() -> None:
+    from finance.cashflow_v14_production import resolve_tech_generation_specs
+
+    cfg = _three_tech_cfg()  # tidal declared type: tidal, no opt-in
+    params = {
+        "capacity_mw": 180.0,
+        "capacity_factor": (150 * 0.339 + 30 * 0.40) / 180.0,
+        "degradation": 0.005,
+    }
+    with pytest.raises(ValueError, match="UNMODELLED|allow_unvalidated_flat_cf"):
+        resolve_tech_generation_specs(cfg, params)
+
+
+def test_unmodelled_tidal_bills_only_with_explicit_optin() -> None:
     from finance.cashflow_v14_production import resolve_tech_generation_specs
 
     cfg = _three_tech_cfg()
+    # Deliberately opt into the experimental flat-CF proxy for the tidal block.
+    cfg["generation"]["technologies"]["tidal"]["allow_unvalidated_flat_cf"] = True
     # project headline reconciles: (150*0.339 + 30*0.40)/180 = 0.349166...
-    params = {"capacity_mw": 180.0, "capacity_factor": (150 * 0.339 + 30 * 0.40) / 180.0,
-              "degradation": 0.005}
+    params = {
+        "capacity_mw": 180.0,
+        "capacity_factor": (150 * 0.339 + 30 * 0.40) / 180.0,
+        "degradation": 0.005,
+    }
     specs = resolve_tech_generation_specs(cfg, params)
     assert specs is not None
     techs = {s["technology"] for s in specs}
-    assert techs == {"wind", "tidal"}  # tidal aggregated; battery (storage) skipped
+    assert techs == {
+        "wind",
+        "tidal",
+    }  # tidal aggregated (opt-in); battery (storage) skipped
