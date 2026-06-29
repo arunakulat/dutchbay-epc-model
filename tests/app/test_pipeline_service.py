@@ -135,6 +135,19 @@ def test_run_finance_case_rejects_stale_capacity_vs_bankable_aep() -> None:
         run_finance_case(scen)
 
 
+def test_run_finance_case_rejects_inconsistent_fx_spot() -> None:
+    """PIPE-3 (#489): the FX spot cross-assert now fires over the in-memory seam too — a
+    scenario whose fx.rates.lkr_per_usd disagrees with fx.start_lkr_per_usd is rejected
+    (the #236 stale-FX class), not silently run into a self-inconsistent lender pack.
+    """
+    scen = _scenario()
+    scen["fx"] = dict(scen["fx"])
+    scen["fx"]["rates"] = dict(scen["fx"].get("rates", {}))
+    scen["fx"]["rates"]["lkr_per_usd"] = 290.0  # diverges from fx.start_lkr_per_usd
+    with pytest.raises(ValueError, match="inconsistent LKR/USD spot"):
+        run_finance_case(scen)
+
+
 # --------------------------------------------------------------------------- #
 # run_integrated_case
 # --------------------------------------------------------------------------- #

@@ -29,6 +29,7 @@ from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
+from analytics.scenario_loader import _assert_fx_spot_consistency
 from solar_resource.cashflow_adapter import solar_export_to_scenario_patch
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
 
@@ -80,6 +81,14 @@ def run_finance_case(
     enforce_aep_provenance(guarded, "<inline>")
     validate_evidence_register(guarded, "<inline>")
     validate_development_readiness(guarded, "<inline>")
+    # PIPE-3 (#489): the FX spot cross-assert is a load-time guard too, and was the one
+    # integrity detector this seam still skipped — so a web/notebook caller could submit a
+    # scenario whose fx.rates.lkr_per_usd, fx.start_lkr_per_usd and fx.source.pinned_rate
+    # disagree and get a self-inconsistent lender pack (the #236 stale-FX class) silently.
+    # Run it here too (api.pipeline_api already does at its boundary). It is a no-op unless
+    # two spot keys disagree, so committed scenarios are byte-identical; MC perturbation
+    # paths do not route through this seam (they evaluate in-memory dicts directly).
+    _assert_fx_spot_consistency(guarded, "<inline>")
 
     modules = list(validation_modules) if validation_modules is not None else None
     result = run_v14_pipeline(

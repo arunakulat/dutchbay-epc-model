@@ -59,9 +59,6 @@ try:
 except ImportError:
     RISK_AVAILABLE = False
 
-# Scenario comparison (builtin - no external dependency)
-SCENARIO_COMPARISON_AVAILABLE = True
-
 logger = logging.getLogger(__name__)
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -70,7 +67,14 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyticsEnablement(BaseModel):
-    """Tracks which analytics modules are enabled and available."""
+    """Tracks which analytics modules are enabled and available.
+
+    Only the analytics this wrapper actually computes are tracked: returns and risk.
+    The former sensitivity / Monte-Carlo / scenario-comparison toggles were dead stubs
+    (they silently returned None — real sensitivity lives in ``analytics.sensitivity``
+    and the report tornado, real MC in ``analytics.mc``); they were removed in #472/#489
+    (PIPE-6) rather than duplicated here.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -79,87 +83,6 @@ class AnalyticsEnablement(BaseModel):
 
     risk_enabled: bool = Field(default=False)
     risk_available: bool = Field(default=False)
-
-    sensitivity_enabled: bool = Field(default=False)
-    sensitivity_available: bool = Field(default=False)
-
-    monte_carlo_enabled: bool = Field(default=False)
-    monte_carlo_available: bool = Field(default=False)
-
-    scenario_comparison_enabled: bool = Field(default=False)
-    scenario_comparison_available: bool = Field(default=True)
-
-
-class SensitivityPoint(BaseModel):
-    """Single sensitivity analysis data point."""
-
-    model_config = ConfigDict(frozen=True)
-
-    parameter: str = Field(description="Parameter name")
-    variation_pct: float = Field(description="% change from base")
-    project_npv: float = Field(description="Resulting project NPV")
-    project_irr: Optional[float] = Field(default=None, description="Resulting IRR")
-    min_dscr: float = Field(description="Minimum DSCR")
-
-
-class SensitivityAnalysisResult(BaseModel):
-    """Sensitivity analysis (tornado chart data)."""
-
-    model_config = ConfigDict(frozen=True)
-
-    parameters_tested: List[str] = Field(description="Parameters swept")
-    sensitivity_points: List[SensitivityPoint] = Field(
-        description="All data points"
-    )
-    base_npv: float = Field(description="Base case NPV")
-    base_irr: Optional[float] = Field(default=None, description="Base case IRR")
-    base_dscr: float = Field(description="Base case min DSCR")
-
-    # Tornado ranking (by NPV impact)
-    npv_impact_ranking: List[tuple[str, float]] = Field(
-        description="Parameters ranked by NPV sensitivity"
-    )
-
-
-class ScenarioComparisonResult(BaseModel):
-    """Comparison of multiple scenarios (base/optimistic/pessimistic)."""
-
-    model_config = ConfigDict(frozen=True)
-
-    scenario_names: List[str] = Field(description="Scenario labels")
-    project_npvs: List[float] = Field(description="Project NPVs by scenario")
-    project_irrs: List[Optional[float]] = Field(description="Project IRRs")
-    equity_npvs: List[float] = Field(description="Equity NPVs")
-    equity_irrs: List[Optional[float]] = Field(description="Equity IRRs")
-    min_dscrs: List[float] = Field(description="Min DSCRs")
-
-    # Summary statistics
-    npv_range: float = Field(description="Max NPV - Min NPV")
-    irr_range: float = Field(description="Max IRR - Min IRR")
-
-
-class MonteCarloResult(BaseModel):
-    """Monte Carlo simulation results."""
-
-    model_config = ConfigDict(frozen=True)
-
-    iterations: int = Field(ge=1000, description="Number of MC iterations")
-    project_npv_mean: float = Field(description="Mean NPV")
-    project_npv_std: float = Field(ge=0.0, description="Std dev NPV")
-    project_npv_p10: float = Field(description="10th percentile NPV")
-    project_npv_p50: float = Field(description="50th percentile (median) NPV")
-    project_npv_p90: float = Field(description="90th percentile NPV")
-
-    project_irr_mean: Optional[float] = Field(default=None, description="Mean IRR")
-    project_irr_std: Optional[float] = Field(default=None, description="Std dev IRR")
-
-    # Full distribution (optional - can be large)
-    npv_distribution: Optional[List[float]] = Field(
-        default=None, description="Full NPV samples"
-    )
-    irr_distribution: Optional[List[float]] = Field(
-        default=None, description="Full IRR samples"
-    )
 
 
 class EnhancedAnalyticsResult(BaseModel):
@@ -171,9 +94,7 @@ class EnhancedAnalyticsResult(BaseModel):
     base_result: Dict[str, Any] = Field(description="Full base pipeline result")
 
     # Analytics enablement status
-    analytics_enabled: AnalyticsEnablement = Field(
-        description="Which analytics ran"
-    )
+    analytics_enabled: AnalyticsEnablement = Field(description="Which analytics ran")
 
     # Optional analytics results
     returns_analysis: Optional[AllReturns] = Field(
@@ -181,15 +102,6 @@ class EnhancedAnalyticsResult(BaseModel):
     )
     risk_analysis: Optional[Dict[str, Any]] = Field(
         default=None, description="VaR/CVaR/tail risk"
-    )
-    sensitivity_analysis: Optional[SensitivityAnalysisResult] = Field(
-        default=None, description="Tornado chart data"
-    )
-    monte_carlo_analysis: Optional[MonteCarloResult] = Field(
-        default=None, description="Monte Carlo simulation"
-    )
-    scenario_comparison: Optional[ScenarioComparisonResult] = Field(
-        default=None, description="Multi-scenario comparison"
     )
 
 
@@ -281,8 +193,12 @@ def _calculate_risk_analysis(
         constraints = config.get("constraints", {})
         dscr_cov = float(constraints.get("min_dscr_covenant", 1.0))
         risk_config = RiskConfig(
-            confidence_level=float(config.get("risk", {}).get("confidence_level", 0.95)),
-            target_return=float(config.get("returns", {}).get("equity_discount_rate", 0.0)),
+            confidence_level=float(
+                config.get("risk", {}).get("confidence_level", 0.95)
+            ),
+            target_return=float(
+                config.get("returns", {}).get("equity_discount_rate", 0.0)
+            ),
             min_dscr=dscr_cov,
             min_llcr=float(constraints.get("min_llcr_covenant", dscr_cov)),
             min_plcr=float(constraints.get("min_plcr_covenant", dscr_cov)),
@@ -316,55 +232,6 @@ def _calculate_risk_analysis(
         return None
 
 
-def _calculate_sensitivity_analysis(
-    config_path: str | Path,
-    base_result: Dict[str, Any],
-) -> Optional[SensitivityAnalysisResult]:
-    """Calculate sensitivity analysis (tornado chart).
-
-    NOTE: This is a STUB - full implementation requires re-running pipeline
-    with parameter variations.
-    """
-    logger.warning(
-        "Sensitivity analysis requires full pipeline re-runs with parameter sweeps. "
-        "This is a stub implementation - returning None."
-    )
-    return None
-
-
-def _calculate_monte_carlo(
-    config_path: str | Path,
-    base_result: Dict[str, Any],
-    iterations: int = 10000,
-) -> Optional[MonteCarloResult]:
-    """Calculate Monte Carlo simulation.
-
-    NOTE: This is a STUB - full implementation requires stochastic parameter
-    sampling and repeated pipeline runs.
-    """
-    logger.warning(
-        "Monte Carlo simulation requires stochastic parameter sampling "
-        "and repeated pipeline runs. This is a stub implementation - returning None."
-    )
-    return None
-
-
-def _calculate_scenario_comparison(
-    config_path: str | Path,
-    base_result: Dict[str, Any],
-) -> Optional[ScenarioComparisonResult]:
-    """Compare multiple scenarios (base/optimistic/pessimistic).
-
-    NOTE: This is a STUB - full implementation requires loading and running
-    multiple scenario files.
-    """
-    logger.warning(
-        "Scenario comparison requires loading multiple scenario configs. "
-        "This is a stub implementation - returning None."
-    )
-    return None
-
-
 # ═════════════════════════════════════════════════════════════════════════════
 # MAIN ENHANCED PIPELINE FUNCTION
 # ═════════════════════════════════════════════════════════════════════════════
@@ -378,11 +245,6 @@ def run_v14_pipeline_with_analytics(
     # Analytics enablement flags
     enable_returns: bool = False,
     enable_risk: bool = False,
-    enable_sensitivity: bool = False,
-    enable_monte_carlo: bool = False,
-    enable_scenario_comparison: bool = False,
-    # Analytics parameters
-    monte_carlo_iterations: int = 10000,
 ) -> Dict[str, Any]:
     """Run V14 pipeline with optional analytics modules.
 
@@ -403,14 +265,6 @@ def run_v14_pipeline_with_analytics(
         Enable returns analysis (IRR/NPV/MIRR).
     enable_risk : bool, default False
         Enable risk metrics (VaR/CVaR/tail risk).
-    enable_sensitivity : bool, default False
-        Enable sensitivity analysis (tornado charts).
-    enable_monte_carlo : bool, default False
-        Enable Monte Carlo simulation.
-    enable_scenario_comparison : bool, default False
-        Enable multi-scenario comparison.
-    monte_carlo_iterations : int, default 10000
-        Number of MC iterations (if enabled).
 
     Returns
     -------
@@ -454,7 +308,9 @@ def run_v14_pipeline_with_analytics(
     # analytics consume (annual_rows / debt_result / kpis). This wrapper used to
     # import the *wind* run_v14_pipeline, whose result lacks these keys, so the
     # returns/risk analytics silently always returned None.
-    missing = [k for k in ("annual_rows", "debt_result", "kpis") if k not in base_result]
+    missing = [
+        k for k in ("annual_rows", "debt_result", "kpis") if k not in base_result
+    ]
     if missing:
         raise RuntimeError(
             f"Base pipeline result is missing finance keys {missing}; "
@@ -483,23 +339,6 @@ def run_v14_pipeline_with_analytics(
         logger.info("Calculating risk analysis...")
         risk_analysis = _calculate_risk_analysis(base_result, cfg)
 
-    sensitivity_analysis = None
-    if enable_sensitivity:
-        logger.info("Calculating sensitivity analysis...")
-        sensitivity_analysis = _calculate_sensitivity_analysis(config_path, base_result)
-
-    monte_carlo_analysis = None
-    if enable_monte_carlo:
-        logger.info("Running Monte Carlo simulation (%d iterations)...", monte_carlo_iterations)
-        monte_carlo_analysis = _calculate_monte_carlo(
-            config_path, base_result, iterations=monte_carlo_iterations
-        )
-
-    scenario_comparison = None
-    if enable_scenario_comparison:
-        logger.info("Comparing scenarios...")
-        scenario_comparison = _calculate_scenario_comparison(config_path, base_result)
-
     # ──────────────────────────────────────────────────────────────────────────
     # 3. Package analytics result
     # ──────────────────────────────────────────────────────────────────────────
@@ -509,12 +348,6 @@ def run_v14_pipeline_with_analytics(
         returns_available=RETURNS_AVAILABLE,
         risk_enabled=enable_risk,
         risk_available=RISK_AVAILABLE,
-        sensitivity_enabled=enable_sensitivity,
-        sensitivity_available=False,  # Stub only
-        monte_carlo_enabled=enable_monte_carlo,
-        monte_carlo_available=False,  # Stub only
-        scenario_comparison_enabled=enable_scenario_comparison,
-        scenario_comparison_available=SCENARIO_COMPARISON_AVAILABLE,
     )
 
     analytics_result = EnhancedAnalyticsResult(
@@ -522,17 +355,12 @@ def run_v14_pipeline_with_analytics(
         analytics_enabled=analytics_enabled,
         returns_analysis=returns_analysis,
         risk_analysis=risk_analysis,
-        sensitivity_analysis=sensitivity_analysis,
-        monte_carlo_analysis=monte_carlo_analysis,
-        scenario_comparison=scenario_comparison,
     )
 
     logger.info(
-        "Analytics pipeline complete: returns=%s, risk=%s, sensitivity=%s, MC=%s",
+        "Analytics pipeline complete: returns=%s, risk=%s",
         "✓" if returns_analysis else "✗",
         "✓" if risk_analysis else "✗",
-        "✓" if sensitivity_analysis else "✗",
-        "✓" if monte_carlo_analysis else "✗",
     )
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -554,7 +382,4 @@ __all__ = [
     # Contracts
     "EnhancedAnalyticsResult",
     "AnalyticsEnablement",
-    "SensitivityAnalysisResult",
-    "MonteCarloResult",
-    "ScenarioComparisonResult",
 ]
