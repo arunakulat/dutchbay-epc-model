@@ -4,6 +4,17 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- **GWTF governance rule `DELIVERY-01` ("Dolphins, not whales").** Codified the
+  delivery-cadence principle as a new "Delivery Cadence" theme in
+  `go_with_the_flow_rules_v3_0_clean.csv`: manage and ship all work as small,
+  complete, frequently-surfacing increments (SMACs) rather than one large,
+  long-submerged "whale" effort. It is the overarching philosophy that the
+  code-level Dolphin Strategy (`REFACTOR-01..04`) implements for refactoring,
+  generalised to all work (features, audits, docs, migrations). Inserted ahead of
+  `REFACTOR-01`; ruleset now 62 rules (README count updated). Governance/docs-only,
+  KPI-neutral.
+
 ### Changed
 - **Coverage-hardening + `pipeline_v14` consolidation (#456, audit finding `QUAL-9`).**
   Added `solar_resource` to the coverage gate (`.coveragerc` source + the CI `--cov`
