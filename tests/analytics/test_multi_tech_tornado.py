@@ -296,6 +296,7 @@ def test_bess_with_revenue_lever_is_swept_alongside_generation(hybrid_config):
     techs = dict(cfg["generation"]["technologies"])
     techs["bess_1"] = {
         "type": "bess", "power_mw": 50.0, "energy_mwh": 200.0,
+        "capex_usd": 25_000_000,  # BESS-3: a revenue-producing bess must declare capex
         "revenue": {"model": "capacity_charge",
                     "capacity_charge_lkr_per_mw_month": 5_000_000, "contract_years": 15},
     }

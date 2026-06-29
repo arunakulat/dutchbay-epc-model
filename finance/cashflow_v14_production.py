@@ -33,6 +33,39 @@ from .tech_types import is_storage_type
 logger = logging.getLogger(__name__)
 
 
+def validate_storage_capex_declared(config: Dict[str, Any]) -> None:
+    """CESSPIT / BESS-3: a revenue-producing ``type: bess`` block must declare a positive
+    ``capex_usd`` — a storage asset is not free revenue.
+
+    This blocks the specific footgun the audit found: a battery folded onto a hybrid as a
+    pure revenue override (no capex) that lifts project IRR for nothing. The modeller must
+    still include the BESS capex in the financed ``capex.usd_total`` to finance it —
+    per-tech ``capex_usd`` remains reporting-only by design (the ``capex.usd_total`` is the
+    single authoritative financed total, deliberately decoupled so Monte-Carlo/sensitivity
+    can perturb it). Coupling per-tech capex/opex into the financed total is tracked
+    separately as ARCH-3.
+    """
+    generation = config.get("generation")
+    techs = generation.get("technologies") if isinstance(generation, dict) else None
+    if not isinstance(techs, dict):
+        return
+    for name, block in techs.items():
+        if not isinstance(block, dict):
+            continue
+        if is_storage_type(block.get("type")) and isinstance(block.get("revenue"), dict):
+            try:
+                capex_usd: Optional[float] = float(block.get("capex_usd"))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                capex_usd = None
+            if capex_usd is None or capex_usd <= 0.0:
+                raise ValueError(
+                    f"generation.technologies['{name}'] is a revenue-producing type:bess "
+                    "block but declares no positive capex_usd. A storage asset is not free "
+                    "revenue — declare its capex_usd and include it in capex.usd_total "
+                    "(BESS-3)."
+                )
+
+
 def _load_degradation_config() -> Dict[str, Any]:
     """Load the degradation profile config from ``config/defaults.yaml``.
 
