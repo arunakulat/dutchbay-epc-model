@@ -28,6 +28,7 @@ from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from solar_resource.cashflow_adapter import solar_export_to_scenario_patch
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
 
 #: Default lender-grade validation modules. ``None`` validates all registered
@@ -89,31 +90,58 @@ def run_finance_case(
 
 def run_integrated_case(
     scenario: Mapping[str, Any],
-    wind_export: Mapping[str, Any],
+    wind_export: Mapping[str, Any] | None = None,
     *,
+    solar_export: Mapping[str, Any] | None = None,
     scenario_name: str = "P75",
     adapter_mode: AdapterMode = "fill_if_absent",
     tolerance_pct: float = 0.5,
+    solar_scenario_name: str = "P50",
+    solar_adapter_mode: AdapterMode = "fill_if_absent",
+    solar_tolerance_pct: float = 0.5,
+    solar_technology: str = "solar",
     validation_mode: str = "strict",
     validation_modules: Sequence[str] | None = DEFAULT_VALIDATION_MODULES,
 ) -> dict[str, Any]:
-    """Apply a frozen wind export to the scenario, then run finance.
+    """Apply a frozen wind and/or solar export to the scenario, then run finance.
 
-    Bridges a wind-resource export (validated against ``WindCashflowExport`` at
-    the boundary) into the scenario's ``resource.wind`` block via the
-    drift-checked adapter, then runs the finance pipeline on the **patched**
-    scenario. Pure in-memory; neither ``scenario`` nor ``wind_export`` is mutated
-    (the adapter deep-copies).
+    Bridges frozen resource exports into the scenario via the drift-checked
+    adapters, then runs the finance pipeline on the **patched** scenario. Pure
+    in-memory; neither ``scenario`` nor either export is mutated (each adapter
+    deep-copies). At least one of ``wind_export`` / ``solar_export`` must be
+    supplied — for a plain scenario call :func:`run_finance_case` directly.
+
+    The two exports patch *different* parts of the scenario, mirroring how each
+    technology bills the cashflow:
+
+    * ``wind_export`` (the output of ``WindPipeline.export_for_cashflow_model``)
+      writes the project-level ``project.capacity_factor`` — the wind-only
+      headline. Use it for a wind-only scenario.
+    * ``solar_export`` (the output of
+      ``solar_resource.cashflow_adapter.build_solar_cashflow_export``) writes the
+      per-tech ``generation.technologies.<tech>`` block and re-blends the project
+      headline. Use it for a hybrid — the declared per-tech wind stays, solar is
+      overwritten, and ``project.capacity_factor`` re-blends.
+
+    Both adapters are pvlib/PyWake-free (they consume frozen dicts), so this seam
+    never pulls a resource toolchain into the finance path. Passing *both* a
+    wind_export and a solar_export to a hybrid is a misuse — the wind adapter
+    would clobber the blended headline with the wind-only capacity; pass only the
+    solar_export for a hybrid.
 
     Args:
         scenario: A full v14 scenario mapping. Not mutated.
-        wind_export: A wind-resource export dict (the output of
-            ``WindPipeline.export_for_cashflow_model``).
-        scenario_name: P-level guard — must match ``wind_export['scenario']``.
-        adapter_mode: ``"overwrite"`` | ``"fill_if_absent"`` (default) |
-            ``"validate_only"``.
-        tolerance_pct: Acceptable symmetric drift (percent) before the adapter
-            raises in the fill/validate modes.
+        wind_export: A wind-resource export dict, or ``None`` to skip wind.
+        solar_export: A solar-resource export dict, or ``None`` to skip solar.
+        scenario_name: P-level guard for the wind export.
+        adapter_mode: Wind adapter mode (``overwrite`` | ``fill_if_absent`` |
+            ``validate_only``).
+        tolerance_pct: Wind adapter drift tolerance (percent).
+        solar_scenario_name: P-level guard for the solar export (default ``P50`` —
+            the producer is deterministic P50 today).
+        solar_adapter_mode: Solar adapter mode.
+        solar_tolerance_pct: Solar adapter drift tolerance (percent).
+        solar_technology: ``generation.technologies`` key the solar export targets.
         validation_mode: ``"strict"`` (default) or ``"off"``.
         validation_modules: As ``run_finance_case``.
 
@@ -121,19 +149,40 @@ def run_integrated_case(
         The canonical pipeline result dict (see ``run_finance_case``).
 
     Raises:
-        wind_resource.cashflow_adapter.WindAdapterDriftError: A present scenario
-            value disagrees with the wind export beyond ``tolerance_pct``.
-        ValueError: ``scenario_name`` does not match the export's P-level.
-        pydantic.ValidationError: The wind export fails schema validation.
+        ValueError: Neither export supplied, or a ``scenario_name`` does not match
+            its export's P-level.
+        wind_resource.cashflow_adapter.WindAdapterDriftError: Wind drift beyond
+            ``tolerance_pct``.
+        solar_resource.cashflow_adapter.SolarAdapterDriftError: Solar drift beyond
+            ``solar_tolerance_pct`` (or a per-tech capacity-identity mismatch).
+        pydantic.ValidationError: An export fails schema validation.
         analytics.schema_guard.ConfigValidationError: As ``run_finance_case``.
     """
-    patched = wind_export_to_scenario_patch(
-        wind_export,
-        scenario,
-        scenario_name=scenario_name,
-        adapter_mode=adapter_mode,
-        tolerance_pct=tolerance_pct,
-    )
+    if wind_export is None and solar_export is None:
+        raise ValueError(
+            "run_integrated_case requires a wind_export and/or a solar_export; "
+            "for a plain scenario with no frozen resource export, call "
+            "run_finance_case instead."
+        )
+
+    patched: Mapping[str, Any] = scenario
+    if wind_export is not None:
+        patched = wind_export_to_scenario_patch(
+            wind_export,
+            patched,
+            scenario_name=scenario_name,
+            adapter_mode=adapter_mode,
+            tolerance_pct=tolerance_pct,
+        )
+    if solar_export is not None:
+        patched = solar_export_to_scenario_patch(
+            solar_export,
+            patched,
+            scenario_name=solar_scenario_name,
+            adapter_mode=solar_adapter_mode,
+            tolerance_pct=solar_tolerance_pct,
+            technology=solar_technology,
+        )
     return run_finance_case(
         patched,
         validation_mode=validation_mode,
