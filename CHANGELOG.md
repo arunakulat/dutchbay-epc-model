@@ -16,6 +16,19 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Solar P50 re-baselined to the pvlib-modelled CF for the hybrid lender case (#469).**
+  `scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml` now bills solar off the pvlib-MODELLED
+  P50 capacity factor (`generation.technologies.solar.capacity_factor` 0.20 -> 0.179, -10.5%)
+  produced by `solar_resource.pv_producer`, replacing the prior declared 0.20. The blended
+  headline `project.capacity_factor` re-blends to 0.295502, the bankable references
+  (`expected_results`, `scenarios/aep_summary_dutchbay_hybrid.json`) drop solar to 78.4 GWh
+  net P50 (combined 542.7 GWh), and the Monte-Carlo capacity-factor band recenters on the
+  new base. **KPI impact** (hybrid scenario only): project IRR 0.02162 -> 0.01958 (-20 bps),
+  equity IRR -0.0576 -> -0.0612, project NPV -$87.60M -> -$89.78M, CFADS $242.00M -> $237.78M
+  (-1.7%); min DSCR holds at 1.30 (debt sculpted to the target). Solar AEP share 15.9% ->
+  14.4%. `tests/finance/test_hybrid_scenario.py` re-pinned. The solar P90 preserves the prior
+  P90/P50 ratio pending the dedicated PV P50/P90 step (#469 dolphin 4); the wind-only
+  lendercase is unaffected. Delivered behind the frozen-export adapter from #494 (dolphin 1).
 - **Coverage-hardening + `pipeline_v14` consolidation (#456, audit finding `QUAL-9`).**
   Added `solar_resource` to the coverage gate (`.coveragerc` source + the CI `--cov`
   flags + `make` `COV`); the floor still holds at ~97% (`solar_resource` measures 100%
