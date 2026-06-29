@@ -17,7 +17,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from analytics.pipeline_v14 import run_v14_pipeline
+# Canonical pipeline (#456): reads the finance result contract (kpis / debt_result /
+# annual_rows), produced by pipeline_v14_enhanced — the legacy wind-only pipeline_v14
+# never returned those keys (it was folded onto enhanced and retired).
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
 # Configure logging
 logging.basicConfig(
@@ -123,13 +126,10 @@ def main():
     logger.info("Starting complete analysis for: %s", scenario_path)
     
     try:
-        # Run full pipeline with all modules enabled
-        # NB: analytics.pipeline_v14.run_v14_pipeline takes only
-        # (config, validation_mode, validation_modules). The historical
-        # allow_fx_degradation=True kwarg was never accepted by this entrypoint,
-        # so every invocation raised TypeError and was swallowed by the except
-        # below — i.e. this runner never actually produced output. Dropping the
-        # invalid kwarg restores the intended behaviour (mypy [call-arg] caught it).
+        # Run the canonical finance pipeline with the default modules enabled.
+        # Calls analytics.pipeline_v14_enhanced.run_v14_pipeline (#456): the legacy
+        # wind-only pipeline_v14 this script used to import never produced the
+        # finance keys read below (kpis / debt_result / annual_rows).
         results = run_v14_pipeline(
             config=scenario_path,
             validation_mode="strict",

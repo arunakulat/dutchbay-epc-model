@@ -199,7 +199,8 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
 
     clearsky = loc.get_clearsky(times, model="ineichen")
     clearsky_ghi_annual_kwh = float(clearsky["ghi"].sum()) / 1000.0
-    if clearsky_ghi_annual_kwh <= 0:
+    # Defensive guard: pvlib clear-sky is always positive for a valid site.
+    if clearsky_ghi_annual_kwh <= 0:  # pragma: no cover
         raise RuntimeError("Clear-sky GHI computed as non-positive — check site/timezone.")
     # Scale the clear-sky shape so its annual GHI equals the measured site total (the
     # clear-sky index). A sunny tropical site lands near ~0.8.
@@ -246,7 +247,8 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
     specific_yield = annual_ac_wh / (config.dc_capacity_mw * 1.0e6)
     poa_annual_kwh = float(poa.sum()) / 1000.0
 
-    if not math.isfinite(capacity_factor) or capacity_factor <= 0:
+    # Defensive guard: valid PV inputs always yield a finite positive CF.
+    if not math.isfinite(capacity_factor) or capacity_factor <= 0:  # pragma: no cover
         raise RuntimeError(
             f"Solar AEP produced a non-positive/NaN capacity factor ({capacity_factor}); "
             "check the resource.solar inputs."

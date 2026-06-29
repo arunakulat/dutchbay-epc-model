@@ -334,7 +334,6 @@ def test_gateway_and_pipeline_modules_are_exempt() -> None:
     modules themselves (which are *supposed* to import finance/pipeline).
     """
     assert _is_exempt("analytics/evaluation_v14.py")
-    assert _is_exempt("analytics/pipeline_v14.py")
     assert _is_exempt("analytics/pipeline_v14_enhanced.py")
     # A normal analytics module is NOT exempt.
     assert not _is_exempt("analytics/scenario_analytics.py")

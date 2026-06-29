@@ -18,10 +18,13 @@ analytics.pipeline_v14_enhanced.run_v14_pipeline   ← THE canonical pipeline
    (an alias of run_v14_pipeline_enhanced)
 ```
 
-**`analytics/pipeline_v14_enhanced.py` is the canonical orchestrator.** The
-legacy `analytics/pipeline_v14.py` is a **wind-only** pipeline with a *different*
-output contract and is **not** canonical — do not wire new work to it. (The
-analytics wrapper was routed off it in #286.)
+**`analytics/pipeline_v14_enhanced.py` is the canonical orchestrator** (it exposes
+`run_v14_pipeline` as an alias of `run_v14_pipeline_enhanced`). The legacy wind-only
+`analytics/pipeline_v14.py` was retired in #456: the engine was routed off it in #286,
+and its two remaining script consumers (`scripts/export_to_excel.py`,
+`scripts/legacy_runners/run_complete_analysis_fixed.py`) were already reading the
+enhanced finance contract (`annual_rows` / `debt_result` / `kpis`), so they were folded
+onto `pipeline_v14_enhanced` and the legacy module was deleted.
 
 For sensitivity / Monte-Carlo / programmatic / API callers, the canonical
 gateway is **`analytics.evaluate_scenario.evaluate_with_overrides(base_config_path,
@@ -183,8 +186,8 @@ different surface.
 - **CESSPIT / CCCDIR / CASPER**: config-first (no hardcoded constants), always-strict
   validation (no `strict=False` bypass in production), clean typed interfaces,
   graceful optional-dep failure.
-- **Test coverage**: the five engine packages (`analytics`, `finance`,
-  `wind_resource`, `api`, `app`) are gated at ≥95% via `--cov-fail-under=95` in CI
+- **Test coverage**: the six engine packages (`analytics`, `finance`,
+  `wind_resource`, `api`, `app`, `solar_resource`) are gated at ≥95% via `--cov-fail-under=95` in CI
   and `make test` (currently ~97%, 2,683 tests). See the README for the enforcement
   detail (#439).
 - **Auditability**: every run is stamped with a `run_manifest` (config hash,

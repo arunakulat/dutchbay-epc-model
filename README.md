@@ -75,7 +75,7 @@ solar_resource/               # pvlib solar producer (hybrid multi-tech; optiona
 api/                          # FastAPI endpoints (pipeline, sensitivity)
 app/                          # Web service, jobs, report rendering, Streamlit dashboard
 
-# Coverage gate spans finance + analytics + wind_resource + api + app (>=95%, .coveragerc).
+# Coverage gate spans finance + analytics + wind_resource + api + app + solar_resource (>=95%, .coveragerc).
 
 scenarios/                    # Scenario configuration files
   ├── dutchbay_lendercase_2025Q4.yaml   # Canonical lender case
@@ -151,15 +151,15 @@ flake8 analytics/ finance/
 black --check analytics/ finance/
 isort --check-only analytics/ finance/
 
-# Testing with coverage (the 5 engine packages CI gates at >=95%)
-pytest --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov-report=html
+# Testing with coverage (the 6 engine packages CI gates at >=95%)
+pytest --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov=solar_resource --cov-report=html
 ```
 
 ### CI/CD Pipeline
 
 - **Quick Smoke**: CLI + core analytics (fast feedback)
 - **Full Regression**: Complete v14 pipeline + coverage
-- **Coverage**: the five engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`; untestable CLI/viz/worker infra excluded via `.coveragerc`) are gated at **≥95%**. The **`--cov-fail-under=95`** floor is enforced where the full suite actually runs — the CI test step (`.github/workflows/test-suite.yml`) and `make test` — so coverage cannot silently regress. (As of #439 `pytest.ini`/`pytest.ci.ini`/`tox.ini` were retired; `pyproject.toml` `[tool.pytest.ini_options]` is the single pytest config and `.coveragerc` the single coverage config.)
+- **Coverage**: the six engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`, `solar_resource`; untestable CLI/viz/worker infra excluded via `.coveragerc`) are gated at **≥95%**. The **`--cov-fail-under=95`** floor is enforced where the full suite actually runs — the CI test step (`.github/workflows/test-suite.yml`) and `make test` — so coverage cannot silently regress. (As of #439 `pytest.ini`/`pytest.ci.ini`/`tox.ini` were retired; `pyproject.toml` `[tool.pytest.ini_options]` is the single pytest config and `.coveragerc` the single coverage config.)
 - **FX Schema**: Strict enforcement (mapping-only, no scalars)
 
 ---

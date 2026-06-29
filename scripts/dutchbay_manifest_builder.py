@@ -233,7 +233,7 @@ def print_console_summary(manifest: Dict[str, List[Dict[str, Any]]]) -> None:
 
     critical_files = [
         "run_full_pipeline_v14.py",
-        "analytics/pipeline_v14.py",
+        "analytics/pipeline_v14_enhanced.py",
         "analytics/evaluation_v14.py",
         "analytics/contracts_v14.py",
         "pyproject.toml",
