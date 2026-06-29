@@ -207,6 +207,34 @@ def test_html_omits_tornado_section_when_absent() -> None:
     assert "Sensitivity Tornado" not in render_report_html(_context())
 
 
+def test_html_contains_global_sa_when_supplied() -> None:
+    from app.services.report_global_sa import GlobalSABlock, GlobalSADriver
+
+    block = GlobalSABlock(
+        method="morris",
+        metric="project_irr",
+        n_runs=112,
+        drivers=[
+            GlobalSADriver(name="tariff.lkr_per_kwh", mu_star=0.0493, sigma=0.0050),
+            GlobalSADriver(name="capex.usd_total", mu_star=0.0318, sigma=0.0033),
+        ],
+    )
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, global_sa=block)
+    )
+    assert "Global Sensitivity" in html
+    assert "Morris" in html and "112 model evaluations" in html
+    assert "tariff.lkr_per_kwh" in html and "capex.usd_total" in html
+    assert "4.93%" in html  # mu_star rendered via fmt_ratio_pct(0.0493)
+
+
+def test_html_omits_global_sa_section_when_absent() -> None:
+    assert "Global Sensitivity" not in render_report_html(_context())
+
+
 def test_html_contains_evidence_register_when_supplied() -> None:
     case = CaseResult(
         status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None

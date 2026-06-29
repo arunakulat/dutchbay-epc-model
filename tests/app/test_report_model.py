@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Dict
 
-
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import Covenants, ReportConfig, ReportMeta
@@ -194,6 +193,35 @@ def test_tornado_none_by_default() -> None:
         _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
     )
     assert ctx.tornado is None
+
+
+# --------------------------------------------------------------------------- #
+# Global sensitivity (Morris) wiring (MC-1)
+# --------------------------------------------------------------------------- #
+def test_global_sa_stored_when_supplied() -> None:
+    # build_report_context only stores the pre-computed global-SA block (stays pure).
+    from app.services.report_global_sa import GlobalSABlock, GlobalSADriver
+
+    block = GlobalSABlock(
+        method="morris",
+        metric="project_irr",
+        n_runs=112,
+        drivers=[
+            GlobalSADriver(name="tariff.lkr_per_kwh", mu_star=0.0493, sigma=0.005)
+        ],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, global_sa=block
+    )
+    assert ctx.global_sa is not None
+    assert ctx.global_sa.drivers[0].name == "tariff.lkr_per_kwh"
+
+
+def test_global_sa_none_by_default() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.global_sa is None
 
 
 # --------------------------------------------------------------------------- #
