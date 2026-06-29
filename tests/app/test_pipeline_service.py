@@ -88,6 +88,31 @@ def test_run_finance_case_does_not_mutate_input() -> None:
     assert scen == before
 
 
+def test_run_finance_case_stamps_run_manifest() -> None:
+    # The shared pipeline does not stamp a manifest; this gateway must (so /cases and the
+    # report pack expose a real audit stamp, not an empty one). Metadata only — KPI-neutral.
+    from analytics.run_manifest import config_sha256, engine_version
+
+    scen = _scenario()
+    manifest = run_finance_case(scen)["run_manifest"]
+    assert manifest["config_sha256"] == config_sha256(scen)  # hashes the config run
+    assert manifest["engine_version"] == engine_version()
+    assert len(manifest["git_sha"]) > 0
+    assert manifest["validation_mode"] == "strict"
+    assert manifest["manifest_schema_version"]  # present and non-empty
+
+
+def test_run_integrated_case_manifest_reflects_the_patched_config() -> None:
+    # The hybrid seam routes through run_finance_case on its PATCHED config, so its manifest
+    # hashes the patched config — distinct from the unpatched scenario's manifest.
+    scen = _scenario()
+    plain = run_finance_case(scen)["run_manifest"]["config_sha256"]
+    patched = run_integrated_case(scen, wind_export=_valid_wind_export())[
+        "run_manifest"
+    ]["config_sha256"]
+    assert patched != plain
+
+
 def test_run_finance_case_fails_fast_on_invalid_scenario() -> None:
     # CESSPIT: strict validation rejects an empty config rather than degrading.
     with pytest.raises(Exception):
