@@ -68,7 +68,9 @@ def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
     return None
 
 
-def _section_case_insensitive(mapping: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+def _section_case_insensitive(
+    mapping: Mapping[str, Any], key: str
+) -> Mapping[str, Any] | None:
     value = _lookup_case_insensitive(mapping, key)
     return value if isinstance(value, Mapping) else None
 
@@ -139,7 +141,9 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
     cross-checked and a mismatch >0.5% raises (CESSPIT: the two must not silently differ).
     """
     capex_section = _section_case_insensitive(params, "capex")
-    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+    if capex_section and _lookup_case_insensitive(
+        capex_section, "derive_from_breakdown"
+    ):
         breakdown = _lookup_case_insensitive(capex_section, "breakdown")
         if not isinstance(breakdown, Mapping):
             raise ValueError(
@@ -150,7 +154,9 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
             float(v) for v in breakdown.values() if isinstance(v, (int, float))
         )
         if line_total <= 0:
-            raise ValueError("capex.breakdown sums to <= 0; provide positive line items")
+            raise ValueError(
+                "capex.breakdown sums to <= 0; provide positive line items"
+            )
 
         # AACE QRA contingency: when capex.contingency.method == 'qra', the contingency
         # is RECOMPUTED from the base cost (breakdown minus its contingency line) + the
@@ -163,11 +169,18 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
             # recomputed from the risk inputs), so there is no usd_total cross-check here.
             # The NPV/IRR capex base is kept consistent by routing metrics._derive_capex_usd
             # through this same resolver when derive_from_breakdown is set (no divergence).
-            contingency_line = float(_lookup_case_insensitive(breakdown, "contingency_usd") or 0.0)
+            contingency_line = float(
+                _lookup_case_insensitive(breakdown, "contingency_usd") or 0.0
+            )
             base_cost = line_total - contingency_line
-            derived = base_cost + resolve_contingency(base_cost, capex_section).contingency_usd
+            derived = (
+                base_cost
+                + resolve_contingency(base_cost, capex_section).contingency_usd
+            )
             if derived <= 0:
-                raise ValueError("QRA-derived CAPEX is <= 0; check the breakdown / risk inputs")
+                raise ValueError(
+                    "QRA-derived CAPEX is <= 0; check the breakdown / risk inputs"
+                )
             return derived
 
         derived = line_total
@@ -310,12 +323,18 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         usd_rate = _rate_decimal(rate_value, 0.0)
 
         return {
-            "construction_periods": int(_as_float(debt_cfg.get("construction_periods"), 2)),
-            "construction_schedule": debt_cfg.get("construction_schedule", [40.0, 60.0]),
+            "construction_periods": int(
+                _as_float(debt_cfg.get("construction_periods"), 2)
+            ),
+            "construction_schedule": debt_cfg.get(
+                "construction_schedule", [40.0, 60.0]
+            ),
             "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
             "debt_ratio": debt_ratio_value,
             "tenor_years": int(_as_float(tenor_value, 15)),
-            "interest_only_years": int(_as_float(debt_cfg.get("interest_only_years"), 0)),
+            "interest_only_years": int(
+                _as_float(debt_cfg.get("interest_only_years"), 0)
+            ),
             "amortization_style": debt_cfg.get("amortization_style", "annuity"),
             "target_dscr": _as_float(debt_cfg.get("target_dscr"), 1.30),
             "mix": debt_cfg.get("mix", {"usd_commercial_min": 1.0}),
@@ -463,6 +482,14 @@ def _sculpted_schedule(
         principal_total = max(0.0, target_svc - sum(interest_map.values()))
         total_bal = sum(obals.values()) or 1.0
         for k in tranches:
+            # FIN-5 (#482, reviewed): the sculpted principal is shared across tranches
+            # PRO-RATA BY OUTSTANDING BALANCE. This is deliberate — pari-passu pro-rata
+            # amortisation is the standard multi-creditor convention; lenders on the cheaper
+            # tranches (USD/DFI) will not accept being amortised slower so the expensive LKR
+            # tranche can be paid down first. Cost-weighted ("retire the dearest debt first")
+            # allocation would lower total interest but is non-standard inter-creditor terms
+            # and KPI-moving, so it is NOT the default (a future configurable waterfall could
+            # offer it). See the audit FIN-5 "review" note.
             prorata = obals[k] / total_bal if total_bal > 0 else 0.0
             principal_k = min(obals[k], principal_total * prorata)
             obals[k] = max(0.0, obals[k] - principal_k)
@@ -618,7 +645,8 @@ def apply_debt_layer(
             dscr_by_year[year_key] = dscr_series[debt_period]
 
     dscr_op = [
-        d for i, d in enumerate(dscr_series)
+        d
+        for i, d in enumerate(dscr_series)
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
@@ -892,7 +920,11 @@ def _maybe_autosolve_dscr(
         mode,
         binding_gearing,
         solved,
-        f"; P90 {solved_p90:.3f} -> binds {binding_case}" if solved_p90 is not None else "",
+        (
+            f"; P90 {solved_p90:.3f} -> binds {binding_case}"
+            if solved_p90 is not None
+            else ""
+        ),
         target,
     )
     return resized, detail
@@ -1063,7 +1095,9 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     _reserves = fin.get("reserves")
     reserves: Mapping[str, Any] = _reserves if isinstance(_reserves, Mapping) else {}
     target_months = _as_float(
-        dsra_cfg.get("target_months", fin.get("dsra_months", reserves.get("dsra_months"))),
+        dsra_cfg.get(
+            "target_months", fin.get("dsra_months", reserves.get("dsra_months"))
+        ),
         6.0,
     )
 
@@ -1185,7 +1219,9 @@ def plan_debt(
     debt_service_total = core.get("debt_service_total", []) or []
     interest_total = core.get("interest_total", []) or []
     public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
-    raw_min = min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
+    raw_min = (
+        min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
+    )
     # Single source of truth for the covenant minimum (round-5 #3). The lender-facing
     # min_dscr must agree with the bridge-corrected per-year covenant table (dscr_by_year),
     # not only the raw per-period series. The raw series carries the sub-annual bridge
@@ -1328,14 +1364,17 @@ def size_debt_with_dual_dscr(
         service = [cf / target for cf in cfads]
         capacity = _npv(service, debt_rate)
         profile = [
-            (cf / svc) if svc > 0 else float("inf")
-            for cf, svc in zip(cfads, service)
+            (cf / svc) if svc > 0 else float("inf") for cf, svc in zip(cfads, service)
         ]
         min_dscr = min(profile) if profile else 0.0
         return service, capacity, profile, min_dscr
 
-    service_p50, debt_p50, profile_p50, min_dscr_p50 = _size_one(cfads_p50, dscr_target_p50)
-    service_p99, debt_p99, profile_p99, min_dscr_p99 = _size_one(cfads_p99, dscr_target_p99)
+    service_p50, debt_p50, profile_p50, min_dscr_p50 = _size_one(
+        cfads_p50, dscr_target_p50
+    )
+    service_p99, debt_p99, profile_p99, min_dscr_p99 = _size_one(
+        cfads_p99, dscr_target_p99
+    )
 
     ratio_cap = capex * debt_ratio_max
     debt_uncapped = min(debt_p50, debt_p99)

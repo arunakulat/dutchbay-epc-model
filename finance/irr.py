@@ -493,7 +493,12 @@ def approx_project_irr(
         else:
             a, fa = mid, fm
 
-    return 0.5 * (a + b)
+    # FIN-10 (#482) / FIN-01: the bisection exhausted max_iter without reaching tol — it has
+    # NOT converged. Return None (IRR undefined) rather than the final-bracket midpoint, which
+    # may be far from a root; a silent unverified number is worse than an explicit "no result"
+    # (matches this function's other undefined-IRR cases). Converged runs returned at line 490.
+    mid = 0.5 * (a + b)
+    return mid if abs(npv_gap(mid)) < tol else None
 
 
 __all__ = [

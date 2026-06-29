@@ -539,7 +539,11 @@ def calculate_tax(
         new_losses = sum(amt for _, amt in new_vintages)
 
     tax_liability = 0.0 if is_holiday else taxable_income * tax_profile.tax_rate
-    effective_rate = tax_liability / ebit if ebit > 0.0 else 0.0
+    # FIN-3 (#482): the effective tax rate is tax / TAXABLE INCOME (the base the rate is
+    # applied to), not tax / EBIT (which ignores the interest + depreciation deductions and
+    # would report a misleadingly low rate). Reporting-only — CFADS uses tax_liability
+    # directly — so this is KPI-neutral, but the lender-audit figure must be honest.
+    effective_rate = tax_liability / taxable_income if taxable_income > 0.0 else 0.0
     wht_on_interest = interest_expense * tax_profile.withholding_tax_rate
 
     return TaxResult(
