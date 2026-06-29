@@ -448,6 +448,51 @@ def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
     )
 
 
+class FinanceReportBlocks(BaseModel):
+    """The serialised finance blocks a lender report renders (RPT-1).
+
+    A public seam over the private ``_extract_*`` serialisers so the report
+    builder (``app.reports``) reuses ONE serialisation source rather than
+    re-deriving these shapes — the report and the ``/run-pipeline`` API can never
+    drift apart (CCCDIR).
+    """
+
+    kpis: KpiBlock
+    aep: AepBlock
+    debt: DebtBlock
+    cost: CostBlock
+    funding: FundingBlock
+
+
+def extract_finance_report_blocks(
+    scenario_config: Mapping[str, Any],
+    debt_result: Mapping[str, Any],
+    kpis: Mapping[str, Any],
+) -> FinanceReportBlocks:
+    """Serialise the lender-report finance blocks from a finance run (RPT-1).
+
+    Reuses the canonical ``_extract_*`` serialisers (the same ones the
+    ``/run-pipeline`` response is built from) so the generated report and the API
+    surface never diverge.
+
+    Args:
+        scenario_config: The resolved scenario config (drives the AEP + CAPEX blocks).
+        debt_result: The pipeline's ``debt_result`` mapping (drives the debt schedule
+            / DSCR profile and the sources-and-uses).
+        kpis: The pipeline's ``kpis`` mapping (drives the executive KPI callout).
+
+    Returns:
+        The five serialised blocks, ready for the report renderer.
+    """
+    return FinanceReportBlocks(
+        kpis=_extract_kpis(kpis),
+        aep=_extract_aep(scenario_config),
+        debt=_extract_debt(debt_result),
+        cost=_extract_cost(scenario_config),
+        funding=_extract_funding(debt_result),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------

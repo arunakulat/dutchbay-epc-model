@@ -140,10 +140,15 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
     case_result = CaseResult.from_pipeline_result(
         result, scenario_variant=inputs.scenario_variant
     )
+    # Pass the resolved scenario + the run's debt_result so the report can render the
+    # quantitative lender sections (production P50/P90, sources-and-uses, DSCR profile,
+    # readiness/E&S) — not just the KPI summary (RPT-1).
     return build_report_context(
         case_result,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         inputs=inputs,
+        scenario_config=scenario,
+        debt_result=result.get("debt_result"),
     )
 
 

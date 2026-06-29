@@ -12,6 +12,11 @@ from app.reports.report_model import (
     ReportContext,
     Verdict,
     build_report_context,
+    fmt_gwh,
+    fmt_pct,
+    fmt_ratio_pct,
+    fmt_usd,
+    fmt_x,
     format_kpi_value,
 )
 
@@ -70,6 +75,104 @@ def test_format_multiple() -> None:
 def test_format_usd_sign_handling() -> None:
     assert format_kpi_value(110662500.0, "usd") == "$110,662,500"
     assert format_kpi_value(-57994285.93, "usd") == "-$57,994,286"
+
+
+# --------------------------------------------------------------------------- #
+# Finance-table format helpers (RPT-1)
+# --------------------------------------------------------------------------- #
+def test_fmt_helpers_none_is_em_dash() -> None:
+    assert fmt_usd(None) == "—"
+    assert fmt_gwh(None) == "—"
+    assert fmt_x(None) == "—"
+    assert fmt_ratio_pct(None) == "—"
+    assert fmt_pct(None) == "—"
+
+
+def test_fmt_helpers_values() -> None:
+    assert fmt_usd(159_600_000.0) == "$159,600,000"
+    assert fmt_usd(-65_455_817.0) == "-$65,455,817"  # accounting-style negative
+    assert fmt_gwh(464.34) == "464.3 GWh"
+    assert fmt_x(1.308) == "1.31x"
+    assert fmt_ratio_pct(0.4125) == "41.25%"  # ratio -> percent
+    assert fmt_pct(13.39) == "13.39%"  # already a percent
+
+
+# --------------------------------------------------------------------------- #
+# Finance blocks wiring (RPT-1): production / sources-and-uses / DSCR profile
+# --------------------------------------------------------------------------- #
+_SCENARIO_CFG = {
+    "resource": {
+        "wind": {"aep_gwh": 464.3, "capacity_factor": 0.332, "source_id": "test-source"}
+    },
+    "project": {"capacity_mw": 159.6},
+    "finance": {"capex_total_usd": 159_600_000.0},
+}
+_DEBT_RESULT = {
+    "debt_total": 65_835_000.0,
+    "total_idc": 10_287_933.22,
+    "tenor_years": 15,
+    "construction_years": 2,
+    "min_dscr": 1.2999,
+    "avg_debt_rate": 0.08,
+    "balloon_pct": 0.36,
+    "balloon_remaining": 23_700_000.0,
+    "dual_dscr": {
+        "solved_gearing": 0.4125,
+        "binding_constraint": "dscr",
+        "binding_production_case": "P50",
+    },
+    "principal_by_tranche": {"senior": 65_835_000.0},
+    "idc_by_tranche": {"senior": 10_287_933.22},
+    "raw_dscr_series": [None, None, 1.308, 1.31, 1.30],
+    "debt_outstanding": [65_835_000.0, 65_835_000.0, 60_000_000.0, 55e6, 50e6],
+    "debt_service_total": [0.0, 0.0, 8_000_000.0, 8_000_000.0, 8_000_000.0],
+    "funding": {
+        "sources_and_uses": {
+            "uses": {"capex_usd": 159_600_000.0, "idc_usd": 10_287_933.22},
+            "sources": {"senior_debt_usd": 76_122_933.22, "equity_usd": 93_765_000.0},
+            "uses_total_usd": 169_887_933.22,
+            "sources_total_usd": 169_887_933.22,
+            "balanced": True,
+        }
+    },
+}
+
+
+def test_finance_blocks_populated_with_scenario_and_debt() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+    )
+    assert ctx.finance is not None
+    assert ctx.finance.aep.net_p50_gwh == 464.3
+    assert ctx.finance.funding.balanced is True
+    # A real sources-and-uses table balances.
+    assert ctx.finance.funding.uses_total_usd == ctx.finance.funding.sources_total_usd
+    assert ctx.finance.debt.tenor_years == 15
+    # Full-timeline DSCR profile: construction years carry None, operating years a value.
+    assert [r.dscr for r in ctx.finance.debt.schedule[:3]] == [None, None, 1.308]
+    assert ctx.finance.kpis.project_irr == _VALUE_DESTRUCTIVE_KPIS["project_irr"]
+
+
+def test_finance_blocks_none_without_debt_result() -> None:
+    # scenario_config alone (no debt_result) -> no finance section (legacy-safe).
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+    )
+    assert ctx.finance is None
+
+
+def test_finance_blocks_none_without_scenario_config() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        debt_result=_DEBT_RESULT,
+    )
+    assert ctx.finance is None
 
 
 # --------------------------------------------------------------------------- #

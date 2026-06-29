@@ -106,6 +106,68 @@ def test_html_omits_readiness_section_body_when_absent() -> None:
     assert "No development-readiness register was supplied" in html
 
 
+def test_html_contains_finance_sections_when_supplied() -> None:
+    # With a scenario_config + debt_result the quantitative lender sections render (RPT-1).
+    inputs = WindFarmInputs(
+        site_name="Dutch Bay",
+        capacity_mw=159.6,
+        capacity_factor=0.332,
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=20.30,
+        ppa_term_years=20,
+        capex_total_usd=159_600_000,
+        opex_annual_usd=5_000_000,
+        fx_start_lkr_per_usd=333.79,
+    )
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    scenario = {
+        "resource": {"wind": {"aep_gwh": 464.3, "capacity_factor": 0.332}},
+        "project": {"capacity_mw": 159.6},
+        "finance": {"capex_total_usd": 159_600_000.0},
+    }
+    debt = {
+        "debt_total": 65_835_000.0,
+        "tenor_years": 15,
+        "min_dscr": 1.30,
+        "dual_dscr": {"solved_gearing": 0.4125},
+        "principal_by_tranche": {"senior": 65_835_000.0},
+        "raw_dscr_series": [None, None, 1.308],
+        "debt_outstanding": [65_835_000.0, 65_835_000.0, 60_000_000.0],
+        "debt_service_total": [0.0, 0.0, 8_000_000.0],
+        "funding": {
+            "sources_and_uses": {
+                "uses": {"capex_usd": 159_600_000.0, "idc_usd": 10_287_933.22},
+                "sources": {
+                    "senior_debt_usd": 76_122_933.22,
+                    "equity_usd": 93_765_000.0,
+                },
+                "uses_total_usd": 169_887_933.22,
+                "sources_total_usd": 169_887_933.22,
+                "balanced": True,
+            }
+        },
+    }
+    html = render_report_html(
+        build_report_context(
+            case,
+            generated_at=GENERATED_AT,
+            inputs=inputs,
+            scenario_config=scenario,
+            debt_result=debt,
+        )
+    )
+    assert "Energy Production (P50 / P90)" in html
+    assert "464.3 GWh" in html  # P50 net AEP rendered via fmt_gwh
+    assert "Sources &amp; Uses of Funds" in html
+    assert ">Balanced<" in html  # sources-and-uses balance badge
+    assert "Debt Structure &amp; DSCR Profile" in html
+    assert "Annual DSCR profile" in html
+    assert "1.31x" in html  # operating-year DSCR rounded
+    assert "$159,600,000" in html  # CAPEX use rendered via fmt_usd
+
+
 def test_html_covenant_badges_reflect_verdict() -> None:
     html = render_report_html(_context())
     # IRR below hurdle and equity negative -> both fail badges present.
