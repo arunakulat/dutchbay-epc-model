@@ -243,6 +243,36 @@
   </section>
   {% endif %}
 
+  {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
+  {% if ctx.tornado and ctx.tornado.rows %}
+  <section class="page">
+    <h2>Sensitivity Tornado &mdash; Project IRR</h2>
+    <p class="muted">One-at-a-time sensitivity of the project IRR to each driver
+      (base {{ fmt_ratio_pct(ctx.tornado.rows[0].base) }}); drivers ordered by swing
+      magnitude, widest first.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">Downside IRR</th>
+          <th style="text-align:right;">Upside IRR</th>
+          <th style="text-align:right;">Swing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.tornado.rows %}
+        <tr>
+          <td>{{ r.label }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.low_case) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.high_case) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.impact_abs) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>

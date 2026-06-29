@@ -168,6 +168,45 @@ def test_html_contains_finance_sections_when_supplied() -> None:
     assert "$159,600,000" in html  # CAPEX use rendered via fmt_usd
 
 
+def test_html_contains_tornado_when_supplied() -> None:
+    from app.services.report_tornado import TornadoBlock, TornadoRow
+
+    tornado = TornadoBlock(
+        metric="project_irr",
+        rows=[
+            TornadoRow(
+                label="Tariff",
+                base=0.0116,
+                low_case=-0.0031,
+                high_case=0.0249,
+                impact_abs=0.0280,
+            ),
+            TornadoRow(
+                label="CAPEX",
+                base=0.0116,
+                low_case=0.0222,
+                high_case=0.0025,
+                impact_abs=0.0197,
+            ),
+        ],
+    )
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, tornado=tornado)
+    )
+    assert "Sensitivity Tornado" in html
+    assert "Downside IRR" in html  # table header
+    assert "Tariff" in html and "CAPEX" in html  # drivers rendered (widest first)
+    assert "2.80%" in html  # swing rendered via fmt_ratio_pct(0.0280)
+
+
+def test_html_omits_tornado_section_when_absent() -> None:
+    # Default context passes no tornado -> the section is omitted entirely.
+    assert "Sensitivity Tornado" not in render_report_html(_context())
+
+
 def test_html_covenant_badges_reflect_verdict() -> None:
     html = render_report_html(_context())
     # IRR below hurdle and equity negative -> both fail badges present.
