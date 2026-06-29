@@ -144,9 +144,7 @@ def test_discover_globs_non_scenario_json(tmp_path: Path) -> None:
 
 def test_scenario_name_from_path() -> None:
     """The scenario name is the file stem."""
-    assert (
-        ScenarioAnalytics._scenario_name_from_path(Path("/a/b/foo.yaml")) == "foo"
-    )
+    assert ScenarioAnalytics._scenario_name_from_path(Path("/a/b/foo.yaml")) == "foo"
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +365,66 @@ def test_scenario_result_fail_reason_optional() -> None:
         discount_rate=0.1,
     )
     assert res.fail_reason is None
+
+
+def test_scenario_result_lcos_defaults_empty() -> None:
+    """ScenarioResult.lcos defaults to an empty list (non-storage scenarios)."""
+    res = ScenarioResult(
+        name="x",
+        config_path=Path("x.yaml"),
+        kpis={},
+        annual_rows=[],
+        debt_result={},
+        discount_rate=0.1,
+    )
+    assert res.lcos == []
+
+
+# ---------------------------------------------------------------------------
+# Read-only LCOS surfacing (finance.bess_lcos) — batch artifacts
+# ---------------------------------------------------------------------------
+BESS_YAML = SCENARIOS_DIR / "ceb_bess_10mw_capacity_charge.yaml"
+
+
+@pytest.fixture
+def bess_dir(tmp_path: Path) -> Path:
+    """A directory containing only the standalone capacity-charge BESS scenario."""
+    shutil.copy(BESS_YAML, tmp_path / BESS_YAML.name)
+    return tmp_path
+
+
+def test_bess_scenario_surfaces_lcos_in_summary_and_metadata(bess_dir: Path) -> None:
+    """A type: bess scenario surfaces LCOS in both batch artifacts (read-only)."""
+    summary_df, _ts, meta = ScenarioAnalytics(scenarios_dir=bess_dir).run()
+
+    # At-a-glance summary column (Excel surface).
+    assert "bess_lcos_usd_per_mwh" in summary_df.columns
+    lcos_glance = summary_df["bess_lcos_usd_per_mwh"].iloc[0]
+    assert isinstance(lcos_glance, float) and lcos_glance > 0.0
+
+    # Full per-BESS breakdown (summary_json surface).
+    block = meta.batch_summary["bess_lcos"]
+    assert len(block) == 1
+    entry = block[0]
+    assert entry["scenario"] == "ceb_bess_10mw_capacity_charge"
+    result = entry["results"][0]
+    assert result["revenue_model"] == "capacity_charge"
+    assert result["lcos_usd_per_mwh"] == pytest.approx(lcos_glance)
+    assert result["pv_costs_usd"] > 0.0 and result["pv_discharged_mwh"] > 0.0
+
+
+def test_lcos_metadata_is_json_serialisable(bess_dir: Path) -> None:
+    """The enriched batch_summary (incl. bess_lcos) round-trips through JSON."""
+    _summary_df, _ts, meta = ScenarioAnalytics(scenarios_dir=bess_dir).run()
+    dumped = json.dumps(meta.batch_summary)  # raises if any value is non-serialisable
+    assert "bess_lcos" in dumped
+
+
+def test_wind_scenario_has_no_lcos(lender_analytics: ScenarioAnalytics) -> None:
+    """A wind-only batch adds no LCOS column and an empty bess_lcos block."""
+    summary_df, _ts, meta = lender_analytics.run()
+    assert "bess_lcos_usd_per_mwh" not in summary_df.columns
+    assert meta.batch_summary["bess_lcos"] == []
 
 
 def test_batch_result_summary_fields() -> None:
