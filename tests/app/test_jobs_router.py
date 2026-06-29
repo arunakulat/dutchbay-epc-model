@@ -47,32 +47,67 @@ def test_get_store_returns_default() -> None:
 def test_enqueue_creates_queued_record_and_schedules_task() -> None:
     store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background, store=store)
+    accepted = jr.enqueue_job(_request(), background, store=store, subject="u1")
     assert accepted.state is JobState.QUEUED
     assert accepted.status_url == f"/jobs/{accepted.job_id}"
     assert accepted.events_url == f"/jobs/{accepted.job_id}/events"
     # A background task was scheduled (NOT executed here -> no real ERA5).
     assert len(background.tasks) == 1
-    # The injected store holds the queued record.
+    # The injected store holds the queued record, bound to the authenticated owner.
     record = store.get(accepted.job_id)
     assert record is not None and record.state is JobState.QUEUED
+    assert record.owner == "u1"
 
 
 def test_get_job_found() -> None:
     store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background, store=store)
-    record = jr.get_job(accepted.job_id, store=store)
+    accepted = jr.enqueue_job(_request(), background, store=store, subject="u1")
+    record = jr.get_job(accepted.job_id, store=store, subject="u1")
     assert record.job_id == accepted.job_id
 
 
 def test_get_job_unknown_404() -> None:
     with pytest.raises(HTTPException) as exc:
-        jr.get_job("does-not-exist", store=InMemoryJobStore())
+        jr.get_job("does-not-exist", store=InMemoryJobStore(), subject="u1")
     assert exc.value.status_code == 404
 
 
+def test_get_job_other_owner_404() -> None:
+    """A different subject cannot read another client's job (non-leaking 404)."""
+    store = InMemoryJobStore()
+    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    with pytest.raises(HTTPException) as exc:
+        jr.get_job(accepted.job_id, store=store, subject="u2")
+    assert exc.value.status_code == 404
+    # The 404 detail must not differ from the unknown-id case (no existence leak).
+    assert exc.value.detail == f"unknown job: {accepted.job_id}"
+
+
 def test_job_events_returns_sse_stream() -> None:
-    resp = jr.job_events("any-id", request=_FakeRequest(), store=InMemoryJobStore())  # type: ignore[arg-type]
+    store = InMemoryJobStore()
+    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    resp = jr.job_events(
+        accepted.job_id, request=_FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     assert isinstance(resp, StreamingResponse)
     assert resp.media_type == "text/event-stream"
+
+
+def test_job_events_unknown_404() -> None:
+    with pytest.raises(HTTPException) as exc:
+        jr.job_events(
+            "ghost", request=_FakeRequest(), store=InMemoryJobStore(), subject="u1"  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 404
+
+
+def test_job_events_other_owner_404() -> None:
+    """Ownership is enforced before any SSE stream opens (non-leaking 404)."""
+    store = InMemoryJobStore()
+    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    with pytest.raises(HTTPException) as exc:
+        jr.job_events(
+            accepted.job_id, request=_FakeRequest(), store=store, subject="u2"  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 404

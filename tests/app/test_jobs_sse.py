@@ -21,6 +21,7 @@ def _collect(agen: AsyncIterator[str]) -> List[str]:
 def _record(state: JobState, step: int, message: str) -> JobRecord:
     return JobRecord(
         job_id="j1",
+        owner="u1",
         state=state,
         progress=JobProgress(step=step, total_steps=4, message=message),
         created_at="t0",

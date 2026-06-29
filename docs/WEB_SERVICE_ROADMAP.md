@@ -79,8 +79,11 @@ background execution + progress.
    insufficient — no status/result tracking).
 3. **Progress streaming (high):** **Server-Sent Events**, not WebSockets
    (one-way job progress over plain HTTP).
-4. **Auth (high):** first-party FastAPI **OAuth2 password flow + JWT**; isolate
+4. **Auth (high):** first-party FastAPI **OAuth2 bearer + JWT**; isolate
    jobs/results by JWT subject. No third-party IdP needed for a few known clients.
+   *Delivered (#449)* with stdlib-only HMAC-SHA256 JWT + PBKDF2 (no new dependency);
+   `POST /token` takes a **JSON** body rather than an OAuth2 form, so no
+   `python-multipart` is pulled into the locked requirements.
 5. **Frontend types (high):** generate TypeScript from the Pydantic models with
    **`pydantic-to-typescript`** so client validation mirrors the backend.
 6. **Deployment (Fly security verified):** **Fly.io** — default at-rest LUKS +
@@ -119,7 +122,11 @@ background execution + progress.
   progress + signed report download.
 
 ### Sprint 3 — Auth + wizard + deploy
-- OAuth2 + JWT, per-client job/result isolation.
+- ✅ **OAuth2 + JWT, per-client job/result isolation — DONE (#449).** Stdlib-only
+  HMAC-SHA256 JWT + PBKDF2 hashing (no new dependency); `/cases*` and `/jobs*` are
+  guarded by `get_current_subject`, and each `JobRecord` is bound to its JWT subject
+  (non-owners get a non-leaking 404). The lower-level `/run-pipeline` and the mounted
+  `/sensitivity` app are **not yet** guarded — see `app/api/auth.py` and the #449 PR.
 - React wizard (5 pages: site basics → financial params → wind-data source →
   scenario toggles → confirm & run), validated with generated TS types.
 - Fly.io deploy (app + Redis + Postgres for users/jobs), HTTPS, encrypted temp

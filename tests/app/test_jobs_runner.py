@@ -42,7 +42,7 @@ def _request() -> WindJobRequest:
 
 
 def _seed_queued(store: InMemoryJobStore, job_id: str = "j1") -> None:
-    store.create(JobRecord(**new_queued_record(job_id, now="t0")))
+    store.create(JobRecord(**new_queued_record(job_id, now="t0", owner="u1")))
 
 
 def _good_assessment(_req: WindJobRequest, progress: Any) -> Mapping[str, Any]:
@@ -135,9 +135,11 @@ def test_finance_failure_marks_failed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_new_queued_record_shape() -> None:
-    kwargs = new_queued_record("abc", now="t9")
+    kwargs = new_queued_record("abc", now="t9", owner="u1")
     assert kwargs["state"] is JobState.QUEUED
+    assert kwargs["owner"] == "u1"
     assert kwargs["created_at"] == "t9" and kwargs["updated_at"] == "t9"
     assert kwargs["progress"].step == 0
-    # Constructs a valid JobRecord.
-    assert JobRecord(**kwargs).job_id == "abc"
+    # Constructs a valid JobRecord bound to its owner.
+    record = JobRecord(**kwargs)
+    assert record.job_id == "abc" and record.owner == "u1"
