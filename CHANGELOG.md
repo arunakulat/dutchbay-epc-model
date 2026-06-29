@@ -121,6 +121,14 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Release workflow now publishes a GitHub Release (#457): `release-run.yml` (which fires
+  only on a pushed `v*` tag) gained a step that packages the lendercase artifacts as
+  `DutchBay_Model_V<version>.zip` (version from the `VERSION` file) and creates/updates the
+  GitHub Release for the tag via the built-in `gh` CLI (no new action dependency; idempotent
+  on re-tag; hyphenated tags marked pre-release). Previously it only kept a workflow-run
+  artifact, so RELEASING.md §7's "creates a Release" claim was inaccurate and the v15.0.0
+  Release had to be made by hand — §7 is now accurate. Added `contents: write` to the job.
+  CI/docs only, KPI-neutral.
 - Finance tax-scope + dead-code (#483, FIN-1/2/4): (FIN-1) deleted the parallel
   `finance/tax_v14.py` engine (a legacy `TaxCalculatorV14` wrapper with contradictory
   silent defaults — corporate rate 0.30 / 15-yr SL depreciation — that contradicted the

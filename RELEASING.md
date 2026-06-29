@@ -75,8 +75,13 @@ git push origin "v${VERSION}"                        # push the TAG, not main
 
 ## 7) GitHub Actions
 
-- The `release-run.yml` workflow runs on the pushed tag and creates a Release with the
-  artifact `DutchBay_Model_V<version>.zip`.
+- The `release-run.yml` workflow runs on the pushed `v*` tag: it installs the pinned
+  lock, runs the full test suite + the lender-pipeline smoke, builds the lendercase
+  artifacts, and then (#457) **publishes a GitHub Release** for the tag with
+  `DutchBay_Model_V<version>.zip` attached (version read from the `VERSION` file). The same
+  artifacts are also kept as a workflow-run artifact (`dutchbay-v14-release-artifacts`) for
+  debugging. The release step is idempotent — re-tagging re-uploads the asset rather than
+  failing — and marks hyphenated tags (e.g. `v15.1.0-rc1`) as pre-releases.
 - If CI fails, fix on a new branch → PR → merge, then bump the patch (e.g. `15.0.1`) and
   retag.
 
