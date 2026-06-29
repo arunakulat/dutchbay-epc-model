@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.development_readiness import build_readiness_report
+from analytics.evidence_register import EvidenceRegisterError, build_evidence_report
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -137,6 +138,25 @@ class Verdict(BaseModel):
     notes: List[str] = Field(default_factory=list)
 
 
+class EvidenceRow(BaseModel):
+    """One material assumption's declared evidence (source / as-of / tier)."""
+
+    assumption: str
+    source: str
+    as_of: str
+    tier: str
+    note: str = ""
+
+
+class EvidenceBlock(BaseModel):
+    """Coverage of a scenario's assumption-evidence register (#435 → RPT-1)."""
+
+    rows: List[EvidenceRow]
+    missing: List[str]  # material assumptions with no declared evidence
+    covered: int
+    total: int
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -162,6 +182,9 @@ class ReportContext(BaseModel):
     #: One-at-a-time sensitivity tornado over the standard drivers (RPT-1). None when
     #: not supplied or when the (best-effort) sweep failed — the section is then omitted.
     tornado: Optional[TornadoBlock] = None
+    #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
+    #: (no scenario config), in which case the section is omitted.
+    evidence: Optional[EvidenceBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -354,6 +377,43 @@ def _build_readiness(
     return rows, report.overall_status
 
 
+def _build_evidence(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[EvidenceBlock]:
+    """Project a scenario's assumption-evidence register into a report block (#435).
+
+    Reads ``evidence_register.entries`` (assumption → source/as-of/tier) via the canonical
+    :func:`analytics.evidence_register.build_evidence_report`, and reports how many of the
+    material assumptions carry declared evidence (the ``missing`` set is the lender gap).
+    Returns ``None`` when no scenario config is supplied (legacy callers) or the register
+    is structurally malformed — the section is then omitted. Pure presentation.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        report = build_evidence_report(scenario_config)
+    except EvidenceRegisterError:
+        return None
+    rows = [
+        EvidenceRow(
+            assumption=name,
+            source=str(rec.get("source", "")),
+            as_of=str(rec.get("as_of", "")),
+            tier=str(rec.get("tier", "")),
+            note=str(rec.get("note", "")),
+        )
+        for name, rec in report.entries.items()
+        if isinstance(rec, Mapping)
+    ]
+    covered = len(report.covered)
+    return EvidenceBlock(
+        rows=rows,
+        missing=list(report.missing),
+        covered=covered,
+        total=covered + len(report.missing),
+    )
+
+
 def _build_finance_blocks(
     case_result: CaseResult,
     scenario_config: Optional[Mapping[str, Any]],
@@ -422,5 +482,6 @@ def build_report_context(
         overall_readiness=overall_readiness,
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
+        evidence=_build_evidence(scenario_config),
         manifest=dict(case_result.run_manifest or {}),
     )

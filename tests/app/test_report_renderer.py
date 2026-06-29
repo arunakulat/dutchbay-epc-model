@@ -207,6 +207,33 @@ def test_html_omits_tornado_section_when_absent() -> None:
     assert "Sensitivity Tornado" not in render_report_html(_context())
 
 
+def test_html_contains_evidence_register_when_supplied() -> None:
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    scenario = {
+        "evidence_register": {
+            "entries": {
+                "capex": {
+                    "source": "SINOHYDRO EPC quote",
+                    "as_of": "2025-09",
+                    "tier": "A",
+                },
+            }
+        }
+    }
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, scenario_config=scenario)
+    )
+    assert "Assumption Evidence Register" in html
+    assert "SINOHYDRO EPC quote" in html  # the declared source
+    assert "without declared evidence" in html  # the gap (uncovered assumptions)
+
+
+def test_html_omits_evidence_section_without_scenario_config() -> None:
+    assert "Assumption Evidence Register" not in render_report_html(_context())
+
+
 def test_html_covenant_badges_reflect_verdict() -> None:
     html = render_report_html(_context())
     # IRR below hurdle and equity negative -> both fail badges present.
