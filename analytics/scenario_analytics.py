@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -33,6 +33,7 @@ from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
+from finance.bess_lcos import compute_lcos_suite
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
@@ -59,6 +60,10 @@ class ScenarioResult:
     debt_result: Dict[str, Any]
     discount_rate: float
     fail_reason: Optional[str] = None
+    #: Per-BESS Levelised Cost of Storage view (read-only; finance.bess_lcos). One
+    #: ``LcosResult.as_dict()`` per ``type: bess`` technology; empty for wind/solar-only
+    #: scenarios, so non-storage scenarios are unaffected.
+    lcos: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -253,6 +258,25 @@ class ScenarioAnalytics:
             except Exception as exc:  # pragma: no cover
                 logger.warning("EPC breakdown derivation failed for %s: %s", name, exc)
 
+            # Levelised Cost of Storage — a READ-ONLY view for any type: bess technology
+            # (empty for wind/solar-only scenarios). Best-effort (CASPER), like the report
+            # tornado/global-SA adapters: an LCOS failure logs and yields no view rather
+            # than sinking the scenario, and it feeds no KPI. The discount rate is this
+            # batch's effective rate (the same basis the KPIs use), and the horizon is the
+            # number of operating years actually built.
+            try:
+                lcos = [
+                    res.as_dict()
+                    for res in compute_lcos_suite(
+                        config,
+                        wacc=discount_rate,
+                        project_years=len(annual_rows),
+                    )
+                ]
+            except Exception as exc:  # pragma: no cover - read-only, non-blocking
+                logger.warning("LCOS computation failed for %s: %s", name, exc)
+                lcos = []
+
             return ScenarioResult(
                 name=name,
                 config_path=config_path,
@@ -260,6 +284,7 @@ class ScenarioAnalytics:
                 annual_rows=annual_rows,
                 debt_result=debt_result,
                 discount_rate=discount_rate,
+                lcos=lcos,
             )
         except Exception as exc:
             logger.error("Scenario %s failed: %s", name, exc)
@@ -356,6 +381,12 @@ class ScenarioAnalytics:
                 "failed_scenarios": [
                     {"name": r.name, "reason": r.fail_reason} for r in failures
                 ],
+                # Read-only per-BESS LCOS view (finance.bess_lcos); only scenarios with a
+                # storage (bess-typed) technology contribute, so this is [] for a
+                # wind/solar batch and the summary_json is otherwise byte-identical.
+                "bess_lcos": [
+                    {"scenario": r.name, "results": r.lcos} for r in results if r.lcos
+                ],
             },
         )
 
@@ -400,6 +431,10 @@ class ScenarioAnalytics:
             rec: Dict[str, Any] = dict(result.kpis)
             rec["scenario_name"] = result.name
             rec["discount_rate_used"] = result.discount_rate
+            # At-a-glance storage LCOS (USD/MWh) of the first BESS, surfaced only when the
+            # scenario has one — so the column is absent for wind/solar-only batches.
+            if result.lcos:
+                rec["bess_lcos_usd_per_mwh"] = result.lcos[0].get("lcos_usd_per_mwh")
             summary_records.append(rec)
 
             dscr_scalar: Optional[float] = None
