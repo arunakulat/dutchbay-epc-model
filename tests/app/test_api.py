@@ -200,15 +200,23 @@ def test_http_smoke_if_httpx_available() -> None:
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
-    client = TestClient(app)
-    assert client.get("/health").json() == {"status": "ok"}
+    from app.api.auth import get_current_subject
 
-    ok = client.post("/cases", json=_valid_kwargs())
-    assert ok.status_code == 200
-    assert "project_irr" in ok.json()["kpis"]
+    # Auth is exercised end-to-end in test_auth.py; here we override the dependency
+    # so the smoke stays focused on the case-running behaviour.
+    app.dependency_overrides[get_current_subject] = lambda: "smoke-user"
+    try:
+        client = TestClient(app)
+        assert client.get("/health").json() == {"status": "ok"}
 
-    # malformed body -> FastAPI 422
-    assert client.post("/cases", json={"site_name": ""}).status_code == 422
+        ok = client.post("/cases", json=_valid_kwargs())
+        assert ok.status_code == 200
+        assert "project_irr" in ok.json()["kpis"]
+
+        # malformed body -> FastAPI 422
+        assert client.post("/cases", json={"site_name": ""}).status_code == 422
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -218,11 +226,15 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
 
     from app.jobs.store import InMemoryJobStore
 
+    from app.api.auth import get_current_subject
+
     # Stub the runner so the TestClient's background task does NOT hit real ERA5.
     monkeypatch.setattr(jr, "run_wind_job", lambda *a, **k: None)
     # Override the store dependency (proves the DI seam is real and swappable).
     custom_store = InMemoryJobStore()
     app.dependency_overrides[jr.get_store] = lambda: custom_store
+    # Override auth (the owner-isolation path is covered in test_auth.py).
+    app.dependency_overrides[get_current_subject] = lambda: "smoke-user"
     try:
         client = TestClient(app)
         body = {

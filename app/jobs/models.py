@@ -64,6 +64,9 @@ class JobRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     job_id: str
+    owner: str = Field(
+        ..., description="Authenticated subject that owns this job (per-client isolation)."
+    )
     state: JobState
     progress: JobProgress
     result: Optional[Dict[str, Any]] = Field(

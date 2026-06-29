@@ -28,6 +28,7 @@ class _FakeRedis:
 def _record(job_id: str = "j1", state: JobState = JobState.QUEUED) -> JobRecord:
     return JobRecord(
         job_id=job_id,
+        owner="u1",
         state=state,
         progress=JobProgress(step=0, total_steps=4, message="Queued"),
         created_at="t0",

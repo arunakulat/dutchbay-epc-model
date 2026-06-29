@@ -4,7 +4,19 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Security
+- **Web-surface authentication + per-client job isolation (#449, audit finding
+  `RPT-3`).** `/cases`, `/cases/report.{html,pdf}`, and all `/jobs*` routes now
+  require a bearer token (`get_current_subject`); each `JobRecord` is bound to its
+  JWT subject, and a non-owner (or unknown id) gets a non-leaking 404 on both the
+  record and its SSE event stream. Tokens are stdlib-only **HMAC-SHA256 JWTs** with
+  **PBKDF2-SHA256** password hashing (`app/api/auth.py`) — no new dependency, so the
+  pinned `requirements.txt` and the `pip-audit` gate are untouched. Config is
+  fail-closed: `DUTCHBAY_JWT_SECRET` (required; a missing secret is a 500, never a
+  default) and `DUTCHBAY_API_USERS`. `POST /token` accepts a JSON body (not an
+  OAuth2 form) to avoid pulling in `python-multipart`. Out of scope (noted
+  follow-ups): the lower-level `/run-pipeline` and the mounted `/sensitivity` app
+  remain unguarded; username-enumeration timing is not hardened.
 
 ## v15.0.0 - 2026-06-29
 

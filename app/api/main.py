@@ -24,14 +24,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, ConfigDict
 
 from analytics.aep_provenance import AepProvenanceError
 from analytics.aep_reconciliation import AepReconciliationError
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
 from api.sensitivity_api import app as sensitivity_app
+from app.api.auth import get_current_subject, login_for_access_token
 from app.api.jobs_router import router as jobs_router
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -61,8 +63,41 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+class TokenRequest(BaseModel):
+    """Credentials submitted to ``POST /token`` to obtain a bearer token.
+
+    A JSON body (not an OAuth2 form) so the feature needs no ``python-multipart``
+    dependency — keeping the strict requirements lock + security gate intact.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """The bearer token issued by ``POST /token``."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+@app.post("/token", response_model=TokenResponse, tags=["auth"])
+def issue_token(credentials: TokenRequest) -> TokenResponse:
+    """Exchange a username + password for a short-lived bearer JWT.
+
+    Returns a 401 on bad credentials and a 500 if the server's signing secret
+    (``DUTCHBAY_JWT_SECRET``) is unconfigured (fail-closed).
+    """
+    token = login_for_access_token(credentials.username, credentials.password)
+    return TokenResponse(access_token=token)
+
+
 @app.post("/cases", response_model=CaseResult, tags=["cases"])
-def run_case(inputs: WindFarmInputs) -> CaseResult:
+def run_case(
+    inputs: WindFarmInputs, subject: str = Depends(get_current_subject)
+) -> CaseResult:
     """Run a lender case from a wizard submission (synchronous, frozen-AEP).
 
     The request body is validated as ``WindFarmInputs`` by FastAPI (a 422 is
@@ -113,14 +148,18 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
 
 
 @app.post("/cases/report.html", response_class=HTMLResponse, tags=["cases"])
-def run_case_report_html(inputs: WindFarmInputs) -> HTMLResponse:
+def run_case_report_html(
+    inputs: WindFarmInputs, subject: str = Depends(get_current_subject)
+) -> HTMLResponse:
     """Run a lender case and return it rendered as an HTML report."""
     context = _build_report_context(inputs)
     return HTMLResponse(content=render_report_html(context))
 
 
 @app.post("/cases/report.pdf", tags=["cases"])
-def run_case_report_pdf(inputs: WindFarmInputs) -> Response:
+def run_case_report_pdf(
+    inputs: WindFarmInputs, subject: str = Depends(get_current_subject)
+) -> Response:
     """Run a lender case and return it rendered as a PDF.
 
     Returns a 503 when the optional WeasyPrint backend is not installed

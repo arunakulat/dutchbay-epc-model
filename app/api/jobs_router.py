@@ -20,6 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.api.auth import get_current_subject
 from app.jobs.models import JobRecord, JobState, WindJobRequest, utc_now_iso
 from app.jobs.runner import new_queued_record, run_wind_job
 from app.jobs.sse import job_event_stream
@@ -56,10 +57,17 @@ def enqueue_job(
     request: WindJobRequest,
     background: BackgroundTasks,
     store: JobStore = Depends(get_store),
+    subject: str = Depends(get_current_subject),
 ) -> JobAccepted:
-    """Queue an async live-ERA5 finance job and schedule it to run."""
+    """Queue an async live-ERA5 finance job and schedule it to run.
+
+    The job is bound to the authenticated ``subject`` so only its owner can later
+    read it (per-client isolation).
+    """
     job_id = _new_job_id()
-    store.create(JobRecord(**new_queued_record(job_id, now=utc_now_iso())))
+    store.create(
+        JobRecord(**new_queued_record(job_id, now=utc_now_iso(), owner=subject))
+    )
     background.add_task(run_wind_job, job_id, request, store)
     return JobAccepted(
         job_id=job_id,
@@ -69,13 +77,26 @@ def enqueue_job(
     )
 
 
-@router.get("/{job_id}", response_model=JobRecord)
-def get_job(job_id: str, store: JobStore = Depends(get_store)) -> JobRecord:
-    """Return the current state of a job (404 if unknown)."""
+def _owned_record_or_404(store: JobStore, job_id: str, subject: str) -> JobRecord:
+    """Return the job iff it exists and ``subject`` owns it, else raise 404.
+
+    A non-owner (and an unknown id) get the **same** 404 — the response never
+    discloses that another client's job exists (non-leaking isolation).
+    """
     record = store.get(job_id)
-    if record is None:
+    if record is None or record.owner != subject:
         raise HTTPException(status_code=404, detail=f"unknown job: {job_id}")
     return record
+
+
+@router.get("/{job_id}", response_model=JobRecord)
+def get_job(
+    job_id: str,
+    store: JobStore = Depends(get_store),
+    subject: str = Depends(get_current_subject),
+) -> JobRecord:
+    """Return the current state of a job the caller owns (404 otherwise)."""
+    return _owned_record_or_404(store, job_id, subject)
 
 
 @router.get("/{job_id}/events")
@@ -83,9 +104,14 @@ def job_events(
     job_id: str,
     request: Request,
     store: JobStore = Depends(get_store),
+    subject: str = Depends(get_current_subject),
 ) -> StreamingResponse:
-    """Stream job progress as SSE until the job is terminal, times out, or the
-    client disconnects."""
+    """Stream a job's progress as SSE until terminal, timeout, or disconnect.
+
+    Ownership is checked up front: a non-owner or unknown id gets a 404 before any
+    stream opens (non-leaking isolation), rather than an SSE error frame.
+    """
+    _owned_record_or_404(store, job_id, subject)
     return StreamingResponse(
         job_event_stream(store, job_id, is_disconnected=request.is_disconnected),
         media_type="text/event-stream",

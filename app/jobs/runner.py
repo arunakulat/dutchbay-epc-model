@@ -116,10 +116,17 @@ def run_wind_job(
         )
 
 
-def new_queued_record(job_id: str, *, now: str) -> Dict[str, Any]:
-    """Build the kwargs for a freshly-queued :class:`JobRecord` (CCCDIR helper)."""
+def new_queued_record(job_id: str, *, now: str, owner: str) -> Dict[str, Any]:
+    """Build the kwargs for a freshly-queued :class:`JobRecord` (CCCDIR helper).
+
+    Args:
+        job_id: The id for the new record.
+        now: The ISO timestamp to stamp ``created_at``/``updated_at`` with.
+        owner: The authenticated subject the job is bound to (per-client isolation).
+    """
     return {
         "job_id": job_id,
+        "owner": owner,
         "state": JobState.QUEUED,
         "progress": JobProgress(step=0, total_steps=TOTAL_STEPS, message="Queued"),
         "created_at": now,
