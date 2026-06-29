@@ -157,7 +157,9 @@ def test_decode_rejects_invalid_base64_signature() -> None:
 def test_decode_rejects_non_json_header() -> None:
     h = auth._b64url_encode(b"{not json")
     p = auth._b64url_encode(json.dumps({"sub": "x", "exp": 9999999999}).encode())
-    sig = hmac.new(_SECRET.encode(), f"{h}.{p}".encode("ascii"), hashlib.sha256).digest()
+    sig = hmac.new(
+        _SECRET.encode(), f"{h}.{p}".encode("ascii"), hashlib.sha256
+    ).digest()
     with pytest.raises(AuthError, match="malformed"):
         decode_token(f"{h}.{p}.{auth._b64url_encode(sig)}", secret=_SECRET, now=1000)
 
@@ -171,9 +173,7 @@ def test_jwt_secret_present(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize("value", [None, ""])
-def test_jwt_secret_missing_is_500(
-    monkeypatch: pytest.MonkeyPatch, value: Any
-) -> None:
+def test_jwt_secret_missing_is_500(monkeypatch: pytest.MonkeyPatch, value: Any) -> None:
     if value is None:
         monkeypatch.delenv("DUTCHBAY_JWT_SECRET", raising=False)
     else:
@@ -311,7 +311,10 @@ def test_http_auth_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     assert unauth.headers["www-authenticate"] == "Bearer"
 
     # Bad credentials -> 401.
-    assert client.post("/token", json={"username": "alice", "password": "x"}).status_code == 401
+    assert (
+        client.post("/token", json={"username": "alice", "password": "x"}).status_code
+        == 401
+    )
 
     # Good credentials -> a bearer token.
     tok = client.post("/token", json={"username": "alice", "password": "pw"})
@@ -330,9 +333,9 @@ def test_http_auth_flow(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("httpx")
-    import app.api.jobs_router as jr
     from fastapi.testclient import TestClient
 
+    import app.api.jobs_router as jr
     from app.api.main import app
     from app.jobs.store import InMemoryJobStore
 

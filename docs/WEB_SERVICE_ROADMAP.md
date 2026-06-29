@@ -122,7 +122,7 @@ background execution + progress.
   progress + signed report download.
 
 ### Sprint 3 — Auth + wizard + deploy
-- ✅ **OAuth2 + JWT, per-client job/result isolation — DONE (#449).** Stdlib-only
+- **OAuth2 + JWT, per-client job/result isolation — DONE (#449).** Stdlib-only
   HMAC-SHA256 JWT + PBKDF2 hashing (no new dependency); `/cases*` and `/jobs*` are
   guarded by `get_current_subject`, and each `JobRecord` is bound to its JWT subject
   (non-owners get a non-leaking 404). The lower-level `/run-pipeline` and the mounted
