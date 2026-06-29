@@ -106,7 +106,7 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
-  aep_summary_path: "tests/mocks/aep_summary_dutchbay_10mw.json"
+  aep_summary_path: "scenarios/aep_summary_dutchbay_10mw.json"
 
   # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).

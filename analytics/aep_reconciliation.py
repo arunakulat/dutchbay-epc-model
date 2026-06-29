@@ -159,27 +159,31 @@ def collect_bankable_net_aep_gwh(config: Mapping[str, Any]) -> dict[str, float]:
         path = resource.get("aep_summary_path")
         if isinstance(path, str) and path:
             summary_path = Path(path)
+            # WIND-7 / CESSPIT: a DECLARED aep_summary_path commits the scenario to it.
+            # A missing/unreadable/unparseable summary must FAIL LOUD — silently skipping
+            # it disarms the AEP<->CF reconciliation this guard exists to perform, which is
+            # exactly the silent-divergence failure mode it is meant to prevent.
             if not summary_path.exists():
-                logger.warning(
-                    "resource.aep_summary_path %r is not readable from cwd; its AEP "
-                    "reference is skipped by the reconciliation guard.",
-                    path,
+                raise AepReconciliationError(
+                    f"resource.aep_summary_path {path!r} is declared but not readable "
+                    f"from cwd ({Path.cwd()}). A bankable-AEP reference must resolve to a "
+                    f"committed production artifact (e.g. scenarios/aep_summary_*.json); "
+                    f"refusing to silently skip it (WIND-7)."
                 )
-            else:
-                try:
-                    data = json.loads(summary_path.read_text())
-                except (OSError, ValueError):
-                    logger.warning(
-                        "resource.aep_summary_path %r could not be parsed; skipped.",
-                        path,
-                    )
-                    data = None
-                if isinstance(data, Mapping):
-                    value = data.get("net_site_aep_gwh")
-                    if value is None:
-                        value = data.get("net_aep_p50_gwh")
-                    if _is_number(value):
-                        refs[f"{path}:net_site_aep_gwh"] = float(value)
+            try:
+                data = json.loads(summary_path.read_text())
+            except (OSError, ValueError) as exc:
+                raise AepReconciliationError(
+                    f"resource.aep_summary_path {path!r} could not be read/parsed as "
+                    f"JSON: {exc}. Refusing to silently skip the bankable-AEP reference "
+                    f"(WIND-7)."
+                ) from exc
+            if isinstance(data, Mapping):
+                value = data.get("net_site_aep_gwh")
+                if value is None:
+                    value = data.get("net_aep_p50_gwh")
+                if _is_number(value):
+                    refs[f"{path}:net_site_aep_gwh"] = float(value)
     return refs
 
 
