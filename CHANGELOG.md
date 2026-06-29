@@ -121,6 +121,16 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Gate the enum-only generation technologies (#474, ARCH-1): `tidal` / `hydro` /
+  `geothermal` / `run_of_river` are recognised generation types for classification and
+  aggregation but are backed by no resource model, so billing one previously produced a
+  SILENT, unvalidated flat `capacity_factor x tariff`. `resolve_tech_generation_specs` now
+  fails loud on an explicitly-typed unmodelled generation tech unless the block sets
+  `allow_unvalidated_flat_cf: true` (the explicit experimental-proxy opt-in) — so a user can
+  never silently get a fake result. Added `MODELLED_GENERATION_TYPES = {wind, solar}` +
+  `is_modelled_generation_type()` and the supported-tech matrix to `finance/tech_types.py`.
+  KPI-neutral: no committed scenario uses a typed enum-only tech; wind/solar/BESS and
+  untyped (key-sniffed) generation blocks are unaffected.
 - Code-quality cleanup (#490, QUAL-6/7/8/10/11): archived 16 verified-unreferenced one-off
   developer shell scripts (fix/cleanup/phase/rollback/deploy/sprint-validation helpers) +
   the stray root "AAA - instructions" file to `legacy/dev_scripts/`, and the drifted

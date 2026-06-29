@@ -22,13 +22,17 @@ Version: 2.0.0 (Added degradation)
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import yaml
-from pathlib import Path
 
-from .tech_types import is_storage_type
+from .tech_types import (
+    is_generation_type,
+    is_modelled_generation_type,
+    is_storage_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,9 @@ def validate_storage_capex_declared(config: Dict[str, Any]) -> None:
     for name, block in techs.items():
         if not isinstance(block, dict):
             continue
-        if is_storage_type(block.get("type")) and isinstance(block.get("revenue"), dict):
+        if is_storage_type(block.get("type")) and isinstance(
+            block.get("revenue"), dict
+        ):
             try:
                 capex_usd: Optional[float] = float(block.get("capex_usd"))  # type: ignore[arg-type]
             except (TypeError, ValueError):
@@ -91,31 +97,31 @@ def apply_degradation_profile(
     years: int,
     degradation_rate_pct: Optional[float] = None,
     start_year: int = 1,
-    method: str = "linear"
+    method: str = "linear",
 ) -> List[float]:
     """Apply annual performance degradation to energy production.
-    
+
     Wind turbines experience gradual performance decline due to:
     - Mechanical wear on gearbox and drivetrain
-    - Blade leading edge erosion from rain/particles  
+    - Blade leading edge erosion from rain/particles
     - Bearing degradation over operating cycles
     - Control system calibration drift
     - Yaw system performance decline
-    
+
     Industry research shows typical degradation:
     - Modern turbines: 0.5-0.7%/year (median 0.65%)
     - Older turbines (pre-2008): 1.0-1.6%/year
     - Impact: 12-15% cumulative loss over 20-25 years
-    
+
     References:
-        - Staffell & Green (2014): "How Does Wind Farm Performance Decline 
+        - Staffell & Green (2014): "How Does Wind Farm Performance Decline
           with Age?" Energy Policy, UK wind farms, 1.6%/year average
-        - NREL (2019): "2018 Wind Technologies Market Report", US modern 
+        - NREL (2019): "2018 Wind Technologies Market Report", US modern
           turbines, 0.53%/year median
-        - Kim et al. (2025): "Quantification of Performance Degradation", 
+        - Kim et al. (2025): "Quantification of Performance Degradation",
           South Korea study, 0.72%/year
         - IEC 61400-12-1:2022 Annex C: Performance monitoring standards
-    
+
     Args:
         aep_base: Base year annual energy production (MWh/year)
         years: Number of years to project (typically 20-25)
@@ -125,11 +131,11 @@ def apply_degradation_profile(
             Use 2 if commissioning year has no degradation
         method: Degradation model - "linear" (default) or "exponential"
             Linear is conservative and industry standard
-            
+
     Returns:
         List of annual production values with degradation applied.
         Length = years. Index 0 = Year 1.
-        
+
     Example:
         >>> # 350 GWh/year base, 25 years, 0.65%/year degradation
         >>> production = apply_degradation_profile(350_000, 25, 0.65)
@@ -146,28 +152,28 @@ def apply_degradation_profile(
         degradation_rate_pct = config.get("annual_rate_pct", 0.65)
         start_year = config.get("start_year", 1)
         method = config.get("method", "linear")
-        
+
         if config.get("enabled", True):
             logger.info(
                 f"Wind degradation: {degradation_rate_pct}%/year "
                 f"(method: {method}, start: year {start_year})"
             )
-    
+
     # Convert percentage to decimal
     degradation_rate = degradation_rate_pct / 100.0
-    
+
     # Build degradation profile
     production = []
     for year_idx in range(years):
         year_number = year_idx + 1  # 1-based year
-        
+
         if year_number < start_year:
             # No degradation before start year (e.g., commissioning)
             degradation_factor = 1.0
         else:
             # Calculate degradation from start year
             years_since_start = year_number - start_year
-            
+
             if method == "exponential":
                 # Exponential: front-loaded degradation
                 # Factor = exp(-rate * t)
@@ -176,19 +182,23 @@ def apply_degradation_profile(
                 # Linear (default): conservative, industry standard
                 # Factor = (1 - rate)^t
                 degradation_factor = (1.0 - degradation_rate) ** years_since_start
-        
+
         annual_production = aep_base * degradation_factor
         production.append(annual_production)
-    
+
     # Log impact
     if degradation_rate > 0:
-        year_10_loss = (1 - production[9] / aep_base) * 100 if len(production) >= 10 else 0
-        year_20_loss = (1 - production[19] / aep_base) * 100 if len(production) >= 20 else 0
+        year_10_loss = (
+            (1 - production[9] / aep_base) * 100 if len(production) >= 10 else 0
+        )
+        year_20_loss = (
+            (1 - production[19] / aep_base) * 100 if len(production) >= 20 else 0
+        )
         logger.info(
             f"Degradation impact: Year 10: -{year_10_loss:.1f}%, "
             f"Year 20: -{year_20_loss:.1f}%"
         )
-    
+
     return production
 
 
@@ -299,6 +309,26 @@ def resolve_tech_generation_specs(
                     "non-generating technology (e.g. storage)."
                 )
             continue  # not a generation tech (e.g. storage) -> intentionally skipped
+        # ARCH-1 (#474): an explicitly-typed ENUM-ONLY generation tech (tidal / hydro /
+        # geothermal / run_of_river) has NO validated resource model, so billing it here
+        # would silently use an UNVALIDATED flat capacity_factor x tariff. Fail loud unless
+        # the scenario deliberately opts into the experimental proxy, so a user can never
+        # silently get a fake result. Untyped generation blocks are the conventional CF
+        # path (not gated); wind/solar are modelled (finance.tech_types).
+        declared_type = block.get("type")
+        if (
+            is_generation_type(declared_type)
+            and not is_modelled_generation_type(declared_type)
+            and not bool(block.get("allow_unvalidated_flat_cf", False))
+        ):
+            raise ValueError(
+                f"generation.technologies['{name}'] declares type={declared_type!r}, a "
+                "recognised but UNMODELLED generation technology — it has no resource model "
+                "and would bill an unvalidated flat capacity_factor x tariff. Supported "
+                "modelled generation: wind, solar (storage: bess). To deliberately use the "
+                "experimental flat-CF proxy, set this block's "
+                "allow_unvalidated_flat_cf: true."
+            )
         # Unit convention MUST match the single-tech path: _build_cashflow_params
         # reads project.degradation(_pct) as a PERCENT and divides by 100. So a
         # per-tech degradation_pct here is also a percent (e.g. 0.6 -> 0.6%/yr).
