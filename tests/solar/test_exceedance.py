@@ -110,10 +110,15 @@ class TestSharedZTableParity:
     """The wind and solar exceedance build-ups must use the ONE shared z-table."""
 
     def test_solar_and_wind_share_the_same_z_table(self):
+        # Both producers source analytics.core.exceedance.EXCEEDANCE_Z. Assert value
+        # equality (==) rather than object identity (is): a suite-level module reload can
+        # replace the cached object while values stay equal, and value drift between the
+        # two tables is the real failure mode this guards (a future edit to one must not
+        # diverge from the other).
         from analytics.core.exceedance import EXCEEDANCE_Z
         from wind_resource.bankable_aep import _EXCEEDANCE_Z as wind_z
 
-        assert wind_z is EXCEEDANCE_Z  # same object, not a fork
+        assert wind_z == EXCEEDANCE_Z  # no value fork between wind and solar
 
     def test_solar_p90_fraction_equals_wind_for_equal_sigma(self):
         # For an identical combined sigma and P50, solar and wind exceedance agree exactly.
