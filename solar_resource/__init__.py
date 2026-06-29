@@ -25,6 +25,8 @@ Public surface:
     validate_declared_solar_cf — VALIDATE a declared P50 CF against the producer.
     solar_export_to_scenario_patch — OVERWRITE the financed CF from a frozen export.
     build_solar_cashflow_export — freeze a SolarAEPResult into a finance export dict.
+    SolarUncertaintyBudget / SolarExceedanceResult / exceedance_levels_solar — the
+        pure (pvlib-free) P50/P75/P90 exceedance build-up (IEC 61724-1 / IEA-PVPS Task 13).
 """
 
 from __future__ import annotations
@@ -33,6 +35,11 @@ from solar_resource.cashflow_adapter import (
     SolarCashflowExport,
     build_solar_cashflow_export,
     solar_export_to_scenario_patch,
+)
+from solar_resource.exceedance import (
+    SolarExceedanceResult,
+    SolarUncertaintyBudget,
+    exceedance_levels_solar,
 )
 from solar_resource.pv_producer import (
     SolarAEPResult,
@@ -51,4 +58,7 @@ __all__ = [
     "SolarCashflowExport",
     "build_solar_cashflow_export",
     "solar_export_to_scenario_patch",
+    "SolarUncertaintyBudget",
+    "SolarExceedanceResult",
+    "exceedance_levels_solar",
 ]

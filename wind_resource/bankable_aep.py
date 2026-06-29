@@ -28,6 +28,8 @@ from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 
+from analytics.core.exceedance import EXCEEDANCE_Z
+
 logger = logging.getLogger(__name__)
 
 IEC_REFERENCE_AIR_DENSITY_KGM3 = 1.225
@@ -37,7 +39,9 @@ IEC_REFERENCE_AIR_DENSITY_KGM3 = 1.225
 HOURS_PER_YEAR = 8760.0
 
 # Normal-distribution z-scores for exceedance probabilities (P_x = P50 - z*sigma).
-_EXCEEDANCE_Z = {50: 0.0, 75: 0.6745, 90: 1.2816, 95: 1.6449, 99: 2.3263}
+# Sourced from the shared analytics.core.exceedance table so the wind and solar
+# exceedance build-ups can never silently diverge (one table, parity-tested).
+_EXCEEDANCE_Z = EXCEEDANCE_Z
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +200,9 @@ def model_wake_loss(
         diameter=float(rotor_diameter_m),
         hub_height=float(hub_height_m),
         powerCtFunction=PowerCtTabular(
-            ws, np.asarray(power_kw, dtype=float) * 1000.0, "w",
+            ws,
+            np.asarray(power_kw, dtype=float) * 1000.0,
+            "w",
             np.asarray(thrust_coefficient, dtype=float),
         ),
     )
@@ -219,6 +225,7 @@ def model_wake_loss(
     if model in ("turbopark", "turbo", "turbo_gaussian"):
         from py_wake.deficit_models.gaussian import TurboGaussianDeficit
         from py_wake.wind_farm_models import PropagateDownwind
+
         wfm = PropagateDownwind(site, wt, wake_deficitModel=TurboGaussianDeficit())
         model_name = "TurboGaussian (TurbOPark)"
     else:

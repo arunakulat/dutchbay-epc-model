@@ -34,7 +34,13 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
+
+from solar_resource.exceedance import (
+    SolarExceedanceResult,
+    SolarUncertaintyBudget,
+    exceedance_levels_solar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +164,9 @@ class SolarAEPResult:
     poa_kwh_m2: float  # plane-of-array insolation over the year
     ghi_kwh_m2: float  # the (scaled) site GHI used
     clearsky_scale: float  # clear-sky index applied to hit annual_ghi_kwh_m2
+    #: P50/P75/P90 exceedance build-up, populated only when compute_solar_aep is
+    #: called with emit_exceedance=True; None otherwise (backward-compatible).
+    exceedance: Optional[SolarExceedanceResult] = None
 
 
 @dataclass(frozen=True)
@@ -172,13 +181,38 @@ class SolarCfValidation:
     result: SolarAEPResult = field(repr=False)
 
 
-def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
+def compute_solar_aep(
+    config: SolarResourceConfig,
+    *,
+    emit_exceedance: bool = False,
+    uncertainty_budget: Optional[SolarUncertaintyBudget] = None,
+    p50_haircut_pct: float = 0.0,
+    life_years: int = 20,
+    correlation: float = 0.0,
+) -> SolarAEPResult:
     """Produce the bankable annual energy / capacity factor for a PV system.
 
     Pipeline (all pvlib): clear-sky GHI (Ineichen) for a reference year → scale to the
     measured ``annual_ghi_kwh_m2`` → DISC decomposition to DNI → closure DHI → Hay-Davies
     plane-of-array transposition → Faiman cell temperature → PVWatts DC → PVWatts inverter
     (clipped at the AC nameplate) → flat system-loss derate → annual AC energy.
+
+    The deterministic P50 above is unchanged by the keyword-only arguments, which only add
+    an OPTIONAL P50/P75/P90 exceedance build-up on top (mirroring the wind producer):
+
+    Args:
+        config: The typed PV-system + resource inputs.
+        emit_exceedance: When True, populate ``SolarAEPResult.exceedance`` with the
+            P50/P75/P90 levels; when False (default) it stays None and the result is
+            byte-identical to the prior P50-only contract.
+        uncertainty_budget: The 1-sigma PV uncertainty budget; defaults to
+            :class:`solar_resource.exceedance.SolarUncertaintyBudget` literature typicals.
+        p50_haircut_pct: Bankability haircut applied to the modelled P50 before the
+            exceedance build-up (default 0.0).
+        life_years: Averaging window for the project-life P90 (default 20).
+        correlation: Uniform inter-category correlation rho in [0, 1] (0.0 = RSS baseline).
+
+    The exceedance build-up is pure (no pvlib), so it never affects the import contract.
 
     Raises:
         RuntimeError: if pvlib (the [solar] extra) is not installed.
@@ -265,6 +299,21 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
         config.annual_ghi_kwh_m2,
         scale,
     )
+    exceedance: Optional[SolarExceedanceResult] = None
+    if emit_exceedance:
+        budget = (
+            uncertainty_budget
+            if uncertainty_budget is not None
+            else SolarUncertaintyBudget()
+        )
+        exceedance = exceedance_levels_solar(
+            annual_energy_gwh,
+            budget,
+            life_years=life_years,
+            p50_haircut_pct=p50_haircut_pct,
+            correlation=correlation,
+        )
+
     return SolarAEPResult(
         annual_energy_gwh=annual_energy_gwh,
         capacity_factor=capacity_factor,
@@ -272,6 +321,7 @@ def compute_solar_aep(config: SolarResourceConfig) -> SolarAEPResult:
         poa_kwh_m2=poa_annual_kwh,
         ghi_kwh_m2=float(ghi.sum()) / 1000.0,
         clearsky_scale=scale,
+        exceedance=exceedance,
     )
 
 
