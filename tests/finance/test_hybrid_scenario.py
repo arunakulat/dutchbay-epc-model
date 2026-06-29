@@ -53,3 +53,23 @@ def test_hybrid_reports_per_technology_split() -> None:
     # wind 159.6 / 199.6 = 80% ; solar 40 / 199.6 = 20%
     assert rows["wind"].share_of_capex_pct == pytest.approx(80.0, abs=0.2)
     assert rows["solar"].share_of_capex_pct == pytest.approx(20.0, abs=0.2)
+
+
+def test_hybrid_net_p90_is_model_derived() -> None:
+    """The hybrid net_aep_p90 (#469 dolphin 4c) is reproducible from the solar model.
+
+    Proves the frozen 475.1 GWh is wind 404.4 + the pvlib-modelled solar P90-1yr (not a
+    hand-maintained placeholder). Gated on the [solar] extra. P90 is reporting-only here
+    (bind_downside false), so this does not touch the pinned financed KPIs above.
+    """
+    pytest.importorskip("pvlib")
+    import yaml
+
+    from solar_resource.pv_producer import SolarResourceConfig, compute_solar_aep
+
+    sc = yaml.safe_load(open(HYBRID))
+    res = compute_solar_aep(SolarResourceConfig.from_scenario(sc), emit_exceedance=True)
+    solar_p90 = res.exceedance.p90_1yr_gwh
+    declared = sc["expected_results"]["net_aep_p90_gwh"]
+    # net_aep_p90 == wind 404.4 + model solar P90-1yr, within reporting rounding.
+    assert declared == pytest.approx(404.4 + solar_p90, abs=0.1)

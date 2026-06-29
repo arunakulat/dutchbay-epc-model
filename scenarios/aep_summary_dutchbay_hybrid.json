@@ -35,10 +35,10 @@
   },
   "exceedance": {
     "net_aep_p50_gwh": 542.7,
-    "net_aep_p90_1yr_gwh": 472.7
+    "net_aep_p90_1yr_gwh": 475.1
   },
   "created_date": "2026-06-22",
-  "created_by": "M3 hybrid (canonical wind bankable export + pvlib-modelled solar P50, #469)",
-  "version": "1.1",
-  "notes": "Combined bankable AEP for the 209.6 MW hybrid = wind 464.3 GWh (15 x IEA-10MW-198 via wind_resource.bankable_aep, incl. a 2.0% pre-construction P50 over-prediction haircut from the modelled 473.8; ERA5-fitted Weibull A=8.199/k=2.665; PyWake 7.28% wake; 14.48% total losses) + solar 78.4 GWh (50 MW fixed-tilt, Puttalam GHI, pvlib-MODELLED P50 CF 0.179 from solar_resource.pv_producer; re-baselined #469 from the prior declared 0.20, -10.5%). Net CF 0.295502 over 209.6 MW nameplate reconciles with capacity_mw*capacity_factor (the engine bills revenue off that). The per-tech split drives the lender reporting (generation.technologies). Solar P90 (472.7 net) preserves the prior P90/P50 ratio pending the dedicated PV P50/P90 uncertainty step (#469 dolphin 4)."
+  "created_by": "M3 hybrid (canonical wind bankable export + pvlib-modelled solar P50/P90, #469)",
+  "version": "1.2",
+  "notes": "Combined bankable AEP for the 209.6 MW hybrid = wind 464.3 GWh (15 x IEA-10MW-198 via wind_resource.bankable_aep, incl. a 2.0% pre-construction P50 over-prediction haircut from the modelled 473.8; ERA5-fitted Weibull A=8.199/k=2.665; PyWake 7.28% wake; 14.48% total losses) + solar 78.4 GWh (50 MW fixed-tilt, Puttalam GHI, pvlib-MODELLED P50 CF 0.179 from solar_resource.pv_producer; re-baselined #469 from the prior declared 0.20, -10.5%). Net CF 0.295502 over 209.6 MW nameplate reconciles with capacity_mw*capacity_factor (the engine bills revenue off that). The per-tech split drives the lender reporting (generation.technologies). Combined net P90-1yr 475.1 = wind 404.4 + solar 70.7, the solar component now MODELLED via solar_resource.exceedance (default IEA-PVPS Task 13 budget, sigma ~7.65%; #469 dolphin 4c replaced the prior ratio-preserved placeholder). P90 is reporting-only here (bind_downside false)."
 }
