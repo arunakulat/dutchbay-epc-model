@@ -7,8 +7,22 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-Work merged since v14.15.0 (PRs #220–#264). Grouped by theme; see `git log` /
-`gh pr view <n>` for per-PR detail.
+Work merged since the v14.15.0 tag — through the current head (well beyond the
+PRs #220–#264 originally listed here; that range was stale). Grouped by theme; see
+`git log` / `gh pr view <n>` for per-PR detail. A version bump + tag and a
+de-duplication of the legacy version headers below remain open in #443 (a tag/release
+triggers `release-run.yml`, so the bump is a deliberate release-policy step).
+
+### Engineering & audit remediation (2026-06)
+- Coverage-gate honesty (#439): retired `pytest.ini` / `pytest.ci.ini` / `tox.ini`;
+  `pyproject.toml` is now the single pytest config and `.coveragerc` the single
+  coverage config; `--cov-fail-under=95` is enforced in CI and `make test`.
+- Documentation honesty (#440, #441, #442, #444, #445): corrected the stale
+  coverage / package-count / test-count figures in `ARCHITECTURE.md`; documented
+  `contracts_v14` as frozen dataclasses (not "Pydantic V2"); removed
+  "skeleton/placeholder" wording from the live MC sampler/correlation and the DSCR
+  sensitivity module; stripped migration-narration comments from the engine imports;
+  annotated the pipeline-sequence diagram's load-time-only guards.
 
 ### Wind resource & bankable AEP
 - **Bankable AEP engine** (#220): IEC 61400-12-1 air-density correction, PyWake

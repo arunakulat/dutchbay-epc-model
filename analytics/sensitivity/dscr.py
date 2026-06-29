@@ -8,7 +8,8 @@ Scope:
 - No plotting
 - No direct pipeline imports (only evaluation gateway via engine)
 
-This module is intentionally minimal as a placeholder.
+This module is intentionally minimal: pure DSCR-sensitivity transforms/wrappers over
+engine-level sensitivity runs.
 """
 from __future__ import annotations
 

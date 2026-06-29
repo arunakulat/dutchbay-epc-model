@@ -19,7 +19,8 @@ def generate_lhs_samples(
     common_random_numbers: bool = True,
 ) -> np.ndarray:
     """
-    Minimal LHS sampler. Replace with your more advanced implementation if you already have it.
+    Latin Hypercube sampler — the canonical, tested LHS implementation: one stratified
+    draw per [i/n, (i+1)/n] interval per dimension (no column reuse).
 
     Returns: array shape [n_trials, n_params] sampled uniformly within bounds.
     """

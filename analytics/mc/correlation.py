@@ -71,7 +71,9 @@ def apply_correlation_structure(
     Output:
       correlated_samples: same shape
 
-    This is a skeleton; wire your existing proven implementation here.
+    Canonical, tested implementation: nearest-PSD repair + Cholesky factorisation +
+    rank-reordering (Iman-Conover) to induce the target correlation while preserving
+    each input's marginal distribution.
     """
     if not correlation.enabled:
         return lhs_samples
