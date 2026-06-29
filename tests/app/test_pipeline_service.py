@@ -225,12 +225,19 @@ def test_run_integrated_case_solar_plevel_mismatch() -> None:
 
 
 def test_run_integrated_case_solar_drift_raises_in_fill_mode() -> None:
-    # fill_if_absent compares the present declared 0.20 against the modelled 0.179
-    # (~10.5% drift) -> trips the solar drift guard at the default 0.5% tolerance.
+    # fill_if_absent compares the scenario's present declared solar CF against the export;
+    # a CF deliberately off from the declared (0.16) trips the solar drift guard at the
+    # default 0.5% tolerance. Using an off-by value (not the modelled 0.179, which the #469
+    # re-baseline made the declared CF) keeps this robust to the scenario's declared P50.
+    off_export = dict(
+        _valid_solar_export(),
+        capacity_factor=0.16,
+        annual_energy_gwh=70.08,  # 50 MW * 8760 h * 0.16 / 1000
+    )
     with pytest.raises(SolarAdapterDriftError):
         run_integrated_case(
             _hybrid_scenario(),
-            solar_export=_valid_solar_export(),
+            solar_export=off_export,
             solar_adapter_mode="fill_if_absent",
         )
 
