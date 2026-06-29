@@ -1,7 +1,10 @@
 """Analytics module for DutchBay EPC Model.
 
-Pydantic v2 Migration Status (Sprint 15):
-- contracts_v14.py: Fully migrated to Pydantic V2 ✅
+Contracts status:
+- contracts_v14.py: frozen dataclasses with a Pydantic-compatible ``model_dump()``
+  facade (it deliberately uses ``@dataclass`` + ``dataclasses.asdict`` for
+  serialization and does NOT provide Pydantic field-level validation; the
+  serialization layer accepts both dataclasses and Pydantic objects).
 - returns.py: Project & equity returns (IRR, NPV, MIRR)
 - risk_metrics.py: Tail risk analytics (VaR, CVaR)
 
@@ -9,7 +12,7 @@ Sprint 16 Planned:
 - Add Pydantic V2 contracts for returns and risk outputs
 """
 
-# Core contracts (Pydantic V2) - ONLY import what exists in contracts_v14.py
+# Core contracts (frozen dataclasses) - ONLY import what exists in contracts_v14.py
 from analytics.contracts_v14 import (
     CASPER_CONTRACT_VERSION,
     BreakevenResult,
@@ -69,7 +72,7 @@ from analytics.core.risk_metrics import (
 __all__ = [
     # Contract version
     "CASPER_CONTRACT_VERSION",
-    # Core Pydantic V2 Contracts
+    # Core contracts (frozen dataclasses)
     "BreakevenResult",
     "CasperResult",
     "MonteCarloResult",

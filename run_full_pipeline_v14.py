@@ -99,7 +99,7 @@ import hydra
 import yaml
 from omegaconf import DictConfig
 
-# CRITICAL FIX: Import lender-grade pipeline (was: analytics.pipeline_v14)
+# Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config

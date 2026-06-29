@@ -35,11 +35,11 @@ file-level re-validation. On a frozen `aep_summary` a full run is ~0.05s.
 ## Pipeline sequence (`run_v14_pipeline_enhanced`)
 
 ```
-0. Config normalization        analytics.scenario_loader.load_scenario_config()
+0. Config normalization        analytics.scenario_loader.load_scenario_config()   [LOAD-TIME ONLY — file-path configs]
 1. Pre-flight validation       analytics.schema_guard.validate_config_for_v14()   (strict by default)
 2. Cashflow engine (lazy)      finance.cashflow_v14.build_annual_rows()           (+ cashflow_v14_tax)
 3. Debt planning               finance.debt_v14.plan_debt()                       (DSCR + bridge-period alignment)
-4. WACC / discount resolution  finance.wacc_v14.compute_wacc_from_config()
+4. WACC / discount resolution  finance.wacc_v14.compute_build_up_wacc() | compute_wacc_from_config()  (build_up vs capm; may drive the discount rate)
 5. KPI calculation             analytics.core.metrics.calculate_scenario_kpis()
 6. Equity distribution (lazy)  finance.equity_distribution_v14_hydra.calculate_equity_distribution_from_pipeline()
 7. Result assembly             ScenarioResult dataclass → dict
@@ -49,6 +49,14 @@ Steps 2 and 6 use **lazy imports** (deliberate — to break an import-load cycle
 see #294/#298). Strict schema-spec registration is deterministic via
 `schema_guard._MODULE_IMPORTS` mapping each logical module to **all** its
 registering modules (#301).
+
+> **Load-time vs every-run (#445 / PIPE-8):** step 0 and the load-time integrity
+> guards it triggers — the FX spot cross-assert, AEP reconciliation/provenance, and
+> the evidence / development-readiness registers — run **only for file-path configs**
+> via `scenario_loader`. In-memory `Mapping` configs (the Monte-Carlo, sensitivity,
+> and API-inline paths) **skip** them and call `run_v14_pipeline` directly, so a
+> derived/inline run does not re-assert those guards. Step 4 resolves `build_up`
+> vs `capm` WACC and (when `drives_discount_rate`) sets the discount rate.
 
 ### Result contract (top-level keys)
 
@@ -86,7 +94,7 @@ wind analytics from the cashflow engine and gives lender-grade reproducibility.
 |---|---|
 | `analytics/pipeline_v14_enhanced.py` | canonical orchestrator (`run_v14_pipeline`) |
 | `analytics/evaluate_scenario.py`, `analytics/evaluation_v14.py` | override gateways |
-| `analytics/contracts_v14.py` | Pydantic v2 contracts (`ScenarioResult`, `WaccResult`, …) |
+| `analytics/contracts_v14.py` | frozen dataclasses w/ a Pydantic-compatible `model_dump()` facade (`ScenarioResult`, `WaccResult`, …); no field-level validation |
 | `analytics/scenario_loader.py` | config load + light normalization (authored-AEP reconciliation) |
 | `analytics/schema_guard.py` | pre-flight validation (strict) |
 | `analytics/core/metrics.py` | `calculate_scenario_kpis()` |
@@ -175,8 +183,10 @@ different surface.
 - **CESSPIT / CCCDIR / CASPER**: config-first (no hardcoded constants), always-strict
   validation (no `strict=False` bypass in production), clean typed interfaces,
   graceful optional-dep failure.
-- **Test coverage**: the four engine packages (`analytics`, `finance`,
-  `wind_resource`, `api`) are each ≥95% (overall ~98%, 2,200+ tests).
+- **Test coverage**: the five engine packages (`analytics`, `finance`,
+  `wind_resource`, `api`, `app`) are gated at ≥95% via `--cov-fail-under=95` in CI
+  and `make test` (currently ~97%, 2,683 tests). See the README for the enforcement
+  detail (#439).
 - **Auditability**: every run is stamped with a `run_manifest` (config hash,
   engine version, commit).
 
