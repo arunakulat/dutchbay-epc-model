@@ -6,6 +6,7 @@ project IRR; (3) a scenario with no ``type: bess`` block carries exactly zero BE
 revenue (byte-identical wind/solar behaviour). RUN+SHAPE is pinned, not the illustrative
 vintage economics (the capacity charge rate is a placeholder bid value).
 """
+
 from __future__ import annotations
 
 import math
@@ -46,15 +47,21 @@ def test_standalone_bess_books_flat_capacity_charge():
 @pytest.mark.skipif(not _NIGHTPEAK.exists(), reason="night-peak scenario not present")
 def test_energy_tariff_scenario_books_night_peak_revenue():
     out = evaluate_with_overrides(
-        raw_config=load_scenario_config(_NIGHTPEAK), overrides={}, return_full_result=True
+        raw_config=load_scenario_config(_NIGHTPEAK),
+        overrides={},
+        return_full_result=True,
     )
     rows = out["annual_rows"]
     assert len(rows) == 10  # 10-year night-peak contract term
-    expected = 40 * 1000 * 365 * 0.90 * 1.0 * 45.80  # energy_mwh×1000×cycles×RTE×avail×tariff
+    expected = (
+        40 * 1000 * 365 * 0.90 * 1.0 * 45.80
+    )  # energy_mwh×1000×cycles×RTE×avail×tariff
     for row in rows:
         assert row["bess_revenue_lkr"] == pytest.approx(expected)
         assert row["generation_revenue_lkr"] == pytest.approx(0.0)  # BESS-incremental
-    assert out["kpis"]["project_irr"] > 0  # the 45.80 LKR/kWh night-peak tariff is lucrative
+    assert (
+        out["kpis"]["project_irr"] > 0
+    )  # the 45.80 LKR/kWh night-peak tariff is lucrative
 
 
 @pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")
@@ -125,7 +132,9 @@ def test_bess_with_capex_is_additive_and_financed_on_the_hybrid():
         return_full_result=True,
     )
     # Capacity charge is booked additively on top of generation revenue ...
-    assert out["annual_rows"][0]["bess_revenue_lkr"] == pytest.approx(5_000_000 * 50 * 12)
+    assert out["annual_rows"][0]["bess_revenue_lkr"] == pytest.approx(
+        5_000_000 * 50 * 12
+    )
     assert out["annual_rows"][0]["generation_revenue_lkr"] > 0
     # ... and the run reconciles with the BESS capex financed, so project IRR reflects
     # real economics (a finite number), not a free-revenue uplift.
@@ -138,15 +147,21 @@ def test_type_bess_is_not_double_counted_as_generation():
     so it is never double-counted (generation tariff AND capacity charge)."""
     cfg = {
         "project": {"capacity_mw": 100.0, "capacity_factor": 0.34},
-        "generation": {"technologies": {
-            "wind": {"capacity_mw": 100.0, "capacity_factor": 0.34},
-            "bess": {
-                "type": "bess", "power_mw": 50.0,
-                "capacity_mw": 50.0, "capacity_factor": 0.20,  # stray generation keys
-                "revenue": {"model": "capacity_charge",
-                            "capacity_charge_lkr_per_mw_month": 1_000_000},
-            },
-        }},
+        "generation": {
+            "technologies": {
+                "wind": {"capacity_mw": 100.0, "capacity_factor": 0.34},
+                "bess": {
+                    "type": "bess",
+                    "power_mw": 50.0,
+                    "capacity_mw": 50.0,
+                    "capacity_factor": 0.20,  # stray generation keys
+                    "revenue": {
+                        "model": "capacity_charge",
+                        "capacity_charge_lkr_per_mw_month": 1_000_000,
+                    },
+                },
+            }
+        },
     }
     params = {"degradation": 0.0, "capacity_mw": 100.0, "capacity_factor": 0.34}
     gen_specs = resolve_tech_generation_specs(cfg, params)
@@ -163,7 +178,8 @@ def test_both_cashflow_builders_agree_on_bess_revenue():
     """The BESS revenue is mirrored into BOTH builders (calculate_single_year_cfads and
     build_annual_rows_efficient). Pin that they stay identical on a scenario with a
     NON-ZERO capacity charge — a one-sided edit to either builder's BESS branch then
-    fails the suite (the canonical equivalence test runs only on a BESS-free scenario)."""
+    fails the suite (the canonical equivalence test runs only on a BESS-free scenario).
+    """
     cfg = load_scenario_config(_CEB)
     rows = build_annual_rows(cfg)
     eff = build_annual_rows_efficient(cfg)
@@ -176,3 +192,50 @@ def test_both_cashflow_builders_agree_on_bess_revenue():
             ), f"mismatch on {key}"
     # guard the guard: the BESS branch is actually exercised (non-zero capacity charge)
     assert rows[0]["bess_revenue_lkr"] > 0
+
+
+# ── Augmentation + degradation through the cashflow (#470 BESS-1a/1b) ────────────
+
+
+def _ceb_with_degradation():
+    """The CEB capacity-charge scenario with MDSC fade + a year-10 augmentation injected.
+
+    Mutates a freshly-loaded config (does NOT touch the committed scenario file — the
+    KPI-moving opt-in re-pin of the committed scenarios is a separate, held dolphin).
+    """
+    cfg = load_scenario_config(_CEB)
+    for block in cfg["generation"]["technologies"].values():
+        if block.get("type") == "bess":
+            block["revenue"]["mdsc_fade_pct_annual"] = 0.011
+            block["revenue"]["augmentation_schedule"] = [
+                {"year": 10, "capex_usd": 5_000_000}
+            ]
+    return cfg
+
+
+def test_augmentation_drags_cfads_and_fade_curve_through_the_cashflow():
+    out = evaluate_with_overrides(
+        raw_config=_ceb_with_degradation(), overrides={}, return_full_result=True
+    )
+    rows = out["annual_rows"]
+    # Fade BEFORE the augmentation: operating year 9 (index 8) revenue is below year 1.
+    assert rows[8]["bess_revenue_lkr"] < rows[0]["bess_revenue_lkr"]
+    # Augmentation capex lands in operating year 10 (index 9) and nowhere adjacent.
+    assert rows[9]["bess_augmentation_capex_lkr"] > 0
+    assert rows[8]["bess_augmentation_capex_lkr"] == 0
+    assert rows[10]["bess_augmentation_capex_lkr"] == 0
+    # The top-up RESTORES capacity: year-10 revenue jumps back above the faded year-9.
+    assert rows[9]["bess_revenue_lkr"] > rows[8]["bess_revenue_lkr"]
+    # ...and the capex DRAGS that year's CFADS below its post-tax level.
+    assert rows[9]["cfads_final_lkr"] < rows[9]["posttax_cfads_lkr"]
+
+
+def test_both_builders_agree_with_augmentation():
+    cfg = _ceb_with_degradation()
+    rows = build_annual_rows(cfg)
+    eff = build_annual_rows_efficient(cfg)
+    for base_row, eff_row in zip(rows, eff):
+        assert base_row["cfads_final_lkr"] == pytest.approx(eff_row["cfads_final_lkr"])
+        assert base_row["bess_augmentation_capex_lkr"] == pytest.approx(
+            eff_row["bess_augmentation_capex_lkr"]
+        )

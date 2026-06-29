@@ -157,6 +157,55 @@ def _fade_rate(value: Any, *, tech: str) -> float:
     return coerced
 
 
+def _resolve_augmentation_events(value: Any, *, tech: str) -> List[Dict[str, Any]]:
+    """Validate ``revenue.augmentation_schedule`` into a sorted list of events.
+
+    Each event is ``{year, capex_usd[, restore_to_soh]}`` — a mid-life cell top-up that
+    (a) incurs ``capex_usd`` (USD) in 1-based operating ``year`` and (b) restores the
+    state-of-health to ``restore_to_soh`` (default ``1.0``), after which it re-fades.
+    Absent (``None``) -> ``[]`` -> no augmentation -> byte-identical. Fail-loud (CESSPIT)
+    on a non-list, a bad year (not a positive whole number), a negative ``capex_usd``, or
+    a ``restore_to_soh`` outside ``[0, 1]``.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.augmentation_schedule must be a "
+            "list of {year, capex_usd[, restore_to_soh]} events."
+        )
+    events: List[Dict[str, Any]] = []
+    for i, ev in enumerate(value):
+        if not isinstance(ev, Mapping):
+            raise ValueError(
+                f"generation.technologies['{tech}'].revenue.augmentation_schedule[{i}] "
+                "must be a mapping {year, capex_usd[, restore_to_soh]}."
+            )
+        year = _as_float(ev.get("year"))
+        if year is None or year != int(year) or year < 1:
+            raise ValueError(
+                f"generation.technologies['{tech}'].revenue.augmentation_schedule[{i}]"
+                f".year={ev.get('year')!r} must be a positive whole operating year."
+            )
+        capex = _as_float(ev.get("capex_usd"))
+        if capex is None or capex < 0:
+            raise ValueError(
+                f"generation.technologies['{tech}'].revenue.augmentation_schedule[{i}]"
+                ".capex_usd must be a non-negative USD amount (the cell top-up cost)."
+            )
+        restore_raw = ev.get("restore_to_soh")
+        restore = (
+            1.0
+            if restore_raw is None
+            else _unit_factor(restore_raw, tech=tech, field="restore_to_soh")
+        )
+        events.append(
+            {"year": int(year), "capex_usd": capex, "restore_to_soh": restore}
+        )
+    events.sort(key=lambda e: e["year"])
+    return events
+
+
 def resolve_bess_specs(
     config: Mapping[str, Any],
 ) -> Optional[List[Dict[str, Any]]]:
@@ -283,6 +332,10 @@ def resolve_bess_specs(
             "availability_factor": availability,
             "mdsc_fade_pct_annual": fade,
             "mdsc_floor_soh": floor_soh,
+            # Mid-life cell top-ups (default [] -> no augmentation -> byte-identical).
+            "augmentation_events": _resolve_augmentation_events(
+                revenue.get("augmentation_schedule"), tech=str(name)
+            ),
         }
 
         if model == "capacity_charge":
@@ -366,24 +419,72 @@ def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
 def mdsc_soh_for_year(spec: Dict[str, Any], year_index: int) -> float:
     """The state-of-health (usable MDSC) factor for one operating year, in ``(0, 1]``.
 
-    ``soh(t) = max(floor_soh, (1 - mdsc_fade_pct_annual) ** year_index)``. With the absent
-    default fade ``0.0`` this is exactly ``1.0`` (no degradation -> byte-identical), so a
-    scenario that does not opt in is unchanged. ``year_index`` is 0-based (operating year 1
-    -> 0), so year 1 is undiminished and the asset fades thereafter, floored at
-    ``mdsc_floor_soh``.
+    Without augmentation, ``soh(t) = max(floor_soh, (1 - mdsc_fade_pct_annual) ** t)``.
+    With an ``augmentation_schedule``, the curve RESTORES to ``restore_to_soh`` at each
+    event year and re-fades from there: for the most recent event at 0-based year ``e``,
+    ``soh(t) = min(1.0, restore_to_soh * (1 - fade) ** (t - e))``. With the absent default
+    fade ``0.0`` and no events this is exactly ``1.0`` (no degradation -> byte-identical),
+    so a scenario that does not opt in is unchanged. ``year_index`` is 0-based (operating
+    year 1 -> 0).
 
     Args:
-        spec: A resolved BESS spec (carries ``mdsc_fade_pct_annual`` / ``mdsc_floor_soh``).
+        spec: A resolved BESS spec (carries ``mdsc_fade_pct_annual`` / ``mdsc_floor_soh`` /
+            ``augmentation_events``).
         year_index: Zero-based operating-year index.
 
     Returns:
         The multiplicative SoH derate to apply to the year's flat revenue.
     """
     fade = float(spec.get("mdsc_fade_pct_annual", 0.0))
+    # Most recent augmentation event at or before this year sets the fade origin.
+    base_year_index = 0
+    base_soh = 1.0
+    for event in spec.get("augmentation_events") or []:
+        event_index = int(event["year"]) - 1  # 1-based year -> 0-based index
+        if event_index <= year_index:
+            base_year_index = event_index
+            base_soh = float(event["restore_to_soh"])
+        else:
+            break  # events are sorted ascending
     if fade <= 0.0:
-        return 1.0
+        soh = base_soh
+    else:
+        soh = base_soh * (1.0 - fade) ** (year_index - base_year_index)
     floor = float(spec.get("mdsc_floor_soh", _DEFAULT_MDSC_FLOOR_SOH))
-    return max(floor, (1.0 - fade) ** year_index)
+    return min(1.0, max(floor, soh))
+
+
+def bess_augmentation_capex_lkr_for_year(
+    specs: Optional[List[Dict[str, Any]]],
+    year_index: int,
+    fx_rate_lkr_per_usd: float,
+) -> float:
+    """Total BESS augmentation capex (LKR) incurred in one operating year.
+
+    Sums every spec's augmentation event whose 0-based year matches ``year_index`` and
+    converts the ``capex_usd`` at the supplied FX rate. ``0.0`` when there are no specs or
+    no event falls in this year (so a scenario without an ``augmentation_schedule`` is
+    byte-identical). This is a CASH OUTFLOW the cashflow nets out of CFADS in the incurred
+    year; the depreciation tax shield on it is conservatively NOT credited (a documented
+    lender-prudent simplification — it understates value slightly rather than risking an
+    incorrect mid-life depreciation treatment).
+
+    Args:
+        specs: Resolved BESS specs from :func:`resolve_bess_specs`, or ``None``.
+        year_index: Zero-based operating-year index.
+        fx_rate_lkr_per_usd: The year's LKR/USD rate to translate the USD capex.
+
+    Returns:
+        The combined augmentation capex in LKR for the year (``0.0`` if none).
+    """
+    if not specs:
+        return 0.0
+    total_usd = 0.0
+    for spec in specs:
+        for event in spec.get("augmentation_events") or []:
+            if int(event["year"]) - 1 == year_index:
+                total_usd += float(event["capex_usd"])
+    return total_usd * float(fx_rate_lkr_per_usd)
 
 
 def bess_revenue_lkr_for_year(
@@ -423,4 +524,5 @@ __all__ = [
     "resolve_bess_specs",
     "bess_revenue_lkr_for_year",
     "mdsc_soh_for_year",
+    "bess_augmentation_capex_lkr_for_year",
 ]
