@@ -159,7 +159,7 @@ pytest --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --c
 
 - **Quick Smoke**: CLI + core analytics (fast feedback)
 - **Full Regression**: Complete v14 pipeline + coverage
-- **Coverage**: the five engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`; untestable CLI/viz/worker infra excluded via `.coveragerc`) — **~97% overall** (96.95% measured), **2,625 tests** (2,621 pass, 4 skip). `pyproject.toml` enforces a **`--cov-fail-under=95`** regression floor over those five packages (CI's `--cov` flags scan all five), so coverage cannot silently regress below the documented ≥95%.
+- **Coverage**: the five engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`; untestable CLI/viz/worker infra excluded via `.coveragerc`) are gated at **≥95%**. The **`--cov-fail-under=95`** floor is enforced where the full suite actually runs — the CI test step (`.github/workflows/test-suite.yml`) and `make test` — so coverage cannot silently regress. (As of #439 `pytest.ini`/`pytest.ci.ini`/`tox.ini` were retired; `pyproject.toml` `[tool.pytest.ini_options]` is the single pytest config and `.coveragerc` the single coverage config.)
 - **FX Schema**: Strict enforcement (mapping-only, no scalars)
 
 ---

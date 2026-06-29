@@ -154,8 +154,40 @@ files = ["analytics", "finance"]
 config_file = "mypy.ini"
 
 [tool.pytest.ini_options]
-addopts = "--cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov-report=term-missing --cov-fail-under=95"
+# Single source of truth for pytest configuration (CCCDIR, #439). pytest.ini,
+# pytest.ci.ini and the tox.ini [pytest] section were retired: pytest resolved
+# pytest.ini FIRST and silently ignored this block ("WARNING: ignoring pytest config
+# in pyproject.toml"), so the --cov-fail-under floor declared here used to be dead.
+# Coverage is deliberately NOT in addopts — a partial dev run (`pytest tests/foo.py`)
+# must not spuriously trip the floor. The --cov-fail-under=95 gate lives where the FULL
+# suite runs: `make test` and the CI test step (.github/workflows/test-suite.yml). The
+# coverage surface/omissions are configured once in .coveragerc.
+minversion = "6.0"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers --strict-config --showlocals"
+norecursedirs = [".git", "__pycache__", ".pytest_cache", ".venv*", "venv*", "build", "dist", "*.egg-info"]
+markers = [
+    "slow: tests with long runtime (>5s; deselect with -m 'not slow')",
+    "integration: integration tests spanning multiple modules",
+    "unit: unit tests for individual functions and classes",
+    "smoke: fast smoke tests (core import/CLI/analytics sanity)",
+    "performance: performance/throughput benchmark tests (subset of slow)",
+    "edge_case: edge-case and boundary-condition tests",
+    "stress: stress/failure/load-scenario tests",
+    "critical_error: critical error-handling and recovery tests",
+    "regression: regression tests with frozen/expected output",
+    "monte_carlo: Monte Carlo simulation tests",
+    "sensitivity: sensitivity-analysis tests",
+    "lint: static-analysis and linting tests",
+    "analytics_layer: functional/integration tests for the analytics layer",
+    "casper: CASPER payload/contract tests",
+    "frozen: tests with frozen assertions",
+    "production: production-scale validation tests",
+    "debug: debug tests with verbose output",
+]
 
 [tool.bandit]
 # SAST over the engine/application surface only (tests/scripts/legacy are not the
