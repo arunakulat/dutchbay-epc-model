@@ -4,6 +4,20 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **Coverage-hardening + `pipeline_v14` consolidation (#456, audit finding `QUAL-9`).**
+  Added `solar_resource` to the coverage gate (`.coveragerc` source + the CI `--cov`
+  flags + `make` `COV`); the floor still holds at ~97% (`solar_resource` measures 100%
+  after marking its two physically-unreachable defensive guards `# pragma: no cover`).
+  Resolved the half-retired `analytics/pipeline_v14.py` (a legacy wind-only pipeline
+  excluded from coverage yet still imported): both of its script consumers
+  (`scripts/export_to_excel.py`, `scripts/legacy_runners/run_complete_analysis_fixed.py`)
+  were already reading the *enhanced* finance contract (`annual_rows`/`debt_result`/`kpis`),
+  so they were folded onto the canonical `analytics/pipeline_v14_enhanced.py` and the
+  legacy module + its base-specific strict-validation regression test were deleted.
+  Removed the now-dangling `--cov=analytics.pipeline_v14` from `fx-tests.yml`, the stale
+  `.coveragerc` omit entry, and the stale lint exemption. KPI-neutral (no `finance/` change).
+
 ### Security
 - **Web-surface authentication + per-client job isolation (#449, audit finding
   `RPT-3`).** `/cases`, `/cases/report.{html,pdf}`, and all `/jobs*` routes now

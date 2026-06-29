@@ -23,7 +23,10 @@ except ImportError:
     print("ERROR: openpyxl required. Install with: pip install openpyxl")
     sys.exit(1)
 
-from analytics.pipeline_v14 import run_v14_pipeline
+# Canonical pipeline (#456): this script reads the finance result contract
+# (annual_rows / debt_result / kpis), which is produced by pipeline_v14_enhanced —
+# the legacy wind-only pipeline_v14 never returned those keys.
+from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
 # Configure logging
 logging.basicConfig(

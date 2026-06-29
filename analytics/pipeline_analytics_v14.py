@@ -31,9 +31,9 @@ from typing import Any, Dict, List, Mapping, Optional
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-# Base pipeline: the FINANCE engine (returns annual_rows / debt_result / kpis).
-# NOT analytics.pipeline_v14, which is the wind-resource pipeline — a different
-# result shape that lacks the finance keys the analytics below consume.
+# Canonical finance pipeline (returns annual_rows / debt_result / kpis). The legacy
+# wind-only analytics/pipeline_v14.py — a different result shape lacking these finance
+# keys — was retired in #456 (folded onto pipeline_v14_enhanced).
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 

@@ -1,5 +1,5 @@
 [run]
-source = analytics,finance,wind_resource,api,app
+source = analytics,finance,wind_resource,api,app,solar_resource
 omit =
     */tests/*
     */__pycache__/*
@@ -10,15 +10,14 @@ omit =
     */setup.py
     # Untestable infra excluded from the coverage denominator (2026-06-22): these
     # are not unit-testable, so a coverage % over them is meaningless. Hydra/
-    # argparse CLI entrypoints, the exploratory PySAM sandbox, the Streamlit/
-    # matplotlib dashboards & plotting, and the legacy wind-only pipeline_v14
-    # (only scripts/ + legacy_runners/ consume it; the engine was routed off it
-    # in #286). Test the engine logic; exclude the shells.
+    # argparse CLI entrypoints, the exploratory PySAM sandbox, and the Streamlit/
+    # matplotlib dashboards & plotting. Test the engine logic; exclude the shells.
+    # (The legacy wind-only analytics/pipeline_v14.py was retired in #456 — folded
+    # onto the canonical analytics/pipeline_v14_enhanced.py and deleted.)
     */analytics/cli/*
     */analytics/pysam_sandbox/*
     */analytics/sensitivity/viz.py
     */analytics/sensitivity/dashboard_demo.py
-    */analytics/pipeline_v14.py
     # arq + Redis worker entrypoint (Sprint 2): loaded only by the `arq` CLI with
     # the optional [jobs] extra + a live Redis; never imported by app/tests.
     */app/jobs/worker.py

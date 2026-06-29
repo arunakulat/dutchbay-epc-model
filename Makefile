@@ -15,10 +15,10 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # CVE (add `--ignore-vuln <ID>` with a one-line reason), and prefer fixing over ignoring.
 PIP_AUDIT_IGNORES :=
 
-# Coverage surface for the floor gate (#439): the five engine packages, mirroring the
-# CI test step. The --cov-fail-under=95 floor is enforced in `test` and CI — NOT in
-# pyproject addopts — so a partial dev run does not spuriously trip it.
-COV := --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app
+# Coverage surface for the floor gate (#439, +solar_resource #456): the six engine
+# packages, mirroring the CI test step. The --cov-fail-under=95 floor is enforced in
+# `test` and CI — NOT in pyproject addopts — so a partial dev run does not spuriously trip it.
+COV := --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov=solar_resource
 
 # Install the pinned reproducibility lock + the dev/CI toolchain (pyproject [dev]).
 setup:

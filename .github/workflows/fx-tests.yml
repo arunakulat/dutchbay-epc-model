@@ -2,7 +2,7 @@
 # Triggered on:
 #  - Pushes to main/feature/fx-* branches
 #  - PRs targeting main
-#  - Changes to FX files, pipeline_v14, or FX tests
+#  - Changes to FX files, the canonical pipeline_v14_enhanced, or FX tests
 
 name: FX Integration Tests
 
@@ -13,7 +13,7 @@ on:
       - feature/fx-*
     paths:
       - 'analytics/fx/**'
-      - 'analytics/pipeline_v14.py'
+      - 'analytics/pipeline_v14_enhanced.py'
       - 'analytics/contracts_v14.py'
       - 'tests/analytics_layer/test_fx_sensitivity_real.py'
       - '.github/workflows/fx-tests.yml'
@@ -22,7 +22,7 @@ on:
       - main
     paths:
       - 'analytics/fx/**'
-      - 'analytics/pipeline_v14.py'
+      - 'analytics/pipeline_v14_enhanced.py'
       - 'analytics/contracts_v14.py'
       - 'tests/analytics_layer/test_fx_sensitivity_real.py'
       - '.github/workflows/fx-tests.yml'
@@ -57,7 +57,6 @@ jobs:
         run: |
           pytest tests/analytics_layer/test_fx_sensitivity_real.py -v \
             --cov=analytics.fx \
-            --cov=analytics.pipeline_v14 \
             --cov-report=xml \
             --cov-report=term-missing \
             --tb=short \
@@ -129,15 +128,13 @@ jobs:
           pip install -e .[dev]
           pip install pytest
 
-      - name: Run smoke test - pipeline with FX
+      - name: Run smoke test - canonical pipeline on the FX lender scenario
+        # #456: the legacy wind-only analytics.pipeline_v14 was retired (folded onto
+        # pipeline_v14_enhanced). This smokes the canonical pipeline on the FX-bearing
+        # lender scenario end-to-end (strict validation incl. the FX mapping) and
+        # asserts it returns finance KPIs + the debt result.
         run: |
-          python -c "from pathlib import Path; from unittest.mock import patch; from analytics.pipeline_v14 import run_v14_pipeline; p = Path('scenarios/dutchbay_lendercase_2025Q4.yaml'); assert p.exists(), p; wr = {'wind_data': {'mean_ws': 7.85}, 'energy_production': {'gross_aep': {'capacity_factor_gross': 45.0}, 'net_aep': {'net_aep_p50_mwh': 563000.0, 'net_aep_p75_mwh': 540000.0, 'net_aep_p90_mwh': 500000.0, 'capacity_factor_net_p75': 41.1}}, 'statistical_analysis': {'weibull': {'shape_k': 2.1, 'scale_c': 8.32}}}; cf = {'revenue_annual_usd': 36540000.0}; StubWindPipeline = type('StubWindPipeline', (), {'__init__': lambda self, *a, **k: None, 'run_complete_assessment': lambda self, *a, **k: wr, 'export_for_cashflow_model': lambda self, *a, **k: cf}); ctx = patch('analytics.pipeline_v14.WindPipeline', StubWindPipeline); ctx.start(); result = run_v14_pipeline(config=str(p), validation_mode='off'); ctx.stop(); assert result['status'] == 'success'; assert result['config']['project_name'] == 'DutchBay Wind Farm'; assert result['aep_p75_mwh'] == 540000.0; print('Smoke test passed: path-based FX scenario pipeline invocation works')"
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      - name: Run smoke test - pipeline without FX
-        run: |
-          python -c "from pathlib import Path; from tempfile import NamedTemporaryFile; from unittest.mock import patch; import yaml; from analytics.pipeline_v14 import run_v14_pipeline; src = Path('scenarios/dutchbay_lendercase_2025Q4.yaml'); assert src.exists(), src; cfg = yaml.safe_load(src.read_text()); cfg.pop('fx', None); tmp = NamedTemporaryFile('w', suffix='.yaml', delete=False); yaml.safe_dump(cfg, tmp); tmp.close(); wr = {'wind_data': {'mean_ws': 7.85}, 'energy_production': {'gross_aep': {'capacity_factor_gross': 45.0}, 'net_aep': {'net_aep_p50_mwh': 563000.0, 'net_aep_p75_mwh': 540000.0, 'net_aep_p90_mwh': 500000.0, 'capacity_factor_net_p75': 41.1}}, 'statistical_analysis': {'weibull': {'shape_k': 2.1, 'scale_c': 8.32}}}; cf = {'revenue_annual_usd': 36540000.0}; StubWindPipeline = type('StubWindPipeline', (), {'__init__': lambda self, *a, **k: None, 'run_complete_assessment': lambda self, *a, **k: wr, 'export_for_cashflow_model': lambda self, *a, **k: cf}); ctx = patch('analytics.pipeline_v14.WindPipeline', StubWindPipeline); ctx.start(); result = run_v14_pipeline(config=tmp.name, validation_mode='off'); ctx.stop(); assert result['status'] == 'success'; assert result['config']['project_name'] == 'DutchBay Wind Farm'; assert result['aep_p75_mwh'] == 540000.0; print('Smoke test passed: path-based non-FX scenario pipeline invocation works')"
+          python -c "from pathlib import Path; from analytics.pipeline_v14_enhanced import run_v14_pipeline; p = Path('scenarios/dutchbay_lendercase_2025Q4.yaml'); assert p.exists(), p; result = run_v14_pipeline(config=str(p), validation_mode='strict'); assert result.get('kpis'), 'pipeline returned no KPIs'; assert 'project_irr' in result['kpis']; assert 'debt_result' in result; print('Smoke test passed: canonical FX scenario pipeline invocation works')"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
