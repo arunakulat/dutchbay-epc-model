@@ -31,9 +31,9 @@ project:
   # tech's own capacity factor AND degradation) is declared in the `generation:`
   # block below, which the cashflow sums (M3 true per-tech finance). capacity_mw /
   # capacity_factor are the reconciling headline (the engine cross-checks them vs
-  # the per-tech sum within 1%): 0.305842 = (159.6*0.339 + 50*0.20) / 209.6.
+  # the per-tech sum within 1%): 0.295502 = (159.6*0.332 + 50*0.179) / 209.6.
   capacity_mw: 209.6  # 159.6 MW wind + 50 MW solar
-  capacity_factor: 0.300584  # capacity-weighted blended P50 net CF (reconciles per-tech)
+  capacity_factor: 0.295502  # capacity-weighted blended P50 net CF (reconciles per-tech)
   # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
   # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
   # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
@@ -61,8 +61,8 @@ project:
 # CFADS). aep_gwh / capex_usd / availability_pct drive the lender per-tech reporting
 # split (analytics.portfolio + casper_payload). The per-tech year-1 generation
 # reconciles with project.capacity_mw * capacity_factor (engine-enforced, ±1%):
-#   wind  159.6 MW * 0.332 = 52.987 ; solar 50 MW * 0.20 = 10.0 ; sum 62.987
-#   project 209.6 MW * 0.305842 = 64.1044  ✓
+#   wind  159.6 MW * 0.332 = 52.987 ; solar 50 MW * 0.179 = 8.95 ; sum 61.937
+#   project 209.6 MW * 0.295502 = 61.937  ✓
 generation:
   technologies:
     wind:
@@ -74,11 +74,11 @@ generation:
       availability_pct: 97.0
     solar:
       capacity_mw: 50.0
-      capacity_factor: 0.20       # net P50 fixed-tilt, Puttalam GHI (the financed driver;
-                                  # the optional [solar] pvlib producer on the resource.solar
-                                  # block below reproduces this within ~11% — modelled ~0.18)
+      capacity_factor: 0.179      # net P50 fixed-tilt, Puttalam GHI — the pvlib-MODELLED P50
+                                  # (solar_resource.pv_producer on the resource.solar block below;
+                                  # 0.17901, re-baselined #469 from the prior declared 0.20, -10.5%)
       degradation_pct: 0.4        # 0.4%/yr module aging (percent, /100 by the engine)
-      aep_gwh: 87.6              # 50 MW * 8760 * 0.20
+      aep_gwh: 78.4              # 50 MW * 8760 * 0.179
       capex_usd: 40000000         # $800/kW x 50 MW (SL utility-scale PV)
       availability_pct: 99.0
 
@@ -150,7 +150,7 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
-  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (561.4 GWh)
+  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (542.7 GWh net P50)
 
   uncertainty:
 
@@ -481,9 +481,9 @@ monte_carlo:
   # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
   # no implicit name->path mapping. ARCH-01: all values from config.
   parameters:
-    - name: project.capacity_factor   # base 0.307, rel_std 0.05 -> +/-10%
-      low: 0.2763
-      high: 0.3377
+    - name: project.capacity_factor   # base 0.2955, rel_std 0.05 -> +/-10%
+      low: 0.266
+      high: 0.325
       distribution: uniform
     - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
       low: 16.24
@@ -534,12 +534,12 @@ timeline:
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
   # Combined bankable AEP for the 209.6 MW hybrid = wind 473.8 GWh (15 x IEA-10MW,
-  # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 87.6 GWh (50 MW
-  # fixed-tilt P50). The aep_reconciliation guard cross-checks this against
-  # capacity_mw * capacity_factor (551.9 GWh), so a stale headline cannot creep in.
-  net_aep_p50_gwh: 551.9   # wind 464.3 (post 2% over-prediction haircut) + solar 87.6 (exact)
-  net_aep_p90_gwh: 480.7   # wind 404.4 (post haircut) + solar 76.3
-  capacity_factor: 0.300584
+  # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 78.4 GWh (50 MW
+  # fixed-tilt, pvlib-modelled P50 CF 0.179). The aep_reconciliation guard cross-checks
+  # this against capacity_mw * capacity_factor (542.6 GWh), so a stale headline cannot creep in.
+  net_aep_p50_gwh: 542.7   # wind 464.3 (post 2% over-prediction haircut) + solar 78.4 (pvlib P50)
+  net_aep_p90_gwh: 472.7   # wind 404.4 (post haircut) + solar 68.3 (P90/P50 ratio preserved; Dolphin 4 = true PV P90)
+  capacity_factor: 0.295502
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of
   # truth) rather than hand-maintained here — solar's distinct degradation makes them
