@@ -30,6 +30,24 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Hybrid lender case: the bankable P90 now binds the gearing (D4.6).**
+  `scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml` sets `Financing_Terms.bind_downside: true`
+  + `downside_aep_source: p90`, so the MODELLED net P90 (475.1 GWh, #469 dolphin 4c) — which
+  was previously reporting-only — now constrains debt. The engine sizes a second gearing
+  against a P90 cashflow (annual CFADS x the real P90/P50 ratio 475.1/542.7 = 0.8754) at the
+  same 1.30 DSCR floor (`target_dscr_p90` defaults to `target_dscr`) and binds `min(P50, P90)`.
+  P90 binds (`binding_production_case: P90`), shrinking the gearing 0.4225 -> 0.3675 (-13.8%
+  debt). **KPI impact** (hybrid scenario only; wind-only lender case and the CEB BESS scenarios
+  untouched): equity IRR -0.06115 -> **-0.02722 (+339 bps)**, LLCR 1.302 -> **1.497**, PLCR
+  1.348 -> **1.550**, avg DSCR 1.387 -> 1.443, and — notably — the maturity **balloon collapses
+  from 39.8% to 0%** (the smaller debt fully amortises over the 15-year tenor, resolving the
+  long-flagged ~40-57% balloon). project IRR is unlevered and **unchanged** (0.019578); min DSCR
+  holds 1.30; total CFADS is debt-independent and unchanged. project NPV edges down -$89.78M ->
+  **-$91.65M** (the larger equity slice raises the build-up WACC). This is the lender-prudent
+  reading — debt that services even at P90 — and it de-risks a structure whose 13.39% LKR debt
+  was destroying equity value at the ~2% project return. `tests/finance/test_hybrid_scenario.py`
+  and the hybrid tornado tests (`tests/analytics/test_multi_tech_tornado.py`: balloon_pct now
+  joins min_dscr as structurally flat) re-pinned.
 - **CEB BESS scenarios opted into MDSC state-of-health fade + augmentation (#470d, BESS-1/4).**
   The two committed CEB battery scenarios now exercise the year-indexed degradation and
   augmentation levers shipped KPI-neutral in #501/#502 (they previously booked a perfectly
