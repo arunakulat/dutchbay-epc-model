@@ -65,7 +65,8 @@ class JobRecord(BaseModel):
 
     job_id: str
     owner: str = Field(
-        ..., description="Authenticated subject that owns this job (per-client isolation)."
+        ...,
+        description="Authenticated subject that owns this job (per-client isolation).",
     )
     state: JobState
     progress: JobProgress
