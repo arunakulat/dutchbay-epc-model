@@ -121,6 +121,15 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Pipeline convergence + dead-validator removal (#472, PIPE-1/2): deleted the orphaned
+  `analytics/contracts_v14_validators.py` (a post-execution result-bounds validator wired
+  into no production path, duplicating the live `schema_guard` pre-flight; its `IRR_MIN`
+  bound would in fact false-positive on this project's legitimately-negative IRRs) and its
+  two test modules + the now-empty WACC-fence allowlist entry. Clearly marked
+  `run_scenario_analytics_v14.py` as the deliberately LIGHTER batch-comparison path (it is
+  NOT the canonical engine — informational WACC, no equity waterfall) vs the canonical
+  `run_full_pipeline_v14.py` (→ `pipeline_v14_enhanced`), in both the CLI docstring and
+  `docs/ARCHITECTURE.md`. KPI-neutral (dead-code removal + documentation only).
 - Coverage-gate honesty (#439): retired `pytest.ini` / `pytest.ci.ini` / `tox.ini`;
   `pyproject.toml` is now the single pytest config and `.coveragerc` the single
   coverage config; `--cov-fail-under=95` is enforced in CI and `make test`.

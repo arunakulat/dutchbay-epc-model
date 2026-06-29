@@ -14,9 +14,22 @@ logger = logging.getLogger(__name__)
 
 #!/usr/bin/env python3
 """
-v14 Scenario Analytics – Hydra CLI entrypoint.
+v14 Scenario Analytics – Hydra CLI entrypoint (batch scenario COMPARISON).
 
 This is the thin, blessed CLI wrapper around analytics.scenario_analytics.ScenarioAnalytics.
+
+PIPELINE ROLE (PIPE-1, #472) — this is the deliberately LIGHTER batch path, NOT the
+canonical engine. It discovers many scenarios and runs each through
+``ScenarioAnalytics._run_single`` (``build_annual_rows`` + ``apply_debt_layer`` +
+``calculate_scenario_kpis`` with ``wacc_is_real=False``) for fast, comparable snapshots.
+It intentionally does NOT do the canonical lender-grade work that
+``run_full_pipeline_v14.py`` (→ ``analytics.pipeline_v14_enhanced.run_v14_pipeline``)
+does: build-up WACC driving the discount rate, the two-pass interest tax shield, the
+equity-distribution waterfall, FX integration, and the full
+``contracts_v14.ScenarioResult`` surface. The discount rate here is the scenario's
+configured/global default (informational WACC only) — so for a single scenario's
+authoritative economics use ``run_full_pipeline_v14.py``; use this CLI to rank/compare a
+directory of scenarios. See docs/ARCHITECTURE.md ("Canonical execution map").
 
 Usage (Hydra-style overrides)
 -----------------------------

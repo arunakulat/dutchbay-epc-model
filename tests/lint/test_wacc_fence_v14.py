@@ -64,14 +64,9 @@ CANONICAL_WACC_MODULE = PROJECT_ROOT / "finance" / "wacc_v14.py"
 # defining the formula. Keyed by repo-relative POSIX path -> reason. Allowlisted
 # files may carry the spelled-out term but still must NOT contain a
 # formula-shaped match (enforced below).
-ALLOWLIST: dict[str, str] = {
-    # [PERMANENT] Validation-bounds module: "WACC" appears only as the
-    # WACC_MIN / WACC_MAX bound constants and an explanatory comment
-    # ("# WACC: Weighted Average Cost of Capital ..."). No formula is defined.
-    "analytics/contracts_v14_validators.py": (
-        "validation-bound constants + explanatory comment; no WACC formula"
-    ),
-}
+# Currently empty: the sole prior entry (analytics/contracts_v14_validators.py, a
+# dead post-execution result-bounds validator) was deleted in #472 (PIPE-2).
+ALLOWLIST: dict[str, str] = {}
 
 # Compiled once. ``_FORMULA_PATTERNS`` is every pattern except the spelled-out
 # term — the shapes an allowlisted file may never contain.
@@ -149,9 +144,9 @@ def test_canonical_wacc_module_exists_and_is_not_scanned() -> None:
     If the canonical module disappeared or were accidentally scanned, the fence
     would either miss real drift or fail trivially — so assert both.
     """
-    assert CANONICAL_WACC_MODULE.is_file(), (
-        f"Canonical WACC module is missing: {CANONICAL_WACC_MODULE}"
-    )
+    assert (
+        CANONICAL_WACC_MODULE.is_file()
+    ), f"Canonical WACC module is missing: {CANONICAL_WACC_MODULE}"
     scanned = {p.resolve() for p in _iter_python_files()}
     assert CANONICAL_WACC_MODULE.resolve() not in scanned
 
@@ -163,6 +158,6 @@ def test_allowlist_entries_are_live() -> None:
     forces the allowlist to be pruned when a file goes away.
     """
     for rel in ALLOWLIST:
-        assert (PROJECT_ROOT / rel).is_file(), (
-            f"Stale WACC-fence allowlist entry (file no longer exists): {rel}"
-        )
+        assert (
+            PROJECT_ROOT / rel
+        ).is_file(), f"Stale WACC-fence allowlist entry (file no longer exists): {rel}"

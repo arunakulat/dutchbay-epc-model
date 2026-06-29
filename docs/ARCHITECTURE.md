@@ -33,6 +33,19 @@ overrides, *, validation_mode, validation_modules)`** (and
 which run the same engine on an in-memory config + dotted-key overrides without
 file-level re-validation. On a frozen `aep_summary` a full run is ~0.05s.
 
+**`run_scenario_analytics_v14.py` is a deliberately LIGHTER batch-comparison path, NOT
+the canonical engine** (PIPE-1, #472). It runs each discovered scenario through
+`ScenarioAnalytics._run_single` (`build_annual_rows` + `apply_debt_layer` +
+`calculate_scenario_kpis` with `wacc_is_real=False`) to produce fast, comparable
+snapshots. It intentionally omits the canonical pipeline's build-up WACC (it uses the
+scenario's configured/global default discount — informational WACC only), two-pass
+interest tax shield, equity-distribution waterfall, FX integration, and the full
+`contracts_v14.ScenarioResult` surface. For a single scenario's authoritative
+lender-grade economics use `run_full_pipeline_v14.py`; use the batch CLI to rank/compare
+a directory of scenarios. (Converging the two engines would change the batch's
+discount-rate semantics and KPI surface — a deliberate, KPI-moving decision, not done
+here.)
+
 ---
 
 ## Pipeline sequence (`run_v14_pipeline_enhanced`)
