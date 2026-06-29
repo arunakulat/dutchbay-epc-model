@@ -21,10 +21,12 @@ from app.services.pipeline_service import (
     run_finance_case,
     run_integrated_case,
 )
+from solar_resource.cashflow_adapter import SolarAdapterDriftError
 from wind_resource.cashflow_adapter import WindAdapterDriftError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+HYBRID_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 
 REQUIRED_KPIS = {"project_irr", "equity_irr", "min_dscr", "avg_dscr", "llcr", "plcr"}
 
@@ -95,10 +97,13 @@ def test_run_finance_case_fails_fast_on_invalid_scenario() -> None:
 def test_run_finance_case_rejects_stale_capacity_vs_bankable_aep() -> None:
     """The seam reconciliation guard fires: a capacity that disagrees with the declared
     bankable AEP fails loud over the in-memory-dict seam (makes the wire-in non-deletable —
-    the same inline-dict bypass that lets an unapproved AEP source through, closed here)."""
+    the same inline-dict bypass that lets an unapproved AEP source through, closed here).
+    """
     from analytics.aep_reconciliation import AepReconciliationError
 
-    scen = _scenario()  # lendercase: 159.6 MW reconciles with the frozen 464.3 GWh AEP (post haircut)
+    scen = (
+        _scenario()
+    )  # lendercase: 159.6 MW reconciles with the frozen 464.3 GWh AEP (post haircut)
     scen["project"] = dict(scen["project"])
     scen["project"]["capacity_mw"] = 200.0  # 200 x 0.332 x 8.760 = 582 GWh >> 464.3
     with pytest.raises(AepReconciliationError):
@@ -119,9 +124,7 @@ def test_run_integrated_case_overwrite_runs_finance() -> None:
 def test_run_integrated_case_rejects_plevel_mismatch() -> None:
     # Export is P75 but caller asks for P50 -> refuse to mix P-levels.
     with pytest.raises(ValueError, match="refusing to mix|scenario"):
-        run_integrated_case(
-            _scenario(), _valid_wind_export(), scenario_name="P50"
-        )
+        run_integrated_case(_scenario(), _valid_wind_export(), scenario_name="P50")
 
 
 def test_run_integrated_case_drift_raises_in_fill_mode() -> None:
@@ -139,5 +142,85 @@ def test_run_integrated_case_does_not_mutate_inputs() -> None:
     scen, export = _scenario(), _valid_wind_export()
     scen_before, export_before = copy.deepcopy(scen), copy.deepcopy(export)
     run_integrated_case(scen, export, adapter_mode="overwrite")
+    assert scen == scen_before
+    assert export == export_before
+
+
+def test_run_integrated_case_requires_an_export() -> None:
+    # CESSPIT: with neither export the seam refuses (use run_finance_case instead).
+    with pytest.raises(ValueError, match="wind_export and/or a solar_export"):
+        run_integrated_case(_scenario())
+
+
+# --------------------------------------------------------------------------- #
+# run_integrated_case — solar export (hybrid path)
+# --------------------------------------------------------------------------- #
+def _hybrid_scenario() -> Dict[str, Any]:
+    """The canonical hybrid wind+solar scenario as a fresh in-memory dict."""
+    return dict(load_scenario_config(str(HYBRID_SCENARIO)))
+
+
+def _valid_solar_export() -> Dict[str, Any]:
+    """A schema-valid P50 solar export — the pvlib-modelled CF for the 50 MWp block."""
+    return {
+        "scenario": "P50",
+        "technology": "solar",
+        "annual_energy_gwh": 78.4,
+        "capacity_factor": 0.179,  # DECIMAL (modelled P50), vs the declared 0.20
+        "dc_capacity_mw": 50.0,
+        "specific_yield_kwh_per_kwp": 1568.2,
+    }
+
+
+def test_run_integrated_case_solar_overwrite_runs_finance() -> None:
+    result = run_integrated_case(
+        _hybrid_scenario(),
+        solar_export=_valid_solar_export(),
+        solar_adapter_mode="overwrite",
+    )
+    assert result["status"] == "success"
+    assert REQUIRED_KPIS <= set(result["kpis"])
+
+
+def test_run_integrated_case_solar_overwrite_lowers_irr() -> None:
+    """The frozen solar export genuinely flows into finance (not shelfware).
+
+    The modelled 0.179 CF is below the scenario's declared 0.20, so overwriting it
+    bills less solar generation — project IRR must drop versus the un-patched run.
+    """
+    base = run_finance_case(_hybrid_scenario())  # declared solar CF 0.20
+    over = run_integrated_case(
+        _hybrid_scenario(),
+        solar_export=_valid_solar_export(),
+        solar_adapter_mode="overwrite",
+    )
+    assert over["kpis"]["project_irr"] < base["kpis"]["project_irr"]
+
+
+def test_run_integrated_case_solar_plevel_mismatch() -> None:
+    # Export is P50 but caller asks for P90 -> refuse to mix P-levels.
+    with pytest.raises(ValueError, match="refusing to mix|scenario"):
+        run_integrated_case(
+            _hybrid_scenario(),
+            solar_export=_valid_solar_export(),
+            solar_scenario_name="P90",
+        )
+
+
+def test_run_integrated_case_solar_drift_raises_in_fill_mode() -> None:
+    # fill_if_absent compares the present declared 0.20 against the modelled 0.179
+    # (~10.5% drift) -> trips the solar drift guard at the default 0.5% tolerance.
+    with pytest.raises(SolarAdapterDriftError):
+        run_integrated_case(
+            _hybrid_scenario(),
+            solar_export=_valid_solar_export(),
+            solar_adapter_mode="fill_if_absent",
+        )
+
+
+def test_run_integrated_case_solar_does_not_mutate_inputs() -> None:
+    scen, export = _hybrid_scenario(), _valid_solar_export()
+    scen_before, export_before = copy.deepcopy(scen), copy.deepcopy(export)
+    run_integrated_case(scen, solar_export=export, solar_adapter_mode="overwrite")
     assert scen == scen_before
     assert export == export_before
