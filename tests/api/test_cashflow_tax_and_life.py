@@ -61,6 +61,9 @@ BASE_PARAMS = {
         "wht_on_interest_enabled": False,
         "wht_gross_up": False,
     },
+    # Explicit flat FX (FIN-6): 333.79 LKR/USD flat reproduces the prior
+    # silent-fallback behaviour now that the engine fails loud on missing fx.
+    "fx": {"start_lkr_per_usd": 333.79, "annual_depr_pct": 0.0},
 }
 
 
