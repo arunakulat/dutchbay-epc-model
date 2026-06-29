@@ -88,7 +88,8 @@ jobs:
           --cov=app \
           --cov-report=term-missing \
           --cov-report=xml \
-          --cov-report=html
+          --cov-report=html \
+          --cov-fail-under=95
 
     - name: Upload test results
       uses: actions/upload-artifact@v4

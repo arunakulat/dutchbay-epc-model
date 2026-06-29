@@ -15,6 +15,11 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # CVE (add `--ignore-vuln <ID>` with a one-line reason), and prefer fixing over ignoring.
 PIP_AUDIT_IGNORES :=
 
+# Coverage surface for the floor gate (#439): the five engine packages, mirroring the
+# CI test step. The --cov-fail-under=95 floor is enforced in `test` and CI — NOT in
+# pyproject addopts — so a partial dev run does not spuriously trip it.
+COV := --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app
+
 # Install the pinned reproducibility lock + the dev/CI toolchain (pyproject [dev]).
 setup:
 	$(PY) -m pip install --upgrade pip
@@ -42,15 +47,16 @@ security:
 audit:
 	pip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)
 
-# The real test gate: pytest (xdist-parallel) with the coverage floor from pyproject.
+# The real test gate: pytest (xdist-parallel) with the coverage floor (#439). The floor
+# is enforced HERE and in the CI test step, not in pyproject addopts.
 test:
-	pytest -n auto
+	pytest -n auto $(COV) --cov-report=term-missing --cov-fail-under=95
 
 cov:
-	pytest -n auto --cov-report=term-missing
+	pytest -n auto $(COV) --cov-report=term-missing
 
 html:
-	pytest --cov-report=html && echo "Open htmlcov/index.html"
+	pytest $(COV) --cov-report=html && echo "Open htmlcov/index.html"
 
 package:
 	$(PY) -m build
