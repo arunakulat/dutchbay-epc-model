@@ -121,6 +121,18 @@ Consolidates all work merged since the v14.15.0 tag (the prior `[Unreleased]` ra
 Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
 
 ### Engineering & audit remediation (2026-06)
+- Code-quality cleanup (#490, QUAL-6/7/8/10/11): archived 16 verified-unreferenced one-off
+  developer shell scripts (fix/cleanup/phase/rollback/deploy/sprint-validation helpers) +
+  the stray root "AAA - instructions" file to `legacy/dev_scripts/`, and the drifted
+  sprint-snapshot docs (`SPRINT15_SECOND_ITERATION_FIXES.md`, `sprint_16/REGRESSION_TEST_SUITE.md`
+  — the latter referenced the validator deleted in #472) to `legacy/sprint_snapshots/`
+  (QUAL-7/8/10; GWTF R12 legacy isolation; live tooling such as the venv/setup, `gwtf-*`,
+  release and sensitivity-validation scripts was left in place). QUAL-6 (repo-wide `black`):
+  the `black --check .` CI step is deliberately advisory (`|| true`) so legacy/excluded code
+  need not be reformatted — the engine packages are already black-clean (enforced by
+  pre-commit + the scoped `analytics/fx/` gate), and a 243-file repo-wide reformat is
+  intentionally NOT performed. QUAL-11: the full 3.11+3.12 matrix runs on push + nightly, the
+  accepted safety net for the PR-time 3.12-only leg. Cleanup only, KPI-neutral.
 - Property-based finance invariants (#491, audit §4.10): added the repo's first Hypothesis
   property tests (`tests/finance/test_finance_invariants_property.py`) asserting structural
   invariants across input ranges that pinned examples can't — NPV at 0% equals the
