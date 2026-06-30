@@ -37,7 +37,10 @@ and the year-indexed ``soh(t)`` multiply.
 NB: the round-trip-efficiency and functional-performance liquidated damages, and a
 sub-97% availability month, are *downside* levers; they are exposed here as optional
 multipliers (``availability_factor`` / ``dispatchable_ratio``) rather than modelled
-from a dispatch simulation, which the engine does not run.
+from a dispatch simulation, which the engine does not run. BESS-2 (#486): a scenario that
+has a measured/projected monthly availability can OPT IN to the tender's liquidated-damages
+derate ``clip(1 - 2*(0.97 - MA), 0, 1)`` by supplying ``revenue.monthly_availability_pct``
+in place of the static ``availability_factor`` (absent -> the static factor, unchanged).
 
 This module covers two ``revenue.model`` values: ``capacity_charge`` (above) and
 ``energy_tariff`` — a BESS charged by an existing solar PV plant and paid a flat tariff
@@ -47,7 +50,10 @@ for night-peak energy exported (the CEB Solar+BESS night-peak scheme, 45.80 LKR/
                  × availability_factor × tariff_lkr_per_kwh
 
 flat over ``contract_years`` (``cycles_per_year`` defaults to 365 — one cycle/day;
-``round_trip_efficiency`` to 0.90). Out of scope: the Kolonnawa 100 MW single-site
+``round_trip_efficiency`` to 0.90). BESS-6 (#486): the charging energy carries NO cost here
+because the scheme charges the BESS from a SEPARATE co-located solar PV plant the EPC owns;
+``round_trip_efficiency`` already books the dispatch loss, so a charging-cost line would
+double-count. Out of scope: the Kolonnawa 100 MW single-site
 project — a CEB-owned night-peak supply procured via an EPC contract, i.e. a
 construction-margin deal, not an operational tolling/tariff stream, so it does not belong
 on this operational cashflow path at all.
@@ -206,6 +212,43 @@ def _resolve_augmentation_events(value: Any, *, tech: str) -> List[Dict[str, Any
     return events
 
 
+def _ld_availability_derate(pct: Any, *, tech: str) -> float:
+    """The CEB tender's liquidated-damages availability derate for a monthly availability %.
+
+    The standalone-BESS tender guarantees 97% monthly availability with a 2x-per-point LD
+    below it: ``derate = clip(1 - 2 * (0.97 - MA), 0, 1)`` where ``MA`` is the availability
+    FRACTION. A month at/above 97% yields 1.0 (no penalty); 94% yields 1 - 2x0.03 = 0.94.
+    This is the BESS-2 (#486) opt-in alternative to the static ``availability_factor``: it is
+    used only when a scenario supplies ``revenue.monthly_availability_pct`` (a measured or
+    projected %), so the committed scenarios (which do not) stay byte-identical.
+    """
+    ma_pct = _as_float(pct)
+    if ma_pct is None or not 0.0 <= ma_pct <= 100.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.monthly_availability_pct={pct!r} "
+            "must be a percentage in [0, 100] (e.g. 94.0 for a 94% availability month)."
+        )
+    return min(1.0, max(0.0, 1.0 - 2.0 * (0.97 - ma_pct / 100.0)))
+
+
+def _resolve_project_life_years(config: Mapping[str, Any]) -> Optional[int]:
+    """Resolve the project operating life in years from the standard config paths.
+
+    Returns ``None`` when no life is declared (so the BESS-5 contract-years guard is a no-op
+    rather than a false positive on a minimal/synthetic config).
+    """
+    for path in (
+        ("project", "life_years"),
+        ("returns", "project_life_years"),
+        ("timeline", "ops_years"),
+        ("project", "project_life_years"),
+    ):
+        v = _as_float(_nested_get(config, *path))
+        if v is not None and v > 0:
+            return int(v)
+    return None
+
+
 def resolve_bess_specs(
     config: Mapping[str, Any],
 ) -> Optional[List[Dict[str, Any]]]:
@@ -307,13 +350,29 @@ def resolve_bess_specs(
                     "number of years."
                 )
             contract_years = int(cy_float)
+            # BESS-5 (#486): a BESS cannot earn its charge beyond the project's operating
+            # horizon — guard contract_years against the resolved project life.
+            project_life = _resolve_project_life_years(config)
+            if project_life is not None and contract_years > project_life:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.contract_years="
+                    f"{contract_years} exceeds the project life ({project_life} years); a "
+                    "BESS contract cannot run past the project's operating horizon."
+                )
 
-        # availability_factor is a common derate ([0, 1]); the rest is model-specific.
-        availability = _unit_factor(
-            revenue.get("availability_factor"),
-            tech=str(name),
-            field="availability_factor",
-        )
+        # availability_factor is a common static derate ([0, 1]). BESS-2 (#486): a scenario
+        # that has actual/projected MONTHLY availability can OPT IN to the tender's
+        # liquidated-damages formula via revenue.monthly_availability_pct instead of the
+        # static factor. Absent (the committed case) -> the static factor -> byte-identical.
+        monthly_avail = revenue.get("monthly_availability_pct")
+        if monthly_avail is not None:
+            availability = _ld_availability_derate(monthly_avail, tech=str(name))
+        else:
+            availability = _unit_factor(
+                revenue.get("availability_factor"),
+                tech=str(name),
+                field="availability_factor",
+            )
         # Year-indexed MDSC fade (default 0.0 -> no fade -> byte-identical). This is the
         # TIME-VARYING state-of-health decay, distinct from the STATIC dispatchable_ratio
         # derate above; the two multiply. floor_soh bounds the fade curve.

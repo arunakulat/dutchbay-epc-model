@@ -23,7 +23,7 @@ project:
   name: "CEB Solar+BESS night-peak 10MW/40MWh (energy tariff)"
   location: "Existing ground-mounted solar PV site, Sri Lanka (CEB Solar+BESS scheme)"
   capacity_mw: 10.0           # BESS power rating (MW)
-  capacity_factor: 0.0001     # NOMINAL placeholder (BESS-incremental; generation tariff is 0)
+  capacity_factor: 0.0         # BESS-incremental: no generation CF (revenue is the night-peak energy tariff)
   degradation: 0.0            # generation degradation N/A (storage)
   life_years: 10             # matches the 10-year night-peak BESS contract term
   cod_year: 2027

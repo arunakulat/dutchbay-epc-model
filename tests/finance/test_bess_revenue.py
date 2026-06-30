@@ -13,6 +13,8 @@ import pytest
 
 from finance.bess_revenue import (
     SUPPORTED_BESS_REVENUE_MODELS,
+    _ld_availability_derate,
+    _resolve_project_life_years,
     bess_augmentation_capex_lkr_for_year,
     bess_revenue_lkr_for_year,
     mdsc_soh_for_year,
@@ -531,3 +533,75 @@ def test_augmentation_restores_soh():
 def test_augmentation_schedule_malformed_fails_loud(bad, match):
     with pytest.raises(ValueError, match=match):
         resolve_bess_specs(_cfg(augmentation_schedule=bad))
+
+
+# ── BESS-2 (#486): opt-in liquidated-damages availability derate ────────────────
+
+
+def test_ld_availability_derate_formula():
+    # at/above the 97% guarantee -> no penalty, capped at 1.0
+    assert _ld_availability_derate(97.0, tech="b") == 1.0
+    assert _ld_availability_derate(99.5, tech="b") == 1.0
+    # below the guarantee -> 2x-per-point derate
+    assert _ld_availability_derate(94.0, tech="b") == pytest.approx(0.94)
+    assert _ld_availability_derate(90.0, tech="b") == pytest.approx(0.86)
+    # clipped at 0 for a catastrophic month
+    assert _ld_availability_derate(0.0, tech="b") == 0.0
+
+
+@pytest.mark.parametrize("bad", [-1.0, 100.1, "x", None])
+def test_ld_availability_derate_out_of_range_fails_loud(bad):
+    with pytest.raises(ValueError, match="monthly_availability_pct"):
+        _ld_availability_derate(bad, tech="b")
+
+
+def test_monthly_availability_pct_opts_into_ld_derate():
+    # a 94% availability month -> 0.94 derate, replacing the static availability_factor
+    spec = resolve_bess_specs(_cfg(monthly_availability_pct=94.0))[0]
+    assert spec["availability_factor"] == pytest.approx(0.94)
+
+
+def test_static_availability_factor_used_when_no_monthly_pct():
+    # absent monthly_availability_pct -> the static factor path is byte-identical
+    spec = resolve_bess_specs(_cfg(availability_factor=0.9))[0]
+    assert spec["availability_factor"] == 0.9
+
+
+# ── BESS-5 (#486): contract_years must not exceed the project life ──────────────
+
+
+def _cfg_with_life(life_years, **revenue_overrides) -> dict:
+    cfg = _cfg(**revenue_overrides)
+    cfg["project"] = {"capacity_mw": 10.0, "life_years": life_years}
+    return cfg
+
+
+def test_contract_years_exceeding_project_life_fails_loud():
+    with pytest.raises(ValueError, match="exceeds the project life"):
+        resolve_bess_specs(_cfg_with_life(15, contract_years=20))
+
+
+def test_contract_years_within_project_life_ok():
+    spec = resolve_bess_specs(_cfg_with_life(15, contract_years=15))[0]
+    assert spec["contract_years"] == 15
+
+
+def test_contract_years_guard_is_noop_without_a_declared_life():
+    # no project life anywhere -> the guard cannot false-positive on a minimal config
+    assert _resolve_project_life_years(_cfg(contract_years=99)) is None
+    spec = resolve_bess_specs(_cfg(contract_years=99))[0]
+    assert spec["contract_years"] == 99
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("project", "life_years"),
+        ("returns", "project_life_years"),
+        ("timeline", "ops_years"),
+        ("project", "project_life_years"),
+    ],
+)
+def test_resolve_project_life_reads_each_standard_path(path):
+    cfg = {path[0]: {path[1]: 12}}
+    assert _resolve_project_life_years(cfg) == 12

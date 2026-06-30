@@ -160,7 +160,9 @@ def _extract_project_life_years(
     if component_life is not None:
         return component_life
 
-    financing_life = as_int_or_none(get_nested(raw, ["Financing_Terms", "tenor_years"], None))
+    financing_life = as_int_or_none(
+        get_nested(raw, ["Financing_Terms", "tenor_years"], None)
+    )
     if financing_life is not None and 5 <= financing_life <= 60:
         if log:
             logger.info(
@@ -295,17 +297,20 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     # Annual O&M escalation (USD-real inflation), e.g. opex.escalation_pct: 2.5 -> 0.025.
     # Optional; defaults to 0.0 (flat USD) so existing scenarios are unchanged. The LKR
     # opex then escalates further via the per-year FX curve (inflation AND FX effects).
-    opex_escalation_pct = _pct_to_decimal(
-        _as_float_or_none(
-            _resolve_first(
-                raw,
-                ("opex", "escalation_pct"),
-                ("opex", "annual_escalation_pct"),
-                ("opex", "inflation_pct"),
-                "opex_escalation_pct",
+    opex_escalation_pct = (
+        _pct_to_decimal(
+            _as_float_or_none(
+                _resolve_first(
+                    raw,
+                    ("opex", "escalation_pct"),
+                    ("opex", "annual_escalation_pct"),
+                    ("opex", "inflation_pct"),
+                    "opex_escalation_pct",
+                )
             )
         )
-    ) or 0.0
+        or 0.0
+    )
 
     success_fee_raw = _as_float_or_none(
         _resolve_first(
@@ -412,9 +417,11 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
 
     _check_required("project_life_years", lambda v: isinstance(v, int) and v > 0)
     _check_required("capacity_mw", lambda v: isinstance(v, (int, float)) and v > 0)
+    # BESS-5 (#486): 0.0 is valid for a storage-only scenario (no generation CF; revenue
+    # is the BESS capacity charge). Negatives and >1 remain invalid.
     _check_required(
         "capacity_factor",
-        lambda v: isinstance(v, (int, float)) and 0.0 < float(v) <= 1.0,
+        lambda v: isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0,
     )
     _check_required(
         "tariff_lkr_per_kwh",
@@ -502,7 +509,10 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
         errors.append("capacity_factor: missing (required field)")
     else:
         cf = _pct_to_decimal(cf_raw)
-        if cf is None or not (0.0 < cf <= 1.0):
+        # BESS-5 (#486): admit 0.0 — a storage-only scenario has no generation capacity
+        # factor (its revenue is the BESS capacity charge), so a literal 0 is valid rather
+        # than the former 0.0001 placeholder. Negatives and >1 remain config errors.
+        if cf is None or not (0.0 <= cf <= 1.0):
             errors.append(
                 f"capacity_factor: {cf} out of range (must be 0.0-1.0 or 0-100%)"
             )

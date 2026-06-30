@@ -888,10 +888,14 @@ def _register_cashflow_schema() -> None:
             ),
             required=True,
             severity="error",
-            description="Net capacity factor (percent or decimal).",
+            description="Net capacity factor (percent or decimal); 0 for a "
+            "storage-only scenario whose revenue is the BESS capacity charge.",
+            # BESS-5 (#486): allow 0.0 — a standalone-BESS scenario has no generation
+            # capacity factor (its revenue is the capacity charge), so a literal 0 is
+            # valid rather than the former 0.0001 placeholder. Still reject negatives.
             validator=lambda v: isinstance(v, (int, float))
             and v is not None
-            and 0.0 < float(v) <= 100.0,
+            and 0.0 <= float(v) <= 100.0,
         ),
         RequiredFieldSpec(
             module="cashflow",
