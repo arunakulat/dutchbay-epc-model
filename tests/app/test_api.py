@@ -7,6 +7,8 @@ convention. Asserts wiring + the fail-loud 400 path, not economic magic numbers.
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from typing import Any, Dict
 
 import pytest
@@ -167,6 +169,134 @@ def test_run_case_report_pdf_success_path(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 # --------------------------------------------------------------------------- #
+# RPT-9: download-filename sanitisation + synchronous-route timeout
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("lendercase", "lendercase"),  # the normal constrained variant is untouched
+        ("base case", "base_case"),
+        ('a"b', "a_b"),  # quote would break the quoted-string header
+        ("a/b\\c", "a_b_c"),  # path separators
+        ("evil\r\nSet-Cookie: x", "evil_Set-Cookie_x"),  # CR/LF header injection
+        ("...", "report"),  # nothing printable survives -> fallback
+        ("", "report"),
+        ("好", "report"),  # non-ASCII collapses then strips to empty -> fallback
+    ],
+)
+def test_sanitise_filename_component(raw: str, expected: str) -> None:
+    assert api_main._sanitise_filename_component(raw) == expected
+
+
+def test_pdf_content_disposition_has_no_header_injection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even a crafted variant reaching the context yields a header with no CR/LF or quote."""
+    monkeypatch.setattr(api_main, "render_report_pdf", lambda _ctx: b"%PDF-1.7 stub")
+
+    class _Ctx:
+        scenario_variant = 'x"\r\nSet-Cookie: y'
+
+    monkeypatch.setattr(api_main, "_build_report_context", lambda _inputs: _Ctx())
+    resp = run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
+    cd = resp.headers["content-disposition"]
+    assert "\r" not in cd and "\n" not in cd and '"y' not in cd
+    assert cd == 'attachment; filename="dutchbay_x_Set-Cookie_y_report.pdf"'
+
+
+def test_run_with_timeout_passes_through_result() -> None:
+    assert asyncio.run(api_main._run_with_timeout(lambda: 42, timeout=5.0)) == 42
+
+
+def test_run_with_timeout_raises_504_on_slow_compute() -> None:
+    release = threading.Event()
+
+    def _slow() -> int:
+        release.wait(2.0)  # block the worker thread deterministically
+        return 1
+
+    async def _scenario() -> HTTPException:
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await api_main._run_with_timeout(_slow, timeout=0.01)
+            return exc.value
+        finally:
+            release.set()  # let the orphaned worker thread finish promptly
+
+    err = asyncio.run(_scenario())
+    assert err.status_code == 504
+    assert "time limit" in str(err.detail)
+
+
+def test_run_with_timeout_propagates_inner_http_exception() -> None:
+    """A fail-loud 400 from the wrapped core must not be masked as a 504."""
+
+    def _boom() -> int:
+        raise HTTPException(status_code=400, detail="bad")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(api_main._run_with_timeout(_boom, timeout=5.0))
+    assert exc.value.status_code == 400
+
+
+def test_run_with_timeout_sheds_load_when_at_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When every compute slot is occupied, a new request is shed with 503 (not queued)."""
+
+    async def _scenario() -> int:
+        sem = asyncio.Semaphore(1)
+        await sem.acquire()  # occupy the only slot (stands in for an in-flight compute)
+        monkeypatch.setattr(api_main, "_get_compute_semaphore", lambda: sem)
+        with pytest.raises(HTTPException) as exc:
+            await api_main._run_with_timeout(lambda: 1, timeout=5.0)
+        return exc.value.status_code
+
+    assert asyncio.run(_scenario()) == 503
+
+
+def test_timed_out_compute_keeps_its_slot_until_the_thread_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compute that exceeds the timeout still holds its concurrency slot until the
+    (uncancellable) worker thread actually finishes — the backpressure property a bare
+    ``wait_for`` would defeat by releasing the limiter token on cancellation."""
+
+    async def _scenario() -> None:
+        sem = asyncio.Semaphore(1)
+        monkeypatch.setattr(api_main, "_get_compute_semaphore", lambda: sem)
+        release = threading.Event()
+
+        def _slow() -> int:
+            release.wait(2.0)
+            return 1
+
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await api_main._run_with_timeout(_slow, timeout=0.05)
+            assert exc.value.status_code == 504
+            # The orphaned (timed-out) compute still occupies the only slot:
+            assert sem.locked() is True
+        finally:
+            release.set()  # let the worker thread finish so the slot can release
+        for _ in range(100):  # allow the shielded task to run its release
+            if not sem.locked():
+                break
+            await asyncio.sleep(0.02)
+        assert sem.locked() is False
+
+    asyncio.run(_scenario())
+
+
+def test_operation_ids_are_pinned() -> None:
+    """The /cases* operationIds are pinned, so the API contract is stable across renames."""
+    paths = app.openapi()["paths"]
+    assert paths["/cases"]["post"]["operationId"] == "run_case"
+    assert paths["/cases/report.html"]["post"]["operationId"] == "run_case_report_html"
+    assert paths["/cases/report.pdf"]["post"]["operationId"] == "run_case_report_pdf"
+
+
+# --------------------------------------------------------------------------- #
 # CaseResult projection
 # --------------------------------------------------------------------------- #
 def test_case_result_projection_filters_non_numeric() -> None:
@@ -180,8 +310,13 @@ def test_case_result_projection_filters_non_numeric() -> None:
     )
     assert result.status == "success"
     assert result.scenario_variant == "basecase"
-    assert result.kpis == {"project_irr": pytest.approx(0.05), "min_dscr": pytest.approx(1.3)}
-    assert "label" not in result.kpis and "flag" not in result.kpis  # str / bool dropped
+    assert result.kpis == {
+        "project_irr": pytest.approx(0.05),
+        "min_dscr": pytest.approx(1.3),
+    }
+    assert (
+        "label" not in result.kpis and "flag" not in result.kpis
+    )  # str / bool dropped
     assert result.run_manifest == {"commit": "abc123"}
 
 
@@ -221,12 +356,11 @@ def test_http_smoke_if_httpx_available() -> None:
 
 def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("httpx")
-    import app.api.jobs_router as jr
     from fastapi.testclient import TestClient
 
-    from app.jobs.store import InMemoryJobStore
-
+    import app.api.jobs_router as jr
     from app.api.auth import get_current_subject
+    from app.jobs.store import InMemoryJobStore
 
     # Stub the runner so the TestClient's background task does NOT hit real ERA5.
     monkeypatch.setattr(jr, "run_wind_job", lambda *a, **k: None)
