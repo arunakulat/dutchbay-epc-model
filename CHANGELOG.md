@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Measure-correlate-predict (MCP) for the long-term wind resource (#477, WIND-1).** New
+  `wind_resource.mcp` correlates a short on-site mast record against the concurrent ERA5
+  reference and applies the fitted transfer to the full long-term reference to predict the
+  long-term on-site wind-speed distribution (IEC 61400-15-2 / MEASNET). Two methods:
+  `variance_ratio` (default — preserves on-site variance and the energy-relevant tail) and
+  `linear_regression` (OLS; variance-deflating, diagnostic). Returns the transfer, the
+  predicted long-term mean, and a Weibull fit of the predicted distribution (reusing
+  `fit_weibull_on_series`). Opt-in via `resource.wind.mcp.enabled` — sites without a mast keep
+  raw ERA5 (the default), so committed scenarios are byte-identical; like the other producer
+  physics it feeds the frozen export only at a dated, authorized re-baseline. KPI-neutral.
 - **Multi-technology report section + shared-POI curtailment seam (#476, ARCH-4/5).**
   **ARCH-4:** the lender report now renders a Multi-Technology Breakdown section for hybrid
   plants — per-technology net AEP, AEP/CFADS/CAPEX shares, OPEX and cost-of-equity, plus the

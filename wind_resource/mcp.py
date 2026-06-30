@@ -1,0 +1,256 @@
+"""Measure-Correlate-Predict (MCP) for long-term on-site wind resource (WIND-1, #477).
+
+The deep-research audit flagged that the wind resource is taken from raw ERA5 with no MCP
+step against on-site measurement — which weakens the bankability of the long-term estimate,
+because reanalysis at a single grid cell carries a site-specific bias (terrain, roughness,
+height) that only concurrent on-site data can correct.
+
+MCP closes that gap (IEC 61400-15-2 / MEASNET practice): a SHORT on-site mast record is
+correlated against the CONCURRENT long-term reference (ERA5) to fit a transfer function, and
+that transfer is applied to the FULL long-term reference to PREDICT the long-term on-site
+wind-speed distribution — capturing the site bias the mast reveals while retaining the
+inter-annual coverage only the long reference has.
+
+Two transfer methods are provided:
+
+* ``variance_ratio`` (default, the bankable choice): ``slope = std(mast)/std(ref)``,
+  ``intercept = mean(mast) - slope*mean(ref)``. It reproduces the on-site **variance** (and
+  hence the high-wind tail that drives ``E[v^3]`` energy), which is what a P50/P90 needs.
+* ``linear_regression`` (ordinary least squares): minimises residual error but regresses
+  toward the mean, **deflating** variance — offered for completeness/diagnostics, not energy.
+
+This is an OPT-IN producer-side method: sites without a mast keep raw ERA5 (the default), so
+committed scenarios are byte-identical. Like the other producer physics it feeds the FROZEN
+export only at a dated, authorized re-baseline; running MCP here never silently moves committed
+economics. Wiring a mast data file + re-freezing the AEP is the integration step (a scenario
+declares ``resource.wind.mcp``); this module is the validated method + config gate behind it.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+
+import numpy as np
+import pandas as pd
+
+from wind_resource.weibull_fit import fit_weibull_on_series
+
+logger = logging.getLogger(__name__)
+
+#: Transfer methods. ``variance_ratio`` preserves on-site variance (bankable / energy);
+#: ``linear_regression`` is OLS (variance-deflating; diagnostic only).
+MCP_METHODS: Tuple[str, ...] = ("variance_ratio", "linear_regression")
+
+#: Default minimum concurrent samples to fit a transfer. A *bankable* MCP wants >= ~12 months
+#: of concurrent data (IEC 61400-15-2); this hard floor only guards the statistics from being
+#: fit on too few points — a scenario should set its own bankable minimum.
+DEFAULT_MIN_CONCURRENT: int = 24
+
+
+@dataclass(frozen=True)
+class MCPResult:
+    """A measure-correlate-predict long-term on-site wind estimate (WIND-1)."""
+
+    method: str
+    slope: float
+    intercept: float
+    pearson_r: float
+    n_concurrent: int
+    ref_long_term_mean_ms: float
+    predicted_long_term_mean_ms: float
+    weibull_a: float
+    weibull_k: float
+    uplift_pct: float  # predicted on-site vs raw reference long-term mean
+    #: Fraction of long-term steps where the transfer predicted a negative speed and was
+    #: clipped to 0. A non-trivial value means the clip lifts the predicted mean and shrinks
+    #: its variance, so the variance-preservation property degrades — disclosed, not silent.
+    fraction_clipped: float = 0.0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "method": self.method,
+            "slope": round(self.slope, 5),
+            "intercept": round(self.intercept, 5),
+            "pearson_r": round(self.pearson_r, 5),
+            "n_concurrent": self.n_concurrent,
+            "ref_long_term_mean_ms": round(self.ref_long_term_mean_ms, 4),
+            "predicted_long_term_mean_ms": round(self.predicted_long_term_mean_ms, 4),
+            "weibull_a": round(self.weibull_a, 4),
+            "weibull_k": round(self.weibull_k, 4),
+            "uplift_pct": round(self.uplift_pct, 3),
+            "fraction_clipped": round(self.fraction_clipped, 5),
+        }
+
+
+def pearson_r(mast: np.ndarray, ref: np.ndarray) -> float:
+    """Pearson correlation of two concurrent series (0.0 if either is constant)."""
+    if mast.std() == 0.0 or ref.std() == 0.0:
+        return 0.0
+    return float(np.corrcoef(mast, ref)[0, 1])
+
+
+def variance_ratio_transfer(
+    mast: np.ndarray, ref_concurrent: np.ndarray
+) -> Tuple[float, float]:
+    """Variance-ratio transfer ``(slope, intercept)`` (IEC 61400-15-2; variance-preserving)."""
+    ref_std = float(ref_concurrent.std())
+    if ref_std == 0.0:
+        raise ValueError(
+            "reference concurrent series has zero variance; cannot fit MCP"
+        )
+    slope = float(mast.std()) / ref_std
+    intercept = float(mast.mean()) - slope * float(ref_concurrent.mean())
+    return slope, intercept
+
+
+def linear_regression_transfer(
+    mast: np.ndarray, ref_concurrent: np.ndarray
+) -> Tuple[float, float]:
+    """Ordinary-least-squares transfer ``(slope, intercept)`` (variance-deflating)."""
+    slope, intercept = np.polyfit(ref_concurrent, mast, 1)
+    return float(slope), float(intercept)
+
+
+def predict_long_term(
+    slope: float, intercept: float, ref_long_term: np.ndarray
+) -> np.ndarray:
+    """Apply a transfer to the long-term reference; clip to physical (>= 0) wind speeds."""
+    predicted = slope * ref_long_term + intercept
+    return np.clip(predicted, 0.0, None)
+
+
+def run_mcp(
+    mast_concurrent: Sequence[float],
+    ref_concurrent: Sequence[float],
+    ref_long_term: Sequence[float],
+    *,
+    method: str = "variance_ratio",
+    min_concurrent: int = DEFAULT_MIN_CONCURRENT,
+) -> MCPResult:
+    """Run measure-correlate-predict and return the long-term on-site estimate.
+
+    Args:
+        mast_concurrent: On-site mast wind speeds (m/s) over the measurement window.
+        ref_concurrent: Long-term reference (ERA5) wind speeds over the SAME window, aligned
+            element-wise with ``mast_concurrent``.
+        ref_long_term: The full long-term reference series (m/s) to predict on-site from.
+        method: ``"variance_ratio"`` (default) or ``"linear_regression"``.
+        min_concurrent: Minimum aligned concurrent samples required to fit the transfer.
+
+    Returns:
+        An :class:`MCPResult` with the fitted transfer, the predicted long-term on-site mean,
+        and a Weibull fit of the predicted on-site distribution.
+
+    Raises:
+        ValueError: unknown ``method``; concurrent series differ in length or fall below
+            ``min_concurrent``; the long-term reference is empty; or the reference has zero
+            variance (CESSPIT — fail loud rather than emit a meaningless transfer).
+    """
+    if method not in MCP_METHODS:
+        raise ValueError(f"Unknown MCP method {method!r}; choose from {MCP_METHODS}")
+    mast = np.asarray(mast_concurrent, dtype=float)
+    ref_c = np.asarray(ref_concurrent, dtype=float)
+    ref_lt = np.asarray(ref_long_term, dtype=float)
+    # Fail loud on gaps: real ERA5 / mast records routinely carry NaN/inf, which would
+    # otherwise silently corrupt the means while still yielding a plausible Weibull (CESSPIT).
+    for name, arr in (
+        ("mast_concurrent", mast),
+        ("ref_concurrent", ref_c),
+        ("ref_long_term", ref_lt),
+    ):
+        if arr.size and not np.all(np.isfinite(arr)):
+            raise ValueError(
+                f"{name} contains non-finite (NaN/inf) values; clean the series before MCP"
+            )
+    if mast.shape != ref_c.shape:
+        raise ValueError(
+            f"mast and reference concurrent series must align; got {mast.shape} vs "
+            f"{ref_c.shape}"
+        )
+    if mast.size < min_concurrent:
+        raise ValueError(
+            f"need >= {min_concurrent} concurrent samples to fit MCP; got {mast.size}"
+        )
+    if ref_lt.size == 0:
+        raise ValueError("ref_long_term is empty")
+    # Both methods need a non-degenerate reference; guard here so linear_regression (OLS)
+    # fails loud identically to variance_ratio rather than emitting a garbage np.polyfit.
+    if float(ref_c.std()) == 0.0:
+        raise ValueError(
+            "reference concurrent series has zero variance; cannot fit MCP"
+        )
+
+    if method == "variance_ratio":
+        slope, intercept = variance_ratio_transfer(mast, ref_c)
+    else:
+        slope, intercept = linear_regression_transfer(mast, ref_c)
+
+    fraction_clipped = float(np.mean((slope * ref_lt + intercept) < 0.0))
+    if fraction_clipped > 0.01:
+        logger.warning(
+            "MCP transfer predicted negative speeds at %.1f%% of long-term steps; clipping "
+            "to 0 lifts the predicted mean and shrinks its variance.",
+            fraction_clipped * 100.0,
+        )
+    predicted = predict_long_term(slope, intercept, ref_lt)
+    weibull = fit_weibull_on_series(
+        pd.DataFrame({"ws": predicted}), ws_column="ws", method="mle"
+    )
+    ref_mean = float(ref_lt.mean())
+    pred_mean = float(predicted.mean())
+    uplift = ((pred_mean - ref_mean) / ref_mean * 100.0) if ref_mean > 0 else 0.0
+
+    return MCPResult(
+        method=method,
+        slope=slope,
+        intercept=intercept,
+        pearson_r=pearson_r(mast, ref_c),
+        n_concurrent=int(mast.size),
+        ref_long_term_mean_ms=ref_mean,
+        predicted_long_term_mean_ms=pred_mean,
+        weibull_a=weibull.weibull_a,
+        weibull_k=weibull.weibull_k,
+        uplift_pct=uplift,
+        fraction_clipped=fraction_clipped,
+    )
+
+
+def mcp_settings(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve the opt-in ``resource.wind.mcp`` settings, or ``None`` when MCP is off.
+
+    Returns ``{"method": ..., "min_concurrent": ...}`` only when
+    ``resource.wind.mcp.enabled`` is truthy; otherwise ``None`` so the caller keeps the raw
+    ERA5 path (the default — committed scenarios are byte-identical). The mast/reference
+    series themselves are supplied by the caller's data-ingest step (a scenario points
+    ``resource.wind.mcp`` at its mast record); this only resolves the method knobs.
+    """
+    wind = config.get("resource", {}) if isinstance(config, Mapping) else {}
+    wind = wind.get("wind", {}) if isinstance(wind, Mapping) else {}
+    mcp = wind.get("mcp") if isinstance(wind, Mapping) else None
+    if not isinstance(mcp, Mapping) or not mcp.get("enabled"):
+        return None
+    method = str(mcp.get("method", "variance_ratio")).strip().lower()
+    if method not in MCP_METHODS:
+        raise ValueError(
+            f"resource.wind.mcp.method={method!r} is invalid; choose from {MCP_METHODS}"
+        )
+    try:
+        min_concurrent = int(mcp.get("min_concurrent", DEFAULT_MIN_CONCURRENT))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("resource.wind.mcp.min_concurrent must be an integer") from exc
+    return {"method": method, "min_concurrent": min_concurrent}
+
+
+__all__ = [
+    "MCP_METHODS",
+    "DEFAULT_MIN_CONCURRENT",
+    "MCPResult",
+    "pearson_r",
+    "variance_ratio_transfer",
+    "linear_regression_transfer",
+    "predict_long_term",
+    "run_mcp",
+    "mcp_settings",
+]
