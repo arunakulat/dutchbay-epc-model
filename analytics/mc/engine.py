@@ -28,6 +28,7 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.aggregate import aggregate_trials
 from analytics.mc.correlation import (
     CorrelationSpec,
+    align_correlation_to_params,
     apply_correlation_structure,
     load_correlation_from_config,
 )
@@ -341,6 +342,16 @@ class MonteCarloEngine:
             self._dead_param_names,
             self._base_outside_bounds,
         ) = self._extract_param_definitions(self._base_config)
+
+        # MC-7 (#487): re-index the correlation matrix onto the ACTIVE parameter set. A
+        # scenario authors its matrix against the parameters it declares; a consumer that
+        # OVERRIDES monte_carlo.parameters (e.g. fx-calibration's single fx_calibrated driver)
+        # while inheriting the correlation block would otherwise hit a shape mismatch in
+        # apply_correlation_structure. align_correlation_to_params subsets/reorders via the
+        # spec's param_names (no-op when they already match -> byte-identical lender case).
+        self._correlation = align_correlation_to_params(
+            self._correlation, self._param_names
+        )
 
         # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
         _mc_cfg = self._base_config.get("monte_carlo", {})

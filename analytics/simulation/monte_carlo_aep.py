@@ -234,8 +234,15 @@ def run_monte_carlo_aep(
     elec_loss_samples = rng.normal(elec_loss_base, electrical_loss_std_pct, n_scenarios)
     elec_loss_samples = np.clip(elec_loss_samples, 0.0, 5.0)
 
-    # Run scenarios (vectorized for speed)
-    logger.info("Generating wind distributions and computing AEP...")
+    # MC-6 (#487): the PARAMETER SAMPLING above is vectorised (the five rng.normal draws
+    # produce length-n arrays in one call each). The per-scenario step below is a genuine
+    # Python loop, NOT vectorised: each scenario draws its OWN 8760-hour wind series
+    # (rng.weibull(k_i, 8760)) and runs it through the power curve. It cannot be vectorised
+    # in memory — an (n_scenarios x 8760) wind array is ~7 GB of float64 at the production
+    # n=100k. The earlier "vectorized for speed" comment was inaccurate and has been removed.
+    logger.info(
+        "Generating wind distributions and computing AEP (per-scenario loop)..."
+    )
 
     for i in range(n_scenarios):
         if (i + 1) % 10000 == 0:
