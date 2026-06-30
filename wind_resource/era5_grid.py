@@ -59,7 +59,9 @@ class GridSpec:
         if self.cell_deg <= 0.0:
             raise ValueError(f"cell_deg must be > 0, got {self.cell_deg}")
         if self.mode not in ("native", "interpolated"):
-            raise ValueError(f"mode must be 'native' or 'interpolated', got {self.mode}")
+            raise ValueError(
+                f"mode must be 'native' or 'interpolated', got {self.mode}"
+            )
 
     @property
     def span_deg(self) -> float:
@@ -83,8 +85,12 @@ class GridSpec:
         is the top (north) edge.
         """
         half = self.span_deg / 2.0
-        lats = [self.center_lat + half - (i + 0.5) * self.cell_deg for i in range(self.n)]
-        lons = [self.center_lon - half + (j + 0.5) * self.cell_deg for j in range(self.n)]
+        lats = [
+            self.center_lat + half - (i + 0.5) * self.cell_deg for i in range(self.n)
+        ]
+        lons = [
+            self.center_lon - half + (j + 0.5) * self.cell_deg for j in range(self.n)
+        ]
         return [(la, lo) for la in lats for lo in lons]
 
 
@@ -105,8 +111,58 @@ def assemble_grids(cells: List[CellResult], n: int) -> Dict[str, np.ndarray]:
         raise ValueError(f"expected {n * n} cells for a {n}x{n} grid, got {len(cells)}")
     ws = np.array([c.ws150_mean for c in cells], dtype="float32").reshape(n, n)
     cf = np.array([c.capacity_factor for c in cells], dtype="float32").reshape(n, n)
-    aep = np.array([c.aep_per_turbine_gwh for c in cells], dtype="float32").reshape(n, n)
+    aep = np.array([c.aep_per_turbine_gwh for c in cells], dtype="float32").reshape(
+        n, n
+    )
     return {"ws150_mean": ws, "capacity_factor": cf, "aep_per_turbine": aep}
+
+
+def spatial_representativeness(
+    cells: List[CellResult],
+    n: int,
+    *,
+    spread_tol_pct: float = 15.0,
+    deviation_tol_pct: float = 8.0,
+) -> Dict[str, Any]:
+    """Is the site's ERA5 cell REPRESENTATIVE of its neighbourhood? (WIND-10, #484).
+
+    A single-cell assessment silently assumes the site cell typifies the surrounding
+    resource. On a steep wind gradient (coastline, ridge) that can bias the AEP. Given an
+    ``n×n`` (odd ``n``) neighbourhood of ``CellResult`` cells, this computes the hub-height
+    wind-speed SPREAD across the neighbourhood ``100*(max-min)/mean`` and the centre cell's
+    DEVIATION from the neighbourhood mean ``100*(centre-mean)/mean``, and flags
+    ``representative`` when both are within tolerance. It is a read-only diagnostic — it does
+    NOT alter the AEP; a fired flag is a prompt to review siting/measurement, not an automatic
+    adjustment.
+    """
+    if len(cells) != n * n:
+        raise ValueError(f"expected {n * n} cells for a {n}x{n} grid, got {len(cells)}")
+    if n % 2 == 0:
+        raise ValueError(
+            f"need an odd grid size for a well-defined centre cell, got n={n}"
+        )
+    arr = np.asarray([c.ws150_mean for c in cells], dtype=float)
+    center_ws = float(arr[(n // 2) * n + (n // 2)])
+    nbhd_mean = float(arr.mean())
+    if nbhd_mean <= 0.0:
+        raise ValueError(
+            "neighbourhood mean wind speed must be > 0 to assess representativeness"
+        )
+    spread_pct = 100.0 * (float(arr.max()) - float(arr.min())) / nbhd_mean
+    deviation_pct = 100.0 * (center_ws - nbhd_mean) / nbhd_mean
+    return {
+        "assessed": True,
+        "n_cells": n * n,
+        "center_ws150_ms": round(center_ws, 4),
+        "neighbourhood_mean_ws150_ms": round(nbhd_mean, 4),
+        "spread_pct": round(spread_pct, 4),
+        "center_deviation_pct": round(deviation_pct, 4),
+        "spread_tol_pct": float(spread_tol_pct),
+        "deviation_tol_pct": float(deviation_tol_pct),
+        "representative": bool(
+            spread_pct <= spread_tol_pct and abs(deviation_pct) <= deviation_tol_pct
+        ),
+    }
 
 
 def downscale_bilinear(
@@ -133,12 +189,16 @@ def downscale_bilinear(
     half = coarse_spec.span_deg / 2.0
     # Coarse cell-centre coordinates. Rows run north→south, so latitudes descend.
     clats_desc = np.array(
-        [coarse_spec.center_lat + half - (i + 0.5) * coarse_spec.cell_deg
-         for i in range(coarse_spec.n)]
+        [
+            coarse_spec.center_lat + half - (i + 0.5) * coarse_spec.cell_deg
+            for i in range(coarse_spec.n)
+        ]
     )
     clons = np.array(
-        [coarse_spec.center_lon - half + (j + 0.5) * coarse_spec.cell_deg
-         for j in range(coarse_spec.n)]
+        [
+            coarse_spec.center_lon - half + (j + 0.5) * coarse_spec.cell_deg
+            for j in range(coarse_spec.n)
+        ]
     )
     lat_asc = clats_desc[::-1]  # RegularGridInterpolator needs strictly ascending axes
     fine_pts = np.array(fine_spec.cell_centers())  # (m*m, 2) as (lat, lon)
@@ -147,8 +207,11 @@ def downscale_bilinear(
     for var, grid in coarse.items():
         grid_asc = grid[::-1, :]  # flip rows to ascending-lat order
         interp = RegularGridInterpolator(
-            (lat_asc, clons), grid_asc, method="linear",
-            bounds_error=False, fill_value=None,
+            (lat_asc, clons),
+            grid_asc,
+            method="linear",
+            bounds_error=False,
+            fill_value=None,
         )
         vals = interp(fine_pts).astype("float32").reshape(fine_spec.n, fine_spec.n)
         out[var] = vals
@@ -181,7 +244,9 @@ def fetch_cell_results(
     )
 
     if spec.mode != "native":
-        raise ValueError("fetch_cell_results requires a 'native' grid; downscale the fine grid")
+        raise ValueError(
+            "fetch_cell_results requires a 'native' grid; downscale the fine grid"
+        )
 
     results: List[CellResult] = []
     n_turb = max(1, int(getattr(base_request, "num_turbines", 1)))

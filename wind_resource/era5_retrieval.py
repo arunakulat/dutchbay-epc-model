@@ -67,7 +67,9 @@ def _is_leap(year: int) -> bool:
 
 def expected_hours_for_years(start_year: int, end_year: int) -> int:
     """Total hours in the calendar-year span ``[start, end]`` (leap-aware)."""
-    return sum((366 if _is_leap(y) else 365) * 24 for y in range(start_year, end_year + 1))
+    return sum(
+        (366 if _is_leap(y) else 365) * 24 for y in range(start_year, end_year + 1)
+    )
 
 
 def _resolve_reference(download: Dict[str, Any]) -> Tuple[int, int, str]:
@@ -286,7 +288,9 @@ def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.Data
     return df
 
 
-def validate_coverage(series: pd.DataFrame, config: ERA5RequestConfig) -> Dict[str, Any]:
+def validate_coverage(
+    series: pd.DataFrame, config: ERA5RequestConfig
+) -> Dict[str, Any]:
     """Assert the retrieved series fully covers the requested window (no silent partials).
 
     Compares the row count against the leap-aware expected hours for the year span. On a
@@ -358,6 +362,22 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
         "expected_hours": config.expected_hours,
         "actual_hours": coverage["actual_hours"],
         "coverage_complete": coverage["coverage_complete"],
+    }
+    # WIND-10 (#484): this is a SINGLE-CELL ERA5 timeseries retrieval — the assessment uses
+    # one grid cell and implicitly assumes it typifies the site neighbourhood. Surface that
+    # limitation honestly rather than leaving it unstated; a representativeness verdict
+    # requires a neighbourhood, which the single-point timeseries product does not fetch. To
+    # assess it, run an n×n grid (``wind_resource.era5_grid``) and pass the cells to
+    # ``wind_resource.era5_grid.spatial_representativeness``.
+    result["spatial_representativeness"] = {
+        "assessed": False,
+        "n_cells": 1,
+        "site_cell": {"latitude": config.latitude, "longitude": config.longitude},
+        "reason": (
+            "single-cell ERA5 timeseries retrieval; neighbourhood not fetched. Run an n×n "
+            "grid (wind_resource.era5_grid) + spatial_representativeness() to assess whether "
+            "the site cell is representative of its surroundings (e.g. coastal/ridge gradient)."
+        ),
     }
     logger.info(
         "%s: %.1f GWh P50 (CF %.1f%%) from %s vintage %d-%d (%d h, %s)",
