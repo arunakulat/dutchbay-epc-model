@@ -10,16 +10,16 @@ Design goals
 - All production scenario evaluation goes through analytics.evaluation_v14.evaluate_with_overrides
 - Correlation + degradation are optional steps (plug-ins), not separate engines.
 """
-from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from __future__ import annotations
 
 import hashlib
 import json
 import logging
 import math
+from dataclasses import dataclass
 from statistics import NormalDist
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -58,7 +58,9 @@ class MonteCarloRunMeta:
 
 
 def _stable_config_hash(cfg: Mapping[str, Any]) -> str:
-    payload = json.dumps(cfg, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    payload = json.dumps(
+        cfg, sort_keys=True, separators=(",", ":"), default=str
+    ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
@@ -102,7 +104,9 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
 
     project_irr = max(0.0, 0.13 * tariff_scale * cf_scale / max(capex_scale, 0.01))
     dscr_min = max(0.01, 1.35 * tariff_scale * cf_scale / max(capex_scale, 0.01))
-    project_npv = (tariff_scale * cf_scale - capex_scale - 0.05 * opex_scale) * 10_000_000.0
+    project_npv = (
+        tariff_scale * cf_scale - capex_scale - 0.05 * opex_scale
+    ) * 10_000_000.0
 
     return {
         "project_irr": float(project_irr),
@@ -152,13 +156,23 @@ def _tail_risk(
     if not (0.0 < confidence < 1.0) or not trial_metrics:
         return {}
     q = 1.0 - confidence
-    keys = {k for tm in trial_metrics for k, v in tm.items()
-            if not k.startswith("_") and isinstance(v, (int, float)) and not isinstance(v, bool)}
+    keys = {
+        k
+        for tm in trial_metrics
+        for k, v in tm.items()
+        if not k.startswith("_")
+        and isinstance(v, (int, float))
+        and not isinstance(v, bool)
+    }
     out: Dict[str, Dict[str, float]] = {}
     for k in sorted(keys):
         vals = np.array(
-            [float(tm[k]) for tm in trial_metrics
-             if isinstance(tm.get(k), (int, float)) and not isinstance(tm.get(k), bool)],
+            [
+                float(tm[k])
+                for tm in trial_metrics
+                if isinstance(tm.get(k), (int, float))
+                and not isinstance(tm.get(k), bool)
+            ],
             dtype=float,
         )
         if vals.size == 0:
@@ -225,7 +239,9 @@ def _trial_fixed_debt_min_dscr(
 #: Distribution shapes the sampler can honor (besides the calibrated FX driver). A declared
 #: shape outside this set is a config error (previously silently sampled uniform — decorative).
 _SUPPORTED_DISTRIBUTIONS = frozenset({"uniform", "triangular", "normal", "lognormal"})
-_Z975 = 1.959963984540054  # Phi^-1(0.975): low/high read as a 95% CI for normal/lognormal
+_Z975 = (
+    1.959963984540054  # Phi^-1(0.975): low/high read as a 95% CI for normal/lognormal
+)
 
 
 def _inv_cdf_shaped(u: float, kind: str, low: float, high: float, mode: float) -> float:
@@ -251,12 +267,32 @@ def _inv_cdf_shaped(u: float, kind: str, low: float, high: float, mode: float) -
         lo = low if low > 0 else 1e-12
         mu = 0.5 * (math.log(lo) + math.log(high))
         sigma = (math.log(high) - math.log(lo)) / (2.0 * _Z975)
-        return math.exp(mu + sigma * NormalDist(0.0, 1.0).inv_cdf(u)) if sigma > 0 else math.exp(mu)
+        return (
+            math.exp(mu + sigma * NormalDist(0.0, 1.0).inv_cdf(u))
+            if sigma > 0
+            else math.exp(mu)
+        )
     return low + u * (high - low)  # uniform fallback (not normally reached)
 
 
 class MonteCarloEngine:
-    """Canonical Monte Carlo engine."""
+    """Canonical Monte Carlo engine.
+
+    Common random numbers (MC-9, #473): ``common_random_numbers`` (default true) applies
+    CRN *within a single run* — every sampled driver dimension is drawn from one
+    ``seed``-seeded stream, so re-running with the same seed reproduces the trial set exactly
+    (MRM-01) and the stratified-LHS structure is shared across dimensions. CRN *across separate
+    runs/variants* (e.g. pairing a base vs a stressed run on identical draws to reduce the
+    variance of their difference) is a deliberately external concern: pass the SAME ``seed``
+    (and the same param set/order) to both ``MonteCarloEngine`` instances and the draws line
+    up. This is by design, not a defect — the engine does not implicitly couple two runs.
+
+    Toy fallback (MC-9, #473): when a trial's full v14 evaluation raises, the engine appends a
+    deterministic toy-metric stand-in so a smoke run still yields an array; the trial is tagged
+    ``_toy_fallback`` and counted in ``toy_fallback_count``. Set
+    ``monte_carlo.allow_toy_fallback: false`` to fail loud instead — a production run then
+    RAISES on the first failed trial rather than reporting fabricated KPIs.
+    """
 
     def __init__(
         self,
@@ -274,7 +310,8 @@ class MonteCarloEngine:
         # were not in the override.  When base_config is already a plain
         # Mapping (the normal case from tests and CLI), this is a no-op.
         try:
-            from omegaconf import OmegaConf, DictConfig
+            from omegaconf import DictConfig, OmegaConf
+
             if isinstance(base_config, DictConfig):
                 self._base_config: Dict[str, Any] = OmegaConf.to_container(  # type: ignore[assignment]
                     base_config, resolve=True, throw_on_missing=False
@@ -308,7 +345,20 @@ class MonteCarloEngine:
         # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
         _mc_cfg = self._base_config.get("monte_carlo", {})
         self._fixed_debt_stress: bool = (
-            bool(_mc_cfg.get("fixed_debt_stress", False)) if isinstance(_mc_cfg, Mapping) else False
+            bool(_mc_cfg.get("fixed_debt_stress", False))
+            if isinstance(_mc_cfg, Mapping)
+            else False
+        )
+        # MC-9 (#473): the toy-metric fallback exists so a smoke/integration run on a minimal
+        # config still produces an array. On a REAL run a fallback means full v14 evaluation
+        # FAILED for that trial — the toy KPIs are fabricated, not real, and (though tagged and
+        # counted) could be consumed downstream as if real. Opt in to fail-loud via
+        # monte_carlo.allow_toy_fallback: false, which RAISES on the first failed trial instead
+        # of substituting toy metrics. Default true keeps smoke tests and back-compat identical.
+        self._allow_toy_fallback: bool = (
+            bool(_mc_cfg.get("allow_toy_fallback", True))
+            if isinstance(_mc_cfg, Mapping)
+            else True
         )
         self._fixed_debt_covenant: float = _resolve_min_dscr_covenant(self._base_config)
 
@@ -366,10 +416,14 @@ class MonteCarloEngine:
                 "A distribution: fx_calibrated parameter requires fx.start_lkr_per_usd "
                 "(the pinned anchor spot the calibrated shocks scale around)."
             )
-        calibration = calibrate_from_config(self._base_config, pinned_spot=float(pinned))
+        calibration = calibrate_from_config(
+            self._base_config, pinned_spot=float(pinned)
+        )
         mc = self._base_config.get("monte_carlo", {})
         fxc = mc.get("fx_calibration", {}) if isinstance(mc, Mapping) else {}
-        self._fx_drive_drift = bool(fxc.get("drive_drift", True)) if isinstance(fxc, Mapping) else True
+        self._fx_drive_drift = (
+            bool(fxc.get("drive_drift", True)) if isinstance(fxc, Mapping) else True
+        )
         self._fx_calibration = calibration
         self._fx_sampler = calibration.sampler()
         logger.info(
@@ -408,14 +462,20 @@ class MonteCarloEngine:
         drive_drift, and records the realised spot back into ``sample_row`` so the
         aggregated/reported MC input is the spot (not the unit draw).
         """
-        if self._fx_sampler is None or self._fx_param_index is None or self._fx_param_name is None:
+        if (
+            self._fx_sampler is None
+            or self._fx_param_index is None
+            or self._fx_param_name is None
+        ):
             return overrides
         u = float(sample_row[self._fx_param_index])
         spot = self._fx_sampler.spot_from_unit(u)
         self._set_dotted(overrides, self._fx_param_name, spot)
         if self._fx_drive_drift:
             self._set_dotted(overrides, "fx.annual_depr", self._fx_sampler.drift)
-        sample_row[self._fx_param_index] = spot  # record the spot for aggregation/reporting
+        sample_row[self._fx_param_index] = (
+            spot  # record the spot for aggregation/reporting
+        )
         return overrides
 
     def _init_cf_coupling(self) -> None:
@@ -440,7 +500,9 @@ class MonteCarloEngine:
                 except (TypeError, ValueError):
                     continue
         proj = self._base_config.get("project")
-        base_proj_cf = proj.get("capacity_factor") if isinstance(proj, Mapping) else None
+        base_proj_cf = (
+            proj.get("capacity_factor") if isinstance(proj, Mapping) else None
+        )
         if not base_tech_cfs or not base_proj_cf:
             return
         self._cf_coupling = (float(base_proj_cf), base_tech_cfs)
@@ -457,7 +519,11 @@ class MonteCarloEngine:
                 continue
             low, high = self._param_bounds[idx]
             base = _resolve_config_value(self._base_config, self._param_names[idx])
-            mode = base if (base is not None and low <= base <= high) else 0.5 * (low + high)
+            mode = (
+                base
+                if (base is not None and low <= base <= high)
+                else 0.5 * (low + high)
+            )
             self._shaped_params[idx] = (kind, float(low), float(high), float(mode))
             self._param_bounds[idx] = (0.0, 1.0)
 
@@ -465,7 +531,8 @@ class MonteCarloEngine:
         self, overrides: Dict[str, Any], sample_row: np.ndarray
     ) -> Dict[str, Any]:
         """Map each shaped param's unit LHS draw through its inverse-CDF, overwriting the raw
-        unit value the static builder placed and recording the shaped value for aggregation."""
+        unit value the static builder placed and recording the shaped value for aggregation.
+        """
         if not self._shaped_params:
             return overrides
         for idx, (kind, low, high, mode) in self._shaped_params.items():
@@ -492,7 +559,9 @@ class MonteCarloEngine:
         ratio = float(cf) / base_proj_cf
         for tech, base_cf in base_tech_cfs.items():
             self._set_dotted(
-                overrides, f"generation.technologies.{tech}.capacity_factor", base_cf * ratio
+                overrides,
+                f"generation.technologies.{tech}.capacity_factor",
+                base_cf * ratio,
             )
         return overrides
 
@@ -588,7 +657,8 @@ class MonteCarloEngine:
                     "DEGENERATE (zero-variance) risk distribution. Prefer a valid dotted "
                     "path (e.g. capex.usd_total, project.capacity_factor). The post-run "
                     "degenerate_sweep flag confirms whether dispersion actually collapsed.",
-                    idx, name,
+                    idx,
+                    name,
                 )
             else:
                 # Distribution-integrity check: the sampled band SHOULD contain the
@@ -605,7 +675,11 @@ class MonteCarloEngine:
                         "monte_carlo.parameters[%d].name %r deterministic base %.6g is OUTSIDE "
                         "its MC band [%.6g, %.6g]; the sampled distribution does not contain the "
                         "base case, so MC P50 will not reconcile to the deterministic run.",
-                        idx, name, base_val, low, high,
+                        idx,
+                        name,
+                        base_val,
+                        low,
+                        high,
                     )
 
             param_names.append(name)
@@ -649,7 +723,9 @@ class MonteCarloEngine:
         fixed_dscr_vals: List[float] = []
         if self._fixed_debt_stress:
             base_full = evaluate_with_overrides(
-                config_path=None, raw_config=self._base_config, overrides={},
+                config_path=None,
+                raw_config=self._base_config,
+                overrides={},
                 return_full_result=True,
             )
             if isinstance(base_full, Mapping):
@@ -664,7 +740,9 @@ class MonteCarloEngine:
             overrides = self._apply_distribution_shapes(overrides, samples[i])
             overrides = self._apply_cf_coupling(overrides)
             overrides = self._apply_fx_calibration(overrides, samples[i])
-            overrides = apply_degradation_if_enabled(base_cfg=self._base_config, overrides=overrides)
+            overrides = apply_degradation_if_enabled(
+                base_cfg=self._base_config, overrides=overrides
+            )
 
             try:
                 out = evaluate_with_overrides(
@@ -686,6 +764,16 @@ class MonteCarloEngine:
                 else:
                     trial_metrics.append({})
             except Exception as exc:
+                # MC-9 (#473): fail loud when the scenario has opted out of the fallback —
+                # a production run must not silently report fabricated toy KPIs.
+                if not self._allow_toy_fallback:
+                    raise RuntimeError(
+                        f"MC trial {i} failed full v14 evaluation and "
+                        "monte_carlo.allow_toy_fallback is false, so the toy-metric fallback "
+                        "is disabled (a production run must not report fabricated KPIs). Fix "
+                        "the underlying scenario/config error, or set allow_toy_fallback: true "
+                        f"for a smoke run. Underlying error: {exc}"
+                    ) from exc
                 # WARNING, not DEBUG: on a production scenario a toy fallback
                 # means real evaluation FAILED for this trial; silently swallowing
                 # it at DEBUG let an all-failing run report success_rate=100% with
@@ -714,7 +802,10 @@ class MonteCarloEngine:
             "param_names": list(self._param_names),
             "dead_param_names": list(self._dead_param_names),
             "base_outside_bounds": list(self._base_outside_bounds),
-            "correlation_enabled": bool(self._correlation and self._correlation.enabled),
+            "correlation_enabled": bool(
+                self._correlation and self._correlation.enabled
+            ),
+            "allow_toy_fallback": self._allow_toy_fallback,
         }
         if self._fixed_debt_stress and fixed_dscr_vals:
             arr = sorted(fixed_dscr_vals)
@@ -789,8 +880,11 @@ class MonteCarloEngine:
         degenerate = bool(
             real_trials > 1
             and any_measured
-            and len(flat_metrics) == sum(
-                1 for v in (result.trials or {}).values() if len([x for x in v if x is not None]) > 1
+            and len(flat_metrics)
+            == sum(
+                1
+                for v in (result.trials or {}).values()
+                if len([x for x in v if x is not None]) > 1
             )
         )
         result.metadata["degenerate_sweep"] = degenerate
@@ -806,7 +900,9 @@ class MonteCarloEngine:
             )
 
     @staticmethod
-    def _build_overrides_from_sample(sample_row: np.ndarray, param_names: Sequence[str]) -> Dict[str, Any]:
+    def _build_overrides_from_sample(
+        sample_row: np.ndarray, param_names: Sequence[str]
+    ) -> Dict[str, Any]:
         """Build a nested override dict from a flat LHS sample row.
 
         Dot-notation parameter names (e.g. ``"project.capacity_factor"``) are

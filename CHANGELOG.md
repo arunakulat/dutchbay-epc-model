@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Monte-Carlo fail-loud on toy fallback, opt-in (#473, MC-9).** The MC engine substitutes
+  deterministic *toy* KPIs when a trial's full v14 evaluation raises (so a smoke run on a
+  minimal config still yields an array). On a real run that means evaluation FAILED for that
+  trial — the toy KPIs are fabricated. A scenario can now refuse the fallback with
+  `monte_carlo.allow_toy_fallback: false`, which RAISES on the first failed trial instead of
+  silently reporting fabricated KPIs; the resolved value is echoed in
+  `result.metadata["allow_toy_fallback"]`. Default `true` keeps smoke tests and existing runs
+  byte-identical. The engine docstring also now documents the common-random-numbers scope
+  (CRN applies *within* a run; pairing two runs/variants on shared draws is done externally by
+  passing the same seed + param set — by design, not a defect). KPI-neutral.
 - **BESS availability liquidated-damages derate, opt-in (#486, BESS-2).** A standalone-BESS
   scenario that has a measured or projected monthly availability can now opt into the CEB
   tender's liquidated-damages formula — `derate = clip(1 - 2*(0.97 - MA), 0, 1)` (a month at/
