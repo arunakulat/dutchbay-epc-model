@@ -505,6 +505,52 @@
   </section>
   {% endif %}
 
+  {# 8a-quater. Cash-flow waterfall by payment priority — #481 / RPT-2 #}
+  {% if ctx.cashflow_waterfall %}
+  <section class="page">
+    <h2>Cash-Flow Waterfall by Payment Priority ({{ ctx.cashflow_waterfall.currency }})</h2>
+    <p>Operating cash applied in lender priority each year: cash available for debt service
+      (CFADS) first meets scheduled senior debt service, then the balloon is retired at maturity,
+      and only the residual is available to equity. Every figure is the engine's own published
+      cash flow, so CFADS and scheduled debt service are the same numbers used in the headline
+      KPIs and the Debt Structure &amp; DSCR Profile section above. The balloon sweep is shown
+      separately because it is senior to equity but is NOT part of the scheduled debt service that
+      sets the DSCR covenant. The model sweeps 100% of post-senior cash to equity, so cash to
+      equity is the distribution — no reserve balance accumulates beyond the DSRA funded at
+      financial close. Year N is operating year N (post-COD); the DSCR-profile section indexes from
+      financial close, so its construction and bridge periods precede operating year&nbsp;1.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th style="text-align:right;">CFADS</th>
+          <th style="text-align:right;">Scheduled debt service</th>
+          <th style="text-align:right;">Balloon sweep</th>
+          <th style="text-align:right;">Cash to equity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.cashflow_waterfall.rows %}
+        <tr>
+          <td>{{ r.year }}</td>
+          <td class="num">{{ fmt_usd(r.cfads) }}</td>
+          <td class="num">{{ fmt_usd(r.scheduled_debt_service) }}</td>
+          <td class="num">{{ fmt_usd(r.balloon_sweep) }}</td>
+          <td class="num">{{ fmt_usd(r.cash_to_equity) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td><strong>Total</strong></td>
+          <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_cfads) }}</strong></td>
+          <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_scheduled_debt_service) }}</strong></td>
+          <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_balloon_sweep) }}</strong></td>
+          <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_cash_to_equity) }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 8b. Assumption evidence register — #435 / RPT-1 #}
   {% if ctx.evidence %}
   <section class="page">

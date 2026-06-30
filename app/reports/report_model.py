@@ -19,7 +19,11 @@ from analytics.evidence_register import EvidenceRegisterError, build_evidence_re
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
-from analytics.three_statement import build_three_statement_from_run
+from analytics.three_statement import (
+    ThreeStatementResult,
+    build_cashflow_waterfall,
+    build_three_statement_from_run,
+)
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -220,6 +224,36 @@ class ThreeStatementBlock(BaseModel):
     balance_sheet: List[Dict[str, Any]]
 
 
+class WaterfallRow(BaseModel):
+    """One operating year of the cash-flow waterfall by payment priority (#481, RPT-2)."""
+
+    year: int
+    cfads: float
+    scheduled_debt_service: float
+    balloon_sweep: float
+    cash_to_equity: float
+
+
+class WaterfallBlock(BaseModel):
+    """Cash-flow waterfall (CFADS → scheduled debt service → balloon → equity) + totals (#481, RPT-2).
+
+    Sourced from the engine's own published per-row figures, so the cascade ties line-for-line to
+    the rest of the report (CCCDIR — one source of truth): ``cfads`` equals the CFADS the DSCR
+    numerator uses (``total_cfads`` = the report's headline CFADS) and ``scheduled_debt_service``
+    equals the Debt Structure & DSCR Profile section's debt service. The balloon is a SEPARATE line
+    (senior to equity but excluded from the scheduled DSCR, so the two sections do not present
+    contradictory coverage). The model sweeps 100% of post-senior cash to equity, so
+    ``cash_to_equity`` is the distribution (no reserve build-up beyond the DSRA funded at close).
+    """
+
+    currency: str
+    rows: List[WaterfallRow]
+    total_cfads: float
+    total_scheduled_debt_service: float
+    total_balloon_sweep: float
+    total_cash_to_equity: float
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -259,6 +293,10 @@ class ReportContext(BaseModel):
     #: Three-statement output + tie-out status (#479). None when the caller supplies no
     #: annual_rows / debt_result — the section is then omitted.
     three_statement: Optional[ThreeStatementBlock] = None
+    #: Cash-flow waterfall by payment priority (#481, RPT-2). Sourced from the engine's published
+    #: per-row figures (ties to the headline CFADS + DSCR section); None on the legacy KPI-only
+    #: path, where the section is omitted.
+    cashflow_waterfall: Optional[WaterfallBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -580,16 +618,16 @@ def _build_multi_tech(
     )
 
 
-def _build_three_statement(
+def _build_three_statement_result(
     scenario_config: Optional[Mapping[str, Any]],
     debt_result: Optional[Mapping[str, Any]],
     annual_rows: Optional[Sequence[Mapping[str, Any]]],
-) -> Optional[ThreeStatementBlock]:
-    """Project the three-statement output + tie-out status into a report block (#479).
+) -> Optional[ThreeStatementResult]:
+    """Assemble the three-statement result once, shared by the statements + waterfall blocks.
 
     Reuses ``analytics.three_statement.build_three_statement_from_run``. Returns ``None`` when
     the caller supplies no ``annual_rows`` / ``debt_result`` / ``scenario_config`` (legacy
-    KPI-only path) — the section is then omitted. Pure presentation.
+    KPI-only path) or the statements do not tie out — the dependent sections are then omitted.
     """
     if scenario_config is None or debt_result is None or not annual_rows:
         return None
@@ -597,6 +635,15 @@ def _build_three_statement(
         {"annual_rows": list(annual_rows), "debt_result": dict(debt_result)},
         scenario_config,
     )
+    if result is None or result.tie_outs is None:
+        return None
+    return result
+
+
+def _three_statement_block(
+    result: Optional[ThreeStatementResult],
+) -> Optional[ThreeStatementBlock]:
+    """Project an assembled three-statement result into its report block (#479)."""
     if result is None or result.tie_outs is None:
         return None
     payload = result.to_dict()
@@ -612,6 +659,40 @@ def _build_three_statement(
         income_statement=payload["income_statement"],
         cash_flow=payload["cash_flow"],
         balance_sheet=payload["balance_sheet"],
+    )
+
+
+def _waterfall_block(
+    result: Optional[ThreeStatementResult],
+    annual_rows: Optional[Sequence[Mapping[str, Any]]],
+) -> Optional[WaterfallBlock]:
+    """Project the cash-flow waterfall (by payment priority) into a report block (#481, RPT-2).
+
+    Built from the engine's published per-row figures (``build_cashflow_waterfall``), so every line
+    ties to the rest of the report (CCCDIR — one source of truth; the CFADS and scheduled debt
+    service match the headline KPI and the DSCR-profile section). Gated on the three-statement
+    result so it co-renders with the statements (both depend on the enriched ``annual_rows``);
+    ``None`` on the legacy KPI-only path — the section is then omitted.
+    """
+    if result is None or not annual_rows:
+        return None
+    wf = build_cashflow_waterfall(annual_rows)
+    return WaterfallBlock(
+        currency=wf.currency,
+        rows=[
+            WaterfallRow(
+                year=r.year,
+                cfads=r.cfads,
+                scheduled_debt_service=r.scheduled_debt_service,
+                balloon_sweep=r.balloon_sweep,
+                cash_to_equity=r.cash_to_equity,
+            )
+            for r in wf.rows
+        ],
+        total_cfads=wf.total_cfads,
+        total_scheduled_debt_service=wf.total_scheduled_debt_service,
+        total_balloon_sweep=wf.total_balloon_sweep,
+        total_cash_to_equity=wf.total_cash_to_equity,
     )
 
 
@@ -657,6 +738,9 @@ def build_report_context(
     """
     cfg = config if config is not None else load_report_config()
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
+    # Assemble the three-statement result once; both the statements and the payment-priority
+    # waterfall blocks derive from it (one engine-output source, no second pass).
+    ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
     return ReportContext(
         meta=cfg.report,
         covenants=cfg.covenants,
@@ -677,8 +761,7 @@ def build_report_context(
         global_sa=global_sa,
         evidence=_build_evidence(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
-        three_statement=_build_three_statement(
-            scenario_config, debt_result, annual_rows
-        ),
+        three_statement=_three_statement_block(ts_result),
+        cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
         manifest=dict(case_result.run_manifest or {}),
     )
