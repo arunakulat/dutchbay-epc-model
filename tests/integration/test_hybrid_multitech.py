@@ -4,11 +4,13 @@ multi-tech layer reports the per-technology generation/CFADS split.
 The plant is configured as one combined-output asset (combined nameplate × blended
 P50 capacity factor), so the run's CFADS is the combined plant's; a
 ``generation.technologies`` block declares the wind/solar split, and the aggregator
-allocates the run's CFADS across technologies in proportion to declared AEP.
+apportions the run's CFADS across technologies by operating margin (revenue − opex;
+ARCH-2, #488), falling back to AEP-proportional when tariff/FX/opex do not resolve. For
+this flat-tariff hybrid with no per-tech opex the two bases coincide.
 
-This proves the multi-tech *reporting* capability runs end-to-end. True per-tech
-project finance — separate solar CAPEX/OPEX/degradation flowing through the
-cashflow — is a later step (the per-tech CFADS here is an indicative allocation).
+This proves the multi-tech *reporting* capability runs end-to-end. True per-tech project
+finance — separate solar CAPEX/OPEX/degradation flowing through the cashflow — remains a
+later step (the per-tech CFADS here is still an apportionment of one combined run).
 """
 
 from __future__ import annotations
@@ -23,7 +25,9 @@ WIND_AEP_GWH = 473.8
 SOLAR_AEP_GWH = 87.6
 COMBINED_MW = 200.0
 HOURS_PER_YEAR = 8760
-COMBINED_CF = (WIND_AEP_GWH + SOLAR_AEP_GWH) * 1e6 / (COMBINED_MW * 1000 * HOURS_PER_YEAR)
+COMBINED_CF = (
+    (WIND_AEP_GWH + SOLAR_AEP_GWH) * 1e6 / (COMBINED_MW * 1000 * HOURS_PER_YEAR)
+)
 
 
 def _hybrid_scenario() -> dict:
@@ -47,13 +51,17 @@ def _hybrid_scenario() -> dict:
         "technologies": {
             "wind": {
                 "capacity_mw": wind_mw,
-                "capacity_factor": WIND_AEP_GWH * 1e6 / (wind_mw * 1000 * HOURS_PER_YEAR),
+                "capacity_factor": WIND_AEP_GWH
+                * 1e6
+                / (wind_mw * 1000 * HOURS_PER_YEAR),
                 "aep_gwh": WIND_AEP_GWH,
                 "capex_usd": 195_000_000,
             },
             "solar": {
                 "capacity_mw": solar_mw,
-                "capacity_factor": SOLAR_AEP_GWH * 1e6 / (solar_mw * 1000 * HOURS_PER_YEAR),
+                "capacity_factor": SOLAR_AEP_GWH
+                * 1e6
+                / (solar_mw * 1000 * HOURS_PER_YEAR),
                 "aep_gwh": SOLAR_AEP_GWH,
                 "capex_usd": 35_000_000,
             },
@@ -91,8 +99,12 @@ def test_hybrid_runs_through_engine_and_reports_per_tech() -> None:
     # Shares follow the declared per-tech AEP proportions.
     total_aep = WIND_AEP_GWH + SOLAR_AEP_GWH
     rows = {r.technology: r for r in breakdown}
-    assert rows["wind"].share_of_aep_pct == pytest.approx(100.0 * WIND_AEP_GWH / total_aep)
-    assert rows["solar"].share_of_aep_pct == pytest.approx(100.0 * SOLAR_AEP_GWH / total_aep)
+    assert rows["wind"].share_of_aep_pct == pytest.approx(
+        100.0 * WIND_AEP_GWH / total_aep
+    )
+    assert rows["solar"].share_of_aep_pct == pytest.approx(
+        100.0 * SOLAR_AEP_GWH / total_aep
+    )
     assert rows["wind"].share_of_capex_pct == pytest.approx(100.0 * 195 / 230)
 
     # Serializes through the contract's JSON helper (what casper_payload emits).
@@ -124,8 +136,16 @@ def test_per_tech_degradation_flows_through_the_real_cashflow() -> None:
     hybrid = dict(base)
     hybrid["generation"] = {
         "technologies": {
-            "wind": {"capacity_mw": 150, "capacity_factor": 0.339, "degradation_pct": 0.006},
-            "solar": {"capacity_mw": 50, "capacity_factor": 0.20, "degradation_pct": 0.004},
+            "wind": {
+                "capacity_mw": 150,
+                "capacity_factor": 0.339,
+                "degradation_pct": 0.006,
+            },
+            "solar": {
+                "capacity_mw": 50,
+                "capacity_factor": 0.20,
+                "degradation_pct": 0.004,
+            },
         }
     }
     multi = run_finance_case(hybrid)

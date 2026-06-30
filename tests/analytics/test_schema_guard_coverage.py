@@ -183,6 +183,54 @@ def test_validate_accepts_valid_fx_no_modules() -> None:
 
 
 # ---------------------------------------------------------------------------
+# ARCH-6 (#488): technology `type` enum validation at pre-flight
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_technology_type_is_rejected_at_preflight() -> None:
+    """A declared but unrecognised technology `type` (typo / unsupported class) fails
+    fast at the schema guard — before the pipeline runs."""
+    cfg = {
+        "fx": _valid_fx(),
+        "generation": {
+            "technologies": {
+                "w": {"type": "wnid", "capacity_factor": 0.3},
+                "b": {"type": "battery", "power_mw": 10},
+            }
+        },
+    }
+    with pytest.raises(ConfigValidationError) as exc:
+        validate_config_for_v14(cfg, "scenario.yaml", [])
+    msg = str(exc.value)
+    assert "wnid" in msg and "battery" in msg
+    assert "not a recognised technology type" in msg
+
+
+def test_known_technology_types_pass() -> None:
+    """Recognised generation/storage types pass the type check."""
+    cfg = {
+        "fx": _valid_fx(),
+        "generation": {
+            "technologies": {
+                "wind": {"type": "wind", "capacity_factor": 0.34},
+                "solar": {"type": "solar", "capacity_factor": 0.18},
+                "bess": {"type": "bess", "power_mw": 11},
+            }
+        },
+    }
+    assert validate_config_for_v14(cfg, "<test>", []) is None
+
+
+def test_untyped_technology_block_is_not_gated() -> None:
+    """An untyped block is the backward-compatible key-sniff path — not forced a type."""
+    cfg = {
+        "fx": _valid_fx(),
+        "generation": {"technologies": {"wind": {"capacity_factor": 0.34}}},
+    }
+    assert validate_config_for_v14(cfg, "<test>", []) is None
+
+
+# ---------------------------------------------------------------------------
 # validate_config_for_v14: spec-driven branches via synthetic specs
 # ---------------------------------------------------------------------------
 
@@ -355,13 +403,16 @@ def _lender_config() -> dict[str, Any]:
     import yaml
 
     repo = Path(__file__).resolve().parents[2]
-    return yaml.safe_load((repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml").read_text())
+    return yaml.safe_load(
+        (repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml").read_text()
+    )
 
 
 def test_era5_guard_auto_enforced_when_block_present() -> None:
     """The canonical declares resource.era5, so even with the DEFAULT module set
     (cashflow/debt) the era5 interface schema is now enforced: corrupting it (dropping the
-    required latitude) raises, where before it was silently never validated (Wave-2 fix)."""
+    required latitude) raises, where before it was silently never validated (Wave-2 fix).
+    """
     cfg = _lender_config()
     cfg["resource"]["era5"].pop("latitude", None)
     with pytest.raises(ConfigValidationError, match="latitude"):
@@ -371,7 +422,9 @@ def test_era5_guard_auto_enforced_when_block_present() -> None:
 def test_clean_lender_config_passes_with_wind_era5_enforced() -> None:
     """The unmodified canonical satisfies the wind + era5 schemas (byte-identical: the
     guard fires but finds nothing wrong)."""
-    validate_config_for_v14(_lender_config(), "lender", ["cashflow", "debt"])  # no raise
+    validate_config_for_v14(
+        _lender_config(), "lender", ["cashflow", "debt"]
+    )  # no raise
 
 
 def test_wind_era5_not_enforced_when_absent() -> None:

@@ -62,11 +62,15 @@ def test_build_wind_profile_none_without_aep() -> None:
 # Aggregation + breakdown (genuinely multi-tech)
 # --------------------------------------------------------------------------- #
 def _profile(tech: str, aep: float, cfads: float) -> GenerationProfile:
-    return GenerationProfile(technology=tech, annual_aep_kwh=aep, annual_cfads_usd=cfads)
+    return GenerationProfile(
+        technology=tech, annual_aep_kwh=aep, annual_cfads_usd=cfads
+    )
 
 
 def test_aggregate_sums_and_indexes() -> None:
-    res = aggregate_generation([_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)])
+    res = aggregate_generation(
+        [_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)]
+    )
     assert isinstance(res, MultiTechGenerationResult)
     assert res.total_aep_kwh == pytest.approx(500e6)
     assert res.total_cfads_usd == pytest.approx(48e6)
@@ -79,7 +83,9 @@ def test_aggregate_empty_raises() -> None:
 
 
 def test_breakdown_shares_split_across_techs() -> None:
-    res = aggregate_generation([_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)])
+    res = aggregate_generation(
+        [_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)]
+    )
     rows = {r.technology: r for r in technology_breakdown(res)}
     assert rows["wind"].share_of_aep_pct == pytest.approx(80.0)
     assert rows["solar"].share_of_aep_pct == pytest.approx(20.0)
@@ -87,8 +93,13 @@ def test_breakdown_shares_split_across_techs() -> None:
 
 
 def test_breakdown_capex_shares_when_provided() -> None:
-    res = aggregate_generation([_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)])
-    rows = {r.technology: r for r in technology_breakdown(res, capex_by_tech={"wind": 150e6, "solar": 50e6})}
+    res = aggregate_generation(
+        [_profile("wind", 400e6, 40e6), _profile("solar", 100e6, 8e6)]
+    )
+    rows = {
+        r.technology: r
+        for r in technology_breakdown(res, capex_by_tech={"wind": 150e6, "solar": 50e6})
+    }
     assert rows["wind"].share_of_capex_pct == pytest.approx(75.0)
     assert rows["solar"].share_of_capex_pct == pytest.approx(25.0)
 
@@ -107,7 +118,9 @@ def test_build_multi_tech_from_run_wind_only() -> None:
     assert result.technologies["wind"].annual_aep_kwh == pytest.approx(473.8e6)
     assert breakdown[0].share_of_aep_pct == pytest.approx(100.0)
     # Round-trips through the contract's JSON helper (what casper_payload calls).
-    assert result.to_dict()["technologies"]["wind"]["annual_aep_kwh"] == pytest.approx(473.8e6)
+    assert result.to_dict()["technologies"]["wind"]["annual_aep_kwh"] == pytest.approx(
+        473.8e6
+    )
 
 
 def test_build_multi_tech_from_run_none_without_aep() -> None:
@@ -123,8 +136,16 @@ from analytics.portfolio.generation_aggregator import resolve_tech_aep_kwh  # no
 _HYBRID_CONFIG = {
     "generation": {
         "technologies": {
-            "wind": {"aep_gwh": 473.8, "availability_pct": 97.0, "capex_usd": 195_000_000},
-            "solar": {"aep_gwh": 87.6, "availability_pct": 99.0, "capex_usd": 35_000_000},
+            "wind": {
+                "aep_gwh": 473.8,
+                "availability_pct": 97.0,
+                "capex_usd": 195_000_000,
+            },
+            "solar": {
+                "aep_gwh": 87.6,
+                "availability_pct": 99.0,
+                "capex_usd": 35_000_000,
+            },
         }
     }
 }
@@ -140,7 +161,9 @@ def test_resolve_tech_aep_prefers_generation_block() -> None:
 
 def test_resolve_solar_aep_from_generation_and_resource() -> None:
     assert resolve_tech_aep_kwh(_HYBRID_CONFIG, "solar") == pytest.approx(87.6e6)
-    assert resolve_tech_aep_kwh({"resource": {"solar": {"aep_gwh": 60.0}}}, "solar") == pytest.approx(60.0e6)
+    assert resolve_tech_aep_kwh(
+        {"resource": {"solar": {"aep_gwh": 60.0}}}, "solar"
+    ) == pytest.approx(60.0e6)
     assert resolve_tech_aep_kwh({}, "solar") is None
 
 
@@ -202,3 +225,123 @@ def test_third_generation_tech_is_not_dropped_and_bess_excluded() -> None:
     assert sum(r.share_of_aep_pct for r in breakdown) == pytest.approx(100.0)
     assert result.technologies["wind"].annual_aep_kwh == pytest.approx(400.0e6)
     assert total == pytest.approx(540.0)
+
+
+# --------------------------------------------------------------------------- #
+# ARCH-2 (#488): operating-margin-weighted CFADS apportionment
+# --------------------------------------------------------------------------- #
+_HYBRID_PRICED = {
+    "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+    "revenue": {"tariff_lkr_per_kwh": 30.0},  # flat project tariff
+    "generation": {
+        "technologies": {
+            "wind": {
+                "aep_gwh": 400.0,
+                "capacity_factor": 0.34,
+                "opex_usd_per_year": 4_000_000.0,
+            },
+            "solar": {
+                "aep_gwh": 100.0,
+                "capacity_factor": 0.20,
+                "opex_usd_per_year": 500_000.0,
+            },
+        }
+    },
+    "capex": {"usd_total": 200_000_000.0},
+}
+
+
+def test_hybrid_cfads_is_margin_weighted_and_conserves_the_run_total() -> None:
+    """With FX + tariff + per-tech opex resolvable, the split is by operating margin
+    (revenue - opex) and still sums to the run's actual CFADS."""
+    kpis = {"mean_operational_cfads_usd": 20_000_000.0}
+    result, _ = build_multi_tech_from_run(kpis, _HYBRID_PRICED)
+    assert result is not None
+    assert result.total_cfads_usd == pytest.approx(20_000_000.0)  # exact partition
+    # Margins: wind = 400e6*30/300 - 4e6 = 36e6; solar = 100e6*30/300 - 0.5e6 = 9.5e6.
+    total_margin = 36_000_000.0 + 9_500_000.0
+    assert result.technologies["wind"].annual_cfads_usd == pytest.approx(
+        20_000_000.0 * 36_000_000.0 / total_margin
+    )
+    assert result.technologies["solar"].annual_cfads_usd == pytest.approx(
+        20_000_000.0 * 9_500_000.0 / total_margin
+    )
+
+
+def test_per_tech_opex_shifts_cfads_weight_away_from_aep_share() -> None:
+    """A high-opex technology earns a CFADS share BELOW its AEP share (and the low-opex
+    one above) — opex is the legitimate per-tech differentiator (revenue uses the single
+    project tariff the engine actually bills, never a per-tech tariff)."""
+    cfg = {
+        "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+        "revenue": {"tariff_lkr_per_kwh": 30.0},
+        "generation": {
+            "technologies": {
+                # revenue: wind 40M, solar 10M; opex eats wind's margin to parity (10M each)
+                "wind": {
+                    "aep_gwh": 400.0,
+                    "capacity_factor": 0.34,
+                    "opex_usd_per_year": 30_000_000.0,
+                },
+                "solar": {"aep_gwh": 100.0, "capacity_factor": 0.20},
+            }
+        },
+    }
+    kpis = {"mean_operational_cfads_usd": 10_000_000.0}
+    result, _ = build_multi_tech_from_run(kpis, cfg)
+    assert result is not None
+    aep_share_solar = 100.0 / (400.0 + 100.0)  # 0.20
+    cfads_share_solar = result.technologies["solar"].annual_cfads_usd / 10_000_000.0
+    assert (
+        cfads_share_solar > aep_share_solar
+    )  # low opex lifts solar's share (0.5 > 0.2)
+    assert result.total_cfads_usd == pytest.approx(10_000_000.0)
+
+
+def test_negative_per_tech_margin_falls_back_to_aep_split() -> None:
+    """A technology whose opex exceeds its revenue (negative margin) must NOT produce a
+    negative / >100% CFADS share — the apportionment falls back to the AEP split."""
+    cfg = {
+        "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+        "revenue": {"tariff_lkr_per_kwh": 30.0},
+        "generation": {
+            "technologies": {
+                "wind": {"aep_gwh": 400.0, "capacity_factor": 0.34},
+                # solar revenue 10M, opex 12M -> margin -2M (portfolio total still positive)
+                "solar": {
+                    "aep_gwh": 100.0,
+                    "capacity_factor": 0.20,
+                    "opex_usd_per_year": 12_000_000.0,
+                },
+            }
+        },
+    }
+    kpis = {"mean_operational_cfads_usd": 10_000_000.0}
+    result, _ = build_multi_tech_from_run(kpis, cfg)
+    assert result is not None
+    # AEP split (not margin): wind 80%, solar 20%, both non-negative.
+    assert result.technologies["wind"].annual_cfads_usd == pytest.approx(
+        10_000_000.0 * 400.0 / 500.0
+    )
+    assert result.technologies["solar"].annual_cfads_usd == pytest.approx(
+        10_000_000.0 * 100.0 / 500.0
+    )
+
+
+def test_falls_back_to_aep_split_without_fx() -> None:
+    """No FX block -> the apportionment falls back to the AEP-proportional split."""
+    cfg = {
+        "revenue": {"tariff_lkr_per_kwh": 30.0},
+        "generation": {
+            "technologies": {
+                "wind": {"aep_gwh": 400.0, "capacity_factor": 0.34},
+                "solar": {"aep_gwh": 100.0, "capacity_factor": 0.20},
+            }
+        },
+    }
+    kpis = {"mean_operational_cfads_usd": 10_000_000.0}
+    result, _ = build_multi_tech_from_run(kpis, cfg)
+    assert result is not None
+    assert result.technologies["wind"].annual_cfads_usd == pytest.approx(
+        10_000_000.0 * 400.0 / 500.0
+    )
