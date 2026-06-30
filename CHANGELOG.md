@@ -135,6 +135,12 @@ Grouped by theme; see `git log` / `gh pr view <n>` for per-PR detail.
   float-typed row) — documented; a return-tuple refactor is deferred as risk-disproportionate.
   No committed KPI moves (full finance+analytics suite green). FIN-12 (equity-WHT under-charge
   guard) is tracked as a follow-up on #482 — a distinct module needing its own careful guard.
+  FIN-12 now CLOSED: `equity_distribution_v14_hydra` fails loud on an ENABLED-but-rate/data-
+  ABSENT WHT inconsistency — interest/dividend WHT enabled without its rate, or `wht_gross_up`
+  enabled while a row lacks `interest_usd` — which the gated idiom would otherwise resolve to
+  0 and OVERSTATE equity IRR/NPV on a raw public-API config. Fire-on-inconsistency only (an
+  explicit 0.0 rate is legitimate; absence-while-enabled raises); KPI-neutral — every
+  committed scenario declares its rate and none set `wht_gross_up: true`.
 - Money precision decision: keep float64 (#480, ADR): added
   `docs/MONEY_PRECISION_DECISION.md` recording the keep-`float` decision for the money path,
   backed by a measurement on the real lender cashflow — the float64-vs-exact-`Decimal` NPV

@@ -11,6 +11,7 @@ The canonical lender scenario is used where a real config is required; all
 other cases build explicit, fully-deterministic payloads so each waterfall
 branch is exercised in isolation.
 """
+
 from __future__ import annotations
 
 import json
@@ -424,8 +425,14 @@ def test_pipeline_from_canonical_scenario_capex_less_debt() -> None:
 def test_schedule_balloon_shortfall_is_cash_call() -> None:
     """A balloon larger than available cash becomes a negative equity CF (cash call)."""
     cfg = EquityDistributionConfig(min_dscr_threshold=0.0, min_reserve_months=0)
-    rows = [{"year": 1, "cf_pre_debt": 6.0e6, "debt_service_total": 5.0e6,
-             "balloon_resolution": 4.0e6}]
+    rows = [
+        {
+            "year": 1,
+            "cf_pre_debt": 6.0e6,
+            "debt_service_total": 5.0e6,
+            "balloon_resolution": 4.0e6,
+        }
+    ]
     schedule = build_equity_distribution_schedule(
         annual_rows=rows, debt_result={}, distribution_config=cfg
     )
@@ -456,12 +463,15 @@ def test_schedule_fund_at_close_seeds_reserve() -> None:
     # Terminal year: the seeded DSRA is released to the sponsor, not destroyed.
     assert schedule[-1]["reserve_balance_usd"] == pytest.approx(0.0)
     assert schedule[-1]["terminal_release_usd"] == pytest.approx(2.0e6)
-    assert schedule[-1]["equity_distribution_usd"] == pytest.approx(8.0e6)  # 6M op + 2M DSRA
+    assert schedule[-1]["equity_distribution_usd"] == pytest.approx(
+        8.0e6
+    )  # 6M op + 2M DSRA
 
 
 def test_schedule_holdback_retains_cash() -> None:
     """A non-zero holdback moves cash from distribution to retained DURING operations; the
-    accumulated retention is released to the sponsor at the terminal period (Wave-1 fix)."""
+    accumulated retention is released to the sponsor at the terminal period (Wave-1 fix).
+    """
     cfg = EquityDistributionConfig(
         min_dscr_threshold=0.0,
         min_reserve_months=0,
@@ -477,14 +487,68 @@ def test_schedule_holdback_retains_cash() -> None:
     )
     cash_for_equity = 6.0e6  # 10 - 4, no reserve
     # Operating year: 20% held back from the distribution, retained in the SPV.
-    assert schedule[0]["equity_distribution_usd"] == pytest.approx(cash_for_equity * 0.80)
+    assert schedule[0]["equity_distribution_usd"] == pytest.approx(
+        cash_for_equity * 0.80
+    )
     assert schedule[0]["retained_cash_usd"] == pytest.approx(cash_for_equity * 0.20)
     assert schedule[0]["terminal_release_usd"] == 0.0
     # Terminal year: both years' holdbacks (2 x 1.2M) are released to the sponsor; nothing lost.
-    assert schedule[-1]["terminal_release_usd"] == pytest.approx(2 * cash_for_equity * 0.20)
+    assert schedule[-1]["terminal_release_usd"] == pytest.approx(
+        2 * cash_for_equity * 0.20
+    )
     assert schedule[-1]["equity_distribution_usd"] == pytest.approx(
         cash_for_equity * 0.80 + 2 * cash_for_equity * 0.20
     )
     # Conservation: every dollar of cash-for-equity reaches the sponsor across the schedule.
     total_dist = sum(r["equity_distribution_usd"] for r in schedule)
     assert total_dist == pytest.approx(2 * cash_for_equity)
+
+
+# ---------------------------------------------------------------------------
+# FIN-12 (#482): fail loud when a WHT charge is ENABLED but its rate / data is
+# ABSENT — the gated idiom would silently resolve to 0 and OVERSTATE equity IRR/NPV.
+# ---------------------------------------------------------------------------
+def test_fin12_dividend_wht_enabled_without_rate_raises() -> None:
+    cfg = {
+        "tax": {"wht_on_dividends_enabled": True}
+    }  # enabled, but no wht_on_dividends
+    with pytest.raises(ValueError, match="wht_on_dividends.*absent|under-charge"):
+        mod._build_distribution_config(cfg)
+
+
+def test_fin12_interest_wht_enabled_without_rate_raises() -> None:
+    cfg = {"tax": {"wht_on_interest_enabled": True}}  # enabled, but no rate key
+    with pytest.raises(
+        ValueError, match="wht_on_interest_to_nonresidents.*absent|under-charge"
+    ):
+        mod._build_distribution_config(cfg)
+
+
+def test_fin12_enabled_wht_with_explicit_zero_rate_is_allowed() -> None:
+    # An explicit 0.0 rate is a legitimate "no charge" choice — only an ABSENT key raises.
+    cfg = {
+        "tax": {
+            "wht_on_dividends_enabled": True,
+            "wht_on_dividends": 0.0,
+            "wht_on_interest_enabled": True,
+            "wht_on_interest_to_nonresidents": 0.0,
+        }
+    }
+    built = mod._build_distribution_config(cfg)
+    assert built.wht_on_dividends_rate == 0.0
+    assert built.wht_on_interest_rate == 0.0
+
+
+def test_fin12_gross_up_without_interest_usd_on_rows_raises() -> None:
+    cfg = EquityDistributionConfig(
+        min_dscr_threshold=0.0,
+        min_reserve_months=0,
+        wht_gross_up=True,
+        wht_on_interest_rate=0.10,
+    )
+    # Rows carry cf_pre_debt/debt_service but NOT interest_usd (a raw, un-enriched row).
+    rows = [{"year": 1, "cf_pre_debt": 6.0e6, "debt_service_total": 5.0e6}]
+    with pytest.raises(ValueError, match="interest_usd"):
+        build_equity_distribution_schedule(
+            annual_rows=rows, debt_result={}, distribution_config=cfg
+        )
