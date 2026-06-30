@@ -39,10 +39,53 @@ def test_degenerate_all_toy_run_is_detectable() -> None:
     # real v14 eval fails and falls to toy — which is what this test detects.
     minimal = {
         "capex": {"usd_total": 100.0},
-        "monte_carlo": {"parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}]},
+        "monte_carlo": {
+            "parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}]
+        },
     }
     result = run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
     assert result.metadata["toy_fallback_count"] == 8
+
+
+# --------------------------------------------------------------------------- #
+# MC-9 (#473): opt-in fail-loud — a production run can refuse the toy fallback
+# --------------------------------------------------------------------------- #
+def test_allow_toy_fallback_false_raises_on_failed_trial() -> None:
+    """With monte_carlo.allow_toy_fallback: false, the first failed trial RAISES instead of
+    silently substituting fabricated toy KPIs — so a broken production scenario fails loud.
+    """
+    minimal = {
+        "capex": {"usd_total": 100.0},
+        "monte_carlo": {
+            "parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}],
+            "allow_toy_fallback": False,
+        },
+    }
+    with pytest.raises(RuntimeError, match="allow_toy_fallback"):
+        run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
+
+
+def test_allow_toy_fallback_defaults_true_and_is_surfaced() -> None:
+    """Absent the flag the engine keeps the back-compatible fallback AND records the resolved
+    value in metadata so a consumer can see which mode produced the result."""
+    base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
+    result = run_monte_carlo_analysis(base_config=base, n_trials=8, seed=42)
+    assert result.metadata["allow_toy_fallback"] is True
+    assert (
+        result.metadata["toy_fallback_count"] == 0
+    )  # canonical run uses no fallback anyway
+
+
+def test_allow_toy_fallback_false_is_a_noop_when_no_trial_fails() -> None:
+    """Fail-loud must not change a healthy run: the canonical scenario evaluates every trial
+    for real, so allow_toy_fallback: false simply never fires."""
+    base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
+    base = dict(base)
+    base["monte_carlo"] = {**base.get("monte_carlo", {}), "allow_toy_fallback": False}
+    result = run_monte_carlo_analysis(base_config=base, n_trials=8, seed=42)
+    assert result.metadata["allow_toy_fallback"] is False
+    assert result.metadata["toy_fallback_count"] == 0
+    assert result.success_rate() == 100.0
 
 
 # --------------------------------------------------------------------------- #
@@ -53,16 +96,28 @@ from analytics.cli.cli_monte_carlo_hydra import _derive_run_status  # noqa: E402
 
 def test_cli_status_degenerate_when_all_toy() -> None:
     """All trials toy (no real eval) -> degenerate, never a clean success."""
-    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=200) == "degenerate"
+    assert (
+        _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=200)
+        == "degenerate"
+    )
 
 
 def test_cli_status_degraded_when_some_toy_or_failed() -> None:
-    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=5) == "degraded"
-    assert _derive_run_status(iterations=200, failed_iterations=3, toy_fallback_count=0) == "degraded"
+    assert (
+        _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=5)
+        == "degraded"
+    )
+    assert (
+        _derive_run_status(iterations=200, failed_iterations=3, toy_fallback_count=0)
+        == "degraded"
+    )
 
 
 def test_cli_status_success_only_when_all_real() -> None:
-    assert _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=0) == "success"
+    assert (
+        _derive_run_status(iterations=200, failed_iterations=0, toy_fallback_count=0)
+        == "success"
+    )
 
 
 def test_mc_warns_on_non_resolving_parameter_name(
@@ -80,7 +135,9 @@ def test_mc_warns_on_non_resolving_parameter_name(
 
     cfg = {
         "fx": {"start_lkr_per_usd": 333.79},
-        "monte_carlo": {"parameters": [{"name": "not.a.real.key", "low": 0.1, "high": 0.2}]},
+        "monte_carlo": {
+            "parameters": [{"name": "not.a.real.key", "low": 0.1, "high": 0.2}]
+        },
     }
     with caplog.at_level(logging.WARNING, logger="analytics.mc.engine"):
         MonteCarloEngine(base_config=cfg)  # constructs (no raise)
@@ -91,7 +148,8 @@ def test_dead_param_name_flags_degenerate_sweep() -> None:
     """Round-5: a non-resolving (dead) dotted param name silently merges as an unread config
     key, so every real trial succeeds with IDENTICAL KPIs (toy_fallback_count == 0,
     failed_iterations == 0) and the risk distribution is fake-stable. The prior warn-only fix
-    did not reach the result object; the run is now flagged in-band so a lender can see it."""
+    did not reach the result object; the run is now flagged in-band so a lender can see it.
+    """
     base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
 
     dead = dict(base)
