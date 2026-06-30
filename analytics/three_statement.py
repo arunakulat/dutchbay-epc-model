@@ -390,6 +390,108 @@ def build_three_statement_from_run(
     )
 
 
+@dataclass(frozen=True)
+class CashflowWaterfallRow:
+    """One operating year of the cash-flow waterfall, ordered by payment priority (USD).
+
+    Every figure is an engine-published per-row value, so the cascade ties line-for-line to the
+    rest of the report: ``cfads`` is the lender CFADS (post-tax, post-maintenance-capex, and post
+    the risk haircut the DSCR uses); ``scheduled_debt_service`` is interest + scheduled principal,
+    the DSCR denominator; ``balloon_sweep`` is the bullet retired at maturity (senior to equity
+    but NOT part of the scheduled DSCR); ``cash_to_equity`` is what remains for the sponsors.
+    """
+
+    year: int
+    cfads: float
+    scheduled_debt_service: float
+    balloon_sweep: float
+    cash_to_equity: float
+
+
+@dataclass(frozen=True)
+class CashflowWaterfall:
+    """The CFADS → scheduled debt service → balloon → equity cascade per operating year + totals.
+
+    Built from the engine's OWN published per-operating-year USD figures (``cf_pre_debt``,
+    ``debt_service_total``, ``balloon_resolution``, ``cf_after_debt``) — a regrouping by payment
+    priority, NOT a reconstruction. So ``cfads`` equals the CFADS the DSCR numerator uses (and
+    ``total_cfads`` the report's headline CFADS), and ``scheduled_debt_service`` equals the Debt
+    Structure & DSCR Profile section's debt service — the report does not present two
+    contradictory coverage numbers. The balloon is shown SEPARATELY because it is senior to equity
+    yet excluded from the scheduled DSCR. The model sweeps 100% of post-senior cash to equity, so
+    ``cash_to_equity`` is the distribution (no reserve build-up beyond the DSRA funded at close).
+    """
+
+    currency: str
+    rows: List[CashflowWaterfallRow] = field(default_factory=list)
+    total_cfads: float = 0.0
+    total_scheduled_debt_service: float = 0.0
+    total_balloon_sweep: float = 0.0
+    total_cash_to_equity: float = 0.0
+
+
+def build_cashflow_waterfall(
+    annual_rows: Sequence[Mapping[str, Any]],
+    *,
+    currency: str = "USD",
+) -> CashflowWaterfall:
+    """Regroup the engine's per-operating-year cash figures into a payment-priority waterfall.
+
+    Sources every line from the engine's OWN published per-row USD columns so the waterfall ties
+    line-for-line to the rest of the report — no reconstruction, no second source of truth:
+
+    - ``cfads`` = ``cf_pre_debt`` — the risk-haircut, post-tax, post-maintenance-capex CFADS the
+      DSCR numerator uses (so ``total_cfads`` matches the report's headline CFADS).
+    - ``scheduled_debt_service`` = ``debt_service_total`` — interest + scheduled principal, i.e.
+      the DSCR denominator shown in the Debt Structure & DSCR Profile section.
+    - ``balloon_sweep`` = ``balloon_resolution`` — the bullet retired at maturity; senior to
+      equity but NOT part of the scheduled DSCR, so the two sections do not disagree on coverage.
+    - ``cash_to_equity`` = ``cf_after_debt`` (= cfads − scheduled − balloon), the engine's own
+      residual; distributed in full under the model's 100% sweep.
+
+    Args:
+        annual_rows: The enriched operating-year rows (one per operating year, post-COD), carrying
+            the engine's USD ``cf_pre_debt`` / ``debt_service_total`` / ``balloon_resolution`` /
+            ``cf_after_debt`` columns.
+        currency: Presentation-currency label (the engine figures are USD).
+
+    Returns:
+        A :class:`CashflowWaterfall` with the per-year cascade rows and project-life totals.
+    """
+    rows: List[CashflowWaterfallRow] = []
+    total_cfads = 0.0
+    total_scheduled = 0.0
+    total_balloon = 0.0
+    total_cash = 0.0
+    for i, row in enumerate(annual_rows):
+        cfads = _f(row, "cf_pre_debt")
+        scheduled = _f(row, "debt_service_total")
+        balloon = _f(row, "balloon_resolution")
+        # cf_after_debt is the engine's own residual; reconstruct it only if a row omits it.
+        cash_to_equity = _f(row, "cf_after_debt", cfads - scheduled - balloon)
+        rows.append(
+            CashflowWaterfallRow(
+                year=int(_f(row, "year", i + 1)),
+                cfads=cfads,
+                scheduled_debt_service=scheduled,
+                balloon_sweep=balloon,
+                cash_to_equity=cash_to_equity,
+            )
+        )
+        total_cfads += cfads
+        total_scheduled += scheduled
+        total_balloon += balloon
+        total_cash += cash_to_equity
+    return CashflowWaterfall(
+        currency=currency,
+        rows=rows,
+        total_cfads=total_cfads,
+        total_scheduled_debt_service=total_scheduled,
+        total_balloon_sweep=total_balloon,
+        total_cash_to_equity=total_cash,
+    )
+
+
 __all__ = [
     "DEFAULT_TIEOUT_TOLERANCE",
     "IncomeStatementRow",
@@ -397,6 +499,9 @@ __all__ = [
     "BalanceSheetRow",
     "TieOutStatus",
     "ThreeStatementResult",
+    "CashflowWaterfallRow",
+    "CashflowWaterfall",
     "build_three_statement",
     "build_three_statement_from_run",
+    "build_cashflow_waterfall",
 ]

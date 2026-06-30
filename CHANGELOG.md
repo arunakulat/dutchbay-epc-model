@@ -5,6 +5,17 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Cash-flow waterfall by payment priority in the report (#481, RPT-2).** New
+  `analytics.three_statement.build_cashflow_waterfall` regroups the engine's OWN published
+  per-operating-year USD figures into the lender priority cascade — CFADS (`cf_pre_debt`, the
+  risk-haircut CFADS the DSCR uses) → scheduled senior debt service (`debt_service_total`, the DSCR
+  denominator) → balloon sweep at maturity (shown SEPARATELY: senior to equity but excluded from
+  the scheduled DSCR) → cash to equity (`cf_after_debt`) — per operating year plus project-life
+  totals. Sourced from the engine, NOT reconstructed, so the section ties line-for-line to the rest
+  of the report (CCCDIR — one source of truth): total CFADS matches the headline CFADS KPI and the
+  scheduled debt service matches the Debt Structure & DSCR Profile section, so the report never
+  presents two contradictory coverage numbers. The model sweeps 100% of post-senior cash to equity.
+  Additive, read-only, KPI-neutral.
 - **Synchronous-route hardening: PDF-filename sanitisation + bounded, time-limited compute (#481,
   RPT-9).** The `POST /cases/report.pdf` download filename is now sanitised
   (`_sanitise_filename_component`, `[A-Za-z0-9._-]` only) before it is interpolated into the

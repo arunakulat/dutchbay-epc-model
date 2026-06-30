@@ -755,9 +755,12 @@ def test_multi_tech_block_surfaces_poi_curtailment_when_configured() -> None:
 # --------------------------------------------------------------------------- #
 def _annual_rows_3s(n: int = 3) -> list:
     # Enriched rows: LKR P&L + per-year USD debt columns. interest 10/8/6, service 30/28/26
-    # -> principal 20 each, retiring the 60 drawn debt (debt_total 55 + IDC 5) to 0.
+    # -> principal 20 each, retiring the 60 drawn debt (debt_total 55 + IDC 5) to 0. The engine
+    # CFADS columns (cf_pre_debt 40/38/36, deliberately distinct from the ~7 the P&L would
+    # reconstruct) prove the waterfall reads the engine's published figure, not a reconstruction.
     interest = [10.0, 8.0, 6.0]
     service = [30.0, 28.0, 26.0]
+    cf_pre_debt = [40.0, 38.0, 36.0]
     return [
         {
             "year": t + 1,
@@ -770,6 +773,8 @@ def _annual_rows_3s(n: int = 3) -> list:
             "interest_usd": interest[t],
             "debt_service_total": service[t],
             "balloon_resolution": 0.0,
+            "cf_pre_debt": cf_pre_debt[t],
+            "cf_after_debt": cf_pre_debt[t] - service[t],
         }
         for t in range(n)
     ]
@@ -823,3 +828,51 @@ def test_three_statement_section_renders_in_html() -> None:
     assert "Financial Statements" in html
     assert "All tie-outs pass" in html
     assert "Income statement" in html and "Balance sheet" in html
+
+
+def test_cashflow_waterfall_block_populated() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+        annual_rows=_annual_rows_3s(3),
+    )
+    assert ctx.cashflow_waterfall is not None
+    wf = ctx.cashflow_waterfall
+    assert wf.currency == "USD"
+    assert len(wf.rows) == 3
+    # The waterfall sources the engine's published cf_pre_debt (40/38/36), NOT a P&L reconstruction.
+    assert [r.cfads for r in wf.rows] == pytest.approx([40.0, 38.0, 36.0])
+    # Scheduled debt service equals the engine's debt_service_total (ties to the DSCR section).
+    assert [r.scheduled_debt_service for r in wf.rows] == pytest.approx(
+        [30.0, 28.0, 26.0]
+    )
+    assert wf.total_cfads == pytest.approx(114.0)
+    assert wf.total_scheduled_debt_service == pytest.approx(84.0)
+
+
+def test_cashflow_waterfall_none_without_annual_rows() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+    )
+    assert ctx.cashflow_waterfall is None
+
+
+def test_cashflow_waterfall_section_renders_in_html() -> None:
+    from app.reports.renderer import render_report_html
+
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+        annual_rows=_annual_rows_3s(3),
+    )
+    html = render_report_html(ctx)
+    assert "Cash-Flow Waterfall by Payment Priority" in html
+    assert "Scheduled debt service" in html
+    assert "Cash to equity" in html

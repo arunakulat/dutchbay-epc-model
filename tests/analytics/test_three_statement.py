@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 import pytest
 
 from analytics.three_statement import (
+    build_cashflow_waterfall,
     build_three_statement,
     build_three_statement_from_run,
 )
@@ -140,3 +141,71 @@ def test_from_run_assembles_and_ties_out() -> None:
     assert res.currency == "USD"
     assert res.tie_outs is not None and res.tie_outs.all_pass
     assert res.to_dict()["tie_outs"]["debt_retires_to_residual"] is True
+
+
+# --------------------------------------------------------------------------- #
+# Cash-flow waterfall by payment priority (RPT-2)
+# --------------------------------------------------------------------------- #
+def _engine_rows(n: int = 3) -> List[Dict[str, Any]]:
+    """Operating rows carrying the engine's published per-year USD waterfall columns.
+
+    cf_pre_debt is the haircut CFADS (DSCR numerator); debt_service_total the scheduled
+    interest+principal (DSCR denominator); balloon_resolution the bullet retired at maturity;
+    cf_after_debt the engine's own residual = cf_pre_debt − debt_service_total − balloon_resolution.
+    """
+    cfads = [100.0, 90.0, 80.0]
+    service = [30.0, 28.0, 26.0]
+    balloon = [0.0, 0.0, 10.0]
+    return [
+        {
+            "year": t + 1,
+            "cf_pre_debt": cfads[t],
+            "debt_service_total": service[t],
+            "balloon_resolution": balloon[t],
+            "cf_after_debt": cfads[t] - service[t] - balloon[t],
+        }
+        for t in range(n)
+    ]
+
+
+def test_waterfall_sources_engine_columns_and_ties() -> None:
+    rows = _engine_rows(3)
+    wf = build_cashflow_waterfall(rows)
+    assert wf.currency == "USD"
+    assert len(wf.rows) == 3
+    # CFADS is the engine's cf_pre_debt (the DSCR numerator / headline CFADS), not a reconstruction.
+    assert [r.cfads for r in wf.rows] == pytest.approx([100.0, 90.0, 80.0])
+    # Scheduled debt service is the engine's debt_service_total (the DSCR denominator).
+    assert [r.scheduled_debt_service for r in wf.rows] == pytest.approx(
+        [30.0, 28.0, 26.0]
+    )
+    # The balloon is a SEPARATE line, excluded from scheduled debt service.
+    assert [r.balloon_sweep for r in wf.rows] == pytest.approx([0.0, 0.0, 10.0])
+    # Cash to equity ties to the engine's own cf_after_debt = cfads − scheduled − balloon.
+    assert [r.cash_to_equity for r in wf.rows] == pytest.approx([70.0, 62.0, 44.0])
+    assert wf.total_cfads == pytest.approx(270.0)
+    assert wf.total_scheduled_debt_service == pytest.approx(84.0)
+    assert wf.total_balloon_sweep == pytest.approx(10.0)
+    assert wf.total_cash_to_equity == pytest.approx(176.0)
+
+
+def test_waterfall_scheduled_service_excludes_balloon() -> None:
+    # The scheduled-debt-service line must equal the engine's debt_service_total exactly (the DSCR
+    # denominator), with the balloon on its own line — so it cannot contradict the DSCR section.
+    rows = _engine_rows(3)
+    wf = build_cashflow_waterfall(rows)
+    for r, row in zip(wf.rows, rows):
+        assert r.scheduled_debt_service == pytest.approx(row["debt_service_total"])
+        assert r.balloon_sweep == pytest.approx(row["balloon_resolution"])
+
+
+def test_waterfall_reconstructs_cash_to_equity_when_row_omits_it() -> None:
+    # If a row omits cf_after_debt, it is reconstructed as cfads − scheduled − balloon.
+    row = {
+        "year": 1,
+        "cf_pre_debt": 100.0,
+        "debt_service_total": 30.0,
+        "balloon_resolution": 5.0,
+    }
+    wf = build_cashflow_waterfall([row])
+    assert wf.rows[0].cash_to_equity == pytest.approx(65.0)
