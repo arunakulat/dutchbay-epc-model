@@ -4,6 +4,24 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- **Three-statement output (P&L / cash flow / balance sheet) + tie-out checks (#479).** New
+  `analytics.three_statement` assembles the three articulating statements from the engine's own
+  outputs (no new finance logic), presented in USD (the reported-KPI numeraire — LKR P&L lines
+  converted at each year's FX; the per-year debt figures are read from the engine's enriched
+  `annual_rows` columns `interest_usd` / `debt_service_total` / `balloon_resolution`, which are
+  phase-correct and fold the construction bridge into operating year 1, rather than re-derived
+  from raw period indices). The balance sheet balances **by construction** (equity is the
+  funding plug; cash, debt, depreciation and retained earnings roll forward), so
+  `balance_sheet_balances` / `cashflow_reconciles` / `retained_earnings_rolls` are articulation
+  invariants asserted as a guard against a builder regression. The genuinely **independent**
+  tie-out is `debt_retires_to_residual`: the per-row principal + balloon repayments must
+  amortise the engine's stated drawn debt down to its stated balloon residual (it has teeth —
+  catches a debt stream that does not retire the financed debt). Surfaced as a report section
+  with the tie-out status + the three statements. Verified on the committed hybrid and wind-only
+  lender cases: balance residual $0.00, debt-retirement residual $0.00, year-1 interest incl.
+  the bridge, the lender case's balloon residual carried correctly. Additive, read-only, KPI-neutral.
+
 ### Changed (KPI-moving — VERSION 15.0.0 -> 15.1.0)
 - **Solar TMY ingest + hourly thermal; committed hybrid solar P50 re-baselined (#529,
   SOLAR-6/12).** `solar_resource.pv_producer` gains an opt-in `resource.solar.tmy_path`: when

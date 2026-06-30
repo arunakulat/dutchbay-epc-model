@@ -748,3 +748,78 @@ def test_multi_tech_block_surfaces_poi_curtailment_when_configured() -> None:
     )
     assert ctx_plain.multi_tech is not None
     assert ctx_plain.multi_tech.poi_curtailment_pct is None
+
+
+# --------------------------------------------------------------------------- #
+# Three-statement output + tie-outs (#479)
+# --------------------------------------------------------------------------- #
+def _annual_rows_3s(n: int = 3) -> list:
+    # Enriched rows: LKR P&L + per-year USD debt columns. interest 10/8/6, service 30/28/26
+    # -> principal 20 each, retiring the 60 drawn debt (debt_total 55 + IDC 5) to 0.
+    interest = [10.0, 8.0, 6.0]
+    service = [30.0, 28.0, 26.0]
+    return [
+        {
+            "year": t + 1,
+            "revenue_lkr": 1000.0,
+            "opex_lkr": 200.0,
+            "ebitda_lkr": 800.0,
+            "total_depreciation_lkr": 500.0,
+            "tax_lkr": 100.0,
+            "fx_rate": 100.0,
+            "interest_usd": interest[t],
+            "debt_service_total": service[t],
+            "balloon_resolution": 0.0,
+        }
+        for t in range(n)
+    ]
+
+
+_DEBT_RESULT_3S = {
+    "debt_total": 55.0,
+    "total_idc": 5.0,
+    "balloon_residual": 0.0,
+}
+_SCEN_3S = {"capex": {"usd_total": 55.0}, "fx": {"start_lkr_per_usd": 100.0}}
+
+
+def test_three_statement_block_populated_and_ties_out() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+        annual_rows=_annual_rows_3s(3),
+    )
+    assert ctx.three_statement is not None
+    ts = ctx.three_statement
+    assert ts.currency == "USD"
+    assert ts.tie_outs_pass is True
+    assert ts.balance_sheet_balances and ts.debt_retires_to_residual
+    assert len(ts.income_statement) == 3 and len(ts.balance_sheet) == 3
+
+
+def test_three_statement_none_without_annual_rows() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+    )
+    assert ctx.three_statement is None
+
+
+def test_three_statement_section_renders_in_html() -> None:
+    from app.reports.renderer import render_report_html
+
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_DEBT_RESULT_3S,
+        annual_rows=_annual_rows_3s(3),
+    )
+    html = render_report_html(ctx)
+    assert "Financial Statements" in html
+    assert "All tie-outs pass" in html
+    assert "Income statement" in html and "Balance sheet" in html

@@ -459,6 +459,52 @@
   </section>
   {% endif %}
 
+  {# 8a-ter. Three-statement financial statements + tie-outs — #479 #}
+  {% if ctx.three_statement %}
+  <section class="page">
+    <h2>Financial Statements ({{ ctx.three_statement.currency }})</h2>
+    <p>Three articulating statements assembled from the engine's annual outputs. Tie-out
+      status:
+      {% if ctx.three_statement.tie_outs_pass %}<span class="badge pass">All tie-outs pass</span>
+      {% else %}<span class="badge fail">Tie-out break</span>{% endif %}
+      independent debt-retires-to-residual check: {{ ctx.three_statement.debt_retires_to_residual }};
+      balance sheet balances: {{ ctx.three_statement.balance_sheet_balances }};
+      cash flow reconciles: {{ ctx.three_statement.cashflow_reconciles }};
+      retained-earnings roll-forward: {{ ctx.three_statement.retained_earnings_rolls }};
+      max balance residual {{ fmt_usd(ctx.three_statement.max_abs_balance_residual) }}).</p>
+
+    <h3>Income statement</h3>
+    <table>
+      <thead><tr><th>Year</th><th>Revenue</th><th>EBITDA</th><th>Depr.</th><th>EBIT</th><th>Interest</th><th>Tax</th><th>Net income</th></tr></thead>
+      <tbody>
+        {% for r in ctx.three_statement.income_statement %}
+        <tr><td>{{ r.year }}</td><td class="num">{{ fmt_usd(r.revenue) }}</td><td class="num">{{ fmt_usd(r.ebitda) }}</td><td class="num">{{ fmt_usd(r.depreciation) }}</td><td class="num">{{ fmt_usd(r.ebit) }}</td><td class="num">{{ fmt_usd(r.interest) }}</td><td class="num">{{ fmt_usd(r.tax) }}</td><td class="num">{{ fmt_usd(r.net_income) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Cash flow statement</h3>
+    <table>
+      <thead><tr><th>Year</th><th>CFO</th><th>CFI</th><th>Debt principal</th><th>Distributions</th><th>CFF</th><th>Net change</th><th>Cash</th></tr></thead>
+      <tbody>
+        {% for r in ctx.three_statement.cash_flow %}
+        <tr><td>{{ r.year }}</td><td class="num">{{ fmt_usd(r.cfo) }}</td><td class="num">{{ fmt_usd(r.cfi) }}</td><td class="num">{{ fmt_usd(r.debt_principal) }}</td><td class="num">{{ fmt_usd(r.distributions) }}</td><td class="num">{{ fmt_usd(r.cff) }}</td><td class="num">{{ fmt_usd(r.net_change_in_cash) }}</td><td class="num">{{ fmt_usd(r.closing_cash) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Balance sheet</h3>
+    <table>
+      <thead><tr><th>Year</th><th>PP&amp;E</th><th>Cash</th><th>Assets</th><th>Debt</th><th>Equity</th><th>L &amp; E</th><th>Residual</th></tr></thead>
+      <tbody>
+        {% for r in ctx.three_statement.balance_sheet %}
+        <tr><td>{{ r.year }}</td><td class="num">{{ fmt_usd(r.ppe_net) }}</td><td class="num">{{ fmt_usd(r.cash) }}</td><td class="num">{{ fmt_usd(r.total_assets) }}</td><td class="num">{{ fmt_usd(r.debt) }}</td><td class="num">{{ fmt_usd(r.total_equity) }}</td><td class="num">{{ fmt_usd(r.total_liabilities_and_equity) }}</td><td class="num">{{ fmt_usd(r.balance_residual) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 8b. Assumption evidence register — #435 / RPT-1 #}
   {% if ctx.evidence %}
   <section class="page">
