@@ -4,6 +4,26 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed (KPI-moving — VERSION 15.0.0 -> 15.1.0)
+- **Solar TMY ingest + hourly thermal; committed hybrid solar P50 re-baselined (#529,
+  SOLAR-6/12).** `solar_resource.pv_producer` gains an opt-in `resource.solar.tmy_path`: when
+  a FROZEN hourly TMY is supplied it uses the TMY's measured hourly GHI/DNI/DHI **and** its
+  hourly ambient temp / wind for Faiman cell temperature (SOLAR-12), replacing the clear-sky
+  year scaled to `annual_ghi_kwh_m2` and the scalar annual-mean temperature. Absent
+  `tmy_path` the clear-sky path is byte-identical. Provenance: **frozen** (a committed PVGIS
+  TMY at `inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv`), keeping finance
+  pvlib/network-free + reproducible (the #469 ERA5 discipline).
+  **KPI-MOVING re-baseline of the committed hybrid** (`dutchbay_hybrid_windsolar_2025Q4`):
+  the frozen PVGIS TMY's real GHI (1871 kWh/m², vs the declared 2000) plus hot-hour thermal
+  lower the modelled solar P50 CF **0.179 -> 0.1685 (-5.9%)**, solar AEP 78.4 -> 73.8 GWh,
+  the blended project CF 0.295502 -> 0.292997, combined net P50 542.7 -> 538.1 GWh and net
+  P90-1yr 475.1 -> 471.0 GWh (`aep_summary_dutchbay_hybrid.json`). The P90 binds the gearing
+  (D4.6), so the hybrid financials move: **project_irr 0.01958 -> 0.01855, equity_irr
+  -0.0272 -> -0.0285, project_npv -91.65M -> -92.67M, total CFADS 237.78M -> 235.66M;
+  min_dscr holds 1.30** (debt sculpted to target). The wind-only lendercase is unaffected
+  (no solar). Pins updated: scenario YAML, the frozen AEP summary, and
+  `tests/finance/test_hybrid_scenario.py`.
+
 ### Added
 - **Measure-correlate-predict (MCP) for the long-term wind resource (#477, WIND-1).** New
   `wind_resource.mcp` correlates a short on-site mast record against the concurrent ERA5
@@ -72,10 +92,9 @@ All notable changes to this project will be documented here.
   correct), **SOLAR-8** (`pdc0 = ac_nameplate/eta` saturates the inverter at the AC nameplate
   and the clip DOES engage at DC 50 MWp / ILR 1.2), and **SOLAR-9** (bifacial is a report-stage
   `cf_mono`/`cf_bifacial` disclosure only; the financed yield is monofacial) are all correct
-  as-is. **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) are DEFERRED** as a KPI-moving
-  re-baseline: the chain scales a clear-sky year to the measured annual GHI and runs Faiman on a
-  scalar annual-mean ambient temp, so a TMY would move the committed (frozen) hybrid solar P50
-  0.179 and needs the same frozen-vs-live provenance decision as #469 (ERA5). KPI-neutral.
+  as-is. **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) were deferred here and are now
+  IMPLEMENTED in #529 (the "Changed (KPI-moving)" entry above)** — a frozen PVGIS TMY moved the
+  committed hybrid solar P50 0.179 -> 0.1685. KPI-neutral (this #485 slice itself).
 - **Wake-source disclosure + opt-in live PyWake at the headline (#478, WIND-2).** The headline
   AEP build now resolves the wake loss through `_resolve_wake_loss` and stamps a `wake_source`
   into the AEP summary. Default = the documented FROZEN `resource.losses.wake_loss_pct` — which

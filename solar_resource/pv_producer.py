@@ -47,12 +47,14 @@ Deep-research audit dispositions (#485), each RE-VERIFIED against this code:
   ``cf_mono`` vs ``cf_bifacial`` disclosure in ``scripts/generate_solar_assessment_report.py``;
   the FINANCED yield is the monofacial pvlib P50. Bifacial is intentionally outside the
   validated finance chain, not silently baked in.
-* **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) — DEFERRED, KPI-moving.** The chain scales
-  a clear-sky year to the measured annual GHI and runs Faiman on a SCALAR annual-mean ambient
-  temp, so hot-hour losses are flattened (SOLAR-12). Fixing this needs an hourly TMY series
-  (SOLAR-6) — a provenance decision mirroring the #469 ERA5 frozen-vs-live call — and would
-  move the committed (frozen) hybrid solar P50 0.179, requiring a deliberate re-baseline +
-  re-pin. Tracked as a separate authorized item; NOT changed here.
+* **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) — IMPLEMENTED (#529, opt-in).** When
+  ``tmy_path`` points at a FROZEN hourly TMY (the #469 frozen-vs-live call, resolved to FROZEN
+  for reproducibility + a pvlib-free finance stack), the producer uses the TMY's measured
+  hourly GHI/DNI/DHI AND its hourly ambient temp / wind for Faiman cell temperature — so the
+  clear-sky-shape assumption and the flattened scalar-temp hot-hour losses are both removed.
+  Absent ``tmy_path`` the clear-sky path is byte-identical to the prior behaviour. The
+  committed hybrid was re-baselined on a frozen PVGIS TMY (solar P50 0.179 -> 0.1685, -5.9%:
+  real GHI ~1871 vs the declared 2000 + hot-hour thermal); see CHANGELOG #529.
 """
 
 from __future__ import annotations
@@ -60,6 +62,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from solar_resource.exceedance import (
@@ -70,6 +73,9 @@ from solar_resource.exceedance import (
 from solar_resource.loss_model import compute_net_solar_loss_factor
 
 logger = logging.getLogger(__name__)
+
+#: Repo root (solar_resource/ -> repo root), for resolving a relative frozen TMY path.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: Reference (non-leap) calendar year for the clear-sky shape. A fixed constant keeps the
 #: producer reproducible (``Date.now`` is unavailable / would break regression pins); it is
@@ -131,6 +137,15 @@ class SolarResourceConfig:
     #: loss taxonomy (solar_resource.loss_model). ``hash=False`` keeps the frozen dataclass
     #: hashable despite the mapping field.
     losses: Optional[Mapping[str, Any]] = field(default=None, hash=False)
+    #: SOLAR-6/12 (#529): optional path to a FROZEN hourly TMY CSV (columns ``ghi``, ``dni``,
+    #: ``dhi`` in W/m2, ``temp_air`` in degC, ``wind_speed`` in m/s; 8760 hourly rows, UTC
+    #: index). When supplied, the producer uses the TMY's measured hourly irradiance AND its
+    #: hourly ambient temp / wind for cell temperature (SOLAR-12), instead of the clear-sky
+    #: year scaled to ``annual_ghi_kwh_m2`` and the scalar ``ambient_temp_c`` / ``wind_speed_ms``.
+    #: Absent (default), the clear-sky path is byte-identical to the prior behaviour. Frozen
+    #: (not fetched live) to keep finance pvlib/network-free + reproducible (the #469 ERA5
+    #: discipline). Path is resolved relative to the repo root.
+    tmy_path: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.dc_capacity_mw <= 0:
@@ -227,6 +242,59 @@ class SolarCfValidation:
     result: SolarAEPResult = field(repr=False)
 
 
+#: Hourly TMY columns the producer consumes (SOLAR-6/12). Irradiance W/m2, temp degC, wind m/s.
+_TMY_REQUIRED_COLUMNS: tuple[str, ...] = ("ghi", "dni", "dhi", "temp_air", "wind_speed")
+
+
+def _load_tmy(tmy_path: str) -> Any:
+    """Load a frozen hourly TMY CSV into a tz-aware (UTC) DataFrame (SOLAR-6).
+
+    The CSV must carry an hourly timestamp index plus :data:`_TMY_REQUIRED_COLUMNS`. A
+    tz-naive index is localised to UTC (PVGIS/NSRDB TMY convention). Resolved relative to the
+    repo root when not absolute.
+
+    Raises:
+        FileNotFoundError: the path does not exist.
+        ValueError: required columns are missing, the row count is not 8760, or values are
+            non-finite (CESSPIT — a malformed frozen TMY must fail loud, not skew the P50).
+    """
+    import numpy as np
+    import pandas as pd
+
+    path = Path(tmy_path)
+    if not path.is_absolute():
+        path = _REPO_ROOT / tmy_path
+    if not path.exists():
+        raise FileNotFoundError(f"TMY file not found: {path}")
+    tmy = pd.read_csv(path, index_col=0, parse_dates=True)
+    missing = [c for c in _TMY_REQUIRED_COLUMNS if c not in tmy.columns]
+    if missing:
+        raise ValueError(
+            f"TMY {path.name} is missing required column(s): {missing}; "
+            f"need {list(_TMY_REQUIRED_COLUMNS)}"
+        )
+    tmy = tmy[list(_TMY_REQUIRED_COLUMNS)]
+    if len(tmy) != _HOURS_PER_YEAR:
+        raise ValueError(
+            f"TMY {path.name} has {len(tmy)} rows; expected {_HOURS_PER_YEAR} hourly steps"
+        )
+    if not np.isfinite(tmy.to_numpy(dtype=float)).all():
+        raise ValueError(f"TMY {path.name} contains non-finite values; clean it first")
+    if (tmy[["ghi", "dni", "dhi"]].to_numpy(dtype=float) < 0).any():
+        raise ValueError(
+            f"TMY {path.name} has negative irradiance; clean it first (irradiance >= 0)"
+        )
+    index = pd.DatetimeIndex(tmy.index)
+    if index.tz is None:
+        index = index.tz_localize("UTC")
+    if not index.is_monotonic_increasing or index.has_duplicates:
+        raise ValueError(
+            f"TMY {path.name} index must be unique and monotonically increasing (hourly)"
+        )
+    tmy.index = index
+    return tmy
+
+
 def compute_solar_aep(
     config: SolarResourceConfig,
     *,
@@ -275,29 +343,46 @@ def compute_solar_aep(
         tz=config.timezone,
         altitude=config.altitude_m,
     )
-    times = pd.date_range(
-        f"{config.reference_year}-01-01 00:00",
-        f"{config.reference_year}-12-31 23:00",
-        freq="1h",
-        tz=config.timezone,
-    )
 
-    clearsky = loc.get_clearsky(times, model="ineichen")
-    clearsky_ghi_annual_kwh = float(clearsky["ghi"].sum()) / 1000.0
-    # Defensive guard: pvlib clear-sky is always positive for a valid site.
-    if clearsky_ghi_annual_kwh <= 0:  # pragma: no cover
-        raise RuntimeError(
-            "Clear-sky GHI computed as non-positive — check site/timezone."
+    if config.tmy_path is not None:
+        # SOLAR-6/12: measured hourly TMY irradiance + hourly ambient temp / wind. The TMY
+        # sets the resource (annual_ghi_kwh_m2 becomes informational), and Faiman runs on the
+        # hourly temp/wind series so hot-hour thermal losses are no longer flattened.
+        tmy = _load_tmy(config.tmy_path)
+        times = tmy.index
+        ghi = tmy["ghi"]
+        dni = tmy["dni"]
+        dhi = tmy["dhi"]
+        temp_air: Any = tmy["temp_air"]
+        wind_speed: Any = tmy["wind_speed"]
+        ghi_used_kwh_m2 = float(ghi.sum()) / 1000.0
+        scale = float("nan")  # not applicable to a measured TMY
+        solpos = loc.get_solarposition(times)
+    else:
+        times = pd.date_range(
+            f"{config.reference_year}-01-01 00:00",
+            f"{config.reference_year}-12-31 23:00",
+            freq="1h",
+            tz=config.timezone,
         )
-    # Scale the clear-sky shape so its annual GHI equals the measured site total (the
-    # clear-sky index). A sunny tropical site lands near ~0.8.
-    scale = config.annual_ghi_kwh_m2 / clearsky_ghi_annual_kwh
-    ghi = clearsky["ghi"] * scale
-
-    solpos = loc.get_solarposition(times)
-    dni = pvlib.irradiance.disc(ghi, solpos["zenith"], times)["dni"]
-    cos_zen = np.cos(np.radians(solpos["zenith"]))
-    dhi = (ghi - dni * cos_zen).clip(lower=0.0)
+        clearsky = loc.get_clearsky(times, model="ineichen")
+        clearsky_ghi_annual_kwh = float(clearsky["ghi"].sum()) / 1000.0
+        # Defensive guard: pvlib clear-sky is always positive for a valid site.
+        if clearsky_ghi_annual_kwh <= 0:  # pragma: no cover
+            raise RuntimeError(
+                "Clear-sky GHI computed as non-positive — check site/timezone."
+            )
+        # Scale the clear-sky shape so its annual GHI equals the measured site total (the
+        # clear-sky index). A sunny tropical site lands near ~0.8.
+        scale = config.annual_ghi_kwh_m2 / clearsky_ghi_annual_kwh
+        ghi = clearsky["ghi"] * scale
+        solpos = loc.get_solarposition(times)
+        dni = pvlib.irradiance.disc(ghi, solpos["zenith"], times)["dni"]
+        cos_zen = np.cos(np.radians(solpos["zenith"]))
+        dhi = (ghi - dni * cos_zen).clip(lower=0.0)
+        temp_air = config.ambient_temp_c
+        wind_speed = config.wind_speed_ms
+        ghi_used_kwh_m2 = config.annual_ghi_kwh_m2
 
     dni_extra = pvlib.irradiance.get_extra_radiation(times)
     poa = pvlib.irradiance.get_total_irradiance(
@@ -312,9 +397,7 @@ def compute_solar_aep(
         model="haydavies",  # anisotropic (lender-preferred over the isotropic default)
     )["poa_global"].clip(lower=0.0)
 
-    cell_temp = pvlib.temperature.faiman(
-        poa, temp_air=config.ambient_temp_c, wind_speed=config.wind_speed_ms
-    )
+    cell_temp = pvlib.temperature.faiman(poa, temp_air=temp_air, wind_speed=wind_speed)
     pdc0_w = config.dc_capacity_mw * 1.0e6
     dc_power = pvlib.pvsystem.pvwatts_dc(poa, cell_temp, pdc0_w, config.gamma_pdc_per_c)
     ac_nameplate_w = pdc0_w / config.dc_ac_ratio
@@ -345,12 +428,14 @@ def compute_solar_aep(
         )
 
     logger.info(
-        "Solar AEP: %.1f GWh, CF %.3f, yield %.0f kWh/kWp (GHI %.0f kWh/m2, scale %.3f)",
+        "Solar AEP: %.1f GWh, CF %.3f, yield %.0f kWh/kWp (GHI %.0f kWh/m2, scale %.3f, "
+        "source %s)",
         annual_energy_gwh,
         capacity_factor,
         specific_yield,
-        config.annual_ghi_kwh_m2,
+        ghi_used_kwh_m2,
         scale,
+        "TMY" if config.tmy_path is not None else "clear-sky",
     )
     exceedance: Optional[SolarExceedanceResult] = None
     if emit_exceedance:

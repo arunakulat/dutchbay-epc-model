@@ -208,3 +208,124 @@ def test_hybrid_scenario_solar_block_validates_declared_p50() -> None:
     assert (
         v.within_tolerance
     ), f"declared {declared} vs producer {v.modelled_cf:.3f} drifted {v.relative_diff:.1%}"
+
+
+# ── SOLAR-6/12 (#529): TMY ingest + hourly thermal ────────────────────────────
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from solar_resource.pv_producer import _load_tmy  # noqa: E402
+
+_FROZEN_TMY = "inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv"
+
+
+def _write_tmy(path: str, *, temp_c: float = 27.0, wind: float = 4.5) -> str:
+    """Write a synthetic 8760-row hourly TMY CSV (a simple diurnal GHI shape)."""
+    idx = pd.date_range("1990-01-01", periods=8760, freq="1h", tz="UTC")
+    hour = idx.hour.to_numpy()
+    ghi = np.clip(900.0 * np.sin((hour - 6) / 12.0 * np.pi), 0.0, None)  # daytime bell
+    df = pd.DataFrame(
+        {
+            "ghi": ghi,
+            "dni": ghi * 0.7,
+            "dhi": ghi * 0.3,
+            "temp_air": np.full(8760, temp_c),
+            "wind_speed": np.full(8760, wind),
+        },
+        index=idx,
+    )
+    df.index.name = "time"
+    df.to_csv(path)
+    return path
+
+
+def test_frozen_kalpitiya_tmy_repins_solar_cf() -> None:
+    """Regression pin: the committed frozen PVGIS TMY yields the re-baselined P50 (#529)."""
+    r = compute_solar_aep(_cfg(tmy_path=_FROZEN_TMY))
+    assert r.capacity_factor == pytest.approx(0.1685, abs=0.001)
+    assert r.annual_energy_gwh == pytest.approx(73.8, abs=0.3)
+
+
+def test_tmy_path_changes_result_vs_clearsky() -> None:
+    """The TMY path produces a different (here lower) CF than the clear-sky default."""
+    clearsky = compute_solar_aep(_cfg()).capacity_factor
+    tmy = compute_solar_aep(_cfg(tmy_path=_FROZEN_TMY)).capacity_factor
+    assert tmy < clearsky  # real GHI 1871 < declared 2000, + hot-hour thermal
+
+
+def test_solar12_hourly_thermal_hotter_tmy_lowers_cf(tmp_path) -> None:
+    """SOLAR-12: a hotter hourly ambient series yields a lower CF (cell-temp losses)."""
+    cool = _write_tmy(str(tmp_path / "cool.csv"), temp_c=20.0)
+    hot = _write_tmy(str(tmp_path / "hot.csv"), temp_c=40.0)
+    cf_cool = compute_solar_aep(_cfg(tmy_path=cool)).capacity_factor
+    cf_hot = compute_solar_aep(_cfg(tmy_path=hot)).capacity_factor
+    assert cf_hot < cf_cool
+
+
+def test_clearsky_path_byte_identical_without_tmy() -> None:
+    """No tmy_path -> the clear-sky path is unchanged (the default is byte-identical)."""
+    a = compute_solar_aep(_cfg(tmy_path=None)).capacity_factor
+    b = compute_solar_aep(_cfg()).capacity_factor
+    assert a == b
+
+
+def test_load_tmy_missing_file_raises() -> None:
+    with pytest.raises(FileNotFoundError, match="TMY file not found"):
+        _load_tmy("inputs/solar_tmy/does_not_exist.csv")
+
+
+def test_load_tmy_missing_column_raises(tmp_path) -> None:
+    idx = pd.date_range("1990-01-01", periods=8760, freq="1h", tz="UTC")
+    df = pd.DataFrame({"ghi": 1.0, "dni": 1.0, "dhi": 1.0, "temp_air": 25.0}, index=idx)
+    p = str(tmp_path / "nowind.csv")
+    df.to_csv(p)
+    with pytest.raises(ValueError, match="missing required column"):
+        _load_tmy(p)
+
+
+def test_load_tmy_wrong_row_count_raises(tmp_path) -> None:
+    idx = pd.date_range("1990-01-01", periods=100, freq="1h", tz="UTC")
+    df = pd.DataFrame(
+        {"ghi": 1.0, "dni": 1.0, "dhi": 1.0, "temp_air": 25.0, "wind_speed": 2.0},
+        index=idx,
+    )
+    p = str(tmp_path / "short.csv")
+    df.to_csv(p)
+    with pytest.raises(ValueError, match="expected 8760"):
+        _load_tmy(p)
+
+
+def test_load_tmy_non_finite_raises(tmp_path) -> None:
+    p = _write_tmy(str(tmp_path / "nan.csv"))
+    df = pd.read_csv(p, index_col=0, parse_dates=True)
+    df.iloc[5, df.columns.get_loc("temp_air")] = np.nan
+    df.to_csv(p)
+    with pytest.raises(ValueError, match="non-finite"):
+        _load_tmy(p)
+
+
+def test_from_scenario_passes_tmy_path() -> None:
+    cfg = SolarResourceConfig.from_scenario(
+        {"resource": {"solar": {**KALPITIYA, "tmy_path": _FROZEN_TMY}}}
+    )
+    assert cfg.tmy_path == _FROZEN_TMY
+
+
+def test_load_tmy_negative_irradiance_raises(tmp_path) -> None:
+    p = _write_tmy(str(tmp_path / "neg.csv"))
+    df = pd.read_csv(p, index_col=0, parse_dates=True)
+    df.iloc[12, df.columns.get_loc("ghi")] = -5.0
+    df.to_csv(p)
+    with pytest.raises(ValueError, match="negative irradiance"):
+        _load_tmy(p)
+
+
+def test_load_tmy_non_monotonic_index_raises(tmp_path) -> None:
+    p = _write_tmy(str(tmp_path / "dup.csv"))
+    df = pd.read_csv(p, index_col=0, parse_dates=True)
+    idx = df.index.to_list()
+    idx[1] = idx[0]  # duplicate timestamp -> non-unique / non-monotonic
+    df.index = pd.DatetimeIndex(idx)
+    df.to_csv(p)
+    with pytest.raises(ValueError, match="unique and monotonically increasing"):
+        _load_tmy(p)

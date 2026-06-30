@@ -26,10 +26,11 @@ from solar_resource.cashflow_adapter import (
     solar_export_to_scenario_patch,
 )
 
-# Canonical hybrid numbers (scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml):
-#   wind  159.6 MW @ CF 0.332
-#   solar  50.0 MW @ CF 0.20 declared  →  pvlib-modelled 0.17901 (−10.5%)
-# Blended headline after overwrite = (159.6*0.332 + 50*0.17901) / 209.6.
+# Adapter-mechanics fixtures (decoupled from the committed scenario): the solar CF below is
+# the CLEAR-SKY producer output (0.17901), used here only to exercise the OVERWRITE adapter
+# math. The committed hybrid's FINANCED solar P50 is now 0.1685 on a frozen PVGIS TMY (#529
+# SOLAR-6/12); these synthetic adapter tests are intentionally independent of that re-baseline.
+#   wind  159.6 MW @ CF 0.332 ; solar 50.0 MW @ clear-sky modelled 0.17901
 _WIND_MW, _WIND_CF = 159.6, 0.332
 _SOLAR_MW = 50.0
 _SOLAR_CF_MODELLED = 0.17901

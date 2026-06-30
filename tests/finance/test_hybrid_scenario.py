@@ -38,13 +38,18 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # 1.302 -> 1.497, PLCR 1.348 -> 1.550. project_irr is unlevered (UNCHANGED); min_dscr
     # holds 1.30; total_cfads_usd is debt-independent (UNCHANGED). project_npv edges down
     # -89.78M -> -91.65M (the smaller debt slice raises the build-up WACC).
-    assert kpis["project_irr"] == pytest.approx(0.019577905010579898, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.02721927328494267, rel=1e-6)  # D4.6
+    # #529 (SOLAR-6/12): the financed solar P50 CF was re-baselined 0.179 -> 0.1685 (-5.9%)
+    # on a FROZEN PVGIS TMY (hourly GHI/DNI/DHI + hourly Faiman temp/wind) — real GHI 1871
+    # (vs the declared 2000) + hot-hour thermal. Less solar generation (78.4 -> 73.8 GWh)
+    # lowers total CFADS 237.78M -> 235.66M (-0.9%), projIRR 0.01958 -> 0.01855 (-10bps),
+    # equity_irr -0.0272 -> -0.0285, and NPV -91.65M -> -92.67M; min_dscr holds 1.30.
+    assert kpis["project_irr"] == pytest.approx(0.01855071204306178, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.028493280998005632, rel=1e-6)  # #529
     assert kpis["project_npv"] == pytest.approx(
-        -91650154.42575124, rel=1e-6
-    )  # D4.6 P90-bound debt
+        -92672410.10213006, rel=1e-6
+    )  # #529 solar TMY re-baseline
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(237778073.29042047, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(235664760.1435344, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:
@@ -54,9 +59,9 @@ def test_hybrid_reports_per_technology_split() -> None:
     assert gen is not None and breakdown is not None
     assert set(gen.technologies) == {"wind", "solar"}
     rows = {r.technology: r for r in breakdown}
-    # wind 464.3 (post 2% haircut) / 542.7 = 85.6% ; solar 78.4 (pvlib P50) / 542.7 = 14.4%
-    assert rows["wind"].share_of_aep_pct == pytest.approx(85.6, abs=0.2)
-    assert rows["solar"].share_of_aep_pct == pytest.approx(14.4, abs=0.2)
+    # wind 464.3 / 538.1 = 86.3% ; solar 73.8 (pvlib P50, #529 TMY) / 538.1 = 13.7%
+    assert rows["wind"].share_of_aep_pct == pytest.approx(86.3, abs=0.2)
+    assert rows["solar"].share_of_aep_pct == pytest.approx(13.7, abs=0.2)
     # wind 159.6 / 199.6 = 80% ; solar 40 / 199.6 = 20%
     assert rows["wind"].share_of_capex_pct == pytest.approx(80.0, abs=0.2)
     assert rows["solar"].share_of_capex_pct == pytest.approx(20.0, abs=0.2)
@@ -65,7 +70,7 @@ def test_hybrid_reports_per_technology_split() -> None:
 def test_hybrid_net_p90_is_model_derived() -> None:
     """The hybrid net_aep_p90 (#469 dolphin 4c) is reproducible from the solar model.
 
-    Proves the frozen 475.1 GWh is wind 404.4 + the pvlib-modelled solar P90-1yr (not a
+    Proves the frozen 471.0 GWh is wind 404.4 + the pvlib-modelled solar P90-1yr (not a
     hand-maintained placeholder). Gated on the [solar] extra. This P90 now BINDS the gearing
     (bind_downside true, D4.6 — it drives the financed KPIs pinned in the economics test
     above); here we only check the AEP arithmetic that feeds it.
