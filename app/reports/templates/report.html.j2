@@ -399,12 +399,29 @@
     <h2>Assumptions Register</h2>
     {% if ctx.assumptions %}
     <table>
+      <thead>
+        <tr>
+          <th>Assumption</th>
+          <th style="text-align:right;">Value</th>
+          <th>Source</th>
+          <th>As of</th>
+          <th>Impact</th>
+        </tr>
+      </thead>
       <tbody>
         {% for row in ctx.assumptions %}
-        <tr><td>{{ row.label }}</td><td class="num">{{ row.display }}</td></tr>
+        <tr>
+          <td>{{ row.label }}</td>
+          <td class="num">{{ row.display }}</td>
+          <td>{{ row.source or "—" }}</td>
+          <td>{{ row.as_of or "—" }}</td>
+          <td>{{ row.impact or "—" }}</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
+    <p class="muted">Source and as-of are shown where the scenario's evidence register declares
+      provenance for the assumption; impact is the KPI each assumption most directly moves.</p>
     {% else %}
     <p class="muted">Assumptions were inherited from the base scenario variant
       ({{ ctx.scenario_variant }}); no wizard overrides were supplied.</p>
@@ -593,7 +610,9 @@
     <table>
       <tbody>
         {% for key, value in ctx.manifest.items() %}
-        <tr><td>{{ key }}</td><td class="num">{{ value }}</td></tr>
+        {# Manifest values are identifiers/timestamps (run id, version, git SHA, config hash) —
+           left-aligned, not numeric (RPT-4). #}
+        <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
