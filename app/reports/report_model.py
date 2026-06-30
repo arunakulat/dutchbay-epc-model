@@ -16,6 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import EvidenceRegisterError, build_evidence_report
+from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
+from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
+from analytics.portfolio.tech_wbs import build_multi_tech_wbs
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -158,6 +161,44 @@ class EvidenceBlock(BaseModel):
     total: int
 
 
+class MultiTechRow(BaseModel):
+    """One technology's line in the multi-technology breakdown (ARCH-4, #476)."""
+
+    technology: str
+    aep_gwh: Optional[float] = None
+    share_of_aep_pct: Optional[float] = None
+    share_of_cfads_pct: Optional[float] = None
+    capex_usd: Optional[float] = None
+    share_of_capex_pct: Optional[float] = None
+    opex_usd_per_year: Optional[float] = None
+    cost_of_equity: Optional[float] = None
+    wacc_basis: str = "blended"
+
+
+class MultiTechBlock(BaseModel):
+    """Per-technology production/economics breakdown for a hybrid plant (ARCH-4, #476).
+
+    Reuses the additive multi-tech generation view (ARCH-2, #488) and the per-tech
+    cost/return work-breakdown (ARCH-3, #475) — pure presentation, no finance logic. The
+    CFADS share is apportioned by operating margin; the financed-vs-allocated residual is
+    the shared / balance-of-plant bucket. Rendered only for genuine hybrids (2+ generation
+    technologies).
+    """
+
+    rows: List[MultiTechRow]
+    total_aep_gwh: Optional[float] = None
+    financed_capex_usd: Optional[float] = None
+    allocated_capex_usd: Optional[float] = None
+    capex_residual_usd: Optional[float] = None
+    capex_reconciled: bool = False
+    project_wacc_nominal: Optional[float] = None
+    #: Shared-POI curtailment (ARCH-5, #476) — populated only when the scenario declares a
+    #: POI limit and per-tech hourly profiles; None (omitted) otherwise.
+    poi_limit_mw: Optional[float] = None
+    poi_curtailment_pct: Optional[float] = None
+    poi_curtailed_energy_mwh: Optional[float] = None
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -191,6 +232,9 @@ class ReportContext(BaseModel):
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
+    #: Per-technology production/economics breakdown for a hybrid (ARCH-4, #476). None for
+    #: single-tech plants or legacy callers — the section is then omitted.
+    multi_tech: Optional[MultiTechBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -432,6 +476,86 @@ def _build_finance_blocks(
     return extract_finance_report_blocks(scenario_config, debt_result, case_result.kpis)
 
 
+def _build_multi_tech(
+    case_result: CaseResult,
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[MultiTechBlock]:
+    """Project a hybrid's per-technology production/economics into a report block (ARCH-4).
+
+    Reuses the additive multi-tech generation view (``build_multi_tech_from_run``, ARCH-2)
+    and the per-tech cost/return work-breakdown (``build_multi_tech_wbs``, ARCH-3). Returns
+    ``None`` for legacy callers (no scenario config) and for single-technology plants (fewer
+    than two generation technologies) — the section is then omitted. Pure presentation; the
+    WBS build is best-effort (a malformed per-tech over-attribution degrades to the
+    generation-only view rather than failing the whole report).
+    """
+    if scenario_config is None:
+        return None
+    result, breakdown = build_multi_tech_from_run(case_result.kpis, scenario_config)
+    if result is None or breakdown is None or len(result.technologies) < 2:
+        return None
+
+    breakdown_by_tech = {row.technology: row for row in breakdown}
+
+    # Per-tech CAPEX/OPEX/cost-of-equity from the ARCH-3 work-breakdown (best-effort).
+    wbs = None
+    try:
+        wbs = build_multi_tech_wbs(
+            scenario_config,
+            project_wacc_nominal=case_result.kpis.get("discount_rate_used"),
+        )
+    except ValueError:
+        wbs = None
+    wbs_by_tech = dict(wbs.technologies) if wbs is not None else {}
+
+    rows: List[MultiTechRow] = []
+    for tech, profile in result.technologies.items():
+        bd = breakdown_by_tech.get(tech)
+        w = wbs_by_tech.get(tech)
+        capex_usd = w.capex_usd if w is not None else None
+        rows.append(
+            MultiTechRow(
+                technology=tech,
+                aep_gwh=profile.annual_aep_kwh / 1_000_000.0,
+                share_of_aep_pct=bd.share_of_aep_pct if bd is not None else None,
+                share_of_cfads_pct=bd.share_of_cfads_pct if bd is not None else None,
+                capex_usd=capex_usd,
+                # Couple the CAPEX share to the CAPEX value: when the work-breakdown is
+                # absent/degraded (capex_usd None) suppress the share too, so the column is
+                # not a populated % beside an em-dash dollar figure.
+                share_of_capex_pct=(
+                    bd.share_of_capex_pct
+                    if bd is not None and capex_usd is not None
+                    else None
+                ),
+                opex_usd_per_year=w.opex_usd_per_year if w is not None else None,
+                cost_of_equity=w.cost_of_equity if w is not None else None,
+                wacc_basis=w.wacc_basis if w is not None else "blended",
+            )
+        )
+
+    # Shared-POI curtailment (ARCH-5): opt-in; None unless a POI limit + hourly profiles
+    # are declared, so committed scenarios omit it.
+    curtailment = resolve_shared_poi_curtailment(scenario_config)
+
+    return MultiTechBlock(
+        rows=rows,
+        total_aep_gwh=result.total_aep_kwh / 1_000_000.0,
+        financed_capex_usd=wbs.financed_capex_usd if wbs is not None else None,
+        allocated_capex_usd=wbs.allocated_capex_usd if wbs is not None else None,
+        capex_residual_usd=wbs.capex_residual_usd if wbs is not None else None,
+        capex_reconciled=wbs.capex_reconciled if wbs is not None else False,
+        project_wacc_nominal=wbs.project_wacc_nominal if wbs is not None else None,
+        poi_limit_mw=curtailment.poi_limit_mw if curtailment is not None else None,
+        poi_curtailment_pct=(
+            curtailment.curtailment_pct if curtailment is not None else None
+        ),
+        poi_curtailed_energy_mwh=(
+            curtailment.curtailed_energy_mwh if curtailment is not None else None
+        ),
+    )
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -492,5 +616,6 @@ def build_report_context(
         tornado=tornado,
         global_sa=global_sa,
         evidence=_build_evidence(scenario_config),
+        multi_tech=_build_multi_tech(case_result, scenario_config),
         manifest=dict(case_result.run_manifest or {}),
     )

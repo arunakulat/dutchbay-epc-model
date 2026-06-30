@@ -532,6 +532,26 @@ class MultiTechWBS(ContractMixin):
         return self.model_dump()
 
 
+@dataclass(frozen=True)
+class SharedPoiCurtailmentResult(ContractMixin):
+    """Shared point-of-interconnection curtailment for a hybrid plant (ARCH-5, #476).
+
+    When several technologies inject through one shared POI, their *combined* instantaneous
+    output can exceed the POI export limit; the excess is physically curtailed (lost, not
+    deemed/paid — distinct from grid-instructed curtailment). Computed from per-technology
+    hourly injection profiles against ``poi_limit_mw``; ``curtailment_pct`` is the curtailed
+    share of combined gross generation. Opt-in: absent a POI limit or hourly profiles, the
+    interaction is not modelled (no committed scenario is affected — KPI-neutral).
+    """
+
+    poi_limit_mw: float
+    gross_energy_mwh: float
+    curtailed_energy_mwh: float
+    curtailment_pct: float
+    hours_curtailed: int
+    hours_total: int
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     "check_covenant_breach_with_tolerance",
@@ -566,4 +586,5 @@ __all__ = [
     "TechnologyBreakdown",
     "TechnologyCostReturn",
     "MultiTechWBS",
+    "SharedPoiCurtailmentResult",
 ]

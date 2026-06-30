@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Dict
 
+import pytest
+
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import Covenants, ReportConfig, ReportMeta
@@ -608,3 +610,141 @@ def test_assumptions_omit_location_when_absent() -> None:
         _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, inputs=inp
     )
     assert "Location" not in [a.label for a in ctx.assumptions]
+
+
+# --------------------------------------------------------------------------- #
+# Multi-technology breakdown (ARCH-4, #476)
+# --------------------------------------------------------------------------- #
+_HYBRID_SCENARIO = {
+    "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+    "revenue": {"tariff_lkr_per_kwh": 30.0},
+    "capex": {"usd_total": 200_000_000.0},
+    "opex": {"usd_per_year": 5_000_000.0},
+    "generation": {
+        "technologies": {
+            "wind": {
+                "type": "wind",
+                "aep_gwh": 400.0,
+                "capacity_factor": 0.34,
+                "capex_usd": 150_000_000.0,
+                "opex_usd_per_year": 3_500_000.0,
+            },
+            "solar": {
+                "type": "solar",
+                "aep_gwh": 100.0,
+                "capacity_factor": 0.20,
+                "capex_usd": 30_000_000.0,
+                "opex_usd_per_year": 800_000.0,
+            },
+        }
+    },
+}
+_HYBRID_KPIS = {**_VALUE_DESTRUCTIVE_KPIS, "mean_operational_cfads_usd": 20_000_000.0}
+
+
+def test_multi_tech_block_populated_for_hybrid() -> None:
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_HYBRID_SCENARIO,
+    )
+    assert ctx.multi_tech is not None
+    techs = {r.technology for r in ctx.multi_tech.rows}
+    assert techs == {"wind", "solar"}
+    assert ctx.multi_tech.total_aep_gwh == 500.0
+    wind = next(r for r in ctx.multi_tech.rows if r.technology == "wind")
+    assert wind.capex_usd == 150_000_000.0
+    assert wind.opex_usd_per_year == 3_500_000.0
+    assert wind.share_of_aep_pct is not None
+    # Reconciliation: 200M financed, 180M attributed, 20M shared/BOP residual.
+    assert ctx.multi_tech.financed_capex_usd == 200_000_000.0
+    assert ctx.multi_tech.allocated_capex_usd == 180_000_000.0
+    assert ctx.multi_tech.capex_residual_usd == 20_000_000.0
+    assert ctx.multi_tech.capex_reconciled is True
+
+
+def test_multi_tech_none_for_single_tech() -> None:
+    single = {
+        "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+        "generation": {
+            "technologies": {
+                "wind": {"type": "wind", "aep_gwh": 400.0, "capacity_factor": 0.34}
+            }
+        },
+    }
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=single
+    )
+    assert ctx.multi_tech is None
+
+
+def test_multi_tech_none_without_scenario_config() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.multi_tech is None
+
+
+def test_multi_tech_section_renders_in_html() -> None:
+    """The multi-tech section renders in the HTML (Jinja step; no weasyprint needed)."""
+    from app.reports.renderer import render_report_html
+
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_HYBRID_SCENARIO,
+    )
+    html = render_report_html(ctx)
+    assert "Multi-Technology Breakdown" in html
+    assert "wind" in html and "solar" in html
+
+    # Single-tech omits the section entirely.
+    ctx_single = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert "Multi-Technology Breakdown" not in render_report_html(ctx_single)
+
+
+def test_multi_tech_block_surfaces_poi_curtailment_when_configured() -> None:
+    """A hybrid declaring a shared-POI limit + per-tech hourly profiles surfaces the
+    curtailment disclosure (ARCH-5); committed scenarios without them omit it."""
+    cfg = {
+        **_HYBRID_SCENARIO,
+        "generation": {
+            "shared_poi": {"limit_mw": 150.0},
+            "technologies": {
+                "wind": {
+                    "type": "wind",
+                    "aep_gwh": 400.0,
+                    "capacity_factor": 0.34,
+                    "capex_usd": 150_000_000.0,
+                    "hourly_profile_mw": [120.0, 80.0, 130.0],
+                },
+                "solar": {
+                    "type": "solar",
+                    "aep_gwh": 100.0,
+                    "capacity_factor": 0.20,
+                    "capex_usd": 30_000_000.0,
+                    "hourly_profile_mw": [50.0, 40.0, 40.0],
+                },
+            },
+        },
+    }
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=cfg,
+    )
+    assert ctx.multi_tech is not None
+    assert ctx.multi_tech.poi_limit_mw == 150.0
+    assert ctx.multi_tech.poi_curtailment_pct is not None
+    assert ctx.multi_tech.poi_curtailed_energy_mwh == pytest.approx(40.0)  # 20+0+20
+
+    # The committed-style hybrid (no POI limit / hourly profiles) omits curtailment.
+    ctx_plain = build_report_context(
+        _case(_HYBRID_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_HYBRID_SCENARIO,
+    )
+    assert ctx_plain.multi_tech is not None
+    assert ctx_plain.multi_tech.poi_curtailment_pct is None
