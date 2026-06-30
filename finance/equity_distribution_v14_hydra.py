@@ -23,6 +23,7 @@ GWTF Compliance:
     - No direct analytics-layer dependency on finance internals except through
       the main v14 pipeline integration point.
 """
+
 from __future__ import annotations
 
 import logging
@@ -166,7 +167,9 @@ def _extract_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     (e.g. the canonical lendercase), so they stay byte-identical.
     """
     capex_section = _section_case_insensitive(config, "capex")
-    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+    if capex_section and _lookup_case_insensitive(
+        capex_section, "derive_from_breakdown"
+    ):
         from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
 
         return float(_resolve_capex_bottom_up(dict(config)))
@@ -248,9 +251,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     )
 
     if project_life is None:
-        project = _section_case_insensitive(config, "Project") or _section_case_insensitive(
-            config, "project"
-        )
+        project = _section_case_insensitive(
+            config, "Project"
+        ) or _section_case_insensitive(config, "project")
         if project:
             project_life = _lookup_case_insensitive(project, "project_life_years")
 
@@ -259,8 +262,29 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     # bears it as a cash cost only when wht_gross_up. Both default off -> byte-identical.
     tax_section = _section_case_insensitive(config, "tax") or {}
     wht_enabled = bool(_lookup_case_insensitive(tax_section, "wht_on_interest_enabled"))
+    # FIN-12 (#482): fail loud on an ENABLED-but-rate-ABSENT inconsistency. With the rate key
+    # missing the gated idiom below silently resolves to 0.0, so the equity waterfall would
+    # under-charge WHT and OVERSTATE equity_irr/npv (the public-API footgun — a raw config can
+    # enable WHT without supplying the rate). An explicit 0.0 rate is legitimate (no charge);
+    # only an absent key while enabled is the bug.
+    if wht_enabled and (
+        _lookup_case_insensitive(tax_section, "wht_on_interest_to_nonresidents") is None
+    ):
+        raise ValueError(
+            "tax.wht_on_interest_enabled is true but tax.wht_on_interest_to_nonresidents "
+            "(the rate) is absent — interest WHT would silently resolve to 0 and the equity "
+            "waterfall would under-charge. Declare the rate (e.g. 0.10) or disable the flag."
+        )
     wht_rate = (
-        float(_as_float(_lookup_case_insensitive(tax_section, "wht_on_interest_to_nonresidents"), 0.0) or 0.0)
+        float(
+            _as_float(
+                _lookup_case_insensitive(
+                    tax_section, "wht_on_interest_to_nonresidents"
+                ),
+                0.0,
+            )
+            or 0.0
+        )
         if wht_enabled
         else 0.0
     )
@@ -270,6 +294,15 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     div_wht_enabled = bool(
         _lookup_case_insensitive(tax_section, "wht_on_dividends_enabled")
     )
+    # FIN-12 (#482): symmetric guard — enabled dividend WHT must declare its rate.
+    if div_wht_enabled and (
+        _lookup_case_insensitive(tax_section, "wht_on_dividends") is None
+    ):
+        raise ValueError(
+            "tax.wht_on_dividends_enabled is true but tax.wht_on_dividends (the rate) is "
+            "absent — dividend WHT would silently resolve to 0 and the equity waterfall "
+            "would under-charge the sponsor. Declare the rate (e.g. 0.15) or disable the flag."
+        )
     div_wht_rate = (
         float(
             _as_float(_lookup_case_insensitive(tax_section, "wht_on_dividends"), 0.0)
@@ -322,7 +355,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         terminal_value_usd=float(
             _as_float(equity_section.get("terminal_value_usd"), 0.0) or 0.0
         ),
-        discount_rate=float(_as_float(equity_section.get("discount_rate"), 0.10) or 0.0),
+        discount_rate=float(
+            _as_float(equity_section.get("discount_rate"), 0.10) or 0.0
+        ),
         equity_investment_usd=_as_float(
             equity_section.get("equity_investment_usd")
             or equity_section.get("equity_contribution_usd")
@@ -417,7 +452,9 @@ def _extract_debt_service(
     return 0.0
 
 
-def _extract_dscr(row: Mapping[str, Any], cf_pre_debt: float, debt_service: float) -> Optional[float]:
+def _extract_dscr(
+    row: Mapping[str, Any], cf_pre_debt: float, debt_service: float
+) -> Optional[float]:
     """Extract or compute DSCR for an annual row."""
     row_dscr = _as_float(row.get("dscr"))
     if row_dscr is not None and row_dscr > 0.0:
@@ -474,6 +511,18 @@ def build_equity_distribution_schedule(
         # tops it up alongside interest). It reduces cash to equity but is NOT scheduled debt
         # service, so — like the balloon resolution — it stays out of the DSCR (the row's own
         # cf_after_debt, used for covenant reporting, is untouched upstream).
+        # FIN-12 (#482): the gross-up needs per-year interest_usd (an enricher-only key the
+        # equity pass adds, not present on a raw row). If wht_gross_up is on but the row lacks
+        # it, the cost would silently be 0 and equity_irr/npv would be overstated — fail loud
+        # rather than under-charge. (Dormant when wht_gross_up is off, as all committed
+        # scenarios have it; an explicit 0.0 interest_usd is fine, only an absent key raises.)
+        if distribution_config.wht_gross_up and row.get("interest_usd") is None:
+            raise ValueError(
+                f"Equity distribution: wht_gross_up is enabled but annual row {year} lacks "
+                "interest_usd (the per-year non-resident interest the SPV grosses up). The "
+                "WHT cash cost would silently be 0 — supply interest_usd on the rows (the "
+                "levered equity pass enriches it) or disable wht_gross_up."
+            )
         interest_usd = _as_float(row.get("interest_usd"), 0.0) or 0.0
         wht_cost = (
             interest_usd * distribution_config.wht_on_interest_rate
@@ -530,7 +579,9 @@ def build_equity_distribution_schedule(
             locked_cash_balance += trapped
             retained_cash = trapped
         elif cash_for_equity < 0.0:
-            equity_distribution = cash_for_equity  # sponsor cash call to fund the balloon
+            equity_distribution = (
+                cash_for_equity  # sponsor cash call to fund the balloon
+            )
             retained_cash = 0.0
         else:
             # Unlocked: release any lockup-trapped cash now that the covenant has cured.
@@ -661,9 +712,9 @@ def calculate_equity_distribution_from_pipeline(
     ]
     if distribution_config.terminal_value_usd > 0.0 and distribution_values:
         distribution_values[-1] += distribution_config.terminal_value_usd
-        annual_distributions[-1]["terminal_value_usd"] = (
-            distribution_config.terminal_value_usd
-        )
+        annual_distributions[-1][
+            "terminal_value_usd"
+        ] = distribution_config.terminal_value_usd
         annual_distributions[-1]["equity_distribution_usd"] = distribution_values[-1]
 
     # Match the PROJECT IRR/NPV convention (finance.irr / analytics.core.metrics): capex AND
@@ -680,7 +731,8 @@ def calculate_equity_distribution_from_pipeline(
         # key (partial/stubbed callers of this public API), fall back to the config so the
         # equity timeline matches what the project IRR would use for the same project.
         construction_years = int(
-            _as_float(_lookup_case_insensitive(config, "construction_years"), 0.0) or 0.0
+            _as_float(_lookup_case_insensitive(config, "construction_years"), 0.0)
+            or 0.0
         )
     cashflows = (
         [-float(equity_investment)] + [0.0] * construction_years + distribution_values
