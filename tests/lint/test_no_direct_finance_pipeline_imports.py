@@ -134,11 +134,8 @@ ALLOWLIST: dict[str, str] = {
         "finance.debt_v14 directly per scenario. Should batch over the gateway "
         "(evaluate_with_overrides) instead of driving engines itself."
     ),
-    "analytics/stress_tests_v14.py": (
-        "[TODO #36] Imports finance.irr (irr, npv) directly for stress NPV/IRR "
-        "(R7). Borderline: could route through analytics.core.metrics/returns "
-        "to drop the direct finance dependency. Tracked."
-    ),
+    # analytics/stress_tests_v14.py was QUARANTINED to legacy/ in #473 (MC-2/3) — it is no
+    # longer under analytics/, so it is outside this guard's scope and needs no allowlist entry.
 }
 
 # Files that contain a forbidden import only at function scope (lazy import),
@@ -232,11 +229,7 @@ def _is_exempt(rel_path: str) -> bool:
 
 def _analytics_py_files() -> List[Path]:
     """All Python files under analytics/, excluding caches."""
-    files = [
-        p
-        for p in ANALYTICS_DIR.rglob("*.py")
-        if "__pycache__" not in p.parts
-    ]
+    files = [p for p in ANALYTICS_DIR.rglob("*.py") if "__pycache__" not in p.parts]
     return sorted(files)
 
 
@@ -284,18 +277,14 @@ def test_no_unlisted_direct_finance_or_pipeline_imports() -> None:
     because that file will not be in ALLOWLIST.
     """
     unlisted: List[Tuple[str, List[str]]] = [
-        (rel, mods)
-        for rel, mods in sorted(_VIOLATIONS.items())
-        if rel not in ALLOWLIST
+        (rel, mods) for rel, mods in sorted(_VIOLATIONS.items()) if rel not in ALLOWLIST
     ]
 
     assert not unlisted, (
         "CCCDIR boundary violation (issue #36): analytics module(s) import "
         "finance.* or analytics.pipeline_* directly at module level without an "
         "allowlist entry.\n\n"
-        + "\n".join(
-            f"  {rel}: {', '.join(mods)}" for rel, mods in unlisted
-        )
+        + "\n".join(f"  {rel}: {', '.join(mods)}" for rel, mods in unlisted)
         + "\n\nFix: route scenario evaluation through the gateway\n"
         f"  {GATEWAY}\n"
         "instead of importing finance/pipeline internals. If this is a genuine "

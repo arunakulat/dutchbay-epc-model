@@ -50,6 +50,22 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Quarantined the built-but-unwired stress-test engine (#473, MC-2/3/4).** `StressTestEngine`
+  (`stress_tests_v14`) was implemented and tested but reachable from NO production path — no
+  Hydra CLI, pipeline, report, or app imports it (the only "use" was a commented-out stub in
+  `scripts/run_full_pipeline_sprint12.py`). Moved it `analytics/ → legacy/` (now an importable
+  quarantine package) so the production tree honestly reflects what runs; its test moved to
+  `tests/legacy/` (still exercised so the code keeps working if reactivated, but out of the
+  analytics coverage gate), and its now-stale CCCDIR import-allowlist entry was dropped. A
+  banner on the module + a `legacy/README.md` note record why it was quarantined and how to
+  reactivate it. The audit's other MC-2/3 targets were **verified wired/shimmed and left as-is**
+  (`optimization_v14` via the solar-assessment script, `capital_risk_layer_v14` via its CLI
+  runner, `sensitivity_v14`/`sensitivity_pareto` are deprecation shims). MC-4: the module's
+  `var_95_usd`/`cvar_95_usd` are documented as **deterministic stress losses, not statistical
+  VaR/CVaR** (the only mislabel — now in frozen legacy); the genuinely-empirical VaR/CVaR in
+  `analytics/core/risk_metrics` + `analytics/sensitivity/tail_risk` were verified honest and
+  unchanged, and the `capital_risk_layer` `p90 = percentile(aep, 10)` flagged by review is the
+  **correct exceedance convention** (P90 = 10th pct), not a bug — left untouched. KPI-neutral.
 - **Storage-only scenarios declare `capacity_factor: 0.0` honestly (#486, BESS-5).** The
   cashflow capacity-factor validator (all three guard surfaces: the `RequiredFieldSpec` in
   `cashflow_v14.py` and both checks in `cashflow_v14_params.py`) now admits a literal `0.0`

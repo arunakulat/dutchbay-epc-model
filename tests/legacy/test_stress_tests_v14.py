@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Tests for the stress_tests_v14 engine.
+"""Tests for the quarantined stress_tests_v14 engine (now ``legacy/``, #473 MC-2/3).
 
-Covers the public surface of ``analytics.stress_tests_v14``:
+Covers the public surface of ``legacy.stress_tests_v14``:
 
 - ``StressScenario`` enum membership/values.
 - ``StressTestEngine`` base-metric initialisation (NPV/IRR via finance.irr, R7).
@@ -18,7 +18,9 @@ rather than real loss measures (``var_95`` is now ``max(0, base_npv -
 stressed_npv)``). There is no xfail — the defects are closed.
 
 Context:
-    Coverage backfill for analytics.stress_tests_v14 (previously ~0%).
+    Coverage backfill for the engine (previously ~0%). The module was quarantined to
+    ``legacy/`` in #473 (built-but-unwired); this test keeps it exercised so it still works
+    if reactivated, but it no longer counts toward the analytics coverage gate.
 """
 
 from __future__ import annotations
@@ -28,12 +30,12 @@ from pathlib import Path
 
 import pytest
 
-from analytics.stress_tests_v14 import (
+from finance.irr import irr, npv
+from legacy.stress_tests_v14 import (
     StressResult,
     StressScenario,
     StressTestEngine,
 )
-from finance.irr import irr, npv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

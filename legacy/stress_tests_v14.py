@@ -1,6 +1,24 @@
 """
 Stress Testing Module for DutchBay EPC Model (v14)
 
+QUARANTINED (#473, MC-2/3) — BUILT BUT UNWIRED. This module is not reachable from any
+production path: no Hydra CLI, no pipeline (``pipeline_v14_enhanced`` /
+``pipeline_analytics_v14``), no report pack, no FastAPI app imports it. The only references
+are its own test (``tests/legacy/test_stress_tests_v14.py``) and a commented-out stub in
+``scripts/run_full_pipeline_sprint12.py``. It was moved out of ``analytics/`` into
+``legacy/`` so the production tree honestly reflects what actually runs; the code and its git
+history are preserved here. To REACTIVATE: wire ``StressTestEngine`` into a Hydra CLI under
+``analytics/cli/`` and surface its output in the report, route its NPV/IRR through the
+``evaluate_with_overrides`` gateway (dropping the direct ``finance.irr`` import), and fix the
+mislabel noted below.
+
+MC-4 HONESTY NOTE (#473): the result fields ``var_95_usd`` / ``cvar_95_usd`` are NOT
+statistical Value-at-Risk / Conditional-VaR. They are a single DETERMINISTIC stress loss
+(``max(0, base_npv - stressed_npv)``) and a fixed 1.25x buffer on it — there is no loss
+distribution or tail quantile. Real empirical VaR/CVaR live in ``analytics/core/risk_metrics``
+and ``analytics/sensitivity/tail_risk``. The names are kept as-is only because this is frozen
+legacy code; do not copy this labelling into production.
+
 Implements comprehensive stress testing scenarios:
 - Interest rate shocks (±2%, ±5%)
 - Market downturns (20%, 40%, 60%)
@@ -8,9 +26,9 @@ Implements comprehensive stress testing scenarios:
 - Inflation stress (2%, 4%, 6%)
 - Combined severe scenarios
 
-Produces risk metrics:
-- Value at Risk (VaR) at 95% confidence
-- Conditional VaR (CVaR)
+Produces (see the MC-4 note above — these are stress-loss scalars, not statistical tail risk):
+- "VaR" at 95% label (a deterministic stress loss)
+- "CVaR" label (a fixed 1.25x buffer)
 - NPV and IRR impact analysis
 - Break-even analysis
 
