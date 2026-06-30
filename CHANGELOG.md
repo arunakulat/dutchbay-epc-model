@@ -5,6 +5,21 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Synchronous-route hardening: PDF-filename sanitisation + bounded, time-limited compute (#481,
+  RPT-9).** The `POST /cases/report.pdf` download filename is now sanitised
+  (`_sanitise_filename_component`, `[A-Za-z0-9._-]` only) before it is interpolated into the
+  `Content-Disposition` header, so no variant can break the quoted string or inject header bytes
+  (defence in depth — the only current caller passes a constrained scenario-variant literal). The
+  synchronous `/cases*` compute routes now run under a wall-clock ceiling (`_run_with_timeout`,
+  default 120 s, env-overridable via `DUTCHBAY_SYNC_ROUTE_TIMEOUT`): a pathological hang returns
+  `504` and frees the request instead of blocking the worker indefinitely. Honest limitation: the
+  worker thread cannot be force-cancelled, so the ceiling bounds the client wait, not the
+  computation — therefore the compute is also concurrency-bounded
+  (`DUTCHBAY_SYNC_ROUTE_MAX_CONCURRENCY`, default 8) with a `503` load-shed when full, and a
+  timed-out compute *keeps its slot for the worker thread's full lifetime* (held via
+  `asyncio.shield`), so a slow client cannot accumulate unbounded background compute. The route
+  `operation_id`s are pinned (`run_case` / `run_case_report_html` / `run_case_report_pdf`) so the
+  client-facing API contract is decoupled from internal handler renames. KPI-neutral.
 - **Three-statement output (P&L / cash flow / balance sheet) + tie-out checks (#479).** New
   `analytics.three_statement` assembles the three articulating statements from the engine's own
   outputs (no new finance logic), presented in USD (the reported-KPI numeraire — LKR P&L lines
