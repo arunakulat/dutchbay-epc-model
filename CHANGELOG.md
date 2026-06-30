@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Real end-to-end lender-report integration test (#481, RPT-7/8).** Adds
+  `tests/integration/test_lender_report_e2e.py`: it drives a `WindFarmInputs` submission through the
+  production report path (scenario → `run_finance_case` → `build_report_context` →
+  `render_report_html`) and asserts the live pipeline KPIs reach the report, every major section
+  renders (incl. the cash-flow waterfall and the three statements), the rendered waterfall's total
+  CFADS ties to the headline `total_cfads_usd` KPI, the production builder's tornado + Morris
+  global-SA sections render, and the auth-gated `POST /cases/report.html` route renders over HTTP —
+  plus a gated PDF-render smoke. (The pre-existing `tests/integration/test_assessment_report.py`
+  covers the solar script, not the lender report.) Test-only; KPI-neutral.
 - **Async arq worker formalized as a deferred, Redis-gated follow-up (#481, RPT-6).** Documented
   the as-built status of the async ERA5 path in `docs/WEB_SERVICE_ROADMAP.md` — the worker
   (`app/jobs/worker.py`) and `RedisJobStore` are built and unit-tested but NOT wired; the live
