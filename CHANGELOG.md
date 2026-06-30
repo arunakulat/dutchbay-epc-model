@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Multi-tech residuals: margin-weighted per-tech CFADS + technology-type pre-flight
+  validation (#488, ARCH-2/6).** **ARCH-2:** the multi-tech generation view
+  (`build_multi_tech_from_run`) now apportions the run's combined CFADS by per-technology
+  **operating margin** (revenue = net AEP x per-tech tariff / FX, minus per-tech opex from
+  the ARCH-3 work-breakdown) instead of by raw AEP, so a technology with a different tariff
+  or opex intensity gets a correct CFADS share (the old AEP split mis-attributed it). It
+  remains an exact partition of the run's actual tax-netted CFADS (tax is project-level, not
+  per-tech), and falls back to the AEP split (byte-identical) for single-tech or when
+  FX/tariff do not resolve — so committed economics are unchanged (additive view).
+  **ARCH-6:** `validate_config_for_v14` now rejects an unrecognised
+  `generation.technologies.<name>.type` at pre-flight (against `finance.tech_types`), so a
+  typo (`wnid`) or unsupported class (`battery`) fails fast (CESSPIT) rather than slipping
+  downstream; untyped blocks remain the backward-compatible key-sniff path. KPI-neutral.
 - **Per-technology cost/return work-breakdown (#475, ARCH-3).** New
   `analytics.portfolio.tech_wbs.build_multi_tech_wbs` + `MultiTechWBS` /
   `TechnologyCostReturn` contracts attribute a hybrid's reporting CAPEX/OPEX and per-tech

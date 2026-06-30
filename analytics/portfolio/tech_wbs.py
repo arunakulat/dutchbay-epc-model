@@ -178,6 +178,19 @@ def _tech_opex_usd(block: Mapping[str, Any]) -> Optional[float]:
     return None
 
 
+def resolve_tech_opex_usd(config: Mapping[str, Any], tech: str) -> Optional[float]:
+    """Per-technology annual OPEX (USD) for ``tech`` from its ``generation.technologies``
+    block, or ``None`` if absent.
+
+    The single source of truth for per-tech OPEX (the same ``_TECH_OPEX_KEYS`` the WBS
+    uses), exposed so consumers (e.g. the multi-tech generation aggregator's ARCH-2
+    margin split) reuse it without building the full work-breakdown — no double work and
+    no over-attribution raise.
+    """
+    block = _nested_get(config, "generation", "technologies", tech)
+    return _tech_opex_usd(block) if isinstance(block, Mapping) else None
+
+
 def _tech_cost_of_equity(block: Mapping[str, Any]) -> Optional[float]:
     """Per-technology cost of equity, if the block declares its own ``wacc`` override.
 
@@ -368,4 +381,5 @@ def _reconcile(
 __all__ = [
     "DEFAULT_RECONCILE_TOLERANCE_PCT",
     "build_multi_tech_wbs",
+    "resolve_tech_opex_usd",
 ]

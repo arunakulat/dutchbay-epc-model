@@ -150,6 +150,44 @@ def _validate_fx_section(
         )
 
 
+def _validate_technology_types(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Validate any declared ``generation.technologies.<name>.type`` against the enum.
+
+    ARCH-6 (#488): the schema guard is the pre-flight gatekeeper (CESSPIT), but it did not
+    check the technology ``type`` — a typo (``wnid``) or an unsupported class (``battery``)
+    slipped through here and only surfaced (if at all) downstream. This fails fast at
+    pre-flight against the single source of truth (:mod:`finance.tech_types`).
+
+    A ``type`` is validated only when declared: blocks without an explicit ``type`` are the
+    backward-compatible key-sniff path (a ``capacity_factor`` -> generation), so this does
+    not force a ``type`` on legacy scenarios. This complements the downstream #474 ARCH-1
+    gate (which only fires for an explicitly-typed, billed, unmodelled generation tech).
+    """
+    generation = (
+        raw_config.get("generation") if isinstance(raw_config, Mapping) else None
+    )
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if not isinstance(techs, Mapping):
+        return
+
+    from finance.tech_types import GENERATION_TYPES, STORAGE_TYPES, is_known_type
+
+    valid = ", ".join(sorted(GENERATION_TYPES | STORAGE_TYPES))
+    for name, block in techs.items():
+        if not isinstance(block, Mapping):
+            continue
+        declared = block.get("type")
+        if declared is None:
+            continue  # untyped -> backward-compatible key-sniff path, not gated here
+        if not is_known_type(declared):
+            errors.append(
+                f"generation.technologies['{name}'].type={declared!r} is not a "
+                f"recognised technology type (valid: {valid})"
+            )
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -177,6 +215,9 @@ def validate_config_for_v14(
 
     # 1. Validate FX section (always required for v14)
     _validate_fx_section(raw_config, errors)
+
+    # 1b. Validate any declared technology `type` against the enum (ARCH-6, #488).
+    _validate_technology_types(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
