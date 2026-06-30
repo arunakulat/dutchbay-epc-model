@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.development_readiness import build_readiness_report
-from analytics.evidence_register import EvidenceRegisterError, build_evidence_report
+from analytics.evidence_register import build_evidence_report
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
@@ -105,12 +105,15 @@ class KpiRow(BaseModel):
 
 
 class AssumptionRow(BaseModel):
-    """One assumptions-register line (label + formatted value)."""
+    """One assumptions-register line: value + evidence source/as-of + a model-impact note."""
 
     model_config = ConfigDict(extra="forbid")
 
     label: str
     display: str
+    source: str = ""
+    as_of: str = ""
+    impact: str = ""
 
 
 class RiskRow(BaseModel):
@@ -422,33 +425,97 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
     )
 
 
-def _build_assumptions(inputs: Optional[WindFarmInputs]) -> List[AssumptionRow]:
-    """Render the wizard inputs as an assumptions register (when available)."""
+#: Wizard assumption label -> (evidence-register key for source/as-of cross-ref, impact note).
+#: The impact is the KPI/driver the assumption most directly moves — grounded in the model's
+#: sensitivity structure (tariff/resource dominate; capex drives gearing; FX erodes LKR revenue),
+#: NOT a live recompute. A ``None`` key means no material assumption maps to the line, so its
+#: source/as-of stay blank rather than borrowing an unrelated register entry.
+_ASSUMPTION_META: Dict[str, tuple[Optional[str], str]] = {
+    "Capacity factor": ("capacity_factor", "Net AEP, hence revenue (P50/P90)"),
+    "PPA tariff": ("tariff", "Revenue — the dominant value driver"),
+    "PPA term": (None, "Revenue horizon / merchant-tail exposure"),
+    "Total CAPEX": ("capex", "Gearing, debt sizing, project IRR"),
+    "Annual OPEX": ("opex", "CFADS, hence DSCR"),
+    "FX (start)": ("fx", "USD value of LKR-denominated revenue"),
+    "Installed capacity": (None, "Scales gross AEP and capex"),
+    "Project life": (None, "Operating horizon for NPV / IRR"),
+}
+
+
+def _evidence_lookup(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Dict[str, Mapping[str, Any]]:
+    """Best-effort ``{material-assumption -> {source, as_of, ...}}`` from the scenario register.
+
+    Returns ``{}`` when no scenario config is supplied or the register is malformed, so the
+    assumptions table shows no source/as-of (em-dash) rather than failing the whole report.
+    """
+    if scenario_config is None:
+        return {}
+    try:
+        report = build_evidence_report(scenario_config)
+    except ValueError:
+        # EvidenceRegisterError is a ValueError, but build_evidence_report also raises a plain
+        # ValueError on a bad min_tier / malformed taxonomy — catch both so a malformed register
+        # truly degrades to no source/as-of (em-dash) rather than failing the whole report.
+        return {}
+    return {
+        name: rec for name, rec in report.entries.items() if isinstance(rec, Mapping)
+    }
+
+
+def _assumption_row(
+    label: str, display: str, evidence: Mapping[str, Mapping[str, Any]]
+) -> AssumptionRow:
+    """Build one assumptions-register row, enriched with evidence source/as-of + an impact note.
+
+    Source/as-of come from the scenario's evidence register ONLY where a material assumption maps
+    to the line (no fabricated provenance — blank otherwise); the impact is the static,
+    model-grounded note for the line.
+    """
+    key, impact = _ASSUMPTION_META.get(label, (None, ""))
+    rec: Mapping[str, Any] = evidence.get(key, {}) if key is not None else {}
+    return AssumptionRow(
+        label=label,
+        display=display,
+        source=str(rec.get("source", "")),
+        as_of=str(rec.get("as_of", "")),
+        impact=impact,
+    )
+
+
+def _build_assumptions(
+    inputs: Optional[WindFarmInputs],
+    scenario_config: Optional[Mapping[str, Any]] = None,
+) -> List[AssumptionRow]:
+    """Render the wizard inputs as an assumptions register (value · source · as-of · impact).
+
+    Source and as-of are cross-referenced from the scenario's evidence register where a material
+    assumption maps to the line (no fabricated provenance — blank where none is declared); the
+    impact is a static, model-grounded note of the KPI each assumption most directly moves.
+    """
     if inputs is None:
         return []
+    evidence = _evidence_lookup(scenario_config)
     rows = [
-        AssumptionRow(label="Site", display=inputs.site_name),
-        AssumptionRow(label="Installed capacity", display=f"{inputs.capacity_mw:g} MW"),
-        AssumptionRow(
-            label="Capacity factor", display=f"{inputs.capacity_factor * 100:.1f}%"
+        _assumption_row("Site", inputs.site_name, evidence),
+        _assumption_row("Installed capacity", f"{inputs.capacity_mw:g} MW", evidence),
+        _assumption_row(
+            "Capacity factor", f"{inputs.capacity_factor * 100:.1f}%", evidence
         ),
-        AssumptionRow(
-            label="Project life", display=f"{inputs.project_life_years} years"
+        _assumption_row("Project life", f"{inputs.project_life_years} years", evidence),
+        _assumption_row(
+            "PPA tariff", f"LKR {inputs.ppa_price_lkr_per_kwh:g}/kWh", evidence
         ),
-        AssumptionRow(
-            label="PPA tariff",
-            display=f"LKR {inputs.ppa_price_lkr_per_kwh:g}/kWh",
-        ),
-        AssumptionRow(label="PPA term", display=f"{inputs.ppa_term_years} years"),
-        AssumptionRow(label="Total CAPEX", display=f"${inputs.capex_total_usd:,.0f}"),
-        AssumptionRow(label="Annual OPEX", display=f"${inputs.opex_annual_usd:,.0f}"),
-        AssumptionRow(
-            label="FX (start)",
-            display=f"LKR {inputs.fx_start_lkr_per_usd:g}/USD",
+        _assumption_row("PPA term", f"{inputs.ppa_term_years} years", evidence),
+        _assumption_row("Total CAPEX", f"${inputs.capex_total_usd:,.0f}", evidence),
+        _assumption_row("Annual OPEX", f"${inputs.opex_annual_usd:,.0f}", evidence),
+        _assumption_row(
+            "FX (start)", f"LKR {inputs.fx_start_lkr_per_usd:g}/USD", evidence
         ),
     ]
     if inputs.location is not None:
-        rows.insert(1, AssumptionRow(label="Location", display=inputs.location))
+        rows.insert(1, _assumption_row("Location", inputs.location, evidence))
     return rows
 
 
@@ -500,7 +567,9 @@ def _build_evidence(
         return None
     try:
         report = build_evidence_report(scenario_config)
-    except EvidenceRegisterError:
+    except ValueError:
+        # As in _evidence_lookup: a malformed register (incl. a bad min_tier / taxonomy that
+        # raises a plain ValueError, not just EvidenceRegisterError) degrades to no section.
         return None
     rows = [
         EvidenceRow(
@@ -752,7 +821,7 @@ def build_report_context(
         status=case_result.status,
         kpi_rows=_build_kpi_rows(case_result.kpis, cfg),
         verdict=_build_verdict(case_result.kpis, cfg.covenants),
-        assumptions=_build_assumptions(inputs),
+        assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(cfg.risk_register),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,

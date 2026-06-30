@@ -5,6 +5,17 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Assumptions register deepened + run-manifest left-aligned (#481, RPT-2/RPT-4).** The report's
+  assumptions register now shows value · source · as-of · impact: source and as-of are
+  cross-referenced from the scenario's evidence register where a material assumption maps to the
+  line (no fabricated provenance — blank otherwise), and impact is a static, model-grounded note of
+  the KPI each assumption most directly moves (tariff/resource dominate revenue; CAPEX drives
+  gearing; FX erodes LKR revenue). Source/as-of are inert (render em-dash) until a committed
+  scenario declares `evidence_register.entries`; populating that provenance is a separate data
+  task. A malformed register (e.g. a bad `min_tier`) now degrades the cross-ref + evidence section
+  gracefully instead of failing the whole report. Separately, the run-manifest values (run id,
+  engine version, git SHA, config hash — identifiers, not numbers) are now left-aligned instead of
+  right-aligned-numeric. Additive, read-only, KPI-neutral.
 - **Cash-flow waterfall by payment priority in the report (#481, RPT-2).** New
   `analytics.three_statement.build_cashflow_waterfall` regroups the engine's OWN published
   per-operating-year USD figures into the lender priority cascade — CFADS (`cf_pre_debt`, the

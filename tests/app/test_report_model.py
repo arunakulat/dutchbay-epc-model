@@ -297,6 +297,108 @@ def test_evidence_none_on_malformed_register() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Assumptions register deepening (#481, RPT-2): value · source · as-of · impact
+# --------------------------------------------------------------------------- #
+def test_assumptions_carry_impact_notes_without_fabricating_sources() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, inputs=_inputs()
+    )
+    by_label = {r.label: r for r in ctx.assumptions}
+    # Mapped assumptions carry a model-grounded impact note...
+    assert "Revenue" in by_label["PPA tariff"].impact
+    assert by_label["Capacity factor"].impact and by_label["Total CAPEX"].impact
+    # ...but with no scenario config, no source/as-of is fabricated.
+    assert by_label["PPA tariff"].source == "" and by_label["PPA tariff"].as_of == ""
+
+
+def test_assumptions_cross_reference_evidence_register() -> None:
+    scenario = {
+        "evidence_register": {
+            "entries": {
+                "capex": {
+                    "source": "SINOHYDRO EPC quote",
+                    "as_of": "2025-09",
+                    "tier": "A",
+                },
+                "tariff": {"source": "CEB SPPA", "as_of": "2025-06", "tier": "A"},
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        inputs=_inputs(),
+        scenario_config=scenario,
+    )
+    by_label = {r.label: r for r in ctx.assumptions}
+    # CAPEX + tariff lines pick up source/as-of from the matching evidence entries.
+    assert by_label["Total CAPEX"].source == "SINOHYDRO EPC quote"
+    assert by_label["Total CAPEX"].as_of == "2025-09"
+    assert by_label["PPA tariff"].source == "CEB SPPA"
+    # A line with no mapped material assumption (Site) stays blank — no borrowed provenance.
+    assert by_label["Site"].source == "" and by_label["Site"].as_of == ""
+
+
+def test_assumptions_table_renders_new_columns() -> None:
+    from app.reports.renderer import render_report_html
+
+    scenario = {
+        "evidence_register": {
+            "entries": {
+                "capex": {
+                    "source": "SINOHYDRO EPC quote",
+                    "as_of": "2025-09",
+                    "tier": "A",
+                }
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        inputs=_inputs(),
+        scenario_config=scenario,
+    )
+    html = render_report_html(ctx)
+    assert "SINOHYDRO EPC quote" in html  # source column populated from the register
+    assert ">Impact<" in html  # the new Impact column header
+    assert "dominant value driver" in html  # the tariff impact note
+
+
+def test_manifest_values_render_left_aligned() -> None:
+    from app.reports.renderer import render_report_html
+
+    case = CaseResult(
+        status="success",
+        scenario_variant="lendercase",
+        kpis=_VALUE_DESTRUCTIVE_KPIS,
+        run_manifest={"engine_version": "15.1.0", "git_sha": "abc1234"},
+    )
+    ctx = build_report_context(case, generated_at=GENERATED_AT)
+    html = render_report_html(ctx)
+    # Manifest metadata strings are left-aligned, not numeric-right-aligned (RPT-4).
+    assert "<td>engine_version</td>" in html
+    assert "<td>15.1.0</td>" in html
+    assert '<td class="num">15.1.0</td>' not in html
+
+
+def test_malformed_register_degrades_gracefully_not_a_500() -> None:
+    # A bad min_tier raises a plain ValueError inside build_evidence_report; the assumptions
+    # cross-ref and the evidence section must both degrade gracefully, not crash the report.
+    scenario = {"evidence_register": {"min_tier": "NOT_A_TIER"}}
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        inputs=_inputs(),
+        scenario_config=scenario,
+    )
+    assert ctx.evidence is None  # _build_evidence degraded to no section
+    by_label = {r.label: r for r in ctx.assumptions}
+    assert by_label["Total CAPEX"].source == ""  # _evidence_lookup degraded to {}
+    assert by_label["Total CAPEX"].impact  # the static impact note is still present
+
+
+# --------------------------------------------------------------------------- #
 # Context assembly
 # --------------------------------------------------------------------------- #
 def test_build_context_basic_shape() -> None:
