@@ -32,9 +32,14 @@ pip install -e '.[solar]'   # or: pip install pvlib
 The solar tests are gated behind `pytest.importorskip('pvlib')`, so they skip when the
 extra is absent (e.g. the default CI install).
 
-## The model (reproducible, no network / no TMY files)
+## The model (reproducible; clear-sky by default, opt-in frozen TMY)
 
-`compute_solar_aep(config)` runs a standard pvlib pipeline, all driven by config:
+`compute_solar_aep(config)` runs a standard pvlib pipeline, all driven by config. By default
+(no `tmy_path`) it is network-free and TMY-file-free — a clear-sky year scaled to the measured
+annual GHI. When `resource.solar.tmy_path` points at a FROZEN hourly TMY (SOLAR-6/12, #529),
+it instead uses the TMY's measured hourly GHI/DNI/DHI and its hourly ambient temp/wind for
+Faiman cell temperature (steps 1-2 and the scalar-temp assumption are replaced); the frozen
+TMY keeps the run reproducible and pvlib/network-free at finance time. Default pipeline:
 
 1. **Clear-sky year** (pvlib Ineichen) for a fixed reference calendar.
 2. **Scale to the measured annual GHI** (`annual_ghi_kwh_m2` — the single resource knob, a
@@ -64,8 +69,10 @@ assert v.within_tolerance
 ```
 
 `scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml` carries an example `resource.solar`
-block; the pvlib producer reproduces its declared 0.20 P50 within ~11% (modelled ≈ 0.179 CF,
-specific yield ≈ 1568 kWh/kWp — realistic for Puttalam utility-scale fixed-tilt PV).
+block with a frozen `tmy_path` (#529): on that PVGIS TMY the producer yields and the scenario
+declares CF ≈ 0.1685, specific yield ≈ 1476 kWh/kWp — realistic for Kalpitiya utility-scale
+fixed-tilt PV. (Without a TMY the clear-sky default on the same block yields ≈ 0.179 / 1568;
+the #529 re-baseline lowered the financed P50 from 0.179 to 0.1685 on the real-GHI TMY.)
 
 ## The OVERWRITE bridge — `cashflow_adapter` (finance never imports pvlib)
 

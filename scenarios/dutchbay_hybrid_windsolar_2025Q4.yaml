@@ -31,9 +31,9 @@ project:
   # tech's own capacity factor AND degradation) is declared in the `generation:`
   # block below, which the cashflow sums (M3 true per-tech finance). capacity_mw /
   # capacity_factor are the reconciling headline (the engine cross-checks them vs
-  # the per-tech sum within 1%): 0.295502 = (159.6*0.332 + 50*0.179) / 209.6.
+  # the per-tech sum within 1%): 0.292997 = (159.6*0.332 + 50*0.1685) / 209.6.
   capacity_mw: 209.6  # 159.6 MW wind + 50 MW solar
-  capacity_factor: 0.295502  # capacity-weighted blended P50 net CF (reconciles per-tech)
+  capacity_factor: 0.292997  # capacity-weighted blended P50 net CF (reconciles per-tech; #529 solar re-baseline)
   # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
   # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
   # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
@@ -61,8 +61,8 @@ project:
 # CFADS). aep_gwh / capex_usd / availability_pct drive the lender per-tech reporting
 # split (analytics.portfolio + casper_payload). The per-tech year-1 generation
 # reconciles with project.capacity_mw * capacity_factor (engine-enforced, ±1%):
-#   wind  159.6 MW * 0.332 = 52.987 ; solar 50 MW * 0.179 = 8.95 ; sum 61.937
-#   project 209.6 MW * 0.295502 = 61.937  ✓
+#   wind  159.6 MW * 0.332 = 52.987 ; solar 50 MW * 0.1685 = 8.425 ; sum 61.412
+#   project 209.6 MW * 0.292997 = 61.412  ✓ (#529 solar TMY re-baseline)
 generation:
   technologies:
     wind:
@@ -74,11 +74,13 @@ generation:
       availability_pct: 97.0
     solar:
       capacity_mw: 50.0
-      capacity_factor: 0.179      # net P50 fixed-tilt, Puttalam GHI — the pvlib-MODELLED P50
-                                  # (solar_resource.pv_producer on the resource.solar block below;
-                                  # 0.17901, re-baselined #469 from the prior declared 0.20, -10.5%)
+      capacity_factor: 0.1685     # net P50 fixed-tilt, Kalpitiya — the pvlib-MODELLED P50 on a
+                                  # FROZEN PVGIS TMY (resource.solar.tmy_path below): hourly
+                                  # GHI/DNI/DHI + hourly Faiman ambient temp/wind. #529 SOLAR-6/12
+                                  # re-baseline from 0.179 (-5.9%): real GHI 1871 (vs declared 2000)
+                                  # + hot-hour thermal. Prior chain: #469 0.20->0.179 (clear-sky+scalar).
       degradation_pct: 0.4        # 0.4%/yr module aging (percent, /100 by the engine)
-      aep_gwh: 78.4              # 50 MW * 8760 * 0.179
+      aep_gwh: 73.8              # 50 MW * 8760 * 0.1685
       capex_usd: 40000000         # $800/kW x 50 MW (SL utility-scale PV)
       availability_pct: 99.0
 
@@ -150,7 +152,7 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
-  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (542.7 GWh net P50)
+  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (538.1 GWh net P50; #529)
 
   uncertainty:
 
@@ -203,21 +205,26 @@ resource:
       drift_tolerance_pct: 5.0  # warn/flag if |A_fit-A_declared| or |k_fit-k_declared| exceeds this
 
   # OPTIONAL pvlib solar producer (the [solar] extra). The financed run uses the declared
-  # P50 generation.technologies.solar.capacity_factor (0.20); this block lets the
+  # P50 generation.technologies.solar.capacity_factor (0.1685); this block lets the
   # solar_resource.pv_producer compute a physics-grounded CF to VALIDATE that P50 (never
   # overwrite it) — the photovoltaic analogue of resource.era5 / wind_resource for wind.
-  # The pvlib model on these inputs yields CF ~0.18 (within ~11% of the declared 0.20).
+  # On the FROZEN PVGIS TMY (tmy_path) the pvlib model yields CF 0.1685 — the declared P50
+  # (#529 SOLAR-6/12 re-baseline). annual_ghi_kwh_m2 is informational when a TMY is supplied
+  # (the TMY's measured hourly GHI sets the resource; the TMY's annual GHI is ~1871).
   solar:
     latitude: 8.27               # PV array centroid, Kalpitiya (co-located with wind)
     longitude: 79.75
     timezone: "Asia/Colombo"
     altitude_m: 5.0
-    annual_ghi_kwh_m2: 2000.0    # measured Puttalam annual GHI (~5.48 kWh/m2/day)
+    annual_ghi_kwh_m2: 2000.0    # informational when tmy_path is set (TMY GHI ~1871 governs)
     dc_capacity_mw: 50.0         # DC nameplate (MWp); matches the solar tech block
     tilt_deg: 8.0                # fixed tilt near site latitude (low-latitude tropics)
     azimuth_deg: 180.0           # equator-facing (N hemisphere)
     dc_ac_ratio: 1.2             # inverter loading ratio
     system_loss_pct: 14.0        # soiling/wiring/mismatch/availability stack
+    # SOLAR-6/12 (#529): FROZEN PVGIS TMY (lat 8.27, lon 79.75) — hourly GHI/DNI/DHI +
+    # hourly ambient temp/wind for Faiman. Drives the re-baselined 0.1685 P50.
+    tmy_path: "inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # MULTI-CURRENCY PPA STRUCTURE (NEW: Sprint 17)
@@ -374,7 +381,7 @@ Financing_Terms:
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
   # Bind the bankable P90 downside to the gearing (D4.6): the engine sizes a SECOND gearing
   # against a P90 cashflow (annual CFADS rescaled by the real net P90/P50 AEP ratio,
-  # 475.1/542.7 = 0.8754, from expected_results) and uses min(P50, P90) gearing — so the
+  # 471.0/538.1 = 0.8753, from expected_results; #529) and uses min(P50, P90) gearing — so the
   # structure must clear the DSCR floor even at P90 production, not only at P50. This makes
   # the MODELLED P90 (#469 dolphin 4c) actually bind debt rather than be reporting-only.
   # downside_aep_source: p90 reads the real P90/P50 ratio (vs the legacy flat 0.80 proxy);
@@ -494,9 +501,9 @@ monte_carlo:
   # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
   # no implicit name->path mapping. ARCH-01: all values from config.
   parameters:
-    - name: project.capacity_factor   # base 0.2955, rel_std 0.05 -> +/-10%
-      low: 0.266
-      high: 0.325
+    - name: project.capacity_factor   # base 0.292997, rel_std 0.05 -> +/-10% (#529 re-baseline)
+      low: 0.2637
+      high: 0.3223
       distribution: uniform
     - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
       low: 16.24
@@ -546,13 +553,14 @@ timeline:
 # EXPECTED RESULTS (For Pipeline Validation)
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
-  # Combined bankable AEP for the 209.6 MW hybrid = wind 473.8 GWh (15 x IEA-10MW,
-  # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 78.4 GWh (50 MW
-  # fixed-tilt, pvlib-modelled P50 CF 0.179). The aep_reconciliation guard cross-checks
-  # this against capacity_mw * capacity_factor (542.6 GWh), so a stale headline cannot creep in.
-  net_aep_p50_gwh: 542.7   # wind 464.3 (post 2% over-prediction haircut) + solar 78.4 (pvlib P50)
-  net_aep_p90_gwh: 475.1   # wind 404.4 (post haircut) + solar 70.7 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%; #469 dolphin 4c replaced the ratio-preserved placeholder). BINDS debt (D4.6): with Financing_Terms.bind_downside true, the P90/P50 ratio (475.1/542.7 = 0.8754) rescales CFADS to size the gearing, so this P90 now constrains debt/equity-IRR/DSCR (not reporting-only).
-  capacity_factor: 0.295502
+  # Combined bankable AEP for the 209.6 MW hybrid = wind 464.3 GWh (15 x IEA-10MW,
+  # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 73.8 GWh (50 MW
+  # fixed-tilt, pvlib-modelled P50 CF 0.1685 on a frozen PVGIS TMY; #529 SOLAR-6/12
+  # re-baseline from 0.179). The aep_reconciliation guard cross-checks this against
+  # capacity_mw * capacity_factor (538.0 GWh), so a stale headline cannot creep in.
+  net_aep_p50_gwh: 538.1   # wind 464.3 (post 2% over-prediction haircut) + solar 73.8 (pvlib P50)
+  net_aep_p90_gwh: 471.0   # wind 404.4 (post haircut) + solar 66.6 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%). BINDS debt (D4.6): with Financing_Terms.bind_downside true, the P90/P50 ratio (471.0/538.1 = 0.8753) rescales CFADS to size the gearing, so this P90 constrains debt/equity-IRR/DSCR (not reporting-only).
+  capacity_factor: 0.292997
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of
   # truth) rather than hand-maintained here — solar's distinct degradation makes them
