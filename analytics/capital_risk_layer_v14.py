@@ -144,7 +144,8 @@ def run_driver_mc(
     Returns:
         Dict of arrays: ``equity_irr``, ``equity_npv``, ``min_dscr``.
     """
-    rng = np.random.RandomState(seed)
+    # MC-5 (#473): modern isolated Generator (PCG64). rng.normal(...) below is unchanged.
+    rng = np.random.default_rng(seed)
     driver_samples = {
         path: rng.normal(spec["mean"], spec["std"], n_samples)
         for path, spec in drivers.items()
