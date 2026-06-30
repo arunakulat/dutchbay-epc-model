@@ -31,15 +31,24 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from analytics.loader.aep_loader import (APPROVED_SOURCES,
-                                         assert_source_in_manifest,
-                                         build_provenance_aep_block)
-from analytics.power_curves.oem_parser import (IEC_REFERENCE_AIR_DENSITY_KGM3,
-                                               parse_power_curve)
+import pandas as pd
+
+from analytics.loader.aep_loader import (
+    APPROVED_SOURCES,
+    assert_source_in_manifest,
+    build_provenance_aep_block,
+)
+from analytics.power_curves.oem_parser import (
+    IEC_REFERENCE_AIR_DENSITY_KGM3,
+    parse_power_curve,
+)
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses, net_capacity_factor
-from wind_resource.bankable_aep import (UncertaintyBudget, density_velocity_factor,
-                                        exceedance_levels)
+from wind_resource.bankable_aep import (
+    UncertaintyBudget,
+    density_velocity_factor,
+    exceedance_levels,
+)
 
 
 def validate_curve_selection(
@@ -85,7 +94,9 @@ def validate_curve_selection(
     # Confirms the slug resolves in the store (raises KeyError otherwise).
     parse_power_curve(curve_key)
 
-    source_type = power_curve.get("source_type") or sources[source_id].get("type", "Unknown")
+    source_type = power_curve.get("source_type") or sources[source_id].get(
+        "type", "Unknown"
+    )
     return {
         "source_id": str(source_id),
         "curve_key": str(curve_key),
@@ -105,12 +116,16 @@ def _uncertainty_from_config(
     unc: Dict[str, Any] = dict(resource.get("uncertainty", {}) or {})
     d = UncertaintyBudget()
     budget = UncertaintyBudget(
-        wind_measurement_pct=float(unc.get("wind_measurement_pct", d.wind_measurement_pct)),
+        wind_measurement_pct=float(
+            unc.get("wind_measurement_pct", d.wind_measurement_pct)
+        ),
         long_term_pct=float(unc.get("long_term_pct", d.long_term_pct)),
         vertical_extrapolation_pct=float(
             unc.get("vertical_extrapolation_pct", d.vertical_extrapolation_pct)
         ),
-        horizontal_flow_pct=float(unc.get("horizontal_flow_pct", d.horizontal_flow_pct)),
+        horizontal_flow_pct=float(
+            unc.get("horizontal_flow_pct", d.horizontal_flow_pct)
+        ),
         power_curve_pct=float(unc.get("power_curve_pct", d.power_curve_pct)),
         wake_model_pct=float(unc.get("wake_model_pct", d.wake_model_pct)),
         interannual_variability_pct=float(
@@ -121,6 +136,87 @@ def _uncertainty_from_config(
     correlation = float(unc.get("correlation", 0.0))
     life_years = int(unc.get("life_years", 20))
     return budget, haircut_pct, correlation, life_years
+
+
+def _resolve_wake_loss(
+    resource: Mapping[str, Any],
+    curve: "pd.DataFrame",
+    *,
+    weibull_a: float,
+    weibull_k: float,
+    hub_height_m: float,
+) -> "tuple[float, str]":
+    """Resolve the wake loss % and disclose its SOURCE (WIND-2, #478).
+
+    Returns ``(wake_loss_pct, wake_source)``. By default the headline uses the documented
+    FROZEN ``resource.losses.wake_loss_pct`` — which for the canonical lender case IS the
+    granular PyWake Bastankhah result computed offline with the real 15-turbine layout and the
+    SW-dominant wind rose, then frozen (the dependency-light frozen-export pattern; py_wake, like
+    pvlib, is in zero CI lanes). A scenario can instead drive the wake LIVE by setting
+    ``resource.wake.model_live: true`` AND supplying the complete, faithful inputs
+    (``coordinates.x_m``/``y_m`` and ``wind_rose_freq``); the curve must carry a thrust (Ct)
+    column. The live path FAILS LOUD on any missing input rather than silently degrading to a
+    uniform-rose computation that would be LESS faithful than the frozen value — and
+    ``model_wake_loss`` itself raises a clear error when py_wake is not installed (CASPER).
+    """
+    losses = resource.get("losses", {}) or {}
+    wake_cfg = resource.get("wake", {}) or {}
+    live = (
+        bool(wake_cfg.get("model_live", False))
+        if isinstance(wake_cfg, Mapping)
+        else False
+    )
+
+    if not live:
+        frozen = losses.get("wake_loss_pct")
+        if frozen is None:
+            raise ValueError(
+                "resource.losses.wake_loss_pct is required when resource.wake.model_live is "
+                "false (the frozen wake path); supply it or enable model_live with a full "
+                "layout + wind rose."
+            )
+        return float(frozen), "frozen_config_pct"
+
+    coords = wake_cfg.get("coordinates") or {}
+    rose = wake_cfg.get("wind_rose_freq")
+    x_m, y_m = coords.get("x_m"), coords.get("y_m")
+    if x_m is None or y_m is None or rose is None:
+        raise ValueError(
+            "resource.wake.model_live is true but the live-wake inputs are incomplete: need "
+            "coordinates.x_m, coordinates.y_m AND wind_rose_freq. Without the wind rose the "
+            "wake defaults to a uniform direction distribution, which is LESS faithful than the "
+            "frozen offline PyWake value — so this fails loud rather than degrading the headline."
+        )
+    if "thrust_coefficient" not in curve.columns:
+        raise ValueError(
+            "live wake (resource.wake.model_live) needs a power curve carrying a "
+            "thrust_coefficient (Ct) column; the selected curve has none."
+        )
+    rotor_d = wake_cfg.get("rotor_diameter_m") or (
+        resource.get("turbines", {}) or {}
+    ).get("rotor_diameter_m")
+    if rotor_d is None:
+        raise ValueError(
+            "live wake needs rotor_diameter_m (resource.wake or resource.turbines)."
+        )
+
+    # Local import: py_wake is optional and must not be imported at module load (CASPER).
+    from wind_resource.bankable_aep import model_wake_loss
+
+    res = model_wake_loss(
+        wind_speed_ms=[float(v) for v in curve["wind_speed_ms"].tolist()],
+        power_kw=[float(v) for v in curve["power_kw"].tolist()],
+        thrust_coefficient=[float(v) for v in curve["thrust_coefficient"].tolist()],
+        rotor_diameter_m=float(rotor_d),
+        hub_height_m=float(hub_height_m),
+        layout_x_m=[float(v) for v in x_m],
+        layout_y_m=[float(v) for v in y_m],
+        weibull_a=float(weibull_a),
+        weibull_k=float(weibull_k),
+        wind_rose_freq=[float(v) for v in rose],
+        deficit_model=str(wake_cfg.get("deficit_model", "bastankhah")),
+    )
+    return float(res.wake_loss_pct), f"pywake_live:{res.deficit_model}"
 
 
 def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
@@ -160,8 +256,12 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     curve = parse_power_curve(
         selection["curve_key"], air_density_kgm3=IEC_REFERENCE_AIR_DENSITY_KGM3
     )
-    rho_site = power_curve_cfg.get("air_density_site_kgm3", wind.get("air_density_kgm3"))
-    rho_ref = power_curve_cfg.get("air_density_ref_kgm3", wind.get("air_density_ref_kgm3"))
+    rho_site = power_curve_cfg.get(
+        "air_density_site_kgm3", wind.get("air_density_kgm3")
+    )
+    rho_ref = power_curve_cfg.get(
+        "air_density_ref_kgm3", wind.get("air_density_ref_kgm3")
+    )
     density_factor = (
         density_velocity_factor(float(rho_site), float(rho_ref))
         if rho_site is not None and rho_ref is not None
@@ -174,6 +274,18 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
         curve["power_kw"].to_numpy(),
         n_turbines,
     )
+    # WIND-2 (#478): resolve the wake loss and DISCLOSE its source. Default = the documented
+    # frozen config % (the offline granular PyWake value); opt-in live PyWake when a scenario
+    # supplies a full layout + wind rose (fail-loud otherwise). Committed lender -> frozen ->
+    # byte-identical headline.
+    wake_loss_pct, wake_source = _resolve_wake_loss(
+        resource,
+        curve,
+        weibull_a=weibull_a,
+        weibull_k=weibull_k,
+        hub_height_m=hub_height_m,
+    )
+    losses["wake_loss_pct"] = wake_loss_pct
     loss_result = apply_losses(gross_gwh, losses)
     modelled_p50_gwh = loss_result.net_aep_gwh  # net P50 before any bankability haircut
 
@@ -209,6 +321,9 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
         "power_curve_key": selection["curve_key"],
         "iec_standard": power_curve_cfg.get("iec_standard", "IEC 61400-12-1:2022"),
         "losses": losses,
+        # WIND-2 (#478): which path produced the wake loss in `losses.wake_loss_pct` —
+        # "frozen_config_pct" (the documented offline PyWake value) or "pywake_live:<model>".
+        "wake_source": wake_source,
         "exceedance": {
             "net_aep_p50_gwh": round(exceedance.p50_gwh, 1),
             "net_aep_p75_gwh": round(exceedance.p75_gwh, 1),

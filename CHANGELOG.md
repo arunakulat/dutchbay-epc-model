@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Wake-source disclosure + opt-in live PyWake at the headline (#478, WIND-2).** The headline
+  AEP build now resolves the wake loss through `_resolve_wake_loss` and stamps a `wake_source`
+  into the AEP summary. Default = the documented FROZEN `resource.losses.wake_loss_pct` — which
+  for the lender case IS the granular PyWake Bastankhah result, computed offline with the real
+  15-turbine layout and the SW-dominant wind rose, then frozen (the dependency-light
+  frozen-export pattern; py_wake, like pvlib, is in zero CI lanes). A scenario can drive the
+  wake LIVE by setting `resource.wake.model_live: true` and supplying the complete faithful
+  inputs (`coordinates.x_m`/`y_m`, `wind_rose_freq`, a Ct-carrying curve); the live path FAILS
+  LOUD on any missing input rather than silently degrading to a uniform-rose computation that
+  would be *less* faithful than the frozen value. Verified the audit's premise was wrong — the
+  headline already reflects the granular wake model, so this is **KPI-neutral**: the committed
+  lender supplies no live spec → frozen path → headline byte-identical (still 464.3 GWh), now
+  with `wake_source: "frozen_config_pct"` disclosed.
 - **Spatial-representativeness diagnostic + single-cell disclosure (#484, WIND-10/3).** The
   resource assessment uses a single ERA5 cell, implicitly assuming it typifies the site
   neighbourhood — which can bias AEP on a coastal/ridge gradient. Added

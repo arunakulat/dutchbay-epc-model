@@ -71,12 +71,81 @@ def test_unknown_source_raises(cfg: dict) -> None:
 
 def test_regen_reproduces_canonical(cfg: dict) -> None:
     summary = build_aep_summary_from_config(cfg)
-    assert summary["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)  # ERA5-fitted Weibull, post 2% P50 over-prediction haircut
+    assert summary["net_site_aep_gwh"] == pytest.approx(
+        464.3, abs=0.5
+    )  # ERA5-fitted Weibull, post 2% P50 over-prediction haircut
     assert summary["gross_aep_gwh"] == pytest.approx(554.1, abs=1.0)
     assert summary["capacity_factor"] == pytest.approx(0.332, abs=0.002)
     assert summary["power_curve_key"] == "iea_reference_10mw"
     assert summary["source_id"] == "IEA_REFERENCE_10MW_198_PC"
     assert summary["provenance"]["aep"]["is_placeholder"] is False
+    # WIND-2 (#478): the committed lender supplies no live-wake spec -> the frozen config wake
+    # path is used and DISCLOSED, and the headline is byte-identical (still ~464.3).
+    assert summary["wake_source"] == "frozen_config_pct"
+    assert summary["losses"]["wake_loss_pct"] == pytest.approx(7.28, abs=1e-9)
+
+
+# ── WIND-2 (#478): wake-source resolution + fail-loud live path ────────────────
+
+
+def test_wake_resolves_frozen_when_no_live_spec(cfg: dict) -> None:
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    curve = parse_power_curve("iea_reference_10mw")
+    pct, source = _resolve_wake_loss(
+        cfg["resource"], curve, weibull_a=8.199, weibull_k=2.665, hub_height_m=150.0
+    )
+    assert source == "frozen_config_pct"
+    assert pct == pytest.approx(7.28, abs=1e-9)
+
+
+def test_wake_live_with_incomplete_inputs_fails_loud(cfg: dict) -> None:
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    cfg = copy.deepcopy(cfg)
+    # model_live on, but no wind rose / coordinates -> must RAISE, not degrade to uniform rose.
+    cfg["resource"]["wake"] = {"model_live": True}
+    curve = parse_power_curve("iea_reference_10mw")
+    with pytest.raises(ValueError, match="wind_rose_freq"):
+        _resolve_wake_loss(
+            cfg["resource"], curve, weibull_a=8.199, weibull_k=2.665, hub_height_m=150.0
+        )
+
+
+def test_wake_frozen_path_requires_a_wake_pct(cfg: dict) -> None:
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    cfg = copy.deepcopy(cfg)
+    cfg["resource"]["losses"].pop("wake_loss_pct", None)
+    curve = parse_power_curve("iea_reference_10mw")
+    with pytest.raises(ValueError, match="wake_loss_pct is required"):
+        _resolve_wake_loss(
+            cfg["resource"], curve, weibull_a=8.199, weibull_k=2.665, hub_height_m=150.0
+        )
+
+
+def test_wake_live_drives_pywake_when_fully_specified(cfg: dict) -> None:
+    pytest.importorskip("py_wake")
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    cfg = copy.deepcopy(cfg)
+    cfg["resource"]["wake"] = {
+        "model_live": True,
+        "rotor_diameter_m": 198.0,
+        "coordinates": {"x_m": [0.0] * 15, "y_m": [i * 650.0 for i in range(15)]},
+        "wind_rose_freq": [3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4],
+        "deficit_model": "bastankhah",
+    }
+    curve = parse_power_curve("iea_reference_10mw")
+    pct, source = _resolve_wake_loss(
+        cfg["resource"], curve, weibull_a=8.199, weibull_k=2.665, hub_height_m=150.0
+    )
+    assert source.startswith("pywake_live")
+    assert 3.0 < pct < 15.0  # a real modelled wake, not the flat placeholder
 
 
 def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
