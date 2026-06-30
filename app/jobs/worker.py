@@ -7,8 +7,9 @@ orchestration (``run_wind_job`` — Dolphin) under an arq worker, using a shared
 ``RedisJobStore`` so the API process can report status the worker produced.
 
 It requires the optional ``[jobs]`` extra (``arq``, ``redis``) and a live Redis, so
-it is loaded only by the ``arq`` CLI — never imported by the app or the tests — and
-is excluded from coverage (like the ERA5 ingestion path). Run with:
+it is loaded only by the ``arq`` CLI (and, when ``[jobs]`` is installed, by the gated
+import-smoke ``tests/app/test_jobs_worker.py``) — never by the running app — and is
+excluded from coverage (like the ERA5 ingestion path). Run with:
 
     pip install -e '.[jobs]'
     arq app.jobs.worker.WorkerSettings
