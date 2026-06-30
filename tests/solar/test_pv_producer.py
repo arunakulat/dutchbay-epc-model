@@ -68,8 +68,37 @@ def test_kalpitiya_cf_and_yield_are_realistic() -> None:
     assert 0.7 < r.clearsky_scale < 0.95  # clear-sky index for a sunny tropical site
 
 
+def test_solar10_cross_validation_against_independent_references() -> None:
+    """SOLAR-10 (#485): cross-validate the pvlib producer against INDEPENDENT references.
+
+    Beyond the generic plausibility band above, pin the modelled specific yield against named
+    third-party estimates for this exact site so a silent model regression is caught:
+      - SolarGIS PVOUT for Puttalam/Kalpitiya fixed-tilt c-Si ≈ 1524 kWh/kWp (the value the
+        standalone solar-assessment report cites as its reference).
+      - SAM / PVsyst tropical fixed-tilt c-Si typically land ~1450-1700 kWh/kWp at this GHI.
+    The producer must agree with the SolarGIS reference within ±10% (a wide bankability band,
+    not a tight pin — the references themselves differ by a few %). KPI-neutral: this reads the
+    computed yield; it does not mutate the scenario, the frozen export, or any committed AEP.
+    """
+    SOLARGIS_PVOUT_KWH_PER_KWP = 1524.0  # SolarGIS reference for the site
+    r = compute_solar_aep(_cfg())
+    rel = (
+        abs(r.specific_yield_kwh_per_kwp - SOLARGIS_PVOUT_KWH_PER_KWP)
+        / SOLARGIS_PVOUT_KWH_PER_KWP
+    )
+    assert rel < 0.10, (
+        f"modelled yield {r.specific_yield_kwh_per_kwp:.0f} kWh/kWp drifted {rel:.1%} from the "
+        f"SolarGIS PVOUT reference {SOLARGIS_PVOUT_KWH_PER_KWP:.0f} — investigate before trusting."
+    )
+    # ...and inside the SAM/PVsyst tropical fixed-tilt c-Si envelope.
+    assert 1450 < r.specific_yield_kwh_per_kwp < 1700, r.specific_yield_kwh_per_kwp
+
+
 def test_is_deterministic() -> None:
-    assert compute_solar_aep(_cfg()).capacity_factor == compute_solar_aep(_cfg()).capacity_factor
+    assert (
+        compute_solar_aep(_cfg()).capacity_factor
+        == compute_solar_aep(_cfg()).capacity_factor
+    )
 
 
 def test_cf_monotonic_in_ghi() -> None:
@@ -83,7 +112,9 @@ def test_cf_invariant_aep_scales_with_capacity() -> None:
     big = compute_solar_aep(_cfg(dc_capacity_mw=100.0))
     # CF / yield are per-kWp -> capacity-invariant; AEP scales linearly with nameplate.
     assert small.capacity_factor == pytest.approx(big.capacity_factor, rel=1e-9)
-    assert big.annual_energy_gwh == pytest.approx(10.0 * small.annual_energy_gwh, rel=1e-9)
+    assert big.annual_energy_gwh == pytest.approx(
+        10.0 * small.annual_energy_gwh, rel=1e-9
+    )
 
 
 # ── Config-first parsing + validation ─────────────────────────────────────────
@@ -161,7 +192,8 @@ def test_validate_declared_cf_rejects_nonpositive() -> None:
 
 def test_hybrid_scenario_solar_block_validates_declared_p50() -> None:
     """The committed hybrid scenario's resource.solar block reproduces (~within tol) the
-    declared generation.technologies.solar.capacity_factor P50 via the pvlib producer."""
+    declared generation.technologies.solar.capacity_factor P50 via the pvlib producer.
+    """
     import pathlib
 
     import yaml
@@ -173,6 +205,6 @@ def test_hybrid_scenario_solar_block_validates_declared_p50() -> None:
     declared = scenario["generation"]["technologies"]["solar"]["capacity_factor"]
     cfg = SolarResourceConfig.from_scenario(scenario)
     v = validate_declared_solar_cf(cfg, declared_cf=declared, tolerance_pct=15.0)
-    assert v.within_tolerance, (
-        f"declared {declared} vs producer {v.modelled_cf:.3f} drifted {v.relative_diff:.1%}"
-    )
+    assert (
+        v.within_tolerance
+    ), f"declared {declared} vs producer {v.modelled_cf:.3f} drifted {v.relative_diff:.1%}"

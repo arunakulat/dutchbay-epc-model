@@ -5,6 +5,22 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Solar yield cross-validation + audit dispositions (#485, SOLAR-4/7/8/9/10; SOLAR-6/12 deferred).**
+  Added a SOLAR-10 cross-validation test pinning the pvlib producer's specific yield against the
+  independent SolarGIS PVOUT reference for the site (1524 kWh/kWp, within ±10%) plus the
+  SAM/PVsyst tropical fixed-tilt envelope (1450–1700) — KPI-neutral (reads the computed yield; no
+  scenario/AEP mutation; solar P50/P75/P90 already shipped in #469). Re-verified the other
+  findings against the code and documented their dispositions in `pv_producer`: **SOLAR-4**
+  (producer is year-1 by design; multi-year degradation is the finance schedule's job — a
+  producer curve would double-count), **SOLAR-7** (`pvlib.disc` is documented to take TRUE
+  zenith, which it's given; Hay-Davies correctly uses apparent — the mixed convention is
+  correct), **SOLAR-8** (`pdc0 = ac_nameplate/eta` saturates the inverter at the AC nameplate
+  and the clip DOES engage at DC 50 MWp / ILR 1.2), and **SOLAR-9** (bifacial is a report-stage
+  `cf_mono`/`cf_bifacial` disclosure only; the financed yield is monofacial) are all correct
+  as-is. **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) are DEFERRED** as a KPI-moving
+  re-baseline: the chain scales a clear-sky year to the measured annual GHI and runs Faiman on a
+  scalar annual-mean ambient temp, so a TMY would move the committed (frozen) hybrid solar P50
+  0.179 and needs the same frozen-vs-live provenance decision as #469 (ERA5). KPI-neutral.
 - **Wake-source disclosure + opt-in live PyWake at the headline (#478, WIND-2).** The headline
   AEP build now resolves the wake loss through `_resolve_wake_loss` and stamps a `wake_source`
   into the AEP summary. Default = the documented FROZEN `resource.losses.wake_loss_pct` — which

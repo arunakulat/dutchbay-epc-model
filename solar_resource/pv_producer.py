@@ -27,6 +27,32 @@ Capacity-factor convention: CF is reported against the **DC nameplate** (``MWp``
 ``annual_ac_energy / (dc_capacity_mw · 8760)`` — the same basis the
 ``generation.technologies.solar.capacity_factor`` block uses for a ``capacity_mw`` given in
 MWp.
+
+Deep-research audit dispositions (#485), each RE-VERIFIED against this code:
+
+* **SOLAR-4 (degradation) — correct as-is.** The producer emits a deterministic YEAR-1 P50 by
+  design; recurring multi-year module degradation (solar 0.4%/yr) is applied by the FINANCE
+  layer's per-tech ``degradation_pct`` schedule (``cashflow_v14_production``), and the loss
+  chain carries only the one-time ``lid_pct``. Adding a producer degradation curve would
+  double-count. The boundary is documented in ``loss_model``/``exceedance``.
+* **SOLAR-7 (zenith convention) — correct as-is.** ``pvlib.irradiance.disc`` is documented to
+  take the **TRUE** (not refraction-corrected) zenith, which is what it is given
+  (``solpos["zenith"]``); the Hay-Davies transposition correctly uses ``apparent_zenith``. The
+  mixed convention is pvlib-correct, not an inconsistency.
+* **SOLAR-8 (inverter clip) — correct as-is.** ``pvwatts`` is called with
+  ``pdc0 = ac_nameplate / inverter_eff_nom`` so the inverter saturates AC at exactly the AC
+  nameplate, and ``.clip(upper=ac_nameplate)`` belt-and-suspenders it. At DC 50 MWp / ILR 1.2
+  (AC 41.67 MW) the clip DOES engage at tropical midday — it is not "disabled".
+* **SOLAR-9 (bifacial) — correct as-is.** ``bifacial_gain`` appears ONLY as a report-stage
+  ``cf_mono`` vs ``cf_bifacial`` disclosure in ``scripts/generate_solar_assessment_report.py``;
+  the FINANCED yield is the monofacial pvlib P50. Bifacial is intentionally outside the
+  validated finance chain, not silently baked in.
+* **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) — DEFERRED, KPI-moving.** The chain scales
+  a clear-sky year to the measured annual GHI and runs Faiman on a SCALAR annual-mean ambient
+  temp, so hot-hour losses are flattened (SOLAR-12). Fixing this needs an hourly TMY series
+  (SOLAR-6) — a provenance decision mirroring the #469 ERA5 frozen-vs-live call — and would
+  move the committed (frozen) hybrid solar P50 0.179, requiring a deliberate re-baseline +
+  re-pin. Tracked as a separate authorized item; NOT changed here.
 """
 
 from __future__ import annotations
