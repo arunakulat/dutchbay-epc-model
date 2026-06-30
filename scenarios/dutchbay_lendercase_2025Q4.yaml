@@ -111,10 +111,16 @@ resource:
   aep_summary_path: "scenarios/aep_summary_dutchbay_10mw.json"
 
   # Pre-construction P50 over-prediction haircut (IEC 61400-15-2 bankability adjustment,
-  # applied before the exceedance build-up). 2.0% — corroborated by the project's Final EIA
-  # (Envision EN220/10.0 EYA) independent P50 464.5 GWh (~2% below the model's modelled 473.8)
-  # + the documented pattern of pre-construction P50 over-prediction. Modelled net 473.8 ->
-  # bankable 464.3 GWh, CF 0.339 -> 0.332.
+  # applied before the exceedance build-up). WIND-5 (#484) — BASIS, de-circularised:
+  # the 2.0% is a CONSERVATIVE POLICY CHOICE grounded in the documented, site-independent
+  # pattern that operational P50s run ~2-5% BELOW pre-construction model estimates (the
+  # well-established pre-construction over-prediction bias; IEC 61400-15-2 EYA guidance and
+  # the DNV/operational-vs-predicted literature put the adjustment in a ~0-7% range). It is
+  # NOT derived from this project's own EIA. As an ex-post CONSISTENCY CHECK only (not the
+  # justification), the project's Final EIA (Envision EN220/10.0 EYA) independently reports
+  # P50 464.5 GWh — within ~0.04% of our haircut output — which corroborates but does not set
+  # the 2%. Parameterised here so the basis is auditable and the value is sensitivity-testable.
+  # Modelled net 473.8 -> bankable 464.3 GWh, CF 0.339 -> 0.332.
   uncertainty:
     p50_haircut_pct: 2.0
 

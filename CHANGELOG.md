@@ -5,6 +5,23 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Energy-weighted Weibull goodness-of-fit + wind methodology honesty (#484, WIND-4/5/8/9).**
+  The headline Weibull fit reported only a CDF `r_squared`, which is bulk-dominated and masks
+  misfit in the high-wind TAIL — exactly where energy concentrates (power ∝ v³). Added
+  `energy_moment_gof_pct` (and an `energy_gof_pct` field on `WeibullFit`/`as_dict`): the
+  relative error of the fitted third moment `A³·Γ(1+3/k)` vs the empirical `mean(v³)` — a
+  curve-independent, tail-sensitive diagnostic that flags an energy-relevant tail misfit a high
+  R² would hide (WIND-9). The fit docstring now documents the pooled-all-hours temporal-
+  invariance assumption and when a time-stratified fit would be needed (WIND-8). The lender
+  scenario's P50 over-prediction haircut justification was **de-circularised** (WIND-5): the
+  2.0% is now grounded in the site-independent pre-construction over-prediction literature
+  (~0–7% range) as a conservative policy choice, with the project's own EIA demoted to an
+  ex-post consistency check rather than the basis; the value was already parameterised. And the
+  `EnergyCalculator` docstring records the verified disposition (WIND-4): the audit's
+  "double-counts wake / mislabels gross" claim is **unfounded** — the module applies the loss
+  stack exactly once and labels gross correctly, and it is off the finance path (a diagnostic
+  timeseries integrator), so no fix was warranted. All KPI-neutral (diagnostic + docs; the
+  frozen headline 464.3 GWh is untouched).
 - **Default inter-driver correlation on the lender Monte-Carlo (#487, MC-7).** The Iman-Conover
   rank-correlation machinery (`analytics.mc.correlation`) was wired but DORMANT — no scenario
   declared a matrix, so the six lender MC drivers sampled independently, understating joint

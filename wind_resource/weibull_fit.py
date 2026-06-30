@@ -39,8 +39,11 @@ class WeibullFit:
     weibull_k: float  # shape (dimensionless)
     mean_ws_ms: float
     std_ws_ms: float  # Weibull-implied std (consistent with A,k), not raw sample std
-    r_squared: float
+    r_squared: float  # CDF goodness-of-fit (bulk-dominated; see energy_gof_pct)
     ks_pvalue: float
+    energy_gof_pct: (
+        float  # WIND-9: tail-sensitive E[v^3] relative error (%), diagnostic
+    )
     n_samples: int
 
     def as_dict(self) -> Dict[str, Any]:
@@ -51,6 +54,8 @@ class WeibullFit:
             "std_ws_ms": round(self.std_ws_ms, 4),
             "r_squared": round(self.r_squared, 5),
             "ks_pvalue": round(self.ks_pvalue, 5),
+            # Energy-weighted (v^3) fit error — high-wind-tail sensitive, unlike r_squared.
+            "energy_gof_pct": round(self.energy_gof_pct, 4),
             "n_samples": self.n_samples,
         }
 
@@ -93,6 +98,27 @@ def weibull_std(weibull_a: float, weibull_k: float) -> float:
     return float(weibull_a) * math.sqrt(max(g2 - g1 * g1, 0.0))
 
 
+def energy_moment_gof_pct(arr: np.ndarray, weibull_a: float, weibull_k: float) -> float:
+    """Energy-weighted goodness-of-fit: relative error in the wind-power third moment.
+
+    WIND-9 (#484): the headline ``r_squared`` is computed on the CDF, where agreement is
+    dominated by the bulk of the distribution and a misfit in the high-wind TAIL — exactly
+    where energy concentrates, since available wind power scales as ``v**3`` — is masked. This
+    diagnostic compares the fitted Weibull's third moment ``E[v**3] = A**3 * Γ(1 + 3/k)`` to
+    the empirical ``mean(v**3)`` and returns ``100 * |fit - empirical| / empirical``. It is
+    curve-independent (no power curve needed), tail-sensitive (cubic weighting), and purely a
+    REPORTING metric — it does NOT change the accepted MLE fit or any AEP. A small value
+    (canonical lender series ≈ 0.5–1%) corroborates the high CDF R²; a large value with a high
+    R² is the WIND-9 red flag (good bulk fit, poor energy-relevant tail).
+    """
+    a = np.asarray(arr, dtype=float)
+    emp_m3 = float(np.mean(a**3))
+    if emp_m3 <= 0.0:
+        return float("nan")
+    fit_m3 = float(weibull_a) ** 3 * math.gamma(1.0 + 3.0 / float(weibull_k))
+    return 100.0 * abs(fit_m3 - emp_m3) / emp_m3
+
+
 def fit_weibull_on_series(
     series: pd.DataFrame, ws_column: str, method: FitMethod = "mle"
 ) -> WeibullFit:
@@ -101,6 +127,16 @@ def fit_weibull_on_series(
     Mirrors :meth:`wind_resource.wind_analyzer.WindAnalyzer.fit_weibull` so the fitted
     ``(A, k)`` are method-consistent with the rest of the wind stack.
 
+    WIND-8 (#484): this is a POOLED ALL-HOURS fit — every hour of the series enters one
+    distribution, so diurnal/seasonal structure is not stratified into the ``(A, k)``. This is
+    appropriate for an annual-energy P50: AEP is the expectation of ``power(v)`` over the full
+    annual wind-speed distribution, and the pooled distribution equals the time-averaged one
+    when the resource has no strong seasonal regime change. The temporal patterns ARE observed
+    separately (``wind_analyzer`` computes monthly/seasonal/diurnal means as diagnostics); if a
+    site shows large monthly ``(A, k)`` spread (e.g. a monsoon regime), a time-stratified fit
+    should be considered — a documented limitation, not a silent one. The returned
+    ``energy_gof_pct`` (WIND-9) guards the energy-relevant tail that a pooled CDF R² can mask.
+
     Raises:
         ValueError: if ``method`` is unsupported, the column is missing, or the series
             has no finite positive wind speeds to fit.
@@ -108,7 +144,9 @@ def fit_weibull_on_series(
     if method != "mle":
         raise ValueError(f"Unsupported Weibull fit method: {method!r} (only 'mle').")
     if ws_column not in series.columns:
-        raise ValueError(f"Series has no column {ws_column!r}; got {list(series.columns)}.")
+        raise ValueError(
+            f"Series has no column {ws_column!r}; got {list(series.columns)}."
+        )
 
     ws_data = pd.to_numeric(series[ws_column], errors="coerce").dropna()
     ws_data = ws_data[ws_data > 0.0]
@@ -137,6 +175,7 @@ def fit_weibull_on_series(
         std_ws_ms=weibull_std(float(scale_c), float(shape_k)),
         r_squared=float(r_squared),
         ks_pvalue=float(ks_pvalue),
+        energy_gof_pct=energy_moment_gof_pct(arr, float(scale_c), float(shape_k)),
         n_samples=int(len(arr)),
     )
 

@@ -62,7 +62,7 @@
   "uncertainty": {
     "p50_haircut_pct": 2.0,
     "modelled_p50_gwh": 473.8,
-    "note": "2.0% pre-construction P50 over-prediction haircut applied to the modelled net P50 (473.8 -> 464.3) before the exceedance build-up. Justified by (a) the project's own Final EIA (Envision EN220/10.0 EYA) independently reporting P50 464.5 GWh -- a ~2% lower estimate from the actual turbine OEM -- and (b) the documented industry pattern of pre-construction P50 over-prediction (operational P50s run ~2-5% below pre-construction estimates). All net P-values scale by 0.98; gross + loss build-up are upstream and unchanged."
+    "note": "2.0% pre-construction P50 over-prediction haircut applied to the modelled net P50 (473.8 -> 464.3) before the exceedance build-up. WIND-5 (#484) BASIS (de-circularised): the 2% is a conservative POLICY CHOICE grounded in the site-independent, documented pattern that operational P50s run ~2-5% below pre-construction model estimates (the pre-construction over-prediction bias; IEC 61400-15-2 EYA guidance + DNV/operational literature, ~0-7% range) -- NOT derived from this project's own EIA. As an ex-post CONSISTENCY CHECK only, the project's Final EIA (Envision EN220/10.0 EYA) independently reports P50 464.5 GWh (within ~0.04% of the haircut output), which corroborates but does not set the 2%. All net P-values scale by 0.98; gross + loss build-up are upstream and unchanged."
   },
   "created_date": "2026-06-20",
   "created_by": "wind_resource.bankable_aep",
