@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Spatial-representativeness diagnostic + single-cell disclosure (#484, WIND-10/3).** The
+  resource assessment uses a single ERA5 cell, implicitly assuming it typifies the site
+  neighbourhood — which can bias AEP on a coastal/ridge gradient. Added
+  `wind_resource.era5_grid.spatial_representativeness(cells, n)`: given an n×n (odd) cell
+  neighbourhood it computes the hub-height wind-speed spread `(max-min)/mean` and the centre
+  cell's deviation from the neighbourhood mean, and flags `representative` when both are within
+  tolerance (read-only — it never alters AEP). The single-cell `era5_retrieval.run()` output now
+  carries an honest `spatial_representativeness: {assessed: false, reason: …}` block instead of
+  leaving the limitation unstated, pointing to the n×n grid path that can populate it. WIND-3:
+  documented (in `aep_tornado.gross_aep_farm_gwh`) that its implicit cut-out handling
+  (`np.interp(right=0.0)`) and `bankable_aep`'s explicit cut-out zeroing are a bounded,
+  verified <0.1% modelling-style difference — not a bug — and the committed 464.3 GWh is the
+  frozen summary value regardless. Closes #484; KPI-neutral.
 - **Interannual-variability validation: computed-vs-assumed (#484, WIND-6).** The bankable P90
   build-up uses an `UncertaintyBudget.interannual_variability_pct` (IEC default 4.0%) while
   `wind_analyzer.calculate_interannual_variability` independently computes the site's IAV
