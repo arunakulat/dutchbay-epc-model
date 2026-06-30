@@ -5,6 +5,22 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Default inter-driver correlation on the lender Monte-Carlo (#487, MC-7).** The Iman-Conover
+  rank-correlation machinery (`analytics.mc.correlation`) was wired but DORMANT — no scenario
+  declared a matrix, so the six lender MC drivers sampled independently, understating joint
+  tail structure. The canonical `dutchbay_lendercase_2025Q4.yaml` now ships a documented 6×6
+  default correlation: **capex↔opex +0.35** (capital and operating costs co-move → fattens the
+  cost-overrun tail) and **capacity_factor↔curtailment +0.20** (on a constrained grid, windy
+  high-output periods are exactly when congestion forces curtailment, so the two rise together).
+  FX is left **uncorrelated on purpose** — unlike a USD-indexed PPA, the flat-LKR CEB PPA has no
+  revenue/FX link — and the administered tariff is independent. A new
+  `align_correlation_to_params` re-indexes the matrix onto the engine's ACTIVE parameters via
+  the spec's `param_names`, so a consumer that overrides `monte_carlo.parameters` (e.g. the
+  fx-calibration mode's single driver) subsets gracefully instead of hitting a shape mismatch.
+  **KPI impact: MC-band stats only** — the deterministic lender case and every `expected_results`
+  pin are unchanged. The correlation modestly *narrows* the band (the CF↔curtailment hedge
+  dominates the cost-clustering in IRR leverage): at n=2000/seed 42, project-IRR VaR(95%)
+  −0.0158→−0.0139, equity-IRR CVaR −0.1246→−0.1210, std 0.0207→0.0202.
 - **Monte-Carlo fail-loud on toy fallback, opt-in (#473, MC-9).** The MC engine substitutes
   deterministic *toy* KPIs when a trial's full v14 evaluation raises (so a smoke run on a
   minimal config still yields an array). On a real run that means evaluation FAILED for that
@@ -50,6 +66,13 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Honest label on the AEP Monte-Carlo loop (#487, MC-6).** The per-scenario AEP loop in
+  `analytics/simulation/monte_carlo_aep.py` was commented "vectorized for speed" but is a
+  genuine Python `for` loop — each scenario draws its own 8760-hour wind series and runs the
+  power curve. (The five loss-factor *samplings* above it ARE vectorised.) Full vectorisation
+  is infeasible — an `n×8760` wind array is ~7 GB of float64 at the production n=100k — so the
+  comment was corrected to describe the per-scenario loop honestly rather than relabelling work
+  that cannot be done. KPI-neutral (comment-only).
 - **Monte-Carlo RNG isolation + modern Generator (#473, MC-5).** Migrated the three legacy
   `np.random` call sites to an isolated `numpy.random.default_rng` (PCG64). The genuine defect
   was `analytics/simulation/monte_carlo_aep.py`, which seeded the **process-global**

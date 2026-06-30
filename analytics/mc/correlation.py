@@ -11,6 +11,7 @@ Implements:
 
 NOTE: This module should NOT depend on the MC engine (no circulars).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -47,7 +48,7 @@ def _nearest_psd(mat: np.ndarray) -> np.ndarray:
     """
     vals, vecs = np.linalg.eigh(mat)
     vals = np.clip(vals, 0.0, None)
-    repaired = (vecs @ np.diag(vals) @ vecs.T)
+    repaired = vecs @ np.diag(vals) @ vecs.T
     # re-normalize to unit diagonal
     d = np.sqrt(np.diag(repaired))
     d[d == 0] = 1.0
@@ -94,7 +95,9 @@ def apply_correlation_structure(
     x = np.array(lhs_samples, copy=True)
     n, k = x.shape
     if mat.shape != (k, k):
-        raise ValueError(f"Correlation matrix shape {mat.shape} does not match samples columns {k}.")
+        raise ValueError(
+            f"Correlation matrix shape {mat.shape} does not match samples columns {k}."
+        )
 
     # correlated normals
     rng = np.random.default_rng(int(seed))
@@ -117,12 +120,18 @@ def apply_correlation_structure(
 
 
 # Back-compat aliases (some older scripts use these names)
-def apply_correlation_to_lhs(lhs_samples: np.ndarray, corr_matrix: np.ndarray, seed: int = 123) -> np.ndarray:
+def apply_correlation_to_lhs(
+    lhs_samples: np.ndarray, corr_matrix: np.ndarray, seed: int = 123
+) -> np.ndarray:
     spec = CorrelationSpec(enabled=True, matrix=corr_matrix)
-    return apply_correlation_structure(lhs_samples=lhs_samples, correlation=spec, seed=seed)
+    return apply_correlation_structure(
+        lhs_samples=lhs_samples, correlation=spec, seed=seed
+    )
 
 
-def get_renewable_energy_correlation_template(param_names: Sequence[str]) -> Dict[str, Any]:
+def get_renewable_energy_correlation_template(
+    param_names: Sequence[str],
+) -> Dict[str, Any]:
     """
     Return a starter template (identity matrix) that callers can customize.
     """
@@ -156,4 +165,55 @@ def load_correlation_from_config(cfg: Mapping[str, Any]) -> Optional[Correlation
         matrix = np.array(mat, dtype=float)
 
     param_names = tuple(names) if names else None
-    return CorrelationSpec(enabled=enabled, method=method, matrix=matrix, param_names=param_names)
+    return CorrelationSpec(
+        enabled=enabled, method=method, matrix=matrix, param_names=param_names
+    )
+
+
+def align_correlation_to_params(
+    spec: Optional[CorrelationSpec], active_param_names: Sequence[str]
+) -> Optional[CorrelationSpec]:
+    """Re-index a CorrelationSpec's matrix onto the engine's ACTIVE parameter set.
+
+    A scenario authors its correlation matrix against the parameters it declares (in order),
+    naming them in ``spec.param_names``. But a consumer can OVERRIDE ``monte_carlo.parameters``
+    to a different/smaller set (e.g. the fx-calibration mode samples a single ``fx_calibrated``
+    driver) while inheriting the scenario's ``correlation`` block. The full matrix would then
+    not match the active column count and ``apply_correlation_structure`` would raise.
+
+    This builds an ``n_active x n_active`` matrix in ``active_param_names`` order: an entry is
+    taken from ``spec.matrix`` when BOTH active params are named in ``spec.param_names``, else
+    it defaults to the identity (uncorrelated). If fewer than two active params carry any
+    off-diagonal correlation, the result is the identity (independent sampling). Returns the
+    spec unchanged when there is no matrix/param_names to align, or it already matches.
+    """
+    if spec is None or spec.matrix is None or not spec.enabled:
+        return spec
+    active = list(active_param_names)
+    k = len(active)
+    src_names = list(spec.param_names) if spec.param_names else None
+    # Without names we cannot safely re-index; defer to the existing exact-shape check.
+    if src_names is None:
+        return spec
+    if list(src_names) == active:
+        return spec  # already aligned (the common case) -> byte-identical
+    src_index = {name: i for i, name in enumerate(src_names)}
+    aligned = np.eye(k, dtype=float)
+    src = np.asarray(spec.matrix, dtype=float)
+    for a in range(k):
+        ia = src_index.get(active[a])
+        if ia is None:
+            continue
+        for b in range(a + 1, k):
+            ib = src_index.get(active[b])
+            if ib is None:
+                continue
+            aligned[a][b] = aligned[b][a] = float(src[ia][ib])
+    return CorrelationSpec(
+        enabled=spec.enabled,
+        method=spec.method,
+        matrix=aligned,
+        param_names=tuple(active),
+        tol=spec.tol,
+        repair=spec.repair,
+    )

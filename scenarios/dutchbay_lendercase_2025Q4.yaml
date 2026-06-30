@@ -472,7 +472,36 @@ monte_carlo:
       low: 0.0                         # in CF; 0-13% incremental = 2-15% total grid curtailment.
       high: 0.13                       # Deliberately downside-weighted: the flat 2% is an
       distribution: uniform            # unvalidated optimistic placeholder for a constrained grid.
-  
+
+  # ── Inter-driver correlation (MC-7, #487) ──────────────────────────────────
+  # Default ON. The Iman-Conover rank-correlation machinery (analytics.mc.correlation)
+  # was present but DORMANT (no scenario declared a matrix), so the six drivers sampled
+  # independently — which understates joint tail risk. The matrix is 6x6 in the EXACT order
+  # of `parameters` above: [capacity_factor, tariff, opex, capex, fx, curtailment].
+  # Only well-justified pairs are non-zero; inventing spurious correlations is worse than
+  # none. KPI impact is MC-band stats only (the deterministic lender case is unaffected).
+  correlation:
+    enabled: true
+    method: iman_conover
+    param_names: [project.capacity_factor, tariff.lkr_per_kwh, opex.usd_per_year, capex.usd_total, fx.start_lkr_per_usd, project.curtailment_pct]
+    #          cf     tariff opex   capex  fx     curt
+    matrix:
+      - [1.00,  0.00,  0.00,  0.00,  0.00,  0.20]   # capacity_factor
+      - [0.00,  1.00,  0.00,  0.00,  0.00,  0.00]   # tariff (flat LKR, administered — independent)
+      - [0.00,  0.00,  1.00,  0.35,  0.00,  0.00]   # opex
+      - [0.00,  0.00,  0.35,  1.00,  0.00,  0.00]   # capex
+      - [0.00,  0.00,  0.00,  0.00,  1.00,  0.00]   # fx (see note: flat-LKR PPA breaks revenue-FX link)
+      - [0.20,  0.00,  0.00,  0.00,  0.00,  1.00]   # curtailment
+    # Rationale (deliberately conservative; each pair is structurally grounded):
+    #   capex<->opex (+0.35): capital and operating costs co-move (shared cost inflation,
+    #     and a larger/more-complex build costs more to run) -> fattens the cost-overrun tail.
+    #   capacity_factor<->curtailment (+0.20): on a constrained grid, high-output (windy)
+    #     periods are exactly when congestion forces curtailment, so the two rise together.
+    #   fx LEFT UNCORRELATED on purpose: unlike a USD-indexed PPA (cf. the sprint17 template's
+    #     revenue<->FX -0.3), the DutchBay CEB PPA is FLAT LKR with no FX indexation, so a
+    #     weaker LKR does NOT lift revenue — the usual revenue/FX link does not exist here.
+    #   tariff independent: it is a fixed administered LKR rate, uncorrelated with volume/cost.
+
   # Output configuration
   var_confidence: 0.95
   cvar_confidence: 0.95
