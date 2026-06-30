@@ -54,7 +54,9 @@ from analytics.casper.casper_payload import (
 from analytics.contracts_v14 import (
     CASPER_CONTRACT_VERSION as CONTRACTS_CASPER_CONTRACT_VERSION,
 )
-from analytics.contracts_v14 import CasperResult
+from analytics.contracts_v14 import (
+    CasperResult,
+)
 
 
 def test_payload_casper_contract_version_is_frozen() -> None:
@@ -109,6 +111,7 @@ def test_casper_result_contract_version_attribute_matches_contracts_constant() -
 
     # init=False: contract_version cannot be passed to the constructor.
     import pytest
+
     with pytest.raises(TypeError):
         CasperResult(scenario="stub", contract_version="hacked")  # type: ignore[call-arg]
 
@@ -131,6 +134,7 @@ def test_casper_result_has_documented_canonical_fields() -> None:
         "monte_carlo",
         "generation",  # Sprint 19 (#60): re-instated (consumed by casper_payload)
         "multi_tech_generation_breakdown",  # Sprint 19 (#60): re-instated
+        "multi_tech_wbs",  # ARCH-3 (#475): per-tech cost/return work-breakdown
         "metadata",
         "contract_version",  # D.X+6: was method, now init=False frozen attr
     }

@@ -100,6 +100,7 @@ def evaluate_with_casper_tail_risk_and_payload(
         sensitivity=casper.sensitivities,
         generation=getattr(casper, "generation", None),
         technology_breakdown=casper.multi_tech_generation_breakdown,
+        multi_tech_wbs=getattr(casper, "multi_tech_wbs", None),
         metadata=casper.metadata,
     )
 

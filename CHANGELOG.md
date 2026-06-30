@@ -5,6 +5,22 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Per-technology cost/return work-breakdown (#475, ARCH-3).** New
+  `analytics.portfolio.tech_wbs.build_multi_tech_wbs` + `MultiTechWBS` /
+  `TechnologyCostReturn` contracts attribute a hybrid's reporting CAPEX/OPEX and per-tech
+  cost-of-equity to each technology and **reconcile** the per-tech allocations against the
+  financed totals: CAPEX against the debt engine's resolved total
+  (`finance.debt_v14._extract_capex_usd`, so `derive_from_breakdown`/QRA scenarios
+  reconcile honestly), OPEX against the project OPEX. A positive `capex_residual_usd` is
+  the legitimate shared/balance-of-plant bucket; an allocation exceeding the financed
+  total beyond tolerance fails loud (CESSPIT). The reconciliation #448 deferred. Per-tech
+  WACC is **disclosure-only** (it does not feed financed economics); the blended
+  `project_wacc_nominal` is supplied from the run's resolved WACC (build-up scenarios
+  compute it in-pipeline from sized debt). Surfaced on `CasperResult.multi_tech_wbs` and
+  in the CASPER JSON payload. Additive, read-only, **KPI-neutral** (the intentional
+  phantom-capex decoupling is preserved; finance still reads one financed total).
+  Financing a per-tech WACC into the blended cost of capital is a separate, KPI-moving,
+  explicitly-authorized step (a decision point, not done here).
 - **Solar yield cross-validation + audit dispositions (#485, SOLAR-4/7/8/9/10; SOLAR-6/12 deferred).**
   Added a SOLAR-10 cross-validation test pinning the pvlib producer's specific yield against the
   independent SolarGIS PVOUT reference for the site (1524 kWh/kWp, within ±10%) plus the
