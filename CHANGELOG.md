@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Interannual-variability validation: computed-vs-assumed (#484, WIND-6).** The bankable P90
+  build-up uses an `UncertaintyBudget.interannual_variability_pct` (IEC default 4.0%) while
+  `wind_analyzer.calculate_interannual_variability` independently computes the site's IAV
+  (`cov_annual_ws`) from the ERA5 annual means — but the two were never compared, so the
+  assumed 4.0% was asserted blind. Added `interannual_variability_drift(computed, assumed)`
+  (mirroring the Weibull-drift check): it reports the percentage-point drift, a
+  `within_tolerance` flag, and whether the assumed sigma is conservative vs the data, and the
+  `wind_pipeline` summary now surfaces it as `interannual_variability_check`. Validate-mode
+  only — it never mutates the budget or the committed P90 (404.4 GWh); adopting the measured
+  IAV stays a deliberate, dated config edit. Also corrected the audit's "all hardcoded"
+  premise: every category sigma is already config-drivable via `resource.uncertainty.*` — the
+  values in `UncertaintyBudget` are IEC defaults, documented as such. KPI-neutral.
 - **Energy-weighted Weibull goodness-of-fit + wind methodology honesty (#484, WIND-4/5/8/9).**
   The headline Weibull fit reported only a CDF `r_squared`, which is bulk-dominated and masks
   misfit in the high-wind TAIL — exactly where energy concentrates (power ∝ v³). Added
