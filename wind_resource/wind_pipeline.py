@@ -39,6 +39,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 import yaml
 
+from wind_resource.bankable_aep import interannual_variability_drift
 from wind_resource.energy_calculator import EnergyCalculator
 from wind_resource.era5_fetcher import ERA5Fetcher
 from wind_resource.wind_analyzer import WindAnalyzer
@@ -48,11 +49,11 @@ logger = logging.getLogger(__name__)
 
 class WindPipeline:
     """Complete wind resource assessment pipeline.
-    
+
     Coordinates ERA5 fetching, wind analysis, and energy calculations
     into a streamlined workflow with JSON export. All configuration
     loaded from YAML files (CCCDIR compliant).
-    
+
     Attributes:
         location: Location dict with 'name', 'lat', 'lon'.
         hub_height: Turbine hub height (m).
@@ -62,7 +63,7 @@ class WindPipeline:
         output_dir: Directory for analysis outputs.
         fetcher: ERA5Fetcher instance.
         config: Configuration dict from era5_config.yaml.
-        
+
     Example:
         >>> pipeline = WindPipeline(
         ...     location={'name': 'Site1', 'lat': 8.5, 'lon': 80.0},
@@ -72,7 +73,7 @@ class WindPipeline:
         ... )
         >>> results = pipeline.run_complete_assessment()
     """
-    
+
     def __init__(
         self,
         location: Dict[str, Any],
@@ -81,7 +82,7 @@ class WindPipeline:
         num_turbines: int,
         cache_dir: str = "inputs/wind_data",
         output_dir: str = "outputs/wind_assessment",
-        config_path: Optional[str] = None
+        config_path: Optional[str] = None,
     ) -> None:
         """Initialize wind assessment pipeline.
 
@@ -99,45 +100,47 @@ class WindPipeline:
             cache_dir: Directory for ERA5 data cache. Default 'inputs/wind_data'.
             output_dir: Directory for analysis outputs. Default 'outputs/wind_assessment'.
             config_path: Path to era5_config.yaml. If None, uses default.
-                
+
         Raises:
             ValueError: If location dict is missing required keys.
             FileNotFoundError: If config file not found.
         """
         # Validate location
-        required_keys = ['name', 'lat', 'lon']
+        required_keys = ["name", "lat", "lon"]
         if not all(k in location for k in required_keys):
             raise ValueError(
                 f"location must contain keys: {required_keys}. "
                 f"Got: {list(location.keys())}"
             )
-        
+
         self.location = location
         self.hub_height = hub_height
         self.turbine_model = turbine_model
         self.num_turbines = num_turbines
         self.cache_dir = Path(cache_dir)
         self.output_dir = Path(output_dir)
-        
+
         # Create directories
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize ERA5 fetcher
         self.fetcher = ERA5Fetcher(cache_dir=str(cache_dir), config_path=config_path)
-        
+
         # Load config (CCCDIR compliance)
         self._load_config(config_path)
-        
+
         logger.info("WindPipeline v1.0.0 initialized (CCCDIR compliant)")
-        logger.info(f"  Location: {location['name']} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)")
+        logger.info(
+            f"  Location: {location['name']} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)"
+        )
         logger.info(f"  Hub height: {hub_height}m")
         logger.info(f"  Turbine model: {turbine_model}")
         logger.info(f"  Number of turbines: {num_turbines}")
-    
+
     def _load_config(self, config_path: Optional[str]) -> None:
         """Load configuration from YAML file.
-        
+
         Args:
             config_path: Path to config file, or None for default.
         """
@@ -152,17 +155,17 @@ class WindPipeline:
 
         with open(config_file) as f:
             self.config = yaml.safe_load(f)
-        
+
         logger.debug("Configuration loaded for pipeline")
-    
+
     def run_complete_assessment(
         self,
-        start_date: str = '2014-12-01',
-        end_date: str = '2025-12-31',
-        force_download: bool = False
+        start_date: str = "2014-12-01",
+        end_date: str = "2025-12-31",
+        force_download: bool = False,
     ) -> Dict[str, Any]:
         """Run complete wind resource assessment pipeline.
-        
+
         Executes the full workflow:
         1. Download/load ERA5 data
         2. Extrapolate to hub height
@@ -170,12 +173,12 @@ class WindPipeline:
         4. Calculate energy production (gross/net AEP, P50/P75/P90)
         5. Calculate revenue projections
         6. Save results to JSON
-        
+
         Args:
             start_date: Start date 'YYYY-MM-DD'. Default '2014-12-01'.
             end_date: End date 'YYYY-MM-DD'. Default '2025-12-31'.
             force_download: Force re-download of ERA5 data. Default False.
-                
+
         Returns:
             Complete assessment results dictionary with keys:
                 - metadata: Assessment metadata.
@@ -184,7 +187,7 @@ class WindPipeline:
                 - energy_production: Gross/net AEP, capacity factors.
                 - revenue: Revenue projections.
                 - monthly_profile: Monthly energy production.
-                
+
         Example:
             >>> results = pipeline.run_complete_assessment(
             ...     start_date='2020-01-01',
@@ -192,179 +195,209 @@ class WindPipeline:
             ... )
             >>> print(results['energy_production']['net_aep']['net_aep_p75_mwh'])
         """
-        logger.info("="*70)
+        logger.info("=" * 70)
         logger.info("WIND RESOURCE ASSESSMENT PIPELINE")
-        logger.info("="*70)
-        
+        logger.info("=" * 70)
+
         # Step 1: Download ERA5 data
         logger.info("\n[Step 1/5] Downloading ERA5 data...")
         data_file = self.fetcher.download_wind_data(
             location=self.location,
             start_date=start_date,
             end_date=end_date,
-            force_download=force_download
+            force_download=force_download,
         )
-        
+
         # Step 2: Load and extrapolate to hub height
         logger.info(f"\n[Step 2/5] Extrapolating to {self.hub_height}m hub height...")
         df = pd.read_csv(data_file)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
         df = self.fetcher.extrapolate_to_hub_height(df, hub_height=self.hub_height)
-        
-        ws_column = f'ws_{int(self.hub_height)}m'
-        
+
+        ws_column = f"ws_{int(self.hub_height)}m"
+
         # Step 3: Statistical analysis
         logger.info("\n[Step 3/5] Running statistical analysis...")
         analyzer = WindAnalyzer(df, ws_column=ws_column)
         statistical_analysis = analyzer.analyze_all()
-        
+
         # Step 4: Energy production calculations
         logger.info("\n[Step 4/5] Calculating energy production...")
         calculator = EnergyCalculator(
             df=df,
             ws_column=ws_column,
             turbine_model=self.turbine_model,
-            num_turbines=self.num_turbines
+            num_turbines=self.num_turbines,
         )
         energy_assessment = calculator.generate_complete_assessment()
-        
+
         # Step 5: Compile results
         logger.info("\n[Step 5/5] Compiling results...")
         results = {
-            'metadata': {
-                'assessment_date': datetime.now().isoformat(),
-                'location': self.location,
-                'data_period': {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'data_points': len(df)
+            "metadata": {
+                "assessment_date": datetime.now().isoformat(),
+                "location": self.location,
+                "data_period": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "data_points": len(df),
                 },
-                'configuration': {
-                    'hub_height_m': self.hub_height,
-                    'turbine_model': self.turbine_model,
-                    'num_turbines': self.num_turbines,
-                    'rated_capacity_kw': calculator.rated_capacity,
-                    'total_capacity_mw': (calculator.rated_capacity * self.num_turbines) / 1000
+                "configuration": {
+                    "hub_height_m": self.hub_height,
+                    "turbine_model": self.turbine_model,
+                    "num_turbines": self.num_turbines,
+                    "rated_capacity_kw": calculator.rated_capacity,
+                    "total_capacity_mw": (calculator.rated_capacity * self.num_turbines)
+                    / 1000,
                 },
-                'version': '1.0.0 (CCCDIR Compliant)'
+                "version": "1.0.0 (CCCDIR Compliant)",
             },
-            'wind_data': {
-                'mean_ws': float(df[ws_column].mean()),
-                'std_ws': float(df[ws_column].std()),
-                'min_ws': float(df[ws_column].min()),
-                'max_ws': float(df[ws_column].max()),
-                'p50_ws': float(df[ws_column].quantile(0.50)),
-                'p90_ws': float(df[ws_column].quantile(0.90))
+            "wind_data": {
+                "mean_ws": float(df[ws_column].mean()),
+                "std_ws": float(df[ws_column].std()),
+                "min_ws": float(df[ws_column].min()),
+                "max_ws": float(df[ws_column].max()),
+                "p50_ws": float(df[ws_column].quantile(0.50)),
+                "p90_ws": float(df[ws_column].quantile(0.90)),
             },
-            'statistical_analysis': statistical_analysis,
-            'energy_production': energy_assessment,
-            'summary': self._generate_summary(statistical_analysis, energy_assessment)
+            "statistical_analysis": statistical_analysis,
+            "energy_production": energy_assessment,
+            "summary": self._generate_summary(statistical_analysis, energy_assessment),
         }
-        
+
         # Save to JSON
-        output_file = self.output_dir / f"{self.location['name'].lower()}_assessment_{start_date}_to_{end_date}.json"
-        with open(output_file, 'w') as f:
+        output_file = (
+            self.output_dir
+            / f"{self.location['name'].lower()}_assessment_{start_date}_to_{end_date}.json"
+        )
+        with open(output_file, "w") as f:
             json.dump(results, f, indent=2)
-        
+
         logger.info(f"\n✅ Assessment complete: {output_file}")
-        logger.info("="*70)
-        
+        logger.info("=" * 70)
+
         return results
-    
-    def _generate_summary(self, statistical: Dict[str, Any], energy: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _generate_summary(
+        self, statistical: Dict[str, Any], energy: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Generate executive summary of key metrics.
-        
+
         Args:
             statistical: Statistical analysis results.
             energy: Energy assessment results.
-            
+
         Returns:
             Summary dict with key metrics.
         """
+        # WIND-6 (#484): validate the COMPUTED interannual CoV against the ASSUMED bankable
+        # IAV sigma (UncertaintyBudget default 4.0%, config-overridable). Surfaces whether the
+        # P90 build-up's interannual assumption is conservative or optimistic vs the site data;
+        # validate-mode only (never mutates the committed P90).
+        computed_iav = statistical["variability"]["cov_annual_ws"]
+        iav_check = interannual_variability_drift(computed_iav)
         return {
-            'wind_resource': {
-                'mean_wind_speed_ms': statistical['summary_stats']['mean'],
-                'weibull_shape_k': statistical['weibull']['shape_k'],
-                'weibull_scale_c_ms': statistical['weibull']['scale_c'],
-                'interannual_cov_percent': statistical['variability']['cov_annual_ws']
+            "wind_resource": {
+                "mean_wind_speed_ms": statistical["summary_stats"]["mean"],
+                "weibull_shape_k": statistical["weibull"]["shape_k"],
+                "weibull_scale_c_ms": statistical["weibull"]["scale_c"],
+                "interannual_cov_percent": computed_iav,
+                "interannual_variability_check": iav_check,
             },
-            'energy_production': {
-                'gross_capacity_factor_percent': energy['gross_aep']['capacity_factor_gross'],
-                'net_aep_p50_gwh': energy['net_aep']['net_aep_p50_mwh'] / 1000,
-                'net_aep_p75_gwh': energy['net_aep']['net_aep_p75_mwh'] / 1000,
-                'net_aep_p90_gwh': energy['net_aep']['net_aep_p90_mwh'] / 1000,
-                'net_capacity_factor_p75_percent': energy['net_aep']['capacity_factor_net_p75']
+            "energy_production": {
+                "gross_capacity_factor_percent": energy["gross_aep"][
+                    "capacity_factor_gross"
+                ],
+                "net_aep_p50_gwh": energy["net_aep"]["net_aep_p50_mwh"] / 1000,
+                "net_aep_p75_gwh": energy["net_aep"]["net_aep_p75_mwh"] / 1000,
+                "net_aep_p90_gwh": energy["net_aep"]["net_aep_p90_mwh"] / 1000,
+                "net_capacity_factor_p75_percent": energy["net_aep"][
+                    "capacity_factor_net_p75"
+                ],
             },
-            'revenue': {
-                'annual_revenue_p75_usd': energy['revenue']['annual_revenue_p75_usd'],
-                'ppa_years': energy['revenue']['ppa_years'],
-                'cumulative_revenue_p75_usd': energy['revenue']['cumulative_revenue_p75_usd']
-            }
+            "revenue": {
+                "annual_revenue_p75_usd": energy["revenue"]["annual_revenue_p75_usd"],
+                "ppa_years": energy["revenue"]["ppa_years"],
+                "cumulative_revenue_p75_usd": energy["revenue"][
+                    "cumulative_revenue_p75_usd"
+                ],
+            },
         }
-    
-    def export_for_cashflow_model(self, scenario: str = 'P75') -> Dict[str, Any]:
+
+    def export_for_cashflow_model(self, scenario: str = "P75") -> Dict[str, Any]:
         """Export key metrics for integration with cashflow model.
-        
+
         Args:
             scenario: P-level scenario ('P50', 'P75', or 'P90'). Default 'P75'.
-                
+
         Returns:
             Dict with cashflow model inputs:
                 - annual_generation_mwh: Annual energy production.
                 - capacity_factor_percent: Net capacity factor.
                 - revenue_annual_usd: Annual revenue.
                 - project_capacity_mw: Total installed capacity.
-                
+
         Raises:
             ValueError: If scenario is not valid.
             RuntimeError: If assessment hasn't been run yet.
-            
+
         Example:
             >>> pipeline.run_complete_assessment()
             >>> cashflow_data = pipeline.export_for_cashflow_model(scenario='P75')
             >>> print(cashflow_data['annual_generation_mwh'])
         """
-        if scenario not in ['P50', 'P75', 'P90']:
+        if scenario not in ["P50", "P75", "P90"]:
             raise ValueError(
                 f"scenario must be 'P50', 'P75', or 'P90'. Got: {scenario}"
             )
-        
+
         # Check if assessment file exists
-        assessment_files = list(self.output_dir.glob(f"{self.location['name'].lower()}_assessment_*.json"))
-        
+        assessment_files = list(
+            self.output_dir.glob(f"{self.location['name'].lower()}_assessment_*.json")
+        )
+
         if not assessment_files:
             raise RuntimeError(
                 "No assessment results found. Run run_complete_assessment() first."
             )
-        
+
         # Load most recent assessment
         latest_file = sorted(assessment_files)[-1]
         with open(latest_file) as f:
             results = json.load(f)
-        
+
         # Extract scenario-specific metrics
         scenario_lower = scenario.lower()
-        energy = results['energy_production']
-        
+        energy = results["energy_production"]
+
         cashflow_export = {
-            'scenario': scenario,
-            'annual_generation_mwh': energy['net_aep'][f'net_aep_{scenario_lower}_mwh'],
-            'capacity_factor_percent': energy['net_aep'][f'capacity_factor_net_{scenario_lower}'],
-            'revenue_annual_usd': energy['revenue'][f'annual_revenue_{scenario_lower}_usd'],
-            'revenue_cumulative_usd': energy['revenue'][f'cumulative_revenue_{scenario_lower}_usd'],
-            'project_capacity_mw': energy['config']['total_capacity_mw'],
-            'num_turbines': energy['config']['num_turbines'],
-            'rated_capacity_per_turbine_kw': energy['config']['rated_capacity_kw'],
-            'ppa_years': energy['revenue']['ppa_years'],
-            'tariff_lkr_per_kwh': energy['revenue']['tariff_lkr_per_kwh'],
-            'exchange_rate_lkr_usd': energy['revenue']['exchange_rate_lkr_usd']
+            "scenario": scenario,
+            "annual_generation_mwh": energy["net_aep"][f"net_aep_{scenario_lower}_mwh"],
+            "capacity_factor_percent": energy["net_aep"][
+                f"capacity_factor_net_{scenario_lower}"
+            ],
+            "revenue_annual_usd": energy["revenue"][
+                f"annual_revenue_{scenario_lower}_usd"
+            ],
+            "revenue_cumulative_usd": energy["revenue"][
+                f"cumulative_revenue_{scenario_lower}_usd"
+            ],
+            "project_capacity_mw": energy["config"]["total_capacity_mw"],
+            "num_turbines": energy["config"]["num_turbines"],
+            "rated_capacity_per_turbine_kw": energy["config"]["rated_capacity_kw"],
+            "ppa_years": energy["revenue"]["ppa_years"],
+            "tariff_lkr_per_kwh": energy["revenue"]["tariff_lkr_per_kwh"],
+            "exchange_rate_lkr_usd": energy["revenue"]["exchange_rate_lkr_usd"],
         }
-        
+
         # Save export
-        export_file = self.output_dir / f"{self.location['name'].lower()}_cashflow_export_{scenario}.json"
-        with open(export_file, 'w') as f:
+        export_file = (
+            self.output_dir
+            / f"{self.location['name'].lower()}_cashflow_export_{scenario}.json"
+        )
+        with open(export_file, "w") as f:
             json.dump(cashflow_export, f, indent=2)
-        
+
         logger.info(f"Exported {scenario} data for cashflow model: {export_file}")
-        
+
         return cashflow_export

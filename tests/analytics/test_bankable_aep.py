@@ -11,6 +11,7 @@ from wind_resource.bankable_aep import (
     density_velocity_factor,
     exceedance_levels,
     gross_aep_weibull,
+    interannual_variability_drift,
     model_wake_loss,
     non_wake_retention,
 )
@@ -41,12 +42,21 @@ def test_gross_aep_iea_10mw_density_corrected() -> None:
     ws, pw, _ = _iea_curve()
     rated = pw.max()
     ref = gross_aep_weibull(
-        wind_speed_ms=ws, power_kw=pw, weibull_a=A, weibull_k=K,
-        rated_power_kw=rated, n_turbines=N_TURBINES,
+        wind_speed_ms=ws,
+        power_kw=pw,
+        weibull_a=A,
+        weibull_k=K,
+        rated_power_kw=rated,
+        n_turbines=N_TURBINES,
     )
     dens = gross_aep_weibull(
-        wind_speed_ms=ws, power_kw=pw, weibull_a=A, weibull_k=K,
-        rated_power_kw=rated, n_turbines=N_TURBINES, rho_site_kgm3=RHO_SITE,
+        wind_speed_ms=ws,
+        power_kw=pw,
+        weibull_a=A,
+        weibull_k=K,
+        rated_power_kw=rated,
+        n_turbines=N_TURBINES,
+        rho_site_kgm3=RHO_SITE,
     )
     # IEA 10MW on the ERA5-fitted site Weibull: ~0.414 ref, ~0.396 density-corrected.
     assert 0.40 < ref.capacity_factor < 0.42
@@ -68,8 +78,11 @@ def test_iec_uncertainty_build_up() -> None:
 
 def test_non_wake_retention_excludes_wake() -> None:
     losses = {
-        "wake_loss_pct": 7.9, "availability_pct": 97.0,
-        "electrical_loss_pct": 2.0, "curtailment_pct": 2.0, "other_pct": 1.0,
+        "wake_loss_pct": 7.9,
+        "availability_pct": 97.0,
+        "electrical_loss_pct": 2.0,
+        "curtailment_pct": 2.0,
+        "other_pct": 1.0,
     }
     f = non_wake_retention(losses)
     # 0.97 * 0.98 * 0.98 * 0.99 = 0.9224 (no wake term)
@@ -83,11 +96,44 @@ def test_pywake_granular_wake_15_turbines() -> None:
     y = np.arange(N_TURBINES) * 650.0  # single N-S row, 650 m spacing
     rose = np.array([3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4], dtype=float)  # SW-dominant
     res = model_wake_loss(
-        wind_speed_ms=ws, power_kw=pw, thrust_coefficient=ct,
-        rotor_diameter_m=ROTOR_M, hub_height_m=HUB_M,
-        layout_x_m=x, layout_y_m=y, weibull_a=A, weibull_k=K,
-        wind_rose_freq=rose, deficit_model="bastankhah",
+        wind_speed_ms=ws,
+        power_kw=pw,
+        thrust_coefficient=ct,
+        rotor_diameter_m=ROTOR_M,
+        hub_height_m=HUB_M,
+        layout_x_m=x,
+        layout_y_m=y,
+        weibull_a=A,
+        weibull_k=K,
+        wind_rose_freq=rose,
+        deficit_model="bastankhah",
     )
     assert res.n_turbines == N_TURBINES
     assert 3.0 < res.wake_loss_pct < 15.0  # modeled, not the flat 5% placeholder
     assert res.aep_wake_gwh < res.aep_gross_gwh
+
+
+# ── WIND-6 (#484): computed-vs-assumed interannual-variability validation ──────
+def test_interannual_variability_drift_within_tolerance() -> None:
+    # computed 3.6% vs assumed default 4.0% -> 0.4 pp drift, within 1.5 pp, and assumed is
+    # conservative (>= computed).
+    chk = interannual_variability_drift(3.6)
+    assert chk["assumed_iav_pct"] == 4.0
+    assert chk["drift_pp"] == pytest.approx(-0.4, abs=1e-9)
+    assert chk["within_tolerance"] is True
+    assert chk["assumed_is_conservative"] is True
+
+
+def test_interannual_variability_drift_flags_optimistic_assumption() -> None:
+    # computed 6.0% vs assumed 4.0% -> the bankable P90 UNDERSTATES interannual risk.
+    chk = interannual_variability_drift(6.0)
+    assert chk["drift_pp"] == pytest.approx(2.0, abs=1e-9)
+    assert chk["within_tolerance"] is False  # 2.0 pp > 1.5 pp tolerance
+    assert chk["assumed_is_conservative"] is False
+
+
+def test_interannual_variability_drift_is_validate_only() -> None:
+    # The check must not mutate the budget default; calling it leaves 4.0% intact.
+    before = UncertaintyBudget().interannual_variability_pct
+    interannual_variability_drift(9.9, assumed_pct=before)
+    assert UncertaintyBudget().interannual_variability_pct == before == 4.0

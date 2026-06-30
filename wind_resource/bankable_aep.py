@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -261,6 +261,17 @@ class UncertaintyBudget:
     All but ``interannual_variability_pct`` are treated as systematic (constant
     over the project life); the interannual term is time-averageable and is
     divided by sqrt(life_years) for the multi-year P90.
+
+    WIND-6 (#484): these category sigmas are NOT hardcoded into the AEP path — every field
+    is config-drivable via ``resource.uncertainty.*`` (see
+    ``analytics.wind.aep_summary_builder._uncertainty_from_config``); the values here are the
+    IEC defaults used only when a scenario does not override them. The ``interannual_variability_pct``
+    in particular CAN and should be validated against the value COMPUTED from the site
+    timeseries (``wind_analyzer.calculate_interannual_variability`` -> ``cov_annual_ws``):
+    :func:`interannual_variability_drift` surfaces the computed-vs-assumed gap so the assumed
+    4.0% is no longer asserted blind. Adopting the measured value is a deliberate, dated config
+    edit (it moves the committed P90), NOT an automatic side effect — the same validate-mode
+    discipline as the Weibull-drift check.
     """
 
     wind_measurement_pct: float = 4.5
@@ -298,6 +309,36 @@ class UncertaintyBudget:
         """Total sigma for an averaging window of ``life_years`` years."""
         iav = self.interannual_variability_pct / np.sqrt(max(life_years, 1.0))
         return float(np.sqrt(self.systematic_sigma_pct(correlation) ** 2 + iav**2))
+
+
+def interannual_variability_drift(
+    computed_cov_pct: float,
+    assumed_pct: float = UncertaintyBudget().interannual_variability_pct,
+    tolerance_pct: float = 1.5,
+) -> Dict[str, Any]:
+    """Validate the ASSUMED interannual-variability sigma against the COMPUTED one (WIND-6).
+
+    The bankable P90 build-up uses ``UncertaintyBudget.interannual_variability_pct`` (default
+    4.0%, config-overridable). The site timeseries independently yields an interannual CoV
+    (``wind_analyzer.calculate_interannual_variability`` -> ``cov_annual_ws``). This compares
+    the two and returns the absolute drift (percentage points) plus a ``within_tolerance`` flag,
+    so a lender can see whether the assumed IAV is conservative (assumed >= computed) or
+    optimistic (assumed < computed) relative to the data. It is a VALIDATE-mode signal only — it
+    NEVER mutates the budget or the committed P90; adopting ``computed_cov_pct`` is a deliberate
+    config edit. Mirrors :func:`wind_resource.weibull_fit.weibull_drift`.
+    """
+    computed = float(computed_cov_pct)
+    assumed = float(assumed_pct)
+    drift_pp = computed - assumed
+    return {
+        "computed_iav_pct": round(computed, 4),
+        "assumed_iav_pct": round(assumed, 4),
+        "drift_pp": round(drift_pp, 4),
+        "within_tolerance": abs(drift_pp) <= float(tolerance_pct),
+        "tolerance_pp": float(tolerance_pct),
+        # assumed >= computed -> the bankable P90 is conservative on interannual risk.
+        "assumed_is_conservative": assumed >= computed,
+    }
 
 
 @dataclass(frozen=True)
