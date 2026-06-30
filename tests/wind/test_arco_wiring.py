@@ -17,18 +17,24 @@ import pytest
 
 from analytics.config_schema import get_required_fields
 from analytics.scenario_loader import load_scenario_config
-from analytics.schema_guard import (ConfigValidationError,
-                                    validate_config_for_v14)
+from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+
 # Top-level import registers the era5 specs at collection time (mirrors
 # tests/analytics/test_wind_interface_schema.py). Required because the import-smoke
 # lint test wipes ``analytics.*`` from ``sys.modules`` mid-run; without this the
 # schema would only register into a re-imported config_schema instance the schema-guard
 # binding here can't see, and the negative tests would silently not raise.
 from analytics.wind.era5_interface_schema import ERA5_INTERFACE_MODULE
-from wind_resource.arco_assessment import (build_arco_assessment,
-                                           era5_config_from_scenario)
-from wind_resource.weibull_fit import (fit_weibull_on_series, weibull_drift,
-                                       weibull_std)
+from wind_resource.arco_assessment import (
+    build_arco_assessment,
+    era5_config_from_scenario,
+)
+from wind_resource.weibull_fit import (
+    energy_moment_gof_pct,
+    fit_weibull_on_series,
+    weibull_drift,
+    weibull_std,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
@@ -51,7 +57,13 @@ def _weibull_series(a: float, k: float, n: int = 60_000, seed: int = 7) -> pd.Da
 
 def test_era5_specs_registered() -> None:
     names = {spec.name for spec in get_required_fields(ERA5_INTERFACE_MODULE)}
-    assert names == {"latitude", "longitude", "reference_mode", "hub_height_m", "strict_coverage"}
+    assert names == {
+        "latitude",
+        "longitude",
+        "reference_mode",
+        "hub_height_m",
+        "strict_coverage",
+    }
 
 
 def test_lender_era5_block_passes_schema(scenario: dict) -> None:
@@ -115,13 +127,37 @@ def test_fit_recovers_known_weibull() -> None:
     assert fit.weibull_a == pytest.approx(8.32, abs=0.15)
     assert fit.weibull_k == pytest.approx(2.1, abs=0.06)
     # the reported std is the Weibull-implied std (consistent with A,k), not raw sample.
-    assert fit.std_ws_ms == pytest.approx(weibull_std(fit.weibull_a, fit.weibull_k), abs=1e-9)
+    assert fit.std_ws_ms == pytest.approx(
+        weibull_std(fit.weibull_a, fit.weibull_k), abs=1e-9
+    )
     assert fit.r_squared > 0.99
+    # WIND-9: a clean fit on Weibull-drawn data also has a small energy-weighted (v^3) GoF.
+    assert 0.0 <= fit.energy_gof_pct < 5.0
+    assert "energy_gof_pct" in fit.as_dict()
 
 
 def test_fit_requires_enough_points() -> None:
     with pytest.raises(ValueError, match=">=2"):
         fit_weibull_on_series(pd.DataFrame({"ws_150m": [0.0, -1.0]}), "ws_150m")
+
+
+def test_energy_moment_gof_detects_tail_misfit() -> None:
+    """WIND-9: the v^3 (energy) GoF must FLAG a high-wind-tail misfit that CDF R^2 misses.
+
+    Build a sample whose bulk matches a Weibull but whose tail is energy-heavy: the cubic
+    moment then diverges from the fitted A^3 Γ(1+3/k), so the diagnostic is large even though
+    a CDF-based R^2 would look fine."""
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    base = rng.weibull(2.0, 20000) * 8.0  # A=8, k=2
+    # inject an energy-heavy tail: a few very-high-wind hours barely move the CDF but
+    # dominate E[v^3].
+    heavy = np.concatenate([base, np.full(200, 28.0)])
+    clean_gof = energy_moment_gof_pct(base, 8.0, 2.0)
+    heavy_gof = energy_moment_gof_pct(heavy, 8.0, 2.0)
+    assert clean_gof < 3.0  # the matched sample is energy-consistent
+    assert heavy_gof > clean_gof + 5.0  # the tail injection is caught by the v^3 metric
 
 
 def test_drift_within_and_outside_tolerance() -> None:
@@ -139,7 +175,9 @@ def test_assessment_validates_without_mutating(scenario: dict) -> None:
     before = copy.deepcopy(scenario)
     # Generate a series matching the scenario's ERA5-fitted declared baseline
     # (A=8.199/k=2.665) so the fit lands within the drift tolerance.
-    res = build_arco_assessment(_weibull_series(8.199, 2.665), scenario, ws_column="ws_150m")
+    res = build_arco_assessment(
+        _weibull_series(8.199, 2.665), scenario, ws_column="ws_150m"
+    )
     # VALIDATE mode: declared baseline untouched.
     assert res["mode"] == "validate"
     assert scenario == before  # no mutation of the caller's scenario
@@ -150,7 +188,9 @@ def test_assessment_validates_without_mutating(scenario: dict) -> None:
 
 
 def test_assessment_implied_block_satisfies_wind_contract(scenario: dict) -> None:
-    res = build_arco_assessment(_weibull_series(8.32, 2.10), scenario, ws_column="ws_150m")
+    res = build_arco_assessment(
+        _weibull_series(8.32, 2.10), scenario, ws_column="ws_150m"
+    )
     probe = copy.deepcopy(scenario)
     probe["resource"]["wind"] = res["implied_wind_block"]
     # the ARCO-produced wind block is a valid resource.wind handoff contract.
@@ -159,7 +199,10 @@ def test_assessment_implied_block_satisfies_wind_contract(scenario: dict) -> Non
 
 def test_large_drift_flags_out_of_tolerance(scenario: dict) -> None:
     res = build_arco_assessment(
-        _weibull_series(6.0, 1.6), scenario, ws_column="ws_150m", drift_tolerance_pct=5.0
+        _weibull_series(6.0, 1.6),
+        scenario,
+        ws_column="ws_150m",
+        drift_tolerance_pct=5.0,
     )
     assert res["drift"]["within_tolerance"] is False  # a much weaker resource is caught
 
