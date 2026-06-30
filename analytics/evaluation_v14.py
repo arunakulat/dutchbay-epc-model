@@ -65,14 +65,14 @@ def _deep_merge_config(
 ) -> dict[str, Any]:
     """
     Recursively deep-merge two configuration dictionaries.
-    
+
     Args:
         base: Base configuration mapping
         overrides: Override values to merge into base
-        
+
     Returns:
         Merged configuration dict
-        
+
     Example:
         >>> base = {"finance": {"capex_usd": 1000}, "project": {"name": "test"}}
         >>> overrides = {"finance": {"capex_usd": 1100}}
@@ -138,15 +138,15 @@ def _expand_dotted_overrides(overrides: Mapping[str, Any]) -> dict[str, Any]:
 def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
-    
+
     Filters out non-numeric values and logs warnings for skipped entries.
-    
+
     Args:
         raw_kpis: Raw KPI mapping from pipeline result
-        
+
     Returns:
         Normalized dict with only numeric (float-convertible) values
-        
+
     Example:
         >>> kpis = {"project_irr": 0.145, "name": "test", "min_dscr": "1.45"}
         >>> normalized = normalize_kpi_dict(kpis)
@@ -176,14 +176,14 @@ def _run_pipeline_with_config(
 ) -> dict[str, Any]:
     """
     Internal helper: run v14 pipeline and return full result.
-    
+
     Args:
         config: Complete scenario configuration
         validation_modules: Modules to validate (defaults to cashflow, debt)
-        
+
     Returns:
         Full pipeline result dict with keys: status, kpis, annual_rows, debt_result, etc.
-        
+
     Raises:
         TypeError: If pipeline result is malformed
     """
@@ -210,29 +210,31 @@ def evaluate_scenario_from_dict(
 ) -> dict[str, float]:
     """
     Evaluate a scenario given an in-memory configuration dict.
-    
+
     Args:
         config: Base configuration mapping
         overrides: Optional override values
-        
+
     Returns:
         Normalized KPI dict {metric_name: float_value}
-        
+
     Example:
         >>> config = load_scenario_config("scenarios/base.yaml")
         >>> kpis = evaluate_scenario_from_dict(config, {"finance.capex_usd": 1100})
         >>> kpis["project_irr"]
         0.142
     """
-    merged_config = _deep_merge_config(config, _expand_dotted_overrides(overrides or {}))
+    merged_config = _deep_merge_config(
+        config, _expand_dotted_overrides(overrides or {})
+    )
     result = _run_pipeline_with_config(merged_config)
-    
+
     raw_kpis = result.get("kpis")
     if not isinstance(raw_kpis, Mapping):
         raise TypeError(
             f"Expected 'kpis' to be a mapping, got {type(raw_kpis).__name__}"
         )
-    
+
     return normalize_kpi_dict(raw_kpis)
 
 
@@ -246,24 +248,24 @@ def evaluate_with_overrides(
 ) -> Union[dict[str, float], dict[str, Any]]:
     """
     Run a single scenario evaluation through the v14 pipeline.
-    
+
     This is the canonical gateway for sensitivity and optimization engines.
-    
+
     Args:
         config_path: Path to scenario YAML file (required if raw_config not provided)
         overrides: Override values to merge into config
         raw_config: In-memory config dict (alternative to config_path)
         validation_modules: Modules to validate (defaults to cashflow, debt)
         return_full_result: If True, return full pipeline result; if False, return KPIs only
-        
+
     Returns:
         - If return_full_result=False: Normalized KPI dict {metric_name: float}
         - If return_full_result=True: Full pipeline result with kpis, annual_rows, debt_result, etc.
-        
+
     Raises:
         ValueError: If neither config_path nor raw_config provided
         FileNotFoundError: If config_path doesn't exist
-        
+
     Example:
         >>> # Sensitivity analysis (KPIs only)
         >>> kpis = evaluate_with_overrides(
@@ -272,7 +274,7 @@ def evaluate_with_overrides(
         ... )
         >>> kpis["project_irr"]
         0.142
-        >>> 
+        >>>
         >>> # Optimization (full result)
         >>> result = evaluate_with_overrides(
         ...     raw_config=config_dict,
@@ -289,7 +291,7 @@ def evaluate_with_overrides(
         raise ValueError(
             "Either config_path or raw_config must be provided to evaluate_with_overrides()"
         )
-    
+
     # Load or use provided config
     if raw_config is not None:
         base_config = dict(raw_config)
@@ -301,14 +303,16 @@ def evaluate_with_overrides(
 
     # Merge overrides (dotted keys like "tax.corporate_tax_rate" are expanded to
     # nested form first so they actually apply — see _expand_dotted_overrides).
-    merged_config = _deep_merge_config(base_config, _expand_dotted_overrides(overrides or {}))
+    merged_config = _deep_merge_config(
+        base_config, _expand_dotted_overrides(overrides or {})
+    )
 
     # Run pipeline
     full_result = _run_pipeline_with_config(
         merged_config,
         validation_modules=validation_modules,
     )
-    
+
     # Return based on requested format
     if return_full_result:
         return full_result
@@ -320,6 +324,30 @@ def evaluate_with_overrides(
                 f"Expected 'kpis' to be a mapping, got {type(raw_kpis).__name__}"
             )
         return normalize_kpi_dict(raw_kpis)
+
+
+def _resolved_wacc_nominal(wacc: Any) -> float | None:
+    """Extract the resolved blended ``wacc_nominal`` from a ScenarioResult.wacc.
+
+    Handles both shapes the result carries (the same dict-or-object split
+    ``casper_payload._scenario_summary_to_dict`` handles): a typed ``WaccResult``
+    (``.base.wacc_nominal``) and a serialized dict (``{"base": {"wacc_nominal": ...}}``
+    or a flat ``{"wacc_nominal": ...}``). Returns ``None`` when unavailable. Used to feed
+    the per-tech WBS its blended-WACC disclosure with the run's *resolved* value (build_up
+    scenarios compute it in-pipeline, so it is not config-derivable).
+    """
+    if wacc is None:
+        return None
+    if isinstance(wacc, Mapping):
+        base = wacc.get("base")
+        if isinstance(base, Mapping) and base.get("wacc_nominal") is not None:
+            return float(base["wacc_nominal"])
+        if wacc.get("wacc_nominal") is not None:
+            return float(wacc["wacc_nominal"])
+        return None
+    base_obj = getattr(wacc, "base", None)
+    nominal = getattr(base_obj, "wacc_nominal", None)
+    return float(nominal) if nominal is not None else None
 
 
 def evaluate_with_casper_tail_risk(
@@ -334,12 +362,12 @@ def evaluate_with_casper_tail_risk(
 ) -> CasperResult:
     """
     High-level CASPER orchestrator for v14 (GWTF-compliant).
-    
+
     Integrates baseline scenario, Monte Carlo, and sensitivity analysis with tail risk.
-    
+
     CRITICAL: This is the ONLY function that imports tail-risk modules.
     All imports are lazy to avoid circular dependencies.
-    
+
     Args:
         config_path: Path to base scenario config
         monte_carlo_config_path: Optional path to MC config
@@ -348,10 +376,10 @@ def evaluate_with_casper_tail_risk(
         confidence: Confidence level for VaR/CVaR (default 0.9 = 90%)
         validation_mode: Schema validation mode
         validation_modules: Modules to validate
-        
+
     Returns:
         CasperResult with scenario, sensitivities, monte_carlo, and tail risk metadata
-        
+
     Example:
         >>> result = evaluate_with_casper_tail_risk(
         ...     config_path="scenarios/base.yaml",
@@ -498,6 +526,16 @@ def evaluate_with_casper_tail_risk(
         baseline_kpis, base_config
     )
 
+    # Per-tech cost/return work-breakdown (ARCH-3, #475): additive read-only CAPEX/OPEX/
+    # WACC attribution reconciled to the financed totals; None for single-tech scenarios.
+    # Pass the run's RESOLVED blended WACC (build_up scenarios compute it in-pipeline from
+    # sized debt, so it is not config-derivable) for the WBS's project-WACC disclosure.
+    from analytics.portfolio.tech_wbs import build_multi_tech_wbs
+
+    multi_tech_wbs = build_multi_tech_wbs(
+        base_config, project_wacc_nominal=_resolved_wacc_nominal(scenario.wacc)
+    )
+
     return CasperResult(
         scenario=scenario,
         baseline_kpis=baseline_kpis,
@@ -505,6 +543,7 @@ def evaluate_with_casper_tail_risk(
         monte_carlo=monte_carlo,
         generation=generation,
         multi_tech_generation_breakdown=generation_breakdown,
+        multi_tech_wbs=multi_tech_wbs,
         metadata=metadata,
     )
 

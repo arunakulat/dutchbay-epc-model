@@ -354,6 +354,10 @@ class CasperResult(ContractMixin):
     # / TechnologyBreakdown) were already re-instated below for the same reason.
     generation: MultiTechGenerationResult | None = None
     multi_tech_generation_breakdown: list[TechnologyBreakdown] | None = None
+    # Per-technology cost/return work-breakdown (ARCH-3, #475): additive read-only
+    # CAPEX/OPEX/WACC attribution reconciled to the financed totals; None when the
+    # scenario carries no generation.technologies block.
+    multi_tech_wbs: MultiTechWBS | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # Class-level frozen attribute (NOT __init__ arg). Resolved Sprint 18D
@@ -471,6 +475,63 @@ class TechnologyBreakdown(ContractMixin):
     notes: str | None = None
 
 
+@dataclass(frozen=True)
+class TechnologyCostReturn(ContractMixin):
+    """Per-technology cost/return line of the multi-tech work-breakdown (ARCH-3).
+
+    Attributes the *reporting* per-tech CAPEX/OPEX/cost-of-capital of a hybrid to a
+    single technology. CAPEX/OPEX are read from the ``generation.technologies.<tech>``
+    block; the financed totals remain ``capex.usd_total`` / project ``opex`` (the
+    deliberate phantom-capex decoupling — finance reads the total, this surface
+    reports the split). ``cost_of_equity`` is a per-tech disclosure only: it is
+    populated when the tech block declares its own ``wacc.cost_of_equity``, else
+    ``None`` and ``wacc_basis == "blended"`` (the project WACC applies). It does NOT
+    feed back into the financed economics — per-tech-WACC financing is a separate,
+    KPI-moving step.
+    """
+
+    technology: str
+    capex_usd: float | None = None
+    opex_usd_per_year: float | None = None
+    cost_of_equity: float | None = None
+    wacc_basis: str = "blended"
+    share_of_capex_pct: float | None = None
+    share_of_opex_pct: float | None = None
+    notes: str | None = None
+
+
+@dataclass(frozen=True)
+class MultiTechWBS(ContractMixin):
+    """Per-technology cost/return work-breakdown with total reconciliation (ARCH-3).
+
+    The keystone the audit deferred in #448: a per-tech CAPEX/OPEX/WACC breakdown
+    reconciled against the authoritative financed totals. ``capex_residual_usd`` is the
+    shared / balance-of-plant / unallocated bucket (e.g. grid connection, development
+    cost) — a positive residual (financed > allocated) is expected and legitimate.
+    Allocations that *exceed* the financed total beyond ``reconcile_tolerance_pct`` are
+    a real error and fail loud at build time (CESSPIT). This surface is additive and
+    read-only: it performs no finance recomputation, so committed scenarios are
+    KPI-neutral.
+    """
+
+    technologies: dict[str, TechnologyCostReturn] = field(default_factory=dict)
+    financed_capex_usd: float | None = None
+    allocated_capex_usd: float = 0.0
+    capex_residual_usd: float | None = None
+    capex_reconciled: bool = False
+    financed_opex_usd_per_year: float | None = None
+    allocated_opex_usd_per_year: float = 0.0
+    opex_residual_usd_per_year: float | None = None
+    opex_reconciled: bool = False
+    project_wacc_nominal: float | None = None
+    reconcile_tolerance_pct: float = 1.0
+    notes: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-safe payload (parity with ``MultiTechGenerationResult.to_dict``)."""
+        return self.model_dump()
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     "check_covenant_breach_with_tolerance",
@@ -503,4 +564,6 @@ __all__ = [
     "GenerationProfile",
     "MultiTechGenerationResult",
     "TechnologyBreakdown",
+    "TechnologyCostReturn",
+    "MultiTechWBS",
 ]

@@ -8,6 +8,7 @@ from analytics.contracts_v14 import (
     CasperResult,
     MonteCarloResult,
     MultiTechGenerationResult,
+    MultiTechWBS,
     ScenarioResult,
     SensitivitySuite,
     TechnologyBreakdown,
@@ -26,6 +27,7 @@ def build_casper_payload(
     sensitivity: SensitivitySuite | None = None,
     generation: MultiTechGenerationResult | None = None,
     technology_breakdown: Sequence[TechnologyBreakdown] | None = None,
+    multi_tech_wbs: MultiTechWBS | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -96,6 +98,7 @@ def build_casper_payload(
         multi_tech_generation_breakdown=(
             list(technology_breakdown) if technology_breakdown is not None else None
         ),
+        multi_tech_wbs=multi_tech_wbs,
         metadata=metadata_dict,
     )
 
@@ -403,6 +406,12 @@ def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
         "generation": _generation_to_dict(casper.generation),
         "technology_breakdown": _technology_breakdown_to_list(
             casper.multi_tech_generation_breakdown
+        ),
+        # Per-tech cost/return work-breakdown (ARCH-3, #475): additive, read-only.
+        "multi_tech_wbs": (
+            casper.multi_tech_wbs.to_dict()
+            if casper.multi_tech_wbs is not None
+            else None
         ),
         "tail_risk": _tail_risk_from_metadata(metadata),
         "metadata": metadata,
