@@ -64,6 +64,27 @@ reports/  → WeasyPrint + Jinja2 (14-page PDF) · export_helpers (XLSX)
 The fast path needs **no queue**. The slow ERA5 path is the only one that needs
 background execution + progress.
 
+### Current status of the async path (deferred wiring)
+
+As of this writing the async ERA5 path is **built and unit-tested but not yet wired** to the HTTP
+API. Concretely:
+
+- `app/jobs/worker.py` (the arq `WorkerSettings` + `run_wind_assessment_task`) and
+  `app/jobs/redis_store.py` (`RedisJobStore`, tested against a fake client) are complete; the
+  worker is import-smoke-tested under the optional `[jobs]` extra.
+- The **live** `POST /jobs` path runs the same orchestration (`app.jobs.runner.run_wind_job`)
+  in-process via FastAPI `BackgroundTasks` against `InMemoryJobStore`, resolved through the
+  `get_store` dependency in `app/api/jobs_router.py` — adequate for a few known clients on one
+  process.
+- The remaining cutover — the route producing to the arq queue and `get_store` returning a
+  `RedisJobStore` behind `[jobs]` — is a deliberate **Redis-gated follow-up**: it cannot be
+  CI-verified without a live Redis, so it is left as a single, well-isolated switch on the verified
+  building blocks rather than shipped half-tested. To enable it: install the `[jobs]` extra, run
+  `arq app.jobs.worker.WorkerSettings`, and point `get_store` at a `RedisJobStore`.
+
+This keeps `main` green and the default path fully tested, while the durable / horizontal-scale
+path stays one explicit step away (see Sprint 2 below).
+
 ---
 
 ## 4. Key technical decisions (with confidence from the research pass)

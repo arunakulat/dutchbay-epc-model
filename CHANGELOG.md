@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Async arq worker formalized as a deferred, Redis-gated follow-up (#481, RPT-6).** Documented
+  the as-built status of the async ERA5 path in `docs/WEB_SERVICE_ROADMAP.md` — the worker
+  (`app/jobs/worker.py`) and `RedisJobStore` are built and unit-tested but NOT wired; the live
+  `POST /jobs` path runs in-process via `BackgroundTasks` / `InMemoryJobStore` through the
+  `get_store` seam; the cutover (route enqueues to arq + `get_store` returns a `RedisJobStore`
+  behind `[jobs]`) is a single Redis-gated switch that cannot be CI-verified without a live Redis.
+  Added a gated import smoke test (`tests/app/test_jobs_worker.py`, skipped without the `[jobs]`
+  extra) that guards the worker module against bit-rot. No production code change; KPI-neutral.
 - **Assumptions register deepened + run-manifest left-aligned (#481, RPT-2/RPT-4).** The report's
   assumptions register now shows value · source · as-of · impact: source and as-of are
   cross-referenced from the scenario's evidence register where a material assumption maps to the

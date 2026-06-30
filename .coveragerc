@@ -19,7 +19,8 @@ omit =
     */analytics/sensitivity/viz.py
     */analytics/sensitivity/dashboard_demo.py
     # arq + Redis worker entrypoint (Sprint 2): loaded only by the `arq` CLI with
-    # the optional [jobs] extra + a live Redis; never imported by app/tests.
+    # the optional [jobs] extra + a live Redis (and the gated import-smoke test under
+    # [jobs]); never imported by the running app, so excluded from coverage.
     */app/jobs/worker.py
 
 [report]
