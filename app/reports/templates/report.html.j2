@@ -411,6 +411,54 @@
     {% endif %}
   </section>
 
+  {# 8a-bis. Multi-technology breakdown (hybrid plants) — ARCH-4 / #476 #}
+  {% if ctx.multi_tech %}
+  <section class="page">
+    <h2>Multi-Technology Breakdown</h2>
+    <p>Per-technology production and economics for the combined plant
+      (total net AEP {{ fmt_gwh(ctx.multi_tech.total_aep_gwh) }}). CFADS is apportioned by
+      operating margin (revenue minus opex); CAPEX/OPEX and cost-of-capital are the
+      reporting per-technology work-breakdown. These are an additive attribution of one
+      combined-plant run and do not change the committed economics.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Technology</th><th>Net AEP</th><th>AEP %</th><th>CFADS %</th>
+          <th>CAPEX</th><th>CAPEX %</th><th>OPEX/yr</th><th>Cost of equity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.multi_tech.rows %}
+        <tr>
+          <td>{{ r.technology }}</td>
+          <td class="num">{{ fmt_gwh(r.aep_gwh) }}</td>
+          <td class="num">{{ fmt_pct(r.share_of_aep_pct) }}</td>
+          <td class="num">{{ fmt_pct(r.share_of_cfads_pct) }}</td>
+          <td class="num">{{ fmt_usd(r.capex_usd) }}</td>
+          <td class="num">{{ fmt_pct(r.share_of_capex_pct) }}</td>
+          <td class="num">{{ fmt_usd(r.opex_usd_per_year) }}</td>
+          <td class="num">{% if r.cost_of_equity is not none %}{{ fmt_ratio_pct(r.cost_of_equity) }} ({{ r.wacc_basis }}){% else %}blended{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.multi_tech.financed_capex_usd is not none %}
+    <p class="muted">Financed CAPEX {{ fmt_usd(ctx.multi_tech.financed_capex_usd) }};
+      attributed {{ fmt_usd(ctx.multi_tech.allocated_capex_usd) }};
+      shared / balance-of-plant residual {{ fmt_usd(ctx.multi_tech.capex_residual_usd) }}
+      ({% if ctx.multi_tech.capex_reconciled %}reconciled{% else %}not reconciled{% endif %}).
+      {% if ctx.multi_tech.project_wacc_nominal is not none %}Project discount rate /
+      blended WACC {{ fmt_ratio_pct(ctx.multi_tech.project_wacc_nominal) }}.{% endif %}</p>
+    {% endif %}
+    {% if ctx.multi_tech.poi_curtailment_pct is not none %}
+    <p class="muted">Shared point-of-interconnection limit
+      {{ "%.0f"|format(ctx.multi_tech.poi_limit_mw) }} MW: combined injection is curtailed
+      {{ fmt_pct(ctx.multi_tech.poi_curtailment_pct) }} of gross generation
+      ({{ fmt_gwh((ctx.multi_tech.poi_curtailed_energy_mwh / 1000.0) if ctx.multi_tech.poi_curtailed_energy_mwh is not none else none) }} lost).</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 8b. Assumption evidence register — #435 / RPT-1 #}
   {% if ctx.evidence %}
   <section class="page">

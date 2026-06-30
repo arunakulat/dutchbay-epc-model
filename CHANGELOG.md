@@ -5,6 +5,22 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Multi-technology report section + shared-POI curtailment seam (#476, ARCH-4/5).**
+  **ARCH-4:** the lender report now renders a Multi-Technology Breakdown section for hybrid
+  plants — per-technology net AEP, AEP/CFADS/CAPEX shares, OPEX and cost-of-equity, plus the
+  financed-vs-attributed CAPEX residual and project blended WACC. Pure presentation, reusing
+  the ARCH-2 generation view and the ARCH-3 work-breakdown; rendered only for 2+ generation
+  technologies and omitted for single-tech/legacy reports. **ARCH-5:** a shared
+  point-of-interconnection curtailment model (`analytics.portfolio.poi_curtailment`)
+  computes, from per-technology hourly injection profiles against
+  `generation.shared_poi.limit_mw`, the energy curtailed when combined injection exceeds the
+  shared export limit (physically lost, distinct from grid-instructed curtailment the SPPA
+  pays as deemed energy). Opt-in: absent a POI limit or hourly profiles it returns nothing,
+  so curtailment is not modelled for any committed scenario (the DutchBay 220 kV line is a
+  separate CEB project, not a binding POI; the seam dovetails with the hourly profiles
+  tracked in #529). Both additive and **financially KPI-neutral** — no committed scenario's
+  economics change; the committed hybrid's rendered report gains the additive Multi-Technology
+  Breakdown section (presentation only).
 - **Multi-tech residuals: margin-weighted per-tech CFADS + technology-type pre-flight
   validation (#488, ARCH-2/6).** **ARCH-2:** the multi-tech generation view
   (`build_multi_tech_from_run`) now apportions the run's combined CFADS by per-technology
