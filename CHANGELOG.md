@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **BESS availability liquidated-damages derate, opt-in (#486, BESS-2).** A standalone-BESS
+  scenario that has a measured or projected monthly availability can now opt into the CEB
+  tender's liquidated-damages formula — `derate = clip(1 - 2*(0.97 - MA), 0, 1)` (a month at/
+  above the 97% guarantee = no penalty; 94% = 0.94) — by supplying
+  `generation.technologies.<bess>.revenue.monthly_availability_pct` in place of the static
+  `availability_factor`. Absent the new key the static factor is used, so every committed
+  scenario is byte-identical. The module docstring also now documents BESS-6: the energy-tariff
+  charging energy is uncosted on purpose (the BESS charges from a separate co-located solar PV
+  plant the EPC owns; `round_trip_efficiency` already books the dispatch loss, so a
+  charging-cost line would double-count).
 - **Solar PV P50/P75/P90 uncertainty + itemised loss chain (#469, SOLAR-2).** The solar
   producer gained a real bankable uncertainty model mirroring the wind IEC 61400-15-2
   build-up: a config-first `SolarUncertaintyBudget` (IEA-PVPS Task 13 / IEC 61724-1
@@ -30,6 +40,18 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Storage-only scenarios declare `capacity_factor: 0.0` honestly (#486, BESS-5).** The
+  cashflow capacity-factor validator (all three guard surfaces: the `RequiredFieldSpec` in
+  `cashflow_v14.py` and both checks in `cashflow_v14_params.py`) now admits a literal `0.0`
+  for a storage-only scenario whose revenue is the BESS capacity charge, not generation —
+  retiring the `0.0001` placeholder that the two CEB BESS scenarios carried to slip past the
+  former strict-positive bound. Negatives and values `> 1`/`> 100%` remain config errors.
+  `resolve_bess_specs` additionally guards `revenue.contract_years` against the resolved
+  project life and **raises** when the BESS contract would run past the project horizon.
+  KPI-neutral: both CEB scenarios (capacity-charge `projIRR 0.00615 / eqIRR -0.03840 / NPV
+  -$2.33M`; night-peak `projIRR 0.09719`) are byte-identical with `0.0` vs `0.0001`. The
+  API wizard's `WindFarmInputs` still rejects `capacity_factor: 0.0` (a wind farm needs a
+  positive CF) — that surface is deliberately unchanged.
 - **Hybrid lender case: the bankable P90 now binds the gearing (D4.6).**
   `scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml` sets `Financing_Terms.bind_downside: true`
   + `downside_aep_source: p90`, so the MODELLED net P90 (475.1 GWh, #469 dolphin 4c) — which

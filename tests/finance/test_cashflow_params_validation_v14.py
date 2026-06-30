@@ -91,3 +91,20 @@ def test_missing_required_field_raises(
     remove(cfg)
     with pytest.raises(ValueError):
         validate_parameters(cfg)
+
+
+def test_zero_capacity_factor_validates_clean() -> None:
+    """BESS-5 (#486): a storage-only scenario declares capacity_factor 0.0 (its
+    revenue is the BESS capacity charge, not generation) — the validator must accept
+    a literal 0 rather than the former 0.0001 placeholder."""
+    cfg = copy.deepcopy(COMPLIANT_CONFIG)
+    cfg["project"]["capacity_factor"] = 0.0
+    assert validate_parameters(cfg) == []
+
+
+def test_negative_capacity_factor_still_rejected() -> None:
+    """The relaxed bound only admits 0.0 — a negative CF remains a config error."""
+    cfg = copy.deepcopy(COMPLIANT_CONFIG)
+    cfg["project"]["capacity_factor"] = -0.1
+    with pytest.raises(ValueError):
+        validate_parameters(cfg)

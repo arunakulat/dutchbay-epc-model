@@ -27,7 +27,7 @@ project:
   name: "CEB Standalone BESS 10MW/40MWh (capacity charge)"
   location: "Designated CEB 33 kV grid substation, Sri Lanka (one of 16 tender sites)"
   capacity_mw: 10.0           # BESS contracted power (MW)
-  capacity_factor: 0.0001     # NOMINAL placeholder (storage-only; tariff is 0 -> earns nothing)
+  capacity_factor: 0.0         # storage-only: no generation CF (revenue is the BESS capacity charge)
   degradation: 0.0            # generation degradation N/A (storage; see BESS dispatchable_ratio)
   life_years: 15             # matches the 15-year tender operational term
   cod_year: 2027
