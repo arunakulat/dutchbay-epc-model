@@ -154,6 +154,7 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
         inputs=inputs,
         scenario_config=scenario,
         debt_result=result.get("debt_result"),
+        annual_rows=result.get("annual_rows"),
         tornado=compute_report_tornado(scenario),
         global_sa=compute_report_global_sa(scenario),
     )

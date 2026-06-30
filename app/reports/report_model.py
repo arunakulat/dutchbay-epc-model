@@ -10,7 +10,7 @@ deterministic and unit-testable (CASPER).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +19,7 @@ from analytics.evidence_register import EvidenceRegisterError, build_evidence_re
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
+from analytics.three_statement import build_three_statement_from_run
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -199,6 +200,26 @@ class MultiTechBlock(BaseModel):
     poi_curtailed_energy_mwh: Optional[float] = None
 
 
+class ThreeStatementBlock(BaseModel):
+    """Three articulating financial statements + their tie-out status (#479).
+
+    P&L / cash flow / balance sheet assembled from the engine's annual + debt outputs
+    (analytics.three_statement), presented in USD. Pure presentation; the tie-out flags are
+    the lender-relevant signal that the statements articulate.
+    """
+
+    currency: str
+    tie_outs_pass: bool
+    balance_sheet_balances: bool
+    debt_retires_to_residual: bool
+    cashflow_reconciles: bool
+    retained_earnings_rolls: bool
+    max_abs_balance_residual: float
+    income_statement: List[Dict[str, Any]]
+    cash_flow: List[Dict[str, Any]]
+    balance_sheet: List[Dict[str, Any]]
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -235,6 +256,9 @@ class ReportContext(BaseModel):
     #: Per-technology production/economics breakdown for a hybrid (ARCH-4, #476). None for
     #: single-tech plants or legacy callers — the section is then omitted.
     multi_tech: Optional[MultiTechBlock] = None
+    #: Three-statement output + tie-out status (#479). None when the caller supplies no
+    #: annual_rows / debt_result — the section is then omitted.
+    three_statement: Optional[ThreeStatementBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -556,6 +580,41 @@ def _build_multi_tech(
     )
 
 
+def _build_three_statement(
+    scenario_config: Optional[Mapping[str, Any]],
+    debt_result: Optional[Mapping[str, Any]],
+    annual_rows: Optional[Sequence[Mapping[str, Any]]],
+) -> Optional[ThreeStatementBlock]:
+    """Project the three-statement output + tie-out status into a report block (#479).
+
+    Reuses ``analytics.three_statement.build_three_statement_from_run``. Returns ``None`` when
+    the caller supplies no ``annual_rows`` / ``debt_result`` / ``scenario_config`` (legacy
+    KPI-only path) — the section is then omitted. Pure presentation.
+    """
+    if scenario_config is None or debt_result is None or not annual_rows:
+        return None
+    result = build_three_statement_from_run(
+        {"annual_rows": list(annual_rows), "debt_result": dict(debt_result)},
+        scenario_config,
+    )
+    if result is None or result.tie_outs is None:
+        return None
+    payload = result.to_dict()
+    t = result.tie_outs
+    return ThreeStatementBlock(
+        currency=result.currency,
+        tie_outs_pass=t.all_pass,
+        balance_sheet_balances=t.balance_sheet_balances,
+        debt_retires_to_residual=t.debt_retires_to_residual,
+        cashflow_reconciles=t.cashflow_reconciles,
+        retained_earnings_rolls=t.retained_earnings_rolls,
+        max_abs_balance_residual=t.max_abs_balance_residual,
+        income_statement=payload["income_statement"],
+        cash_flow=payload["cash_flow"],
+        balance_sheet=payload["balance_sheet"],
+    )
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -564,6 +623,7 @@ def build_report_context(
     config: Optional[ReportConfig] = None,
     scenario_config: Optional[Mapping[str, Any]] = None,
     debt_result: Optional[Mapping[str, Any]] = None,
+    annual_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
 ) -> ReportContext:
@@ -617,5 +677,8 @@ def build_report_context(
         global_sa=global_sa,
         evidence=_build_evidence(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
+        three_statement=_build_three_statement(
+            scenario_config, debt_result, annual_rows
+        ),
         manifest=dict(case_result.run_manifest or {}),
     )
