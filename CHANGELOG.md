@@ -50,6 +50,22 @@ All notable changes to this project will be documented here.
   KPI-neutral.
 
 ### Changed
+- **Monte-Carlo RNG isolation + modern Generator (#473, MC-5).** Migrated the three legacy
+  `np.random` call sites to an isolated `numpy.random.default_rng` (PCG64). The genuine defect
+  was `analytics/simulation/monte_carlo_aep.py`, which seeded the **process-global**
+  `np.random` state (`np.random.seed`) and drew from module-global `np.random.normal/weibull`
+  — non-isolated and not thread-safe (any other code touching `np.random` could perturb it,
+  and vice-versa). `analytics/wind/mc_aep_weibull.py` and `analytics/capital_risk_layer_v14.py`
+  were already isolated (`RandomState(seed)`) but on the legacy API; both moved to
+  `default_rng` for consistency. Same seed still reproduces (MRM-01). **KPI impact:
+  MC-band sidecar stats only — NOT the lender case or any committed scenario KPI.** The
+  bankable AEP (deterministic Weibull integration) and the IEC exceedance P90 are untouched;
+  only the uncertainty-simulation band values shift, by Monte-Carlo sampling noise between the
+  two bit streams (on the test mock at n=2000, seed 42: p50 290.2→283.8, p90 204.8→196.3 GWh),
+  which shrinks ~1/√n at production scale. Every affected test is structural/tolerance/
+  reproducibility-based (e.g. `p50 ≈ 402.6 ±10`, exceedance ordering, same-seed equality) and
+  stays green. Test fixtures that use `RandomState` to generate *synthetic input data* were
+  left as-is (they are test inputs, not the production RNG).
 - **Quarantined the built-but-unwired stress-test engine (#473, MC-2/3/4).** `StressTestEngine`
   (`stress_tests_v14`) was implemented and tested but reachable from NO production path — no
   Hydra CLI, pipeline, report, or app imports it (the only "use" was a commented-out stub in

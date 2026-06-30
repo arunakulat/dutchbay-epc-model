@@ -108,7 +108,8 @@ def run_mc_aep(
         Dict with ``percentiles`` (p50/p75/p90/p99, exceedance), ``mean``,
         ``std``, ``cv``, ``n_samples`` and the ``weibull_fit``.
     """
-    rng = np.random.RandomState(seed)
+    # MC-5 (#473): modern isolated Generator (PCG64). rng.normal(...) below is unchanged.
+    rng = np.random.default_rng(seed)
     curve = parse_power_curve(curve_key, air_density_kgm3=air_density_kgm3)
     curve_ws = curve["wind_speed_ms"].to_numpy()
     curve_power = curve["power_kw"].to_numpy()
