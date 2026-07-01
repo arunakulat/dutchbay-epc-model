@@ -24,13 +24,13 @@ import pytest
 
 # Import modules to test. analyze_dscr_sensitivity is the only symbol the tests
 # below actually exercise; the cashflow / Monte-Carlo behaviour is asserted
-# structurally off the config fixtures. The prior guard also imported a
-# never-existent finance.cashflow_v14_params.extract_cashflow_params, which
-# skipped this whole module — dropping its degradation regression pins.
-try:
-    from analytics.dscr_sensitivity import analyze_dscr_sensitivity
-except ImportError as e:
-    pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
+# structurally off the config fixtures. It is a FIRST-PARTY analytics symbol, not
+# an optional dependency, so import it UNGUARDED: a rename or removal must fail
+# loudly at collection rather than silently skip this module's degradation
+# regression pins. (The prior module-level ImportError->skip guard also masked a
+# never-existent finance.cashflow_v14_params.extract_cashflow_params import, which
+# had silently skipped the whole module — round-2 audit.)
+from analytics.dscr_sensitivity import analyze_dscr_sensitivity
 
 
 class TestDegradationConfiguration:

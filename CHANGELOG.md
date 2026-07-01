@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Stopped masking engine regressions behind first-party `ImportError`->`pytest.skip` in three
+  integration test modules (round-2 audit).** `tests/integration/test_monte_carlo_integration.py`,
+  `test_degradation_flow.py`, and `test_pipeline_end_to_end.py` wrapped FIRST-PARTY analytics imports
+  (`MonteCarloEngine`, `MonteCarloResult`, `run_monte_carlo_analysis`, `analyze_dscr_sensitivity`) in
+  `try/except ImportError -> pytest.skip(allow_module_level=True)`. Those symbols pull no optional
+  dependency, so the guard could never legitimately fire for a missing extra — it only ever masked a
+  rename/removal, silently skipping ~46 (15+15+16) engine regression tests while the suite stayed
+  green (and the import-smoke lint does not bind-import the three symbols, so a rename passed smoke
+  too). The first-party imports are now UNGUARDED so a broken symbol fails loudly at collection,
+  matching the earlier D1 remediation. The per-test `@_REQUIRES_SENSITIVITY` marker guard in
+  `test_pipeline_end_to_end.py` is left intact (it skips individual tests, not the whole module).
+  Test infrastructure only; no `finance/` code and no committed KPI touched. KPI-neutral.
 - **Report the P90/P95 downside (exceedance) tail for higher-is-better metrics in the Monte Carlo
   lender risk table (round-2 audit).** `analytics.mc.exports.build_lender_risk_table` emitted the raw
   90th/95th percentile — the favourable UPSIDE — for DSCR(min), project IRR/NPV and LLCR/PLCR,

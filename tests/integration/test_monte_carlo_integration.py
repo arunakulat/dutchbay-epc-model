@@ -33,15 +33,14 @@ import time
 
 import pytest
 
-# Import modules to test
-try:
-    from omegaconf import OmegaConf  # noqa: F401  (used implicitly via fixtures)
+# Import modules to test. These are FIRST-PARTY analytics symbols (plus omegaconf,
+# a hard Hydra dependency), not optional deps, so import them UNGUARDED: a rename or
+# removal must fail loudly at collection, never be swallowed by a module-level skip
+# that silently drops this module's regression pins (round-2 audit).
+from omegaconf import OmegaConf  # noqa: F401  (used implicitly via fixtures)
 
-    from analytics.contracts_v14 import MonteCarloResult
-    from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
-except ImportError as e:
-    pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
-
+from analytics.contracts_v14 import MonteCarloResult
+from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
 
 # Canonical KPI keys the aggregator produces. The toy fallback now emits the SAME 7-key
 # set a real trial returns (incl. equity_irr / equity_npv) so mixed real+toy runs build
