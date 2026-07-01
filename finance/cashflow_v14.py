@@ -232,7 +232,7 @@ def _prepare_cashflow_context(
     ):
         # Apply enhancement factor if enabled (to the whole base, before any split)
         capex_for_depreciation = capex_dep_resolved * (
-            tax_config.enhanced_capital_allowance_pct
+            tax_config.enhanced_capital_allowance_multiple
             if tax_config.enhanced_allowance_applies
             else 1.0
         )

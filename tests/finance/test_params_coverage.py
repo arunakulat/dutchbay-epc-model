@@ -214,13 +214,13 @@ def test_build_clean_config_passes_required_guard() -> None:
 
 
 # ---------------------------------------------------------------------------
-# enhanced_capital_allowance_pct — resolved + validated by the LIVE TaxConfig path
+# enhanced_capital_allowance_multiple — resolved + validated by the LIVE TaxConfig path
 #
 # Re-audit #1: the parallel resolution that once lived in _build_cashflow_params fed a
 # CashflowParams field NO computation read (the live depreciation path reads
-# tax_config.enhanced_capital_allowance_pct). That dead second source of truth was removed;
-# the multiplier is now resolved + validated exactly once, in cashflow_v14_tax.TaxConfig.
-# These pins moved with it.
+# tax_config.enhanced_capital_allowance_multiple). That dead second source of truth was
+# removed; the multiplier is now resolved + validated exactly once, in
+# cashflow_v14_tax.TaxConfig. These pins moved with it.
 # ---------------------------------------------------------------------------
 
 
@@ -232,7 +232,7 @@ def _tax_config(**overrides: Any) -> TaxConfig:
         depreciation_start_year=1,
         depreciation_years=10,
         enhanced_allowance_applies=True,
-        enhanced_capital_allowance_pct=1.0,
+        enhanced_capital_allowance_multiple=1.0,
         loss_carryforward_years=6,
         tax_holiday_start_year=1,
         tax_holiday_years=0,
@@ -247,7 +247,9 @@ def _tax_config(**overrides: Any) -> TaxConfig:
 def test_enhanced_allowance_multiplier_taken_as_is() -> None:
     """A 1.5 (150% enhanced) multiplier is taken as-is, NOT the old buggy 0.015."""
     assert (
-        _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct
+        _tax_config(
+            enhanced_capital_allowance_multiple=1.5
+        ).enhanced_capital_allowance_multiple
         == 1.5
     )
 
@@ -255,15 +257,17 @@ def test_enhanced_allowance_multiplier_taken_as_is() -> None:
 def test_enhanced_allowance_zero_is_preserved_not_defaulted() -> None:
     """A legitimate 0.0 is preserved (CESSPIT), not coerced to 1.0."""
     assert (
-        _tax_config(enhanced_capital_allowance_pct=0.0).enhanced_capital_allowance_pct
+        _tax_config(
+            enhanced_capital_allowance_multiple=0.0
+        ).enhanced_capital_allowance_multiple
         == 0.0
     )
 
 
 def test_enhanced_allowance_negative_raises_in_taxconfig() -> None:
     """A negative multiplier fails loud in TaxConfig.__post_init__ (the live single source)."""
-    with pytest.raises(ValueError, match="enhanced_capital_allowance_pct"):
-        _tax_config(enhanced_capital_allowance_pct=-0.5)
+    with pytest.raises(ValueError, match="enhanced_capital_allowance_multiple"):
+        _tax_config(enhanced_capital_allowance_multiple=-0.5)
 
 
 def test_enhanced_allowance_is_not_a_cashflowparams_field() -> None:
@@ -273,6 +277,7 @@ def test_enhanced_allowance_is_not_a_cashflowparams_field() -> None:
     from finance.cashflow_v14_contracts import CashflowParams
 
     field_names = {f.name for f in dataclasses.fields(CashflowParams)}
+    assert "enhanced_capital_allowance_multiple" not in field_names
     assert "enhanced_capital_allowance_pct" not in field_names
 
 
@@ -377,9 +382,11 @@ def test_enhanced_allowance_percent_typo_rejected_in_taxconfig() -> None:
     """A percent-style value (150 meaning 1.5) is a unit error: > 3.0 fails loud so a
     latent typo can't silently inflate the depreciable base ~100x."""
     with pytest.raises(ValueError, match="looks like a PERCENT"):
-        _tax_config(enhanced_capital_allowance_pct=150.0)
+        _tax_config(enhanced_capital_allowance_multiple=150.0)
     # a real enhanced multiplier (<= 3.0) is accepted
     assert (
-        _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct
+        _tax_config(
+            enhanced_capital_allowance_multiple=1.5
+        ).enhanced_capital_allowance_multiple
         == 1.5
     )

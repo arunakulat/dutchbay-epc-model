@@ -85,6 +85,32 @@ def test_tax_config_from_yaml_missing_each_required_key_raises(field: str) -> No
         TaxConfig.from_yaml(cfg)
 
 
+def test_enhanced_allowance_accepts_new_key_and_deprecated_alias() -> None:
+    """FIN-02 rename (audit D8): the canonical ``enhanced_capital_allowance_multiple``
+    key is read, and the deprecated ``enhanced_capital_allowance_pct`` alias still
+    resolves (with a DeprecationWarning) so pre-rename scenarios keep loading unchanged.
+    """
+    # Canonical new key.
+    cfg_new = _base_yaml_cfg()
+    del cfg_new["tax"]["enhanced_capital_allowance_pct"]
+    cfg_new["tax"]["enhanced_capital_allowance_multiple"] = 1.5
+    tc_new = TaxConfig.from_yaml(cfg_new)
+    assert tc_new.enhanced_capital_allowance_multiple == 1.5
+
+    # Deprecated alias: same value, resolves with a DeprecationWarning.
+    cfg_old = _base_yaml_cfg()
+    cfg_old["tax"]["enhanced_capital_allowance_pct"] = 1.5
+    with pytest.warns(DeprecationWarning, match="enhanced_capital_allowance_pct"):
+        tc_old = TaxConfig.from_yaml(cfg_old)
+    assert tc_old.enhanced_capital_allowance_multiple == 1.5
+
+    # Neither key present -> fail loud (CESSPIT).
+    cfg_missing = _base_yaml_cfg()
+    del cfg_missing["tax"]["enhanced_capital_allowance_pct"]
+    with pytest.raises(KeyError, match="enhanced_capital_allowance_multiple"):
+        TaxConfig.from_yaml(cfg_missing)
+
+
 # ---------------------------------------------------------------------------
 # 2) Depreciation schedule contract
 # ---------------------------------------------------------------------------

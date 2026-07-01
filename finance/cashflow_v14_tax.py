@@ -125,6 +125,36 @@ def _get_tax_rate_with_compat(tax: Mapping[str, Any]) -> float:
     )
 
 
+def _get_enhanced_allowance_with_compat(tax: Mapping[str, Any]) -> float:
+    """Extract the enhanced capital allowance MULTIPLIER, accepting a deprecated alias.
+
+    The value is a multiplier on the depreciable base (1.0 = standard 100% allowance,
+    1.5 = a 150% enhanced allowance), NOT a percent. The canonical key is
+    ``enhanced_capital_allowance_multiple``; the legacy ``enhanced_capital_allowance_pct``
+    (a FIN-02 misnomer — it never held a percent) is still accepted with a
+    DeprecationWarning so existing scenarios keep loading unchanged.
+    """
+    canonical = _lookup_case_insensitive(tax, "enhanced_capital_allowance_multiple")
+    if canonical is not None:
+        return float(canonical)
+
+    legacy = _lookup_case_insensitive(tax, "enhanced_capital_allowance_pct")
+    if legacy is not None:
+        warnings.warn(
+            "tax.enhanced_capital_allowance_pct is deprecated (the field is a "
+            "multiplier, not a percent). Use tax.enhanced_capital_allowance_multiple "
+            "instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return float(legacy)
+
+    raise KeyError(
+        "Missing required YAML key: tax.enhanced_capital_allowance_multiple "
+        "(or deprecated tax.enhanced_capital_allowance_pct)"
+    )
+
+
 @dataclass(frozen=True)
 class TaxConfig:
     corporate_tax_rate: float
@@ -132,7 +162,7 @@ class TaxConfig:
     depreciation_start_year: int
     depreciation_years: int
     enhanced_allowance_applies: bool
-    enhanced_capital_allowance_pct: float
+    enhanced_capital_allowance_multiple: float
     loss_carryforward_years: int
     tax_holiday_start_year: int
     tax_holiday_years: int
@@ -155,17 +185,17 @@ class TaxConfig:
     )
 
     def __post_init__(self) -> None:
-        # enhanced_capital_allowance_pct is an explicit MULTIPLIER on the depreciable base
-        # (1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance) — only applied
-        # when enhanced_allowance_applies is true (see cashflow_v14.py). This is the SINGLE
-        # live resolution point; validate here so a negative multiplier fails loud
+        # enhanced_capital_allowance_multiple is an explicit MULTIPLIER on the depreciable
+        # base (1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance) — only
+        # applied when enhanced_allowance_applies is true (see cashflow_v14.py). This is the
+        # SINGLE live resolution point; validate here so a negative multiplier fails loud
         # regardless of construction path (the parallel CashflowParams resolver that once
         # carried this check fed a dead field and was removed).
-        if self.enhanced_capital_allowance_pct < 0.0:
+        if self.enhanced_capital_allowance_multiple < 0.0:
             raise ValueError(
-                "tax.enhanced_capital_allowance_pct must be a non-negative multiplier "
+                "tax.enhanced_capital_allowance_multiple must be a non-negative multiplier "
                 "(1.0 = standard 100% allowance, 1.5 = a 150% enhanced allowance); got "
-                f"{self.enhanced_capital_allowance_pct}"
+                f"{self.enhanced_capital_allowance_multiple}"
             )
         # Upper-bound sanity: the field is a MULTIPLIER, not a percent. A value > 3.0 is
         # almost certainly a percent-for-multiplier unit error (e.g. 150 meaning 1.5),
@@ -173,11 +203,11 @@ class TaxConfig:
         # tenor. Real enhanced allowances are <= ~3.0 (300%); reject above that loudly.
         # Caught for ALL configs (not just applied ones) so a latent typo cannot lie
         # dormant until enhanced_allowance_applies flips to true.
-        if self.enhanced_capital_allowance_pct > 3.0:
+        if self.enhanced_capital_allowance_multiple > 3.0:
             raise ValueError(
-                "tax.enhanced_capital_allowance_pct looks like a PERCENT, not a multiplier:"
-                f" got {self.enhanced_capital_allowance_pct} (> 3.0). Use the multiplier "
-                "convention: 100% allowance = 1.0, 150% = 1.5."
+                "tax.enhanced_capital_allowance_multiple looks like a PERCENT, not a "
+                f"multiplier: got {self.enhanced_capital_allowance_multiple} (> 3.0). Use "
+                "the multiplier convention: 100% allowance = 1.0, 150% = 1.5."
             )
 
     @classmethod
@@ -205,8 +235,8 @@ class TaxConfig:
             enhanced_allowance_applies=bool(
                 _require_key(tax, "enhanced_allowance_applies", "tax")
             ),
-            enhanced_capital_allowance_pct=float(
-                _require_key(tax, "enhanced_capital_allowance_pct", "tax")
+            enhanced_capital_allowance_multiple=_get_enhanced_allowance_with_compat(
+                tax
             ),
             loss_carryforward_years=int(
                 _require_key(tax, "loss_carryforward_years", "tax")
