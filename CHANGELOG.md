@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Closed a username-enumeration timing oracle on the `/token` login route (round-2 audit, CWE-208).**
+  `app.api.auth.authenticate_user` short-circuited on an unknown username (`encoded is None or not
+  verify_password(...)`), so the ~600k-iteration PBKDF2 ran only for a *known* username with a wrong
+  password; an unknown username returned the 401 in microseconds. Both cases already return the
+  identical body, so timing was the only distinguishing signal — an unauthenticated caller could
+  enumerate valid client usernames on the public, unrate-limited `/token` route. The unknown-username
+  path now runs a PBKDF2 verification against a fixed module-level dummy hash and discards the result,
+  equalizing the cost so the two paths are indistinguishable by response time. Adds a regression test
+  asserting `verify_password` is invoked (against the dummy hash) on the unknown-user path. Web-authn
+  hardening only; no `finance/` code and no committed KPI touched. KPI-neutral.
 - **Fixed the dead-and-broken `FXSensitivityAnalyzer.analyze_fx_sensitivity()` public surface
   (round-2 audit).** Its helper `_run_pipeline_with_fx_params` built an inline dict config and passed
   it to `run_v14_pipeline_with_analytics`, which hard-guards its config to `(str | Path)` (added in
