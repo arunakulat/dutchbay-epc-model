@@ -278,6 +278,27 @@ def test_monthly_energy_profile_shape_and_values() -> None:
     assert monthly["energy_mwh"].iloc[0] == pytest.approx(1000.0 * 730 * 10 / 1000)
 
 
+def test_monthly_energy_on_rangeindex_orchestrator_shape() -> None:
+    """The real WindPipeline path feeds a RangeIndex, not a DatetimeIndex (audit D3, #574).
+
+    ``pd.to_datetime`` on an integer RangeIndex read the values as epoch-nanoseconds,
+    collapsing all 8760 hours into month 1. This exercises the true orchestrator shape:
+    a positional index must still resolve to 12 real calendar months.
+    """
+    n = 8760
+    df = pd.DataFrame({"ws_150m": np.full(n, 12.0)})  # default RangeIndex(0..8759)
+    assert isinstance(df.index, pd.RangeIndex)
+    calc = EnergyCalculator(df=df, power_curve=_MANUAL_CURVE, num_turbines=10)
+
+    monthly = calc.calculate_monthly_energy()
+
+    # Not collapsed into a single bucket — all 12 months present.
+    assert sorted(monthly["month"].tolist()) == list(range(1, 13))
+    assert len(monthly) == 12
+    # Row 0 is January (~744 h) and the profile is not one giant month-1 sum.
+    assert monthly["energy_mwh"].iloc[0] == pytest.approx(1000.0 * 730 * 10 / 1000)
+
+
 # ---------------------------------------------------------------------------
 # Revenue (calculate_revenue) — config defaults and explicit overrides
 # ---------------------------------------------------------------------------
