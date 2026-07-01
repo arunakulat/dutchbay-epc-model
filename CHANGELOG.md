@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Dependency version bounds tightened (SOTA benchmarking #592/#593).** `pandas>=2.0` gains a `<3.0`
+  cap — pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default str dtype
+  (unconditional breaking changes), so 3.0 must be a deliberate, KPI-oracle-verified migration, not an
+  incidental resolve. The opt-in `[wind]` extra's `cdsapi>=0.6` floor is raised to `>=0.7.2`: the
+  CDS-Beta platform is the sole live Copernicus endpoint since 26 Sep 2024 and needs `cdsapi>=0.7.0`
+  (0.7.2+ recommended); a pre-CDS-Beta version resolves but silently fails against the live endpoint.
+  Spec-metadata only — the pinned lock (`requirements.txt`, `pandas==2.3.3`) already satisfies the cap
+  and `cdsapi` stays out of the base lock as an optional extra, so the installed test environment and
+  the KPI oracle are unchanged.
 - **Reconcile the frozen net-AEP P90 against the bankable summary export, restoring P50<->P90 guard
   symmetry (round-2 audit).** `analytics.aep_reconciliation` reconciled only
   `expected_results.net_aep_p50_gwh` (against `capacity_mw · CF · 8.760`); the frozen
