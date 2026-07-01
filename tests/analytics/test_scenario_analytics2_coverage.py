@@ -9,7 +9,7 @@ targets the remaining branches that file does not exercise:
 - run(): the parallel ThreadPoolExecutor path (parallel + >4 scenarios)
 - run(): export_charts=True dispatch
 - _build_dataframes: DSCR derivation from cfads/debt columns, plus the
-  "cannot derive" warning branch (driven via synthetic ScenarioResults so the
+  "cannot derive" warning branch (driven via synthetic BatchScenarioResults so the
   exact column shapes are deterministic and independent of the live engine)
 - _export_to_excel: the no-output-path no-op and the ExcelExporter-failure
   fallback to a basic pandas workbook
@@ -32,7 +32,7 @@ import pandas as pd
 import pytest
 
 import analytics.scenario_analytics as sa_mod
-from analytics.scenario_analytics import ScenarioAnalytics, ScenarioResult
+from analytics.scenario_analytics import BatchScenarioResult, ScenarioAnalytics
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = REPO_ROOT / "scenarios"
@@ -54,9 +54,9 @@ def _synthetic_result(
     name: str,
     kpis: Dict[str, Any],
     annual_rows: List[Dict[str, Any]],
-) -> ScenarioResult:
-    """A ScenarioResult populated enough to drive _build_dataframes."""
-    return ScenarioResult(
+) -> BatchScenarioResult:
+    """A BatchScenarioResult populated enough to drive _build_dataframes."""
+    return BatchScenarioResult(
         name=name,
         config_path=Path(f"{name}.yaml"),
         kpis=kpis,
@@ -106,7 +106,7 @@ def test_run_parallel_batch_dispatches_threadpool(
 
     sa = ScenarioAnalytics(scenarios_dir=tmp_path, parallel=True)
 
-    def fake_run_single(config_path: Path) -> ScenarioResult:
+    def fake_run_single(config_path: Path) -> BatchScenarioResult:
         stem = config_path.stem
         if stem == "scenario_5":
             # Empty kpis -> classified as a failure by run().

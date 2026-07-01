@@ -51,8 +51,16 @@ logger.setLevel(logging.INFO)
 
 
 @dataclass
-class ScenarioResult:
-    """Container for per-scenario results."""
+class BatchScenarioResult:
+    """Container for one scenario's results in a batch ScenarioAnalytics comparison.
+
+    Distinct from the canonical :class:`analytics.contracts_v14.ScenarioResult`
+    (the single-scenario lender-grade contract): this is the lighter batch-comparison
+    container produced by :class:`ScenarioAnalytics`. It was previously also named
+    ``ScenarioResult`` with a different structure and no alias, colliding with the
+    canonical contract and breaking CCCDIR centralization (audit D9, #578); renamed to
+    make the two surfaces unambiguous.
+    """
 
     name: str
     config_path: Path
@@ -215,7 +223,7 @@ class ScenarioAnalytics:
     # ------------------------------------------------------------------
     # Single-scenario execution
     # ------------------------------------------------------------------
-    def _run_single(self, config_path: Path) -> ScenarioResult:
+    def _run_single(self, config_path: Path) -> BatchScenarioResult:
         """Run the full v14 pipeline for a single scenario."""
         name = self._scenario_name_from_path(config_path)
         logger.info("Processing scenario: %s", name)
@@ -291,7 +299,7 @@ class ScenarioAnalytics:
                 validation_mode="strict" if self.strict else "off",
             ).as_dict()
 
-            return ScenarioResult(
+            return BatchScenarioResult(
                 name=name,
                 config_path=config_path,
                 kpis=kpis,
@@ -303,7 +311,7 @@ class ScenarioAnalytics:
             )
         except Exception as exc:
             logger.error("Scenario %s failed: %s", name, exc)
-            return ScenarioResult(
+            return BatchScenarioResult(
                 name=name,
                 config_path=config_path,
                 kpis={},
@@ -345,8 +353,8 @@ class ScenarioAnalytics:
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        results: List[ScenarioResult] = []
-        failures: List[ScenarioResult] = []
+        results: List[BatchScenarioResult] = []
+        failures: List[BatchScenarioResult] = []
 
         batch_run = self.parallel and len(scenario_paths) > 4
         logger.info(
@@ -443,7 +451,7 @@ class ScenarioAnalytics:
     # ------------------------------------------------------------------
     def _build_dataframes(
         self,
-        results: Sequence[ScenarioResult],
+        results: Sequence[BatchScenarioResult],
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Build summary and timeseries DataFrames from results."""
         summary_records: List[Dict[str, Any]] = []
