@@ -443,8 +443,22 @@ def _calculate_opex_lkr(opex_usd_per_year: float, fx_rate: float) -> float:
 
 
 def _apply_risk_haircut(cfads_lkr: float, risk_haircut_pct: float) -> float:
-    """Apply risk haircut: CFADS * (1 - haircut)."""
-    return cfads_lkr * (1.0 - risk_haircut_pct)
+    """Apply a conservative risk haircut to CFADS.
+
+    The haircut always moves CFADS in the adverse direction: a positive CFADS is
+    reduced toward zero (``cfads * (1 - h)``) and a negative CFADS (a loss year) is
+    made *more* negative (``cfads * (1 + h)``). Expressed sign-safely as
+    ``cfads - h * |cfads|``.
+
+    The prior multiplicative form ``cfads * (1 - h)`` inverted on losses — it
+    *shrank* a negative CFADS toward zero (``-1000 -> -900``), softening the very
+    downside the haircut exists to stress (audit D6, #572). The non-negative branch
+    keeps the exact ``cfads * (1 - h)`` expression, so the committed all-positive
+    lender case is byte-identical (no floating-point reassociation).
+    """
+    if cfads_lkr >= 0.0:
+        return cfads_lkr * (1.0 - risk_haircut_pct)
+    return cfads_lkr * (1.0 + risk_haircut_pct)
 
 
 __all__ = [

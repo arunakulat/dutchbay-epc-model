@@ -76,7 +76,9 @@ def test_cashflow_basic_consistency() -> None:
         haircut_amt = row["risk_haircut_amount_lkr"]
 
         assert haircut_pct >= 0.0
-        assert haircut_amt == pytest.approx(posttax * haircut_pct)
+        # Audit D6 (#572): haircut removes h * |posttax| and always worsens CFADS,
+        # so the amount is sign-independent (this config is loss-making).
+        assert haircut_amt == pytest.approx(abs(posttax) * haircut_pct)
         assert row["cfads_final_lkr"] == pytest.approx(posttax - haircut_amt)
 
 

@@ -166,6 +166,16 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Post-tax risk haircut no longer inverts on loss years (audit D6, #572).** `_apply_risk_haircut`
+  used `cfads * (1 - h)`, which on a *negative* post-tax CFADS *shrank* the loss toward zero
+  (`-1000 → -900`) — softening the very downside the haircut exists to stress. It now worsens CFADS
+  in the adverse direction regardless of sign: the non-negative branch keeps the exact
+  `cfads * (1 - h)` expression (so the committed all-positive lender case is **byte-identical**, no
+  floating-point reassociation), and a negative CFADS is deepened via `cfads * (1 + h)`. The reported
+  `risk_haircut_amount_lkr` is consequently `h · |posttax|` (always a reduction). The two consistency
+  tests whose fixtures are loss-making are re-pinned to the sign-safe invariant; a new unit test pins
+  `-1000 → -1100`. KPI-neutral on every committed scenario (all post-tax CFADS positive), verified via
+  the KPI oracle.
 - **A single partial-KPI Monte Carlo trial no longer crashes the whole run (audit D2, #571).**
   `MonteCarloResult` requires every `trials[]` array to share one length (row alignment for
   breach/joint analytics), but `analytics/mc/aggregate.py` skipped `None` *per key*, so one trial
