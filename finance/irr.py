@@ -158,7 +158,48 @@ def irr(
     if val != val or val < lo or val > hi:
         return _irr_bisect(cfs, lower_bound=lo, upper_bound=hi)
 
+    # numpy_financial can return an in-band value that is NOT actually a root of the NPV
+    # polynomial (documented for multi-sign-change series: numpy-financial #28/#33/#39; e.g.
+    # irr([1, 1, -1, 1e-135]) returns 0.0, but NPV(0.0)=1.0 — the true root is ~-0.382).
+    # It was previously trusted unchecked. Verify the candidate zeroes the NPV; if not, fall
+    # back to the robust bisection solver rather than return a wrong root (#595, audit §3.4).
+    # The two engines are guaranteed-equivalent only on conventional single-sign-change
+    # series (a unique real root) — which is everything DutchBay produces; the guard fires
+    # only on non-physical multi-root fuzz inputs, so this is a no-op on every real cashflow.
+    if not _is_npv_root(val, cfs):
+        return _irr_bisect(cfs, lower_bound=lo, upper_bound=hi)
+
     return val
+
+
+def _is_npv_root(
+    rate: float, cashflows: Sequence[float], *, rtol: float = 1e-6
+) -> bool:
+    """True when ``rate`` zeroes the NPV relative to the discounted-absolute magnitude.
+
+    A genuine root is a near-perfect cancellation, so ``|NPV| / Σ|CF_t / (1 + r)^t| ≈ 0``.
+    The relative test is invariant to cashflow scale and to the local steepness of the NPV
+    curve, so a well-behaved root passes to machine precision while a materially-wrong root
+    (``|NPV| / discounted_abs ~ O(1)``) is rejected. Purely relative — no absolute floor —
+    so it cannot false-accept a wrong root at a tiny cashflow scale; the economically-flat
+    all-near-zero series is already handled by ``irr`` before this is reached.
+    """
+    base = 1.0 + float(rate)
+    if base <= 0.0:
+        return False
+    value = 0.0
+    discounted_abs = 0.0
+    for t, cf in enumerate(cashflows):
+        disc = float(cf) / base**t
+        value += disc
+        discounted_abs += abs(disc)
+    if (
+        not math.isfinite(value)
+        or not math.isfinite(discounted_abs)
+        or discounted_abs <= 0.0
+    ):
+        return False
+    return abs(value) <= rtol * discounted_abs
 
 
 def _irr_bisect(

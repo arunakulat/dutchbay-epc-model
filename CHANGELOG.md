@@ -175,6 +175,16 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **`finance.irr.irr` no longer trusts a `numpy_financial` result that is not actually a root (#595,
+  audit §3.4).** `numpy_financial.irr` (frozen at v1.0.0) can return an in-band value that does not zero
+  the NPV for multi-sign-change series (numpy-financial #28/#33/#39) — e.g. `irr([1, 1, -1, 1e-135])`
+  returned `0.0` while `NPV(0.0)=1.0` and the true root is `~-0.382`. `irr` accepted the library result
+  unchecked whenever it fell within `[lower, upper]`. It now verifies the candidate zeroes the NPV via a
+  new `_is_npv_root` (relative to the discounted-absolute magnitude — scale- and steepness-invariant)
+  and falls back to the robust bisection solver when it does not. Adds a **Hypothesis property test**
+  asserting any returned root zeroes the NPV over an adversarial sign-changing-cashflow corpus (the
+  guardrail that surfaced this). No-op for the well-conditioned committed cashflows (`numpy_financial`
+  returns the correct root, the guard passes) — full suite 3019 green and the KPI oracle byte-identical.
 - **Tail-risk snapshot: fixed inverted cost-driver labels and removed the false VaR/CVaR advertising
   (audit D5/D10, #576).** (1) `_tornado_tail_stats` keyed `downside`/`upside` to the shock *direction*
   (`min(low_case)` / `max(high_case)`), so for a cost driver — whose low-cost case is the *better*
