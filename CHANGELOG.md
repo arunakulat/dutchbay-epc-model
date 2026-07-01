@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Normalized the `Financing_Terms.rates` tranche rates in `_solve_mix` (round-2 audit, FIN-02).**
+  `finance.debt_v14._solve_mix` read the per-tranche rates (`lkr_nominal` / `usd_nominal` /
+  `dfi_nominal` / `*_min`) with a bare `_as_float`, unlike the sibling `debt`-block path which
+  already normalizes via `_rate_decimal`. A canonical `Financing_Terms.rates` entry authored in
+  percent form (e.g. `lkr_nominal: 13.39` instead of `0.1339`) therefore reached the amortization
+  arithmetic as `interest = balance * 13.39` (1339%/yr) with no error — the cost-free-debt guard only
+  rejects `rate <= 0` — silently corrupting IDC/DSCR/every downstream KPI, and the result depended on
+  which config shape was used. The rates now route through `_rate_decimal` (percent-form → decimal for
+  any value > 1.0), matching the other path. KPI-neutral: every committed scenario declares decimal
+  rates (< 1.0), so this is byte-identical for them (verified via the KPI oracle across the lender,
+  base, equity and hybrid scenarios); it only rescues a mis-scaled percent-form input. Adds a
+  regression test that a percent-form tranche rate resolves to the same schedule as its decimal form.
 - **Sized the fund-at-close DSRA off operating year 1, not the synthetic half-year bridge period
   (round-2 audit).** `finance.debt_v14._build_funding` sized the funded Debt Service Reserve off
   `debt_service_total[construction_periods]`, which on the `_build_cfads_timeline` debt timeline is the
