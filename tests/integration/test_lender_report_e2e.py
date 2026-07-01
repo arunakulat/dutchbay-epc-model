@@ -90,7 +90,9 @@ def test_lender_report_renders_every_section_with_live_kpis() -> None:
     # live run's alone.
     for key in ("min_dscr", "project_npv"):
         row = next(r for r in ctx.kpi_rows if r.key == key)
-        assert row.display in html, f"live KPI {key} ({row.display}) not in rendered report"
+        assert (
+            row.display in html
+        ), f"live KPI {key} ({row.display}) not in rendered report"
 
     # Every major section header renders.
     for section in (
@@ -139,7 +141,8 @@ def test_production_path_renders_sensitivity_sections() -> None:
 
 def test_lender_report_renders_through_the_auth_gated_http_route() -> None:
     """Full-stack e2e: the auth-gated ``POST /cases/report.html`` route renders the report over
-    HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath."""
+    HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath.
+    """
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 

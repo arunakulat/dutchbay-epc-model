@@ -50,7 +50,9 @@ from typing import Any, List, Mapping, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 _DEFAULTS_PATH = Path(__file__).resolve().parents[1] / "config" / "defaults.yaml"
-_REGISTER_PATH = Path(__file__).resolve().parents[1] / "config" / "evidence_register.yaml"
+_REGISTER_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "evidence_register.yaml"
+)
 
 #: Provenance fields every evidence entry must carry to be well-formed.
 _REQUIRED_FIELDS: Tuple[str, ...] = ("source", "as_of", "tier")
@@ -111,7 +113,9 @@ class EvidenceFinding:
 class EvidenceReport:
     """Structured coverage of a scenario's assumption evidence (pure, policy-free)."""
 
-    entries: Mapping[str, Mapping[str, Any]]  # assumption -> {source, as_of, tier, note?}
+    entries: Mapping[
+        str, Mapping[str, Any]
+    ]  # assumption -> {source, as_of, tier, note?}
     covered: Tuple[str, ...]
     missing: Tuple[str, ...]
     findings: Tuple[EvidenceFinding, ...] = field(default_factory=tuple)
@@ -192,7 +196,9 @@ def resolve_evidence_policy(config: Mapping[str, Any]) -> EvidencePolicy:
         )
     return EvidencePolicy(
         enforce=_resolve_bool(block, "enforce", default.enforce),
-        require_complete=_resolve_bool(block, "require_complete", default.require_complete),
+        require_complete=_resolve_bool(
+            block, "require_complete", default.require_complete
+        ),
         min_tier=min_tier,
     )
 
@@ -242,33 +248,44 @@ def build_evidence_report(config: Mapping[str, Any]) -> EvidenceReport:
 
     for name, rec in entries.items():
         if not isinstance(rec, Mapping):
-            findings.append(EvidenceFinding("missing_field", name, "entry is not a mapping"))
+            findings.append(
+                EvidenceFinding("missing_field", name, "entry is not a mapping")
+            )
             continue
         if name not in taxonomy.assumptions:
             findings.append(
                 EvidenceFinding(
-                    "unknown_assumption", name,
+                    "unknown_assumption",
+                    name,
                     f"not a canonical material assumption ({', '.join(taxonomy.assumptions)})",
                 )
             )
         missing = [f for f in _REQUIRED_FIELDS if not rec.get(f)]
         if missing:
             findings.append(
-                EvidenceFinding("missing_field", name, f"missing required field(s): {', '.join(missing)}")
+                EvidenceFinding(
+                    "missing_field",
+                    name,
+                    f"missing required field(s): {', '.join(missing)}",
+                )
             )
         tier = rec.get("tier")
         if tier is not None and tier != "":
             if str(tier) not in taxonomy.tier_rank:
                 findings.append(
                     EvidenceFinding(
-                        "unknown_tier", name,
+                        "unknown_tier",
+                        name,
                         f"tier {tier!r} is not in the taxonomy ({', '.join(taxonomy.tiers)})",
                     )
                 )
-            elif policy.min_tier is not None and taxonomy.is_weaker(str(tier), policy.min_tier):
+            elif policy.min_tier is not None and taxonomy.is_weaker(
+                str(tier), policy.min_tier
+            ):
                 findings.append(
                     EvidenceFinding(
-                        "below_min_tier", name,
+                        "below_min_tier",
+                        name,
                         f"tier {tier!r} is weaker than required min_tier {policy.min_tier!r}",
                     )
                 )
@@ -278,7 +295,9 @@ def build_evidence_report(config: Mapping[str, Any]) -> EvidenceReport:
     if policy.require_complete:
         for a in missing_required:
             findings.append(
-                EvidenceFinding("incomplete", a, "material assumption has no evidence entry")
+                EvidenceFinding(
+                    "incomplete", a, "material assumption has no evidence entry"
+                )
             )
 
     return EvidenceReport(
@@ -308,16 +327,22 @@ def validate_evidence_register(
         if report.entries:
             logger.debug(
                 "Evidence register OK%s: %d/%d material assumptions evidenced.",
-                where, len(report.covered), len(report.covered) + len(report.missing),
+                where,
+                len(report.covered),
+                len(report.covered) + len(report.missing),
             )
         return report
 
-    summary = "; ".join(f"[{f.kind}] {f.assumption}: {f.detail}" for f in report.findings)
+    summary = "; ".join(
+        f"[{f.kind}] {f.assumption}: {f.detail}" for f in report.findings
+    )
     if policy.enforce:
         raise EvidenceRegisterError(
             f"Assumption evidence register is not lender-grade{where}: {summary}"
         )
-    logger.warning("Evidence-register findings%s (soft; enforce=false): %s", where, summary)
+    logger.warning(
+        "Evidence-register findings%s (soft; enforce=false): %s", where, summary
+    )
     return report
 
 

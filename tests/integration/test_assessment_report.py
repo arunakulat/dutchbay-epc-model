@@ -18,7 +18,11 @@ pytest.importorskip("reportlab")
 pytest.importorskip("pvlib")
 pytest.importorskip("rasterio")
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "generate_solar_assessment_report.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "scripts"
+    / "generate_solar_assessment_report.py"
+)
 
 
 def _load_module():
@@ -41,8 +45,15 @@ def test_routines_run_and_produce_sane_results(tmp_path: Path) -> None:
     m._OUT_PATH = tmp_path  # scenario YAMLs for the path-based routines land here
     R = m.run_routines(trials=20)
 
-    assert {"resource", "case_fit", "case_competitive", "mc", "sensitivity",
-            "optimization", "dscr"} <= set(R)
+    assert {
+        "resource",
+        "case_fit",
+        "case_competitive",
+        "mc",
+        "sensitivity",
+        "optimization",
+        "dscr",
+    } <= set(R)
 
     # Wet-zone site at the competitive tariff: a marginal unlevered return, now slightly
     # negative after the 5.9% FX-drift re-baseline (~-1.5%; was low-but-positive at 3%);

@@ -386,7 +386,9 @@ def wind_export_to_scenario_patch(
             "adapter_mode": adapter_mode,
             "adapter_tolerance_pct": float(tolerance_pct),
             "num_turbines": int(export.num_turbines),
-            "rated_capacity_per_turbine_kw": float(export.rated_capacity_per_turbine_kw),
+            "rated_capacity_per_turbine_kw": float(
+                export.rated_capacity_per_turbine_kw
+            ),
             "ppa_years": int(export.ppa_years),
         }
     )

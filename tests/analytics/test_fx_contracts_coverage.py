@@ -36,7 +36,8 @@ DEFAULT_RATE = default_fx_lkr_per_usd()  # config-sourced (~333.79), never the s
 
 def test_volumetry_usd_exposure_equivalent_sums_usd_equiv_fields() -> None:
     """total_usd_exposure_equivalent is a straight sum: all fields are already
-    USD-equivalent (labelled by denomination currency), so there is no spot conversion."""
+    USD-equivalent (labelled by denomination currency), so there is no spot conversion.
+    """
     vol = FXVolumetry(
         period=3,
         total_debt_lkr=1000.0,  # USD-equivalent value of LKR-denominated debt
@@ -290,7 +291,9 @@ def test_structured_block_total_debt_usd_equivalent_is_straight_sum() -> None:
     # final period: 50 USD + 2000 (USD-equiv LKR) + 5 CNY = 2055
     assert block.total_debt_usd_equivalent() == pytest.approx(2055.0)
     # the back-compat spot arg is ignored — same result
-    assert block.total_debt_usd_equivalent(spot_rate_lkr_usd=200.0) == pytest.approx(2055.0)
+    assert block.total_debt_usd_equivalent(spot_rate_lkr_usd=200.0) == pytest.approx(
+        2055.0
+    )
     assert block.total_periods() == 2
 
 

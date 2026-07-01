@@ -463,8 +463,7 @@ def main():
     print("\n" + "=" * 90)
     print("âœ“âœ“âœ“ DUAL REGIME ANALYSIS COMPLETE âœ“âœ“âœ“")
     print("=" * 90)
-    print(
-        f"""
+    print(f"""
 KEY RESULTS:
   â€¢ Recent regime (2016-2025): {recent_base:.2f}x DSCR
   â€¢ Historical (Full period): {historical_base:.2f}x DSCR
@@ -475,8 +474,7 @@ NEXT STEPS:
   1. Present recent regime to lenders
   2. Use conservative {min(recent_base, historical_base):.2f}x for debt covenants
   3. Commit to Git repository
-"""
-    )
+""")
 
     return 0
 

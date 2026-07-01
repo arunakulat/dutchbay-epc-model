@@ -428,7 +428,7 @@ def pytest_configure(config: pytest.Config) -> None:
         print("\n" + "=" * 78)
         print("TEST MODE: FULL ITERATIONS (100k+ MC simulations)")
         print("Expected runtime: 5-10 minutes for full suite")
-        print("="* 78 + "\n")
+        print("=" * 78 + "\n")
     else:
         print("\n" + "=" * 78)
         print("TEST MODE: FAST (20 iterations, 3 params)")

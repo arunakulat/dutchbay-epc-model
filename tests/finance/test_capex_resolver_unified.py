@@ -20,7 +20,9 @@ from finance.debt_v14 import _extract_capex_usd as debt_capex
 from finance.equity_distribution_v14_hydra import _extract_capex_usd as equity_capex
 
 _ROOT = Path(__file__).resolve().parents[2]
-_FIVEUSC = _ROOT / "scenarios" / "dutchbay_lendercase_5usc_fixed_lkr.yaml"  # derive_from_breakdown: true
+_FIVEUSC = (
+    _ROOT / "scenarios" / "dutchbay_lendercase_5usc_fixed_lkr.yaml"
+)  # derive_from_breakdown: true
 _CANON = _ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"  # flat usd_total
 
 

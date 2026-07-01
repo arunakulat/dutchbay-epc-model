@@ -117,7 +117,7 @@ def test_validate_turbine_specs_absent_specs_skips_checks() -> None:
 
 
 def test_validate_turbine_specs_aep_specs_present_no_project_capacity(
-    aep_data: Dict[str, Any]
+    aep_data: Dict[str, Any],
 ) -> None:
     # AEP specs present, but config has no turbine specs and no project capacity:
     # count/power guards skipped, capacity block computes but project_capacity_mw

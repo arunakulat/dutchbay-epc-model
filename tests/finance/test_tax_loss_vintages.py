@@ -8,6 +8,7 @@ Pins the two corrected behaviours of the loss-carry-forward engine:
 Also pins that the two cashflow builders thread the vintage ledger identically (no
 two-sources-of-truth) and that the legacy scalar path is unchanged.
 """
+
 from __future__ import annotations
 
 import math
@@ -37,8 +38,12 @@ def _profile(cap: int, holidays=None) -> TaxProfile:
 
 def _tax(year, ebit, profile, vintages):
     return calculate_tax(
-        year=year, ebit=ebit, interest_expense=0.0, depreciation=0.0,
-        tax_profile=profile, prior_loss_vintages=vintages,
+        year=year,
+        ebit=ebit,
+        interest_expense=0.0,
+        depreciation=0.0,
+        tax_profile=profile,
+        prior_loss_vintages=vintages,
     )
 
 
@@ -69,7 +74,7 @@ def test_loss_used_within_window_offsets_normally():
 
 def test_fifo_oldest_first():
     p = _profile(cap=10)
-    v = (_tax(1, -100.0, p, ()).carried_forward_vintages)
+    v = _tax(1, -100.0, p, ()).carried_forward_vintages
     v = _tax(2, -50.0, p, v).carried_forward_vintages  # (1,100),(2,50)
     r = _tax(3, 120.0, p, v)  # 120 offsets the year-1 100 then 20 of year-2 50
     assert r.taxable_income == pytest.approx(0.0)
@@ -95,8 +100,14 @@ def test_losses_preserved_through_holiday():
 def test_scalar_path_has_no_expiry():
     p = _profile(cap=6)
     # prior_loss_vintages omitted -> legacy scalar path: an "old" loss still offsets
-    r = calculate_tax(year=8, ebit=200.0, interest_expense=0.0, depreciation=0.0,
-                      tax_profile=p, prior_year_losses=100.0)
+    r = calculate_tax(
+        year=8,
+        ebit=200.0,
+        interest_expense=0.0,
+        depreciation=0.0,
+        tax_profile=p,
+        prior_year_losses=100.0,
+    )
     assert r.taxable_income == pytest.approx(100.0)  # offset applied (no expiry)
     assert r.carried_forward_vintages == ()
 
@@ -115,7 +126,9 @@ def test_build_tax_series_threads_vintages():
     )
     # year 1 loss preserved through holidays 2-3, then offsets profit in year 4
     assert res[1].tax_liability == 0.0 and res[2].tax_liability == 0.0  # holidays
-    assert res[3].taxable_income == pytest.approx(0.0)  # year-4 profit offset by the loss
+    assert res[3].taxable_income == pytest.approx(
+        0.0
+    )  # year-4 profit offset by the loss
 
 
 @pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")
@@ -132,4 +145,6 @@ def test_both_builders_agree_with_a_tax_holiday():
     for base_row, eff_row in zip(rows, eff):
         assert set(base_row.keys()) == set(eff_row.keys())
         for key in base_row:
-            assert math.isclose(base_row[key], eff_row[key], rel_tol=1e-9, abs_tol=1e-6), key
+            assert math.isclose(
+                base_row[key], eff_row[key], rel_tol=1e-9, abs_tol=1e-6
+            ), key

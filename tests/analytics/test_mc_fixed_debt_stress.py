@@ -35,7 +35,12 @@ def test_fixed_debt_min_dscr_helper_recovers_cfads() -> None:
 
 
 def test_fixed_debt_min_dscr_helper_no_operating_periods() -> None:
-    assert _trial_fixed_debt_min_dscr([0.0, 0.0], {"raw_dscr_series": [], "debt_service_total": []}) is None
+    assert (
+        _trial_fixed_debt_min_dscr(
+            [0.0, 0.0], {"raw_dscr_series": [], "debt_service_total": []}
+        )
+        is None
+    )
 
 
 def _cfg(fixed_debt: bool):
@@ -81,8 +86,8 @@ class TestEngineFixedDebt:
 
             a = MonteCarloEngine(_cfg(fixed_debt=True), seed=7).run(n_trials=24)
             b = MonteCarloEngine(_cfg(fixed_debt=True), seed=7).run(n_trials=24)
-            assert a.metadata["fixed_debt_stress"]["breach_probability"] == pytest.approx(
-                b.metadata["fixed_debt_stress"]["breach_probability"]
-            )
+            assert a.metadata["fixed_debt_stress"][
+                "breach_probability"
+            ] == pytest.approx(b.metadata["fixed_debt_stress"]["breach_probability"])
         finally:
             logging.disable(logging.NOTSET)

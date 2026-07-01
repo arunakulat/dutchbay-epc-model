@@ -61,11 +61,17 @@ def test_gross_up_charges_a_real_cash_cost_without_touching_dscr() -> None:
     (the WHT is senior to equity yet out of scheduled debt service)."""
     off = evaluate_with_overrides(
         LENDER,
-        overrides={"tax.wht_on_interest_to_nonresidents": 0.10, "tax.wht_gross_up": False},
+        overrides={
+            "tax.wht_on_interest_to_nonresidents": 0.10,
+            "tax.wht_gross_up": False,
+        },
     )
     on = evaluate_with_overrides(
         LENDER,
-        overrides={"tax.wht_on_interest_to_nonresidents": 0.10, "tax.wht_gross_up": True},
+        overrides={
+            "tax.wht_on_interest_to_nonresidents": 0.10,
+            "tax.wht_gross_up": True,
+        },
     )
     assert on["equity_irr"] < off["equity_irr"] - 1e-4  # materially lower
     # DSCR and project-level CFADS are upstream of the equity WHT deduction.
@@ -75,11 +81,15 @@ def test_gross_up_charges_a_real_cash_cost_without_touching_dscr() -> None:
 
 def test_per_year_wht_equals_interest_times_rate_aligned() -> None:
     """Proves the period alignment: each year's charged WHT equals that year's scheduled
-    interest * rate (including the bridge-period interest folded into operating year 1)."""
+    interest * rate (including the bridge-period interest folded into operating year 1).
+    """
     rate = 0.10
     full = evaluate_with_overrides(
         LENDER,
-        overrides={"tax.wht_on_interest_to_nonresidents": rate, "tax.wht_gross_up": True},
+        overrides={
+            "tax.wht_on_interest_to_nonresidents": rate,
+            "tax.wht_gross_up": True,
+        },
         return_full_result=True,
     )
     rows = full["annual_rows"]
@@ -100,12 +110,17 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     debt rate 13.39%; the off case still keeps the IDC depreciation shield + dividend WHT,
     only dropping the interest deduction — a bigger shield now that LKR interest is higher).
     The project IRR / DSCR / CFADS are upstream of the equity waterfall and are byte-identical
-    either way — the shield is confined to the equity path (project captures it via after-tax kd)."""
+    either way — the shield is confined to the equity path (project captures it via after-tax kd).
+    """
     on = evaluate_with_overrides(LENDER, overrides={})  # default True
-    off = evaluate_with_overrides(LENDER, overrides={"tax.interest_deductibility": False})
+    off = evaluate_with_overrides(
+        LENDER, overrides={"tax.interest_deductibility": False}
+    )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
     assert off["equity_irr"] == pytest.approx(-0.08473157279360188, abs=1e-9)
-    assert on["equity_irr"] > off["equity_irr"] + 0.02  # the shield is material (+408bps)
+    assert (
+        on["equity_irr"] > off["equity_irr"] + 0.02
+    )  # the shield is material (+408bps)
     # The shield is confined to the equity path: project KPIs identical both ways.
     assert on["project_irr"] == pytest.approx(off["project_irr"], abs=1e-12)
     assert on["min_dscr"] == pytest.approx(off["min_dscr"], abs=1e-12)

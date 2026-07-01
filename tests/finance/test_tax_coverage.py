@@ -22,14 +22,12 @@ from finance.cashflow_v14_tax import (
     DepreciationSchedule,
     TaxConfig,
     TaxProfile,
+    _get_key_with_default,
+    _get_tax_rate_with_compat,
     build_tax_holiday_map,
     build_tax_profile,
     build_tax_series,
     calculate_tax,
-)
-from finance.cashflow_v14_tax import (
-    _get_key_with_default,
-    _get_tax_rate_with_compat,
 )
 
 
@@ -61,6 +59,7 @@ def _cfg(**overrides: object) -> dict:
 # Section / key helpers
 # ---------------------------------------------------------------------------
 
+
 def test_from_yaml_missing_tax_section_raises() -> None:
     """No ``tax`` section at all -> KeyError from _require_section (line 50)."""
     with pytest.raises(KeyError, match=r"Missing required YAML section: tax"):
@@ -88,6 +87,7 @@ def test_get_key_with_default_present_and_absent() -> None:
 # ---------------------------------------------------------------------------
 # corporate-tax-rate compatibility ladder
 # ---------------------------------------------------------------------------
+
 
 def test_canonical_rate_out_of_range_raises() -> None:
     """Canonical rate above 1.0 is rejected (line 88)."""
@@ -148,6 +148,7 @@ def test_from_yaml_uses_compact_alias_end_to_end() -> None:
 # ---------------------------------------------------------------------------
 # TaxConfig._validate guards (each raises on exactly one bad field)
 # ---------------------------------------------------------------------------
+
 
 def _direct_config(**overrides: object) -> TaxConfig:
     """Build a TaxConfig directly (bypassing from_yaml's rate pre-validation).
@@ -242,17 +243,13 @@ def test_validate_plant_share_out_of_range_raises() -> None:
 def test_validate_plant_share_requires_plant_years() -> None:
     """plant_capex_share set but plant_depreciation_years missing -> raises."""
     with pytest.raises(ValueError, match=r"plant_depreciation_years must be >= 1"):
-        TaxConfig.from_yaml(
-            _cfg(plant_capex_share=0.7, civil_depreciation_years=20)
-        )
+        TaxConfig.from_yaml(_cfg(plant_capex_share=0.7, civil_depreciation_years=20))
 
 
 def test_validate_plant_share_requires_civil_years() -> None:
     """plant_capex_share + plant_years set but civil_depreciation_years missing."""
     with pytest.raises(ValueError, match=r"civil_depreciation_years must be >= 1"):
-        TaxConfig.from_yaml(
-            _cfg(plant_capex_share=0.7, plant_depreciation_years=5)
-        )
+        TaxConfig.from_yaml(_cfg(plant_capex_share=0.7, plant_depreciation_years=5))
 
 
 def test_validate_full_split_config_accepted() -> None:
@@ -274,6 +271,7 @@ def test_validate_full_split_config_accepted() -> None:
 # ---------------------------------------------------------------------------
 # TaxProfile.__post_init__ guards
 # ---------------------------------------------------------------------------
+
 
 def _profile(**overrides: object) -> dict:
     base = dict(
@@ -311,6 +309,7 @@ def test_taxprofile_bad_depreciation_method_raises() -> None:
 # DepreciationSchedule constructors
 # ---------------------------------------------------------------------------
 
+
 def test_build_straight_line_nonpositive_life_raises() -> None:
     """useful_life <= 0 (line 288)."""
     with pytest.raises(ValueError, match=r"useful_life must be > 0"):
@@ -329,17 +328,14 @@ def test_build_straight_line_arithmetic_and_conservation() -> None:
     assert sched.book_value[-1] == pytest.approx(0.0)
     # monotone non-increasing book value
     assert all(
-        b2 <= b1 + 1e-9
-        for b1, b2 in zip(sched.book_value, sched.book_value[1:])
+        b2 <= b1 + 1e-9 for b1, b2 in zip(sched.book_value, sched.book_value[1:])
     )
 
 
 def test_build_split_straight_line_bad_share_raises() -> None:
     """build_split_straight_line rejects share outside [0,1] (line 329)."""
     with pytest.raises(ValueError, match=r"plant_capex_share must be in"):
-        DepreciationSchedule.build_split_straight_line(
-            1000.0, 1.5, 5, 20, 25
-        )
+        DepreciationSchedule.build_split_straight_line(1000.0, 1.5, 5, 20, 25)
 
 
 def test_build_split_straight_line_sums_components() -> None:
@@ -363,11 +359,10 @@ def test_build_split_straight_line_sums_components() -> None:
 # Holiday map + profile wiring
 # ---------------------------------------------------------------------------
 
+
 def test_build_tax_holiday_map_window() -> None:
     """Holiday is True exactly within [start, start+years-1]."""
-    cfg = TaxConfig.from_yaml(
-        _cfg(tax_holiday_start_year=2, tax_holiday_years=3)
-    )
+    cfg = TaxConfig.from_yaml(_cfg(tax_holiday_start_year=2, tax_holiday_years=3))
     hmap = build_tax_holiday_map(cfg, project_life_years=6)
     assert hmap == {1: False, 2: True, 3: True, 4: True, 5: False, 6: False}
 
@@ -386,6 +381,7 @@ def test_build_tax_profile_wht_disabled_is_zero() -> None:
 # build_tax_series: length guard + carry-forward loop
 # ---------------------------------------------------------------------------
 
+
 def test_build_tax_series_length_mismatch_raises() -> None:
     """Mismatched input lengths raise (line 456)."""
     sched = DepreciationSchedule.build_straight_line(1000.0, 3, 3)
@@ -395,9 +391,7 @@ def test_build_tax_series_length_mismatch_raises() -> None:
             ebit_series=[10.0, 10.0],  # short by one
             interest_series=[0.0, 0.0, 0.0],
             depreciation_schedule=sched,
-            tax_profile=build_tax_profile(
-                TaxConfig.from_yaml(_cfg()), sched, 3
-            ),
+            tax_profile=build_tax_profile(TaxConfig.from_yaml(_cfg()), sched, 3),
         )
 
 
@@ -497,7 +491,9 @@ def test_depreciation_start_year_offsets_the_schedule() -> None:
     assert sched.annual_amounts[0] == 0.0
     assert sched.annual_amounts[1] == 0.0
     assert sched.annual_amounts[2] == pytest.approx(annual_depr)
-    assert sched.annual_amounts[6] == pytest.approx(annual_depr)  # year 7 = start+life-1
+    assert sched.annual_amounts[6] == pytest.approx(
+        annual_depr
+    )  # year 7 = start+life-1
     assert sched.annual_amounts[7] == 0.0  # year 8 past the window
     # full base still recovered, just deferred
     assert sum(sched.annual_amounts) == pytest.approx(1_000.0)
@@ -521,7 +517,9 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
 
     lender = "scenarios/dutchbay_lendercase_2025Q4.yaml"
     base = evaluate_with_overrides(lender, overrides={})
-    deferred = evaluate_with_overrides(lender, overrides={"tax.depreciation_start_year": 3})
+    deferred = evaluate_with_overrides(
+        lender, overrides={"tax.depreciation_start_year": 3}
+    )
     assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
     # start_year=1 default is byte-identical to the canonical baseline (PR-A fabricated-levy
     # removal lifts CFADS 199.10M -> 202.33M; dividend WHT / IDC are equity-path only)
@@ -532,18 +530,27 @@ def test_depreciation_start_year_overrun_warns_about_forfeited_tail(
     caplog: "pytest.LogCaptureFixture",
 ) -> None:
     """A start_year that pushes the useful-life window past project_life forfeits the tail
-    allowance; the engine must WARN (Wave-1 re-audit hardening of the newly-wired field)."""
+    allowance; the engine must WARN (Wave-1 re-audit hardening of the newly-wired field).
+    """
     from pathlib import Path
 
     from analytics.scenario_loader import load_scenario_config
     from finance.cashflow_v14 import build_annual_rows
 
-    lender = Path(__file__).resolve().parents[2] / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    lender = (
+        Path(__file__).resolve().parents[2]
+        / "scenarios"
+        / "dutchbay_lendercase_2025Q4.yaml"
+    )
     cfg = load_scenario_config(str(lender))
-    cfg["tax"]["depreciation_start_year"] = 18  # life 20 -> window 18..(18+life-1) overruns
+    cfg["tax"][
+        "depreciation_start_year"
+    ] = 18  # life 20 -> window 18..(18+life-1) overruns
     with caplog.at_level("WARNING", logger="finance.cashflow_v14"):
         build_annual_rows(cfg)
-    assert any("forfeiting the tail-year allowance" in r.message for r in caplog.records)
+    assert any(
+        "forfeiting the tail-year allowance" in r.message for r in caplog.records
+    )
 
 
 def test_depreciation_start_year_one_does_not_warn(
@@ -555,8 +562,14 @@ def test_depreciation_start_year_one_does_not_warn(
     from analytics.scenario_loader import load_scenario_config
     from finance.cashflow_v14 import build_annual_rows
 
-    lender = Path(__file__).resolve().parents[2] / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    lender = (
+        Path(__file__).resolve().parents[2]
+        / "scenarios"
+        / "dutchbay_lendercase_2025Q4.yaml"
+    )
     cfg = load_scenario_config(str(lender))
     with caplog.at_level("WARNING", logger="finance.cashflow_v14"):
         build_annual_rows(cfg)
-    assert not any("forfeiting the tail-year allowance" in r.message for r in caplog.records)
+    assert not any(
+        "forfeiting the tail-year allowance" in r.message for r in caplog.records
+    )

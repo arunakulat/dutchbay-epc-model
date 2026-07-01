@@ -23,16 +23,16 @@ from typing import Tuple
 
 def patch_param_range_config(content: str) -> str:
     """Replace ParameterRangeConfig with enhanced version.
-    
+
     Args:
         content: Original file content
-        
+
     Returns:
         Modified content with updated ParameterRangeConfig
     """
-    
+
     old_pattern = r'@dataclass\s+class ParameterRangeConfig:.*?shock_type: str = "scalar".*?(?=#|\n\n@|\nclass)'
-    
+
     new_impl = '''@dataclass
 class ParameterRangeConfig:
     """CCCDIR: Configuration for a single sensitivity parameter.
@@ -86,23 +86,23 @@ class ParameterRangeConfig:
         """Computed high value: base_value * (1 + high_pct/100)."""
         return self.base_value * (1.0 + self.high_pct / 100.0)
 '''
-    
+
     return re.sub(old_pattern, new_impl, content, flags=re.DOTALL)
 
 
 def add_tornado_result_single(content: str) -> str:
     """Add new single-parameter TornadoResult after ParameterRangeConfig.
-    
+
     Args:
         content: Original file content
-        
+
     Returns:
         Modified content with new TornadoResult class
     """
-    
+
     # Find insertion point after ParameterRangeConfig
-    insertion_marker = 'class ShockSpec:'
-    
+    insertion_marker = "class ShockSpec:"
+
     new_class = '''\n\n@dataclass
 class TornadoResult:
     """CASPER: Single-parameter tornado analysis result.
@@ -142,65 +142,67 @@ class TornadoResult:
 
 @dataclass
 '''
-    
-    return content.replace(f'@dataclass\nclass {insertion_marker}', new_class + insertion_marker)
+
+    return content.replace(
+        f"@dataclass\nclass {insertion_marker}", new_class + insertion_marker
+    )
 
 
 def rename_existing_tornado(content: str) -> str:
     """Rename existing TornadoResult to MultiShockTornadoResult.
-    
+
     Args:
         content: Original file content
-        
+
     Returns:
         Modified content with renamed class
     """
     # Find the existing TornadoResult that has metric_name, base_metric, shock_results
     old_pattern = r'@dataclass\s+class TornadoResult:\s+"""CASPER: Tornado chart data.*?shock_results: List\[ShockResult\]'
-    
+
     replacement = '@dataclass\nclass MultiShockTornadoResult:\n    """CASPER: Multi-shock tornado chart data (legacy)."""\n\n    metric_name: str\n    base_metric: float\n    shock_results: List[ShockResult]'
-    
+
     content = re.sub(old_pattern, replacement, content, flags=re.DOTALL)
-    
+
     # Also update references in MultiMetricTornadoResult
     content = content.replace(
-        'tornado_charts: Dict[str, TornadoResult]',
-        'tornado_charts: Dict[str, MultiShockTornadoResult]'
+        "tornado_charts: Dict[str, TornadoResult]",
+        "tornado_charts: Dict[str, MultiShockTornadoResult]",
     )
-    
+
     return content
 
 
 def main() -> None:
     """Main execution: Apply all patches to analytics/contracts_v14.py."""
-    
-    file_path = Path('analytics/contracts_v14.py')
-    
+
+    file_path = Path("analytics/contracts_v14.py")
+
     if not file_path.exists():
         raise FileNotFoundError(f"{file_path} not found")
-    
+
     print(f"📖 Reading {file_path}...")
     content = file_path.read_text()
     original_size = len(content)
-    
+
     print("🔧 Applying patches...")
-    
+
     # Step 1: Update ParameterRangeConfig
     print("  1. Updating ParameterRangeConfig...")
     content = patch_param_range_config(content)
-    
+
     # Step 2: Rename existing TornadoResult
     print("  2. Renaming TornadoResult → MultiShockTornadoResult...")
     content = rename_existing_tornado(content)
-    
+
     # Step 3: Add new TornadoResult
     print("  3. Adding new single-parameter TornadoResult...")
     content = add_tornado_result_single(content)
-    
+
     # Write back
     print(f"💾 Writing updated file ({len(content)} bytes, was {original_size})...")
     file_path.write_text(content)
-    
+
     print("\n✅ Patches applied successfully!")
     print("\nNext steps:")
     print("  1. Review changes: git diff analytics/contracts_v14.py")
@@ -208,5 +210,5 @@ def main() -> None:
     print("  3. Commit: git add analytics/contracts_v14.py && git commit")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

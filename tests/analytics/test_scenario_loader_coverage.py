@@ -95,7 +95,9 @@ def test_load_raw_config_unsupported_extension_raises(tmp_path: Path) -> None:
     """An existing file with an unsupported extension raises ScenarioConfigError."""
     target = tmp_path / "scn.txt"
     target.write_text("project: {}\n")
-    with pytest.raises(ScenarioConfigError, match="Unsupported scenario config extension"):
+    with pytest.raises(
+        ScenarioConfigError, match="Unsupported scenario config extension"
+    ):
         _load_raw_config(target)
 
 
@@ -282,8 +284,8 @@ def test_fx_spot_consistency_raises_when_keys_diverge() -> None:
     """A stale fx.start vs an edited fx.rates.lkr_per_usd is the #236 class -> fail loud."""
     cfg = {
         "fx": {
-            "rates": {"lkr_per_usd": 350.0},   # author edited this
-            "start_lkr_per_usd": 333.79,        # forgot to update this
+            "rates": {"lkr_per_usd": 350.0},  # author edited this
+            "start_lkr_per_usd": 333.79,  # forgot to update this
         }
     }
     with pytest.raises(ValueError, match="inconsistent LKR/USD spot"):

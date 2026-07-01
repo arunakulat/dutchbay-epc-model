@@ -15,7 +15,9 @@ it should either:
 from typing import Any, Dict, Mapping
 
 
-def apply_degradation_if_enabled(*, base_cfg: Mapping[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+def apply_degradation_if_enabled(
+    *, base_cfg: Mapping[str, Any], overrides: Dict[str, Any]
+) -> Dict[str, Any]:
     mc = base_cfg.get("monte_carlo", {}) if isinstance(base_cfg, Mapping) else {}
     degr = mc.get("degradation", {}) if isinstance(mc, Mapping) else {}
     enabled = bool(degr.get("enabled", False))

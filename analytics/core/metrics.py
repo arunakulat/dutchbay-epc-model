@@ -121,7 +121,9 @@ def _lookup_case_insensitive(mapping: Mapping[str, Any], key: str) -> Any:
     return None
 
 
-def _section_case_insensitive(config: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+def _section_case_insensitive(
+    config: Mapping[str, Any], key: str
+) -> Mapping[str, Any] | None:
     value = _lookup_case_insensitive(config, key)
     return value if isinstance(value, Mapping) else None
 
@@ -164,7 +166,9 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
         return 0.0
 
     capex_section = _section_case_insensitive(config, "capex")
-    if capex_section and _lookup_case_insensitive(capex_section, "derive_from_breakdown"):
+    if capex_section and _lookup_case_insensitive(
+        capex_section, "derive_from_breakdown"
+    ):
         from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
 
         return float(_resolve_capex_bottom_up(dict(config)))
@@ -199,7 +203,9 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     return 0.0
 
 
-def _derive_cfads_series(annual_rows: Optional[Sequence[Mapping[str, Any]]]) -> list[float]:
+def _derive_cfads_series(
+    annual_rows: Optional[Sequence[Mapping[str, Any]]],
+) -> list[float]:
     """Extract CFADS series in USD, with LKR fallback conversion."""
     if not annual_rows:
         return []
@@ -459,7 +465,9 @@ def calculate_scenario_kpis(
     result.setdefault("npv", float(result.get("project_npv", 0.0)))
     result.setdefault("project_irr", 0.0)
     result.setdefault("irr", float(result.get("project_irr", 0.0)))
-    result.setdefault("equity_irr", 0.0)  # neutral sentinel, NOT the unlevered project_irr
+    result.setdefault(
+        "equity_irr", 0.0
+    )  # neutral sentinel, NOT the unlevered project_irr
     result.setdefault("avg_dscr", float(result.get("dscr_mean", 0.0)))
     result.setdefault("llcr", float(result.get("llcr", 0.0)))
     result.setdefault("plcr", float(result.get("plcr", 0.0)))

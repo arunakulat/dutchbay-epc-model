@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-
 MODULE_PATH = Path("finance/equity_distribution_v14_hydra.py")
 
 
@@ -72,12 +71,12 @@ class TestGWTFCompliance:
         content = MODULE_PATH.read_text(encoding="utf-8")
 
         assert "from pydantic import" in content, "Module must import from pydantic"
-        assert "ConfigDict" in content, (
-            "Pydantic v2 uses ConfigDict, not nested Config class"
-        )
-        assert "model_config = ConfigDict(" in content, (
-            "Pydantic v2 requires 'model_config = ConfigDict(...)'"
-        )
+        assert (
+            "ConfigDict" in content
+        ), "Pydantic v2 uses ConfigDict, not nested Config class"
+        assert (
+            "model_config = ConfigDict(" in content
+        ), "Pydantic v2 requires 'model_config = ConfigDict(...)'"
 
     def test_has_type_annotations(self) -> None:
         """TYPE-01: All public functions must have type annotations."""
@@ -89,9 +88,9 @@ class TestGWTFCompliance:
                 if node.name.startswith("_"):
                     continue
 
-                assert node.returns is not None, (
-                    f"Function '{node.name}' missing return type annotation (TYPE-01)"
-                )
+                assert (
+                    node.returns is not None
+                ), f"Function '{node.name}' missing return type annotation (TYPE-01)"
 
                 for arg in node.args.args:
                     if arg.arg in {"self", "cls"}:
@@ -109,9 +108,9 @@ class TestGWTFCompliance:
         docstring = ast.get_docstring(tree)
         assert docstring is not None, "Module missing docstring (DOC-01)"
         assert len(docstring) > 100, "Module docstring too short (DOC-01)"
-        assert "Equity Distribution" in docstring, (
-            "Module docstring must describe Equity Distribution"
-        )
+        assert (
+            "Equity Distribution" in docstring
+        ), "Module docstring must describe Equity Distribution"
 
     def test_classes_have_docstrings(self) -> None:
         """DOC-01: All classes must have docstrings."""
@@ -121,12 +120,12 @@ class TestGWTFCompliance:
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 docstring = ast.get_docstring(node)
-                assert docstring is not None, (
-                    f"Class '{node.name}' missing docstring (DOC-01)"
-                )
-                assert len(docstring) > 20, (
-                    f"Class '{node.name}' docstring too short (DOC-01)"
-                )
+                assert (
+                    docstring is not None
+                ), f"Class '{node.name}' missing docstring (DOC-01)"
+                assert (
+                    len(docstring) > 20
+                ), f"Class '{node.name}' docstring too short (DOC-01)"
 
     def test_public_methods_have_docstrings(self) -> None:
         """DOC-01: All public methods must have docstrings."""
@@ -139,9 +138,9 @@ class TestGWTFCompliance:
                     continue
 
                 docstring = ast.get_docstring(node)
-                assert docstring is not None, (
-                    f"Method '{node.name}' missing docstring (DOC-01)"
-                )
+                assert (
+                    docstring is not None
+                ), f"Method '{node.name}' missing docstring (DOC-01)"
 
     def test_uses_logging_not_print(self) -> None:
         """CST-01: Module should use logging, not print (except __main__)."""
@@ -169,7 +168,10 @@ class TestGWTFCompliance:
 
         config_class = None
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "EquityDistributionConfig":
+            if (
+                isinstance(node, ast.ClassDef)
+                and node.name == "EquityDistributionConfig"
+            ):
                 config_class = node
                 break
 
@@ -179,7 +181,10 @@ class TestGWTFCompliance:
         for item in config_class.body:
             if isinstance(item, ast.FunctionDef):
                 for decorator in item.decorator_list:
-                    if isinstance(decorator, ast.Name) and decorator.id == "field_validator":
+                    if (
+                        isinstance(decorator, ast.Name)
+                        and decorator.id == "field_validator"
+                    ):
                         has_validators = True
                         break
                     if isinstance(decorator, ast.Call):
@@ -190,9 +195,9 @@ class TestGWTFCompliance:
                             has_validators = True
                             break
 
-        assert has_validators, (
-            "EquityDistributionConfig must use @field_validator for validation (VAL-01)"
-        )
+        assert (
+            has_validators
+        ), "EquityDistributionConfig must use @field_validator for validation (VAL-01)"
 
     def test_imports_from_future(self) -> None:
         """CST-01: Module should use future annotations for cleaner types."""
@@ -212,12 +217,12 @@ class TestGWTFCompliance:
         (the legacy self.config.* engine was retired)."""
         content = MODULE_PATH.read_text(encoding="utf-8")
 
-        assert "distribution_config.min_dscr_threshold" in content, (
-            "DSCR threshold should come from config (ARCH-01)"
-        )
-        assert "distribution_config.min_reserve_months" in content, (
-            "Reserve months should come from config (ARCH-01)"
-        )
+        assert (
+            "distribution_config.min_dscr_threshold" in content
+        ), "DSCR threshold should come from config (ARCH-01)"
+        assert (
+            "distribution_config.min_reserve_months" in content
+        ), "Reserve months should come from config (ARCH-01)"
 
     def test_classes_use_proper_typing(self) -> None:
         """TYPE-01: Classes should use Dict, List, Tuple from typing."""
@@ -231,12 +236,16 @@ class TestGWTFCompliance:
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.returns:
                 return_str = ast.unparse(node.returns)
-                if "Dict" in return_str or "List" in return_str or "Tuple" in return_str:
+                if (
+                    "Dict" in return_str
+                    or "List" in return_str
+                    or "Tuple" in return_str
+                ):
                     has_typed_returns = True
 
-        assert has_typed_returns, (
-            "Module should use typing.Dict, typing.List for return types (TYPE-01)"
-        )
+        assert (
+            has_typed_returns
+        ), "Module should use typing.Dict, typing.List for return types (TYPE-01)"
 
     def test_config_uses_field_defaults(self) -> None:
         """ARCH-01: Config should use Pydantic Field() with defaults."""
@@ -245,7 +254,10 @@ class TestGWTFCompliance:
 
         config_class = None
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "EquityDistributionConfig":
+            if (
+                isinstance(node, ast.ClassDef)
+                and node.name == "EquityDistributionConfig"
+            ):
                 config_class = node
                 break
 
@@ -255,15 +267,18 @@ class TestGWTFCompliance:
         for item in config_class.body:
             if isinstance(item, ast.AnnAssign):
                 if isinstance(item.value, ast.Call):
-                    if isinstance(item.value.func, ast.Name) and item.value.func.id == "Field":
+                    if (
+                        isinstance(item.value.func, ast.Name)
+                        and item.value.func.id == "Field"
+                    ):
                         for keyword in item.value.keywords:
                             if keyword.arg == "default":
                                 has_field_defaults = True
                                 break
 
-        assert has_field_defaults, (
-            "EquityDistributionConfig should use Field(default=...) for config values (ARCH-01)"
-        )
+        assert (
+            has_field_defaults
+        ), "EquityDistributionConfig should use Field(default=...) for config values (ARCH-01)"
 
     def test_no_global_state(self) -> None:
         """ARCH-01: Module should not use global mutable business state."""

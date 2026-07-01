@@ -292,7 +292,9 @@ def fetch_live_history_bis(timeout_s: float = 60.0) -> FXHistorySeries:
             "Accept": "application/vnd.sdmx.data+json",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:  # nosec B310 - fixed https BIS literal, not user input
+    with urllib.request.urlopen(
+        req, timeout=timeout_s
+    ) as resp:  # nosec B310 - fixed https BIS literal, not user input
         payload = json.loads(resp.read().decode("utf-8"))
     data = payload["data"]
     series_obj = next(iter(data["dataSets"][0]["series"].values()))
@@ -333,7 +335,9 @@ def fetch_live_history_fred(timeout_s: float = 30.0) -> FXHistorySeries:
     req = urllib.request.Request(
         FRED_DEXSLUS_CSV, headers={"User-Agent": "dutchbay-fx/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:  # nosec B310 - fixed https FRED literal, not user input
+    with urllib.request.urlopen(
+        req, timeout=timeout_s
+    ) as resp:  # nosec B310 - fixed https FRED literal, not user input
         text = resp.read().decode("utf-8")
     pairs: list[tuple[str, float]] = []
     for line in text.splitlines()[1:]:
@@ -430,9 +434,7 @@ def filter_series_to_window(
     Dates are ISO ``YYYY-MM-DD`` (zero-padded) so lexicographic compare == chronological.
     """
     lo, hi = start.isoformat(), end.isoformat()
-    kept = [
-        (d, r) for d, r in zip(series.dates, series.rates) if lo <= d <= hi
-    ]
+    kept = [(d, r) for d, r in zip(series.dates, series.rates) if lo <= d <= hi]
     if not kept:
         raise ValueError(
             f"No observations fall in the window [{lo}, {hi}] — refusing to write an "

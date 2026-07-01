@@ -4,6 +4,7 @@ Pins the Kolonnawa-style EPC supply model: a construction margin (price − cost
 construction period, with the contractor's working-capital need and (when defined) an
 annualised construction IRR — a SEPARATE model from the operational v14 cashflow engine.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -59,7 +60,9 @@ def test_even_spread_when_no_schedules():
 def test_peak_working_capital_with_back_loaded_payment():
     # all payment at month 12, cost even over 1..12 -> contractor funds the whole cost
     r = compute_epc_margin(_epc(payment_schedule=[{"month": 12, "pct": 1.0}]))
-    assert r.peak_working_capital == pytest.approx(80.0 * 11 / 12)  # cumulative cost by month 11
+    assert r.peak_working_capital == pytest.approx(
+        80.0 * 11 / 12
+    )  # cumulative cost by month 11
 
 
 def test_construction_irr_defined_when_investment_first():
@@ -103,7 +106,9 @@ def test_bad_construction_months_raises(months):
 
 def test_payment_schedule_must_sum_to_one():
     with pytest.raises(ValueError, match="sum to"):
-        compute_epc_margin(_epc(payment_schedule=[{"month": 0, "pct": 0.5}]))  # 0.5 != 1
+        compute_epc_margin(
+            _epc(payment_schedule=[{"month": 0, "pct": 0.5}])
+        )  # 0.5 != 1
 
 
 def test_payment_month_out_of_range_raises():

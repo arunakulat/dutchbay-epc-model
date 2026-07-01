@@ -58,7 +58,9 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
 
 def test_disabling_drives_falls_back_to_legacy_and_says_so() -> None:
     """With drives_discount_rate off, the basis is the legacy default + labelled base."""
-    kpis = evaluate_with_overrides(LENDER, overrides={"wacc.drives_discount_rate": False})
+    kpis = evaluate_with_overrides(
+        LENDER, overrides={"wacc.drives_discount_rate": False}
+    )
     assert abs(kpis["discount_rate_used"] - DEFAULT_DISCOUNT_RATE) < 1e-9
     assert not kpis["wacc_is_real"]
 

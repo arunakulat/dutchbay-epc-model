@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SensitivityConfig:
     """Configuration for DSCR sensitivity analysis.
-    
+
     CESSPIT Compliance: All parameters from config, no defaults in code.
-    
+
     Attributes:
         base_capex: Base case CAPEX (USD)
         base_aep_p50: Base case AEP P50 (MWh/year)
@@ -101,20 +101,20 @@ def _build_cfads_array(
     project_life: int,
 ) -> List[float]:
     """Build CFADS array with degradation applied year-over-year.
-    
+
     Critical for accurate debt sizing: degradation reduces revenue each year,
     directly impacting debt serviceability.
-    
+
     Args:
         aep: Annual energy production at COD (MWh/year)
         tariff: PPA tariff (USD/MWh)
         opex: Annual operating expenses (USD/year)
         degradation_rate: Annual degradation rate (decimal, e.g. 0.006 = 0.6%)
         project_life: Operational life (years)
-    
+
     Returns:
         List of annual CFADS values incorporating degradation
-        
+
     Example:
         >>> cfads = _build_cfads_array(
         ...     aep=100000,
@@ -130,19 +130,19 @@ def _build_cfads_array(
         >>> assert abs(cfads[19] - (expected_aep_y20 * 50 - 500000)) < 100
     """
     cfads = []
-    
+
     for t in range(project_life):
         # Apply degradation year-over-year
         aep_degraded = aep * (1 - degradation_rate) ** t
-        
+
         # Revenue with degraded generation
         revenue_t = aep_degraded * tariff
-        
+
         # CFADS = Revenue - OPEX (simplified, no tax for sizing)
         cfads_t = revenue_t - opex
-        
+
         cfads.append(cfads_t)
-    
+
     return cfads
 
 
@@ -152,15 +152,15 @@ def _perturb_parameter(
     perturbation_pct: float,
 ) -> Dict[str, float]:
     """Create perturbed parameter set for sensitivity analysis.
-    
+
     Args:
         config: Base sensitivity configuration
         variable: Parameter to perturb ('degradation', 'aep', 'tariff', 'opex')
         perturbation_pct: Percentage change (e.g. 10.0 = +10%)
-    
+
     Returns:
         Dictionary with perturbed parameters
-        
+
     Raises:
         ValueError: If variable is not recognized
     """
@@ -172,9 +172,9 @@ def _perturb_parameter(
         "degradation": config.base_degradation,
         "capex": config.base_capex,
     }
-    
+
     factor = 1 + (perturbation_pct / 100.0)
-    
+
     if variable == "degradation":
         params["degradation"] = config.base_degradation * factor
     elif variable == "aep":
@@ -189,7 +189,7 @@ def _perturb_parameter(
         params["capex"] = config.base_capex * factor
     else:
         raise ValueError(f"Unknown sensitivity variable: {variable}")
-    
+
     return params
 
 
@@ -198,14 +198,14 @@ def analyze_single_variable(
     variable: str,
 ) -> Dict[str, Any]:
     """Run sensitivity analysis for a single variable.
-    
+
     Perturbs the variable across the configured range and calculates
     debt capacity at each point using dual DSCR methodology.
-    
+
     Args:
         config: Sensitivity configuration
         variable: Variable to analyze ('degradation', 'aep', 'tariff', 'opex', 'capex')
-    
+
     Returns:
         Dictionary containing:
             - variable: Variable name
@@ -221,7 +221,7 @@ def analyze_single_variable(
                 - delta_from_base_pct: Percentage change vs base case
             - tornado_data: Min/max impact for tornado chart
             - constraint_transitions: Where binding constraint changes
-    
+
     Example:
         >>> config = SensitivityConfig(
         ...     base_aep_p50=100000, base_aep_p99=85000,
@@ -236,21 +236,19 @@ def analyze_single_variable(
         ...       f"${result['tornado_data']['max_impact']:.1f}M")
     """
     logger.info(f"Analyzing sensitivity: {variable}")
-    
+
     # Generate perturbation points
     perturbations = np.linspace(
-        -config.perturbation_range_pct,
-        config.perturbation_range_pct,
-        config.n_steps
+        -config.perturbation_range_pct, config.perturbation_range_pct, config.n_steps
     )
-    
+
     results = []
     base_debt = None
-    
+
     for pct in perturbations:
         # Perturb parameters
         params = _perturb_parameter(config, variable, pct)
-        
+
         # Build CFADS with perturbed parameters
         cfads_p50 = _build_cfads_array(
             aep=params["aep_p50"],
@@ -259,7 +257,7 @@ def analyze_single_variable(
             degradation_rate=params["degradation"],
             project_life=config.project_life,
         )
-        
+
         cfads_p99 = _build_cfads_array(
             aep=params["aep_p99"],
             tariff=params["tariff"],
@@ -267,7 +265,7 @@ def analyze_single_variable(
             degradation_rate=params["degradation"],
             project_life=config.project_life,
         )
-        
+
         # Size debt with dual DSCR
         debt_result = size_debt_with_dual_dscr(
             cfads_p50=cfads_p50,
@@ -278,21 +276,21 @@ def analyze_single_variable(
             debt_ratio_max=config.debt_ratio_max,
             debt_rate=config.debt_rate,
         )
-        
+
         # Store base case for delta calculations
         if abs(pct) < 1e-6:  # Base case (0% perturbation)
             base_debt = debt_result["debt_sized"]
-        
+
         # Calculate deltas
         delta_usd = (
-            debt_result["debt_sized"] - base_debt
-            if base_debt is not None else 0.0
+            debt_result["debt_sized"] - base_debt if base_debt is not None else 0.0
         )
         delta_pct = (
             (delta_usd / base_debt * 100.0)
-            if base_debt is not None and base_debt > 0 else 0.0
+            if base_debt is not None and base_debt > 0
+            else 0.0
         )
-        
+
         # Get perturbed parameter value for logging
         if variable == "degradation":
             perturbed_value = params["degradation"]
@@ -306,60 +304,74 @@ def analyze_single_variable(
             perturbed_value = params["capex"]
         else:
             perturbed_value = 0.0
-        
-        results.append({
-            "perturbation_pct": float(pct),
-            "perturbed_value": float(perturbed_value),
-            "debt_sized": float(debt_result["debt_sized"]),
-            "debt_p50": float(debt_result["debt_p50"]),
-            "debt_p99": float(debt_result["debt_p99"]),
-            "binding_constraint": debt_result["binding_constraint"],
-            "delta_from_base_usd": float(delta_usd),
-            "delta_from_base_pct": float(delta_pct),
-            "min_dscr_p50": float(debt_result["min_dscr_p50"]),
-            "min_dscr_p99": float(debt_result["min_dscr_p99"]),
-        })
-    
+
+        results.append(
+            {
+                "perturbation_pct": float(pct),
+                "perturbed_value": float(perturbed_value),
+                "debt_sized": float(debt_result["debt_sized"]),
+                "debt_p50": float(debt_result["debt_p50"]),
+                "debt_p99": float(debt_result["debt_p99"]),
+                "binding_constraint": debt_result["binding_constraint"],
+                "delta_from_base_usd": float(delta_usd),
+                "delta_from_base_pct": float(delta_pct),
+                "min_dscr_p50": float(debt_result["min_dscr_p50"]),
+                "min_dscr_p99": float(debt_result["min_dscr_p99"]),
+            }
+        )
+
     # Calculate tornado chart data (impact at extremes)
     min_debt = min(r["debt_sized"] for r in results)
     max_debt = max(r["debt_sized"] for r in results)
-    
+
     tornado_data = {
         "min_impact": float(min_debt - base_debt) if base_debt else 0.0,
         "max_impact": float(max_debt - base_debt) if base_debt else 0.0,
         "range_usd": float(max_debt - min_debt),
         "range_pct": (
             float((max_debt - min_debt) / base_debt * 100.0)
-            if base_debt and base_debt > 0 else 0.0
+            if base_debt and base_debt > 0
+            else 0.0
         ),
     }
-    
+
     # Identify constraint transitions (where binding constraint changes)
     transitions = []
     for i in range(1, len(results)):
-        if results[i]["binding_constraint"] != results[i-1]["binding_constraint"]:
-            transitions.append({
-                "at_perturbation_pct": float(results[i]["perturbation_pct"]),
-                "from_constraint": results[i-1]["binding_constraint"],
-                "to_constraint": results[i]["binding_constraint"],
-            })
-    
+        if results[i]["binding_constraint"] != results[i - 1]["binding_constraint"]:
+            transitions.append(
+                {
+                    "at_perturbation_pct": float(results[i]["perturbation_pct"]),
+                    "from_constraint": results[i - 1]["binding_constraint"],
+                    "to_constraint": results[i]["binding_constraint"],
+                }
+            )
+
     # Get base value
     base_value = (
-        config.base_degradation if variable == "degradation"
-        else config.base_aep_p50 if variable == "aep"
-        else config.base_tariff if variable == "tariff"
-        else config.base_opex if variable == "opex"
-        else config.base_capex if variable == "capex"
-        else 0.0
+        config.base_degradation
+        if variable == "degradation"
+        else (
+            config.base_aep_p50
+            if variable == "aep"
+            else (
+                config.base_tariff
+                if variable == "tariff"
+                else (
+                    config.base_opex
+                    if variable == "opex"
+                    else config.base_capex if variable == "capex" else 0.0
+                )
+            )
+        )
     )
-    
+
     logger.info(
         f"  {variable}: Range ${tornado_data['range_usd']/1e6:.1f}M "
         f"({tornado_data['range_pct']:.1f}%), "
         f"{len(transitions)} constraint transitions"
     )
-    
+
     return {
         "variable": variable,
         "base_value": float(base_value),
@@ -375,19 +387,19 @@ def analyze_dscr_sensitivity(
     variables: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Comprehensive dual DSCR sensitivity analysis.
-    
+
     Analyzes how debt capacity varies with key project parameters,
     showing lenders:
     - When does P99 bind vs P50?
     - Debt capacity vs degradation rate
     - Impact of AEP uncertainty on sizing
     - Sensitivity to tariff and OPEX changes
-    
+
     Lender Presentation:
     - Tornado chart: Shows most sensitive parameters
     - Binding constraint analysis: Highlights downside risk
     - Debt capacity range: Quantifies uncertainty
-    
+
     Args:
         config: Hydra/OmegaConf configuration with:
             - project.capex_usd
@@ -403,7 +415,7 @@ def analyze_dscr_sensitivity(
             - financing.debt_rate
         variables: List of variables to analyze. If None, uses default:
             ['degradation', 'aep', 'tariff', 'opex', 'capex']
-    
+
     Returns:
         Dictionary containing:
             - sensitivity_config: Configuration used
@@ -411,10 +423,10 @@ def analyze_dscr_sensitivity(
             - tornado_chart: Sorted by impact magnitude
             - summary: Overall statistics
             - binding_constraint_analysis: When P99 binds
-    
+
     Raises:
         ValueError: If required config parameters are missing
-        
+
     Example:
         >>> from omegaconf import OmegaConf
         >>> cfg = OmegaConf.load('scenarios/dutchbay_lendercase_2025Q4.yaml')
@@ -429,7 +441,7 @@ def analyze_dscr_sensitivity(
     logger.info("=" * 70)
     logger.info("DUAL DSCR SENSITIVITY ANALYSIS")
     logger.info("=" * 70)
-    
+
     # Extract configuration (CESSPIT: all from config)
     try:
         sens_config = SensitivityConfig(
@@ -443,9 +455,7 @@ def analyze_dscr_sensitivity(
             perturbation_range_pct=float(
                 config.get("sensitivity", {}).get("perturbation_range_pct", 20.0)
             ),
-            n_steps=int(
-                config.get("sensitivity", {}).get("n_steps", 9)
-            ),
+            n_steps=int(config.get("sensitivity", {}).get("n_steps", 9)),
             dscr_target_p50=float(config.financing.dscr_target_p50),
             dscr_target_p99=float(config.financing.dscr_target_p99),
             debt_ratio_max=float(config.financing.debt_ratio_max),
@@ -461,53 +471,55 @@ def analyze_dscr_sensitivity(
             "  operations: {opex_usd_year}\n"
             "  financing: {dscr_target_p50, dscr_target_p99, debt_ratio_max, debt_rate}"
         ) from e
-    
+
     # Default variables if not specified
     if variables is None:
         variables = ["degradation", "aep", "tariff", "opex", "capex"]
-    
+
     logger.info(f"Variables: {', '.join(variables)}")
     logger.info(f"Perturbation range: ±{sens_config.perturbation_range_pct}%")
     logger.info(f"Steps: {sens_config.n_steps}")
     logger.info("")
-    
+
     # Run sensitivity for each variable
     variable_results = []
     for var in variables:
         result = analyze_single_variable(sens_config, var)
         variable_results.append(result)
-    
+
     # Build tornado chart (sorted by impact magnitude)
     tornado_chart = []
     for var_result in variable_results:
-        tornado_chart.append({
-            "variable": var_result["variable"],
-            "impact_range": var_result["tornado_data"]["range_usd"],
-            "impact_range_pct": var_result["tornado_data"]["range_pct"],
-            "min_impact": var_result["tornado_data"]["min_impact"],
-            "max_impact": var_result["tornado_data"]["max_impact"],
-        })
-    
+        tornado_chart.append(
+            {
+                "variable": var_result["variable"],
+                "impact_range": var_result["tornado_data"]["range_usd"],
+                "impact_range_pct": var_result["tornado_data"]["range_pct"],
+                "min_impact": var_result["tornado_data"]["min_impact"],
+                "max_impact": var_result["tornado_data"]["max_impact"],
+            }
+        )
+
     # Sort by absolute impact
     tornado_chart.sort(key=lambda x: abs(x["impact_range"]), reverse=True)
-    
+
     # Binding constraint analysis
     binding_analysis = {}
     for var_result in variable_results:
         var = var_result["variable"]
         transitions = var_result["constraint_transitions"]
-        
+
         # Count binding constraints across perturbations
         binding_counts = {"P50": 0, "P99": 0, "RATIO_CAP": 0}
         for pert in var_result["perturbations"]:
             binding_counts[pert["binding_constraint"]] += 1
-        
+
         binding_analysis[var] = {
             "transitions": transitions,
             "binding_counts": binding_counts,
             "p99_binds_frequently": binding_counts["P99"] > binding_counts["P50"],
         }
-    
+
     # Summary statistics
     summary = {
         "most_sensitive_variable": tornado_chart[0]["variable"],
@@ -516,7 +528,7 @@ def analyze_dscr_sensitivity(
         "variables_analyzed": len(variables),
         "base_debt": variable_results[0]["base_debt"] if variable_results else 0.0,
     }
-    
+
     logger.info("=" * 70)
     logger.info("TORNADO CHART (by impact magnitude)")
     logger.info("=" * 70)
@@ -528,7 +540,7 @@ def analyze_dscr_sensitivity(
     logger.info("=" * 70)
     logger.info(f"Most sensitive: {summary['most_sensitive_variable']}")
     logger.info("=" * 70)
-    
+
     return {
         "sensitivity_config": {
             "base_capex": sens_config.base_capex,
@@ -550,19 +562,19 @@ def analyze_dscr_sensitivity(
 def main() -> None:
     """CLI entry point for dual DSCR sensitivity analysis."""
     import sys
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    
+
     if len(sys.argv) < 2:
         logger.error("Usage: python -m analytics.dscr_sensitivity <config.yaml>")
         sys.exit(1)
-    
+
     config_path = sys.argv[1]
     logger.info(f"Loading config: {config_path}")
-    
+
     cfg = OmegaConf.load(config_path)
     if not isinstance(cfg, DictConfig):
         raise TypeError(
@@ -570,7 +582,7 @@ def main() -> None:
         )
 
     results = analyze_dscr_sensitivity(cfg)
-    
+
     # Output JSON results
     print(json.dumps(results, indent=2))
 

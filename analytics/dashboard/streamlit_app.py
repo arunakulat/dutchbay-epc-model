@@ -40,12 +40,29 @@ metric = st.selectbox(
     index=0,
 )
 
-st.markdown("**Driver ranges** — edit base/low/high (absolute values); add rows as needed.")
+st.markdown(
+    "**Driver ranges** — edit base/low/high (absolute values); add rows as needed."
+)
 DEFAULT_PARAMS = pd.DataFrame(
     [
-        {"variable_name": "tariff.lkr_per_kwh", "base_value": 20.3, "low_value": 16.0, "high_value": 24.0},
-        {"variable_name": "project.capacity_factor", "base_value": 0.339, "low_value": 0.30, "high_value": 0.37},
-        {"variable_name": "fx.start_lkr_per_usd", "base_value": 333.79, "low_value": 300.0, "high_value": 367.0},
+        {
+            "variable_name": "tariff.lkr_per_kwh",
+            "base_value": 20.3,
+            "low_value": 16.0,
+            "high_value": 24.0,
+        },
+        {
+            "variable_name": "project.capacity_factor",
+            "base_value": 0.339,
+            "low_value": 0.30,
+            "high_value": 0.37,
+        },
+        {
+            "variable_name": "fx.start_lkr_per_usd",
+            "base_value": 333.79,
+            "low_value": 300.0,
+            "high_value": 367.0,
+        },
     ]
 )
 params_df = st.data_editor(DEFAULT_PARAMS, num_rows="dynamic", use_container_width=True)
@@ -74,17 +91,29 @@ if st.button("Run sensitivity", type="primary"):
         if not params:
             st.warning("Add at least one driver with a variable_name.")
         else:
-            suite = run_sensitivity_analysis(config_path, metric=metric, parameters=params)
+            suite = run_sensitivity_analysis(
+                config_path, metric=metric, parameters=params
+            )
             records: Dict[str, Any] = suite_to_records(suite)
             rows = records.get("tornado_rows", [])
             if not rows:
-                st.warning("No tornado rows produced — check the config path and drivers.")
+                st.warning(
+                    "No tornado rows produced — check the config path and drivers."
+                )
             else:
                 df = pd.DataFrame(rows).sort_values("impact_abs", ascending=False)
                 base = float(df["base_value"].iloc[0])
                 st.subheader(f"Tornado — {metric} (base = {base:.4g})")
                 st.dataframe(
-                    df[["parameter", "base_value", "low_value", "high_value", "impact_abs"]],
+                    df[
+                        [
+                            "parameter",
+                            "base_value",
+                            "low_value",
+                            "high_value",
+                            "impact_abs",
+                        ]
+                    ],
                     use_container_width=True,
                 )
                 st.bar_chart(df.set_index("parameter")["impact_abs"])

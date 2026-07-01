@@ -4,6 +4,7 @@ Multi-Objective Optimizer for Dutch Bay 150MW Financial Model V12
 Optimizes debt ratio, USD/LKR split, and DFI debt under IRR/DSCR constraints
 ENHANCED VERSION: Robust error handling, constraint verification, dict key access
 """
+
 from __future__ import annotations
 
 import json
@@ -328,7 +329,9 @@ def optimize_debt_pareto(
         out_path.mkdir(parents=True, exist_ok=True)
         df.to_csv(out_path / "pareto_grid_results.csv", index=False)
         frontier_df.to_csv(out_path / "pareto_frontier.csv", index=False)
-        frontier_df.to_json(out_path / "pareto_frontier.json", orient="records", indent=2)
+        frontier_df.to_json(
+            out_path / "pareto_frontier.json", orient="records", indent=2
+        )
         # Utopia-ranked CSV (best first)
         frontier_ranked = frontier_df.sort_values(by="utopia_distance", ascending=True)
         frontier_ranked.to_csv(out_path / "pareto_utopia_ranked.csv", index=False)

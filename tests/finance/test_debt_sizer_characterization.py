@@ -80,7 +80,9 @@ def test_equity_npv_monotonic_in_gearing() -> None:
         assert higher >= lower - 1.0, f"equity_npv not monotonic: {npvs}"
 
 
-def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap() -> None:
+def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap() -> (
+    None
+):
     """Leverage is value-destructive and equity IRR plateaus at the DSCR-solved cap.
 
     The project return (~2.7%) sits well BELOW the cost of debt (the PR-B UIP LKR rate of
@@ -96,14 +98,18 @@ def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap(
     """
     import math
 
-    irrs = [_kpis(dr)["equity_irr"] for dr in GEARINGS]  # [0.35,0.40,0.45,0.50,0.60,0.70]
+    irrs = [
+        _kpis(dr)["equity_irr"] for dr in GEARINGS
+    ]  # [0.35,0.40,0.45,0.50,0.60,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
     # Above the ~0.45 DSCR-solved cap (PR-B's UIP LKR debt rate 13.39% de-levered the deal
     # from ~0.588) the sizer clamps to the solved gearing -> equity IRR plateaus at the
     # canonical clamped value (now -0.0486 after the PR-B debt-rate re-baseline).
     plateau = irrs[3:]
-    assert max(plateau) - min(plateau) < 1e-6, f"supra-cap equity_irr not flat (clamped): {plateau}"
+    assert (
+        max(plateau) - min(plateau) < 1e-6
+    ), f"supra-cap equity_irr not flat (clamped): {plateau}"
     assert plateau[0] == pytest.approx(-0.0486, abs=0.002)
     # Value-destructive leverage: the least-levered point beats the clamped high-gearing plateau,
     # and the gap is material.

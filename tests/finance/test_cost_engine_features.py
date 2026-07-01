@@ -14,8 +14,8 @@ import pytest
 from finance.cashflow_v14_params import _build_cashflow_params
 from finance.debt_v14 import _extract_capex_usd
 
-
 # --- CAPEX: derive-from-breakdown ------------------------------------------------
+
 
 def test_capex_derives_from_breakdown_sum() -> None:
     cfg = {
@@ -53,13 +53,17 @@ def test_capex_flag_off_uses_flat_total() -> None:
     cfg = {
         "capex": {
             "usd_total": 159_600_000,
-            "breakdown": {"a_usd": 140_000_000, "b_usd": 10_000_000},  # sums to 150M, ignored
+            "breakdown": {
+                "a_usd": 140_000_000,
+                "b_usd": 10_000_000,
+            },  # sums to 150M, ignored
         }
     }
     assert _extract_capex_usd(cfg) == pytest.approx(159_600_000, rel=1e-9)
 
 
 # --- OPEX: escalation ------------------------------------------------------------
+
 
 def _params(raw: dict):
     return _build_cashflow_params(raw)

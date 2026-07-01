@@ -103,7 +103,7 @@ def compute_trend(annual: pd.Series) -> TrendResult:
     p_mk = float(_kt.pvalue)
     sen = _st.theilslopes(vals, yrs)
     ols = _st.linregress(yrs, vals)
-    r2 = float(ols.rvalue ** 2)
+    r2 = float(ols.rvalue**2)
     classification, note = _classify(float(p_mk), r2)
     return TrendResult(
         start_year=int(yrs.min()),
@@ -125,13 +125,20 @@ def compute_trend(annual: pd.Series) -> TrendResult:
     )
 
 
-def reference_periods(start_year: int, end_year: int) -> List[Tuple[int, int, str, str]]:
+def reference_periods(
+    start_year: int, end_year: int
+) -> List[Tuple[int, int, str, str]]:
     """``(start, end, key, role)`` for recent-5yr / current-decade / 20yr / full record."""
     candidates = [
         (end_year - 4, end_year, "recent_5yr", "downside (recent 5 yr)"),
         (end_year - 9, end_year, "current_decade", "central (current-climate decade)"),
         (end_year - 19, end_year, "longterm_20yr", "long-term (20 yr)"),
-        (start_year, end_year, "full_record", f"full record ({end_year - start_year + 1} yr)"),
+        (
+            start_year,
+            end_year,
+            "full_record",
+            f"full record ({end_year - start_year + 1} yr)",
+        ),
     ]
     return [(max(s, start_year), e, k, r) for (s, e, k, r) in candidates]
 
@@ -144,7 +151,7 @@ def period_aep_table(
 
     rows: List[Dict[str, Any]] = []
     idx_year = pd.DatetimeIndex(series.index).year
-    for (s, e, key, role) in periods:
+    for s, e, key, role in periods:
         sub = series[(idx_year >= s) & (idx_year <= e)]
         if sub.empty:
             continue
@@ -172,7 +179,9 @@ def recommend_p50(trend: TrendResult, table: List[Dict[str, Any]]) -> Dict[str, 
         central_key = "current_decade"
     else:
         central_key = "longterm_20yr"
-    central = by.get(central_key) or by.get("longterm_20yr") or (table[0] if table else {})
+    central = (
+        by.get(central_key) or by.get("longterm_20yr") or (table[0] if table else {})
+    )
     downside = by.get("recent_5yr", {})
     upside = by.get("longterm_20yr", {})
     return {
@@ -200,7 +209,8 @@ def render_trend_markdown(
         f"{trend.sen_slope_per_decade:+.3f} m/s/decade (95% CI "
         f"[{trend.sen_ci_low_per_decade:+.3f}, {trend.sen_ci_high_per_decade:+.3f}]); "
         f"OLS R2 {trend.ols_r2}.",
-        "- Decade means: " + " · ".join(f"{k} {v}" for k, v in trend.decade_means.items()),
+        "- Decade means: "
+        + " · ".join(f"{k} {v}" for k, v in trend.decade_means.items()),
         f"- **Classification: {trend.classification.replace('_', ' ')}.** "
         f"{trend.classification_note}",
         "",
@@ -234,7 +244,10 @@ def trend_summary_dataframe(
 ) -> pd.DataFrame:
     """Tidy (Metric, Value) table for the lender workbook 'ResourceTrend' sheet."""
     rows: List[Tuple[str, Any]] = [
-        ("Reference period", f"{trend.start_year}-{trend.end_year} ({trend.n_years} yr)"),
+        (
+            "Reference period",
+            f"{trend.start_year}-{trend.end_year} ({trend.n_years} yr)",
+        ),
         ("Mean wind speed (m/s)", trend.mean_ws_ms),
         ("Interannual CoV (%)", trend.cov_pct),
         ("Mann-Kendall tau", trend.mk_tau),
@@ -248,7 +261,9 @@ def trend_summary_dataframe(
     for k, v in trend.decade_means.items():
         rows.append((f"Decade mean {k} (m/s)", v))
     for r in table:
-        rows.append((f"AEP P50 {r['period']} [{r['role']}] (GWh)", r["net_aep_p50_gwh"]))
+        rows.append(
+            (f"AEP P50 {r['period']} [{r['role']}] (GWh)", r["net_aep_p50_gwh"])
+        )
         rows.append((f"CF {r['period']}", r["capacity_factor"]))
     rows += [
         ("Recommended P50 basis", rec["central_basis"].replace("_", " ")),

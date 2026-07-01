@@ -289,9 +289,7 @@ class TestMainCli:
         assert "summary" in payload
         assert payload["summary"]["variables_analyzed"] == 5
 
-    def test_main_usage_error_exits(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_usage_error_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No config argument -> usage error and SystemExit(1)."""
         import sys as _sys
 

@@ -30,7 +30,6 @@ from finance.epc_helper_v14 import (
     epc_breakdown_from_config,
 )
 
-
 # ---------------------------------------------------------------------------
 # _resolve_fx_rate (lines 105-127)
 # ---------------------------------------------------------------------------
@@ -364,7 +363,11 @@ def test_breakdown_dict_explicit_default_fx_argument() -> None:
 def test_breakdown_dict_non_mapping_capex_zero_pcts() -> None:
     """Non-mapping capex -> the guard resets it to {} so pcts are 0.0."""
     base = 4.0e7
-    cfg = {"capex": ["not", "a", "map"], "finance": {"capex_usd": base}, "fx": {"rate": 300.0}}
+    cfg = {
+        "capex": ["not", "a", "map"],
+        "finance": {"capex_usd": base},
+        "fx": {"rate": 300.0},
+    }
     out = epc_breakdown_dict(cfg)
     assert out["base_cost_usd"] == base
     assert out["freight_pct"] == 0.0

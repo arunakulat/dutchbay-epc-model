@@ -9,6 +9,7 @@
 KPI-neutral: this is an additive, read-only analysis layer; the deterministic base case is
 never touched (no canonical-KPI assertions belong here).
 """
+
 from __future__ import annotations
 
 import math
@@ -38,7 +39,7 @@ def _ishigami(overrides):
     """
     a, b = 7.0, 0.1
     x1, x2, x3 = overrides["x1"], overrides["x2"], overrides["x3"]
-    return {"y": math.sin(x1) + a * math.sin(x2) ** 2 + b * (x3 ** 4) * math.sin(x1)}
+    return {"y": math.sin(x1) + a * math.sin(x2) ** 2 + b * (x3**4) * math.sin(x1)}
 
 
 def test_sobol_recovers_ishigami_interaction_structure() -> None:

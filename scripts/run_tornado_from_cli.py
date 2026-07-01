@@ -15,6 +15,7 @@ were exported by the shim any more, so the script raised ``ImportError`` on impo
 It is repointed here to the live API; the YAML loader and the tornado->DataFrame
 flattener are implemented locally (the engine returns typed contracts, not frames).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,7 +71,9 @@ def load_parameters_from_yaml(path: Path) -> List[ParameterRangeConfig]:
                 )
             items = list_vals[0]
     else:
-        raise ValueError(f"{path}: expected a YAML list or mapping, got {type(raw).__name__}.")
+        raise ValueError(
+            f"{path}: expected a YAML list or mapping, got {type(raw).__name__}."
+        )
 
     allowed = {f.name for f in fields(ParameterRangeConfig)}
     params: List[ParameterRangeConfig] = []
@@ -111,18 +114,22 @@ def tornado_suite_to_dataframe(
     rows: List[dict[str, Any]] = []
     for idx, tr in enumerate(results):
         param = params[idx] if idx < len(params) else None
-        variable_name = param.variable_name if param is not None else (tr.label or tr.metric_name)
+        variable_name = (
+            param.variable_name if param is not None else (tr.label or tr.metric_name)
+        )
         label = (param.label if param is not None else None) or variable_name
         shock = tr.shock_results[0] if tr.shock_results else None
-        rows.append({
-            "metric": metric,
-            "variable_name": variable_name,
-            "label": label,
-            "base_case": tr.base_metric,
-            "low_case": shock.low_case if shock is not None else None,
-            "high_case": shock.high_case if shock is not None else None,
-            "impact_abs": tr.impact_abs,
-        })
+        rows.append(
+            {
+                "metric": metric,
+                "variable_name": variable_name,
+                "label": label,
+                "base_case": tr.base_metric,
+                "low_case": shock.low_case if shock is not None else None,
+                "high_case": shock.high_case if shock is not None else None,
+                "impact_abs": tr.impact_abs,
+            }
+        )
 
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -210,9 +217,14 @@ def main(argv: List[str] | None = None) -> int:
     frames: list[pd.DataFrame] = []
     for metric_name in metrics:
         try:
-            suite = run_sensitivity_analysis(config_path, metric=metric_name, parameters=params)
+            suite = run_sensitivity_analysis(
+                config_path, metric=metric_name, parameters=params
+            )
         except (ValueError, KeyError) as exc:
-            print(f"[run_tornado_from_cli] ERROR for metric '{metric_name}': {exc}", file=sys.stderr)
+            print(
+                f"[run_tornado_from_cli] ERROR for metric '{metric_name}': {exc}",
+                file=sys.stderr,
+            )
             return 2
         frames.append(tornado_suite_to_dataframe(suite, metric_name, params))
 

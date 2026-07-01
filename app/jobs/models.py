@@ -101,7 +101,11 @@ class WindJobRequest(BaseModel):
 
     def site_location(self) -> Dict[str, Any]:
         """Build the ``{name, lat, lon}`` dict the wind pipeline requires."""
-        return {"name": self.inputs.site_name, "lat": self.site_lat, "lon": self.site_lon}
+        return {
+            "name": self.inputs.site_name,
+            "lat": self.site_lat,
+            "lon": self.site_lon,
+        }
 
     def to_finance_scenario(self) -> Dict[str, Any]:
         """Map the embedded finance inputs to a full v14 scenario dict."""

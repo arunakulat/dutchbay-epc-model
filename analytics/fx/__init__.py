@@ -19,11 +19,12 @@ __all__ = ["integrate_fx_into_scenario_result"]
 
 def __getattr__(name: str) -> Any:
     """PEP 562: Lazy module attribute access.
-    
+
     Defers importing fx_integration until first use of integrate_fx_into_scenario_result.
     This breaks the circular dependency chain.
     """
     if name == "integrate_fx_into_scenario_result":
         from .fx_integration import integrate_fx_into_scenario_result
+
         return integrate_fx_into_scenario_result
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

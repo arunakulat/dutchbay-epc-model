@@ -5,6 +5,7 @@ Test Script for Option A/B Enhanced Returns Module: Grid/regulatory/tax/risk/DSC
 Usage:
     python scripts/test_returns_module.py
 """
+
 import sys
 from pathlib import Path
 

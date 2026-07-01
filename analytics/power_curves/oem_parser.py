@@ -144,7 +144,9 @@ _CURVE_ENTRY: Dict[str, Any] = _load_curve_entry()
 ENVISION_EN171_65_POWER_CURVE: pd.DataFrame = _build_base_curve(_CURVE_ENTRY)
 
 #: EN-171/6.5 MW turbine specifications, config-sourced.
-ENVISION_EN171_65_SPECS: Dict[str, Any] = _build_specs(_CURVE_ENTRY, CANONICAL_CURVE_KEY)
+ENVISION_EN171_65_SPECS: Dict[str, Any] = _build_specs(
+    _CURVE_ENTRY, CANONICAL_CURVE_KEY
+)
 
 
 def _apply_air_density_correction(
@@ -367,9 +369,7 @@ def compute_aep_from_curve(
             * availability_multiplier
             * electrical_multiplier
         )
-        losses_dict["total_loss_pct"] = 100.0 * (
-            1.0 - net_aep_gwh / gross_aep_farm_gwh
-        )
+        losses_dict["total_loss_pct"] = 100.0 * (1.0 - net_aep_gwh / gross_aep_farm_gwh)
     else:
         net_aep_gwh = gross_aep_farm_gwh
         losses_dict["total_loss_pct"] = 0.0
@@ -414,7 +414,9 @@ def validate_power_curve_iec_compliance(curve: pd.DataFrame) -> Dict[str, Any]:
     rated_idx = int(np.argmax(power))
     monotonic_ok = bool(np.all(np.diff(power[: rated_idx + 1]) >= -1e-6))
 
-    cutin_ok = bool(power[ws <= float(ENVISION_EN171_65_SPECS["cut_in_ms"])].min() <= 1e-6)
+    cutin_ok = bool(
+        power[ws <= float(ENVISION_EN171_65_SPECS["cut_in_ms"])].min() <= 1e-6
+    )
     cutout_ok = bool(power[-1] <= 1e-6)
 
     return {

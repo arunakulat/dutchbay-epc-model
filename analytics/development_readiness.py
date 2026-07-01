@@ -39,7 +39,9 @@ from analytics.config_schema import RequiredFieldSpec, register_required_fields
 logger = logging.getLogger(__name__)
 
 _DEFAULTS_PATH = Path(__file__).resolve().parents[1] / "config" / "defaults.yaml"
-_TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "config" / "development_readiness.yaml"
+_TAXONOMY_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "development_readiness.yaml"
+)
 
 
 class DevelopmentReadinessError(ValueError):
@@ -162,7 +164,9 @@ def _resolve_bool(block: Mapping[str, Any], key: str, fallback: bool) -> bool:
         return fallback
     value = block[key]
     if not isinstance(value, bool):
-        raise ValueError(f"development_readiness.{key} must be a boolean; got {value!r}")
+        raise ValueError(
+            f"development_readiness.{key} must be a boolean; got {value!r}"
+        )
     return value
 
 
@@ -174,7 +178,9 @@ def resolve_readiness_policy(config: Mapping[str, Any]) -> ReadinessPolicy:
         return default
     return ReadinessPolicy(
         enforce=_resolve_bool(block, "enforce", default.enforce),
-        require_complete=_resolve_bool(block, "require_complete", default.require_complete),
+        require_complete=_resolve_bool(
+            block, "require_complete", default.require_complete
+        ),
     )
 
 
@@ -226,37 +232,47 @@ def build_readiness_report(config: Mapping[str, Any]) -> ReadinessReport:
 
     for name, rec in pairs:
         if not isinstance(rec, Mapping):
-            findings.append(ReadinessFinding("missing_field", name, "entry is not a mapping"))
+            findings.append(
+                ReadinessFinding("missing_field", name, "entry is not a mapping")
+            )
             continue
         if name not in taxonomy.workstreams:
             findings.append(
                 ReadinessFinding(
-                    "unknown_workstream", name,
+                    "unknown_workstream",
+                    name,
                     f"not a canonical workstream ({', '.join(taxonomy.workstreams)})",
                 )
             )
         status = rec.get("status")
         if status is None or status == "":
-            findings.append(ReadinessFinding("missing_field", name, "missing required 'status'"))
+            findings.append(
+                ReadinessFinding("missing_field", name, "missing required 'status'")
+            )
             continue
         status = str(status)
         if status not in taxonomy.status_rank:
             findings.append(
                 ReadinessFinding(
-                    "unknown_status", name,
+                    "unknown_status",
+                    name,
                     f"status {status!r} is not in the RAG scale ({', '.join(taxonomy.statuses)})",
                 )
             )
             continue
         valid_statuses.append(status)
-        rendered.append(ReadinessItem(workstream=name, status=status, note=str(rec.get("note", ""))))
+        rendered.append(
+            ReadinessItem(workstream=name, status=status, note=str(rec.get("note", "")))
+        )
 
     declared = {name for name, _ in pairs}
     missing = tuple(w for w in taxonomy.workstreams if w not in declared)
     if policy.require_complete:
         for w in missing:
             findings.append(
-                ReadinessFinding("incomplete", w, "workstream has no declared readiness status")
+                ReadinessFinding(
+                    "incomplete", w, "workstream has no declared readiness status"
+                )
             )
 
     counts = {s: valid_statuses.count(s) for s in taxonomy.statuses}
@@ -290,16 +306,22 @@ def validate_development_readiness(
         if report.items:
             logger.debug(
                 "Development readiness%s: overall=%s (%d workstreams declared).",
-                where, report.overall_status, len(report.covered),
+                where,
+                report.overall_status,
+                len(report.covered),
             )
         return report
 
-    summary = "; ".join(f"[{f.kind}] {f.workstream}: {f.detail}" for f in report.findings)
+    summary = "; ".join(
+        f"[{f.kind}] {f.workstream}: {f.detail}" for f in report.findings
+    )
     if policy.enforce:
         raise DevelopmentReadinessError(
             f"Development-readiness register is not lender-grade{where}: {summary}"
         )
-    logger.warning("Development-readiness findings%s (soft; enforce=false): %s", where, summary)
+    logger.warning(
+        "Development-readiness findings%s (soft; enforce=false): %s", where, summary
+    )
     return report
 
 

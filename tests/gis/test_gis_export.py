@@ -32,7 +32,13 @@ def _cfg(tmp_path):
         "center_lon": 79.75,
         "grids": [
             {"name": "coarse", "n": 3, "cell_deg": 0.25, "mode": "native"},
-            {"name": "fine", "n": 3, "cell_deg": 0.05, "mode": "interpolated", "source": "coarse"},
+            {
+                "name": "fine",
+                "n": 3,
+                "cell_deg": 0.05,
+                "mode": "interpolated",
+                "source": "coarse",
+            },
         ],
     }
 

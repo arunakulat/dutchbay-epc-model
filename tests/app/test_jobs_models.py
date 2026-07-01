@@ -83,5 +83,12 @@ def test_request_defaults_and_validation() -> None:
     with pytest.raises(ValueError):  # latitude out of range
         _request(site_lat=120.0)
     with pytest.raises(ValueError):  # unknown field rejected (extra=forbid)
-        WindJobRequest(inputs=_inputs(), site_lat=8.0, site_lon=79.0,
-                       turbine_model="X", num_turbines=1, hub_height_m=100.0, bogus=1)
+        WindJobRequest(
+            inputs=_inputs(),
+            site_lat=8.0,
+            site_lon=79.0,
+            turbine_model="X",
+            num_turbines=1,
+            hub_height_m=100.0,
+            bogus=1,
+        )

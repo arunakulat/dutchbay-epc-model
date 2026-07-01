@@ -16,6 +16,7 @@ Framework Compliance:
 Run:
     pytest tests/analytics/test_tax_sensitivity.py -v
 """
+
 from __future__ import annotations
 
 import copy
@@ -77,7 +78,9 @@ def test_corporate_tax_rate_has_material_impact(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_corporate_tax_rate_direction_on_levered_equity_is_shield_dominated(base_config):
+def test_corporate_tax_rate_direction_on_levered_equity_is_shield_dominated(
+    base_config,
+):
     """At the realistic 5.9% FX-drift baseline the LEVERED equity IRR RISES with the
     corporate tax rate — the interest tax shield dominates.
 

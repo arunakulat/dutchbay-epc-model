@@ -227,9 +227,11 @@ def _resolve_scenario_spot(fx_config: Mapping[str, Any]) -> Optional[float]:
     candidates = [
         rates.get("lkr_per_usd") if isinstance(rates, Mapping) else None,
         fx_config.get("start_lkr_per_usd"),
-        (fx_config.get("source") or {}).get("pinned_rate")
-        if isinstance(fx_config.get("source"), Mapping)
-        else None,
+        (
+            (fx_config.get("source") or {}).get("pinned_rate")
+            if isinstance(fx_config.get("source"), Mapping)
+            else None
+        ),
     ]
     for value in candidates:
         if value is None:
@@ -300,9 +302,7 @@ def compute_fx_curve(
         else:
             spot = float(raw_spot)
             if spot <= 0.0:
-                raise ValueError(
-                    f"fx spot rate must be > 0; got {raw_spot!r}"
-                )
+                raise ValueError(f"fx spot rate must be > 0; got {raw_spot!r}")
         # SINGLE SOURCE OF TRUTH: when the scenario's fx block resolves to a parametric
         # curve (start + annual_depr), reuse the cashflow's resolver so the REPORTED FX
         # curve EQUALS the curve the USD economics are computed at. Previously this built a
@@ -491,7 +491,9 @@ def compute_fx_risk_profile(
     # Spot rate (final-year curve point, else config reference) — retained for the log.
     from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
-    spot_lkr_usd = fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else default_fx_lkr_per_usd()
+    spot_lkr_usd = (
+        fx_curve.lkr_usd[-1] if fx_curve.lkr_usd else default_fx_lkr_per_usd()
+    )
 
     # FX VaR is on the CURRENCY-MISMATCHED legs ONLY (audit fix). The project's revenue is
     # LKR; LKR-denominated debt serviced from that LKR revenue is a NATURAL HEDGE — its
@@ -508,10 +510,14 @@ def compute_fx_risk_profile(
     # coverage_pct was read onto the block but never reduced the VaR. Clamp to [0,1];
     # 0% coverage -> full exposure.
     hedge_frac = max(0.0, min(1.0, fx_block.hedging_coverage_pct / 100.0))
-    hard_currency_exposure = total_debt_usd + total_debt_cny  # mismatched vs LKR revenue
+    hard_currency_exposure = (
+        total_debt_usd + total_debt_cny
+    )  # mismatched vs LKR revenue
     residual_exposure = hard_currency_exposure * (1.0 - hedge_frac)
     var_95_usd_million = (residual_exposure * var_shock_pct) / 1e6
-    cvar_95_usd_million = var_95_usd_million * 1.5  # CVaR ~1.5x VaR (normal-tail heuristic)
+    cvar_95_usd_million = (
+        var_95_usd_million * 1.5
+    )  # CVaR ~1.5x VaR (normal-tail heuristic)
 
     # Revenue percentages (assume all in LKR unless specified otherwise)
     revenues_lkr_pct = 100.0 if "LKR" in fx_block.revenue_currencies else 0.0

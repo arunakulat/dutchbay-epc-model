@@ -73,14 +73,18 @@ def _analyzer(**kwargs: float) -> TailRiskAnalyzer:
 def test_config_unusual_confidence_warns(caplog: pytest.LogCaptureFixture) -> None:
     # A confidence level outside the typical 0.80-0.99 band is still accepted
     # (the field bound is 0..1) but emits a warning.
-    with caplog.at_level(logging.WARNING, logger="dutchbay.analytics.core.risk_metrics"):
+    with caplog.at_level(
+        logging.WARNING, logger="dutchbay.analytics.core.risk_metrics"
+    ):
         cfg = _config(confidence_level=0.50)
     assert cfg.confidence_level == pytest.approx(0.50)
     assert any("Unusual confidence level" in rec.message for rec in caplog.records)
 
 
 def test_config_typical_confidence_no_warn(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.WARNING, logger="dutchbay.analytics.core.risk_metrics"):
+    with caplog.at_level(
+        logging.WARNING, logger="dutchbay.analytics.core.risk_metrics"
+    ):
         _config(confidence_level=0.95)
     assert not any("Unusual confidence level" in rec.message for rec in caplog.records)
 

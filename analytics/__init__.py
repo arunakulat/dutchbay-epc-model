@@ -30,19 +30,6 @@ from analytics.contracts_v14 import (
     WaccResult,
 )
 
-# (The analytics.contracts_v14_compat stub layer is fully retired. The
-# DownsideMetrics/TailRiskMetrics stubs went in audit R2; the last symbol,
-# build_cashflow_result_from_annual_rows, had ZERO real callers — the "live
-# production callers" note was stale — so the module is removed. The canonical
-# MultiMetricSensitivitySuite/DownsideMetrics live in analytics.contracts_v14.)
-
-# FX contracts
-from analytics.fx.fx_contracts import (
-    FXCurveOutput,
-    FXRiskProfile,
-    FXStructuredBlock,
-)
-
 # Returns calculation module
 from analytics.core.returns import (
     AllReturns,
@@ -68,6 +55,20 @@ from analytics.core.risk_metrics import (
     TailRiskReport,
     VaRCVaRResult,
 )
+
+# FX contracts
+from analytics.fx.fx_contracts import (
+    FXCurveOutput,
+    FXRiskProfile,
+    FXStructuredBlock,
+)
+
+# (The analytics.contracts_v14_compat stub layer is fully retired. The
+# DownsideMetrics/TailRiskMetrics stubs went in audit R2; the last symbol,
+# build_cashflow_result_from_annual_rows, had ZERO real callers — the "live
+# production callers" note was stale — so the module is removed. The canonical
+# MultiMetricSensitivitySuite/DownsideMetrics live in analytics.contracts_v14.)
+
 
 __all__ = [
     # Contract version

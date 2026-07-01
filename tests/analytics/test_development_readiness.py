@@ -6,6 +6,7 @@ Covers the config-sourced taxonomy, the soft-by-default policy, the pure report 
 canonical-KPI assertions belong here — the guarantee is that it raises or no-ops and never
 mutates the config.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,7 +28,9 @@ def _full_items(**status_over):
     tax = load_readiness_taxonomy()
     return {
         "development_readiness": {
-            "items": {w: {"status": status_over.get(w, "green")} for w in tax.workstreams}
+            "items": {
+                w: {"status": status_over.get(w, "green")} for w in tax.workstreams
+            }
         }
     }
 
@@ -96,24 +99,39 @@ def test_unknown_status_is_a_finding() -> None:
 def test_missing_status_field_is_a_finding() -> None:
     cfg = {"development_readiness": {"items": {"epc": {"note": "no status"}}}}
     report = build_readiness_report(cfg)
-    assert any(f.kind == "missing_field" and f.workstream == "epc" for f in report.findings)
+    assert any(
+        f.kind == "missing_field" and f.workstream == "epc" for f in report.findings
+    )
 
 
 def test_non_mapping_entry_is_a_finding() -> None:
     cfg = {"development_readiness": {"items": {"land": "green"}}}  # value not a record
     report = build_readiness_report(cfg)
-    assert any(f.kind == "missing_field" and "not a mapping" in f.detail for f in report.findings)
+    assert any(
+        f.kind == "missing_field" and "not a mapping" in f.detail
+        for f in report.findings
+    )
 
 
 def test_require_complete_flags_missing_workstreams() -> None:
-    cfg = {"development_readiness": {"require_complete": True, "items": {"land": {"status": "green"}}}}
+    cfg = {
+        "development_readiness": {
+            "require_complete": True,
+            "items": {"land": {"status": "green"}},
+        }
+    }
     report = build_readiness_report(cfg)
     incomplete = {f.workstream for f in report.findings if f.kind == "incomplete"}
     assert "financing" in incomplete and "land" not in incomplete
 
 
 def test_enforce_true_raises_on_findings() -> None:
-    cfg = {"development_readiness": {"enforce": True, "items": {"bogus": {"status": "green"}}}}
+    cfg = {
+        "development_readiness": {
+            "enforce": True,
+            "items": {"bogus": {"status": "green"}},
+        }
+    }
     with pytest.raises(DevelopmentReadinessError, match="not lender-grade"):
         validate_development_readiness(cfg, "lender.yaml")
 
@@ -149,7 +167,9 @@ def test_malformed_items_container_raises() -> None:
 
 def test_list_item_without_workstream_raises() -> None:
     with pytest.raises(DevelopmentReadinessError, match="'workstream' key"):
-        build_readiness_report({"development_readiness": {"items": [{"status": "green"}]}})
+        build_readiness_report(
+            {"development_readiness": {"items": [{"status": "green"}]}}
+        )
 
 
 def test_non_bool_override_raises() -> None:
@@ -208,7 +228,9 @@ def test_seeded_lendercase_scenario_rolls_up_red() -> None:
     import yaml
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = yaml.safe_load((repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml").read_text())
+    cfg = yaml.safe_load(
+        (repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml").read_text()
+    )
     report = build_readiness_report(cfg)
     assert report.is_clean  # the seed is well-formed against the taxonomy
     assert report.overall_status == "red"  # financing is red

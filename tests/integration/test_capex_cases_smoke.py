@@ -83,12 +83,18 @@ def test_resource_invariant_to_capex(name: str) -> None:
     """Only capex changed — resource fields equal the canonical lender case."""
     cfg = load_scenario_config(str(CASES[name]["file"]))
     assert float(cfg["project"]["capacity_mw"]) == pytest.approx(159.6, abs=0.01)
-    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(464.3, abs=0.5)
-    assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(0.332, abs=0.001)
+    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(
+        464.3, abs=0.5
+    )
+    assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(
+        0.332, abs=0.001
+    )
 
 
 @pytest.mark.parametrize("name", list(CASES))
-def test_expected_results_bind_to_engine(name: str, kpis: dict[str, dict[str, float]]) -> None:
+def test_expected_results_bind_to_engine(
+    name: str, kpis: dict[str, dict[str, float]]
+) -> None:
     """The live pipeline reproduces every financial ``expected_results`` value."""
     expected = load_scenario_config(str(CASES[name]["file"]))["expected_results"]
     live = kpis[name]

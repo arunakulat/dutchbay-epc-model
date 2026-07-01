@@ -18,6 +18,7 @@ Public API (keep stable):
 - run_sensitivity_analysis(...)
 - build_one_way_sensitivity_suite(...)
 """
+
 from __future__ import annotations
 
 import copy
@@ -110,7 +111,9 @@ _COVENANT_METRIC_TOKENS = ("dscr", "llcr", "plcr")
 _FLAT_IMPACT_TOL = 1e-9
 
 
-def _flag_degenerate_metric(suite: SensitivitySuite, metric_key: str) -> SensitivitySuite:
+def _flag_degenerate_metric(
+    suite: SensitivitySuite, metric_key: str
+) -> SensitivitySuite:
     """Stamp ``metadata['flat_metric']`` and warn when a metric's whole tornado is flat.
 
     Sets ``flat_metric`` True only when there is at least one bar and every bar's

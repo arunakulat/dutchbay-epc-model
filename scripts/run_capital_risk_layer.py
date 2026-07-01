@@ -23,6 +23,7 @@ With no --drivers, a default set is derived from the scenario's own base values
 (project.capacity_factor, tariff.lkr_per_kwh, capex.usd_total) at a 5% Gaussian std.
 JSON is printed to stdout.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -80,7 +81,9 @@ def default_drivers(config_path: str) -> Dict[str, Dict[str, float]]:
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run the capital-risk layer for a scenario.")
+    p = argparse.ArgumentParser(
+        description="Run the capital-risk layer for a scenario."
+    )
     p.add_argument("--config", required=True, help="Path to the v14 scenario YAML.")
     p.add_argument(
         "--drivers",

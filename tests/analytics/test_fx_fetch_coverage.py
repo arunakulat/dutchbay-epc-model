@@ -114,7 +114,9 @@ def test_default_fx_raises_when_defaults_key_missing(
 def test_from_vintage_file_malformed_raises(tmp_path: Path) -> None:
     """A vintage JSON missing required keys raises with the artifact path quoted."""
     bad = tmp_path / "vintage.json"
-    bad.write_text(json.dumps({"provider": "open_er_api"}))  # no lkr_per_usd / as_of_utc
+    bad.write_text(
+        json.dumps({"provider": "open_er_api"})
+    )  # no lkr_per_usd / as_of_utc
     with pytest.raises(ValueError, match="Malformed FX vintage artifact"):
         FXRate.from_vintage_file(bad)
 
@@ -182,9 +184,7 @@ def test_from_scenario_missing_source_raises() -> None:
 
 def test_from_scenario_latest_mode_builds() -> None:
     """mode='latest' needs no pinned rate and resolves the documented defaults."""
-    cfg = FXRequestConfig.from_scenario(
-        {"fx": {"source": {"mode": "latest"}}}
-    )
+    cfg = FXRequestConfig.from_scenario({"fx": {"source": {"mode": "latest"}}})
     assert cfg.reference_mode == "latest"
     assert cfg.provider == DEFAULT_PROVIDER
     assert cfg.endpoint == DEFAULT_ENDPOINT

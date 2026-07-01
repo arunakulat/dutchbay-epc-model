@@ -91,7 +91,8 @@ def test_irr_solver_converges_to_a_real_tariff_for_reachable_target() -> None:
     assert 40.0 < tariff < 100.0  # interior solution, not a bound
     achieved = float(
         evaluate_with_overrides(
-            base_config_path=LENDER_CONFIG, overrides={"tariff": {"lkr_per_kwh": tariff}}
+            base_config_path=LENDER_CONFIG,
+            overrides={"tariff": {"lkr_per_kwh": tariff}},
         )["project_irr"]
     )
     assert achieved == pytest.approx(target, abs=2e-3)
@@ -126,7 +127,11 @@ def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
     "max debt given DSCR" IS the engine's solved gearing."""
     with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_given_dscr(
-            LENDER_CONFIG, None, target_dscr=1.10, bounds=(1.0e6, 1.0e9), tolerance=1000.0
+            LENDER_CONFIG,
+            None,
+            target_dscr=1.10,
+            bounds=(1.0e6, 1.0e9),
+            tolerance=1000.0,
         )
 
 
@@ -140,13 +145,18 @@ def test_npv_solver_project_metric_converges_to_real_tariff() -> None:
     project_npv at the returned tariff matches the target."""
     target = 200.0e6  # within the reachable ~85M..439M band over 40..100 LKR/kWh
     tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG, None, target_npv=target, metric="project_npv",
-        bounds=(40.0, 100.0), tolerance=1.0e5,
+        LENDER_CONFIG,
+        None,
+        target_npv=target,
+        metric="project_npv",
+        bounds=(40.0, 100.0),
+        tolerance=1.0e5,
     )
     assert 40.0 < tariff < 100.0
     achieved = float(
         evaluate_with_overrides(
-            base_config_path=LENDER_CONFIG, overrides={"tariff": {"lkr_per_kwh": tariff}}
+            base_config_path=LENDER_CONFIG,
+            overrides={"tariff": {"lkr_per_kwh": tariff}},
         )["project_npv"]
     )
     assert achieved == pytest.approx(target, abs=2.0e6)
@@ -156,10 +166,16 @@ def test_npv_solver_equity_metric_is_accepted_and_live() -> None:
     """equity_npv is a valid metric and the override is live (else the self-check raises);
     the solver returns a tariff within bounds."""
     tariff = solve_for_tariff_given_npv(
-        LENDER_CONFIG, None, target_npv=100.0e6, metric="equity_npv",
-        bounds=(40.0, 100.0), tolerance=1.0e6,
+        LENDER_CONFIG,
+        None,
+        target_npv=100.0e6,
+        metric="equity_npv",
+        bounds=(40.0, 100.0),
+        tolerance=1.0e6,
     )
-    assert 40.0 <= tariff <= 100.0  # target 100M is within the ~54M..365M reachable band
+    assert (
+        40.0 <= tariff <= 100.0
+    )  # target 100M is within the ~54M..365M reachable band
 
 
 def test_npv_solver_unreachable_target_raises() -> None:
@@ -168,7 +184,10 @@ def test_npv_solver_unreachable_target_raises() -> None:
     (~85M..439M) over 40-100 LKR/kWh, so a -1e9 target is unreachable in-range."""
     with pytest.raises(ValueError, match="not achievable within bounds"):
         solve_for_tariff_given_npv(
-            LENDER_CONFIG, None, target_npv=-1.0e9, metric="project_npv",
+            LENDER_CONFIG,
+            None,
+            target_npv=-1.0e9,
+            metric="project_npv",
             bounds=(40.0, 100.0),
         )
 
@@ -191,8 +210,12 @@ def test_multi_covenant_fails_loud_under_dual_dscr_sizing() -> None:
     fails loud rather than collapsing to a meaningless bound (Wave-2 fix)."""
     with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_multi_covenant(
-            LENDER_CONFIG, None, target_dscr=1.10, target_llcr=1.50,
-            bounds=(1.0e6, 1.0e9), tolerance=1000.0,
+            LENDER_CONFIG,
+            None,
+            target_dscr=1.10,
+            target_llcr=1.50,
+            bounds=(1.0e6, 1.0e9),
+            tolerance=1000.0,
         )
 
 
@@ -225,7 +248,10 @@ def test_min_capex_floor_unreachable_raises() -> None:
     (~$100M) clears well under 20% IRR, so a 0.20 floor is unreachable in-range."""
     with pytest.raises(ValueError, match="not achievable within bounds"):
         solve_for_min_capex_given_irr_floor(
-            LENDER_CONFIG, None, irr_floor=0.20, bounds=(100.0e6, 500.0e6),
+            LENDER_CONFIG,
+            None,
+            irr_floor=0.20,
+            bounds=(100.0e6, 500.0e6),
             tolerance=10_000.0,
         )
 

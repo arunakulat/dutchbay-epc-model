@@ -93,5 +93,6 @@ def test_finance_run_scenarios_declare_fx() -> None:
             offenders.append(path.name)
     assert not offenders, (
         "Finance run-scenario(s) declare `returns:` but no `fx:` block — _fx_curve now "
-        "fails loud on missing FX (FIN-6). Add an `fx` block:\n  " + "\n  ".join(offenders)
+        "fails loud on missing FX (FIN-6). Add an `fx` block:\n  "
+        + "\n  ".join(offenders)
     )

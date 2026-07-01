@@ -19,7 +19,11 @@ import yaml
 
 from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine, _inv_cdf_shaped
 
-_SCENARIO = Path(__file__).resolve().parents[2] / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+_SCENARIO = (
+    Path(__file__).resolve().parents[2]
+    / "scenarios"
+    / "dutchbay_lendercase_2025Q4.yaml"
+)
 
 
 def _load() -> dict:
@@ -28,19 +32,28 @@ def _load() -> dict:
 
 class TestInverseCdf:
     def test_triangular_peaks_at_mode_and_is_monotone(self) -> None:
-        xs = [_inv_cdf_shaped(u / 1000, "triangular", 100.0, 200.0, 150.0) for u in range(1, 1000)]
+        xs = [
+            _inv_cdf_shaped(u / 1000, "triangular", 100.0, 200.0, 150.0)
+            for u in range(1, 1000)
+        ]
         assert all(xs[i] <= xs[i + 1] + 1e-9 for i in range(len(xs) - 1))
         assert statistics.median(xs) == pytest.approx(150.0, abs=2.0)
         assert min(xs) >= 100.0 and max(xs) <= 200.0
 
     def test_normal_low_high_is_95pct_ci(self) -> None:
-        xs = [_inv_cdf_shaped(u / 1000, "normal", 100.0, 200.0, 150.0) for u in range(1, 1000)]
+        xs = [
+            _inv_cdf_shaped(u / 1000, "normal", 100.0, 200.0, 150.0)
+            for u in range(1, 1000)
+        ]
         assert statistics.median(xs) == pytest.approx(150.0, abs=1.0)
         assert xs[24] == pytest.approx(100.0, abs=2.0)  # ~P2.5
         assert xs[974] == pytest.approx(200.0, abs=2.0)  # ~P97.5
 
     def test_lognormal_is_right_skewed(self) -> None:
-        xs = [_inv_cdf_shaped(u / 1000, "lognormal", 100.0, 200.0, 150.0) for u in range(1, 1000)]
+        xs = [
+            _inv_cdf_shaped(u / 1000, "lognormal", 100.0, 200.0, 150.0)
+            for u in range(1, 1000)
+        ]
         assert statistics.mean(xs) > statistics.median(xs)  # positive skew
         assert min(xs) > 0.0
 

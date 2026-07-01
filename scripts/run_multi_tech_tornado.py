@@ -30,6 +30,7 @@ A single metric, ±15% shocks, to stdout::
       --config scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml \\
       --metric project_irr --shock-pct 0.15
 """
+
 from __future__ import annotations
 
 import argparse
@@ -100,11 +101,15 @@ def _print_coverage(config: dict) -> None:
     """
     gen = discover_generation_technologies(config)
     storage_swept = [
-        t for t in discover_storage_technologies(config) if applicable_storage_drivers(config, t)
+        t
+        for t in discover_storage_technologies(config)
+        if applicable_storage_drivers(config, t)
     ]
     swept = gen + storage_swept
     not_swept = [
-        t for t in discover_non_generation_technologies(config) if t not in set(storage_swept)
+        t
+        for t in discover_non_generation_technologies(config)
+        if t not in set(storage_swept)
     ]
     print(
         f"\n=== Technologies swept: {', '.join(swept) or 'none'} "
@@ -123,13 +128,17 @@ def _print_coverage(config: dict) -> None:
 def _print_summary(bars: List[MultiTechTornadoBar], metrics: List[str]) -> None:
     """Print the per-technology volatility ranking + flat-metric note to stderr."""
     flat = set(flat_metrics(bars))
-    print("\n=== Per-technology volatility ranking (sum of |impact| per tech) ===",
-          file=sys.stderr)
+    print(
+        "\n=== Per-technology volatility ranking (sum of |impact| per tech) ===",
+        file=sys.stderr,
+    )
     for metric in metrics:
         if metric in flat:
             continue
         ranking = impact_by_technology(bars, metric)
-        ranked = "  >  ".join(f"{tech} ({impact:.6f})" for tech, impact in ranking.items())
+        ranked = "  >  ".join(
+            f"{tech} ({impact:.6f})" for tech, impact in ranking.items()
+        )
         leader = next(iter(ranking), None)
         suffix = f"   ← {leader} drives {metric} volatility" if leader else ""
         print(f"  {metric:14s}: {ranked}{suffix}", file=sys.stderr)
@@ -169,7 +178,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         action="append",
         dest="drivers",
         help="Per-tech driver to sweep (capex_usd, capacity_factor, degradation_pct). "
-        "May be passed multiple times. Defaults to all of: " + ", ".join(DEFAULT_DRIVERS),
+        "May be passed multiple times. Defaults to all of: "
+        + ", ".join(DEFAULT_DRIVERS),
     )
     parser.add_argument(
         "--shock-pct",

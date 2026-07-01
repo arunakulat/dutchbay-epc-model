@@ -4,6 +4,7 @@
 Part of Task 1: Legacy Quarantine Sweep
 Ensures no production code imports from legacy/ or dutchbay_v14chat/
 """
+
 import re
 import sys
 from pathlib import Path

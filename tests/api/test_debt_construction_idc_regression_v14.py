@@ -126,7 +126,9 @@ def test_lendercase_idc_totals_pinned() -> None:
     # the LKR tranche rate to the UIP-implied 13.39%, so the DSCR sizer DE-LEVERS (gearing
     # ~0.588 -> ~0.45); the IDC-inclusive tranche principals scale down accordingly (the LKR
     # tranche's per-unit IDC rises with its rate, but the much smaller total debt dominates).
-    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(39_099_998.218995, rel=tol)
+    assert float(lkr.get("principal_m", 0.0)) == pytest.approx(
+        39_099_998.218995, rel=tol
+    )
     assert float(usd.get("principal_m", 0.0)) == pytest.approx(36_045_784.6875, rel=tol)
     assert float(dfi.get("principal_m", 0.0)) == pytest.approx(7_897_416.975, rel=tol)
 

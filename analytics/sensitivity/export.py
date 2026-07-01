@@ -12,6 +12,7 @@ Public API (keep stable):
 - suite_to_tables(...)
 - suite_to_records(...)
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -29,20 +30,20 @@ def suite_to_records(
 ) -> Dict[str, Any]:
     """
     Convert SensitivitySuite to JSON-friendly records.
-    
+
     Adapted for contracts_v14.SensitivitySuite structure:
     - suite.metric: str (target metric)
     - suite.base_config_path: str
     - suite.tornado_results: List[TornadoResult]
     - suite.base_kpis: Optional[Dict[str, float]]
-    
+
     TornadoResult structure:
     - metric_name: str (parameter name)
     - base_metric: float
     - shock_results: List[ShockResult]
     - label: Optional[str]
     - impact_abs: float
-    
+
     ShockResult structure:
     - low_case: float
     - high_case: float
@@ -54,7 +55,7 @@ def suite_to_records(
             "base_config_path": suite.base_config_path,
         }
     }
-    
+
     if suite.base_kpis:
         out["metadata"]["base_kpis"] = dict(suite.base_kpis)
 
@@ -89,7 +90,7 @@ def suite_to_records(
                     "impact_abs": 0.0,
                 }
             )
-    
+
     out["tornado_rows"] = rows
     return out
 

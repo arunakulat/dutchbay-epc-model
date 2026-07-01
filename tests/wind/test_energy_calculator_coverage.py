@@ -79,9 +79,7 @@ def test_manual_curve_sets_rated_capacity_to_peak() -> None:
 
 def test_manual_curve_requires_ws_and_power_keys() -> None:
     with pytest.raises(ValueError, match="must have 'ws' and 'power'"):
-        EnergyCalculator(
-            df=_df(), power_curve={"ws": [1.0, 2.0]}, num_turbines=10
-        )
+        EnergyCalculator(df=_df(), power_curve={"ws": [1.0, 2.0]}, num_turbines=10)
 
 
 def test_manual_curve_length_mismatch_raises() -> None:
@@ -239,7 +237,9 @@ def test_gross_aep_at_rated_wind() -> None:
 
 def test_net_aep_computes_gross_when_none() -> None:
     calc = _calc(speed=12.0)
-    net = calc.calculate_net_aep()  # gross_aep_mwh is None => calc.calculate_gross_aep()
+    net = (
+        calc.calculate_net_aep()
+    )  # gross_aep_mwh is None => calc.calculate_gross_aep()
     total_loss = calc._calculate_total_loss()
     expected_p50 = net["gross_aep_mwh"] * total_loss * calc.p_levels["p50"]
     assert net["net_aep_p50_mwh"] == pytest.approx(expected_p50)

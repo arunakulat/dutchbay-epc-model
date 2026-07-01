@@ -15,11 +15,10 @@ from pathlib import Path
 from typing import Any, Dict
 from unittest import mock
 
-import scipy.stats  # noqa: F401  (warm doc-gen before any numpy reload)
-
 import numpy as np
 import pandas as pd
 import pytest
+import scipy.stats  # noqa: F401  (warm doc-gen before any numpy reload)
 
 from wind_resource import era5_fetcher
 from wind_resource.era5_fetcher import ERA5Fetcher
@@ -152,11 +151,12 @@ def test_download_wind_data_full_orchestration(tmp_path: Path) -> None:
     fetcher = _make_fetcher(tmp_path)
     nc_path = fetcher.cache_dir / "era5_dutchbay_raw.nc"
 
-    with mock.patch.object(
-        fetcher, "_download_from_cds", return_value=nc_path
-    ) as dl, mock.patch.object(
-        fetcher, "_convert_netcdf_to_dataframe", return_value=_fake_uv_frame()
-    ) as conv:
+    with (
+        mock.patch.object(fetcher, "_download_from_cds", return_value=nc_path) as dl,
+        mock.patch.object(
+            fetcher, "_convert_netcdf_to_dataframe", return_value=_fake_uv_frame()
+        ) as conv,
+    ):
         result = fetcher.download_wind_data(
             location=_location(),
             start_date="2020-01-01",
@@ -185,10 +185,11 @@ def test_download_wind_data_force_redownload_ignores_cache(tmp_path: Path) -> No
     cache_file.write_text("stale\n")
     nc_path = fetcher.cache_dir / "era5_dutchbay_raw.nc"
 
-    with mock.patch.object(
-        fetcher, "_download_from_cds", return_value=nc_path
-    ) as dl, mock.patch.object(
-        fetcher, "_convert_netcdf_to_dataframe", return_value=_fake_uv_frame()
+    with (
+        mock.patch.object(fetcher, "_download_from_cds", return_value=nc_path) as dl,
+        mock.patch.object(
+            fetcher, "_convert_netcdf_to_dataframe", return_value=_fake_uv_frame()
+        ),
     ):
         fetcher.download_wind_data(
             location=_location(),
@@ -242,9 +243,7 @@ def test_download_from_cds_generic_error(tmp_path: Path) -> None:
     fake_client = mock.MagicMock()
     fake_client.retrieve.side_effect = RuntimeError("connection reset")
 
-    with mock.patch.object(
-        era5_fetcher.cdsapi, "Client", return_value=fake_client
-    ):
+    with mock.patch.object(era5_fetcher.cdsapi, "Client", return_value=fake_client):
         with pytest.raises(RuntimeError, match="CDS API download failed") as exc:
             fetcher._download_from_cds(
                 location=_location(),
@@ -261,9 +260,7 @@ def test_download_from_cds_too_large_error_adds_hint(tmp_path: Path) -> None:
     fake_client = mock.MagicMock()
     fake_client.retrieve.side_effect = Exception("Request too large for CDS")
 
-    with mock.patch.object(
-        era5_fetcher.cdsapi, "Client", return_value=fake_client
-    ):
+    with mock.patch.object(era5_fetcher.cdsapi, "Client", return_value=fake_client):
         with pytest.raises(RuntimeError, match="CDS API download failed") as exc:
             fetcher._download_from_cds(
                 location=_location(),
@@ -281,9 +278,7 @@ def test_download_from_cds_cost_error_adds_hint(tmp_path: Path) -> None:
     fake_client = mock.MagicMock()
     fake_client.retrieve.side_effect = Exception("403 cost limit exceeded")
 
-    with mock.patch.object(
-        era5_fetcher.cdsapi, "Client", return_value=fake_client
-    ):
+    with mock.patch.object(era5_fetcher.cdsapi, "Client", return_value=fake_client):
         with pytest.raises(RuntimeError) as exc:
             fetcher._download_from_cds(
                 location=_location(),

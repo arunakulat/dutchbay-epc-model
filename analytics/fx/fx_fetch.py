@@ -74,6 +74,7 @@ def default_fx_lkr_per_usd() -> float:
             f"({_DEFAULTS_PATH})"
         ) from exc
 
+
 DEFAULT_PROVIDER = "open_er_api"
 DEFAULT_ENDPOINT = "https://open.er-api.com/v6/latest/USD"
 # CBSL authoritative indicative rate — documented for audit, NEVER fetched (JS-rendered).
@@ -262,8 +263,12 @@ def fetch_live_fx(cfg: FXRequestConfig) -> FXRate:
         raise ValueError(
             f"FX endpoint must use https (refusing file:/ or plaintext): {cfg.endpoint!r}"
         )
-    req = urllib.request.Request(cfg.endpoint, headers={"User-Agent": "dutchbay-fx/1.0"})
-    with urllib.request.urlopen(req, timeout=cfg.timeout_s) as resp:  # nosec B310 - https scheme enforced above
+    req = urllib.request.Request(
+        cfg.endpoint, headers={"User-Agent": "dutchbay-fx/1.0"}
+    )
+    with urllib.request.urlopen(
+        req, timeout=cfg.timeout_s
+    ) as resp:  # nosec B310 - https scheme enforced above
         payload = json.loads(resp.read().decode("utf-8"))
 
     rates = payload.get("rates") or {}
@@ -322,12 +327,17 @@ def validate_fx(scenario: Mapping[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {
         "mode": "validate",
         "pinned": pinned.as_dict(),
-        "vintage": {"pinned_as_of": cfg.pinned_as_of, "reference_url": cfg.reference_url},
+        "vintage": {
+            "pinned_as_of": cfg.pinned_as_of,
+            "reference_url": cfg.reference_url,
+        },
     }
     try:
         live = fetch_live_fx(cfg)
     except (OSError, ValueError) as exc:  # network / parse failure — non-fatal
-        logger.warning("FX VALIDATE: live fetch unavailable (%s); pinned rate UNCHANGED", exc)
+        logger.warning(
+            "FX VALIDATE: live fetch unavailable (%s); pinned rate UNCHANGED", exc
+        )
         out["live"] = "unavailable"
         out["drift"] = None
         return out

@@ -14,11 +14,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from wind_resource.era5_retrieval import (ERA5CoverageError, ERA5RequestConfig,
-                                          build_hub_height_series,
-                                          compute_site_aep, ensure_cdsapirc,
-                                          expected_hours_for_years,
-                                          validate_coverage)
+from wind_resource.era5_retrieval import (
+    ERA5CoverageError,
+    ERA5RequestConfig,
+    build_hub_height_series,
+    compute_site_aep,
+    ensure_cdsapirc,
+    expected_hours_for_years,
+    validate_coverage,
+)
 
 
 def _synthetic_era5_nc(tmp_path, hours: int = 168):

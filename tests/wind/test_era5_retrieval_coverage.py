@@ -151,7 +151,7 @@ def test_retrieve_era5_timeseries_empty_archive_raises(
 
 
 def test_build_hub_height_series_missing_component_raises(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A dataset missing a wind component hits the comp() KeyError (line 262)."""
     times = pd.date_range("2023-01-01", periods=4, freq="h")
@@ -169,7 +169,7 @@ def test_build_hub_height_series_missing_component_raises(
 
 
 def test_build_hub_height_series_falls_back_to_time_coord(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When ``valid_time`` is absent the ``time`` coord is used (line 255 false branch)."""
     times = pd.date_range("2023-01-01", periods=6, freq="h")
@@ -292,9 +292,11 @@ def test_main_prints_run_result_for_env_config(
         captured_path["path"] = path
         return cfg
 
-    monkeypatch.setattr(ERA5RequestConfig, "from_yaml", classmethod(
-        lambda _cls, path: _fake_from_yaml(path)
-    ))
+    monkeypatch.setattr(
+        ERA5RequestConfig,
+        "from_yaml",
+        classmethod(lambda _cls, path: _fake_from_yaml(path)),
+    )
     monkeypatch.setattr(
         era5_retrieval, "run", lambda c: {"project": c.project_name, "ok": True}
     )
@@ -313,15 +315,17 @@ def test_main_uses_default_config_path_when_env_unset(
     """With no env var, ``main`` falls back to the Kalpitiya default path (line 378-379)."""
     captured_path: Dict[str, str] = {}
 
-    monkeypatch.setattr(ERA5RequestConfig, "from_yaml", classmethod(
-        lambda _cls, path: captured_path.setdefault("path", path) and None or _cfg()
-    ))
+    monkeypatch.setattr(
+        ERA5RequestConfig,
+        "from_yaml",
+        classmethod(
+            lambda _cls, path: captured_path.setdefault("path", path) and None or _cfg()
+        ),
+    )
     monkeypatch.setattr(era5_retrieval, "run", lambda c: {"ok": True})
     monkeypatch.delenv("ERA5_REQUEST_CONFIG", raising=False)
 
     main()
 
-    assert captured_path["path"] == (
-        "wind_resource/config/era5_request_kalpitiya.yaml"
-    )
+    assert captured_path["path"] == ("wind_resource/config/era5_request_kalpitiya.yaml")
     assert json.loads(capsys.readouterr().out) == {"ok": True}

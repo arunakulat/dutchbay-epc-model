@@ -105,9 +105,7 @@ def test_canonical_rows_conservation_and_signs() -> None:
         # EBITDA identity: revenue - statutory - opex.
         assert math.isclose(
             r["ebitda_lkr"],
-            r["revenue_lkr"]
-            - r["total_statutory_deductions_lkr"]
-            - r["opex_lkr"],
+            r["revenue_lkr"] - r["total_statutory_deductions_lkr"] - r["opex_lkr"],
             rel_tol=1e-9,
             abs_tol=1.0,
         )
@@ -367,7 +365,7 @@ def _context() -> Any:
 
 def test_single_year_zero_fx_zeroes_usd_views() -> None:
     """A zero FX rate forces the USD revenue/CFADS views to 0.0 (no div-by-0)."""
-    (params, _fxc, _cd, _ints, _years, tp, ds) = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds = _context()
     row = calculate_single_year_cfads(
         params=params, fx_rate=0.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -379,7 +377,7 @@ def test_single_year_zero_fx_zeroes_usd_views() -> None:
 
 def test_single_year_negative_fx_zeroes_usd_views() -> None:
     """A non-positive (negative) FX rate also zeroes the USD views."""
-    (params, _fxc, _cd, _ints, _years, tp, ds) = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds = _context()
     row = calculate_single_year_cfads(
         params=params, fx_rate=-5.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -389,7 +387,7 @@ def test_single_year_negative_fx_zeroes_usd_views() -> None:
 
 def test_single_year_verbose_logs(caplog: pytest.LogCaptureFixture) -> None:
     """verbose=True emits a per-year CFADS log line without changing the result."""
-    (params, _fxc, _cd, _ints, _years, tp, ds) = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds = _context()
     quiet = calculate_single_year_cfads(
         params=params, fx_rate=300.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -414,14 +412,22 @@ def test_single_year_prior_losses_threaded_into_tax() -> None:
     Derive: a large prior-year loss shield must not increase the tax versus a
     zero-loss baseline (monotonic, sign-correct shield).
     """
-    (params, _fxc, _cd, _ints, _years, tp, ds) = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds = _context()
     no_loss = calculate_single_year_cfads(
-        params=params, fx_rate=300.0, year=2, tax_profile=tp,
-        depreciation_schedule=ds, prior_year_losses=0.0,
+        params=params,
+        fx_rate=300.0,
+        year=2,
+        tax_profile=tp,
+        depreciation_schedule=ds,
+        prior_year_losses=0.0,
     )
     with_loss = calculate_single_year_cfads(
-        params=params, fx_rate=300.0, year=2, tax_profile=tp,
-        depreciation_schedule=ds, prior_year_losses=1.0e12,
+        params=params,
+        fx_rate=300.0,
+        year=2,
+        tax_profile=tp,
+        depreciation_schedule=ds,
+        prior_year_losses=1.0e12,
     )
     assert with_loss["tax_lkr"] <= no_loss["tax_lkr"] + 1.0
 
@@ -450,7 +456,7 @@ def _force_zero_years(
         interest_expense_series: Any,
         **kwargs: Any,
     ) -> Any:
-        (params, fxc, cd, ints, _years, tp, ds) = real(
+        params, fxc, cd, ints, _years, tp, ds = real(
             config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
         return (params, fxc, cd, [], 0, tp, ds)
@@ -503,7 +509,7 @@ def test_build_annual_rows_efficient_zero_years_returns_empty(
         interest_expense_series: Any,
         **kwargs: Any,
     ) -> Any:
-        (params, fxc, cd, ints, _years, tp, ds) = real(
+        params, fxc, cd, ints, _years, tp, ds = real(
             config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
         return (params, fxc, cd, [], 0, tp, ds)

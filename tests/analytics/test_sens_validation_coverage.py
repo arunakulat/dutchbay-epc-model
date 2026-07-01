@@ -59,7 +59,9 @@ def test_nested_override_multi_segment() -> None:
     assert out == {"project": {"financial": {"tariff": 7.5}}}
 
 
-def test_all_points_in_range_returns_empty_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_all_points_in_range_returns_empty_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: list[dict[str, Any]] = []
 
     def fake_eval(path: str, ovr: dict[str, Any], **_: Any) -> dict[str, Any]:
@@ -172,9 +174,7 @@ def test_custom_metric_key_is_honored(monkeypatch: pytest.MonkeyPatch) -> None:
         "analytics.evaluate_scenario.evaluate_with_overrides", fake_eval
     )
 
-    df = validate_parameter_ranges(
-        "ignored.yaml", [_param()], metric="equity_irr"
-    )
+    df = validate_parameter_ranges("ignored.yaml", [_param()], metric="equity_irr")
 
     assert len(df) == 2
     assert set(df["output"]) == {-0.30}

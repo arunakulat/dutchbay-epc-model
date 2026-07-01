@@ -7,10 +7,10 @@ cashflow and debt have produced the canonical v14 payload shape.
 
 from __future__ import annotations
 
+from finance.equity import calculate_equity_distribution_from_pipeline as exported_calc
 from finance.equity_distribution_v14_hydra import (
     calculate_equity_distribution_from_pipeline,
 )
-from finance.equity import calculate_equity_distribution_from_pipeline as exported_calc
 
 
 def test_equity_distribution_from_canonical_payload_computes_metrics() -> None:
@@ -57,7 +57,9 @@ def test_equity_distribution_from_canonical_payload_computes_metrics() -> None:
     assert result["annual_distributions"][0]["reserve_funded_usd"] == 4_000_000.0
     assert result["annual_distributions"][0]["equity_distribution_usd"] == 6_000_000.0
     assert result["annual_distributions"][1]["equity_distribution_usd"] == 12_000_000.0
-    assert result["annual_distributions"][2]["equity_distribution_usd"] == 18_000_000.0  # 14M op + 4M DSRA
+    assert (
+        result["annual_distributions"][2]["equity_distribution_usd"] == 18_000_000.0
+    )  # 14M op + 4M DSRA
     assert result["annual_distributions"][2]["terminal_release_usd"] == 4_000_000.0
     assert result["metadata"]["computed_from"] == "canonical_v14_pipeline"
 

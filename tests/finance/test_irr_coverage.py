@@ -30,6 +30,8 @@ from datetime import datetime
 import pytest
 
 from finance.irr import (
+    _irr_bisect,
+    _xirr_bisect,
     approx_project_irr,
     irr,
     npv,
@@ -37,7 +39,6 @@ from finance.irr import (
     xirr,
     xnpv,
 )
-from finance.irr import _irr_bisect, _xirr_bisect
 
 # ---------------------------------------------------------------------------
 # npv

@@ -33,7 +33,23 @@ def _good():
         model="TC-180/8.0",
         rated_capacity_kw=8000,
         wind_speeds_ms=[0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 20, 25],
-        power_kw=[0, 0, 300, 700, 1300, 2100, 3200, 4500, 6000, 7300, 8000, 8000, 8000, 8000, 0],
+        power_kw=[
+            0,
+            0,
+            300,
+            700,
+            1300,
+            2100,
+            3200,
+            4500,
+            6000,
+            7300,
+            8000,
+            8000,
+            8000,
+            8000,
+            0,
+        ],
         hub_heights_m=[120, 140],
         certificate="OEM-SPEC-X",
     )
@@ -98,8 +114,11 @@ def test_added_curve_consumable_by_energy_calculator(tmp_path):
         {"ws_150m": np.random.default_rng(1).weibull(2.4, 240) * 8.0}, index=idx
     )
     calc = EnergyCalculator(
-        df=df, ws_column="ws_150m", turbine_model="test_8mw",
-        num_turbines=10, power_curves_path=str(store),
+        df=df,
+        ws_column="ws_150m",
+        turbine_model="test_8mw",
+        num_turbines=10,
+        power_curves_path=str(store),
     )
     assert calc.rated_capacity == 8000
     assert calc.calculate_gross_aep()["windfarm_aep_mwh"] > 0
@@ -112,7 +131,9 @@ def test_oedb_paths_if_available(path):
             df = list_oedb_turbines("Enercon")
             assert len(df) > 0
         else:
-            pc = fetch_oedb_power_curve("E-126/7500", hub_height_m=135, manufacturer="Enercon")
+            pc = fetch_oedb_power_curve(
+                "E-126/7500", hub_height_m=135, manufacturer="Enercon"
+            )
             assert pc.rated_capacity_kw == pytest.approx(7500, rel=0.02)
             assert validate_power_curve(pc) == []
             assert pc.source == "oedb_windpowerlib"
@@ -125,7 +146,7 @@ def _wtg_xml():
         '<WindTurbineGenerator Description="TestCo TC-200/12.0" RotorDiameter="200">'
         '<PerformanceTable AirDensity="1.225">'
         '<StartStopStrategy LowSpeedCutIn="3.0" HighSpeedCutOut="25.0"/>'
-        '<DataTable>'
+        "<DataTable>"
         '<DataPoint WindSpeed="3.0" PowerOutput="0"/>'
         '<DataPoint WindSpeed="5.0" PowerOutput="1000000"/>'
         '<DataPoint WindSpeed="8.0" PowerOutput="5000000"/>'
@@ -133,11 +154,11 @@ def _wtg_xml():
         '<DataPoint WindSpeed="12.0" PowerOutput="12000000"/>'
         '<DataPoint WindSpeed="20.0" PowerOutput="12000000"/>'
         '<DataPoint WindSpeed="25.0" PowerOutput="0"/>'
-        '</DataTable></PerformanceTable>'
+        "</DataTable></PerformanceTable>"
         '<PerformanceTable AirDensity="1.10"><DataTable>'
         '<DataPoint WindSpeed="3.0" PowerOutput="0"/>'
         '<DataPoint WindSpeed="12.0" PowerOutput="11000000"/>'
-        '</DataTable></PerformanceTable></WindTurbineGenerator>'
+        "</DataTable></PerformanceTable></WindTurbineGenerator>"
     )
 
 
@@ -146,7 +167,9 @@ def test_from_wasp_wtg_picks_density_and_converts(tmp_path):
 
     path = tmp_path / "t.wtg"
     path.write_text(_wtg_xml())
-    pc = from_wasp_wtg(path, air_density_kgm3=1.225, manufacturer="TestCo", key="tc_12mw")
+    pc = from_wasp_wtg(
+        path, air_density_kgm3=1.225, manufacturer="TestCo", key="tc_12mw"
+    )
     assert pc.rated_capacity_kw == 12000.0  # the 1.225 table, not the 1.10 one
     assert pc.wind_speeds_ms[1] == 5.0 and pc.power_kw[1] == 1000.0  # W -> kW
     assert pc.cut_in_ms == 3.0 and pc.cut_out_ms == 25.0
@@ -196,8 +219,12 @@ def test_turbine_models_fetch_captures_thrust_when_present():
 
 def test_to_yaml_block_emits_thrust_curve_only_when_present():
     with_ct = PowerCurve(
-        key="k", manufacturer="M", model="m", rated_capacity_kw=1000,
-        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, 500.0, 1000.0],
+        key="k",
+        manufacturer="M",
+        model="m",
+        rated_capacity_kw=1000,
+        wind_speeds_ms=[3.0, 4.0, 5.0],
+        power_kw=[0.0, 500.0, 1000.0],
         thrust_coeffs=[0.8, 0.85, 0.7],
     )
     block = with_ct.to_yaml_block()["k"]
@@ -205,20 +232,34 @@ def test_to_yaml_block_emits_thrust_curve_only_when_present():
     assert block["thrust_curve"]["ct"] == [0.8, 0.85, 0.7]
 
     without_ct = PowerCurve(
-        key="k", manufacturer="M", model="m", rated_capacity_kw=1000,
-        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, 500.0, 1000.0],
+        key="k",
+        manufacturer="M",
+        model="m",
+        rated_capacity_kw=1000,
+        wind_speeds_ms=[3.0, 4.0, 5.0],
+        power_kw=[0.0, 500.0, 1000.0],
     )
     assert "thrust_curve" not in without_ct.to_yaml_block()["k"]
 
 
 def test_validate_flags_bad_thrust():
     bad_len = PowerCurve(
-        "k", "M", "m", 1000, [3.0, 4.0, 5.0], [0.0, 500.0, 1000.0],
+        "k",
+        "M",
+        "m",
+        1000,
+        [3.0, 4.0, 5.0],
+        [0.0, 500.0, 1000.0],
         thrust_coeffs=[0.8],
     )
     assert any("thrust_coeffs length" in i for i in validate_power_curve(bad_len))
     bad_range = PowerCurve(
-        "k", "M", "m", 1000, [3.0, 4.0, 5.0], [0.0, 500.0, 1000.0],
+        "k",
+        "M",
+        "m",
+        1000,
+        [3.0, 4.0, 5.0],
+        [0.0, 500.0, 1000.0],
         thrust_coeffs=[0.8, 0.9, 5.0],
     )
     assert any("thrust coefficients" in i for i in validate_power_curve(bad_range))
@@ -232,12 +273,19 @@ def test_reference_10mw_curves_in_canonical_store():
         entry = store[key]
         assert 9500 <= entry["rated_capacity_kw"] <= 11000
         assert entry["power_curve"]["ws"] and entry["power_curve"]["power"]
-        assert validate_power_curve(
-            manual_power_curve(
-                key, "M", "m", entry["rated_capacity_kw"],
-                entry["power_curve"]["ws"], entry["power_curve"]["power"],
+        assert (
+            validate_power_curve(
+                manual_power_curve(
+                    key,
+                    "M",
+                    "m",
+                    entry["rated_capacity_kw"],
+                    entry["power_curve"]["ws"],
+                    entry["power_curve"]["power"],
+                )
             )
-        ) == []
+            == []
+        )
     # IEA is the recommended default and carries Ct; NREL is Cp-only.
     assert store["iea_reference_10mw"]["provenance"]["recommended_default_10mw"] is True
     assert "thrust_curve" in store["iea_reference_10mw"]

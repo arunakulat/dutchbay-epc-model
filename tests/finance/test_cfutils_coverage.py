@@ -35,7 +35,6 @@ from finance.cashflow_v14_utils import (
     resolve_first,
 )
 
-
 # ---------------------------------------------------------------------------
 # A small object whose float()/int() raise TypeError, to drive the except
 # branches deterministically (lines 12-13, 22-23, 76-77).

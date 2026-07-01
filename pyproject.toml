@@ -147,6 +147,18 @@ exclude = '''
 )/
 '''
 
+[tool.isort]
+# profile=black makes isort's import wrapping byte-compatible with black, so the two
+# formatters converge instead of fighting (a hard prerequisite for enforcing both). This
+# is now the single source of truth for isort — the CLI no longer needs --profile black.
+profile = "black"
+line_length = 88
+# Match black's exclusions. isort's built-in skip already covers .venv/build/dist; these
+# repo-specific frozen/local trees (top-level legacy/ + tests/legacy/, and .venv311) are not
+# in the defaults, so add them explicitly to keep frozen code untouched.
+extend_skip = ["legacy", ".venv311"]
+extend_skip_glob = ["legacy/*", "*/legacy/*"]
+
 [tool.mypy]
 python_version = "3.11"
 # Run mypy primarily over the typed application surface

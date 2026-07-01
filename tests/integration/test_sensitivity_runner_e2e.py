@@ -39,9 +39,9 @@ def test_runner_returns_canonical_suite_end_to_end() -> None:
     assert suite.metric == "project_irr"
     assert len(suite.tornado_results) >= 1
     # Anti-silent-no-op guard: at least one driver must register real impact.
-    assert any(t.impact_abs > 0 for t in suite.tornado_results), (
-        "all tornado bars are flat — shocks are not reaching the model"
-    )
+    assert any(
+        t.impact_abs > 0 for t in suite.tornado_results
+    ), "all tornado bars are flat — shocks are not reaching the model"
 
 
 def test_audit_fields_populated_end_to_end() -> None:

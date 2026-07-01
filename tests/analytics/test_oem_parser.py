@@ -122,9 +122,13 @@ def test_air_density_correction(
     # At each grid speed the corrected curve == the reference read at the shifted speed.
     for v in (6.0, 8.0, 10.0):
         p_site = site_curve.loc[site_curve["wind_speed_ms"] == v, "power_kw"].iloc[0]
-        assert p_site == pytest.approx(float(np.interp(v * factor, ref_ws, ref_p)), rel=1e-6)
+        assert p_site == pytest.approx(
+            float(np.interp(v * factor, ref_ws, ref_p)), rel=1e-6
+        )
     # Thinner air -> no more power than the reference at a given speed (rising region).
-    p_ref_8 = reference_curve.loc[reference_curve["wind_speed_ms"] == 8.0, "power_kw"].iloc[0]
+    p_ref_8 = reference_curve.loc[
+        reference_curve["wind_speed_ms"] == 8.0, "power_kw"
+    ].iloc[0]
     p_site_8 = site_curve.loc[site_curve["wind_speed_ms"] == 8.0, "power_kw"].iloc[0]
     assert p_site_8 <= p_ref_8
 
@@ -228,9 +232,7 @@ def test_aep_losses_multiplicative(
     assert net == pytest.approx(gross * factor, rel=0.01)
 
 
-def test_aep_low_wind(
-    reference_curve: pd.DataFrame, low_wind_8760: np.ndarray
-) -> None:
+def test_aep_low_wind(reference_curve: pd.DataFrame, low_wind_8760: np.ndarray) -> None:
     """A low-wind site yields a low (but positive) capacity factor."""
     aep, cf, _ = compute_aep_from_curve(
         low_wind_8760, reference_curve, 23, 6.5, apply_losses=True
@@ -308,7 +310,9 @@ def test_aep_increases_with_air_density(weibull_wind_8760: np.ndarray) -> None:
         ("ge_cypress_5p5", 5500.0),
     ],
 )
-def test_parse_power_curve_selects_by_key(curve_key: str, expected_peak_kw: float) -> None:
+def test_parse_power_curve_selects_by_key(
+    curve_key: str, expected_peak_kw: float
+) -> None:
     """parse_power_curve loads whichever store curve the model selected."""
     curve = parse_power_curve(curve_key)
     assert abs(curve["power_kw"].max() - expected_peak_kw) < 1.0
@@ -339,7 +343,9 @@ def test_monte_carlo_uses_summary_curve_key(monkeypatch: pytest.MonkeyPatch) -> 
         return original(key, *args, **kwargs)
 
     monkeypatch.setattr(mc, "parse_power_curve", _spy)
-    mc.run_monte_carlo_aep("tests/mocks/aep_summary_dutchbay.json", n_scenarios=20, seed=1)
+    mc.run_monte_carlo_aep(
+        "tests/mocks/aep_summary_dutchbay.json", n_scenarios=20, seed=1
+    )
     assert seen["key"] == "envision_en171_6p5"
 
 

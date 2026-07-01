@@ -78,7 +78,9 @@ def test_default_curtailment_is_byte_identical() -> None:
     # -> UIP-implied 13.39%): projIRR 2.68% is UNCHANGED (unlevered), but the higher cost of
     # debt lifts the WACC (8.1% -> 9.8%) so NPV deepens to -$65.5M. minDSCR unchanged (1.30).
     assert k["project_irr"] == pytest.approx(0.026837, abs=1e-5)
-    assert k["project_npv"] == pytest.approx(-65455817.14, abs=1.0)  # PR-B UIP LKR debt rate
+    assert k["project_npv"] == pytest.approx(
+        -65455817.14, abs=1.0
+    )  # PR-B UIP LKR debt rate
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
 
 

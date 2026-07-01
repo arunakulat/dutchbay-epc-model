@@ -179,7 +179,9 @@ class MultiTechTornadoBar:
         return f"{self.technology}.{self.driver}"
 
 
-def _technology_blocks(config: Mapping[str, Any]) -> List[Tuple[str, Mapping[str, Any]]]:
+def _technology_blocks(
+    config: Mapping[str, Any],
+) -> List[Tuple[str, Mapping[str, Any]]]:
     """Every ``(name, block)`` under ``generation.technologies``, in declared order."""
     techs = _nested_get(config, "generation", "technologies")
     if not isinstance(techs, Mapping):
@@ -299,7 +301,10 @@ def applicable_drivers(
     """
     present: List[str] = []
     for driver in drivers:
-        if _as_float(_nested_get(config, "generation", "technologies", tech, driver)) is not None:
+        if (
+            _as_float(_nested_get(config, "generation", "technologies", tech, driver))
+            is not None
+        ):
             present.append(driver)
     return present
 
@@ -326,7 +331,11 @@ def _blended_capacity_factor(
     for name in discover_generation_technologies(config):
         block = techs[name]
         mw = _as_float(block.get("capacity_mw"))
-        cf = shocked_cf if name == shocked_tech else _as_float(block.get("capacity_factor"))
+        cf = (
+            shocked_cf
+            if name == shocked_tech
+            else _as_float(block.get("capacity_factor"))
+        )
         if mw is None or cf is None:
             raise ValueError(
                 f"generation.technologies['{name}'] needs numeric capacity_mw and "
@@ -412,7 +421,9 @@ def applicable_storage_drivers(
     """
     present: List[str] = []
     for driver in drivers:
-        value = _nested_get(config, "generation", "technologies", tech, "revenue", driver)
+        value = _nested_get(
+            config, "generation", "technologies", tech, "revenue", driver
+        )
         if _as_float(value) is not None:
             present.append(driver)
     return present
@@ -459,11 +470,15 @@ def _metric_value(kpis: Mapping[str, Any], metric: str) -> float:
         raise ValueError(f"KPI '{metric}' is not numeric: {value!r}.") from exc
 
 
-def _evaluate(config: Mapping[str, Any], overrides: Mapping[str, float]) -> Mapping[str, Any]:
+def _evaluate(
+    config: Mapping[str, Any], overrides: Mapping[str, float]
+) -> Mapping[str, Any]:
     """Evaluate the scenario through the canonical gateway and return its KPIs."""
     result = evaluate_with_overrides(raw_config=config, overrides=overrides)
     if not isinstance(result, Mapping):  # pragma: no cover - defensive
-        raise TypeError(f"evaluate_with_overrides returned {type(result).__name__}, not a mapping.")
+        raise TypeError(
+            f"evaluate_with_overrides returned {type(result).__name__}, not a mapping."
+        )
     return result
 
 
@@ -512,7 +527,11 @@ def run_multi_tech_tornado(
     # (storage without a sweepable revenue lever, or some other kind) is warned about so
     # a tornado is never mistaken for complete.
     swept_storage = set(storage_techs)
-    unswept = [t for t in discover_non_generation_technologies(config) if t not in swept_storage]
+    unswept = [
+        t
+        for t in discover_non_generation_technologies(config)
+        if t not in swept_storage
+    ]
     if unswept:
         logger.warning(
             "multi-tech tornado: not sweeping %d technology block(s) %s — they are "
@@ -532,7 +551,10 @@ def run_multi_tech_tornado(
     bars: List[MultiTechTornadoBar] = []
 
     def _emit(
-        tech: str, driver: str, low_kpis: Mapping[str, Any], high_kpis: Mapping[str, Any]
+        tech: str,
+        driver: str,
+        low_kpis: Mapping[str, Any],
+        high_kpis: Mapping[str, Any],
     ) -> None:
         for metric in metrics:
             bars.append(
@@ -552,16 +574,24 @@ def run_multi_tech_tornado(
             _emit(
                 tech,
                 driver,
-                _evaluate(config, build_coupled_override(config, tech, driver, low_mult)),
-                _evaluate(config, build_coupled_override(config, tech, driver, high_mult)),
+                _evaluate(
+                    config, build_coupled_override(config, tech, driver, low_mult)
+                ),
+                _evaluate(
+                    config, build_coupled_override(config, tech, driver, high_mult)
+                ),
             )
     for tech in storage_techs:
         for driver in applicable_storage_drivers(config, tech, storage_drivers):
             _emit(
                 tech,
                 driver,
-                _evaluate(config, build_storage_override(config, tech, driver, low_mult)),
-                _evaluate(config, build_storage_override(config, tech, driver, high_mult)),
+                _evaluate(
+                    config, build_storage_override(config, tech, driver, low_mult)
+                ),
+                _evaluate(
+                    config, build_storage_override(config, tech, driver, high_mult)
+                ),
             )
 
     # Group by metric (preserve requested order), sort each group by |impact| desc.

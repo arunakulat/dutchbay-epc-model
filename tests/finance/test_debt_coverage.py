@@ -137,9 +137,7 @@ def test_capex_breakdown_bottom_up_sum() -> None:
 
 def test_capex_breakdown_qra_recomputes_contingency() -> None:
     base = {"turbines_usd": 90.0, "bop_usd": 10.0, "contingency_usd": 5.0}
-    fixed_params = {
-        "capex": {"derive_from_breakdown": True, "breakdown": dict(base)}
-    }
+    fixed_params = {"capex": {"derive_from_breakdown": True, "breakdown": dict(base)}}
     fixed_total = _extract_capex_usd(fixed_params)
     assert fixed_total == pytest.approx(105.0)
 
@@ -263,9 +261,7 @@ def test_annuity_schedule_interest_only_rows() -> None:
 # apply_debt_layer — zero-debt avg-rate branch (line 586) + fx parsing (614-615)
 # ─────────────────────────────────────────────────────────────────────────────
 def _rows(cfads: float, n: int = 5, **extra: object) -> list[dict[str, object]]:
-    return [
-        {"year": i + 1, "cfads_usd": cfads, **extra} for i in range(n)
-    ]
+    return [{"year": i + 1, "cfads_usd": cfads, **extra} for i in range(n)]
 
 
 def test_apply_debt_layer_zero_debt_ratio_avg_rate_zero() -> None:
@@ -336,7 +332,9 @@ def _flat_config(debt_ratio: float = 0.7) -> dict[str, object]:
 def test_solve_gearing_top_level_debt_ratio_branch() -> None:
     # Strong CFADS: even at max_ratio the schedule clears target -> returns max_ratio.
     rows = _rows(40.0, n=8)
-    solved = _solve_gearing_for_dscr(_flat_config(), rows, target_dscr=1.30, max_ratio=0.7)
+    solved = _solve_gearing_for_dscr(
+        _flat_config(), rows, target_dscr=1.30, max_ratio=0.7
+    )
     assert solved == pytest.approx(0.7)
 
 
@@ -508,7 +506,9 @@ def test_warn_decorative_tranches_warns_once_then_short_circuits(
     cfg = {"Financing_Terms": {"debt_tranches": [{"name": "X", "rate_pct": 5.0}]}}
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
         _warn_if_decorative_tranches(cfg)
-    assert any("debt_tranches is NOT an engine input" in r.message for r in caplog.records)
+    assert any(
+        "debt_tranches is NOT an engine input" in r.message for r in caplog.records
+    )
     assert debt_v14._warned_decorative_tranches is True
 
     # Second call short-circuits on the module flag (no new warning record).

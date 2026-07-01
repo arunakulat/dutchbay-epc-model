@@ -26,7 +26,9 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
 
 def test_default_class_is_config_sourced() -> None:
-    assert default_estimate_class() == 3  # config/defaults.yaml cost_reference.estimate_class
+    assert (
+        default_estimate_class() == 3
+    )  # config/defaults.yaml cost_reference.estimate_class
 
 
 def test_scenario_override_then_default() -> None:

@@ -115,7 +115,9 @@ class DebtBlock(BaseModel):
     total_idc_usd: Optional[float] = None
     gearing: Optional[float] = None
     binding_constraint: Optional[str] = None
-    binding_production_case: Optional[str] = None  # "P50" | "P90" (downside-binding sizing)
+    binding_production_case: Optional[str] = (
+        None  # "P50" | "P90" (downside-binding sizing)
+    )
     sizing_mode: Optional[str] = None
     tenor_years: Optional[int] = None
     construction_years: Optional[int] = None
@@ -184,7 +186,9 @@ class RunPipelineResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers (pure serialisation — no modelling)
 # ---------------------------------------------------------------------------
-def _apply_overrides(cfg: Dict[str, Any], overrides: Mapping[str, Any]) -> Dict[str, Any]:
+def _apply_overrides(
+    cfg: Dict[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
     out = copy.deepcopy(cfg)
     for dotted, value in overrides.items():
         parts = str(dotted).split(".")
@@ -212,7 +216,9 @@ def _avg_finite_dscr(debt: Mapping[str, Any]) -> Optional[float]:
     vals = [
         float(x)
         for x in series
-        if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(float(x))
+        if isinstance(x, (int, float))
+        and not isinstance(x, bool)
+        and math.isfinite(float(x))
     ]
     return sum(vals) / len(vals) if vals else None
 
@@ -297,9 +303,13 @@ def _extract_aep(cfg: Mapping[str, Any]) -> AepBlock:
     return AepBlock(
         net_p50_gwh=_f(summary.get("net_site_aep_gwh") or wind.get("aep_gwh")),
         net_p75_gwh=_f(exc.get("net_aep_p75_gwh")),
-        net_p90_gwh=_f(exc.get("net_aep_p90_1yr_gwh") or exc.get("net_aep_p90_life_gwh")),
+        net_p90_gwh=_f(
+            exc.get("net_aep_p90_1yr_gwh") or exc.get("net_aep_p90_life_gwh")
+        ),
         gross_gwh=_f(summary.get("gross_aep_gwh")),
-        capacity_factor=_f(summary.get("capacity_factor") or wind.get("capacity_factor")),
+        capacity_factor=_f(
+            summary.get("capacity_factor") or wind.get("capacity_factor")
+        ),
         source_id=(summary.get("source_id") or wind.get("source_id")),
     )
 
@@ -347,9 +357,13 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         binding_constraint=dual.get("binding_constraint"),
         binding_production_case=dual.get("binding_production_case"),
         sizing_mode=dual.get("sizing_mode"),
-        tenor_years=int(debt["tenor_years"]) if debt.get("tenor_years") is not None else None,
+        tenor_years=(
+            int(debt["tenor_years"]) if debt.get("tenor_years") is not None else None
+        ),
         construction_years=(
-            int(debt["construction_years"]) if debt.get("construction_years") is not None else None
+            int(debt["construction_years"])
+            if debt.get("construction_years") is not None
+            else None
         ),
         avg_debt_rate_pct=None if avg_rate is None else round(avg_rate * 100.0, 4),
         min_dscr=_f(debt.get("min_dscr")),
@@ -504,7 +518,9 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
             safe_path = confined_path(payload.config_path, must_exist=True)
             cfg: Dict[str, Any] = dict(load_scenario_config(str(safe_path)))
         except (UnsafePathError, OSError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=f"Could not load config_path: {exc}")
+            raise HTTPException(
+                status_code=400, detail=f"Could not load config_path: {exc}"
+            )
     else:
         cfg = dict(payload.config or {})
 
@@ -518,7 +534,9 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     # disagrees with a declared bankable AEP fails loud over the API too (a client
     # override is a stale-value injection, NOT a deliberate sensitivity perturbation).
     try:
-        reconcile_capacity_factor_with_bankable_aep(cfg, payload.config_path or "<inline>")
+        reconcile_capacity_factor_with_bankable_aep(
+            cfg, payload.config_path or "<inline>"
+        )
         enforce_aep_provenance(cfg, payload.config_path or "<inline>")
         validate_evidence_register(cfg, payload.config_path or "<inline>")
         validate_development_readiness(cfg, payload.config_path or "<inline>")

@@ -40,12 +40,18 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     res = plan_debt(annual_rows=rows, config=cfg)
 
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
-    assert res["debt_total"] == pytest.approx(0.45 * CAPEX, rel=3e-3)  # DSCR-solved, below cap (PR-B UIP LKR rate de-levers)
+    assert res["debt_total"] == pytest.approx(
+        0.45 * CAPEX, rel=3e-3
+    )  # DSCR-solved, below cap (PR-B UIP LKR rate de-levers)
     detail = res["dual_dscr"]
     assert detail is not None
-    assert 0.40 < detail["solved_gearing"] < 0.70  # DSCR-bound, strictly below the 0.70 cap
+    assert (
+        0.40 < detail["solved_gearing"] < 0.70
+    )  # DSCR-bound, strictly below the 0.70 cap
     assert detail["binding_constraint"] == "P50"  # DSCR-bound, not gearing-bound
-    assert detail["debt_p99"] >= res["debt_total"]  # P99 capacity exceeds the P50 sizing
+    assert (
+        detail["debt_p99"] >= res["debt_total"]
+    )  # P99 capacity exceeds the P50 sizing
 
 
 def test_opt_out_keeps_fixed_gearing(base_config):
@@ -65,7 +71,9 @@ def test_opt_out_keeps_fixed_gearing(base_config):
 
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
-    assert res["min_dscr"] == pytest.approx(0.481, abs=0.01)  # 70% over-levers -> deep sub-covenant
+    assert res["min_dscr"] == pytest.approx(
+        0.481, abs=0.01
+    )  # 70% over-levers -> deep sub-covenant
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):
@@ -83,6 +91,8 @@ def test_lower_target_adds_leverage_when_dscr_bound(base_config):
     cfg_120["Financing_Terms"]["target_dscr"] = 1.20
     res_120 = plan_debt(annual_rows=build_annual_rows(cfg_120), config=cfg_120)
 
-    assert res_120["debt_total"] > res_130["debt_total"] + 1_000_000  # lower target -> more debt
+    assert (
+        res_120["debt_total"] > res_130["debt_total"] + 1_000_000
+    )  # lower target -> more debt
     assert res_130["min_dscr"] == pytest.approx(1.30, abs=0.01)
     assert res_120["min_dscr"] == pytest.approx(1.20, abs=0.01)  # lower DSCR floor

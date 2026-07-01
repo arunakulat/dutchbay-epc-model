@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 import pytest
 import yaml
 
+from analytics.core.returns import _safe_float  # type: ignore[attr-defined]
 from analytics.core.returns import (
     AllReturns,
     EquityReturns,
@@ -33,9 +34,6 @@ from analytics.core.returns import (
     calculate_npv,
     calculate_project_returns,
     summarize_all_returns,
-)
-from analytics.core.returns import (
-    _safe_float,  # type: ignore[attr-defined]
 )
 from finance.irr import irr as _live_irr
 from finance.irr import npv as _live_npv
@@ -121,7 +119,9 @@ def test_calculate_npv_start_period_shifts_by_zeros() -> None:
     assert shifted < calculate_npv(cashflows, 0.10, start_period=0)
 
 
-def test_calculate_npv_exception_path_returns_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_calculate_npv_exception_path_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Force the delegated npv to raise so the except branch (logger + 0.0) runs.
     import analytics.core.returns as returns_mod
 
@@ -151,7 +151,9 @@ def test_calculate_irr_matches_live_engine() -> None:
     assert got > 0.0
 
 
-def test_calculate_irr_exception_path_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_calculate_irr_exception_path_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import analytics.core.returns as returns_mod
 
     def _boom(_cfs: List[float]) -> float:
@@ -190,7 +192,9 @@ def test_calculate_mirr_valid_is_bounded_by_irr() -> None:
     assert 0.10 < mirr < irr
 
 
-def test_calculate_mirr_exception_path_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_calculate_mirr_exception_path_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Drive the inner try/except (lines 363-365): make the final MIRR _safe_float
     # raise an OverflowError so the handler returns None.
     import analytics.core.returns as returns_mod
@@ -214,7 +218,9 @@ def test_from_yaml_financing_terms_branch() -> None:
     cfg = yaml.safe_load(CANONICAL_SCENARIO.read_text())
     parsed = ReturnsConfig.from_yaml(cfg)
     assert 0.0 <= parsed.debt_ratio <= 1.0
-    assert parsed.debt_ratio == pytest.approx(float(cfg["Financing_Terms"]["debt_ratio"]))
+    assert parsed.debt_ratio == pytest.approx(
+        float(cfg["Financing_Terms"]["debt_ratio"])
+    )
     assert parsed.capex_usd == pytest.approx(float(cfg["capex"]["usd_total"]))
     assert parsed.capex_fx_rate == pytest.approx(float(cfg["fx"]["start_lkr_per_usd"]))
 
@@ -293,9 +299,13 @@ def test_project_returns_invariants_against_live_engine() -> None:
     # (was inflows-only, overstating NPV by the entire capex).
     expected_npv = _live_npv(cfg.project_discount_rate, pr.cashflows_with_capex)
     assert pr.project_npv == pytest.approx(expected_npv)
-    assert pr.project_npv < _live_npv(cfg.project_discount_rate, cfads)  # outlay is netted
+    assert pr.project_npv < _live_npv(
+        cfg.project_discount_rate, cfads
+    )  # outlay is netted
     # Profitability index is NPV / CAPEX by construction.
-    assert pr.profitability_index == pytest.approx((pr.project_npv + capex_lkr) / capex_lkr)
+    assert pr.profitability_index == pytest.approx(
+        (pr.project_npv + capex_lkr) / capex_lkr
+    )
     # Profitable stream pays back within the operating horizon.
     assert pr.payback_period is not None and 1 <= pr.payback_period <= len(cfads)
 
@@ -330,12 +340,20 @@ def test_equity_returns_invariants_against_live_engine() -> None:
     assert er.equity_cashflows == pytest.approx(expected_ecf)
     assert er.equity_cashflows_with_investment == [-equity_investment] + expected_ecf
     # IRR / NPV must match the live engine on the equity vectors.
-    assert er.equity_irr == pytest.approx(_live_irr(er.equity_cashflows_with_investment))
+    assert er.equity_irr == pytest.approx(
+        _live_irr(er.equity_cashflows_with_investment)
+    )
     # NPV nets the equity outlay: discounts the same [-equity] + ECF vector as the IRR.
-    expected_npv = _live_npv(cfg.equity_discount_rate, er.equity_cashflows_with_investment)
+    expected_npv = _live_npv(
+        cfg.equity_discount_rate, er.equity_cashflows_with_investment
+    )
     assert er.equity_npv == pytest.approx(expected_npv)
-    assert er.equity_npv < _live_npv(cfg.equity_discount_rate, expected_ecf)  # outlay netted
-    assert er.equity_pi == pytest.approx((er.equity_npv + equity_investment) / equity_investment)
+    assert er.equity_npv < _live_npv(
+        cfg.equity_discount_rate, expected_ecf
+    )  # outlay netted
+    assert er.equity_pi == pytest.approx(
+        (er.equity_npv + equity_investment) / equity_investment
+    )
 
 
 def test_equity_returns_payback_none_when_never_recovered() -> None:

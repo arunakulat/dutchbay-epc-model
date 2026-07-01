@@ -25,9 +25,7 @@ from pathlib import Path
 from typing import Final
 
 # Compatibility stubs to add to contracts_v14.py
-CONTRACTS_STUBS: Final[
-    str
-] = '''
+CONTRACTS_STUBS: Final[str] = '''
 # =============================================================================
 # BACKWARD COMPATIBILITY STUBS (Sprint 12 Pydantic v2 Migration)
 # =============================================================================
@@ -78,9 +76,7 @@ def build_cashflow_result_from_annual_rows(*args: Any, **kwargs: Any) -> Dict[st
 '''
 
 # Stubs for refinancing_v14_hydra.py
-REFINANCING_STUBS: Final[
-    str
-] = '''
+REFINANCING_STUBS: Final[str] = '''
 # Backward compatibility stubs (Sprint 12 Pydantic v2 migration)
 class RefinancingEngine:
     """Legacy stub for test compatibility."""
@@ -92,9 +88,7 @@ class RefinancingV14:
 '''
 
 # Stubs for fx_contracts.py
-FX_STUBS: Final[
-    str
-] = '''
+FX_STUBS: Final[str] = '''
 # Backward compatibility stub (Sprint 12 Pydantic v2 migration)
 class FXMonteCarloConfig(BaseModel):
     """Legacy stub for FX Monte Carlo test compatibility."""

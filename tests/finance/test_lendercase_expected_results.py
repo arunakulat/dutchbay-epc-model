@@ -74,7 +74,9 @@ def test_expected_results_are_not_the_discredited_fiction() -> None:
     # Guard against the pre-honest-baseline FICTION (0.145 / 0.185 / $45M / 1.45),
     # distinct from the legitimate 15x10MW re-model (~0.111 / 0.062 / $27M / 1.30).
     # Thresholds sit between the two so the discredited fiction can't creep back.
-    assert float(expected["project_irr"]) < 0.13, "project_irr looks like the old fiction"
+    assert (
+        float(expected["project_irr"]) < 0.13
+    ), "project_irr looks like the old fiction"
     assert float(expected["equity_irr"]) < 0.10, "equity_irr looks like the old fiction"
     assert float(expected["min_dscr"]) < 1.40, "min_dscr looks like the old fiction"
     assert float(expected["project_npv_m_usd"]) < 35.0, "NPV looks like the old fiction"

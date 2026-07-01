@@ -30,7 +30,9 @@ VINTAGE = REPO_ROOT / "tests" / "fixtures" / "fx" / "fx_pinned_2026Q2.json"
 PINNED = 333.79
 
 
-def _scenario(mode: str = "fixed", start: float = PINNED, pinned: float = PINNED) -> dict:
+def _scenario(
+    mode: str = "fixed", start: float = PINNED, pinned: float = PINNED
+) -> dict:
     return {
         "fx": {
             "start_lkr_per_usd": start,

@@ -56,7 +56,10 @@ def test_mc_aep_applies_curtailment_and_other(tmp_path: Path) -> None:
         aep_summary_path=str(AEP_MOCK), n_scenarios=200, seed=42, export_scenarios=False
     )
     without = run_monte_carlo_aep(
-        aep_summary_path=str(zeroed_path), n_scenarios=200, seed=42, export_scenarios=False
+        aep_summary_path=str(zeroed_path),
+        n_scenarios=200,
+        seed=42,
+        export_scenarios=False,
     )
 
     ratio = full["percentiles"]["p50"] / without["percentiles"]["p50"]
@@ -78,6 +81,8 @@ def test_mc_aep_uses_exceedance_convention() -> None:
         aep_summary_path=str(AEP_MOCK), n_scenarios=500, seed=7, export_scenarios=False
     )
     p = res["percentiles"]
-    assert p["p99"] <= p["p90"] <= p["p75"] <= p["p50"], f"exceedance ordering violated: {p}"
+    assert (
+        p["p99"] <= p["p90"] <= p["p75"] <= p["p50"]
+    ), f"exceedance ordering violated: {p}"
     # The headline guard: the conservative P90 must sit below the median.
     assert p["p90"] < p["p50"]

@@ -4,6 +4,7 @@ analytics.mc.samplers
 Sampling utilities (LHS baseline).
 Keep import-light: numpy only.
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Tuple
@@ -38,12 +39,18 @@ def generate_lhs_samples(
     u = rng.uniform(size=(n, k))
     a = cut[:n]
     b = cut[1:]
-    pts = u * (b - a)[:, None] + a[:, None]  # [n,1] broadcast -> [n,k] via later operations
+    pts = (
+        u * (b - a)[:, None] + a[:, None]
+    )  # [n,1] broadcast -> [n,k] via later operations
 
     # independent random permutations per dimension
     lhs = np.zeros((n, k), dtype=float)
     for j in range(k):
-        perm = rng.permutation(n) if common_random_numbers else np.random.default_rng(int(seed + j)).permutation(n)
+        perm = (
+            rng.permutation(n)
+            if common_random_numbers
+            else np.random.default_rng(int(seed + j)).permutation(n)
+        )
         # Take dimension j's OWN stratified column (was column 0 for every j, which made
         # every dimension reuse the same stratified values — a degenerate Latin Hypercube
         # where all parameters were perfectly correlated; audit R1).

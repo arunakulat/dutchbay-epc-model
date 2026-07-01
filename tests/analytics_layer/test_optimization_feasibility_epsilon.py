@@ -41,8 +41,9 @@ def test_deleverage_sweep_has_no_plateau_flipflop() -> None:
     # Points at/above the covenant (within a generous 1e-6) must be feasible —
     # pre-fix, several plateau points at min_dscr≈1.30 were flipped to infeasible.
     flipped = [
-        p for p in res.curve if p.constraint is not None
-        and p.constraint >= 1.30 - 1e-6 and not p.feasible
+        p
+        for p in res.curve
+        if p.constraint is not None and p.constraint >= 1.30 - 1e-6 and not p.feasible
     ]
     assert not flipped, (
         "covenant-compliant points marked infeasible (FP-plateau flip-flop): "

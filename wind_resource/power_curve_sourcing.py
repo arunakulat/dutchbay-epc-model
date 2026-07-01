@@ -98,7 +98,11 @@ def list_oedb_turbines(manufacturer: Optional[str] = None) -> Any:
 
     df = get_turbine_types(print_out=False)
     if manufacturer:
-        mask = df["manufacturer"].astype(str).str.contains(manufacturer, case=False, na=False)
+        mask = (
+            df["manufacturer"]
+            .astype(str)
+            .str.contains(manufacturer, case=False, na=False)
+        )
         df = df[mask]
     return df
 
@@ -241,9 +245,13 @@ def add_curve_to_store(
         existing.update(pc.to_yaml_block())
         store_path.write_text(yaml.safe_dump(existing, sort_keys=False))
     else:
-        block = yaml.safe_dump(pc.to_yaml_block(), sort_keys=False, default_flow_style=False)
+        block = yaml.safe_dump(
+            pc.to_yaml_block(), sort_keys=False, default_flow_style=False
+        )
         with open(store_path, "a") as f:
-            f.write(f"\n# Added via power_curve_sourcing (source: {pc.source})\n{block}")
+            f.write(
+                f"\n# Added via power_curve_sourcing (source: {pc.source})\n{block}"
+            )
     logger.info("Added power curve %r (%s) to %s", pc.key, pc.source, store_path)
     return store_path
 
@@ -290,22 +298,36 @@ def fetch_turbine_models_curve(
     csvs = list(_turbine_models_data_dir().rglob("*.csv"))
     matches = [p for p in csvs if p.stem == name]
     if not matches:
-        matches = [p for p in csvs if name.lower() in p.stem.lower() and "Validation" not in p.stem]
+        matches = [
+            p
+            for p in csvs
+            if name.lower() in p.stem.lower() and "Validation" not in p.stem
+        ]
     if not matches:
-        raise ValueError(f"No turbine-models curve named {name!r}; see list_turbine_models()")
+        raise ValueError(
+            f"No turbine-models curve named {name!r}; see list_turbine_models()"
+        )
     csv = matches[0]
     df = pd.read_csv(csv)
     ws_col = next((c for c in df.columns if "wind speed" in str(c).lower()), None)
-    power_col = next((c for c in df.columns if str(c).lower().startswith("power")), None)
+    power_col = next(
+        (c for c in df.columns if str(c).lower().startswith("power")), None
+    )
     if ws_col is None or power_col is None:
-        raise ValueError(f"{csv.name} missing wind-speed/power columns: {list(df.columns)}")
+        raise ValueError(
+            f"{csv.name} missing wind-speed/power columns: {list(df.columns)}"
+        )
     sub = df[[ws_col, power_col]].apply(pd.to_numeric, errors="coerce").dropna()
     ws = [float(x) for x in sub[ws_col]]
     power = [float(x) for x in sub[power_col]]  # already kW
     # Capture the thrust-coefficient (Ct) curve when the source ships one, aligned
     # to the same rows as ws/power (IEA/DTU reference designs carry it; others don't).
     ct_col = next(
-        (c for c in df.columns if str(c).strip().lower() in ("ct [-]", "ct", "thrust coefficient")),
+        (
+            c
+            for c in df.columns
+            if str(c).strip().lower() in ("ct [-]", "ct", "thrust coefficient")
+        ),
         None,
     )
     thrust: Optional[List[float]] = None
@@ -346,8 +368,12 @@ def from_wasp_wtg(
     Multi-mode files carry several ``PerformanceTable`` blocks (one per air density); the one
     nearest ``air_density_kgm3`` is used. ``PowerOutput`` (W) is converted to kW.
     """
-    root = ElementTree.parse(str(path)).getroot()  # nosec B314 - local operator-supplied .wtg turbine file, not untrusted network input
-    desc = root.get("Description") or root.get("ManufacturerName") or Path(str(path)).stem
+    root = ElementTree.parse(
+        str(path)
+    ).getroot()  # nosec B314 - local operator-supplied .wtg turbine file, not untrusted network input
+    desc = (
+        root.get("Description") or root.get("ManufacturerName") or Path(str(path)).stem
+    )
     rotor = root.get("RotorDiameter")
     tables = root.findall(".//PerformanceTable")
     if not tables:
@@ -362,11 +388,21 @@ def from_wasp_wtg(
     table = min(tables, key=lambda t: abs(_density(t) - air_density_kgm3))
     points = table.findall(".//DataPoint")
     ws = [float(_ws) for p in points if (_ws := p.get("WindSpeed")) is not None]
-    power = [float(_po) / 1000.0 for p in points if (_po := p.get("PowerOutput")) is not None]
+    power = [
+        float(_po) / 1000.0 for p in points if (_po := p.get("PowerOutput")) is not None
+    ]
     rated = max(power) if power else 0.0
     strat = table.find(".//StartStopStrategy")
-    cut_in = float(_ci) if (strat is not None and (_ci := strat.get("LowSpeedCutIn"))) else 3.0
-    cut_out = float(_co) if (strat is not None and (_co := strat.get("HighSpeedCutOut"))) else 25.0
+    cut_in = (
+        float(_ci)
+        if (strat is not None and (_ci := strat.get("LowSpeedCutIn")))
+        else 3.0
+    )
+    cut_out = (
+        float(_co)
+        if (strat is not None and (_co := strat.get("HighSpeedCutOut")))
+        else 25.0
+    )
     return PowerCurve(
         key=key or _slugify(str(desc)),
         manufacturer=manufacturer or "unknown",
@@ -417,12 +453,18 @@ def from_tabular_file(
     ws_col = _find(["wind speed", "wind_speed", "windspeed", "speed", "ws"])
     power_col = _find(["power", "electrical"])
     if ws_col is None or power_col is None:
-        raise ValueError(f"Could not find ws/power columns in {path}: {list(df.columns)}")
+        raise ValueError(
+            f"Could not find ws/power columns in {path}: {list(df.columns)}"
+        )
     sub = df[[ws_col, power_col]].apply(pd.to_numeric, errors="coerce").dropna()
     divisor = 1000.0 if power_unit.lower() in ("w", "watt", "watts") else 1.0
     ws = [float(x) for x in sub[ws_col]]
     power = [float(x) / divisor for x in sub[power_col]]
-    rated = float(rated_capacity_kw) if rated_capacity_kw else (max(power) if power else 0.0)
+    rated = (
+        float(rated_capacity_kw)
+        if rated_capacity_kw
+        else (max(power) if power else 0.0)
+    )
     prov: Dict[str, Any] = {"file": Path(str(path)).name, "power_unit": power_unit}
     if certificate:
         prov["certificate"] = certificate

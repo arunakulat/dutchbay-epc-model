@@ -145,9 +145,7 @@ def test_block_volumetry_is_built_per_row() -> None:
 
 def test_block_defaults_when_no_fx_section() -> None:
     """Empty config -> documented defaults (blended/USD/USD, ratios 0, LKR revenue)."""
-    block = compute_fx_structured_block(
-        config={}, debt_result={}, annual_rows=[]
-    )
+    block = compute_fx_structured_block(config={}, debt_result={}, annual_rows=[])
     assert block.strategy == "blended"
     assert block.base_currency == "USD"
     assert block.reporting_currency == "USD"
@@ -306,9 +304,7 @@ def test_curve_default_flat_honors_explicit_spot() -> None:
 
 def test_curve_years_fall_back_to_index_when_missing() -> None:
     """Rows without a 'year' key get sequential indices as the year labels."""
-    curve = compute_fx_curve(
-        config={}, annual_rows=[{}, {}, {}]
-    )
+    curve = compute_fx_curve(config={}, annual_rows=[{}, {}, {}])
     assert curve.years == [0, 1, 2]
     assert len(curve.lkr_usd) == 3
 
@@ -410,10 +406,12 @@ def test_risk_profile_var_is_independent_of_curve_spot() -> None:
         annual_rows=_annual_rows(),
     )
     p_a = compute_fx_risk_profile(
-        fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 300.0])
+        fx_block=block,
+        fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 300.0]),
     )
     p_b = compute_fx_risk_profile(
-        fx_block=block, fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 400.0])
+        fx_block=block,
+        fx_curve=FXCurveOutput(years=[2025, 2026], lkr_usd=[330.0, 400.0]),
     )
     # _full_fx_config declares hedging_coverage_pct=30 -> VaR on the 70% residual of the
     # hard-currency (USD + CNY) legs (the LKR leg is a natural hedge, excluded).
@@ -541,9 +539,11 @@ def test_hedging_coverage_reduces_var() -> None:
     vol = [FXVolumetry(period=0, total_debt_lkr=1000.0, total_debt_usd=1000.0)]
     curve = compute_fx_curve(config={}, annual_rows=[{"year": 0}])
     v_unhedged = compute_fx_risk_profile(
-        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=0.0), fx_curve=curve
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=0.0),
+        fx_curve=curve,
     ).var_95_usd_million
     v_hedged = compute_fx_risk_profile(
-        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=40.0), fx_curve=curve
+        fx_block=FXStructuredBlock(volumetry=vol, hedging_coverage_pct=40.0),
+        fx_curve=curve,
     ).var_95_usd_million
     assert v_hedged == pytest.approx(v_unhedged * 0.60)  # 40% hedged -> 60% residual

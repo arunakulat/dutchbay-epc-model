@@ -10,6 +10,7 @@ which the shim exported, so ``python scripts/run_tornado_from_cli.py`` raised
 imports, (2) the YAML parameter loader, (3) the tornado->CSV flatten/column
 contract, and (4) clean multi-metric and error behaviour.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -45,9 +46,7 @@ def test_module_imports_without_error():
 
 
 def _write_params(tmp_path: Path, *, nested: bool = True) -> Path:
-    body = (
-        "parameters:\n" if nested else ""
-    ) + (
+    body = ("parameters:\n" if nested else "") + (
         "  - variable_name: capex.usd_total\n"
         "    base_value: 159600000.0\n"
         "    low_pct: -10.0\n"
@@ -69,14 +68,19 @@ def test_load_parameters_from_yaml_nested_and_list(tmp_path: Path):
     cli = _load_cli()
     for nested in (True, False):
         params = cli.load_parameters_from_yaml(_write_params(tmp_path, nested=nested))
-        assert [p.variable_name for p in params] == ["capex.usd_total", "tariff.lkr_per_kwh"]
+        assert [p.variable_name for p in params] == [
+            "capex.usd_total",
+            "tariff.lkr_per_kwh",
+        ]
         assert params[0].base_value == pytest.approx(159_600_000.0)
 
 
 def test_load_parameters_rejects_unknown_keys(tmp_path: Path):
     cli = _load_cli()
     bad = tmp_path / "bad.yaml"
-    bad.write_text("parameters:\n  - variable_name: x\n    base_value: 1.0\n    bogus_key: 5\n")
+    bad.write_text(
+        "parameters:\n  - variable_name: x\n    base_value: 1.0\n    bogus_key: 5\n"
+    )
     with pytest.raises(ValueError, match="unknown keys"):
         cli.load_parameters_from_yaml(bad)
 
@@ -85,16 +89,28 @@ def test_load_parameters_rejects_unknown_keys(tmp_path: Path):
 def test_single_metric_tornado_csv(tmp_path: Path):
     cli = _load_cli()
     out = tmp_path / "tornado.csv"
-    rc = cli.main([
-        "--config", str(_CONFIG),
-        "--parameters", str(_write_params(tmp_path)),
-        "--metric", "project_irr",
-        "--output", str(out),
-    ])
+    rc = cli.main(
+        [
+            "--config",
+            str(_CONFIG),
+            "--parameters",
+            str(_write_params(tmp_path)),
+            "--metric",
+            "project_irr",
+            "--output",
+            str(out),
+        ]
+    )
     assert rc == 0
     df = pd.read_csv(out)
     assert list(df.columns) == [
-        "metric", "variable_name", "label", "base_case", "low_case", "high_case", "impact_abs",
+        "metric",
+        "variable_name",
+        "label",
+        "base_case",
+        "low_case",
+        "high_case",
+        "impact_abs",
     ]
     assert set(df["variable_name"]) == {"capex.usd_total", "tariff.lkr_per_kwh"}
     assert (df["metric"] == "project_irr").all()
@@ -110,13 +126,20 @@ def test_single_metric_tornado_csv(tmp_path: Path):
 def test_multi_metric_tags_each_metric(tmp_path: Path):
     cli = _load_cli()
     out = tmp_path / "multi.csv"
-    rc = cli.main([
-        "--config", str(_CONFIG),
-        "--parameters", str(_write_params(tmp_path)),
-        "--metric", "project_irr",
-        "--metric", "min_dscr",
-        "--output", str(out),
-    ])
+    rc = cli.main(
+        [
+            "--config",
+            str(_CONFIG),
+            "--parameters",
+            str(_write_params(tmp_path)),
+            "--metric",
+            "project_irr",
+            "--metric",
+            "min_dscr",
+            "--output",
+            str(out),
+        ]
+    )
     assert rc == 0
     df = pd.read_csv(out)
     assert set(df["metric"]) == {"project_irr", "min_dscr"}
@@ -135,17 +158,26 @@ def test_shipped_example_command_runs(tmp_path: Path):
     """
     cli = _load_cli()
     out = tmp_path / "example.csv"
-    rc = cli.main([
-        "--config", str(_CONFIG),
-        "--parameters", str(_PARAMS_EXAMPLE),
-        "--metric", "project_irr",
-        "--output", str(out),
-    ])
+    rc = cli.main(
+        [
+            "--config",
+            str(_CONFIG),
+            "--parameters",
+            str(_PARAMS_EXAMPLE),
+            "--metric",
+            "project_irr",
+            "--output",
+            str(out),
+        ]
+    )
     assert rc == 0
     df = pd.read_csv(out)
     assert not df.empty
     assert set(df["variable_name"]) == {
-        "capex.usd_total", "tariff.lkr_per_kwh", "opex.usd_per_year", "project.capacity_factor",
+        "capex.usd_total",
+        "tariff.lkr_per_kwh",
+        "opex.usd_per_year",
+        "project.capacity_factor",
     }
 
 
@@ -157,10 +189,15 @@ def test_unresolvable_parameter_path_exits_clean(tmp_path: Path, capsys):
         "parameters:\n  - variable_name: finance.does_not_exist\n"
         "    base_value: 1.0\n    low_pct: -10.0\n    high_pct: 10.0\n"
     )
-    rc = cli.main([
-        "--config", str(_CONFIG),
-        "--parameters", str(bad),
-        "--metric", "project_irr",
-    ])
+    rc = cli.main(
+        [
+            "--config",
+            str(_CONFIG),
+            "--parameters",
+            str(bad),
+            "--metric",
+            "project_irr",
+        ]
+    )
     assert rc == 2  # clean non-zero exit, not an uncaught traceback
     assert "ERROR" in capsys.readouterr().err

@@ -22,9 +22,12 @@ def test_sigma_resolution_order() -> None:
     # explicit override wins
     assert resolve_capex_sigma_pct({}, override=15.0) == 15.0
     # QRA uncertainty next
-    assert resolve_capex_sigma_pct(
-        {"capex": {"contingency": {"base_cost_uncertainty_pct": 12.0}}}
-    ) == 12.0
+    assert (
+        resolve_capex_sigma_pct(
+            {"capex": {"contingency": {"base_cost_uncertainty_pct": 12.0}}}
+        )
+        == 12.0
+    )
     # then capex.uncertainty_pct
     assert resolve_capex_sigma_pct({"capex": {"uncertainty_pct": 8.0}}) == 8.0
 

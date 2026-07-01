@@ -71,7 +71,7 @@ def test_config_loader_returns_non_dict_raises(
         _validate_config_type_and_structure(str(LENDER_SCENARIO))
 
 
-def test_config_empty_mapping_raises(  ) -> None:
+def test_config_empty_mapping_raises() -> None:
     """An empty mapping is rejected (line 111)."""
     with pytest.raises(PipelineConfigError, match="empty"):
         _validate_config_type_and_structure({})
@@ -270,7 +270,8 @@ def test_debt_fee_rate_non_mapping_financing_returns_zero() -> None:
 
 def test_debt_fee_rate_guarantee_gated_on_flag() -> None:
     """Fee load = upfront/tenor always; the guarantee premium loads ONLY when
-    use_revenue_guarantee is true (round-9 gate). Without the flag the 75bps is NOT charged."""
+    use_revenue_guarantee is true (round-9 gate). Without the flag the 75bps is NOT charged.
+    """
     base = {
         "Financing_Terms": {
             "guarantee_revenue_pct": 0.01,
@@ -280,7 +281,9 @@ def test_debt_fee_rate_guarantee_gated_on_flag() -> None:
     }
     # Flag absent / false -> guarantee gated OFF, only upfront/tenor loads.
     assert math.isclose(_debt_fee_rate(base), 0.03 / 15.0, rel_tol=1e-12)
-    off = {"Financing_Terms": {**base["Financing_Terms"], "use_revenue_guarantee": False}}
+    off = {
+        "Financing_Terms": {**base["Financing_Terms"], "use_revenue_guarantee": False}
+    }
     assert math.isclose(_debt_fee_rate(off), 0.03 / 15.0, rel_tol=1e-12)
     # Flag true -> guarantee premium loads alongside the amortised upfront.
     on = {"Financing_Terms": {**base["Financing_Terms"], "use_revenue_guarantee": True}}

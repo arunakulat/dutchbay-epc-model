@@ -52,8 +52,7 @@ def test_risk_register_loads_with_valid_severities() -> None:
 def test_risk_register_rejects_bad_severity(tmp_path: Path) -> None:
     bad = tmp_path / "bad.yaml"
     bad.write_text(
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
             report:
               title: t
               subtitle: s
@@ -68,8 +67,7 @@ def test_risk_register_rejects_bad_severity(tmp_path: Path) -> None:
             kpi_table: []
             risk_register:
               - {category: c, risk: r, mitigation: m, severity: catastrophic}
-            """
-        ),
+            """),
         encoding="utf-8",
     )
     with pytest.raises(ValueError):  # severity not in the RiskSeverity Literal
@@ -79,8 +77,7 @@ def test_risk_register_rejects_bad_severity(tmp_path: Path) -> None:
 def test_risk_register_is_optional(tmp_path: Path) -> None:
     minimal = tmp_path / "minimal.yaml"
     minimal.write_text(
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
             report:
               title: t
               subtitle: s
@@ -93,8 +90,7 @@ def test_risk_register_is_optional(tmp_path: Path) -> None:
               min_dscr_target: 1.3
               max_balloon_pct: 0.4
             kpi_table: []
-            """
-        ),
+            """),
         encoding="utf-8",
     )
     cfg = load_report_config(minimal)  # no risk_register key -> defaults to empty
@@ -104,8 +100,7 @@ def test_risk_register_is_optional(tmp_path: Path) -> None:
 def test_unknown_key_is_rejected(tmp_path: Path) -> None:
     bad = tmp_path / "bad.yaml"
     bad.write_text(
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
             report:
               title: t
               subtitle: s
@@ -119,8 +114,7 @@ def test_unknown_key_is_rejected(tmp_path: Path) -> None:
               max_balloon_pct: 0.4
             kpi_table: []
             surprise: 1
-            """
-        ),
+            """),
         encoding="utf-8",
     )
     with pytest.raises(ValueError):  # pydantic ValidationError (extra=forbid)

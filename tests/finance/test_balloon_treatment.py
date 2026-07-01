@@ -82,7 +82,9 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
 
 
-def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(results: dict) -> None:
+def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
+    results: dict,
+) -> None:
     """cash_sweep traps post-maturity CFADS against the balloon; it is below the free pass.
 
     After the 5.9% FX-drift re-baseline plus the 2.0% AEP P50 over-prediction haircut the

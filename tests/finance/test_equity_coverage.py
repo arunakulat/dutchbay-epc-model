@@ -12,6 +12,7 @@ covered by monkeypatching the *delegated* primitives (``_irr`` / ``_npv_wrapper`
 to raise or return a non-finite value -- the module's documented contract is to
 swallow those into ``None`` -- rather than by fabricating a result.
 """
+
 from __future__ import annotations
 
 import math
@@ -22,8 +23,8 @@ import pytest
 from analytics.contracts_v14 import EquityPerformance
 from finance import equity_v14 as mod
 from finance.equity_v14 import (
-    EquityCashflowSummary,
     LEGACY_EQUITY_DISCOUNT_RATE,
+    EquityCashflowSummary,
     calculate_cash_on_cash,
     calculate_equity_irr,
     calculate_equity_npv,
@@ -168,7 +169,9 @@ def test_cash_on_cash_non_positive_base_returns_empty(base: float) -> None:
 # ---------------------------------------------------------------------------
 def test_moic_combines_distributions_and_nav() -> None:
     """MOIC = (cumulative distributions + NAV) / invested."""
-    moic = calculate_moic(cumulative_distributions=80.0, current_nav=40.0, total_invested=100.0)
+    moic = calculate_moic(
+        cumulative_distributions=80.0, current_nav=40.0, total_invested=100.0
+    )
     assert moic == pytest.approx((80.0 + 40.0) / 100.0)
 
 

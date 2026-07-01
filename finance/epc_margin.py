@@ -85,7 +85,9 @@ def _resolve_total_cost(epc: Mapping[str, Any]) -> float:
             raise ValueError(f"epc.cost.{category}={amount!r} is not numeric.")
         value = float(amount)
         if not math.isfinite(value) or value < 0:
-            raise ValueError(f"epc.cost.{category}={value} must be non-negative finite.")
+            raise ValueError(
+                f"epc.cost.{category}={value} must be non-negative finite."
+            )
         total += value
     if total <= 0:
         raise ValueError("epc.cost categories sum to a non-positive total.")
@@ -117,11 +119,19 @@ def _schedule_to_monthly(
             )
         month = entry["month"]
         pct = entry["pct"]
-        if not isinstance(month, int) or isinstance(month, bool) or not 0 <= month <= months:
+        if (
+            not isinstance(month, int)
+            or isinstance(month, bool)
+            or not 0 <= month <= months
+        ):
             raise ValueError(
                 f"epc.{field} month={month!r} must be an integer in [0, {months}]."
             )
-        if isinstance(pct, bool) or not isinstance(pct, (int, float)) or not 0 <= pct <= 1:
+        if (
+            isinstance(pct, bool)
+            or not isinstance(pct, (int, float))
+            or not 0 <= pct <= 1
+        ):
             raise ValueError(f"epc.{field} pct={pct!r} must be a number in [0, 1].")
         amounts[month] += float(pct) * total
         pct_sum += float(pct)
@@ -150,11 +160,17 @@ def compute_epc_margin(config: Mapping[str, Any]) -> EpcMarginResult:
     if not isinstance(epc, Mapping):
         raise ValueError("config has no 'epc' block to compute an EPC margin from.")
 
-    contract_value = _require_positive(epc.get("contract_value_usd"), "contract_value_usd")
+    contract_value = _require_positive(
+        epc.get("contract_value_usd"), "contract_value_usd"
+    )
     total_cost = _resolve_total_cost(epc)
 
     months_raw = epc.get("construction_months")
-    if not isinstance(months_raw, int) or isinstance(months_raw, bool) or months_raw <= 0:
+    if (
+        not isinstance(months_raw, int)
+        or isinstance(months_raw, bool)
+        or months_raw <= 0
+    ):
         raise ValueError(
             f"epc.construction_months must be a positive integer; got {months_raw!r}."
         )

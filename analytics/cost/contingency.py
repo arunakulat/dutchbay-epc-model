@@ -58,12 +58,16 @@ def _z_one_sided(confidence: float) -> float:
     return float(norm.ppf(confidence))
 
 
-def resolve_contingency(base_cost_usd: float, capex_config: Mapping[str, Any]) -> ContingencyResult:
+def resolve_contingency(
+    base_cost_usd: float, capex_config: Mapping[str, Any]
+) -> ContingencyResult:
     """Resolve the CAPEX contingency for a given base cost (excluding contingency)."""
     cont = _contingency_cfg(capex_config)
     method = str(cont.get("method", "fixed")).lower()
     if method != "qra":
-        return ContingencyResult(contingency_usd=0.0, method="fixed", base_cost_usd=base_cost_usd)
+        return ContingencyResult(
+            contingency_usd=0.0, method="fixed", base_cost_usd=base_cost_usd
+        )
 
     if "base_cost_uncertainty_pct" not in cont:
         raise ValueError(

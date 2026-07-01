@@ -24,13 +24,25 @@ _HYBRID = {
         "technologies": {
             # degradation_pct is a PERCENT (0.6 -> 0.6%/yr), matching the single-tech
             # convention (_build_cashflow_params divides by 100). Resolved to 0.006 dec.
-            "wind": {"capacity_mw": 150, "capacity_factor": 0.339, "degradation_pct": 0.6},
-            "solar": {"capacity_mw": 50, "capacity_factor": 0.20, "degradation_pct": 0.4},
+            "wind": {
+                "capacity_mw": 150,
+                "capacity_factor": 0.339,
+                "degradation_pct": 0.6,
+            },
+            "solar": {
+                "capacity_mw": 50,
+                "capacity_factor": 0.20,
+                "degradation_pct": 0.4,
+            },
         }
     }
 }
 # project headline reconciles: (150*0.339 + 50*0.20)/200 = 0.304250
-_PROJECT_PARAMS = {"capacity_mw": 200, "capacity_factor": 0.304250, "degradation": 0.005}
+_PROJECT_PARAMS = {
+    "capacity_mw": 200,
+    "capacity_factor": 0.304250,
+    "degradation": 0.005,
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -50,22 +62,34 @@ def test_resolve_specs_with_per_tech_degradation() -> None:
 
 
 def test_degradation_falls_back_to_project() -> None:
-    cfg = {"generation": {"technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.304250}}}}
+    cfg = {
+        "generation": {
+            "technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.304250}}
+        }
+    }
     specs = resolve_tech_generation_specs(cfg, _PROJECT_PARAMS)
     assert specs is not None and specs[0]["degradation"] == 0.005  # project fallback
 
 
 def test_consistency_raises_on_mismatch() -> None:
     # per-tech sum 50.85 vs project 200*0.30 = 60 -> > 1% mismatch -> fail loud.
-    cfg = {"generation": {"technologies": {"wind": {"capacity_mw": 150, "capacity_factor": 0.339}}}}
+    cfg = {
+        "generation": {
+            "technologies": {"wind": {"capacity_mw": 150, "capacity_factor": 0.339}}
+        }
+    }
     with pytest.raises(ValueError, match="reconcile"):
-        resolve_tech_generation_specs(cfg, {"capacity_mw": 200, "capacity_factor": 0.30, "degradation": 0.005})
+        resolve_tech_generation_specs(
+            cfg, {"capacity_mw": 200, "capacity_factor": 0.30, "degradation": 0.005}
+        )
 
 
 def test_non_dict_block_and_all_skipped_return_none() -> None:
     # A malformed (non-dict) tech is skipped; a storage-only block has no
     # generation, so the whole resolution returns None (single-tech path).
-    cfg = {"generation": {"technologies": {"bad": "not-a-dict", "bess": {"power_mw": 50}}}}
+    cfg = {
+        "generation": {"technologies": {"bad": "not-a-dict", "bess": {"power_mw": 50}}}
+    }
     assert resolve_tech_generation_specs(cfg, _PROJECT_PARAMS) is None
 
 
@@ -74,7 +98,10 @@ def test_storage_without_capacity_factor_skipped() -> None:
         "generation": {
             "technologies": {
                 "wind": {"capacity_mw": 200, "capacity_factor": 0.304250},
-                "bess": {"capacity_mw": 50, "power_mw": 50},  # no capacity_factor/aep_gwh
+                "bess": {
+                    "capacity_mw": 50,
+                    "power_mw": 50,
+                },  # no capacity_factor/aep_gwh
             }
         }
     }
@@ -105,9 +132,15 @@ def test_capacity_factor_without_capacity_mw_raises() -> None:
 
 def test_non_positive_headline_raises() -> None:
     # The reconciliation must not silently skip on a non-positive headline (audit #3).
-    cfg = {"generation": {"technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.3}}}}
+    cfg = {
+        "generation": {
+            "technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.3}}
+        }
+    }
     with pytest.raises(ValueError, match="non-positive"):
-        resolve_tech_generation_specs(cfg, {"capacity_mw": 0.0, "capacity_factor": 0.3, "degradation": 0.005})
+        resolve_tech_generation_specs(
+            cfg, {"capacity_mw": 0.0, "capacity_factor": 0.3, "degradation": 0.005}
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -116,7 +149,9 @@ def test_non_positive_headline_raises() -> None:
 def test_single_tech_path_is_identical() -> None:
     params = {**_PROJECT_PARAMS, "grid_loss_pct": 0.02}  # no tech_generation_specs
     got = calculate_net_production_for_year(params, 5)
-    expected = _calculate_net_production(200, 0.304250, 0.005, 0.02, 5, curtailment_pct=0.0)
+    expected = _calculate_net_production(
+        200, 0.304250, 0.005, 0.02, 5, curtailment_pct=0.0
+    )
     assert got == expected
 
 
@@ -135,7 +170,12 @@ def test_per_tech_degradation_diverges_from_single_blend() -> None:
     # wind (0.6%/yr) and solar (0.4%/yr) decay differently than a single 0.5% blend.
     specs = resolve_tech_generation_specs(_HYBRID, _PROJECT_PARAMS)
     multi = {"grid_loss_pct": 0.0, "tech_generation_specs": specs}
-    single = {"grid_loss_pct": 0.0, "capacity_mw": 200, "capacity_factor": 0.304250, "degradation": 0.005}
+    single = {
+        "grid_loss_pct": 0.0,
+        "capacity_mw": 200,
+        "capacity_factor": 0.304250,
+        "degradation": 0.005,
+    }
 
     _, n0_multi = calculate_net_production_for_year(multi, 0)
     _, n0_single = calculate_net_production_for_year(single, 0)
@@ -143,7 +183,9 @@ def test_per_tech_degradation_diverges_from_single_blend() -> None:
 
     _, n10_multi = calculate_net_production_for_year(multi, 10)
     _, n10_single = calculate_net_production_for_year(single, 10)
-    assert n10_multi != pytest.approx(n10_single)  # per-tech degradation genuinely matters
+    assert n10_multi != pytest.approx(
+        n10_single
+    )  # per-tech degradation genuinely matters
 
 
 # --------------------------------------------------------------------------- #
@@ -165,7 +207,11 @@ def test_wind_only_block_percent_degradation_matches_single_tech_full_life() -> 
     config = {
         "generation": {
             "technologies": {
-                "wind": {"capacity_mw": 200.0, "capacity_factor": 0.304250, "degradation_pct": 0.5}
+                "wind": {
+                    "capacity_mw": 200.0,
+                    "capacity_factor": 0.304250,
+                    "degradation_pct": 0.5,
+                }
             }
         }
     }
@@ -174,24 +220,46 @@ def test_wind_only_block_percent_degradation_matches_single_tech_full_life() -> 
     multi = {**_LIFE_PROJECT, "tech_generation_specs": specs}
     single = {**_LIFE_PROJECT, "tech_generation_specs": None}
     for year in range(20):
-        assert calculate_net_production_for_year(multi, year) == calculate_net_production_for_year(single, year)
+        assert calculate_net_production_for_year(
+            multi, year
+        ) == calculate_net_production_for_year(single, year)
 
 
 def test_wind_only_block_no_degradation_falls_back_full_life() -> None:
     # No per-tech degradation -> falls back to the (already-decimal) project value;
     # byte-identical to single-tech across the full project life.
-    config = {"generation": {"technologies": {"wind": {"capacity_mw": 200.0, "capacity_factor": 0.304250}}}}
+    config = {
+        "generation": {
+            "technologies": {
+                "wind": {"capacity_mw": 200.0, "capacity_factor": 0.304250}
+            }
+        }
+    }
     specs = resolve_tech_generation_specs(config, _LIFE_PROJECT)
     multi = {**_LIFE_PROJECT, "tech_generation_specs": specs}
     single = {**_LIFE_PROJECT, "tech_generation_specs": None}
     for year in range(20):
-        assert calculate_net_production_for_year(multi, year) == calculate_net_production_for_year(single, year)
+        assert calculate_net_production_for_year(
+            multi, year
+        ) == calculate_net_production_for_year(single, year)
 
 
 def test_negative_per_tech_degradation_raises() -> None:
-    config = {"generation": {"technologies": {"wind": {"capacity_mw": 200, "capacity_factor": 0.30, "degradation_pct": -0.5}}}}
+    config = {
+        "generation": {
+            "technologies": {
+                "wind": {
+                    "capacity_mw": 200,
+                    "capacity_factor": 0.30,
+                    "degradation_pct": -0.5,
+                }
+            }
+        }
+    }
     with pytest.raises(ValueError, match="degradation_pct"):
-        resolve_tech_generation_specs(config, {"capacity_mw": 200, "capacity_factor": 0.30, "degradation": 0.005})
+        resolve_tech_generation_specs(
+            config, {"capacity_mw": 200, "capacity_factor": 0.30, "degradation": 0.005}
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -224,4 +292,6 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     # WACC + spread), below the base NPV. -60.92M -> -71.32M (higher WACC from the LKR rate).
     assert kpis["project_npv_prudential"] == pytest.approx(-71316323.02802612, rel=1e-9)
     assert kpis["prudential_rate_used"] == pytest.approx(0.10827115075628828, abs=1e-9)
-    assert kpis["project_npv_prudential"] < kpis["project_npv"]  # haircut rate -> lower NPV
+    assert (
+        kpis["project_npv_prudential"] < kpis["project_npv"]
+    )  # haircut rate -> lower NPV

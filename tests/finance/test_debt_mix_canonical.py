@@ -50,7 +50,9 @@ def test_rates_drive_avg_debt_rate() -> None:
 
 def test_mix_drives_tranche_split() -> None:
     """Tranche principals follow the mix proportions, not any tranche table."""
-    dr = _debt({MIX + "dfi_max": 0.20, MIX + "lkr_max": 0.40, MIX + "usd_commercial_min": 0.40})
+    dr = _debt(
+        {MIX + "dfi_max": 0.20, MIX + "lkr_max": 0.40, MIX + "usd_commercial_min": 0.40}
+    )
     principal = dr["principal_by_tranche"]
     total = sum(principal.values())
     assert principal["dfi"] / total == pytest.approx(0.20, abs=0.02)
@@ -67,7 +69,9 @@ def test_decorative_debt_tranches_is_ignored() -> None:
         {"name": "USD_DFI", "currency": "USD", "rate_pct": 99.0, "principal_usd": 1},
         {"name": "LKR_Local", "currency": "LKR", "rate_pct": 99.0, "principal_lkr": 1},
     ]
-    with_block = _debt({"Financing_Terms.debt_tranches": bogus_tranches})["avg_debt_rate"]
+    with_block = _debt({"Financing_Terms.debt_tranches": bogus_tranches})[
+        "avg_debt_rate"
+    ]
     assert with_block == pytest.approx(base, abs=1e-9)
 
 

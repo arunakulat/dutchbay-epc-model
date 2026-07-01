@@ -73,9 +73,7 @@ def test_evaluate_with_casper_tail_risk_smoke(
 
     # Minimal YAML bodies; content is irrelevant because we monkeypatch the
     # actual pipeline + MC orchestrators.
-    cfg_path.write_text(
-        "project:\n  name: Toy Scenario\n  capex_usd_per_kw: 1500\n"
-    )
+    cfg_path.write_text("project:\n  name: Toy Scenario\n  capex_usd_per_kw: 1500\n")
     mc_cfg_path.write_text("monte_carlo:\n  iterations: 10\n")
 
     # --- 2. Patch pipeline + MC orchestrators inside evaluation_v14 ---------

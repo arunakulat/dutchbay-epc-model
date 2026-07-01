@@ -24,7 +24,9 @@ VALID_TARGET_METRICS = {
 
 @dataclass(frozen=True)
 class FXSensitivityConfig:
-    fx_rate_shocks: list[float] = field(default_factory=lambda: [-0.10, -0.05, 0.0, 0.05, 0.10])
+    fx_rate_shocks: list[float] = field(
+        default_factory=lambda: [-0.10, -0.05, 0.0, 0.05, 0.10]
+    )
     hedge_ratio_values: list[float] = field(default_factory=lambda: [0.0, 0.5, 1.0])
     spread_shocks_bps: list[float] = field(default_factory=lambda: [-100, 0, 100])
     target_metric: str = "project_irr"
@@ -99,13 +101,17 @@ class RealFXSensitivityResult:
             return
         if len(self.fx_rate_points) >= 2:
             xs = [p.fx_rate for p in self.fx_rate_points]
-            ys = [p.project_irr for p in self.fx_rate_points if p.project_irr is not None]
+            ys = [
+                p.project_irr for p in self.fx_rate_points if p.project_irr is not None
+            ]
             if len(xs) == len(ys) and len(ys) >= 2:
                 coef, _variance = _linear_fit("fx_rate", xs, [float(y) for y in ys])
                 self.fx_rate_irr_sensitivity = coef.coefficient
 
 
-def evaluate_with_overrides(base_config_path: str, overrides: dict[str, Any]) -> dict[str, Any]:
+def evaluate_with_overrides(
+    base_config_path: str, overrides: dict[str, Any]
+) -> dict[str, Any]:
     from analytics.evaluation_v14 import evaluate_with_overrides as _evaluate
 
     return cast(dict[str, Any], _evaluate(base_config_path, overrides))
@@ -130,7 +136,9 @@ def _metric_from_result(result: dict[str, Any], metric: str) -> float:
     raise KeyError(f"Metric {metric!r} not found in pipeline result")
 
 
-def _linear_fit(parameter: str, xs: Sequence[float], ys: Sequence[float]) -> tuple[SensitivityCoefficient, float]:
+def _linear_fit(
+    parameter: str, xs: Sequence[float], ys: Sequence[float]
+) -> tuple[SensitivityCoefficient, float]:
     x = np.asarray([float(value) for value in xs], dtype=float)
     y = np.asarray([float(value) for value in ys], dtype=float)
     if len(x) != len(y) or len(x) == 0:
@@ -189,7 +197,9 @@ class FXSensitivityAnalyzer:
         from analytics.fx.fx_fetch import default_fx_lkr_per_usd
 
         fx_config = self.base_config.get("fx", {})
-        rates = fx_config.get("rates") if isinstance(fx_config.get("rates"), dict) else {}
+        rates = (
+            fx_config.get("rates") if isinstance(fx_config.get("rates"), dict) else {}
+        )
         # Prefer the LIVE engine key (start_lkr_per_usd), then the scenario rates block,
         # then the legacy spot_rate, then the global config default.
         spot = (
@@ -225,15 +235,23 @@ class FXSensitivityAnalyzer:
         # ~0 here is an unmodeled-lever signal, not an FX-rate-style cash sensitivity.
         hedge_values = []
         for hedge_ratio in self.config.hedge_ratio_values:
-            out = evaluate_with_overrides(self.base_config_path, {"fx": {"hedge_ratio": float(hedge_ratio)}})
+            out = evaluate_with_overrides(
+                self.base_config_path, {"fx": {"hedge_ratio": float(hedge_ratio)}}
+            )
             hedge_values.append(_metric_from_result(out, metric))
-        pairs.append(_linear_fit("hedge_ratio", self.config.hedge_ratio_values, hedge_values))
+        pairs.append(
+            _linear_fit("hedge_ratio", self.config.hedge_ratio_values, hedge_values)
+        )
 
         spread_values = []
         for spread_bps in self.config.spread_shocks_bps:
-            out = evaluate_with_overrides(self.base_config_path, {"fx": {"spread_shock_bps": float(spread_bps)}})
+            out = evaluate_with_overrides(
+                self.base_config_path, {"fx": {"spread_shock_bps": float(spread_bps)}}
+            )
             spread_values.append(_metric_from_result(out, metric))
-        pairs.append(_linear_fit("spread", self.config.spread_shocks_bps, spread_values))
+        pairs.append(
+            _linear_fit("spread", self.config.spread_shocks_bps, spread_values)
+        )
         if all(abs(v - hedge_values[0]) < 1e-12 for v in hedge_values) and all(
             abs(v - spread_values[0]) < 1e-12 for v in spread_values
         ):
@@ -250,14 +268,18 @@ class FXSensitivityAnalyzer:
                 coefficient=coef.coefficient,
                 std_error=coef.std_error,
                 r_squared=coef.r_squared,
-                variance_contribution=(variance / total_variance if total_variance > 0 else 0.0),
+                variance_contribution=(
+                    variance / total_variance if total_variance > 0 else 0.0
+                ),
             )
             for coef, variance in pairs
         ]
         explained = float(np.mean([coef.r_squared for coef in coefficients]))
         return FXSensitivityResult(coefficients, base_value, total_variance, explained)
 
-    def _run_pipeline_with_fx_params(self, fx_rate: float, hedge_ratio: float, spread_bps: float) -> dict[str, Any]:
+    def _run_pipeline_with_fx_params(
+        self, fx_rate: float, hedge_ratio: float, spread_bps: float
+    ) -> dict[str, Any]:
         config = copy.deepcopy(self.base_config)
         config.setdefault("fx", {})
         # start_lkr_per_usd is the LIVE engine key (spot_rate was not consumed). hedge_ratio /
@@ -280,12 +302,18 @@ class FXSensitivityAnalyzer:
         )
         return result
 
-    def _extract_metrics(self, pipeline_result: dict[str, Any]) -> tuple[Optional[float], float, Optional[float], float, float]:
+    def _extract_metrics(
+        self, pipeline_result: dict[str, Any]
+    ) -> tuple[Optional[float], float, Optional[float], float, float]:
         kpis = pipeline_result.get("kpis", {})
         project_irr = kpis.get("project_irr", pipeline_result.get("project_irr"))
-        project_npv = float(kpis.get("project_npv", pipeline_result.get("project_npv", 0.0)))
+        project_npv = float(
+            kpis.get("project_npv", pipeline_result.get("project_npv", 0.0))
+        )
         equity_irr = kpis.get("equity_irr", pipeline_result.get("equity_irr"))
-        equity_npv = float(kpis.get("equity_npv", pipeline_result.get("equity_npv", 0.0)))
+        equity_npv = float(
+            kpis.get("equity_npv", pipeline_result.get("equity_npv", 0.0))
+        )
         debt = pipeline_result.get("debt_result", {})
         min_dscr = float(debt.get("min_dscr", pipeline_result.get("dscr_min", 0.0)))
         return project_irr, project_npv, equity_irr, equity_npv, min_dscr
@@ -302,13 +330,42 @@ class FXSensitivityAnalyzer:
         base_fx = self._base_fx()
         base_hedge = float(fx_config.get("hedge_ratio", 0.0))
         base_spread = float(fx_config.get("spread_bps", 0.0))
-        base_result = self._run_pipeline_with_fx_params(base_fx, base_hedge, base_spread)
-        base_irr, base_npv, base_equity_irr, _, base_dscr = self._extract_metrics(base_result)
-        result = RealFXSensitivityResult(base_fx, base_hedge, base_spread, base_irr, base_npv, base_equity_irr, base_dscr)
-        for fx_rate in np.linspace(base_fx * (1 - fx_variation_pct / 100), base_fx * (1 + fx_variation_pct / 100), fx_steps):
-            out = self._run_pipeline_with_fx_params(float(fx_rate), base_hedge, base_spread)
+        base_result = self._run_pipeline_with_fx_params(
+            base_fx, base_hedge, base_spread
+        )
+        base_irr, base_npv, base_equity_irr, _, base_dscr = self._extract_metrics(
+            base_result
+        )
+        result = RealFXSensitivityResult(
+            base_fx,
+            base_hedge,
+            base_spread,
+            base_irr,
+            base_npv,
+            base_equity_irr,
+            base_dscr,
+        )
+        for fx_rate in np.linspace(
+            base_fx * (1 - fx_variation_pct / 100),
+            base_fx * (1 + fx_variation_pct / 100),
+            fx_steps,
+        ):
+            out = self._run_pipeline_with_fx_params(
+                float(fx_rate), base_hedge, base_spread
+            )
             irr, npv, equity_irr, equity_npv, dscr = self._extract_metrics(out)
-            result.fx_rate_points.append(FXSensitivityPoint(float(fx_rate), base_hedge, base_spread, irr, npv, equity_irr, equity_npv, dscr))
+            result.fx_rate_points.append(
+                FXSensitivityPoint(
+                    float(fx_rate),
+                    base_hedge,
+                    base_spread,
+                    irr,
+                    npv,
+                    equity_irr,
+                    equity_npv,
+                    dscr,
+                )
+            )
         result.calculate_summary_metrics()
         return result
 

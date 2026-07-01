@@ -528,9 +528,7 @@ def test_chart_generator_creates_output_dir(tmp_path: Path) -> None:
 
 def test_plot_kpi_comparison_dataframe_named_column(tmp_path: Path) -> None:
     gen = ChartGenerator(tmp_path)
-    df = pd.DataFrame(
-        {"scenario_name": ["a", "b"], "project_irr": [0.07, 0.05]}
-    )
+    df = pd.DataFrame({"scenario_name": ["a", "b"], "project_irr": [0.07, 0.05]})
     path = gen.plot_kpi_comparison(df, "project_irr", "kpi.png")
     assert path == tmp_path / "kpi.png"
     assert path.exists()

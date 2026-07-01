@@ -156,15 +156,22 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
         python -m pip install -e ".[wind,gis]"
-        pip install ruff black mypy==1.19.0
+        pip install ruff black isort mypy==1.19.0
 
     - name: Run ruff (mandatory gate)
       # MANDATORY: no '|| true'. A lint regression now fails the 'lint' job and,
       # via the Test Summary gate below, blocks the merge. The repo is ruff-clean.
       run: ruff check . --output-format=github
 
-    - name: Run black (check only)
-      run: black --check --diff . || true
+    - name: Run black (mandatory gate)
+      # MANDATORY (no '|| true' since the repo-wide reformat cleared the 210-file backlog):
+      # black --check now blocks the merge on any un-black'd file, matching ruff/mypy.
+      run: black --check --diff .
+
+    - name: Run isort (mandatory gate)
+      # MANDATORY: import ordering enforced repo-wide. isort uses profile=black (pyproject),
+      # so it converges with black instead of fighting it; any misordered import blocks merge.
+      run: isort --check-only --diff .
 
     - name: Run mypy (library + engine surface — strict, fail-loud)
       # Strict, COMPLETE-annotation gate over EVERY typed package + entrypoint, not just
@@ -237,11 +244,11 @@ jobs:
         # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
         # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
         # any failure/cancel/skip is non-success and blocks the merge.
-        # The 'lint' job is a ruff + mypy gate: ruff (whole repo) is now MANDATORY
-        # (no '|| true'), mypy runs strict over finance/ + analytics/ and a relaxed
-        # real-error pass over scripts/, and only black stays advisory ('|| true').
-        # Any ruff or mypy regression fails 'lint' and — via the second check below —
-        # blocks the merge. (PR4: fix-first mypy gate; ruff promoted to mandatory and
+        # The 'lint' job is a ruff + black + isort + mypy gate, ALL MANDATORY (no '|| true'):
+        # ruff (whole repo), black --check + isort --check (whole repo, after the repo-wide
+        # reformat cleared the backlog; profile=black so they converge), and mypy strict over
+        # the typed surface + a relaxed real-error pass over scripts/. Any regression fails
+        # 'lint' and — via the second check below — blocks the merge. (PR4: fix-first mypy gate;
         # scripts/ added to the mypy gate once both reached zero errors.)
         if [ "${{ needs.test.result }}" != "success" ]; then
           echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"

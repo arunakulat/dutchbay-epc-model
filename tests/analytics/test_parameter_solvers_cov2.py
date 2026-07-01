@@ -71,7 +71,11 @@ def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
     iteration branches can no longer be reached on a real scenario (Wave-2 fix)."""
     with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_given_dscr(
-            LENDER_CONFIG, None, target_dscr=1.10, bounds=(1.0e6, 1.0e9), tolerance=0.0,
+            LENDER_CONFIG,
+            None,
+            target_dscr=1.10,
+            bounds=(1.0e6, 1.0e9),
+            tolerance=0.0,
         )
 
 
@@ -83,10 +87,14 @@ def test_dscr_solver_fails_loud_under_dual_dscr_sizing() -> None:
 def test_npv_solver_target_above_range_raises() -> None:
     """A target project_npv above the achievable range over [40, 100] LKR/kWh (~85M..439M
     with the LIVE tariff path) is not bracketed: the solver fails loud (round-2 fix) instead
-    of silently collapsing to the high bound. 5e8 (500M) exceeds the max -> unreachable."""
+    of silently collapsing to the high bound. 5e8 (500M) exceeds the max -> unreachable.
+    """
     with pytest.raises(ValueError, match="not achievable within bounds"):
         solve_for_tariff_given_npv(
-            LENDER_CONFIG, None, target_npv=5.0e8, metric="project_npv",
+            LENDER_CONFIG,
+            None,
+            target_npv=5.0e8,
+            metric="project_npv",
             bounds=(40.0, 100.0),
         )
 
@@ -117,8 +125,12 @@ def test_multi_covenant_fails_loud_under_dual_dscr_sizing() -> None:
     non-convergence / zero-iteration bisection branches are now guarded-unreachable)."""
     with pytest.raises(ValueError, match="does not move dscr_min"):
         solve_for_max_debt_multi_covenant(
-            LENDER_CONFIG, None, target_dscr=1.10, target_llcr=1.00,
-            bounds=(1.0e6, 1.0e9), tolerance=0.0,
+            LENDER_CONFIG,
+            None,
+            target_dscr=1.10,
+            target_llcr=1.00,
+            bounds=(1.0e6, 1.0e9),
+            tolerance=0.0,
         )
 
 

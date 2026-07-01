@@ -4,8 +4,8 @@ from dataclasses import asdict
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
-    CasperResult,
     CashflowResult,
+    CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
     MonteCarloResult,
@@ -61,7 +61,9 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert PackageScenarioResult is ScenarioResult
 
 
-def test_contracts_v14_dolphin_enrichment_fields_are_optional_and_serializable() -> None:
+def test_contracts_v14_dolphin_enrichment_fields_are_optional_and_serializable() -> (
+    None
+):
     covenants = DebtCovenantSnapshot(
         dscr_min=1.35,
         dscr_threshold=1.30,
@@ -142,11 +144,14 @@ def test_contracts_v14_sensitivity_and_mc_surface_is_importable() -> None:
 def test_covenant_breach_tolerance_helper() -> None:
     assert check_covenant_breach_with_tolerance(1.29999, 1.30) is False
     assert check_covenant_breach_with_tolerance(1.295, 1.30) is True
-    assert check_covenant_breach_with_tolerance(
-        actual=4.0001,
-        threshold=4.0,
-        covenant_type="ceiling",
-    ) is False
+    assert (
+        check_covenant_breach_with_tolerance(
+            actual=4.0001,
+            threshold=4.0,
+            covenant_type="ceiling",
+        )
+        is False
+    )
 
 
 def test_sensitivity_suite_audit_fields_are_optional_and_serializable() -> None:
