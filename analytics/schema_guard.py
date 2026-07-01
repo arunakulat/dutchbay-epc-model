@@ -51,7 +51,12 @@ class ConfigValidationError(ValueError):
 # fresh process). Map each logical module to ALL of its registering modules.
 _MODULE_IMPORTS: dict[str, tuple[str, ...]] = {
     "cashflow": ("finance.cashflow_v14", "finance.epc_helper_v14"),
+    # `debt` registers validate-when-present specs (tenor / rate / gearing) as of #579.
     "debt": ("finance.debt_v14",),
+    # `irr` intentionally registers NO config-field specs: IRR/NPV are computed, not
+    # configured; the discount rate lives under the `wacc`/config surface with a documented
+    # default, and no live caller requests `irr` validation (the canonical path validates
+    # `['cashflow','debt']`). Kept in the map so the surface stays discoverable (audit D11, #579).
     "irr": ("finance.irr",),
     "wind": ("analytics.wind.wind_interface_schema",),
     "era5": ("analytics.wind.era5_interface_schema",),
