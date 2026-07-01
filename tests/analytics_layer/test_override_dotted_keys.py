@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from analytics.evaluation_v14 import _expand_dotted_overrides, evaluate_with_overrides
+from analytics.evaluation_v14 import evaluate_with_overrides, expand_dotted_overrides
 
 BASECASE = Path("scenarios/dutchbay_basecase_2025Q4.yaml")
 
@@ -22,7 +22,7 @@ BASECASE = Path("scenarios/dutchbay_basecase_2025Q4.yaml")
 
 
 def test_expand_dotted_overrides_builds_nested_paths() -> None:
-    out = _expand_dotted_overrides(
+    out = expand_dotted_overrides(
         {"tax.corporate_tax_rate": 0.42, "tax.tax_holiday_years": 5, "capex": {"x": 1}}
     )
     assert out == {
@@ -32,11 +32,11 @@ def test_expand_dotted_overrides_builds_nested_paths() -> None:
 
 
 def test_expand_dotted_overrides_recurses_into_nested_mappings() -> None:
-    assert _expand_dotted_overrides({"a": {"b.c": 1}}) == {"a": {"b": {"c": 1}}}
+    assert expand_dotted_overrides({"a": {"b.c": 1}}) == {"a": {"b": {"c": 1}}}
 
 
 def test_expand_dotted_overrides_passes_plain_keys_through() -> None:
-    assert _expand_dotted_overrides({"tariff": 30.0}) == {"tariff": 30.0}
+    assert expand_dotted_overrides({"tariff": 30.0}) == {"tariff": 30.0}
 
 
 # ── End-to-end guards (skip if the canonical scenario is absent) ─────────────

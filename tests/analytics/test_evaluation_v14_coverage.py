@@ -88,7 +88,7 @@ def test_expand_dotted_overrides_merges_plain_mapping_into_expanded_branch() -> 
         "finance": {"opex_usd": 50},
     }
 
-    out = evaluation_v14._expand_dotted_overrides(overrides)
+    out = evaluation_v14.expand_dotted_overrides(overrides)
 
     assert out == {"finance": {"capex_usd": 1100, "opex_usd": 50}}
 
@@ -96,7 +96,7 @@ def test_expand_dotted_overrides_merges_plain_mapping_into_expanded_branch() -> 
 def test_expand_dotted_overrides_passes_plain_keys_through() -> None:
     """Plain (non-dotted) scalar keys round-trip unchanged; nested mappings are
     expanded recursively."""
-    out = evaluation_v14._expand_dotted_overrides(
+    out = evaluation_v14.expand_dotted_overrides(
         {"plain": 5, "nested": {"deep.key": 9}}
     )
     assert out == {"plain": 5, "nested": {"deep": {"key": 9}}}
