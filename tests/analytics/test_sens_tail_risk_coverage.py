@@ -150,11 +150,39 @@ def test_tornado_tail_stats_uses_shock_extremes() -> None:
     assert stats["parameter"] == "AEP"
     assert stats["metric"] == "project_irr"
     assert stats["base_value"] == pytest.approx(0.0543)
-    # Worst downside is the minimum low_case; best upside is max high_case.
+    # downside = worst KPI, upside = best KPI, over ALL shock cases (both directions).
     assert stats["downside"] == pytest.approx(0.030)
     assert stats["upside"] == pytest.approx(0.070)
     assert stats["worst_impact_abs"] == pytest.approx(0.020)
     assert stats["n_shocks"] == 2
+
+
+def test_tornado_tail_stats_labels_cost_driver_by_outcome_not_direction() -> None:
+    """A cost driver's low-cost (low) case is the BETTER outcome (audit D5/D10, #576).
+
+    For CAPEX, shocking the driver LOW raises IRR (better) and HIGH lowers it (worse), so
+    ``low_case > high_case`` in KPI terms. Keying by shock direction (min low / max high)
+    would report downside=0.070 > upside=0.030 — inverted. Outcome-keying reports the true
+    worst (0.030) and best (0.070).
+    """
+    cost_shock = ShockResult(
+        label="capex_+1sd",
+        low_case=0.070,  # low CAPEX -> higher IRR (better)
+        high_case=0.030,  # high CAPEX -> lower IRR (worse)
+        impact_abs=0.040,
+        metric_name="project_irr",
+    )
+    tornado = TornadoResult(
+        metric_name="project_irr",
+        base_metric=0.05,
+        shock_results=[cost_shock],
+        label="CAPEX",
+        impact_abs=0.040,
+    )
+    stats = _tornado_tail_stats(tornado=tornado)
+    assert stats["downside"] == pytest.approx(0.030)  # the WORSE outcome
+    assert stats["upside"] == pytest.approx(0.070)  # the BETTER outcome
+    assert stats["downside"] < stats["upside"]  # never inverted
 
 
 def test_tornado_tail_stats_no_usable_shocks_collapses_to_base() -> None:
@@ -202,9 +230,11 @@ def test_aggregate_metric_snapshot_picks_extremes() -> None:
     assert snap["upside"] == pytest.approx(0.09)  # best upside
     assert snap["worst_impact_abs"] == pytest.approx(0.04)  # largest impact
     assert snap["n_parameters"] == 2
-    assert snap["cvar_alpha"] == pytest.approx(0.05)
-    assert snap["percentiles"] == [5, 10, 95]
-    assert snap["dscr_floor"] == pytest.approx(1.30)
+    # Audit D5 (#576): the tornado snapshot no longer echoes cvar_alpha / percentiles /
+    # dscr_floor — it computes no VaR/CVaR/breach, so surfacing them was misleading.
+    assert "cvar_alpha" not in snap
+    assert "percentiles" not in snap
+    assert "dscr_floor" not in snap
 
 
 def test_aggregate_metric_snapshot_empty_rows() -> None:

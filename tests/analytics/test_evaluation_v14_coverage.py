@@ -333,11 +333,15 @@ def test_casper_full_path_with_fakes_and_enrichment(
     assert result.monte_carlo is not None
     assert result.monte_carlo.iterations == 10
     assert result.sensitivities is not None
-    # Tail-risk enrichment populated metadata, alpha derived from confidence.
+    # Tail-risk enrichment populated metadata with the honest 3-point tornado snapshot.
+    # Audit D5 (#576): the tornado path emits base/downside/upside, not the misleading
+    # cvar_alpha/percentiles/dscr_floor echoes (it computes no VaR/CVaR/breach).
     assert "tail_risk" in result.metadata
     assert "tail_risk_summary" in result.metadata
     snap = result.metadata["tail_risk_summary"]["project_irr"]
-    assert snap["cvar_alpha"] == pytest.approx(1.0 - 0.9)
+    assert "cvar_alpha" not in snap
+    assert {"base_value", "downside", "upside", "worst_impact_abs"} <= set(snap)
+    assert snap["downside"] <= snap["upside"]
 
 
 def test_casper_uses_n_iterations_key_fallback(

@@ -1,22 +1,26 @@
 """
 analytics.sensitivity.tail_risk
 
-Tail risk enrichment for SensitivitySuite.
+Tail-risk enrichment for a one-way SensitivitySuite.
 
-Purpose:
-- Provide lender-grade downside summaries over sensitivity scenarios:
-    * VaR (e.g., P10/P5) and CVaR (expected shortfall) for selected metrics
-    * Probability of covenant breach (e.g., DSCR < floor) if metric available
-- Attach outputs to suite.metadata in a stable format so CASPER can consume it.
+What the LIVE path computes (``enrich_suite_with_tail_risk``):
+- A **3-point tornado snapshot** per parameter: the base value plus the worst-outcome
+  ``downside`` and best-outcome ``upside`` KPI across that parameter's low/high shocks,
+  and the largest ``|impact|``. These are keyed to the KPI OUTCOME, not the shock
+  direction, so a cost driver (higher CAPEX/opex/rate -> worse KPI) labels correctly
+  (audit D5/D10, #576).
+- A per-metric aggregate (worst downside / best upside / largest impact across parameters),
+  in the shape ``analytics.casper.casper_payload._tail_risk_from_metadata`` consumes.
 
-IMPORTANT:
-- This module does NOT run Monte Carlo by default.
-- It provides an API for "tail risk snapshots" that can be computed from:
-    A) precomputed MonteCarloResult per scenario, OR
-    B) scenario-level approximation if caller supplies distributions.
-
-This skeleton implements the metadata schema and hooks.
-You will wire it to your Monte Carlo engine in your repo (recommended).
+What the live path does NOT compute:
+- Distributional **VaR (P5/P10), CVaR / expected-shortfall, or covenant-breach probability**.
+  Those require Monte Carlo trial arrays per case, which a one-way tornado does not have.
+  The ``_build_case_tail_snapshot`` / ``_cvar`` / ``_prob_breach`` helpers below implement
+  that distributional path, but they are a SEPARATE, currently-unwired API: a caller must
+  attach per-case MC arrays to each scenario's metadata and call the snapshot builder
+  explicitly. They are NOT invoked by ``enrich_suite_with_tail_risk``, and the tornado
+  snapshot must not be read as if it produced VaR/CVaR/breach (audit D5, #576). For real
+  distributional tail risk, use the Monte Carlo engine (``analytics.mc``).
 """
 
 from __future__ import annotations
@@ -31,6 +35,11 @@ from analytics.contracts_v14 import SensitivitySuite, TornadoResult
 
 @dataclass(frozen=True)
 class TailRiskConfig:
+    # The live tornado enrichment (`enrich_suite_with_tail_risk`) uses only `enabled`.
+    # `percentiles` / `cvar_alpha` / `dscr_floor` / `require_trials` parameterize the
+    # SEPARATE, currently-unwired distributional path (`_build_case_tail_snapshot`) that
+    # needs per-case Monte Carlo trial arrays; they are NOT consumed by the tornado
+    # snapshot and are no longer echoed into it (audit D5, #576).
     enabled: bool = True
     percentiles: Tuple[int, int, int] = (5, 10, 95)  # downside p5/p10; upside p95
     cvar_alpha: float = 0.05
@@ -123,21 +132,28 @@ def enrich_suite_with_tail_risk(
 def _tornado_tail_stats(*, tornado: TornadoResult) -> dict[str, Any]:
     """Honest per-parameter tail snapshot from a tornado's shock results.
 
-    Derives downside/upside/impact from the shock cases actually present
-    (``low_case`` / ``high_case`` / ``impact_abs`` are optional on
-    :class:`~analytics.contracts_v14.ShockResult`, so missing values are
-    skipped). A tornado with no usable shocks collapses to its base value.
+    ``downside`` / ``upside`` are keyed to the KPI OUTCOME, not the shock direction:
+    the worst and best KPI achieved across ALL of this parameter's shock cases (both
+    ``low_case`` and ``high_case``). Keying by direction — ``min(low_case)`` /
+    ``max(high_case)`` — inverted the labels for cost drivers (CAPEX/opex/rate), whose
+    low-cost case is the *better* outcome (audit D5/D10, #576). ``impact_abs`` fields are
+    optional on :class:`~analytics.contracts_v14.ShockResult`, so missing values are
+    skipped; a tornado with no usable shocks collapses to its base value.
     """
     base = float(tornado.base_metric)
-    lows = [s.low_case for s in tornado.shock_results if s.low_case is not None]
-    highs = [s.high_case for s in tornado.shock_results if s.high_case is not None]
+    cases = [
+        c
+        for s in tornado.shock_results
+        for c in (s.low_case, s.high_case)
+        if c is not None
+    ]
     impacts = [s.impact_abs for s in tornado.shock_results if s.impact_abs is not None]
     return {
         "parameter": str(tornado.label or tornado.metric_name),
         "metric": str(tornado.metric_name),
         "base_value": base,
-        "downside": float(min(lows)) if lows else base,
-        "upside": float(max(highs)) if highs else base,
+        "downside": float(min(cases)) if cases else base,
+        "upside": float(max(cases)) if cases else base,
         "worst_impact_abs": (
             float(max(impacts)) if impacts else float(tornado.impact_abs)
         ),
@@ -152,9 +168,12 @@ def _aggregate_metric_snapshot(
 ) -> dict[str, Any]:
     """Aggregate per-parameter rows into one per-metric tail snapshot.
 
-    Shaped for the CASPER consumer (``{metric_name: {snapshot}}``): the worst
-    downside / best upside / largest impact across all parameters, plus the
-    tail-risk run parameters for provenance.
+    Shaped for the CASPER consumer (``{metric_name: {snapshot}}``): the worst downside /
+    best upside / largest impact across all parameters. It deliberately does NOT echo
+    ``cvar_alpha`` / ``percentiles`` / ``dscr_floor``: the tornado path computes no VaR,
+    CVaR, or breach probability, so surfacing those config knobs implied a distributional
+    computation that never happened (audit D5, #576). ``run_cfg`` is retained for the
+    unwired MC-backed distributional path, not consumed here beyond ``enabled``.
     """
     base = float(rows[0]["base_value"]) if rows else float("nan")
     downsides = [float(r["downside"]) for r in rows]
@@ -166,9 +185,6 @@ def _aggregate_metric_snapshot(
         "upside": max(upsides) if upsides else base,
         "worst_impact_abs": max(impacts) if impacts else 0.0,
         "n_parameters": len(rows),
-        "cvar_alpha": float(run_cfg.cvar_alpha),
-        "percentiles": list(run_cfg.percentiles),
-        "dscr_floor": float(run_cfg.dscr_floor),
     }
 
 

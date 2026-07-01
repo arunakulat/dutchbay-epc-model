@@ -166,8 +166,9 @@ def test_evaluate_with_casper_tail_risk_smoke(
     assert snap["base_value"] == pytest.approx(0.12)
     assert snap["downside"] == pytest.approx(0.10)
     assert snap["upside"] == pytest.approx(0.14)
-    # alpha is derived from `confidence` (0.9 -> 0.10), not hardcoded.
-    assert snap["cvar_alpha"] == pytest.approx(0.10)
+    # Audit D5 (#576): the tornado snapshot no longer echoes cvar_alpha — it computes no
+    # VaR/CVaR/breach, so the config knob is not surfaced as if it were a computed stat.
+    assert "cvar_alpha" not in snap
 
     # End-to-end producer -> consumer contract: the CASPER payload helper must
     # surface the suite-centric summary. Guards the silent-None shape mismatch
