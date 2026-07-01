@@ -4,6 +4,13 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.2.0 - 2026-07-01
+
+_Consolidates everything merged since the v15.0.0 tag: the #529 solar re-baseline (which bumped the
+interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 report-residuals work
+(RPT-2/4/6/7/8/9) and its follow-ups. Committed wind-only lender-case economics are unchanged by
+everything except #529 (hybrid solar P50 re-baseline)._
+
 ### Fixed
 - **`pyproject.toml` version synced to `VERSION` (15.0.0 → 15.1.0).** The #529 release bumped the
   `VERSION` file to 15.1.0 but left `pyproject.toml` at 15.0.0; per `RELEASING.md` the two must be
@@ -91,7 +98,7 @@ All notable changes to this project will be documented here.
   lender cases: balance residual $0.00, debt-retirement residual $0.00, year-1 interest incl.
   the bridge, the lender case's balloon residual carried correctly. Additive, read-only, KPI-neutral.
 
-### Changed (KPI-moving — VERSION 15.0.0 -> 15.1.0)
+### Changed (KPI-moving — interim VERSION 15.0.0 -> 15.1.0, now shipped in 15.2.0)
 - **Solar TMY ingest + hourly thermal; committed hybrid solar P50 re-baselined (#529,
   SOLAR-6/12).** `solar_resource.pv_producer` gains an opt-in `resource.solar.tmy_path`: when
   a FROZEN hourly TMY is supplied it uses the TMY's measured hourly GHI/DNI/DHI **and** its
