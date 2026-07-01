@@ -149,6 +149,29 @@ def _write_json(path: Path, payload: Any) -> None:
     )
 
 
+def _load_manifest_config(effective_config: str | Path) -> dict[str, Any]:
+    """Re-load the resolved config for manifest hashing, warning loudly on failure.
+
+    The run manifest hashes the resolved config so ``summary.json`` is tamper-evident.
+    If that re-load fails we still emit a manifest (rather than aborting a successful
+    run), but bound to a non-binding ``{config_path: ...}`` fallback whose ``config_sha256``
+    no longer reflects the resolved contents. This previously happened under a bare
+    ``except`` with **no log line** (audit D8, #577), so a tamper-evidence-void manifest
+    could ship unnoticed. The failure is now logged at WARNING with the traceback.
+    """
+    try:
+        return dict(load_scenario_config(effective_config))
+    except Exception:
+        logger.warning(
+            "Run manifest degraded: could not re-load %r to hash its resolved config; "
+            "the manifest's config_sha256 will bind to the file path, not the resolved "
+            "contents (tamper-evidence weakened).",
+            str(effective_config),
+            exc_info=True,
+        )
+        return {"config_path": str(effective_config)}
+
+
 # ============================================================================
 # Sprint 19 (W.6): Wind→Finance integration helpers
 # ============================================================================
@@ -538,10 +561,7 @@ def cli(cfg: DictConfig) -> None:
         # Stamp an auditable run manifest (resolved-config hash + engine version +
         # commit) so summary.json is reproducible and tamper-evident (ICAEW posture).
         if isinstance(result, dict):
-            try:
-                _manifest_cfg = dict(load_scenario_config(effective_config))
-            except Exception:
-                _manifest_cfg = {"config_path": str(effective_config)}
+            _manifest_cfg = _load_manifest_config(effective_config)
             result["run_manifest"] = build_run_manifest(
                 _manifest_cfg, validation_mode=str(validation_mode)
             ).as_dict()
