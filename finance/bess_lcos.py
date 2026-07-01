@@ -59,6 +59,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from .bess_revenue import mdsc_soh_for_year, resolve_bess_specs
+from .cashflow_v14_utils import pct_to_decimal
 from .irr import npv
 from .tech_types import is_generation_type
 
@@ -285,7 +286,13 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
     single_bess = len(bess_specs) == 1
 
     project_opex = _as_float(_nested_get(config, "opex", "usd_per_year"))
-    project_opex_esc = _as_float(_nested_get(config, "opex", "escalation_pct")) or 0.0
+    # Normalise identically to the cashflow engine (cashflow_v14_params): opex.escalation_pct
+    # is a PERCENT (2.5 -> 0.025 via the >1.0 heuristic), not a raw decimal. Reading it raw
+    # here treated a cashflow-canonical 2.5 as 250%/yr. pct_to_decimal(0.0)=0.0, so the
+    # committed 0.0-escalation BESS scenarios stay byte-identical.
+    project_opex_esc = (
+        pct_to_decimal(_as_float(_nested_get(config, "opex", "escalation_pct"))) or 0.0
+    )
     project_capex_total = _as_float(_nested_get(config, "capex", "usd_total"))
 
     out: List[LcosSpec] = []
