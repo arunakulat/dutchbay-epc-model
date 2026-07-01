@@ -24,6 +24,7 @@ from analytics.sensitivity.global_sa import (  # noqa: E402
     GlobalSAProblem,
     build_problem,
     run_morris,
+    run_pawn,
     run_sobol,
 )
 
@@ -148,3 +149,34 @@ def test_morris_flags_covenant_pinned_metric_as_flat() -> None:
     assert flat["flat_metric"] is True
     for d in flat["drivers"].values():
         assert d == {"mu_star": 0.0, "sigma": 0.0}
+
+
+def test_pawn_ranks_ishigami_influential_drivers_in_band() -> None:
+    """PAWN median KS is in [0,1] and ranks a genuinely-influential Ishigami driver top (#591)."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    res = run_pawn(problem=prob, evaluate_fn=_ishigami, metrics=("y",), n=512, seed=1)
+    d = res["metrics"]["y"]["drivers"]
+    # KS statistics are bounded in [0, 1] (unlike out-of-band variance indices).
+    for name in prob.names:
+        assert 0.0 <= d[name]["median"] <= 1.0
+    # x1/x2 carry the first-order signal; one of them tops the ranking.
+    assert res["metrics"]["y"]["ranking"][0] in {"x1", "x2"}
+    assert res["metrics"]["y"]["flat_metric"] is False
+
+
+def test_pawn_flags_covenant_pinned_metric_as_flat() -> None:
+    """A near-constant covenant metric yields SPURIOUS PAWN indices on FP jitter, so PAWN
+    flags+zeroes it via the same guard as Sobol/Morris (#591)."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    res = run_pawn(
+        problem=prob,
+        evaluate_fn=_ishigami_with_flat,
+        metrics=("y", "min_dscr"),
+        n=256,
+        seed=1,
+    )
+    assert res["metrics"]["y"]["flat_metric"] is False
+    flat = res["metrics"]["min_dscr"]
+    assert flat["flat_metric"] is True
+    for d in flat["drivers"].values():
+        assert d == {"median": 0.0, "mean": 0.0, "cv": 0.0}
