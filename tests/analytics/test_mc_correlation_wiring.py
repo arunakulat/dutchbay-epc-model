@@ -16,7 +16,11 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from analytics.mc.correlation import CorrelationSpec, align_correlation_to_params
+from analytics.mc.correlation import (
+    CorrelationSpec,
+    align_correlation_to_params,
+    apply_correlation_structure,
+)
 from analytics.mc.engine import MonteCarloEngine
 
 _SCENARIO = (
@@ -146,3 +150,45 @@ def test_correlation_changes_trial_outcomes() -> None:
         assert a != b  # correlation rearranged the joint sample -> outcomes differ
     finally:
         logging.disable(logging.NOTSET)
+
+
+def _induced_spearman(out: np.ndarray, i: int, j: int) -> float:
+    """Spearman rank correlation between two columns via rank-Pearson (no scipy dep)."""
+    ri = np.argsort(np.argsort(out[:, i]))
+    rj = np.argsort(np.argsort(out[:, j]))
+    return float(np.corrcoef(ri, rj)[0, 1])
+
+
+def test_iman_conover_induces_target_correlation() -> None:
+    """The INDUCED Spearman must match the target, not merely differ from baseline.
+
+    Regression guard for audit D1 (#570): the reorder was a scatter-by-rank (inverse
+    permutation), so the induced correlation collapsed to ~0 while metadata claimed
+    ``correlation_enabled=true``. The old form here would yield ~0.0; the gather-by-rank
+    fix reproduces the target within sampling tolerance. This asserts the induction
+    itself, which the pre-existing ``a != b`` wiring test could never catch.
+    """
+    rng = np.random.default_rng(7)
+    n, target = 4000, 0.6
+    lhs = rng.random((n, 2))  # iid uniforms stand in for the LHS marginals
+    mat = np.array([[1.0, target], [target, 1.0]])
+    spec = CorrelationSpec(enabled=True, matrix=mat, param_names=("a", "b"))
+
+    out = apply_correlation_structure(lhs_samples=lhs, correlation=spec, seed=42)
+
+    induced = _induced_spearman(out, 0, 1)
+    assert abs(induced - target) < 0.05, f"induced Spearman {induced:.3f} != {target}"
+    # Marginals must be preserved exactly (a pure reordering of each column).
+    assert np.allclose(np.sort(out[:, 0]), np.sort(lhs[:, 0]))
+    assert np.allclose(np.sort(out[:, 1]), np.sort(lhs[:, 1]))
+
+
+def test_iman_conover_preserves_independence_at_zero_target() -> None:
+    """A zero-correlation target must stay ~independent (no spurious induced correlation)."""
+    rng = np.random.default_rng(11)
+    n = 4000
+    lhs = rng.random((n, 2))
+    mat = np.eye(2)
+    spec = CorrelationSpec(enabled=True, matrix=mat, param_names=("a", "b"))
+    out = apply_correlation_structure(lhs_samples=lhs, correlation=spec, seed=42)
+    assert abs(_induced_spearman(out, 0, 1)) < 0.06

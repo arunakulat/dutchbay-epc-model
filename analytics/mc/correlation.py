@@ -109,12 +109,19 @@ def apply_correlation_structure(
     # ranks of correlated normals
     y_ranks = np.argsort(np.argsort(y, axis=0), axis=0)
 
-    # reorder each column of x by y_ranks
+    # Reorder each column of x so its rank vector matches the correlated
+    # normals' rank vector (Iman-Conover). This is a GATHER by rank: row i
+    # receives the marginal value whose ascending rank equals ``y_ranks[i, j]``,
+    # giving ``out[:, j]`` a rank vector identical to ``y[:, j]`` and therefore
+    # the target Spearman correlation, while preserving the exact marginal.
+    #
+    # The previous SCATTER form ``out[y_ranks[:, j], j] = col_sorted`` applied the
+    # INVERSE permutation, so the induced correlation collapsed to ~0 while the
+    # ``correlation_enabled`` metadata claimed otherwise (audit D1, #570).
     out = np.empty_like(x)
     for j in range(k):
-        # map: target order is y_ranks; pick from x sorted by original ranks
         col_sorted = np.sort(x[:, j])
-        out[y_ranks[:, j], j] = col_sorted
+        out[:, j] = col_sorted[y_ranks[:, j]]
 
     return out
 
