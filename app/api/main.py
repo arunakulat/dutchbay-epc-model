@@ -36,7 +36,7 @@ from analytics.aep_provenance import AepProvenanceError
 from analytics.aep_reconciliation import AepReconciliationError
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
-from api.sensitivity_api import app as sensitivity_app
+from api.sensitivity_api import SensitivityInput, run_tornado
 from app.api.auth import get_current_subject, login_for_access_token
 from app.api.config import SYNC_ROUTE_MAX_CONCURRENCY, SYNC_ROUTE_TIMEOUT_SECONDS
 from app.api.jobs_router import router as jobs_router
@@ -58,10 +58,21 @@ app = FastAPI(
     description="Lender-grade wind-farm project-finance, served as a web API.",
 )
 
-# Unify the pre-existing surfaces under one app (Sprint 1 roadmap).
-app.include_router(pipeline_router, tags=["pipeline"])
+# Unify the pre-existing surfaces under one app (Sprint 1 roadmap). Every compute
+# surface is auth-gated via Depends(get_current_subject); only /health and /token
+# are public. The /sensitivity surface is composed here as gated routes rather than
+# a mounted sub-app: a mount is an opaque ASGI boundary that does NOT inherit the
+# parent's auth dependency, which is how /sensitivity/* was reachable anonymously.
+app.include_router(
+    pipeline_router, tags=["pipeline"], dependencies=[Depends(get_current_subject)]
+)
 app.include_router(jobs_router)  # async live-ERA5 job path (Sprint 2 PR E)
-app.mount("/sensitivity", sensitivity_app)
+app.include_router(
+    pipeline_router,
+    prefix="/sensitivity",
+    tags=["sensitivity"],
+    dependencies=[Depends(get_current_subject)],
+)
 
 
 @app.get("/health", tags=["ops"])
@@ -326,3 +337,22 @@ async def run_case_report_pdf_endpoint(
 ) -> Response:
     """Run a lender case and return a PDF report (auth-gated; timeout-bounded)."""
     return await _run_with_timeout(run_case_report_pdf, inputs)
+
+
+@app.post(
+    "/sensitivity/run-tornado/",
+    response_model=list[dict[str, Any]],
+    tags=["sensitivity"],
+    operation_id="run_sensitivity_tornado",
+)
+async def run_sensitivity_tornado_endpoint(
+    payload: SensitivityInput, subject: str = Depends(get_current_subject)
+) -> list[dict[str, Any]]:
+    """Single-metric tornado sensitivity (auth-gated; sync-route timeout-bounded).
+
+    Delegates to the thin ``api.sensitivity_api.run_tornado`` adapter, wrapped in
+    the same wall-clock timeout + concurrency limiter as ``/cases`` so a heavy
+    multi-evaluation sweep cannot run unbounded. Previously this route lived on a
+    mounted sub-app that bypassed BOTH auth and that limiter.
+    """
+    return await _run_with_timeout(run_tornado, payload)
