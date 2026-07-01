@@ -31,15 +31,16 @@ import time
 import pytest
 
 # Import Monte Carlo pipeline modules (canonical engine: analytics.mc.engine).
-try:
-    from omegaconf import OmegaConf  # noqa: F401  (configs come via fixtures)
+# These are FIRST-PARTY analytics symbols (plus omegaconf, a hard Hydra dependency),
+# not optional deps, so import them UNGUARDED: a rename or removal must fail loudly at
+# collection, never be swallowed by a module-level skip that silently drops this
+# module's end-to-end regression pins (round-2 audit). (The analytics.dscr_sensitivity
+# import below stays guarded because it feeds a per-test @_REQUIRES_SENSITIVITY marker,
+# not a whole-module skip.)
+from omegaconf import OmegaConf  # noqa: F401  (configs come via fixtures)
 
-    from analytics.contracts_v14 import MonteCarloResult
-    from analytics.mc.engine import run_monte_carlo_analysis
-except ImportError as e:
-    pytest.skip(
-        f"Required pipeline modules not available: {e}", allow_module_level=True
-    )
+from analytics.contracts_v14 import MonteCarloResult
+from analytics.mc.engine import run_monte_carlo_analysis
 
 # Import analytics.dscr_sensitivity behind an ImportError guard so a genuinely
 # unavailable optional dependency skips the sensitivity-dependent tests (via the
