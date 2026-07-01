@@ -316,6 +316,21 @@ everything except #529 (hybrid solar P50 re-baseline)._
   kept in lockstep. Packaging metadata only — no code or KPI change.
 
 ### Added
+- **PAWN (moment-independent) global sensitivity analysis (#591).** New
+  `analytics.sensitivity.global_sa.run_pawn` adds a distribution-based (Kolmogorov-Smirnov) SA index
+  alongside the variance-based Sobol/Morris. PAWN (Pianosi & Wagener 2018) stays bounded in [0,1] and,
+  unlike variance-based Sobol, does not misbehave on bimodal / DSCR-floor-pinned outputs — exactly the
+  DutchBay case — so it is the right complement for skewed KPIs (`min_dscr`, `equity_irr`). It is a
+  given-data method (`SALib.analyze.pawn`, zero new dependency), driven here by its own LHS sample, and
+  reports the **median** KS statistic per driver (with mean / CV). Empirically confirmed that a
+  structurally-flat metric (a covenant-pinned `min_dscr` carrying only FP jitter) produces *spurious*
+  non-zero PAWN indices, so the same `_is_flat_output` / `_flat_metric_reason` guard the Sobol path uses
+  is applied — flagging and zeroing rather than reporting noise. A finite-sample noise floor (~0.15
+  median KS for an inert driver at `n=256`, `s=10`) is documented. Additive, read-only — KPI-neutral /
+  oracle byte-identical; full suite green. Adds Ishigami-ranking and flat-metric tests. (`run_pawn` is a
+  standalone API for now; CLI/report wiring — and a shared partial-NaN finite-mask for
+  Sobol/Morris/PAWN — are tracked follow-ups. Independently re-evaluated by a Fable-model adversarial
+  review, gate MERGE.)
 - **Monte Carlo convergence diagnostic (#590).** New `analytics/mc/convergence.py` computes a
   read-only per-metric convergence trace from the final trial arrays — running mean plus the CI
   half-width `err_k = z · sd_k / √k` (95% by default; equivalent to a Welford online accumulator) at

@@ -381,3 +381,95 @@ def run_morris(
         per_metric[m] = {"drivers": drivers, "ranking": ranked, "flat_metric": False}
     out["metrics"] = per_metric
     return out
+
+
+def run_pawn(
+    config_path: Optional[str] = None,
+    *,
+    metrics: Sequence[str] = DEFAULT_METRICS,
+    n: int = 256,
+    s: int = 10,
+    params: Optional[Sequence[Mapping[str, Any]]] = None,
+    seed: Optional[int] = 42,
+    problem: Optional[GlobalSAProblem] = None,
+    evaluate_fn: Optional[EvaluateFn] = None,
+) -> Dict[str, Any]:
+    """PAWN (moment-independent, KS-based) global SA — robust on skewed / covenant-pinned KPIs.
+
+    PAWN (Pianosi & Wagener 2018) measures a driver's influence by the Kolmogorov-Smirnov
+    distance between the unconditional output CDF and the CDFs conditioned on that driver's
+    ``s`` slices — a *distribution*-based index, not a *variance*-based one. Unlike Sobol it
+    stays bounded in [0,1] and does not misbehave on bimodal / DSCR-floor-pinned outputs, which
+    is exactly the DutchBay case, so it is the right complement to the variance-based tornado /
+    Sobol. It is a GIVEN-DATA method (``SALib.analyze.pawn``): here it is driven by its own LHS
+    sample (``n`` rows), but the same (X, Y) could be reused from any prior sweep. Reports the
+    **median** KS statistic per driver (with mean / CV of the KS across slices).
+
+    A structurally-flat metric (a covenant-pinned ``min_dscr`` carrying only FP jitter) yields
+    SPURIOUS non-zero PAWN indices — verified empirically — so the same ``_is_flat_output`` /
+    ``_flat_metric_reason`` guard the Sobol path uses is applied here, flagging and zeroing rather
+    than reporting noise. Note a finite-sample noise floor: at the defaults (``n=256``, ``s=10``)
+    an inert driver still measures a median KS of ~0.15, so low-end ranking positions are not
+    evidence of influence (the floor roughly halves as ``n`` doubles). ``problem``/``evaluate_fn``
+    override the config-derived defaults (used by closed-form tests).
+    """
+    _require_salib()
+    from SALib.analyze import pawn as pawn_analyze
+    from SALib.sample import latin as latin_sample
+
+    prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
+    salib_problem = prob.as_salib()
+    X = latin_sample.sample(salib_problem, n, seed=seed)
+    cols = _evaluate_rows(evfn, prob, X, metrics)
+
+    out: Dict[str, Any] = {
+        "method": "pawn",
+        "n": n,
+        "s": int(s),
+        "n_runs": len(X),
+        "problem": salib_problem,
+    }
+    per_metric: Dict[str, Any] = {}
+    for m in metrics:
+        is_flat, spread = _is_flat_output(cols[m])
+        if is_flat:
+            reason = _flat_metric_reason(m)
+            logger.warning(
+                "global SA metric '%s' is structurally FLAT (range=%.2e across %d runs): "
+                "%s — PAWN indices on FP jitter are spurious; emitting zeroed KS instead.",
+                m,
+                spread,
+                len(X),
+                reason,
+            )
+            per_metric[m] = {
+                "drivers": {
+                    name: {"median": 0.0, "mean": 0.0, "cv": 0.0} for name in prob.names
+                },
+                "ranking": list(prob.names),
+                "flat_metric": True,
+                "flat_metric_reason": reason,
+            }
+            continue
+        # PAWN is deterministic given (X, Y); ``seed`` is not passed to ``analyze`` because
+        # SALib forwards it to a global ``np.random.seed`` (a process-wide RNG side effect) while
+        # leaving the KS computation unchanged. The seed that matters is on ``latin.sample`` above.
+        Si = pawn_analyze.analyze(
+            salib_problem,
+            X,
+            np.asarray(cols[m], dtype=float),
+            S=int(s),
+            print_to_console=False,
+        )
+        drivers = {
+            name: {
+                "median": float(Si["median"][i]),
+                "mean": float(Si["mean"][i]),
+                "cv": float(Si["CV"][i]),
+            }
+            for i, name in enumerate(prob.names)
+        }
+        ranked = sorted(drivers, key=lambda k: drivers[k]["median"], reverse=True)
+        per_metric[m] = {"drivers": drivers, "ranking": ranked, "flat_metric": False}
+    out["metrics"] = per_metric
+    return out
