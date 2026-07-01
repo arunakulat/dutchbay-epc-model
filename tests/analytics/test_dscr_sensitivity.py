@@ -475,5 +475,44 @@ class TestRegressionPins:
         assert "aep" in top2, "AEP should be one of the most sensitive parameters"
 
 
+def test_even_n_steps_rejected() -> None:
+    """An even n_steps cannot include the 0% base point in a symmetric grid, so
+    SensitivityConfig rejects it loudly (CESSPIT) instead of silently zeroing every
+    delta."""
+    with pytest.raises(ValueError, match="n_steps must be"):
+        SensitivityConfig(
+            base_capex=200e6,
+            base_aep_p50=100_000,
+            base_aep_p99=85_000,
+            base_tariff=50.0,
+            base_opex=2.5e6,
+            base_degradation=0.006,
+            project_life=20,
+            perturbation_range_pct=20.0,
+            n_steps=8,  # even -> no 0% midpoint
+            dscr_target_p50=1.30,
+            dscr_target_p99=1.00,
+            debt_ratio_max=0.70,
+            debt_rate=0.08,
+        )
+
+
+def test_downside_deltas_measured_against_presized_base(
+    base_config: SensitivityConfig,
+) -> None:
+    """Regression: the base is sized before the sweep, so downside perturbation rows
+    (evaluated before the 0% midpoint) carry a real delta_from_base, not the 0.0 the
+    old mid-loop capture left for every pre-midpoint point."""
+    result = analyze_single_variable(base_config, "degradation")
+    perts = result["perturbations"]
+    downside = [r for r in perts if r["perturbation_pct"] < 0]
+    assert downside, "expected downside perturbation rows"
+    # Pre-fix every pre-midpoint row recorded delta_from_base_usd == 0.0.
+    assert any(r["delta_from_base_usd"] != 0.0 for r in downside)
+    # The 0% midpoint remains the base itself (zero delta).
+    base_row = min(perts, key=lambda r: abs(r["perturbation_pct"]))
+    assert base_row["delta_from_base_usd"] == pytest.approx(0.0, abs=1.0)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
