@@ -5,7 +5,9 @@ Lender-style exports for Monte Carlo results.
 
 Outputs:
 - risk table suitable for IC memo / lender pack
-  * P50 / P90 for key metrics
+  * P50 plus the P90/P95 DOWNSIDE (exceedance) tail for key higher-is-better
+    metrics (DSCR, IRR, NPV, LLCR, PLCR): P90 = 10th pct, P95 = 5th pct, i.e. the
+    value exceeded 90%/95% of the time (consistent with the AEP P90 convention).
   * Prob(DSCR < covenant_floor)
   * Worst-year DSCR P95 (conservative downside statistic)
 - optional CASPER-ready payload blocks (dict-of-tables)
@@ -138,23 +140,35 @@ def build_lender_risk_table(
 
     rows: list[dict[str, Any]] = []
 
-    def add_metric(label: str, key: str) -> None:
+    def add_metric(label: str, key: str, *, higher_is_better: bool = True) -> None:
         try:
             arr = _get_trial_array(result, key)
         except KeyError:
             return
+        # Lender/exceedance convention: the "P90"/"P95" columns report the DOWNSIDE
+        # (bankable) tail -- the value exceeded 90%/95% of the time -- consistent with
+        # the "Worst-year DSCR (P95 downside)" row below (5th pct) and the AEP P90 =
+        # 10th-pct convention in analytics.capital_risk_layer_v14. For higher-is-better
+        # metrics (DSCR, IRR, NPV, LLCR, PLCR) that adverse tail is the LOW end, so
+        # P90 = 10th pct and P95 = 5th pct. Reporting the raw 90th/95th pct here would
+        # emit the favourable upside and understate tail risk to a lender.
+        if higher_is_better:
+            p90, p95 = _p(arr, 10), _p(arr, 5)
+        else:
+            p90, p95 = _p(arr, 90), _p(arr, 95)
         rows.append(
             {
                 "metric": label,
                 "P50": _p(arr, 50),
-                "P90": _p(arr, 90),
-                "P95": _p(arr, 95),
+                "P90": p90,
+                "P95": p95,
                 "mean": float(arr.mean()) if arr.size else float("nan"),
                 "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0,
             }
         )
 
-    # Core metrics table
+    # Core metrics table. Every metric here is higher-is-better, so P90/P95 are the
+    # downside (exceedance) tail -- see add_metric().
     add_metric("DSCR (min)", k_dscr)
     add_metric("Project IRR", k_irr)
     add_metric("Project NPV", k_npv)

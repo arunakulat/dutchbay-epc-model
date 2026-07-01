@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Report the P90/P95 downside (exceedance) tail for higher-is-better metrics in the Monte Carlo
+  lender risk table (round-2 audit).** `analytics.mc.exports.build_lender_risk_table` emitted the raw
+  90th/95th percentile — the favourable UPSIDE — for DSCR(min), project IRR/NPV and LLCR/PLCR,
+  contradicting the exceedance convention used everywhere else (the sibling "Worst-year DSCR (P95
+  downside)" row is the 5th pct; the AEP P90 is the 10th pct in `capital_risk_layer_v14`) and
+  understating tail risk to a lender. For these higher-is-better metrics the `P90`/`P95` columns now
+  report the adverse low tail (P90 = 10th pct, P95 = 5th pct), consistent with that sibling row.
+  Off the committed-KPI path: this table feeds only the example lender-pack export, not the
+  pipeline / `report_model` / api, so no committed KPI moves. Adds a deterministic
+  direction-asserting regression test. KPI-neutral.
 - **Migrated all scenario YAMLs and test fixtures to `enhanced_capital_allowance_multiple`
   (audit D8, step 2 of 2).** All 22 `scenarios/*.yaml` keys and the dict-key test fixtures now use
   the canonical multiplier name; each numeric value is byte-preserved, so committed KPIs are

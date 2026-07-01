@@ -205,6 +205,49 @@ class TestBuildLenderRiskTable:
         # Covenant metrics should follow
         assert "Prob(DSCR < 1.30)" in metrics[:3]
 
+    def test_p90_p95_report_the_downside_tail_for_higher_is_better_metrics(self):
+        """P90/P95 columns must report the DOWNSIDE (exceedance) tail, not the
+        favourable upside.
+
+        For higher-is-better metrics (DSCR, IRR, NPV, LLCR, PLCR) the adverse tail
+        is the low end, so P90 = 10th pct and P95 = 5th pct -- the value exceeded
+        90%/95% of the time -- consistent with the "Worst-year DSCR (P95 downside)"
+        row (5th pct) and the AEP P90 exceedance convention. Regression guard for the
+        round-2 audit finding that add_metric emitted the raw 90th/95th percentile
+        (the upside), understating tail risk to a lender and contradicting the
+        sibling downside row in the same table.
+        """
+        arr = np.arange(1.0, 101.0)  # deterministic 1..100 -> known percentiles
+        result = MonteCarloResult(
+            summary={},
+            metadata={"n_trials": int(arr.size)},
+            trials={
+                "dscr_min": list(arr),
+                "project_irr": list(arr),
+                "project_npv": list(arr),
+                "llcr": list(arr),
+                "plcr": list(arr),
+            },
+        )
+
+        df = build_lender_risk_table(result)
+
+        for metric in ("DSCR (min)", "Project IRR", "Project NPV", "LLCR", "PLCR"):
+            row = df[df["metric"] == metric].iloc[0]
+            # Adverse tail must sit BELOW the median for a higher-is-better metric.
+            assert row["P95"] < row["P90"] < row["P50"], (
+                f"{metric}: P90/P95 must be the downside tail, got "
+                f"P50={row['P50']}, P90={row['P90']}, P95={row['P95']}"
+            )
+            # Exact exceedance percentiles (P90 = 10th, P95 = 5th).
+            assert row["P90"] == pytest.approx(float(np.percentile(arr, 10)))
+            assert row["P95"] == pytest.approx(float(np.percentile(arr, 5)))
+
+        # The DSCR P95 must equal the sibling "Worst-year DSCR (P95 downside)"
+        # statistic (5th pct): the two rows are now semantically consistent.
+        dscr_row = df[df["metric"] == "DSCR (min)"].iloc[0]
+        assert dscr_row["P95"] == pytest.approx(worst_year_dscr_p95(arr))
+
 
 @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
 class TestBuildCasperRiskBlocks:
