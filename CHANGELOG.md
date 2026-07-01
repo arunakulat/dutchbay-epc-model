@@ -178,6 +178,19 @@ everything except #529 (hybrid solar P50 re-baseline)._
   rather than crashing. Byte-identical on runs where every trial is complete (all committed scenarios
   and tests). Adds regression tests covering the single-partial, different-missing-keys, and
   non-numeric cases. KPI-neutral (MC robustness).
+- **Monte Carlo Iman-Conover rank correlation was numerically inert (audit D1, #570).** The reorder
+  in `analytics/mc/correlation.py` scattered each marginal by rank (`out[y_ranks[:, j], j] =
+  col_sorted`) — the INVERSE permutation — so the induced Spearman correlation collapsed to ~0 while
+  the run metadata reported `correlation_enabled=true`. The committed lender case ships
+  `monte_carlo.correlation.enabled: true` with authored 0.35/0.20 pairs, so its reported P50/P90/VaR/
+  CVaR/breach bands were computed as if all drivers were independent, understating joint tail risk.
+  Fixed to a GATHER by rank (`out[:, j] = col_sorted[y_ranks[:, j]]`), so each column's rank vector
+  matches the correlated normals' and the target correlation is reproduced (empirically: target
+  ρ=0.5 → induced +0.486 post-fix vs +0.011 pre-fix) while preserving the exact marginal. Adds two
+  property tests asserting the *induced* Spearman matches the target (and stays ~0 at a zero target) —
+  the pre-existing wiring test only checked `a != b`, which is why the bug survived. **KPI impact:**
+  MC risk bands only; the committed deterministic covenant KPIs (project/equity IRR, DSCR, NPV, LLCR,
+  PLCR) are MC-independent and verified byte-identical via the KPI oracle.
 - **`pyproject.toml` version synced to `VERSION` (15.0.0 → 15.1.0).** The #529 release bumped the
   `VERSION` file to 15.1.0 but left `pyproject.toml` at 15.0.0; per `RELEASING.md` the two must be
   kept in lockstep. Packaging metadata only — no code or KPI change.
