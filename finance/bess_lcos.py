@@ -461,6 +461,16 @@ def compute_lcos(spec: LcosSpec, *, wacc: float, project_years: int) -> LcosResu
     energy_cf = [0.0] * (horizon + 1)
 
     capex_cf[0] = spec.capex_usd
+    # M1: the LCOS discharged-energy basis must match what the revenue model actually
+    # exports. bess_revenue's energy_tariff branch exports the FULL nameplate energy per
+    # cycle (energy_mwh x cycles x RTE, NO depth-of-discharge factor), so applying the 0.40
+    # energy_tariff DoD here double-derated the LCOS denominator and overstated the reported
+    # LCOS by 1/0.40 = 2.5x. Only a capacity_charge (availability-tolling) BESS is dispatched
+    # to a fractional DoD on call; gate by revenue_model (not by the default) so the fix holds
+    # even if a scenario overrides revenue.depth_of_discharge.
+    dod_factor = (
+        spec.depth_of_discharge if spec.revenue_model == "capacity_charge" else 1.0
+    )
     for t in range(1, horizon + 1):
         opex_cf[t] = spec.opex_usd_per_year * (1.0 + spec.opex_escalation_pct) ** (
             t - 1
@@ -469,7 +479,7 @@ def compute_lcos(spec: LcosSpec, *, wacc: float, project_years: int) -> LcosResu
         energy_cf[t] = (
             spec.energy_per_cycle_mwh
             * spec.cycles_per_year
-            * spec.depth_of_discharge
+            * dod_factor
             * spec.round_trip_efficiency
             * soh
         )
