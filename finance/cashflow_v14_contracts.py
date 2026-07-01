@@ -27,7 +27,7 @@ class CashflowParams:
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - risk_haircut_pct: float (decimal, 0–1)
 
-    NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_pct,
+    NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
     fields — the live tax/depreciation/holiday path resolves + validates them via
     finance.cashflow_v14_tax.TaxConfig (single source of truth). Parallel CashflowParams

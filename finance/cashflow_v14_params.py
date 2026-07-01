@@ -348,7 +348,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     social_levy_pct = _pct_to_decimal(social_levy_raw) or 0.0
 
-    # NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_pct,
+    # NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     # depreciation_years, tax_holiday_years, tax_holiday_start_year) are resolved + validated
     # by finance.cashflow_v14_tax.TaxConfig — the LIVE tax/depreciation/holiday path reads them
     # off that object (tax_config.tax_rate, .depreciation_years, .tax_holiday_years, .holiday

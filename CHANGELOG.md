@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Renamed the tax field `enhanced_capital_allowance_pct` → `enhanced_capital_allowance_multiple`
+  in the finance engine, with a deprecated YAML alias (audit D8, step 1 of 2).** The field is a
+  MULTIPLIER on the depreciable base (1.0 = standard 100% allowance, 1.5 = a 150% enhanced
+  allowance), never a percent, so the `_pct` suffix violated FIN-02 (unit-suffixed names). The
+  `TaxConfig` dataclass field, its validators, the depreciation reader in `cashflow_v14.py`, and the
+  contract doc comments now use `_multiple`; `TaxConfig.from_yaml` gains a
+  `_get_enhanced_allowance_with_compat` helper (mirroring `_get_tax_rate_with_compat`) that accepts
+  the new key and still resolves the legacy `enhanced_capital_allowance_pct` with a
+  `DeprecationWarning`, so every existing scenario loads unchanged. KPI-neutral: committed KPIs
+  (project/equity IRR, DSCR, LLCR/PLCR, NPV, WACC, CFADS) are byte-identical across the lender, base,
+  equity and hybrid scenarios (verified before/after). Scenario YAMLs and dict-key test fixtures
+  still carry the deprecated key; migrating them to the canonical key is step 2 (the alias remains as
+  the backward-compat shim per the deprecation lifecycle).
 - **Fixed a currency + phase mismatch in the enhanced-analytics returns view (audit D12).**
   `analytics.pipeline_analytics_v14._calculate_returns_analysis` built the CFADS series in LKR
   (`cfads_final_lkr`) while taking debt service from the USD, period-indexed
