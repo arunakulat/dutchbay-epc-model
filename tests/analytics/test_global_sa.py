@@ -94,3 +94,57 @@ def test_morris_smoke_lendercase_ranks_dominant_drivers() -> None:
     ranking = res["metrics"]["project_irr"]["ranking"]
     # tariff and capex are the model's known dominant project-IRR drivers; one should top it.
     assert ranking[0] in {"tariff.lkr_per_kwh", "capex.usd_total"}
+
+
+def _ishigami_with_flat(overrides):
+    """Ishigami for 'y' plus a covenant-pinned 'min_dscr' that never moves."""
+    out = _ishigami(overrides)
+    out["min_dscr"] = 1.30  # structurally invariant (debt sized to the DSCR target)
+    return out
+
+
+def test_sobol_flags_covenant_pinned_metric_as_flat() -> None:
+    """A near-constant covenant metric is flagged, not decomposed into out-of-[0,1] indices.
+
+    Audit D4 (#575): global SA had no analogue of the tornado's flat_metric guard, so a
+    covenant-pinned min_dscr produced negative S1 / ST>1. The guard now zeroes and flags it.
+    """
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    res = run_sobol(
+        problem=prob,
+        evaluate_fn=_ishigami_with_flat,
+        metrics=("y", "min_dscr"),
+        n=256,
+        seed=1,
+    )
+    # The real metric is decomposed as before.
+    assert res["metrics"]["y"]["flat_metric"] is False
+    # The covenant metric is flagged flat with zeroed, in-band indices (no negative S1 / ST>1).
+    flat = res["metrics"]["min_dscr"]
+    assert flat["flat_metric"] is True
+    assert "covenant-pinned" in flat["flat_metric_reason"]
+    assert flat["interactions_present"] is False
+    for d in flat["drivers"].values():
+        assert d == {
+            "S1": 0.0,
+            "S1_conf": 0.0,
+            "ST": 0.0,
+            "ST_conf": 0.0,
+            "interactive": False,
+        }
+
+
+def test_morris_flags_covenant_pinned_metric_as_flat() -> None:
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    res = run_morris(
+        problem=prob,
+        evaluate_fn=_ishigami_with_flat,
+        metrics=("y", "min_dscr"),
+        n_trajectories=8,
+        seed=1,
+    )
+    assert res["metrics"]["y"]["flat_metric"] is False
+    flat = res["metrics"]["min_dscr"]
+    assert flat["flat_metric"] is True
+    for d in flat["drivers"].values():
+        assert d == {"mu_star": 0.0, "sigma": 0.0}
