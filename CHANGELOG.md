@@ -5,6 +5,21 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Reconcile the frozen net-AEP P90 against the bankable summary export, restoring P50<->P90 guard
+  symmetry (round-2 audit).** `analytics.aep_reconciliation` reconciled only
+  `expected_results.net_aep_p50_gwh` (against `capacity_mw · CF · 8.760`); the frozen
+  `net_aep_p90_gwh` had no load-time guard, yet it drives the hybrid P90-binds-gearing
+  (`finance.debt_v14._resolve_downside_ratio` reads the P90/P50 ratio to size the `min(P50, P90)`
+  gearing), so a stale P90 could silently move committed hybrid economics — and the only test that
+  reconciled it against the live wind+solar model was `pvlib`-gated and skipped in the default CI
+  gate. New `reconcile_frozen_p90_with_bankable_summary` (called from
+  `reconcile_capacity_factor_with_bankable_aep`, independent of capacity/CF) fails loud when the
+  frozen `net_aep_p90_gwh` diverges beyond tolerance from the authoritative
+  `exceedance.net_aep_p90_1yr_gwh` in the scenario's `aep_summary_path` export — a `pvlib`-free check
+  that runs in the default gate. No-op unless both values are present. KPI-neutral: all five committed
+  scenarios that carry both agree exactly (hybrid 471.0, four wind-only cases 404.4 via the 10 MW
+  summary), so nothing raises and the KPI oracle is byte-identical; kalpitiya/mullikulam summaries
+  carry no P90 and are a clean no-op. Adds pass/fail/no-op regression tests.
 - **Closed a username-enumeration timing oracle on the `/token` login route (round-2 audit, CWE-208).**
   `app.api.auth.authenticate_user` short-circuited on an unknown username (`encoded is None or not
   verify_password(...)`), so the ~600k-iteration PBKDF2 ran only for a *known* username with a wrong
