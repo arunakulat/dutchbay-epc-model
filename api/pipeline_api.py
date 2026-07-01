@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import math
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from analytics.aep_provenance import enforce_aep_provenance
-from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.aep_provenance import AepProvenanceError, enforce_aep_provenance
+from analytics.aep_reconciliation import (
+    AepReconciliationError,
+    reconcile_capacity_factor_with_bankable_aep,
+)
 from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
@@ -29,8 +33,11 @@ from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario_config
+from analytics.schema_guard import ConfigValidationError
 from api.path_safety import UnsafePathError, confined_path
 from finance.debt_v14 import _extract_capex_usd
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -517,9 +524,22 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         try:
             safe_path = confined_path(payload.config_path, must_exist=True)
             cfg: Dict[str, Any] = dict(load_scenario_config(str(safe_path)))
-        except (UnsafePathError, OSError, ValueError) as exc:
+        except (UnsafePathError, ValueError) as exc:
+            # Authored, actionable path/validation messages — safe to surface.
             raise HTTPException(
                 status_code=400, detail=f"Could not load config_path: {exc}"
+            )
+        except OSError as exc:
+            # A filesystem error can embed absolute internal paths; log it
+            # server-side and return only the class + a generic message
+            # (mirrors app/jobs/runner.py).
+            logger.exception("run-pipeline: failed to load config_path")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{type(exc).__name__}: could not load config_path; "
+                    "see the server logs."
+                ),
             )
     else:
         cfg = dict(payload.config or {})
@@ -546,8 +566,23 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         # config is NOT a deliberate MC perturbation, so enforce it here.
         _assert_fx_spot_consistency(cfg, payload.config_path or "<inline>")
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
-    except Exception as exc:  # config/validation/engine errors -> 422, not 500
+    except (
+        ConfigValidationError,
+        AepReconciliationError,
+        AepProvenanceError,
+        ValueError,
+    ) as exc:
+        # Authored, actionable validation/reconciliation messages — safe to surface.
         raise HTTPException(status_code=422, detail=f"Pipeline run failed: {exc}")
+    except Exception as exc:
+        # Unexpected engine error: the raw message can embed internal paths/config,
+        # so log the full trace server-side and return only the class + a generic
+        # message (mirrors app/jobs/runner.py).
+        logger.exception("run-pipeline: pipeline execution failed")
+        raise HTTPException(
+            status_code=422,
+            detail=f"{type(exc).__name__}: pipeline run failed; see the server logs.",
+        )
 
     kpis = result.get("kpis") or {}
     debt = result.get("debt_result") or {}

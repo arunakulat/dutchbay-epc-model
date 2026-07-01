@@ -75,6 +75,19 @@ def test_build_problem_requires_two_drivers() -> None:
         build_problem("ignored.yaml", params=[{"name": "x", "low": 0.0, "high": 1.0}])
 
 
+def test_build_problem_requires_both_bounds() -> None:
+    """A parameter that omits a bound must fail with an actionable ValueError naming
+    the field (CASPER), not the bare TypeError that float(None) used to raise."""
+    with pytest.raises(ValueError, match="both a low/min and a high/max"):
+        build_problem(
+            "ignored.yaml",
+            params=[
+                {"name": "a", "low": 0.0, "high": 1.0},
+                {"name": "b", "low": 0.0},  # missing high/max -> float(None) pre-fix
+            ],
+        )
+
+
 def test_morris_smoke_lendercase_ranks_dominant_drivers() -> None:
     res = run_morris(LENDER, n_trajectories=4, metrics=("project_irr",), seed=1)
     assert res["n_runs"] == 4 * (res["problem"]["num_vars"] + 1)
