@@ -211,41 +211,34 @@ class TestDegradationSensitivityIntegration:
 
     def test_degradation_sensitivity_produces_results(self, dutchbay_omegaconf_config):
         """Degradation sensitivity should produce valid results."""
-        # Run sensitivity analysis with degradation only
-        try:
-            result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
-            )
+        # The module-level guard already skips if analyze_dscr_sensitivity is
+        # unimportable; a runtime error here is a real regression, not a skip.
+        result = analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation"]
+        )
 
-            assert "variables" in result
-            assert len(result["variables"]) == 1
-            assert result["variables"][0]["variable"] == "degradation"
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        assert "variables" in result
+        assert len(result["variables"]) == 1
+        assert result["variables"][0]["variable"] == "degradation"
 
     def test_higher_degradation_reduces_debt_capacity(self, dutchbay_omegaconf_config):
         """Higher degradation should reduce debt sizing capacity."""
-        try:
-            result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
-            )
+        result = analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation"]
+        )
 
-            deg_result = result["variables"][0]
-            perturbations = deg_result["perturbations"]
+        deg_result = result["variables"][0]
+        perturbations = deg_result["perturbations"]
 
-            # Find min and max perturbation
-            min_pert = min(perturbations, key=lambda x: x["perturbation_pct"])
-            max_pert = max(perturbations, key=lambda x: x["perturbation_pct"])
+        # Find min and max perturbation
+        min_pert = min(perturbations, key=lambda x: x["perturbation_pct"])
+        max_pert = max(perturbations, key=lambda x: x["perturbation_pct"])
 
-            # Lower degradation → higher debt
-            # Higher degradation → lower debt
-            assert (
-                min_pert["debt_sized"] > max_pert["debt_sized"]
-            ), "Debt capacity should decrease with higher degradation"
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        # Lower degradation → higher debt
+        # Higher degradation → lower debt
+        assert (
+            min_pert["debt_sized"] > max_pert["debt_sized"]
+        ), "Debt capacity should decrease with higher degradation"
 
 
 class TestDegradationRegressionPins:

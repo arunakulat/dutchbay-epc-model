@@ -41,16 +41,16 @@ except ImportError as e:
         f"Required pipeline modules not available: {e}", allow_module_level=True
     )
 
-# analytics.dscr_sensitivity currently has an unrelated, pre-existing broken
-# transitive import (finance.debt_v14.size_debt_with_dual_dscr is missing).
-# Import it defensively so the Monte Carlo tests below still run; the
-# sensitivity-dependent tests are individually skipped when it is unavailable.
+# Import analytics.dscr_sensitivity behind an ImportError guard so a genuinely
+# unavailable optional dependency skips the sensitivity-dependent tests (via the
+# @_REQUIRES_SENSITIVITY marker) instead of erroring collection. Any OTHER
+# exception is a real breakage and must fail loudly at import, not be masked.
 try:
     from analytics.dscr_sensitivity import analyze_dscr_sensitivity
 
     _HAS_SENSITIVITY = True
     _SENSITIVITY_IMPORT_ERROR = ""
-except Exception as exc:  # pragma: no cover - environment-dependent
+except ImportError as exc:  # pragma: no cover - environment-dependent
     analyze_dscr_sensitivity = None  # type: ignore[assignment]
     _HAS_SENSITIVITY = False
     _SENSITIVITY_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
@@ -103,23 +103,21 @@ class TestPipelineDataFlow:
     @_REQUIRES_SENSITIVITY
     def test_dscr_to_sensitivity_data_flow(self, dutchbay_omegaconf_config):
         """DSCR sizing results should feed into sensitivity analysis."""
-        try:
-            # Run sensitivity with degradation only (fast)
-            result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
-            )
+        # @_REQUIRES_SENSITIVITY already skips if the module is unimportable; a
+        # runtime error here is a real regression, not a skip.
+        # Run sensitivity with degradation only (fast)
+        result = analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation"]
+        )
 
-            # Should have base case debt sizing
-            assert "sensitivity_config" in result
-            assert "variables" in result
+        # Should have base case debt sizing
+        assert "sensitivity_config" in result
+        assert "variables" in result
 
-            # Base debt should be available
-            base_result = result["variables"][0]
-            assert "base_debt" in base_result
-            assert base_result["base_debt"] > 0
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        # Base debt should be available
+        base_result = result["variables"][0]
+        assert "base_debt" in base_result
+        assert base_result["base_debt"] > 0
 
 
 class TestPipelineDegradationPropagation:
@@ -150,26 +148,22 @@ class TestPipelineDegradationPropagation:
     @_REQUIRES_SENSITIVITY
     def test_degradation_flows_to_outputs(self, dutchbay_omegaconf_config):
         """Degradation impact should be visible in final outputs."""
-        try:
-            # Run sensitivity analysis
-            result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation"]
-            )
+        # Run sensitivity analysis
+        result = analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation"]
+        )
 
-            deg_result = result["variables"][0]
+        deg_result = result["variables"][0]
 
-            # Should have degradation-specific outputs
-            assert deg_result["variable"] == "degradation"
-            assert "tornado_data" in deg_result
+        # Should have degradation-specific outputs
+        assert deg_result["variable"] == "degradation"
+        assert "tornado_data" in deg_result
 
-            # Impact should be measurable
-            tornado = deg_result["tornado_data"]
-            assert (
-                tornado["range_pct"] > 2.0
-            ), f"Degradation should have > 2% impact, got {tornado['range_pct']:.1f}%"
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        # Impact should be measurable
+        tornado = deg_result["tornado_data"]
+        assert (
+            tornado["range_pct"] > 2.0
+        ), f"Degradation should have > 2% impact, got {tornado['range_pct']:.1f}%"
 
 
 class TestPipelinePerformance:
@@ -182,23 +176,19 @@ class TestPipelinePerformance:
         self, dutchbay_omegaconf_config, performance_benchmarks
     ):
         """Sensitivity analysis should meet performance target."""
-        try:
-            # Use minimal variables for speed test
-            start_time = time.time()
+        # Use minimal variables for speed test
+        start_time = time.time()
 
-            analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
-            )
+        analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation", "aep"]
+        )
 
-            execution_time = time.time() - start_time
-            max_time = performance_benchmarks["sensitivity_analysis_max_seconds"]
+        execution_time = time.time() - start_time
+        max_time = performance_benchmarks["sensitivity_analysis_max_seconds"]
 
-            assert (
-                execution_time < max_time
-            ), f"Sensitivity should complete in < {max_time}s, took {execution_time:.1f}s"
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        assert (
+            execution_time < max_time
+        ), f"Sensitivity should complete in < {max_time}s, took {execution_time:.1f}s"
 
     @pytest.mark.slow
     @pytest.mark.performance
@@ -227,29 +217,25 @@ class TestPipelinePerformance:
         """Complete pipeline (sensitivity + Monte Carlo) should meet target."""
         start_time = time.perf_counter()
 
-        try:
-            # Run sensitivity (includes DSCR sizing)
-            analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config,
-                variables=["degradation", "aep"],
-            )
+        # Run sensitivity (includes DSCR sizing)
+        analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config,
+            variables=["degradation", "aep"],
+        )
 
-            # Run Monte Carlo (small sample)
-            run_monte_carlo_analysis(
-                base_config=mc_sampling_config,
-                n_trials=500,
-                seed=int(mc_sampling_config.monte_carlo.seed),
-            )
+        # Run Monte Carlo (small sample)
+        run_monte_carlo_analysis(
+            base_config=mc_sampling_config,
+            n_trials=500,
+            seed=int(mc_sampling_config.monte_carlo.seed),
+        )
 
-            execution_time = time.perf_counter() - start_time
-            max_time = performance_benchmarks["full_pipeline_max_seconds"]
+        execution_time = time.perf_counter() - start_time
+        max_time = performance_benchmarks["full_pipeline_max_seconds"]
 
-            assert (
-                execution_time < max_time
-            ), f"Full pipeline should complete in < {max_time}s, took {execution_time:.2f}s"
-
-        except Exception as e:
-            pytest.skip(f"Pipeline modules not available: {e}")
+        assert (
+            execution_time < max_time
+        ), f"Full pipeline should complete in < {max_time}s, took {execution_time:.2f}s"
 
 
 class TestPipelineOutputs:
@@ -259,33 +245,29 @@ class TestPipelineOutputs:
     @_REQUIRES_SENSITIVITY
     def test_sensitivity_output_structure(self, dutchbay_omegaconf_config):
         """Sensitivity analysis should produce complete output."""
-        try:
-            result = analyze_dscr_sensitivity(
-                dutchbay_omegaconf_config, variables=["degradation", "aep"]
+        result = analyze_dscr_sensitivity(
+            dutchbay_omegaconf_config, variables=["degradation", "aep"]
+        )
+
+        # Required top-level keys
+        assert "sensitivity_config" in result
+        assert "variables" in result
+        assert "tornado_chart" in result
+        assert "summary" in result
+        assert "binding_constraint_analysis" in result
+
+        # Tornado chart should be sorted
+        tornado = result["tornado_chart"]
+        for i in range(1, len(tornado)):
+            assert abs(tornado[i - 1]["impact_range"]) >= abs(
+                tornado[i]["impact_range"]
             )
 
-            # Required top-level keys
-            assert "sensitivity_config" in result
-            assert "variables" in result
-            assert "tornado_chart" in result
-            assert "summary" in result
-            assert "binding_constraint_analysis" in result
-
-            # Tornado chart should be sorted
-            tornado = result["tornado_chart"]
-            for i in range(1, len(tornado)):
-                assert abs(tornado[i - 1]["impact_range"]) >= abs(
-                    tornado[i]["impact_range"]
-                )
-
-            # Summary should have key metrics
-            summary = result["summary"]
-            assert "most_sensitive_variable" in summary
-            assert "base_debt" in summary
-            assert summary["base_debt"] > 0
-
-        except Exception as e:
-            pytest.skip(f"Sensitivity analysis not available: {e}")
+        # Summary should have key metrics
+        summary = result["summary"]
+        assert "most_sensitive_variable" in summary
+        assert "base_debt" in summary
+        assert summary["base_debt"] > 0
 
     @pytest.mark.slow
     def test_monte_carlo_output_structure(self, mc_sampling_config):
