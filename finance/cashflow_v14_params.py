@@ -432,6 +432,20 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
     """Validate cashflow parameters from configuration."""
     errors: List[str] = []
 
+    def _pct_or_raw(raw: float | None) -> float | None:
+        """Normalize a rate for validation, degrading to the raw value on failure.
+
+        ``pct_to_decimal`` now fails loud on an impossible (>100) rate (audit D7,
+        #573). In *validation* we want the field-named "out of range" error rather
+        than a bare ``ValueError``, so an out-of-range value falls back to the raw
+        (which is >100, hence outside every valid band) and trips the caller's own
+        range check with the offending field named.
+        """
+        try:
+            return _pct_to_decimal(raw)
+        except ValueError:
+            return raw
+
     tax_rate_raw = _as_float_or_none(
         _resolve_first(
             config,
@@ -446,7 +460,7 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
     if tax_rate_raw is None:
         errors.append("corporate_tax_rate: missing (required field)")
     else:
-        tax_rate = _pct_to_decimal(tax_rate_raw)
+        tax_rate = _pct_or_raw(tax_rate_raw)
         if tax_rate is None or not (0.0 <= tax_rate <= 1.0):
             errors.append(
                 "corporate_tax_rate: "
@@ -485,7 +499,7 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
     if cf_raw is None:
         errors.append("capacity_factor: missing (required field)")
     else:
-        cf = _pct_to_decimal(cf_raw)
+        cf = _pct_or_raw(cf_raw)
         # BESS-5 (#486): admit 0.0 — a storage-only scenario has no generation capacity
         # factor (its revenue is the BESS capacity charge), so a literal 0 is valid rather
         # than the former 0.0001 placeholder. Negatives and >1 remain config errors.
@@ -528,7 +542,7 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
         _resolve_first(config, ("project", "grid_loss_pct"), "grid_loss_pct")
     )
     if grid_loss_raw is not None:
-        loss = _pct_to_decimal(grid_loss_raw)
+        loss = _pct_or_raw(grid_loss_raw)
         if loss and not (0.0 <= loss < 1.0):
             errors.append(f"grid_loss_pct: {loss} out of range (must be 0.0-1.0)")
 
@@ -542,7 +556,7 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
         )
     )
     if risk_haircut_raw is not None:
-        risk = _pct_to_decimal(risk_haircut_raw)
+        risk = _pct_or_raw(risk_haircut_raw)
         if risk and not (0.0 <= risk < 1.0):
             errors.append(f"risk_haircut_pct: {risk} out of range (must be 0.0-1.0)")
 

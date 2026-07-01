@@ -78,9 +78,25 @@ def as_float_or_none(value: Any) -> Optional[float]:
 
 
 def pct_to_decimal(raw: Optional[float]) -> Optional[float]:
-    """Interpret a numeric as a percentage if > 1.0, otherwise as a decimal."""
+    """Normalize a rate/factor to a decimal fraction, fail-loud on nonsense.
+
+    A value in ``[0, 1]`` (and any negative, e.g. a deflationary escalation) is
+    treated as an already-decimal fraction; a value in ``(1, 100]`` is treated as a
+    percentage and divided by 100. A value ``> 100`` cannot be a valid rate or
+    capacity factor under *either* reading, so it now raises instead of being
+    silently reinterpreted as a fraction of a percent (audit D7, #573) — e.g. the
+    old heuristic mapped ``150 -> 1.5`` and ``1.5 -> 0.015`` with no complaint.
+    Every value on the committed/canonical path is <= 100, so this is byte-identical
+    for real inputs and only converts a previously-silent mis-scaling into a loud error.
+    """
     if raw is None:
         return None
+    if raw > 100.0:
+        raise ValueError(
+            f"pct_to_decimal: {raw!r} is out of range — a rate or capacity factor "
+            "must be a decimal fraction (<= 1) or a percentage (<= 100). Declare the "
+            "value in decimal or percent form (a *_pct-suffixed key carries percent)."
+        )
     if raw > 1.0:
         return raw / 100.0
     return raw

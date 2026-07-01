@@ -226,6 +226,25 @@ def test_pct_to_decimal_decimal_at_or_below_one_passthrough() -> None:
     assert pct_to_decimal(1.0) == 1.0
 
 
+def test_pct_to_decimal_above_100_fails_loud() -> None:
+    """A value > 100 cannot be a valid rate/factor and now raises (audit D7, #573).
+
+    The old heuristic silently mapped e.g. 150 -> 1.5 and 250 -> 2.5. The boundary
+    100.0 stays valid (== 1.0); just above it fails loud.
+    """
+    import pytest
+
+    assert pct_to_decimal(100.0) == 1.0  # boundary still valid
+    for bad in (100.0001, 150.0, 250.0, 1000.0):
+        with pytest.raises(ValueError, match="out of range"):
+            pct_to_decimal(bad)
+
+
+def test_pct_to_decimal_negative_passthrough() -> None:
+    """Negatives (e.g. deflationary escalation) are treated as decimals, unchanged."""
+    assert pct_to_decimal(-0.02) == -0.02
+
+
 def test_pct_alias_is_same_object() -> None:
     """The underscore alias is the same callable (line 138)."""
     assert _pct_to_decimal is pct_to_decimal
