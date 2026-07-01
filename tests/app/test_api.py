@@ -63,8 +63,10 @@ def test_app_exposes_expected_routes() -> None:
     assert "/jobs" in spec_paths  # async live-ERA5 path (PR E)
     assert "/jobs/{job_id}" in spec_paths
     assert "/jobs/{job_id}/events" in spec_paths
-    # the sensitivity sub-app is mounted as a sub-application
-    assert any(getattr(r, "path", "") == "/sensitivity" for r in app.routes)
+    # the sensitivity surface is now composed as gated routes (no longer a mounted
+    # sub-app), so its endpoints appear in the parent OpenAPI schema.
+    assert "/sensitivity/run-pipeline" in spec_paths
+    assert "/sensitivity/run-tornado/" in spec_paths
 
 
 def test_health() -> None:
@@ -390,5 +392,48 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
         assert client.get("/jobs/unknown-id").status_code == 404
         # The injected store — not the module default — received the job.
         assert custom_store.get(job_id) is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --------------------------------------------------------------------------- #
+# Auth gate on the compute surfaces (regression for the pre-fix anonymous hole)
+# --------------------------------------------------------------------------- #
+def test_compute_routes_require_auth_when_no_token() -> None:
+    """/run-pipeline and /sensitivity/* return full lender KPIs + confined file
+    reads, so — like /cases — they must reject an unauthenticated request with 401.
+    Regression: these were anonymously reachable while mounted/ungated."""
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)  # no dependency override -> no bearer token presented
+    assert client.post("/run-pipeline", json={"config_path": "x"}).status_code == 401
+    assert (
+        client.post("/sensitivity/run-pipeline", json={"config_path": "x"}).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/sensitivity/run-tornado/",
+            json={"config_path": "x", "parameters": []},
+        ).status_code
+        == 401
+    )
+
+
+def test_compute_routes_pass_auth_gate_with_token() -> None:
+    """With the auth dependency satisfied, the request reaches the handler: a bad
+    config_path yields the handler's own 4xx (not the 401 gate), proving the token
+    was accepted rather than the route being blanket-open or blanket-closed."""
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from app.api.auth import get_current_subject
+
+    app.dependency_overrides[get_current_subject] = lambda: "smoke-user"
+    try:
+        client = TestClient(app)
+        r = client.post("/run-pipeline", json={"config_path": "does_not_exist.yaml"})
+        assert r.status_code != 401  # gate passed; handler ran (and 400'd on bad path)
     finally:
         app.dependency_overrides.clear()
