@@ -426,9 +426,20 @@ class Tranche:
 def _solve_mix(p: Dict[str, Any], debt_total: float) -> Dict[str, Tranche]:
     mix = p.get("mix", {})
     rates = p.get("rates", {})
-    r_lkr = _as_float(rates.get("lkr_nominal") or rates.get("lkr_min"), 0.0)
-    r_usd = _as_float(rates.get("usd_nominal") or rates.get("usd_commercial_min"), 0.0)
-    r_dfi = _as_float(rates.get("dfi_nominal") or rates.get("dfi_min"), 0.0)
+    # Normalize each tranche rate through _rate_decimal (percent-form -> decimal for any
+    # value > 1.0), matching the sibling `debt`-block path (see _extract_financing_terms,
+    # which already routes interest_rate_pct through _rate_decimal). Previously these read
+    # the rate with a bare _as_float, so a canonical Financing_Terms.rates entry authored in
+    # percent form (e.g. lkr_nominal: 13.39 instead of 0.1339) reached _annuity_schedule as
+    # interest = balance * 13.39 (1339%/yr) with no error -- the cost-free-debt guard only
+    # catches rate <= 0. Every committed scenario declares decimal rates (< 1.0), so this is
+    # byte-identical for them; it only rescues a mis-scaled percent-form input, and closes the
+    # config-shape asymmetry between the two debt paths (round-2 audit, FIN-02).
+    r_lkr = _rate_decimal(rates.get("lkr_nominal") or rates.get("lkr_min"), 0.0)
+    r_usd = _rate_decimal(
+        rates.get("usd_nominal") or rates.get("usd_commercial_min"), 0.0
+    )
+    r_dfi = _rate_decimal(rates.get("dfi_nominal") or rates.get("dfi_min"), 0.0)
     lkr = min(debt_total * _as_float(mix.get("lkr_max"), 0.0), debt_total)
     dfi = min(
         debt_total * _as_float(mix.get("dfi_max"), 0.0), max(0.0, debt_total - lkr)

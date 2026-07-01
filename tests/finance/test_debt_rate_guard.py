@@ -71,3 +71,27 @@ def test_zero_debt_does_not_trip_the_guard() -> None:
     params["Financing_Terms"]["debt_ratio"] = 0.0
     core = apply_debt_layer(params=params, annual_rows=_rows(10.0))
     assert core["debt_total"] == 0.0
+
+
+def test_percent_form_tranche_rate_is_normalized_like_the_debt_path() -> None:
+    """Round-2 audit: a Financing_Terms.rates tranche rate authored in PERCENT form must
+    resolve to the same schedule as its decimal form.
+
+    _solve_mix used to read the tranche rates with a bare _as_float, so `usd_nominal: 8.39`
+    reached the amortization arithmetic as 839%/yr interest with no error (the cost-free-debt
+    guard only catches rate <= 0). The sibling `debt`-block path already normalized via
+    _rate_decimal, so behaviour depended on which config shape was used. _solve_mix now routes
+    the rates through _rate_decimal too, so 8.39 and 0.0839 are equivalent.
+    """
+    core_pct = apply_debt_layer(
+        params=_params(rates={"usd_nominal": 8.39}), annual_rows=_rows(10.0)
+    )
+    core_dec = apply_debt_layer(
+        params=_params(rates={"usd_nominal": 0.0839}), annual_rows=_rows(10.0)
+    )
+    # The percent-form rate is normalized to the decimal, not modelled as 839%/yr.
+    assert core_pct["avg_debt_rate"] == pytest.approx(0.0839, rel=1e-9)
+    assert core_pct["avg_debt_rate"] == pytest.approx(core_dec["avg_debt_rate"])
+    assert core_pct["total_idc_capitalized"] == pytest.approx(
+        core_dec["total_idc_capitalized"]
+    )
