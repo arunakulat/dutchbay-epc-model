@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **`pyproject.toml` version synced to `VERSION` (15.0.0 → 15.1.0).** The #529 release bumped the
+  `VERSION` file to 15.1.0 but left `pyproject.toml` at 15.0.0; per `RELEASING.md` the two must be
+  kept in lockstep. Packaging metadata only — no code or KPI change.
+
 ### Added
 - **Real end-to-end lender-report integration test (#481, RPT-7/8).** Adds
   `tests/integration/test_lender_report_e2e.py`: it drives a `WindFarmInputs` submission through the
