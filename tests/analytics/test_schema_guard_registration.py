@@ -57,7 +57,7 @@ def _valid_config() -> dict:
             "depreciation_start_year": 1,
             "depreciation_years": 15,
             "enhanced_allowance_applies": False,
-            "enhanced_capital_allowance_pct": 1.0,
+            "enhanced_capital_allowance_multiple": 1.0,
             "loss_carryforward_years": 25,
             "tax_holiday_start_year": 1,
             "tax_holiday_years": 0,

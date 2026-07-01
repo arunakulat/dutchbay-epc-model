@@ -48,7 +48,7 @@ _FULL_TAX: Dict[str, Any] = {
     "depreciation_start_year": 1,
     "depreciation_years": 15,
     "enhanced_allowance_applies": False,
-    "enhanced_capital_allowance_pct": 1.0,
+    "enhanced_capital_allowance_multiple": 1.0,
     "loss_carryforward_years": 6,
     "tax_holiday_start_year": 1,
     "tax_holiday_years": 0,
@@ -296,7 +296,7 @@ def test_enhanced_capital_allowance_scales_depreciation_base() -> None:
     enhanced = _base_config()
     enhanced["tax"]["depreciable_capex_lkr"] = base
     enhanced["tax"]["enhanced_allowance_applies"] = True
-    enhanced["tax"]["enhanced_capital_allowance_pct"] = 1.5
+    enhanced["tax"]["enhanced_capital_allowance_multiple"] = 1.5
     dep_enhanced = _first_year_depreciation(enhanced)
 
     assert math.isclose(dep_enhanced, dep_plain * 1.5, rel_tol=1e-9)

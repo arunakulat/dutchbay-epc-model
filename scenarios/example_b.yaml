@@ -19,7 +19,7 @@ tax:
   depreciation_start_year: 1
   depreciation_years: 20
   enhanced_allowance_applies: false
-  enhanced_capital_allowance_pct: 1.5  # MULTIPLIER (1.5 = 150% enhanced allowance), not a percent
+  enhanced_capital_allowance_multiple: 1.5  # MULTIPLIER (1.5 = 150% enhanced allowance), not a percent
   loss_carryforward_years: 25
   tax_holiday_start_year: 1
   tax_holiday_years: 8

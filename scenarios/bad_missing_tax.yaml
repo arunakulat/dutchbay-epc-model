@@ -45,7 +45,7 @@ tax:
   depreciation_method: straight_line
   depreciation_years: null
   depreciation_start_year: 1
-  enhanced_capital_allowance_pct: 1.5
+  enhanced_capital_allowance_multiple: 1.5
   enhanced_allowance_applies: false
   loss_carryforward_years: 25
   wht_on_interest_to_nonresidents: 0.1
