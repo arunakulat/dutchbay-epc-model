@@ -17,9 +17,12 @@ toolchain (CASPER). The exceedance z-table is the SHARED ``analytics.core.exceed
 
 Default budget provenance: the 1-sigma defaults below are literature-typical for a tropical
 fixed-tilt utility-scale plant (IEA-PVPS Task 13 "Uncertainties in Yield Assessments",
-IEC 61724-1). They are NOT site-specific; a real lender energy-yield assessment overrides
-them per scenario via ``resource.solar.uncertainty`` (the same override pattern as the
-itemised loss stack). The combined 1-year sigma at the defaults is ~7.6%.
+IEC 61724-1). They are NOT site-specific; a real lender energy-yield assessment supplies a
+site budget by constructing a ``SolarUncertaintyBudget`` and passing it to
+``compute_solar_aep(uncertainty_budget=...)``. There is NO scenario-YAML override wired into
+the producer — ``resource.solar.uncertainty`` is not read by the pipeline (and is rejected as
+an unknown key by ``SolarResourceConfig.from_scenario``). The combined 1-year sigma at the
+defaults is ~7.6%.
 """
 
 from __future__ import annotations
@@ -45,7 +48,8 @@ class SolarUncertaintyBudget:
     the project life); the interannual GHI term is the single time-averageable component and
     is divided by ``sqrt(life_years)`` for the multi-year P90, exactly mirroring the wind
     budget's interannual handling. The defaults are tropical-fixed-tilt literature typicals;
-    override per scenario via ``resource.solar.uncertainty``.
+    a caller supplies a site budget programmatically via
+    ``compute_solar_aep(uncertainty_budget=...)`` (no scenario-YAML override is wired).
 
     Boundary note (avoids double-counting): year-1 DC degradation and multi-year degradation
     belong in the *loss/degradation* chain and the finance degradation schedule respectively,
@@ -100,7 +104,12 @@ class SolarUncertaintyBudget:
 
     @classmethod
     def from_scenario(cls, block: Mapping[str, Any]) -> "SolarUncertaintyBudget":
-        """Build from a ``resource.solar.uncertainty`` mapping (CESSPIT: explicit keys).
+        """Build a budget from a ``resource.solar.uncertainty`` mapping (CESSPIT: explicit keys).
+
+        A convenience constructor for a caller that already holds such a mapping; it is NOT
+        auto-invoked by the producer (``SolarResourceConfig.from_scenario`` does not read an
+        ``uncertainty`` sub-block), so wiring a scenario budget means calling this and passing
+        the result to ``compute_solar_aep(uncertainty_budget=...)``.
 
         Unknown keys RAISE rather than being silently dropped, so a typo (e.g.
         ``soling_pct``) fails loud instead of reverting to a default.
