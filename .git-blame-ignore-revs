@@ -1,0 +1,7 @@
+# Revisions ignored by `git blame` so authorship points at the real change, not
+# a bulk reformat. GitHub honours this file automatically; enable it locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Only add commits that are PURELY mechanical (formatting/renames), never logic.
+
+# Repo-wide black + isort reformat; promote both to mandatory CI gates (#545)
+8e2e12f7d9bf56bf125edf4a3d7cf357c03fc247
