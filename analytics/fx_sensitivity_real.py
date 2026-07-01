@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -110,11 +109,17 @@ class RealFXSensitivityResult:
 
 
 def evaluate_with_overrides(
-    base_config_path: str, overrides: dict[str, Any]
+    base_config_path: str,
+    overrides: dict[str, Any],
+    *,
+    return_full_result: bool = False,
 ) -> dict[str, Any]:
     from analytics.evaluation_v14 import evaluate_with_overrides as _evaluate
 
-    return cast(dict[str, Any], _evaluate(base_config_path, overrides))
+    return cast(
+        dict[str, Any],
+        _evaluate(base_config_path, overrides, return_full_result=return_full_result),
+    )
 
 
 def _metric_from_result(result: dict[str, Any], metric: str) -> float:
@@ -280,27 +285,24 @@ class FXSensitivityAnalyzer:
     def _run_pipeline_with_fx_params(
         self, fx_rate: float, hedge_ratio: float, spread_bps: float
     ) -> dict[str, Any]:
-        config = copy.deepcopy(self.base_config)
-        config.setdefault("fx", {})
-        # start_lkr_per_usd is the LIVE engine key (spot_rate was not consumed). hedge_ratio /
-        # spread_bps are retained but not modeled by the cashflow engine (see run()).
-        config["fx"].update(
-            {
+        # Route the FX overrides through the path-based contract gateway
+        # (config-first / CCCDIR) -- the same seam run() uses -- rather than mutating an
+        # in-memory config dict and passing it to run_v14_pipeline_with_analytics. That
+        # callee hard-guards its config to (str | Path) (added #156), so the old
+        # dict-config call always raised TypeError, leaving this public method dead in
+        # production and only ever exercised under a monkeypatched pipeline in tests
+        # (round-2 audit). start_lkr_per_usd is the LIVE engine key; hedge_ratio /
+        # spread_bps are carried through but not modeled by the cashflow engine (see run()).
+        overrides: dict[str, Any] = {
+            "fx": {
                 "start_lkr_per_usd": float(fx_rate),
                 "hedge_ratio": float(hedge_ratio),
                 "spread_bps": float(spread_bps),
             }
+        }
+        return evaluate_with_overrides(
+            self.base_config_path, overrides, return_full_result=True
         )
-        from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
-
-        # Annotated local (not cast): under the full mypy run the cast is
-        # "redundant", but fastlane's focused `--follow-imports=skip` surface
-        # sees this return as Any. An annotated local satisfies both — it
-        # absorbs the Any and gives the return a concrete type.
-        result: dict[str, Any] = run_v14_pipeline_with_analytics(
-            config=config, enable_returns=True, enable_risk=False
-        )
-        return result
 
     def _extract_metrics(
         self, pipeline_result: dict[str, Any]

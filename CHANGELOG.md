@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Fixed the dead-and-broken `FXSensitivityAnalyzer.analyze_fx_sensitivity()` public surface
+  (round-2 audit).** Its helper `_run_pipeline_with_fx_params` built an inline dict config and passed
+  it to `run_v14_pipeline_with_analytics`, which hard-guards its config to `(str | Path)` (added in
+  #156), so the method always raised `TypeError` before returning a `RealFXSensitivityResult` — a
+  permanently-broken public method that every test hid by monkeypatching the pipeline. It now routes
+  the FX overrides through the path-based contract gateway `evaluate_with_overrides(base_config_path,
+  {"fx": {...}}, return_full_result=True)` — the same seam `run()` already uses (the module-level
+  wrapper gains a `return_full_result` passthrough) — and drops the unused `copy` import. Adds a
+  non-mocked end-to-end regression that drives `analyze_fx_sensitivity` on the real lender scenario
+  (so the previously-dead method is genuinely exercised) and reworks the monkeypatched tests onto the
+  gateway seam. KPI-neutral: this analytics surface feeds no committed KPI (verified byte-identical
+  via the KPI oracle); it previously failed loud rather than emitting a wrong number.
 - **Normalized the `Financing_Terms.rates` tranche rates in `_solve_mix` (round-2 audit, FIN-02).**
   `finance.debt_v14._solve_mix` read the per-tranche rates (`lkr_nominal` / `usd_nominal` /
   `dfi_nominal` / `*_min`) with a bare `_as_float`, unlike the sibling `debt`-block path which
