@@ -122,6 +122,11 @@ class ERA5RequestConfig:
     reference_height_high_m: float = 100.0
     alpha_min: float = 0.05
     alpha_max: float = 0.40
+    # Fallback shear exponent when alpha cannot be computed (NaN ws ratio). 0.143 is the
+    # 1/7-power-law coastal/neutral-stability default and matches ERA5Fetcher.alpha_default,
+    # reconciling the two ERA5 paths (audit D13, #580) — the old fill used alpha_min (0.05),
+    # a clip floor, which understated shear on gap-filled hours.
+    alpha_default: float = 0.143
     output_dir: str = "outputs/era5_cache"
     reference_mode: str = "fixed"
     resolved_at: str = ""
@@ -147,6 +152,7 @@ class ERA5RequestConfig:
             hub_height_m=float(turb["hub_height_m"]),
             alpha_min=float(dl.get("alpha_min", 0.05)),
             alpha_max=float(dl.get("alpha_max", 0.40)),
+            alpha_default=float(dl.get("alpha_default", 0.143)),
             output_dir=str(dl.get("output_dir", "outputs/era5_cache")),
             turbine_model=str(turb["model"]),
             num_turbines=int(turb["num_turbines"]),
@@ -270,8 +276,12 @@ def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.Data
     h_t = config.hub_height_m
     with np.errstate(divide="ignore", invalid="ignore"):
         alpha = np.log(ws100 / ws10) / np.log(h_hi / h_lo)
+    # Fill an uncomputable alpha with the coastal/neutral default (not the clip floor),
+    # then bound to the physical shear range (audit D13, #580).
     alpha = np.clip(
-        np.nan_to_num(alpha, nan=config.alpha_min), config.alpha_min, config.alpha_max
+        np.nan_to_num(alpha, nan=config.alpha_default),
+        config.alpha_min,
+        config.alpha_max,
     )
     ws_hub = ws100 * (h_t / h_hi) ** alpha
 
