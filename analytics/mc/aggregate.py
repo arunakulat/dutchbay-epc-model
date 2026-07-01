@@ -104,26 +104,49 @@ def aggregate_trials(
         "equity_npv",
     ]
 
-    # Extract raw trial arrays
+    # Partial-trial policy (audit D2, #571). MonteCarloResult enforces that every
+    # trials[] array has the SAME length (row alignment across metrics, so
+    # trials[m][i] refers to the same trial i for breach/joint analytics). The old
+    # code skipped None PER KEY, so a single trial missing one KPI (e.g. an equity
+    # distribution that failed on that draw) produced ragged arrays and the contract
+    # raised ValueError, aborting the WHOLE run instead of degrading.
+    #
+    # Policy: complete-case aggregation. A metric is "observed" if at least one trial
+    # produced a finite numeric value for it; a trial is aggregated only if it produced
+    # a finite value for EVERY observed metric. Partial trials (missing any observed
+    # metric) are excluded from the arrays and counted in failed_iterations. This keeps
+    # exact row alignment, never raises, and is byte-identical on runs where every trial
+    # is complete (all committed scenarios and tests). A malformed non-numeric value is
+    # treated as missing rather than crashing.
+    def _num(v: Any) -> Optional[float]:
+        if v is None or isinstance(v, bool):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if np.isfinite(f) else None
+
+    observed_keys = [
+        k
+        for k in metric_keys
+        if any(_num(tm.get(k)) is not None for tm in trial_metrics)
+    ]
+
+    def _is_complete(tm: Mapping[str, Any]) -> bool:
+        return all(_num(tm.get(k)) is not None for k in observed_keys)
+
+    complete_trials = [tm for tm in trial_metrics if _is_complete(tm)]
+
+    # Extract raw trial arrays over the common (complete) trial set.
     arrays: Dict[str, np.ndarray] = {}
     trials: Dict[str, List[float]] = {}
 
-    for k in metric_keys:
-        vals: List[float] = []
-        for tm in trial_metrics:
-            v = tm.get(k, None)
-            if v is None:
-                # Missing metric in this trial - skip or use NaN
-                # For production: decide on NaN handling policy
-                continue
-            vals.append(float(v))
-
+    for k in observed_keys:
+        vals: List[float] = [float(tm[k]) for tm in complete_trials]
         if not vals:
-            # No trials had this metric - skip it
             continue
-
-        arr = np.array(vals, dtype=float)
-        arrays[k] = arr
+        arrays[k] = np.array(vals, dtype=float)
         trials[k] = vals  # Store raw list for MonteCarloResult.trials
 
     # Compute summary statistics
@@ -171,7 +194,14 @@ def aggregate_trials(
     n_failed = sum(
         1
         for tm in trial_metrics
-        if tm.get("_toy_fallback") or not any(k in tm for k in metric_keys)
+        if tm.get("_toy_fallback")
+        or not any(k in tm for k in metric_keys)
+        or not _is_complete(tm)
+    )
+    # Surface the partial-trial degrade (audit D2): trials dropped because they were
+    # missing one or more observed KPIs (0 on a clean run).
+    metadata["partial_trial_count"] = sum(
+        1 for tm in trial_metrics if not _is_complete(tm)
     )
 
     def _stat(metric: str, key: str) -> Optional[float]:

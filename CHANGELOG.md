@@ -166,6 +166,18 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **A single partial-KPI Monte Carlo trial no longer crashes the whole run (audit D2, #571).**
+  `MonteCarloResult` requires every `trials[]` array to share one length (row alignment for
+  breach/joint analytics), but `analytics/mc/aggregate.py` skipped `None` *per key*, so one trial
+  missing a single KPI (e.g. an equity distribution that failed on that draw) produced ragged arrays
+  and the frozen contract raised `ValueError`, aborting the entire lender pack instead of degrading.
+  Replaced with a documented **complete-case** policy: a metric is "observed" if at least one trial
+  produced a finite value for it, and a trial is aggregated only if it produced a finite value for
+  every observed metric; partial trials are excluded from the arrays, counted in `failed_iterations`,
+  and surfaced via a new `metadata['partial_trial_count']`. Non-numeric values are treated as missing
+  rather than crashing. Byte-identical on runs where every trial is complete (all committed scenarios
+  and tests). Adds regression tests covering the single-partial, different-missing-keys, and
+  non-numeric cases. KPI-neutral (MC robustness).
 - **Monte Carlo Iman-Conover rank correlation was numerically inert (audit D1, #570).** The reorder
   in `analytics/mc/correlation.py` scattered each marginal by rank (`out[y_ranks[:, j], j] =
   col_sorted`) — the INVERSE permutation — so the induced Spearman correlation collapsed to ~0 while
