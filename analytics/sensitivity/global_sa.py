@@ -114,8 +114,15 @@ def build_problem(
         if str(p.get("distribution", p.get("kind", "uniform"))) == "fx_calibrated":
             skipped.append(name)
             continue
-        low = float(p.get("low", p.get("min")))
-        high = float(p.get("high", p.get("max")))
+        low_raw = p.get("low", p.get("min"))
+        high_raw = p.get("high", p.get("max"))
+        if low_raw is None or high_raw is None:
+            raise ValueError(
+                f"{name}: global SA needs both a low/min and a high/max bound to "
+                f"sweep (got low={low_raw!r}, high={high_raw!r})."
+            )
+        low = float(low_raw)
+        high = float(high_raw)
         if not high > low:
             raise ValueError(f"{name}: global SA needs high > low, got [{low}, {high}]")
         names.append(name)
