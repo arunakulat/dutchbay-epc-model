@@ -53,7 +53,7 @@ BASE_PARAMS = {
         "depreciation_start_year": 1,
         "depreciation_years": 15,
         "enhanced_allowance_applies": False,
-        "enhanced_capital_allowance_pct": 1.0,
+        "enhanced_capital_allowance_multiple": 1.0,
         "loss_carryforward_years": 25,
         "tax_holiday_start_year": 1,
         "tax_holiday_years": 0,
@@ -141,10 +141,10 @@ def test_enhanced_allowance_does_not_hurt_early_cfads():
     base = copy.deepcopy(BASE_PARAMS)
 
     baseline = copy.deepcopy(base)
-    baseline["tax"]["enhanced_capital_allowance_pct"] = 1.0
+    baseline["tax"]["enhanced_capital_allowance_multiple"] = 1.0
 
     enhanced = copy.deepcopy(base)
-    enhanced["tax"]["enhanced_capital_allowance_pct"] = 2.0
+    enhanced["tax"]["enhanced_capital_allowance_multiple"] = 2.0
 
     cf_base = _run_cfads(baseline)
     cf_enh = _run_cfads(enhanced)

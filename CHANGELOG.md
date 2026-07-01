@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Migrated all scenario YAMLs and test fixtures to `enhanced_capital_allowance_multiple`
+  (audit D8, step 2 of 2).** All 22 `scenarios/*.yaml` keys and the dict-key test fixtures now use
+  the canonical multiplier name; each numeric value is byte-preserved, so committed KPIs are
+  unchanged (verified byte-identical across the lender, base, equity and hybrid scenarios). Fixed the
+  orphan `scenarios/test/base_scenario.yaml`, whose value was the percent-form `125` (never loaded —
+  `enhanced_allowance_applies: false` and no consumer references it — but a latent unit-error that the
+  `> 3.0` guard would reject): now `1.25`. The deprecated `enhanced_capital_allowance_pct` YAML alias
+  remains supported (with a `DeprecationWarning`) per the deprecation lifecycle; the frozen
+  `legacy_scenarios/archive/` copy is deliberately left untouched. KPI-neutral.
 - **Renamed the tax field `enhanced_capital_allowance_pct` → `enhanced_capital_allowance_multiple`
   in the finance engine, with a deprecated YAML alias (audit D8, step 1 of 2).** The field is a
   MULTIPLIER on the depreciable base (1.0 = standard 100% allowance, 1.5 = a 150% enhanced

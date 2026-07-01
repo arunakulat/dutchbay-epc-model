@@ -24,7 +24,7 @@ tax:
   plant_depreciation_years: 5  # SL Fourth Sched Class 2 (plant & machinery)
   civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
   enhanced_allowance_applies: false
-  enhanced_capital_allowance_pct: 1.5
+  enhanced_capital_allowance_multiple: 1.5
   loss_carryforward_years: 6
   tax_holiday_route: none
   tax_holiday_start_year: 1

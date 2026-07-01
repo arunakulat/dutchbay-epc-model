@@ -295,7 +295,7 @@ tax:
   plant_capex_share: 0.80
   plant_depreciation_years: 5  # SL Fourth Sched Class 2 (plant & machinery)
   civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
-  enhanced_capital_allowance_pct: 1.5
+  enhanced_capital_allowance_multiple: 1.5
   enhanced_allowance_applies: false
   loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.1

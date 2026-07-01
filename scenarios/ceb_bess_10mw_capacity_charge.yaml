@@ -111,7 +111,7 @@ tax:
   plant_capex_share: 0.90        # BESS is overwhelmingly plant & machinery (5-yr class)
   plant_depreciation_years: 5
   civil_depreciation_years: 20
-  enhanced_capital_allowance_pct: 1.5
+  enhanced_capital_allowance_multiple: 1.5
   enhanced_allowance_applies: false
   loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.1
