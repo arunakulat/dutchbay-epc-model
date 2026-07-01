@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import math
 from typing import Any, Mapping, Sequence
 
 from analytics.contracts_v14 import (
@@ -13,6 +15,8 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TechnologyBreakdown,
 )
+
+logger = logging.getLogger(__name__)
 
 # Frozen JSON contract version for CASPER payloads.
 # If this ever changes, it MUST be treated as a breaking change and guarded
@@ -332,6 +336,99 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
     }
 
 
+def _resolve_dscr_floor(scenario: ScenarioResult | str | None) -> float | None:
+    """Config-first covenant DSCR floor from the scenario, or None (CESSPIT).
+
+    The authoritative floor is the debt covenant *threshold* attached to the resolved
+    scenario (``debt_covenants.dscr_threshold``). Returns None when the scenario is a bare
+    string sentinel or carries no structured covenant — the caller then falls back to the
+    documented ``CovenantSpec`` default and surfaces whichever floor it used, so the number
+    is never silently assumed.
+    """
+    if isinstance(scenario, str) or scenario is None:
+        return None
+    dc = getattr(scenario, "debt_covenants", None)
+    threshold = getattr(dc, "dscr_threshold", None)
+    if isinstance(threshold, (int, float)) and not isinstance(threshold, bool):
+        floor = float(threshold)
+        if floor > 0.0:
+            return floor
+    return None
+
+
+def _json_safe_cell(key: str, val: Any) -> Any:
+    """Coerce a lender-risk-table cell to a strict-JSON-safe value.
+
+    The ``metric`` column is a label (str); every other column is numeric. A non-finite
+    float — the ``NaN`` placeholders ``build_lender_risk_table`` writes into the covenant
+    rows (P50/P90/P95/std) — maps to ``None`` to match the payload's None-for-missing
+    convention and keep the payload valid under a strict encoder (``allow_nan=False``).
+    """
+    if key == "metric":
+        return str(val)
+    if val is None or isinstance(val, bool):
+        return val
+    if isinstance(val, int):
+        return val  # preserve e.g. n_trials as an int
+    num = float(val)
+    return num if math.isfinite(num) else None
+
+
+def _mc_risk_from_result(
+    mc: MonteCarloResult | None,
+    scenario: ScenarioResult | str | None,
+) -> dict[str, Any] | None:
+    """Surface the lender-grade Monte Carlo risk table from raw trial arrays.
+
+    Wires the previously-unconsumed ``analytics.mc.exports.build_casper_risk_blocks`` into
+    the CASPER payload (follow-up to the #576 tail-risk honesty fix): a P50 + P90/P95
+    *downside* (exceedance) table for DSCR/IRR/NPV/LLCR/PLCR, plus ``Prob(DSCR < floor)``
+    and the worst-year DSCR P95 — the genuine distributional VaR/CVaR-style tail risk the
+    one-way tornado path cannot compute (it needs the MC trial vectors).
+
+    CASPER discipline — degrade gracefully at call-time, never crash the payload: returns
+    None when Monte Carlo was not run, when the result is summary-only (no raw ``dscr_min``
+    trial array), or when the optional ``pandas`` export dependency is absent. The DSCR
+    covenant floor is resolved config-first (``debt_covenants.dscr_threshold``), falling back
+    to the ``CovenantSpec`` default, and is surfaced explicitly in the emitted covenant block.
+    The pandas ``DataFrame`` is converted to JSON-safe records (native ``float``/``str``).
+    """
+    if mc is None:
+        return None
+    try:
+        from analytics.mc.exports import CovenantSpec, build_casper_risk_blocks
+
+        floor = _resolve_dscr_floor(scenario)
+        covenant = (
+            CovenantSpec(dscr_floor=floor) if floor is not None else CovenantSpec()
+        )
+        blocks = build_casper_risk_blocks(mc, covenant=covenant)
+
+        table = blocks.get("lender_risk_table")
+        if table is None:  # defensive; build_casper_risk_blocks always emits the table
+            return None
+        records = table.to_dict(orient="records")
+        json_safe = [
+            {key: _json_safe_cell(key, val) for key, val in row.items()}
+            for row in records
+        ]
+        covenant_block = {
+            key: _json_safe_cell(key, val)
+            for key, val in (blocks.get("covenant") or {}).items()
+        }
+        return {"lender_risk_table": json_safe, "covenant": covenant_block}
+    except (KeyError, RuntimeError, ImportError):
+        # The sanctioned degradation paths: no raw dscr_min trials (KeyError), pandas
+        # absent (RuntimeError), or the export module unavailable (ImportError). Omit the
+        # block rather than crash the read-only payload. Any OTHER exception is a genuine
+        # bug and is left to propagate (fail-loud) instead of being silently swallowed.
+        logger.debug(
+            "CASPER mc_risk block omitted (no raw trials / pandas absent).",
+            exc_info=True,
+        )
+        return None
+
+
 def _generation_to_dict(
     gen: MultiTechGenerationResult | None,
 ) -> dict[str, Any] | None:
@@ -403,6 +500,11 @@ def _casper_to_dict(casper: CasperResult) -> dict[str, Any]:
         # Singular key to match the CASPER v1 contract docs
         "sensitivity": _sensitivity_to_dict(casper.sensitivities),
         "monte_carlo": _monte_carlo_to_dict(casper.monte_carlo),
+        # Lender-grade MC risk table (P90/P95 downside + DSCR breach probability) surfaced
+        # from raw trial arrays; additive customer-visible key, so no contract-version bump
+        # (same posture as `generation` / `technology_breakdown`). Omitted (None) when MC
+        # was not run or the result is summary-only.
+        "mc_risk": _mc_risk_from_result(casper.monte_carlo, casper.scenario),
         "generation": _generation_to_dict(casper.generation),
         "technology_breakdown": _technology_breakdown_to_list(
             casper.multi_tech_generation_breakdown
