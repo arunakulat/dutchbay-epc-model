@@ -166,6 +166,16 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Global SA now flags a structurally-flat metric instead of emitting out-of-[0,1] Sobol indices
+  (audit D4, #575).** The tornado engine guards a covenant-pinned metric with `_flag_degenerate_metric`,
+  but global SA (`analytics/sensitivity/global_sa.py`) had no counterpart: a near-constant `min_dscr`
+  (in `DEFAULT_METRICS`; debt is sized to the DSCR target, so the ratio is invariant to the swept
+  drivers) made SALib return negative `S1` and `ST>1` with no warning and spurious `interactive`
+  flags. `run_sobol`/`run_morris` now pre-check each metric's output range and, when
+  structurally flat, log a loud covenant-aware warning and emit zeroed, in-band indices with
+  `flat_metric: True` + `flat_metric_reason`, skipping the undefined decomposition. Real metrics carry
+  `flat_metric: False` and are unchanged (Ishigami structure preserved). Read-only supplementary
+  section — KPI-neutral, oracle byte-identical.
 - **Wind monthly-energy profile no longer collapses all 8760 hours into month 1 (audit D3, #574).**
   `EnergyCalculator.calculate_monthly_energy` ran `pd.to_datetime(df.index).month`, which on the
   `WindPipeline` orchestrator's integer `RangeIndex` read the values as epoch-nanoseconds and bucketed

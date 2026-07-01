@@ -30,6 +30,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
+import numpy as np
+
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
 
@@ -45,6 +47,43 @@ DEFAULT_METRICS: Tuple[str, ...] = ("project_irr", "equity_irr", "min_dscr")
 #: ``ST - S1`` above this fraction flags a driver whose effect is materially interactive
 #: (the variance-based analogue of the one-way tornado's flat-metric flag).
 INTERACTION_TOL: float = 0.05
+
+#: Tokens that mark a covenant-pinned ratio (mirrors the tornado engine's guard).
+_COVENANT_METRIC_TOKENS: Tuple[str, ...] = ("dscr", "llcr", "plcr")
+
+#: A metric output vector is treated as structurally flat (degenerate) when its range is
+#: within these tolerances of zero. Variance-based indices (Sobol S1/ST) are undefined on a
+#: (near-)constant output and SALib returns garbage — negative S1, ST>1 — so such a metric is
+#: flagged rather than decomposed (audit D4, #575; the analogue of the tornado's flat_metric).
+_FLAT_ABS_TOL: float = 1e-12
+_FLAT_REL_TOL: float = 1e-6
+
+
+def _flat_metric_reason(metric_key: str) -> str:
+    """Covenant-aware explanation for a structurally-flat global-SA metric."""
+    if any(tok in metric_key.lower() for tok in _COVENANT_METRIC_TOKENS):
+        return (
+            "covenant-pinned: debt is sized to the DSCR target, so this ratio is "
+            "structurally invariant to the swept drivers — variance-based indices are "
+            "undefined; sweep a covenant-relevant lever (gearing, balloon) instead"
+        )
+    return "the metric does not move under these sweeps; variance-based indices are undefined"
+
+
+def _is_flat_output(values: Sequence[float]) -> Tuple[bool, float]:
+    """Return (is_flat, range) for a metric's output vector across the SA samples.
+
+    Flat when the finite range is within ``_FLAT_ABS_TOL`` or ``_FLAT_REL_TOL`` of the
+    output scale — the covenant-pinned/near-constant case that makes Sobol/Morris return
+    out-of-[0,1] indices.
+    """
+    arr = np.asarray(list(values), dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return True, 0.0
+    spread = float(np.ptp(finite))
+    scale = max(abs(float(np.mean(finite))), 1.0)
+    return spread <= max(_FLAT_ABS_TOL, _FLAT_REL_TOL * scale), spread
 
 
 def _require_salib() -> None:
@@ -226,6 +265,33 @@ def run_sobol(
     }
     per_metric: Dict[str, Any] = {}
     for m in metrics:
+        is_flat, spread = _is_flat_output(cols[m])
+        if is_flat:
+            reason = _flat_metric_reason(m)
+            logger.warning(
+                "global SA metric '%s' is structurally FLAT (range=%.2e across %d runs): "
+                "%s — emitting zeroed indices instead of undefined Sobol values.",
+                m,
+                spread,
+                len(X),
+                reason,
+            )
+            per_metric[m] = {
+                "drivers": {
+                    name: {
+                        "S1": 0.0,
+                        "S1_conf": 0.0,
+                        "ST": 0.0,
+                        "ST_conf": 0.0,
+                        "interactive": False,
+                    }
+                    for name in prob.names
+                },
+                "interactions_present": False,
+                "flat_metric": True,
+                "flat_metric_reason": reason,
+            }
+            continue
         Si = sobol_analyze.analyze(
             salib_problem,
             cols[m],
@@ -246,6 +312,7 @@ def run_sobol(
         per_metric[m] = {
             "drivers": drivers,
             "interactions_present": any(d["interactive"] for d in drivers.values()),
+            "flat_metric": False,
         }
     out["metrics"] = per_metric
     return out
@@ -284,6 +351,25 @@ def run_morris(
     }
     per_metric: Dict[str, Any] = {}
     for m in metrics:
+        is_flat, spread = _is_flat_output(cols[m])
+        if is_flat:
+            reason = _flat_metric_reason(m)
+            logger.warning(
+                "global SA metric '%s' is structurally FLAT (range=%.2e across %d runs): "
+                "%s — Morris elementary effects are all ~0.",
+                m,
+                spread,
+                len(X),
+                reason,
+            )
+            drivers_flat = {name: {"mu_star": 0.0, "sigma": 0.0} for name in prob.names}
+            per_metric[m] = {
+                "drivers": drivers_flat,
+                "ranking": list(prob.names),
+                "flat_metric": True,
+                "flat_metric_reason": reason,
+            }
+            continue
         Si = morris_analyze.analyze(
             salib_problem, X, cols[m], print_to_console=False, seed=seed
         )
@@ -292,6 +378,6 @@ def run_morris(
             for i, name in enumerate(prob.names)
         }
         ranked = sorted(drivers, key=lambda k: drivers[k]["mu_star"], reverse=True)
-        per_metric[m] = {"drivers": drivers, "ranking": ranked}
+        per_metric[m] = {"drivers": drivers, "ranking": ranked, "flat_metric": False}
     out["metrics"] = per_metric
     return out
