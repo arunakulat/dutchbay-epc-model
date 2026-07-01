@@ -218,6 +218,28 @@ def test_authenticate_user_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     assert authenticate_user("mallory", "pw") is None
 
 
+def test_authenticate_user_unknown_still_runs_pbkdf2(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 audit: an unknown username must still pay the PBKDF2 cost (against the fixed
+    dummy hash) so it is indistinguishable by response time from a wrong password for a real
+    user. Without this, the unknown-user path short-circuits and skips the ~600k-iteration
+    PBKDF2, leaking username existence via timing (CWE-208 user-enumeration oracle)."""
+    _set_user(monkeypatch, "alice", "pw")
+    real_verify = auth.verify_password
+    calls: list[str] = []
+
+    def spy(password: str, encoded: str) -> bool:
+        calls.append(encoded)
+        return real_verify(password, encoded)
+
+    monkeypatch.setattr(auth, "verify_password", spy)
+    assert authenticate_user("mallory", "pw") is None
+    # verify_password ran exactly once on the unknown-user path, against the dummy hash
+    # (not any real user's stored hash) -- so the PBKDF2 cost is paid on both paths.
+    assert calls == [auth._DUMMY_PASSWORD_HASH]
+
+
 def test_login_for_access_token_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_user(monkeypatch, "alice", "pw")
     monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _SECRET)

@@ -259,8 +259,21 @@ def _api_users() -> Dict[str, str]:
     return users
 
 
+# A fixed dummy PBKDF2 hash (random password + salt, computed once at import) used to
+# equalize the cost of an unknown-username login with a known-username-wrong-password login.
+# Without it, authenticate_user short-circuits on an unknown username and never runs the
+# ~600k-iteration PBKDF2, so the 401 returns in microseconds while a real username pays the
+# full hashing cost -- a measurable timing side channel that lets an unauthenticated caller
+# enumerate valid usernames on the public /token route (CWE-208 / CWE-204, round-2 audit).
+_DUMMY_PASSWORD_HASH = hash_password(os.urandom(32).hex())
+
+
 def authenticate_user(username: str, password: str) -> Optional[str]:
     """Return the username if the credentials are valid, else ``None``.
+
+    Runs a PBKDF2 verification on both the known- and unknown-username paths so the
+    response time does not reveal whether ``username`` exists (constant-time w.r.t.
+    username existence; the identical 401 body already closes the message channel).
 
     Args:
         username: The submitted username.
@@ -270,7 +283,12 @@ def authenticate_user(username: str, password: str) -> Optional[str]:
         The authenticated subject (``username``) on success, ``None`` otherwise.
     """
     encoded = _api_users().get(username)
-    if encoded is None or not verify_password(password, encoded):
+    if encoded is None:
+        # Unknown user: still pay the PBKDF2 cost against a dummy hash and discard it, so
+        # this path is indistinguishable by timing from a wrong password for a real user.
+        verify_password(password, _DUMMY_PASSWORD_HASH)
+        return None
+    if not verify_password(password, encoded):
         return None
     return username
 
