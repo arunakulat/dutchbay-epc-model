@@ -61,6 +61,45 @@ def test_fund_at_close_funds_dsra_and_is_roughly_eqirr_neutral() -> None:
     assert kpis["project_irr"] == pytest.approx(base_kpis["project_irr"], abs=1e-4)
 
 
+def test_dsra_sized_off_operating_year_1_not_the_bridge_period() -> None:
+    """Round-2 audit: the fund-at-close DSRA must be sized off OPERATING YEAR 1's debt
+    service, not the synthetic half-year "bridge" lead-in period.
+
+    `debt_service_total` is on the debt timeline built by `_build_cfads_timeline`: when a
+    bridge period is present it sits at index `construction_periods` and operating year 1 is
+    at `construction_periods + 1`. `_build_funding` used to index `construction_periods`
+    directly, grabbing the bridge -- only a half-year of interest when
+    `interest_only_years < 2` -- and under-reserving the DSRA (~50% low at io=0). The
+    canonical lender case uses `interest_only_years: 2` (bridge == op-year-1, which masks
+    the bug), so this test forces io=0 to make the two periods differ.
+    """
+    cfg = dict(load_scenario_config(LENDER))
+    cfg["Financing_Terms"] = {
+        **cfg["Financing_Terms"],
+        "interest_only_years": 0,
+        "dsra": {"fund_at_close": True, "target_months": 6},
+    }
+    r = run_v14_pipeline(config=copy.deepcopy(cfg))
+    debt = r["debt_result"] or {}
+    funding = debt.get("funding") or {}
+    ds = debt["debt_service_total"]
+    period_map = debt["annual_row_debt_period_map"]
+    op_year1_period = int(period_map[0]["debt_period"])
+    bridge_period = op_year1_period - 1  # the synthetic half-year lead-in
+
+    # Precondition: at io=0 the bridge really is materially smaller than operating year 1,
+    # so the fix is genuinely exercised (guards against the test silently passing on io=2).
+    assert ds[op_year1_period] > 1.4 * ds[bridge_period]
+
+    # The DSRA is sized off operating year 1's debt service ...
+    assert funding["initial_dsra_usd"] == pytest.approx(
+        (6.0 / 12.0) * ds[op_year1_period], rel=1e-6
+    )
+    # ... and is materially larger than the old, bridge-based reserve would have been.
+    buggy_bridge_dsra = (6.0 / 12.0) * ds[bridge_period]
+    assert funding["initial_dsra_usd"] > 1.4 * buggy_bridge_dsra
+
+
 def test_sources_equal_uses() -> None:
     for dsra in (None, {"fund_at_close": True, "target_months": 9}):
         _, f = _run(dsra=dsra)
