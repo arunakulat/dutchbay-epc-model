@@ -166,6 +166,19 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **`pct_to_decimal` fails loud on out-of-range rates instead of silently mis-scaling (audit D7,
+  #573).** The `finance/cashflow_v14_utils.py` normalizer read *any* value `> 1.0` as a percentage,
+  so `150 → 1.5` and `1.5 → 0.015` passed silently — a fail-loud violation. It now raises for a value
+  `> 100` (valid under neither the decimal `<= 1` nor the percentage `<= 100` reading), keeps the
+  `(1, 100] → /100` percent branch and the `<= 1` decimal branch (negatives, e.g. deflationary
+  escalation, pass through unchanged). Every value on the canonical/committed path is `<= 100`
+  (capacity factor, losses, fees, tax, escalation), so it is **byte-identical** for real inputs and
+  only turns a previously-silent mis-scaling into a loud error. `validate_parameters` keeps its
+  field-named "out of range" errors (tax / capacity factor / grid loss / risk haircut) via a local
+  wrapper that degrades an impossible rate to its raw value rather than propagating the raise, so
+  strict validation still names the offending field. (Note: `finance/wacc_v14.py` carries its own
+  separate `_pct_to_decimal`; left untouched as it is not on the D7 path.) Adds fail-loud and
+  negative-passthrough tests; full suite green. KPI-neutral, verified via the KPI oracle.
 - **Post-tax risk haircut no longer inverts on loss years (audit D6, #572).** `_apply_risk_haircut`
   used `cfads * (1 - h)`, which on a *negative* post-tax CFADS *shrank* the loss toward zero
   (`-1000 → -900`) — softening the very downside the haircut exists to stress. It now worsens CFADS
