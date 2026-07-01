@@ -549,7 +549,7 @@ expected_results:
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
   annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
   annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e) + CPI
+  revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e); flat-nominal LKR, NO CPI/tariff escalation (tariff_type=fixed)
   
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
@@ -615,6 +615,62 @@ metadata:
     - 'v2.7: Added debt_tranches structure'
     - 'v3.1: Removed decorative Financing_Terms.debt_tranches (never an engine input); mix + rates are canonical (plan_debt warns if re-added)'
 
+
+# Assumption evidence register (#C5, RPT-2): where each MATERIAL assumption came from, as of when,
+# and how strong the source is. Pure detector via analytics.evidence_register — declaring these
+# changes NO computed number; it surfaces provenance for the report's Evidence Register section and
+# the deepened Assumptions Register. Tiers (strongest->weakest): measured, contracted, vendor_quote,
+# benchmark, derived, assumption, placeholder. enforce/require_complete/min_tier inherit from
+# config/defaults.yaml (report-only, non-blocking). Honest by design: the flat 20.3 LKR tariff and
+# the indicative debt terms are `assumption` tier (not yet executed), matching the development
+# readiness register below.
+evidence_register:
+  entries:
+    tariff:
+      source: "CEB standardized PPA (BOO, 20-yr, flat LKR/kWh, no escalation/FX-index)"
+      as_of: "2025"
+      tier: assumption
+      note: "20.3 LKR/kWh is the modelled flat rate; the standardized PPA template carries no filled tariff (PPA not yet executed)."
+    capex:
+      source: "Bottom-up WBS (NREL SAM/LandBOSSE), $/kW anchored to the IRENA 2024 onshore benchmark ($1,041/kW); AACE Class 3"
+      as_of: "2026"
+      tier: benchmark
+      note: "$1,000/kW; cross-checked vs the SINOHYDRO Mannar EPC quote (~$889/kW) and the Envision Dutch Bay EIA (~$1,420/kW). Not derived from this project's EIA."
+    opex:
+      source: "Full-service O&M contract + insurance/land-lease/admin build-up ($20/kW-yr, IRENA/NREL onshore benchmark)"
+      as_of: "2026"
+      tier: benchmark
+    capacity_factor:
+      source: "ERA5-fitted Weibull -> PyWake wake -> power-curve -> AEP chain, post a 2% pre-construction over-prediction haircut (net P50 CF 0.332)"
+      as_of: "2026"
+      tier: derived
+      note: "Corroborated by the Envision EN220/10.0 EYA (P50 464.5 GWh, within ~0.04%)."
+    fx:
+      source: "USD/LKR 333.79 spot, 2026-Q2 pinned vintage (CBSL anchor / FRED DEXSLUS backbone, BIS XRU cross-check)"
+      as_of: "2026-06"
+      tier: measured
+    debt_terms:
+      source: "Indicative lender terms: 15-yr tenor; per-tranche USD 7.5% commercial / 6.5% DFI + UIP-implied LKR 13.39% (blended kd ~7.63%); DSCR-sculpted gearing (~0.45 to the 1.30x floor)"
+      as_of: "2025"
+      tier: assumption
+      note: "No executed term sheet (financing uncommitted). Financing_Terms.interest_rate_nominal 8% is capacity-metadata only; the schedule amortises on the per-tranche rates above."
+    degradation:
+      source: "0.5%/yr turbine performance degradation (industry-standard onshore wind aging)"
+      as_of: "2026"
+      tier: benchmark
+    inflation:
+      source: "No explicit USD/CPI cost escalation applied — cost stack held at 2026 USD vintage (opex flat, tariff flat-nominal-LKR); LKR cost erosion enters only via fx.annual_depr (5.89%/yr)"
+      as_of: "2026"
+      tier: assumption
+      note: "cpi_annual_pct 2.0 is declared but gated to tariff_type=indexed; this scenario is tariff_type=fixed, so it is inert (no escalation reaches the engine)."
+    tax:
+      source: "Sri Lanka Inland Revenue Act, IMF-reformed 2024-26: CIT 30%, dividend WHT 15%, renewable holiday removed, TLCF 6 yr"
+      as_of: "2025"
+      tier: benchmark
+    discount_rate:
+      source: "~9.83% build-up WACC from the modelled capital structure (project discount 10% / equity 12%)"
+      as_of: "2026"
+      tier: derived
 
 # Development-readiness / E&S status register (#C11). Per-workstream R/A/G to financial
 # close; validated softly by analytics.development_readiness (no-op on the economics). An

@@ -10,6 +10,16 @@ All notable changes to this project will be documented here.
   kept in lockstep. Packaging metadata only — no code or KPI change.
 
 ### Added
+- **Committed lender case now declares full assumption provenance (#481 RPT-2 follow-up).** The
+  `dutchbay_lendercase_2025Q4.yaml` scenario gains an `evidence_register.entries` block declaring a
+  source · as-of · tier for all 10 material assumptions (tariff, capex, opex, capacity_factor, fx,
+  debt_terms, degradation, inflation, tax, discount_rate) — so the report's Evidence Register renders
+  **10 of 10 covered** and the deepened Assumptions Register shows real provenance instead of
+  em-dash. Honestly tiered against the development-readiness register: the flat 20.3 LKR tariff and
+  the indicative debt terms are `assumption` (not yet executed), FX is `measured`, capex / opex /
+  degradation / tax are `benchmark`, and capacity factor / discount rate are `derived`. A pure
+  detector (`enforce: false`) — verified byte-identical KPIs (projIRR 0.0268 / minDSCR 1.30 / NPV
+  −$65.46M / CFADS $202.33M unchanged). KPI-neutral.
 - **Real end-to-end lender-report integration test (#481, RPT-7/8).** Adds
   `tests/integration/test_lender_report_e2e.py`: it drives a `WindFarmInputs` submission through the
   production report path (scenario → `run_finance_case` → `build_report_context` →
