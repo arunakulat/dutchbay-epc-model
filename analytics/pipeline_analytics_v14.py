@@ -114,7 +114,18 @@ def _calculate_returns_analysis(
     base_result: Dict[str, Any],
     config: Dict[str, Any],
 ) -> Optional[AllReturns]:
-    """Calculate project & equity returns from base pipeline result."""
+    """Calculate project & equity returns from the base pipeline result.
+
+    All series on this call path are USD and operating-year aligned: CFADS is read
+    from each enriched row's ``cf_pre_debt`` and debt service from the row-level
+    ``debt_service_total`` (both USD, bridge-folded onto operating years by
+    ``pipeline_v14_enhanced._enrich_annual_rows_with_debt``). ``capex_fx_rate`` is
+    neutralised to 1.0 on the local ReturnsConfig so CAPEX and the equity base stay
+    in USD too. Consequence: the returned :class:`AllReturns` keeps its ``*_lkr``
+    field suffixes for API stability but carries self-consistent USD on this path.
+    This surface feeds no committed KPI (those come from the finance engine); it is
+    the enhanced-analytics returns view only.
+    """
     if not RETURNS_AVAILABLE:
         logger.warning("Returns module not available; skipping returns analysis")
         return None
@@ -122,28 +133,35 @@ def _calculate_returns_analysis(
     try:
         # Extract required data from base pipeline result
         annual_rows = base_result.get("annual_rows", [])
-        debt_result = base_result.get("debt_result", {})
 
         if not annual_rows:
             logger.warning("No annual_rows in base result; skipping returns")
             return None
 
-        # Build CFADS series
-        cfads_series = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
+        # Build CFADS and debt-service series BOTH from the enriched per-row USD
+        # fields so they share currency (USD) AND period alignment. The enriched
+        # rows carry cf_pre_debt (USD CFADS) and a row-level debt_service_total
+        # (USD, mapped to each operating year via the canonical debt-period map,
+        # with the construction/bridge lead-in folded into year 1 by
+        # pipeline_v14_enhanced._enrich_annual_rows_with_debt). Previously CFADS was
+        # read in LKR (cfads_final_lkr) while debt service was sliced from the
+        # PERIOD-indexed debt_result["debt_service_total"] (USD, with a construction
+        # lead-in) -> a currency mismatch (~FX rate) plus a multi-year phase offset
+        # that made debt service ~vanish and grossly inflated the geared equity IRR.
+        cfads_series = [float(row.get("cf_pre_debt", 0.0)) for row in annual_rows]
+        debt_service_series = [
+            float(row.get("debt_service_total", 0.0)) for row in annual_rows
+        ]
 
-        # Build debt service series
-        debt_service_total = debt_result.get("debt_service_total", [])
-        if not debt_service_total:
-            logger.warning("No debt_service_total; using zeros")
-            debt_service_series = [0.0] * len(cfads_series)
-        else:
-            debt_service_series = list(debt_service_total[: len(cfads_series)])
-            # Pad if shorter
-            while len(debt_service_series) < len(cfads_series):
-                debt_service_series.append(0.0)
-
-        # Build ReturnsConfig from scenario config
-        returns_config = ReturnsConfig.from_yaml(config)
+        # Build ReturnsConfig from the scenario config, then force a USD-consistent
+        # variant for THIS call: cfads/debt above are USD, so keep CAPEX and the
+        # equity base in USD too by neutralising the LKR conversion
+        # (capex_fx_rate=1.0 -> CAPEX stays capex_usd, equity base =
+        # capex_usd * (1 - debt_ratio)). The shared returns library keeps its LKR
+        # semantics for its other callers; only this call site is USD-consistent.
+        returns_config = ReturnsConfig.from_yaml(config).model_copy(
+            update={"capex_fx_rate": 1.0}
+        )
 
         # Calculate all returns
         all_returns = summarize_all_returns(
