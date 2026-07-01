@@ -187,6 +187,96 @@ def collect_bankable_net_aep_gwh(config: Mapping[str, Any]) -> dict[str, float]:
     return refs
 
 
+def collect_bankable_net_aep_p90_gwh(config: Mapping[str, Any]) -> dict[str, float]:
+    """Collect available bankable net-AEP **P90** references (GWh), labelled by source.
+
+    The P90 analogue of :func:`collect_bankable_net_aep_gwh`. Reads the frozen
+    ``expected_results.net_aep_p90_gwh`` and, when the ``resource.aep_summary_path`` export
+    exists, parses, and carries it, the authoritative ``exceedance.net_aep_p90_1yr_gwh``.
+
+    Unlike the P50 collector this does NOT re-raise on a missing/unparseable summary — that
+    fail-loud contract is owned by :func:`collect_bankable_net_aep_gwh` (which runs first in
+    :func:`reconcile_capacity_factor_with_bankable_aep`); and a summary that simply does not
+    export a P90 is not an error (not every bankable export computes exceedance).
+    """
+    refs: dict[str, float] = {}
+
+    expected = config.get("expected_results")
+    if isinstance(expected, Mapping):
+        value = expected.get("net_aep_p90_gwh")
+        if _is_number(value):
+            refs["expected_results.net_aep_p90_gwh"] = float(value)
+
+    resource = config.get("resource")
+    if isinstance(resource, Mapping):
+        path = resource.get("aep_summary_path")
+        if isinstance(path, str) and path:
+            summary_path = Path(path)
+            if summary_path.exists():
+                try:
+                    data: Any = json.loads(summary_path.read_text())
+                except (OSError, ValueError):
+                    data = None
+                if isinstance(data, Mapping):
+                    exceed = data.get("exceedance")
+                    value = (
+                        exceed.get("net_aep_p90_1yr_gwh")
+                        if isinstance(exceed, Mapping)
+                        else None
+                    )
+                    if value is None:
+                        value = data.get("net_aep_p90_1yr_gwh")
+                    if _is_number(value):
+                        refs[f"{path}:exceedance.net_aep_p90_1yr_gwh"] = float(value)
+    return refs
+
+
+def reconcile_frozen_p90_with_bankable_summary(
+    config: dict[str, Any], config_path: str | None = None
+) -> None:
+    """Fail loud if the frozen ``expected_results.net_aep_p90_gwh`` diverges from the
+    bankable P90 in the ``resource.aep_summary_path`` export.
+
+    No-op unless the scenario declares BOTH a frozen ``net_aep_p90_gwh`` AND a summary that
+    exports ``exceedance.net_aep_p90_1yr_gwh``. The frozen P90 drives the hybrid
+    P90-binds-gearing (``finance.debt_v14._resolve_downside_ratio`` reads the P90/P50 ratio to
+    size the ``min(P50, P90)`` gearing), so a stale value silently moves committed hybrid
+    economics. The P50 side is guarded by
+    :func:`reconcile_capacity_factor_with_bankable_aep` against ``capacity_mw · CF · 8.760``;
+    this restores the P50<->P90 symmetry (round-2 audit).
+    """
+    refs = collect_bankable_net_aep_p90_gwh(config)
+    scenario_p90 = refs.get("expected_results.net_aep_p90_gwh")
+    summary_key = next(
+        (k for k in refs if k.endswith(":exceedance.net_aep_p90_1yr_gwh")), None
+    )
+    if scenario_p90 is None or summary_key is None:
+        return
+
+    summary_p90 = refs[summary_key]
+    where = f" in '{config_path}'" if config_path else ""
+    if scenario_p90 <= 0 or summary_p90 <= 0:
+        raise AepReconciliationError(
+            f"Bankable net-AEP P90 is non-positive{where}: "
+            f"expected_results.net_aep_p90_gwh={scenario_p90}, {summary_key}={summary_p90} "
+            "— a zero/negative P90 is nonsensical; fix the export or expected_results."
+        )
+
+    tolerance = resolve_tolerance_pct(config) / 100.0
+    relative = abs(scenario_p90 - summary_p90) / summary_p90
+    if relative > tolerance:
+        raise AepReconciliationError(
+            f"Frozen expected_results.net_aep_p90_gwh={scenario_p90:.2f} GWh does not "
+            f"reconcile with the bankable P90 export {summary_key}={summary_p90:.2f} GWh "
+            f"({relative * 100:.1f}% > {tolerance * 100:.1f}% tolerance){where}. This P90 "
+            "drives the hybrid P90-binds-gearing (finance.debt_v14._resolve_downside_ratio "
+            "reads the P90/P50 ratio to size the min(P50, P90) gearing), so a stale value "
+            "silently moves committed hybrid economics. Regenerate the aep_summary export or "
+            "fix expected_results.net_aep_p90_gwh so they agree, or set "
+            "aep_reconciliation.tolerance_pct if the gap is intentional."
+        )
+
+
 def reconcile_capacity_factor_with_bankable_aep(
     config: dict[str, Any], config_path: str | None = None
 ) -> None:
@@ -196,7 +286,15 @@ def reconcile_capacity_factor_with_bankable_aep(
     bankable net-AEP reference. Raises :class:`AepReconciliationError` when an implied
     generation diverges from a bankable reference beyond the configured tolerance, or when
     a declared bankable reference is non-positive.
+
+    Also reconciles the frozen P90 against the bankable P90 export (P50<->P90 symmetry) via
+    :func:`reconcile_frozen_p90_with_bankable_summary`, which runs unconditionally (it does
+    not depend on capacity_mw / capacity_factor).
     """
+    # P90 first: it is independent of capacity/CF, so it must not be skipped by the
+    # capacity/CF early-return below (round-2 audit).
+    reconcile_frozen_p90_with_bankable_summary(config, config_path)
+
     capacity_mw, capacity_factor = resolve_billed_capacity_and_factor(config)
     if capacity_mw is None or capacity_factor is None:
         return
@@ -256,5 +354,7 @@ __all__ = [
     "resolve_tolerance_pct",
     "resolve_billed_capacity_and_factor",
     "collect_bankable_net_aep_gwh",
+    "collect_bankable_net_aep_p90_gwh",
+    "reconcile_frozen_p90_with_bankable_summary",
     "reconcile_capacity_factor_with_bankable_aep",
 ]

@@ -18,8 +18,10 @@ import yaml
 from analytics.aep_reconciliation import (
     AepReconciliationError,
     collect_bankable_net_aep_gwh,
+    collect_bankable_net_aep_p90_gwh,
     default_tolerance_pct,
     reconcile_capacity_factor_with_bankable_aep,
+    reconcile_frozen_p90_with_bankable_summary,
     resolve_tolerance_pct,
 )
 from analytics.scenario_loader import load_scenario_config
@@ -110,6 +112,54 @@ def test_within_tolerance_does_not_raise() -> None:
     )
     cfg["project"]["capacity_factor"] = cfg["project"]["capacity_factor"] * 1.01  # +1%
     reconcile_capacity_factor_with_bankable_aep(cfg, "within-tol")  # must not raise
+
+
+# --- P90 reconciliation (round-2 audit: P50<->P90 symmetry) ---------------------------
+_HYBRID = "scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml"
+
+
+def test_frozen_hybrid_p90_reconciles_with_the_summary_export() -> None:
+    """The hybrid frozen net_aep_p90_gwh (471.0) reconciles with the bankable P90 export
+    (aep_summary exceedance.net_aep_p90_1yr_gwh), which drives the P90-binds-gearing."""
+    cfg = load_scenario_config(str(REPO_ROOT / _HYBRID))
+    refs = collect_bankable_net_aep_p90_gwh(cfg)
+    assert refs["expected_results.net_aep_p90_gwh"] == pytest.approx(471.0)
+    summary_key = next(k for k in refs if k.endswith("net_aep_p90_1yr_gwh"))
+    assert refs[summary_key] == pytest.approx(471.0)
+    reconcile_frozen_p90_with_bankable_summary(cfg, _HYBRID)  # must not raise
+
+
+def test_stale_frozen_p90_fails_loud() -> None:
+    """A frozen net_aep_p90_gwh that desyncs from the bankable P90 export fails loud —
+    without this guard a stale P90 silently moves the P90-bound hybrid gearing/KPIs."""
+    cfg = load_scenario_config(str(REPO_ROOT / _HYBRID))
+    cfg["expected_results"]["net_aep_p90_gwh"] = 300.0  # was 471.0
+    with pytest.raises(AepReconciliationError, match="does not reconcile"):
+        reconcile_frozen_p90_with_bankable_summary(cfg, "stale-p90")
+    # and it is reached through the main entry point too (P90 runs before the CF check)
+    with pytest.raises(AepReconciliationError, match="net_aep_p90_gwh"):
+        reconcile_capacity_factor_with_bankable_aep(cfg, "stale-p90")
+
+
+def test_p90_reconciliation_is_noop_without_a_summary_p90() -> None:
+    """Scenarios whose summary export carries no P90 (e.g. kalpitiya) are a clean no-op —
+    the guard only engages when BOTH the frozen P90 and a bankable P90 export are present.
+    """
+    cfg = load_scenario_config(
+        str(REPO_ROOT / "scenarios" / "kalpitiya_lendercase_160m_fitted.yaml")
+    )
+    refs = collect_bankable_net_aep_p90_gwh(cfg)
+    assert "expected_results.net_aep_p90_gwh" in refs
+    assert not any(k.endswith("net_aep_p90_1yr_gwh") for k in refs)
+    reconcile_frozen_p90_with_bankable_summary(cfg, "kalpitiya")  # must not raise
+
+
+@pytest.mark.parametrize("scenario", BANKABLE_SCENARIOS)
+def test_canonical_scenarios_reconcile_p90(scenario: str) -> None:
+    """Every shipped bankable scenario also passes the P90 reconciliation (no-op where the
+    summary carries no P90; a byte-agreeing pair where it does)."""
+    cfg = load_scenario_config(str(REPO_ROOT / scenario))
+    reconcile_frozen_p90_with_bankable_summary(cfg, scenario)  # must not raise
 
 
 def test_widened_tolerance_admits_divergence() -> None:
