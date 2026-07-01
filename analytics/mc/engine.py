@@ -26,6 +26,7 @@ import numpy as np
 from analytics.contracts_v14 import MonteCarloResult
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.aggregate import aggregate_trials
+from analytics.mc.convergence import convergence_diagnostic
 from analytics.mc.correlation import (
     CorrelationSpec,
     align_correlation_to_params,
@@ -860,6 +861,10 @@ class MonteCarloEngine:
             kwargs["percentiles"] = percentiles
         result = aggregate_trials(**kwargs)
         self._flag_degenerate_sweep(result)
+        # Read-only convergence diagnostic (running mean + CI half-width vs n) so a reader
+        # can see whether n_trials sufficed for THIS scenario. Additive metadata only — it
+        # never changes n_trials or the reported bands (#590).
+        result.metadata["convergence"] = convergence_diagnostic(result.trials or {})
         return result
 
     @staticmethod
