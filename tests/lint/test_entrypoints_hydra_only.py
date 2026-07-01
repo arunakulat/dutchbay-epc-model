@@ -55,6 +55,11 @@ from pathlib import Path
 
 import pytest
 
+# Repository root (tests/lint/ -> tests/ -> repo root). Anchors all path checks so
+# they resolve identically regardless of the pytest invocation cwd (a bare Path(...)
+# is cwd-relative and silently mis-resolves under some CI runners).
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Test Configuration
 # ═════════════════════════════════════════════════════════════════════════════
@@ -98,7 +103,7 @@ def test_canonical_cli_uses_hydra(cli_path):
         GWTF R3 mandates Hydra-only for consistency and config management.
         Argparse creates incompatible CLI patterns.
     """
-    path = Path(cli_path)
+    path = REPO_ROOT / cli_path
     assert path.exists(), (
         f"Canonical CLI not found: {cli_path}\n" f"Expected in: {path.resolve()}"
     )
@@ -145,7 +150,7 @@ def test_legacy_cli_marked_deprecated(cli_path):
         Prevents confusion about which CLI is canonical.
         Warns users to migrate to Hydra wrappers.
     """
-    path = Path(cli_path)
+    path = REPO_ROOT / cli_path
     if not path.exists():
         pytest.skip(f"Legacy CLI not found (may be removed): {cli_path}")
 
@@ -229,8 +234,8 @@ def test_no_duplicate_entrypoints():
         CESSPIT Clean principle: one canonical version only.
     """
     # Check for FIXED copies
-    fixed_files = list(Path(".").glob("*_FIXED.py"))
-    fixed_files += list(Path("analytics").glob("*_FIXED.py"))
+    fixed_files = list(REPO_ROOT.glob("*_FIXED.py"))
+    fixed_files += list((REPO_ROOT / "analytics").glob("*_FIXED.py"))
 
     assert len(fixed_files) == 0, (
         f"Found FIXED copies (should be deleted): {fixed_files}\n"
@@ -241,7 +246,7 @@ def test_no_duplicate_entrypoints():
     # Check repo root for unexpected runners
     allowed_runners = {"run_full_pipeline_v14.py", "run_scenario_analytics_v14.py"}
     root_runners = [
-        f for f in Path(".").glob("run_*.py") if f.name not in allowed_runners
+        f for f in REPO_ROOT.glob("run_*.py") if f.name not in allowed_runners
     ]
 
     assert len(root_runners) == 0, (
@@ -271,9 +276,12 @@ def test_canonical_clis_print_json(cli_path):
         CLI-03 mandates JSON-first outputs for CI/tooling integration.
         Structured output enables programmatic consumption.
     """
-    path = Path(cli_path)
-    if not path.exists():
-        pytest.skip(f"CLI not found: {cli_path}")
+    path = REPO_ROOT / cli_path
+    assert path.exists(), (
+        f"Canonical CLI not found: {cli_path}\n"
+        f"Expected in: {path.resolve()}\n"
+        "A missing canonical CLI is a regression (GWTF R25), not a skip."
+    )
 
     content = path.read_text()
 
