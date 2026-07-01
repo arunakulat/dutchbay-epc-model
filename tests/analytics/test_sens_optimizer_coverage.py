@@ -257,7 +257,9 @@ def test_run_pareto_search_handles_unwrapped_kpis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Evaluator returns a flat kpis mapping (no 'kpis' wrapper).
-    monkeypatch.setattr(opt, "evaluate_with_overrides", _make_fake_eval(wrap_kpis=False))
+    monkeypatch.setattr(
+        opt, "evaluate_with_overrides", _make_fake_eval(wrap_kpis=False)
+    )
     res = run_pareto_search(
         base_config={"finance": {"tariff_usd": 1.0}},
         objectives=[ObjectiveSpec(metric_key="project_irr", direction="max")],

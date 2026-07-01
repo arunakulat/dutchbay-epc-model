@@ -46,7 +46,9 @@ class TestNoSilentDefaults:
     def test_energy_calculator_requires_num_turbines(self) -> None:
         df = pd.DataFrame({"ws_150m": np.full(24, 8.0)})
         with pytest.raises(ValueError, match="num_turbines is required"):
-            EnergyCalculator(df=df, ws_column="ws_150m", turbine_model="iea_reference_10mw")
+            EnergyCalculator(
+                df=df, ws_column="ws_150m", turbine_model="iea_reference_10mw"
+            )
 
     def test_tornado_requires_curve_key(self, scenario: dict) -> None:
         bad = copy.deepcopy(scenario)
@@ -80,14 +82,19 @@ class TestNoSilentDefaults:
 
         with pytest.raises(TypeError):
             ERA5RequestConfig(
-                project_name="x", latitude=1.0, longitude=2.0,
-                start_year=2020, end_year=2024,
+                project_name="x",
+                latitude=1.0,
+                longitude=2.0,
+                start_year=2020,
+                end_year=2024,
             )
 
     def test_lender_scenario_still_builds(self, scenario: dict) -> None:
         """The compliant lender scenario provides every field — no raise, 464.3 GWh (post 2% haircut)."""
         summary = build_aep_summary_from_config(scenario)
-        assert summary["net_site_aep_gwh"] == pytest.approx(464.3, abs=1.0)  # ERA5-fitted, post 2% P50 haircut
+        assert summary["net_site_aep_gwh"] == pytest.approx(
+            464.3, abs=1.0
+        )  # ERA5-fitted, post 2% P50 haircut
 
 
 # ── Layer 2: source scan (masking literals can't creep back) ────────────────────
@@ -101,7 +108,9 @@ class TestNoMaskingDefaultLiterals:
     """Greppable guards: the removed legacy fallbacks must stay removed."""
 
     def test_energy_calculator_has_no_num_turbines_default(self) -> None:
-        assert "num_turbines: int = 15" not in _src("wind_resource/energy_calculator.py")
+        assert "num_turbines: int = 15" not in _src(
+            "wind_resource/energy_calculator.py"
+        )
 
     def test_tornado_from_config_has_no_curve_key_fallback(self) -> None:
         src = _src("analytics/wind/aep_tornado.py")
@@ -109,11 +118,15 @@ class TestNoMaskingDefaultLiterals:
 
     def test_tornado_has_no_baked_alt_curve(self) -> None:
         """The power-curve driver's alternative machine is config-driven, not baked."""
-        assert 'alt_curve_key: str = "ge_cypress' not in _src("analytics/wind/aep_tornado.py")
+        assert 'alt_curve_key: str = "ge_cypress' not in _src(
+            "analytics/wind/aep_tornado.py"
+        )
 
     def test_mc_aep_has_no_hardcoded_envision_curve(self) -> None:
         """The MC-AEP engine must load THIS project's curve_key, not a baked Envision curve."""
-        assert "parse_envision_en171_curve" not in _src("analytics/wind/mc_aep_weibull.py")
+        assert "parse_envision_en171_curve" not in _src(
+            "analytics/wind/mc_aep_weibull.py"
+        )
 
     def test_monte_carlo_aep_uses_centralised_losses_and_required_curve(self) -> None:
         """No scattered loss magic numbers, no silent fallback to the legacy curve."""
@@ -125,7 +138,9 @@ class TestNoMaskingDefaultLiterals:
         assert 'wake_loss_pct", 8.0' not in _src("analytics/wind/pipeline_aep_v14.py")
 
     def test_summary_builder_has_no_hub_height_fallback(self) -> None:
-        assert 'get("hub_height_m", 150' not in _src("analytics/wind/aep_summary_builder.py")
+        assert 'get("hub_height_m", 150' not in _src(
+            "analytics/wind/aep_summary_builder.py"
+        )
 
     def test_era5_from_yaml_has_no_turbine_identity_fallbacks(self) -> None:
         src = _src("wind_resource/era5_retrieval.py")

@@ -35,7 +35,6 @@ from wind_resource.power_curve_sourcing import (
     validate_power_curve,
 )
 
-
 # ── fetch_oedb_power_curve: turbine present but no power curve (line 127) ──────
 
 
@@ -67,16 +66,24 @@ def test_validate_flags_too_few_points() -> None:
 
 def test_validate_flags_negative_power() -> None:
     pc = PowerCurve(
-        key="k", manufacturer="M", model="m", rated_capacity_kw=1000,
-        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, -10.0, 1000.0],
+        key="k",
+        manufacturer="M",
+        model="m",
+        rated_capacity_kw=1000,
+        wind_speeds_ms=[3.0, 4.0, 5.0],
+        power_kw=[0.0, -10.0, 1000.0],
     )
     assert any("power must be non-negative" in i for i in validate_power_curve(pc))
 
 
 def test_validate_flags_non_positive_rated() -> None:
     pc = PowerCurve(
-        key="k", manufacturer="M", model="m", rated_capacity_kw=0.0,
-        wind_speeds_ms=[3.0, 4.0, 5.0], power_kw=[0.0, 500.0, 1000.0],
+        key="k",
+        manufacturer="M",
+        model="m",
+        rated_capacity_kw=0.0,
+        wind_speeds_ms=[3.0, 4.0, 5.0],
+        power_kw=[0.0, 500.0, 1000.0],
     )
     issues = validate_power_curve(pc)
     assert any("rated_capacity_kw must be positive" in i for i in issues)
@@ -94,7 +101,23 @@ def _good_curve() -> PowerCurve:
         model="TC-180/8.0",
         rated_capacity_kw=8000,
         wind_speeds_ms=[0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 20, 25],
-        power_kw=[0, 0, 300, 700, 1300, 2100, 3200, 4500, 6000, 7300, 8000, 8000, 8000, 8000, 0],
+        power_kw=[
+            0,
+            0,
+            300,
+            700,
+            1300,
+            2100,
+            3200,
+            4500,
+            6000,
+            7300,
+            8000,
+            8000,
+            8000,
+            8000,
+            0,
+        ],
         hub_heights_m=[120, 140],
     )
 
@@ -181,7 +204,9 @@ def test_fetch_turbine_models_missing_columns_raises(
 
 def test_from_wasp_wtg_no_performance_table_raises(tmp_path) -> None:
     path = tmp_path / "empty.wtg"
-    path.write_text('<WindTurbineGenerator Description="X" RotorDiameter="200"></WindTurbineGenerator>')
+    path.write_text(
+        '<WindTurbineGenerator Description="X" RotorDiameter="200"></WindTurbineGenerator>'
+    )
     with pytest.raises(ValueError, match="No <PerformanceTable>"):
         from_wasp_wtg(path)
 
@@ -192,12 +217,12 @@ def test_from_wasp_wtg_bad_air_density_defaults(tmp_path) -> None:
     path.write_text(
         '<WindTurbineGenerator Description="TC/10" RotorDiameter="180">'
         '<PerformanceTable AirDensity="not-a-number">'
-        '<DataTable>'
+        "<DataTable>"
         '<DataPoint WindSpeed="3.0" PowerOutput="0"/>'
         '<DataPoint WindSpeed="10.0" PowerOutput="5000000"/>'
         '<DataPoint WindSpeed="12.0" PowerOutput="10000000"/>'
         '<DataPoint WindSpeed="25.0" PowerOutput="0"/>'
-        '</DataTable></PerformanceTable></WindTurbineGenerator>'
+        "</DataTable></PerformanceTable></WindTurbineGenerator>"
     )
     pc = from_wasp_wtg(path, air_density_kgm3=1.225, manufacturer="TestCo", key="tc10")
     # _density() swallowed the ValueError and reported the 1.225 default.

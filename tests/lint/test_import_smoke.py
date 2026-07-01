@@ -34,19 +34,20 @@ from importlib import import_module
 
 import pytest
 
-
 # =============================================================================
 # P0 Critical Imports (must always work)
 # =============================================================================
 
+
 def test_import_analytics():
     """Test that 'import analytics' succeeds without errors.
-    
+
     This is the most basic smoke test. If this fails, the entire
     analytics package is broken (likely circular import).
     """
     try:
         import analytics
+
         assert analytics is not None
     except ImportError as e:
         pytest.fail(f"Failed to import analytics: {e}")
@@ -54,7 +55,7 @@ def test_import_analytics():
 
 def test_import_contracts_v14():
     """Test that contracts_v14 can be imported from analytics.
-    
+
     contracts_v14.py is the foundation of all type contracts.
     If this fails, check for:
       - Circular imports with fx package
@@ -63,6 +64,7 @@ def test_import_contracts_v14():
     """
     try:
         from analytics import contracts_v14
+
         assert contracts_v14 is not None
         # Verify key contracts exist
         assert hasattr(contracts_v14, "ScenarioResult")
@@ -74,32 +76,36 @@ def test_import_contracts_v14():
 
 def test_import_fx_integration():
     """Test that FX integration can be imported without circular issues.
-    
+
     This was the source of P0 circular import bug:
       contracts_v14 → fx_contracts → fx/__init__ → fx_integration → contracts_v14
-    
+
     Fix applied:
       - analytics/fx/__init__.py uses lazy __getattr__
       - fx_integration.py uses TYPE_CHECKING for ScenarioResult
-    
+
     If this fails:
       - Check analytics/fx/__init__.py for eager imports
       - Check fx_integration.py for runtime import of contracts_v14
     """
     try:
         from analytics.fx import integrate_fx_into_scenario_result
+
         assert integrate_fx_into_scenario_result is not None
     except ImportError as e:
-        pytest.fail(f"Failed to import analytics.fx.integrate_fx_into_scenario_result: {e}")
+        pytest.fail(
+            f"Failed to import analytics.fx.integrate_fx_into_scenario_result: {e}"
+        )
 
 
 def test_import_sensitivity_optimizer():
     """Test that sensitivity.optimizer can be imported.
-    
+
     This is the canonical Pareto optimization module.
     """
     try:
         from analytics.sensitivity.optimizer import run_pareto_search
+
         assert run_pareto_search is not None
     except ImportError as e:
         pytest.fail(f"Failed to import analytics.sensitivity.optimizer: {e}")
@@ -107,19 +113,22 @@ def test_import_sensitivity_optimizer():
 
 def test_import_sensitivity_pareto_shim():
     """Test that legacy sensitivity_pareto.py shim works.
-    
+
     This was converted from broken implementation to shim in P0-2.
-    
+
     If this fails:
       - Check that analytics.sensitivity.optimizer exists
       - Check that sensitivity_pareto.py doesn't have import-time pandas
     """
     try:
         import analytics.sensitivity_pareto
+
         assert analytics.sensitivity_pareto is not None
         # Verify shim exports canonical functions
         assert hasattr(analytics.sensitivity_pareto, "run_pareto_search")
-        assert hasattr(analytics.sensitivity_pareto, "optimize_from_sensitivity_insights")
+        assert hasattr(
+            analytics.sensitivity_pareto, "optimize_from_sensitivity_insights"
+        )
     except ImportError as e:
         pytest.fail(f"Failed to import analytics.sensitivity_pareto: {e}")
 
@@ -128,6 +137,7 @@ def test_import_mc_engine():
     """Test that Monte Carlo engine can be imported."""
     try:
         from analytics.mc import engine
+
         assert engine is not None
         assert hasattr(engine, "run_monte_carlo_analysis")
     except ImportError as e:
@@ -138,6 +148,7 @@ def test_import_sensitivity_engine():
     """Test that sensitivity engine can be imported."""
     try:
         from analytics.sensitivity import engine
+
         assert engine is not None
         assert hasattr(engine, "run_sensitivity_analysis")
     except ImportError as e:
@@ -164,9 +175,10 @@ def test_import_scenario_analytics():
 # Cross-Module Import Tests (detect subtle circular deps)
 # =============================================================================
 
+
 def test_import_all_analytics_submodules():
     """Test that all major analytics submodules can be imported together.
-    
+
     This catches subtle circular dependencies that only appear when
     multiple modules are imported in the same process.
     """
@@ -178,7 +190,7 @@ def test_import_all_analytics_submodules():
         "analytics.evaluation_v14",
         "analytics.pipeline_v14_enhanced",
     ]
-    
+
     failed_imports = []
     for module_name in modules_to_test:
         try:
@@ -186,7 +198,7 @@ def test_import_all_analytics_submodules():
             assert mod is not None
         except ImportError as e:
             failed_imports.append((module_name, str(e)))
-    
+
     if failed_imports:
         error_msg = "Failed to import the following modules:\n"
         for mod, err in failed_imports:
@@ -196,7 +208,7 @@ def test_import_all_analytics_submodules():
 
 def test_import_contracts_then_fx():
     """Test importing contracts_v14 followed by fx integration.
-    
+
     This specifically tests the P0-1 fix for circular imports.
     """
     try:
@@ -204,11 +216,11 @@ def test_import_contracts_then_fx():
         for key in list(sys.modules.keys()):
             if "analytics.fx" in key or "analytics.contracts" in key:
                 del sys.modules[key]
-        
+
         # Import in order that would trigger circular dep
         from analytics import contracts_v14
         from analytics.fx import integrate_fx_into_scenario_result
-        
+
         assert contracts_v14 is not None
         assert integrate_fx_into_scenario_result is not None
     except ImportError as e:
@@ -238,9 +250,10 @@ def test_import_monte_carlo_aep_before_analytics_wind():
 # Performance Guardrails (imports should be fast)
 # =============================================================================
 
+
 def test_import_speed_baseline():
     """Verify that basic imports complete quickly.
-    
+
     Import times should be < 1 second for analytics package.
     Slow imports indicate:
       - Heavy computation at module level (anti-pattern)
@@ -248,16 +261,17 @@ def test_import_speed_baseline():
       - Circular import resolution overhead
     """
     import time
-    
+
     # Clear cache for clean test
     for key in list(sys.modules.keys()):
         if key.startswith("analytics"):
             del sys.modules[key]
-    
+
     start = time.time()
     import analytics
+
     elapsed = time.time() - start
-    
+
     # Allow up to 2 seconds (generous, but catches egregious issues)
     assert elapsed < 2.0, f"Import took {elapsed:.2f}s (expected <2.0s)"
 
@@ -266,9 +280,10 @@ def test_import_speed_baseline():
 # Metadata (for CI reporting)
 # =============================================================================
 
+
 def test_smoke_test_coverage():
     """Document what this test suite covers.
-    
+
     This is a meta-test that just prints coverage info.
     Useful for CI logs and documentation.
     """

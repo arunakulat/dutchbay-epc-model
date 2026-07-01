@@ -40,13 +40,19 @@ def test_systematic_sigma_linear_at_full_correlation() -> None:
 
 def test_systematic_sigma_monotonic_in_correlation() -> None:
     b = UncertaintyBudget()
-    s0, s5, s1 = b.systematic_sigma_pct(0.0), b.systematic_sigma_pct(0.5), b.systematic_sigma_pct(1.0)
+    s0, s5, s1 = (
+        b.systematic_sigma_pct(0.0),
+        b.systematic_sigma_pct(0.5),
+        b.systematic_sigma_pct(1.0),
+    )
     assert s0 < s5 < s1  # correlation widens uncertainty
 
 
 def test_combined_sigma_reproduces_canonical_10pct() -> None:
     """The default budget's 1-yr sigma is ~10.07% (matches the canonical mock)."""
-    assert UncertaintyBudget().combined_sigma_pct(1.0, 0.0) == pytest.approx(10.07, abs=0.02)
+    assert UncertaintyBudget().combined_sigma_pct(1.0, 0.0) == pytest.approx(
+        10.07, abs=0.02
+    )
 
 
 # --- engine: exceedance haircut + correlation ----------------------------------
@@ -72,11 +78,17 @@ def test_exceedance_correlation_widens_lowers_p90_only() -> None:
 def test_builder_default_reproduces_canonical_exceedance() -> None:
     """LENDER YAML carries the 2% pre-construction P50 haircut -> canonical post-haircut exceedance."""
     summary = build_aep_summary_from_config(load_scenario_config(LENDER))
-    assert summary["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)  # 464.36 post 2% haircut
+    assert summary["net_site_aep_gwh"] == pytest.approx(
+        464.3, abs=0.5
+    )  # 464.36 post 2% haircut
     exc = summary["exceedance"]
     assert exc["sigma_1yr_pct"] == pytest.approx(10.07, abs=0.05)
-    assert exc["net_aep_p90_1yr_gwh"] == pytest.approx(404.4, abs=1.0)  # 412.7 -> 404.4 post 2% haircut
-    assert summary["uncertainty"]["p50_haircut_pct"] == 2.0  # 2% pre-construction P50 haircut now in LENDER YAML
+    assert exc["net_aep_p90_1yr_gwh"] == pytest.approx(
+        404.4, abs=1.0
+    )  # 412.7 -> 404.4 post 2% haircut
+    assert (
+        summary["uncertainty"]["p50_haircut_pct"] == 2.0
+    )  # 2% pre-construction P50 haircut now in LENDER YAML
     assert summary["uncertainty"]["correlation"] == 0.0
 
 

@@ -22,8 +22,9 @@ to be JSON-safe. No network, cdsapi, or matplotlib is touched.
 from __future__ import annotations
 
 import json
-import pytest
 from typing import Any
+
+import pytest
 
 from analytics.casper.casper_payload import (
     CASPER_CONTRACT_VERSION,
@@ -35,6 +36,7 @@ from analytics.casper.casper_payload import (
 )
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
+    GenerationProfile,
     MonteCarloResult,
     MultiTechGenerationResult,
     ScenarioResult,
@@ -45,9 +47,6 @@ from analytics.contracts_v14 import (
     TrancheDebtProfile,
     WaccComponents,
     WaccResult,
-)
-from analytics.contracts_v14 import (
-    GenerationProfile,
 )
 
 # ────────────────────────── builders ──────────────────────────────
@@ -158,9 +157,7 @@ def test_scenario_summary_none_returns_none() -> None:
 
 def test_scenario_summary_bare_string_minimal_descriptor() -> None:
     """A bare scenario-name string yields the minimal descriptor."""
-    assert _scenario_summary_to_dict("just_a_name") == {
-        "scenario_name": "just_a_name"
-    }
+    assert _scenario_summary_to_dict("just_a_name") == {"scenario_name": "just_a_name"}
 
 
 def test_build_payload_with_bare_string_scenario() -> None:
@@ -218,9 +215,7 @@ def test_wacc_dict_form_passed_through() -> None:
 
 def test_debt_profile_overlay_surfaced() -> None:
     """An attached TrancheDebtProfile is flattened into debt_profile."""
-    summary = _scenario_summary_to_dict(
-        _bare_scenario(debt_profile=_debt_profile())
-    )
+    summary = _scenario_summary_to_dict(_bare_scenario(debt_profile=_debt_profile()))
     assert summary is not None
     dp = summary["debt_profile"]
     assert dp["tenor_years"] == 15
@@ -440,16 +435,16 @@ def test_payload_survives_live_dict_shaped_scenario() -> None:
     valid payload from that real shape (round-3 fix)."""
     scenario = _bare_scenario(
         kpis={
-            "scenario_name": "DutchBay Wind Farm",   # str — must be skipped, not float()'d
-            "wacc_label": "build_up",                # str
-            "dscr_series": [1.3, 1.45],              # list
-            "project_irr": 0.0505,                   # numeric — kept
-            "min_dscr": 1.30,                        # numeric — kept
+            "scenario_name": "DutchBay Wind Farm",  # str — must be skipped, not float()'d
+            "wacc_label": "build_up",  # str
+            "dscr_series": [1.3, 1.45],  # list
+            "project_irr": 0.0505,  # numeric — kept
+            "min_dscr": 1.30,  # numeric — kept
         },
         debt_profile={"construction_years": 2, "total_debt": 1.0e8},  # dict, not typed
-        wacc={"wacc_nominal": 0.081},                                  # dict
+        wacc={"wacc_nominal": 0.081},  # dict
         equity_performance={"equity_irr": -0.008, "equity_npv": -3.5e7, "metadata": {}},
-        debt_covenants="computed",                                     # bare status str
+        debt_covenants="computed",  # bare status str
     )
     payload = build_casper_payload(scenario=scenario)
     assert json.dumps(payload, default=str)  # serialises without raising

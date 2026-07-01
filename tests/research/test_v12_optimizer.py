@@ -13,6 +13,7 @@ SHAPE. They deliberately do NOT pin the V12 model's economic values: it is a
 vintage (150 MW-era) research instrument whose absolute numbers are not canonical
 (the live economics are analytics.optimization_v14 / the v14 pipeline).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -37,7 +38,9 @@ def test_module_imports():
 
 def test_build_financial_model_returns_both_irrs():
     # Regression for project_irr coming back None (brentq overflow) on defaults.
-    res = build_financial_model(create_default_parameters(), create_default_debt_structure())
+    res = build_financial_model(
+        create_default_parameters(), create_default_debt_structure()
+    )
     assert res["equity_irr"] is not None and res["equity_irr"] > 0
     assert res["project_irr"] is not None and res["project_irr"] > 0
 
@@ -48,8 +51,12 @@ def test_optimize_capital_structure_runs():
     )
     assert res["convergence"] is True
     for k in (
-        "optimal_debt_ratio", "optimal_usd_pct", "optimal_dfi_pct",
-        "optimized_equity_irr", "optimized_project_irr", "optimized_min_dscr",
+        "optimal_debt_ratio",
+        "optimal_usd_pct",
+        "optimal_dfi_pct",
+        "optimized_equity_irr",
+        "optimized_project_irr",
+        "optimized_min_dscr",
     ):
         assert k in res
     assert 0.0 <= res["optimal_debt_ratio"] <= 1.0
@@ -63,7 +70,14 @@ def test_optimize_debt_pareto_produces_frontier():
     assert res["grid_count"] > 0
     assert res["frontier_count"] > 0
     pt = res["frontier"][0]
-    for k in ("debt_ratio", "tenor_years", "equity_irr", "min_dscr", "project_irr", "npv_12pct"):
+    for k in (
+        "debt_ratio",
+        "tenor_years",
+        "equity_irr",
+        "min_dscr",
+        "project_irr",
+        "npv_12pct",
+    ):
         assert k in pt
     assert pt["project_irr"] is not None
 
@@ -73,12 +87,16 @@ def test_grace_above_supported_is_rejected():
     # (USD principal is not tenor-bound), so the sweep must reject it rather than
     # report DSCR/IRR inflated by stranded principal.
     with pytest.raises(ValueError, match="grace"):
-        opt.optimize_debt_pareto(grid_dr="0.7:0.7:0.1", grid_tenor="15:15:1", grid_grace="4:4:1")
+        opt.optimize_debt_pareto(
+            grid_dr="0.7:0.7:0.1", grid_tenor="15:15:1", grid_grace="4:4:1"
+        )
 
 
 def test_supported_grace_grid_runs():
     # The default-style grid (grace 0..3) is within the supported range and runs.
-    res = opt.optimize_debt_pareto(grid_dr="0.6:0.8:0.1", grid_tenor="12:16:2", grid_grace="0:3:1")
+    res = opt.optimize_debt_pareto(
+        grid_dr="0.6:0.8:0.1", grid_tenor="12:16:2", grid_grace="0:3:1"
+    )
     assert res["frontier_count"] > 0
 
 
@@ -88,7 +106,9 @@ def test_frontier_excludes_stranded_usd_principal():
     # supported grace range. Such points must be dropped from the frontier — their
     # DSCR/IRR are inflated by principal never billed into Total_DS. This grid
     # includes the stranding point (dr=0.9, grace=3) alongside clean ones.
-    res = opt.optimize_debt_pareto(grid_dr="0.8:0.9:0.1", grid_tenor="10:14:2", grid_grace="2:3:1")
+    res = opt.optimize_debt_pareto(
+        grid_dr="0.8:0.9:0.1", grid_tenor="10:14:2", grid_grace="2:3:1"
+    )
     assert res["skipped_unamortised"] > 0  # the dr=0.9/grace=3 points were dropped
     for r in res["frontier"]:
         assert not (abs(r["debt_ratio"] - 0.9) < 1e-9 and r["grace_years"] == 3)

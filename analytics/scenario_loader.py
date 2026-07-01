@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -65,8 +65,7 @@ def _try_config_paths(base_path: Path) -> Path:
 
     tried = ", ".join(str(candidate) for candidate in candidates)
     raise FileNotFoundError(
-        f"Scenario config not found: {base_path} "
-        f"(tried: {tried})"
+        f"Scenario config not found: {base_path} " f"(tried: {tried})"
     )
 
 

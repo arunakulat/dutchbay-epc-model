@@ -63,7 +63,11 @@ class InMemoryJobStore:
         """Evict oldest terminal (else oldest) records until below capacity."""
         while len(self._jobs) >= self._max_retained:
             victim = next(
-                (jid for jid, rec in self._jobs.items() if rec.state in TERMINAL_STATES),
+                (
+                    jid
+                    for jid, rec in self._jobs.items()
+                    if rec.state in TERMINAL_STATES
+                ),
                 next(iter(self._jobs)),
             )
             del self._jobs[victim]

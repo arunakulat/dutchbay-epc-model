@@ -29,7 +29,9 @@ def test_config_sha256_is_stable_and_override_sensitive() -> None:
 
 
 def test_engine_version_reads_version_file() -> None:
-    assert engine_version() == (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    assert (
+        engine_version() == (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    )
     assert engine_version() != "v14.3.0"  # the old hardcoded literal is gone
 
 

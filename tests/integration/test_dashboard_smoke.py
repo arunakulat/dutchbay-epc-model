@@ -55,10 +55,16 @@ def test_dashboard_data_pipeline_produces_tornado_rows() -> None:
 
     params = [
         ParameterRangeConfig(
-            variable_name="tariff.lkr_per_kwh", base_value=20.3, low_value=16.0, high_value=24.0
+            variable_name="tariff.lkr_per_kwh",
+            base_value=20.3,
+            low_value=16.0,
+            high_value=24.0,
         ),
         ParameterRangeConfig(
-            variable_name="project.capacity_factor", base_value=0.339, low_value=0.30, high_value=0.37
+            variable_name="project.capacity_factor",
+            base_value=0.339,
+            low_value=0.30,
+            high_value=0.37,
         ),
     ]
     suite = run_sensitivity_analysis(

@@ -31,8 +31,7 @@ from typing import Any, Dict, Mapping
 import pandas as pd
 
 from wind_resource.era5_retrieval import ERA5RequestConfig
-from wind_resource.weibull_fit import (WeibullFit, fit_weibull_on_series,
-                                       weibull_drift)
+from wind_resource.weibull_fit import WeibullFit, fit_weibull_on_series, weibull_drift
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,9 @@ def _resolve_reference_window(era5: Mapping[str, Any]) -> tuple[int, int, str]:
         lag = int(ref.get("end_year_lag", 2))
         end_year = _dt.date.today().year - lag
         return end_year - n_years + 1, end_year, "latest"
-    raise ValueError(f"resource.era5.reference.mode must be 'fixed' or 'latest', got {mode!r}.")
+    raise ValueError(
+        f"resource.era5.reference.mode must be 'fixed' or 'latest', got {mode!r}."
+    )
 
 
 def era5_config_from_scenario(scenario: Mapping[str, Any]) -> ERA5RequestConfig:
@@ -111,8 +112,12 @@ def era5_config_from_scenario(scenario: Mapping[str, Any]) -> ERA5RequestConfig:
         start_year=start_year,
         end_year=end_year,
         hub_height_m=hub_era5,
-        reference_height_low_m=float(era5.get("reference_height_low_m", _ERA5_REF_HEIGHT_LOW_M)),
-        reference_height_high_m=float(era5.get("reference_height_high_m", _ERA5_REF_HEIGHT_HIGH_M)),
+        reference_height_low_m=float(
+            era5.get("reference_height_low_m", _ERA5_REF_HEIGHT_LOW_M)
+        ),
+        reference_height_high_m=float(
+            era5.get("reference_height_high_m", _ERA5_REF_HEIGHT_HIGH_M)
+        ),
         alpha_min=float(era5.get("alpha_min", 0.05)),
         alpha_max=float(era5.get("alpha_max", 0.40)),
         output_dir=str(era5.get("output_dir", "outputs/era5_cache")),
@@ -131,8 +136,7 @@ def _implied_aep(scenario: Mapping[str, Any], fit: WeibullFit) -> Dict[str, Any]
     summary, so the caller sees what the lender headline WOULD be on ARCO-fitted data —
     without mutating the real scenario.
     """
-    from analytics.wind.aep_summary_builder import \
-        build_aep_summary_from_config
+    from analytics.wind.aep_summary_builder import build_aep_summary_from_config
 
     probe = copy.deepcopy(dict(scenario))
     probe.setdefault("wind_resource", {})
@@ -173,9 +177,10 @@ def build_arco_assessment(
         float(drift_tolerance_pct)
         if drift_tolerance_pct is not None
         else float(
-            _require(scenario, "resource").get("era5", {}).get("weibull_fit", {}).get(
-                "drift_tolerance_pct", _DEFAULT_DRIFT_TOLERANCE_PCT
-            )
+            _require(scenario, "resource")
+            .get("era5", {})
+            .get("weibull_fit", {})
+            .get("drift_tolerance_pct", _DEFAULT_DRIFT_TOLERANCE_PCT)
         )
     )
 
@@ -224,9 +229,11 @@ def assess(scenario: Mapping[str, Any]) -> Dict[str, Any]:
     (CASPER), so importing this module never requires the ``[wind]`` extra. CI exercises
     :func:`build_arco_assessment` on synthetic series instead of calling this.
     """
-    from wind_resource.era5_retrieval import (build_hub_height_series,
-                                              retrieve_era5_timeseries,
-                                              validate_coverage)
+    from wind_resource.era5_retrieval import (
+        build_hub_height_series,
+        retrieve_era5_timeseries,
+        validate_coverage,
+    )
 
     cfg = era5_config_from_scenario(scenario)
     nc_path = retrieve_era5_timeseries(cfg)

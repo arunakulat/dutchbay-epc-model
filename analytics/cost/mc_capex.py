@@ -39,7 +39,9 @@ def _apply_estimate_class_floor(config: Mapping[str, Any], sigma_pct: float) -> 
         logger.warning(
             "CAPEX MC sigma %.2f%% is tighter than AACE Class %d implies (%.2f%%); "
             "flooring to the class band.",
-            sigma_pct, band.estimate_class, implied,
+            sigma_pct,
+            band.estimate_class,
+            implied,
         )
         return implied
     return sigma_pct
@@ -71,7 +73,9 @@ class CapexMcResult:
         }
 
 
-def resolve_capex_sigma_pct(config: Mapping[str, Any], override: Optional[float] = None) -> float:
+def resolve_capex_sigma_pct(
+    config: Mapping[str, Any], override: Optional[float] = None
+) -> float:
     """The 1-sigma % on CAPEX: explicit override, else the QRA uncertainty, else uncertainty_pct."""
     if override is not None:
         return float(override)
@@ -79,7 +83,10 @@ def resolve_capex_sigma_pct(config: Mapping[str, Any], override: Optional[float]
     capex = capex if isinstance(capex, Mapping) else {}
     cont = capex.get("contingency")
     cont = cont if isinstance(cont, Mapping) else {}
-    for candidate in (cont.get("base_cost_uncertainty_pct"), capex.get("uncertainty_pct")):
+    for candidate in (
+        cont.get("base_cost_uncertainty_pct"),
+        capex.get("uncertainty_pct"),
+    ):
         if candidate is not None:
             return float(candidate)
     raise ValueError(

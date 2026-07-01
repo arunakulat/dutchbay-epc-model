@@ -33,7 +33,7 @@ All old imports continue to work:
     from finance.cashflow_v14 import CashFlowEngine
     from finance.cashflow_v14_utils import cashflow_utilities
     from finance.cashflow_v14_tax import cashflow_with_tax
-    
+
     # New way (recommended)
     from finance.cashflow import CashFlowEngine
     from finance.cashflow import cashflow_utilities

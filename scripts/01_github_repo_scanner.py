@@ -128,7 +128,9 @@ class RepoScanner:
                 if category is None:
                     continue
                 if category in {"python", "test"}:
-                    self.files.append(self._analyze_python_file(file_path, str(relative_path)))
+                    self.files.append(
+                        self._analyze_python_file(file_path, str(relative_path))
+                    )
                 else:
                     self.files.append(
                         FileInfo(
@@ -180,7 +182,9 @@ class RepoScanner:
                 complexity_score=complexity,
                 refactor_risk=risk,
                 deprecated_imports=deprecated,
-                last_modified=datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+                last_modified=datetime.fromtimestamp(
+                    file_path.stat().st_mtime
+                ).isoformat(),
             )
         except Exception as exc:
             print(f"  Failed to analyze {relative_path}: {exc}")
@@ -222,7 +226,9 @@ class RepoScanner:
                 complexity += len(node.values) - 1
         return float(complexity)
 
-    def _assess_refactor_risk(self, complexity: float, deprecated_count: int, todos: int) -> str:
+    def _assess_refactor_risk(
+        self, complexity: float, deprecated_count: int, todos: int
+    ) -> str:
         risk_score = complexity + (deprecated_count * 5) + (todos * 2)
         if risk_score < 10:
             return "low"
@@ -290,11 +296,15 @@ class RepoScanner:
             if node not in visited:
                 dfs(node, [node])
         for dep in self.dependencies:
-            dep.is_circular = any(dep.source in cycle and dep.target in cycle for cycle in cycles)
+            dep.is_circular = any(
+                dep.source in cycle and dep.target in cycle for cycle in cycles
+            )
 
     def _calculate_technical_debt(self) -> None:
         total_todos = sum(f.todos for f in self.files)
-        total_complexity = sum(f.complexity_score for f in self.files if f.category == "python")
+        total_complexity = sum(
+            f.complexity_score for f in self.files if f.category == "python"
+        )
         deprecated_count = sum(len(f.deprecated_imports) for f in self.files)
         imported_modules = {dep.target for dep in self.dependencies}
         all_modules = {
@@ -317,25 +327,45 @@ class RepoScanner:
         assert self.technical_debt is not None
         todo_score = max(0.0, 100.0 - (self.technical_debt.total_todos * 2))
         complexity_score = max(0.0, 100.0 - (self.technical_debt.total_complexity / 10))
-        deprecated_score = max(0.0, 100.0 - (self.technical_debt.deprecated_imports_count * 10))
-        circular_score = max(0.0, 100.0 - (len(self.technical_debt.circular_dependencies) * 20))
-        overall = todo_score * 0.2 + complexity_score * 0.3 + deprecated_score * 0.3 + circular_score * 0.2
+        deprecated_score = max(
+            0.0, 100.0 - (self.technical_debt.deprecated_imports_count * 10)
+        )
+        circular_score = max(
+            0.0, 100.0 - (len(self.technical_debt.circular_dependencies) * 20)
+        )
+        overall = (
+            todo_score * 0.2
+            + complexity_score * 0.3
+            + deprecated_score * 0.3
+            + circular_score * 0.2
+        )
         recommendations = []
         if self.technical_debt.total_todos > 20:
-            recommendations.append(f"Resolve TODOs before refactoring: {self.technical_debt.total_todos}")
+            recommendations.append(
+                f"Resolve TODOs before refactoring: {self.technical_debt.total_todos}"
+            )
         if self.technical_debt.deprecated_imports_count:
-            recommendations.append(f"Update deprecated imports: {self.technical_debt.deprecated_imports_count}")
+            recommendations.append(
+                f"Update deprecated imports: {self.technical_debt.deprecated_imports_count}"
+            )
         if self.technical_debt.circular_dependencies:
-            recommendations.append(f"Break circular dependencies: {len(self.technical_debt.circular_dependencies)}")
+            recommendations.append(
+                f"Break circular dependencies: {len(self.technical_debt.circular_dependencies)}"
+            )
         if len(self.technical_debt.high_risk_modules) > 5:
-            recommendations.append(f"Refactor high-complexity modules: {len(self.technical_debt.high_risk_modules)}")
+            recommendations.append(
+                f"Refactor high-complexity modules: {len(self.technical_debt.high_risk_modules)}"
+            )
         self.migration_readiness = MigrationReadiness(
             overall_score=overall,
-            ready_modules=[f.path for f in self.files if f.refactor_risk == "low" and f.todos == 0],
+            ready_modules=[
+                f.path for f in self.files if f.refactor_risk == "low" and f.todos == 0
+            ],
             attention_modules=[
                 f.path
                 for f in self.files
-                if f.refactor_risk == "medium" or (f.refactor_risk == "low" and f.todos > 0)
+                if f.refactor_risk == "medium"
+                or (f.refactor_risk == "low" and f.todos > 0)
             ],
             blocking_modules=[f.path for f in self.files if f.refactor_risk == "high"],
             recommendations=recommendations or ["Repository is ready for migration"],
@@ -381,7 +411,9 @@ Repository: {self.repo_root}
 ## Migration Recommendations
 
 """
-        for index, recommendation in enumerate(self.migration_readiness.recommendations, 1):
+        for index, recommendation in enumerate(
+            self.migration_readiness.recommendations, 1
+        ):
             report += f"{index}. {recommendation}\n"
         report += "\n---\nGenerated by Dolphin D01.\n"
         output_path.write_text(report, encoding="utf-8")
@@ -395,7 +427,9 @@ Repository: {self.repo_root}
             "statistics": {
                 "total_files": len(self.files),
                 "total_loc": sum(f.loc for f in self.files),
-                "python_modules": len([f for f in self.files if f.category == "python"]),
+                "python_modules": len(
+                    [f for f in self.files if f.category == "python"]
+                ),
                 "test_files": len([f for f in self.files if f.category == "test"]),
                 "config_files": len([f for f in self.files if f.category == "config"]),
             },
@@ -405,11 +439,16 @@ Repository: {self.repo_root}
 
     def _generate_dependency_graph(self, output_path: Path) -> None:
         payload = {
-            "nodes": sorted({dep.source for dep in self.dependencies} | {dep.target for dep in self.dependencies}),
+            "nodes": sorted(
+                {dep.source for dep in self.dependencies}
+                | {dep.target for dep in self.dependencies}
+            ),
             "edges": [asdict(dep) for dep in self.dependencies],
             "statistics": {
                 "total_dependencies": len(self.dependencies),
-                "circular_count": len([dep for dep in self.dependencies if dep.is_circular]),
+                "circular_count": len(
+                    [dep for dep in self.dependencies if dep.is_circular]
+                ),
             },
         }
         output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

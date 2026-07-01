@@ -8,7 +8,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-rasterio = pytest.importorskip("rasterio")  # CASPER: skip when the [gis] extra is absent
+rasterio = pytest.importorskip(
+    "rasterio"
+)  # CASPER: skip when the [gis] extra is absent
 
 from analytics.gis.geotiff_export import (  # noqa: E402
     DEFAULT_CRS,
@@ -56,8 +58,12 @@ def test_export_grid_rasters_one_file_per_variable(tmp_path):
 
 def test_append_manifest_idempotent(tmp_path):
     entry = build_manifest_entry(
-        "DutchBay/GIS/coarse", BBOX, 0.25, VARS,
-        {v: f"{v}.tif" for v in VARS}, provenance={"method": "test"},
+        "DutchBay/GIS/coarse",
+        BBOX,
+        0.25,
+        VARS,
+        {v: f"{v}.tif" for v in VARS},
+        provenance={"method": "test"},
     )
     manifest = tmp_path / "DataLake_Manifest_All.json"
     append_manifest(manifest, [entry])

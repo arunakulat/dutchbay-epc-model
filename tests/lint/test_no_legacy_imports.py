@@ -35,6 +35,6 @@ def test_guard_scans_real_protected_dirs() -> None:
 def test_no_forbidden_legacy_imports() -> None:
     guard = _load_guard()
     violations = guard.find_violations()
-    assert violations == [], "Forbidden legacy imports in production code:\n" + "\n".join(
-        violations
-    )
+    assert (
+        violations == []
+    ), "Forbidden legacy imports in production code:\n" + "\n".join(violations)

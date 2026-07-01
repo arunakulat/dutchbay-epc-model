@@ -11,13 +11,17 @@ Scope:
 This module is intentionally minimal: pure DSCR-sensitivity transforms/wrappers over
 engine-level sensitivity runs.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 from analytics.contracts_v14 import ParameterRangeConfig, SensitivitySuite
-from analytics.sensitivity.engine import SensitivityRunConfig, build_one_way_sensitivity_suite
+from analytics.sensitivity.engine import (
+    SensitivityRunConfig,
+    build_one_way_sensitivity_suite,
+)
 
 
 @dataclass(frozen=True)

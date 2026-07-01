@@ -53,7 +53,9 @@ def test_total_loss_pct_result_field_is_ignored() -> None:
 def test_canonical_back_compat_keys_preserve_factor() -> None:
     """The five canonical keys reproduce the exact retention product (no drift)."""
     expected = 0.9272 * 0.97 * 0.98 * 0.98 * 0.99  # wake7.28/avail97/elec2/curt2/other1
-    assert apply_losses(100.0, CANONICAL).net_factor == pytest.approx(expected, rel=1e-9)
+    assert apply_losses(100.0, CANONICAL).net_factor == pytest.approx(
+        expected, rel=1e-9
+    )
 
 
 def test_finer_loss_now_reduces_aep_instead_of_being_dropped() -> None:
@@ -83,7 +85,9 @@ def test_mc_fixed_retention_excludes_sampled_and_honours_new_keys() -> None:
     losses = {**CANONICAL, "icing_pct": 1.5}
     excl = {"wake_loss_pct", "electrical_loss_pct", "availability_pct"}
     # curtailment 2, other 1, icing 1.5 -> 0.98 * 0.99 * 0.985
-    assert compute_net_factor(losses, exclude=excl) == pytest.approx(0.98 * 0.99 * 0.985)
+    assert compute_net_factor(losses, exclude=excl) == pytest.approx(
+        0.98 * 0.99 * 0.985
+    )
 
 
 def test_validate_loss_keys_guard() -> None:

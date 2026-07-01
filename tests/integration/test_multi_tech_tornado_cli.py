@@ -5,6 +5,7 @@ CSV (sorted by |impact| within each metric), defaults to the full metric set, an
 exits cleanly (code 2) on a non-multi-tech scenario or a bad shock band — rather than
 emitting an empty CSV or an uncaught traceback.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -45,17 +46,30 @@ def test_module_imports_without_error():
 def test_csv_columns_tags_and_sorting(tmp_path: Path):
     cli = _load_cli()
     out = tmp_path / "mtt.csv"
-    rc = cli.main([
-        "--config", str(_HYBRID),
-        "--metric", "project_irr",
-        "--metric", "balloon_pct",
-        "--output", str(out),
-    ])
+    rc = cli.main(
+        [
+            "--config",
+            str(_HYBRID),
+            "--metric",
+            "project_irr",
+            "--metric",
+            "balloon_pct",
+            "--output",
+            str(out),
+        ]
+    )
     assert rc == 0
     df = pd.read_csv(out)
     assert list(df.columns) == [
-        "metric", "technology", "driver", "label",
-        "base_case", "low_case", "high_case", "impact_abs", "shock_pct",
+        "metric",
+        "technology",
+        "driver",
+        "label",
+        "base_case",
+        "low_case",
+        "high_case",
+        "impact_abs",
+        "shock_pct",
     ]
     assert set(df["technology"]) == {"wind", "solar"}
     assert set(df["driver"]) == {"capex_usd", "capacity_factor", "degradation_pct"}
@@ -102,7 +116,9 @@ def test_storage_block_reported_not_swept(tmp_path: Path, capsys):
 
     cli = _load_cli()
     out = tmp_path / "mtt.csv"
-    rc = cli.main(["--config", str(scenario), "--metric", "project_irr", "--output", str(out)])
+    rc = cli.main(
+        ["--config", str(scenario), "--metric", "project_irr", "--output", str(out)]
+    )
     assert rc == 0
     assert set(pd.read_csv(out)["technology"]) == {"wind", "solar"}
     err = capsys.readouterr().err
@@ -115,7 +131,9 @@ def test_standalone_bess_scenario_is_swept(tmp_path: Path, capsys):
     """A standalone storage-only scenario is now swept on its capacity-charge driver."""
     cli = _load_cli()
     out = tmp_path / "bess.csv"
-    rc = cli.main(["--config", str(_CEB_BESS), "--metric", "project_irr", "--output", str(out)])
+    rc = cli.main(
+        ["--config", str(_CEB_BESS), "--metric", "project_irr", "--output", str(out)]
+    )
     assert rc == 0
     df = pd.read_csv(out)
     assert set(df["technology"]) == {"bess_unit"}

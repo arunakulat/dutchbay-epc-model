@@ -233,9 +233,7 @@ def test_evaluate_with_overrides_full_result_non_mapping_kpis_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """KPIs-only branch with a non-mapping ``kpis`` -> TypeError (line 319)."""
-    monkeypatch.setattr(
-        evaluation_v14, "run_v14_pipeline", lambda **_kw: {"kpis": 123}
-    )
+    monkeypatch.setattr(evaluation_v14, "run_v14_pipeline", lambda **_kw: {"kpis": 123})
     with pytest.raises(TypeError, match="Expected 'kpis' to be a mapping"):
         evaluation_v14.evaluate_with_overrides(raw_config={"project": {"name": "x"}})
 
@@ -302,9 +300,7 @@ def _patch_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_casper_missing_config_raises() -> None:
     """A non-existent base config path -> FileNotFoundError (line 368-369)."""
     with pytest.raises(FileNotFoundError, match="Scenario config not found"):
-        evaluation_v14.evaluate_with_casper_tail_risk(
-            config_path="no/such/file.yaml"
-        )
+        evaluation_v14.evaluate_with_casper_tail_risk(config_path="no/such/file.yaml")
 
 
 def test_casper_full_path_with_fakes_and_enrichment(

@@ -16,7 +16,6 @@ from typing import Any, Dict
 import pytest
 
 from analytics.fx.fx_fetch import default_fx_lkr_per_usd
-from finance.cashflow_v14_tax import TaxConfig
 from finance.cashflow_v14_params import (
     _build_cashflow_params,
     _extract_parameters,
@@ -26,6 +25,7 @@ from finance.cashflow_v14_params import (
     _resolve_tariff_lkr_per_kwh,
     validate_parameters,
 )
+from finance.cashflow_v14_tax import TaxConfig
 
 # A minimal v14-compliant cashflow config used as the clean baseline that each
 # negative-path test perturbs in exactly one place.
@@ -106,7 +106,10 @@ def test_fx_start_falls_back_to_config_default() -> None:
 
 def test_fx_start_ignores_non_positive_rate() -> None:
     """A non-positive explicit rate is discarded in favour of the config default."""
-    assert _resolve_fx_start({"fx": {"start_lkr_per_usd": 0.0}}) == default_fx_lkr_per_usd()
+    assert (
+        _resolve_fx_start({"fx": {"start_lkr_per_usd": 0.0}})
+        == default_fx_lkr_per_usd()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,12 +246,18 @@ def _tax_config(**overrides: Any) -> TaxConfig:
 
 def test_enhanced_allowance_multiplier_taken_as_is() -> None:
     """A 1.5 (150% enhanced) multiplier is taken as-is, NOT the old buggy 0.015."""
-    assert _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct == 1.5
+    assert (
+        _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct
+        == 1.5
+    )
 
 
 def test_enhanced_allowance_zero_is_preserved_not_defaulted() -> None:
     """A legitimate 0.0 is preserved (CESSPIT), not coerced to 1.0."""
-    assert _tax_config(enhanced_capital_allowance_pct=0.0).enhanced_capital_allowance_pct == 0.0
+    assert (
+        _tax_config(enhanced_capital_allowance_pct=0.0).enhanced_capital_allowance_pct
+        == 0.0
+    )
 
 
 def test_enhanced_allowance_negative_raises_in_taxconfig() -> None:
@@ -371,4 +380,7 @@ def test_enhanced_allowance_percent_typo_rejected_in_taxconfig() -> None:
     with pytest.raises(ValueError, match="looks like a PERCENT"):
         _tax_config(enhanced_capital_allowance_pct=150.0)
     # a real enhanced multiplier (<= 3.0) is accepted
-    assert _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct == 1.5
+    assert (
+        _tax_config(enhanced_capital_allowance_pct=1.5).enhanced_capital_allowance_pct
+        == 1.5
+    )

@@ -14,6 +14,7 @@ Exit Codes:
     0: All checks pass
     1: Structure violations found
 """
+
 from __future__ import annotations
 
 import sys

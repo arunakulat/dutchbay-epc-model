@@ -60,7 +60,9 @@ def test_weibull_is_the_era5_fitted_optimum(cfg: dict) -> None:
     k = float(cfg["wind_resource"]["weibull_k"])
     assert a == pytest.approx(7.97, abs=0.05)
     assert k == pytest.approx(2.506, abs=0.05)
-    assert float(cfg["wind_resource"]["mean_wind_speed_ms"]) == pytest.approx(7.07, abs=0.1)
+    assert float(cfg["wind_resource"]["mean_wind_speed_ms"]) == pytest.approx(
+        7.07, abs=0.1
+    )
 
 
 def test_tariff_is_the_usd_bid_in_lkr(cfg: dict) -> None:
@@ -105,10 +107,14 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # only bite scenarios with persistent unused losses; the canonical wind lendercase is byte-identical.
     assert kpis["project_irr"] == pytest.approx(-0.0668, abs=0.005)
     assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.1732, abs=0.01)  # PR-B UIP LKR rate deepens it
+    assert kpis["equity_irr"] == pytest.approx(
+        -0.1732, abs=0.01
+    )  # PR-B UIP LKR rate deepens it
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0
-    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)  # sizer holds DSCR, sizes debt down
+    assert kpis["min_dscr"] == pytest.approx(
+        1.30, abs=0.02
+    )  # sizer holds DSCR, sizes debt down
 
 
 def test_expected_results_block_matches_live_engine() -> None:

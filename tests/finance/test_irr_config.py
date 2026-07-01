@@ -46,7 +46,9 @@ def test_load_config_explicit_path_returns_dict() -> None:
     assert "irr_validation" in config
 
 
-def test_load_config_default_path_resolves_from_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_config_default_path_resolves_from_cwd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """``load_config(None)`` resolves the default master-config path from cwd."""
     monkeypatch.chdir(REPO_ROOT)
     config = load_config()  # default: scenarios/dutchbay_master_config_v14.yaml

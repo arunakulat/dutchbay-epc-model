@@ -62,8 +62,12 @@ def test_hybrid_mc_runs_without_toy_fallback_and_cf_moves_irr() -> None:
         # fallback. Now every trial evaluates for real.
         assert res.failed_iterations == 0
         assert res.metadata.get("degenerate_sweep") is False
-        irr = [float(x) for x in (res.trials or {}).get("project_irr", []) if x is not None]
+        irr = [
+            float(x) for x in (res.trials or {}).get("project_irr", []) if x is not None
+        ]
         assert len(irr) == 48
-        assert max(irr) - min(irr) > 1e-3  # CF (+ the other drivers) genuinely move the IRR
+        assert (
+            max(irr) - min(irr) > 1e-3
+        )  # CF (+ the other drivers) genuinely move the IRR
     finally:
         logging.disable(logging.NOTSET)

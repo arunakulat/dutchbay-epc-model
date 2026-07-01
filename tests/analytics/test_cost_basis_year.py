@@ -23,7 +23,10 @@ def test_scenario_value_takes_precedence() -> None:
 
 
 def test_falls_back_to_default_when_absent() -> None:
-    assert resolve_cost_basis_year({"capex": {"usd_total": 1.0}}) == default_cost_basis_year()
+    assert (
+        resolve_cost_basis_year({"capex": {"usd_total": 1.0}})
+        == default_cost_basis_year()
+    )
     assert resolve_cost_basis_year({}) == default_cost_basis_year()
 
 
@@ -38,5 +41,7 @@ def test_canonical_scenario_declares_basis_year() -> None:
     from analytics.scenario_loader import load_scenario_config
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = load_scenario_config(str(repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"))
+    cfg = load_scenario_config(
+        str(repo / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+    )
     assert resolve_cost_basis_year(cfg) == 2026

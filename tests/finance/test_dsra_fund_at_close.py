@@ -79,7 +79,9 @@ def test_legacy_dsra_months_key_is_wired() -> None:
     assert f["dsra_target_months"] == pytest.approx(12.0)
     _, f6 = _run(dsra={"fund_at_close": True}, dsra_months=6)
     # twice the months -> ~twice the reserve
-    assert f["initial_dsra_usd"] == pytest.approx(2.0 * f6["initial_dsra_usd"], rel=0.01)
+    assert f["initial_dsra_usd"] == pytest.approx(
+        2.0 * f6["initial_dsra_usd"], rel=0.01
+    )
 
 
 def test_reserves_nested_dsra_months_is_wired() -> None:
@@ -90,7 +92,9 @@ def test_reserves_nested_dsra_months_is_wired() -> None:
     _, f12 = _run(dsra={"fund_at_close": True}, reserves={"dsra_months": 12})
     assert f12["dsra_target_months"] == pytest.approx(12.0)
     _, f6 = _run(dsra={"fund_at_close": True}, reserves={"dsra_months": 6})
-    assert f12["initial_dsra_usd"] == pytest.approx(2.0 * f6["initial_dsra_usd"], rel=0.02)
+    assert f12["initial_dsra_usd"] == pytest.approx(
+        2.0 * f6["initial_dsra_usd"], rel=0.02
+    )
     # An explicit dsra.target_months still takes precedence over the reserves nesting.
     _, f_override = _run(
         dsra={"fund_at_close": True, "target_months": 6}, reserves={"dsra_months": 12}

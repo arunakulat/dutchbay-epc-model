@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Repo-wide `black` + `isort` reformat, and both promoted to mandatory CI gates.** Ran `isort .`
+  + `black .` across the whole repo (210 files reformatted), clearing the ~212-file backlog that had
+  kept `black` advisory (`|| true`). Added a `[tool.isort]` config (`profile = "black"`, `legacy/`
+  excluded) so the two formatters converge instead of fighting — a hard prerequisite for enforcing
+  both. The `test-suite` lint job now runs `black --check` and `isort --check-only` as MANDATORY
+  gates (no `|| true`), matching `ruff`/`mypy`. Purely mechanical and behavior-preserving — the full
+  test suite is unchanged. KPI-neutral. (A `.git-blame-ignore-revs` entry for the reformat commit
+  follows so `git blame` skips it.)
 - **CI cost reduction (~50–70% fewer minutes, zero tests touched).** Added a `concurrency` group
   with `cancel-in-progress` (scoped to `pull_request` events, so `main`/scheduled runs are never
   cancelled) to all four heavy workflows — a new push now aborts the superseded in-flight run

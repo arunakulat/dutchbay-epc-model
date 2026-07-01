@@ -61,7 +61,9 @@ def fake_run_monte_carlo_analysis(
     with the correct kwargs and consumes the dataclass result.
     """
     _ = (seed, kwargs)
-    project_cfg = base_config.get("project") or {} if isinstance(base_config, Mapping) else {}
+    project_cfg = (
+        base_config.get("project") or {} if isinstance(base_config, Mapping) else {}
+    )
     scenario_name = str(project_cfg.get("name", "Toy Scenario"))
 
     return MonteCarloResult(

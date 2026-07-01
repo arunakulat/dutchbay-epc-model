@@ -23,6 +23,7 @@ CASPER: SALib is an optional dependency (the ``[dev]`` toolchain / the pinned lo
 :func:`_require_salib` fails loud with an actionable message if it is absent, so the base
 finance install never needs it.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,7 +51,9 @@ def _require_salib() -> None:
     """Fail loud (CASPER) when the optional SALib dependency is missing."""
     try:
         import SALib  # noqa: F401
-    except ImportError as exc:  # pragma: no cover - exercised via the importorskip-gated tests
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover - exercised via the importorskip-gated tests
         raise ImportError(
             "Global sensitivity analysis requires SALib. Install the dev toolchain "
             '(`pip install -e ".[dev]"`) or `pip install SALib`. It is an OPTIONAL '
@@ -64,7 +67,9 @@ class GlobalSAProblem:
 
     names: List[str]
     bounds: List[Tuple[float, float]]
-    skipped: List[str] = field(default_factory=list)  # e.g. fx_calibrated (no clean bound)
+    skipped: List[str] = field(
+        default_factory=list
+    )  # e.g. fx_calibrated (no clean bound)
 
     @property
     def num_vars(self) -> int:
@@ -78,7 +83,9 @@ class GlobalSAProblem:
         }
 
 
-def build_problem(config_path: str, params: Optional[Sequence[Mapping[str, Any]]] = None) -> GlobalSAProblem:
+def build_problem(
+    config_path: str, params: Optional[Sequence[Mapping[str, Any]]] = None
+) -> GlobalSAProblem:
     """Build a SALib problem from the scenario's ``monte_carlo.parameters`` (CCCDIR: one contract).
 
     Reuses the engine's parameter contract — a list of ``{name, low, high[, distribution]}``
@@ -120,14 +127,18 @@ def build_problem(config_path: str, params: Optional[Sequence[Mapping[str, Any]]
             f"skipped (fx_calibrated): {skipped}."
         )
     if skipped:
-        logger.warning("Global SA skipping fx_calibrated drivers (no authored bound): %s", skipped)
+        logger.warning(
+            "Global SA skipping fx_calibrated drivers (no authored bound): %s", skipped
+        )
     return GlobalSAProblem(names=names, bounds=bounds, skipped=skipped)
 
 
 def _engine_evaluate_fn(config_path: str) -> EvaluateFn:
     """The default evaluator: the canonical ARCH-04 gateway, keyed by dotted-path overrides."""
+
     def _fn(overrides: Mapping[str, float]) -> Mapping[str, Any]:
         return evaluate_with_overrides(config_path, overrides=dict(overrides))
+
     return _fn
 
 
@@ -149,7 +160,12 @@ def _resolve(
     return problem, evaluate_fn
 
 
-def _evaluate_rows(evaluate_fn: EvaluateFn, problem: GlobalSAProblem, samples: Any, metrics: Sequence[str]) -> Dict[str, Any]:
+def _evaluate_rows(
+    evaluate_fn: EvaluateFn,
+    problem: GlobalSAProblem,
+    samples: Any,
+    metrics: Sequence[str],
+) -> Dict[str, Any]:
     """Evaluate every SALib sample row ONCE and collect each metric's output vector (so the
     ``N·(D+2)`` / ``N·(D+1)`` runs are shared across metrics). ``evaluate_fn`` maps a dotted-
     path override dict to a metric dict — defaults to the engine gateway; tests inject a
@@ -190,22 +206,34 @@ def run_sobol(
 
     prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
     salib_problem = prob.as_salib()
-    X = sobol_sample.sample(salib_problem, n, calc_second_order=calc_second_order, seed=seed)
+    X = sobol_sample.sample(
+        salib_problem, n, calc_second_order=calc_second_order, seed=seed
+    )
     cols = _evaluate_rows(evfn, prob, X, metrics)
 
-    out: Dict[str, Any] = {"method": "sobol", "n": n, "n_runs": len(X), "problem": prob.as_salib()}
+    out: Dict[str, Any] = {
+        "method": "sobol",
+        "n": n,
+        "n_runs": len(X),
+        "problem": prob.as_salib(),
+    }
     per_metric: Dict[str, Any] = {}
     for m in metrics:
         Si = sobol_analyze.analyze(
-            salib_problem, cols[m], calc_second_order=calc_second_order, seed=seed,
+            salib_problem,
+            cols[m],
+            calc_second_order=calc_second_order,
+            seed=seed,
             print_to_console=False,
         )
         drivers: Dict[str, Any] = {}
         for i, name in enumerate(prob.names):
             s1, st = float(Si["S1"][i]), float(Si["ST"][i])
             drivers[name] = {
-                "S1": s1, "S1_conf": float(Si["S1_conf"][i]),
-                "ST": st, "ST_conf": float(Si["ST_conf"][i]),
+                "S1": s1,
+                "S1_conf": float(Si["S1_conf"][i]),
+                "ST": st,
+                "ST_conf": float(Si["ST_conf"][i]),
                 "interactive": (st - s1) > INTERACTION_TOL,
             }
         per_metric[m] = {
@@ -241,10 +269,17 @@ def run_morris(
     X = morris_sample.sample(salib_problem, N=n_trajectories, seed=seed)
     cols = _evaluate_rows(evfn, prob, X, metrics)
 
-    out: Dict[str, Any] = {"method": "morris", "n_trajectories": n_trajectories, "n_runs": len(X), "problem": salib_problem}
+    out: Dict[str, Any] = {
+        "method": "morris",
+        "n_trajectories": n_trajectories,
+        "n_runs": len(X),
+        "problem": salib_problem,
+    }
     per_metric: Dict[str, Any] = {}
     for m in metrics:
-        Si = morris_analyze.analyze(salib_problem, X, cols[m], print_to_console=False, seed=seed)
+        Si = morris_analyze.analyze(
+            salib_problem, X, cols[m], print_to_console=False, seed=seed
+        )
         drivers = {
             name: {"mu_star": float(Si["mu_star"][i]), "sigma": float(Si["sigma"][i])}
             for i, name in enumerate(prob.names)

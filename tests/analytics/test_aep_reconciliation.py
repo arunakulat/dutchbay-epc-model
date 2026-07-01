@@ -141,7 +141,9 @@ def test_no_bankable_reference_is_noop() -> None:
 def test_declared_but_missing_aep_summary_path_raises() -> None:
     """WIND-7: a declared aep_summary_path that does not resolve must FAIL LOUD, not be
     silently skipped (which would disarm the AEP<->CF reconciliation guard)."""
-    cfg = {"resource": {"aep_summary_path": "scenarios/does_not_exist_aep_summary.json"}}
+    cfg = {
+        "resource": {"aep_summary_path": "scenarios/does_not_exist_aep_summary.json"}
+    }
     with pytest.raises(AepReconciliationError, match="aep_summary_path"):
         collect_bankable_net_aep_gwh(cfg)
 
@@ -219,7 +221,9 @@ def _lender() -> dict:
 def test_percent_form_capacity_factor_does_not_false_positive() -> None:
     """project.capacity_factor authored as a percent (>1.0) is normalized like the engine."""
     cfg = _lender()
-    cfg["project"]["capacity_factor"] = 33.2  # engine reads 0.332 via pct_to_decimal (post 2% AEP haircut)
+    cfg["project"][
+        "capacity_factor"
+    ] = 33.2  # engine reads 0.332 via pct_to_decimal (post 2% AEP haircut)
     reconcile_capacity_factor_with_bankable_aep(cfg, "pct-cf")  # must NOT raise
 
 

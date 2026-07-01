@@ -374,9 +374,7 @@ class TestFxRefresh:
         # CCCDIR: _PROVIDER_METADATA is the single source for the sidecar's stable
         # DESCRIPTOR fields, so a refresh must reproduce the committed BIS sidecar's
         # descriptors exactly (guards against the generator drifting from the artifact).
-        committed = json.loads(
-            Path(fx_history.DEFAULT_VINTAGE_PROVENANCE).read_text()
-        )
+        committed = json.loads(Path(fx_history.DEFAULT_VINTAGE_PROVENANCE).read_text())
         s = _synthetic_daily_series(provider="BIS")
         gen = fx_history._build_refresh_provenance(
             s, window_years=20, as_of=dt.date(2026, 6, 28), sha256="deadbeef"
@@ -394,7 +392,9 @@ class TestFxRefresh:
             "preferred_live_backbone",
         ]
         for k in descriptor_keys:
-            assert gen[k] == committed[k], f"descriptor {k!r} drifted from committed sidecar"
+            assert (
+                gen[k] == committed[k]
+            ), f"descriptor {k!r} drifted from committed sidecar"
 
     def test_write_vintage_fails_loud_on_silent_row_drop(self, tmp_path: Path) -> None:
         # A rate that rounds to "0" at 4dp would be dropped on reload; the write

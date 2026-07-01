@@ -17,12 +17,20 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 import numpy as np
 
-from analytics.gis.geotiff_export import (DEFAULT_CRS, append_manifest,
-                                          build_manifest_entry,
-                                          export_grid_rasters)
-from wind_resource.era5_grid import (GRID_VARIABLES, CellResult, GridSpec,
-                                     assemble_grids, downscale_bilinear,
-                                     fetch_cell_results)
+from analytics.gis.geotiff_export import (
+    DEFAULT_CRS,
+    append_manifest,
+    build_manifest_entry,
+    export_grid_rasters,
+)
+from wind_resource.era5_grid import (
+    GRID_VARIABLES,
+    CellResult,
+    GridSpec,
+    assemble_grids,
+    downscale_bilinear,
+    fetch_cell_results,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +150,12 @@ def run_gis_export(
 
         bbox = spec.bbox()
         paths = export_grid_rasters(
-            grids, bbox, out_dir, prefix=f"dutchbay_{spec.name}", crs=crs, provenance=provenance
+            grids,
+            bbox,
+            out_dir,
+            prefix=f"dutchbay_{spec.name}",
+            crs=crs,
+            provenance=provenance,
         )
         entries.append(
             build_manifest_entry(
@@ -164,7 +177,9 @@ def run_gis_export(
 
     manifest = append_manifest(manifest_path, entries)
     summary["manifest_path"] = str(manifest)
-    logger.info("GIS export: wrote %d grids to %s (manifest %s)", len(specs), out_dir, manifest)
+    logger.info(
+        "GIS export: wrote %d grids to %s (manifest %s)", len(specs), out_dir, manifest
+    )
     return summary
 
 

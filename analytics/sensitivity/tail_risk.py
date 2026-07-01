@@ -18,6 +18,7 @@ IMPORTANT:
 This skeleton implements the metadata schema and hooks.
 You will wire it to your Monte Carlo engine in your repo (recommended).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -104,8 +105,7 @@ def enrich_suite_with_tail_risk(
     if getattr(suite, "tornado_results", None):
         metric_key = str(suite.metric)
         rows = [
-            _tornado_tail_stats(tornado=tornado)
-            for tornado in suite.tornado_results
+            _tornado_tail_stats(tornado=tornado) for tornado in suite.tornado_results
         ]
         tail_table.extend(rows)
         summary[metric_key] = _aggregate_metric_snapshot(rows=rows, run_cfg=run_cfg)
@@ -131,16 +131,16 @@ def _tornado_tail_stats(*, tornado: TornadoResult) -> dict[str, Any]:
     base = float(tornado.base_metric)
     lows = [s.low_case for s in tornado.shock_results if s.low_case is not None]
     highs = [s.high_case for s in tornado.shock_results if s.high_case is not None]
-    impacts = [
-        s.impact_abs for s in tornado.shock_results if s.impact_abs is not None
-    ]
+    impacts = [s.impact_abs for s in tornado.shock_results if s.impact_abs is not None]
     return {
         "parameter": str(tornado.label or tornado.metric_name),
         "metric": str(tornado.metric_name),
         "base_value": base,
         "downside": float(min(lows)) if lows else base,
         "upside": float(max(highs)) if highs else base,
-        "worst_impact_abs": float(max(impacts)) if impacts else float(tornado.impact_abs),
+        "worst_impact_abs": (
+            float(max(impacts)) if impacts else float(tornado.impact_abs)
+        ),
         "n_shocks": len(tornado.shock_results),
     }
 
@@ -172,7 +172,9 @@ def _aggregate_metric_snapshot(
     }
 
 
-def _extract_trials_from_case(case: Mapping[str, Any], metric_key: str) -> Optional[np.ndarray]:
+def _extract_trials_from_case(
+    case: Mapping[str, Any], metric_key: str
+) -> Optional[np.ndarray]:
     meta = case.get("metadata", None)
     if not isinstance(meta, Mapping):
         return None

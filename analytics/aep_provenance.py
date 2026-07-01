@@ -101,9 +101,7 @@ def _resolve_bool(block: Mapping[str, Any], key: str, fallback: bool) -> bool:
         return fallback
     value = block[key]
     if not isinstance(value, bool):
-        raise ValueError(
-            f"aep_provenance.{key} must be a boolean; got {value!r}"
-        )
+        raise ValueError(f"aep_provenance.{key} must be a boolean; got {value!r}")
     return value
 
 

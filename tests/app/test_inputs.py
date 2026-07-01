@@ -112,7 +112,9 @@ def test_to_overrides_includes_set_optionals() -> None:
 
 @pytest.mark.parametrize("variant", ["lendercase", "basecase", "equitycase"])
 def test_base_scenario_path_exists(variant: str) -> None:
-    path = WindFarmInputs(**_valid_kwargs(scenario_variant=variant)).base_scenario_path()
+    path = WindFarmInputs(
+        **_valid_kwargs(scenario_variant=variant)
+    ).base_scenario_path()
     assert path.exists(), path
 
 

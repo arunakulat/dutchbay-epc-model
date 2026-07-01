@@ -67,9 +67,7 @@ def holiday_cfg() -> Dict[str, Any]:
 @pytest.fixture
 def sdp_cfg() -> Dict[str, Any]:
     """Lender case + the SDP-pathway override (≤10-yr holiday + enhanced)."""
-    merged = OmegaConf.merge(
-        OmegaConf.load(LENDER_CASE), OmegaConf.load(SDP_OVERRIDE)
-    )
+    merged = OmegaConf.merge(OmegaConf.load(LENDER_CASE), OmegaConf.load(SDP_OVERRIDE))
     return _to_dict(merged)
 
 
@@ -148,9 +146,7 @@ class TestHolidayWindow:
         assert holidays[13] is False
         assert holidays[20] is False
 
-    def test_live_lender_case_has_no_holiday(
-        self, lender_cfg: Dict[str, Any]
-    ) -> None:
+    def test_live_lender_case_has_no_holiday(self, lender_cfg: Dict[str, Any]) -> None:
         tc = TaxConfig.from_yaml(lender_cfg)
         holidays = build_tax_holiday_map(tc, project_life_years=20)
         assert not any(holidays[y] for y in range(1, 21))

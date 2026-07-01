@@ -37,7 +37,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-from analytics.run_manifest import engine_version
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
     EquityPerformance,
@@ -45,8 +44,11 @@ from analytics.contracts_v14 import (
     TrancheDebtProfile,
 )
 from analytics.contracts_v14 import WaccComponents as ContractWaccComponents
-from analytics.contracts_v14 import WaccResult
+from analytics.contracts_v14 import (
+    WaccResult,
+)
 from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
+from analytics.run_manifest import engine_version
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.debt_v14 import _extract_capex_usd, plan_debt
@@ -275,9 +277,7 @@ def _enrich_annual_rows_with_debt(
 
         period_idx = row_to_period.get(idx, idx)
         service = (
-            debt_service[period_idx]
-            if 0 <= period_idx < len(debt_service)
-            else 0.0
+            debt_service[period_idx] if 0 <= period_idx < len(debt_service) else 0.0
         )
         try:
             debt_service_value = float(service or 0.0)
@@ -314,7 +314,9 @@ def _enrich_annual_rows_with_debt(
         out["debt_service_total"] = debt_service_value
         out["interest_usd"] = interest_value
         out["balloon_resolution"] = balloon_resolution_value
-        out["cf_after_debt"] = cf_pre_debt - debt_service_value - balloon_resolution_value
+        out["cf_after_debt"] = (
+            cf_pre_debt - debt_service_value - balloon_resolution_value
+        )
         enriched.append(out)
 
     return _validate_annual_rows_structure(enriched, require_debt_fields=True)
@@ -339,7 +341,9 @@ def _debt_fee_rate(config: Mapping[str, Any]) -> float:
     use_guarantee = bool(fin.get("use_revenue_guarantee", False))
     guarantee = float(fin.get("guarantee_revenue_pct") or 0.0) if use_guarantee else 0.0
     fees = fin.get("fees") or {}
-    upfront = float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
+    upfront = (
+        float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
+    )
     tenor = float(fin.get("tenor_years") or 15.0) or 15.0
     return guarantee + (upfront / tenor)
 
@@ -777,7 +781,9 @@ def run_v14_pipeline_enhanced(
         # USD IDC; build_annual_rows translates it at year-0 FX (same basis as USD capex).
         tax_block = cfg.get("tax", {}) or {}
         interest_deductible = bool(tax_block.get("interest_deductibility", True))
-        capitalize_idc = bool(tax_block.get("capitalize_idc_in_depreciable_base", False))
+        capitalize_idc = bool(
+            tax_block.get("capitalize_idc_in_depreciable_base", False)
+        )
         idc_usd = float(debt_result.get("total_idc") or 0.0) if capitalize_idc else None
         if interest_deductible or capitalize_idc:
             op_interest_lkr = (

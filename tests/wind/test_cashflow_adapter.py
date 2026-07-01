@@ -25,7 +25,6 @@ from wind_resource.cashflow_adapter import (
     wind_export_to_scenario_patch,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -199,9 +198,7 @@ class TestAdapterContract:
 
     def test_validate_only_raises_on_missing(self, p75_export):
         with pytest.raises(WindAdapterDriftError) as exc:
-            wind_export_to_scenario_patch(
-                p75_export, {}, adapter_mode="validate_only"
-            )
+            wind_export_to_scenario_patch(p75_export, {}, adapter_mode="validate_only")
         assert exc.value.scenario_value is None
         assert exc.value.mode == "validate_only"
 
@@ -232,9 +229,7 @@ class TestAdapterContract:
 
     # -- caller immutability + provenance ----------------------------------
 
-    @pytest.mark.parametrize(
-        "mode", ["overwrite", "fill_if_absent", "validate_only"]
-    )
+    @pytest.mark.parametrize("mode", ["overwrite", "fill_if_absent", "validate_only"])
     def test_input_dict_not_mutated(self, p75_export, aligned_scenario, mode):
         before = copy.deepcopy(aligned_scenario)
         try:
@@ -245,9 +240,7 @@ class TestAdapterContract:
             pass
         assert aligned_scenario == before, f"input mutated under mode={mode}"
 
-    @pytest.mark.parametrize(
-        "mode", ["overwrite", "fill_if_absent", "validate_only"]
-    )
+    @pytest.mark.parametrize("mode", ["overwrite", "fill_if_absent", "validate_only"])
     def test_provenance_metadata_present(self, p75_export, aligned_scenario, mode):
         patch = wind_export_to_scenario_patch(
             p75_export, aligned_scenario, adapter_mode=mode

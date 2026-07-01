@@ -72,7 +72,9 @@ def test_certified_oem_curve_is_available() -> None:
 
 
 def test_build_provenance_aep_block_shape() -> None:
-    block = build_provenance_aep_block(CANONICAL_OEM, derived_from=["ECMWF_ERA5_2020_2024_DUTCHBAY"])
+    block = build_provenance_aep_block(
+        CANONICAL_OEM, derived_from=["ECMWF_ERA5_2020_2024_DUTCHBAY"]
+    )
     assert block["aep_source_id"] == CANONICAL_OEM
     assert block["source_type"] == "OEM"
     assert block["derived_from"] == ["ECMWF_ERA5_2020_2024_DUTCHBAY"]

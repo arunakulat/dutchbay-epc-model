@@ -8,13 +8,13 @@ is an optional extra; the HTML report needs only Jinja2.
 
 from __future__ import annotations
 
-from app.reports.report_config import ReportConfig, load_report_config
-from app.reports.report_model import ReportContext, build_report_context
 from app.reports.renderer import (
     ReportDependencyError,
     render_report_html,
     render_report_pdf,
 )
+from app.reports.report_config import ReportConfig, load_report_config
+from app.reports.report_model import ReportContext, build_report_context
 
 __all__ = [
     "ReportConfig",

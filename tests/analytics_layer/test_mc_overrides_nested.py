@@ -11,16 +11,17 @@ GWTF compliance:
   - FIN-01 (Numeric robustness): fallback path no longer activated silently
   - R23/R25 (branch + CI gate): this file ships on fix/p0-mc-overrides-not-nested
 """
+
 from __future__ import annotations
 
-import yaml
-import pytest
-import numpy as np
 from pathlib import Path
 from typing import Any, Dict
 
-from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
+import numpy as np
+import pytest
+import yaml
 
+from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
 
 SCENARIO_PATH = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
@@ -30,9 +31,24 @@ def lendercase_config() -> Dict[str, Any]:
     cfg = yaml.safe_load(SCENARIO_PATH.read_text())
     cfg["monte_carlo"] = {
         "parameters": [
-            {"name": "project.capacity_factor", "low": 0.38, "high": 0.47, "distribution": "uniform"},
-            {"name": "Financing_Terms.rates.lkr_nominal", "low": 0.06, "high": 0.10, "distribution": "uniform"},
-            {"name": "project.degradation", "low": 0.003, "high": 0.008, "distribution": "uniform"},
+            {
+                "name": "project.capacity_factor",
+                "low": 0.38,
+                "high": 0.47,
+                "distribution": "uniform",
+            },
+            {
+                "name": "Financing_Terms.rates.lkr_nominal",
+                "low": 0.06,
+                "high": 0.10,
+                "distribution": "uniform",
+            },
+            {
+                "name": "project.degradation",
+                "low": 0.003,
+                "high": 0.008,
+                "distribution": "uniform",
+            },
         ]
     }
     return cfg
@@ -44,8 +60,18 @@ def minimal_flat_config() -> Dict[str, Any]:
         "scenario_name": "flat_param_test",
         "monte_carlo": {
             "parameters": [
-                {"name": "capex", "low": 100.0, "high": 120.0, "distribution": "uniform"},
-                {"name": "tariff", "low": 0.08, "high": 0.12, "distribution": "uniform"},
+                {
+                    "name": "capex",
+                    "low": 100.0,
+                    "high": 120.0,
+                    "distribution": "uniform",
+                },
+                {
+                    "name": "tariff",
+                    "low": 0.08,
+                    "high": 0.12,
+                    "distribution": "uniform",
+                },
             ]
         },
     }
@@ -57,7 +83,11 @@ class TestBuildOverridesFromSample:
     def test_dotted_names_produce_nested_dict(self):
         result = MonteCarloEngine._build_overrides_from_sample(
             np.array([0.42, 0.075, 0.005]),
-            ["project.capacity_factor", "Financing_Terms.rates.lkr_nominal", "project.degradation"],
+            [
+                "project.capacity_factor",
+                "Financing_Terms.rates.lkr_nominal",
+                "project.degradation",
+            ],
         )
         assert result == {
             "project": {"capacity_factor": 0.42, "degradation": 0.005},
@@ -120,18 +150,14 @@ class TestMCEngineNoToyFallback:
         """
         result = MonteCarloEngine(lendercase_config, seed=42).run(n_trials=50)
 
-        assert "project_irr" in result.summary, (
-            "project_irr missing from summary — trials still falling to toy fallback"
-        )
-        assert "dscr_min" in result.summary, (
-            "dscr_min missing from summary"
-        )
-        assert result.summary["project_irr"]["mean"] > 0, (
-            "Mean IRR is zero or negative"
-        )
-        assert result.failed_iterations == 0, (
-            f"{result.failed_iterations} trials failed — check override nesting"
-        )
+        assert (
+            "project_irr" in result.summary
+        ), "project_irr missing from summary — trials still falling to toy fallback"
+        assert "dscr_min" in result.summary, "dscr_min missing from summary"
+        assert result.summary["project_irr"]["mean"] > 0, "Mean IRR is zero or negative"
+        assert (
+            result.failed_iterations == 0
+        ), f"{result.failed_iterations} trials failed — check override nesting"
 
     def test_mc_irr_in_plausible_range(self, lendercase_config):
         """IRR mean must fall within a plausible range given CF 0.38-0.47."""
@@ -141,9 +167,9 @@ class TestMCEngineNoToyFallback:
             pytest.skip("project_irr not in summary — toy fallback still active")
 
         irr_stats = result.summary["project_irr"]
-        assert 0.05 < irr_stats["mean"] < 0.35, (
-            f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [5%, 35%]"
-        )
+        assert (
+            0.05 < irr_stats["mean"] < 0.35
+        ), f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [5%, 35%]"
         p10 = irr_stats["percentiles"][10]
         p90 = irr_stats["percentiles"][90]
         assert p10 < p90, f"P10 {p10:.2%} >= P90 {p90:.2%} — distribution inverted"
@@ -152,9 +178,9 @@ class TestMCEngineNoToyFallback:
         """Two runs with same seed must produce identical IRR mean (MRM-01)."""
         r1 = MonteCarloEngine(lendercase_config, seed=99).run(n_trials=30)
         r2 = MonteCarloEngine(lendercase_config, seed=99).run(n_trials=30)
-        assert r1.summary.get("project_irr", {}).get("mean") == \
-               r2.summary.get("project_irr", {}).get("mean"), \
-               "Same seed produced different IRR means"
+        assert r1.summary.get("project_irr", {}).get("mean") == r2.summary.get(
+            "project_irr", {}
+        ).get("mean"), "Same seed produced different IRR means"
 
     def test_mc_different_seeds_differ(self, lendercase_config):
         """Different seeds must produce different mean IRR values."""
@@ -172,6 +198,7 @@ class TestMCEngineBackwardCompatFlatParams:
 
     def test_flat_params_engine_runs_without_error(self, minimal_flat_config):
         from omegaconf import OmegaConf
+
         cfg = OmegaConf.create(minimal_flat_config)
         engine = MonteCarloEngine(cfg, seed=42)
         result = engine.run(n_trials=10)

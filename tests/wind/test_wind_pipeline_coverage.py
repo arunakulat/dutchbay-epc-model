@@ -70,7 +70,9 @@ class _FakeFetcher:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         ts = pd.date_range("2023-01-01", periods=48, freq="h")
         # ws_10m present so extrapolate has something to base the hub column on.
-        df = pd.DataFrame({"timestamp": ts, "ws_10m": [6.0 + (i % 5) for i in range(48)]})
+        df = pd.DataFrame(
+            {"timestamp": ts, "ws_10m": [6.0 + (i % 5) for i in range(48)]}
+        )
         path = self.cache_dir / "synthetic_wind.csv"
         df.to_csv(path, index=False)
         return path
@@ -205,9 +207,7 @@ def test_init_rejects_location_missing_keys(
         )
 
 
-def test_init_explicit_config_path(
-    patched_stages: None, tmp_path: Path
-) -> None:
+def test_init_explicit_config_path(patched_stages: None, tmp_path: Path) -> None:
     cfg = tmp_path / "custom_era5.yaml"
     cfg.write_text("dataset: reanalysis-era5\nvariables: [u100, v100]\n")
     pipe = WindPipeline(
@@ -223,9 +223,7 @@ def test_init_explicit_config_path(
     assert pipe.config["variables"] == ["u100", "v100"]
 
 
-def test_load_config_missing_file_raises(
-    patched_stages: None, tmp_path: Path
-) -> None:
+def test_load_config_missing_file_raises(patched_stages: None, tmp_path: Path) -> None:
     missing = tmp_path / "does_not_exist.yaml"
     with pytest.raises(FileNotFoundError, match="Config file not found"):
         WindPipeline(
@@ -334,9 +332,7 @@ def test_run_complete_assessment_force_download_propagates(
 # ---------------------------------------------------------------------------
 
 
-def test_export_rejects_invalid_scenario(
-    patched_stages: None, tmp_path: Path
-) -> None:
+def test_export_rejects_invalid_scenario(patched_stages: None, tmp_path: Path) -> None:
     pipe = _make_pipeline(tmp_path)
     with pytest.raises(ValueError, match="scenario must be"):
         pipe.export_for_cashflow_model(scenario="P42")
@@ -398,7 +394,9 @@ def test_export_uses_most_recent_assessment(
     # Drop in a lexically-later assessment file with a distinct generation value;
     # the export must pick the sorted()[-1] file, i.e. this one.
     later = tmp_path / "out" / "testsite_assessment_2099-01-01_to_2099-12-31.json"
-    payload = {"energy_production": _energy_assessment(num_turbines=20, rated_kw=10000.0)}
+    payload = {
+        "energy_production": _energy_assessment(num_turbines=20, rated_kw=10000.0)
+    }
     payload["energy_production"]["net_aep"]["net_aep_p75_mwh"] = 999_999.0
     later.write_text(json.dumps(payload))
 

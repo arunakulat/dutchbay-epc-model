@@ -52,7 +52,9 @@ def _cost_reference() -> Mapping[str, Any]:
     data = yaml.safe_load(_DEFAULTS_PATH.read_text())
     ref = data["defaults"]["cost_reference"]
     if not isinstance(ref, Mapping):
-        raise ValueError(f"config/defaults.yaml defaults.cost_reference malformed ({_DEFAULTS_PATH})")
+        raise ValueError(
+            f"config/defaults.yaml defaults.cost_reference malformed ({_DEFAULTS_PATH})"
+        )
     return ref
 
 
@@ -76,7 +78,9 @@ def resolve_estimate_class(config: Mapping[str, Any]) -> int:
             try:
                 return int(ec)
             except (TypeError, ValueError) as exc:
-                raise ValueError(f"capex.estimate_class must be an integer 1-5; got {ec!r}") from exc
+                raise ValueError(
+                    f"capex.estimate_class must be an integer 1-5; got {ec!r}"
+                ) from exc
     return default_estimate_class()
 
 
@@ -84,7 +88,9 @@ def accuracy_band(estimate_class: int) -> AccuracyBand:
     """The asymmetric low/high accuracy band for an estimate class (config-sourced)."""
     bands = _cost_reference().get("estimate_class_bands")
     if not isinstance(bands, Mapping):
-        raise ValueError("config/defaults.yaml missing defaults.cost_reference.estimate_class_bands")
+        raise ValueError(
+            "config/defaults.yaml missing defaults.cost_reference.estimate_class_bands"
+        )
     row = bands.get(str(int(estimate_class)))
     if not isinstance(row, Mapping):
         raise ValueError(f"no estimate_class_bands entry for class {estimate_class}")

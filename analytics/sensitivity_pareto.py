@@ -42,10 +42,10 @@ def optimize_from_sensitivity_insights(
     seed: int = 123,
 ) -> ParetoResult:
     """Legacy wrapper for run_pareto_search().
-    
+
     This function exists for backward compatibility only.
     New code should use analytics.sensitivity.optimizer.run_pareto_search directly.
-    
+
     Args:
         base_config: Base scenario configuration
         objectives: List of optimization objectives
@@ -54,10 +54,10 @@ def optimize_from_sensitivity_insights(
         max_points: Maximum evaluation points
         n_samples: Number of samples for LHS
         seed: Random seed for reproducibility
-        
+
     Returns:
         ParetoResult with frontier and all evaluated points
-        
+
     Example:
         >>> from analytics.sensitivity_pareto import optimize_from_sensitivity_insights
         >>> result = optimize_from_sensitivity_insights(

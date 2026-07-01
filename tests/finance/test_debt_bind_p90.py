@@ -45,7 +45,9 @@ def test_default_off_preserves_canonical() -> None:
     assert d["downside_source"] == "flat_factor"
     assert d["downside_ratio"] == pytest.approx(0.80, abs=1e-6)
     assert "solved_gearing_p90" not in d
-    assert d["solved_gearing_p50"] == pytest.approx(0.45, abs=0.01)  # PR-B UIP LKR rate de-levers
+    assert d["solved_gearing_p50"] == pytest.approx(
+        0.45, abs=0.01
+    )  # PR-B UIP LKR rate de-levers
 
 
 def test_p90_binds_when_floor_is_high() -> None:

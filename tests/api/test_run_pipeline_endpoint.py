@@ -92,8 +92,14 @@ def test_validation_mode_rejects_undocumented_value() -> None:
 
 
 def test_validation_mode_accepts_strict_and_off() -> None:
-    assert RunPipelineRequest(config_path=LENDER, validation_mode="strict").validation_mode == "strict"
-    assert RunPipelineRequest(config_path=LENDER, validation_mode="off").validation_mode == "off"
+    assert (
+        RunPipelineRequest(config_path=LENDER, validation_mode="strict").validation_mode
+        == "strict"
+    )
+    assert (
+        RunPipelineRequest(config_path=LENDER, validation_mode="off").validation_mode
+        == "off"
+    )
 
 
 def test_inline_config_with_divergent_fx_spot_rejected() -> None:
@@ -117,7 +123,9 @@ def test_single_fx_spot_override_fans_out_to_all_pinned_keys() -> None:
     fx.rates.lkr_per_usd and fx.source.pinned_rate, so it stays self-consistent and runs
     (it previously tripped the spot cross-assert -> 422). Round-3 fix."""
     resp = run_pipeline(
-        RunPipelineRequest(config_path=LENDER, overrides={"fx.start_lkr_per_usd": 360.0})
+        RunPipelineRequest(
+            config_path=LENDER, overrides={"fx.start_lkr_per_usd": 360.0}
+        )
     )
     assert resp.scenario_name  # ran to completion, no 422
 
@@ -145,8 +153,13 @@ def test_contradictory_fx_spot_override_is_rejected_not_silently_collapsed() -> 
 
     cfg = yaml.safe_load(Path(LENDER).read_text())
     with pytest.raises(HTTPException) as exc:
-        run_pipeline(RunPipelineRequest(
-            config=cfg,
-            overrides={"fx.rates.lkr_per_usd": 350.0, "fx.source.pinned_rate": 400.0},
-        ))
+        run_pipeline(
+            RunPipelineRequest(
+                config=cfg,
+                overrides={
+                    "fx.rates.lkr_per_usd": 350.0,
+                    "fx.source.pinned_rate": 400.0,
+                },
+            )
+        )
     assert exc.value.status_code == 422

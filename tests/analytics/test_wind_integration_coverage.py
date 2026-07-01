@@ -220,9 +220,7 @@ def test_integrate_mode1_direct_injection(
     assert block["source_type"] == aep_data["source_type"]
     assert block["provenance"] == aep_data["provenance"]
     assert "monte_carlo_results" not in block
-    assert block["capacity_factor_derived"] == pytest.approx(
-        473.8 / (150.0 * 8.760)
-    )
+    assert block["capacity_factor_derived"] == pytest.approx(473.8 / (150.0 * 8.760))
 
 
 def test_integrate_mode2_load_from_data_lake(
@@ -232,12 +230,12 @@ def test_integrate_mode2_load_from_data_lake(
 ) -> None:
     monkeypatch.setattr(wi, "WIND_MODULES_AVAILABLE", True)
     monkeypatch.setattr(
-        wi, "load_aep_from_summary", lambda path, validate_manifest: aep_data,
+        wi,
+        "load_aep_from_summary",
+        lambda path, validate_manifest: aep_data,
         raising=False,
     )
-    out = wi.integrate_aep_into_config(
-        config=base_config, aep_summary_path="aep.json"
-    )
+    out = wi.integrate_aep_into_config(config=base_config, aep_summary_path="aep.json")
     assert out["aep"]["net_aep_gwh"] == 473.8
     assert out["aep"]["source_id"] == aep_data["source_id"]
 
@@ -250,7 +248,9 @@ def test_integrate_mode3_monte_carlo_p90(
 ) -> None:
     monkeypatch.setattr(wi, "WIND_MODULES_AVAILABLE", True)
     monkeypatch.setattr(
-        wi, "load_aep_from_summary", lambda path, validate_manifest: aep_data,
+        wi,
+        "load_aep_from_summary",
+        lambda path, validate_manifest: aep_data,
         raising=False,
     )
     monkeypatch.setattr(
@@ -348,7 +348,9 @@ def test_import_fallback_disables_wind_modules(
     # A module object lacking ``load_aep_from_summary`` triggers the ImportError
     # raised by ``from ... import load_aep_from_summary``.
     monkeypatch.setitem(
-        sys.modules, broken, importlib.util.module_from_spec(
+        sys.modules,
+        broken,
+        importlib.util.module_from_spec(
             importlib.machinery.ModuleSpec(broken, loader=None)
         ),
     )

@@ -55,7 +55,7 @@ warnings.warn(
 
 def main() -> None:
     """Legacy argparse entry point (DEPRECATED).
-    
+
     ⚠️ DEPRECATED: Use analytics/cli/cli_sensitivity_hydra.py instead.
     This function uses argparse and violates GWTF R3 (Hydra-only).
     """
@@ -74,14 +74,14 @@ def main() -> None:
         "--output", "-o", type=Path, help="Output file path to save results (optional)."
     )
     args = parser.parse_args()
-    
+
     # Print deprecation notice
     print(
         "⚠️  WARNING: cli_sensitivity.py is DEPRECATED (argparse-based).\n"
         "    Use: python analytics/cli/cli_sensitivity_hydra.py config=... instead\n"
         "    This script will be removed in Sprint 18.\n"
     )
-    
+
     suite = run_sensitivity_analysis(args.scenario, metric=args.metric)
     result_dict = asdict(suite)
     if args.output:

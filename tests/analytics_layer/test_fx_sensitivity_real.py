@@ -89,7 +89,9 @@ class TestFXSensitivityConfig:
 
     def test_config_invalid_confidence_level(self):
         """Invalid confidence level should raise ValueError."""
-        with pytest.raises(ValueError, match="confidence_level must be between 0 and 1"):
+        with pytest.raises(
+            ValueError, match="confidence_level must be between 0 and 1"
+        ):
             FXSensitivityConfig(confidence_level=1.5)
 
     def test_config_invalid_target_metric(self):
@@ -219,8 +221,11 @@ class TestFXSensitivityAnalyzer:
         assert analyzer.config.target_metric == "project_irr"
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
-    def test_run_fx_rate_sensitivity(self, mock_evaluate, sample_config, mock_pipeline_results):
+    def test_run_fx_rate_sensitivity(
+        self, mock_evaluate, sample_config, mock_pipeline_results
+    ):
         """FX rate sensitivity should run pipeline for each shock."""
+
         # Mock pipeline to return different IRRs for different FX rates
         def mock_pipeline_call(base_config_path, overrides):
             # The fx_rate sweep drives the LIVE key start_lkr_per_usd.
@@ -246,7 +251,9 @@ class TestFXSensitivityAnalyzer:
         assert len(result.coefficients) > 0
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
-    def test_sensitivity_coefficient_calculation(self, mock_evaluate, sample_config, mock_pipeline_results):
+    def test_sensitivity_coefficient_calculation(
+        self, mock_evaluate, sample_config, mock_pipeline_results
+    ):
         """Sensitivity coefficients should be calculated from regression."""
         analyzer = FXSensitivityAnalyzer(
             base_config_path="scenarios/test.yaml",
@@ -259,8 +266,10 @@ class TestFXSensitivityAnalyzer:
         def mock_pipeline_call(base_config_path, overrides):
             fx = overrides.get("fx", {})
             start = fx.get("start_lkr_per_usd")
-            shock = (float(start) / base_fx - 1.0) if start is not None else float(
-                fx.get("fx_shock", 0.0)
+            shock = (
+                (float(start) / base_fx - 1.0)
+                if start is not None
+                else float(fx.get("fx_shock", 0.0))
             )
             result = mock_pipeline_results.copy()
             result["project_irr"] = 0.12 - 0.15 * shock
@@ -271,15 +280,20 @@ class TestFXSensitivityAnalyzer:
         result = analyzer.run()
 
         # Find FX rate coefficient
-        fx_coef = next((c for c in result.coefficients if c.parameter == "fx_rate"), None)
+        fx_coef = next(
+            (c for c in result.coefficients if c.parameter == "fx_rate"), None
+        )
         assert fx_coef is not None
         # Should be approximately -0.15 (from our mock)
         assert abs(fx_coef.coefficient - (-0.15)) < 0.05
         assert fx_coef.r_squared is not None
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
-    def test_variance_decomposition(self, mock_evaluate, sample_config, mock_pipeline_results):
+    def test_variance_decomposition(
+        self, mock_evaluate, sample_config, mock_pipeline_results
+    ):
         """Variance decomposition should attribute risk to parameters."""
+
         # Mock with different sensitivities
         def mock_pipeline_call(base_config_path, overrides):
             fx_shock = overrides.get("fx", {}).get("fx_shock", 0.0)
@@ -300,7 +314,9 @@ class TestFXSensitivityAnalyzer:
 
         # Total variance contributions should sum to ~1.0
         total_variance_contrib = sum(
-            c.variance_contribution for c in result.coefficients if c.variance_contribution is not None
+            c.variance_contribution
+            for c in result.coefficients
+            if c.variance_contribution is not None
         )
         assert 0.9 <= total_variance_contrib <= 1.1
 
@@ -333,8 +349,11 @@ class TestFXSensitivityAnalyzer:
         assert result.base_value is not None
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
-    def test_regression_quality_check(self, mock_evaluate, sample_config, mock_pipeline_results):
+    def test_regression_quality_check(
+        self, mock_evaluate, sample_config, mock_pipeline_results
+    ):
         """Analyzer should report regression quality (R-squared)."""
+
         # Mock perfect linear relationship for high R-squared
         def mock_pipeline_call(base_config_path, overrides):
             fx_shock = overrides.get("fx", {}).get("fx_shock", 0.0)
@@ -352,7 +371,9 @@ class TestFXSensitivityAnalyzer:
         result = analyzer.run()
 
         # R-squared should be high for perfect linear relationship
-        fx_coef = next((c for c in result.coefficients if c.parameter == "fx_rate"), None)
+        fx_coef = next(
+            (c for c in result.coefficients if c.parameter == "fx_rate"), None
+        )
         assert fx_coef is not None
         assert fx_coef.r_squared is not None
         assert fx_coef.r_squared > 0.95  # High quality fit
@@ -411,7 +432,9 @@ class TestFXSensitivityIntegration:
         assert 0.0 <= result.explained_variance <= 1.0
 
         # FX rate should typically have largest impact
-        fx_coef = next((c for c in result.coefficients if c.parameter == "fx_rate"), None)
+        fx_coef = next(
+            (c for c in result.coefficients if c.parameter == "fx_rate"), None
+        )
         assert fx_coef is not None
         assert fx_coef.coefficient != 0.0
 

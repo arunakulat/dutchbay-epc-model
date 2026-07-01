@@ -15,6 +15,7 @@ Example::
 
     python scripts/run_epc_margin.py --config scenarios/kolonnawa_epc_100mw.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,7 +49,9 @@ def main(argv: List[str] | None = None) -> int:
     args = parse_args(argv)
     config = yaml.safe_load(Path(args.config).read_text())
     if not isinstance(config, dict):
-        print(f"[run_epc_margin] ERROR: {args.config} is not a mapping.", file=sys.stderr)
+        print(
+            f"[run_epc_margin] ERROR: {args.config} is not a mapping.", file=sys.stderr
+        )
         return 2
     try:
         result = compute_epc_margin(config)

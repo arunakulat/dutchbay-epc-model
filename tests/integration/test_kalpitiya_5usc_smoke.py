@@ -48,13 +48,17 @@ def test_payment_is_lkr_only(cfg: dict) -> None:
 
 def test_resource_and_turbine_equal_the_canonical(cfg: dict) -> None:
     """Resource/turbine inputs match the canonical lender case (costs + tariff differ)."""
-    assert cfg["resource"]["power_curve"]["curve_key"] == "iea_reference_10mw"  # IEA 10.6 MW
+    assert (
+        cfg["resource"]["power_curve"]["curve_key"] == "iea_reference_10mw"
+    )  # IEA 10.6 MW
     assert float(cfg["fx"]["start_lkr_per_usd"]) == pytest.approx(333.79, abs=0.001)
     assert float(cfg["wind_resource"]["weibull_a"]) == pytest.approx(8.199, abs=0.01)
     assert float(cfg["wind_resource"]["weibull_k"]) == pytest.approx(2.665, abs=0.01)
     assert cfg["resource"]["turbines"]["count"] == 15
     # AEP tracks the canonical (shared 10MW summary mock); 464.3 GWh post 2% P50 haircut.
-    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(464.3, abs=0.5)
+    assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(
+        464.3, abs=0.5
+    )
 
 
 def test_capex_is_granular_bottom_up(cfg: dict) -> None:
@@ -68,7 +72,9 @@ def test_capex_is_granular_bottom_up(cfg: dict) -> None:
     assert line_sum == pytest.approx(float(cx["usd_total"]), rel=0.005)  # cross-check
     # the engine derives CAPEX from the breakdown, not the flat total
     assert _extract_capex_usd(dict(cfg)) == pytest.approx(207_500_000, rel=1e-6)
-    assert _extract_capex_usd(dict(cfg)) / 159_600 == pytest.approx(1300.0, abs=1.0)  # $/kW
+    assert _extract_capex_usd(dict(cfg)) / 159_600 == pytest.approx(
+        1300.0, abs=1.0
+    )  # $/kW
 
 
 def test_opex_is_granular_and_escalates(cfg: dict) -> None:
@@ -85,7 +91,9 @@ def test_opex_is_granular_and_escalates(cfg: dict) -> None:
 
     rows = build_annual_rows(load_scenario_config(str(SCENARIO)))
     ops = [r for r in rows if r.get("opex_usd")]
-    assert ops[-1]["opex_usd"] == pytest.approx(ops[0]["opex_usd"] * 1.025 ** 19, rel=0.01)
+    assert ops[-1]["opex_usd"] == pytest.approx(
+        ops[0]["opex_usd"] * 1.025**19, rel=0.01
+    )
 
 
 def test_scenario_passes_schemas(cfg: dict) -> None:
@@ -114,12 +122,18 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # upstream of the equity waterfall).
     assert kpis["project_irr"] == pytest.approx(-0.0359, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
-    assert kpis["equity_irr"] == pytest.approx(-0.1409, abs=0.005)  # PR-B UIP LKR rate deepens it further
+    assert kpis["equity_irr"] == pytest.approx(
+        -0.1409, abs=0.005
+    )  # PR-B UIP LKR rate deepens it further
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
-    assert kpis["project_npv"] == pytest.approx(-138.0e6, rel=0.05)  # PR-B higher WACC deepens NPV
+    assert kpis["project_npv"] == pytest.approx(
+        -138.0e6, rel=0.05
+    )  # PR-B higher WACC deepens NPV
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
-    assert kpis["max_debt_usd"] == pytest.approx(56.03e6, rel=0.02)  # PR-B UIP LKR rate de-levers
+    assert kpis["max_debt_usd"] == pytest.approx(
+        56.03e6, rel=0.02
+    )  # PR-B UIP LKR rate de-levers
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:
@@ -130,5 +144,7 @@ def test_expected_results_match_live_engine(cfg: dict) -> None:
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
     assert kpis["project_irr"] == pytest.approx(float(er["project_irr"]), abs=0.005)
     assert kpis["equity_irr"] == pytest.approx(float(er["equity_irr"]), abs=0.005)
-    assert kpis["project_npv"] / 1e6 == pytest.approx(float(er["project_npv_m_usd"]), abs=0.5)
+    assert kpis["project_npv"] / 1e6 == pytest.approx(
+        float(er["project_npv_m_usd"]), abs=0.5
+    )
     assert kpis["min_dscr"] == pytest.approx(float(er["min_dscr"]), abs=0.02)

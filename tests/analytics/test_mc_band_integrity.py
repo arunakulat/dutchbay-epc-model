@@ -15,7 +15,9 @@ from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
 def _cfg(low: float, high: float, base: float = 159_600_000.0) -> dict:
     return {
         "capex": {"usd_total": base},
-        "monte_carlo": {"parameters": [{"name": "capex.usd_total", "low": low, "high": high}]},
+        "monte_carlo": {
+            "parameters": [{"name": "capex.usd_total", "low": low, "high": high}]
+        },
     }
 
 

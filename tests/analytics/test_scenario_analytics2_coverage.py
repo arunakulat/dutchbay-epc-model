@@ -138,7 +138,9 @@ def test_run_export_charts_invokes_chart_export(
     """export_charts=True with an output_path routes through _export_charts."""
     calls: List[str] = []
 
-    def fake_export_charts(self: ScenarioAnalytics, summary_df: Any, ts_df: Any) -> None:
+    def fake_export_charts(
+        self: ScenarioAnalytics, summary_df: Any, ts_df: Any
+    ) -> None:
         calls.append("charts")
 
     monkeypatch.setattr(ScenarioAnalytics, "_export_charts", fake_export_charts)

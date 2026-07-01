@@ -34,7 +34,9 @@ from analytics.aep_provenance import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = REPO_ROOT / "scenarios"
 LENDER = SCENARIOS / "dutchbay_lendercase_2025Q4.yaml"
-BASECASE = SCENARIOS / "dutchbay_basecase_2025Q4.yaml"  # declares no power_curve.source_id
+BASECASE = (
+    SCENARIOS / "dutchbay_basecase_2025Q4.yaml"
+)  # declares no power_curve.source_id
 
 APPROVED_REFERENCE = "IEA_REFERENCE_10MW_198_PC"
 PLACEHOLDER_OEM = "OEM_ENVISION_EN171_10_PC"
@@ -64,7 +66,9 @@ def test_default_policy_comes_from_config() -> None:
 
 def test_scenario_overrides_policy_per_key() -> None:
     default = default_provenance_policy()
-    resolved = resolve_provenance_policy({"aep_provenance": {"allow_placeholder": True}})
+    resolved = resolve_provenance_policy(
+        {"aep_provenance": {"allow_placeholder": True}}
+    )
     assert resolved.allow_placeholder is True
     # Unspecified keys fall back to the config default.
     assert resolved.enforce is default.enforce
@@ -147,7 +151,9 @@ def test_scenario_load_rejects_unapproved_source(tmp_path: Path) -> None:
 def test_non_scalar_source_id_raises_clean_error() -> None:
     """A list/dict source_id is a clean AepProvenanceError, not an unhashable TypeError."""
     with pytest.raises(AepProvenanceError, match="must be a string"):
-        enforce_aep_provenance(_cfg(None) | {"resource": {"power_curve": {"source_id": ["x"]}}}, "<list>")
+        enforce_aep_provenance(
+            _cfg(None) | {"resource": {"power_curve": {"source_id": ["x"]}}}, "<list>"
+        )
 
 
 # ── The guard also fires at the dict-accepting seams (API + app service) ───────

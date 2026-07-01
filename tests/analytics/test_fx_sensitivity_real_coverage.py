@@ -244,20 +244,22 @@ def test_analyzer_non_dict_yaml_ignored(tmp_path: Path) -> None:
     assert analyzer.base_config == {}
 
 
-def test_base_fx_falls_back_to_config_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_base_fx_falls_back_to_config_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cfg = tmp_path / "no_fx.yaml"
     cfg.write_text("project:\n  name: x\n")
     analyzer = FXSensitivityAnalyzer(str(cfg))
-    monkeypatch.setattr(
-        "analytics.fx.fx_fetch.default_fx_lkr_per_usd", lambda: 305.0
-    )
+    monkeypatch.setattr("analytics.fx.fx_fetch.default_fx_lkr_per_usd", lambda: 305.0)
     assert analyzer._base_fx() == pytest.approx(305.0)
 
 
 # ---------------------------------------------------------------------------
 # FXSensitivityAnalyzer.run — full path with stubbed evaluation
 # ---------------------------------------------------------------------------
-def _stub_evaluate_with_overrides(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+def _stub_evaluate_with_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[dict[str, Any]]:
     """Patch the module-level ``evaluate_with_overrides`` with a deterministic
     monotone response so the linear fits have real, non-degenerate slopes."""
     calls: list[dict[str, Any]] = []
@@ -282,7 +284,9 @@ def _stub_evaluate_with_overrides(monkeypatch: pytest.MonkeyPatch) -> list[dict[
     return calls
 
 
-def test_run_produces_three_coefficients_and_variance(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_produces_three_coefficients_and_variance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _stub_evaluate_with_overrides(monkeypatch)
     analyzer = FXSensitivityAnalyzer(str(LENDER))
     result = analyzer.run()
@@ -309,7 +313,9 @@ def test_run_produces_three_coefficients_and_variance(monkeypatch: pytest.Monkey
     assert fx_call["start_lkr_per_usd"] == pytest.approx(333.79 * (1.0 + (-0.10)))
 
 
-def test_run_constant_metric_has_flat_sensitivities(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_constant_metric_has_flat_sensitivities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # a constant metric makes every linear fit flat (zero slope) and the
     # per-driver variance effectively zero (float dust only).
     monkeypatch.setattr(
@@ -323,7 +329,9 @@ def test_run_constant_metric_has_flat_sensitivities(monkeypatch: pytest.MonkeyPa
     assert all(c.coefficient == pytest.approx(0.0) for c in result.coefficients)
 
 
-def test_run_exact_zero_variance_takes_zero_contribution_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_exact_zero_variance_takes_zero_contribution_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # single-element shock lists -> each np.var over one value is exactly 0.0,
     # so total_variance == 0.0 and the `else 0.0` contribution branch fires.
     monkeypatch.setattr(
@@ -341,10 +349,14 @@ def test_run_exact_zero_variance_takes_zero_contribution_branch(monkeypatch: pyt
 # ---------------------------------------------------------------------------
 # _run_pipeline_with_fx_params / _extract_metrics / analyze_fx_sensitivity
 # ---------------------------------------------------------------------------
-def _patch_pipeline(monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def _patch_pipeline(
+    monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     captured: list[dict[str, Any]] = []
 
-    def fake_pipeline(*, config: dict[str, Any], enable_returns: bool, enable_risk: bool) -> dict[str, Any]:
+    def fake_pipeline(
+        *, config: dict[str, Any], enable_returns: bool, enable_risk: bool
+    ) -> dict[str, Any]:
         captured.append(config)
         spot = float(config["fx"]["start_lkr_per_usd"])
         if fixed is not None:
@@ -366,7 +378,9 @@ def _patch_pipeline(monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | Non
     return captured
 
 
-def test_run_pipeline_with_fx_params_injects_fx_block(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_pipeline_with_fx_params_injects_fx_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured = _patch_pipeline(monkeypatch)
     analyzer = FXSensitivityAnalyzer(str(LENDER))
     base_rate = analyzer.base_config["fx"]["start_lkr_per_usd"]  # 333.79
@@ -379,7 +393,9 @@ def test_run_pipeline_with_fx_params_injects_fx_block(monkeypatch: pytest.Monkey
     assert analyzer.base_config["fx"]["start_lkr_per_usd"] == pytest.approx(base_rate)
 
 
-def test_run_pipeline_with_fx_params_creates_fx_when_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_pipeline_with_fx_params_creates_fx_when_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured = _patch_pipeline(monkeypatch)
     cfg = tmp_path / "no_fx.yaml"
     cfg.write_text("project:\n  name: x\n")
@@ -434,7 +450,9 @@ def test_extract_metrics_defaults_when_empty() -> None:
     assert dscr == 0.0
 
 
-def test_analyze_fx_sensitivity_sweeps_and_orders_tail(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyze_fx_sensitivity_sweeps_and_orders_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _patch_pipeline(monkeypatch)
     analyzer = FXSensitivityAnalyzer(str(LENDER))
     result = analyzer.analyze_fx_sensitivity(fx_variation_pct=10.0, fx_steps=5)
@@ -455,10 +473,14 @@ def test_analyze_fx_sensitivity_sweeps_and_orders_tail(monkeypatch: pytest.Monke
     assert result.fx_rate_irr_sensitivity < 0.0
 
 
-def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured = _patch_pipeline(monkeypatch)
     cfg = tmp_path / "with_fx.yaml"
-    cfg.write_text("fx:\n  spot_rate: 300.0\n  hedge_ratio: 0.75\n  spread_bps: 120.0\n")
+    cfg.write_text(
+        "fx:\n  spot_rate: 300.0\n  hedge_ratio: 0.75\n  spread_bps: 120.0\n"
+    )
     analyzer = FXSensitivityAnalyzer(str(cfg))
     result = analyzer.analyze_fx_sensitivity(fx_steps=3)
     assert result.base_hedge_ratio == pytest.approx(0.75)

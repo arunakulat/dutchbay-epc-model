@@ -12,22 +12,23 @@ Framework Compliance:
 - TEST-01: Regression pins for integration behavior
 """
 
+from typing import Any, Dict
+
 import pytest
 from omegaconf import OmegaConf
-from typing import Dict, Any
 
 
 @pytest.fixture
 def dutchbay_base_config() -> Dict[str, Any]:
     """Base configuration for DutchBay 150MW wind farm.
-    
+
     Based on 2025Q4 lender case with:
     - 50 x Vestas V150-3.0MW turbines
     - Mannar region, Sri Lanka
     - 20-year PPA at $50/MWh
     - 0.6%/year degradation
     - Dual DSCR: 1.30x (P50) / 1.00x (P99)
-    
+
     Returns:
         Dictionary with complete project configuration
     """
@@ -95,10 +96,10 @@ def dutchbay_base_config() -> Dict[str, Any]:
             "degradation_std_pct": 0.1,
             "correlation_enabled": True,
             "correlation_matrix": [
-                [1.0,  0.4, -0.3, -0.2],  # revenue, cost, fx, degradation
-                [0.4,  1.0, -0.2,  0.1],
-                [-0.3, -0.2, 1.0,  0.0],
-                [-0.2,  0.1, 0.0,  1.0],
+                [1.0, 0.4, -0.3, -0.2],  # revenue, cost, fx, degradation
+                [0.4, 1.0, -0.2, 0.1],
+                [-0.3, -0.2, 1.0, 0.0],
+                [-0.2, 0.1, 0.0, 1.0],
             ],
         },
         "sensitivity": {
@@ -113,10 +114,10 @@ def dutchbay_base_config() -> Dict[str, Any]:
 @pytest.fixture
 def dutchbay_omegaconf_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
     """OmegaConf version of DutchBay configuration.
-    
+
     Args:
         dutchbay_base_config: Base configuration dictionary
-    
+
     Returns:
         OmegaConf configuration object
     """
@@ -152,7 +153,12 @@ def mc_sampling_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
     cfg.monte_carlo.parameters = [
         {"name": "capex", "distribution": "uniform", "low": 90.0, "high": 110.0},
         {"name": "tariff", "distribution": "uniform", "low": 0.09, "high": 0.11},
-        {"name": "capacity_factor", "distribution": "uniform", "low": 0.28, "high": 0.32},
+        {
+            "name": "capacity_factor",
+            "distribution": "uniform",
+            "low": 0.28,
+            "high": 0.32,
+        },
         {"name": "opex_annual", "distribution": "uniform", "low": 2.0, "high": 3.0},
     ]
     return cfg
@@ -161,10 +167,10 @@ def mc_sampling_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
 @pytest.fixture
 def wind_assessment_mock_results() -> Dict[str, Any]:
     """Mock wind assessment results for testing.
-    
+
     Simulates output from wind_resource/wind_pipeline.py
     without requiring actual ERA5 data download.
-    
+
     Returns:
         Dictionary mimicking WindPipeline.run_complete_assessment() output
     """
@@ -219,7 +225,7 @@ def wind_assessment_mock_results() -> Dict[str, Any]:
 @pytest.fixture
 def degradation_test_params() -> Dict[str, Any]:
     """Degradation parameters for testing.
-    
+
     Returns:
         Dictionary with degradation test scenarios
     """
@@ -245,22 +251,22 @@ def degradation_test_params() -> Dict[str, Any]:
 @pytest.fixture
 def dscr_test_targets() -> Dict[str, float]:
     """DSCR targets for dual constraint testing.
-    
+
     Returns:
         Dictionary with DSCR parameters
     """
     return {
         "dscr_p50_target": 1.30,  # Investment grade
         "dscr_p99_target": 1.00,  # Downside protection
-        "dscr_p50_min": 1.20,     # Minimum acceptable
-        "dscr_p99_min": 0.95,     # Stress case floor
+        "dscr_p50_min": 1.20,  # Minimum acceptable
+        "dscr_p99_min": 0.95,  # Stress case floor
     }
 
 
 @pytest.fixture
 def performance_benchmarks() -> Dict[str, float]:
     """Performance benchmarks for integration tests.
-    
+
     Returns:
         Dictionary with time limits (seconds)
     """

@@ -142,9 +142,7 @@ def _annual_taxes(cfg: Dict[str, Any]) -> List[float]:
     return taxes
 
 
-def test_base_scenario_total_corporate_tax_is_nonzero(
-    base_cfg: Dict[str, Any]
-) -> None:
+def test_base_scenario_total_corporate_tax_is_nonzero(base_cfg: Dict[str, Any]) -> None:
     """GOLDEN (TEST-01): base scenario yields non-zero, non-negative total tax."""
     taxes = _annual_taxes(base_cfg)
     total_tax = float(sum(taxes))
@@ -164,11 +162,11 @@ def test_base_scenario_no_statutory_holiday(base_cfg: Dict[str, Any]) -> None:
     tc = TaxConfig.from_yaml(base_cfg)
     holidays = build_tax_holiday_map(tc, project_life_years=life)
 
-    assert not any(holidays[y] for y in range(1, life + 1)), (
-        "Base scenario should have no statutory tax holiday under the post-2025 regime"
-    )
+    assert not any(
+        holidays[y] for y in range(1, life + 1)
+    ), "Base scenario should have no statutory tax holiday under the post-2025 regime"
     taxes = _annual_taxes(base_cfg)
     assert sum(taxes) > 0.0
-    assert any(t > 0.0 for t in taxes), (
-        "At least one year must carry positive corporate tax"
-    )
+    assert any(
+        t > 0.0 for t in taxes
+    ), "At least one year must carry positive corporate tax"

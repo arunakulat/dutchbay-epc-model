@@ -6,6 +6,7 @@ coverage report (build_evidence_report), and the policy-applying guard
 canonical-KPI assertions belong here — the byte-identical-economics guarantee is that the
 guard raises or no-ops and never mutates the config.
 """
+
 from __future__ import annotations
 
 import logging
@@ -86,7 +87,9 @@ def test_unknown_tier_is_a_finding() -> None:
 
 
 def test_missing_required_field_is_a_finding() -> None:
-    cfg = {"evidence_register": {"entries": {"capex": {"source": "EPC quote"}}}}  # no as_of/tier
+    cfg = {
+        "evidence_register": {"entries": {"capex": {"source": "EPC quote"}}}
+    }  # no as_of/tier
     report = build_evidence_report(cfg)
     f = next(f for f in report.findings if f.kind == "missing_field")
     assert "as_of" in f.detail and "tier" in f.detail
@@ -101,7 +104,9 @@ def test_min_tier_flags_weak_evidence() -> None:
         }
     }
     report = build_evidence_report(cfg)
-    assert any(f.kind == "below_min_tier" and f.assumption == "tariff" for f in report.findings)
+    assert any(
+        f.kind == "below_min_tier" and f.assumption == "tariff" for f in report.findings
+    )
 
 
 def test_require_complete_flags_missing_assumptions() -> None:
@@ -177,7 +182,9 @@ def test_block_without_entries_is_clean_noop() -> None:
 
 
 def test_non_mapping_entry_value_is_a_finding() -> None:
-    cfg = {"evidence_register": {"entries": {"tariff": "21 LKR/kWh"}}}  # value not a record
+    cfg = {
+        "evidence_register": {"entries": {"tariff": "21 LKR/kWh"}}
+    }  # value not a record
     report = build_evidence_report(cfg)
     f = next(f for f in report.findings if f.kind == "missing_field")
     assert "not a mapping" in f.detail

@@ -68,7 +68,9 @@ def test_summary_stats_percentile_edges_hit_min_and_max() -> None:
     stats = _summary_stats(vals)
     assert stats["min"] == 1.0
     assert stats["max"] == 10.0
-    assert stats["min"] <= stats["p10"] <= stats["median"] <= stats["p90"] <= stats["max"]
+    assert (
+        stats["min"] <= stats["p10"] <= stats["median"] <= stats["p90"] <= stats["max"]
+    )
 
 
 def test_summary_stats_percentile_is_linear_interpolated() -> None:
@@ -614,7 +616,11 @@ def test_prudential_rate_surfaces_a_distinct_prudential_npv() -> None:
         discount_rate=0.08,
         prudential_rate=0.12,
     )
-    assert "project_npv_prudential" not in base  # not computed without a prudential rate
+    assert (
+        "project_npv_prudential" not in base
+    )  # not computed without a prudential rate
     assert prud["prudential_rate_used"] == 0.12
-    assert prud["project_npv_prudential"] < prud["project_npv"]  # higher discount -> lower
+    assert (
+        prud["project_npv_prudential"] < prud["project_npv"]
+    )  # higher discount -> lower
     assert prud["project_npv"] == base["project_npv"]  # base unchanged (additive)

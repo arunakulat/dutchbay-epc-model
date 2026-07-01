@@ -47,7 +47,9 @@ def lender_cfg() -> dict:
 
 def test_base_reproduces_canonical(lender_cfg: dict) -> None:
     df = tornado_from_config(lender_cfg)
-    assert df["base_aep_gwh"].iloc[0] == pytest.approx(473.8, abs=1.0)  # ERA5-fitted Weibull
+    assert df["base_aep_gwh"].iloc[0] == pytest.approx(
+        473.8, abs=1.0
+    )  # ERA5-fitted Weibull
 
 
 def test_all_drivers_present(lender_cfg: dict) -> None:
@@ -95,9 +97,15 @@ def test_run_with_explicit_args() -> None:
     df = run_aep_tornado(
         weibull_a=8.32,
         weibull_k=2.1,
-        losses={"wake_loss_pct": 5.0, "availability_pct": 97.0, "electrical_loss_pct": 2.0},
+        losses={
+            "wake_loss_pct": 5.0,
+            "availability_pct": 97.0,
+            "electrical_loss_pct": 2.0,
+        },
         n_turbines=23,
-        cfg=AEPTornadoConfig(alt_curve_key="ge_cypress_5p5"),  # name an alt -> power_curve driver
+        cfg=AEPTornadoConfig(
+            alt_curve_key="ge_cypress_5p5"
+        ),  # name an alt -> power_curve driver
     )
     assert set(df["driver"]) == EXPECTED_DRIVERS
     assert df["base_aep_gwh"].iloc[0] > 0
@@ -106,7 +114,8 @@ def test_run_with_explicit_args() -> None:
 def test_power_curve_driver_skipped_without_alt() -> None:
     """No baked alternative machine: the power-curve driver is simply absent."""
     df = run_aep_tornado(
-        weibull_a=8.32, weibull_k=2.1,
+        weibull_a=8.32,
+        weibull_k=2.1,
         losses={"wake_loss_pct": 5.0, "availability_pct": 97.0},
         n_turbines=15,
     )
@@ -146,7 +155,12 @@ def test_scaled_losses_byte_identical_for_canonical_stack() -> None:
     }
     for rel in (-0.2, 0.2):
         out = _scaled_losses(canon, rel)
-        for key in ("wake_loss_pct", "electrical_loss_pct", "curtailment_pct", "other_pct"):
+        for key in (
+            "wake_loss_pct",
+            "electrical_loss_pct",
+            "curtailment_pct",
+            "other_pct",
+        ):
             assert out[key] == pytest.approx(canon[key] * (1.0 + rel))
         assert out["availability_pct"] == pytest.approx(
             100.0 - (100.0 - 97.0) * (1.0 + rel)

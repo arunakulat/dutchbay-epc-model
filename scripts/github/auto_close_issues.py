@@ -30,8 +30,7 @@ from typing import Any, Dict, List, Tuple
 # ---------------------------------------------------------------------------
 
 ISSUE_CLOSE_NOTES: Dict[int, str] = {
-    1: textwrap.dedent(
-        """\
+    1: textwrap.dedent("""\
         Closing as resolved.
 
         The v14 analytics path now attaches `scenario_name` to the KPI block via
@@ -39,19 +38,15 @@ ISSUE_CLOSE_NOTES: Dict[int, str] = {
         `ScenarioAnalytics` propagates this into `summary_df` and `timeseries_df`.
         The executive report flow normalises `scenario_name` before exporting,
         and the Excel + chart exports now show correct scenario labels.
-        """
-    ),
-    2: textwrap.dedent(
-        """\
+        """),
+    2: textwrap.dedent("""\
         Closing as a duplicate of #1.
 
         The same changes that resolved #1 (scenario_name propagation through
         `calculate_scenario_kpis(...)`, `compute_kpis(...)`, `ScenarioAnalytics`
         and the export normalisation path) fully address this issue as well.
-        """
-    ),
-    3: textwrap.dedent(
-        """\
+        """),
+    3: textwrap.dedent("""\
         Closing as resolved.
 
         KPI naming is now canonicalised via the analytics layer:
@@ -61,10 +56,8 @@ ISSUE_CLOSE_NOTES: Dict[int, str] = {
           into `dscr` with clear logging when needed.
 
         ExcelExporter and ChartExporter both consume these canonical names.
-        """
-    ),
-    4: textwrap.dedent(
-        """\
+        """),
+    4: textwrap.dedent("""\
         Closing as resolved.
 
         Excel board views have been hardened by:
@@ -75,10 +68,8 @@ ISSUE_CLOSE_NOTES: Dict[int, str] = {
         The executive report now produces a stable workbook with `Summary` and
         timeseries sheets and IRR/DSCR views where data is available, and
         CI smokes for export are green.
-        """
-    ),
-    5: textwrap.dedent(
-        """\
+        """),
+    5: textwrap.dedent("""\
         Closing as resolved.
 
         A unified `export_charts(...)` entry point now drives chart creation:
@@ -88,10 +79,8 @@ ISSUE_CLOSE_NOTES: Dict[int, str] = {
           executive report.
 
         The latest `make_executive_report.py` run produces both charts.
-        """
-    ),
-    6: textwrap.dedent(
-        """\
+        """),
+    6: textwrap.dedent("""\
         Closing as resolved.
 
         `make_executive_report.py` has been thinned to a CLI + orchestration
@@ -102,18 +91,15 @@ ISSUE_CLOSE_NOTES: Dict[int, str] = {
         - Delegates Excel + chart generation to the exporter helpers.
 
         All heavy lifting for exports lives in the analytics/export layer now.
-        """
-    ),
-    7: textwrap.dedent(
-        """\
+        """),
+    7: textwrap.dedent("""\
         Closing as resolved.
 
         Duplicate `'Batch analysis complete'` logging has been removed. The
         message is emitted once by the analytics layer, and the executive
         report script no longer re-logs the same banner. Console output is
         now clean and single-sourced.
-        """
-    ),
+        """),
     # You can add more entries as you resolve additional issues, e.g.:
     # 8: "Closing after adding construction + IDC + grace-period regression tests...",
 }

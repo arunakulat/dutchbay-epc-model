@@ -182,8 +182,18 @@ def test_tornado_tail_stats_no_usable_shocks_collapses_to_base() -> None:
 
 def test_aggregate_metric_snapshot_picks_extremes() -> None:
     rows = [
-        {"base_value": 0.05, "downside": 0.03, "upside": 0.07, "worst_impact_abs": 0.02},
-        {"base_value": 0.05, "downside": 0.01, "upside": 0.09, "worst_impact_abs": 0.04},
+        {
+            "base_value": 0.05,
+            "downside": 0.03,
+            "upside": 0.07,
+            "worst_impact_abs": 0.02,
+        },
+        {
+            "base_value": 0.05,
+            "downside": 0.01,
+            "upside": 0.09,
+            "worst_impact_abs": 0.04,
+        },
     ]
     cfg = TailRiskConfig(cvar_alpha=0.05, percentiles=(5, 10, 95), dscr_floor=1.30)
     snap = _aggregate_metric_snapshot(rows=rows, run_cfg=cfg)
@@ -212,7 +222,9 @@ def test_aggregate_metric_snapshot_empty_rows() -> None:
 
 
 def test_enrich_disabled_returns_suite_unchanged() -> None:
-    suite = SensitivitySuite(metric="project_irr", tornado_results=[_tornado_with_shocks()])
+    suite = SensitivitySuite(
+        metric="project_irr", tornado_results=[_tornado_with_shocks()]
+    )
     out = enrich_suite_with_tail_risk(
         suite=suite, base_config={}, run_cfg=TailRiskConfig(enabled=False)
     )
@@ -265,7 +277,10 @@ def test_enrich_handles_none_metadata() -> None:
 def test_extract_trials_no_metadata_mapping() -> None:
     # metadata absent / not a Mapping -> None
     assert _extract_trials_from_case({}, "project_irr") is None
-    assert _extract_trials_from_case({"metadata": ["not", "a", "map"]}, "project_irr") is None
+    assert (
+        _extract_trials_from_case({"metadata": ["not", "a", "map"]}, "project_irr")
+        is None
+    )
 
 
 def test_extract_trials_missing_metric_returns_none() -> None:

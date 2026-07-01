@@ -27,7 +27,9 @@ def test_hub_height_is_yaml_sourced_and_consistent(cfg: dict) -> None:
     """160 m comes from config, consistently across turbine / turbines / era5."""
     assert cfg["turbine"]["hub_height_m"] == 160
     assert cfg["resource"]["turbines"]["hub_height_m"] == 160
-    assert cfg["resource"]["era5"]["hub_height_m"] == 160  # cross-asserted by the adapter
+    assert (
+        cfg["resource"]["era5"]["hub_height_m"] == 160
+    )  # cross-asserted by the adapter
 
 
 def test_weibull_is_the_fitted_optimum_not_the_declared(cfg: dict) -> None:
@@ -57,5 +59,7 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # of the equity waterfall.
     assert kpis["project_irr"] == pytest.approx(0.0312, abs=0.01)
     assert kpis["equity_irr"] == pytest.approx(-0.0412, abs=0.01)
-    assert kpis["equity_irr"] < kpis["project_irr"]  # levered equity below the project return
+    assert (
+        kpis["equity_irr"] < kpis["project_irr"]
+    )  # levered equity below the project return
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)

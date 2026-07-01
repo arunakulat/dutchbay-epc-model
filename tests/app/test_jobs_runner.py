@@ -52,14 +52,18 @@ def _good_assessment(_req: WindJobRequest, progress: Any) -> Mapping[str, Any]:
 
 
 def test_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT)
+    monkeypatch.setattr(
+        runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT
+    )
     store = InMemoryJobStore()
     _seed_queued(store)
     run_wind_job("j1", _request(), store, assessment_fn=_good_assessment)
     rec = store.get("j1")
     assert rec is not None
     assert rec.state is JobState.SUCCEEDED
-    assert rec.result is not None and rec.result["kpis"]["project_irr"] == pytest.approx(0.05)
+    assert rec.result is not None and rec.result["kpis"][
+        "project_irr"
+    ] == pytest.approx(0.05)
     assert rec.progress.step == TOTAL_STEPS and rec.progress.message == "Complete"
     assert rec.error is None
 
@@ -93,7 +97,9 @@ def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
                 seen.append((p.step, p.message))
             return super().update(job_id, **changes)
 
-    monkeypatch.setattr(runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT)
+    monkeypatch.setattr(
+        runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT
+    )
     store = _RecordingStore()
     _seed_queued(store)
     run_wind_job("j1", _request(), store, assessment_fn=_good_assessment)

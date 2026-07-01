@@ -11,6 +11,7 @@ assembly to the canonical engine
 orchestration hub avoids the duplicate-and-drift failure mode that previously
 left this entry point calling a non-existent ``StandardShockLibrary`` API.
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -20,7 +21,9 @@ from typing import Any, List, Mapping, Optional, Sequence
 
 from analytics.contracts_v14 import ParameterRangeConfig, SensitivitySuite
 from analytics.scenario_loader import load_scenario_config
-from analytics.sensitivity.engine import SensitivityRunConfig
+from analytics.sensitivity.engine import (
+    SensitivityRunConfig,
+)
 from analytics.sensitivity.engine import (
     run_sensitivity_analysis as _run_engine_sensitivity,
 )

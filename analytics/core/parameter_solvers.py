@@ -92,10 +92,14 @@ def _assert_override_is_live(
     hi_over = _clone_overrides(base_overrides)
     apply(hi_over, float(probes[1]))
     lo = float(
-        evaluate_with_overrides(base_config_path=base_config_path, overrides=lo_over)[kpi_key]
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=lo_over)[
+            kpi_key
+        ]
     )
     hi = float(
-        evaluate_with_overrides(base_config_path=base_config_path, overrides=hi_over)[kpi_key]
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=hi_over)[
+            kpi_key
+        ]
     )
     if abs(hi - lo) < 1e-9:
         raise ValueError(
@@ -213,8 +217,12 @@ def solve_for_tariff_given_irr(
         overrides.setdefault("tariff", {})["lkr_per_kwh"] = float(tariff)
 
     _assert_override_is_live(
-        base_config_path, base_overrides, _apply_tariff, (low, high),
-        "project_irr", lever="tariff.lkr_per_kwh",
+        base_config_path,
+        base_overrides,
+        _apply_tariff,
+        (low, high),
+        "project_irr",
+        lever="tariff.lkr_per_kwh",
     )
 
     def _evaluate_at(tariff: float) -> float:
@@ -234,8 +242,13 @@ def solve_for_tariff_given_irr(
     _d_low, _d_high = _bracket_deltas(_evaluate_at, low, high)
     if _d_low is not None and _d_high is not None:
         _assert_target_bracketed(
-            _d_low, _d_high, label="solve_for_tariff_given_irr",
-            low=low, high=high, target=float(target_irr), tolerance=tolerance,
+            _d_low,
+            _d_high,
+            label="solve_for_tariff_given_irr",
+            low=low,
+            high=high,
+            target=float(target_irr),
+            tolerance=tolerance,
         )
 
     last_good_mid: Optional[float] = None
@@ -361,8 +374,12 @@ def solve_for_max_debt_given_dscr(
     # DSCR" IS the engine's solved gearing, not a solver sweep. (Kept fail-loud rather than
     # returning a silent bound; see the Wave-2 audit finding.)
     _assert_override_is_live(
-        base_config_path, base_overrides, _apply_debt, (low, high),
-        "dscr_min", lever="financial.debt_amount_usd",
+        base_config_path,
+        base_overrides,
+        _apply_debt,
+        (low, high),
+        "dscr_min",
+        lever="financial.debt_amount_usd",
     )
 
     def _evaluate_at(debt_amount: float) -> float:
@@ -502,8 +519,12 @@ def solve_for_tariff_given_npv(
         overrides.setdefault("tariff", {})["lkr_per_kwh"] = float(tariff)
 
     _assert_override_is_live(
-        base_config_path, base_overrides, _apply_tariff, (low, high),
-        metric, lever="tariff.lkr_per_kwh",
+        base_config_path,
+        base_overrides,
+        _apply_tariff,
+        (low, high),
+        metric,
+        lever="tariff.lkr_per_kwh",
     )
 
     def _evaluate_at(tariff: float) -> float:
@@ -523,8 +544,13 @@ def solve_for_tariff_given_npv(
     _d_low, _d_high = _bracket_deltas(_evaluate_at, low, high)
     if _d_low is not None and _d_high is not None:
         _assert_target_bracketed(
-            _d_low, _d_high, label="solve_for_tariff_given_npv",
-            low=low, high=high, target=float(target_npv), tolerance=tolerance,
+            _d_low,
+            _d_high,
+            label="solve_for_tariff_given_npv",
+            low=low,
+            high=high,
+            target=float(target_npv),
+            tolerance=tolerance,
         )
 
     last_good_mid: Optional[float] = None
@@ -649,8 +675,12 @@ def solve_for_max_debt_multi_covenant(
     # As with solve_for_max_debt_given_dscr: debt is engine-sized (dual_dscr), so an absolute
     # debt-amount sweep does not move the covenants — fail loud instead of returning a bound.
     _assert_override_is_live(
-        base_config_path, base_overrides, _apply_debt, (low, high),
-        "dscr_min", lever="financial.debt_amount_usd",
+        base_config_path,
+        base_overrides,
+        _apply_debt,
+        (low, high),
+        "dscr_min",
+        lever="financial.debt_amount_usd",
     )
 
     def _evaluate_at(debt_amount: float) -> Tuple[float, float]:
@@ -686,7 +716,9 @@ def solve_for_max_debt_multi_covenant(
             continue
 
         # BOTH covenants must be satisfied
-        both_satisfied = (achieved_dscr >= target_dscr) and (achieved_llcr >= target_llcr)
+        both_satisfied = (achieved_dscr >= target_dscr) and (
+            achieved_llcr >= target_llcr
+        )
 
         if both_satisfied:
             # Can increase debt
@@ -800,8 +832,12 @@ def solve_for_min_capex_given_irr_floor(
         overrides.setdefault("capex", {})["usd_total"] = float(capex)
 
     _assert_override_is_live(
-        base_config_path, base_overrides, _apply_capex, (low, high),
-        "project_irr", lever="capex.usd_total",
+        base_config_path,
+        base_overrides,
+        _apply_capex,
+        (low, high),
+        "project_irr",
+        lever="capex.usd_total",
     )
 
     def _evaluate_at(capex: float) -> float:
@@ -823,8 +859,13 @@ def solve_for_min_capex_given_irr_floor(
     _d_low, _d_high = _bracket_deltas(lambda c: _evaluate_at(c) - irr_floor, low, high)
     if _d_low is not None and _d_high is not None:
         _assert_target_bracketed(
-            _d_low, _d_high, label="solve_for_min_capex_given_irr_floor",
-            low=low, high=high, target=float(irr_floor), tolerance=1e-4,
+            _d_low,
+            _d_high,
+            label="solve_for_min_capex_given_irr_floor",
+            low=low,
+            high=high,
+            target=float(irr_floor),
+            tolerance=1e-4,
         )
 
     last_good_mid: Optional[float] = None

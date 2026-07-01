@@ -27,13 +27,14 @@ IMPORTANT:
 - This module performs multi-scenario evaluation and can be compute-heavy.
   It intentionally enforces plan-size bounds to avoid accidental blow-ups.
 """
+
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from itertools import product
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
-import copy
 import numpy as np
 
 from analytics.evaluation_v14 import evaluate_with_overrides
@@ -48,6 +49,7 @@ except Exception:  # pragma: no cover
 # Contracts / small data models
 # -----------------------------
 
+
 @dataclass(frozen=True)
 class ObjectiveSpec:
     """
@@ -56,6 +58,7 @@ class ObjectiveSpec:
     metric_key: KPI key in evaluation output (kpis dict)
     direction: "max" or "min"
     """
+
     metric_key: str
     direction: str = "max"  # "max" | "min"
 
@@ -69,6 +72,7 @@ class ParameterGridSpec:
       - can be a dotted path if your override patcher supports it
     values: explicit numeric values to test
     """
+
     name: str
     override_key: str
     values: Tuple[float, ...]
@@ -79,10 +83,11 @@ class ParetoPoint:
     """
     A single evaluated point in objective space.
     """
+
     label: str
     overrides: Mapping[str, Any]
-    objectives: Mapping[str, float]   # metric_key -> value
-    kpis: Mapping[str, Any]           # full KPI dict (for export/audit)
+    objectives: Mapping[str, float]  # metric_key -> value
+    kpis: Mapping[str, Any]  # full KPI dict (for export/audit)
 
 
 @dataclass(frozen=True)
@@ -90,6 +95,7 @@ class ParetoResult:
     """
     Output bundle.
     """
+
     objectives: Tuple[ObjectiveSpec, ...]
     grid: Tuple[ParameterGridSpec, ...]
     points_all: Tuple[ParetoPoint, ...]
@@ -101,6 +107,7 @@ class ParetoResult:
 # Core helpers
 # -----------------------------
 
+
 def _deepcopy_cfg(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     return copy.deepcopy(dict(cfg))
 
@@ -108,7 +115,9 @@ def _deepcopy_cfg(cfg: Mapping[str, Any]) -> Dict[str, Any]:
 def _extract_kpis(out: Mapping[str, Any]) -> Mapping[str, Any]:
     k = out.get("kpis", out)
     if not isinstance(k, Mapping):
-        raise TypeError("Evaluation output must be a mapping or contain a 'kpis' mapping.")
+        raise TypeError(
+            "Evaluation output must be a mapping or contain a 'kpis' mapping."
+        )
     return k
 
 
@@ -135,7 +144,9 @@ def _normalize_for_dominance(value: float, direction: str) -> float:
     raise ValueError(f"Objective direction must be 'max' or 'min', got: {direction!r}")
 
 
-def pareto_frontier(points: Sequence[ParetoPoint], objectives: Sequence[ObjectiveSpec]) -> List[ParetoPoint]:
+def pareto_frontier(
+    points: Sequence[ParetoPoint], objectives: Sequence[ObjectiveSpec]
+) -> List[ParetoPoint]:
     """
     Compute non-dominated frontier.
     A point A dominates B if it is >= in all normalized objectives and > in at least one.
@@ -175,6 +186,7 @@ def pareto_frontier(points: Sequence[ParetoPoint], objectives: Sequence[Objectiv
 # -----------------------------
 # Plan builders (bounded)
 # -----------------------------
+
 
 def build_grid_plan(
     grid: Sequence[ParameterGridSpec],
@@ -264,6 +276,7 @@ def build_lhs_plan(
 # Orchestration
 # -----------------------------
 
+
 def run_pareto_search(
     *,
     base_config: Mapping[str, Any],
@@ -342,6 +355,7 @@ def run_pareto_search(
 # Exports (optional pandas)
 # -----------------------------
 
+
 def export_pareto_table(
     result: ParetoResult,
     *,
@@ -350,7 +364,9 @@ def export_pareto_table(
     """
     Return a pandas DataFrame (if available) or list-of-dicts with key fields.
     """
-    pts = result.points_pareto if which.lower().strip() == "pareto" else result.points_all
+    pts = (
+        result.points_pareto if which.lower().strip() == "pareto" else result.points_all
+    )
 
     rows: List[Dict[str, Any]] = []
     obj_keys = [o.metric_key for o in result.objectives]

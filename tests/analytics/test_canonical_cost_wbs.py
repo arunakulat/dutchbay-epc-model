@@ -22,8 +22,12 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 def test_canonical_breakdown_sums_to_total() -> None:
     cfg = load_scenario_config(LENDER)
     capex = cfg["capex"]
-    line_sum = sum(v for v in capex["breakdown"].values() if isinstance(v, (int, float)))
-    assert line_sum == pytest.approx(float(capex["usd_total"]), rel=0.005)  # WBS == total
+    line_sum = sum(
+        v for v in capex["breakdown"].values() if isinstance(v, (int, float))
+    )
+    assert line_sum == pytest.approx(
+        float(capex["usd_total"]), rel=0.005
+    )  # WBS == total
     assert line_sum == pytest.approx(159_600_000, rel=1e-6)
 
 

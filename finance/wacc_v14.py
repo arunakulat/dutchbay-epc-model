@@ -434,7 +434,12 @@ def resolve_cost_of_equity(wacc_cfg: Dict[str, Any]) -> float:
 
     bu = wacc_cfg.get("build_up")
     if isinstance(bu, dict):
-        parts = ("risk_free", "country_risk_premium", "equity_risk_premium", "size_premium")
+        parts = (
+            "risk_free",
+            "country_risk_premium",
+            "equity_risk_premium",
+            "size_premium",
+        )
         total = 0.0
         seen = False
         for key in parts:
@@ -447,7 +452,9 @@ def resolve_cost_of_equity(wacc_cfg: Dict[str, Any]) -> float:
             total += val
             seen = True
         if not seen or total <= 0:
-            raise ValueError("wacc.build_up requires positive risk_free/premia components")
+            raise ValueError(
+                "wacc.build_up requires positive risk_free/premia components"
+            )
         return total
 
     raise ValueError(
@@ -475,7 +482,9 @@ def compute_build_up_wacc(
         tax_raw = get_nested(config, ["tax", "corporate_tax_rate_pct"])
     if tax_raw is None:
         tax_raw = get_nested(config, ["tax", "corporate_tax_rate"])
-    tax_rate = _pct_to_decimal(_as_float_or_none(tax_raw)) if tax_raw is not None else 0.0
+    tax_rate = (
+        _pct_to_decimal(_as_float_or_none(tax_raw)) if tax_raw is not None else 0.0
+    )
     if tax_rate is None or not (0.0 <= tax_rate <= 1.0):
         raise ValueError(f"Invalid tax_rate for build_up WACC: {tax_raw!r}")
 

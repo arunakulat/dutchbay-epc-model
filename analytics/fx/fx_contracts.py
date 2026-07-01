@@ -32,7 +32,6 @@ from typing import Any, Dict, List, Literal, Optional
 # CRITICAL: Import Pydantic at module level to avoid E402 (module-level import not at top)
 from pydantic import BaseModel, ConfigDict
 
-
 # ═════════════════════════════════════════════════════════════════════════════
 # FXVolumetry – Debt and Revenue Exposure by Currency and Time
 # ═════════════════════════════════════════════════════════════════════════════
@@ -370,7 +369,9 @@ class FXStructuredBlock:
         """Return number of periods in volumetry."""
         return len(self.volumetry)
 
-    def total_debt_usd_equivalent(self, spot_rate_lkr_usd: float | None = None) -> float:
+    def total_debt_usd_equivalent(
+        self, spot_rate_lkr_usd: float | None = None
+    ) -> float:
         """Total debt in USD-equivalent (straight sum across currencies).
 
         All FXVolumetry debt fields are USD-EQUIVALENT (labelled by denomination

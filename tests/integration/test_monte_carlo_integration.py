@@ -35,9 +35,10 @@ import pytest
 
 # Import modules to test
 try:
-    from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
-    from analytics.contracts_v14 import MonteCarloResult
     from omegaconf import OmegaConf  # noqa: F401  (used implicitly via fixtures)
+
+    from analytics.contracts_v14 import MonteCarloResult
+    from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
 except ImportError as e:
     pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
 
@@ -200,8 +201,12 @@ class TestMonteCarloStatistics:
         first = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed)
         second = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed)
 
-        assert first.trials == second.trials, "trials must be identical for a fixed seed"
-        assert first.summary == second.summary, "summary must be identical for a fixed seed"
+        assert (
+            first.trials == second.trials
+        ), "trials must be identical for a fixed seed"
+        assert (
+            first.summary == second.summary
+        ), "summary must be identical for a fixed seed"
 
         # A different seed must change the draws
         other = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed + 1)
@@ -212,7 +217,9 @@ class TestMonteCarloPerformance:
     """Test Monte Carlo performance benchmarks."""
 
     @pytest.mark.slow
-    def test_1k_trials_performance(self, mc_sampling_config, performance_benchmarks) -> None:
+    def test_1k_trials_performance(
+        self, mc_sampling_config, performance_benchmarks
+    ) -> None:
         """1,000 trials should complete within the performance target."""
         cfg = mc_sampling_config
 
@@ -223,14 +230,16 @@ class TestMonteCarloPerformance:
         execution_time = time.perf_counter() - start_time
 
         max_time = performance_benchmarks["monte_carlo_1k_max_seconds"]
-        assert execution_time < max_time, (
-            f"1K trials should complete in < {max_time}s, took {execution_time:.2f}s"
-        )
+        assert (
+            execution_time < max_time
+        ), f"1K trials should complete in < {max_time}s, took {execution_time:.2f}s"
         assert result.metadata["n_trials"] == 1000
 
     @pytest.mark.slow
     @pytest.mark.performance
-    def test_10k_trials_performance(self, mc_sampling_config, performance_benchmarks) -> None:
+    def test_10k_trials_performance(
+        self, mc_sampling_config, performance_benchmarks
+    ) -> None:
         """10,000 trials should complete within the performance target."""
         cfg = mc_sampling_config
 
@@ -241,9 +250,9 @@ class TestMonteCarloPerformance:
         execution_time = time.perf_counter() - start_time
 
         max_time = performance_benchmarks["monte_carlo_10k_max_seconds"]
-        assert execution_time < max_time, (
-            f"10K trials should complete in < {max_time}s, took {execution_time:.2f}s"
-        )
+        assert (
+            execution_time < max_time
+        ), f"10K trials should complete in < {max_time}s, took {execution_time:.2f}s"
         assert len(result.trials["project_npv"]) == 10000
 
     @pytest.mark.slow
@@ -259,16 +268,18 @@ class TestMonteCarloPerformance:
         execution_time = time.perf_counter() - start_time
 
         trials_per_second = n_trials / execution_time
-        assert trials_per_second > 100, (
-            f"Should achieve > 100 trials/s, got {trials_per_second:.0f} trials/s"
-        )
+        assert (
+            trials_per_second > 100
+        ), f"Should achieve > 100 trials/s, got {trials_per_second:.0f} trials/s"
 
 
 class TestMonteCarloDegradationIntegration:
     """Test the degradation hook in the current Monte Carlo engine."""
 
     @pytest.mark.slow
-    def test_degradation_hook_is_documented_noop_on_toy_path(self, mc_sampling_config) -> None:
+    def test_degradation_hook_is_documented_noop_on_toy_path(
+        self, mc_sampling_config
+    ) -> None:
         """Pin the current degradation-hook behaviour (TEST-01).
 
         The current engine wires degradation through
@@ -290,7 +301,9 @@ class TestMonteCarloDegradationIntegration:
 
         # Enable the nested degradation hook and re-run with the same seed
         cfg.monte_carlo.degradation = {"enabled": True, "default_rate": 0.006}
-        with_degradation = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
+        with_degradation = run_monte_carlo_analysis(
+            base_config=cfg, n_trials=200, seed=seed
+        )
 
         assert isinstance(with_degradation, MonteCarloResult)
         assert EXPECTED_KPIS.issubset(set(with_degradation.summary))
@@ -327,7 +340,12 @@ class TestMonteCarloRegressionPins:
         assert meta["n_trials"] == 250
         assert meta["seed"] == seed
         assert meta["sampler"] == "lhs"
-        assert meta["param_names"] == ["capex", "tariff", "capacity_factor", "opex_annual"]
+        assert meta["param_names"] == [
+            "capex",
+            "tariff",
+            "capacity_factor",
+            "opex_annual",
+        ]
 
 
 if __name__ == "__main__":
@@ -336,7 +354,8 @@ if __name__ == "__main__":
 
 def test_degradation_hook_drives_live_project_degradation_key() -> None:
     """The MC degradation hook now writes the LIVE engine key project.degradation (was the
-    dead wind.degradation_rate, silently ignored). Default-off returns overrides unchanged."""
+    dead wind.degradation_rate, silently ignored). Default-off returns overrides unchanged.
+    """
     from analytics.mc.degradation import apply_degradation_if_enabled
 
     off = apply_degradation_if_enabled(
@@ -344,7 +363,9 @@ def test_degradation_hook_drives_live_project_degradation_key() -> None:
     )
     assert off == {}  # disabled -> no-op
     on = apply_degradation_if_enabled(
-        base_cfg={"monte_carlo": {"degradation": {"enabled": True, "default_rate": 0.6}}},
+        base_cfg={
+            "monte_carlo": {"degradation": {"enabled": True, "default_rate": 0.6}}
+        },
         overrides={},
     )
     assert on == {"project.degradation": 0.6}  # live key, not wind.degradation_rate
@@ -359,10 +380,14 @@ def test_degradation_hook_does_not_clobber_a_sampled_value() -> None:
 
     base = {"monte_carlo": {"degradation": {"enabled": True, "default_rate": 0.6}}}
     # nested form (as MC overrides arrive): the 0.9 draw survives, no flat clobber key
-    nested = apply_degradation_if_enabled(base_cfg=base, overrides={"project": {"degradation": 0.9}})
+    nested = apply_degradation_if_enabled(
+        base_cfg=base, overrides={"project": {"degradation": 0.9}}
+    )
     assert nested == {"project": {"degradation": 0.9}}
     # flat form: the sampled flat key survives
-    flat = apply_degradation_if_enabled(base_cfg=base, overrides={"project.degradation": 0.9})
+    flat = apply_degradation_if_enabled(
+        base_cfg=base, overrides={"project.degradation": 0.9}
+    )
     assert flat["project.degradation"] == 0.9
     # absent: the default is injected on the live key
     absent = apply_degradation_if_enabled(base_cfg=base, overrides={})

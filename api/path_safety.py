@@ -42,7 +42,9 @@ def allowed_roots() -> tuple[Path, ...]:
             "(required to confine API file-path inputs)."
         ) from exc
     if not isinstance(names, list) or not names:
-        raise UnsafePathError("defaults.api.allowed_path_roots must be a non-empty list.")
+        raise UnsafePathError(
+            "defaults.api.allowed_path_roots must be a non-empty list."
+        )
     return tuple((REPO_ROOT / str(name)).resolve() for name in names)
 
 

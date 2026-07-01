@@ -123,10 +123,10 @@ logger = logging.getLogger(__name__)
 
 def _safe_mkdir(path: Path) -> None:
     """Create directory if it doesn't exist (mkdir -p behavior).
-    
+
     Args:
         path: Directory path to create.
-        
+
     Returns:
         None. Creates directory with parents if needed.
     """
@@ -135,11 +135,11 @@ def _safe_mkdir(path: Path) -> None:
 
 def _write_json(path: Path, payload: Any) -> None:
     """Write Python object as formatted JSON file.
-    
+
     Args:
         path: File path for JSON output.
         payload: Python object to serialize (must be JSON-serializable).
-        
+
     Returns:
         None. Writes file with indent=2, sorted keys.
     """
@@ -250,15 +250,20 @@ def _run_wind_producer(
 
     logger.info(
         "Auto-orchestrate: invoking wind producer (location=%s, scenario=%s)",
-        location, export_scenario,
+        location,
+        export_scenario,
     )
     proc = subprocess.run(
         [
-            sys.executable, str(producer),
+            sys.executable,
+            str(producer),
             f"location={location}",
             f"export_scenario={export_scenario}",
         ],
-        capture_output=True, text=True, env=env, check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -317,21 +322,23 @@ def _apply_wind_to_scenario(
         tmp.close()
     logger.info(
         "Wind→scenario patch applied (mode=%s, tolerance=%.3f%%, scenario=%s)",
-        adapter_mode, tolerance_pct, scenario_name,
+        adapter_mode,
+        tolerance_pct,
+        scenario_name,
     )
     return Path(tmp.name)
 
 
 def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
     """Write annual cashflow rows as CSV (stdlib csv module - no pandas).
-    
+
     Args:
         path: File path for CSV output.
         annual_rows: List of dicts representing annual cashflow rows.
-        
+
     Returns:
         None. Writes CSV with header row derived from all dict keys.
-        
+
     Notes:
         - Uses stdlib csv module for CI stability (no pandas dependency)
         - Handles heterogeneous row schemas (union of all keys)
@@ -340,13 +347,13 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
     """
     if not isinstance(annual_rows, list) or not annual_rows:
         return
-    
+
     dict_rows = [row for row in annual_rows if isinstance(row, dict)]
     if not dict_rows:
         return
-    
+
     fieldnames: list[str] = sorted({k for row in dict_rows for k in row.keys()})
-    
+
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -465,7 +472,10 @@ def cli(cfg: DictConfig) -> None:
                 wind_json_path = _run_wind_producer(
                     scenario_yaml_path=config,
                     export_scenario=wind_export_scenario,
-                    output_dir=Path(str(cfg.get("export_dir", "_out/run_full_pipeline_v14"))) / "wind_export",
+                    output_dir=Path(
+                        str(cfg.get("export_dir", "_out/run_full_pipeline_v14"))
+                    )
+                    / "wind_export",
                 )
 
             patched_scenario_path = _apply_wind_to_scenario(
@@ -550,10 +560,14 @@ def cli(cfg: DictConfig) -> None:
                 if "kpis" in result:
                     _write_json(export_dir / "kpis.json", result.get("kpis"))
                     logger.info("Wrote kpis.json to %s", export_dir / "kpis.json")
-                
+
                 if "debt_result" in result:
-                    _write_json(export_dir / "debt_result.json", result.get("debt_result"))
-                    logger.info("Wrote debt_result.json to %s", export_dir / "debt_result.json")
+                    _write_json(
+                        export_dir / "debt_result.json", result.get("debt_result")
+                    )
+                    logger.info(
+                        "Wrote debt_result.json to %s", export_dir / "debt_result.json"
+                    )
 
                 if "equity_distribution" in result:
                     _write_json(
@@ -564,17 +578,19 @@ def cli(cfg: DictConfig) -> None:
                         "Wrote equity_distribution.json to %s",
                         export_dir / "equity_distribution.json",
                     )
-                
+
                 if "annual_rows" in result:
                     _write_annual_rows_csv(
                         export_dir / "annual_rows.csv", result.get("annual_rows")
                     )
-                    logger.info("Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv")
+                    logger.info(
+                        "Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv"
+                    )
 
             logger.info("All artifacts written to: %s", str(export_dir.resolve()))
 
         print(json.dumps(result, indent=2, sort_keys=True))
-        
+
     except Exception as e:
         error_result = {
             "status": "error",
@@ -594,7 +610,8 @@ def cli(cfg: DictConfig) -> None:
             except OSError as cleanup_exc:  # pragma: no cover (best-effort)
                 logger.warning(
                     "Could not remove temp patched scenario %s: %s",
-                    patched_scenario_path, cleanup_exc,
+                    patched_scenario_path,
+                    cleanup_exc,
                 )
 
 

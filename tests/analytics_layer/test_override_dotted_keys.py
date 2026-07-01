@@ -5,6 +5,7 @@ Regression coverage for the silent no-op where flat *dotted* overrides
 which made every nested-parameter one-way sensitivity report zero impact while the
 underlying model in fact responds to the parameter.
 """
+
 from __future__ import annotations
 
 import copy
@@ -114,7 +115,9 @@ def test_evaluate_scenario_gateway_honours_dotted_keys() -> None:
     base = es_eval(str(BASECASE))["project_irr"]
     dotted = es_eval(str(BASECASE), {"capex.usd_total": 5e8})["project_irr"]
     nested = es_eval(str(BASECASE), {"capex": {"usd_total": 5e8}})["project_irr"]
-    assert dotted != pytest.approx(base), "dotted override no-op on evaluate_scenario (regression)"
+    assert dotted != pytest.approx(
+        base
+    ), "dotted override no-op on evaluate_scenario (regression)"
     assert dotted == pytest.approx(nested), "dotted and nested forms must agree"
 
 
@@ -130,5 +133,9 @@ def test_both_gateways_agree_on_dotted_override() -> None:
     v14_out = evaluate_with_overrides(
         config_path=None, raw_config=raw, overrides={"capex.usd_total": 5e8}
     )
-    v14 = (v14_out.get("kpis", v14_out) if hasattr(v14_out, "get") else v14_out)["project_irr"]
-    assert es == pytest.approx(v14), "the two evaluate_with_overrides gateways disagree on dotted keys"
+    v14 = (v14_out.get("kpis", v14_out) if hasattr(v14_out, "get") else v14_out)[
+        "project_irr"
+    ]
+    assert es == pytest.approx(
+        v14
+    ), "the two evaluate_with_overrides gateways disagree on dotted keys"
