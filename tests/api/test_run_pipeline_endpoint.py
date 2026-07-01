@@ -163,3 +163,41 @@ def test_contradictory_fx_spot_override_is_rejected_not_silently_collapsed() -> 
             )
         )
     assert exc.value.status_code == 422
+
+
+def test_unexpected_engine_error_is_scrubbed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unexpected (non-authored) engine error must not echo its raw message: it can
+    embed internal paths/config. Only the exception class + a generic 'see the server
+    logs' pointer is returned (mirrors the async job runner scrub)."""
+    import api.pipeline_api as papi
+
+    def _boom(*_a: object, **_k: object) -> dict:
+        raise RuntimeError("/abs/secret/path/leak.yaml blew up (secret=hunter2)")
+
+    monkeypatch.setattr(papi, "run_v14_pipeline", _boom)
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(config_path=LENDER))
+    assert exc.value.status_code == 422
+    detail = str(exc.value.detail)
+    assert "RuntimeError" in detail
+    assert "see the server logs" in detail
+    assert "secret" not in detail and "/abs/secret" not in detail
+
+
+def test_authored_validation_error_is_surfaced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deliberately-authored ValueError from the validators keeps its actionable
+    message (it does not leak internals); only unexpected errors are scrubbed."""
+    import api.pipeline_api as papi
+
+    def _boom(*_a: object, **_k: object) -> None:
+        raise ValueError("capacity_factor 0.5 diverges from bankable AEP by >2%")
+
+    monkeypatch.setattr(papi, "reconcile_capacity_factor_with_bankable_aep", _boom)
+    with pytest.raises(HTTPException) as exc:
+        run_pipeline(RunPipelineRequest(config_path=LENDER))
+    assert exc.value.status_code == 422
+    assert "diverges from bankable AEP" in str(exc.value.detail)
