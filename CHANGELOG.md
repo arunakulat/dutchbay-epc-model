@@ -166,6 +166,14 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Run manifest no longer silently degrades its config hash (audit D8, #577).** The CLI re-loaded the
+  scenario config to hash it under a bare `except` with **no log line**, so a successful run could ship
+  a manifest whose `config_sha256` binds to the file *path* rather than the resolved *contents* —
+  tamper-evidence void, unnoticed. Extracted `_load_manifest_config`, which logs the degrade at WARNING
+  with the traceback before falling back to the non-binding `{config_path: ...}` (the run is not
+  aborted). Adds happy-path and degrade-warns tests. KPI-neutral; oracle byte-identical. (The broader
+  engine-stamp-the-manifest half of #577 — so direct callers also get a manifest — remains as tracked
+  follow-up.)
 - **Reconciled the divergent NaN wind-shear-alpha fill across the two ERA5 paths (audit D13, #580).**
   When alpha (`ln(ws100/ws10)/ln(h_hi/h_lo)`) is uncomputable, `ERA5Fetcher` filled it with a
   config-driven `alpha_default` (0.143, the 1/7-power-law coastal/neutral value) but `era5_retrieval`
