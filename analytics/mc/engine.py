@@ -34,7 +34,7 @@ from analytics.mc.correlation import (
     load_correlation_from_config,
 )
 from analytics.mc.degradation import apply_degradation_if_enabled
-from analytics.mc.samplers import generate_lhs_samples
+from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 
 logger = logging.getLogger(__name__)
 
@@ -354,8 +354,24 @@ class MonteCarloEngine:
             self._correlation, self._param_names
         )
 
-        # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
         _mc_cfg = self._base_config.get("monte_carlo", {})
+
+        # Sampler selection (opt-in via monte_carlo.sampler: "sobol"). Default "lhs" keeps the
+        # canonical Latin-Hypercube path — byte-identical to every existing run. Sobol is a
+        # low-discrepancy QMC alternative offered for the model's SMOOTHER KPIs only (see
+        # generate_sobol_samples / #589); it rounds the trial count up to a power of two.
+        _sampler = (
+            str(_mc_cfg.get("sampler", "lhs")).strip().lower()
+            if isinstance(_mc_cfg, Mapping)
+            else "lhs"
+        )
+        if _sampler not in ("lhs", "sobol"):
+            raise MonteCarloConfigError(
+                f"monte_carlo.sampler must be 'lhs' or 'sobol', got {_sampler!r}."
+            )
+        self._sampler: str = _sampler
+
+        # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
         self._fixed_debt_stress: bool = (
             bool(_mc_cfg.get("fixed_debt_stress", False))
             if isinstance(_mc_cfg, Mapping)
@@ -398,7 +414,7 @@ class MonteCarloEngine:
         self._meta = MonteCarloRunMeta(
             n_trials=0,
             seed=self._seed,
-            sampler="lhs",
+            sampler=self._sampler,
             common_random_numbers=self._crn,
             param_names=tuple(self._param_names),
             config_hash=_stable_config_hash(self._base_config),
@@ -707,18 +723,41 @@ class MonteCarloEngine:
         return param_names, bounds, kinds, dead_names, base_outside
 
     def run(self, *, n_trials: int) -> MonteCarloResult:
-        n = int(n_trials)
-        if n <= 0:
+        n_requested = int(n_trials)
+        if n_requested <= 0:
             raise ValueError("n_trials must be > 0")
 
-        samples = generate_lhs_samples(
-            n_trials=n,
-            bounds=self._param_bounds,
-            seed=self._seed,
-            common_random_numbers=self._crn,
-        )
+        if self._sampler == "sobol":
+            # Sobol rounds n up to the next power of two (balance is only kept at 2**m); ALL
+            # 2**m points are used, so the effective trial count may exceed the request. n is
+            # re-derived from the returned sample count below so the loop, aggregator and
+            # metadata all agree on the number of trials actually evaluated.
+            samples = generate_sobol_samples(
+                n_trials=n_requested,
+                bounds=self._param_bounds,
+                seed=self._seed,
+            )
+        else:
+            samples = generate_lhs_samples(
+                n_trials=n_requested,
+                bounds=self._param_bounds,
+                seed=self._seed,
+                common_random_numbers=self._crn,
+            )
+
+        n = int(samples.shape[0])  # effective trial count (Sobol may round up to 2**m)
 
         if self._correlation is not None and self._correlation.enabled:
+            if self._sampler == "sobol":
+                # Iman-Conover rank-reordering preserves each driver's marginal but destroys the
+                # JOINT low-discrepancy structure Sobol was chosen for — the balance benefit then
+                # only accrues to the marginals. Warn once so an opted-in user is not misled.
+                logger.warning(
+                    "monte_carlo.sampler='sobol' with an enabled correlation block: "
+                    "Iman-Conover rank-reordering preserves marginals but destroys the joint "
+                    "Sobol low-discrepancy structure (the QMC benefit is limited to the "
+                    "marginals). Disable correlation to retain the full QMC balance."
+                )
             samples = apply_correlation_structure(
                 lhs_samples=samples,
                 correlation=self._correlation,
@@ -807,8 +846,10 @@ class MonteCarloEngine:
 
         meta: Dict[str, Any] = {
             "seed": self._seed,
-            "sampler": "lhs",
-            "common_random_numbers": self._crn,
+            "sampler": self._sampler,
+            # CRN is a property of the pseudo-random LHS draw; it is inapplicable to a
+            # deterministic Sobol' net, so record null rather than a misleading flag there.
+            "common_random_numbers": (self._crn if self._sampler != "sobol" else None),
             "n_trials": n,
             "config_hash": self._meta.config_hash,
             "param_names": list(self._param_names),
@@ -819,6 +860,11 @@ class MonteCarloEngine:
             ),
             "allow_toy_fallback": self._allow_toy_fallback,
         }
+        if self._sampler == "sobol" and n != n_requested:
+            # Surface that Sobol rounded the request up to a power of two so a downstream
+            # consumer never silently mistakes the effective trial count for the requested one.
+            meta["sobol_n_requested"] = n_requested
+            meta["sobol_n_used"] = n
         if self._fixed_debt_stress and fixed_dscr_vals:
             arr = sorted(fixed_dscr_vals)
             cov = float(self._fixed_debt_covenant)
