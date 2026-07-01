@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from analytics.contracts_v14 import ScenarioResult
-from analytics.evaluation_v14 import _expand_dotted_overrides
+from analytics.evaluation_v14 import expand_dotted_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
@@ -102,7 +102,7 @@ def evaluate_with_overrides(
     #    solver sweeping "capex.usd_total" through this gateway no-ops while the
     #    optimizer's gateway honours it. Nested-dict overrides pass through unchanged.
     merged_cfg = (
-        _deep_merge_dicts(raw_cfg, _expand_dotted_overrides(overrides))
+        _deep_merge_dicts(raw_cfg, expand_dotted_overrides(overrides))
         if overrides
         else raw_cfg
     )
