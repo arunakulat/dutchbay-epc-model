@@ -5,6 +5,20 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Sized the fund-at-close DSRA off operating year 1, not the synthetic half-year bridge period
+  (round-2 audit).** `finance.debt_v14._build_funding` sized the funded Debt Service Reserve off
+  `debt_service_total[construction_periods]`, which on the `_build_cfads_timeline` debt timeline is the
+  synthetic half-year "bridge" lead-in period rather than operating year 1 (index
+  `construction_periods + 1`). When `interest_only_years < 2` the bridge bears only a half-year of
+  interest, so the DSRA was under-reserved (~50% low at io=0), understating equity-at-close and
+  overstating equity IRR (the reserve is added to equity at financial close and surfaced at
+  `api/pipeline_api.py`). It now reuses the engine's own operating-year-1 debt period (row 0 of
+  `annual_row_debt_period_map`, the same period the year-1 DSCR is computed against), so it is correct
+  whether or not a bridge period exists. KPI-neutral: every committed scenario uses
+  `interest_only_years: 2` (bridge == op-year-1) and none enable `dsra.fund_at_close`, so the DSRA is
+  0 for all of them; committed KPIs are byte-identical across the lender, base, equity and hybrid
+  scenarios (verified before/after). Adds a regression test that forces io=0 and asserts the reserve
+  is sized off operating year 1, not the bridge.
 - **Stopped masking engine regressions behind first-party `ImportError`->`pytest.skip` in three
   integration test modules (round-2 audit).** `tests/integration/test_monte_carlo_integration.py`,
   `test_degradation_flow.py`, and `test_pipeline_end_to_end.py` wrapped FIRST-PARTY analytics imports

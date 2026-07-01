@@ -1103,7 +1103,23 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
 
     construction_periods = int(_as_float(core.get("construction_periods"), 0))
     ds = core.get("debt_service_total", []) or []
-    yr1_ds = float(ds[construction_periods]) if len(ds) > construction_periods else 0.0
+    # Size the DSRA off OPERATING YEAR 1's debt service, not the synthetic half-year
+    # "bridge" lead-in period. `debt_service_total` is on the debt timeline built by
+    # `_build_cfads_timeline`: when a bridge period is present it sits at index
+    # `construction_periods` and operating year 1 is at `construction_periods + 1`, so
+    # indexing `construction_periods` directly grabbed the bridge -- which carries only a
+    # half-year of interest when `interest_only_years < 2` -- and under-reserved the DSRA
+    # (~50% low in the io=0 case), understating equity-at-close and overstating equity IRR.
+    # Reuse the engine's own operating-year-1 debt period (row 0 of
+    # `annual_row_debt_period_map`, the same period the year-1 DSCR is computed against) so
+    # this stays correct whether or not a bridge period exists (audit round-2 DSRA fix).
+    period_map = core.get("annual_row_debt_period_map") or []
+    op_year1_period = (
+        int(period_map[0]["debt_period"])
+        if period_map and "debt_period" in period_map[0]
+        else construction_periods
+    )
+    yr1_ds = float(ds[op_year1_period]) if len(ds) > op_year1_period else 0.0
     initial_dsra = (target_months / 12.0) * yr1_ds if fund_at_close else 0.0
 
     capex = _extract_capex_usd(config)
