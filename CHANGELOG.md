@@ -5,6 +5,20 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Fixed a currency + phase mismatch in the enhanced-analytics returns view (audit D12).**
+  `analytics.pipeline_analytics_v14._calculate_returns_analysis` built the CFADS series in LKR
+  (`cfads_final_lkr`) while taking debt service from the USD, period-indexed
+  `debt_result["debt_service_total"]` (which carries a construction/bridge lead-in) — a currency
+  mismatch of ~one FX rate plus a multi-year phase offset that made debt service effectively vanish
+  and grossly inflated the geared equity IRR on this surface. Both series are now read from the
+  enriched per-row USD fields (`cf_pre_debt` and the operating-year-aligned, bridge-folded row-level
+  `debt_service_total`), and the local `ReturnsConfig` neutralises `capex_fx_rate` to 1.0 so CAPEX
+  and the equity base stay in USD too. Off the committed-KPI path: this `returns_analysis` surface
+  feeds no committed IRR/DSCR/LLCR/PLCR/NPV/WACC/CFADS value (those come from the finance engine) and
+  its only reader is an unreached fallback in `fx_sensitivity_real`; no pinned test value changes.
+  KPI-neutral. Adds a regression test that geared equity IRR sits below project IRR when debt is
+  priced above the project return, plus a docstring note that the returned `AllReturns` `*_lkr`
+  fields carry self-consistent USD on this call path.
 - **Corrected the read-only LCOS discharged-energy basis for `energy_tariff` BESS (audit M1).**
   `finance.bess_lcos.compute_lcos` applied a 0.40 depth-of-discharge to the discharged-energy
   denominator for the `energy_tariff` model, but `bess_revenue` exports the FULL nameplate energy
