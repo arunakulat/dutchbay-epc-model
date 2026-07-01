@@ -316,6 +316,20 @@ everything except #529 (hybrid solar P50 re-baseline)._
   kept in lockstep. Packaging metadata only — no code or KPI change.
 
 ### Added
+- **Monte Carlo convergence diagnostic (#590).** New `analytics/mc/convergence.py` computes a
+  read-only per-metric convergence trace from the final trial arrays — running mean plus the CI
+  half-width `err_k = z · sd_k / √k` (95% by default; equivalent to a Welford online accumulator) at
+  log-spaced checkpoints ending at `n` — and the engine attaches it to `result.metadata["convergence"]`
+  (headline `final_rel_ci_halfwidth = err_N / |mean|`, reported as `null` when the mean is within one
+  half-width of zero — its sign is not even resolved, and the committed lender IRRs sit near zero, so a
+  naive `|mean|` denominator would blow up to a spurious huge number), so a reader can see whether
+  `n_trials` sufficed for THIS scenario. Each per-metric block is tagged `statistic: "mean"`. Deliberately
+  a diagnostic, not an early-stopping rule: it never changes `n_trials` or any reported band (that would
+  move the P50/P90 bands), so it is **KPI-neutral / oracle byte-identical**. Documents its limits (i.i.d.
+  normal SE is approximate under LHS; bounds the MEAN only — P90/P95/P99/ES converge slower, so a tight
+  mean-CI does not certify the bands a lender reads). Adds unit + engine-integration tests. (Independently
+  re-evaluated by a Fable-model adversarial review — gate MERGE; its near-zero-mean and self-marker nits
+  applied here; a P90 order-statistic CI is filed as a follow-up.)
 - **CASPER payload now surfaces the lender-grade Monte Carlo risk table (`mc_risk`).** The
   `analytics.mc.exports.build_casper_risk_blocks` builder — a P50 + P90/P95 *downside* (exceedance)
   table for DSCR/IRR/NPV/LLCR/PLCR plus `Prob(DSCR < floor)` and the worst-year DSCR P95, computed
