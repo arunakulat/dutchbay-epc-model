@@ -68,16 +68,24 @@ def test_config_accepts_all_valid_metrics() -> None:
 def test_evaluate_with_overrides_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    def fake(path: str, overrides: dict[str, Any]) -> dict[str, Any]:
+    def fake(
+        path: str, overrides: dict[str, Any], *, return_full_result: bool = False
+    ) -> dict[str, Any]:
         captured["path"] = path
         captured["overrides"] = overrides
+        captured["return_full_result"] = return_full_result
         return {"project_irr": 0.07}
 
     monkeypatch.setattr("analytics.evaluation_v14.evaluate_with_overrides", fake)
+    # KPIs-only by default ...
     out = evaluate_with_overrides("cfg.yaml", {"fx": {"fx_shock": 0.1}})
     assert out == {"project_irr": 0.07}
     assert captured["path"] == "cfg.yaml"
     assert captured["overrides"] == {"fx": {"fx_shock": 0.1}}
+    assert captured["return_full_result"] is False
+    # ... and the return_full_result flag is forwarded to the real gateway.
+    evaluate_with_overrides("cfg.yaml", {"fx": {}}, return_full_result=True)
+    assert captured["return_full_result"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -352,15 +360,23 @@ def test_run_exact_zero_variance_takes_zero_contribution_branch(
 def _patch_pipeline(
     monkeypatch: pytest.MonkeyPatch, fixed: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
+    """Patch the path-based gateway seam (``mod.evaluate_with_overrides``) that
+    ``_run_pipeline_with_fx_params`` routes through, capturing the OVERRIDES passed for
+    each swept point and returning a deterministic full-result payload.
+
+    (Previously this patched ``run_v14_pipeline_with_analytics`` and passed a whole config
+    dict — which masked the fact that the real method always raised ``TypeError`` on the
+    dict config the callee now rejects; round-2 audit fixed the method to use the gateway.)
+    """
     captured: list[dict[str, Any]] = []
 
-    def fake_pipeline(
-        *, config: dict[str, Any], enable_returns: bool, enable_risk: bool
+    def fake(
+        path: str, overrides: dict[str, Any], *, return_full_result: bool = False
     ) -> dict[str, Any]:
-        captured.append(config)
-        spot = float(config["fx"]["start_lkr_per_usd"])
+        captured.append(overrides)
         if fixed is not None:
             return fixed
+        spot = float(overrides["fx"]["start_lkr_per_usd"])
         # IRR/NPV decline as LKR weakens (spot rises): VaR/CVaR tail lives at high spot.
         return {
             "kpis": {
@@ -372,30 +388,31 @@ def _patch_pipeline(
             "debt_result": {"min_dscr": 1.30},
         }
 
-    import analytics.pipeline_analytics_v14 as pipe
-
-    monkeypatch.setattr(pipe, "run_v14_pipeline_with_analytics", fake_pipeline)
+    monkeypatch.setattr(mod, "evaluate_with_overrides", fake)
     return captured
 
 
-def test_run_pipeline_with_fx_params_injects_fx_block(
+def test_run_pipeline_with_fx_params_passes_fx_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _patch_pipeline(monkeypatch)
     analyzer = FXSensitivityAnalyzer(str(LENDER))
     base_rate = analyzer.base_config["fx"]["start_lkr_per_usd"]  # 333.79
-    analyzer._run_pipeline_with_fx_params(400.0, 0.5, 100.0)  # inject a DISTINCT rate
-    injected = captured[0]["fx"]
-    assert injected["start_lkr_per_usd"] == pytest.approx(400.0)
-    assert injected["hedge_ratio"] == pytest.approx(0.5)
-    assert injected["spread_bps"] == pytest.approx(100.0)
-    # deep copy: the injected 400.0 did NOT mutate the analyzer's own base_config.
+    analyzer._run_pipeline_with_fx_params(400.0, 0.5, 100.0)  # a DISTINCT rate
+    # The FX params are passed as gateway OVERRIDES against the base_config_path (no config
+    # dict is built or mutated), and reach the gateway with the live start_lkr_per_usd key.
+    fx = captured[0]["fx"]
+    assert fx["start_lkr_per_usd"] == pytest.approx(400.0)
+    assert fx["hedge_ratio"] == pytest.approx(0.5)
+    assert fx["spread_bps"] == pytest.approx(100.0)
+    # The analyzer's own base_config is never touched (overrides go to the gateway).
     assert analyzer.base_config["fx"]["start_lkr_per_usd"] == pytest.approx(base_rate)
 
 
-def test_run_pipeline_with_fx_params_creates_fx_when_absent(
+def test_run_pipeline_with_fx_params_override_is_independent_of_base_fx(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Even a scenario with no fx block gets a well-formed fx override carrying the swept rate.
     captured = _patch_pipeline(monkeypatch)
     cfg = tmp_path / "no_fx.yaml"
     cfg.write_text("project:\n  name: x\n")
@@ -524,3 +541,24 @@ def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
     for name in ("hedge_ratio", "spread"):
         coef = next(c for c in result.coefficients if c.parameter == name)
         assert abs(coef.coefficient) < 1e-9
+
+
+def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
+    """End-to-end, NO mock: analyze_fx_sensitivity now routes through the path-based
+    gateway, so it actually runs on the real lender scenario instead of raising TypeError
+    on a dict config.
+
+    Round-2 audit: the method built an inline dict config and passed it to
+    run_v14_pipeline_with_analytics, which hard-guards config to (str | Path), so it always
+    raised before returning — the public method was dead in production and only ever
+    exercised under a monkeypatched pipeline. This drives it unmocked so the fix is real.
+    """
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    result = analyzer.analyze_fx_sensitivity(fx_variation_pct=10.0, fx_steps=3)
+    assert isinstance(result, RealFXSensitivityResult)
+    assert result.base_fx_rate == pytest.approx(333.79)
+    assert len(result.fx_rate_points) == 3
+    irrs = [p.project_irr for p in result.fx_rate_points if p.project_irr is not None]
+    assert len(irrs) == 3  # every swept point produced a real IRR (no TypeError)
+    # weaker LKR (higher spot) -> lower project IRR: a real, monotone tail
+    assert irrs[-1] < irrs[0]
