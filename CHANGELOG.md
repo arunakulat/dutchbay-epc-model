@@ -316,6 +316,38 @@ everything except #529 (hybrid solar P50 re-baseline)._
   kept in lockstep. Packaging metadata only — no code or KPI change.
 
 ### Added
+- **Optional Sobol' QMC Monte-Carlo sampler (#589).** New
+  `analytics.mc.samplers.generate_sobol_samples` adds a scrambled Sobol' low-discrepancy
+  (quasi-Monte-Carlo) draw as an **opt-in** alternative to the canonical LHS sampler, selected
+  per-scenario via `monte_carlo.sampler: "sobol"` (default `"lhs"` — **byte-identical** to every
+  existing run; the deterministic base case does not invoke MC at all, so the oracle is untouched).
+  Deliberately opt-in, not the default: a scrambled Sobol' net's star discrepancy is `~O((log n)ᵈ/n)`
+  versus MC's `O(n⁻¹ᐟ²)` RMSE, an advantage realised only for *smooth, low-effective-dimension*
+  integrands, and DutchBay's binding KPIs are **not** smooth in the drivers (`min_dscr` clamps at the
+  covenant floor; `equity_irr` kinks where debt is sized) — QMC buys little there and can alias against
+  the sequence, so it is offered as an honest convergence option for the smoother KPIs (`project_npv`,
+  mean `project_irr`) only. Because a scrambled Sobol' net keeps its balance/discrepancy guarantee only
+  at `n = 2**m` (SciPy warns, and the property is genuinely lost, if a non-power-of-2 subset is
+  truncated), a requested trial count is rounded **up** to the next power of two and all `2**m` points
+  are used; the engine records `sobol_n_requested` / `sobol_n_used` in `result.metadata` so a consumer
+  never mistakes the effective count for the request. Scaling uses the SAME per-dimension affine map as
+  LHS (`lo + u·(hi−lo)`) rather than `qmc.scale`, so a **pinned driver** (`lo == hi`, an engine-accepted
+  config shape) yields a constant column instead of the raw, param-anonymous `ValueError` `qmc.scale`
+  raises on a non-strict bound — Sobol never fails on a config LHS accepts (CASPER). When Sobol is
+  combined with an enabled correlation block the engine emits a one-time warning: Iman-Conover
+  rank-reordering preserves the marginals but destroys the *joint* low-discrepancy structure, so the QMC
+  benefit is limited to the marginals. `common_random_numbers` is recorded `null` (not a misleading flag)
+  on a Sobol run, since CRN is inapplicable to a deterministic net. SciPy (`scipy.stats.qmc`) is imported
+  lazily inside the sampler (CASPER — the module top-level stays numpy-only). Additive, read-only —
+  KPI-neutral / oracle byte-identical; full suite green. Adds discrepancy, power-of-two-rounding,
+  determinism, pinned-column, sampler-normalization and engine-switch tests. Independently re-evaluated
+  by a **Fable-model** 3-lens adversarial review (QMC-numerics / KPI-neutrality / contracts-CASPER):
+  initial gate **BLOCK** on two confirmed one-line defects — the pinned-`lo==hi` `qmc.scale` crash and a
+  sibling `MonteCarloRunMeta` `sampler="lhs"` hardcode (a latent frozen-contract lie) — both fixed and
+  re-gated **MERGE**; follow-ups filed #647 (CLI requested-vs-used `n_trials`), #648 (retire dead
+  `monte_carlo.sampling_method` + wire `MonteCarloResult.sampling_method`), #649 (vestigial RunMeta).
+  (This is the last of the P1
+  methodology backlog; see the 2026-07-02 SOTA link-research digest for why QMC is framed as opt-in.)
 - **PAWN (moment-independent) global sensitivity analysis (#591).** New
   `analytics.sensitivity.global_sa.run_pawn` adds a distribution-based (Kolmogorov-Smirnov) SA index
   alongside the variance-based Sobol/Morris. PAWN (Pianosi & Wagener 2018) stays bounded in [0,1] and,

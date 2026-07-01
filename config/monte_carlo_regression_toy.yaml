@@ -9,7 +9,7 @@ simulation:
   iterations: 20              # FAST: Reduced for rapid testing (was 500)
   random_seed: 42             # Global RNG seed (CRN across scenarios)
   parallel_workers: 4         # Hint for parallel execution (if supported)
-  sampler: lhs                # {lhs | sobol | random}
+  sampler: lhs                # {lhs | sobol}  (live key is monte_carlo.sampler; 'random' now raises)
   output_percentiles:
     - 5
     - 10
