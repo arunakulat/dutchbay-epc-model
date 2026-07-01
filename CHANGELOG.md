@@ -4,6 +4,23 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **CI cost reduction (~50–70% fewer minutes, zero tests touched).** Added a `concurrency` group
+  with `cancel-in-progress` (scoped to `pull_request` events, so `main`/scheduled runs are never
+  cancelled) to all four heavy workflows — a new push now aborts the superseded in-flight run
+  instead of letting stale runs pile up. Dropped the `test-suite` `push` trigger from
+  `[main, develop, feature/*, resolution/*]` to `[main]` only: feature/PR branches validate via
+  `pull_request`, removing the push+pull_request double-run that doubled CI cost per PR commit
+  (work reaches `main` only through PRs, so nothing loses a gate). `regression-smoke` drops the
+  stale `v14chat-upgrade` branch. The suite still runs `-n auto` across all cores and all three
+  required checks (`Test Summary`, `fastlane`, `smoke`) still run on every PR — deliberately NOT
+  paths-scoped, since a paths-skipped required check would block PRs indefinitely.
+- **Fixed a check-name collision** surfaced by the review: `fx-tests.yml` had two jobs whose display
+  names (`Test Summary`, `Code Quality Checks`) collided with `test-suite.yml`'s jobs — and
+  `Test Summary` is a *required* status check, so on an FX-touching PR two different "Test Summary"
+  checks appeared, making the required-check identity ambiguous. Renamed the fx-tests jobs to
+  `FX Test Summary` / `FX Code Quality Checks` (job IDs unchanged, so `needs:` is unaffected).
+
 ## v15.2.0 - 2026-07-01
 
 _Consolidates everything merged since the v15.0.0 tag: the #529 solar re-baseline (which bumped the

@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+# Cancel a superseded PR run when a new commit is pushed; main runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   fastlane:
     runs-on: ubuntu-latest
