@@ -166,6 +166,15 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Reconciled the divergent NaN wind-shear-alpha fill across the two ERA5 paths (audit D13, #580).**
+  When alpha (`ln(ws100/ws10)/ln(h_hi/h_lo)`) is uncomputable, `ERA5Fetcher` filled it with a
+  config-driven `alpha_default` (0.143, the 1/7-power-law coastal/neutral value) but `era5_retrieval`
+  filled it with `alpha_min` (0.05, the clip *floor*) — understating shear on gap-filled hours.
+  `ERA5RequestConfig` gains an `alpha_default` field (default 0.143, overridable via
+  `download.alpha_default`) and `build_hub_height_series` now fills NaN alpha with it before clipping,
+  matching `ERA5Fetcher`. Bounded to gap-filled hours on the wind-diagnostic path; the committed frozen
+  wind export is unaffected, so no lender KPI moves — oracle byte-identical. Adds a NaN-fill regression
+  test and a `from_yaml` wiring test.
 - **FX pre-flight now numeric-validates `start_lkr_per_usd` and `annual_depr`, not just their presence
   (audit D14, #581).** `schema_guard._validate_fx_section` only key-presence-checked the FX mapping, so
   `fx.annual_depr: 'not-a-number'` passed the gate (the loader would raise later, but CESSPIT wants the

@@ -195,6 +195,46 @@ def test_build_hub_height_series_falls_back_to_time_coord(
     assert np.isclose(df["wind_shear_alpha"].iloc[0], np.log(2.0) / np.log(10.0))
 
 
+def test_build_hub_height_series_fills_nan_alpha_with_default_not_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A NaN shear alpha is filled with alpha_default (0.143), not the clip floor.
+
+    Audit D13 (#580): this path filled an uncomputable alpha (0/0 winds -> NaN) with
+    alpha_min (0.05, a clip floor), diverging from ERA5Fetcher, which uses alpha_default.
+    Both now use the coastal/neutral 0.143 default.
+    """
+    times = pd.date_range("2023-01-01", periods=3, freq="h")
+    zero = np.zeros(len(times))  # ws10 = ws100 = 0 -> 0/0 -> NaN alpha
+    fake = _FakeDataset(
+        data={"u10": zero, "v10": zero, "u100": zero, "v100": zero},
+        coords={"valid_time": times},
+    )
+    fake_xr = types.ModuleType("xarray")
+    fake_xr.open_dataset = lambda _path: fake  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "xarray", fake_xr)
+
+    cfg = _cfg()
+    assert cfg.alpha_default == pytest.approx(0.143)
+    df = build_hub_height_series(Path("ignored.nc"), cfg)
+    alphas = df["wind_shear_alpha"].to_numpy()
+    assert np.allclose(alphas, cfg.alpha_default)
+    assert not np.allclose(alphas, cfg.alpha_min)  # NOT the old clip-floor fill
+
+
+def test_request_config_reads_alpha_default_from_yaml(tmp_path: Path) -> None:
+    """``download.alpha_default`` overrides the 0.143 default (audit D13, #580)."""
+    yml = tmp_path / "cfg.yaml"
+    yml.write_text(
+        "project:\n  name: A\n  latitude: 8.27\n  longitude: 79.75\n"
+        "download:\n  alpha_default: 0.12\n"
+        "  reference:\n    mode: fixed\n    start: 2020\n    end: 2023\n"
+        "turbine:\n  model: iea_reference_10mw\n  num_turbines: 15\n  hub_height_m: 150\n"
+    )
+    cfg = ERA5RequestConfig.from_yaml(str(yml))
+    assert cfg.alpha_default == pytest.approx(0.12)
+
+
 def test_run_orchestrates_and_freezes_vintage(monkeypatch: pytest.MonkeyPatch) -> None:
     """``run`` wires retrieve -> build -> coverage -> AEP and freezes vintage (345-373)."""
     cfg = _cfg(reference_mode="latest")
