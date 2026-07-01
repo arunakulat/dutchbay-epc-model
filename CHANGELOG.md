@@ -166,6 +166,16 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Wind monthly-energy profile no longer collapses all 8760 hours into month 1 (audit D3, #574).**
+  `EnergyCalculator.calculate_monthly_energy` ran `pd.to_datetime(df.index).month`, which on the
+  `WindPipeline` orchestrator's integer `RangeIndex` read the values as epoch-nanoseconds and bucketed
+  every hour into January — a silent, meaningless `monthly_profile`, masked by a `DatetimeIndex` test
+  fixture and a monkeypatched calculator. A new `_month_of_row` helper uses a `DatetimeIndex` directly
+  and synthesizes a reference non-leap-year hourly calendar for a positional/`RangeIndex`, so each row
+  maps to its true month. Adds a regression test exercising the real `RangeIndex` shape end-to-end
+  (12 months present, not one bucket). Diagnostic (`wind_resource`) path only — the bankable AEP is
+  index-independent (`analytics.wind.aep_summary_builder`), so **no lender KPI moves**; KPI oracle
+  byte-identical.
 - **`pct_to_decimal` fails loud on out-of-range rates instead of silently mis-scaling (audit D7,
   #573).** The `finance/cashflow_v14_utils.py` normalizer read *any* value `> 1.0` as a percentage,
   so `150 → 1.5` and `1.5 → 0.015` passed silently — a fail-loud violation. It now raises for a value

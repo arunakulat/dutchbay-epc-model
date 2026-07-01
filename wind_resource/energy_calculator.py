@@ -398,6 +398,24 @@ class EnergyCalculator:
 
         return results
 
+    @staticmethod
+    def _month_of_row(index: pd.Index) -> np.ndarray:
+        """Return the calendar month (1-12) for each hourly row.
+
+        A ``DatetimeIndex`` is used directly. A positional/integer index (the
+        ``WindPipeline`` orchestrator feeds a ``RangeIndex``) is a contiguous hourly
+        series, so a reference non-leap-year hourly calendar is synthesized and each
+        row mapped to its true month.
+
+        The previous ``pd.to_datetime(df.index).month`` silently read an integer
+        ``RangeIndex`` as epoch-nanoseconds, so all 8760 hours landed in month 1 and
+        the emitted ``monthly_profile`` was meaningless (audit D3, #574).
+        """
+        if isinstance(index, pd.DatetimeIndex):
+            return np.asarray(index.month)
+        calendar = pd.date_range("2001-01-01", periods=len(index), freq="h")
+        return np.asarray(calendar.month)
+
     def calculate_monthly_energy(self) -> pd.DataFrame:
         """Calculate monthly energy production profile.
 
@@ -412,7 +430,7 @@ class EnergyCalculator:
             >>> print(monthly.head())
         """
         df = self.df.copy()
-        df["month"] = pd.to_datetime(df.index).month
+        df["month"] = self._month_of_row(df.index)
         df["power_kw"] = self.power_curve_func(df[self.ws_column])
 
         # Monthly averages
