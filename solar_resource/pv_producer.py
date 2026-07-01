@@ -43,10 +43,14 @@ Deep-research audit dispositions (#485), each RE-VERIFIED against this code:
   ``pdc0 = ac_nameplate / inverter_eff_nom`` so the inverter saturates AC at exactly the AC
   nameplate, and ``.clip(upper=ac_nameplate)`` belt-and-suspenders it. At DC 50 MWp / ILR 1.2
   (AC 41.67 MW) the clip DOES engage at tropical midday — it is not "disabled".
-* **SOLAR-9 (bifacial) — correct as-is.** ``bifacial_gain`` appears ONLY as a report-stage
-  ``cf_mono`` vs ``cf_bifacial`` disclosure in ``scripts/generate_solar_assessment_report.py``;
-  the FINANCED yield is the monofacial pvlib P50. Bifacial is intentionally outside the
-  validated finance chain, not silently baked in.
+* **SOLAR-9 (bifacial) — producer/finance chain is monofacial; the sample report is NOT.**
+  The producer and the committed hybrid lender case never admit bifacial: the financed solar
+  P50 is the frozen monofacial pvlib yield (0.1685). NOTE, however, that the standalone
+  *illustrative* ``scripts/generate_solar_assessment_report.py`` DOES finance a bifacial-
+  uplifted capacity factor — it sets ``project.capacity_factor = cf_mono * bifacial_gain``
+  (default +7%) before calling ``run_v14_pipeline``, and discloses ``cf_mono`` vs
+  ``cf_bifacial`` side by side. So that sample report's headline KPIs carry the (un-validated)
+  bifacial uplift; the committed lender pack does not.
 * **SOLAR-6 (TMY ingest) + SOLAR-12 (hourly thermal) — IMPLEMENTED (#529, opt-in).** When
   ``tmy_path`` points at a FROZEN hourly TMY (the #469 frozen-vs-live call, resolved to FROZEN
   for reproducibility + a pvlib-free finance stack), the producer uses the TMY's measured
