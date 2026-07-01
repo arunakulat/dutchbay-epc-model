@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Corrected the read-only LCOS discharged-energy basis for `energy_tariff` BESS (audit M1).**
+  `finance.bess_lcos.compute_lcos` applied a 0.40 depth-of-discharge to the discharged-energy
+  denominator for the `energy_tariff` model, but `bess_revenue` exports the FULL nameplate energy
+  per cycle for that model (no DoD) — so the reported LCOS was overstated by 1/0.40 = 2.5x. The DoD
+  is now gated by `revenue_model` (applied only to `capacity_charge`, which IS dispatched to a
+  fractional depth on call). Read-only reporting number, strictly off the cashflow path: no
+  committed IRR/DSCR/NPV/CFADS/covenant value and no pinned test value changes; only the reported
+  `energy_tariff` LCOS moves (2.5x lower, now consistent with its revenue energy basis).
 - **Repo-wide `black` + `isort` reformat, and both promoted to mandatory CI gates.** Ran `isort .`
   + `black .` across the whole repo (210 files reformatted), clearing the ~212-file backlog that had
   kept `black` advisory (`|| true`). Added a `[tool.isort]` config (`profile = "black"`, `legacy/`

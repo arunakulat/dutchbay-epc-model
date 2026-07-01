@@ -397,3 +397,28 @@ def test_opex_escalation_pct_is_normalised_like_the_cashflow_engine():
 
     cfg["opex"]["escalation_pct"] = 0.0  # committed scenarios -> byte-identical
     assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == 0.0
+
+
+def test_energy_tariff_lcos_discharged_energy_matches_revenue_basis():
+    """M1: an energy_tariff BESS's LCOS discharged-energy basis must equal the revenue
+    energy basis (energy_mwh x cycles x RTE, with NO depth-of-discharge) — bess_revenue
+    exports the full nameplate energy per cycle for the energy_tariff model. Applying the
+    0.40 energy_tariff DoD to the LCOS denominator overstated the reported LCOS by 2.5x.
+    """
+    spec = resolve_lcos_specs(_energy_cfg(contract_years=1))[0]
+    assert spec.revenue_model == "energy_tariff"
+    r = compute_lcos(spec, wacc=0.0, project_years=1)
+    # DoD is NOT applied for energy_tariff: 40 MWh x 1 cycle x 1.0 rte x 1.0 soh = 40
+    # (previously 40 x 0.40 = 16, which overstated LCOS by 1/0.40 = 2.5x).
+    assert r.pv_discharged_mwh == pytest.approx(40.0)
+
+
+def test_capacity_charge_lcos_still_applies_depth_of_discharge():
+    """The capacity_charge (availability-tolling) DoD is UNCHANGED by M1: such a BESS is
+    dispatched to a fractional depth on call, so its LCOS energy basis keeps the 0.80 DoD.
+    """
+    spec = resolve_lcos_specs(_capacity_cfg(revenue_overrides={"contract_years": 1}))[0]
+    assert spec.revenue_model == "capacity_charge"
+    r = compute_lcos(spec, wacc=0.0, project_years=1)
+    # DoD applied: 40 x 1 cycle x 0.80 dod x 1.0 rte x 1.0 soh = 32.
+    assert r.pv_discharged_mwh == pytest.approx(32.0)
