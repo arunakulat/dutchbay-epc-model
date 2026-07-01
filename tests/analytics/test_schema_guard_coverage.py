@@ -153,6 +153,33 @@ def test_fx_section_valid_mapping_no_error() -> None:
     assert errors == []
 
 
+def test_fx_section_non_numeric_depr_rejected() -> None:
+    """A non-numeric `annual_depr` is caught at pre-flight (audit D14, #581)."""
+    errors: list[str] = []
+    _validate_fx_section(
+        {"fx": {FX_START_KEY: 333.79, FX_DEPR_KEY: "not-a-number"}}, errors
+    )
+    assert any(FX_DEPR_KEY in e and "finite number" in e for e in errors)
+
+
+def test_fx_section_non_numeric_or_nonpositive_start_rejected() -> None:
+    """A non-numeric or non-positive `start_lkr_per_usd` is caught at pre-flight."""
+    bad_str: list[str] = []
+    _validate_fx_section({"fx": {FX_START_KEY: "foo", FX_DEPR_KEY: 0.05}}, bad_str)
+    assert any(FX_START_KEY in e and "finite number" in e for e in bad_str)
+
+    non_positive: list[str] = []
+    _validate_fx_section({"fx": {FX_START_KEY: -5.0, FX_DEPR_KEY: 0.05}}, non_positive)
+    assert any(FX_START_KEY in e and "> 0" in e for e in non_positive)
+
+
+def test_fx_section_numeric_string_still_accepted() -> None:
+    """A numeric string passes (float() semantics mirror the loader) — no over-tightening."""
+    errors: list[str] = []
+    _validate_fx_section({"fx": {FX_START_KEY: "333.79", FX_DEPR_KEY: "0.05"}}, errors)
+    assert errors == []
+
+
 # ---------------------------------------------------------------------------
 # validate_config_for_v14: FX errors surface through the public API
 # ---------------------------------------------------------------------------

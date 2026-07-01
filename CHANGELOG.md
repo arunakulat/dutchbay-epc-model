@@ -166,6 +166,13 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **FX pre-flight now numeric-validates `start_lkr_per_usd` and `annual_depr`, not just their presence
+  (audit D14, #581).** `schema_guard._validate_fx_section` only key-presence-checked the FX mapping, so
+  `fx.annual_depr: 'not-a-number'` passed the gate (the loader would raise later, but CESSPIT wants the
+  gatekeeper to name the field). It now rejects a non-finite `start_lkr_per_usd`/`annual_depr` and a
+  non-positive `start_lkr_per_usd`, using `float()` semantics that mirror `scenario_loader._resolve_fx`
+  (so numeric strings still pass — no over-tightening). Defense-in-depth only; every committed scenario
+  has valid numeric FX, so full suite (3004) and the KPI oracle are unchanged. KPI-neutral.
 - **Renamed the batch `ScenarioResult` to `BatchScenarioResult` to end a name collision with the
   canonical contract (audit D9, #578).** `analytics/scenario_analytics.py` defined a structurally
   different `ScenarioResult` dataclass sharing the name of the canonical
