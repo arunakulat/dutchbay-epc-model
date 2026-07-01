@@ -1,8 +1,12 @@
 name: Test Suite
 
 on:
+  # Post-merge validation on main only; feature/PR branches validate via pull_request. This
+  # removes the push+pull_request double-run that doubled CI cost per PR commit (a feature/*
+  # push AND its PR both fired the full suite). Work reaches main only through PRs (GWTF), so
+  # every change is still gated exactly once before merge, then re-validated on the main push.
   push:
-    branches: [ main, develop, feature/*, resolution/* ]
+    branches: [ main ]
   pull_request:
     branches: [ main, develop ]
   schedule:
@@ -10,6 +14,13 @@ on:
     # exercised every day against main.
     - cron: '17 3 * * *'
   workflow_dispatch:
+
+# Cancel superseded runs for the same PR (a new push aborts the in-flight run instead of
+# piling up). cancel-in-progress is scoped to pull_request events, so main/schedule runs are
+# never cancelled — every merged commit is still fully validated.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

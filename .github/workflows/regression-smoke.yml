@@ -1,10 +1,17 @@
 name: Regression Smoke
 
 on:
+  # NOT paths-scoped: `smoke` is a REQUIRED status check (ruleset "main branch protection"), so it
+  # must run on every PR — paths-scoping it would leave non-matching PRs waiting forever on a check
+  # that never reports. We only drop the stale v14chat-upgrade branch and add run-cancellation.
   push:
-    branches: [ v14chat-upgrade, main ]
+    branches: [ main ]
   pull_request:
-    branches: [ v14chat-upgrade, main ]
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:
