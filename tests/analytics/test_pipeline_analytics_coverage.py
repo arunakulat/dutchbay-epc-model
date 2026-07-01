@@ -186,27 +186,39 @@ def test_returns_no_annual_rows_returns_none() -> None:
     assert mod._calculate_returns_analysis({"annual_rows": []}, {}) is None
 
 
-def test_returns_empty_debt_service_uses_zeros(real_cfg: Dict[str, Any]) -> None:
-    """Empty debt_service_total -> zero-filled series (lines 225-226)."""
+def test_returns_rows_missing_usd_fields_default_to_zero(
+    real_cfg: Dict[str, Any],
+) -> None:
+    """Rows without the enriched USD fields -> zero series, still returns AllReturns.
+
+    Post-D12 the series are read from per-row ``cf_pre_debt`` / ``debt_service_total``
+    (USD). Rows carrying only the legacy ``cfads_final_lkr`` therefore yield all-zero
+    USD series via ``row.get(..., 0.0)`` and must still produce a (degenerate)
+    AllReturns rather than raising.
+    """
     base = {
         "annual_rows": [{"cfads_final_lkr": 1.0e9}, {"cfads_final_lkr": 1.1e9}],
-        "debt_result": {"debt_service_total": []},
     }
     out = mod._calculate_returns_analysis(base, real_cfg)
     assert out is not None
     assert out.project_returns is not None
 
 
-def test_returns_short_debt_service_is_padded(real_cfg: Dict[str, Any]) -> None:
-    """debt_service_total shorter than CFADS -> padded with zeros (line 231)."""
+def test_returns_series_are_one_entry_per_annual_row(
+    real_cfg: Dict[str, Any],
+) -> None:
+    """Both series are built one entry per annual row (index-aligned by construction).
+
+    Post-D12 CFADS and debt service both come from the annual rows themselves, so the
+    two series are always the same length as ``annual_rows`` -- no positional slice of
+    a period-indexed debt series and no while-loop padding can desynchronise them.
+    """
     base = {
         "annual_rows": [
-            {"cfads_final_lkr": 1.0e9},
-            {"cfads_final_lkr": 1.1e9},
-            {"cfads_final_lkr": 1.2e9},
+            {"cf_pre_debt": 1.2e7, "debt_service_total": 4.0e6},
+            {"cf_pre_debt": 1.3e7, "debt_service_total": 4.0e6},
+            {"cf_pre_debt": 1.4e7, "debt_service_total": 4.0e6},
         ],
-        # one entry vs three CFADS years -> while-loop padding runs.
-        "debt_result": {"debt_service_total": [4.0e8]},
     }
     out = mod._calculate_returns_analysis(base, real_cfg)
     assert out is not None
@@ -220,6 +232,57 @@ def test_returns_bad_config_caught_returns_none(
     # Missing capex/fx/financing/returns keys -> ReturnsConfig.from_yaml raises,
     # caught by the broad except.
     assert mod._calculate_returns_analysis(finance_base_result, {}) is None
+
+
+def test_returns_geared_equity_below_project_for_expensive_debt() -> None:
+    """D12: enhanced-analytics returns are USD-consistent and phase-aligned.
+
+    With debt priced (11%) above the unlevered project return (~8.4%) at 60% gearing,
+    geared equity IRR must sit BELOW project IRR. Pre-fix, CFADS was read in LKR
+    (``cfads_final_lkr``) while debt service was sliced from the USD, period-indexed
+    ``debt_result['debt_service_total']`` -- a ~FX-rate currency mismatch plus a phase
+    offset that made debt service ~vanish and inflated equity IRR far above project
+    IRR. This is a regression guard for that bug.
+    """
+    fx = 300.0
+    n = 15
+    cf_usd = 12_000_000.0
+    r_d, debt_usd = 0.11, 60_000_000.0
+    ds_usd = debt_usd * r_d / (1.0 - (1.0 + r_d) ** -n)  # level annuity
+    # Enriched-row shape: per-row USD cf_pre_debt + per-row USD debt_service_total,
+    # plus the legacy LKR cfads_final_lkr the buggy path used to read.
+    annual_rows = [
+        {
+            "year": i + 1,
+            "cfads_final_lkr": cf_usd * fx,
+            "cf_pre_debt": cf_usd,
+            "debt_service_total": ds_usd,
+        }
+        for i in range(n)
+    ]
+    base = {
+        "annual_rows": annual_rows,
+        # Period-indexed USD series with a construction lead-in: what the buggy path
+        # positionally sliced (now ignored -- the per-row fields drive the series).
+        "debt_result": {"debt_service_total": [0.0, 0.0] + [ds_usd] * n},
+    }
+    cfg = {
+        "capex": {"usd_total": 100_000_000.0},
+        "fx": {"start_lkr_per_usd": fx},
+        "Financing_Terms": {"debt_ratio": 0.6},
+        "returns": {"project_discount_rate": 0.10, "equity_discount_rate": 0.12},
+    }
+    out = mod._calculate_returns_analysis(base, cfg)
+    assert out is not None
+    proj = out.project_returns.project_irr
+    eq = out.equity_returns.equity_irr
+    assert proj is not None and eq is not None
+    # Expensive debt above the project return de-levers equity.
+    assert eq < proj
+    # The currency-mismatch inflation (uplift was strongly positive pre-fix) is gone.
+    assert out.irr_uplift < 0.0
+    # Equity base is USD equity (capex_usd * (1 - debt_ratio)), not LKR-scaled.
+    assert out.equity_investment_lkr == pytest.approx(40_000_000.0)
 
 
 # ---------------------------------------------------------------------------
