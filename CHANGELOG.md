@@ -166,6 +166,19 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Tail-risk snapshot: fixed inverted cost-driver labels and removed the false VaR/CVaR advertising
+  (audit D5/D10, #576).** (1) `_tornado_tail_stats` keyed `downside`/`upside` to the shock *direction*
+  (`min(low_case)` / `max(high_case)`), so for a cost driver — whose low-cost case is the *better*
+  outcome — the lender-facing tail table reported the better figure as the "downside." They are now
+  keyed to the KPI *outcome*: the worst and best KPI across all of the parameter's shock cases. (2) The
+  live tornado path computes only 3-point downside/upside/impact — no distributional VaR/CVaR or
+  breach probability (those need Monte Carlo trial arrays) — yet the module docstring/config promised
+  them and the per-metric summary echoed `cvar_alpha`/`percentiles`/`dscr_floor`, which CASPER
+  surfaced verbatim as if computed. The echoes are removed and the docstrings rewritten to state
+  plainly what the live path does and does not compute (the distributional helpers remain as a
+  separate, explicitly-unwired MC-backed API; use `analytics.mc` for real tail risk). Re-pins the
+  tests that encoded the echoes and adds a cost-driver label regression test. KPI-neutral (a
+  read-only tail table; deterministic KPIs untouched); oracle byte-identical.
 - **The `debt` logical module now registers validation specs; strict `['cashflow','debt']` no longer
   guards zero debt fields (audit D11, #579).** `finance.debt_v14` registered no `RequiredFieldSpec`s, so
   `get_required_fields('debt') == []` and the canonical strict validation guarded nothing on the debt
