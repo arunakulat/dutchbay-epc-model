@@ -166,6 +166,15 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **Renamed the batch `ScenarioResult` to `BatchScenarioResult` to end a name collision with the
+  canonical contract (audit D9, #578).** `analytics/scenario_analytics.py` defined a structurally
+  different `ScenarioResult` dataclass sharing the name of the canonical
+  `analytics.contracts_v14.ScenarioResult`, with no import/alias between them — a CCCDIR
+  (FRAMEWORK-03) violation where two distinct result surfaces answered to one name. The batch
+  comparison container is renamed `BatchScenarioResult` (matching the neighbouring
+  `BatchResultSummary`), its docstring now names the canonical contract it is distinct from, and the
+  two test modules that constructed it are updated. No shim — it is an internal batch container, not a
+  public contract, and the only importers were tests. KPI-neutral; oracle byte-identical.
 - **Global SA now flags a structurally-flat metric instead of emitting out-of-[0,1] Sobol indices
   (audit D4, #575).** The tornado engine guards a covenant-pinned metric with `_flag_degenerate_metric`,
   but global SA (`analytics/sensitivity/global_sa.py`) had no counterpart: a near-constant `min_dscr`

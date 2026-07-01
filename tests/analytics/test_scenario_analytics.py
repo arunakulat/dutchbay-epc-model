@@ -27,8 +27,8 @@ import pytest
 
 from analytics.scenario_analytics import (
     BatchResultSummary,
+    BatchScenarioResult,
     ScenarioAnalytics,
-    ScenarioResult,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -215,7 +215,7 @@ def test_run_single_happy_path(lender_analytics: ScenarioAnalytics) -> None:
     """A valid scenario produces populated KPIs, annual rows, and debt result."""
     path = lender_analytics.discover_scenarios()[0]
     res = lender_analytics._run_single(path)
-    assert isinstance(res, ScenarioResult)
+    assert isinstance(res, BatchScenarioResult)
     assert res.fail_reason is None
     assert res.name == LENDER_STEM
     assert res.config_path == path
@@ -231,7 +231,7 @@ def test_run_single_happy_path(lender_analytics: ScenarioAnalytics) -> None:
 
 
 def test_run_single_failure_is_graceful(tmp_path: Path) -> None:
-    """A schema-invalid scenario yields a ScenarioResult with fail_reason set.
+    """A schema-invalid scenario yields a BatchScenarioResult with fail_reason set.
 
     _run_single never raises; it records the failure and leaves the result
     surfaces empty so the batch can skip it.
@@ -355,8 +355,8 @@ def test_run_export_excel_noop_without_output_path(lender_dir: Path) -> None:
 # Dataclasses
 # ---------------------------------------------------------------------------
 def test_scenario_result_fail_reason_optional() -> None:
-    """ScenarioResult.fail_reason defaults to None."""
-    res = ScenarioResult(
+    """BatchScenarioResult.fail_reason defaults to None."""
+    res = BatchScenarioResult(
         name="x",
         config_path=Path("x.yaml"),
         kpis={},
@@ -368,8 +368,8 @@ def test_scenario_result_fail_reason_optional() -> None:
 
 
 def test_scenario_result_lcos_defaults_empty() -> None:
-    """ScenarioResult.lcos defaults to an empty list (non-storage scenarios)."""
-    res = ScenarioResult(
+    """BatchScenarioResult.lcos defaults to an empty list (non-storage scenarios)."""
+    res = BatchScenarioResult(
         name="x",
         config_path=Path("x.yaml"),
         kpis={},
@@ -431,8 +431,8 @@ def test_wind_scenario_has_no_lcos(lender_analytics: ScenarioAnalytics) -> None:
 # Reproducibility manifest (analytics.run_manifest) — batch metadata
 # ---------------------------------------------------------------------------
 def test_scenario_result_run_manifest_defaults_none() -> None:
-    """ScenarioResult.run_manifest defaults to None (pre-manifest failures)."""
-    res = ScenarioResult(
+    """BatchScenarioResult.run_manifest defaults to None (pre-manifest failures)."""
+    res = BatchScenarioResult(
         name="x",
         config_path=Path("x.yaml"),
         kpis={},
