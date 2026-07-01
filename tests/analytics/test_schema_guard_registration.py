@@ -113,3 +113,51 @@ def test_strict_validation_rejects_missing_capex() -> None:
     cfg["finance"].pop("capex_total_usd")
     with pytest.raises(ConfigValidationError, match="epc_usd_total"):
         validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+
+
+# ---------------------------------------------------------------------------
+# debt module registers validate-when-present specs (audit D11, #579)
+# ---------------------------------------------------------------------------
+def test_debt_module_registers_validate_when_present_specs() -> None:
+    """The `debt` logical module now registers real specs (was zero, #579)."""
+    import finance.debt_v14  # noqa: F401  (import side effect registers the specs)
+    from analytics.config_schema import get_required_fields
+
+    specs = {s.name: s for s in get_required_fields("debt")}
+    assert {
+        "debt_tenor_years",
+        "debt_interest_rate",
+        "debt_gearing_ratio",
+    } <= set(specs)
+    # All are validate-when-present: not required, and a missing value passes.
+    for spec in specs.values():
+        assert spec.required is False
+        assert spec.validator is not None and spec.validator(None) is True
+
+
+def test_debt_spec_validators_reject_present_malformed_values() -> None:
+    import finance.debt_v14  # noqa: F401
+    from analytics.config_schema import get_required_fields
+
+    specs = {s.name: s for s in get_required_fields("debt")}
+    assert specs["debt_tenor_years"].validator(-5) is False
+    assert specs["debt_tenor_years"].validator(15) is True
+    assert specs["debt_interest_rate"].validator("nan-ish") is False
+    assert specs["debt_interest_rate"].validator(0.08) is True
+    assert specs["debt_gearing_ratio"].validator(1.5) is False
+    assert specs["debt_gearing_ratio"].validator(0.7) is True
+
+
+def test_strict_validation_rejects_malformed_present_debt_tenor() -> None:
+    """A PRESENT but non-positive tenor now fails strict `['cashflow','debt']`."""
+    cfg = _valid_config()
+    cfg["debt"]["term_years"] = -1  # present but malformed
+    with pytest.raises(ConfigValidationError, match="debt_tenor_years"):
+        validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+
+
+def test_strict_validation_accepts_config_with_no_debt_block() -> None:
+    """A config with NO debt block still passes — debt specs never force presence."""
+    cfg = _valid_config()
+    cfg.pop("debt")
+    validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])  # must not raise

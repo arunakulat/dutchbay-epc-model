@@ -166,6 +166,18 @@ interim `VERSION` to 15.1.0 but was never separately tagged) plus the #481 repor
 everything except #529 (hybrid solar P50 re-baseline)._
 
 ### Fixed
+- **The `debt` logical module now registers validation specs; strict `['cashflow','debt']` no longer
+  guards zero debt fields (audit D11, #579).** `finance.debt_v14` registered no `RequiredFieldSpec`s, so
+  `get_required_fields('debt') == []` and the canonical strict validation guarded nothing on the debt
+  block. The debt engine is intentionally default-tolerant (a missing `tenor_years` defaults to 15) and
+  several committed scenarios carry no debt block, so the new specs are **validate-when-present**
+  (`required=False`): a missing value passes untouched, but a *present* malformed value — a non-positive
+  tenor, a non-numeric/negative rate, or an out-of-[0,1] gearing — now fails loud at pre-flight instead
+  of silently reaching the sizer. Every committed scenario's declared debt values already satisfy these
+  (full suite 3012 green; KPI oracle byte-identical). The `irr` logical module **intentionally**
+  registers no config specs (IRR/NPV are computed, the discount rate lives under the `wacc`/config
+  surface with a documented default, and no live caller validates `irr`); this disposition is now
+  documented at `schema_guard._MODULE_IMPORTS`.
 - **Run manifest no longer silently degrades its config hash (audit D8, #577).** The CLI re-loaded the
   scenario config to hash it under a bare `except` with **no log line**, so a successful run could ship
   a manifest whose `config_sha256` binds to the file *path* rather than the resolved *contents* —
