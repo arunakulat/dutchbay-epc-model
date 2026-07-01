@@ -92,6 +92,21 @@ class SensitivityConfig:
     debt_ratio_max: float
     debt_rate: float
 
+    def __post_init__(self) -> None:
+        """Reject a perturbation grid that cannot express the 0% base case.
+
+        The sweep is a symmetric ``linspace`` over ``[-range, +range]``; it contains
+        the exact 0% base point ONLY when ``n_steps`` is odd (and a single point
+        cannot express a range at all). An even ``n_steps`` drops the base row, which
+        previously zeroed every reported delta silently. CESSPIT: fail loud rather
+        than emit a degenerate sensitivity result.
+        """
+        if self.n_steps < 3 or self.n_steps % 2 == 0:
+            raise ValueError(
+                "n_steps must be an odd integer >= 3 so the symmetric perturbation "
+                f"grid includes the 0% base case, got {self.n_steps}"
+            )
+
 
 def _build_cfads_array(
     aep: float,
@@ -193,6 +208,45 @@ def _perturb_parameter(
     return params
 
 
+def _size_debt_at_perturbation(
+    config: SensitivityConfig, variable: str, pct: float
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Perturb ``variable`` by ``pct`` percent and size dual-DSCR debt at that point.
+
+    Returns ``(params, debt_result)``. Factored out so the 0% base case can be sized
+    once BEFORE the sweep, making ``base_debt`` — and every delta measured against it
+    — independent of the grid's ordering and parity. Previously the base was captured
+    mid-loop only when a grid point hit exactly 0%, so downside points (evaluated
+    before the midpoint) recorded a 0.0 delta and an even ``n_steps`` grid lost the
+    base entirely.
+    """
+    params = _perturb_parameter(config, variable, pct)
+    cfads_p50 = _build_cfads_array(
+        aep=params["aep_p50"],
+        tariff=params["tariff"],
+        opex=params["opex"],
+        degradation_rate=params["degradation"],
+        project_life=config.project_life,
+    )
+    cfads_p99 = _build_cfads_array(
+        aep=params["aep_p99"],
+        tariff=params["tariff"],
+        opex=params["opex"],
+        degradation_rate=params["degradation"],
+        project_life=config.project_life,
+    )
+    debt_result = size_debt_with_dual_dscr(
+        cfads_p50=cfads_p50,
+        cfads_p99=cfads_p99,
+        dscr_target_p50=config.dscr_target_p50,
+        dscr_target_p99=config.dscr_target_p99,
+        capex=params["capex"],
+        debt_ratio_max=config.debt_ratio_max,
+        debt_rate=config.debt_rate,
+    )
+    return params, debt_result
+
+
 def analyze_single_variable(
     config: SensitivityConfig,
     variable: str,
@@ -242,54 +296,19 @@ def analyze_single_variable(
         -config.perturbation_range_pct, config.perturbation_range_pct, config.n_steps
     )
 
+    # Size the unperturbed 0% base ONCE, before the sweep, so base_debt and every
+    # delta measured against it are independent of the grid's ordering and parity.
+    _, base_debt_result = _size_debt_at_perturbation(config, variable, 0.0)
+    base_debt = float(base_debt_result["debt_sized"])
+
     results = []
-    base_debt = None
 
     for pct in perturbations:
-        # Perturb parameters
-        params = _perturb_parameter(config, variable, pct)
+        params, debt_result = _size_debt_at_perturbation(config, variable, pct)
 
-        # Build CFADS with perturbed parameters
-        cfads_p50 = _build_cfads_array(
-            aep=params["aep_p50"],
-            tariff=params["tariff"],
-            opex=params["opex"],
-            degradation_rate=params["degradation"],
-            project_life=config.project_life,
-        )
-
-        cfads_p99 = _build_cfads_array(
-            aep=params["aep_p99"],
-            tariff=params["tariff"],
-            opex=params["opex"],
-            degradation_rate=params["degradation"],
-            project_life=config.project_life,
-        )
-
-        # Size debt with dual DSCR
-        debt_result = size_debt_with_dual_dscr(
-            cfads_p50=cfads_p50,
-            cfads_p99=cfads_p99,
-            dscr_target_p50=config.dscr_target_p50,
-            dscr_target_p99=config.dscr_target_p99,
-            capex=params["capex"],
-            debt_ratio_max=config.debt_ratio_max,
-            debt_rate=config.debt_rate,
-        )
-
-        # Store base case for delta calculations
-        if abs(pct) < 1e-6:  # Base case (0% perturbation)
-            base_debt = debt_result["debt_sized"]
-
-        # Calculate deltas
-        delta_usd = (
-            debt_result["debt_sized"] - base_debt if base_debt is not None else 0.0
-        )
-        delta_pct = (
-            (delta_usd / base_debt * 100.0)
-            if base_debt is not None and base_debt > 0
-            else 0.0
-        )
+        # Calculate deltas against the pre-computed base (always defined).
+        delta_usd = debt_result["debt_sized"] - base_debt
+        delta_pct = (delta_usd / base_debt * 100.0) if base_debt > 0 else 0.0
 
         # Get perturbed parameter value for logging
         if variable == "degradation":
@@ -325,13 +344,11 @@ def analyze_single_variable(
     max_debt = max(r["debt_sized"] for r in results)
 
     tornado_data = {
-        "min_impact": float(min_debt - base_debt) if base_debt else 0.0,
-        "max_impact": float(max_debt - base_debt) if base_debt else 0.0,
+        "min_impact": float(min_debt - base_debt),
+        "max_impact": float(max_debt - base_debt),
         "range_usd": float(max_debt - min_debt),
         "range_pct": (
-            float((max_debt - min_debt) / base_debt * 100.0)
-            if base_debt and base_debt > 0
-            else 0.0
+            float((max_debt - min_debt) / base_debt * 100.0) if base_debt > 0 else 0.0
         ),
     }
 
@@ -375,7 +392,7 @@ def analyze_single_variable(
     return {
         "variable": variable,
         "base_value": float(base_value),
-        "base_debt": float(base_debt) if base_debt else 0.0,
+        "base_debt": float(base_debt),
         "perturbations": results,
         "tornado_data": tornado_data,
         "constraint_transitions": transitions,
