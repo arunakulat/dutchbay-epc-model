@@ -454,3 +454,75 @@ def test_payload_survives_live_dict_shaped_scenario() -> None:
     # numeric KPIs survive; the str/list ones are dropped (not coerced)
     assert payload["baseline_kpis"]["project_irr"] == pytest.approx(0.0505)
     assert "scenario_name" not in payload["baseline_kpis"]
+
+
+# ────────────────────────── mc_risk block (real MC VaR/CVaR/breach) ─────────────
+def _monte_carlo_with_trials() -> MonteCarloResult:
+    """A MonteCarloResult carrying raw trial arrays (what build_casper_risk_blocks needs)."""
+    dscr = [1.10, 1.22, 1.28, 1.31, 1.35, 1.40, 1.45, 1.20, 1.33, 1.27]
+    irr = [0.02 + 0.005 * i for i in range(10)]
+    npv = [-5.0e6 + 1.0e6 * i for i in range(10)]
+    trials = {
+        "dscr_min": dscr,
+        "project_irr": irr,
+        "project_npv": npv,
+    }
+    return MonteCarloResult(
+        scenario_name="cov_scenario",
+        iterations=10,
+        failed_iterations=0,
+        trials=trials,
+        dscr_min_p10=1.20,
+        dscr_min_p50=1.30,
+    )
+
+
+def test_mc_risk_surfaced_from_trials_and_config_first_floor() -> None:
+    """The real MC risk table is surfaced, JSON-safe, with a config-first DSCR floor."""
+    scenario = _bare_scenario(debt_covenants=_debt_covenants())  # dscr_threshold=1.20
+    payload = build_casper_payload(
+        scenario=scenario, monte_carlo=_monte_carlo_with_trials()
+    )
+
+    mc_risk = payload["mc_risk"]
+    assert mc_risk is not None
+    # Lender risk table has the DSCR (min) row plus covenant rows.
+    metrics = {row["metric"] for row in mc_risk["lender_risk_table"]}
+    assert "DSCR (min)" in metrics
+    assert any(m.startswith("Prob(DSCR <") for m in metrics)
+    # Config-first covenant floor came from debt_covenants.dscr_threshold (1.20), not 1.30.
+    cov = mc_risk["covenant"]
+    assert cov["dscr_floor"] == pytest.approx(1.20)
+    assert 0.0 <= cov["prob_breach"] <= 1.0
+    assert cov["n_trials"] == 10
+    # Strict-JSON safe: numpy floats coerced to native, and the covenant-row NaN
+    # placeholders mapped to None so a strict encoder does not raise (audit hardening).
+    assert json.dumps(payload, allow_nan=False)
+    # The covenant rows' numeric columns are None (not NaN tokens).
+    prob_row = next(
+        r for r in mc_risk["lender_risk_table"] if r["metric"].startswith("Prob(DSCR <")
+    )
+    assert prob_row["P50"] is None and prob_row["P90"] is None
+
+
+def test_mc_risk_is_none_when_no_monte_carlo() -> None:
+    payload = build_casper_payload(scenario=_bare_scenario())
+    assert payload["mc_risk"] is None
+
+
+def test_mc_risk_is_none_for_summary_only_result_no_crash() -> None:
+    """A summary-only MonteCarloResult (no raw trials) degrades to None, not a crash."""
+    payload = build_casper_payload(
+        scenario=_bare_scenario(debt_covenants=_debt_covenants()),
+        monte_carlo=_monte_carlo(),  # percentile scalars only, no .trials
+    )
+    assert payload["mc_risk"] is None
+
+
+def test_mc_risk_floor_falls_back_to_default_without_covenants() -> None:
+    """With no structured covenant, the surfaced floor is the CovenantSpec default (1.30)."""
+    payload = build_casper_payload(
+        scenario=_bare_scenario(),  # no debt_covenants
+        monte_carlo=_monte_carlo_with_trials(),
+    )
+    assert payload["mc_risk"]["covenant"]["dscr_floor"] == pytest.approx(1.30)

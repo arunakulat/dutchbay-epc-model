@@ -306,6 +306,26 @@ everything except #529 (hybrid solar P50 re-baseline)._
   kept in lockstep. Packaging metadata only — no code or KPI change.
 
 ### Added
+- **CASPER payload now surfaces the lender-grade Monte Carlo risk table (`mc_risk`).** The
+  `analytics.mc.exports.build_casper_risk_blocks` builder — a P50 + P90/P95 *downside* (exceedance)
+  table for DSCR/IRR/NPV/LLCR/PLCR plus `Prob(DSCR < floor)` and the worst-year DSCR P95, computed
+  from raw MC trial arrays — had **no production consumer** (flagged in the #576 tail-risk follow-up:
+  it is the genuine distributional VaR/CVaR-style tail risk the one-way tornado path structurally
+  cannot produce). It is now wired into `_casper_to_dict` as an additive `mc_risk` block. CASPER
+  discipline: it degrades to `null` (never crashes the payload) when Monte Carlo was not run, when the
+  result is summary-only (no raw `dscr_min` trial array), or when the optional `pandas` export
+  dependency is absent; the DSCR covenant floor is resolved **config-first** from
+  `debt_covenants.dscr_threshold` (falling back to the documented `CovenantSpec` default and surfaced
+  explicitly in the emitted covenant block — no silent floor); the `DataFrame` is converted to
+  JSON-safe records. Additive customer-visible key, so no `casper_result_v1` version bump (same posture
+  as the earlier `generation` / `technology_breakdown` additions). Cells are **strict-JSON**-safe
+  (non-finite floats — the covenant-row `NaN` placeholders — map to `None`, matching the payload's
+  None-for-missing convention, so `json.dumps(allow_nan=False)` does not raise), and the guard is
+  narrowed to the sanctioned degradation paths (`KeyError`/`RuntimeError`/`ImportError`) so a genuine
+  bug propagates rather than being swallowed. Adds surfaced/absent/summary-only/config-first-floor/
+  strict-JSON tests. Read-only; KPI-neutral (oracle byte-identical). Re-scopes the `mc/exports.py` item
+  in #583 from "remove dead code" to "wired". (Adversarially reviewed against GWTF/CESSPIT/CCCDIR/CASPER
+  before merge; the floor-source-consistency and docs follow-ups are tracked separately.)
 - **Committed lender case now declares full assumption provenance (#481 RPT-2 follow-up).** The
   `dutchbay_lendercase_2025Q4.yaml` scenario gains an `evidence_register.entries` block declaring a
   source · as-of · tier for all 10 material assumptions (tariff, capex, opex, capacity_factor, fx,
