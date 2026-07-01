@@ -348,29 +348,14 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     social_levy_pct = _pct_to_decimal(social_levy_raw) or 0.0
 
-    corporate_tax_raw = _as_float_or_none(
-        _resolve_first(
-            raw,
-            ("tax", "corporate_tax_rate_pct"),
-            ("tax", "corporate_tax_rate"),
-            ("tax", "corporate_rate"),
-            ("project", "corporate_tax_rate_pct"),
-            ("project", "corporate_tax_rate"),
-            ("parameters", "corporate_tax_rate_pct"),
-            ("parameters", "corporate_tax_rate"),
-            "corporate_tax_rate_pct",
-            "corporate_tax_rate",
-        )
-    )
-    corporate_tax_rate = _pct_to_decimal(corporate_tax_raw)
-
-    # NOTE: the tax-detail inputs (enhanced_capital_allowance_pct, depreciation_years,
-    # tax_holiday_years, tax_holiday_start_year) are resolved + validated by
-    # finance.cashflow_v14_tax.TaxConfig — the LIVE depreciation/holiday path reads them
-    # off that object (tax_config.depreciation_years, .tax_holiday_years, .holiday window).
-    # The parallel resolution that once lived here fed CashflowParams fields that NO
-    # computation ever read — dead second sources of truth that could silently drift from
-    # the live TaxConfig — so they were removed (CCCDIR).
+    # NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_pct,
+    # depreciation_years, tax_holiday_years, tax_holiday_start_year) are resolved + validated
+    # by finance.cashflow_v14_tax.TaxConfig — the LIVE tax/depreciation/holiday path reads them
+    # off that object (tax_config.tax_rate, .depreciation_years, .tax_holiday_years, .holiday
+    # window). The parallel resolution that once lived here fed CashflowParams fields that NO
+    # computation ever read — dead second sources of truth that could silently drift from the
+    # live TaxConfig — so they were removed (CCCDIR). The config KEY is still required + range-
+    # validated for the whole config in validate_parameters() below.
 
     risk_haircut_raw = _as_float_or_none(
         _resolve_first(
@@ -402,9 +387,6 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         success_fee_pct=float(success_fee_pct),
         env_surcharge_pct=float(env_surcharge_pct),
         social_levy_pct=float(social_levy_pct),
-        corporate_tax_rate=(
-            float(corporate_tax_rate) if corporate_tax_rate is not None else 0.0
-        ),
         risk_haircut_pct=float(risk_haircut_pct),
     )
 
@@ -431,11 +413,6 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         "opex_usd_per_year",
         lambda v: isinstance(v, (int, float)) and v >= 0,
     )
-    _check_required(
-        "corporate_tax_rate",
-        lambda v: isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0,
-    )
-
     if missing_or_invalid:
         raise ValueError(
             "Missing or invalid required fields for v14 cashflow: "

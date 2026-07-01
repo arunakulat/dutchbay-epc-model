@@ -287,7 +287,6 @@ def test_extract_parameters_returns_plain_dict() -> None:
     assert isinstance(out, dict)
     assert out["project_life_years"] == 20
     assert out["capacity_mw"] == 100.0
-    assert out["corporate_tax_rate"] == pytest.approx(0.30)
 
 
 # ---------------------------------------------------------------------------

@@ -25,14 +25,14 @@ class CashflowParams:
       this lever models ADDITIONAL constrained-grid curtailment for stress/risk analysis
       (see analytics.core.sensitivity_runner + the canonical scenario's monte_carlo block).
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
-    - corporate_tax_rate: float (decimal, 0–1)
     - risk_haircut_pct: float (decimal, 0–1)
 
-    NOTE: the tax-detail inputs (enhanced_capital_allowance_pct, depreciation_years,
-    tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams fields — the live
-    depreciation/holiday path resolves + validates them via finance.cashflow_v14_tax
-    .TaxConfig (single source of truth). Parallel CashflowParams fields here were dead
-    second sources of truth (no computation ever read them) and were removed (CCCDIR).
+    NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_pct,
+    depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
+    fields — the live tax/depreciation/holiday path resolves + validates them via
+    finance.cashflow_v14_tax.TaxConfig (single source of truth). Parallel CashflowParams
+    fields here were dead second sources of truth (no computation ever read them) and were
+    removed (CCCDIR).
     """
 
     project_life_years: int
@@ -45,7 +45,6 @@ class CashflowParams:
     success_fee_pct: float
     env_surcharge_pct: float
     social_levy_pct: float
-    corporate_tax_rate: float
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
     curtailment_pct: float = 0.0
