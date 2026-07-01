@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -148,6 +149,38 @@ def _validate_fx_section(
             f"FX config missing required key(s): {missing_keys}. "
             f"Expected `{FX_START_KEY}` and `{FX_DEPR_KEY}`."
         )
+
+    # Numeric validation of present keys (audit D14, #581). Key-presence alone let a
+    # non-numeric value (e.g. 'not-a-number') through the pre-flight gate — the loader
+    # would raise later, but CESSPIT wants the gatekeeper to name the field. `float()`
+    # semantics mirror `scenario_loader._resolve_fx`, so numeric strings still pass.
+    start = fx_cfg.get(FX_START_KEY)
+    if start is not None:
+        if not _is_finite_number(start):
+            errors.append(
+                f"FX `{FX_START_KEY}` must be a finite number (LKR per USD), got {start!r}."
+            )
+        elif float(start) <= 0.0:
+            errors.append(
+                f"FX `{FX_START_KEY}` must be > 0 (LKR per USD), got {start!r}."
+            )
+
+    depr = fx_cfg.get(FX_DEPR_KEY)
+    if depr is not None and not _is_finite_number(depr):
+        errors.append(
+            f"FX `{FX_DEPR_KEY}` must be a finite number "
+            f"(annual FX depreciation), got {depr!r}."
+        )
+
+
+def _is_finite_number(value: Any) -> bool:
+    """True when ``value`` coerces to a finite float (``bool`` excluded)."""
+    if isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
 
 
 def _validate_technology_types(
