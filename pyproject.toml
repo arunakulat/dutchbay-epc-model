@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.24",
-  "pandas>=2.0",
+  # Cap <3.0: pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default
+  # str dtype — unconditional breaking changes. Lift only after a deliberate,
+  # KPI-oracle-verified 3.0 migration (#593).
+  "pandas>=2.0,<3.0",
   "numpy-financial>=1.0.0",
   "openpyxl>=3.1",
   "matplotlib>=3.7",
@@ -74,7 +77,10 @@ dashboard = [
 # this extra; consumers (run_full_pipeline_v14.py + wind_resource.cashflow_adapter)
 # do not. Disclosed as Defect W1 in Sprint 19 (CHANGELOG v14.15.0).
 wind = [
-  "cdsapi>=0.6",
+  # >=0.7.2: the CDS-Beta platform is the sole live Copernicus endpoint since 26 Sep 2024
+  # and requires cdsapi>=0.7.0 (0.7.2+ recommended); a pre-CDS-Beta version resolves but
+  # silently fails against the live endpoint (#592).
+  "cdsapi>=0.7.2",
   "xarray>=2023.6",
   "netcdf4>=1.6",
   "windpowerlib>=0.2",  # open turbine library (oedb) for power-curve sourcing (#181)
