@@ -74,15 +74,19 @@ def test_cashflow_basic_consistency() -> None:
     for i, row in enumerate(rows):
         assert cfads[i] == pytest.approx(row["cfads_final_lkr"])
 
-        # Risk haircut relationship:
-        # cfads_final = posttax_cfads * (1 - risk_haircut_pct)
-        posttax = row["posttax_cfads_lkr"]  # ✅ FIXED: _lkr suffix
+        # Risk haircut relationship (audit D6, #572): the haircut removes
+        # ``h * |posttax|`` of cash and always moves CFADS adversely, so the
+        # amount is sign-independent (this config is loss-making, posttax < 0).
+        posttax = row["posttax_cfads_lkr"]
         haircut_pct = row["risk_haircut_pct"]
-        haircut_amt = row["risk_haircut_amount_lkr"]  # ✅ FIXED: _lkr suffix
+        haircut_amt = row["risk_haircut_amount_lkr"]
 
         assert haircut_pct >= 0.0
-        assert haircut_amt == pytest.approx(posttax * haircut_pct)
+        assert haircut_amt == pytest.approx(abs(posttax) * haircut_pct)
         assert row["cfads_final_lkr"] == pytest.approx(posttax - haircut_amt)
+        # The haircut never softens a loss: |final| >= |posttax| when posttax < 0.
+        if posttax < 0:
+            assert abs(row["cfads_final_lkr"]) >= abs(posttax) - 1e-6
 
 
 def test_cashflow_zero_risk_haircut_means_posttax_equals_cfads() -> None:
@@ -104,6 +108,29 @@ def test_cashflow_zero_risk_haircut_means_posttax_equals_cfads() -> None:
         assert cfads[i] == pytest.approx(
             row["posttax_cfads_lkr"]
         )  # ✅ FIXED: _lkr suffix
+
+
+def test_risk_haircut_is_conservative_on_losses() -> None:
+    """The haircut must WORSEN CFADS regardless of sign (audit D6, #572).
+
+    The old ``cfads * (1 - h)`` form softened a loss (``-1000 -> -900``), inverting
+    the conservatism. The fix worsens a loss (``-1000 -> -1100``) while staying
+    byte-identical for non-negative CFADS.
+    """
+    from finance.cashflow_v14_production import _apply_risk_haircut
+
+    # Non-negative CFADS: unchanged reduction toward zero (byte-identical).
+    assert _apply_risk_haircut(1000.0, 0.10) == pytest.approx(900.0)
+    assert _apply_risk_haircut(0.0, 0.10) == pytest.approx(0.0)
+
+    # Loss year: the haircut deepens the loss instead of softening it.
+    assert _apply_risk_haircut(-1000.0, 0.10) == pytest.approx(-1100.0)
+
+    # Property: a risk haircut never improves CFADS in any direction.
+    for cfads in (-5000.0, -1.0, 0.0, 1.0, 5000.0):
+        out = _apply_risk_haircut(cfads, 0.15)
+        assert out <= cfads + 1e-9  # never larger than the un-haircut value
+        assert abs(out) >= abs(cfads) - 1e-9 if cfads < 0 else abs(out) <= abs(cfads)
 
 
 def test_validate_parameters_fails_when_capacity_missing() -> None:
