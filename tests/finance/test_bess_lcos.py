@@ -379,3 +379,21 @@ def test_as_dict_is_json_shaped():
     assert d["technology"] == "bess_unit"
     assert d["lcos_usd_per_mwh"] == r.lcos_usd_per_mwh
     assert isinstance(d["notes"], list)
+
+
+def test_opex_escalation_pct_is_normalised_like_the_cashflow_engine():
+    """opex.escalation_pct is a PERCENT (cashflow-canonical 2.5 == 2.5%/yr); the LCOS spec
+    must normalise it via pct_to_decimal (2.5 -> 0.025), not read it raw (which treated the
+    same value as 250%/yr). Decimal-form inputs (<=1.0) pass through, and 0.0 stays 0.0 — so
+    the committed 0.0-escalation BESS scenarios are byte-identical."""
+    cfg = _capacity_cfg()
+    cfg["opex"]["escalation_pct"] = 2.5  # cashflow-canonical percent form
+    assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == pytest.approx(0.025)
+
+    cfg["opex"][
+        "escalation_pct"
+    ] = 0.025  # already decimal -> unchanged (heuristic parity)
+    assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == pytest.approx(0.025)
+
+    cfg["opex"]["escalation_pct"] = 0.0  # committed scenarios -> byte-identical
+    assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == 0.0
