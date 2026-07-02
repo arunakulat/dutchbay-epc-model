@@ -201,3 +201,94 @@ def test_unresolvable_parameter_path_exits_clean(tmp_path: Path, capsys):
     )
     assert rc == 2  # clean non-zero exit, not an uncaught traceback
     assert "ERROR" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# #658 — built-in --preset tax / --preset dscr (opt-in; report-only, KPI-neutral)
+# ---------------------------------------------------------------------------
+
+_TORNADO_COLUMNS = [
+    "metric",
+    "variable_name",
+    "label",
+    "base_case",
+    "low_case",
+    "high_case",
+    "impact_abs",
+]
+
+
+@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
+def test_preset_tax_sweeps_rate_and_holiday_on_project_irr(tmp_path: Path):
+    """`--preset tax` sweeps tax.corporate_tax_rate + tax.tax_holiday_years on project_irr,
+    with no --parameters needed."""
+    cli = _load_cli()
+    out = tmp_path / "tax.csv"
+    rc = cli.main(["--config", str(_CONFIG), "--preset", "tax", "--output", str(out)])
+    assert rc == 0
+    df = pd.read_csv(out)
+    assert list(df.columns) == _TORNADO_COLUMNS
+    assert (df["metric"] == "project_irr").all()
+    assert set(df["variable_name"]) == {
+        "tax.corporate_tax_rate",
+        "tax.tax_holiday_years",
+    }
+    # Both tax drivers genuinely move project_irr (not silent flat bars).
+    assert (df["impact_abs"] > 0).all()
+    # Tornado convention: descending |impact|.
+    assert df["impact_abs"].is_monotonic_decreasing
+
+
+@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
+def test_preset_dscr_targets_min_dscr_kpi(tmp_path: Path):
+    """`--preset dscr` targets the live min_dscr KPI key (the canonical key the gateway
+    always emits), NOT the DscrSensitivityConfig 'dscr_min' field default. target_dscr
+    moves the covenant metric; gearing/tenor are (correctly) covenant-pinned flat."""
+    cli = _load_cli()
+    out = tmp_path / "dscr.csv"
+    rc = cli.main(["--config", str(_CONFIG), "--preset", "dscr", "--output", str(out)])
+    assert rc == 0
+    df = pd.read_csv(out)
+    assert list(df.columns) == _TORNADO_COLUMNS
+    assert (df["metric"] == "min_dscr").all()
+    assert "Financing_Terms.target_dscr" in set(df["variable_name"])
+    # target_dscr moves min_dscr 1:1 (covenant sculpt target); it must be a non-flat bar.
+    target_row = df[df["variable_name"] == "Financing_Terms.target_dscr"].iloc[0]
+    assert target_row["impact_abs"] > 0
+    # base_case is the pinned covenant DSCR (~1.30).
+    assert target_row["base_case"] == pytest.approx(1.30, abs=0.02)
+
+
+@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
+def test_preset_and_parameters_are_mutually_exclusive(tmp_path: Path, capsys):
+    cli = _load_cli()
+    rc = cli.main(
+        [
+            "--config",
+            str(_CONFIG),
+            "--preset",
+            "tax",
+            "--parameters",
+            str(_write_params(tmp_path)),
+        ]
+    )
+    assert rc == 2
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_no_preset_and_no_parameters_errors_clean(capsys):
+    """Neither --preset nor --parameters is a clean exit 2 (no silent default path)."""
+    cli = _load_cli()
+    rc = cli.main(["--config", str(_CONFIG)])
+    assert rc == 2
+    assert "ERROR" in capsys.readouterr().err
+
+
+def test_preset_stdout_when_no_output(capsys):
+    """A preset with no --output streams the CSV to stdout (same as the default path)."""
+    cli = _load_cli()
+    rc = cli.main(["--config", str(_CONFIG), "--preset", "tax"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "tax.corporate_tax_rate" in out
+    assert out.splitlines()[0].split(",") == _TORNADO_COLUMNS

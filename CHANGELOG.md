@@ -5,6 +5,35 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **PAWN method + tax / DSCR presets exposed on the sensitivity CLIs (#658, closes #645, opt-in, report-only, KPI-neutral).**
+  Three verified-existing, tested-but-CLI-orphaned sensitivity runners are now reachable from the
+  two thin `scripts/` sensitivity CLIs. All additions are opt-in and change no computed KPI — the
+  deterministic pipeline is untouched (all-scenarios kpi oracle byte-identical); the default
+  behavior of both CLIs is unchanged.
+  - `scripts/run_global_sensitivity.py` gains `--method pawn` (alongside `morris`/`sobol`;
+    default stays `morris`) dispatching to `analytics.sensitivity.global_sa.run_pawn` with a new
+    `--s` slice-count flag (`run_pawn` takes `n=`/`s=`, not `n_trajectories=`). PAWN is the
+    moment-independent, KS-based index that stays bounded in `[0, 1]` on skewed / covenant-pinned
+    KPIs where Sobol misbehaves. The stderr headline reports the median-KS ranking and discloses a
+    `flat_metric` (covenant-pinned) or `nan_poisoned` (#644 finite-mask) block rather than
+    presenting a zeroed ranking as an influence ranking (CESSPIT fail-loud). Prerequisite #644
+    (partial-NaN finite mask) is merged, so `--method pawn` cannot emit fabricated rankings on a
+    partially-NaN metric column.
+  - `scripts/run_tornado_from_cli.py` gains `--preset tax` and `--preset dscr` (mutually exclusive
+    with `--parameters`; each supplies its own drivers and fixes its own metric) routed through the
+    sanctioned one-way wrappers `analytics.sensitivity.tax.run_tax_one_way` /
+    `analytics.sensitivity.dscr.run_dscr_one_way`. The tax preset sweeps `tax.corporate_tax_rate`
+    (pct band) + `tax.tax_holiday_years` (absolute 0→10) on `project_irr`; the DSCR preset sweeps
+    the covenant levers (`Financing_Terms.target_dscr` / `debt_ratio` / `tenor_years`) on the
+    canonical live `min_dscr` KPI key. The DSCR preset pins `min_dscr` (the key the gateway always
+    emits — `analytics/core/metrics.py` sets both `min_dscr` and its `dscr_min` alias) rather than
+    the `DscrSensitivityConfig` field default `dscr_min`, resolving the metric-key mismatch
+    explicitly with no silent-KeyError / silent-fallback path.
+  - These `scripts/` argparse additions stay within the thin-utility carve-out sanctioned by
+    `tests/lint/test_entrypoints_hydra_only.py` / `test_no_argparse_anywhere.py` (both green); no
+    argparse is introduced under `finance/`, `analytics/`, `dutchbay_v14chat/` or the canonical
+    root entrypoints. Supersedes the `--method pawn` ask of #645 (its report-block extras remain
+    out of scope).
 - **Per-project approved AEP sources registered from YAML (#661, config-first provenance widening, opt-in, KPI-neutral).**
   A scenario may now declare an optional `resource.power_curve.approved_sources_yaml` naming a
   project-local YAML manifest of vetted AEP/curve sources (`{source_id: {type, description,
