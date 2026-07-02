@@ -255,6 +255,12 @@ def aggregate_trials(
         project_npv_p90=_pct("project_npv", 90),
         dscr_min_p10=_pct("dscr_min", 10),
         dscr_min_p50=_pct("dscr_min", 50),
+        # Provenance: surface the sampler actually used (meta["sampler"], set by the
+        # engine to the validated "lhs"|"sobol") as the first-class result field so the
+        # lender-facing risk blocks can attribute bands to their generation method,
+        # instead of leaving it as the None default while the identity hides in the loose
+        # metadata dict (#648a, CCCDIR). Falls back to None if a direct caller omits it.
+        sampling_method=meta.get("sampler"),
     )
 
     return result
