@@ -66,6 +66,19 @@ def compute_capital_risk_layer(
 ) -> CapitalRiskLayer:
     """Aggregate outcome samples into a :class:`CapitalRiskLayer`.
 
+    CVaR throughout this layer is the Expected Shortfall (ES) — the same statistic
+    under its other standard name (labelled ``CVaR/ES(..%)`` by the underlying
+    :class:`analytics.core.risk_metrics.TailRiskAnalyzer`).
+
+    Small-sample caveat: CVaR/ES is a tail mean estimated from only the
+    ``(1 - confidence) * n`` worst samples — at n=1000 a 99% ES averages ~10 raw
+    samples and a 95% ES ~50, which is noisy for a covenant or pricing input. ES
+    converges slower than the mean, so a tight mean confidence interval from the
+    post-hoc convergence diagnostic (``analytics.mc.convergence``, #643) does not
+    certify the tail. The sample floor enforced below is a degeneracy guard (the
+    tail must hold at least one sample), NOT a sufficiency certificate — size the
+    Monte Carlo so the tail itself carries enough samples for the use at hand.
+
     Args:
         equity_irr_samples: Array of equity IRR outcomes (decimal).
         min_dscr_samples: Array of per-scenario minimum DSCR outcomes.
@@ -80,7 +93,9 @@ def compute_capital_risk_layer(
         The aggregated :class:`CapitalRiskLayer`.
 
     Raises:
-        ValueError: If fewer than 20 samples are supplied (CVaR needs a tail).
+        ValueError: If fewer than max(20, 1/(1-confidence)) samples are supplied
+            (the CVaR/ES tail needs at least one sample; this floor is a
+            degeneracy guard, not statistical sufficiency).
     """
     irr = np.asarray(equity_irr_samples, dtype=float)
     dscr = np.asarray(min_dscr_samples, dtype=float)

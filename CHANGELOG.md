@@ -45,6 +45,36 @@ All notable changes to this project will be documented here.
     the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
     duplicated hedged scenario fixture.
 
+### Fixed
+- **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
+  Five verified erosions of the fail-loud stance closed; all committed scenarios verified
+  **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
+  previously-silent malformed/missing input into a raise or WARNING:
+  - `finance.cashflow_v14_utils.as_float`/`as_int` now **raise `ValueError` on a present-but-malformed
+    value** (e.g. `"12,5"`, a mapping) instead of silently returning the default; `None` still yields
+    the default. A silent fallback here could move a tax/capex base with no trace (the call sites are
+    precedence chains). The `as_float_or_none`/`as_int_or_none` probe variants keep their documented
+    swallow semantics — the project-life heuristic tree-walk and capacity candidate scans depend on
+    them (pinned by test). The `finance.utils` twin module (used by `debt_v14`/`epc_helper_v14` with
+    explicit engine defaults) is out of this issue's scope and unchanged.
+  - `validate_parameters` converts the new `as_int` raise for a malformed `tax.depreciation_years`
+    into a **field-named validation error** (previously a malformed value silently PASSED validation);
+    the validator keeps its report-all contract.
+  - `finance.debt_v14` `amortization_style` is now **whitelisted** (`annuity`/`fixed` → annuity;
+    `sculpted`/`auto` → DSCR-sculpted) mirroring the `balloon_treatment` whitelist. `auto` — used by
+    committed scenarios — is an explicit, documented sculpted alias, not a fall-through accident; an
+    unknown style WARNs and falls back to sculpted (exactly the old silent behaviour, now loud).
+  - The compact `debt:` schema now emits the **same placeholder-substitution WARNs** as the
+    `Financing_Terms` path (A1/#91) when it substitutes the `[0.5, 0.5]` even draw or `[40, 60]`
+    construction phasing; the `Financing_Terms` path additionally WARNs on its previously-silent
+    `[40, 60]` construction-schedule substitution. Values are unchanged.
+  - `finance.debt_v14._pmt` raises a clear `ValueError` when `nper <= 0` with a non-zero rate instead
+    of a raw `ZeroDivisionError` (defensive: the sole caller guards `amort_years > 0`); the
+    `rate == 0` degenerate contract is untouched.
+  The `_extract_project_life_years` heuristic tree-walk already WARNs (the issue's "silent" was
+  overstated); its warning is now pinned by a dedicated test. Dedicated failure tests cover every new
+  raise/warn path.
+
 ### Changed
 - **Batch discount-rate default consolidated to a single source of truth (#586).** The default was
   stated three times with two different values: a silent `0.10` fallback in
@@ -59,6 +89,58 @@ All notable changes to this project will be documented here.
   that omits the key (e.g. a `~default_discount_rate` Hydra delete-override), previously a silent
   0.10. Regression-pinned in `tests/analytics/test_run_scenario_analytics_discount_default.py`,
   including a pin on the committed YAML 0.12 so the authoritative batch value cannot drift silently.
+- **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
+  remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
+  (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
+  `test_oem_parser.py` seeds 42/43) — moved to `np.random.default_rng(seed)` (PCG64) per NEP 19,
+  completing the migration the #473 MC-5 dolphin applied to the production RNG. Determinism under
+  fixed seeds is preserved (MRM-01); the sampled streams change, but every consuming assertion is
+  band/ordering/statistical and was verified to hold with comfortable margins on the new streams
+  (tightest: DSCR breach-prob 0.096 vs 0.106 ± 0.04; MC-AEP p50 402.76 vs 402.6 ± 10), so no
+  assertion was re-baselined and no site needed seed-stream pinning. Test-only; the committed
+  scenario KPI surface is kpi-oracle byte-identical. The `datetime.utcnow()` half of #619's sweep
+  has exactly one live site (`analytics/pipeline_v14_enhanced.py:80`), owned by #586b and
+  deliberately not touched here; the `pyxirr`/QuantLib lock fork stays user-gated (W5).
+- **hydra-core pinned 1.3.2 → 1.3.3 + declared as an abstract runtime dep + maintenance-risk ADR (#609).**
+  The reproducibility-lock pin moves to 1.3.3 (upstream is packaging-only — removes `setup.py`'s
+  `pkg_resources` dependency, hydra#3207 — so runtime behaviour and all committed KPIs are unchanged;
+  its transitive requirements were already satisfied by the lock, so no other pin moves).
+  `hydra-core>=1.3.3` is now declared in `pyproject.toml [project.dependencies]`: the packaged
+  `analytics.cli.*_hydra` modules import `hydra` at module scope, so its previous absence meant
+  regenerating the lock from pyproject (the lock header's own recipe) would have silently dropped a
+  load-bearing package. New ADR `docs/HYDRA_MAINTENANCE_DECISION.md` records the stalled upstream
+  cadence (1.3.2 Feb-2023 → 1.3.3 Jun-2026, maintainer-status question unanswered) as an accepted
+  risk — stale but stable: narrow `@hydra.main`+dotlist surface, everything pinned, OSV/pip-audit
+  clean — with an OmegaConf + thin-CLI fallback plan (omegaconf is already a direct runtime dep) and
+  explicit re-evaluation triggers.
+- **`pydantic.mypy` plugin registered in the effective mypy config (#594, tooling-only, KPI-neutral).**
+  `mypy.ini` (the config both CI gates actually read — `pyproject.toml`'s `[tool.mypy]` merely points
+  `config_file = "mypy.ini"`) now sets `plugins = pydantic.mypy` plus the strictest `[pydantic-mypy]`
+  profile (`init_forbid_extra`, `init_typed`, `warn_required_dynamic_aliases`). The CASPER-family
+  frozen-contract boundary (pydantic v2 models in `analytics/core/risk_metrics.py`,
+  `analytics/core/returns.py`, `analytics/fx/fx_contracts.py`,
+  `finance/equity_distribution_v14_hydra.py` and the `api/`/`app/` layers) is now genuinely
+  type-checked: precisely-typed synthesized `__init__` signatures, unknown constructor kwargs
+  rejected, dynamic required aliases flagged. Verified against the CI-pinned mypy 1.19.0 +
+  pydantic 2.13.4: zero new errors on both CI invocations (library/engine surface and the relaxed
+  `scripts/` gate), plugin activation positively confirmed via an out-of-tree probe model. The now
+  inert `[mypy-pydantic.*] ignore_missing_imports` block (pydantic v2 ships `py.typed`) is kept and
+  annotated; its removal is deferred as a user-gated cleanup. No runtime code changed; kpi_oracle
+  byte-identical across all committed scenarios.
+- **CVaR labelled explicitly as Expected Shortfall + quantified small-sample caveat (#600, KPI-neutral).**
+  The user-facing display label from `analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar`
+  moves `CVaR(95%)` → `CVaR/ES(95%)` (CVaR and Expected Shortfall are the same statistic; the label now
+  names both). Docstrings at every CVaR computation surface (`analytics/core/risk_metrics.py`,
+  `analytics/mc/engine.py::_tail_risk`, `analytics/capital_risk_layer_v14.py`,
+  `analytics/sensitivity/tail_risk.py::_cvar`) plus `docs/ANALYTICS_INTEGRATION.md` now state
+  CVaR == ES and carry a quantified small-sample caveat: the tail mean rests on only
+  `(1 - confidence) * n` trials — at n=1000 a 1% tail averages ~10 raw trials (noisy for a
+  covenant/pricing input) — and ES converges slower than the mean, so a tight mean CI from the
+  post-hoc convergence diagnostic (`analytics/mc/convergence.py`, #643) does not certify the tail;
+  the `>= max(20, 1/(1-confidence))`-sample floor in `capital_risk_layer_v14` is documented as a
+  degeneracy guard, not statistical sufficiency. Strings/docs/Markdown only: no numeric computation,
+  default, or config key changes (`cvar_confidence`/`cvar_alpha` untouched); committed scenario KPIs
+  byte-identical (labels never enter committed KPI artifacts).
 - **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
   modelled in the engine (above), the analysis layer's sweeps now drive the live keys end-to-end:
   - `FXSensitivityAnalyzer.run()`'s spread sweep drives `fx.spread_bps` (the legacy, engine-ignored
@@ -278,6 +360,69 @@ All notable changes to this project will be documented here.
   `Test Summary` is a *required* status check, so on an FX-touching PR two different "Test Summary"
   checks appeared, making the required-check identity ambiguous. Renamed the fx-tests jobs to
   `FX Test Summary` / `FX Code Quality Checks` (job IDs unchanged, so `needs:` is unaffected).
+- **CI: dropped the redundant advisory black/isort steps from `fx-tests.yml`.** The FX code-quality
+  job carried FX-scoped `black --check` / `isort --check-only` steps with `continue-on-error: true`
+  (advisory only, predating the repo-wide gate). Formatting and import order are enforced repo-wide
+  by the MANDATORY lint gate in `test-suite.yml` (#545), which strictly supersedes the advisory
+  checks, so they only added CI time and a perpetually ignorable signal. The two steps are removed
+  and `black`/`isort` dropped from that job's installs; the advisory mypy and flake8 steps are
+  intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
+  gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
+
+### Fixed
+- **Hygiene cluster, docs/header/naming shims (#586, dolphin a of 3 — KPI-neutral).**
+  - `finance/debt_v14.py`: replaced the corrupted stray header (`# [File content too long...]`,
+    a leftover editing artifact) with the module's real docstring, now at the top of the file
+    where Python actually binds `__doc__` (it previously sat as an inert string literal below
+    the imports). Comment/docstring-only; no code change.
+  - `analytics/pipeline_v14_enhanced.PipelineMetrics.timestamp`: deprecated naive
+    `datetime.utcnow()` → tz-aware `datetime.now(timezone.utc)`. The ISO metadata timestamp now
+    carries an explicit `+00:00` offset, matching the tz-aware run manifest. Metadata-only; no
+    KPI reads this field. (Owned here; struck from the #619 repo-wide utcnow sweep.)
+  - `analytics/mc/samplers.generate_lhs_samples`: the misleading `common_random_numbers`
+    parameter is renamed `shared_permutation_stream` (it selects the permutation-stream
+    derivation — CRN across runs comes from passing the same `seed`, not from this flag). The
+    old keyword keeps working as a deprecated alias (DeprecationWarning; conflicting values
+    fail loud with ValueError); output for either spelling is bit-identical. The engine-level
+    `common_random_numbers` config/API/metadata name is unchanged — at that level it genuinely
+    toggles the MC-9 CRN feature.
+  - `analytics/core/sensitivity_runner`: the path-based entry point is canonically named
+    `run_sensitivity_analysis_from_path`, disambiguating it from the engine orchestrator
+    `analytics.sensitivity.run_sensitivity_analysis` (same exported name, incompatible
+    keyword-only/in-memory signature). The historical `run_sensitivity_analysis` export remains
+    as an additive module alias (same object) in both the module and `analytics.core.__all__`;
+    all existing imports keep working. Alias retirement is deferred to a user-approved batch.
+  - `analytics/pipeline_analytics_v14._calculate_risk_analysis`: documented (labeling only)
+    that the enhanced-analytics risk path deliberately reads `cfads_final_lkr`, so its
+    level-denominated outputs (VaR/CVaR, CFADS percentiles) are LKR-based — unlike the returns
+    path, which #559 made USD-consistent. No numeric change; a USD re-basing of risk outputs
+    requires separate user authorization.
+  Validators, Sobol power-of-2, deep-merge and discount-default items are dolphins b/c of #586.
+
+### Fixed
+- **Hygiene cluster #586 (dolphin B of 3): validators + Sobol n gate + deep-merge aliasing.**
+  Three fail-loud/additive consistency fixes; all committed scenario KPIs verified byte-identical
+  (argv-correct kpi_oracle before/after across all 27 committed scenarios).
+  - `project_life_years` schema validator (`finance.cashflow_v14._register_cashflow_schema`) now
+    accepts integral floats (`20.0`) — the engine's own extraction (`as_int_or_none` → `int(value)`)
+    already coerced `20.0` to `20`, so the strict pre-flight guard was rejecting configs the engine
+    reads fine. It now also rejects `bool` (the old `isinstance(v, int)` let `True` pass as "1 year")
+    and keeps rejecting non-integral floats (`20.5` fails loud rather than being silently truncated),
+    non-positives, and strings. All committed scenarios carry plain-int year counts and validate
+    identically.
+  - `analytics.sensitivity.global_sa.run_sobol` now validates `n` is a positive power of 2
+    (`ValueError`) before sampling. SALib's `sobol` sampler draws a base-2 Sobol' sequence whose
+    balance properties only hold at powers of 2 — SALib merely warns and degrades the S1/ST
+    estimates, so the gateway fails loud instead. The documented default `n=256` is unaffected.
+  - `analytics.evaluation_v14._deep_merge_config` no longer aliases nested branches: the old
+    shallow `dict(base)` seed left every branch NOT named in the overrides shared with the base
+    config's own sub-dicts (and inserted override branches by reference), so an in-place mutation
+    of the merged config could silently leak into the caller's base — a real hazard for
+    Monte-Carlo / sensitivity loops that re-merge the SAME base mapping thousands of times. The
+    merged dict is now structurally independent of both inputs (nested mappings and lists freshly
+    copied; immutable scalar leaves shared; merge values and key order unchanged, pinned by
+    regression tests). Limitation: exotic non-YAML containers (tuples, sets, arrays) still pass by
+    reference and are documented as out of contract.
 
 ## v15.2.0 - 2026-07-01
 

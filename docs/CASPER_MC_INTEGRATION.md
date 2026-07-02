@@ -32,6 +32,33 @@ The Sprint 18 MC refactoring provides lender-grade risk analytics through:
 2. **`build_casper_risk_blocks()`** - Complete CASPER-ready payload
 3. **`CovenantSpec`** - Configurable covenant floors and thresholds
 
+### Auto-wiring into the CASPER payload (#637)
+
+Since #637, `build_casper_payload()` wires these blocks in automatically:
+`_casper_to_dict()` emits a top-level **`mc_risk`** key
+(`{"lender_risk_table": [...], "covenant": {...}}`) whenever the payload is
+built with a `MonteCarloResult` that carries raw trial arrays. `mc_risk` is an
+additive customer-visible key, so there is no contract-version bump (the
+contract stays `casper_result_v1`; see
+[api_contract_casper_result_v1.md](api_contract_casper_result_v1.md)).
+
+`mc_risk` degrades gracefully to `None` — the payload never crashes — when:
+
+- Monte Carlo was not run (`monte_carlo=None`), or
+- the `MonteCarloResult` is summary-only (no raw `dscr_min` trial array), or
+- the optional `pandas` export dependency is absent.
+
+The covenant DSCR floor is resolved config-first from the scenario's
+`debt_covenants.dscr_threshold`, falling back to the `CovenantSpec` default
+(1.30); the floor actually used is surfaced in `mc_risk.covenant.dscr_floor`.
+`NaN` placeholder cells are emitted as `null` (strict-JSON safe).
+
+The caller-side `payload["tables"]["lender_risk_table"]` insertion shown in
+the snippets below is therefore the **legacy/manual pattern**: it is only
+needed when hand-building a payload dict outside `build_casper_payload()`
+(e.g. bespoke lender exports). New integrations should pass the
+`MonteCarloResult` to `build_casper_payload()` and read `payload["mc_risk"]`.
+
 ### Lender Pack Requirements
 
 Lenders require:
@@ -44,7 +71,24 @@ Lenders require:
 
 ## Quick Start
 
-### 3-Step Integration
+### Auto-wired path (preferred, #637)
+
+```python
+from analytics.casper.casper_payload import build_casper_payload
+
+# scenario: ScenarioResult, mc_result: MonteCarloResult with raw trial arrays
+payload = build_casper_payload(scenario=scenario, monte_carlo=mc_result)
+
+risk = payload["mc_risk"]  # None if MC absent / summary-only / pandas missing
+if risk is not None:
+    table = risk["lender_risk_table"]  # list[dict], JSON-safe records
+    covenant = risk["covenant"]        # dscr_floor, prob_breach, ...
+```
+
+### Legacy/manual pattern (hand-built payloads only)
+
+Use this only when constructing a payload dict outside
+`build_casper_payload()`:
 
 ```python
 from analytics.mc import (
@@ -66,12 +110,40 @@ blocks = build_casper_risk_blocks(
     covenant=CovenantSpec(dscr_floor=1.30)
 )
 
-# Step 3: Insert into payload
+# Step 3 (manual insertion — auto-wired as payload["mc_risk"] since #637)
 payload["tables"]["lender_risk_table"] = blocks["lender_risk_table"].to_dict(orient="records")
 payload["metrics"]["covenant"] = blocks["covenant"]
 ```
 
 ### Output Structure
+
+Auto-wired shape (top-level key in the `casper_result_v1` payload):
+
+```json
+{
+  "mc_risk": {
+    "lender_risk_table": [
+      {"metric": "DSCR (min)", "P50": 1.45, "P90": 1.32, "P95": 1.28,
+       "mean": 1.42, "std": 0.08},
+      {"metric": "Prob(DSCR < 1.30)", "P50": null, "P90": null, "P95": null,
+       "mean": 0.12, "std": null}
+    ],
+    "covenant": {
+      "dscr_floor": 1.30,
+      "prob_breach": 0.12,
+      "worst_year_dscr_p95_downside": 1.22,
+      "n_trials": 1000
+    }
+  }
+}
+```
+
+Note the lender/exceedance convention: for higher-is-better metrics (DSCR,
+IRR, NPV, LLCR, PLCR) the `P90`/`P95` columns report the downside tail — the
+value exceeded 90%/95% of the time (10th/5th percentile) — not the favourable
+upside.
+
+Legacy/manual shape (hand-built payloads):
 
 ```json
 {
@@ -107,7 +179,33 @@ payload["metrics"]["covenant"] = blocks["covenant"]
 
 ## Payload Structure
 
-### CASPER Payload Schema
+### Canonical payload (`casper_result_v1`, auto-wired)
+
+The canonical payload emitted by `build_casper_payload()` carries the MC risk
+analytics as the top-level `mc_risk` key (see
+[api_contract_casper_result_v1.md](api_contract_casper_result_v1.md) for the
+full frozen key set):
+
+```python
+payload = {
+    "contract_version": "casper_result_v1",
+    "scenario": {...},
+    "baseline_kpis": {...},
+    "sensitivity": {...},
+    "monte_carlo": {...},       # lean MC summary (percentile blocks)
+    "mc_risk": {                # ← MC INTEGRATION POINT (auto-wired, #637)
+        "lender_risk_table": [...],
+        "covenant": {...},
+    },                           # None when MC absent / summary-only / no pandas
+    "generation": {...},
+    "technology_breakdown": [...],
+    "multi_tech_wbs": {...},
+    "tail_risk": {...},
+    "metadata": {...},
+}
+```
+
+### Legacy/manual payload schema (hand-built exports)
 
 ```python
 payload = {
@@ -117,14 +215,14 @@ payload = {
     
     # === TABLES SECTION ===
     "tables": {
-        "lender_risk_table": [...],  # ← MC INTEGRATION POINT
+        "lender_risk_table": [...],  # ← MC INTEGRATION POINT (manual insertion)
         "cashflow": [...],
         "debt_service": [...],
     },
     
     # === METRICS SECTION ===
     "metrics": {
-        "covenant": {...},  # ← MC INTEGRATION POINT
+        "covenant": {...},  # ← MC INTEGRATION POINT (manual insertion)
         "baseline_kpis": {...},
         "wacc": {...},
     },
@@ -263,7 +361,11 @@ blocks = build_casper_risk_blocks(
 
 ## Examples
 
-### Example 1: Basic Integration
+### Example 1: Basic Integration (legacy/manual payload construction)
+
+When working through `build_casper_payload()`, none of this is needed — the
+blocks below arrive as `payload["mc_risk"]` automatically (#637). This example
+hand-builds a standalone export payload:
 
 ```python
 from analytics.mc import run_monte_carlo_analysis, build_casper_risk_blocks
@@ -375,11 +477,34 @@ assert json_str is not None
 json.dumps(blocks["covenant"])  # Should work without default handler
 ```
 
+Note: the auto-wired `payload["mc_risk"]` path performs this conversion
+internally — records are emitted JSON-safe with `NaN` mapped to `null`, valid
+under a strict encoder (`allow_nan=False`) — so no `default=str` handler is
+needed there.
+
 ### Payload Schema Compliance
+
+Auto-wired (`casper_result_v1`) payloads:
+
+```python
+def validate_casper_mc_risk(payload: dict) -> None:
+    """Validate the auto-wired mc_risk block (None is a valid degraded state)."""
+    assert payload["contract_version"] == "casper_result_v1"
+    risk = payload["mc_risk"]
+    if risk is None:
+        return  # MC not run, summary-only result, or pandas absent
+    assert "lender_risk_table" in risk
+    covenant = risk["covenant"]
+    assert "dscr_floor" in covenant
+    assert "prob_breach" in covenant
+    assert 0.0 <= covenant["prob_breach"] <= 1.0
+```
+
+Legacy/manual payloads:
 
 ```python
 def validate_casper_payload(payload: dict) -> None:
-    """Validate CASPER payload structure."""
+    """Validate the hand-built CASPER payload structure (legacy pattern)."""
     assert "tables" in payload
     assert "metrics" in payload
     assert "lender_risk_table" in payload["tables"]
@@ -391,6 +516,10 @@ def validate_casper_payload(payload: dict) -> None:
     assert "prob_breach" in covenant
     assert 0.0 <= covenant["prob_breach"] <= 1.0
 ```
+
+The repository's own regression coverage for the auto-wired block lives in
+`tests/analytics/test_casper_payload_coverage.py` (mc_risk surfaced from
+trials, config-first floor, None for missing MC / summary-only results).
 
 ---
 
@@ -458,6 +587,6 @@ For questions or issues:
 
 ---
 
-**Last Updated**: Sprint 18 - December 23, 2025  
-**Contract Version**: v1.0  
+**Last Updated**: 2026-07-02 (#638 — records the #637 `mc_risk` auto-wiring)  
+**Contract Version**: `casper_result_v1` ([frozen contract](api_contract_casper_result_v1.md))  
 **Status**: Production Ready

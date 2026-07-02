@@ -59,6 +59,25 @@ def run_monte_carlo_analysis(*args: Any, **kwargs: Any) -> Any:
     return _real_run_mc(*args, **kwargs)
 
 
+def _copy_config_tree(value: Any) -> Any:
+    """Recursively copy the mapping/list skeleton of a config value.
+
+    The returned structure shares no dict or list containers with the input;
+    leaf scalars are shared by reference, which is safe because they are
+    immutable. Nested mappings are normalized to plain ``dict`` — exactly what
+    ``_deep_merge_config`` already produced for *overridden* branches. Other
+    container types (tuples, sets, numpy arrays, ...) pass through by
+    reference: committed scenario configs are YAML, i.e. mappings, lists and
+    scalars, so those exotic leaves are out of contract and must not be
+    mutated in place by consumers.
+    """
+    if isinstance(value, Mapping):
+        return {key: _copy_config_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_copy_config_tree(item) for item in value]
+    return value
+
+
 def _deep_merge_config(
     base: Mapping[str, Any],
     overrides: Mapping[str, Any],
@@ -66,12 +85,24 @@ def _deep_merge_config(
     """
     Recursively deep-merge two configuration dictionaries.
 
+    The returned dict is structurally independent of BOTH inputs: every nested
+    mapping/list branch is freshly copied (#586). The previous implementation
+    seeded the result with a shallow ``dict(base)``, so any nested branch NOT
+    named in ``overrides`` stayed aliased to ``base``'s own sub-dicts — an
+    in-place mutation of the merged config (or of the base) silently leaked
+    into the other. That is a real hazard for Monte-Carlo / sensitivity loops,
+    which re-merge the SAME base config mapping thousands of times per run.
+
+    Key order matches the old behaviour: base keys keep their positions, and
+    override-only keys are appended in ``overrides`` iteration order.
+
     Args:
         base: Base configuration mapping
         overrides: Override values to merge into base
 
     Returns:
-        Merged configuration dict
+        Merged configuration dict sharing no mapping/list containers with
+        either input (scalar leaves are shared; they are immutable)
 
     Example:
         >>> base = {"finance": {"capex_usd": 1000}, "project": {"name": "test"}}
@@ -81,20 +112,29 @@ def _deep_merge_config(
         1100
         >>> merged["project"]["name"]
         'test'
+        >>> merged["project"] is base["project"]
+        False
     """
-    result: dict[str, Any] = dict(base)
+    result: dict[str, Any] = {}
+
+    for key, base_value in base.items():
+        if (
+            key in overrides
+            and isinstance(base_value, Mapping)
+            and isinstance(overrides[key], Mapping)
+        ):
+            result[key] = _deep_merge_config(
+                cast(Mapping[str, Any], base_value),
+                cast(Mapping[str, Any], overrides[key]),
+            )
+        elif key in overrides:
+            result[key] = _copy_config_tree(overrides[key])
+        else:
+            result[key] = _copy_config_tree(base_value)
 
     for key, override_value in overrides.items():
-        if (
-            key in result
-            and isinstance(result[key], Mapping)
-            and isinstance(override_value, Mapping)
-        ):
-            base_mapping = cast(Mapping[str, Any], result[key])
-            override_mapping = cast(Mapping[str, Any], override_value)
-            result[key] = _deep_merge_config(base_mapping, override_mapping)
-        else:
-            result[key] = override_value
+        if key not in base:
+            result[key] = _copy_config_tree(override_value)
 
     return result
 

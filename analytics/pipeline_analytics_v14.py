@@ -187,7 +187,17 @@ def _calculate_risk_analysis(
     base_result: Dict[str, Any],
     config: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    """Calculate risk metrics (VaR, CVaR, tail risk)."""
+    """Calculate risk metrics (VaR, CVaR, tail risk) on the LKR CFADS series.
+
+    Currency basis (#586, documented deliberately): this risk path reads
+    ``cfads_final_lkr``, so every level-denominated output it produces (VaR/CVaR,
+    CFADS percentiles, mean/std) is in **LKR**; ratio/probability outputs are
+    currency-free. This differs from the returns path above
+    (:func:`_calculate_returns_analysis`), which was made USD-consistent by #559.
+    Re-basing the risk series to USD would move reported enhanced-analytics risk
+    numbers by roughly the FX rate and is therefore NOT done here — a numeric
+    re-basing requires separate user authorization (see #586).
+    """
     if not RISK_AVAILABLE:
         logger.warning("Risk module not available; skipping risk analysis")
         return None
@@ -198,6 +208,7 @@ def _calculate_risk_analysis(
             logger.warning("No annual_rows; skipping risk analysis")
             return None
 
+        # LKR basis — see the docstring above before changing this key (#586).
         cfads_series = [float(row.get("cfads_final_lkr", 0.0)) for row in annual_rows]
 
         # Deterministic risk metrics on the scenario CFADS series.

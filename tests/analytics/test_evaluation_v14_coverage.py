@@ -103,6 +103,85 @@ def test_expand_dotted_overrides_passes_plain_keys_through() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _deep_merge_config: merged config must not alias either input (#586)
+# ---------------------------------------------------------------------------
+def _merge_fixture() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Base with an overridden branch, an untouched branch, and a list-of-dicts
+    branch (the Financing_Terms.tranches pattern), plus a nested override."""
+    base: dict[str, Any] = {
+        "finance": {"capex_usd": 1000, "fees": {"success_pct": 0.01}},
+        "project": {"name": "test", "life": {"years": 20}},
+        "debt": {"tranches": [{"rate": 0.06}, {"rate": 0.08}]},
+        "flat": 7,
+    }
+    overrides: dict[str, Any] = {
+        "finance": {"capex_usd": 1100},
+        "new_block": {"inner": {"x": 1}},
+    }
+    return base, overrides
+
+
+def test_deep_merge_semantics_and_key_order_unchanged() -> None:
+    """The merge VALUES and key order are exactly the pre-#586 behaviour; only
+    the aliasing is gone."""
+    base, overrides = _merge_fixture()
+    merged = evaluation_v14._deep_merge_config(base, overrides)
+
+    assert merged == {
+        "finance": {"capex_usd": 1100, "fees": {"success_pct": 0.01}},
+        "project": {"name": "test", "life": {"years": 20}},
+        "debt": {"tranches": [{"rate": 0.06}, {"rate": 0.08}]},
+        "flat": 7,
+        "new_block": {"inner": {"x": 1}},
+    }
+    # Base keys keep their positions; override-only keys append at the end.
+    assert list(merged) == ["finance", "project", "debt", "flat", "new_block"]
+
+
+def test_deep_merge_untouched_branches_do_not_alias_base() -> None:
+    """Regression (#586): the old ``dict(base)`` seed left every nested branch
+    NOT named in overrides aliased to base's own sub-dicts."""
+    base, overrides = _merge_fixture()
+    merged = evaluation_v14._deep_merge_config(base, overrides)
+
+    # Untouched mapping branch: fresh containers all the way down.
+    assert merged["project"] is not base["project"]
+    assert merged["project"]["life"] is not base["project"]["life"]
+    # Sibling of an overridden key inside a merged branch.
+    assert merged["finance"]["fees"] is not base["finance"]["fees"]
+    # List-of-dicts branch: neither the list nor its element dicts are shared.
+    assert merged["debt"]["tranches"] is not base["debt"]["tranches"]
+    assert merged["debt"]["tranches"][0] is not base["debt"]["tranches"][0]
+
+
+def test_deep_merge_mutation_does_not_leak_in_either_direction() -> None:
+    """In-place mutation of the merged config must not reach the base config
+    (the Monte-Carlo re-merge hazard), and vice versa."""
+    base, overrides = _merge_fixture()
+    merged = evaluation_v14._deep_merge_config(base, overrides)
+
+    merged["project"]["life"]["years"] = 99
+    merged["debt"]["tranches"][0]["rate"] = 0.5
+    assert base["project"]["life"]["years"] == 20
+    assert base["debt"]["tranches"][0]["rate"] == 0.06
+
+    base["finance"]["fees"]["success_pct"] = 0.9
+    assert merged["finance"]["fees"]["success_pct"] == 0.01
+
+
+def test_deep_merge_override_branches_do_not_alias_the_overrides_mapping() -> None:
+    """Override values inserted verbatim (non-merged branches) must be copies,
+    not references into the caller's overrides dict."""
+    base, overrides = _merge_fixture()
+    merged = evaluation_v14._deep_merge_config(base, overrides)
+
+    assert merged["new_block"] is not overrides["new_block"]
+    assert merged["new_block"]["inner"] is not overrides["new_block"]["inner"]
+    merged["new_block"]["inner"]["x"] = 42
+    assert overrides["new_block"]["inner"]["x"] == 1
+
+
+# ---------------------------------------------------------------------------
 # _run_pipeline_with_config: non-mapping payload raises (line 200)
 # ---------------------------------------------------------------------------
 def test_run_pipeline_with_config_rejects_non_mapping_payload(
