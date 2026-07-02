@@ -5,6 +5,24 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in Gaussian-copula dependence for MC correlation (#601, default off — KPI-neutral).**
+  `monte_carlo.correlation.method` now dispatches: the default `iman_conover` path is
+  bit-identical to the previous single-path code (pinned by a reference-algorithm test and
+  verified byte-identical via the all-scenarios KPI oracle), while `method: gaussian_copula`
+  opts into Gaussian-copula dependence built from EXACT normal scores — the raw draws are
+  whitened against their own sample covariance and recorrelated, so the scores carry the
+  target correlation exactly instead of Iman-Conover's O(1/sqrt(n)) approximate Spearman
+  (SOTA link-research digest correction). The quantile map onto each driver's empirical
+  marginal reduces to a gather-by-rank, so marginals are preserved exactly; seeded
+  determinism is pinned (MRM-01). Honest limitations documented in the docstring: the matrix
+  parameterizes the LATENT-NORMAL scale (induced Spearman = (6/pi)*arcsin(rho/2), e.g. 0.60
+  induces ~0.582, a distortion BOTH methods share), and a Gaussian copula has ZERO asymptotic
+  tail dependence — the issue's tail-crisis motivation (FX-crisis x curtailment) requires a
+  t-copula, an explicit non-goal left as a follow-up. `gaussian_copula` requires
+  n_trials > n_params (fails loud). Unrecognized `correlation.method` values (e.g.
+  `cholesky`) now FAIL LOUD at apply time instead of silently running Iman-Conover while the
+  config claims another structure (CESSPIT); the engine's Sobol'+correlation warning now
+  names the active method. No committed scenario sets a non-default method.
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:

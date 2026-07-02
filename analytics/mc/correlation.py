@@ -6,7 +6,8 @@ Single source of truth for Monte Carlo correlation handling.
 Implements:
 - CorrelationSpec (config carrier)
 - validate_correlation_matrix
-- apply_correlation_structure (Iman-Conover rank correlation)
+- apply_correlation_structure (method dispatch: Iman-Conover rank correlation by
+  default; opt-in exact-normal-scores Gaussian copula; unknown methods fail loud)
 - template helpers + config loaders
 
 NOTE: This module should NOT depend on the MC engine (no circulars).
@@ -19,11 +20,18 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 
+#: Dependence-induction methods apply_correlation_structure can dispatch to.
+#: Anything else fails loud at apply time (CESSPIT) — a config typo must not
+#: silently run Iman-Conover while claiming another structure.
+SUPPORTED_CORRELATION_METHODS: Tuple[str, ...] = ("iman_conover", "gaussian_copula")
+
 
 @dataclass(frozen=True)
 class CorrelationSpec:
     enabled: bool
-    method: str = "iman_conover"  # future: gaussian_copula, cholesky
+    # "iman_conover" (default) or opt-in "gaussian_copula"; see
+    # SUPPORTED_CORRELATION_METHODS and the apply_correlation_structure docstring.
+    method: str = "iman_conover"
     matrix: Optional[np.ndarray] = None
     param_names: Optional[Tuple[str, ...]] = None
 
@@ -56,6 +64,46 @@ def _nearest_psd(mat: np.ndarray) -> np.ndarray:
     return cast("np.ndarray", repaired)
 
 
+def _exact_normal_scores(z: np.ndarray, chol_target: np.ndarray) -> np.ndarray:
+    """Recorrelate raw normal scores so their SAMPLE correlation is exactly the target.
+
+    Whitens the centred score matrix against its own sample covariance (Cholesky
+    solve), then recorrelates with the target Cholesky factor. The result's sample
+    Pearson correlation equals ``chol_target @ chol_target.T`` exactly (to floating
+    point), removing the O(1/sqrt(n)) sampling error the raw draws carry.
+
+    Args:
+      z: raw standard-normal draws, shape [n_trials, n_params].
+      chol_target: lower Cholesky factor of the target correlation matrix.
+
+    Returns:
+      Correlated normal scores, shape [n_trials, n_params].
+
+    Raises:
+      ValueError: if n_trials <= n_params (the sample covariance of the scores is
+        singular, so the exact whitening step is undefined).
+    """
+    n, k = z.shape
+    if n <= k:
+        raise ValueError(
+            "method='gaussian_copula' requires n_trials > n_params for the exact "
+            f"normal-scores whitening (got n_trials={n}, n_params={k})."
+        )
+    centred = z - z.mean(axis=0, keepdims=True)
+    # Denominator is irrelevant: only the RANKS of the scores are consumed downstream,
+    # and a uniform covariance rescale cannot change them.
+    sample_cov = (centred.T @ centred) / float(n)
+    try:
+        chol_sample = np.linalg.cholesky(sample_cov)
+    except np.linalg.LinAlgError as exc:  # pragma: no cover - n > k makes this a.s. PD
+        raise ValueError(
+            "method='gaussian_copula' whitening failed: the raw normal scores have "
+            "a singular sample covariance; increase n_trials."
+        ) from exc
+    whitened = np.linalg.solve(chol_sample, centred.T).T  # sample cov == identity
+    return cast("np.ndarray", whitened @ chol_target.T)
+
+
 def apply_correlation_structure(
     *,
     lhs_samples: np.ndarray,
@@ -63,7 +111,39 @@ def apply_correlation_structure(
     seed: int = 123,
 ) -> np.ndarray:
     """
-    Apply correlation to an LHS sample matrix using Iman-Conover rank correlation.
+    Apply a dependence structure to an LHS/QMC sample matrix, dispatching on
+    ``correlation.method``. Both methods only reorder values WITHIN each column
+    (a pure permutation), so every marginal distribution is preserved exactly.
+
+    Methods:
+      - ``iman_conover`` (default; bit-identical to the historical single-path code):
+        Iman-Conover rank reordering. Correlated normal scores ``y = z @ L.T`` are
+        built from the RAW standard-normal draws and each sample column is gathered
+        by the score column's ranks. APPROXIMATE Spearman (per the SOTA link-research
+        digest): the raw scores carry O(1/sqrt(n)) sampling error in their own
+        correlation, so the induced rank correlation scatters around the target.
+      - ``gaussian_copula`` (opt-in): Gaussian-copula dependence with EXACT normal
+        scores. The raw draws are whitened against their own sample covariance and
+        recorrelated (see ``_exact_normal_scores``), so the scores' sample Pearson
+        correlation equals the target exactly; each column is then quantile-mapped
+        onto its empirical marginal. Because the normal CDF is strictly monotone,
+        that quantile map reduces to the same gather-by-rank, keeping the marginals
+        exact. The matrix parameterizes the copula on the LATENT-NORMAL scale, so
+        the induced Spearman is (6/pi)*arcsin(rho/2) — e.g. a 0.60 entry induces
+        ~0.582, slightly BELOW the nominal entry.
+        Requires n_trials > n_params (fails loud otherwise).
+
+    Limitations (honest, per the SOTA link-research corrections):
+      - A Gaussian copula has ZERO asymptotic tail dependence for |rho| < 1: it
+        CANNOT capture joint tail-crisis co-movement (e.g. FX-crisis x curtailment
+        striking together). That motivation requires a t-copula or another
+        tail-dependent family — an explicit NON-GOAL here, left as a follow-up.
+      - Iman-Conover remains the default and is approximate in Spearman terms; the
+        copula option removes the score-correlation sampling error, not the
+        arcsin(rho/2) latent-scale distortion (which both methods share).
+
+    Determinism (MRM-01): all randomness comes from ``np.random.default_rng(seed)``;
+    identical inputs + seed => identical output for both methods.
 
     Inputs:
       lhs_samples: shape [n_trials, n_params], assumed iid-ish (LHS in [low,high] domain)
@@ -72,14 +152,26 @@ def apply_correlation_structure(
     Output:
       correlated_samples: same shape
 
-    Canonical, tested implementation: nearest-PSD repair + Cholesky factorisation +
-    rank-reordering (Iman-Conover) to induce the target correlation while preserving
-    each input's marginal distribution.
+    Raises:
+      ValueError: enabled without a matrix; matrix/sample shape mismatch; an
+        unrecognized ``correlation.method`` (fail loud — unknown methods previously
+        fell through to Iman-Conover silently); gaussian_copula with
+        n_trials <= n_params.
     """
     if not correlation.enabled:
         return lhs_samples
     if correlation.matrix is None:
         raise ValueError("CorrelationSpec.enabled=True but matrix is None.")
+
+    method = str(correlation.method).strip().lower()
+    if method not in SUPPORTED_CORRELATION_METHODS:
+        raise ValueError(
+            f"Unsupported CorrelationSpec.method {correlation.method!r}: expected one "
+            f"of {list(SUPPORTED_CORRELATION_METHODS)}. Unrecognized methods "
+            "previously ran Iman-Conover silently; they now fail loud (CESSPIT) so a "
+            "config typo cannot masquerade as a deliberately-chosen dependence "
+            "structure."
+        )
 
     mat = np.array(correlation.matrix, dtype=float, copy=True)
     validate_correlation_matrix(mat, tol=correlation.tol)
@@ -88,9 +180,11 @@ def apply_correlation_structure(
         # Ensure PSD-ish for decomposition steps
         mat = _nearest_psd(mat)
 
-    # Skeleton IC method:
-    # 1) convert each column to ranks
-    # 2) generate correlated normal scores using Cholesky of target corr
+    # Shared skeleton:
+    # 1) generate correlated normal scores using Cholesky of target corr
+    #    (raw scores for iman_conover; exactly-recorrelated scores for
+    #    gaussian_copula)
+    # 2) convert the score columns to ranks
     # 3) reorder samples to match correlated ranks
     x = np.array(lhs_samples, copy=True)
     n, k = x.shape
@@ -104,16 +198,21 @@ def apply_correlation_structure(
     z = rng.standard_normal(size=(n, k))
     # Cholesky may fail if mat not PSD; nearest_psd should help.
     L = np.linalg.cholesky(mat + np.eye(k) * 1e-12)
-    y = z @ L.T
+    if method == "gaussian_copula":
+        y = _exact_normal_scores(z, L)
+    else:  # iman_conover — the historical path, kept bit-identical
+        y = z @ L.T
 
     # ranks of correlated normals
     y_ranks = np.argsort(np.argsort(y, axis=0), axis=0)
 
     # Reorder each column of x so its rank vector matches the correlated
-    # normals' rank vector (Iman-Conover). This is a GATHER by rank: row i
-    # receives the marginal value whose ascending rank equals ``y_ranks[i, j]``,
-    # giving ``out[:, j]`` a rank vector identical to ``y[:, j]`` and therefore
-    # the target Spearman correlation, while preserving the exact marginal.
+    # normals' rank vector (Iman-Conover gather; for gaussian_copula this same
+    # gather IS the empirical-quantile map since Phi is monotone). This is a
+    # GATHER by rank: row i receives the marginal value whose ascending rank
+    # equals ``y_ranks[i, j]``, giving ``out[:, j]`` a rank vector identical to
+    # ``y[:, j]`` and therefore the target Spearman correlation, while
+    # preserving the exact marginal.
     #
     # The previous SCATTER form ``out[y_ranks[:, j], j] = col_sorted`` applied the
     # INVERSE permutation, so the induced correlation collapsed to ~0 while the
