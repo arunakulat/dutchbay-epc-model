@@ -31,6 +31,7 @@ import pandas as pd
 
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
+from analytics.cost.benchmark import lcos_benchmark
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
@@ -86,7 +87,9 @@ class BatchScenarioResult:
     discount_rate: float
     fail_reason: Optional[str] = None
     #: Per-BESS Levelised Cost of Storage view (read-only; finance.bess_lcos). One
-    #: ``LcosResult.as_dict()`` per ``type: bess`` technology; empty for wind/solar-only
+    #: ``LcosResult.as_dict()`` per ``type: bess`` technology, each carrying an additive
+    #: ``benchmark`` advisory (analytics.cost.benchmark.lcos_benchmark, #605: the PNNL
+    #: ESGC 2024 / Lazard LCOS v10.0 non-ITC band); empty for wind/solar-only
     #: scenarios, so non-storage scenarios are unaffected.
     lcos: List[Dict[str, Any]] = field(default_factory=list)
     #: Reproducibility stamp (analytics.run_manifest): resolved-config SHA-256 + engine
@@ -294,14 +297,29 @@ class ScenarioAnalytics:
             # batch's effective rate (the same basis the KPIs use), and the horizon is the
             # number of operating years actually built.
             try:
-                lcos = [
-                    res.as_dict()
-                    for res in compute_lcos_suite(
-                        config,
-                        wacc=discount_rate,
-                        project_years=len(annual_rows),
-                    )
-                ]
+                lcos = []
+                for res in compute_lcos_suite(
+                    config,
+                    wacc=discount_rate,
+                    project_years=len(annual_rows),
+                ):
+                    entry = res.as_dict()
+                    # Advisory literature-band disclosure (#605), ADDITIVE only: the
+                    # computed lcos_usd_per_mwh and the fixed-dispatch limitation
+                    # notes (#596) it joins are untouched. An out-of-band LCOS logs a
+                    # WARNING inside lcos_benchmark, citing PNNL ESGC 2024 / Lazard
+                    # LCOS v10.0 (non-ITC); an undefined LCOS gets an explicit
+                    # not-comparable note. The advisory itself is best-effort: if it
+                    # fails, the LCOS view still surfaces without it.
+                    try:
+                        entry["benchmark"] = lcos_benchmark(
+                            entry.get("lcos_usd_per_mwh")
+                        )
+                    except Exception as exc:  # pragma: no cover - advisory only
+                        logger.warning(
+                            "LCOS benchmark advisory failed for %s: %s", name, exc
+                        )
+                    lcos.append(entry)
             except Exception as exc:  # pragma: no cover - read-only, non-blocking
                 logger.warning("LCOS computation failed for %s: %s", name, exc)
                 lcos = []

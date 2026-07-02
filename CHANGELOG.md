@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **BESS LCOS advisory sanity band vs PNNL ESGC 2024 / Lazard LCOS v10.0 non-ITC (#605, report-only).**
+  `analytics.cost.benchmark.lcos_benchmark()` (mirroring `capex_benchmark`) checks the computed
+  read-only LCOS (`finance.bess_lcos`) against the **USD 115–254/MWh non-ITC literature band**
+  (Lazard LCOS v10.0, June-2025 LCOE+, unsubsidised — Sri Lanka has no US ITC; methodology
+  cross-anchored to PNNL ESGC 2024). The band, source labels, and vintage are config-sourced from
+  `defaults.cost_reference` in `config/defaults.yaml` (CCCDIR — no Python-literal anchors). Each
+  per-BESS LCOS dict in the `ScenarioAnalytics` batch view gains an **additive** `benchmark`
+  advisory (`within_band`/band/sources/note); an out-of-band LCOS **logs a WARNING citing the
+  sources** — no raise, no value change — and an undefined LCOS (`None`, e.g. zero discharged
+  energy) yields an explicit not-comparable note (`within_band: null`), never a crash or silent
+  zero. Joins the fixed-dispatch limitation notes from #596: the model's LCOS is a fixed-cycling
+  basis, so an out-of-band value is a review prompt, not an error. Every existing reported
+  `lcos_usd_per_mwh` value and all committed-scenario KPIs are byte-identical.
 - **Wind artifact hygiene (#618, KPI-neutral: committed scenarios byte-identical, frozen AEP artifacts untouched).**
   Three fixes on the `wind_resource` timeseries-diagnostic path (finance reads the frozen
   `aep_summary` JSON, so lender KPIs cannot move):

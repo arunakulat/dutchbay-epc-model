@@ -413,6 +413,30 @@ def test_bess_scenario_surfaces_lcos_in_summary_and_metadata(bess_dir: Path) -> 
     assert result["pv_costs_usd"] > 0.0 and result["pv_discharged_mwh"] > 0.0
 
 
+def test_bess_lcos_carries_benchmark_advisory(bess_dir: Path) -> None:
+    """Each per-BESS LCOS dict carries the additive #605 band advisory — and the
+    computed lcos_usd_per_mwh and #596 limitation notes are unchanged by it."""
+    from analytics.cost.benchmark import lcos_band_usd_per_mwh
+
+    _summary_df, _ts, meta = ScenarioAnalytics(scenarios_dir=bess_dir).run()
+    result = meta.batch_summary["bess_lcos"][0]["results"][0]
+
+    # The computed value and the fixed-dispatch limitation notes (#596) still surface.
+    value = result["lcos_usd_per_mwh"]
+    assert isinstance(value, float) and value > 0.0
+    assert any("not simulated" in n for n in result["notes"])
+
+    # The advisory is additive and consistent with the config-sourced band.
+    low, high, _sources, year = lcos_band_usd_per_mwh()
+    advisory = result["benchmark"]
+    assert advisory["band_low_usd_per_mwh"] == pytest.approx(low)
+    assert advisory["band_high_usd_per_mwh"] == pytest.approx(high)
+    assert advisory["band_year"] == year
+    assert advisory["within_band"] == (low <= value <= high)
+    assert "PNNL ESGC 2024" in advisory["note"]
+    assert "Lazard LCOS v10.0" in advisory["note"]
+
+
 def test_lcos_metadata_is_json_serialisable(bess_dir: Path) -> None:
     """The enriched batch_summary (incl. bess_lcos) round-trips through JSON."""
     _summary_df, _ts, meta = ScenarioAnalytics(scenarios_dir=bess_dir).run()
