@@ -179,6 +179,22 @@ All notable changes to this project will be documented here.
   has no order-statistic analogue. `numpy`-only, import-light per the module charter (CASPER).
   Read-only/additive — same contract as #590; all committed-scenario KPIs verified byte-
   identical (all-scenarios kpi oracle).
+- **Producer-side long-term-trend emission into the frozen wind export (#656, slice 4, opt-in, KPI-neutral).**
+  Closes the loop opened by slice 3: a wind producer now MINTS the `long_term_trend` block that the
+  finance-CLI Executive Workbook step decodes into the "ResourceTrend" sheet, so the sheet is
+  producible end-to-end (no longer only from hand-/test-built exports). New
+  `wind_resource.long_term_trend.build_resource_trend_export_block` computes the Mann-Kendall /
+  Sen's-slope trend on an already-retrieved multi-year hub series and encodes it via the
+  slice-3 `serialize_resource_trend` (exact inverse of the consumer decoder). It DEGRADES EXPLICITLY
+  on a record shorter than `MIN_TREND_YEARS` (10 yr; IEC 61400-15-1 / MEASNET) — `{"analyzed": false,
+  "reason": ...}`, never a spurious tau (CESSPIT). `WindPipeline.run_complete_assessment` gains an
+  opt-in `analyze_trend` flag (DEFAULT OFF) that computes the block on the SAME series (no second CDS
+  fetch) and attaches it under `long_term_trend`; `scripts/run_wind_analysis_v14.py`
+  (`analyze_trend` in `conf/wind_analysis.yaml`, default false) surfaces it at the export top level so
+  a frozen export captured from its stdout carries it. **Report/VALIDATE-only:** the block never
+  touches the retrieved series, the committed AEP, or any KPI — the finance adapter reads only the
+  `cashflow_export` contract — so every existing caller is byte-identical. (Also cleaned a
+  pre-existing unused `sys` import in the wind CLI.)
 - **Single-scenario Executive Workbook emission — a genuine live caller for `build_executive_workbook` (#656, slice 3, opt-in, KPI-neutral).**
   `analytics.executive_workbook.build_executive_workbook` shipped orphaned in PR #179 (its only
   caller was a unit test). This wires it into the canonical single-scenario CLI. New helpers
