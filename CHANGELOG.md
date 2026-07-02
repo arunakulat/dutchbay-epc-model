@@ -46,6 +46,18 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
+- **hydra-core pinned 1.3.2 → 1.3.3 + declared as an abstract runtime dep + maintenance-risk ADR (#609).**
+  The reproducibility-lock pin moves to 1.3.3 (upstream is packaging-only — removes `setup.py`'s
+  `pkg_resources` dependency, hydra#3207 — so runtime behaviour and all committed KPIs are unchanged;
+  its transitive requirements were already satisfied by the lock, so no other pin moves).
+  `hydra-core>=1.3.3` is now declared in `pyproject.toml [project.dependencies]`: the packaged
+  `analytics.cli.*_hydra` modules import `hydra` at module scope, so its previous absence meant
+  regenerating the lock from pyproject (the lock header's own recipe) would have silently dropped a
+  load-bearing package. New ADR `docs/HYDRA_MAINTENANCE_DECISION.md` records the stalled upstream
+  cadence (1.3.2 Feb-2023 → 1.3.3 Jun-2026, maintainer-status question unanswered) as an accepted
+  risk — stale but stable: narrow `@hydra.main`+dotlist surface, everything pinned, OSV/pip-audit
+  clean — with an OmegaConf + thin-CLI fallback plan (omegaconf is already a direct runtime dep) and
+  explicit re-evaluation triggers.
 - **`pydantic.mypy` plugin registered in the effective mypy config (#594, tooling-only, KPI-neutral).**
   `mypy.ini` (the config both CI gates actually read — `pyproject.toml`'s `[tool.mypy]` merely points
   `config_file = "mypy.ini"`) now sets `plugins = pydantic.mypy` plus the strictest `[pydantic-mypy]`
