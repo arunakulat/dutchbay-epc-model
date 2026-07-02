@@ -5,6 +5,32 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
+  New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
+  conditions-precedent checklist: the discrete named line items that must be satisfied (or
+  explicitly waived) before first drawdown / financial close — e.g. `ppa_executed`,
+  `esia_approved`, `epc_contract_signed`, `security_package_perfected`. This is finer-grained
+  than the development-readiness R/A/G register (`analytics.development_readiness`, which rolls
+  a whole workstream to one status): the CP checklist tracks each named condition to a
+  satisfied / waived / pending state and reports how many CPs remain outstanding (and so gate
+  drawdown), rolled up overall and per workstream.
+  - The taxonomy (satisfaction scale, canonical CP workstreams, and named CP items) lives in
+    `config/conditions_precedent.yaml`; the enforcement policy resolves
+    `scenario conditions_precedent.{enforce,require_complete}` → `config/defaults.yaml`
+    `defaults.conditions_precedent.*` (CESSPIT / CCCDIR — no Python literals). Mirrors the
+    development-readiness (#C11) and evidence-register (#C5) patterns.
+  - **Soft by default, DEFAULT OFF** (`enforce: false`, `require_complete: false`). A scenario
+    with no / partial checklist is reported on, never broken; `validate_conditions_precedent`
+    is a pure detector (raises / warns / no-ops) wired into the same three seams as the
+    readiness / evidence guards (`analytics.scenario_loader`, `api.pipeline_api`,
+    `app.services.pipeline_service`). It changes no computed number. No committed scenario
+    declares a `conditions_precedent` block, so all-scenarios KPIs are byte-identical
+    (verified via the all-scenarios kpi oracle).
+  - Registered in the central config schema (`RequiredFieldSpec`, module `conditions_precedent`,
+    optional / warning-only) so it appears in the lender schema export.
+  - This is slice 2 of 5 of the feasibility-report generator (#616). The remaining slices
+    (20-section feasibility schema, IC executive summary + red-flag section, bankability
+    evidence-completeness score, route/template wiring) are tracked as follow-up issues.
 - **`MonteCarloResult.sampling_method` is now populated from the sampler actually used (#648a, provenance wiring, KPI-neutral).**
   The `sampling_method` field on `MonteCarloResult` (`analytics.contracts_v14`) existed but was
   never set, so every result reported the `None` default while the sampler identity lived only in
