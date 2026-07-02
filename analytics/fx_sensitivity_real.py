@@ -259,13 +259,20 @@ class FXSensitivityAnalyzer:
 
     def run(self) -> FXSensitivityResult:
         metric = self.config.target_metric
-        base = evaluate_with_overrides(self.base_config_path, {"fx": {"fx_shock": 0.0}})
+        # Base case: NO FX override. The legacy `{"fx": {"fx_shock": 0.0}}` override that
+        # used to seed this call was a DEAD key — the v14 cashflow engine never reads
+        # `fx.fx_shock`, so it was inert and produced a base metric byte-identical to a
+        # clean no-override call (#659; Fable finding from the #666 review). Passing `{}`
+        # makes that explicit and stops advertising a phantom engine key.
+        base = evaluate_with_overrides(self.base_config_path, {})
         base_value = _metric_from_result(base, metric)
         pairs: list[tuple[SensitivityCoefficient, float]] = []
 
         # FX-RATE sweep drives the LIVE engine key fx.start_lkr_per_usd (the rate the
-        # cashflow actually discounts at). The old keys fx.fx_shock / fx.spot_rate_lkr_usd
-        # were not consumed by the engine, so this coefficient was a fake ~0 (Wave-2 fix).
+        # cashflow actually discounts at). The legacy fx.fx_shock / fx.spot_rate_lkr_usd
+        # keys were never consumed by the engine (fx.fx_shock is now fully retired from
+        # this analyzer, #659), so a rate coefficient built off them would be a fake ~0;
+        # the live start_lkr_per_usd sweep below is the real one (Wave-2 fix).
         base_fx = self._base_fx()
         fx_values = []
         for shock in self.config.fx_rate_shocks:

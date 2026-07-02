@@ -318,8 +318,11 @@ def test_run_produces_three_coefficients_and_variance(
     assert result.total_variance is not None and result.total_variance > 0.0
     assert result.explained_variance is not None
 
-    # the base evaluation anchors at the unshocked case
-    assert calls[0] == {"fx": {"fx_shock": 0.0}}
+    # the base evaluation anchors at the CLEAN no-override case (#659): the legacy dead
+    # key {"fx": {"fx_shock": 0.0}} was retired — the engine never read fx.fx_shock, so
+    # the base call must now carry NO fx override at all.
+    assert calls[0] == {}
+    assert "fx_shock" not in calls[0].get("fx", {})
     # fx shocks re-price the LIVE engine key start_lkr_per_usd relative to base fx (333.79):
     # the first sweep point is the -10% shock -> 333.79 * 0.90.
     fx_call = calls[1]["fx"]
@@ -697,3 +700,38 @@ def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
     assert result.spread_npv_sensitivity < 0.0
     # fx_rate NPV sensitivity is also fitted now (weaker LKR -> lower NPV)
     assert result.fx_rate_npv_sensitivity < 0.0
+
+
+# ---------------------------------------------------------------------------
+# #659 — fx_shock base-key retirement (dead-key removal, base-identity proof)
+# ---------------------------------------------------------------------------
+def test_run_base_call_carries_no_fx_shock_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run()'s base evaluation must NOT send the retired dead key fx.fx_shock (#659).
+
+    fx.fx_shock was never read by the v14 cashflow engine (Fable finding, #666 review);
+    the base call is now a clean no-override ``{}``. Regression guard so the dead key
+    cannot creep back into the base seed.
+    """
+    calls = _stub_evaluate_with_overrides(monkeypatch)
+    FXSensitivityAnalyzer(str(LENDER)).run()
+    assert calls[0] == {}
+    assert "fx_shock" not in calls[0].get("fx", {})
+
+
+def test_run_base_metric_identical_after_fx_shock_retirement() -> None:
+    """The retired-key swap is byte-identical against the REAL engine (#659).
+
+    Proves the retirement is inert: the base metric from the NEW clean no-override base
+    call ``{}`` equals the metric the OLD ``{"fx": {"fx_shock": 0.0}}`` override produced
+    — because fx.fx_shock was a dead key the engine never consumed. This is the
+    base-identity guarantee behind the KPI-neutrality of the swap.
+    """
+    metric = "project_irr"
+    old_base = evaluate_with_overrides(str(LENDER), {"fx": {"fx_shock": 0.0}})
+    new_base = evaluate_with_overrides(str(LENDER), {})
+    old_value = mod._metric_from_result(old_base, metric)
+    new_value = mod._metric_from_result(new_base, metric)
+    # Exact float equality (not approx): the dead key changes nothing in the engine.
+    assert new_value == old_value
