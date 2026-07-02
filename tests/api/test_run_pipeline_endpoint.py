@@ -19,6 +19,7 @@ from api.pipeline_api import RunPipelineRequest, run_pipeline
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+HYBRID = str(REPO_ROOT / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml")
 
 
 def test_run_pipeline_returns_full_report() -> None:
@@ -43,10 +44,36 @@ def test_run_pipeline_returns_full_report() -> None:
     assert resp.debt.debt_total_usd == pytest.approx(71.82e6, rel=0.02)
     assert resp.debt.gearing == pytest.approx(0.45, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
+    # Default P50-only solve (bind_downside unset): the P90 sizing-detail fields stay
+    # absent (None) so the lender pack renders no P90 rows for this case (#613).
+    assert resp.debt.binding_production_case == "P50"
+    assert resp.debt.solved_gearing_p90 is None
+    assert resp.debt.target_dscr_p90 is None
     assert set(resp.debt.tranches) == {"lkr", "usd", "dfi"}
     assert resp.debt.tranches["usd"].principal_usd > 0
     assert len(resp.debt.schedule) > 15  # full project timeline
     assert all(row.year >= 1 for row in resp.debt.schedule)
+
+
+def test_debt_block_surfaces_p90_sizing_detail_when_bind_downside() -> None:
+    """A bind_downside scenario serialises the P90 sizing detail into DebtBlock (#613).
+
+    The committed hybrid case opts into Financing_Terms.bind_downside, so the lender pack
+    surfaces both gearing solves (P50 vs P90), the resolved P90 DSCR target, and the real
+    downside CFADS ratio + its source — all pure serialisation from debt_result['dual_dscr'].
+    """
+    resp = run_pipeline(RunPipelineRequest(config_path=HYBRID))
+    d = resp.debt
+    # P90 binds this deal (the downside deleverages below the P50 solve).
+    assert d.binding_production_case == "P90"
+    assert d.solved_gearing_p50 is not None and d.solved_gearing_p90 is not None
+    assert d.solved_gearing_p90 < d.solved_gearing_p50
+    # The resized gearing tracks the binding (P90) solve.
+    assert d.gearing == pytest.approx(d.solved_gearing_p90, abs=1e-6)
+    # P90 detail is present and sourced from the real bankable P90/P50 AEP ratio.
+    assert d.target_dscr_p90 is not None
+    assert d.downside_source == "p90_aep"
+    assert d.downside_ratio == pytest.approx(471.0 / 538.1, abs=0.005)
 
 
 def test_overrides_change_economics() -> None:

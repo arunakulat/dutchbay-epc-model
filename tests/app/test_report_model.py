@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
+from app.reports.renderer import render_report_html
 from app.reports.report_config import (
     Covenants,
     ReportConfig,
@@ -162,6 +163,68 @@ def test_finance_blocks_populated_with_scenario_and_debt() -> None:
     # Full-timeline DSCR profile: construction years carry None, operating years a value.
     assert [r.dscr for r in ctx.finance.debt.schedule[:3]] == [None, None, 1.308]
     assert ctx.finance.kpis.project_irr == _VALUE_DESTRUCTIVE_KPIS["project_irr"]
+
+
+def test_report_omits_p90_sizing_rows_for_p50_only_debt() -> None:
+    """The default P50-only debt result renders NO P90 sizing-detail rows (#613).
+
+    The lender report keeps the single binding-constraint row (present for every dual_dscr
+    scenario) but omits the P90 gearing-solve / target / downside-ratio rows unless a
+    scenario opts into the downside-binding solve.
+    """
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+    )
+    html = render_report_html(ctx)
+    assert "Binding sizing constraint" in html
+    assert "Gearing solves (P50 / P90)" not in html
+    assert "P90 target DSCR" not in html
+    assert "Downside CFADS ratio" not in html
+
+
+def test_report_surfaces_p90_sizing_rows_when_bind_downside() -> None:
+    """A bind_downside debt result renders the full P90 sizing-detail block (#613).
+
+    Pure render-when-present serialisation: the two gearing solves, the P90 DSCR target,
+    and the downside CFADS ratio (with a human-readable source label) all appear.
+    """
+    debt = {
+        **_DEBT_RESULT,
+        "dual_dscr": {
+            "solved_gearing": 0.365,
+            "binding_constraint": "dscr",
+            "binding_production_case": "P90",
+            "sizing_mode": "dual_dscr",
+            "solved_gearing_p50": 0.4175,
+            "solved_gearing_p90": 0.365,
+            "target_dscr_p90": 1.30,
+            "downside_ratio": 0.875302,
+            "downside_source": "p90_aep",
+        },
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=debt,
+    )
+    assert ctx.finance is not None
+    d = ctx.finance.debt
+    assert d.solved_gearing_p50 == pytest.approx(0.4175)
+    assert d.solved_gearing_p90 == pytest.approx(0.365)
+    assert d.target_dscr_p90 == pytest.approx(1.30)
+    assert d.downside_ratio == pytest.approx(0.875302)
+    assert d.downside_source == "p90_aep"
+
+    html = render_report_html(ctx)
+    assert "Gearing solves (P50 / P90)" in html
+    assert "41.75% / 36.50%" in html  # fmt_ratio_pct of the two solves
+    assert "P90 target DSCR" in html
+    assert "Downside CFADS ratio (P90/P50)" in html
+    assert "P90 AEP" in html  # source label, not the raw "p90_aep" token
 
 
 def test_finance_blocks_none_without_debt_result() -> None:

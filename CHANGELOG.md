@@ -5,6 +5,24 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **P90 (downside) debt-sizing detail surfaced in the lender report (#613, render-when-present, KPI-neutral).**
+  The lender pack already renders "Binding sizing constraint … (P50/P90)" by default for
+  every `debt_sizing: dual_dscr` scenario (`report.html.j2` via `api.pipeline_api._extract_debt`);
+  #613 was a verification issue confirming that and closing the residual gap: for a scenario
+  that opts into the downside-binding solve (`Financing_Terms.bind_downside`), the underlying
+  P90 sizing detail was computed in the engine but never serialised, so its lender pack showed
+  only the "(P90)" tag without the two gearing solves. `api.pipeline_api.DebtBlock` +
+  `_extract_debt` now carry the optional additive fields `solved_gearing_p50`,
+  `solved_gearing_p90`, `target_dscr_p90`, `downside_ratio`, `downside_source` — pure
+  serialisation from `debt_result['dual_dscr']`, no finance logic — and the template renders
+  the "Gearing solves (P50 / P90)", "P90 target DSCR" and "Downside CFADS ratio (P90/P50)"
+  rows only when the P90 solve is present. `finance.debt_v14._maybe_autosolve_dscr` now also
+  records the resolved `target_dscr_p90` on the `dual_dscr` detail (a pure metadata write,
+  only when `bind_downside` is active). DEFAULT ABSENT = byte-identical: no committed scenario
+  gains `bind_downside`; the default P50-only lender report is unchanged (the P90 rows stay
+  omitted), and only the one committed scenario that already opts in
+  (`dutchbay_hybrid_windsolar_2025Q4.yaml`) shows the new detail. All committed-scenario KPIs
+  verified byte-identical (all-scenarios kpi oracle).
 - **Opt-in MERRA-2 second-source cross-validation of the ERA5 wind resource (#612, disclose-don't-mutate, KPI-neutral).**
   New `wind_resource.crossval` runs a VALIDATE-mode sanity check of an independent reanalysis
   (MERRA-2) against the declared ERA5 baseline — the same disclose-don't-mutate contract as

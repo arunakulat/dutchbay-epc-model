@@ -225,6 +225,17 @@
         {% if ctx.finance.debt.binding_constraint %}
         <tr><td>Binding sizing constraint</td><td class="num">{{ ctx.finance.debt.binding_constraint }}{% if ctx.finance.debt.binding_production_case %} ({{ ctx.finance.debt.binding_production_case }}){% endif %}</td></tr>
         {% endif %}
+        {# P90 (downside) sizing detail — rendered only when a scenario opts into the
+           downside-binding solve (bind_downside); absent for the default P50-only case. #}
+        {% if ctx.finance.debt.solved_gearing_p90 is not none %}
+        <tr><td>Gearing solves (P50 / P90)</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.solved_gearing_p50) }} / {{ fmt_ratio_pct(ctx.finance.debt.solved_gearing_p90) }}</td></tr>
+        {% if ctx.finance.debt.target_dscr_p90 is not none %}
+        <tr><td>P90 target DSCR</td><td class="num">{{ fmt_x(ctx.finance.debt.target_dscr_p90) }}</td></tr>
+        {% endif %}
+        {% if ctx.finance.debt.downside_ratio is not none %}
+        <tr><td>Downside CFADS ratio (P90/P50)</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.downside_ratio) }}{% if ctx.finance.debt.downside_source %} ({{ {"p90_aep": "P90 AEP", "explicit_factor": "explicit factor", "flat_factor": "flat proxy"}.get(ctx.finance.debt.downside_source, ctx.finance.debt.downside_source) }}){% endif %}</td></tr>
+        {% endif %}
+        {% endif %}
       </tbody>
     </table>
     {% if ctx.finance.debt.schedule %}

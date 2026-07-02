@@ -11,7 +11,6 @@ canonical economics exactly.
 
 from __future__ import annotations
 
-import copy
 import warnings
 from pathlib import Path
 
@@ -45,6 +44,8 @@ def test_default_off_preserves_canonical() -> None:
     assert d["downside_source"] == "flat_factor"
     assert d["downside_ratio"] == pytest.approx(0.80, abs=1e-6)
     assert "solved_gearing_p90" not in d
+    # No downside solve => no P90 target detail either (report renders no P90 rows).
+    assert "target_dscr_p90" not in d
     assert d["solved_gearing_p50"] == pytest.approx(
         0.45, abs=0.01
     )  # PR-B UIP LKR rate de-levers
@@ -55,6 +56,8 @@ def test_p90_binds_when_floor_is_high() -> None:
     assert d["binding_production_case"] == "P90"
     assert d["solved_gearing_p90"] < d["solved_gearing_p50"]  # downside deleverages
     assert d["solved_gearing"] == pytest.approx(d["solved_gearing_p90"], abs=1e-6)
+    # The resolved P90 DSCR target is recorded on the detail for the lender pack (#613).
+    assert d["target_dscr_p90"] == pytest.approx(1.20, abs=1e-6)
     # the real bankable P90/P50 AEP ratio (post 2% haircut: 404.4/464.3 = 0.871),
     # NOT the flat 0.80
     assert d["downside_source"] == "p90_aep"
