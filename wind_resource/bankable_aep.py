@@ -311,6 +311,40 @@ class UncertaintyBudget:
         return float(np.sqrt(self.systematic_sigma_pct(correlation) ** 2 + iav**2))
 
 
+def budget_from_mapping(uncertainty: Mapping[str, Any]) -> UncertaintyBudget:
+    """Build an :class:`UncertaintyBudget` from a ``resource.uncertainty``-shaped mapping.
+
+    Consumes ONLY the seven IEC 61400-15-2 category sigmas; a key that is absent keeps
+    the :class:`UncertaintyBudget` default, so an empty mapping reproduces
+    ``UncertaintyBudget()`` exactly. The policy knobs that also live under
+    ``resource.uncertainty`` (``p50_haircut_pct``, ``correlation``, ``life_years``) are
+    deliberately NOT resolved here — each consumer applies its own policy layer (the
+    bankable builder's haircut default vs the timeseries diagnostic's 0.0 pin is an
+    open policy question, #653), and keeping this helper policy-free is what lets both
+    layers share ONE sigma parser that cannot drift (#618).
+    """
+    d = UncertaintyBudget()
+    return UncertaintyBudget(
+        wind_measurement_pct=float(
+            uncertainty.get("wind_measurement_pct", d.wind_measurement_pct)
+        ),
+        long_term_pct=float(uncertainty.get("long_term_pct", d.long_term_pct)),
+        vertical_extrapolation_pct=float(
+            uncertainty.get("vertical_extrapolation_pct", d.vertical_extrapolation_pct)
+        ),
+        horizontal_flow_pct=float(
+            uncertainty.get("horizontal_flow_pct", d.horizontal_flow_pct)
+        ),
+        power_curve_pct=float(uncertainty.get("power_curve_pct", d.power_curve_pct)),
+        wake_model_pct=float(uncertainty.get("wake_model_pct", d.wake_model_pct)),
+        interannual_variability_pct=float(
+            uncertainty.get(
+                "interannual_variability_pct", d.interannual_variability_pct
+            )
+        ),
+    )
+
+
 def interannual_variability_drift(
     computed_cov_pct: float,
     assumed_pct: float = UncertaintyBudget().interannual_variability_pct,

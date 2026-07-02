@@ -18,7 +18,8 @@ Typical usage:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0 (CCCDIR Compliant)
+Version: tracks the repo ``VERSION`` file via ``analytics.run_manifest.engine_version()``
+    (no per-module literal to go stale; #618).
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy import stats
+
+from analytics.run_manifest import engine_version
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +102,7 @@ class WindAnalyzer:
         # Load configuration (CCCDIR compliance)
         self._load_config(config_path)
 
-        logger.info("WindAnalyzer v1.0.0 initialized")
+        logger.info(f"WindAnalyzer v{engine_version()} initialized")
         logger.info(f"  Data points: {len(self.df):,}")
         logger.info(f"  Wind speed column: {ws_column}")
         logger.info(f"  Mean WS: {self.df[ws_column].mean():.2f} m/s")
