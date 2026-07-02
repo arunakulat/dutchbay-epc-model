@@ -34,6 +34,34 @@ that opts in sees the BESS revenue DECLINE over life (and, with an augmentation 
 recover after a cell top-up — see ``mdsc_soh_for_year``). The static ``dispatchable_ratio``
 and the year-indexed ``soh(t)`` multiply.
 
+STATE-OF-HEALTH MODELS (``revenue.soh_model``, default ``geometric``)
+---------------------------------------------------------------------
+
+The default degradation curve is a single GEOMETRIC fade above:
+``soh(t) = (1 - mdsc_fade_pct_annual) ** t`` — one blended rate that lumps calendar and
+cycle aging together. A scenario can OPT IN to a separable **calendar + cycle** curve by
+setting ``revenue.soh_model: separable_calendar_cycle`` (absent ⇒ ``geometric`` ⇒
+byte-identical). This follows the NREL **BLAST** (Battery Lifetime Analysis and Simulation
+Tool; Smith et al., NREL, the lifetime model behind SAM's battery module), which separates
+**calendar aging** (capacity loss driven by elapsed time, independent of use) from **cycle
+aging** (capacity loss driven by charge/discharge throughput). Here the two loss channels
+superpose linearly per fade-origin-relative year ``n``::
+
+    efc_per_year = cycles_per_year * depth_of_discharge      (equivalent full cycles/yr)
+    annual_fade  = calendar_fade_pct_annual + cycle_fade_pct_per_efc * efc_per_year
+    soh(n)       = max(mdsc_floor_soh, base_soh - annual_fade * n)
+
+with ``calendar_fade_pct_annual`` (loss/yr from time) and ``cycle_fade_pct_per_efc`` (loss
+per equivalent full cycle) supplied via ``revenue.*``. The two models are MUTUALLY
+EXCLUSIVE: ``mdsc_fade_pct_annual`` belongs to ``geometric`` only, and the calendar/cycle
+keys to ``separable_calendar_cycle`` only — mixing them (or an unknown ``soh_model``) is a
+config error and raises (CESSPIT fail-loud; no silent precedence). ``mdsc_floor_soh`` and
+the ``augmentation_schedule`` restore semantics apply identically to both models (the floor
+still bounds; an augmentation still resets the fade origin to ``restore_to_soh``). The
+per-year ``efc_per_year`` throughput uses the SAME ``cycles_per_year`` / depth-of-discharge
+the LCOS energy basis uses, so the revenue and LCOS SoH curves can never diverge — both go
+through the single source of truth :func:`mdsc_soh_for_year`.
+
 NB: the round-trip-efficiency and functional-performance liquidated damages, and a
 sub-97% availability month, are *downside* levers; they are exposed here as optional
 multipliers (``availability_factor`` / ``dispatchable_ratio``) rather than modelled
@@ -62,7 +90,7 @@ on this operational cashflow path at all.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 #: The explicit per-technology type discriminator value marking a storage block.
 BESS_TYPE = "bess"
@@ -91,6 +119,28 @@ _DEFAULT_ROUND_TRIP_EFFICIENCY = 0.85
 #: non-linear and is unmodelled — so soh(t) floors here rather than extrapolating
 #: (NextG / Eway LFP warranty bands). Overridable per scenario via revenue.mdsc_floor_soh.
 _DEFAULT_MDSC_FLOOR_SOH = 0.70
+
+#: State-of-health degradation model selector values (``revenue.soh_model``).
+#:
+#: * ``geometric`` (default, absent) — one blended geometric rate
+#:   ``soh(t) = (1 - mdsc_fade_pct_annual) ** t`` (calendar+cycle lumped).
+#: * ``separable_calendar_cycle`` — NREL-BLAST-style separable calendar + cycle aging
+#:   (calendar loss ∝ time, cycle loss ∝ equivalent-full-cycle throughput; superposed
+#:   linearly). See the module docstring.
+_SOH_MODEL_GEOMETRIC = "geometric"
+_SOH_MODEL_SEPARABLE = "separable_calendar_cycle"
+SUPPORTED_SOH_MODELS = (_SOH_MODEL_GEOMETRIC, _SOH_MODEL_SEPARABLE)
+#: The ``revenue.*`` keys that belong to each SoH model (used to reject cross-model mixing).
+_GEOMETRIC_ONLY_KEYS = ("mdsc_fade_pct_annual",)
+_SEPARABLE_ONLY_KEYS = ("calendar_fade_pct_annual", "cycle_fade_pct_per_efc")
+#: Default depth-of-discharge, by revenue model, for the separable model's equivalent-full-
+#: cycle throughput. A capacity-charge (availability) BESS is dispatched deep on call
+#: (0.80); an energy-tariff night-peak BESS does a shallower daily partial shift (0.40).
+#: These are the CANONICAL DoD defaults; :mod:`finance.bess_lcos` imports them (single source
+#: of truth) so the LCOS energy basis and the separable-cycle throughput cannot drift apart.
+#: Overridable per scenario via ``revenue.depth_of_discharge``.
+_DEFAULT_DOD_CAPACITY_CHARGE = 0.80
+_DEFAULT_DOD_ENERGY_TARIFF = 0.40
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -165,6 +215,136 @@ def _fade_rate(value: Any, *, tech: str) -> float:
             "1.1%/yr, not 1.1)."
         )
     return coerced
+
+
+def _separable_fade_rate(value: Any, *, tech: str, field: str) -> float:
+    """Validate a separable-model fade rate in ``[0, 1)``; default ``0.0`` when absent.
+
+    Both separable channels (``calendar_fade_pct_annual`` per year, ``cycle_fade_pct_per_efc``
+    per equivalent full cycle) are decimal fractional loss rates. ``0.0`` (absent) means that
+    channel contributes no fade. A value outside ``[0, 1)`` (e.g. ``1.1`` for a percent
+    mis-entered as a whole number instead of the decimal, or ``>= 1`` which would erase the
+    asset in a single unit) is a config error and **raises** (CESSPIT fail-loud), symmetric
+    with ``_fade_rate`` for the geometric model.
+    """
+    coerced = _as_float(value)
+    if coerced is None:
+        if value is None:
+            return 0.0
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.{field}={value!r} is not "
+            "numeric; it is a decimal fractional fade rate (e.g. 0.02 for 2%)."
+        )
+    if not 0.0 <= coerced < 1.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.{field}={coerced} is out of "
+            "range; it is a decimal fractional fade rate in [0, 1) (e.g. 0.02 for 2%, "
+            "not 2)."
+        )
+    return coerced
+
+
+def _soh_cycles_per_year(value: Any, *, tech: str) -> float:
+    """Validate the separable model's ``cycles_per_year`` throughput; default 365.
+
+    Positive-or-raise (CESSPIT), matching the energy-tariff / LCOS cycles validation, so the
+    equivalent-full-cycle basis cannot go non-positive. Absent ⇒ one cycle/day.
+    """
+    if value is None:
+        return _DEFAULT_CYCLES_PER_YEAR
+    coerced = _as_float(value)
+    if coerced is None or coerced <= 0.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.cycles_per_year={value!r} must "
+            "be a positive number (cycles/year for the separable cycle-aging basis)."
+        )
+    return coerced
+
+
+def _resolve_soh_model(
+    revenue: Mapping[str, Any],
+    *,
+    tech: str,
+    default_depth_of_discharge: float,
+) -> Tuple[str, float]:
+    """Resolve the SoH degradation model and its ANNUAL fade rate (CESSPIT fail-loud).
+
+    Returns ``(soh_model, annual_fade_rate)`` where ``annual_fade_rate`` is the per-year
+    fractional capacity loss the year-indexed curve applies:
+
+    * ``geometric`` (default / ``revenue.soh_model`` absent) — ``annual_fade_rate`` is
+      ``mdsc_fade_pct_annual`` (the compounding ``(1 - rate) ** t`` base), default ``0.0``
+      ⇒ no fade ⇒ byte-identical.
+    * ``separable_calendar_cycle`` — the linear superposition
+      ``calendar_fade_pct_annual + cycle_fade_pct_per_efc * cycles_per_year *
+      depth_of_discharge`` (NREL BLAST: calendar aging ∝ time + cycle aging ∝ equivalent
+      full cycles).
+
+    The two models are mutually exclusive: a key that belongs to the OTHER model raises
+    (no silent precedence), as does an unknown ``soh_model`` value. For the separable model
+    the equivalent-full-cycle throughput ``cycles_per_year * depth_of_discharge`` uses the
+    SAME inputs (and defaults) the LCOS energy basis uses — ``default_depth_of_discharge`` is
+    the caller-supplied per-model DoD default — so the revenue and LCOS SoH curves stay
+    coupled. Throughput is resolved ONLY for the separable model, so the default geometric
+    path keeps its exact prior validation surface (byte-identical).
+    """
+    soh_model_raw = revenue.get("soh_model")
+    soh_model = _SOH_MODEL_GEOMETRIC if soh_model_raw is None else soh_model_raw
+    if soh_model not in SUPPORTED_SOH_MODELS:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue.soh_model={soh_model_raw!r} is "
+            f"not supported; expected one of {SUPPORTED_SOH_MODELS}."
+        )
+
+    if soh_model == _SOH_MODEL_GEOMETRIC:
+        # Cross-model keys are a mis-configuration — fail loud rather than silently ignore
+        # the separable keys under the geometric model.
+        for key in _SEPARABLE_ONLY_KEYS:
+            if revenue.get(key) is not None:
+                raise ValueError(
+                    f"generation.technologies['{tech}'].revenue.{key} is a "
+                    f"'{_SOH_MODEL_SEPARABLE}' key but soh_model is "
+                    f"'{_SOH_MODEL_GEOMETRIC}' (the default); set "
+                    f"soh_model: {_SOH_MODEL_SEPARABLE} to use it, or remove the key."
+                )
+        annual = _fade_rate(revenue.get("mdsc_fade_pct_annual"), tech=tech)
+        return _SOH_MODEL_GEOMETRIC, annual
+
+    # separable_calendar_cycle
+    for key in _GEOMETRIC_ONLY_KEYS:
+        if revenue.get(key) is not None:
+            raise ValueError(
+                f"generation.technologies['{tech}'].revenue.{key} is a "
+                f"'{_SOH_MODEL_GEOMETRIC}' key but soh_model is "
+                f"'{_SOH_MODEL_SEPARABLE}'; use calendar_fade_pct_annual / "
+                "cycle_fade_pct_per_efc instead, or remove the key."
+            )
+    calendar = _separable_fade_rate(
+        revenue.get("calendar_fade_pct_annual"),
+        tech=tech,
+        field="calendar_fade_pct_annual",
+    )
+    cycle = _separable_fade_rate(
+        revenue.get("cycle_fade_pct_per_efc"),
+        tech=tech,
+        field="cycle_fade_pct_per_efc",
+    )
+    cycles_per_year = _soh_cycles_per_year(revenue.get("cycles_per_year"), tech=tech)
+    dod_raw = revenue.get("depth_of_discharge")
+    depth_of_discharge = (
+        default_depth_of_discharge
+        if dod_raw is None
+        else _unit_factor(dod_raw, tech=tech, field="depth_of_discharge")
+    )
+    efc_per_year = cycles_per_year * depth_of_discharge
+    annual = calendar + cycle * efc_per_year
+    if not 0.0 <= annual < 1.0:
+        raise ValueError(
+            f"generation.technologies['{tech}'].revenue: the separable annual fade rate "
+            f"(calendar {calendar} + cycle {cycle} * {efc_per_year:g} EFC/yr = {annual}) "
+            "is out of range; the combined per-year capacity loss must be in [0, 1)."
+        )
+    return _SOH_MODEL_SEPARABLE, annual
 
 
 def _resolve_augmentation_events(value: Any, *, tech: str) -> List[Dict[str, Any]]:
@@ -380,7 +560,27 @@ def resolve_bess_specs(
         # Year-indexed MDSC fade (default 0.0 -> no fade -> byte-identical). This is the
         # TIME-VARYING state-of-health decay, distinct from the STATIC dispatchable_ratio
         # derate above; the two multiply. floor_soh bounds the fade curve.
-        fade = _fade_rate(revenue.get("mdsc_fade_pct_annual"), tech=str(name))
+        #
+        # The SoH model (revenue.soh_model, default 'geometric') selects the fade curve. The
+        # geometric model uses mdsc_fade_pct_annual as the compounding (1-rate)**t base; the
+        # opt-in 'separable_calendar_cycle' (NREL BLAST) collapses calendar + cycle aging into
+        # a single per-year fade rate here (soh_annual_fade_rate) so mdsc_soh_for_year stays a
+        # pure function of that rate and the model tag — one curve, honored identically by the
+        # cashflow revenue path AND finance.bess_lcos. The separable cycle channel needs the
+        # equivalent-full-cycle throughput; resolve cycles_per_year / depth_of_discharge the
+        # SAME way finance.bess_lcos resolves its energy basis so the two curves stay coupled.
+        # Throughput is resolved ONLY for the separable model so the default geometric path
+        # keeps its exact prior validation surface (byte-identical).
+        default_dod = (
+            _DEFAULT_DOD_CAPACITY_CHARGE
+            if model == "capacity_charge"
+            else _DEFAULT_DOD_ENERGY_TARIFF
+        )
+        soh_model, soh_annual_fade_rate = _resolve_soh_model(
+            revenue,
+            tech=str(name),
+            default_depth_of_discharge=default_dod,
+        )
         floor_raw = revenue.get("mdsc_floor_soh")
         floor_soh = (
             _DEFAULT_MDSC_FLOOR_SOH
@@ -393,7 +593,11 @@ def resolve_bess_specs(
             "power_mw": power_mw,
             "contract_years": contract_years,
             "availability_factor": availability,
-            "mdsc_fade_pct_annual": fade,
+            # For the geometric model this is the (1-rate)**t base; for the separable model
+            # it is the linear per-year loss (calendar + cycle-per-EFC * EFC/yr). Both are
+            # consumed by mdsc_soh_for_year via the soh_model tag below.
+            "mdsc_fade_pct_annual": soh_annual_fade_rate,
+            "soh_model": soh_model,
             "mdsc_floor_soh": floor_soh,
             # Mid-life cell top-ups (default [] -> no augmentation -> byte-identical).
             "augmentation_events": _resolve_augmentation_events(
@@ -482,23 +686,35 @@ def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
 def mdsc_soh_for_year(spec: Dict[str, Any], year_index: int) -> float:
     """The state-of-health (usable MDSC) factor for one operating year, in ``(0, 1]``.
 
-    Without augmentation, ``soh(t) = max(floor_soh, (1 - mdsc_fade_pct_annual) ** t)``.
-    With an ``augmentation_schedule``, the curve RESTORES to ``restore_to_soh`` at each
-    event year and re-fades from there: for the most recent event at 0-based year ``e``,
-    ``soh(t) = min(1.0, restore_to_soh * (1 - fade) ** (t - e))``. With the absent default
-    fade ``0.0`` and no events this is exactly ``1.0`` (no degradation -> byte-identical),
-    so a scenario that does not opt in is unchanged. ``year_index`` is 0-based (operating
-    year 1 -> 0).
+    The fade shape is set by ``spec['soh_model']`` (default / absent ⇒ ``geometric``), and
+    the per-year fade magnitude by ``spec['mdsc_fade_pct_annual']`` (the resolver stores the
+    separable model's collapsed calendar+cycle annual rate under the same key). Both models
+    share the augmentation-restore and floor semantics; ``n = year_index - base_year_index``
+    is the year count since the current fade origin:
+
+    * **geometric** (default) — ``soh = base_soh * (1 - fade) ** n`` (compounding). With the
+      absent default fade ``0.0`` and no events this is exactly ``1.0`` (no degradation), so a
+      scenario that does not opt into any fade is byte-identical.
+    * **separable_calendar_cycle** (NREL BLAST, opt-in) — ``soh = base_soh - fade * n`` where
+      ``fade`` is the linear ``calendar + cycle-per-EFC * EFC/yr`` annual loss the resolver
+      computed once (so revenue and LCOS share it). Calendar and cycle aging superpose
+      linearly, matching the BLAST separable decomposition used by SAM.
+
+    With an ``augmentation_schedule`` the curve RESTORES to ``restore_to_soh`` at each event
+    year and re-fades from there (the most recent event at or before ``year_index`` sets
+    ``base_soh`` and ``base_year_index``), and ``mdsc_floor_soh`` bounds the result below —
+    identically for both models. ``year_index`` is 0-based (operating year 1 → 0).
 
     Args:
-        spec: A resolved BESS spec (carries ``mdsc_fade_pct_annual`` / ``mdsc_floor_soh`` /
-            ``augmentation_events``).
+        spec: A resolved BESS spec (carries ``soh_model`` / ``mdsc_fade_pct_annual`` /
+            ``mdsc_floor_soh`` / ``augmentation_events``).
         year_index: Zero-based operating-year index.
 
     Returns:
         The multiplicative SoH derate to apply to the year's flat revenue.
     """
     fade = float(spec.get("mdsc_fade_pct_annual", 0.0))
+    soh_model = spec.get("soh_model", _SOH_MODEL_GEOMETRIC)
     # Most recent augmentation event at or before this year sets the fade origin.
     base_year_index = 0
     base_soh = 1.0
@@ -509,10 +725,15 @@ def mdsc_soh_for_year(spec: Dict[str, Any], year_index: int) -> float:
             base_soh = float(event["restore_to_soh"])
         else:
             break  # events are sorted ascending
+    years_since_origin = year_index - base_year_index
     if fade <= 0.0:
         soh = base_soh
+    elif soh_model == _SOH_MODEL_SEPARABLE:
+        # Linear (BLAST separable) superposition of calendar + cycle loss.
+        soh = base_soh - fade * years_since_origin
     else:
-        soh = base_soh * (1.0 - fade) ** (year_index - base_year_index)
+        # Geometric (default): compounding fade — byte-identical to the prior behaviour.
+        soh = base_soh * (1.0 - fade) ** years_since_origin
     floor = float(spec.get("mdsc_floor_soh", _DEFAULT_MDSC_FLOOR_SOH))
     return min(1.0, max(floor, soh))
 
@@ -584,6 +805,7 @@ def bess_revenue_lkr_for_year(
 __all__ = [
     "BESS_TYPE",
     "SUPPORTED_BESS_REVENUE_MODELS",
+    "SUPPORTED_SOH_MODELS",
     "resolve_bess_specs",
     "bess_revenue_lkr_for_year",
     "mdsc_soh_for_year",

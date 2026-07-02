@@ -535,6 +535,193 @@ def test_augmentation_schedule_malformed_fails_loud(bad, match):
         resolve_bess_specs(_cfg(augmentation_schedule=bad))
 
 
+# ── #606: opt-in NREL-BLAST separable calendar+cycle SoH model ──────────────────
+
+
+def test_soh_model_defaults_to_geometric_byte_identical():
+    # Absent revenue.soh_model -> the geometric curve is tagged and byte-identical.
+    spec = resolve_bess_specs(_cfg())[0]
+    assert spec["soh_model"] == "geometric"
+    assert spec["mdsc_fade_pct_annual"] == 0.0
+    assert all(mdsc_soh_for_year(spec, t) == 1.0 for t in (0, 1, 5, 10, 20))
+
+
+def test_explicit_geometric_matches_default_curve():
+    # An explicit soh_model: geometric behaves exactly like the absent default (compounding).
+    spec = resolve_bess_specs(_cfg(soh_model="geometric", mdsc_fade_pct_annual=0.011))[
+        0
+    ]
+    assert spec["soh_model"] == "geometric"
+    assert mdsc_soh_for_year(spec, 1) == pytest.approx(0.989)
+    assert mdsc_soh_for_year(spec, 10) == pytest.approx(
+        0.989**10
+    )  # compounding, not linear
+
+
+def test_separable_calendar_only_is_linear():
+    # Calendar-only fade: soh(n) = 1 - calendar * n (linear, NOT compounding).
+    spec = resolve_bess_specs(
+        _cfg(soh_model="separable_calendar_cycle", calendar_fade_pct_annual=0.02)
+    )[0]
+    assert spec["soh_model"] == "separable_calendar_cycle"
+    assert spec["mdsc_fade_pct_annual"] == pytest.approx(0.02)  # no cycle channel
+    assert mdsc_soh_for_year(spec, 0) == pytest.approx(1.0)
+    assert mdsc_soh_for_year(spec, 5) == pytest.approx(0.90)  # 1 - 0.02*5, linear
+    assert mdsc_soh_for_year(spec, 10) == pytest.approx(0.80)  # 1 - 0.02*10
+
+
+def test_separable_cycle_only_scales_with_efc_throughput():
+    # Cycle-only fade: annual rate = per_efc * cycles/yr * DoD. A capacity-charge BESS
+    # defaults to 365 cycles/yr at 0.80 DoD -> 292 EFC/yr.
+    spec = resolve_bess_specs(
+        _cfg(soh_model="separable_calendar_cycle", cycle_fade_pct_per_efc=0.00005)
+    )[0]
+    assert spec["mdsc_fade_pct_annual"] == pytest.approx(0.00005 * 365 * 0.80)
+    assert mdsc_soh_for_year(spec, 1) == pytest.approx(1.0 - 0.00005 * 292.0)
+
+
+def test_separable_uses_declared_cycles_and_dod_for_efc():
+    # Explicit cycles_per_year / depth_of_discharge override the per-model EFC defaults.
+    spec = resolve_bess_specs(
+        _cfg(
+            soh_model="separable_calendar_cycle",
+            cycle_fade_pct_per_efc=0.0001,
+            cycles_per_year=200,
+            depth_of_discharge=0.5,
+        )
+    )[0]
+    assert spec["mdsc_fade_pct_annual"] == pytest.approx(0.0001 * 200 * 0.5)  # 0.01/yr
+
+
+def test_separable_calendar_plus_cycle_superpose_linearly():
+    spec = resolve_bess_specs(
+        _cfg(
+            soh_model="separable_calendar_cycle",
+            calendar_fade_pct_annual=0.008,
+            cycle_fade_pct_per_efc=0.00003,
+            cycles_per_year=365,
+            depth_of_discharge=0.40,
+        )
+    )[0]
+    expected = 0.008 + 0.00003 * 365 * 0.40  # 0.008 + 0.004380
+    assert spec["mdsc_fade_pct_annual"] == pytest.approx(expected)
+    assert mdsc_soh_for_year(spec, 3) == pytest.approx(1.0 - expected * 3)
+
+
+def test_separable_curve_is_floored():
+    spec = resolve_bess_specs(
+        _cfg(
+            soh_model="separable_calendar_cycle",
+            calendar_fade_pct_annual=0.10,
+            mdsc_floor_soh=0.80,
+        )
+    )[0]
+    # 1 - 0.10*n would fall below 0.80 by year 3, but the floor bounds it.
+    assert mdsc_soh_for_year(spec, 50) == pytest.approx(0.80)
+    assert mdsc_soh_for_year(spec, 3) == pytest.approx(0.80)
+
+
+def test_separable_augmentation_resets_the_fade_origin():
+    # An augmentation restores SoH to restore_to_soh at its year, then re-fades LINEARLY.
+    spec = resolve_bess_specs(
+        _cfg(
+            soh_model="separable_calendar_cycle",
+            calendar_fade_pct_annual=0.02,
+            augmentation_schedule=[{"year": 11, "capex_usd": 5_000_000}],
+        )
+    )[0]
+    soh_y10 = mdsc_soh_for_year(spec, 9)  # operating year 10, pre-augmentation
+    assert soh_y10 == pytest.approx(1.0 - 0.02 * 9)  # 0.82
+    assert mdsc_soh_for_year(spec, 10) == pytest.approx(1.0)  # restored at the event
+    assert mdsc_soh_for_year(spec, 12) == pytest.approx(
+        1.0 - 0.02 * 2
+    )  # re-fades from origin
+
+
+def test_separable_revenue_declines_linearly():
+    specs = resolve_bess_specs(
+        _cfg(soh_model="separable_calendar_cycle", calendar_fade_pct_annual=0.02)
+    )
+    y0 = bess_revenue_lkr_for_year(specs, 0)
+    y5 = bess_revenue_lkr_for_year(specs, 5)
+    assert y5 == pytest.approx(y0 * 0.90)  # linear, not (1-0.02)^5
+
+
+def test_separable_applies_to_energy_tariff_model_too():
+    spec = resolve_bess_specs(
+        _energy_cfg(
+            soh_model="separable_calendar_cycle",
+            calendar_fade_pct_annual=0.01,
+        )
+    )[0]
+    assert spec["soh_model"] == "separable_calendar_cycle"
+    assert mdsc_soh_for_year(spec, 4) == pytest.approx(1.0 - 0.01 * 4)
+
+
+def test_unknown_soh_model_fails_loud():
+    with pytest.raises(ValueError, match="soh_model"):
+        resolve_bess_specs(_cfg(soh_model="linear"))
+
+
+def test_geometric_with_separable_key_fails_loud():
+    # A separable key under the (default) geometric model is a mis-config, not silent.
+    with pytest.raises(ValueError, match="calendar_fade_pct_annual"):
+        resolve_bess_specs(_cfg(calendar_fade_pct_annual=0.02))
+    with pytest.raises(ValueError, match="cycle_fade_pct_per_efc"):
+        resolve_bess_specs(_cfg(soh_model="geometric", cycle_fade_pct_per_efc=0.0001))
+
+
+def test_separable_with_geometric_key_fails_loud():
+    with pytest.raises(ValueError, match="mdsc_fade_pct_annual"):
+        resolve_bess_specs(
+            _cfg(
+                soh_model="separable_calendar_cycle",
+                calendar_fade_pct_annual=0.02,
+                mdsc_fade_pct_annual=0.011,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "field", ["calendar_fade_pct_annual", "cycle_fade_pct_per_efc"]
+)
+@pytest.mark.parametrize("bad", [1.0, 1.1, -0.1, "x"])
+def test_separable_fade_rate_out_of_range_fails_loud(field, bad):
+    with pytest.raises(ValueError, match=field):
+        resolve_bess_specs(_cfg(soh_model="separable_calendar_cycle", **{field: bad}))
+
+
+def test_separable_combined_rate_out_of_range_fails_loud():
+    # Individually-valid channels whose SUPERPOSITION exceeds [0, 1) still fail loud.
+    with pytest.raises(ValueError, match="separable annual fade rate"):
+        resolve_bess_specs(
+            _cfg(
+                soh_model="separable_calendar_cycle",
+                calendar_fade_pct_annual=0.5,
+                cycle_fade_pct_per_efc=0.5,
+            )
+        )
+
+
+def test_separable_bad_cycles_and_dod_fail_loud():
+    with pytest.raises(ValueError, match="cycles_per_year"):
+        resolve_bess_specs(
+            _cfg(
+                soh_model="separable_calendar_cycle",
+                calendar_fade_pct_annual=0.01,
+                cycles_per_year=-1,
+            )
+        )
+    with pytest.raises(ValueError, match="depth_of_discharge"):
+        resolve_bess_specs(
+            _cfg(
+                soh_model="separable_calendar_cycle",
+                cycle_fade_pct_per_efc=0.0001,
+                depth_of_discharge=80,
+            )
+        )
+
+
 # ── BESS-2 (#486): opt-in liquidated-damages availability derate ────────────────
 
 

@@ -77,6 +77,9 @@
     .rag-green { background: #e3f4e8; color: #1d7a3e; }
     .rag-amber { background: #fff4e0; color: #9a6700; }
     .rag-red { background: #fdeaea; color: #b23b3b; }
+    /* TCFD climate-risk tags (EP4-aligned CCRA) — physical vs transition. */
+    .tcfd-physical { background: #e8eef7; color: #2a4d80; }
+    .tcfd-transition { background: #f0e8f7; color: #5e3b80; }
     ul.notes { margin: 6pt 0; padding-left: 18pt; }
     ul.notes li { margin-bottom: 3pt; }
     .disclaimer { font-size: 9pt; color: #555; }
@@ -222,6 +225,17 @@
         {% if ctx.finance.debt.binding_constraint %}
         <tr><td>Binding sizing constraint</td><td class="num">{{ ctx.finance.debt.binding_constraint }}{% if ctx.finance.debt.binding_production_case %} ({{ ctx.finance.debt.binding_production_case }}){% endif %}</td></tr>
         {% endif %}
+        {# P90 (downside) sizing detail — rendered only when a scenario opts into the
+           downside-binding solve (bind_downside); absent for the default P50-only case. #}
+        {% if ctx.finance.debt.solved_gearing_p90 is not none %}
+        <tr><td>Gearing solves (P50 / P90)</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.solved_gearing_p50) }} / {{ fmt_ratio_pct(ctx.finance.debt.solved_gearing_p90) }}</td></tr>
+        {% if ctx.finance.debt.target_dscr_p90 is not none %}
+        <tr><td>P90 target DSCR</td><td class="num">{{ fmt_x(ctx.finance.debt.target_dscr_p90) }}</td></tr>
+        {% endif %}
+        {% if ctx.finance.debt.downside_ratio is not none %}
+        <tr><td>Downside CFADS ratio (P90/P50)</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.downside_ratio) }}{% if ctx.finance.debt.downside_source %} ({{ {"p90_aep": "P90 AEP", "explicit_factor": "explicit factor", "flat_factor": "flat proxy"}.get(ctx.finance.debt.downside_source, ctx.finance.debt.downside_source) }}){% endif %}</td></tr>
+        {% endif %}
+        {% endif %}
       </tbody>
     </table>
     {% if ctx.finance.debt.schedule %}
@@ -356,7 +370,8 @@
       <tbody>
         {% for r in ctx.risk_register %}
         <tr>
-          <td>{{ r.category }}</td>
+          <td>{{ r.category }}{% if r.climate_risk_category %}
+            <span class="badge tcfd-{{ r.climate_risk_category }}">TCFD: {{ r.climate_risk_category|capitalize }}</span>{% endif %}</td>
           <td>{{ r.risk }}</td>
           <td>{{ r.mitigation }}</td>
           <td><span class="badge sev-{{ r.severity }}">{{ r.severity|capitalize }}</span></td>

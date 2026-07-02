@@ -131,6 +131,9 @@ class RiskRow(BaseModel):
     risk: str
     mitigation: str
     severity: str  # low | medium | high — drives the badge class in the template
+    #: TCFD/EP4 climate-risk class (physical | transition); None when the risk is untagged,
+    #: in which case the template renders no climate tag. Additive presentation only.
+    climate_risk_category: Optional[str] = None
 
 
 class ReadinessRow(BaseModel):
@@ -547,6 +550,7 @@ def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
             risk=r.risk,
             mitigation=r.mitigation,
             severity=r.severity,
+            climate_risk_category=r.climate_risk_category,
         )
         for r in risks
     ]

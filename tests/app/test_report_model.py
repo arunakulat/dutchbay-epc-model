@@ -9,7 +9,13 @@ from pydantic import ValidationError
 
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
-from app.reports.report_config import Covenants, ReportConfig, ReportMeta
+from app.reports.renderer import render_report_html
+from app.reports.report_config import (
+    Covenants,
+    ReportConfig,
+    ReportMeta,
+    RiskItem,
+)
 from app.reports.report_model import (
     ReportContext,
     Verdict,
@@ -157,6 +163,68 @@ def test_finance_blocks_populated_with_scenario_and_debt() -> None:
     # Full-timeline DSCR profile: construction years carry None, operating years a value.
     assert [r.dscr for r in ctx.finance.debt.schedule[:3]] == [None, None, 1.308]
     assert ctx.finance.kpis.project_irr == _VALUE_DESTRUCTIVE_KPIS["project_irr"]
+
+
+def test_report_omits_p90_sizing_rows_for_p50_only_debt() -> None:
+    """The default P50-only debt result renders NO P90 sizing-detail rows (#613).
+
+    The lender report keeps the single binding-constraint row (present for every dual_dscr
+    scenario) but omits the P90 gearing-solve / target / downside-ratio rows unless a
+    scenario opts into the downside-binding solve.
+    """
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+    )
+    html = render_report_html(ctx)
+    assert "Binding sizing constraint" in html
+    assert "Gearing solves (P50 / P90)" not in html
+    assert "P90 target DSCR" not in html
+    assert "Downside CFADS ratio" not in html
+
+
+def test_report_surfaces_p90_sizing_rows_when_bind_downside() -> None:
+    """A bind_downside debt result renders the full P90 sizing-detail block (#613).
+
+    Pure render-when-present serialisation: the two gearing solves, the P90 DSCR target,
+    and the downside CFADS ratio (with a human-readable source label) all appear.
+    """
+    debt = {
+        **_DEBT_RESULT,
+        "dual_dscr": {
+            "solved_gearing": 0.365,
+            "binding_constraint": "dscr",
+            "binding_production_case": "P90",
+            "sizing_mode": "dual_dscr",
+            "solved_gearing_p50": 0.4175,
+            "solved_gearing_p90": 0.365,
+            "target_dscr_p90": 1.30,
+            "downside_ratio": 0.875302,
+            "downside_source": "p90_aep",
+        },
+    }
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=debt,
+    )
+    assert ctx.finance is not None
+    d = ctx.finance.debt
+    assert d.solved_gearing_p50 == pytest.approx(0.4175)
+    assert d.solved_gearing_p90 == pytest.approx(0.365)
+    assert d.target_dscr_p90 == pytest.approx(1.30)
+    assert d.downside_ratio == pytest.approx(0.875302)
+    assert d.downside_source == "p90_aep"
+
+    html = render_report_html(ctx)
+    assert "Gearing solves (P50 / P90)" in html
+    assert "41.75% / 36.50%" in html  # fmt_ratio_pct of the two solves
+    assert "P90 target DSCR" in html
+    assert "Downside CFADS ratio (P90/P50)" in html
+    assert "P90 AEP" in html  # source label, not the raw "p90_aep" token
 
 
 def test_finance_blocks_none_without_debt_result() -> None:
@@ -460,6 +528,87 @@ def test_risk_register_projected_from_config() -> None:
         assert row.category and row.risk and row.mitigation
         assert row.severity in {"low", "medium", "high"}
     assert any(r.severity == "high" for r in ctx.risk_register)
+
+
+def test_risk_register_climate_category_passthrough() -> None:
+    """_build_risk_register threads the TCFD climate tag onto the render row (and None stays None)."""
+    cfg = ReportConfig(
+        report=ReportMeta(
+            title="t",
+            subtitle="s",
+            organization="o",
+            version="1.0",
+            confidentiality="c",
+            disclaimer="d",
+        ),
+        covenants=Covenants(
+            min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4
+        ),
+        kpi_table=[],
+        risk_register=[
+            RiskItem(
+                category="Resource",
+                risk="r",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="physical",
+            ),
+            RiskItem(
+                category="Regulatory",
+                risk="r",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="transition",
+            ),
+            RiskItem(category="EPC", risk="r", mitigation="m", severity="low"),
+        ],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, config=cfg
+    )
+    tags = [row.climate_risk_category for row in ctx.risk_register]
+    assert tags == ["physical", "transition", None]
+
+
+def test_risk_register_html_renders_tcfd_tag_only_when_present() -> None:
+    """The template renders a TCFD tag for a tagged risk and omits it for an untagged one."""
+    from app.reports.renderer import render_report_html
+
+    cfg = ReportConfig(
+        report=ReportMeta(
+            title="t",
+            subtitle="s",
+            organization="o",
+            version="1.0",
+            confidentiality="c",
+            disclaimer="d",
+        ),
+        covenants=Covenants(
+            min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4
+        ),
+        kpi_table=[],
+        risk_register=[
+            RiskItem(
+                category="Resource",
+                risk="yield",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="physical",
+            ),
+            RiskItem(category="EPC", risk="overrun", mitigation="m", severity="low"),
+        ],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, config=cfg
+    )
+    html = render_report_html(ctx)
+    # The tagged Resource row renders a physical TCFD tag span...
+    assert "TCFD: Physical" in html
+    assert 'class="badge tcfd-physical"' in html
+    # ...and the untagged EPC row emits no TCFD tag span at all. (The .tcfd-* CSS classes
+    # always live in the <style> block, so we assert on the rendered <span>, not the class.)
+    assert "TCFD: Transition" not in html
+    assert 'class="badge tcfd-transition"' not in html
 
 
 def test_readiness_projected_from_scenario_config() -> None:
