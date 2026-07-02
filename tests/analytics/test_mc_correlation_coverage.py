@@ -1,11 +1,13 @@
-"""Coverage for analytics.mc.correlation — Iman-Conover rank correlation for MC.
+"""Coverage for analytics.mc.correlation — MC dependence structures.
 
 Exercises validation (square/diagonal/symmetry raises), the nearest-PSD eigenvalue
 repair, the full apply_correlation_structure pipeline (disabled passthrough, missing
-matrix raise, shape-mismatch raise, correlated reordering), the back-compat alias,
-the starter template, and the permissive config loader. All deterministic; the module
-is self-contained (no network / config / matplotlib), so only small synthetic
-correlation matrices are needed.
+matrix raise, shape-mismatch raise, correlated reordering), the method dispatch
+(#601: default Iman-Conover pinned bit-for-bit, the opt-in exact-normal-scores
+Gaussian copula, and the fail-loud contract for unrecognized methods), the
+back-compat alias, the starter template, and the permissive config loader. All
+deterministic (MRM-01); the module is self-contained (no network / config /
+matplotlib), so only small synthetic correlation matrices are needed.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import numpy as np
 import pytest
 
 from analytics.mc.correlation import (
+    SUPPORTED_CORRELATION_METHODS,
     CorrelationSpec,
     _nearest_psd,
     apply_correlation_structure,
@@ -179,6 +182,153 @@ def test_apply_repairs_non_psd_target_via_nearest_psd() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# method dispatch (#601): fail-loud contract + Gaussian copula                #
+# --------------------------------------------------------------------------- #
+def test_apply_unknown_method_fails_loud() -> None:
+    # CESSPIT: an unrecognized method must raise at apply time, not silently run
+    # Iman-Conover while the config claims a different dependence structure.
+    mat = np.array([[1.0, 0.4], [0.4, 1.0]])
+    spec = CorrelationSpec(enabled=True, matrix=mat, method="not_a_method")
+    with pytest.raises(ValueError, match="not_a_method"):
+        apply_correlation_structure(lhs_samples=_lhs(16, 2), correlation=spec)
+
+
+def test_apply_disabled_spec_ignores_unknown_method() -> None:
+    # The fail-loud contract is an APPLY-time contract: a disabled spec stays a
+    # passthrough regardless of its method string (nothing is applied).
+    samples = _lhs(8, 2)
+    spec = CorrelationSpec(enabled=False, method="not_a_method")
+    assert apply_correlation_structure(lhs_samples=samples, correlation=spec) is samples
+
+
+def test_apply_method_is_case_and_whitespace_normalized() -> None:
+    # " Gaussian_Copula " normalizes to the supported token (config ergonomics).
+    samples = _lhs(32, 2, seed=19)
+    mat = np.array([[1.0, 0.5], [0.5, 1.0]])
+    spec = CorrelationSpec(enabled=True, matrix=mat, method=" Gaussian_Copula ")
+    out = apply_correlation_structure(lhs_samples=samples, correlation=spec, seed=3)
+    ref = apply_correlation_structure(
+        lhs_samples=samples,
+        correlation=CorrelationSpec(enabled=True, matrix=mat, method="gaussian_copula"),
+        seed=3,
+    )
+    np.testing.assert_array_equal(out, ref)
+
+
+def test_supported_methods_registry_matches_contract() -> None:
+    assert SUPPORTED_CORRELATION_METHODS == ("iman_conover", "gaussian_copula")
+
+
+def test_iman_conover_default_path_matches_reference_algorithm() -> None:
+    """Pin the DEFAULT path bit-for-bit against an inline reference implementation.
+
+    The #601 method dispatch must leave the historical Iman-Conover path
+    byte-identical: same rng consumption, same Cholesky, same gather-by-rank.
+    The reference below reproduces that exact operation sequence independently;
+    any drift in the default path (an extra rng draw, a reordered op) breaks
+    exact equality here.
+    """
+    samples = _lhs(64, 3, seed=17)
+    target = np.array(
+        [
+            [1.0, 0.5, 0.2],
+            [0.5, 1.0, 0.0],
+            [0.2, 0.0, 1.0],
+        ]
+    )
+    spec = CorrelationSpec(enabled=True, matrix=target)  # default method
+    out = apply_correlation_structure(lhs_samples=samples, correlation=spec, seed=99)
+
+    # Reference: the legacy single-path algorithm, replicated operation-for-operation.
+    mat = _nearest_psd(np.array(target, dtype=float, copy=True))  # repair=True default
+    rng = np.random.default_rng(99)
+    z = rng.standard_normal(size=(64, 3))
+    chol = np.linalg.cholesky(mat + np.eye(3) * 1e-12)
+    y = z @ chol.T
+    ranks = np.argsort(np.argsort(y, axis=0), axis=0)
+    expected = np.empty_like(samples)
+    for j in range(3):
+        expected[:, j] = np.sort(samples[:, j])[ranks[:, j]]
+    np.testing.assert_array_equal(out, expected)
+
+
+def _gc_spec(mat: np.ndarray) -> CorrelationSpec:
+    return CorrelationSpec(enabled=True, matrix=mat, method="gaussian_copula")
+
+
+def test_gaussian_copula_preserves_marginals_exactly() -> None:
+    # The copula's empirical-quantile map is a pure within-column permutation:
+    # sorted columns must be IDENTICAL (not merely close) to the input's.
+    samples = _lhs(256, 3, seed=23)
+    mat = np.array(
+        [
+            [1.0, 0.7, 0.0],
+            [0.7, 1.0, -0.3],
+            [0.0, -0.3, 1.0],
+        ]
+    )
+    out = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(mat), seed=31
+    )
+    assert out.shape == samples.shape
+    for j in range(samples.shape[1]):
+        np.testing.assert_array_equal(np.sort(out[:, j]), np.sort(samples[:, j]))
+
+
+def test_gaussian_copula_seed_determinism() -> None:
+    # MRM-01: identical inputs + seed => bit-identical output; a different seed
+    # must produce a different joint arrangement.
+    samples = _lhs(128, 2, seed=29)
+    mat = np.array([[1.0, 0.6], [0.6, 1.0]])
+    a = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(mat), seed=42
+    )
+    b = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(mat), seed=42
+    )
+    c = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(mat), seed=43
+    )
+    np.testing.assert_array_equal(a, b)
+    assert not np.array_equal(a, c)
+
+
+def test_gaussian_copula_dispatch_differs_from_iman_conover() -> None:
+    # The dispatch is real: same inputs + seed, different methods => different
+    # joint arrangements (the copula whitens the scores before recorrelating).
+    samples = _lhs(512, 2, seed=37)
+    mat = np.array([[1.0, 0.6], [0.6, 1.0]])
+    gc = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(mat), seed=7
+    )
+    ic = apply_correlation_structure(
+        lhs_samples=samples,
+        correlation=CorrelationSpec(enabled=True, matrix=mat),
+        seed=7,
+    )
+    assert not np.array_equal(gc, ic)
+
+
+def test_gaussian_copula_requires_more_trials_than_params() -> None:
+    # n_trials <= n_params makes the scores' sample covariance singular, so the
+    # exact whitening is undefined: fail loud with an actionable message.
+    samples = _lhs(3, 3, seed=41)
+    with pytest.raises(ValueError, match="n_trials > n_params"):
+        apply_correlation_structure(
+            lhs_samples=samples, correlation=_gc_spec(np.eye(3)), seed=1
+        )
+
+
+def test_gaussian_copula_single_param_is_supported() -> None:
+    # k=1 degenerate case: a 1x1 identity target still runs (pure permutation).
+    samples = _lhs(16, 1, seed=43)
+    out = apply_correlation_structure(
+        lhs_samples=samples, correlation=_gc_spec(np.eye(1)), seed=11
+    )
+    np.testing.assert_array_equal(np.sort(out[:, 0]), np.sort(samples[:, 0]))
+
+
+# --------------------------------------------------------------------------- #
 # apply_correlation_to_lhs (back-compat alias)                                #
 # --------------------------------------------------------------------------- #
 def test_back_compat_alias_matches_structure_call() -> None:
@@ -222,7 +372,11 @@ def test_load_config_returns_none_when_correlation_falsey() -> None:
     assert load_correlation_from_config({"monte_carlo": {"correlation": {}}}) is None
 
 
-def test_load_config_full_spec() -> None:
+def test_load_config_full_spec_unknown_method_fails_loud_at_apply() -> None:
+    # The loader stays permissive (round-trips any method string verbatim), but
+    # APPLYING an unrecognized method now fails loud (#601). Before the dispatch,
+    # method='cholesky' silently ran Iman-Conover while the config claimed
+    # otherwise.
     cfg = {
         "monte_carlo": {
             "correlation": {
@@ -240,6 +394,30 @@ def test_load_config_full_spec() -> None:
     assert spec.param_names == ("aep", "capex")
     assert spec.matrix is not None
     np.testing.assert_allclose(spec.matrix, np.array([[1.0, 0.5], [0.5, 1.0]]))
+    with pytest.raises(ValueError, match="cholesky"):
+        apply_correlation_structure(lhs_samples=_lhs(8, 2), correlation=spec)
+
+
+def test_load_config_round_trips_gaussian_copula_method() -> None:
+    # The opt-in method string survives the config -> CorrelationSpec round trip
+    # and dispatches cleanly at apply time.
+    cfg = {
+        "monte_carlo": {
+            "correlation": {
+                "enabled": True,
+                "method": "gaussian_copula",
+                "matrix": [[1.0, 0.5], [0.5, 1.0]],
+                "param_names": ["aep", "capex"],
+            }
+        }
+    }
+    spec = load_correlation_from_config(cfg)
+    assert spec is not None
+    assert spec.method == "gaussian_copula"
+    out = apply_correlation_structure(
+        lhs_samples=_lhs(32, 2, seed=47), correlation=spec, seed=5
+    )
+    assert out.shape == (32, 2)
 
 
 def test_load_config_defaults_when_keys_absent() -> None:

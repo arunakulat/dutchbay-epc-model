@@ -8,7 +8,7 @@ from typing import Any, Callable, Mapping, Optional
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from analytics.scenario_analytics import ScenarioAnalytics
+from analytics.scenario_analytics import BatchResultSummary, ScenarioAnalytics
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +50,15 @@ Key behaviours
 - Prints a small JSON summary to stdout for CI / smoke tests:
 
     {
+      "basis": "comparison_snapshot",
       "n_success": <int>,
       "n_failed": <int>,
       "output_path": "...",
       "summary_json": null | "path"
     }
+
+  ``basis`` is the machine-readable provenance marker (#611): batch economics are
+  comparison snapshots, not the canonical ``run_full_pipeline_v14.py`` numbers.
 
 Hydra config
 ------------
@@ -64,6 +68,29 @@ You can override any top-level key using Hydra’s `key=value` syntax, e.g.:
 
     python run_scenario_analytics_v14.py output=exports/custom.xlsx charts=false
 """
+
+
+def _build_stdout_payload(
+    batch_metadata: BatchResultSummary,
+    output_path: Path,
+    summary_json_path: Optional[Path],
+) -> dict[str, Any]:
+    """
+    Build the compact JSON payload printed to stdout for CI / smoke tests.
+
+    Additive contract (#611): carries the batch provenance marker ``basis``
+    (sourced from :class:`analytics.scenario_analytics.BatchResultSummary`, always
+    ``"comparison_snapshot"``) alongside the pre-existing keys, so downstream
+    consumers cannot mistake batch DSCR/IRR for canonical pipeline economics.
+    No existing key is renamed or removed.
+    """
+    return {
+        "basis": batch_metadata.basis,
+        "n_success": batch_metadata.n_success,
+        "n_failed": batch_metadata.n_failed,
+        "output_path": str(output_path),
+        "summary_json": str(summary_json_path) if summary_json_path else None,
+    }
 
 
 def _build_scenario_filter(expr: Optional[str]) -> Optional[Callable[[str], bool]]:
@@ -193,13 +220,10 @@ def main(cfg: DictConfig) -> None:
         output_summary_json=summary_json_path,
     )
 
-    # Compact JSON payload for CI / smoke tests.
-    result: dict[str, Any] = {
-        "n_success": batch_metadata.n_success,
-        "n_failed": batch_metadata.n_failed,
-        "output_path": str(output_path),
-        "summary_json": str(summary_json_path) if summary_json_path else None,
-    }
+    # Compact JSON payload for CI / smoke tests (incl. the #611 basis marker).
+    result: dict[str, Any] = _build_stdout_payload(
+        batch_metadata, output_path, summary_json_path
+    )
 
     # IMPORTANT: stdout must be valid JSON for the CLI smoke test.
     # Logs will go via the logging framework (typically to stderr).

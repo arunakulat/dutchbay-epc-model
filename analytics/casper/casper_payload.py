@@ -16,6 +16,12 @@ from analytics.contracts_v14 import (
     TechnologyBreakdown,
 )
 
+# Shared, dependency-light covenant-floor resolver (#639): the same 4-path config
+# precedence the MC engine's fixed-debt breach test uses, extracted to
+# analytics.mc.covenant (stdlib-only; analytics.mc.__init__ is lazy) precisely so
+# this contracts-facing module can reuse it WITHOUT importing the heavy MC engine.
+from analytics.mc.covenant import resolve_min_dscr_covenant
+
 logger = logging.getLogger(__name__)
 
 # Frozen JSON contract version for CASPER payloads.
@@ -339,14 +345,24 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
 def _resolve_dscr_floor(scenario: ScenarioResult | str | None) -> float | None:
     """Config-first covenant DSCR floor from the scenario, or None (CESSPIT).
 
-    The authoritative floor is the debt covenant *threshold* attached to the resolved
-    scenario (``debt_covenants.dscr_threshold``). Returns None when the scenario is a bare
-    string sentinel or carries no structured covenant — the caller then falls back to the
-    documented ``CovenantSpec`` default and surfaces whichever floor it used, so the number
+    The authoritative floor is the MC engine's own covenant resolution (#639):
+    ``analytics.mc.covenant.resolve_min_dscr_covenant`` applied to the raw scenario
+    config carried on ``ScenarioResult.config`` — precedence
+    ``constraints.min_dscr_covenant`` -> ``Financing_Terms.target_dscr`` ->
+    ``Financing_Terms.min_dscr`` -> ``monte_carlo.min_dscr_covenant``, default 1.30 —
+    so the CASPER mc_risk table and the engine's fixed-debt breach test cannot
+    disagree on the floor. Graceful CASPER fallback when the scenario is a bare
+    string sentinel or carries no raw config: the pipeline's
+    ``debt_covenants.dscr_threshold`` snapshot (= ``Financing_Terms.target_dscr``,
+    the pre-#639 behavior), then None — the caller then applies the documented
+    ``CovenantSpec`` default and surfaces whichever floor it used, so the number
     is never silently assumed.
     """
     if isinstance(scenario, str) or scenario is None:
         return None
+    cfg = getattr(scenario, "config", None)
+    if isinstance(cfg, Mapping) and cfg:
+        return resolve_min_dscr_covenant(cfg)
     dc = getattr(scenario, "debt_covenants", None)
     threshold = getattr(dc, "dscr_threshold", None)
     if isinstance(threshold, (int, float)) and not isinstance(threshold, bool):
@@ -389,9 +405,12 @@ def _mc_risk_from_result(
     CASPER discipline — degrade gracefully at call-time, never crash the payload: returns
     None when Monte Carlo was not run, when the result is summary-only (no raw ``dscr_min``
     trial array), or when the optional ``pandas`` export dependency is absent. The DSCR
-    covenant floor is resolved config-first (``debt_covenants.dscr_threshold``), falling back
-    to the ``CovenantSpec`` default, and is surfaced explicitly in the emitted covenant block.
-    The pandas ``DataFrame`` is converted to JSON-safe records (native ``float``/``str``).
+    covenant floor is resolved config-first with the MC engine's own resolver
+    (``analytics.mc.covenant.resolve_min_dscr_covenant`` over ``ScenarioResult.config``,
+    #639), falling back to ``debt_covenants.dscr_threshold`` and then the ``CovenantSpec``
+    default when no raw config is attached; the floor used is surfaced explicitly in the
+    emitted covenant block. The pandas ``DataFrame`` is converted to JSON-safe records
+    (native ``float``/``str``).
     """
     if mc is None:
         return None

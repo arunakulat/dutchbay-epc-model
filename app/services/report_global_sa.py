@@ -16,6 +16,13 @@ Sobol S1/ST variance decomposition is ~3 min and stays on the on-demand CLI
 (``scripts/run_global_sensitivity.py --method sobol``), not inline. CASPER — best-effort:
 a failure (no ``monte_carlo.parameters``, SALib absent, …) returns ``None`` and the
 section is omitted; the core report stays fail-loud.
+
+The same degrade path covers an engine-FLAGGED metric (#644): when the screening marks
+the target metric ``nan_poisoned`` (too many non-finite outputs) or ``flat_metric``
+(structurally invariant), its ``drivers`` are zeroed placeholders, not results — rendering
+them would print every driver at 0.00% with no caveat, a confident false claim (e.g. "FX
+does not influence the IRR"). The section is omitted (``None``) instead, with the engine's
+reason logged.
 """
 
 from __future__ import annotations
@@ -77,8 +84,10 @@ def compute_report_global_sa(
 
     Returns:
         A render-ready :class:`GlobalSABlock` with drivers ranked by ``mu_star``, or
-        ``None`` if the screening raised or produced no usable rows — the supplementary
-        section never sinks the core report (CASPER).
+        ``None`` if the screening raised, produced no usable rows, or flagged the metric
+        (``nan_poisoned`` / ``flat_metric`` — zeroed placeholder drivers that would render
+        as an uncaveated all-0.00% table) — the supplementary section never sinks the
+        core report, and never renders a flagged placeholder as a result (CASPER).
     """
     path: Optional[str] = None
     try:
@@ -96,6 +105,20 @@ def compute_report_global_sa(
             os.unlink(path)
 
     per_metric = (result.get("metrics") or {}).get(metric) or {}
+    for flag, reason_key in (
+        ("nan_poisoned", "nan_poisoned_reason"),
+        ("flat_metric", "flat_metric_reason"),
+    ):
+        if per_metric.get(flag):
+            logger.warning(
+                "Report global-SA metric '%s' is flagged %s (%s); its zeroed placeholder "
+                "drivers would render as an uncaveated all-0.00%% table — omitting the "
+                "Global Sensitivity section from the report.",
+                metric,
+                flag,
+                per_metric.get(reason_key) or "no reason attached",
+            )
+            return None
     raw = per_metric.get("drivers") or {}
     ranking = per_metric.get("ranking") or sorted(
         raw, key=lambda k: (raw[k] or {}).get("mu_star") or 0.0, reverse=True

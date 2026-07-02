@@ -26,7 +26,11 @@ Config:
 
 Output:
     Prints JSON to stdout (raw per-trial arrays are written only to the
-    artifact file, not stdout):
+    artifact file, not stdout). The top-level ``n_trials`` is the trial count
+    actually evaluated (== ``metadata.n_trials``): on the opt-in Sobol sampler
+    a non-power-of-two request is rounded UP to the next 2**m (#589), and the
+    divergence is disclosed via ``metadata.sobol_n_requested`` /
+    ``metadata.sobol_n_used`` (#647 — one artifact, one honest trial count):
     {{
       "status": "success",
       "n_trials": 10000,
@@ -209,12 +213,22 @@ def main(cfg: DictConfig) -> None:
             iterations, result.failed_iterations, toy_fallback_count
         )
 
+        # #647: report the trial count actually EVALUATED, not the request. The engine
+        # re-derives n from the sample matrix (the opt-in Sobol sampler rounds a
+        # non-power-of-two request UP to the next 2**m and uses ALL points, #589) and
+        # stamps it in metadata["n_trials"], disclosing any divergence via
+        # metadata["sobol_n_requested"]/["sobol_n_used"]. Echoing the requested count at
+        # the top level put two conflicting n_trials in the same artifact; source it
+        # from the result so the artifact tells one story. Default lhs path: used ==
+        # requested, so this is a no-op there.
+        n_trials_used = int((result.metadata or {}).get("n_trials", n_trials))
+
         payload: dict[str, Any] = {
             "status": status,
             "success_rate_pct": round(success_rate_pct, 2),
             "failed_iterations": result.failed_iterations,
             "toy_fallback_count": toy_fallback_count,
-            "n_trials": n_trials,
+            "n_trials": n_trials_used,
             "seed": seed,
             "execution_time_seconds": round(execution_time_seconds, 4),
             "summary": result.summary,
@@ -237,7 +251,7 @@ def main(cfg: DictConfig) -> None:
 
         logger.info(
             "Monte Carlo analysis complete: %d trials, execution_time=%.2fs",
-            n_trials,
+            n_trials_used,
             execution_time_seconds,
         )
 
@@ -268,6 +282,8 @@ def main(cfg: DictConfig) -> None:
             "error": str(e),
             "error_type": type(e).__name__,
             "config_path": str(config_path),
+            # REQUESTED count: the run failed before producing a result, so there is no
+            # engine metadata (and no evaluated/Sobol-rounded count) to report (#647).
             "n_trials": n_trials,
             "seed": seed,
         }
