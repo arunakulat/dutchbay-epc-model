@@ -28,11 +28,17 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List
 
+import matplotlib
 import pandas as pd
 import pytest
 
-import analytics.scenario_analytics as sa_mod
-from analytics.scenario_analytics import BatchScenarioResult, ScenarioAnalytics
+matplotlib.use("Agg")  # headless; the #662 charts-on tests write real PNGs
+
+import analytics.scenario_analytics as sa_mod  # noqa: E402
+from analytics.scenario_analytics import (  # noqa: E402
+    BatchScenarioResult,
+    ScenarioAnalytics,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = REPO_ROOT / "scenarios"
@@ -413,6 +419,75 @@ def test_export_charts_unavailable_warns(
     out = tmp_path / "report.xlsx"
     sa = ScenarioAnalytics(scenarios_dir=tmp_path, output_path=out)
     with caplog.at_level("WARNING", logger=sa_mod.logger.name):
-        sa._export_charts(pd.DataFrame({"a": [1]}), pd.DataFrame({"b": [2]}))
+        result = sa._export_charts(pd.DataFrame({"a": [1]}), pd.DataFrame({"b": [2]}))
 
     assert any("ChartExporter not available" in rec.message for rec in caplog.records)
+    # The failure branch still returns an (empty) list, not None.
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Board-deck enrichments (#662): metadata block, richer charts, run() wiring
+# ---------------------------------------------------------------------------
+def test_build_export_metadata_carries_mrm02_fields() -> None:
+    """_build_export_metadata stamps scenario / config source / VERSION (MRM-02)."""
+    sa = ScenarioAnalytics(scenarios_dir=SCENARIOS_DIR)
+    summary = pd.DataFrame(
+        {"scenario_name": ["base", "stress"], "equity_irr": [0.08, 0.04]}
+    )
+    meta = sa._build_export_metadata(summary)
+    assert meta["Scenario Count"] == 2
+    assert "base" in meta["Scenarios"] and "stress" in meta["Scenarios"]
+    assert meta["Scenarios Directory"] == str(SCENARIOS_DIR)
+    # Model version is the repo VERSION file (non-empty), not a hardcoded literal.
+    assert isinstance(meta["Model Version"], str) and meta["Model Version"]
+    assert meta["Economics Basis"] == sa_mod.BATCH_ECONOMICS_BASIS
+
+
+def test_export_charts_returns_written_png_paths(lender_dir: Path) -> None:
+    """The real charts path returns the PNGs it wrote (incl. the richer #662 charts)."""
+    out = lender_dir / "report.xlsx"
+    sa = ScenarioAnalytics(scenarios_dir=lender_dir, output_path=out)
+    summary_df, timeseries_df, _meta = sa.run()
+
+    written = sa._export_charts(summary_df, timeseries_df)
+    names = {p.name for p in written}
+    # Existing DSCR/IRR charts plus the new cross-scenario board visuals.
+    assert "dscr_series.png" in names
+    assert "kpi_comparison.png" in names
+    assert "dscr_comparison.png" in names
+    for p in written:
+        assert p.exists()
+    # MRM-02 sidecar written alongside the PNGs.
+    charts_dir = out.with_name(out.stem + "_charts")
+    assert (charts_dir / "charts_metadata.json").exists()
+
+
+def test_run_charts_on_builds_enriched_workbook(lender_dir: Path) -> None:
+    """run(export_charts=True) yields a board-deck workbook: cover + Charts + rule."""
+    from openpyxl import load_workbook
+
+    out = lender_dir / "enriched.xlsx"
+    sa = ScenarioAnalytics(scenarios_dir=lender_dir, output_path=out)
+    sa.run(export_excel=True, export_charts=True)
+
+    wb = load_workbook(out)
+    assert "Report_Cover" in wb.sheetnames  # MRM-02 cover
+    assert "Charts" in wb.sheetnames
+    assert len(wb["Charts"]._images) >= 1
+    # Live conditional-formatting rule on the DSCR_View covenant column.
+    assert len(list(wb["DSCR_View"].conditional_formatting)) == 1
+
+
+def test_run_charts_off_workbook_stays_lean(lender_dir: Path) -> None:
+    """run() with charts off keeps the vanilla workbook (no cover/Charts/rule)."""
+    from openpyxl import load_workbook
+
+    out = lender_dir / "plain.xlsx"
+    sa = ScenarioAnalytics(scenarios_dir=lender_dir, output_path=out)
+    sa.run(export_excel=True, export_charts=False)
+
+    wb = load_workbook(out)
+    assert "Report_Cover" not in wb.sheetnames
+    assert "Charts" not in wb.sheetnames
+    assert len(list(wb["DSCR_View"].conditional_formatting)) == 0

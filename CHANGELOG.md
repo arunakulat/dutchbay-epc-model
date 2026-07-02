@@ -5,6 +5,28 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Richer board-deck charts + embedded / live-formatted batch Excel (#662, opt-in, KPI-neutral).**
+  The batch scenario-comparison export (`analytics.scenario_analytics.ScenarioAnalytics`, behind
+  `run_scenario_analytics_v14.py`) gains a board-deck-grade enrichment on the charts-enabled path
+  (`charts=true`):
+  - `_export_charts` now also emits the cross-scenario `ChartGenerator` visuals into the
+    `*_charts` sidecar — a KPI-comparison bar (`kpi_comparison.png`), a DSCR-comparison line with
+    the 1.0 covenant floor (`dscr_comparison.png`), and an end-of-horizon debt waterfall
+    (`debt_waterfall.png`) — alongside the existing per-scenario DSCR series and IRR histogram,
+    and returns the written PNG paths.
+  - The single `.xlsx` deliverable now embeds those PNGs into a dedicated `Charts` sheet
+    (`ExcelExporter.add_chart_image`) and applies a **live** `CellIsRule` (`lessThan` 1.0) to the
+    `DSCR_View` covenant column (`ExcelExporter.add_conditional_formatting`) — this re-evaluates as
+    the reader edits, unlike the pre-existing static highlight fill.
+  - **MRM-02 provenance** stamps every enriched artefact: a `Report_Cover` sheet and a
+    `charts_metadata.json` sidecar carry the scenario list, scenarios directory, engine `VERSION`,
+    commit, and economics basis, so any reported KPI set is reconstructable.
+  - **DEFAULT OFF = byte-identical (#662).** With `charts=false` (the default for existing callers)
+    the workbook is unchanged: no `Report_Cover`, no `Charts` sheet, no conditional-formatting rule,
+    no charts directory. The two new `export_summary_and_timeseries` knobs
+    (`dscr_conditional_threshold`, `embed_chart_images`) default to `None`. Exports are downstream of
+    KPIs, so all committed-scenario KPIs are byte-identical (verified via the multi-scenario oracle).
+    No new dependency (openpyxl / matplotlib already present, both optional).
 - **Spatial-representativeness verdict wired into the GIS export / DataLake manifest (#660, WIND-10/#484, read-only diagnostic, KPI-neutral).**
   `analytics.gis.gis_export.run_gis_export` now retains the native n×n `CellResult`
   neighbourhood it samples per grid (previously discarded after `assemble_grids`) and runs
