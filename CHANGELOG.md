@@ -60,6 +60,20 @@ All notable changes to this project will be documented here.
   inert `[mypy-pydantic.*] ignore_missing_imports` block (pydantic v2 ships `py.typed`) is kept and
   annotated; its removal is deferred as a user-gated cleanup. No runtime code changed; kpi_oracle
   byte-identical across all committed scenarios.
+- **CVaR labelled explicitly as Expected Shortfall + quantified small-sample caveat (#600, KPI-neutral).**
+  The user-facing display label from `analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar`
+  moves `CVaR(95%)` → `CVaR/ES(95%)` (CVaR and Expected Shortfall are the same statistic; the label now
+  names both). Docstrings at every CVaR computation surface (`analytics/core/risk_metrics.py`,
+  `analytics/mc/engine.py::_tail_risk`, `analytics/capital_risk_layer_v14.py`,
+  `analytics/sensitivity/tail_risk.py::_cvar`) plus `docs/ANALYTICS_INTEGRATION.md` now state
+  CVaR == ES and carry a quantified small-sample caveat: the tail mean rests on only
+  `(1 - confidence) * n` trials — at n=1000 a 1% tail averages ~10 raw trials (noisy for a
+  covenant/pricing input) — and ES converges slower than the mean, so a tight mean CI from the
+  post-hoc convergence diagnostic (`analytics/mc/convergence.py`, #643) does not certify the tail;
+  the `>= max(20, 1/(1-confidence))`-sample floor in `capital_risk_layer_v14` is documented as a
+  degeneracy guard, not statistical sufficiency. Strings/docs/Markdown only: no numeric computation,
+  default, or config key changes (`cvar_confidence`/`cvar_alpha` untouched); committed scenario KPIs
+  byte-identical (labels never enter committed KPI artifacts).
 - **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
   modelled in the engine (above), the analysis layer's sweeps now drive the live keys end-to-end:
   - `FXSensitivityAnalyzer.run()`'s spread sweep drives `fx.spread_bps` (the legacy, engine-ignored
@@ -279,6 +293,14 @@ All notable changes to this project will be documented here.
   `Test Summary` is a *required* status check, so on an FX-touching PR two different "Test Summary"
   checks appeared, making the required-check identity ambiguous. Renamed the fx-tests jobs to
   `FX Test Summary` / `FX Code Quality Checks` (job IDs unchanged, so `needs:` is unaffected).
+- **CI: dropped the redundant advisory black/isort steps from `fx-tests.yml`.** The FX code-quality
+  job carried FX-scoped `black --check` / `isort --check-only` steps with `continue-on-error: true`
+  (advisory only, predating the repo-wide gate). Formatting and import order are enforced repo-wide
+  by the MANDATORY lint gate in `test-suite.yml` (#545), which strictly supersedes the advisory
+  checks, so they only added CI time and a perpetually ignorable signal. The two steps are removed
+  and `black`/`isort` dropped from that job's installs; the advisory mypy and flake8 steps are
+  intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
+  gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
 
 ## v15.2.0 - 2026-07-01
 
