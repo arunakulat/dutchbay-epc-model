@@ -6,11 +6,11 @@ Calculates Annual Energy Production (AEP) from wind speed data using:
 - P-level scenarios (P50, P75, P90)
 - Revenue projections with configurable tariffs
 
-All configuration loaded from YAML files (CCCDIR compliant).
+All configuration loaded from YAML files (config-first, GWTF ARCH-01).
 
 SCOPE / WIND-4 (#484): this is the TIMESERIES-INTEGRATION AEP path used by the
 ``wind_resource`` diagnostic pipeline (``wind_pipeline.WindPipeline``,
-``era5_retrieval.compute_net_aep``). It is NOT on the lender FINANCE path — the canonical
+``era5_retrieval.compute_site_aep``). It is NOT on the lender FINANCE path — the canonical
 bankable headline (net P50 464.3 GWh, frozen into ``scenarios/aep_summary_dutchbay_10mw.json``)
 is produced by the analytic-Weibull integrator
 ``analytics.wind.aep_summary_builder → analytics.wind.aep_tornado.gross_aep_farm_gwh``, which
@@ -38,21 +38,28 @@ Typical usage:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0 (CCCDIR Compliant)
+Version: tracks the repo ``VERSION`` file via ``analytics.run_manifest.engine_version()``
+    (no per-module literal to go stale; #618).
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 import numpy as np
 import pandas as pd
 import yaml
 from scipy import interpolate
 
-from wind_resource.bankable_aep import UncertaintyBudget, exceedance_levels
+from analytics.run_manifest import engine_version
+from wind_resource.bankable_aep import (
+    IEC_REFERENCE_AIR_DENSITY_KGM3,
+    budget_from_mapping,
+    density_velocity_factor,
+    exceedance_levels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +97,9 @@ class EnergyCalculator:
         num_turbines: Optional[int] = None,
         config_path: Optional[str] = None,
         power_curves_path: Optional[str] = None,
+        uncertainty: Optional[Mapping[str, Any]] = None,
+        air_density_site_kgm3: Optional[float] = None,
+        air_density_ref_kgm3: float = IEC_REFERENCE_AIR_DENSITY_KGM3,
     ) -> None:
         """Initialize energy calculator with configuration.
 
@@ -104,10 +114,26 @@ class EnergyCalculator:
                 no default — raises ValueError if omitted).
             config_path: Path to era5_config.yaml. If None, uses default.
             power_curves_path: Path to power_curves.yaml. If None, uses default.
+            uncertainty: Optional ``resource.uncertainty.*``-shaped mapping driving
+                the IEC 61400-15-2 exceedance build-up (category sigmas,
+                ``correlation``, ``life_years``). Absent/empty = the
+                ``UncertaintyBudget()`` defaults — byte-identical to the previous
+                hardcoded budget. A ``p50_haircut_pct`` key is NOT applied on this
+                diagnostic path (see :meth:`calculate_net_aep`; policy gated in #653).
+            air_density_site_kgm3: Optional site air density. When given, the IEC
+                61400-12-1 velocity correction ``(rho_site/rho_ref)**(1/3)`` is
+                applied to the wind speeds before the power-curve lookup — the same
+                correction the bankable path applies
+                (:func:`wind_resource.bankable_aep.gross_aep_weibull`). Absent =
+                factor 1.0 (no correction), matching the bankable builder's
+                fallback when a scenario declares no densities.
+            air_density_ref_kgm3: Reference density the power curve is defined at.
+                Default the IEC 1.225 kg/m^3 (only consulted when
+                ``air_density_site_kgm3`` is given).
 
         Raises:
             ValueError: If neither turbine_model nor power_curve provided,
-                or if DataFrame is invalid.
+                or if DataFrame is invalid, or air densities are non-positive.
             FileNotFoundError: If config files not found.
         """
         # Validate inputs
@@ -132,6 +158,21 @@ class EnergyCalculator:
         self.ws_column = ws_column
         self.num_turbines = num_turbines
 
+        # resource.uncertainty.* plumbing (#618): stored as a plain dict; consumed by
+        # calculate_net_aep. Empty mapping == UncertaintyBudget() defaults (identity).
+        self.uncertainty: Dict[str, Any] = dict(uncertainty or {})
+
+        # IEC 61400-12-1 air-density velocity correction (#618): factor 1.0 (identity)
+        # unless a site density is supplied — parity with the bankable path, where the
+        # correction is applied only when a scenario declares its densities.
+        self.air_density_site_kgm3 = air_density_site_kgm3
+        self.air_density_ref_kgm3 = air_density_ref_kgm3
+        self.density_velocity_factor = (
+            density_velocity_factor(float(air_density_site_kgm3), air_density_ref_kgm3)
+            if air_density_site_kgm3 is not None
+            else 1.0
+        )
+
         # Load configurations (CCCDIR compliance)
         self._load_config(config_path)
 
@@ -143,7 +184,9 @@ class EnergyCalculator:
             assert power_curve is not None
             self._load_power_curve_manual(power_curve)
 
-        logger.info("EnergyCalculator v1.0.0 initialized (CCCDIR compliant)")
+        logger.info(
+            f"EnergyCalculator v{engine_version()} initialized (CCCDIR compliant)"
+        )
         logger.info(f"  Turbines: {num_turbines}")
         logger.info(f"  Rated capacity: {self.rated_capacity} kW")
         logger.info(
@@ -287,21 +330,30 @@ class EnergyCalculator:
     def calculate_gross_aep(self) -> Dict[str, float]:
         """Calculate gross Annual Energy Production (no losses).
 
+        When a site air density was supplied, the IEC 61400-12-1 velocity
+        correction is applied first: the reference-density power curve is read at
+        ``v * (rho_site/rho_ref)**(1/3)`` (thinner air -> less power at a given
+        speed), matching the bankable path
+        (:func:`wind_resource.bankable_aep.gross_aep_weibull`). Without a site
+        density the factor is 1.0 and results are unchanged (#618).
+
         Returns:
             Dict with keys:
                 - average_power_kw: Mean power output per turbine (kW).
                 - capacity_factor_gross: Gross capacity factor (%).
                 - single_turbine_aep_mwh: AEP for one turbine (MWh/year).
                 - windfarm_aep_mwh: Total AEP for all turbines (MWh/year).
+                - density_velocity_factor: The IEC 61400-12-1 factor applied
+                  (1.0 = no correction).
 
         Example:
             >>> gross = calc.calculate_gross_aep()
             >>> print(f"Gross CF: {gross['capacity_factor_gross']:.1f}%")
             Gross CF: 42.5%
         """
-        # Apply power curve to wind speeds
+        # Apply power curve to (density-corrected) wind speeds
         wind_speeds = self.df[self.ws_column].to_numpy()
-        power_output = self.power_curve_func(wind_speeds)
+        power_output = self.power_curve_func(wind_speeds * self.density_velocity_factor)
 
         # Average power (kW)
         average_power_kw = float(np.mean(power_output))
@@ -319,6 +371,7 @@ class EnergyCalculator:
             "capacity_factor_gross": capacity_factor_gross,
             "single_turbine_aep_mwh": single_turbine_aep_mwh,
             "windfarm_aep_mwh": windfarm_aep_mwh,
+            "density_velocity_factor": self.density_velocity_factor,
         }
 
         logger.info(
@@ -331,6 +384,14 @@ class EnergyCalculator:
         self, gross_aep_mwh: Optional[float] = None
     ) -> Dict[str, float]:
         """Calculate net AEP with losses for P50/P75/P90 scenarios.
+
+        The P75/P90 exceedance build-up is driven by the ``uncertainty`` mapping
+        supplied at construction (``resource.uncertainty.*``: category sigmas,
+        ``correlation``, ``life_years``); with none supplied it reproduces the
+        ``UncertaintyBudget()`` defaults exactly. A declared ``p50_haircut_pct``
+        is NOT applied on this diagnostic path — the kernel 0.0 identity is
+        hard-pinned pending the #653 policy decision (the bankable
+        ``aep_summary_builder`` path is the one that applies the haircut policy).
 
         Args:
             gross_aep_mwh: Gross AEP in MWh/year. If None, calculates it.
@@ -346,6 +407,9 @@ class EnergyCalculator:
                 - capacity_factor_net_p50: Net CF at P50 (%).
                 - capacity_factor_net_p75: Net CF at P75 (%).
                 - capacity_factor_net_p90: Net CF at P90 (%).
+                - pvalue_method / uncertainty_sigma_1yr_pct: exceedance provenance.
+                - exceedance_correlation / exceedance_life_years / p50_haircut_pct:
+                  the exceedance knobs actually used (haircut always 0.0 here).
 
         Example:
             >>> net = calc.calculate_net_aep()
@@ -366,8 +430,32 @@ class EnergyCalculator:
         # path (it uses the bankable aep_summary), so headline economics are
         # unaffected; this corrects the secondary wind-diagnostic P-values only.
         net_p50 = gross_aep_mwh * total_loss * self.p_levels["p50"]
+
+        # Budget/knobs from the plumbed resource.uncertainty mapping (#618): the
+        # sigma parser is shared with the bankable builder (budget_from_mapping), so
+        # the two consumers cannot drift. Absent mapping = UncertaintyBudget()
+        # defaults, correlation 0.0 (IEC RSS), life_years = ppa_years — identical to
+        # the previous hardcoded call.
+        budget = budget_from_mapping(self.uncertainty)
+        correlation = float(self.uncertainty.get("correlation", 0.0))
+        life_years = int(self.uncertainty.get("life_years", self.ppa_years))
+        if "p50_haircut_pct" in self.uncertainty:
+            # Deliberately NOT applied: whether this diagnostic path should share the
+            # bankable builder's haircut policy default is the OPEN user-gated
+            # question #653. Until that is settled, the kernel 0.0 identity is
+            # hard-pinned here and the declared key is surfaced, not silently used.
+            logger.info(
+                "resource.uncertainty.p50_haircut_pct=%s declared but NOT applied on "
+                "the timeseries diagnostic path (hard-pinned 0.0 pending #653); it is "
+                "consumed by the bankable aep_summary_builder path only.",
+                self.uncertainty["p50_haircut_pct"],
+            )
         _exc = exceedance_levels(
-            net_p50 / 1000.0, UncertaintyBudget(), life_years=int(self.ppa_years)
+            net_p50 / 1000.0,
+            budget,
+            life_years=life_years,
+            p50_haircut_pct=0.0,  # kernel identity, pinned (#653)
+            correlation=correlation,
         )
         net_p75 = _exc.p75_gwh * 1000.0
         net_p90 = _exc.p90_1yr_gwh * 1000.0
@@ -390,6 +478,11 @@ class EnergyCalculator:
             "capacity_factor_net_p90": cf_net_p90,
             "pvalue_method": "iec_61400_15_2",
             "uncertainty_sigma_1yr_pct": _exc.sigma_1yr_pct,
+            # Knob disclosure (#618): which exceedance inputs this run actually used.
+            # p50_haircut_pct is ALWAYS 0.0 on this path (pinned pending #653).
+            "exceedance_correlation": correlation,
+            "exceedance_life_years": life_years,
+            "p50_haircut_pct": 0.0,
         }
 
         logger.info(f"Net AEP P50: {net_p50:,.0f} MWh/year (CF: {cf_net_p50:.1f}%)")
@@ -431,7 +524,12 @@ class EnergyCalculator:
         """
         df = self.df.copy()
         df["month"] = self._month_of_row(df.index)
-        df["power_kw"] = self.power_curve_func(df[self.ws_column])
+        # Same IEC 61400-12-1 density correction as calculate_gross_aep (factor 1.0
+        # when no site density was supplied), so the monthly profile stays consistent
+        # with the corrected annual gross (#618).
+        df["power_kw"] = self.power_curve_func(
+            df[self.ws_column] * self.density_velocity_factor
+        )
 
         # Monthly averages
         monthly = df.groupby("month")["power_kw"].mean().reset_index()

@@ -2,10 +2,14 @@
 
 These are the small, defensive config-coercion / nested-lookup helpers the
 cashflow engine uses to read heterogeneous (canonical lower-case vs. hand-authored
-title-case) scenario dicts. The module is already ~91% covered by the wider suite;
-this file pins the remaining branches — specifically the ``except`` fall-throughs
-in ``as_float`` / ``as_int`` / ``as_float_or_none`` (lines 12-13, 22-23, 76-77),
-which only fire on non-coercible inputs.
+title-case) scenario dicts. This file pins the coercion contract (#585 fail-loud):
+
+- ``as_float`` / ``as_int``: ``None`` -> default, but a PRESENT-but-malformed
+  value raises ``ValueError`` instead of silently returning the default (a
+  silent fallback can move a tax/capex base with no trace).
+- ``as_float_or_none`` / ``as_int_or_none``: the probe variants KEEP their
+  swallow-to-``None`` semantics — candidate scans and the project-life
+  heuristic tree-walk depend on them.
 
 Every expectation is derived from first principles (Python's own ``float``/``int``
 semantics, exact dict-navigation rules, the documented percent-vs-decimal pivot at
@@ -37,7 +41,8 @@ from finance.cashflow_v14_utils import (
 
 # ---------------------------------------------------------------------------
 # A small object whose float()/int() raise TypeError, to drive the except
-# branches deterministically (lines 12-13, 22-23, 76-77).
+# branches deterministically (fail-loud re-raise in as_float/as_int; swallow
+# in the _or_none probe variants).
 # ---------------------------------------------------------------------------
 
 
@@ -66,17 +71,18 @@ def test_as_float_numeric_and_numeric_string_convert() -> None:
     assert isinstance(as_float(3), float)
 
 
-def test_as_float_bad_string_hits_valueerror_branch() -> None:
-    """A non-numeric string raises ValueError inside float() -> default (12-13)."""
-    assert as_float("not-a-number", 0.0) == 0.0
-    # With no default supplied, the fallback is None.
-    assert as_float("not-a-number") is None
+def test_as_float_bad_string_fails_loud() -> None:
+    """A present-but-non-numeric string fails loud (#585), default or not."""
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_float("not-a-number", 0.0)
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_float("not-a-number")
 
 
-def test_as_float_unconvertible_object_hits_typeerror_branch() -> None:
-    """An object float() can't handle raises TypeError -> default (12-13)."""
-    default = -1.0
-    assert as_float(_Uncoercible(), default) == default
+def test_as_float_unconvertible_object_fails_loud() -> None:
+    """An object float() can't handle (TypeError) is re-raised as ValueError (#585)."""
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_float(_Uncoercible(), -1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -98,16 +104,30 @@ def test_as_int_numeric_and_numeric_string_convert() -> None:
     assert isinstance(as_int("4"), int)
 
 
-def test_as_int_bad_string_hits_valueerror_branch() -> None:
-    """A non-integer string raises ValueError inside int() -> default (22-23)."""
-    assert as_int("12.5", -1) == -1
-    assert as_int("abc") is None
+def test_as_int_bad_string_fails_loud() -> None:
+    """A present-but-non-integer string fails loud (#585), default or not."""
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_int("12.5", -1)
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_int("abc")
 
 
-def test_as_int_unconvertible_object_hits_typeerror_branch() -> None:
-    """An object int() can't handle raises TypeError -> default (22-23)."""
-    default = 99
-    assert as_int(_Uncoercible(), default) == default
+def test_as_int_unconvertible_object_fails_loud() -> None:
+    """An object int() can't handle (TypeError) is re-raised as ValueError (#585)."""
+    with pytest.raises(ValueError, match="cannot convert"):
+        as_int(_Uncoercible(), 99)
+
+
+def test_probe_variants_keep_swallow_semantics() -> None:
+    """The _or_none probe variants MUST keep swallowing (#585 scope guard).
+
+    The project-life heuristic tree-walk and the capacity candidate scans probe
+    arbitrary nodes; a raise there would break every fall-through chain.
+    """
+    assert as_float_or_none("not-a-number") is None
+    assert as_float_or_none(_Uncoercible()) is None
+    assert as_int_or_none("not-an-int") is None
+    assert as_int_or_none(_Uncoercible()) is None
 
 
 # ---------------------------------------------------------------------------

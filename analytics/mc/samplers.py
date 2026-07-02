@@ -10,7 +10,8 @@ so an install without the QMC path still imports this module).
 from __future__ import annotations
 
 import math
-from typing import Sequence, Tuple
+import warnings
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -20,14 +21,48 @@ def generate_lhs_samples(
     n_trials: int,
     bounds: Sequence[Tuple[float, float]],
     seed: int = 123,
-    common_random_numbers: bool = True,
+    shared_permutation_stream: Optional[bool] = None,
+    common_random_numbers: Optional[bool] = None,
 ) -> np.ndarray:
     """
     Latin Hypercube sampler — the canonical, tested LHS implementation: one stratified
     draw per [i/n, (i+1)/n] interval per dimension (no column reuse).
 
+    ``shared_permutation_stream`` (default True) controls where the per-dimension
+    column permutations are drawn from: True draws them sequentially from the single
+    ``seed``-seeded generator (the whole sample set is one deterministic stream —
+    what the MC engine's common-random-numbers feature relies on); False derives an
+    independent generator per dimension (``seed + j``), so dimension ``j``'s
+    permutation is invariant to the number/order of other dimensions. Either way the
+    output is a pure function of ``seed`` and ``bounds`` (MRM-01 reproducibility).
+
+    ``common_random_numbers`` is the DEPRECATED former name of this flag, kept as a
+    backward-compatible alias (#586, MOVE→SHIM): the name was misleading at sampler
+    level — CRN across runs comes from passing the same ``seed``, not from this flag,
+    which only selects the permutation-stream derivation above. Passing it emits a
+    DeprecationWarning; passing both names with conflicting values raises ValueError.
+    (The engine-level ``common_random_numbers`` config/API name is unchanged — at that
+    level it genuinely toggles the CRN feature, see ``analytics.mc.engine``.)
+
     Returns: array shape [n_trials, n_params] sampled uniformly within bounds.
     """
+    if common_random_numbers is not None:
+        warnings.warn(
+            "generate_lhs_samples(common_random_numbers=...) is deprecated; "
+            "use shared_permutation_stream=... (same semantics). See #586.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if shared_permutation_stream is None:
+            shared_permutation_stream = common_random_numbers
+        elif bool(shared_permutation_stream) != bool(common_random_numbers):
+            raise ValueError(
+                "Conflicting values for shared_permutation_stream and its "
+                "deprecated alias common_random_numbers"
+            )
+    if shared_permutation_stream is None:
+        shared_permutation_stream = True
+
     n = int(n_trials)
     if n <= 0:
         raise ValueError("n_trials must be > 0")
@@ -51,7 +86,7 @@ def generate_lhs_samples(
     for j in range(k):
         perm = (
             rng.permutation(n)
-            if common_random_numbers
+            if shared_permutation_stream
             else np.random.default_rng(int(seed + j)).permutation(n)
         )
         # Take dimension j's OWN stratified column (was column 0 for every j, which made

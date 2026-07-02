@@ -899,6 +899,27 @@ def build_annual_rows_efficient(
 # =============================================================================
 
 
+def _is_positive_whole_years(value: Any) -> bool:
+    """Schema validator for year-count fields: a positive whole number of years.
+
+    Accepts ``int`` (20) and integral ``float`` (20.0) — YAML authors write
+    both, and the engine's own extraction (``as_int_or_none`` -> ``int(value)``)
+    already treats 20.0 as 20, so the pre-flight guard must not be stricter
+    than the engine it protects (#586). Rejects ``bool`` (a subclass of int,
+    never a year count — the old ``isinstance(v, int)`` check let ``True``
+    through), non-integral floats (fail loud rather than let the engine
+    silently truncate 20.5 -> 20), and anything <= 0. Strings stay rejected:
+    schema-strict configs must carry numeric year counts (CESSPIT).
+    """
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value > 0
+    if isinstance(value, float):
+        return value > 0.0 and value.is_integer()
+    return False
+
+
 def _register_cashflow_schema() -> None:
     """
     Register the core v14 cashflow-required fields with the global schema
@@ -920,7 +941,9 @@ def _register_cashflow_schema() -> None:
             required=True,
             severity="error",
             description="Project life in years; drives CFADS horizon.",
-            validator=lambda v: isinstance(v, int) and v > 0,
+            # #586: int OR integral float (20.0), matching the engine's own
+            # as_int_or_none coercion; bool / non-integral / <=0 rejected.
+            validator=_is_positive_whole_years,
         ),
         RequiredFieldSpec(
             module="cashflow",
