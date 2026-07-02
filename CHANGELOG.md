@@ -5,6 +5,26 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Morris optimal-trajectories mode + SA method-selection decision tree (#617, opt-in, KPI-neutral).**
+  `analytics.sensitivity.global_sa.run_morris` gains an optional `optimal_trajectories:
+  Optional[int] = None` knob forwarded to SALib's `morris.sample`. When set, SALib draws
+  `n_trajectories` candidate trajectories and keeps the `optimal_trajectories` subset with the
+  widest spread in the input box (Campolongo/Ruano enhancement), dropping the cost from
+  `n_trajectories·(D+1)` to `optimal_trajectories·(D+1)` evaluations while covering more of the
+  space — the OSeMOSYS "10-from-100 at step-size-4" guidance. The chosen value is recorded in
+  the result metadata next to `n_trajectories` / `n_runs`. `scripts/run_global_sensitivity.py`
+  exposes a Morris-only `--optimal-trajectories` flag (fail-loud usage error if combined with
+  `--method sobol`).
+  - **Fail-loud validation (CESSPIT, no silent clamping).** `run_morris` raises `ValueError`
+    unless `2 <= optimal_trajectories < n_trajectories`; it validates itself rather than defer
+    to SALib, whose own bound check is inconsistent (it silently accepts `0`).
+  - **DEFAULT OFF = byte-identical (#617).** `optimal_trajectories=None` is the vanilla Morris
+    path: the SALib sampling call is verified byte-identical to the prior no-kwarg call, so the
+    lender report's Morris SA section and all committed-scenario KPIs are unchanged. MRM-01: the
+    subset selection is seeded (deterministic for a fixed `seed`).
+  - New `docs/SENSITIVITY_DECISION_TREE.md` documents the SA method funnel (Morris screen →
+    Sobol on the top subset → PAWN cross-check → local tornado), cross-linked from the
+    `global_sa` module docstring.
 - **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
   New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
   conditions-precedent checklist: the discrete named line items that must be satisfied (or
