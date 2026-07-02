@@ -5,6 +5,34 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Project→equity IRR bridge in the lender report + OpenDSS-curtailment deferral ADR (#621, additive, KPI-neutral).**
+  Two halves of the deferred/gated cluster.
+  - **IRR bridge (built):** a new disclosure-only section that reconciles the engine's PUBLISHED
+    project (unlevered) IRR to its published equity (levered) IRR, decomposing the leverage uplift
+    into labelled legs — **leverage**, **cost of debt**, **tax shield** — plus an explicit
+    **residual**. New frozen contracts `analytics.contracts_v14.IrrBridgeComponent` /
+    `ProjectEquityIrrBridge` (CCCDIR — result types centralised) and builder
+    `analytics.irr_bridge.build_project_equity_irr_bridge[_from_run]`. All IRR arithmetic is
+    delegated to `finance.irr` (R7 single source of truth); the two endpoints are the headline
+    KPIs and are never recomputed — the legs only *explain* the gap. Each leg is one substitution
+    step on the engine's own published per-year figures (`cfads_usd` / `interest_usd` /
+    `effective_tax_rate` and the authoritative equity return vector), and the residual is the
+    closing term so that `sum(legs) + residual == equity_irr − project_irr` **exactly** (asserted
+    at build time — CESSPIT; IRR is non-additive, so the residual honestly carries the interaction
+    plus principal timing, covenant lockup, DSRA, WHT and terminal value). Wired into the lender
+    report via a new `run_result` argument to `app.reports.report_model.build_report_context`
+    (rendered as "Project → Equity IRR Bridge" with a new signed-percentage-point formatter
+    `fmt_pp`). **Additive + default-off:** the section renders only when the caller supplies the
+    full run result AND it carries a computed equity distribution; absent that, the section is
+    omitted and no headline KPI is touched. All committed-scenario KPIs verified byte-identical
+    (all-scenarios kpi oracle).
+  - **OpenDSS power-flow curtailment (deferred):** recorded as an ADR
+    (`docs/OPENDSS_CURTAILMENT_DECISION.md`) per the adapt+defer verdict — do NOT build the
+    OpenDSSDirect integration (no CEB feeder data, no new hard dependency). The gate: real feeder
+    data **and** explicit user authorization for the `OpenDSSDirect.py` dependency **and** a
+    default-off config gate. The existing energy-balance shared-POI seam
+    (`analytics/portfolio/poi_curtailment.py`) is preserved unchanged
+    (`resolve_shared_poi_curtailment` still returns `None` absent the opt-in config).
 - **Morris optimal-trajectories mode + SA method-selection decision tree (#617, opt-in, KPI-neutral).**
   `analytics.sensitivity.global_sa.run_morris` gains an optional `optimal_trajectories:
   Optional[int] = None` knob forwarded to SALib's `morris.sample`. When set, SALib draws
