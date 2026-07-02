@@ -262,6 +262,7 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
         annual_rows=result.get("annual_rows"),
         tornado=compute_report_tornado(scenario),
         global_sa=compute_report_global_sa(scenario),
+        run_result=result,
     )
 
 
