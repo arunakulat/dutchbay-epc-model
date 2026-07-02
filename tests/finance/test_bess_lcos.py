@@ -149,6 +149,25 @@ def test_energy_tariff_defaults():
     assert s.energy_per_cycle_mwh == 40.0
 
 
+def test_energy_tariff_carries_fixed_dispatch_basis_note():
+    """#596: the energy-tariff LCOS records its fixed-dispatch energy basis — a fixed
+    cycles/yr at FULL nameplate energy per cycle (no depth-of-discharge factor, the
+    post-M1/#557 revenue-export basis) — because dispatch is not simulated or optimised.
+    The note must flow through to LcosResult.notes / as_dict() so report packs carry the
+    limitation, mirroring the capacity-charge CEB note."""
+    s = resolve_lcos_specs(_energy_cfg())[0]
+    assert any(
+        "full nameplate" in n and "not simulated or optimised" in n for n in s.notes
+    )
+    r = compute_lcos(s, wacc=0.08, project_years=15)
+    assert any("full nameplate" in n for n in r.notes)
+    assert any("full nameplate" in n for n in r.as_dict()["notes"])
+    # The note is model-gated: a capacity-charge BESS keeps its CEB cycles-at-DoD note
+    # and does NOT pick up the energy-tariff wording.
+    cap = resolve_lcos_specs(_capacity_cfg())[0]
+    assert all("full nameplate" not in n for n in cap.notes)
+
+
 # ── hybrid attribution ──────────────────────────────────────────────────────────
 
 

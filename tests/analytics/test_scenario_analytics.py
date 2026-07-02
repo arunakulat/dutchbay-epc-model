@@ -26,10 +26,12 @@ import pandas as pd
 import pytest
 
 from analytics.scenario_analytics import (
+    BATCH_ECONOMICS_BASIS,
     BatchResultSummary,
     BatchScenarioResult,
     ScenarioAnalytics,
 )
+from run_scenario_analytics_v14 import _build_stdout_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = REPO_ROOT / "scenarios"
@@ -280,6 +282,9 @@ def test_run_returns_dataframes_and_metadata(
     assert meta.batch_summary["n_scenarios_found"] == 1
     assert meta.batch_summary["n_scenarios_run"] == 1
     assert meta.batch_summary["failed_scenarios"] == []
+    # Provenance marker (#611): batch economics are comparison snapshots,
+    # not the canonical pipeline numbers.
+    assert meta.basis == "comparison_snapshot"
 
 
 def test_run_empty_dir_raises(tmp_path: Path) -> None:
@@ -332,6 +337,9 @@ def test_run_writes_summary_json(lender_dir: Path, tmp_path: Path) -> None:
     assert payload["n_success"] == 1
     assert payload["n_failed"] == 0
     assert payload["successful"] == meta.successful
+    # Emission point 1 of the #611 provenance marker: the persisted summary_json
+    # must label batch economics as a non-authoritative comparison snapshot.
+    assert payload["basis"] == "comparison_snapshot"
 
 
 def test_run_export_excel(lender_dir: Path) -> None:
@@ -497,3 +505,53 @@ def test_batch_result_summary_fields() -> None:
     assert summary.n_success == 1
     assert summary.n_failed == 1
     assert summary.batch_summary["n_scenarios_found"] == 2
+    # basis defaults to the module-level provenance constant (#611).
+    assert summary.basis == BATCH_ECONOMICS_BASIS == "comparison_snapshot"
+
+
+def test_cli_stdout_payload_carries_basis_marker(tmp_path: Path) -> None:
+    """Emission point 2 of the #611 provenance marker: the CLI stdout JSON.
+
+    run_scenario_analytics_v14.main() prints the dict built by
+    _build_stdout_payload; it must carry ``basis: "comparison_snapshot"``
+    ADDITIVELY — the pre-existing keys (n_success, n_failed, output_path,
+    summary_json) are all preserved, none renamed or removed.
+    """
+    meta = BatchResultSummary(
+        successful=["a"],
+        failed=[],
+        n_success=1,
+        n_failed=0,
+        batch_summary={"n_scenarios_found": 1},
+    )
+    summary_json = tmp_path / "meta.json"
+    payload = _build_stdout_payload(meta, tmp_path / "out.xlsx", summary_json)
+
+    assert payload["basis"] == "comparison_snapshot"
+    assert set(payload) == {
+        "basis",
+        "n_success",
+        "n_failed",
+        "output_path",
+        "summary_json",
+    }
+    assert payload["n_success"] == 1
+    assert payload["n_failed"] == 0
+    assert payload["output_path"] == str(tmp_path / "out.xlsx")
+    assert payload["summary_json"] == str(summary_json)
+    # The payload is what main() json.dumps()es to stdout — must serialise.
+    json.dumps(payload)
+
+
+def test_cli_stdout_payload_summary_json_none() -> None:
+    """summary_json stays null in the stdout payload when no path is configured."""
+    meta = BatchResultSummary(
+        successful=[],
+        failed=["b"],
+        n_success=0,
+        n_failed=1,
+        batch_summary={},
+    )
+    payload = _build_stdout_payload(meta, Path("exports/v14.xlsx"), None)
+    assert payload["summary_json"] is None
+    assert payload["basis"] == "comparison_snapshot"

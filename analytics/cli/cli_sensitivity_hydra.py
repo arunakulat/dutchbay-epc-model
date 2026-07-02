@@ -17,13 +17,30 @@ Config:
     - metrics: KPIs to track; the first is the tornado target metric
 
 Output:
-    Prints JSON to stdout:
-    {{
+    Prints the result payload as JSON to stdout with sorted keys:
+    ``dataclasses.asdict(SensitivitySuite)`` plus four CLI metadata keys
+    (``status``, ``config_path``, ``output_dir``, ``metric_analyzed``).
+    Top-level shape:
+    {
+      "analysis_timestamp": "2026-07-02T07:06:36+00:00",
+      "base_config_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "base_kpis": {"project_irr": 0.0268, ...},
+      "config_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "metadata": {"flat_metric": false},
+      "metric": "project_irr",
+      "metric_analyzed": "project_irr",
+      "output_dir": "_out/sensitivity",
+      "scenario_name": "DutchBay Wind Farm",
       "status": "success",
-      "baseline": {{...}},
-      "sensitivity_results": [[{{"param": "capex", "shock": -0.1, ...}}],
-      "output_dir": "_out/sensitivity"
-    }}
+      "tornado_results": [
+        {"metric_name": "CAPEX", "base_metric": 0.0268, "impact_abs": ...,
+         "label": "CAPEX", "metadata": {}, "shock_results": [...]}
+      ]
+    }
+    On failure prints {"status": "error", "error": ..., "error_type": ...,
+    "config_path": ..., "metric": ...} and exits 1. Note: Hydra job logging
+    (INFO records) precedes the JSON on stdout under the default logging
+    config; consumers should parse from the first "{" line.
 
 GWTF:
     - R3: Hydra-only (no argparse)
@@ -35,13 +52,8 @@ CASPER:
     - Traceable: Logged shock parameters
     - Reproducible: Same config → same results
 
-DSGCCCG:
-    Dolphins Swim Gracefully Capturing Clean Current Groups
-    Step 3B - Wired to sensitivity_runner engine
-
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0 (Wired)
 """
 
 from __future__ import annotations
@@ -88,7 +100,7 @@ def main(cfg: DictConfig) -> None:
         >>> python analytics/cli/cli_sensitivity_hydra.py \\
         ...     config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
         ...     output_dir=_out/sensitivity
-        >>> # Output: {{"status": "success", "sensitivity_results": [...]}}
+        >>> # Output: {"status": "success", "tornado_results": [...], ...}
     """
     # Validate required config parameter
     config_path = cfg.get("config")

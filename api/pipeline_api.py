@@ -586,7 +586,17 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
 
     kpis = result.get("kpis") or {}
     debt = result.get("debt_result") or {}
-    manifest = build_run_manifest(cfg, validation_mode=payload.validation_mode)
+    # Engine-stamped manifest preferred (#577): run_v14_pipeline stamps
+    # result["run_manifest"] from the RESOLVED config it actually evaluated, so the
+    # response binds to the engine's own resolution. Rebuilding from this boundary's
+    # cfg is retained only as a fallback for a result without one (e.g. a patched
+    # engine in tests).
+    manifest_raw = result.get("run_manifest")
+    manifest_dict: Dict[str, Any] = (
+        dict(manifest_raw)
+        if isinstance(manifest_raw, Mapping)
+        else build_run_manifest(cfg, validation_mode=payload.validation_mode).as_dict()
+    )
     return RunPipelineResponse(
         scenario_name=str(kpis.get("scenario_name") or cfg.get("name") or "<inline>"),
         config_path=payload.config_path,
@@ -597,5 +607,5 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         debt=_extract_debt(debt),
         cost=_extract_cost(cfg),
         funding=_extract_funding(debt),
-        manifest=ManifestBlock(**manifest.as_dict()),
+        manifest=ManifestBlock(**manifest_dict),
     )

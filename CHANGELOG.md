@@ -5,6 +5,31 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Wind artifact hygiene (#618, KPI-neutral: committed scenarios byte-identical, frozen AEP artifacts untouched).**
+  Three fixes on the `wind_resource` timeseries-diagnostic path (finance reads the frozen
+  `aep_summary` JSON, so lender KPIs cannot move):
+  - **Version strings**: `wind_resource.__version__`, the `ERA5Fetcher`/`WindPipeline`/
+    `EnergyCalculator`/`WindAnalyzer` init logs, the ERA5 download-metadata `version` field and the
+    `WindPipeline` results-metadata `version` field now derive from
+    `analytics.run_manifest.engine_version()` (the repo `VERSION` file) instead of the stale
+    hardcoded `1.0.0`/`1.1.0 (CCCDIR Compliant)` literals (runtime JSON artifacts now stamp e.g.
+    `15.2.0`). Owned here per the #584 hand-off; a source-scan test fences the literals out.
+  - **`resource.uncertainty.*` plumbing**: `EnergyCalculator.calculate_net_aep` builds its IEC
+    61400-15-2 exceedance budget from an optional `uncertainty` mapping (new constructor knob,
+    passed through `WindPipeline`) via a new shared, policy-free sigma parser
+    `wind_resource.bankable_aep.budget_from_mapping` — the same parser
+    `analytics.wind.aep_summary_builder._uncertainty_from_config` now delegates to, so the two
+    consumers cannot drift. `correlation` and `life_years` are honoured; **`p50_haircut_pct` is
+    deliberately NOT applied on this path** (kernel 0.0 pinned; a declared key is logged, not
+    silently used) — the builder-vs-kernel haircut-policy question remains the user-gated #653 and
+    is NOT settled here. Absent config = the previous `UncertaintyBudget()` defaults, exactly.
+  - **Air density on timeseries AEP**: `EnergyCalculator.calculate_gross_aep` (and the monthly
+    profile, for consistency) now applies the IEC 61400-12-1 velocity correction
+    `(rho_site/rho_ref)**(1/3)` when `air_density_site_kgm3` is supplied (new constructor knobs,
+    `ref` defaulting to the IEC 1.225 kg/m^3), matching the bankable path's
+    `density_velocity_factor`; absent = factor 1.0, no correction — parity with
+    `aep_summary_builder`'s fallback when a scenario declares no densities. The factor used is
+    disclosed in the gross-AEP result.
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:
@@ -44,6 +69,47 @@ All notable changes to this project will be documented here.
     transacts at). Hedge behaviour is pinned end-to-end by an integration regression test that overlays
     the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
     duplicated hedged scenario fixture.
+- **BESS LCOS fixed-dispatch limitation note extended to the energy-tariff model (#596,
+  documentation/notes only, KPI-neutral).** `finance.bess_lcos.resolve_lcos_specs` now appends a
+  fixed-dispatch-basis note for `model: energy_tariff` (a fixed `cycles_per_year` at full nameplate
+  energy per cycle — RTE/SoH-derated, no depth-of-discharge factor, the post-M1/#557 revenue-export
+  basis), mirroring the existing capacity-charge cycles-at-DoD note; the note surfaces additively in
+  `LcosResult.notes` / `as_dict()` and hence in the analytics `bess_lcos` report block. The module
+  docstring's LIMITATIONS block now states, for BOTH revenue models, that dispatch is not simulated
+  or optimised — the fixed `cycles_per_year` basis is a known, intentional simplification versus
+  2025–2026 MILP/stochastic dispatch-optimisation LCOS — and the discharged-energy formula reflects
+  the model-gated `dod_factor` (M1) instead of an unconditional `depth_of_discharge`. No numeric
+  field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
+
+### Fixed
+- **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
+  Five verified erosions of the fail-loud stance closed; all committed scenarios verified
+  **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
+  previously-silent malformed/missing input into a raise or WARNING:
+  - `finance.cashflow_v14_utils.as_float`/`as_int` now **raise `ValueError` on a present-but-malformed
+    value** (e.g. `"12,5"`, a mapping) instead of silently returning the default; `None` still yields
+    the default. A silent fallback here could move a tax/capex base with no trace (the call sites are
+    precedence chains). The `as_float_or_none`/`as_int_or_none` probe variants keep their documented
+    swallow semantics — the project-life heuristic tree-walk and capacity candidate scans depend on
+    them (pinned by test). The `finance.utils` twin module (used by `debt_v14`/`epc_helper_v14` with
+    explicit engine defaults) is out of this issue's scope and unchanged.
+  - `validate_parameters` converts the new `as_int` raise for a malformed `tax.depreciation_years`
+    into a **field-named validation error** (previously a malformed value silently PASSED validation);
+    the validator keeps its report-all contract.
+  - `finance.debt_v14` `amortization_style` is now **whitelisted** (`annuity`/`fixed` → annuity;
+    `sculpted`/`auto` → DSCR-sculpted) mirroring the `balloon_treatment` whitelist. `auto` — used by
+    committed scenarios — is an explicit, documented sculpted alias, not a fall-through accident; an
+    unknown style WARNs and falls back to sculpted (exactly the old silent behaviour, now loud).
+  - The compact `debt:` schema now emits the **same placeholder-substitution WARNs** as the
+    `Financing_Terms` path (A1/#91) when it substitutes the `[0.5, 0.5]` even draw or `[40, 60]`
+    construction phasing; the `Financing_Terms` path additionally WARNs on its previously-silent
+    `[40, 60]` construction-schedule substitution. Values are unchanged.
+  - `finance.debt_v14._pmt` raises a clear `ValueError` when `nper <= 0` with a non-zero rate instead
+    of a raw `ZeroDivisionError` (defensive: the sole caller guards `amort_years > 0`); the
+    `rate == 0` degenerate contract is untouched.
+  The `_extract_project_life_years` heuristic tree-walk already WARNs (the issue's "silent" was
+  overstated); its warning is now pinned by a dedicated test. Dedicated failure tests cover every new
+  raise/warn path.
 
 ### Changed
 - **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
@@ -64,6 +130,78 @@ All notable changes to this project will be documented here.
   the engine floor the way the covenant surface always intended
   (`dutchbay_equitycase_2025Q4` 1.40 → 1.30; `edge_extreme_stress` 1.25 → 1.15), with the
   floor used still surfaced explicitly in `mc_risk.covenant.dscr_floor`. The four
+- **Run manifest is now stamped inside the engine (#577, half 2 — engine-internal provenance,
+  KPI-neutral).** `run_v14_pipeline_enhanced` stamps `result["run_manifest"]` itself, immediately
+  after config resolution + schema validation, hashing the ALREADY-RESOLVED post-override config it
+  actually evaluates (no re-load) — so every caller (CLI, web API, `evaluation_v14` gateway,
+  MC/sensitivity per-trial entries, scripts) now receives a manifest whose `config_sha256` binds to
+  the exact inputs, for both path and inline-Mapping configs. Outer stampers defer to it:
+  `run_full_pipeline_v14` becomes stamp-if-absent (new `_stamp_manifest_if_absent` helper; the
+  `_load_manifest_config` re-load with its loud degraded-path WARNING from half 1 is retained as the
+  fallback), `api.pipeline_api.run_pipeline` returns the engine manifest instead of rebuilding one,
+  and `app.services.pipeline_service.run_finance_case`'s existing stamp-if-absent guard is kept as a
+  defensive fallback. `analytics.run_manifest.git_sha()` is now process-cached (`lru_cache` on the
+  `git rev-parse HEAD` probe) so per-trial manifest stamping no longer forks a git subprocess per MC
+  trial; the `DUTCHBAY_GIT_SHA`/`GIT_COMMIT` env override deliberately stays outside the cache and is
+  consulted on every call. `ScenarioAnalytics` batch stamps are unchanged (that surface builds
+  cashflow/debt/KPIs directly and never calls the engine). Additive metadata only: committed scenario
+  KPIs are kpi-oracle byte-identical.
+- **Batch-path economics now labelled non-authoritative in every emitted JSON (#611).** The batch
+  comparison CLI (`run_scenario_analytics_v14.py` → `analytics.scenario_analytics`) computes DSCR/IRR
+  on a deliberately lighter basis than the canonical pipeline (PIPE-1, #472: no build-up WACC, no
+  two-pass interest tax shield, no equity waterfall), but only a docstring said so. Both emitted JSON
+  payloads — the persisted `output_summary_json` (serialised `BatchResultSummary`, which gains a
+  `basis` field defaulting to the new `analytics.scenario_analytics.BATCH_ECONOMICS_BASIS`) and the
+  CLI stdout summary (now built by `run_scenario_analytics_v14._build_stdout_payload`) — carry a
+  machine-readable `basis: "comparison_snapshot"` marker so a consumer cannot mistake batch numbers
+  for `run_full_pipeline_v14.py` economics. Strictly ADDITIVE: no existing key is renamed, removed or
+  revalued (downstream consumers grep-verified: tests only); committed scenario KPIs are
+  kpi-oracle byte-identical. JSON-shape tests extended to pin the marker at both emission points.
+- **Frozen-contract pattern extended to the report/job models (#608, KPI-neutral).** All 13
+  report-section models in `app/reports/report_model.py` (`KpiRow`, `AssumptionRow`, `RiskRow`,
+  `ReadinessRow`, `Verdict`, `ReportContext` — previously `extra="forbid"` only — plus
+  `EvidenceRow`/`EvidenceBlock`, `MultiTechRow`/`MultiTechBlock`, `ThreeStatementBlock`,
+  `WaterfallRow`/`WaterfallBlock`, which had no `model_config`) and `JobRecord` in
+  `app/jobs/models.py` are now `ConfigDict(frozen=True)`, matching the 15 frozen pydantic contracts
+  in `analytics/core/{returns,risk_metrics}.py`, `analytics/pipeline_analytics_v14.py` and the two
+  cashflow adapters. Each model's existing `extra` policy is preserved (no silent forbid/ignore
+  flips), and `JobProgress`'s deliberate `extra="ignore"` (computed-`pct` JSON round-trip) is
+  untouched. Post-construction attribute assignment now raises `ValidationError`; derive variants
+  with `model_copy(update=...)` — the path both job stores already use, so `InMemoryJobStore`/
+  `RedisJobStore` update flows are unchanged. Report contexts are built once in
+  `build_report_context` and consumed read-only by the renderer/API, so no production mutation site
+  existed; the single test that mutated a fetched `JobRecord` in place
+  (`tests/app/test_jobs_store.py::test_get_returns_detached_copy`) now asserts frozen semantics and
+  covers deep-copy detachment via the nested mutable `progress` instead. Committed scenario KPIs are
+  kpi-oracle byte-identical; passes the CI `pydantic.mypy` strict gate (#594).
+- **Tiered MCP bankability guard on measurement-campaign duration (#597).** `wind_resource.mcp`
+  previously enforced only a 24-sample statistical floor (`DEFAULT_MIN_CONCURRENT`, one day of hourly
+  data) while its own comment conceded a bankable MCP needs months of concurrent data. `run_mcp()` now
+  tiers the guard: below the unchanged hard floor it still raises unconditionally; in the band
+  `min_concurrent <= n < BANKABLE_MIN_CONCURRENT` (new constant, 2,880 hourly samples ~= 4 months;
+  Sheridan et al., Wind Energy Science 2025 — long-term capacity-factor errors ~47%/26%/16% at 1/3/6
+  months) it fails loud (CESSPIT, no silent sub-bankable fits) unless the caller passes the new
+  explicit opt-out `allow_below_bankable=True`, which downgrades the failure to a `logger.warning`
+  bankability disclosure; at or above the threshold it runs clean. `mcp_settings()` resolves the
+  matching scenario knob `resource.wind.mcp.allow_below_bankable` strictly (boolean only, non-boolean
+  values raise; defaults OFF) and returns it alongside `method`/`min_concurrent`. The opt-out never
+  bypasses the hard floor. The module remains opt-in with no scenario consumer, so committed
+  scenarios are kpi-oracle byte-identical (verified empirically across all 27). Tier boundaries
+  (23/24, 2,879/2,880), the override path, and the strict knob are pinned in `tests/wind/test_mcp.py`.
+- **Batch discount-rate default consolidated to a single source of truth (#586).** The default was
+  stated three times with two different values: a silent `0.10` fallback in
+  `run_scenario_analytics_v14.py`, the authoritative `0.12` in `conf/run_scenario_analytics_v14.yaml`,
+  and a `0.10` constructor default in `analytics.scenario_analytics.ScenarioAnalytics`. Now: the
+  packaged YAML (`default_discount_rate: 0.12`) is THE source for batch runs and the CLI **fails loudly
+  (`ValueError`) if the key is missing** instead of silently substituting 0.10 (CESSPIT — config
+  explicit, no silent defaults); the direct-API constructor default is defined once as
+  `analytics.scenario_analytics.DEFAULT_GLOBAL_DISCOUNT_RATE` (still `0.10`). No resolved value moves
+  for any committed run: the packaged config always carries the key, invalid-value handling is
+  unchanged, and direct-API callers keep 0.10. The only behavioural change is fail-loud on a config
+  that omits the key (e.g. a `~default_discount_rate` Hydra delete-override), previously a silent
+  0.10. Regression-pinned in `tests/analytics/test_run_scenario_analytics_discount_default.py`,
+  including a pin on the committed YAML 0.12 so the authoritative batch value cannot drift silently.
+- **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
   remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
   (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
   `test_oem_parser.py` seeds 42/43) — moved to `np.random.default_rng(seed)` (PCG64) per NEP 19,
@@ -342,6 +480,61 @@ All notable changes to this project will be documented here.
   and `black`/`isort` dropped from that job's installs; the advisory mypy and flake8 steps are
   intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
   gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
+
+### Fixed
+- **Hygiene cluster, docs/header/naming shims (#586, dolphin a of 3 — KPI-neutral).**
+  - `finance/debt_v14.py`: replaced the corrupted stray header (`# [File content too long...]`,
+    a leftover editing artifact) with the module's real docstring, now at the top of the file
+    where Python actually binds `__doc__` (it previously sat as an inert string literal below
+    the imports). Comment/docstring-only; no code change.
+  - `analytics/pipeline_v14_enhanced.PipelineMetrics.timestamp`: deprecated naive
+    `datetime.utcnow()` → tz-aware `datetime.now(timezone.utc)`. The ISO metadata timestamp now
+    carries an explicit `+00:00` offset, matching the tz-aware run manifest. Metadata-only; no
+    KPI reads this field. (Owned here; struck from the #619 repo-wide utcnow sweep.)
+  - `analytics/mc/samplers.generate_lhs_samples`: the misleading `common_random_numbers`
+    parameter is renamed `shared_permutation_stream` (it selects the permutation-stream
+    derivation — CRN across runs comes from passing the same `seed`, not from this flag). The
+    old keyword keeps working as a deprecated alias (DeprecationWarning; conflicting values
+    fail loud with ValueError); output for either spelling is bit-identical. The engine-level
+    `common_random_numbers` config/API/metadata name is unchanged — at that level it genuinely
+    toggles the MC-9 CRN feature.
+  - `analytics/core/sensitivity_runner`: the path-based entry point is canonically named
+    `run_sensitivity_analysis_from_path`, disambiguating it from the engine orchestrator
+    `analytics.sensitivity.run_sensitivity_analysis` (same exported name, incompatible
+    keyword-only/in-memory signature). The historical `run_sensitivity_analysis` export remains
+    as an additive module alias (same object) in both the module and `analytics.core.__all__`;
+    all existing imports keep working. Alias retirement is deferred to a user-approved batch.
+  - `analytics/pipeline_analytics_v14._calculate_risk_analysis`: documented (labeling only)
+    that the enhanced-analytics risk path deliberately reads `cfads_final_lkr`, so its
+    level-denominated outputs (VaR/CVaR, CFADS percentiles) are LKR-based — unlike the returns
+    path, which #559 made USD-consistent. No numeric change; a USD re-basing of risk outputs
+    requires separate user authorization.
+  Validators, Sobol power-of-2, deep-merge and discount-default items are dolphins b/c of #586.
+
+### Fixed
+- **Hygiene cluster #586 (dolphin B of 3): validators + Sobol n gate + deep-merge aliasing.**
+  Three fail-loud/additive consistency fixes; all committed scenario KPIs verified byte-identical
+  (argv-correct kpi_oracle before/after across all 27 committed scenarios).
+  - `project_life_years` schema validator (`finance.cashflow_v14._register_cashflow_schema`) now
+    accepts integral floats (`20.0`) — the engine's own extraction (`as_int_or_none` → `int(value)`)
+    already coerced `20.0` to `20`, so the strict pre-flight guard was rejecting configs the engine
+    reads fine. It now also rejects `bool` (the old `isinstance(v, int)` let `True` pass as "1 year")
+    and keeps rejecting non-integral floats (`20.5` fails loud rather than being silently truncated),
+    non-positives, and strings. All committed scenarios carry plain-int year counts and validate
+    identically.
+  - `analytics.sensitivity.global_sa.run_sobol` now validates `n` is a positive power of 2
+    (`ValueError`) before sampling. SALib's `sobol` sampler draws a base-2 Sobol' sequence whose
+    balance properties only hold at powers of 2 — SALib merely warns and degrades the S1/ST
+    estimates, so the gateway fails loud instead. The documented default `n=256` is unaffected.
+  - `analytics.evaluation_v14._deep_merge_config` no longer aliases nested branches: the old
+    shallow `dict(base)` seed left every branch NOT named in the overrides shared with the base
+    config's own sub-dicts (and inserted override branches by reference), so an in-place mutation
+    of the merged config could silently leak into the caller's base — a real hazard for
+    Monte-Carlo / sensitivity loops that re-merge the SAME base mapping thousands of times. The
+    merged dict is now structurally independent of both inputs (nested mappings and lists freshly
+    copied; immutable scalar leaves shared; merge values and key order unchanged, pinned by
+    regression tests). Limitation: exotic non-YAML containers (tuples, sets, arrays) still pass by
+    reference and are documented as out of contract.
 
 ## v15.2.0 - 2026-07-01
 

@@ -172,6 +172,35 @@ def _load_manifest_config(effective_config: str | Path) -> dict[str, Any]:
         return {"config_path": str(effective_config)}
 
 
+def _stamp_manifest_if_absent(
+    result: Any, effective_config: str | Path, validation_mode: str
+) -> None:
+    """Stamp ``result['run_manifest']`` only when the engine has not already.
+
+    The engine (``run_v14_pipeline``) stamps the manifest itself from the RESOLVED
+    config it actually evaluated (#577) — that is the binding, authoritative stamp
+    and it wins. This CLI-level fallback fires only when the manifest is missing
+    (e.g. an error-shaped result dict, or a monkeypatched engine): it re-loads the
+    config via :func:`_load_manifest_config`, whose degraded ``{config_path: ...}``
+    path warns loudly (audit D8, #577) rather than silently.
+
+    Args:
+        result: The pipeline result; only mutated when it is a dict without a
+            truthy ``run_manifest``.
+        effective_config: The config path handed to the engine, re-loaded for
+            hashing on the fallback path only.
+        validation_mode: The validation mode recorded in the fallback manifest.
+
+    Returns:
+        None. Mutates ``result`` in place on the fallback path.
+    """
+    if isinstance(result, dict) and not result.get("run_manifest"):
+        result["run_manifest"] = build_run_manifest(
+            _load_manifest_config(effective_config),
+            validation_mode=str(validation_mode),
+        ).as_dict()
+
+
 # ============================================================================
 # Sprint 19 (W.6): Wind→Finance integration helpers
 # ============================================================================
@@ -560,11 +589,9 @@ def cli(cfg: DictConfig) -> None:
 
         # Stamp an auditable run manifest (resolved-config hash + engine version +
         # commit) so summary.json is reproducible and tamper-evident (ICAEW posture).
-        if isinstance(result, dict):
-            _manifest_cfg = _load_manifest_config(effective_config)
-            result["run_manifest"] = build_run_manifest(
-                _manifest_cfg, validation_mode=str(validation_mode)
-            ).as_dict()
+        # Stamp-if-absent (#577): the engine now stamps the manifest itself from the
+        # RESOLVED config it evaluated, which is the binding stamp and wins here.
+        _stamp_manifest_if_absent(result, effective_config, str(validation_mode))
 
         write_artifacts = bool(cfg.get("write_artifacts", False))
         export_dir_raw = cfg.get("export_dir", "_out/run_full_pipeline_v14")

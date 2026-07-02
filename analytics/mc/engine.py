@@ -731,7 +731,9 @@ class MonteCarloEngine:
                 n_trials=n_requested,
                 bounds=self._param_bounds,
                 seed=self._seed,
-                common_random_numbers=self._crn,
+                # Sampler-level name (#586): the engine-level CRN flag maps onto the
+                # sampler's permutation-stream selector (see samplers.py docstring).
+                shared_permutation_stream=self._crn,
             )
 
         n = int(samples.shape[0])  # effective trial count (Sobol may round up to 2**m)
