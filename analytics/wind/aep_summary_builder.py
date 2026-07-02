@@ -48,6 +48,7 @@ from analytics.wind.losses_model import apply_losses, net_capacity_factor
 from wind_resource.bankable_aep import (
     RECOMMENDED_P50_HAIRCUT_PCT,
     UncertaintyBudget,
+    budget_from_mapping,
     density_velocity_factor,
     exceedance_levels,
 )
@@ -123,24 +124,10 @@ def _uncertainty_from_config(
     is a policy default at config-consumption; the ``exceedance_levels`` kernel stays 0.0-identity.
     """
     unc: Dict[str, Any] = dict(resource.get("uncertainty", {}) or {})
-    d = UncertaintyBudget()
-    budget = UncertaintyBudget(
-        wind_measurement_pct=float(
-            unc.get("wind_measurement_pct", d.wind_measurement_pct)
-        ),
-        long_term_pct=float(unc.get("long_term_pct", d.long_term_pct)),
-        vertical_extrapolation_pct=float(
-            unc.get("vertical_extrapolation_pct", d.vertical_extrapolation_pct)
-        ),
-        horizontal_flow_pct=float(
-            unc.get("horizontal_flow_pct", d.horizontal_flow_pct)
-        ),
-        power_curve_pct=float(unc.get("power_curve_pct", d.power_curve_pct)),
-        wake_model_pct=float(unc.get("wake_model_pct", d.wake_model_pct)),
-        interannual_variability_pct=float(
-            unc.get("interannual_variability_pct", d.interannual_variability_pct)
-        ),
-    )
+    # Sigma parsing is shared with the timeseries diagnostic path (#618):
+    # budget_from_mapping is policy-free (sigmas only), so the two consumers cannot
+    # drift on key names/defaults. The haircut POLICY below stays at this layer.
+    budget = budget_from_mapping(unc)
     if "p50_haircut_pct" in unc:
         haircut_pct = float(unc["p50_haircut_pct"])
     else:

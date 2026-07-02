@@ -4,23 +4,41 @@ from typing import Any, Dict, Optional, Sequence, Union
 
 
 def as_float(value: Any, default: Optional[float] = None) -> Optional[float]:
-    """Safely convert a value to float, with default fallback."""
+    """Convert a value to float; ``None`` yields ``default``, malformed fails loud.
+
+    A *present-but-non-coercible* value (e.g. ``"12,5"`` or a mapping) raises
+    ``ValueError`` instead of silently returning ``default`` (#585 fail-loud):
+    every caller sits on a precedence chain where a silent fallback can move a
+    tax/capex base with no trace. Use :func:`as_float_or_none` where probe /
+    fall-through semantics are intended (heuristic tree-walks, candidate scans).
+    """
     if value is None:
         return default
     try:
         return float(value)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"as_float: cannot convert {value!r} to float; supply a numeric "
+            "value or omit the key (an absent/None value yields the default)"
+        ) from exc
 
 
 def as_int(value: Any, default: Optional[int] = None) -> Optional[int]:
-    """Safely convert a value to int, with default fallback."""
+    """Convert a value to int; ``None`` yields ``default``, malformed fails loud.
+
+    Mirrors :func:`as_float`: a present-but-non-coercible value raises
+    ``ValueError`` (#585 fail-loud). Use :func:`as_int_or_none` where probe /
+    fall-through semantics are intended (e.g. the project-life tree-walk).
+    """
     if value is None:
         return default
     try:
         return int(value)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"as_int: cannot convert {value!r} to int; supply an integer "
+            "value or omit the key (an absent/None value yields the default)"
+        ) from exc
 
 
 def as_int_or_none(value: Any) -> Optional[int]:

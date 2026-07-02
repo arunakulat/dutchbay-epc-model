@@ -25,7 +25,8 @@ Typical usage (all turbine/site identity comes from YOUR scenario's config):
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0 (CCCDIR Compliant)
+Version: tracks the repo ``VERSION`` file via ``analytics.run_manifest.engine_version()``
+    (no per-module literal to go stale; #618).
 """
 
 from __future__ import annotations
@@ -34,12 +35,16 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import pandas as pd
 import yaml
 
-from wind_resource.bankable_aep import interannual_variability_drift
+from analytics.run_manifest import engine_version
+from wind_resource.bankable_aep import (
+    IEC_REFERENCE_AIR_DENSITY_KGM3,
+    interannual_variability_drift,
+)
 from wind_resource.energy_calculator import EnergyCalculator
 from wind_resource.era5_fetcher import ERA5Fetcher
 from wind_resource.wind_analyzer import WindAnalyzer
@@ -83,6 +88,9 @@ class WindPipeline:
         cache_dir: str = "inputs/wind_data",
         output_dir: str = "outputs/wind_assessment",
         config_path: Optional[str] = None,
+        uncertainty: Optional[Mapping[str, Any]] = None,
+        air_density_site_kgm3: Optional[float] = None,
+        air_density_ref_kgm3: Optional[float] = None,
     ) -> None:
         """Initialize wind assessment pipeline.
 
@@ -100,6 +108,14 @@ class WindPipeline:
             cache_dir: Directory for ERA5 data cache. Default 'inputs/wind_data'.
             output_dir: Directory for analysis outputs. Default 'outputs/wind_assessment'.
             config_path: Path to era5_config.yaml. If None, uses default.
+            uncertainty: Optional ``resource.uncertainty.*``-shaped mapping passed
+                through to :class:`EnergyCalculator` for the IEC 61400-15-2
+                exceedance build-up (absent = the previous defaults; #618).
+            air_density_site_kgm3: Optional site air density for the IEC 61400-12-1
+                velocity correction, passed through to :class:`EnergyCalculator`
+                (absent = no correction; #618).
+            air_density_ref_kgm3: Optional reference density for the correction
+                (absent = the IEC 1.225 kg/m^3 default).
 
         Raises:
             ValueError: If location dict is missing required keys.
@@ -120,6 +136,18 @@ class WindPipeline:
         self.cache_dir = Path(cache_dir)
         self.output_dir = Path(output_dir)
 
+        # #618 plumbing: exceedance-uncertainty mapping + air-density correction,
+        # passed straight through to EnergyCalculator. All default to identity.
+        self.uncertainty: Dict[str, Any] = dict(uncertainty or {})
+        self.air_density_site_kgm3 = (
+            float(air_density_site_kgm3) if air_density_site_kgm3 is not None else None
+        )
+        self.air_density_ref_kgm3 = (
+            float(air_density_ref_kgm3)
+            if air_density_ref_kgm3 is not None
+            else IEC_REFERENCE_AIR_DENSITY_KGM3
+        )
+
         # Create directories
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -130,7 +158,7 @@ class WindPipeline:
         # Load config (CCCDIR compliance)
         self._load_config(config_path)
 
-        logger.info("WindPipeline v1.0.0 initialized (CCCDIR compliant)")
+        logger.info(f"WindPipeline v{engine_version()} initialized (CCCDIR compliant)")
         logger.info(
             f"  Location: {location['name']} ({location['lat']:.2f}°N, {location['lon']:.2f}°E)"
         )
@@ -228,6 +256,9 @@ class WindPipeline:
             ws_column=ws_column,
             turbine_model=self.turbine_model,
             num_turbines=self.num_turbines,
+            uncertainty=self.uncertainty,
+            air_density_site_kgm3=self.air_density_site_kgm3,
+            air_density_ref_kgm3=self.air_density_ref_kgm3,
         )
         energy_assessment = calculator.generate_complete_assessment()
 
@@ -250,7 +281,9 @@ class WindPipeline:
                     "total_capacity_mw": (calculator.rated_capacity * self.num_turbines)
                     / 1000,
                 },
-                "version": "1.0.0 (CCCDIR Compliant)",
+                # Repo VERSION file via run_manifest (single source of truth, #618) —
+                # replaces the stale hardcoded per-module version literal.
+                "version": engine_version(),
             },
             "wind_data": {
                 "mean_ws": float(df[ws_column].mean()),

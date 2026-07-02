@@ -33,7 +33,7 @@
 
 ### Link 1 — Reanalysis source: ERA5 / ECMWF via Copernicus CDS
 
-**Module:** `wind_resource/era5_fetcher.py` (class `ERA5Fetcher`, header version "1.1.0 (CCCDIR Compliant)", `era5_fetcher.py:1-24`).
+**Module:** `wind_resource/era5_fetcher.py` (class `ERA5Fetcher`; the module/metadata version derives from the repo `VERSION` file via `analytics.run_manifest.engine_version()` — the former hardcoded "1.1.0 (CCCDIR Compliant)" header literal was retired in #618).
 
 - **Source dataset:** Copernicus Climate Data Store, product `reanalysis-era5-single-levels`, `product_type='reanalysis'` (`era5_fetcher.py:280-291`).
 - **Variables downloaded:** 10 m and 100 m u/v wind components, sourced from config not hardcoded — `self.variables = self.config['variables']` (`era5_fetcher.py:145`, `era5_fetcher.py:284`). The config lists `10m_u/v_component_of_wind` and `100m_u/v_component_of_wind` (`wind_resource/config/era5_config.yaml`, `variables:` block).
