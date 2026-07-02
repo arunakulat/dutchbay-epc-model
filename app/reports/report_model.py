@@ -291,6 +291,53 @@ class WaterfallBlock(BaseModel):
     total_cash_to_equity: float
 
 
+class ResourceTrendRow(BaseModel):
+    """One (Metric, Value) line of the long-term resource & trend summary (#178 → #656)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    value: str
+
+
+class ResourceTrendBlock(BaseModel):
+    """Long-term wind-resource & trend commentary for the lender report (#178 → #656).
+
+    A VALIDATE / disclose-only section: it surfaces the Mann-Kendall + Sen's-slope trend test,
+    the net-AEP-by-reference-period table, and the forward-looking P50-basis recommendation from
+    :func:`wind_resource.long_term_trend.analyze_long_term_resource` (IEC 61400-15-1 / MEASNET
+    basis). It NEVER overwrites the committed/frozen scenario P50 — the ``recommended_p50_gwh`` is
+    a disclosed forward basis, not a driver of any KPI. Every field is projected from the live
+    analysis output (``render_trend_markdown`` / ``trend_summary_dataframe``); nothing is
+    re-derived here (CCCDIR — one source of truth). Rendered only when a caller supplies the live
+    ERA5 series (existing report callers pass none, so the section is omitted → byte-identical).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: The rendered Markdown commentary section verbatim from ``render_trend_markdown`` — the
+    #: authoritative narrative, kept intact so the report cannot drift from the analysis.
+    markdown: str
+    #: The tidy (Metric, Value) table verbatim from ``trend_summary_dataframe`` — one source of
+    #: truth shared with the lender-workbook "ResourceTrend" sheet.
+    summary_rows: List[ResourceTrendRow]
+    reference_period: str
+    classification: str
+    classification_note: str
+    trend_significant: bool
+    mk_tau: float
+    mk_pvalue: float
+    sen_slope_per_decade: float
+    ols_r2: float
+    #: Forward-looking recommended P50 basis + values — DISCLOSED, never applied to the frozen
+    #: committed P50 (report/VALIDATE-only).
+    recommended_basis: str
+    recommended_p50_gwh: Optional[float] = None
+    recommended_p50_cf: Optional[float] = None
+    downside_p50_gwh: Optional[float] = None
+    upside_p50_gwh: Optional[float] = None
+
+
 class IrrBridgeLeg(BaseModel):
     """One labelled step of the project→equity IRR bridge (#621, IC disclosure)."""
 
@@ -376,6 +423,11 @@ class ReportContext(BaseModel):
     #: per-row figures (ties to the headline CFADS + DSCR section); None on the legacy KPI-only
     #: path, where the section is omitted.
     cashflow_waterfall: Optional[WaterfallBlock] = None
+    #: Long-term wind-resource & trend commentary (#178 → #656). Populated only when a caller
+    #: supplies a pre-analyzed trend block sourced from the live ERA5 series; existing callers
+    #: (the API report routes) pass none, so the section is omitted and the report is unchanged.
+    #: Disclose-only — the recommended P50 basis never overwrites the committed/frozen P50.
+    resource_trend: Optional[ResourceTrendBlock] = None
     #: Project→equity IRR bridge (#621). Reconciles the published project IRR to the published
     #: equity IRR via labelled legs (leverage / cost of debt / tax shield) + an explicit residual.
     #: None unless the caller supplies the full run result AND it carries a computed equity
@@ -847,6 +899,48 @@ def _waterfall_block(
     )
 
 
+def _build_resource_trend(
+    analysis: Optional[Mapping[str, Any]],
+) -> Optional[ResourceTrendBlock]:
+    """Project a live long-term-trend analysis into its report block (#178 → #656).
+
+    Consumes the dict returned by
+    :func:`wind_resource.long_term_trend.analyze_long_term_resource` — its ``trend``
+    (:class:`~wind_resource.long_term_trend.TrendResult`), ``recommendation``, ``markdown`` and
+    ``summary_df``. Nothing is re-derived here (CCCDIR — one source of truth): the narrative is
+    the analysis's own ``markdown`` and the table is its own ``summary_df``. Returns ``None`` when
+    no analysis is supplied (every existing report caller passes none), so the section is omitted
+    and the rendered report is byte-identical. Report/VALIDATE-only: the recommended forward P50
+    basis is disclosed, never applied to the committed/frozen scenario P50.
+    """
+    if analysis is None:
+        return None
+    trend = analysis["trend"]
+    rec = analysis["recommendation"]
+    summary_df = analysis["summary_df"]
+    summary_rows = [
+        ResourceTrendRow(metric=str(m), value=str(v))
+        for m, v in zip(summary_df["Metric"], summary_df["Value"])
+    ]
+    return ResourceTrendBlock(
+        markdown=str(analysis["markdown"]),
+        summary_rows=summary_rows,
+        reference_period=f"{trend.start_year}-{trend.end_year} ({trend.n_years} yr)",
+        classification=trend.classification.replace("_", " "),
+        classification_note=trend.classification_note,
+        trend_significant=bool(trend.significant),
+        mk_tau=float(trend.mk_tau),
+        mk_pvalue=float(trend.mk_pvalue),
+        sen_slope_per_decade=float(trend.sen_slope_per_decade),
+        ols_r2=float(trend.ols_r2),
+        recommended_basis=str(rec["central_basis"]).replace("_", " "),
+        recommended_p50_gwh=rec.get("p50_gwh"),
+        recommended_p50_cf=rec.get("p50_cf"),
+        downside_p50_gwh=rec.get("downside_gwh"),
+        upside_p50_gwh=rec.get("upside_gwh"),
+    )
+
+
 def _irr_bridge_block(
     run_result: Optional[Mapping[str, Any]],
 ) -> Optional[IrrBridgeBlock]:
@@ -900,6 +994,7 @@ def build_report_context(
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
     global_sa_pawn: Optional[GlobalSABlock] = None,
+    resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
@@ -930,6 +1025,13 @@ def build_report_context(
             the distribution-based complement to the Morris screening. Computed upstream
             and passed in; ``None`` when the best-effort block was skipped or failed, in
             which case only that subsection is omitted.
+        resource_trend: A pre-computed long-term wind-resource & trend analysis (#178 →
+            #656) — the dict from
+            :func:`wind_resource.long_term_trend.analyze_long_term_resource`, run upstream
+            from the live ERA5 series (it does its own resource I/O, so it is analyzed at the
+            production edge and passed in to keep this builder pure). ``None`` for every
+            existing caller (the API report routes supply no ERA5 series), in which case the
+            section is omitted. Disclose-only — it never overwrites the committed/frozen P50.
         run_result: The full pipeline run result (``kpis`` / ``annual_rows`` /
             ``debt_result`` / ``equity_distribution``), used solely to build the additive
             project→equity IRR bridge (#621). Optional — ``None`` for legacy callers, in which
@@ -966,6 +1068,7 @@ def build_report_context(
         multi_tech=_build_multi_tech(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
+        resource_trend=_build_resource_trend(resource_trend),
         irr_bridge=_irr_bridge_block(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )

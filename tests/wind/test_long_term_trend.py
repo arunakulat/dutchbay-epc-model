@@ -6,12 +6,16 @@ lender-workbook wiring is tested via openpyxl. No live CDS is exercised.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
 
+from wind_resource import era5_retrieval
 from wind_resource.era5_retrieval import ERA5RequestConfig
 from wind_resource.long_term_trend import (
+    MIN_TREND_YEARS,
     TrendResult,
     _classify,
     analyze_long_term_resource,
@@ -170,3 +174,134 @@ def test_executive_workbook_resource_trend_sheet(tmp_path):
     # backward-compatible: omitting it creates no such sheet
     out2 = build_executive_workbook(d, d, d, d, d, tmp_path / "wb2.xlsx")
     assert "ResourceTrend" not in openpyxl.load_workbook(out2).sheetnames
+
+
+# ---------------------------------------------------------------------------
+# Live invocation on the wind-assessment path (era5_retrieval.run) — #656.
+# The trend is computed on the SAME already-retrieved hub-height series (no second
+# CDS fetch), is opt-in (analyze_trend), and never changes the frozen AEP/KPIs.
+# ---------------------------------------------------------------------------
+
+
+def _wire_fake_retrieval(monkeypatch, series, calls):
+    """Patch run()'s retrieval stages to synthetic outputs and count CDS retrievals."""
+    from pathlib import Path
+
+    def _fake_retrieve(c):
+        calls["retrieve"] = calls.get("retrieve", 0) + 1
+        return Path("/tmp/sentinel.nc")
+
+    def _fake_build(nc, c):
+        calls["build"] = calls.get("build", 0) + 1
+        return series
+
+    def _fake_validate(s, c):
+        return {
+            "actual_hours": len(s),
+            "expected_hours": len(s),
+            "coverage_complete": True,
+            "missing_hours": 0,
+        }
+
+    monkeypatch.setattr(era5_retrieval, "retrieve_era5_timeseries", _fake_retrieve)
+    monkeypatch.setattr(era5_retrieval, "build_hub_height_series", _fake_build)
+    monkeypatch.setattr(era5_retrieval, "validate_coverage", _fake_validate)
+    # NOTE: compute_site_aep is deliberately NOT mocked — it runs on the synthetic series
+    # (no CDS), and analyze_long_term_resource's period_aep_table calls the real one, so a
+    # simplified stub would break its contract. The retrieval stages above are what would hit
+    # the network; leaving compute real keeps the AEP figures internally consistent.
+
+
+def _run_cfg(analyze_trend, start=2005, end=2024):
+    return ERA5RequestConfig(
+        project_name="T",
+        latitude=8.27,
+        longitude=79.75,
+        start_year=start,
+        end_year=end,
+        hub_height_m=150.0,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
+        analyze_trend=analyze_trend,
+    )
+
+
+def test_run_default_omits_trend(monkeypatch):
+    """analyze_trend defaults OFF: run() attaches no trend and stays byte-identical."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    result = era5_retrieval.run(_run_cfg(analyze_trend=False))
+    assert "long_term_trend" not in result
+    # Only the retrieval + AEP happened; the trend added no work.
+    assert calls == {"retrieve": 1, "build": 1}
+
+
+def test_run_analyze_trend_reuses_series_no_second_fetch(monkeypatch):
+    """Opt-in trend runs on the already-retrieved series — exactly ONE CDS retrieval."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    baseline_aep = era5_retrieval.run(_run_cfg(analyze_trend=False))["net_aep_p50_gwh"]
+    calls.clear()
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    # The trend must NOT trigger a second retrieve/build (it reuses run()'s series).
+    assert calls["retrieve"] == 1
+    assert calls["build"] == 1
+    trend = result["long_term_trend"]
+    assert trend["analyzed"] is True
+    assert "## Long-Term Wind Resource & Trend" in trend["markdown"]
+    # run() attaches a JSON-safe projection (records), not the raw DataFrame: each row is a
+    # {"Metric": ..., "Value": ...} dict verbatim from trend_summary_dataframe.
+    assert isinstance(trend["summary_df"], list)
+    assert all(set(row) == {"Metric", "Value"} for row in trend["summary_df"])
+    # The TrendResult dataclass is likewise projected to a plain (JSON-safe) dict.
+    assert isinstance(trend["trend"], dict)
+    assert trend["trend"]["n_years"] == 20
+    # Report/VALIDATE-only: the headline frozen AEP is unchanged by the trend disclosure.
+    assert result["net_aep_p50_gwh"] == baseline_aep
+
+
+def test_run_short_series_degrades_explicitly(monkeypatch):
+    """A record shorter than the trend minimum degrades explicitly, not silently."""
+    calls: dict = {}
+    short = _ws_series(2021, 2024)  # 4 yr < MIN_TREND_YEARS
+    _wire_fake_retrieval(monkeypatch, short, calls)
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True, start=2021, end=2024))
+    trend = result["long_term_trend"]
+    assert trend["analyzed"] is False
+    assert str(MIN_TREND_YEARS) in trend["reason"]
+    assert "markdown" not in trend
+
+
+def test_run_analyze_trend_result_is_json_serializable(monkeypatch):
+    """The whole run() result round-trips through json.dumps with the trend attached (#656).
+
+    Regression for the Fable blocker: the trend block carried a TrendResult dataclass and a
+    pandas DataFrame, so main()'s json.dumps(result) crashed with 'Object of type TrendResult
+    is not JSON serializable' AFTER a full CDS retrieval + analysis. run() must now attach a
+    JSON-safe projection so the success path serializes cleanly.
+    """
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)  # 20 yr >= minimum
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    assert result["long_term_trend"]["analyzed"] is True
+
+    # Round-trips without a TypeError, and the projection survives the round-trip intact.
+    round_tripped = json.loads(json.dumps(result))
+    rt_trend = round_tripped["long_term_trend"]
+    assert rt_trend["trend"]["n_years"] == 20
+    assert rt_trend["summary_df"] and all(
+        set(row) == {"Metric", "Value"} for row in rt_trend["summary_df"]
+    )
+    assert "## Long-Term Wind Resource & Trend" in rt_trend["markdown"]
+
+
+def test_run_analyze_trend_does_not_mutate_committed_aep(monkeypatch):
+    """Disclose-don't-mutate: the frozen net AEP is identical with the trend on and off (#656)."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    off = era5_retrieval.run(_run_cfg(analyze_trend=False))
+    on = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    for key in ("net_aep_p50_gwh", "net_aep_p90_gwh", "capacity_factor_p50"):
+        assert on[key] == off[key]
+    # The trend is purely additive: the only new top-level key is the disclosure block.
+    assert set(on) - set(off) == {"long_term_trend"}

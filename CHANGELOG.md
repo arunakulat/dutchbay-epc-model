@@ -5,6 +5,26 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Live long-term wind-resource & trend section wired into the lender report (#178 → #656, opt-in, disclose-only, KPI-neutral).**
+  The Mann-Kendall + Sen's-slope trend analysis (`wind_resource.long_term_trend`) was complete
+  and tested but reached no live path. It is now wired end-to-end as a report disclosure:
+  - `wind_resource.era5_retrieval.ERA5RequestConfig` gains an opt-in `analyze_trend` flag
+    (DEFAULT OFF; `download.analyze_trend` in YAML). When true, `run()` computes the trend on the
+    SAME already-retrieved hub-height ERA5 series — **no second CDS fetch** — and attaches it
+    under `result["long_term_trend"]`. A record shorter than `long_term_trend.MIN_TREND_YEARS`
+    (10 yr) degrades **explicitly** (a recorded `analyzed: false` reason), never with a spurious
+    tau (CESSPIT — fail-loud, no silent default).
+  - `app.reports.report_model.ReportContext` gains an optional `resource_trend`
+    (`ResourceTrendBlock`) projected from the live `analyze_long_term_resource` output
+    (`render_trend_markdown` narrative + `trend_summary_dataframe` table, **not re-derived** —
+    CCCDIR one-source-of-truth), and the lender report template renders an optional
+    "Long-Term Wind Resource & Trend" section following the existing omit-when-absent pattern.
+  - **Report / VALIDATE-only:** the section discloses a forward-looking P50 basis (IEC 61400-15-1
+    / MEASNET) and explicitly states it does **not** overwrite the committed/frozen scenario P50.
+    No engine, finance, or scenario-YAML value changes. Every existing report caller (the API
+    report routes) supplies no ERA5 series, so `resource_trend` stays `None` and the rendered
+    report is unchanged — all-scenarios KPIs are byte-identical (verified via the all-scenarios
+    kpi oracle).
 - **Distributional tail-risk for the lender report — first slice: MC per-case trial arrays + VaR/CVaR wire (#657, additive, opt-in, KPI-neutral).**
   `analytics.capital_risk_layer_v14.run_driver_mc` gains an opt-in `collect_trials=True`
   flag that additionally records the full per-trial metric arrays
@@ -621,6 +641,18 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **Long-term trend block is JSON-serializable on the `run()` success path (#656, KPI-neutral).**
+  With `analyze_trend=True`, `wind_resource.era5_retrieval.run()` attached the raw `TrendResult`
+  dataclass and a pandas `DataFrame` under `result["long_term_trend"]`, so `main()`'s
+  `print(json.dumps(result))` crashed with `TypeError: Object of type TrendResult is not JSON
+  serializable` **after** the full CDS retrieval + analysis. `run()` now attaches a **JSON-safe
+  projection** (`dataclasses.asdict(trend)`; `summary_df.to_dict(orient="records")`; markdown /
+  `period_aep` / `recommendation` pass through verbatim), so the whole result round-trips through
+  `json.dumps` and downstream JSON consumers get clean data. The rich objects remain available to
+  `report_model` via a direct `analyze_long_term_resource` call (that consumer wants the dataclass
+  + DataFrame). The `analyzed: false` short-series shape and the disclose-don't-mutate invariant
+  (committed AEP identical with the trend on/off) are unchanged; default-off all-scenarios KPIs
+  remain byte-identical.
 - **`SOLVER_REGISTRY['target_equity_irr']` no longer silently solves the WRONG KPI (#615, KPI-neutral).**
   The registry key `target_equity_irr` pointed at `solve_for_tariff_given_irr`, which was
   hardcoded to the `project_irr` KPI — so `get_solver("target_equity_irr")(…)` returned the

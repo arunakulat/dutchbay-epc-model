@@ -30,6 +30,7 @@ Typical usage:
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 import glob
 import json
@@ -131,6 +132,12 @@ class ERA5RequestConfig:
     reference_mode: str = "fixed"
     resolved_at: str = ""
     strict_coverage: bool = True
+    # Opt-in (#178 → #656): when true, ``run()`` also computes the long-term Mann-Kendall /
+    # Sen's-slope resource trend + net-AEP-by-reference-period table on the SAME already-retrieved
+    # hub-height series (no second CDS fetch) and attaches it under ``result["long_term_trend"]``.
+    # DEFAULT OFF and report/VALIDATE-only: it never changes the retrieved series, the coverage
+    # guard, or the frozen ``net_aep_p50_gwh`` — it is a disclosed forward-P50 basis, not a driver.
+    analyze_trend: bool = False
 
     @classmethod
     def from_yaml(cls, path: str) -> "ERA5RequestConfig":
@@ -159,6 +166,7 @@ class ERA5RequestConfig:
             reference_mode=mode,
             resolved_at=_dt.datetime.now().isoformat(timespec="seconds"),
             strict_coverage=bool(dl.get("strict_coverage", True)),
+            analyze_trend=bool(dl.get("analyze_trend", False)),
         )
 
     @property
@@ -354,6 +362,27 @@ def compute_site_aep(series: pd.DataFrame, config: ERA5RequestConfig) -> Dict[st
     }
 
 
+def _json_safe_trend(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Project ``analyze_long_term_resource``'s rich output into a JSON-safe dict.
+
+    ``analyze_long_term_resource`` returns the live ``TrendResult`` dataclass under ``trend``
+    and a pandas ``DataFrame`` under ``summary_df`` (both intended for the report_model /
+    executive_workbook consumers, which want the objects). Neither is JSON-serializable, so
+    the ``run()`` result — which ``main()`` emits via ``json.dumps`` — must carry a JSON-safe
+    projection instead: the dataclass as ``dataclasses.asdict``, the DataFrame as records. The
+    ``period_aep`` list, ``recommendation`` dict and ``markdown`` string are already JSON-safe
+    and pass through verbatim (CCCDIR — same source of truth, no re-derivation). Downstream
+    JSON consumers (report_model, executive_workbook) thus get clean data.
+    """
+    return {
+        "trend": dataclasses.asdict(analysis["trend"]),
+        "period_aep": analysis["period_aep"],
+        "recommendation": analysis["recommendation"],
+        "markdown": analysis["markdown"],
+        "summary_df": analysis["summary_df"].to_dict(orient="records"),
+    }
+
+
 def run(config: ERA5RequestConfig) -> Dict[str, Any]:
     """End-to-end: retrieve -> hub series -> coverage guard -> net AEP (+ frozen vintage)."""
     nc_path = retrieve_era5_timeseries(config)
@@ -391,6 +420,42 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
             "the site cell is representative of its surroundings (e.g. coastal/ridge gradient)."
         ),
     }
+    # Opt-in long-term resource & trend (#178 → #656): reuse the SAME hub-height series just
+    # built above — no second CDS fetch — to compute the Mann-Kendall / Sen's-slope trend and the
+    # net-AEP-by-reference-period table. Attached under ``long_term_trend`` for the lender report /
+    # workbook; report/VALIDATE-only, so it changes no committed AEP or KPI. A trend test needs a
+    # minimum span of annual means; a short series degrades EXPLICITLY (a recorded reason), never
+    # silently — the trend is simply not attempted rather than emitting a spurious tau on 2-3 years.
+    if config.analyze_trend:
+        from wind_resource.long_term_trend import (
+            MIN_TREND_YEARS,
+            analyze_long_term_resource,
+        )
+
+        # Gate on the ACTUAL number of distinct calendar years in the retrieved series (the
+        # honest signal), not the requested config window — a coverage shortfall (only reachable
+        # when strict_coverage is off; the strict path already raised above) must not slip a
+        # 3-year series past a 20-year config span into a spurious trend statistic.
+        n_years = int(pd.DatetimeIndex(series.index).year.nunique())
+        if n_years < MIN_TREND_YEARS:
+            result["long_term_trend"] = {
+                "analyzed": False,
+                "reason": (
+                    f"long-term trend not computed: the retrieved series spans {n_years} "
+                    f"calendar year(s), shorter than the {MIN_TREND_YEARS}-yr minimum for a "
+                    "Mann-Kendall / Sen's-slope trend test. Pin a longer reference window "
+                    "(and full coverage) to enable the trend section."
+                ),
+            }
+        else:
+            # Attach a JSON-safe projection (not the raw TrendResult dataclass / DataFrame) so
+            # main()'s json.dumps(result) round-trips and downstream JSON consumers get clean
+            # data. The rich objects remain available to report_model via a direct
+            # analyze_long_term_resource call (that consumer wants the dataclass + DataFrame).
+            result["long_term_trend"] = {
+                "analyzed": True,
+                **_json_safe_trend(analyze_long_term_resource(config, series=series)),
+            }
     logger.info(
         "%s: %.1f GWh P50 (CF %.1f%%) from %s vintage %d-%d (%d h, %s)",
         config.project_name,

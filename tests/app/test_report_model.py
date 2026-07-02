@@ -1169,6 +1169,81 @@ def test_cashflow_waterfall_section_renders_in_html() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Long-term wind resource & trend section (#178 → #656) — disclose-only.
+# --------------------------------------------------------------------------- #
+def _trend_analysis() -> Dict[str, object]:
+    """A real analyze_long_term_resource() output over a synthetic 20-yr series."""
+    import numpy as np
+    import pandas as pd
+
+    from wind_resource.era5_retrieval import ERA5RequestConfig
+    from wind_resource.long_term_trend import analyze_long_term_resource
+
+    idx = pd.date_range("2005-01-01", "2024-12-31 23:00", freq="h")
+    rng = np.random.default_rng(7)
+    series = pd.DataFrame({"ws_150m": rng.weibull(2.5, len(idx)) * 8.0}, index=idx)
+    cfg = ERA5RequestConfig(
+        project_name="T",
+        latitude=8.27,
+        longitude=79.75,
+        start_year=2005,
+        end_year=2024,
+        hub_height_m=150.0,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
+    )
+    return analyze_long_term_resource(cfg, series=series)
+
+
+def test_resource_trend_none_by_default() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.resource_trend is None
+
+
+def test_resource_trend_projected_from_live_analysis() -> None:
+    analysis = _trend_analysis()
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        resource_trend=analysis,
+    )
+    block = ctx.resource_trend
+    assert block is not None
+    # Sourced verbatim from the analysis (not re-derived).
+    assert block.markdown == analysis["markdown"]
+    assert block.recommended_basis == analysis["recommendation"][
+        "central_basis"
+    ].replace("_", " ")
+    # The summary table mirrors trend_summary_dataframe row-for-row.
+    assert len(block.summary_rows) == len(analysis["summary_df"])
+    assert any(r.metric == "Bankability basis" for r in block.summary_rows)
+
+
+def test_resource_trend_section_renders_in_html() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        resource_trend=_trend_analysis(),
+    )
+    html = render_report_html(ctx)
+    assert "Long-Term Wind Resource &amp; Trend" in html
+    assert "Mann-Kendall" in html
+    assert "recommended forward p50 basis" in html.lower()
+    # Disclose-only wording: it must state it does NOT change the committed P50.
+    assert "does" in html and "not" in html and "frozen scenario P50" in html
+
+
+def test_resource_trend_omitted_section_absent_from_html() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    html = render_report_html(ctx)
+    assert "Long-Term Wind Resource &amp; Trend" not in html
+
+
+# --------------------------------------------------------------------------- #
 # Project → equity IRR bridge (#621) — additive, default-off
 # --------------------------------------------------------------------------- #
 def _irr_bridge_run_result() -> Dict[str, object]:

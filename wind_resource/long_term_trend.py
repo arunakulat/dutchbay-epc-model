@@ -34,8 +34,9 @@ WEAK_TREND_R2 = 0.20
 
 # Minimum distinct calendar years for a meaningful Mann-Kendall / Sen's-slope trend test.
 # A bankable long-term reference is 10-20+ yr (IEC 61400-15-1 / MEASNET); below this a trend
-# statistic is unstable, so a producer degrades EXPLICITLY rather than emit a spurious tau on
-# a handful of years (see build_resource_trend_export_block).
+# statistic is unstable, so callers degrade EXPLICITLY rather than emit a spurious tau on a
+# handful of years (the producer build_resource_trend_export_block and the live
+# era5_retrieval.run report path both gate on this).
 MIN_TREND_YEARS = 10
 
 

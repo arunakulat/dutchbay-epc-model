@@ -529,6 +529,41 @@
   </section>
   {% endif %}
 
+  {# 8a-bis-2. Long-term wind resource & trend (disclose-only) — #178 / #656 #}
+  {% if ctx.resource_trend %}
+  <section class="page">
+    <h2>Long-Term Wind Resource &amp; Trend</h2>
+    <p>Reference {{ ctx.resource_trend.reference_period }}. Mann-Kendall trend test:
+      tau {{ "%.3f"|format(ctx.resource_trend.mk_tau) }}, p={{ "%.4f"|format(ctx.resource_trend.mk_pvalue) }}
+      ({% if ctx.resource_trend.trend_significant %}significant{% else %}not significant{% endif %} at 5%);
+      Sen slope {{ "%+.3f"|format(ctx.resource_trend.sen_slope_per_decade) }} m/s/decade;
+      OLS R&sup2; {{ "%.4f"|format(ctx.resource_trend.ols_r2) }}.
+      <strong>Classification: {{ ctx.resource_trend.classification }}.</strong>
+      {{ ctx.resource_trend.classification_note }}</p>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.resource_trend.summary_rows %}
+        <tr><td>{{ r.metric }}</td><td>{{ r.value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Recommended forward P50 basis: <strong>{{ ctx.resource_trend.recommended_basis }}</strong>
+      {% if ctx.resource_trend.recommended_p50_gwh is not none %}= {{ fmt_gwh(ctx.resource_trend.recommended_p50_gwh) }}{% endif %}
+      {%- if ctx.resource_trend.recommended_p50_cf is not none %} (CF {{ fmt_ratio_pct(ctx.resource_trend.recommended_p50_cf) }}){% endif %}
+      {%- if ctx.resource_trend.downside_p50_gwh is not none %} — downside {{ fmt_gwh(ctx.resource_trend.downside_p50_gwh) }}{% endif %}
+      {%- if ctx.resource_trend.upside_p50_gwh is not none %}, upside {{ fmt_gwh(ctx.resource_trend.upside_p50_gwh) }}{% endif %}.
+      This is an IEC 61400-15-1 / MEASNET long-term-reference disclosure of the forward resource
+      basis; it does <strong>not</strong> change the committed/frozen scenario P50 used in the
+      economics above. The trend is computed on ERA5 reanalysis annual means: a statistically
+      significant slope may reflect reanalysis inhomogeneity (evolving assimilated observation
+      streams across decades) rather than a real climatological signal, so it is presented as a
+      long-term-reference disclosure, not an operational forecast.</p>
+  </section>
+  {% endif %}
+
   {# 8a-ter. Three-statement financial statements + tie-outs — #479 #}
   {% if ctx.three_statement %}
   <section class="page">
