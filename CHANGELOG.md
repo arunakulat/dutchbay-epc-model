@@ -5,6 +5,36 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in MERRA-2 second-source cross-validation of the ERA5 wind resource (#612, disclose-don't-mutate, KPI-neutral).**
+  New `wind_resource.crossval` runs a VALIDATE-mode sanity check of an independent reanalysis
+  (MERRA-2) against the declared ERA5 baseline — the same disclose-don't-mutate contract as
+  `wind_resource.arco_assessment` / `wind_resource.mcp`. `build_crossval_assessment` takes an
+  **injected** second-source hub-height wind series, fits a Weibull, runs the canonical AEP
+  engine on that fit for the *implied* CF/AEP, and returns a `mode:"validate"` disclosure block:
+  the Weibull drift vs the declared `wind_resource.weibull_a/k` and the mean-ws / CF / AEP
+  deviation vs the frozen `resource.wind` headline. It NEVER writes `wind_resource.*`,
+  `resource.wind.*`, or the frozen AEP export — adopting a second source stays a deliberate,
+  dated re-baseline.
+  - **Strictly opt-in, DEFAULT OFF (CESSPIT).** `crossval_settings` returns `None` unless
+    `resource.crossval.enabled` is true, so scenarios without the block are byte-identical (the
+    disclosure block simply does not exist). Registered via the `RequiredFieldSpec` pattern
+    (`analytics.wind.crossval_interface_schema`, module `"crossval"`) and auto-enforced by
+    `schema_guard.validate_config_for_v14` ONLY when `resource.crossval` is declared — mirroring
+    the existing wind/era5 auto-enforce hook. All committed-scenario KPIs verified byte-identical
+    (all-scenarios kpi oracle).
+  - **MERRA-2 is the implemented second source for the Sri Lanka flagship site** via the
+    no-authentication NASA POWER hourly endpoint (`fetch_merra2_series`) or a user-supplied local
+    series file; the `requests` import is CASPER call-time-guarded (no new import-time dependency).
+    NEWA is documented as EU-coverage-only and is a labelled `source_type` only — never fetched
+    (`load_reference_series` raises for it, pointing to a local series instead). No credentialed or
+    paid API is used. Core comparison functions take injected `pd.DataFrame` series so CI exercises
+    the whole path with ZERO network (the live fetch is monkeypatched at the `requests` boundary).
+  - **Registry-clearing hardening in `schema_guard._ensure_module_registered`:** when a mapped
+    interface module is already imported but its specs are absent from the process-global registry
+    (e.g. a test snapshots/restores `config_schema._REGISTRY`, or evicts the `analytics.*` graph),
+    the module is now `reload`-ed to re-run its import-time registration. Behaviour-neutral in the
+    normal single-import lifecycle (the branch only fires when specs are missing), and it re-registers
+    ALL python modules backing a multi-module logical name (e.g. `cashflow`).
 - **Scenario-YAML wiring for `resource.solar.uncertainty` (#604, opt-in, KPI-neutral).**
   `SolarResourceConfig.from_scenario` now accepts an OPTIONAL `resource.solar.uncertainty`
   mapping instead of rejecting it as an unknown key, closing the wind/solar asymmetry (wind
