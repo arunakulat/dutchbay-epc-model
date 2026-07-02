@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.jobs.models import JobProgress, JobRecord, JobState
 from app.jobs.store import InMemoryJobStore
@@ -36,8 +37,15 @@ def test_get_returns_detached_copy() -> None:
     store.create(_record())
     a = store.get("j1")
     assert a is not None
-    a.state = JobState.FAILED  # mutating the copy must not leak back
-    assert store.get("j1").state is JobState.QUEUED  # type: ignore[union-attr]
+    # JobRecord is frozen (#608): direct attribute assignment on a fetched copy
+    # raises rather than mutating — transitions must go through store.update().
+    with pytest.raises(ValidationError):
+        a.state = JobState.FAILED
+    # Detachment still matters for NESTED mutable state (JobProgress is not
+    # frozen): mutating the copy's progress must not leak back into the store.
+    a.progress.step = 3
+    stored = store.get("j1")
+    assert stored is not None and stored.progress.step == 0
 
 
 def test_update_changes_fields_and_stamps_clock() -> None:

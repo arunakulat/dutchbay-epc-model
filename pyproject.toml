@@ -101,6 +101,16 @@ wind = [
 solar = [
   "pvlib>=0.11",
 ]
+# Multi-objective Pareto search backend (issue #603). pymoo's NSGA-II drives the
+# opt-in plan_kind="pymoo" adaptive search in analytics.sensitivity.optimizer for
+# >=2-parameter trade-offs (e.g. tariff vs gearing) where the Cartesian grid plan
+# explodes past max_points. Opt-in like [wind]/[solar]: the default 'grid'/'lhs'
+# plans never import pymoo, the backend guards the import via _require_pymoo()
+# (CASPER), and the pymoo tests are gated behind pytest.importorskip('pymoo'),
+# so the base finance install never needs it.
+pareto = [
+  "pymoo>=0.6",
+]
 # GeoTIFF / raster export for QGIS (issue #20). rasterio wheels bundle their own GDAL,
 # so no system GDAL/apt is needed on the CI runner or macOS. Opt-in like [wind]; the
 # export code (analytics.gis.geotiff_export) guards the import via _require_rasterio

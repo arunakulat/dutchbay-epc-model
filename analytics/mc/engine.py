@@ -33,6 +33,15 @@ from analytics.mc.correlation import (
     apply_correlation_structure,
     load_correlation_from_config,
 )
+
+# MOVE -> SHIM (#639): the covenant-floor resolvers now live in the dependency-light
+# analytics.mc.covenant module (shared with the CASPER mc_risk block, which must not
+# import this heavy engine module). Re-exported here under their original private
+# names so the engine path and any existing importer are behaviorally unchanged.
+from analytics.mc.covenant import resolve_config_value as _resolve_config_value
+from analytics.mc.covenant import (
+    resolve_min_dscr_covenant as _resolve_min_dscr_covenant,
+)
 from analytics.mc.degradation import apply_degradation_if_enabled
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 
@@ -132,8 +141,12 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
 def _resolve_percentiles(raw: Any) -> Optional[Tuple[int, ...]]:
     """Resolve a scenario's monte_carlo.percentiles into a sorted int tuple, else None.
 
-    Returns None (so the aggregator's documented default applies) when the key is absent
-    or malformed, rather than silently ignoring a well-formed request.
+    Returns None (so the aggregator's documented default applies —
+    ``analytics.mc.aggregate.DEFAULT_PERCENTILES`` = (1, 5, 10, 50, 90, 95, 99),
+    raw percentiles with P99/P1 first-class per #599) when the key is absent or
+    malformed, rather than silently ignoring a well-formed request. A scenario
+    that pins ``monte_carlo.percentiles`` (all committed lender/capex scenarios
+    pin [10, 25, 50, 75, 90]) is honored exactly and is unaffected by the default.
     """
     if not isinstance(raw, (list, tuple)) or not raw:
         return None
@@ -192,34 +205,6 @@ def _tail_risk(
         cvar = float(tail.mean()) if tail.size else var
         out[k] = {"var": var, "cvar": cvar}
     return out
-
-
-def _resolve_config_value(cfg: Mapping[str, Any], dotted: str) -> Optional[float]:
-    """Resolve a dotted path to its float base value in cfg, or None if absent/non-numeric."""
-    cur: Any = cfg
-    for k in dotted.split("."):
-        if isinstance(cur, Mapping) and k in cur:
-            cur = cur[k]
-        else:
-            return None
-    try:
-        return float(cur)
-    except (TypeError, ValueError):
-        return None
-
-
-def _resolve_min_dscr_covenant(cfg: Mapping[str, Any]) -> float:
-    """The DSCR covenant a fixed-debt stress breaches, from the scenario (default 1.30)."""
-    for path in (
-        "constraints.min_dscr_covenant",
-        "Financing_Terms.target_dscr",
-        "Financing_Terms.min_dscr",
-        "monte_carlo.min_dscr_covenant",
-    ):
-        v = _resolve_config_value(cfg, path)
-        if v is not None:
-            return float(v)
-    return 1.30
 
 
 def _trial_fixed_debt_min_dscr(
@@ -759,14 +744,16 @@ class MonteCarloEngine:
 
         if self._correlation is not None and self._correlation.enabled:
             if self._sampler == "sobol":
-                # Iman-Conover rank-reordering preserves each driver's marginal but destroys the
-                # JOINT low-discrepancy structure Sobol was chosen for — the balance benefit then
+                # Correlation-induced rank-reordering (Iman-Conover and the opt-in Gaussian
+                # copula alike, #601) preserves each driver's marginal but destroys the JOINT
+                # low-discrepancy structure Sobol was chosen for — the balance benefit then
                 # only accrues to the marginals. Warn once so an opted-in user is not misled.
                 logger.warning(
                     "monte_carlo.sampler='sobol' with an enabled correlation block: "
-                    "Iman-Conover rank-reordering preserves marginals but destroys the joint "
+                    "the '%s' rank-reordering preserves marginals but destroys the joint "
                     "Sobol low-discrepancy structure (the QMC benefit is limited to the "
-                    "marginals). Disable correlation to retain the full QMC balance."
+                    "marginals). Disable correlation to retain the full QMC balance.",
+                    self._correlation.method,
                 )
             samples = apply_correlation_structure(
                 lhs_samples=samples,

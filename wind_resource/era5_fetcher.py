@@ -20,7 +20,8 @@ Typical usage:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.1.0 (CCCDIR Compliant)
+Version: tracks the repo ``VERSION`` file via ``analytics.run_manifest.engine_version()``
+    (no per-module literal to go stale; #618).
 """
 
 from __future__ import annotations
@@ -34,6 +35,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import yaml
+
+from analytics.run_manifest import engine_version
 
 try:
     import cdsapi
@@ -107,7 +110,7 @@ class ERA5Fetcher:
         # Load configuration (CCCDIR compliance)
         self._load_config(config_path)
 
-        logger.info("ERA5Fetcher v1.1.0 initialized (CCCDIR compliant)")
+        logger.info(f"ERA5Fetcher v{engine_version()} initialized (CCCDIR compliant)")
         logger.info(f"  Cache: {self.cache_dir}")
         logger.info(f"  Config: {self._config_path}")
 
@@ -470,7 +473,9 @@ class ERA5Fetcher:
                 "alpha_default": self.alpha_default,
                 "reference_height": self.reference_height,
             },
-            "version": "1.1.0 (CCCDIR Compliant)",
+            # Repo VERSION file via run_manifest (single source of truth, #618) —
+            # replaces the stale hardcoded per-module version literal.
+            "version": engine_version(),
         }
 
         metadata_file = self.metadata_dir / f"{cache_file.stem}_metadata.json"

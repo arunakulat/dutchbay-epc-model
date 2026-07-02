@@ -23,6 +23,7 @@ from typing import Any, Dict
 import pandas as pd
 import pytest
 
+from analytics.run_manifest import engine_version
 from wind_resource import wind_pipeline as wp
 from wind_resource.wind_pipeline import WindPipeline
 
@@ -109,12 +110,22 @@ class _FakeCalculator:
         ws_column: str,
         turbine_model: str,
         num_turbines: int,
+        uncertainty: Any = None,
+        air_density_site_kgm3: Any = None,
+        air_density_ref_kgm3: Any = None,
     ) -> None:
         self.df = df
         self.ws_column = ws_column
         self.turbine_model = turbine_model
         self.num_turbines = num_turbines
+        # #618 pass-through knobs, recorded for the plumbing assertion.
+        self.uncertainty = uncertainty
+        self.air_density_site_kgm3 = air_density_site_kgm3
+        self.air_density_ref_kgm3 = air_density_ref_kgm3
         self.rated_capacity = 10000.0  # kW per turbine
+        _FakeCalculator.instances.append(self)
+
+    instances: list["_FakeCalculator"] = []
 
     def generate_complete_assessment(self) -> Dict[str, Any]:
         return _energy_assessment(self.num_turbines, self.rated_capacity)
@@ -155,6 +166,7 @@ def _energy_assessment(num_turbines: int, rated_kw: float) -> Dict[str, Any]:
 def patched_stages(monkeypatch: pytest.MonkeyPatch) -> None:
     """Swap all three heavy collaborators for the local fakes."""
     _FakeFetcher.instances.clear()
+    _FakeCalculator.instances.clear()
     monkeypatch.setattr(wp, "ERA5Fetcher", _FakeFetcher)
     monkeypatch.setattr(wp, "WindAnalyzer", _FakeAnalyzer)
     monkeypatch.setattr(wp, "EnergyCalculator", _FakeCalculator)
@@ -274,6 +286,10 @@ def test_run_complete_assessment_wires_all_stages(
     assert cfg["num_turbines"] == 15
     assert cfg["rated_capacity_kw"] == 10000.0
     assert cfg["total_capacity_mw"] == pytest.approx(150.0)
+    # #618: the stamped version derives from the repo VERSION file (run_manifest),
+    # not the stale hardcoded "1.0.0 (CCCDIR Compliant)" literal.
+    assert meta["version"] == engine_version()
+    assert "1.0.0" not in meta["version"]
 
     # wind_data stats are computed from the extrapolated ws_150m column.
     wd = results["wind_data"]
@@ -290,6 +306,38 @@ def test_run_complete_assessment_wires_all_stages(
     assert len(out_files) == 1
     persisted = json.loads(out_files[0].read_text())
     assert persisted["metadata"]["data_period"]["data_points"] == 48
+
+
+def test_uncertainty_and_density_knobs_pass_through_to_calculator(
+    patched_stages: None, tmp_path: Path
+) -> None:
+    """#618: resource.uncertainty.* + air-density knobs reach EnergyCalculator verbatim,
+    and omitting them yields the identity defaults (None site density, empty mapping).
+    """
+    unc = {"wind_measurement_pct": 6.0, "correlation": 0.5}
+    pipe = WindPipeline(
+        location=dict(LOCATION),
+        hub_height=HUB_HEIGHT,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
+        cache_dir=str(tmp_path / "cache"),
+        output_dir=str(tmp_path / "out"),
+        uncertainty=unc,
+        air_density_site_kgm3=1.10,
+        air_density_ref_kgm3=1.225,
+    )
+    pipe.run_complete_assessment()
+    calc = _FakeCalculator.instances[-1]
+    assert calc.uncertainty == unc
+    assert calc.air_density_site_kgm3 == pytest.approx(1.10)
+    assert calc.air_density_ref_kgm3 == pytest.approx(1.225)
+
+    # Default construction: identity knobs (no correction, empty uncertainty).
+    _make_pipeline(tmp_path).run_complete_assessment()
+    calc_default = _FakeCalculator.instances[-1]
+    assert calc_default.uncertainty == {}
+    assert calc_default.air_density_site_kgm3 is None
+    assert calc_default.air_density_ref_kgm3 == pytest.approx(1.225)
 
 
 def test_run_complete_assessment_summary_metrics(
