@@ -54,8 +54,13 @@ def _percentile(arr: np.ndarray, p: int) -> float:
 
 def _cvar(arr: np.ndarray, alpha: float) -> float:
     """
-    CVaR / Expected Shortfall on the downside:
+    CVaR / Expected Shortfall (ES) on the downside:
     mean of values <= VaR_alpha
+
+    Small-sample caveat: the tail mean rests on only ~alpha * n trials — at
+    n=1000 an alpha of 0.01 averages ~10 raw trials (noisy for a covenant or
+    pricing input), and ES converges slower than the mean; a tight mean CI from
+    ``analytics.mc.convergence`` (#643) does not certify the tail.
     """
     if arr.size == 0:
         return float("nan")

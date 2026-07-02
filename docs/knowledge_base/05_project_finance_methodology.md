@@ -44,7 +44,7 @@ Sculpting **maximises debt capacity** versus a level/annuity profile. A grace or
 
 | Ratio | Definition | Horizon | Role |
 |---|---|---|---|
-| **DSCR** | period CFADS ÷ period debt service | point-in-time | Target ≈ 1.30× for contracted infra; min ≈ 1.20×. Industry benchmarks put contracted-solar P50 DSCR at ~1.20–1.30× and contracted-wind at ~1.30–1.40×, with merchant/higher-risk projects materially higher (~1.75–2.00×). |
+| **DSCR** | period CFADS ÷ period debt service | point-in-time | Target ≈ 1.30× for contracted infra; min ≈ 1.20×. Industry benchmarks put contracted-solar P50 DSCR at ~1.20–1.30× and contracted-wind at ~1.30–1.40×, with merchant/higher-risk projects materially higher (~1.75–2.00×). Vintage anchor: the NREL ATB 2024 financial cases assume P50 DSCR ~1.25× (contracted solar) / ~1.3–1.4× (contracted wind) at a ~2.5% real interest rate. |
 | **LLCR** | PV(CFADS over loan life, net of DSRA) ÷ debt outstanding | forward, loan term | Repayment capacity over the loan; triggers cash sweeps. Typical min ≈ 1.10–1.15×. |
 | **PLCR** | as LLCR but over *project* life | forward, project term | Always ≥ LLCR; measures the tail-value cushion. |
 
@@ -221,6 +221,7 @@ Each externally-verifiable benchmark/regime claim below was checked on 2026-06-2
 **Debt sizing, DSCR/LLCR and sculpting**
 - DSCR is sized backwards from CFADS against a target, with gearing expressed as a maximum (e.g. 75/25) and a minimum DSCR (e.g. 1.4×) in the term sheet — confirmed (Yescombe, *Principles of Project Finance*; debt-sizing references): https://www.yescombe.com/PPF2bookframe.htm and https://www.wallstreetprep.com/knowledge/debt-sizing-in-project-finance/
 - DSCR benchmarks: contracted solar ~1.20–1.30×, contracted wind ~1.30–1.40×, merchant ~1.75–2.00× — confirmed: https://courses.renewablesvaluationinstitute.com/pages/academy/debt-sizing-with-target-dscr and https://greenbridgeinfra.com/resources/project-finance/project-finance-dscr (the document's "target ≈1.30× / min ≈1.20×" sits within this range; *strengthened* with the wind/solar/merchant split).
+- NREL ATB 2024/2025 vintage anchor for the DSCR ranges (recorded 2026-07-02, #620): the ATB 2024 financial cases assume P50 DSCR ~1.25× (contracted solar) / ~1.3–1.4× (contracted wind) at a ~2.5% real interest rate — https://atb.nrel.gov/electricity/2024/financial_cases_&_methods
 
 **P50/P75/P90 and IEC 61400-15-2**
 - IEC 61400-15-2 frames pre-construction EYA as a P50 + σ_AEP distribution from which P75/P90/P95 follow, used for bank/investor risk management — confirmed: https://www.profec-ventus.com/services/uncertainty-assessments-of-wind-resource-and-energy-yield.html and the IEC 61400-15 standard family at https://github.com/IEC-61400/eya-def

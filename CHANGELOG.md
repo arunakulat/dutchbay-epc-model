@@ -45,7 +45,89 @@ All notable changes to this project will be documented here.
     the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
     duplicated hedged scenario fixture.
 
+### Fixed
+- **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
+  Five verified erosions of the fail-loud stance closed; all committed scenarios verified
+  **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
+  previously-silent malformed/missing input into a raise or WARNING:
+  - `finance.cashflow_v14_utils.as_float`/`as_int` now **raise `ValueError` on a present-but-malformed
+    value** (e.g. `"12,5"`, a mapping) instead of silently returning the default; `None` still yields
+    the default. A silent fallback here could move a tax/capex base with no trace (the call sites are
+    precedence chains). The `as_float_or_none`/`as_int_or_none` probe variants keep their documented
+    swallow semantics — the project-life heuristic tree-walk and capacity candidate scans depend on
+    them (pinned by test). The `finance.utils` twin module (used by `debt_v14`/`epc_helper_v14` with
+    explicit engine defaults) is out of this issue's scope and unchanged.
+  - `validate_parameters` converts the new `as_int` raise for a malformed `tax.depreciation_years`
+    into a **field-named validation error** (previously a malformed value silently PASSED validation);
+    the validator keeps its report-all contract.
+  - `finance.debt_v14` `amortization_style` is now **whitelisted** (`annuity`/`fixed` → annuity;
+    `sculpted`/`auto` → DSCR-sculpted) mirroring the `balloon_treatment` whitelist. `auto` — used by
+    committed scenarios — is an explicit, documented sculpted alias, not a fall-through accident; an
+    unknown style WARNs and falls back to sculpted (exactly the old silent behaviour, now loud).
+  - The compact `debt:` schema now emits the **same placeholder-substitution WARNs** as the
+    `Financing_Terms` path (A1/#91) when it substitutes the `[0.5, 0.5]` even draw or `[40, 60]`
+    construction phasing; the `Financing_Terms` path additionally WARNs on its previously-silent
+    `[40, 60]` construction-schedule substitution. Values are unchanged.
+  - `finance.debt_v14._pmt` raises a clear `ValueError` when `nper <= 0` with a non-zero rate instead
+    of a raw `ZeroDivisionError` (defensive: the sole caller guards `amort_years > 0`); the
+    `rate == 0` degenerate contract is untouched.
+  The `_extract_project_life_years` heuristic tree-walk already WARNs (the issue's "silent" was
+  overstated); its warning is now pinned by a dedicated test. Dedicated failure tests cover every new
+  raise/warn path.
+
 ### Changed
+- **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
+  remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
+  (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
+  `test_oem_parser.py` seeds 42/43) — moved to `np.random.default_rng(seed)` (PCG64) per NEP 19,
+  completing the migration the #473 MC-5 dolphin applied to the production RNG. Determinism under
+  fixed seeds is preserved (MRM-01); the sampled streams change, but every consuming assertion is
+  band/ordering/statistical and was verified to hold with comfortable margins on the new streams
+  (tightest: DSCR breach-prob 0.096 vs 0.106 ± 0.04; MC-AEP p50 402.76 vs 402.6 ± 10), so no
+  assertion was re-baselined and no site needed seed-stream pinning. Test-only; the committed
+  scenario KPI surface is kpi-oracle byte-identical. The `datetime.utcnow()` half of #619's sweep
+  has exactly one live site (`analytics/pipeline_v14_enhanced.py:80`), owned by #586b and
+  deliberately not touched here; the `pyxirr`/QuantLib lock fork stays user-gated (W5).
+- **hydra-core pinned 1.3.2 → 1.3.3 + declared as an abstract runtime dep + maintenance-risk ADR (#609).**
+  The reproducibility-lock pin moves to 1.3.3 (upstream is packaging-only — removes `setup.py`'s
+  `pkg_resources` dependency, hydra#3207 — so runtime behaviour and all committed KPIs are unchanged;
+  its transitive requirements were already satisfied by the lock, so no other pin moves).
+  `hydra-core>=1.3.3` is now declared in `pyproject.toml [project.dependencies]`: the packaged
+  `analytics.cli.*_hydra` modules import `hydra` at module scope, so its previous absence meant
+  regenerating the lock from pyproject (the lock header's own recipe) would have silently dropped a
+  load-bearing package. New ADR `docs/HYDRA_MAINTENANCE_DECISION.md` records the stalled upstream
+  cadence (1.3.2 Feb-2023 → 1.3.3 Jun-2026, maintainer-status question unanswered) as an accepted
+  risk — stale but stable: narrow `@hydra.main`+dotlist surface, everything pinned, OSV/pip-audit
+  clean — with an OmegaConf + thin-CLI fallback plan (omegaconf is already a direct runtime dep) and
+  explicit re-evaluation triggers.
+- **`pydantic.mypy` plugin registered in the effective mypy config (#594, tooling-only, KPI-neutral).**
+  `mypy.ini` (the config both CI gates actually read — `pyproject.toml`'s `[tool.mypy]` merely points
+  `config_file = "mypy.ini"`) now sets `plugins = pydantic.mypy` plus the strictest `[pydantic-mypy]`
+  profile (`init_forbid_extra`, `init_typed`, `warn_required_dynamic_aliases`). The CASPER-family
+  frozen-contract boundary (pydantic v2 models in `analytics/core/risk_metrics.py`,
+  `analytics/core/returns.py`, `analytics/fx/fx_contracts.py`,
+  `finance/equity_distribution_v14_hydra.py` and the `api/`/`app/` layers) is now genuinely
+  type-checked: precisely-typed synthesized `__init__` signatures, unknown constructor kwargs
+  rejected, dynamic required aliases flagged. Verified against the CI-pinned mypy 1.19.0 +
+  pydantic 2.13.4: zero new errors on both CI invocations (library/engine surface and the relaxed
+  `scripts/` gate), plugin activation positively confirmed via an out-of-tree probe model. The now
+  inert `[mypy-pydantic.*] ignore_missing_imports` block (pydantic v2 ships `py.typed`) is kept and
+  annotated; its removal is deferred as a user-gated cleanup. No runtime code changed; kpi_oracle
+  byte-identical across all committed scenarios.
+- **CVaR labelled explicitly as Expected Shortfall + quantified small-sample caveat (#600, KPI-neutral).**
+  The user-facing display label from `analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar`
+  moves `CVaR(95%)` → `CVaR/ES(95%)` (CVaR and Expected Shortfall are the same statistic; the label now
+  names both). Docstrings at every CVaR computation surface (`analytics/core/risk_metrics.py`,
+  `analytics/mc/engine.py::_tail_risk`, `analytics/capital_risk_layer_v14.py`,
+  `analytics/sensitivity/tail_risk.py::_cvar`) plus `docs/ANALYTICS_INTEGRATION.md` now state
+  CVaR == ES and carry a quantified small-sample caveat: the tail mean rests on only
+  `(1 - confidence) * n` trials — at n=1000 a 1% tail averages ~10 raw trials (noisy for a
+  covenant/pricing input) — and ES converges slower than the mean, so a tight mean CI from the
+  post-hoc convergence diagnostic (`analytics/mc/convergence.py`, #643) does not certify the tail;
+  the `>= max(20, 1/(1-confidence))`-sample floor in `capital_risk_layer_v14` is documented as a
+  degeneracy guard, not statistical sufficiency. Strings/docs/Markdown only: no numeric computation,
+  default, or config key changes (`cvar_confidence`/`cvar_alpha` untouched); committed scenario KPIs
+  byte-identical (labels never enter committed KPI artifacts).
 - **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
   modelled in the engine (above), the analysis layer's sweeps now drive the live keys end-to-end:
   - `FXSensitivityAnalyzer.run()`'s spread sweep drives `fx.spread_bps` (the legacy, engine-ignored
@@ -265,6 +347,14 @@ All notable changes to this project will be documented here.
   `Test Summary` is a *required* status check, so on an FX-touching PR two different "Test Summary"
   checks appeared, making the required-check identity ambiguous. Renamed the fx-tests jobs to
   `FX Test Summary` / `FX Code Quality Checks` (job IDs unchanged, so `needs:` is unaffected).
+- **CI: dropped the redundant advisory black/isort steps from `fx-tests.yml`.** The FX code-quality
+  job carried FX-scoped `black --check` / `isort --check-only` steps with `continue-on-error: true`
+  (advisory only, predating the repo-wide gate). Formatting and import order are enforced repo-wide
+  by the MANDATORY lint gate in `test-suite.yml` (#545), which strictly supersedes the advisory
+  checks, so they only added CI time and a perpetually ignorable signal. The two steps are removed
+  and `black`/`isort` dropped from that job's installs; the advisory mypy and flake8 steps are
+  intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
+  gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
 
 ### Fixed
 - **Hygiene cluster, docs/header/naming shims (#586, dolphin a of 3 — KPI-neutral).**

@@ -6,13 +6,15 @@ All project defaults, thresholds, and configurable values MUST be in:
 - scenarios/*.yaml
 
 GWTF Compliance:
-- CCCDIR: Configuration in Config DIRectory
+- CCCDIR (FRAMEWORK-03): Contracts Centralized, Compliance Documented,
+  Import Relationships explicit
+- Config-first (ARCH-01): all project defaults, thresholds, and configurable
+  values live in config/defaults.yaml and scenarios/*.yaml, never here
 - No magic numbers or hardcoded business logic values
 - Only universal physical/mathematical constants allowed
 
 Author: Dutch Bay EPC Model Team
 Date: December 2025
-Version: 2.0.0 (CCCDIR Compliant)
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ PERCENT_TO_DECIMAL: Final[float] = 0.01
 # =============================================================================
 # REMOVED: All project defaults moved to config/defaults.yaml
 # =============================================================================
-# The following were REMOVED for CCCDIR compliance:
+# The following were REMOVED for config-first (ARCH-01) compliance:
 # - DEFAULT_FX_USD_TO_LKR → config/defaults.yaml: fx.start_lkr_per_usd
 # - DEFAULT_PROJECT_LIFE_YEARS → config/defaults.yaml: project.life_years
 # - DEFAULT_CAPACITY_FACTOR → wind_resource/config/era5_config.yaml

@@ -29,7 +29,7 @@ LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
 @pytest.fixture
 def synthetic() -> dict:
-    rng = np.random.RandomState(0)
+    rng = np.random.default_rng(0)
     return {
         "irr": rng.normal(0.08, 0.02, 2000),
         "npv": rng.normal(-3e6, 5e6, 2000),

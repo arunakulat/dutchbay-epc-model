@@ -364,8 +364,11 @@ class CasperResult(ContractMixin):
     # (D.X+6): previously defined as ``def contract_version(self) -> str``,
     # which silently became a bound method when callers used attribute
     # access (``result.contract_version`` rather than ``result.contract_version()``).
-    # That produced misleading values in serialization paths and contradicted
-    # the sibling ``RefinancingResult.contract_version`` attribute shape.
+    # That produced misleading values in serialization paths and was
+    # inconsistent with the plain string-attribute ``contract_version`` shape
+    # used by sibling contracts at the time (the CHANGELOG Sprint 18D entry
+    # cites ``RefinancingResult``, a contract removed before the repository
+    # import; it no longer exists in tracked code).
     # ``init=False`` keeps the value pinned to the module-level constant
     # while still supporting ``ContractMixin.model_dump()`` / dataclasses.asdict.
     contract_version: str = field(default=CASPER_CONTRACT_VERSION, init=False)
@@ -407,9 +410,11 @@ class DownsideMetrics(ContractMixin):
 #
 # Surfaces here match the consumer expectations in
 # ``analytics/casper/casper_payload.py`` (``_generation_to_dict``,
-# ``_technology_breakdown_to_list``) and are *intentionally distinct* from
-# the ``TechnologyBreakdown`` model in ``finance.contracts`` which carries a
-# different field surface (capacity_mw / capex_usd / opex_annual_usd).
+# ``_technology_breakdown_to_list``). A same-named ``TechnologyBreakdown``
+# model with a different field surface (capacity_mw / capex_usd /
+# opex_annual_usd) historically lived in ``finance/contracts.py``; that module
+# was removed as a dead duplicate in #299, leaving the dataclass below as the
+# only ``TechnologyBreakdown`` in the codebase.
 # ---------------------------------------------------------------------------
 
 
@@ -461,10 +466,10 @@ class MultiTechGenerationResult(ContractMixin):
 class TechnologyBreakdown(ContractMixin):
     """Per-technology KPI share for lender / investor visibility.
 
-    NOTE: This contract is *distinct* from ``finance.contracts.TechnologyBreakdown``
-    (which carries capex/opex/capacity fields). The two share a name for
-    historical reasons but serve different consumers. The CASPER payload
-    pipeline consumes this analytics-side variant via
+    NOTE: this is the only ``TechnologyBreakdown`` in the codebase. A
+    same-named model carrying capex/opex/capacity fields historically lived
+    in ``finance/contracts.py``, but that module was removed as a dead
+    duplicate in #299. The CASPER payload pipeline consumes this contract via
     ``_technology_breakdown_to_list``.
     """
 
