@@ -63,6 +63,39 @@ def test_sobol_recovers_ishigami_interaction_structure() -> None:
         assert d[name]["ST"] >= d[name]["S1"] - 0.05
 
 
+def test_run_sobol_rejects_non_power_of_two_n() -> None:
+    """#586: SALib's base-2 Sobol' sampler only keeps its balance properties at
+    powers of 2 — SALib merely warns and degrades, so run_sobol fails loud."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    for bad in (100, 3, 511, 0, -256):
+        with pytest.raises(ValueError, match="power of 2"):
+            run_sobol(problem=prob, evaluate_fn=_ishigami, metrics=("y",), n=bad)
+    # bool is a subclass of int; True == 1 == 2**0 must still be rejected.
+    with pytest.raises(ValueError, match="power of 2"):
+        run_sobol(problem=prob, evaluate_fn=_ishigami, metrics=("y",), n=True)
+    # Non-int n is a caller bug, not something to coerce.
+    with pytest.raises(ValueError, match="power of 2"):
+        run_sobol(problem=prob, evaluate_fn=_ishigami, metrics=("y",), n=256.0)
+
+
+def test_run_sobol_accepts_power_of_two_n() -> None:
+    """A small power-of-2 n runs end-to-end (n_runs = n * (D + 2))."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+    res = run_sobol(problem=prob, evaluate_fn=_ishigami, metrics=("y",), n=16, seed=1)
+    assert res["n"] == 16
+    assert res["n_runs"] == 16 * (3 + 2)
+    assert set(res["metrics"]["y"]["drivers"]) == {"x1", "x2", "x3"}
+
+
+def test_run_sobol_default_n_is_a_valid_power_of_two() -> None:
+    """The documented default (n=256) must itself satisfy the new gate."""
+    import inspect
+
+    default_n = inspect.signature(run_sobol).parameters["n"].default
+    assert default_n == 256
+    assert default_n > 0 and (default_n & (default_n - 1)) == 0
+
+
 def test_build_problem_skips_fx_calibrated() -> None:
     params = [
         {"name": "project.capacity_factor", "low": 0.30, "high": 0.36},

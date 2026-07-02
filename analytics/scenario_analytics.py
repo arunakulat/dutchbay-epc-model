@@ -46,6 +46,22 @@ logger.setLevel(logging.INFO)
 
 
 # ---------------------------------------------------------------------------
+# Discount-rate default (single source of truth for the code-level fallback)
+# ---------------------------------------------------------------------------
+
+#: Code-level fallback for the batch-wide default discount rate, used ONLY when
+#: :class:`ScenarioAnalytics` is constructed directly without an explicit
+#: ``global_default_discount_rate``. For batch runs via the blessed CLI
+#: (``run_scenario_analytics_v14.py``) the authoritative value is the
+#: ``default_discount_rate`` key in ``conf/run_scenario_analytics_v14.yaml``
+#: (0.12 as committed) and the CLI fails loudly if that key is missing rather
+#: than silently falling back to this constant (CESSPIT: config explicit, no
+#: silent defaults). Consolidated here per #586 — the default was previously
+#: stated three times with two different values.
+DEFAULT_GLOBAL_DISCOUNT_RATE: float = 0.10
+
+
+# ---------------------------------------------------------------------------
 # Data containers
 # ---------------------------------------------------------------------------
 
@@ -123,7 +139,7 @@ class ScenarioAnalytics:
         output_path: Optional[Path] = None,
         scenario_filter: Optional[Callable[[str], bool]] = None,
         parallel: bool = False,
-        global_default_discount_rate: float = 0.10,
+        global_default_discount_rate: float = DEFAULT_GLOBAL_DISCOUNT_RATE,
         strict: bool = True,
     ) -> None:
         self.scenarios_dir = Path(scenarios_dir)
