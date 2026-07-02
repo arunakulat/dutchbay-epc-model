@@ -34,6 +34,116 @@ All notable changes to this project will be documented here.
     argparse is introduced under `finance/`, `analytics/`, `dutchbay_v14chat/` or the canonical
     root entrypoints. Supersedes the `--method pawn` ask of #645 (its report-block extras remain
     out of scope).
+- **Spatial-representativeness verdict wired into the GIS export / DataLake manifest (#660, WIND-10/#484, read-only diagnostic, KPI-neutral).**
+  `analytics.gis.gis_export.run_gis_export` now retains the native n×n `CellResult`
+  neighbourhood it samples per grid (previously discarded after `assemble_grids`) and runs
+  the already-tested-but-unwired `wind_resource.era5_grid.spatial_representativeness` on it,
+  attaching the `assessed: True` verdict (neighbourhood ws spread + centre-cell deviation vs
+  tolerance) to BOTH the returned per-grid summary and each grid's `DataLake_Manifest_All.json`
+  entry. Each interpolated (downscaled) grid carries its native source grid's verdict rather
+  than recomputing one on the smoothed field. An even-`n` native grid (no well-defined centre
+  cell) records an explicit `assessed: False` + reason instead of silently skipping the
+  diagnostic (CESSPIT). The single-cell `wind_resource.era5_retrieval.run` result STAYS
+  `assessed: False` (a single-point timeseries genuinely has no neighbourhood) but its reason
+  string now points at the wired GIS-export path. `build_manifest_entry` gains an optional
+  `representativeness` argument whose key is OMITTED when absent, so a manifest produced
+  without a verdict is byte-identical to the pre-#660 manifest. Purely a provenance
+  disclosure — it alters no exported raster, AEP or KPI (all-scenarios oracle byte-identical).
+- **Tariff-breakeven and equity-IRR tariff solvers — on-demand analysis tools (#615, KPI-neutral).**
+  Two additions to `analytics.core.parameter_solvers`, both routed ONLY through the
+  `evaluate_with_overrides` gateway (ARCH-02: no direct IRR/NPV math — that stays in
+  `finance/irr.py`), and with no committed-scenario caller so the KPI oracle is byte-identical
+  across every scenario:
+  (1) `solve_for_tariff_given_irr` is generalized with a `metric` parameter
+  (`project_irr` | `equity_irr`); the project-IRR path is the default and unchanged, and a new
+  `solve_for_tariff_given_equity_irr` wrapper pins the equity KPI. Both preserve the existing
+  `_assert_override_is_live` / `_assert_target_bracketed` fail-loud guards and fail loud
+  (CESSPIT) via a new `_require_kpi_present` check when the scenario computes no equity
+  distribution (so `equity_irr` is absent) instead of silently solving project IRR.
+  (2) `solve_tariff_breakeven` — a first-class breakeven surface (tariff at NPV=`target`, default
+  NPV=0; or the tariff hitting an IRR hurdle) returning the centralized
+  `contracts_v14.BreakevenResult` (CCCDIR: no new contract types) with `status`
+  (`converged` | `max_iterations` | `unbracketed` | `error`) and the searched `bracket`
+  populated, rather than a bare float — so a batch sweep gets structured infeasibility instead of
+  a raised exception. HONEST convergence status (Fable blocker on #615): the underlying
+  root-finders return the last midpoint on iteration exhaustion (they raise only when NO midpoint
+  could be evaluated) and merely log a warning, so a naive wrapper would stamp `status="converged"`
+  on a bound that misses the target by orders of magnitude. `solve_tariff_breakeven` now RE-VERIFIES
+  the returned tariff via one extra `evaluate_with_overrides` evaluation and emits
+  `status="converged"` ONLY when `|achieved - target| <= tolerance`; otherwise it reports
+  `status="max_iterations"` with the residual (`achieved`, `target`, `abs_residual`, `tolerance`)
+  in `metadata`. The inaccurate "raises on non-convergence" docstring claim (and the
+  `solve_for_tariff_given_irr` / `_npv` "Raises: … fails to converge" sections) were corrected to
+  state the true behaviour (they return the last bound on exhaustion, not raise). No behaviour
+  change to the numeric bisection core. CLI exposure is deferred (module status note updated); any
+  future CLI must be Hydra-only (R3).
+- **Distribution-free order-statistic CI for the MC P90/P95 tail band + a Wilson breach-probability CI (#642, read-only/additive, KPI-neutral).**
+  The convergence diagnostic (#590/#643) bounds only the *mean's* Monte Carlo error
+  (`z·sd/√k`), but a lender reads the **P90/P95 band** (and the DSCR covenant breach
+  probability), which converge slower than the mean. New
+  `analytics.mc.convergence.percentile_ci_diagnostic` adds a distribution-free confidence
+  interval for those percentiles — the classic **binomial order-statistic** interval (normal
+  approximation to the rank bounds `n·p ± z·√(n·p·(1-p))`, floored/ceiled *outward* so
+  coverage is conservative), with **no distributional assumption on the metric** (unlike the
+  mean CI's i.i.d.-normal SE) — plus a **Wilson-score** CI for `P(dscr_min < covenant)`. It is
+  computed from `result.trials` only and surfaced additively under
+  `result.metadata['percentile_ci']` alongside `metadata['convergence']`. When `n` is too
+  small to place a required rank (e.g. the P95 upper bound below ~73 trials) that bound is
+  reported as `None` — loud omission, never a silent clamp to the extreme order statistic
+  (CESSPIT). The `dscr_min` breach threshold is wired from the resolved DSCR covenant
+  (`analytics.mc.covenant.resolve_min_dscr_covenant`, single source of truth). Student-t
+  small-`k` widening is out of scope (documented): it refines the normal-theory *mean* SE and
+  has no order-statistic analogue. `numpy`-only, import-light per the module charter (CASPER).
+  Read-only/additive — same contract as #590; all committed-scenario KPIs verified byte-
+  identical (all-scenarios kpi oracle).
+- **Project→equity IRR bridge in the lender report + OpenDSS-curtailment deferral ADR (#621, additive, KPI-neutral).**
+  Two halves of the deferred/gated cluster.
+  - **IRR bridge (built):** a new disclosure-only section that reconciles the engine's PUBLISHED
+    project (unlevered) IRR to its published equity (levered) IRR, decomposing the leverage uplift
+    into labelled legs — **leverage**, **cost of debt**, **tax shield** — plus an explicit
+    **residual**. New frozen contracts `analytics.contracts_v14.IrrBridgeComponent` /
+    `ProjectEquityIrrBridge` (CCCDIR — result types centralised) and builder
+    `analytics.irr_bridge.build_project_equity_irr_bridge[_from_run]`. All IRR arithmetic is
+    delegated to `finance.irr` (R7 single source of truth); the two endpoints are the headline
+    KPIs and are never recomputed — the legs only *explain* the gap. Each leg is one substitution
+    step on the engine's own published per-year figures (`cfads_usd` / `interest_usd` /
+    `effective_tax_rate` and the authoritative equity return vector), and the residual is the
+    closing term so that `sum(legs) + residual == equity_irr − project_irr` **exactly** (asserted
+    at build time — CESSPIT; IRR is non-additive, so the residual honestly carries the interaction
+    plus principal timing, covenant lockup, DSRA, WHT and terminal value). Wired into the lender
+    report via a new `run_result` argument to `app.reports.report_model.build_report_context`
+    (rendered as "Project → Equity IRR Bridge" with a new signed-percentage-point formatter
+    `fmt_pp`). **Additive + default-off:** the section renders only when the caller supplies the
+    full run result AND it carries a computed equity distribution; absent that, the section is
+    omitted and no headline KPI is touched. All committed-scenario KPIs verified byte-identical
+    (all-scenarios kpi oracle).
+  - **OpenDSS power-flow curtailment (deferred):** recorded as an ADR
+    (`docs/OPENDSS_CURTAILMENT_DECISION.md`) per the adapt+defer verdict — do NOT build the
+    OpenDSSDirect integration (no CEB feeder data, no new hard dependency). The gate: real feeder
+    data **and** explicit user authorization for the `OpenDSSDirect.py` dependency **and** a
+    default-off config gate. The existing energy-balance shared-POI seam
+    (`analytics/portfolio/poi_curtailment.py`) is preserved unchanged
+    (`resolve_shared_poi_curtailment` still returns `None` absent the opt-in config).
+- **Morris optimal-trajectories mode + SA method-selection decision tree (#617, opt-in, KPI-neutral).**
+  `analytics.sensitivity.global_sa.run_morris` gains an optional `optimal_trajectories:
+  Optional[int] = None` knob forwarded to SALib's `morris.sample`. When set, SALib draws
+  `n_trajectories` candidate trajectories and keeps the `optimal_trajectories` subset with the
+  widest spread in the input box (Campolongo/Ruano enhancement), dropping the cost from
+  `n_trajectories·(D+1)` to `optimal_trajectories·(D+1)` evaluations while covering more of the
+  space — the OSeMOSYS "10-from-100 at step-size-4" guidance. The chosen value is recorded in
+  the result metadata next to `n_trajectories` / `n_runs`. `scripts/run_global_sensitivity.py`
+  exposes a Morris-only `--optimal-trajectories` flag (fail-loud usage error if combined with
+  `--method sobol`).
+  - **Fail-loud validation (CESSPIT, no silent clamping).** `run_morris` raises `ValueError`
+    unless `2 <= optimal_trajectories < n_trajectories`; it validates itself rather than defer
+    to SALib, whose own bound check is inconsistent (it silently accepts `0`).
+  - **DEFAULT OFF = byte-identical (#617).** `optimal_trajectories=None` is the vanilla Morris
+    path: the SALib sampling call is verified byte-identical to the prior no-kwarg call, so the
+    lender report's Morris SA section and all committed-scenario KPIs are unchanged. MRM-01: the
+    subset selection is seeded (deterministic for a fixed `seed`).
+  - New `docs/SENSITIVITY_DECISION_TREE.md` documents the SA method funnel (Morris screen →
+    Sobol on the top subset → PAWN cross-check → local tornado), cross-linked from the
+    `global_sa` module docstring.
 - **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
   New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
   conditions-precedent checklist: the discrete named line items that must be satisfied (or
@@ -354,6 +464,13 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **`SOLVER_REGISTRY['target_equity_irr']` no longer silently solves the WRONG KPI (#615, KPI-neutral).**
+  The registry key `target_equity_irr` pointed at `solve_for_tariff_given_irr`, which was
+  hardcoded to the `project_irr` KPI — so `get_solver("target_equity_irr")(…)` returned the
+  tariff for a target PROJECT IRR while claiming to target equity IRR. It now resolves to the
+  new `solve_for_tariff_given_equity_irr` (equity-IRR-pinned), which fails loud when the
+  scenario computes no equity distribution. These solvers have no committed-scenario caller, so
+  the KPI oracle is byte-identical; the fix corrects an analyst-facing answer, not a model KPI.
 - **Global SA: shared finite-mask stops a partial-NaN metric column poisoning Sobol/Morris/PAWN
   indices (#644, KPI-neutral).** A metric column with SOME non-finite entries (an engine KPI
   returning `None` on a subset of sample rows) passed the `_is_flat_output` guard — which inspects
