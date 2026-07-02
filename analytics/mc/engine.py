@@ -141,8 +141,12 @@ def _toy_metric_fallback(overrides: Mapping[str, Any]) -> dict[str, float]:
 def _resolve_percentiles(raw: Any) -> Optional[Tuple[int, ...]]:
     """Resolve a scenario's monte_carlo.percentiles into a sorted int tuple, else None.
 
-    Returns None (so the aggregator's documented default applies) when the key is absent
-    or malformed, rather than silently ignoring a well-formed request.
+    Returns None (so the aggregator's documented default applies —
+    ``analytics.mc.aggregate.DEFAULT_PERCENTILES`` = (1, 5, 10, 50, 90, 95, 99),
+    raw percentiles with P99/P1 first-class per #599) when the key is absent or
+    malformed, rather than silently ignoring a well-formed request. A scenario
+    that pins ``monte_carlo.percentiles`` (all committed lender/capex scenarios
+    pin [10, 25, 50, 75, 90]) is honored exactly and is unaffected by the default.
     """
     if not isinstance(raw, (list, tuple)) or not raw:
         return None

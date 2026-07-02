@@ -54,7 +54,11 @@ EXPECTED_KPIS = {
     "llcr",
     "plcr",
 }
-EXPECTED_PERCENTILE_LEVELS = {5, 10, 50, 90, 95}
+# Default raw-percentile levels (analytics.mc.aggregate.DEFAULT_PERCENTILES).
+# P99/P1 are first-class since #599: raw 99th = upside tail; the lender's
+# downside/exceedance "P99" for higher-is-better metrics is the raw 1st
+# percentile (#563 tail-direction convention in analytics.mc.exports).
+EXPECTED_PERCENTILE_LEVELS = {1, 5, 10, 50, 90, 95, 99}
 
 
 class TestMonteCarloConfiguration:
