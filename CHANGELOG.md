@@ -386,6 +386,31 @@ All notable changes to this project will be documented here.
     requires separate user authorization.
   Validators, Sobol power-of-2, deep-merge and discount-default items are dolphins b/c of #586.
 
+### Fixed
+- **Hygiene cluster #586 (dolphin B of 3): validators + Sobol n gate + deep-merge aliasing.**
+  Three fail-loud/additive consistency fixes; all committed scenario KPIs verified byte-identical
+  (argv-correct kpi_oracle before/after across all 27 committed scenarios).
+  - `project_life_years` schema validator (`finance.cashflow_v14._register_cashflow_schema`) now
+    accepts integral floats (`20.0`) — the engine's own extraction (`as_int_or_none` → `int(value)`)
+    already coerced `20.0` to `20`, so the strict pre-flight guard was rejecting configs the engine
+    reads fine. It now also rejects `bool` (the old `isinstance(v, int)` let `True` pass as "1 year")
+    and keeps rejecting non-integral floats (`20.5` fails loud rather than being silently truncated),
+    non-positives, and strings. All committed scenarios carry plain-int year counts and validate
+    identically.
+  - `analytics.sensitivity.global_sa.run_sobol` now validates `n` is a positive power of 2
+    (`ValueError`) before sampling. SALib's `sobol` sampler draws a base-2 Sobol' sequence whose
+    balance properties only hold at powers of 2 — SALib merely warns and degrades the S1/ST
+    estimates, so the gateway fails loud instead. The documented default `n=256` is unaffected.
+  - `analytics.evaluation_v14._deep_merge_config` no longer aliases nested branches: the old
+    shallow `dict(base)` seed left every branch NOT named in the overrides shared with the base
+    config's own sub-dicts (and inserted override branches by reference), so an in-place mutation
+    of the merged config could silently leak into the caller's base — a real hazard for
+    Monte-Carlo / sensitivity loops that re-merge the SAME base mapping thousands of times. The
+    merged dict is now structurally independent of both inputs (nested mappings and lists freshly
+    copied; immutable scalar leaves shared; merge values and key order unchanged, pinned by
+    regression tests). Limitation: exotic non-YAML containers (tuples, sets, arrays) still pass by
+    reference and are documented as out of contract.
+
 ## v15.2.0 - 2026-07-01
 
 _Consolidates everything merged since the v15.0.0 tag: the #529 solar re-baseline (which bumped the
