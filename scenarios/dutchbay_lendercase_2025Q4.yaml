@@ -117,9 +117,17 @@ resource:
   # well-established pre-construction over-prediction bias; IEC 61400-15-2 EYA guidance and
   # the DNV/operational-vs-predicted literature put the adjustment in a ~0-7% range). It is
   # NOT derived from this project's own EIA. As an ex-post CONSISTENCY CHECK only (not the
-  # justification), the project's Final EIA (Envision EN220/10.0 EYA) independently reports
-  # P50 464.5 GWh — within ~0.04% of our haircut output — which corroborates but does not set
-  # the 2%. Parameterised here so the basis is auditable and the value is sensitivity-testable.
+  # justification), the project's Final EIA (Envision EN220/10.0 EYA) reports P50 464.5 GWh —
+  # within ~0.04% of our haircut output — which corroborates but does not set the 2%.
+  # CALIBRATION NOTE (#654): that EYA is the OEM's (Envision's) OWN pre-construction estimate,
+  # i.e. the population Hammond & Simley (WES 2026) measured over-predicting by 6.6%/7.4% —
+  # so the 464.5 corroboration bounds MODEL-vs-EYA drift, NOT EYA-vs-operations bias. The 2.0%
+  # sits well below the WES-2026 measured bias; it is a deliberate, separately-authorized
+  # calibration choice (SL-transferability of the WES-2026 sample is the documented rationale),
+  # not a claim that the model beats the measured bias. Any move toward the WES-2026 range is
+  # KPI-moving and needs separate user authorization (declined for #587). Canonical caveat:
+  # wind_resource/bankable_aep.py RECOMMENDED_P50_HAIRCUT_PCT.
+  # Parameterised here so the basis is auditable and the value is sensitivity-testable.
   # Modelled net 473.8 -> bankable 464.3 GWh, CF 0.339 -> 0.332.
   uncertainty:
     p50_haircut_pct: 2.0
@@ -566,7 +574,8 @@ expected_results:
   # data-derived BIS 2005-2026 long-run LKR depreciation): project IRR 5.05% -> 2.75%, equity
   # IRR +2.42% -> -0.46%, NPV -$32.3M -> -$53.3M; (6) the 2026-06-28 AEP OVER-PREDICTION
   # HAIRCUT (2.0%, resource.uncertainty.p50_haircut_pct): modelled net P50 473.8 -> bankable
-  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA independent P50 464.5;
+  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA P50 464.5 (the OEM's
+  # own pre-construction EYA — bounds model-vs-EYA drift, not EYA-vs-operations bias; #654);
   # and (7) the 2026-06-28 PR-A group-C #36 tax/levy re-baseline: remove the non-statutory
   # success-fee/env-surcharge levies (#43, +CFADS ~1.5% -> project IRR 2.50% -> 2.68%, NPV
   # -$56.1M -> -$54.0M), add the SL 15% dividend WHT (#81) and capitalize debt IDC into the
