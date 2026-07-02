@@ -14,6 +14,13 @@ History: this script previously imported six symbols from the now-deprecated
 were exported by the shim any more, so the script raised ``ImportError`` on import.
 It is repointed here to the live API; the YAML loader and the tornado->DataFrame
 flattener are implemented locally (the engine returns typed contracts, not frames).
+
+Presets (#658): ``--preset tax`` / ``--preset dscr`` are opt-in built-in driver sets
+that route through the sanctioned one-way wrappers ``analytics.sensitivity.tax.
+run_tax_one_way`` / ``analytics.sensitivity.dscr.run_dscr_one_way`` (which take an
+in-memory ``base_config`` mapping, so the preset path loads the YAML itself). They are
+purely additive: without ``--preset`` the CLI behaves byte-identically to before,
+delegating to the path-based ``run_sensitivity_analysis``.
 """
 
 from __future__ import annotations
@@ -23,7 +30,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import fields
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 import yaml
@@ -38,6 +45,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from analytics.contracts_v14 import ParameterRangeConfig, SensitivitySuite
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
+from analytics.scenario_loader import load_scenario_config
+from analytics.sensitivity.dscr import DscrSensitivityConfig, run_dscr_one_way
+from analytics.sensitivity.tax import TaxSensitivityConfig, run_tax_one_way
 
 # Keys under which a parameter list may be nested in the YAML (besides a bare list).
 _PARAM_LIST_KEYS = ("parameters", "standard_suite", "drivers")
@@ -139,6 +149,168 @@ def tornado_suite_to_dataframe(
     return df
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Built-in presets (#658): opt-in driver sets routed through the sanctioned one-way
+# wrappers. Each driver is (config_key, label, low, high, is_absolute):
+#   is_absolute=False -> low/high are pct bands around the resolved base value
+#   is_absolute=True  -> low/high are absolute sweep endpoints (used where base==0,
+#                        e.g. a tax_holiday_years lever whose base is 0 so a pct band
+#                        would be flat — mirrors sensitivity_runner._DEFAULT_ABSOLUTE_DRIVERS).
+#
+# Config keys are the LIVE resolving paths verified against the canonical scenario
+# schema (2026-07-02), NOT the shorthand names in the issue text (tax.corporate_rate /
+# tax.holiday_years do NOT resolve; tax.corporate_tax_rate / tax.tax_holiday_years do).
+# Non-resolving keys are skipped (no silent flat bars), like the default driver library.
+_PresetDriver = Tuple[str, str, float, float, bool]
+
+_TAX_PRESET_DRIVERS: Tuple[_PresetDriver, ...] = (
+    ("tax.corporate_tax_rate", "Corporate Tax Rate", -20.0, 20.0, False),
+    # Base is 0 years; sweep 0 -> 10 absolutely so the depreciation/loss-carryforward
+    # kink (tax only bites after ~year 6) is visible rather than a flat 0->5 bar.
+    ("tax.tax_holiday_years", "Tax Holiday Years", 0.0, 10.0, True),
+)
+
+# DSCR covenant preset. Under dual_dscr sizing the min-DSCR is pinned AT the target,
+# so gearing / tenor bars come back structurally flat (the engine flags them, which is
+# itself the lender signal "this covenant is sized, not slack"); target_dscr moves it
+# 1:1. Sweeping both surfaces exactly what is pinned vs live.
+_DSCR_PRESET_DRIVERS: Tuple[_PresetDriver, ...] = (
+    ("Financing_Terms.target_dscr", "Target DSCR", -10.0, 10.0, False),
+    ("Financing_Terms.debt_ratio", "Gearing (debt ratio)", -10.0, 10.0, False),
+    ("Financing_Terms.tenor_years", "Debt Tenor", -20.0, 20.0, False),
+)
+
+# The metric each preset targets. The DSCR preset uses ``min_dscr`` — the canonical
+# lender KPI key that the gateway ALWAYS emits (analytics/core/metrics.py sets both
+# ``min_dscr`` and its ``dscr_min`` alias). DscrSensitivityConfig's field default is
+# ``dscr_min``; the preset overrides it to ``min_dscr`` so the sweep pins to the key
+# that unambiguously resolves through evaluate_with_overrides (CESSPIT fail-loud — no
+# reliance on the alias, no silent KeyError path).
+_TAX_PRESET_METRIC = "project_irr"
+_DSCR_PRESET_METRIC = "min_dscr"
+
+
+def _resolve_base_value(cfg: Mapping[str, Any], dotted_key: str) -> Optional[float]:
+    """Resolve a dotted config key to its numeric base value, or None if absent/non-numeric."""
+    node: Any = cfg
+    for part in dotted_key.split("."):
+        if not isinstance(node, Mapping) or part not in node:
+            return None
+        node = node[part]
+    if isinstance(node, bool) or not isinstance(node, (int, float)):
+        return None
+    return float(node)
+
+
+def _preset_parameters(
+    cfg: Mapping[str, Any], drivers: Tuple[_PresetDriver, ...]
+) -> List[ParameterRangeConfig]:
+    """Build ``ParameterRangeConfig`` sweeps for a preset, skipping non-resolving keys.
+
+    Skipping absent keys (rather than failing) matches the default driver library in
+    ``analytics.core.sensitivity_runner`` — a driver the scenario does not carry is
+    simply not swept, never a silent flat bar.
+    """
+    params: List[ParameterRangeConfig] = []
+    for config_key, label, low, high, is_absolute in drivers:
+        base = _resolve_base_value(cfg, config_key)
+        if base is None:
+            continue
+        if is_absolute:
+            params.append(
+                ParameterRangeConfig(
+                    variable_name=config_key,
+                    base_value=base,
+                    low_value=low,
+                    high_value=high,
+                    label=label,
+                )
+            )
+        else:
+            params.append(
+                ParameterRangeConfig(
+                    variable_name=config_key,
+                    base_value=base,
+                    low_pct=low,
+                    high_pct=high,
+                    label=label,
+                )
+            )
+    return params
+
+
+def _run_preset_one_way(
+    preset: str,
+    cfg: Mapping[str, Any],
+    parameter: ParameterRangeConfig,
+    metric: str,
+) -> SensitivitySuite:
+    """Route a single preset driver through the sanctioned one-way wrapper.
+
+    Both wrappers take an in-memory ``base_config`` Mapping (not a path), so the caller
+    has already loaded the YAML. The metric is pinned on the wrapper's config dataclass:
+    ``TaxSensitivityConfig.metric_key`` for tax, ``DscrSensitivityConfig.dscr_metric_key``
+    for DSCR (set to the canonical live ``min_dscr`` key, not the field's ``dscr_min``
+    default — CESSPIT fail-loud on the key that unambiguously resolves).
+    """
+    if preset == "tax":
+        return run_tax_one_way(
+            base_config=cfg,
+            parameter=parameter,
+            cfg=TaxSensitivityConfig(metric_key=metric),
+        )
+    if preset == "dscr":
+        return run_dscr_one_way(
+            base_config=cfg,
+            parameter=parameter,
+            cfg=DscrSensitivityConfig(dscr_metric_key=metric),
+        )
+    raise ValueError(f"unknown preset {preset!r}")  # pragma: no cover
+
+
+def run_preset(
+    preset: str, config_path: str
+) -> Tuple[str, List[ParameterRangeConfig], pd.DataFrame]:
+    """Run a built-in ``tax`` / ``dscr`` preset and return (metric, params, tornado df).
+
+    Loads the scenario YAML into an in-memory mapping (the one-way wrappers take a
+    ``base_config`` Mapping, unlike the path-based default runner), builds the preset's
+    driver sweeps, routes each through the sanctioned wrapper (``run_tax_one_way`` /
+    ``run_dscr_one_way``), and flattens the per-driver suites into one tornado DataFrame
+    via the same :func:`tornado_suite_to_dataframe` the default path uses.
+
+    Raises:
+        ValueError: if the preset resolves to no drivers for this scenario.
+    """
+    cfg = load_scenario_config(Path(config_path))
+    if preset == "tax":
+        metric = _TAX_PRESET_METRIC
+        drivers = _TAX_PRESET_DRIVERS
+    elif preset == "dscr":
+        metric = _DSCR_PRESET_METRIC
+        drivers = _DSCR_PRESET_DRIVERS
+    else:  # pragma: no cover - argparse choices guard this
+        raise ValueError(f"unknown preset {preset!r}")
+
+    params = _preset_parameters(cfg, drivers)
+    if not params:
+        raise ValueError(
+            f"preset '{preset}' resolved no drivers for config {config_path!r}; "
+            "none of its config keys are present in this scenario."
+        )
+
+    frames: List[pd.DataFrame] = []
+    for p in params:
+        suite = _run_preset_one_way(preset, cfg, p, metric)
+        frames.append(tornado_suite_to_dataframe(suite, metric, [p]))
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not df.empty:
+        df = df.sort_values(
+            "impact_abs", ascending=False, na_position="last"
+        ).reset_index(drop=True)
+    return metric, params, df
+
+
 def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     """Minimal CLI wrapper for v14 tornado sensitivity.
 
@@ -161,6 +333,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
           --metric equity_irr \\
           --metric min_dscr \\
           --output out/tornado_multi_metric.csv
+
+    Built-in tax / DSCR presets (no --parameters needed; #658)::
+
+        python scripts/run_tornado_from_cli.py \\
+          --config scenarios/dutchbay_lendercase_2025Q4.yaml \\
+          --preset dscr --output out/tornado_dscr.csv
     """
     parser = argparse.ArgumentParser(
         description="Run v14 tornado sensitivity from the command line "
@@ -174,8 +352,24 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--parameters",
-        required=True,
-        help="Path to sensitivity parameters YAML (e.g. scenarios/sensitivity_parameters_examples.yaml)",
+        required=False,
+        default=None,
+        help=(
+            "Path to sensitivity parameters YAML "
+            "(e.g. scenarios/sensitivity_parameters_examples.yaml). "
+            "Required UNLESS --preset is given (a preset supplies its own drivers)."
+        ),
+    )
+    parser.add_argument(
+        "--preset",
+        choices=["tax", "dscr"],
+        default=None,
+        help=(
+            "Built-in driver set (opt-in). 'tax' sweeps tax.corporate_tax_rate + "
+            "tax.tax_holiday_years on project_irr; 'dscr' sweeps the covenant levers "
+            "(target_dscr / gearing / tenor) on min_dscr. Mutually exclusive with "
+            "--parameters; --metric is ignored (the preset fixes its own metric)."
+        ),
     )
     parser.add_argument(
         "--metric",
@@ -184,7 +378,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help=(
             "KPI metric name to analyze (e.g. project_irr, equity_irr, min_dscr). "
             "May be passed multiple times for multi-metric tornado. "
-            "If omitted, defaults to project_irr."
+            "If omitted, defaults to project_irr. Ignored when --preset is given."
         ),
     )
     parser.add_argument(
@@ -202,6 +396,36 @@ def main(argv: List[str] | None = None) -> int:
     args = parse_args(argv)
 
     config_path = args.config
+
+    # CESSPIT fail-loud: --preset and --parameters are mutually exclusive, and exactly
+    # one source of drivers must be supplied — no silent default-to-example path.
+    if args.preset is not None and args.parameters is not None:
+        print(
+            "[run_tornado_from_cli] ERROR: --preset and --parameters are mutually "
+            "exclusive (a preset supplies its own drivers).",
+            file=sys.stderr,
+        )
+        return 2
+    if args.preset is None and args.parameters is None:
+        print(
+            "[run_tornado_from_cli] ERROR: provide --parameters <yaml> or --preset "
+            "{tax,dscr}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.preset is not None:
+        # Opt-in built-in preset: fixes its own metric, loads its own drivers.
+        try:
+            _metric, _params, df = run_preset(args.preset, config_path)
+        except (ValueError, KeyError) as exc:
+            print(
+                f"[run_tornado_from_cli] ERROR for preset '{args.preset}': {exc}",
+                file=sys.stderr,
+            )
+            return 2
+        return _emit(df, args.output)
+
     params_path = Path(args.parameters)
     metrics: list[str] = list(args.metrics) if args.metrics else ["project_irr"]
 
@@ -230,8 +454,13 @@ def main(argv: List[str] | None = None) -> int:
 
     df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-    if args.output:
-        output_path = Path(args.output)
+    return _emit(df, args.output)
+
+
+def _emit(df: pd.DataFrame, output: str | None) -> int:
+    """Write the tornado DataFrame to ``output`` (or stdout) as CSV; return exit code 0."""
+    if output:
+        output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False)
         print(f"[run_tornado_from_cli] Wrote CSV to {output_path}")
