@@ -43,6 +43,8 @@ def test_taxonomy_loads_ordered_tiers_and_assumptions() -> None:
     assert tax.tiers[0] == "measured"  # strongest first
     assert tax.tiers[-1] == "placeholder"  # weakest last
     assert "tariff" in tax.assumptions and "capex" in tax.assumptions
+    # TCFD/EP4 climate-risk (CCRA-exists) is a canonical material assumption (#607).
+    assert "climate_risk" in tax.assumptions
     # ordering: a stronger tier ranks below (smaller index) a weaker one
     assert tax.is_weaker("placeholder", "benchmark")
     assert not tax.is_weaker("measured", "benchmark")

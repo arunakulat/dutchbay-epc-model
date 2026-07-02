@@ -64,6 +64,8 @@ risk_register:
       Bankable AEP from an ERA5->Weibull->certified-power-curve chain with enforced source
       provenance; debt sculpted with DSCR headroom; P90 sensitivity reported.
     severity: "medium"
+    # TCFD physical: wind-resource variability is a chronic climate/weather hazard to output.
+    climate_risk_category: "physical"
   - category: "Curtailment"
     risk: >
       Grid constraints may curtail dispatch below the modeled net availability.
@@ -71,6 +73,8 @@ risk_register:
       The CEB standardized PPA pays curtailed output as deemed energy, so economic
       curtailment is not haircut from revenue.
     severity: "medium"
+    # TCFD physical: curtailment tracks physical dispatch/grid conditions, not a policy shift.
+    climate_risk_category: "physical"
   - category: "Refinancing"
     risk: >
       A balloon / bullet repayment at debt maturity exposes the project to refinancing
@@ -95,3 +99,5 @@ risk_register:
       The tax block is reconciled to the current IMF-reformed Sri Lankan regime with no
       reliance on the removed renewable-energy tax holiday.
     severity: "medium"
+    # TCFD transition: policy / tax-regime / tariff-framework shifts are transition risk.
+    climate_risk_category: "transition"
