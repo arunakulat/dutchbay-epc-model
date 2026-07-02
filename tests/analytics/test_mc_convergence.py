@@ -13,7 +13,13 @@ import numpy as np
 import pytest
 import yaml
 
-from analytics.mc.convergence import Z_95, convergence_diagnostic
+from analytics.mc.convergence import (
+    Z_95,
+    _order_stat_ci_ranks,
+    _wilson_interval,
+    convergence_diagnostic,
+    percentile_ci_diagnostic,
+)
 
 _LENDER = (
     Path(__file__).resolve().parents[2]
@@ -97,4 +103,144 @@ def test_engine_attaches_convergence_metadata_without_changing_bands() -> None:
     assert d["checkpoints"][-1] == d["n"]
     assert len(d["ci_halfwidth_trace"]) == len(d["checkpoints"])
     # The diagnostic is additive: the percentile bands are still present and untouched.
+    assert result.percentiles is not None
+
+
+# --------------------------------------------------------------------------------------
+# percentile_ci_diagnostic (#642) — distribution-free order-statistic CI for the P90/P95.
+# --------------------------------------------------------------------------------------
+
+
+def test_order_stat_ranks_match_normal_approx_and_widen_outward() -> None:
+    """Ranks are floor(n*p - z*sd) / ceil(n*p + z*sd) with sd = sqrt(n*p*(1-p))."""
+    n, p = 500, 0.90
+    sd = np.sqrt(n * p * (1.0 - p))
+    lo, hi = _order_stat_ci_ranks(n, p, Z_95)
+    assert lo == int(np.floor(n * p - Z_95 * sd))
+    assert hi == int(np.ceil(n * p + Z_95 * sd))
+    # Widened outward (conservative): lower rank strictly below the point rank n*p, upper above.
+    assert lo < n * p < hi
+
+
+def test_order_stat_upper_rank_is_none_when_n_too_small() -> None:
+    """P95 upper rank cannot be placed until n is large enough — reported None, never clamped."""
+    lo_small, hi_small = _order_stat_ci_ranks(40, 0.95, Z_95)
+    assert hi_small is None  # ceil(40*.95 + z*sd) = 42 > 40
+    assert lo_small is not None
+    lo_big, hi_big = _order_stat_ci_ranks(73, 0.95, Z_95)
+    assert hi_big is not None and hi_big <= 73  # placeable once n is large enough
+
+
+def test_percentile_ci_point_matches_numpy_quantile_and_brackets_it() -> None:
+    rng = np.random.default_rng(0)
+    arr = rng.normal(0.10, 0.02, size=1000)
+    out = percentile_ci_diagnostic({"project_irr": arr.tolist()}, percentiles=[90, 95])
+    d = out["project_irr"]
+    assert d["statistic"] == "percentile_ci"
+    assert d["n"] == 1000
+    for p in ("90", "95"):
+        lv = d["percentiles"][p]
+        assert lv["point"] == pytest.approx(
+            float(np.quantile(np.sort(arr), int(p) / 100.0))
+        )
+        # The band brackets the point estimate (order statistics on both sides).
+        assert lv["ci_lower"] <= lv["point"] <= lv["ci_upper"]
+        assert lv["rank_lower"] < lv["rank_upper"]
+
+
+def test_percentile_ci_covers_known_analytic_p90() -> None:
+    """Distribution-free coverage: the 95% order-stat CI for the P90 of Uniform(0,1) brackets
+    the analytic true P90 (=0.90) at ~the nominal rate over many independent draws. The
+    outward floor/ceil widening makes it conservative (coverage >= 0.95), which is the correct
+    direction for a lender-facing band.
+    """
+    rng = np.random.default_rng(12345)
+    n, true_p90, reps = 500, 0.90, 400
+    covered = 0
+    for _ in range(reps):
+        x = rng.uniform(0.0, 1.0, n)
+        lv = percentile_ci_diagnostic({"x": x.tolist()}, percentiles=[90])["x"][
+            "percentiles"
+        ]["90"]
+        if lv["ci_lower"] <= true_p90 <= lv["ci_upper"]:
+            covered += 1
+    coverage = covered / reps
+    assert coverage >= 0.95  # conservative order-stat interval, seeded → deterministic
+
+
+def test_percentile_ci_shrinks_with_more_trials() -> None:
+    rng = np.random.default_rng(7)
+    big = rng.normal(0.0, 1.0, 8000)
+
+    def width(nsub: int) -> float:
+        lv = percentile_ci_diagnostic({"x": big[:nsub].tolist()}, percentiles=[90])[
+            "x"
+        ]["percentiles"]["90"]
+        return lv["ci_upper"] - lv["ci_lower"]
+
+    assert width(4000) < width(200)
+
+
+def test_percentile_ci_omits_metric_below_min_n() -> None:
+    assert percentile_ci_diagnostic({"x": [1.0, 2.0, 3.0]}, min_n=30) == {}
+
+
+def test_percentile_ci_drops_none_and_nonfinite() -> None:
+    arr = [1.0, None, float("nan"), float("inf"), 2.0] + [1.5] * 40
+    out = percentile_ci_diagnostic({"x": arr}, min_n=30)
+    assert out["x"]["n"] == 42  # 45 entries minus None, nan, inf
+
+
+def test_wilson_interval_matches_formula_and_stays_in_unit() -> None:
+    k, n = 5, 100
+    lo, hi = _wilson_interval(k, n, Z_95)
+    phat = k / n
+    z2 = Z_95 * Z_95
+    denom = 1.0 + z2 / n
+    center = (phat + z2 / (2.0 * n)) / denom
+    margin = (Z_95 / denom) * np.sqrt(phat * (1.0 - phat) / n + z2 / (4.0 * n * n))
+    assert lo == pytest.approx(max(0.0, center - margin))
+    assert hi == pytest.approx(min(1.0, center + margin))
+    # Zero breaches: lower clamps to 0, band still non-degenerate (Wilson, not Wald).
+    z_lo, z_hi = _wilson_interval(0, 100, Z_95)
+    assert z_lo == pytest.approx(0.0, abs=1e-9)
+    assert 0.0 < z_hi < 1.0
+
+
+def test_breach_probability_ci_only_when_threshold_given() -> None:
+    rng = np.random.default_rng(2)
+    dscr = rng.normal(1.35, 0.10, size=500).tolist()
+    # No threshold → no breach block invented.
+    plain = percentile_ci_diagnostic({"dscr_min": dscr})["dscr_min"]
+    assert "breach_probability_ci" not in plain
+    # With a covenant threshold → Wilson breach CI on P(dscr_min < 1.30).
+    withthr = percentile_ci_diagnostic(
+        {"dscr_min": dscr}, breach_thresholds={"dscr_min": 1.30}
+    )["dscr_min"]
+    b = withthr["breach_probability_ci"]
+    assert b["threshold"] == 1.30
+    assert b["method"] == "wilson"
+    assert b["n_breaches"] == sum(1 for v in dscr if v < 1.30)
+    assert b["point"] == pytest.approx(b["n_breaches"] / 500)
+    assert b["ci_lower"] <= b["point"] <= b["ci_upper"]
+
+
+def test_engine_attaches_percentile_ci_without_changing_bands() -> None:
+    from analytics.mc.engine import MonteCarloEngine
+
+    cfg = yaml.safe_load(_LENDER.read_text())
+    result = MonteCarloEngine(cfg, seed=1).run(n_trials=128)
+
+    assert "percentile_ci" in result.metadata
+    pci = result.metadata["percentile_ci"]
+    assert isinstance(pci, dict) and pci
+    d = next(iter(pci.values()))
+    assert d["statistic"] == "percentile_ci"
+    assert "90" in d["percentiles"]
+    lv = d["percentiles"]["90"]
+    assert {"point", "ci_lower", "ci_upper", "rank_lower", "rank_upper"} <= set(lv)
+    # dscr_min carries a covenant breach CI (threshold wired from the resolved covenant).
+    assert "dscr_min" in pci
+    assert "breach_probability_ci" in pci["dscr_min"]
+    # Additive only: the percentile bands the aggregator reports are still present.
     assert result.percentiles is not None
