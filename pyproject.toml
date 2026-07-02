@@ -20,6 +20,11 @@ dependencies = [
   "pyyaml>=6.0",
   "scipy>=1.10",
   "omegaconf>=2.3",
+  # Canonical CLI framework (GWTF CLI-01/R1). A real runtime dep: the packaged
+  # analytics.cli.*_hydra modules import hydra at module scope, so regenerating the
+  # requirements.txt lock from pyproject alone must not drop it. Maintenance-risk
+  # ADR (stalled upstream cadence + OmegaConf fallback): docs/HYDRA_MAINTENANCE_DECISION.md (#609).
+  "hydra-core>=1.3.3",
   "pydantic>=2.0",
   "jinja2>=3.1",          # drives the base HTML report (app.reports.renderer); PDF (weasyprint) is the [report] extra
 ]
