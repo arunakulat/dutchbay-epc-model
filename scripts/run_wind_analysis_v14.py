@@ -47,7 +47,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -131,6 +130,8 @@ def cli(cfg: DictConfig) -> None:
         cache_dir = cfg.get("cache_dir")
         output_dir = cfg.get("output_dir")
         export_scenario = cfg.get("export_scenario", "P75")
+        # Opt-in (#656): also compute + attach the long-term resource trend block.
+        analyze_trend = bool(cfg.get("analyze_trend", False))
 
         logger.info("=" * 70)
         logger.info("COMPLETE WIND RESOURCE ASSESSMENT")
@@ -156,7 +157,10 @@ def cli(cfg: DictConfig) -> None:
         # Run complete assessment
         logger.info("\nRunning complete assessment pipeline...")
         assessment_results = pipeline.run_complete_assessment(
-            start_date=start_date, end_date=end_date, force_download=force_download
+            start_date=start_date,
+            end_date=end_date,
+            force_download=force_download,
+            analyze_trend=analyze_trend,
         )
 
         # Export for cashflow model
@@ -284,6 +288,14 @@ def cli(cfg: DictConfig) -> None:
             },
             "message": f"✓ Complete assessment finished for {location_name} ({export_scenario} scenario)",
         }
+
+        # Surface the opt-in long-term trend block (#656) at the export top level
+        # so a frozen export captured from this CLI's stdout carries it; the finance
+        # CLI's Executive Workbook step reads it from here. Absent when analyze_trend
+        # is off, so the default export is byte-identical.
+        trend_block = assessment_results.get("long_term_trend")
+        if trend_block is not None:
+            result["long_term_trend"] = trend_block
 
         logger.info("\n" + "=" * 70)
         logger.info("✓ ASSESSMENT COMPLETE")
