@@ -17,11 +17,15 @@ import numpy as np
 import pytest
 
 from analytics.capital_risk_layer_v14 import (
+    DRIVER_MC_TRIAL_METRICS,
     CapitalRiskLayer,
+    build_case_metadata_from_trials,
+    build_driver_mc_tail_snapshot,
     compute_capital_risk_layer,
     run_capital_risk_layer,
     run_driver_mc,
 )
+from analytics.sensitivity.tail_risk import TailRiskConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -118,3 +122,102 @@ def test_run_capital_risk_layer_smoke() -> None:
     assert layer.n_samples == 25
     assert 0.0 <= layer.dscr["prob_breach"] <= 1.0
     assert layer.equity_irr_var_cvar.var_label == "VaR(95%)"
+
+
+# ---------------------------------------------------------------------------
+# Distributional tail-risk plumbing + wire (#657)
+# ---------------------------------------------------------------------------
+
+_DRIVERS = {"Financing_Terms.debt_ratio": {"mean": 0.625, "std": 0.02}}
+
+
+def test_driver_mc_default_return_unchanged() -> None:
+    # Opt-in feature must not alter the historical three-key return surface.
+    mc = run_driver_mc(LENDER_CONFIG, drivers=_DRIVERS, n_samples=20, seed=3)
+    assert set(mc) == {"equity_irr", "equity_npv", "min_dscr"}
+
+
+def test_driver_mc_collect_trials_adds_all_metric_buckets() -> None:
+    mc = run_driver_mc(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=20, seed=3, collect_trials=True
+    )
+    # Legacy keys stay, plus every canonical trial metric, all shape (n,).
+    assert {"equity_irr", "equity_npv", "min_dscr"}.issubset(mc)
+    for m in DRIVER_MC_TRIAL_METRICS:
+        assert mc[m].shape == (20,), (m, mc[m].shape)
+
+
+def test_driver_mc_mode_parity_same_seed() -> None:
+    # collect_trials must not perturb the RNG draw sequence: the three legacy
+    # arrays are identical whether or not trials are collected.
+    base = run_driver_mc(LENDER_CONFIG, drivers=_DRIVERS, n_samples=20, seed=5)
+    full = run_driver_mc(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=20, seed=5, collect_trials=True
+    )
+    for k in ("equity_irr", "equity_npv", "min_dscr"):
+        assert np.array_equal(base[k], full[k])
+    # dscr_min aliases min_dscr; the collected equity_irr matches the legacy array.
+    assert np.array_equal(full["dscr_min"], full["min_dscr"])
+    assert np.array_equal(base["equity_irr"], full["equity_irr"])
+
+
+def test_build_case_metadata_bucket_shape() -> None:
+    mc = run_driver_mc(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=20, seed=7, collect_trials=True
+    )
+    case = build_case_metadata_from_trials(mc, label="lender_p50")
+    assert case["label"] == "lender_p50"
+    trials = case["metadata"]["trials"]
+    # Exactly the canonical metrics, each a plain JSON-friendly list of floats.
+    assert set(trials) == set(DRIVER_MC_TRIAL_METRICS)
+    assert "min_dscr" not in trials  # convenience alias dropped, no double-count
+    for m, arr in trials.items():
+        assert isinstance(arr, list) and len(arr) == 20
+        assert all(isinstance(v, float) for v in arr)
+
+
+def test_build_driver_mc_tail_snapshot_var_cvar_and_breach() -> None:
+    snap = build_driver_mc_tail_snapshot(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11
+    )
+    rows = {r["metric"]: r for r in snap["rows"]}
+    assert set(rows) == set(DRIVER_MC_TRIAL_METRICS)
+
+    irr_row = rows["project_irr"]
+    # Quantile ordering holds and CVaR sits at or below the downside VaR.
+    assert irr_row["p5"] <= irr_row["p10"] <= irr_row["p95"]
+    assert irr_row["cvar"] <= irr_row["p5"]
+    assert "prob_breach" not in irr_row  # non-DSCR metric: no breach key
+
+    dscr_row = rows["dscr_min"]
+    assert 0.0 <= dscr_row["prob_breach"] <= 1.0
+    assert dscr_row["dscr_floor"] == pytest.approx(TailRiskConfig().dscr_floor)
+
+
+def test_build_driver_mc_tail_snapshot_respects_metric_keys() -> None:
+    snap = build_driver_mc_tail_snapshot(
+        LENDER_CONFIG,
+        drivers=_DRIVERS,
+        n_samples=30,
+        seed=13,
+        metric_keys=["dscr_min"],
+    )
+    assert [r["metric"] for r in snap["rows"]] == ["dscr_min"]
+
+
+def test_tail_snapshot_require_trials_fail_loud_when_absent() -> None:
+    # CESSPIT: a metric with no trial array yields an explicit no_trials note,
+    # never a silently fabricated distributional statistic.
+    from analytics.sensitivity.tail_risk import _build_case_tail_snapshot
+
+    empty_case = build_case_metadata_from_trials({}, label="no_mc")
+    out = _build_case_tail_snapshot(
+        case=empty_case,
+        metric_keys=["project_irr"],
+        run_cfg=TailRiskConfig(require_trials=True),
+    )
+    assert out["rows"][0] == {
+        "case": "no_mc",
+        "metric": "project_irr",
+        "note": "no_trials",
+    }
