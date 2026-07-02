@@ -96,13 +96,14 @@ def run_finance_case(
         validation_mode=validation_mode,
         validation_modules=modules,
     )
-    # Stamp the auditable run manifest (resolved-config SHA-256 + engine version + commit)
-    # so this gateway's result is reproducible and tamper-evident (ICAEW posture), matching
-    # the run_full_pipeline_v14 CLI. The shared run_v14_pipeline does not stamp one, so the
-    # web API (/cases, /cases/report.*) and the integrated/hybrid seam (run_integrated_case,
-    # which routes through here on its patched config) would otherwise omit the manifest the
-    # CaseResult and report pack already expose. Idempotent: defer to a manifest the pipeline
-    # may stamp itself in future. Metadata only — no KPI is touched.
+    # Auditable run manifest (resolved-config SHA-256 + engine version + commit) so this
+    # gateway's result is reproducible and tamper-evident (ICAEW posture). As of #577 the
+    # engine (run_v14_pipeline) stamps the manifest itself from the RESOLVED config it
+    # evaluated, so this guard normally no-ops; it is RETAINED as a stamp-if-absent
+    # fallback (e.g. a monkeypatched engine in tests) so the web API (/cases,
+    # /cases/report.*) and the integrated/hybrid seam (run_integrated_case, which routes
+    # through here on its patched config) never omit the manifest the CaseResult and
+    # report pack expose. Metadata only — no KPI is touched.
     if isinstance(result, dict) and not result.get("run_manifest"):
         result["run_manifest"] = build_run_manifest(
             scenario, validation_mode=validation_mode

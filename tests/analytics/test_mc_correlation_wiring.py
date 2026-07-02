@@ -112,13 +112,16 @@ def test_align_correlation_to_params_is_identity_when_already_matched() -> None:
 def test_align_correlation_to_params_subsets_and_reorders() -> None:
     names = ("a", "b", "c")
     mat = np.array([[1.0, 0.4, 0.7], [0.4, 1.0, 0.2], [0.7, 0.2, 1.0]])
-    spec = CorrelationSpec(enabled=True, matrix=mat, param_names=names)
+    spec = CorrelationSpec(
+        enabled=True, matrix=mat, param_names=names, method="gaussian_copula"
+    )
     # Active set is a reordered subset {c, a}: the (a,c)=0.7 pair must survive, reordered.
     out = align_correlation_to_params(spec, ["c", "a"])
     assert out is not None and out.matrix is not None
     assert out.matrix.shape == (2, 2)
     assert out.matrix[0][1] == out.matrix[1][0] == 0.7  # (c,a) preserved
     assert out.param_names == ("c", "a")
+    assert out.method == "gaussian_copula"  # method survives re-indexing (#601)
 
 
 def test_align_correlation_to_params_identity_when_active_param_absent() -> None:
@@ -192,3 +195,110 @@ def test_iman_conover_preserves_independence_at_zero_target() -> None:
     spec = CorrelationSpec(enabled=True, matrix=mat, param_names=("a", "b"))
     out = apply_correlation_structure(lhs_samples=lhs, correlation=spec, seed=42)
     assert abs(_induced_spearman(out, 0, 1)) < 0.06
+
+
+# --------------------------------------------------------------------------- #
+# Gaussian copula (#601, opt-in)                                              #
+# --------------------------------------------------------------------------- #
+def test_gaussian_copula_induces_target_spearman() -> None:
+    """The copula's induced Spearman lands on the latent-normal mapping.
+
+    The matrix parameterizes the copula on the LATENT-NORMAL scale, so the
+    induced Spearman concentrates at (6/pi)*arcsin(rho/2) — for rho=0.6 that is
+    ~0.582, slightly BELOW the nominal entry (documented, both methods share
+    this distortion). With the exact-normal-scores construction the only noise
+    left is the rank conversion, so a tight tolerance holds; the value must also
+    sit within the looser practical tolerance of the nominal target.
+    """
+    rng = np.random.default_rng(7)
+    n, target = 4000, 0.6
+    lhs = rng.random((n, 2))
+    mat = np.array([[1.0, target], [target, 1.0]])
+    spec = CorrelationSpec(
+        enabled=True, matrix=mat, param_names=("a", "b"), method="gaussian_copula"
+    )
+
+    out = apply_correlation_structure(lhs_samples=lhs, correlation=spec, seed=42)
+
+    induced = _induced_spearman(out, 0, 1)
+    latent = 6.0 / np.pi * np.arcsin(target / 2.0)  # ~0.58192
+    assert abs(induced - latent) < 0.03, f"induced {induced:.3f} != latent {latent:.3f}"
+    assert abs(induced - target) < 0.05, f"induced {induced:.3f} !~ nominal {target}"
+    # Marginals must be preserved exactly (a pure reordering of each column).
+    assert np.allclose(np.sort(out[:, 0]), np.sort(lhs[:, 0]))
+    assert np.allclose(np.sort(out[:, 1]), np.sort(lhs[:, 1]))
+
+
+def test_gaussian_copula_scatter_tighter_than_iman_conover() -> None:
+    """Exact normal scores beat raw scores: less seed-to-seed dependence scatter.
+
+    Iman-Conover recorrelates RAW normal draws, so the induced Spearman inherits
+    the O(1/sqrt(n)) sampling error of the draws' own correlation; the copula
+    whitens that error away first. Over a FIXED seed set (deterministic, MRM-01)
+    the copula's induced-Spearman spread around the latent target must be
+    strictly tighter than Iman-Conover's (measured at n=500: std ~0.011 vs
+    ~0.030).
+    """
+    n, target = 500, 0.6
+    lhs = np.random.default_rng(9).random((n, 2))
+    mat = np.array([[1.0, target], [target, 1.0]])
+    ic_spec = CorrelationSpec(enabled=True, matrix=mat, param_names=("a", "b"))
+    gc_spec = CorrelationSpec(
+        enabled=True, matrix=mat, param_names=("a", "b"), method="gaussian_copula"
+    )
+    ic_vals = []
+    gc_vals = []
+    for seed in range(20):
+        ic_vals.append(
+            _induced_spearman(
+                apply_correlation_structure(
+                    lhs_samples=lhs, correlation=ic_spec, seed=seed
+                ),
+                0,
+                1,
+            )
+        )
+        gc_vals.append(
+            _induced_spearman(
+                apply_correlation_structure(
+                    lhs_samples=lhs, correlation=gc_spec, seed=seed
+                ),
+                0,
+                1,
+            )
+        )
+    assert float(np.std(gc_vals)) < float(np.std(ic_vals))
+
+
+def _with_method(cfg: dict, method: str) -> dict:
+    cfg = _with_correlation(cfg)
+    cfg["monte_carlo"]["correlation"]["method"] = method
+    return cfg
+
+
+def test_engine_round_trips_gaussian_copula_method() -> None:
+    # config -> load_correlation_from_config -> align_correlation_to_params keeps
+    # the opt-in method string intact on the engine's live spec.
+    eng = MonteCarloEngine(_with_method(_load(), "gaussian_copula"), seed=1)
+    assert eng._correlation is not None
+    assert eng._correlation.enabled is True
+    assert eng._correlation.method == "gaussian_copula"
+
+
+def test_engine_gaussian_copula_changes_trial_outcomes_vs_iman_conover() -> None:
+    # Same seed, same matrix, different method -> different joint draws -> different
+    # per-trial KPI sequence. Proves the dispatch is live end-to-end in the engine.
+    logging.disable(logging.WARNING)
+    try:
+        ic = MonteCarloEngine(_with_method(_load(), "iman_conover"), seed=123).run(
+            n_trials=32
+        )
+        gc = MonteCarloEngine(_with_method(_load(), "gaussian_copula"), seed=123).run(
+            n_trials=32
+        )
+        a = [x for x in (ic.trials or {}).get("project_irr", []) if x is not None]
+        b = [x for x in (gc.trials or {}).get("project_irr", []) if x is not None]
+        assert len(a) == len(b) == 32
+        assert a != b  # the copula rearranged the joint sample -> outcomes differ
+    finally:
+        logging.disable(logging.NOTSET)

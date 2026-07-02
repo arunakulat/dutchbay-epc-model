@@ -24,6 +24,81 @@ All notable changes to this project will be documented here.
   the grid evaluates endpoints exactly) is documented and bounded at ~1e-4 IRR. Default
   `method="grid"` keeps all existing callers byte-identical; committed-scenario KPIs verified
   byte-identical via the multi-scenario kpi oracle (19 KPI-bearing scenarios).
+- **Opt-in Gaussian-copula dependence for MC correlation (#601, default off — KPI-neutral).**
+  `monte_carlo.correlation.method` now dispatches: the default `iman_conover` path is
+  bit-identical to the previous single-path code (pinned by a reference-algorithm test and
+  verified byte-identical via the all-scenarios KPI oracle), while `method: gaussian_copula`
+  opts into Gaussian-copula dependence built from EXACT normal scores — the raw draws are
+  whitened against their own sample covariance and recorrelated, so the scores carry the
+  target correlation exactly instead of Iman-Conover's O(1/sqrt(n)) approximate Spearman
+  (SOTA link-research digest correction). The quantile map onto each driver's empirical
+  marginal reduces to a gather-by-rank, so marginals are preserved exactly; seeded
+  determinism is pinned (MRM-01). Honest limitations documented in the docstring: the matrix
+  parameterizes the LATENT-NORMAL scale (induced Spearman = (6/pi)*arcsin(rho/2), e.g. 0.60
+  induces ~0.582, a distortion BOTH methods share), and a Gaussian copula has ZERO asymptotic
+  tail dependence — the issue's tail-crisis motivation (FX-crisis x curtailment) requires a
+  t-copula, an explicit non-goal left as a follow-up. `gaussian_copula` requires
+  n_trials > n_params (fails loud). Unrecognized `correlation.method` values (e.g.
+  `cholesky`) now FAIL LOUD at apply time instead of silently running Iman-Conover while the
+  config claims another structure (CESSPIT); the engine's Sobol'+correlation warning now
+  names the active method. No committed scenario sets a non-default method.
+- **P99 (and P1) first-class in the Monte Carlo default percentile set (#599, additive-only,
+  committed KPIs byte-identical).** `analytics.mc.aggregate` now exposes `DEFAULT_PERCENTILES =
+  (1, 5, 10, 50, 90, 95, 99)` — extending the previous `(5, 10, 50, 90, 95)` default — because
+  senior-debt loan-size capping is conventionally set at P99. Tail direction is handled
+  explicitly per the #563 exceedance convention in `analytics.mc.exports`: the keys are RAW
+  percentiles, so for higher-is-better metrics (DSCR/IRR/NPV/LLCR/PLCR) the lender's downside
+  "P99" is the raw **1st** percentile (key `1`, shipped alongside), while the raw 99th (key `99`)
+  is the upside tail — the raw 99th must never be reported as downside P99. Additive-only proof:
+  each requested percentile is computed independently (`np.percentile` per level), so every
+  pre-existing percentile key/value is unchanged (empirically verified: 0 removed / 0 changed,
+  additions only at levels 1 and 99). Scenarios pinning `monte_carlo.percentiles` are unaffected —
+  all committed lender/capex scenarios pin `[10, 25, 50, 75, 90]` (byte-identical, verified); the
+  two committed scenarios WITHOUT a pin (`dutchbay_mc_enhanced_2025Q4.yaml`, which has no
+  `monte_carlo` block at all, and `dutchbay_sprint17_enhanced.yaml`, whose legacy block has no
+  `monte_carlo.parameters`) cannot produce MC artifacts through the canonical engine (fail-fast
+  `MonteCarloConfigError` before aggregation, unchanged) and so needed no pin; the wind-resource
+  MC (`config/wind_dutchbay_150mw.yaml`) computes its own percentiles and never consumes this
+  default. The deterministic KPI surface is outside the MC aggregator entirely (kpi-oracle
+  byte-identical across all committed scenarios).
+- **BESS LCOS advisory sanity band vs PNNL ESGC 2024 / Lazard LCOS v10.0 non-ITC (#605, report-only).**
+  `analytics.cost.benchmark.lcos_benchmark()` (mirroring `capex_benchmark`) checks the computed
+  read-only LCOS (`finance.bess_lcos`) against the **USD 115–254/MWh non-ITC literature band**
+  (Lazard LCOS v10.0, June-2025 LCOE+, unsubsidised — Sri Lanka has no US ITC; methodology
+  cross-anchored to PNNL ESGC 2024). The band, source labels, and vintage are config-sourced from
+  `defaults.cost_reference` in `config/defaults.yaml` (CCCDIR — no Python-literal anchors). Each
+  per-BESS LCOS dict in the `ScenarioAnalytics` batch view gains an **additive** `benchmark`
+  advisory (`within_band`/band/sources/note); an out-of-band LCOS **logs a WARNING citing the
+  sources** — no raise, no value change — and an undefined LCOS (`None`, e.g. zero discharged
+  energy) yields an explicit not-comparable note (`within_band: null`), never a crash or silent
+  zero. Joins the fixed-dispatch limitation notes from #596: the model's LCOS is a fixed-cycling
+  basis, so an out-of-band value is a review prompt, not an error. Every existing reported
+  `lcos_usd_per_mwh` value and all committed-scenario KPIs are byte-identical.
+- **Wind artifact hygiene (#618, KPI-neutral: committed scenarios byte-identical, frozen AEP artifacts untouched).**
+  Three fixes on the `wind_resource` timeseries-diagnostic path (finance reads the frozen
+  `aep_summary` JSON, so lender KPIs cannot move):
+  - **Version strings**: `wind_resource.__version__`, the `ERA5Fetcher`/`WindPipeline`/
+    `EnergyCalculator`/`WindAnalyzer` init logs, the ERA5 download-metadata `version` field and the
+    `WindPipeline` results-metadata `version` field now derive from
+    `analytics.run_manifest.engine_version()` (the repo `VERSION` file) instead of the stale
+    hardcoded `1.0.0`/`1.1.0 (CCCDIR Compliant)` literals (runtime JSON artifacts now stamp e.g.
+    `15.2.0`). Owned here per the #584 hand-off; a source-scan test fences the literals out.
+  - **`resource.uncertainty.*` plumbing**: `EnergyCalculator.calculate_net_aep` builds its IEC
+    61400-15-2 exceedance budget from an optional `uncertainty` mapping (new constructor knob,
+    passed through `WindPipeline`) via a new shared, policy-free sigma parser
+    `wind_resource.bankable_aep.budget_from_mapping` — the same parser
+    `analytics.wind.aep_summary_builder._uncertainty_from_config` now delegates to, so the two
+    consumers cannot drift. `correlation` and `life_years` are honoured; **`p50_haircut_pct` is
+    deliberately NOT applied on this path** (kernel 0.0 pinned; a declared key is logged, not
+    silently used) — the builder-vs-kernel haircut-policy question remains the user-gated #653 and
+    is NOT settled here. Absent config = the previous `UncertaintyBudget()` defaults, exactly.
+  - **Air density on timeseries AEP**: `EnergyCalculator.calculate_gross_aep` (and the monthly
+    profile, for consistency) now applies the IEC 61400-12-1 velocity correction
+    `(rho_site/rho_ref)**(1/3)` when `air_density_site_kgm3` is supplied (new constructor knobs,
+    `ref` defaulting to the IEC 1.225 kg/m^3), matching the bankable path's
+    `density_velocity_factor`; absent = factor 1.0, no correction — parity with
+    `aep_summary_builder`'s fallback when a scenario declares no densities. The factor used is
+    disclosed in the gross-AEP result.
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:
@@ -76,6 +151,54 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **Global SA: shared finite-mask stops a partial-NaN metric column poisoning Sobol/Morris/PAWN
+  indices (#644, KPI-neutral).** A metric column with SOME non-finite entries (an engine KPI
+  returning `None` on a subset of sample rows) passed the `_is_flat_output` guard — which inspects
+  only finite values — and fed NaNs straight into SALib `analyze`, yielding all-NaN indices plus a
+  fabricated insertion-order `ranking` (`sorted()` over NaN keys). All three runners in
+  `analytics.sensitivity.global_sa` now mask non-finite outputs BEFORE `analyze` via a shared
+  helper (`_apply_finite_mask`) that respects each estimator's sample design: **Sobol** drops whole
+  Saltelli blocks (`D+2` rows, `2D+2` with second order) and **Morris** whole trajectories
+  (`D+1` rows) containing any non-finite output — never single rows, which would corrupt the
+  A/B/AB and elementary-effect pairing (verified against SALib 1.5.2's block indexing) — while the
+  given-data **PAWN** masks row-wise. Masking is deterministic (a pure function of the output
+  vector, MRM-01) and loudly disclosed (CESSPIT): a `logger.warning` carries the metric name and
+  dropped block/row count + share, and a `masked` disclosure dict is attached to the per-metric
+  result. Documented thresholds (the issue names none): above a 10% dropped share the warning
+  escalates; above 50% the metric is flagged **`nan_poisoned`** with zeroed indices (the NaN
+  analogue of `flat_metric`, logged at ERROR) instead of analyzing an unrepresentative residue —
+  flag-not-raise, so one poisoned metric cannot destroy the other metrics' indices in the same
+  run. The all-NaN column still resolves via `_is_flat_output` (unchanged), clean-data index
+  values are bit-identical to a direct SALib `sample->analyze` (pinned by test), and all committed
+  scenarios are **kpi_oracle byte-identical (argv-correct)** — the guard is unreachable on the
+  committed lender case, whose worst-corner KPIs are all finite.
+
+  **Report layer (Fable-review blocker):** the lender report's Global-SA adapter
+  (`app.services.report_global_sa.compute_report_global_sa`) previously read only
+  `drivers`/`ranking` and stripped the flags, so a flagged metric's ZEROED placeholder drivers
+  rendered a "Global Sensitivity — Morris Screening" section with every driver at 0.00% and no
+  caveat — a confident false claim (e.g. "FX does not influence the IRR"). The adapter now takes
+  its documented CASPER degrade path for a `nan_poisoned` — and, same placeholder shape, a
+  `flat_metric` — target metric: it returns `None` (section omitted, engine reason logged),
+  pinned end-to-end (adapter returns `None`; the template's existing `if ctx.global_sa` guard
+  omission is already pinned). Two same-surface refinements from the same review: a flagged
+  (`flat_metric`/`nan_poisoned`) Sobol metric now carries `interactions_present=None` ("not
+  computed") instead of a definitive `False` no index backs (the CLI's truthy check degrades
+  identically), and the masking disclosures pluralize their sample unit correctly
+  ("trajectories", not "trajectorys").
+- **MC CLI artifact no longer carries two conflicting `n_trials` (#647, KPI-neutral).** On the
+  opt-in `monte_carlo.sampler: sobol` path (#589) a non-power-of-two trial request is rounded UP
+  to the next 2**m and ALL points are evaluated; the engine already stamped the evaluated count in
+  `metadata.n_trials` (plus the `sobol_n_requested`/`sobol_n_used` disclosure pair when they
+  diverge), but `cli_monte_carlo_hydra` kept echoing the REQUESTED count at the payload/artifact
+  top level — one `monte_carlo_summary.json` told two different trial-count stories. The CLI now
+  sources the top-level `n_trials` (and the completion log line) from `result.metadata`, so
+  top-level == metadata == trials actually run, with the original request still disclosed via
+  `metadata.sobol_n_requested`. The pre-run error payload keeps the requested count (no result
+  exists there — now commented as such). Default `lhs` path is untouched (requested == used);
+  no other code reads the artifact's top-level `n_trials` (verified). Pinned by a CLI-level
+  subprocess test (`tests/analytics/test_mc_sobol_sampler.py`) driving a 12→16 Sobol run and
+  asserting stdout payload + written artifact agree with metadata.
 - **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
   Five verified erosions of the fail-loud stance closed; all committed scenarios verified
   **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
@@ -106,6 +229,82 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
+  `mc_risk` block's DSCR breach floor was resolved from the pipeline's
+  `debt_covenants.dscr_threshold` snapshot (= `Financing_Terms.target_dscr` only), while the
+  MC engine's fixed-debt breach test used the 4-path precedence
+  `constraints.min_dscr_covenant` → `Financing_Terms.target_dscr` → `Financing_Terms.min_dscr`
+  → `monte_carlo.min_dscr_covenant` (default 1.30) — two resolutions that could disagree on
+  the same scenario. The resolvers were extracted verbatim from `analytics.mc.engine` into the
+  dependency-light `analytics.mc.covenant` (MOVE → SHIM; the engine re-exports them unchanged
+  under their original private names), and `casper_payload` now resolves the floor with the
+  shared resolver over the raw `ScenarioResult.config`, falling back to the
+  `debt_covenants.dscr_threshold` snapshot and then the `CovenantSpec` default (1.30) only
+  when no raw config is attached (bare-string/synthetic scenarios). Verified against all
+  committed scenarios: every lendercase has both resolutions in agreement at 1.30
+  (kpi-oracle byte-identical; the floor is not part of the committed KPI surface); the only
+  runtime `mc_risk` movers are the two non-bankable mixed-covenant configs, which now adopt
+  the engine floor the way the covenant surface always intended
+  (`dutchbay_equitycase_2025Q4` 1.40 → 1.30; `edge_extreme_stress` 1.25 → 1.15), with the
+  floor used still surfaced explicitly in `mc_risk.covenant.dscr_floor`. The four
+- **Run manifest is now stamped inside the engine (#577, half 2 — engine-internal provenance,
+  KPI-neutral).** `run_v14_pipeline_enhanced` stamps `result["run_manifest"]` itself, immediately
+  after config resolution + schema validation, hashing the ALREADY-RESOLVED post-override config it
+  actually evaluates (no re-load) — so every caller (CLI, web API, `evaluation_v14` gateway,
+  MC/sensitivity per-trial entries, scripts) now receives a manifest whose `config_sha256` binds to
+  the exact inputs, for both path and inline-Mapping configs. Outer stampers defer to it:
+  `run_full_pipeline_v14` becomes stamp-if-absent (new `_stamp_manifest_if_absent` helper; the
+  `_load_manifest_config` re-load with its loud degraded-path WARNING from half 1 is retained as the
+  fallback), `api.pipeline_api.run_pipeline` returns the engine manifest instead of rebuilding one,
+  and `app.services.pipeline_service.run_finance_case`'s existing stamp-if-absent guard is kept as a
+  defensive fallback. `analytics.run_manifest.git_sha()` is now process-cached (`lru_cache` on the
+  `git rev-parse HEAD` probe) so per-trial manifest stamping no longer forks a git subprocess per MC
+  trial; the `DUTCHBAY_GIT_SHA`/`GIT_COMMIT` env override deliberately stays outside the cache and is
+  consulted on every call. `ScenarioAnalytics` batch stamps are unchanged (that surface builds
+  cashflow/debt/KPIs directly and never calls the engine). Additive metadata only: committed scenario
+  KPIs are kpi-oracle byte-identical.
+- **Batch-path economics now labelled non-authoritative in every emitted JSON (#611).** The batch
+  comparison CLI (`run_scenario_analytics_v14.py` → `analytics.scenario_analytics`) computes DSCR/IRR
+  on a deliberately lighter basis than the canonical pipeline (PIPE-1, #472: no build-up WACC, no
+  two-pass interest tax shield, no equity waterfall), but only a docstring said so. Both emitted JSON
+  payloads — the persisted `output_summary_json` (serialised `BatchResultSummary`, which gains a
+  `basis` field defaulting to the new `analytics.scenario_analytics.BATCH_ECONOMICS_BASIS`) and the
+  CLI stdout summary (now built by `run_scenario_analytics_v14._build_stdout_payload`) — carry a
+  machine-readable `basis: "comparison_snapshot"` marker so a consumer cannot mistake batch numbers
+  for `run_full_pipeline_v14.py` economics. Strictly ADDITIVE: no existing key is renamed, removed or
+  revalued (downstream consumers grep-verified: tests only); committed scenario KPIs are
+  kpi-oracle byte-identical. JSON-shape tests extended to pin the marker at both emission points.
+- **Frozen-contract pattern extended to the report/job models (#608, KPI-neutral).** All 13
+  report-section models in `app/reports/report_model.py` (`KpiRow`, `AssumptionRow`, `RiskRow`,
+  `ReadinessRow`, `Verdict`, `ReportContext` — previously `extra="forbid"` only — plus
+  `EvidenceRow`/`EvidenceBlock`, `MultiTechRow`/`MultiTechBlock`, `ThreeStatementBlock`,
+  `WaterfallRow`/`WaterfallBlock`, which had no `model_config`) and `JobRecord` in
+  `app/jobs/models.py` are now `ConfigDict(frozen=True)`, matching the 15 frozen pydantic contracts
+  in `analytics/core/{returns,risk_metrics}.py`, `analytics/pipeline_analytics_v14.py` and the two
+  cashflow adapters. Each model's existing `extra` policy is preserved (no silent forbid/ignore
+  flips), and `JobProgress`'s deliberate `extra="ignore"` (computed-`pct` JSON round-trip) is
+  untouched. Post-construction attribute assignment now raises `ValidationError`; derive variants
+  with `model_copy(update=...)` — the path both job stores already use, so `InMemoryJobStore`/
+  `RedisJobStore` update flows are unchanged. Report contexts are built once in
+  `build_report_context` and consumed read-only by the renderer/API, so no production mutation site
+  existed; the single test that mutated a fetched `JobRecord` in place
+  (`tests/app/test_jobs_store.py::test_get_returns_detached_copy`) now asserts frozen semantics and
+  covers deep-copy detachment via the nested mutable `progress` instead. Committed scenario KPIs are
+  kpi-oracle byte-identical; passes the CI `pydantic.mypy` strict gate (#594).
+- **Tiered MCP bankability guard on measurement-campaign duration (#597).** `wind_resource.mcp`
+  previously enforced only a 24-sample statistical floor (`DEFAULT_MIN_CONCURRENT`, one day of hourly
+  data) while its own comment conceded a bankable MCP needs months of concurrent data. `run_mcp()` now
+  tiers the guard: below the unchanged hard floor it still raises unconditionally; in the band
+  `min_concurrent <= n < BANKABLE_MIN_CONCURRENT` (new constant, 2,880 hourly samples ~= 4 months;
+  Sheridan et al., Wind Energy Science 2025 — long-term capacity-factor errors ~47%/26%/16% at 1/3/6
+  months) it fails loud (CESSPIT, no silent sub-bankable fits) unless the caller passes the new
+  explicit opt-out `allow_below_bankable=True`, which downgrades the failure to a `logger.warning`
+  bankability disclosure; at or above the threshold it runs clean. `mcp_settings()` resolves the
+  matching scenario knob `resource.wind.mcp.allow_below_bankable` strictly (boolean only, non-boolean
+  values raise; defaults OFF) and returns it alongside `method`/`min_concurrent`. The opt-out never
+  bypasses the hard floor. The module remains opt-in with no scenario consumer, so committed
+  scenarios are kpi-oracle byte-identical (verified empirically across all 27). Tier boundaries
+  (23/24, 2,879/2,880), the override path, and the strict knob are pinned in `tests/wind/test_mcp.py`.
 - **Batch discount-rate default consolidated to a single source of truth (#586).** The default was
   stated three times with two different values: a silent `0.10` fallback in
   `run_scenario_analytics_v14.py`, the authoritative `0.12` in `conf/run_scenario_analytics_v14.yaml`,

@@ -202,8 +202,22 @@ def test_scenario_percentiles_and_var_cvar_are_honored() -> None:
 
 
 def test_absent_percentiles_falls_back_to_default_levels() -> None:
-    """A scenario without monte_carlo.percentiles keeps the documented default levels."""
+    """A scenario without monte_carlo.percentiles keeps the documented default levels.
+
+    Since #599 the default is DEFAULT_PERCENTILES = (1, 5, 10, 50, 90, 95, 99):
+    P99 first-class for senior-debt loan-size capping, with the raw 1st percentile
+    alongside because for higher-is-better metrics the lender exceedance "P99" is
+    the RAW 1st percentile (the raw 99th is the upside tail — #563 convention).
+    """
     cfg = yaml.safe_load(LENDER.read_text())
     cfg["monte_carlo"].pop("percentiles", None)
     result = run_monte_carlo_analysis(base_config=cfg, n_trials=40, seed=42)
-    assert set(result.percentiles) == {5, 10, 50, 90, 95}
+    assert set(result.percentiles) == {1, 5, 10, 50, 90, 95, 99}
+    # Raw-percentile monotonicity across the new tail levels: the downside
+    # (lender-P99 = raw 1st) sits at or below every other level, the raw 99th
+    # at or above.
+    for metric, levels in result.summary.items():
+        pct = levels["percentiles"]
+        assert (
+            pct[1] <= pct[5] <= pct[50] <= pct[95] <= pct[99]
+        ), f"{metric} percentile ordering violated: {pct}"
