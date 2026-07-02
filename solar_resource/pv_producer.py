@@ -73,6 +73,7 @@ from solar_resource.exceedance import (
     SolarExceedanceResult,
     SolarUncertaintyBudget,
     exceedance_levels_solar,
+    solar_uncertainty_from_config,
 )
 from solar_resource.loss_model import compute_net_solar_loss_factor
 
@@ -117,6 +118,9 @@ class SolarResourceConfig:
             when ``losses`` is provided.
         losses: optional itemised gross->net loss stack (``resource.solar.losses``) that
             REPLACES the flat ``system_loss_pct`` when present (config-first taxonomy).
+        uncertainty: optional ``resource.solar.uncertainty`` block (#604) — budget 1-sigma
+            overrides plus the ``p50_haircut_pct`` / ``correlation`` / ``life_years``
+            exceedance knobs, consumed by ``compute_solar_aep(emit_exceedance=True)``.
         ambient_temp_c, wind_speed_ms: Faiman cell-temperature drivers (annual means).
         inverter_eff_nom: PVWatts nominal inverter efficiency.
     """
@@ -150,6 +154,16 @@ class SolarResourceConfig:
     #: (not fetched live) to keep finance pvlib/network-free + reproducible (the #469 ERA5
     #: discipline). Path is resolved relative to the repo root.
     tmy_path: Optional[str] = None
+    #: OPTIONAL scenario uncertainty block (``resource.solar.uncertainty``, #604): 1-sigma
+    #: budget category overrides plus the ``p50_haircut_pct`` / ``correlation`` /
+    #: ``life_years`` exceedance knobs, parsed by
+    #: :func:`solar_resource.exceedance.solar_uncertainty_from_config` and consumed by
+    #: :func:`compute_solar_aep` when ``emit_exceedance=True``. Validated at construction
+    #: (typo'd keys fail loud, CESSPIT). Absent (default), the exceedance defaults are
+    #: byte-identical to the pre-wiring behaviour — haircut 0.0; the wind side's no-EYA
+    #: haircut policy default (#587) deliberately does NOT port to solar. ``hash=False``
+    #: mirrors ``losses`` (a mapping field on a frozen dataclass).
+    uncertainty: Optional[Mapping[str, Any]] = field(default=None, hash=False)
 
     def __post_init__(self) -> None:
         if self.dc_capacity_mw <= 0:
@@ -181,6 +195,17 @@ class SolarResourceConfig:
                 "losses must be a mapping of *_pct components; got "
                 f"{type(self.losses).__name__}"
             )
+        if self.uncertainty is not None:
+            if not isinstance(self.uncertainty, Mapping):
+                raise TypeError(
+                    "uncertainty must be a mapping of budget *_pct sigmas plus the "
+                    "p50_haircut_pct/correlation/life_years knobs; got "
+                    f"{type(self.uncertainty).__name__}"
+                )
+            # CESSPIT pre-flight: parse the block NOW so a typo'd budget key or a
+            # non-numeric knob fails loud at construction, not at the first
+            # emit_exceedance consumption (which is opt-in and may never run).
+            solar_uncertainty_from_config(self.uncertainty)
 
     @classmethod
     def from_scenario(cls, scenario: Mapping[str, Any]) -> "SolarResourceConfig":
@@ -304,9 +329,9 @@ def compute_solar_aep(
     *,
     emit_exceedance: bool = False,
     uncertainty_budget: Optional[SolarUncertaintyBudget] = None,
-    p50_haircut_pct: float = 0.0,
-    life_years: int = 20,
-    correlation: float = 0.0,
+    p50_haircut_pct: Optional[float] = None,
+    life_years: Optional[int] = None,
+    correlation: Optional[float] = None,
 ) -> SolarAEPResult:
     """Produce the bankable annual energy / capacity factor for a PV system.
 
@@ -318,19 +343,27 @@ def compute_solar_aep(
     (solar_resource.loss_model) when the config carries one.
 
     The deterministic P50 above is unchanged by the keyword-only arguments, which only add
-    an OPTIONAL P50/P75/P90 exceedance build-up on top (mirroring the wind producer):
+    an OPTIONAL P50/P75/P90 exceedance build-up on top (mirroring the wind producer). Each
+    exceedance knob resolves with the precedence **explicit keyword argument > the config's
+    ``resource.solar.uncertainty`` block (#604) > the module default** — ``None`` (the
+    keyword default) means "inherit from the config block when declared":
 
     Args:
         config: The typed PV-system + resource inputs.
         emit_exceedance: When True, populate ``SolarAEPResult.exceedance`` with the
             P50/P75/P90 levels; when False (default) it stays None and the result is
             byte-identical to the prior P50-only contract.
-        uncertainty_budget: The 1-sigma PV uncertainty budget; defaults to
+        uncertainty_budget: The 1-sigma PV uncertainty budget; None (default) falls back to
+            the config's ``uncertainty`` block sigmas when declared, else the
             :class:`solar_resource.exceedance.SolarUncertaintyBudget` literature typicals.
         p50_haircut_pct: Bankability haircut applied to the modelled P50 before the
-            exceedance build-up (default 0.0).
-        life_years: Averaging window for the project-life P90 (default 20).
-        correlation: Uniform inter-category correlation rho in [0, 1] (0.0 = RSS baseline).
+            exceedance build-up; None (default) falls back to the config block's
+            ``p50_haircut_pct``, else 0.0 — the wind side's no-EYA haircut policy default
+            (#587) deliberately does NOT port to solar.
+        life_years: Averaging window for the project-life P90; None (default) falls back
+            to the config block's ``life_years``, else 20.
+        correlation: Uniform inter-category correlation rho in [0, 1]; None (default) falls
+            back to the config block's ``correlation``, else 0.0 (the RSS baseline).
 
     The exceedance build-up is pure (no pvlib), so it never affects the import contract.
 
@@ -443,17 +476,21 @@ def compute_solar_aep(
     )
     exceedance: Optional[SolarExceedanceResult] = None
     if emit_exceedance:
-        budget = (
-            uncertainty_budget
-            if uncertainty_budget is not None
-            else SolarUncertaintyBudget()
+        # Config-first (#604): a scenario-declared resource.solar.uncertainty block
+        # supplies the defaults; an explicit keyword argument overrides it
+        # (kwarg > config block > module default). With neither, the helper returns the
+        # pre-wiring defaults (default budget, haircut 0.0, rho 0.0, 20 years).
+        cfg_budget, cfg_haircut_pct, cfg_correlation, cfg_life_years = (
+            solar_uncertainty_from_config(config.uncertainty)
         )
         exceedance = exceedance_levels_solar(
             annual_energy_gwh,
-            budget,
-            life_years=life_years,
-            p50_haircut_pct=p50_haircut_pct,
-            correlation=correlation,
+            uncertainty_budget if uncertainty_budget is not None else cfg_budget,
+            life_years=life_years if life_years is not None else cfg_life_years,
+            p50_haircut_pct=(
+                p50_haircut_pct if p50_haircut_pct is not None else cfg_haircut_pct
+            ),
+            correlation=correlation if correlation is not None else cfg_correlation,
         )
 
     return SolarAEPResult(

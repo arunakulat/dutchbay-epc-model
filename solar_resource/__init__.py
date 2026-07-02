@@ -27,6 +27,8 @@ Public surface:
     build_solar_cashflow_export — freeze a SolarAEPResult into a finance export dict.
     SolarUncertaintyBudget / SolarExceedanceResult / exceedance_levels_solar — the
         pure (pvlib-free) P50/P75/P90 exceedance build-up (IEC 61724-1 / IEA-PVPS Task 13).
+    solar_uncertainty_from_config — budget + p50_haircut_pct/correlation/life_years knobs
+        from a scenario's OPTIONAL ``resource.solar.uncertainty`` block (#604).
     compute_net_solar_loss_factor / default_solar_loss_taxonomy / validate_solar_loss_keys —
         the config-first itemised gross->net loss chain (replaces the flat system_loss_pct).
 """
@@ -42,6 +44,7 @@ from solar_resource.exceedance import (
     SolarExceedanceResult,
     SolarUncertaintyBudget,
     exceedance_levels_solar,
+    solar_uncertainty_from_config,
 )
 from solar_resource.loss_model import (
     compute_net_solar_loss_factor,
@@ -68,6 +71,7 @@ __all__ = [
     "SolarUncertaintyBudget",
     "SolarExceedanceResult",
     "exceedance_levels_solar",
+    "solar_uncertainty_from_config",
     "compute_net_solar_loss_factor",
     "default_solar_loss_taxonomy",
     "validate_solar_loss_keys",

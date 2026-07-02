@@ -166,6 +166,99 @@ def test_from_scenario_rejects_unknown_key() -> None:
         SolarResourceConfig.from_scenario({"resource": {"solar": block}})
 
 
+# ── #604: scenario-YAML wiring for resource.solar.uncertainty ─────────────────
+
+# A representative scenario block: two exceedance knobs + one budget-sigma override.
+UNCERTAINTY_BLOCK = {
+    "p50_haircut_pct": 2.0,
+    "correlation": 0.2,
+    "life_years": 25,
+    "ghi_dataset_pct": 5.0,
+}
+
+
+def test_from_scenario_accepts_uncertainty_block() -> None:
+    cfg = SolarResourceConfig.from_scenario(
+        {"resource": {"solar": {**KALPITIYA, "uncertainty": dict(UNCERTAINTY_BLOCK)}}}
+    )
+    assert cfg.uncertainty == UNCERTAINTY_BLOCK
+
+
+def test_scenario_uncertainty_block_reaches_exceedance_end_to_end() -> None:
+    """A scenario-declared block drives the exceedance build-up (#604 wiring)."""
+    from solar_resource.exceedance import (
+        SolarUncertaintyBudget,
+        exceedance_levels_solar,
+    )
+
+    scenario = {
+        "resource": {"solar": {**KALPITIYA, "uncertainty": dict(UNCERTAINTY_BLOCK)}}
+    }
+    cfg = SolarResourceConfig.from_scenario(scenario)
+    r = compute_solar_aep(cfg, emit_exceedance=True)
+    assert r.exceedance is not None
+    expected = exceedance_levels_solar(
+        r.annual_energy_gwh,
+        SolarUncertaintyBudget(ghi_dataset_pct=5.0),
+        life_years=25,
+        p50_haircut_pct=2.0,
+        correlation=0.2,
+    )
+    assert r.exceedance == expected
+    # The 2% haircut applied inside the build-up; the deterministic P50 is untouched.
+    assert r.exceedance.p50_gwh == pytest.approx(0.98 * r.annual_energy_gwh)
+    assert r.exceedance.life_years == 25
+
+
+def test_explicit_kwarg_overrides_scenario_uncertainty_block() -> None:
+    # Precedence: explicit keyword argument > config block > module default.
+    cfg = SolarResourceConfig.from_scenario(
+        {"resource": {"solar": {**KALPITIYA, "uncertainty": {"p50_haircut_pct": 2.0}}}}
+    )
+    r = compute_solar_aep(cfg, emit_exceedance=True, p50_haircut_pct=5.0)
+    assert r.exceedance is not None
+    assert r.exceedance.p50_gwh == pytest.approx(0.95 * r.annual_energy_gwh)
+
+
+def test_no_uncertainty_block_is_default_identity() -> None:
+    """A config WITHOUT the block behaves byte-identically to the pre-wiring defaults."""
+    r = compute_solar_aep(_cfg(), emit_exceedance=True)
+    assert r == compute_solar_aep(_cfg(uncertainty=None), emit_exceedance=True)
+    assert r.exceedance is not None
+    # No haircut is introduced silently (the wind #587 no-EYA default does NOT port),
+    # and the life window stays at the 20-year default.
+    assert r.exceedance.p50_gwh == pytest.approx(r.annual_energy_gwh)
+    assert r.exceedance.life_years == 20
+
+
+def test_deterministic_p50_unchanged_by_uncertainty_block() -> None:
+    # The block only parameterises the OPT-IN exceedance build-up; the deterministic
+    # P50 contract (and the default emit_exceedance=False) is unchanged by it.
+    base = compute_solar_aep(_cfg())
+    with_block = compute_solar_aep(_cfg(uncertainty={"p50_haircut_pct": 5.0}))
+    assert with_block.annual_energy_gwh == base.annual_energy_gwh
+    assert with_block.capacity_factor == base.capacity_factor
+    assert with_block.exceedance is None  # emit_exceedance remains opt-in
+
+
+def test_uncertainty_typo_key_rejected_at_construction() -> None:
+    # CESSPIT pre-flight: the typo fails loud when the config is BUILT, not at the
+    # first (opt-in) emit_exceedance consumption.
+    with pytest.raises(KeyError, match="unknown field"):
+        _cfg(uncertainty={"soling_pct": 2.0})  # typo of soiling_pct
+
+
+def test_uncertainty_typo_key_rejected_from_scenario() -> None:
+    block = {**KALPITIYA, "uncertainty": {"soling_pct": 2.0}}
+    with pytest.raises(KeyError, match="unknown field"):
+        SolarResourceConfig.from_scenario({"resource": {"solar": block}})
+
+
+def test_uncertainty_non_mapping_rejected() -> None:
+    with pytest.raises(TypeError, match="uncertainty must be a mapping"):
+        _cfg(uncertainty=3.0)
+
+
 # ── VALIDATE a declared P50 CF against the producer (no overwrite) ─────────────
 
 
