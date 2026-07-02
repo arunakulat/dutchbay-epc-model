@@ -583,6 +583,61 @@
   </section>
   {% endif %}
 
+  {# 8a2. Project → equity IRR bridge — #621 #}
+  {% if ctx.irr_bridge %}
+  <section class="page">
+    <h2>Project &rarr; Equity IRR Bridge</h2>
+    <p>How leverage converts the unlevered <strong>project IRR</strong> into the levered
+      <strong>equity IRR</strong>. The two endpoints are the report's headline returns — this
+      bridge only explains the gap between them, it does not recompute them. Each leg is a single
+      substitution step: leverage (the same operating cash on a smaller equity base) lifts the
+      return; the cost of debt (interest paid to lenders) drags it down; the interest tax shield
+      (interest is tax-deductible) restores part of that drag. The <strong>residual</strong> is
+      shown as its own line — IRR is not additive, and the residual carries that interaction term
+      together with principal-repayment timing, covenant lockup, the debt-service reserve and
+      withholding tax, which the three named legs do not capture in isolation. Legs plus residual
+      reconcile exactly to the total uplift.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th style="text-align:right;">Contribution</th>
+          <th style="text-align:right;">Cumulative IRR</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Project IRR (unlevered)</strong></td>
+          <td class="num">&mdash;</td>
+          <td class="num"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.project_irr) }}</strong></td>
+          <td>Base: return on total project cost.</td>
+        </tr>
+        {% for leg in ctx.irr_bridge.legs %}
+        <tr>
+          <td>{{ leg.name|replace("_", " ")|capitalize }}</td>
+          <td class="num">{{ fmt_pp(leg.contribution) }}</td>
+          <td class="num">{{ fmt_ratio_pct(leg.irr_after) }}</td>
+          <td>{{ leg.detail }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td>{{ ctx.irr_bridge.residual_label|replace("_", " ")|capitalize }} (residual)</td>
+          <td class="num">{{ fmt_pp(ctx.irr_bridge.residual) }}</td>
+          <td class="num">&mdash;</td>
+          <td>Principal-repayment timing, covenant lockup, DSRA, WHT and the IRR interaction term.</td>
+        </tr>
+        <tr>
+          <td><strong>Equity IRR (levered)</strong></td>
+          <td class="num"><strong>{{ fmt_pp(ctx.irr_bridge.total_uplift) }}</strong></td>
+          <td class="num"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.equity_irr) }}</strong></td>
+          <td>Total uplift over the project IRR.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 8b. Assumption evidence register — #435 / RPT-1 #}
   {% if ctx.evidence %}
   <section class="page">

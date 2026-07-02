@@ -103,6 +103,13 @@ ALLOWLIST: dict[str, str] = {
         "[PERMANENT] Project/equity returns adapter; delegates IRR/NPV to "
         "finance.irr by design (R7). Thin wrapper, not a layering breach."
     ),
+    "analytics/irr_bridge.py": (
+        "[PERMANENT] Project→equity IRR bridge (#621); delegates ALL IRR math to "
+        "finance.irr (irr / approx_project_irr) by design (R7 single source of truth), "
+        "exactly like analytics/core/returns.py. No engine logic — a disclosure-only "
+        "decomposition over engine-published numbers; capex resolution uses the same "
+        "function-scoped finance.debt_v14 lazy import as analytics/core/metrics.py."
+    ),
     "analytics/core/epc_helper.py": (
         "[PERMANENT] 6-line re-export shim for finance.epc_helper_v14 EPC "
         "breakdown helpers; exists precisely to give analytics one import seam."

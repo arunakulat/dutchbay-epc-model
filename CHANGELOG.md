@@ -24,6 +24,108 @@ All notable changes to this project will be documented here.
   has no order-statistic analogue. `numpy`-only, import-light per the module charter (CASPER).
   Read-only/additive — same contract as #590; all committed-scenario KPIs verified byte-
   identical (all-scenarios kpi oracle).
+- **Project→equity IRR bridge in the lender report + OpenDSS-curtailment deferral ADR (#621, additive, KPI-neutral).**
+  Two halves of the deferred/gated cluster.
+  - **IRR bridge (built):** a new disclosure-only section that reconciles the engine's PUBLISHED
+    project (unlevered) IRR to its published equity (levered) IRR, decomposing the leverage uplift
+    into labelled legs — **leverage**, **cost of debt**, **tax shield** — plus an explicit
+    **residual**. New frozen contracts `analytics.contracts_v14.IrrBridgeComponent` /
+    `ProjectEquityIrrBridge` (CCCDIR — result types centralised) and builder
+    `analytics.irr_bridge.build_project_equity_irr_bridge[_from_run]`. All IRR arithmetic is
+    delegated to `finance.irr` (R7 single source of truth); the two endpoints are the headline
+    KPIs and are never recomputed — the legs only *explain* the gap. Each leg is one substitution
+    step on the engine's own published per-year figures (`cfads_usd` / `interest_usd` /
+    `effective_tax_rate` and the authoritative equity return vector), and the residual is the
+    closing term so that `sum(legs) + residual == equity_irr − project_irr` **exactly** (asserted
+    at build time — CESSPIT; IRR is non-additive, so the residual honestly carries the interaction
+    plus principal timing, covenant lockup, DSRA, WHT and terminal value). Wired into the lender
+    report via a new `run_result` argument to `app.reports.report_model.build_report_context`
+    (rendered as "Project → Equity IRR Bridge" with a new signed-percentage-point formatter
+    `fmt_pp`). **Additive + default-off:** the section renders only when the caller supplies the
+    full run result AND it carries a computed equity distribution; absent that, the section is
+    omitted and no headline KPI is touched. All committed-scenario KPIs verified byte-identical
+    (all-scenarios kpi oracle).
+  - **OpenDSS power-flow curtailment (deferred):** recorded as an ADR
+    (`docs/OPENDSS_CURTAILMENT_DECISION.md`) per the adapt+defer verdict — do NOT build the
+    OpenDSSDirect integration (no CEB feeder data, no new hard dependency). The gate: real feeder
+    data **and** explicit user authorization for the `OpenDSSDirect.py` dependency **and** a
+    default-off config gate. The existing energy-balance shared-POI seam
+    (`analytics/portfolio/poi_curtailment.py`) is preserved unchanged
+    (`resolve_shared_poi_curtailment` still returns `None` absent the opt-in config).
+- **Morris optimal-trajectories mode + SA method-selection decision tree (#617, opt-in, KPI-neutral).**
+  `analytics.sensitivity.global_sa.run_morris` gains an optional `optimal_trajectories:
+  Optional[int] = None` knob forwarded to SALib's `morris.sample`. When set, SALib draws
+  `n_trajectories` candidate trajectories and keeps the `optimal_trajectories` subset with the
+  widest spread in the input box (Campolongo/Ruano enhancement), dropping the cost from
+  `n_trajectories·(D+1)` to `optimal_trajectories·(D+1)` evaluations while covering more of the
+  space — the OSeMOSYS "10-from-100 at step-size-4" guidance. The chosen value is recorded in
+  the result metadata next to `n_trajectories` / `n_runs`. `scripts/run_global_sensitivity.py`
+  exposes a Morris-only `--optimal-trajectories` flag (fail-loud usage error if combined with
+  `--method sobol`).
+  - **Fail-loud validation (CESSPIT, no silent clamping).** `run_morris` raises `ValueError`
+    unless `2 <= optimal_trajectories < n_trajectories`; it validates itself rather than defer
+    to SALib, whose own bound check is inconsistent (it silently accepts `0`).
+  - **DEFAULT OFF = byte-identical (#617).** `optimal_trajectories=None` is the vanilla Morris
+    path: the SALib sampling call is verified byte-identical to the prior no-kwarg call, so the
+    lender report's Morris SA section and all committed-scenario KPIs are unchanged. MRM-01: the
+    subset selection is seeded (deterministic for a fixed `seed`).
+  - New `docs/SENSITIVITY_DECISION_TREE.md` documents the SA method funnel (Morris screen →
+    Sobol on the top subset → PAWN cross-check → local tornado), cross-linked from the
+    `global_sa` module docstring.
+- **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
+  New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
+  conditions-precedent checklist: the discrete named line items that must be satisfied (or
+  explicitly waived) before first drawdown / financial close — e.g. `ppa_executed`,
+  `esia_approved`, `epc_contract_signed`, `security_package_perfected`. This is finer-grained
+  than the development-readiness R/A/G register (`analytics.development_readiness`, which rolls
+  a whole workstream to one status): the CP checklist tracks each named condition to a
+  satisfied / waived / pending state and reports how many CPs remain outstanding (and so gate
+  drawdown), rolled up overall and per workstream.
+  - The taxonomy (satisfaction scale, canonical CP workstreams, and named CP items) lives in
+    `config/conditions_precedent.yaml`; the enforcement policy resolves
+    `scenario conditions_precedent.{enforce,require_complete}` → `config/defaults.yaml`
+    `defaults.conditions_precedent.*` (CESSPIT / CCCDIR — no Python literals). Mirrors the
+    development-readiness (#C11) and evidence-register (#C5) patterns.
+  - **Soft by default, DEFAULT OFF** (`enforce: false`, `require_complete: false`). A scenario
+    with no / partial checklist is reported on, never broken; `validate_conditions_precedent`
+    is a pure detector (raises / warns / no-ops) wired into the same three seams as the
+    readiness / evidence guards (`analytics.scenario_loader`, `api.pipeline_api`,
+    `app.services.pipeline_service`). It changes no computed number. No committed scenario
+    declares a `conditions_precedent` block, so all-scenarios KPIs are byte-identical
+    (verified via the all-scenarios kpi oracle).
+  - Registered in the central config schema (`RequiredFieldSpec`, module `conditions_precedent`,
+    optional / warning-only) so it appears in the lender schema export.
+  - This is slice 2 of 5 of the feasibility-report generator (#616). The remaining slices
+    (20-section feasibility schema, IC executive summary + red-flag section, bankability
+    evidence-completeness score, route/template wiring) are tracked as follow-up issues.
+- **`MonteCarloResult.sampling_method` is now populated from the sampler actually used (#648a, provenance wiring, KPI-neutral).**
+  The `sampling_method` field on `MonteCarloResult` (`analytics.contracts_v14`) existed but was
+  never set, so every result reported the `None` default while the sampler identity lived only in
+  the loose `metadata["sampler"]` dict (`"lhs"` or the opt-in `"sobol"`). `aggregate_trials`
+  (`analytics.mc.aggregate`) now passes `sampling_method=meta.get("sampler")` into the result on
+  BOTH the canonical LHS and the opt-in Sobol path, so the lender-facing MC risk blocks can
+  attribute the bands to their generation method as a first-class field (CCCDIR). Pure additive
+  metadata: the deterministic pipeline KPI oracle is byte-identical across all committed scenarios
+  (they run LHS), and no config interpretation changes — the dead `monte_carlo.sampling_method`
+  config key retirement remains gated in #648.
+- **Opt-in solar frozen-export ingestion in the canonical CLI (#614, default OFF, KPI-neutral).**
+  `run_full_pipeline_v14.py` + `conf/run_full_pipeline_v14.yaml` gain the opt-in,
+  default-null Hydra keys `solar_assessment_json` (+ `solar_adapter_mode` /
+  `solar_tolerance_pct` / `solar_export_scenario` / `solar_technology`), the photovoltaic
+  analogue of the Sprint-19 wind ingestion path. When set, the CLI consumes a **frozen**
+  solar export through the pvlib-free
+  `solar_resource.cashflow_adapter.solar_export_to_scenario_patch` — patching the per-tech
+  `generation.technologies.<tech>` block and re-blending `project.capacity_factor` — with
+  semantics matching `app/services/pipeline_service.run_integrated_case` (it chains AFTER any
+  wind patch). `compute_solar_aep` / `pvlib` are NEVER imported in the finance path, and
+  there is deliberately no solar auto-orchestrate analogue: lender-grade runs consume an
+  audited frozen export (CASPER/frozen-export design). Ingestion failures fail loud with a
+  structured error JSON (`status='error'`, `phase='solar_resource_ingestion'`, or
+  `error_type='SolarAdapterDriftError'` with `solar_value`/`drift_pct`) and exit 1 before
+  finance. This closes #614's "or document" alternative — hybrid solar parity is via the
+  frozen export, not a producer re-run. DEFAULT ABSENT = byte-identical: no committed
+  scenario passes a solar export, verified via the all-scenarios KPI oracle (all 27 scenarios
+  unchanged).
 - **P90 (downside) debt-sizing detail surfaced in the lender report (#613, render-when-present, KPI-neutral).**
   The lender pack already renders "Binding sizing constraint … (P50/P90)" by default for
   every `debt_sizing: dual_dscr` scenario (`report.html.j2` via `api.pipeline_api._extract_debt`);
