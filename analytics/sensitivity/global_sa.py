@@ -131,6 +131,18 @@ def build_problem(
     mappings whose ``name`` is a dotted config path. ``fx_calibrated`` drivers are SKIPPED
     (their MC dimension is a unit-uniform mapped through an inverse-CDF inside the sampler, so
     they have no authored ``[low, high]`` bound to sweep via ``evaluate_with_overrides``).
+
+    The skip is by design, not a gap (#582). Skipped names are surfaced in
+    ``GlobalSAProblem.skipped`` and logged as a warning; no committed scenario authors an
+    ``fx_calibrated`` entry in ``monte_carlo.parameters`` (FX is swept via the explicit
+    uniform ``fx.start_lkr_per_usd`` driver), so nothing is skipped in practice. Because
+    :func:`run_morris`, :func:`run_sobol` and :func:`run_pawn` all sample the SAME problem
+    built here, an ``fx_calibrated`` driver is excluded from all three methods alike. If a
+    future SA run must sweep one, derive a proxy bound from the calibrated inverse-CDF —
+    ``analytics.fx.fx_calibration.CalibratedFXSampler.spot_from_unit`` at the 1st/99th
+    percentiles, ``[spot_from_unit(0.01), spot_from_unit(0.99)]`` — and author it as an
+    explicit ``{name, low, high}`` entry. Limitation: the SA sweep is then uniform over
+    that range; the two-regime mixture shape itself remains a Monte-Carlo-only feature.
     """
     if params is None:
         cfg = load_scenario_config(config_path)
