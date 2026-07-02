@@ -112,6 +112,20 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Tiered MCP bankability guard on measurement-campaign duration (#597).** `wind_resource.mcp`
+  previously enforced only a 24-sample statistical floor (`DEFAULT_MIN_CONCURRENT`, one day of hourly
+  data) while its own comment conceded a bankable MCP needs months of concurrent data. `run_mcp()` now
+  tiers the guard: below the unchanged hard floor it still raises unconditionally; in the band
+  `min_concurrent <= n < BANKABLE_MIN_CONCURRENT` (new constant, 2,880 hourly samples ~= 4 months;
+  Sheridan et al., Wind Energy Science 2025 — long-term capacity-factor errors ~47%/26%/16% at 1/3/6
+  months) it fails loud (CESSPIT, no silent sub-bankable fits) unless the caller passes the new
+  explicit opt-out `allow_below_bankable=True`, which downgrades the failure to a `logger.warning`
+  bankability disclosure; at or above the threshold it runs clean. `mcp_settings()` resolves the
+  matching scenario knob `resource.wind.mcp.allow_below_bankable` strictly (boolean only, non-boolean
+  values raise; defaults OFF) and returns it alongside `method`/`min_concurrent`. The opt-out never
+  bypasses the hard floor. The module remains opt-in with no scenario consumer, so committed
+  scenarios are kpi-oracle byte-identical (verified empirically across all 27). Tier boundaries
+  (23/24, 2,879/2,880), the override path, and the strict knob are pinned in `tests/wind/test_mcp.py`.
 - **Batch discount-rate default consolidated to a single source of truth (#586).** The default was
   stated three times with two different values: a silent `0.10` fallback in
   `run_scenario_analytics_v14.py`, the authoritative `0.12` in `conf/run_scenario_analytics_v14.yaml`,
