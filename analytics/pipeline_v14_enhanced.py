@@ -48,7 +48,7 @@ from analytics.contracts_v14 import (
     WaccResult,
 )
 from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
-from analytics.run_manifest import engine_version
+from analytics.run_manifest import build_run_manifest, engine_version
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.debt_v14 import _extract_capex_usd, plan_debt
@@ -629,7 +629,13 @@ def run_v14_pipeline_enhanced(
     enable_monitoring: bool = True,
     allow_fx_degradation: bool = False,
 ) -> dict[str, Any]:
-    """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening."""
+    """GWTF Gateway: Enhanced v14 pipeline with comprehensive hardening.
+
+    The success result carries a ``run_manifest`` key (analytics.run_manifest):
+    a reproducibility stamp whose ``config_sha256`` hashes the RESOLVED config
+    this run evaluated, plus engine version, commit SHA, and validation mode
+    (#577). Additive metadata only — no KPI is touched.
+    """
     del allow_fx_degradation
     start_time = time.time()
     metrics = PipelineMetrics(
@@ -679,6 +685,14 @@ def run_v14_pipeline_enhanced(
             logger.info("Schema validation skipped (mode=off)")
 
         metrics.validation_time_sec = time.time() - phase_start
+
+        # Reproducibility stamp (#577): built INSIDE the engine from the ALREADY-
+        # RESOLVED ``cfg`` (no config re-load), immediately after resolution + schema
+        # validation, so ``config_sha256`` binds to the exact post-override config the
+        # engine evaluates. Every caller — CLI, web API, evaluation_v14 gateway,
+        # MC/sensitivity per-trial entries, scripts — now receives the manifest;
+        # outer stampers defer to it (stamp-if-absent). Additive metadata only.
+        run_manifest = build_run_manifest(cfg, validation_mode=mode).as_dict()
 
         phase_start = time.time()
         # Lazy import: breaks the cashflow_v14 <-> analytics cold-import cycle
@@ -910,6 +924,7 @@ def run_v14_pipeline_enhanced(
             "debt_result": debt_result,
             "equity_distribution": equity_distribution,
             "metrics": asdict(metrics) if enable_monitoring else {},
+            "run_manifest": run_manifest,
         }
 
         logger.info(

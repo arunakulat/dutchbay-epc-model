@@ -43,10 +43,21 @@ logger = logging.getLogger(__name__)
 #: ``linear_regression`` is OLS (variance-deflating; diagnostic only).
 MCP_METHODS: Tuple[str, ...] = ("variance_ratio", "linear_regression")
 
-#: Default minimum concurrent samples to fit a transfer. A *bankable* MCP wants >= ~12 months
-#: of concurrent data (IEC 61400-15-2); this hard floor only guards the statistics from being
-#: fit on too few points — a scenario should set its own bankable minimum.
+#: Hard statistical floor on concurrent samples: below this the transfer cannot be fit at
+#: all and :func:`run_mcp` raises unconditionally. This tier only guards the statistics from
+#: being fit on too few points; bankability is the SEPARATE, higher tier below.
 DEFAULT_MIN_CONCURRENT: int = 24
+
+#: Bankability threshold on concurrent samples: ~4 months of hourly data (4 x 30 x 24).
+#: Sheridan et al. (Wind Energy Science, 2025) report long-term capacity-factor errors of
+#: ~47%/26%/16% for 1/3/6-month campaigns, so a transfer fit on less than ~4 months is
+#: statistically fittable but NOT bankable. :func:`run_mcp` fails loud in the band
+#: ``min_concurrent <= n < BANKABLE_MIN_CONCURRENT`` unless the caller explicitly opts out
+#: (``allow_below_bankable=True``), which downgrades the failure to a logged bankability
+#: disclosure (CESSPIT: no silent sub-bankable fits). A *fully* bankable campaign still
+#: wants >= ~12 months (IEC 61400-15-2) to cover seasonality; this threshold is the floor
+#: below which the estimate should not be shown to a lender at all.
+BANKABLE_MIN_CONCURRENT: int = 2880
 
 
 @dataclass(frozen=True)
@@ -128,8 +139,20 @@ def run_mcp(
     *,
     method: str = "variance_ratio",
     min_concurrent: int = DEFAULT_MIN_CONCURRENT,
+    allow_below_bankable: bool = False,
 ) -> MCPResult:
     """Run measure-correlate-predict and return the long-term on-site estimate.
+
+    Campaign-duration guard is TIERED (CESSPIT — no silent sub-bankable fits):
+
+    * ``n < min_concurrent`` (hard statistical floor, default
+      :data:`DEFAULT_MIN_CONCURRENT`): ``ValueError`` unconditionally — too few points to
+      fit a transfer at all. ``allow_below_bankable`` does NOT bypass this tier.
+    * ``min_concurrent <= n < BANKABLE_MIN_CONCURRENT`` (~4 months of hourly data):
+      ``ValueError`` unless ``allow_below_bankable=True``, which downgrades the failure to
+      a ``logger.warning`` bankability disclosure (Sheridan et al., WES 2025: capacity-
+      factor errors ~47%/26%/16% at 1/3/6 months).
+    * ``n >= BANKABLE_MIN_CONCURRENT``: clean.
 
     Args:
         mast_concurrent: On-site mast wind speeds (m/s) over the measurement window.
@@ -137,7 +160,11 @@ def run_mcp(
             element-wise with ``mast_concurrent``.
         ref_long_term: The full long-term reference series (m/s) to predict on-site from.
         method: ``"variance_ratio"`` (default) or ``"linear_regression"``.
-        min_concurrent: Minimum aligned concurrent samples required to fit the transfer.
+        min_concurrent: Hard minimum aligned concurrent samples required to fit the
+            transfer (the fail-loud lower tier; raising it above
+            :data:`BANKABLE_MIN_CONCURRENT` makes the hard floor the only gate).
+        allow_below_bankable: Explicit opt-out for the bankability tier only (defaults
+            OFF). Scenario knob: ``resource.wind.mcp.allow_below_bankable``.
 
     Returns:
         An :class:`MCPResult` with the fitted transfer, the predicted long-term on-site mean,
@@ -145,8 +172,10 @@ def run_mcp(
 
     Raises:
         ValueError: unknown ``method``; concurrent series differ in length or fall below
-            ``min_concurrent``; the long-term reference is empty; or the reference has zero
-            variance (CESSPIT — fail loud rather than emit a meaningless transfer).
+            ``min_concurrent``; concurrent samples below :data:`BANKABLE_MIN_CONCURRENT`
+            without ``allow_below_bankable=True``; the long-term reference is empty; or the
+            reference has zero variance (CESSPIT — fail loud rather than emit a meaningless
+            transfer).
     """
     if method not in MCP_METHODS:
         raise ValueError(f"Unknown MCP method {method!r}; choose from {MCP_METHODS}")
@@ -180,6 +209,28 @@ def run_mcp(
     if float(ref_c.std()) == 0.0:
         raise ValueError(
             "reference concurrent series has zero variance; cannot fit MCP"
+        )
+    # Bankability tier: gated LAST so it only fires on otherwise fit-worthy data — the
+    # data-integrity errors above are the actionable ones when both conditions hold.
+    if mast.size < BANKABLE_MIN_CONCURRENT:
+        if not allow_below_bankable:
+            raise ValueError(
+                f"MCP campaign has {mast.size} concurrent samples, below the bankable "
+                f"minimum of {BANKABLE_MIN_CONCURRENT} (~4 months of hourly data); short "
+                "campaigns carry large long-term capacity-factor errors (Sheridan et al., "
+                "Wind Energy Science 2025: ~47%/26%/16% at 1/3/6 months). Pass "
+                "allow_below_bankable=True (scenario knob: "
+                "resource.wind.mcp.allow_below_bankable) to proceed with a logged "
+                "bankability disclosure."
+            )
+        logger.warning(
+            "MCP transfer fit on %d concurrent samples, below the bankable minimum of %d "
+            "(~4 months of hourly data; Sheridan et al., Wind Energy Science 2025: "
+            "capacity-factor errors ~47%%/26%%/16%% at 1/3/6 months). Proceeding under "
+            "allow_below_bankable — the long-term estimate is NOT bankable without a "
+            "longer measurement campaign.",
+            mast.size,
+            BANKABLE_MIN_CONCURRENT,
         )
 
     if method == "variance_ratio":
@@ -220,11 +271,14 @@ def run_mcp(
 def mcp_settings(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     """Resolve the opt-in ``resource.wind.mcp`` settings, or ``None`` when MCP is off.
 
-    Returns ``{"method": ..., "min_concurrent": ...}`` only when
-    ``resource.wind.mcp.enabled`` is truthy; otherwise ``None`` so the caller keeps the raw
-    ERA5 path (the default — committed scenarios are byte-identical). The mast/reference
-    series themselves are supplied by the caller's data-ingest step (a scenario points
-    ``resource.wind.mcp`` at its mast record); this only resolves the method knobs.
+    Returns ``{"method": ..., "min_concurrent": ..., "allow_below_bankable": ...}`` only
+    when ``resource.wind.mcp.enabled`` is truthy; otherwise ``None`` so the caller keeps
+    the raw ERA5 path (the default — committed scenarios are byte-identical). The
+    mast/reference series themselves are supplied by the caller's data-ingest step (a
+    scenario points ``resource.wind.mcp`` at its mast record); this only resolves the
+    method knobs. ``allow_below_bankable`` (the bankability-tier opt-out fed to
+    :func:`run_mcp`) defaults OFF and is resolved strictly: a non-boolean value is a
+    fail-loud ``ValueError``, not a truthiness coercion (CESSPIT).
     """
     wind = config.get("resource", {}) if isinstance(config, Mapping) else {}
     wind = wind.get("wind", {}) if isinstance(wind, Mapping) else {}
@@ -240,12 +294,23 @@ def mcp_settings(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         min_concurrent = int(mcp.get("min_concurrent", DEFAULT_MIN_CONCURRENT))
     except (TypeError, ValueError) as exc:
         raise ValueError("resource.wind.mcp.min_concurrent must be an integer") from exc
-    return {"method": method, "min_concurrent": min_concurrent}
+    allow_below_bankable = mcp.get("allow_below_bankable", False)
+    if not isinstance(allow_below_bankable, bool):
+        raise ValueError(
+            "resource.wind.mcp.allow_below_bankable must be a boolean; got "
+            f"{allow_below_bankable!r}"
+        )
+    return {
+        "method": method,
+        "min_concurrent": min_concurrent,
+        "allow_below_bankable": allow_below_bankable,
+    }
 
 
 __all__ = [
     "MCP_METHODS",
     "DEFAULT_MIN_CONCURRENT",
+    "BANKABLE_MIN_CONCURRENT",
     "MCPResult",
     "pearson_r",
     "variance_ratio_transfer",

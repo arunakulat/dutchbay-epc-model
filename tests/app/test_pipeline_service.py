@@ -89,8 +89,9 @@ def test_run_finance_case_does_not_mutate_input() -> None:
 
 
 def test_run_finance_case_stamps_run_manifest() -> None:
-    # The shared pipeline does not stamp a manifest; this gateway must (so /cases and the
-    # report pack expose a real audit stamp, not an empty one). Metadata only — KPI-neutral.
+    # The engine stamps the manifest itself as of #577 (this gateway's guard is a
+    # retained stamp-if-absent fallback); either way /cases and the report pack must
+    # expose a real audit stamp bound to the config run. Metadata only — KPI-neutral.
     from analytics.run_manifest import config_sha256, engine_version
 
     scen = _scenario()
