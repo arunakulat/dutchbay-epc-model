@@ -171,6 +171,22 @@ defaults:
     require_complete: false  # if true, EVERY workstream must have a declared status
 
   # ═══════════════════════════════════════════════════════════════════
+  # CONDITIONS-PRECEDENT (CP) CHECKLIST (#616 — first-drawdown / financial-close gate)
+  # ═══════════════════════════════════════════════════════════════════
+  # A scenario may declare a `conditions_precedent.items` block mapping each named condition
+  # precedent (e.g. ppa_executed, esia_approved, epc_contract_signed — see
+  # config/conditions_precedent.yaml) to a satisfied/waived/pending status;
+  # analytics.conditions_precedent validates it against that taxonomy and rolls the items up
+  # per workstream and overall, reporting how many CPs remain outstanding (pending) and so gate
+  # first drawdown. SOFT by design — a scenario with no/partial checklist is reported on, never
+  # broken (mirrors development_readiness #C11 and evidence_register #C5). A lender-grade
+  # scenario opts in to hard enforcement via its own conditions_precedent block: enforce: true,
+  # require_complete: true. Pure detector — changes no computed number.
+  conditions_precedent:
+    enforce: false           # warn on findings (default); true => raise (block the run)
+    require_complete: false  # if true, EVERY canonical cp_item must have a declared status
+
+  # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING
   # ═══════════════════════════════════════════════════════════════════
   # Consumed by finance.cashflow_v14_production._load_degradation_config (the
