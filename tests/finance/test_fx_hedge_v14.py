@@ -116,6 +116,41 @@ def test_cip_rates_missing_resolve_zero() -> None:
     assert r_lkr == 0.0 and r_usd == 0.0
 
 
+def test_cip_rates_parity_with_debt_engine_on_every_config_shape() -> None:
+    """_cip_forward_rates must resolve the SAME rates block the debt engine services the
+    facility at, on every config shape — it delegates to debt_v14._extract_financing_terms,
+    so this pins the parity contract (Fable review of cfb3908: a local mirror silently
+    used debt.rates when a config carried BOTH financing.rates and debt.rates)."""
+    from finance.debt_v14 import _extract_financing_terms, _rate_decimal
+
+    shapes: list[Dict[str, Any]] = [
+        # canonical
+        {"Financing_Terms": {"rates": {"lkr_nominal": 0.13, "usd_nominal": 0.07}}},
+        # case-insensitive section name
+        {"FINANCING_TERMS": {"rates": {"lkr_min": 0.12, "usd_commercial_min": 0.06}}},
+        # financing-only shape
+        {"financing": {"rates": {"lkr_nominal": 0.11, "usd_nominal": 0.05}}},
+        # BOTH financing and debt: the debt engine prefers financing -> so must we
+        {
+            "financing": {"rates": {"lkr_nominal": 0.14, "usd_nominal": 0.08}},
+            "debt": {"rates": {"lkr_nominal": 0.99, "usd_nominal": 0.01}},
+        },
+        # debt-only shape (rates synthesized from interest_rate by the debt engine)
+        {"debt": {"interest_rate": 0.09}},
+    ]
+    for cfg in shapes:
+        terms = _extract_financing_terms(cfg)
+        rates = terms.get("rates", {}) if isinstance(terms, dict) else {}
+        expected_lkr = _rate_decimal(
+            rates.get("lkr_nominal") or rates.get("lkr_min"), 0.0
+        )
+        expected_usd = _rate_decimal(
+            rates.get("usd_nominal") or rates.get("usd_commercial_min"), 0.0
+        )
+        got_lkr, got_usd = _cip_forward_rates(cfg)
+        assert (got_lkr, got_usd) == (expected_lkr, expected_usd), cfg
+
+
 # ---------------------------------------------------------------------------
 # _forward_curve
 # ---------------------------------------------------------------------------
@@ -241,14 +276,22 @@ def test_full_hedge_matches_forward_conversion_year_by_year() -> None:
 
 
 def test_hedged_cfads_usd_direction_tracks_forward_vs_spot() -> None:
-    """When the forward is below spot (canonical rates), hedging raises cfads_usd."""
-    base = build_annual_rows(_cfg())
+    """The hedged cfads_usd direction is DERIVED from the config's own forward-vs-spot
+    relationship (never hardcoded): forward below spot => hedging raises cfads_usd."""
+    cfg = _cfg()
+    r_lkr, r_usd = _cip_forward_rates(cfg)
+    forward_drift = (1.0 + r_lkr) / (1.0 + r_usd) - 1.0
+    forward_below_spot = forward_drift < float(cfg["fx"]["annual_depr"])
+
+    base = build_annual_rows(cfg)
     hedged = build_annual_rows(_cfg(hedge_ratio=1.0, spread_bps=0.0))
     # Year 1 (t=0) forward == spot, so cfads_usd is unchanged there; later years diverge.
     for i in range(1, len(base)):
-        forward_below_spot = True  # canonical rates: forward drift < spot drift
-        if forward_below_spot and base[i]["cfads_final_lkr"] > 0:
-            assert hedged[i]["cfads_usd"] > base[i]["cfads_usd"]
+        if base[i]["cfads_final_lkr"] > 0:
+            if forward_below_spot:
+                assert hedged[i]["cfads_usd"] > base[i]["cfads_usd"]
+            else:
+                assert hedged[i]["cfads_usd"] < base[i]["cfads_usd"]
 
 
 # ---------------------------------------------------------------------------
@@ -269,8 +312,40 @@ def test_validate_rejects_negative_spread_bps() -> None:
         validate_parameters(_cfg(spread_bps=-1.0))
 
 
+def test_validate_rejects_bool_hedge_ratio() -> None:
+    """YAML `hedge_ratio: true` must fail loud, not float() to a silent FULL hedge."""
+    with pytest.raises(ValueError, match="fx.hedge_ratio"):
+        validate_parameters(_cfg(hedge_ratio=True))
+
+
+def test_validate_rejects_non_finite_spread_bps() -> None:
+    """`.nan` passes a bare `< 0.0` check; it must be rejected before it can propagate
+    NaN into the load-bearing cfads_usd stream (Fable review of cfb3908)."""
+    with pytest.raises(ValueError, match="fx.spread_bps"):
+        validate_parameters(_cfg(hedge_ratio=0.5, spread_bps=float("nan")))
+    with pytest.raises(ValueError, match="fx.spread_bps"):
+        validate_parameters(_cfg(hedge_ratio=0.5, spread_bps=float("inf")))
+
+
+def test_validate_rejects_non_finite_hedge_ratio() -> None:
+    with pytest.raises(ValueError, match="fx.hedge_ratio"):
+        validate_parameters(_cfg(hedge_ratio=float("nan")))
+
+
+def test_validate_rejects_bool_spread_bps() -> None:
+    with pytest.raises(ValueError, match="fx.spread_bps"):
+        validate_parameters(_cfg(hedge_ratio=0.5, spread_bps=True))
+
+
 def test_validate_accepts_valid_hedge() -> None:
     assert validate_parameters(_cfg(hedge_ratio=0.5, spread_bps=25.0)) == []
+
+
+def test_engine_gate_blocks_nan_spread_end_to_end() -> None:
+    """The engine pre-flight (validate_parameters inside _prepare_cashflow_context)
+    must refuse a NaN spread on EVERY engine call — no silent NaN cfads_usd."""
+    with pytest.raises(ValueError, match="fx.spread_bps"):
+        build_annual_rows(_cfg(hedge_ratio=0.5, spread_bps=float("nan")))
 
 
 # ---------------------------------------------------------------------------

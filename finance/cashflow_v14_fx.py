@@ -176,41 +176,34 @@ def _fx_curve(
 # =============================================================================
 
 
-def _rate_decimal(value: Any, default: float = 0.0) -> float:
-    """Normalize a percent-or-decimal interest-rate input to a decimal.
-
-    Mirrors ``finance.debt_v14._solve_mix`` / ``_rate_decimal`` semantics EXACTLY (a
-    value > 1.0 is treated as a percentage and divided by 100) so the CIP forward is
-    anchored on the SAME tranche rates the debt engine services the facility at. The
-    tiny function is replicated (not imported) to keep this low-level FX module free of
-    a dependency on the higher-level debt module (import safety, REFACTOR-02).
-    """
-    raw = _as_float_or_none(value)
-    raw = default if raw is None else raw
-    return raw / 100.0 if raw > 1.0 else raw
-
-
 def _cip_forward_rates(config: Dict[str, Any]) -> Tuple[float, float]:
     """Resolve (r_lkr, r_usd) for the covered-interest-parity forward.
 
-    Reads ``Financing_Terms.rates`` (or a ``debt.rates`` fallback) and applies the SAME
-    key priority and normalization as ``finance.debt_v14._solve_mix``:
+    Delegates to the debt engine's OWN financing-terms resolution
+    (``finance.debt_v14._extract_financing_terms`` — case-insensitive sections,
+    ``Financing_Terms`` -> ``financing`` -> ``debt`` -> whole-config fallback, including
+    the ``debt``-branch rate synthesis) and applies the SAME key priority and
+    percent-vs-decimal normalization as ``finance.debt_v14._solve_mix``:
 
     - r_lkr = ``lkr_nominal`` or ``lkr_min``
     - r_usd = ``usd_nominal`` or ``usd_commercial_min``
 
-    Using the engine's own LKR-vs-USD nominal debt cost is the locked design basis for
-    the forward (CIP, not UIP-projected-spot, not a config forward-premium knob). Both
+    Reusing the debt engine's helpers (rather than a local mirror) guarantees the CIP
+    forward is anchored on EXACTLY the tranche rates the facility is serviced at, on
+    every config shape — a local mirror diverged on non-canonical shapes (e.g. a config
+    carrying both ``financing.rates`` and ``debt.rates``; Fable review of cfb3908). The
+    import is call-time, not module-level (REFACTOR-02 lazy pattern): today
+    ``debt_v14`` imports nothing from the cashflow modules, and deferring the import
+    keeps this low-level FX module cycle-proof even if that ever changes. Both rates
     are returned as decimals; a missing rate resolves to 0.0 and is rejected upstream
     when a hedge is actually requested (``_resolve_fx_hedge``).
     """
-    financing = config.get("Financing_Terms") or config.get("financing_terms") or {}
-    debt = config.get("debt") or {}
-    rates: Dict[str, Any] = {}
-    if isinstance(financing, dict) and isinstance(financing.get("rates"), dict):
-        rates = financing["rates"]
-    elif isinstance(debt, dict) and isinstance(debt.get("rates"), dict):
-        rates = debt["rates"]
+    from .debt_v14 import _extract_financing_terms, _rate_decimal
+
+    terms = _extract_financing_terms(config)
+    rates = terms.get("rates", {}) if isinstance(terms, dict) else {}
+    if not isinstance(rates, dict):
+        rates = {}
 
     r_lkr = _rate_decimal(rates.get("lkr_nominal") or rates.get("lkr_min"), 0.0)
     r_usd = _rate_decimal(
