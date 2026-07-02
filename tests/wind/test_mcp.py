@@ -8,10 +8,14 @@ predict the long-term on-site distribution. Deterministic (fixed RNG seed; MRM-0
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pytest
 
 from wind_resource.mcp import (
+    BANKABLE_MIN_CONCURRENT,
+    DEFAULT_MIN_CONCURRENT,
     MCP_METHODS,
     MCPResult,
     linear_regression_transfer,
@@ -33,6 +37,16 @@ def _synthetic_pair() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     ref_long_term = 8.0 * rng.weibull(2.1, _N_LONG)
     ref_concurrent = ref_long_term[:_N_CONCURRENT]
     noise = rng.normal(0.0, 0.4, _N_CONCURRENT)
+    mast_concurrent = np.clip(_TRUE_SLOPE * ref_concurrent + noise, 0.0, None)
+    return mast_concurrent, ref_concurrent, ref_long_term
+
+
+def _pair_of_size(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A well-behaved (non-degenerate) pair with exactly ``n`` concurrent samples."""
+    rng = np.random.default_rng(597)
+    ref_long_term = 8.0 * rng.weibull(2.1, n * 2)
+    ref_concurrent = ref_long_term[:n]
+    noise = rng.normal(0.0, 0.4, n)
     mast_concurrent = np.clip(_TRUE_SLOPE * ref_concurrent + noise, 0.0, None)
     return mast_concurrent, ref_concurrent, ref_long_term
 
@@ -102,6 +116,65 @@ def test_too_few_concurrent_samples_raises() -> None:
         run_mcp([8.0] * 10, [7.0] * 10, [7.0] * 100, min_concurrent=24)
 
 
+# --------------------------------------------------------------------------- #
+# Tiered bankability guard (#597; Sheridan et al. WES 2025)
+# --------------------------------------------------------------------------- #
+def test_hard_floor_tier_not_bypassed_by_override() -> None:
+    # n = 23 < DEFAULT_MIN_CONCURRENT: the statistical floor raises even when the caller
+    # opts out of the bankability tier — the override covers ONLY the bankable band.
+    mast, ref_c, ref_lt = _pair_of_size(DEFAULT_MIN_CONCURRENT - 1)
+    with pytest.raises(ValueError, match=f"need >= {DEFAULT_MIN_CONCURRENT}"):
+        run_mcp(mast, ref_c, ref_lt, allow_below_bankable=True)
+
+
+def test_hard_floor_boundary_lands_in_bankability_tier() -> None:
+    # n = 24 clears the hard floor but is far below bankable -> the bankability error,
+    # not the statistical-floor error, is what the caller sees.
+    mast, ref_c, ref_lt = _pair_of_size(DEFAULT_MIN_CONCURRENT)
+    with pytest.raises(ValueError, match="bankable minimum"):
+        run_mcp(mast, ref_c, ref_lt)
+
+
+def test_sub_bankable_boundary_raises_without_override() -> None:
+    # n = 2879: one sample short of the ~4-month bankability threshold.
+    mast, ref_c, ref_lt = _pair_of_size(BANKABLE_MIN_CONCURRENT - 1)
+    with pytest.raises(ValueError, match="allow_below_bankable"):
+        run_mcp(mast, ref_c, ref_lt)
+
+
+def test_bankable_boundary_runs_clean(caplog: pytest.LogCaptureFixture) -> None:
+    # n = 2880: exactly at the threshold -> clean, no bankability disclosure logged.
+    mast, ref_c, ref_lt = _pair_of_size(BANKABLE_MIN_CONCURRENT)
+    with caplog.at_level(logging.WARNING, logger="wind_resource.mcp"):
+        res = run_mcp(mast, ref_c, ref_lt)
+    assert res.n_concurrent == BANKABLE_MIN_CONCURRENT
+    assert not [r for r in caplog.records if "bankable" in r.getMessage()]
+
+
+def test_sub_bankable_override_runs_with_logged_disclosure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The explicit opt-out downgrades the failure to a warning that names the sample
+    # count, the threshold, and the non-bankability of the estimate.
+    mast, ref_c, ref_lt = _pair_of_size(BANKABLE_MIN_CONCURRENT - 1)
+    with caplog.at_level(logging.WARNING, logger="wind_resource.mcp"):
+        res = run_mcp(mast, ref_c, ref_lt, allow_below_bankable=True)
+    assert res.n_concurrent == BANKABLE_MIN_CONCURRENT - 1
+    disclosures = [
+        r.getMessage() for r in caplog.records if "NOT bankable" in r.getMessage()
+    ]
+    assert len(disclosures) == 1
+    assert str(BANKABLE_MIN_CONCURRENT) in disclosures[0]
+    assert str(BANKABLE_MIN_CONCURRENT - 1) in disclosures[0]
+
+
+def test_data_integrity_errors_precede_bankability_tier() -> None:
+    # A degenerate reference in the sub-bankable band reports the actionable data error,
+    # not the campaign-duration error.
+    with pytest.raises(ValueError, match="zero variance"):
+        run_mcp(list(np.linspace(6.0, 9.0, 30)), [7.0] * 30, [7.0] * 100)
+
+
 def test_zero_variance_reference_raises_for_both_methods() -> None:
     # Both methods must fail loud identically on a degenerate (constant) reference.
     for method in MCP_METHODS:
@@ -134,7 +207,10 @@ def test_fraction_clipped_disclosed_when_transfer_predicts_negative() -> None:
     # Long-term reference reaches BELOW the concurrent window, where the transfer
     # (slope 0.5, intercept -3) predicts negative speeds that must be clipped.
     ref_lt = list(np.linspace(2.0, 14.0, 500))
-    res = run_mcp(mast, ref_c, ref_lt, method="linear_regression")
+    # 200 concurrent samples sit below the bankability tier -> explicit opt-out required.
+    res = run_mcp(
+        mast, ref_c, ref_lt, method="linear_regression", allow_below_bankable=True
+    )
     assert res.fraction_clipped > 0.0
     assert res.as_dict()["fraction_clipped"] == pytest.approx(
         res.fraction_clipped, abs=1e-5
@@ -196,7 +272,33 @@ def test_mcp_settings_resolves_when_enabled() -> None:
             }
         }
     }
-    assert mcp_settings(cfg) == {"method": "variance_ratio", "min_concurrent": 8760}
+    # The bankability opt-out defaults OFF when the scenario does not declare it.
+    assert mcp_settings(cfg) == {
+        "method": "variance_ratio",
+        "min_concurrent": 8760,
+        "allow_below_bankable": False,
+    }
+
+
+def test_mcp_settings_resolves_explicit_allow_below_bankable() -> None:
+    cfg = {
+        "resource": {"wind": {"mcp": {"enabled": True, "allow_below_bankable": True}}}
+    }
+    resolved = mcp_settings(cfg)
+    assert resolved is not None
+    assert resolved["allow_below_bankable"] is True
+
+
+def test_mcp_settings_rejects_non_boolean_allow_below_bankable() -> None:
+    # Strict (CESSPIT): truthy-but-non-boolean values are configuration errors, not opt-outs.
+    for bad in ("yes", 1, 0, "false", [True]):
+        cfg = {
+            "resource": {
+                "wind": {"mcp": {"enabled": True, "allow_below_bankable": bad}}
+            }
+        }
+        with pytest.raises(ValueError, match="allow_below_bankable must be a boolean"):
+            mcp_settings(cfg)
 
 
 def test_mcp_settings_rejects_bad_method() -> None:

@@ -1,5 +1,8 @@
-# [File content too long - showing key changes only]
-# Line 268-275: Changed from float('inf') to None
+"""Debt Planning Module for DutchBay V14 Project Finance.
+
+Author: DutchBay V14 Team, Nov 2025
+Version: 3.7 (Dynamic debt timeline + explicit CAPEX guard + balloon treatment)
+"""
 
 from __future__ import annotations
 
@@ -11,12 +14,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from finance.utils import as_float, get_nested
 
 logger = logging.getLogger(__name__)
-
-"""Debt Planning Module for DutchBay V14 Project Finance.
-
-Author: DutchBay V14 Team, Nov 2025
-Version: 3.7 (Dynamic debt timeline + explicit CAPEX guard + balloon treatment)
-"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Balloon treatment
@@ -44,6 +41,24 @@ _BALLOON_VALID_TREATMENTS = (
     "legacy_ignore",
 )
 _BALLOON_DEFAULT_TREATMENT = "cash_sweep"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Amortization style
+# ─────────────────────────────────────────────────────────────────────────────
+# ``Financing_Terms.amortization_style`` (or compact ``debt.amortization_style``)
+# selects the repayment schedule. Whitelisted values (#585, mirroring the
+# balloon_treatment whitelist above):
+#   - "annuity" / "fixed":  level-payment annuity per tranche.
+#   - "sculpted":           DSCR-sculpted (principal = CFADS/target − interest).
+#   - "auto":               alias for "sculpted" — the engine solves the sculpt
+#       to the DSCR target; committed scenarios use it, so it is an EXPLICIT
+#       whitelisted synonym, not a fall-through.
+# Any other value previously fell through *silently* to sculpted; it still maps
+# to sculpted (byte-identical) but now WARNs like an unknown balloon_treatment.
+_AMORT_ANNUITY_STYLES = ("annuity", "fixed")
+_AMORT_SCULPTED_STYLES = ("sculpted", "auto")
+_AMORT_VALID_STYLES = _AMORT_ANNUITY_STYLES + _AMORT_SCULPTED_STYLES
+_AMORT_DEFAULT_STYLE = "sculpted"
 _BALLOON_TOL = 1.0  # USD; outstanding balances below this are treated as repaid
 _SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt period
 _REFINANCE_TENOR_DEFAULT = 3
@@ -112,8 +127,22 @@ def _allow_toy_capex_fallback(params: Mapping[str, Any]) -> bool:
 
 
 def _pmt(rate: float, nper: int, pv: float) -> float:
+    """Level annuity payment for ``pv`` over ``nper`` periods at ``rate``.
+
+    Defensive guard (#585): with ``rate != 0`` and ``nper <= 0`` the annuity
+    factor ``(1+rate)**nper - 1`` is 0 (or nonsensical), so fail loud with a
+    clear message instead of a raw ``ZeroDivisionError``. The sole engine
+    caller (``_annuity_schedule``) already guards ``amort_years > 0``, so this
+    never fires on a committed path. The ``rate == 0`` degenerate branch keeps
+    its historical ``0.0`` return for ``nper <= 0``.
+    """
     if rate == 0:
         return pv / nper if nper > 0 else 0.0
+    if nper <= 0:
+        raise ValueError(
+            f"_pmt: nper={nper} is invalid with a non-zero rate — an annuity "
+            "needs at least one amortisation period"
+        )
     return pv * (rate * (1 + rate) ** nper) / ((1 + rate) ** nper - 1)
 
 
@@ -295,6 +324,14 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 fallback_drawdown = [0.5, 0.5]
             adapted["debt_drawdown_pct"] = fallback_drawdown
         if adapted.get("construction_schedule") is None:
+            # Same A1/#91 stance as the draw schedule above (#585): the [40, 60]
+            # capex phasing is a placeholder, not a project input — WARN rather
+            # than silently substitute.
+            logger.warning(
+                "Financing_Terms.construction_schedule absent — using a placeholder "
+                "[40, 60] capex phasing; supply the EPC milestone schedule for a "
+                "lender-grade figure."
+            )
             adapted["construction_schedule"] = [40.0, 60.0]
         if adapted.get("mix") is None:
             adapted["mix"] = {"usd_commercial_min": 1.0}
@@ -322,14 +359,33 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         )
         usd_rate = _rate_decimal(rate_value, 0.0)
 
+        # #585: the compact ``debt:`` schema must emit the SAME placeholder-
+        # substitution WARNs as the Financing_Terms path above (A1/#91) — IDC is
+        # draw-timing-sensitive, so a silently substituted even draw / capex
+        # phasing is an unfounded stand-in for a missing project input.
+        construction_schedule = debt_cfg.get("construction_schedule")
+        if construction_schedule is None:
+            logger.warning(
+                "debt.construction_schedule absent — using a placeholder [40, 60] "
+                "capex phasing; supply the EPC milestone schedule for a "
+                "lender-grade figure."
+            )
+            construction_schedule = [40.0, 60.0]
+        debt_drawdown_pct = debt_cfg.get("debt_drawdown_pct")
+        if debt_drawdown_pct is None:
+            logger.warning(
+                "debt.debt_drawdown_pct absent — using a placeholder even draw "
+                "[0.5, 0.5]; IDC is draw-timing-sensitive, so supply the EPC "
+                "milestone draw schedule for a lender-grade figure."
+            )
+            debt_drawdown_pct = [0.5, 0.5]
+
         return {
             "construction_periods": int(
                 _as_float(debt_cfg.get("construction_periods"), 2)
             ),
-            "construction_schedule": debt_cfg.get(
-                "construction_schedule", [40.0, 60.0]
-            ),
-            "debt_drawdown_pct": debt_cfg.get("debt_drawdown_pct", [0.5, 0.5]),
+            "construction_schedule": construction_schedule,
+            "debt_drawdown_pct": debt_drawdown_pct,
             "debt_ratio": debt_ratio_value,
             "tenor_years": int(_as_float(tenor_value, 15)),
             "interest_only_years": int(
@@ -527,7 +583,19 @@ def apply_debt_layer(
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
     tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
-    amortization = (p.get("amortization_style", "sculpted") or "sculpted").lower()
+    amortization = str(
+        p.get("amortization_style", _AMORT_DEFAULT_STYLE) or _AMORT_DEFAULT_STYLE
+    ).lower()
+    if amortization not in _AMORT_VALID_STYLES:
+        logger.warning(
+            "Unknown amortization_style %r; falling back to %s "
+            "(valid: %s -> annuity schedule; %s -> DSCR-sculpted schedule)",
+            amortization,
+            _AMORT_DEFAULT_STYLE,
+            "/".join(_AMORT_ANNUITY_STYLES),
+            "/".join(_AMORT_SCULPTED_STYLES),
+        )
+        amortization = _AMORT_DEFAULT_STYLE
     target_dscr = _as_float(p.get("target_dscr"), 1.30)
 
     capex = _extract_capex_usd(params)
@@ -583,7 +651,7 @@ def apply_debt_layer(
     ) = _build_cfads_timeline(annual_rows, cfads, construction_periods, tenor)
 
     amort_years = max(0, tenor - years_io)
-    if amortization in ("annuity", "fixed"):
+    if amortization in _AMORT_ANNUITY_STYLES:
         schedules = {k: _annuity_schedule(t, amort_years) for k, t in tranches.items()}
     else:
         schedules = _sculpted_schedule(

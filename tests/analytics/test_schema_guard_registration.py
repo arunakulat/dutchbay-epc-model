@@ -148,6 +148,56 @@ def test_debt_spec_validators_reject_present_malformed_values() -> None:
     assert specs["debt_gearing_ratio"].validator(0.7) is True
 
 
+# ---------------------------------------------------------------------------
+# project_life_years spec: integral floats accepted, bool/non-integral/<=0
+# rejected (#586). The engine's own extraction (as_int_or_none -> int(value))
+# already accepts 20.0, so the pre-flight guard must not be stricter than the
+# engine it protects.
+# ---------------------------------------------------------------------------
+def test_project_life_years_validator_accepts_int_and_integral_float() -> None:
+    import finance.cashflow_v14  # noqa: F401  (import side effect registers specs)
+    from analytics.config_schema import get_required_fields
+
+    specs = {s.name: s for s in get_required_fields("cashflow")}
+    validator = specs["project_life_years"].validator
+    assert validator is not None
+
+    assert validator(20) is True
+    assert validator(20.0) is True  # the previously-rejected valid form
+    assert validator(1) is True
+
+    # bool is a subclass of int but never a year count (the old
+    # isinstance(v, int) check let True slip through as "1 year").
+    assert validator(True) is False
+    assert validator(False) is False
+    # Non-integral floats fail loud instead of being silently truncated.
+    assert validator(20.5) is False
+    # Non-positive / non-finite / non-numeric all stay rejected.
+    assert validator(0) is False
+    assert validator(0.0) is False
+    assert validator(-20.0) is False
+    assert validator(float("nan")) is False
+    assert validator(float("inf")) is False
+    assert validator("20") is False
+    assert validator(None) is False
+
+
+def test_strict_validation_accepts_integral_float_project_life() -> None:
+    """End-to-end: a config carrying ``project_life_years: 20.0`` must pass
+    strict validation exactly like the ``20`` the engine coerces it to."""
+    cfg = _valid_config()
+    cfg["project"]["project_life_years"] = 20.0
+    validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+
+
+def test_strict_validation_rejects_non_integral_project_life() -> None:
+    """End-to-end: 20.5 must fail loud (the engine would silently truncate)."""
+    cfg = _valid_config()
+    cfg["project"]["project_life_years"] = 20.5
+    with pytest.raises(ConfigValidationError, match="project_life_years"):
+        validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+
+
 def test_strict_validation_rejects_malformed_present_debt_tenor() -> None:
     """A PRESENT but non-positive tenor now fails strict `['cashflow','debt']`."""
     cfg = _valid_config()

@@ -41,9 +41,15 @@ from analytics.core.risk_metrics import (
     VaRCVaRResult,
 )
 
-# Sensitivity analysis - Tornado charts and shock analysis
+# Sensitivity analysis - Tornado charts and shock analysis.
+# ``run_sensitivity_analysis`` is the backward-compatible alias of the path-based
+# ``run_sensitivity_analysis_from_path`` (#586): the old export name collides with
+# the engine orchestrator ``analytics.sensitivity.run_sensitivity_analysis``,
+# which has an incompatible (keyword-only, in-memory-config) signature. Both are
+# exported; new code should use the ``_from_path`` name.
 from analytics.core.sensitivity_runner import (
     run_sensitivity_analysis,
+    run_sensitivity_analysis_from_path,
 )
 
 __all__ = [
@@ -77,4 +83,5 @@ __all__ = [
     "solve_for_tariff_given_npv",
     # Sensitivity analysis
     "run_sensitivity_analysis",
+    "run_sensitivity_analysis_from_path",
 ]

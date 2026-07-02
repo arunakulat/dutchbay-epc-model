@@ -36,15 +36,19 @@ Configuration:
 
 Author: Dutch Bay Wind Farm Team
 Date: December 2025
-Version: 1.0.0 (CCCDIR Compliant)
+Version: tracks the repo ``VERSION`` file via ``analytics.run_manifest.engine_version()``
+    (no per-module literal to go stale; #618).
 """
 
+from analytics.run_manifest import engine_version
 from wind_resource.energy_calculator import EnergyCalculator
 from wind_resource.era5_fetcher import ERA5Fetcher
 from wind_resource.wind_analyzer import WindAnalyzer
 from wind_resource.wind_pipeline import WindPipeline
 
-__version__ = "1.0.0"
+# Single source of truth: the repo VERSION file (was a stale hardcoded "1.0.0"
+# while the repo had moved to 15.x; #618).
+__version__ = engine_version()
 __all__ = [
     "ERA5Fetcher",
     "WindAnalyzer",

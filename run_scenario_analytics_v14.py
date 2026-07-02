@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -114,6 +114,35 @@ def _build_scenario_filter(expr: Optional[str]) -> Optional[Callable[[str], bool
     return _predicate
 
 
+def _resolve_default_discount_rate(cfg_dict: Mapping[Any, Any]) -> float:
+    """
+    Resolve the batch-wide default discount rate from the Hydra config.
+
+    Single source of truth (#586, CESSPIT — Config Explicit): for batch runs the
+    authoritative value is the ``default_discount_rate`` key in
+    ``conf/run_scenario_analytics_v14.yaml`` (0.12 as committed). There is
+    deliberately NO silent numeric fallback here — a config that omits the key
+    (e.g. via a ``~default_discount_rate`` Hydra delete-override) fails loudly
+    instead of quietly diverging from the packaged value. Direct-API callers of
+    :class:`analytics.scenario_analytics.ScenarioAnalytics` are instead backed by
+    ``analytics.scenario_analytics.DEFAULT_GLOBAL_DISCOUNT_RATE``.
+    """
+    if "default_discount_rate" not in cfg_dict:
+        raise ValueError(
+            "Missing 'default_discount_rate' in the batch config. "
+            "conf/run_scenario_analytics_v14.yaml carries the authoritative "
+            "value; restore the key or pass default_discount_rate=<rate> as a "
+            "Hydra override (there is no silent code fallback)."
+        )
+    raw = cfg_dict["default_discount_rate"]
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid default_discount_rate: {raw!r} – expected a float-like value."
+        )
+
+
 @hydra.main(
     config_path="conf",
     config_name="run_scenario_analytics_v14",
@@ -143,7 +172,6 @@ def main(cfg: DictConfig) -> None:
 
     # Optional extras.
     filter_expr = cfg_dict.get("filter", None)
-    default_discount_rate = cfg_dict.get("default_discount_rate", 0.10)
     summary_json_cfg = cfg_dict.get("summary_json", None)
 
     # Ensure output directory exists (scenarios_dir should already exist).
@@ -152,14 +180,9 @@ def main(cfg: DictConfig) -> None:
     # Wire scenario filter (fixes the previous "unused variable" lint warning).
     scenario_filter = _build_scenario_filter(filter_expr)
 
-    # Normalise discount rate.
-    try:
-        global_default_discount_rate = float(default_discount_rate)
-    except (TypeError, ValueError):
-        raise ValueError(
-            f"Invalid default_discount_rate: {default_discount_rate!r} "
-            "– expected a float-like value."
-        )
+    # Resolve the batch-wide default discount rate — fail-loud if the config
+    # omits the key; the packaged YAML is the single source of truth (#586).
+    global_default_discount_rate = _resolve_default_discount_rate(cfg_dict)
 
     # Optional JSON summary file path.
     summary_json_path: Optional[Path]
