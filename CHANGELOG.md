@@ -46,6 +46,20 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
+- **CVaR labelled explicitly as Expected Shortfall + quantified small-sample caveat (#600, KPI-neutral).**
+  The user-facing display label from `analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar`
+  moves `CVaR(95%)` → `CVaR/ES(95%)` (CVaR and Expected Shortfall are the same statistic; the label now
+  names both). Docstrings at every CVaR computation surface (`analytics/core/risk_metrics.py`,
+  `analytics/mc/engine.py::_tail_risk`, `analytics/capital_risk_layer_v14.py`,
+  `analytics/sensitivity/tail_risk.py::_cvar`) plus `docs/ANALYTICS_INTEGRATION.md` now state
+  CVaR == ES and carry a quantified small-sample caveat: the tail mean rests on only
+  `(1 - confidence) * n` trials — at n=1000 a 1% tail averages ~10 raw trials (noisy for a
+  covenant/pricing input) — and ES converges slower than the mean, so a tight mean CI from the
+  post-hoc convergence diagnostic (`analytics/mc/convergence.py`, #643) does not certify the tail;
+  the `>= max(20, 1/(1-confidence))`-sample floor in `capital_risk_layer_v14` is documented as a
+  degeneracy guard, not statistical sufficiency. Strings/docs/Markdown only: no numeric computation,
+  default, or config key changes (`cvar_confidence`/`cvar_alpha` untouched); committed scenario KPIs
+  byte-identical (labels never enter committed KPI artifacts).
 - **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
   modelled in the engine (above), the analysis layer's sweeps now drive the live keys end-to-end:
   - `FXSensitivityAnalyzer.run()`'s spread sweep drives `fx.spread_bps` (the legacy, engine-ignored
