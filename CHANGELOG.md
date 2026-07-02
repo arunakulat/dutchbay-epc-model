@@ -5,6 +5,47 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Distributional tail-risk for the lender report — first slice: MC per-case trial arrays + VaR/CVaR wire (#657, additive, opt-in, KPI-neutral).**
+  `analytics.capital_risk_layer_v14.run_driver_mc` gains an opt-in `collect_trials=True`
+  flag that additionally records the full per-trial metric arrays
+  (`project_irr`/`equity_irr`/`project_npv`/`equity_npv`, per-trial `dscr_min`, and
+  per-trial `llcr`/`plcr` scalars — coverage ratios are scenario scalars in
+  `finance/debt_v14.py`, so one value per trial is the correct per-trial shape). The
+  default three-key return (`equity_irr`, `equity_npv`, `min_dscr`) is preserved
+  byte-for-byte; the RNG draw sequence is unchanged by the flag, so aggregate statistics
+  are reproducible across both modes for a given seed.
+  - `build_case_metadata_from_trials` packages those arrays into the exact
+    `case["metadata"]["trials"][metric_key]` bucket shape that
+    `analytics.sensitivity.tail_risk._extract_trials_from_case` reads — the shared
+    metadata-plumbing prerequisite for all three distributional consumers, with no shape
+    fork. `build_driver_mc_tail_snapshot` wires the previously-unconsumed distributional
+    path onto these real arrays, producing per-metric VaR (P5/P10), CVaR / expected
+    shortfall, and — for DSCR-like metrics — covenant-breach probability. This is exactly
+    the distributional disclosure a project-finance due diligence wants and that the
+    deterministic tornado path cannot give.
+  - CESSPIT fail-loud preserved: `require_trials=True` yields an explicit `no_trials` note
+    row when a metric's array is absent, never a silently fabricated distributional
+    statistic. All evaluation flows through `evaluate_with_overrides` and no IRR/NPV math
+    is added outside `finance/irr.py` (CCCDIR / ARCH-04). KPI-neutral report-layer metadata
+    only — all committed-scenario KPIs are byte-identical (multi-scenario oracle).
+  - Follow-ups filed for the two remaining wires of #657: `tail_risk_report` render into
+    the capital-risk report output (needs the per-year DSCR/LLCR/PLCR `(n_scenarios,
+    n_years)` matrix), and the `plot_npv_distribution` PNG from the same trial arrays.
+  - **DSCR covenant-breach probability now robust to sculpt floor-pin representation noise
+    (#657, Fable blocker — was a false lender risk number).** A dual-DSCR sculpt pins each
+    trial's per-trial minimum DSCR at the covenant floor *by construction*, so the
+    `dscr_min` trial array clusters at the floor to within ~1e-16 floating-point noise
+    (values like `1.2999999999999996` for a 1.30 floor). The strict `arr < floor`
+    comparison in `analytics.sensitivity.tail_risk._prob_breach` counted that sub-ULP
+    scatter as breaches and reported an 85-93% DSCR breach probability on the flagship
+    lender case whose true value is 0.0. `_prob_breach` now counts a breach only when a
+    trial sits below the floor by more than representation noise (`arr < floor` and not
+    `np.isclose(..., rtol=1e-9)`) — far tighter than any real DSCR margin, so genuine
+    breaches are still counted. When the trial array is fully pinned at the floor,
+    `build_driver_mc_tail_snapshot` now emits a disclosed `degeneracy` note on the DSCR row
+    (`dscr_min_pinned_at_floor`): sculpted amortization makes per-trial min-DSCR invariant,
+    so the informative lender tail lives in LLCR/PLCR and the balloon, not min-DSCR. Report
+    diagnostic only — committed-scenario KPIs remain byte-identical (multi-scenario oracle).
 - **PAWN (median-KS) global-sensitivity block in the lender report + PAWN (X, Y) given-data reuse (#645, additive, default-absent = byte-identical).**
   The lender report's Global Sensitivity area now carries an optional **PAWN** subsection
   alongside the existing Morris screening. PAWN (Pianosi & Wagener 2018) is a
