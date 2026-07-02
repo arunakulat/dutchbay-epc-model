@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -77,7 +77,11 @@ class PipelineMetrics:
     validation_warnings: list[str] = field(default_factory=list)
     fx_integration_attempted: bool = False
     fx_integration_succeeded: bool = False
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    # Tz-aware UTC (was the deprecated naive ``datetime.utcnow()``); the ISO string
+    # now carries an explicit ``+00:00`` offset, matching the tz-aware run manifest.
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     # Read from the repo VERSION file (single source of truth) — was a hardcoded
     # 'v14.3.0' literal that had drifted from the real version (CESSPIT/CCCDIR).
     pipeline_version: str = field(default_factory=engine_version)

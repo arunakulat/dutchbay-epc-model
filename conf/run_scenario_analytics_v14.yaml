@@ -19,7 +19,10 @@ charts: true
 # Optional substring filter for scenario names; null => include all
 filter: null
 
-# Default discount rate (as a decimal) if scenario's own rate is missing
+# Default discount rate (as a decimal) if scenario's own rate is missing.
+# AUTHORITATIVE for batch runs (#586): the CLI fails loudly if this key is
+# missing — there is no silent code fallback. Direct-API construction of
+# ScenarioAnalytics uses analytics.scenario_analytics.DEFAULT_GLOBAL_DISCOUNT_RATE.
 default_discount_rate: 0.12
 
 # Optional JSON summary file written by ScenarioAnalytics.run()

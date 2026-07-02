@@ -257,7 +257,18 @@ def run_sobol(
     Cost is ``n·(D+2)`` evaluations (``calc_second_order=False``). Returns a dict keyed by
     metric → {driver → {S1, S1_conf, ST, ST_conf, interactive}}, plus ``problem`` metadata.
     ``problem``/``evaluate_fn`` override the config-derived defaults (used by closed-form tests).
+
+    ``n`` MUST be a positive power of 2 (default 256 = 2**8): SALib's ``sobol`` sampler
+    draws a base-2 Sobol' sequence, whose balance properties (and therefore the index
+    accuracy) only hold at powers of 2 — SALib itself merely warns and degrades, so we
+    fail loud here instead (#586).
     """
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1 or (n & (n - 1)) != 0:
+        raise ValueError(
+            f"run_sobol requires n to be a positive power of 2 (e.g. 128, 256, 512); "
+            f"got {n!r}. SALib's base-2 Sobol' sequence loses its balance properties "
+            f"at other sizes, silently degrading the S1/ST estimates."
+        )
     _require_salib()
     from SALib.analyze import sobol as sobol_analyze
     from SALib.sample import sobol as sobol_sample

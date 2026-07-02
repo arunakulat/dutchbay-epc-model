@@ -11,6 +11,7 @@ the rest.
 from __future__ import annotations
 
 import copy
+import logging
 from typing import Any, Dict
 
 import pytest
@@ -172,6 +173,24 @@ def test_life_missing_raises() -> None:
     """No life anywhere raises the documented ValueError."""
     with pytest.raises(ValueError, match="project life"):
         _extract_project_life_years({"project": {}}, log=False)
+
+
+def test_life_heuristic_fallback_emits_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The heuristic tree-walk guess is LOUD: a WARNING names the matched path (#585).
+
+    The tree-walk only fires when every explicit field, the component sum and
+    Financing_Terms.tenor_years all miss; the guess must never be silent.
+    """
+    cfg = {"schedule": [{"unrelated": 3}, {"operating_life_years": 25}]}
+    with caplog.at_level(logging.WARNING, logger="finance.cashflow_v14_params"):
+        assert _extract_project_life_years(cfg, log=True) == 25
+    warned = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(
+        "heuristic match" in r.message and "operating_life_years" in r.message
+        for r in warned
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +374,19 @@ def test_validate_depreciation_years_too_small() -> None:
     cfg["tax"]["depreciation_years"] = 0
     msg = _validate_error(cfg)
     assert "depreciation_years" in msg and "must be >= 1" in msg
+
+
+def test_validate_depreciation_years_malformed_is_named_error() -> None:
+    """A present-but-non-coercible depreciation_years is a NAMED validation error (#585).
+
+    Previously ``as_int`` swallowed the coercion failure, so a malformed value
+    silently PASSED validation. The validator converts the new fail-loud raise
+    into a collected, field-named error (keeping its report-all contract).
+    """
+    cfg = _cfg()
+    cfg["tax"]["depreciation_years"] = "twelve-ish"
+    msg = _validate_error(cfg)
+    assert "depreciation_years" in msg and "cannot convert" in msg
 
 
 def test_validate_fx_block_invalid() -> None:
