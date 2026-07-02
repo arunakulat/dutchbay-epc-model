@@ -265,6 +265,14 @@ All notable changes to this project will be documented here.
   `Test Summary` is a *required* status check, so on an FX-touching PR two different "Test Summary"
   checks appeared, making the required-check identity ambiguous. Renamed the fx-tests jobs to
   `FX Test Summary` / `FX Code Quality Checks` (job IDs unchanged, so `needs:` is unaffected).
+- **CI: dropped the redundant advisory black/isort steps from `fx-tests.yml`.** The FX code-quality
+  job carried FX-scoped `black --check` / `isort --check-only` steps with `continue-on-error: true`
+  (advisory only, predating the repo-wide gate). Formatting and import order are enforced repo-wide
+  by the MANDATORY lint gate in `test-suite.yml` (#545), which strictly supersedes the advisory
+  checks, so they only added CI time and a perpetually ignorable signal. The two steps are removed
+  and `black`/`isort` dropped from that job's installs; the advisory mypy and flake8 steps are
+  intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
+  gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
 
 ## v15.2.0 - 2026-07-01
 
