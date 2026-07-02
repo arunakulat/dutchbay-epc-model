@@ -5,6 +5,25 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **P99 (and P1) first-class in the Monte Carlo default percentile set (#599, additive-only,
+  committed KPIs byte-identical).** `analytics.mc.aggregate` now exposes `DEFAULT_PERCENTILES =
+  (1, 5, 10, 50, 90, 95, 99)` — extending the previous `(5, 10, 50, 90, 95)` default — because
+  senior-debt loan-size capping is conventionally set at P99. Tail direction is handled
+  explicitly per the #563 exceedance convention in `analytics.mc.exports`: the keys are RAW
+  percentiles, so for higher-is-better metrics (DSCR/IRR/NPV/LLCR/PLCR) the lender's downside
+  "P99" is the raw **1st** percentile (key `1`, shipped alongside), while the raw 99th (key `99`)
+  is the upside tail — the raw 99th must never be reported as downside P99. Additive-only proof:
+  each requested percentile is computed independently (`np.percentile` per level), so every
+  pre-existing percentile key/value is unchanged (empirically verified: 0 removed / 0 changed,
+  additions only at levels 1 and 99). Scenarios pinning `monte_carlo.percentiles` are unaffected —
+  all committed lender/capex scenarios pin `[10, 25, 50, 75, 90]` (byte-identical, verified); the
+  two committed scenarios WITHOUT a pin (`dutchbay_mc_enhanced_2025Q4.yaml`, which has no
+  `monte_carlo` block at all, and `dutchbay_sprint17_enhanced.yaml`, whose legacy block has no
+  `monte_carlo.parameters`) cannot produce MC artifacts through the canonical engine (fail-fast
+  `MonteCarloConfigError` before aggregation, unchanged) and so needed no pin; the wind-resource
+  MC (`config/wind_dutchbay_150mw.yaml`) computes its own percentiles and never consumes this
+  default. The deterministic KPI surface is outside the MC aggregator entirely (kpi-oracle
+  byte-identical across all committed scenarios).
 - **Wind artifact hygiene (#618, KPI-neutral: committed scenarios byte-identical, frozen AEP artifacts untouched).**
   Three fixes on the `wind_resource` timeseries-diagnostic path (finance reads the frozen
   `aep_summary` JSON, so lender KPIs cannot move):
