@@ -25,6 +25,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -81,6 +82,7 @@ def run_finance_case(
     enforce_aep_provenance(guarded, "<inline>")
     validate_evidence_register(guarded, "<inline>")
     validate_development_readiness(guarded, "<inline>")
+    validate_conditions_precedent(guarded, "<inline>")
     # PIPE-3 (#489): the FX spot cross-assert is a load-time guard too, and was the one
     # integrity detector this seam still skipped — so a web/notebook caller could submit a
     # scenario whose fx.rates.lkr_per_usd, fx.start_lkr_per_usd and fx.source.pinned_rate

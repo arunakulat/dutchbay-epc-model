@@ -25,6 +25,7 @@ from analytics.aep_reconciliation import (
     AepReconciliationError,
     reconcile_capacity_factor_with_bankable_aep,
 )
+from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
@@ -574,6 +575,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         enforce_aep_provenance(cfg, payload.config_path or "<inline>")
         validate_evidence_register(cfg, payload.config_path or "<inline>")
         validate_development_readiness(cfg, payload.config_path or "<inline>")
+        validate_conditions_precedent(cfg, payload.config_path or "<inline>")
         # Same rationale for the FX spot keys: an inline/overridden authored config bypasses
         # the load-time cross-assert, so a divergent fx.rates/start/pinned would yield a
         # self-inconsistent lender pack (#236 class). A client authoring/overriding the

@@ -183,3 +183,25 @@ class TestCliTopLevelNTrialsMatchesMetadata:
         assert artifact["n_trials"] == artifact["metadata"]["n_trials"]
         assert artifact["metadata"]["sobol_n_requested"] == 12
         assert artifact["metadata"]["sobol_n_used"] == 16
+
+
+class TestSamplingMethodProvenance:
+    """#648a: MonteCarloResult.sampling_method is a first-class provenance field wired
+    from the sampler actually used (meta["sampler"]) — so lender-facing risk blocks can
+    attribute the bands to their generation method instead of the None default. It must
+    agree with metadata["sampler"] on BOTH the canonical LHS and the opt-in Sobol path.
+    """
+
+    def test_lhs_result_reports_sampling_method(self) -> None:
+        res = MonteCarloEngine(_load(), seed=123).run(n_trials=32)
+        assert res.metadata["sampler"] == "lhs"  # canonical default
+        assert res.sampling_method == "lhs"
+        assert res.sampling_method == res.metadata["sampler"]
+
+    def test_sobol_result_reports_sampling_method(self) -> None:
+        cfg = copy.deepcopy(_load())
+        cfg["monte_carlo"]["sampler"] = "sobol"
+        res = MonteCarloEngine(cfg, seed=123).run(n_trials=48)  # -> 64 = 2**6
+        assert res.metadata["sampler"] == "sobol"
+        assert res.sampling_method == "sobol"
+        assert res.sampling_method == res.metadata["sampler"]
