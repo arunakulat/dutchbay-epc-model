@@ -46,6 +46,20 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
+- **`pydantic.mypy` plugin registered in the effective mypy config (#594, tooling-only, KPI-neutral).**
+  `mypy.ini` (the config both CI gates actually read — `pyproject.toml`'s `[tool.mypy]` merely points
+  `config_file = "mypy.ini"`) now sets `plugins = pydantic.mypy` plus the strictest `[pydantic-mypy]`
+  profile (`init_forbid_extra`, `init_typed`, `warn_required_dynamic_aliases`). The CASPER-family
+  frozen-contract boundary (pydantic v2 models in `analytics/core/risk_metrics.py`,
+  `analytics/core/returns.py`, `analytics/fx/fx_contracts.py`,
+  `finance/equity_distribution_v14_hydra.py` and the `api/`/`app/` layers) is now genuinely
+  type-checked: precisely-typed synthesized `__init__` signatures, unknown constructor kwargs
+  rejected, dynamic required aliases flagged. Verified against the CI-pinned mypy 1.19.0 +
+  pydantic 2.13.4: zero new errors on both CI invocations (library/engine surface and the relaxed
+  `scripts/` gate), plugin activation positively confirmed via an out-of-tree probe model. The now
+  inert `[mypy-pydantic.*] ignore_missing_imports` block (pydantic v2 ships `py.typed`) is kept and
+  annotated; its removal is deferred as a user-gated cleanup. No runtime code changed; kpi_oracle
+  byte-identical across all committed scenarios.
 - **CVaR labelled explicitly as Expected Shortfall + quantified small-sample caveat (#600, KPI-neutral).**
   The user-facing display label from `analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar`
   moves `CVaR(95%)` → `CVaR/ES(95%)` (CVaR and Expected Shortfall are the same statistic; the label now
