@@ -45,6 +45,36 @@ All notable changes to this project will be documented here.
     the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
     duplicated hedged scenario fixture.
 
+### Fixed
+- **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
+  Five verified erosions of the fail-loud stance closed; all committed scenarios verified
+  **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
+  previously-silent malformed/missing input into a raise or WARNING:
+  - `finance.cashflow_v14_utils.as_float`/`as_int` now **raise `ValueError` on a present-but-malformed
+    value** (e.g. `"12,5"`, a mapping) instead of silently returning the default; `None` still yields
+    the default. A silent fallback here could move a tax/capex base with no trace (the call sites are
+    precedence chains). The `as_float_or_none`/`as_int_or_none` probe variants keep their documented
+    swallow semantics — the project-life heuristic tree-walk and capacity candidate scans depend on
+    them (pinned by test). The `finance.utils` twin module (used by `debt_v14`/`epc_helper_v14` with
+    explicit engine defaults) is out of this issue's scope and unchanged.
+  - `validate_parameters` converts the new `as_int` raise for a malformed `tax.depreciation_years`
+    into a **field-named validation error** (previously a malformed value silently PASSED validation);
+    the validator keeps its report-all contract.
+  - `finance.debt_v14` `amortization_style` is now **whitelisted** (`annuity`/`fixed` → annuity;
+    `sculpted`/`auto` → DSCR-sculpted) mirroring the `balloon_treatment` whitelist. `auto` — used by
+    committed scenarios — is an explicit, documented sculpted alias, not a fall-through accident; an
+    unknown style WARNs and falls back to sculpted (exactly the old silent behaviour, now loud).
+  - The compact `debt:` schema now emits the **same placeholder-substitution WARNs** as the
+    `Financing_Terms` path (A1/#91) when it substitutes the `[0.5, 0.5]` even draw or `[40, 60]`
+    construction phasing; the `Financing_Terms` path additionally WARNs on its previously-silent
+    `[40, 60]` construction-schedule substitution. Values are unchanged.
+  - `finance.debt_v14._pmt` raises a clear `ValueError` when `nper <= 0` with a non-zero rate instead
+    of a raw `ZeroDivisionError` (defensive: the sole caller guards `amort_years > 0`); the
+    `rate == 0` degenerate contract is untouched.
+  The `_extract_project_life_years` heuristic tree-walk already WARNs (the issue's "silent" was
+  overstated); its warning is now pinned by a dedicated test. Dedicated failure tests cover every new
+  raise/warn path.
+
 ### Changed
 - **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
   remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
