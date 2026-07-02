@@ -5,6 +5,25 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Distribution-free order-statistic CI for the MC P90/P95 tail band + a Wilson breach-probability CI (#642, read-only/additive, KPI-neutral).**
+  The convergence diagnostic (#590/#643) bounds only the *mean's* Monte Carlo error
+  (`z·sd/√k`), but a lender reads the **P90/P95 band** (and the DSCR covenant breach
+  probability), which converge slower than the mean. New
+  `analytics.mc.convergence.percentile_ci_diagnostic` adds a distribution-free confidence
+  interval for those percentiles — the classic **binomial order-statistic** interval (normal
+  approximation to the rank bounds `n·p ± z·√(n·p·(1-p))`, floored/ceiled *outward* so
+  coverage is conservative), with **no distributional assumption on the metric** (unlike the
+  mean CI's i.i.d.-normal SE) — plus a **Wilson-score** CI for `P(dscr_min < covenant)`. It is
+  computed from `result.trials` only and surfaced additively under
+  `result.metadata['percentile_ci']` alongside `metadata['convergence']`. When `n` is too
+  small to place a required rank (e.g. the P95 upper bound below ~73 trials) that bound is
+  reported as `None` — loud omission, never a silent clamp to the extreme order statistic
+  (CESSPIT). The `dscr_min` breach threshold is wired from the resolved DSCR covenant
+  (`analytics.mc.covenant.resolve_min_dscr_covenant`, single source of truth). Student-t
+  small-`k` widening is out of scope (documented): it refines the normal-theory *mean* SE and
+  has no order-statistic analogue. `numpy`-only, import-light per the module charter (CASPER).
+  Read-only/additive — same contract as #590; all committed-scenario KPIs verified byte-
+  identical (all-scenarios kpi oracle).
 - **Project→equity IRR bridge in the lender report + OpenDSS-curtailment deferral ADR (#621, additive, KPI-neutral).**
   Two halves of the deferred/gated cluster.
   - **IRR bridge (built):** a new disclosure-only section that reconciles the engine's PUBLISHED
