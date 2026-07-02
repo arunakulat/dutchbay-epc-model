@@ -141,6 +141,23 @@ All notable changes to this project will be documented here.
   has no order-statistic analogue. `numpy`-only, import-light per the module charter (CASPER).
   Read-only/additive — same contract as #590; all committed-scenario KPIs verified byte-
   identical (all-scenarios kpi oracle).
+- **Single-scenario Executive Workbook emission — a genuine live caller for `build_executive_workbook` (#656, slice 3, opt-in, KPI-neutral).**
+  `analytics.executive_workbook.build_executive_workbook` shipped orphaned in PR #179 (its only
+  caller was a unit test). This wires it into the canonical single-scenario CLI. New helpers
+  `frames_from_pipeline_result` (assembles the five finance sheets — Summary / Cashflow /
+  DebtService / Ratios / ScenarioSummary — from a plain `run_v14_pipeline` result; no financial
+  value is derived, CCCDIR one-source) and `emit_executive_workbook_from_pipeline` (the live
+  caller). `run_full_pipeline_v14.py` gains an opt-in Hydra step (`emit_executive_workbook`,
+  default `false`; `executive_workbook_path`, default `<export_dir>/executive_workbook.xlsx`) that
+  writes the workbook after a successful finance run and echoes the path under
+  `result['executive_workbook_path']`. The long-term wind-resource trend reaches the optional
+  "ResourceTrend" sheet by riding INSIDE the frozen wind export as a JSON-safe `long_term_trend`
+  block — the finance CLI runs no live ERA5 (it stays cdsapi-free by design). `serialize_resource_trend`
+  (producer encoder) and `resource_trend_df_from_wind_export` (consumer decoder) are exact inverses,
+  so the tidy (Metric, Value) `summary_df` from `wind_resource.long_term_trend.analyze_long_term_resource`
+  round-trips to the sheet unchanged. **Additive + default-off:** committed scenarios leave the step
+  off, so all-scenario KPIs are verified byte-identical (all-scenarios kpi oracle). A producer-side
+  emit (WindPipeline / era5 export carrying the trend block) is the natural next slice.
 - **Project→equity IRR bridge in the lender report + OpenDSS-curtailment deferral ADR (#621, additive, KPI-neutral).**
   Two halves of the deferred/gated cluster.
   - **IRR bridge (built):** a new disclosure-only section that reconciles the engine's PUBLISHED
