@@ -202,9 +202,47 @@ def test_build_lhs_plan_shape_bounds_and_determinism() -> None:
         assert 0.0 <= ov["ka"] <= 10.0
         assert -5.0 <= ov["kb"] <= 5.0
         assert "a~" in label and "b~" in label
-    # Same seed -> identical samples.
+    # Same seed -> identical samples (scipy qmc.LatinHypercube seeded via
+    # np.random.default_rng(seed) is a pure function of (seed, n, d)).
     plan2 = build_lhs_plan(grid, n_samples=6, seed=7)
     assert [o for _, o in plan] == [o for _, o in plan2]
+    # Different seed -> different samples (the seed genuinely drives the stream).
+    plan3 = build_lhs_plan(grid, n_samples=6, seed=8)
+    assert [o for _, o in plan] != [o for _, o in plan3]
+
+
+def test_build_lhs_plan_one_point_per_stratum() -> None:
+    """The Latin Hypercube property: for n samples, each parameter's range
+    splits into n equal strata [i/n, (i+1)/n) and each stratum is hit exactly
+    once. Verified in unit space by binning the recovered position."""
+    n = 8
+    grid = [
+        ParameterGridSpec(name="a", override_key="ka", values=(0.0, 10.0)),
+        ParameterGridSpec(name="b", override_key="kb", values=(-5.0, 5.0)),
+    ]
+    plan = build_lhs_plan(grid, n_samples=n, seed=42)
+    for g, key in ((grid[0], "ka"), (grid[1], "kb")):
+        lo = float(min(g.values))
+        hi = float(max(g.values))
+        # Recover the [0,1) unit position and bin into n strata.
+        strata = sorted(
+            min(n - 1, int((ov[key] - lo) / (hi - lo) * n)) for _, ov in plan
+        )
+        assert strata == list(range(n))  # each stratum occupied exactly once
+
+
+def test_build_lhs_plan_degenerate_pinned_parameter() -> None:
+    """A degenerate lo == hi parameter yields a constant column (the manual
+    affine map handles it; qmc.scale would raise). Matches prior behavior."""
+    grid = [
+        ParameterGridSpec(name="pinned", override_key="kp", values=(3.5,)),
+        ParameterGridSpec(name="free", override_key="kf", values=(0.0, 100.0)),
+    ]
+    plan = build_lhs_plan(grid, n_samples=5, seed=11)
+    assert len(plan) == 5
+    for _, ov in plan:
+        assert ov["kp"] == 3.5  # pinned: constant, no crash
+        assert 0.0 <= ov["kf"] <= 100.0
 
 
 def test_build_lhs_plan_empty_grid_raises() -> None:

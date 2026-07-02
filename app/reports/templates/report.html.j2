@@ -77,6 +77,9 @@
     .rag-green { background: #e3f4e8; color: #1d7a3e; }
     .rag-amber { background: #fff4e0; color: #9a6700; }
     .rag-red { background: #fdeaea; color: #b23b3b; }
+    /* TCFD climate-risk tags (EP4-aligned CCRA) — physical vs transition. */
+    .tcfd-physical { background: #e8eef7; color: #2a4d80; }
+    .tcfd-transition { background: #f0e8f7; color: #5e3b80; }
     ul.notes { margin: 6pt 0; padding-left: 18pt; }
     ul.notes li { margin-bottom: 3pt; }
     .disclaimer { font-size: 9pt; color: #555; }
@@ -356,7 +359,8 @@
       <tbody>
         {% for r in ctx.risk_register %}
         <tr>
-          <td>{{ r.category }}</td>
+          <td>{{ r.category }}{% if r.climate_risk_category %}
+            <span class="badge tcfd-{{ r.climate_risk_category }}">TCFD: {{ r.climate_risk_category|capitalize }}</span>{% endif %}</td>
           <td>{{ r.risk }}</td>
           <td>{{ r.mitigation }}</td>
           <td><span class="badge sev-{{ r.severity }}">{{ r.severity|capitalize }}</span></td>

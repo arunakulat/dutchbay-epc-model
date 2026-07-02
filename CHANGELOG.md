@@ -35,6 +35,39 @@ All notable changes to this project will be documented here.
     the module is now `reload`-ed to re-run its import-time registration. Behaviour-neutral in the
     normal single-import lifecycle (the branch only fires when specs are missing), and it re-registers
     ALL python modules backing a multi-module logical name (e.g. `cashflow`).
+- **Opt-in NREL-BLAST separable calendar+cycle BESS aging curve (#606, opt-in, KPI-neutral).**
+  `finance.bess_revenue` gains a `revenue.soh_model` selector: the default (absent) `geometric`
+  keeps the compounding `(1 − mdsc_fade_pct_annual)^t` state-of-health curve unchanged, while
+  the new `separable_calendar_cycle` models calendar aging (loss ∝ time) and cycle aging
+  (loss ∝ equivalent-full-cycle throughput = `cycles_per_year × depth_of_discharge`) as a
+  linear superposition — the NREL **BLAST** decomposition used by SAM. New `revenue.*` keys
+  `calendar_fade_pct_annual` and `cycle_fade_pct_per_efc` get fail-loud CESSPIT validation
+  (non-numeric / out-of-`[0,1)` / a combined annual rate outside `[0,1)` raise with the full
+  config path); the two models are mutually exclusive (mixing `mdsc_fade_pct_annual` with the
+  separable keys, or an unknown `soh_model`, raises — no silent precedence). The `mdsc_floor_soh`
+  floor and `augmentation_schedule` origin-reset semantics apply identically to both models.
+  The curve is honoured by BOTH consumers through the single source of truth
+  `mdsc_soh_for_year`: the resolver collapses the separable channels into one annual rate stored
+  on the spec and threaded through `LcosSpec` / `resolve_lcos_specs` / the `compute_lcos`
+  `soh_lookup`, so the cashflow revenue path and `finance.bess_lcos` can never diverge. The
+  per-model depth-of-discharge defaults are now imported by `bess_lcos` from `bess_revenue`
+  (single source of truth). DEFAULT OFF = byte-identical: both committed BESS scenarios
+  (`ceb_bess_10mw_capacity_charge.yaml`, `ceb_solar_bess_nightpeak_10mw.yaml`) keep the
+  geometric curve, and all committed-scenario KPIs are verified byte-identical (all-scenarios
+  kpi oracle).
+- **TCFD-aligned climate-risk fields in the risk / evidence register (#607, additive, KPI-neutral).**
+  `RiskItem` (config) and its render twin `RiskRow` gain an OPTIONAL
+  `climate_risk_category: physical | transition` field (pydantic `Literal`, `extra="forbid"`
+  preserved) threaded through `_build_risk_register`; the report template renders a TCFD tag
+  in the Risk Register only when the field is present (untagged rows render unchanged), so
+  every existing config still loads. `config/evidence_register.yaml`'s `material_assumptions`
+  taxonomy gains a `climate_risk` (CCRA-exists) entry, matching Equator Principles 4's
+  mandatory TCFD-structured Climate Change Risk Assessment; enforcement stays soft
+  (`enforce=false`, `require_complete=false` in `config/defaults.yaml`), so a scenario without
+  a CCRA entry is warn-only, never blocked. The committed `report_defaults.yaml` tags
+  Resource/Curtailment as `physical` and Regulatory/Tariff as `transition`; the lendercase
+  scenario declares an honest `assumption`-tier `climate_risk` entry (analyst screen, not a
+  commissioned CCRA). Pure detector + presentation — committed-scenario KPIs are byte-identical.
 - **Scenario-YAML wiring for `resource.solar.uncertainty` (#604, opt-in, KPI-neutral).**
   `SolarResourceConfig.from_scenario` now accepts an OPTIONAL `resource.solar.uncertainty`
   mapping instead of rejecting it as an unknown key, closing the wind/solar asymmetry (wind
@@ -298,6 +331,31 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **`build_lhs_plan` now samples via `scipy.stats.qmc.LatinHypercube` (#598, KPI-neutral).**
+  The Pareto optimizer's `lhs` plan builder (`analytics.sensitivity.optimizer.build_lhs_plan`)
+  replaces its hand-rolled stratified sampler — whose own docstring admitted it was "NOT full
+  LHS" — with a formal scrambled Latin Hypercube: `qmc.LatinHypercube(d=len(grid),
+  scramble=True, rng=np.random.default_rng(int(seed)))`, giving Koksma-Hlawka error bounds and
+  no new dependency (scipy is already a base dep, `scipy>=1.10`). The public signature and
+  semantics of `build_lhs_plan(grid, *, n_samples, seed=123)` are unchanged: same
+  `List[(label, overrides)]` shape, same `[min(values), max(values)]` per-parameter ranges,
+  same `f"{name}~{v:.6g}"` labels, same fail-loud validation (empty grid / `n_samples<=0`).
+  - MRM-01: the drawn VALUES differ from the legacy stream (it is now genuine LHS), but this is
+    an accepted change — `build_lhs_plan` has NO pipeline/report/committed-scenario caller (its
+    only consumer is the on-demand `run_pareto_search(plan_kind="lhs")` analytics tool) and no
+    test or artifact pins the specific value stream (tests assert shape, per-dimension bounds,
+    same-seed reproducibility, the one-point-per-stratum LHS property and a degenerate pinned
+    parameter — not values). All committed-scenario KPIs verified byte-identical (all-scenarios
+    kpi oracle, 27 scenarios).
+  - CASPER: `from scipy.stats import qmc` is a lazy call-time import with a fail-loud
+    `ImportError` guard (actionable message; `grid` plan still needs numpy only), mirroring the
+    established `analytics.mc.samplers` Sobol pattern (#650). Scaling uses the same manual
+    `lo + u*(hi-lo)` affine map (NOT `qmc.scale`, which raises on a degenerate `lo == hi`
+    parameter), so a pinned parameter yields a constant column exactly as before.
+  - Scrambling/seed semantics (documented honestly): `scramble=True` applies an Owen-style
+    random-linear scramble jittering each point within its stratum; the single seeded
+    `default_rng` drives both the per-dimension stratum permutation and that scramble, so the
+    output is a pure deterministic function of `(seed, n_samples, len(grid))`.
 - **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
   `mc_risk` block's DSCR breach floor was resolved from the pipeline's
   `debt_covenants.dscr_threshold` snapshot (= `Financing_Terms.target_dscr` only), while the

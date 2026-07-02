@@ -187,6 +187,11 @@ A storage technology is declared under `generation.technologies.<name>` with an 
 - **Cost:** `capex_per_kwh_usd` (~125 turnkey, ex-China/US), an augmentation schedule, and opex (~2%/yr).
 - **Revenue:** the model selector — `capacity_charge` (Model A, standalone tolling) or the night-peak energy tariff (Model C, PV-coupled) — chosen per scenario.
 
+**State-of-health (SoH) degradation model** (`revenue.soh_model`, default `geometric`). The year-over-year capacity fade that scales both revenue and the LCOS energy basis has two forms, mutually exclusive and both floored by `revenue.mdsc_floor_soh` and reset by any `augmentation_schedule` event:
+
+- **`geometric`** (default / key absent) — one blended compounding rate: `soh(t) = (1 − revenue.mdsc_fade_pct_annual)^t`. Absent fade ⇒ no degradation ⇒ byte-identical. Lumps calendar and cycle aging into a single number.
+- **`separable_calendar_cycle`** (opt-in) — the **NREL BLAST** decomposition (Battery Lifetime Analysis and Simulation Tool; Smith et al., NREL — the lifetime model behind SAM's battery module), which separates **calendar aging** (loss ∝ elapsed time) from **cycle aging** (loss ∝ charge/discharge throughput). The two superpose linearly per year: `annual_fade = revenue.calendar_fade_pct_annual + revenue.cycle_fade_pct_per_efc × (cycles_per_year × depth_of_discharge)` and `soh(n) = 1 − annual_fade × n`. The equivalent-full-cycle throughput reuses the SAME `cycles_per_year` / `depth_of_discharge` the LCOS energy basis uses, so the revenue and LCOS SoH curves cannot diverge. Mixing `mdsc_fade_pct_annual` with the calendar/cycle keys — or an unknown `soh_model` — fails loud (CESSPIT; no silent precedence).
+
 Until a revenue model is wired for a given structure, a `type: bess` block must either fail loud or remain reporting-only, never silently contribute zero revenue while appearing active. The single-site EPC structure (Model B) is explicitly out of scope for the operational engine and belongs in a dedicated construction-margin module.
 
 ---
