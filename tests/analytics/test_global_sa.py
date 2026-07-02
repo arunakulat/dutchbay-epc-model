@@ -128,9 +128,108 @@ def test_build_problem_requires_both_bounds() -> None:
 def test_morris_smoke_lendercase_ranks_dominant_drivers() -> None:
     res = run_morris(LENDER, n_trajectories=4, metrics=("project_irr",), seed=1)
     assert res["n_runs"] == 4 * (res["problem"]["num_vars"] + 1)
+    assert res["optimal_trajectories"] is None
     ranking = res["metrics"]["project_irr"]["ranking"]
     # tariff and capex are the model's known dominant project-IRR drivers; one should top it.
     assert ranking[0] in {"tariff.lkr_per_kwh", "capex.usd_total"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Morris optimal-trajectories mode (#617) — opt-in subset selection.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _linear_dominant(overrides):
+    """A closed-form with one strongly-dominant linear driver — its Morris ranking is
+    stable under the Campolongo/Ruano optimal-trajectory subset (unlike near-tied drivers).
+    """
+    return {"y": 10.0 * overrides["x1"] + 0.1 * overrides["x2"] + 0.1 * overrides["x3"]}
+
+
+def test_morris_optimal_trajectories_reduces_runs_and_keeps_ranking() -> None:
+    """#617: an optimal-trajectories run costs optimal_trajectories*(D+1) evals (a subset of
+    the n_trajectories candidate pool) and still ranks the dominant driver on top."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    res = run_morris(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=20,
+        optimal_trajectories=10,
+        seed=1,
+    )
+    assert res["optimal_trajectories"] == 10
+    # Cost is the SUBSET size, not the candidate pool: 10*(3+1)=40, not 20*(3+1)=80.
+    assert res["n_runs"] == 10 * (res["problem"]["num_vars"] + 1)
+    assert res["metrics"]["y"]["ranking"][0] == "x1"
+
+
+def test_morris_optimal_trajectories_is_deterministic() -> None:
+    """MRM-01: subset selection is seeded, so a fixed seed gives an identical sample/result."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    kwargs = dict(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=20,
+        optimal_trajectories=8,
+        seed=7,
+    )
+    a = run_morris(**kwargs)
+    b = run_morris(**kwargs)
+    assert a["metrics"]["y"]["drivers"] == b["metrics"]["y"]["drivers"]
+    assert a["n_runs"] == b["n_runs"] == 8 * (prob.num_vars + 1)
+
+
+def test_morris_default_none_is_byte_identical_to_vanilla() -> None:
+    """The opt-in default (None) must leave the sample — and therefore every index —
+    byte-identical to the prior vanilla Morris call (KPI-neutral #617)."""
+    from SALib.sample import morris as morris_sample
+
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    salib_problem = prob.as_salib()
+    x_vanilla = morris_sample.sample(salib_problem, N=12, seed=3)
+    x_none = morris_sample.sample(
+        salib_problem, N=12, optimal_trajectories=None, seed=3
+    )
+    assert np.array_equal(x_vanilla, x_none)
+    res = run_morris(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=12,
+        seed=3,
+    )
+    assert res["optimal_trajectories"] is None
+    assert res["n_runs"] == 12 * (prob.num_vars + 1)
+
+
+def test_morris_optimal_trajectories_rejects_out_of_range() -> None:
+    """CESSPIT fail-loud: optimal_trajectories must be 2 <= k < n_trajectories, no silent
+    clamping. Guards the boundaries SALib itself handles inconsistently (it accepts 0).
+    """
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    # < 2 (incl. SALib's silently-accepted 0), == n_trajectories, and > n_trajectories.
+    for bad in (0, 1, 16, 17, -4):
+        with pytest.raises(ValueError, match="optimal_trajectories"):
+            run_morris(
+                problem=prob,
+                evaluate_fn=_linear_dominant,
+                metrics=("y",),
+                n_trajectories=16,
+                optimal_trajectories=bad,
+                seed=1,
+            )
+    # bool is an int subclass; True == 1 must be rejected, not coerced.
+    with pytest.raises(ValueError, match="optimal_trajectories"):
+        run_morris(
+            problem=prob,
+            evaluate_fn=_linear_dominant,
+            metrics=("y",),
+            n_trajectories=16,
+            optimal_trajectories=True,
+            seed=1,
+        )
 
 
 def _ishigami_with_flat(overrides):

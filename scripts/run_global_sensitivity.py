@@ -20,6 +20,15 @@ Sobol indices for one metric to a CSV (cost ~ n*(D+2) pipeline runs)::
     python scripts/run_global_sensitivity.py \\
       --config scenarios/dutchbay_lendercase_2025Q4.yaml \\
       --method sobol --metric project_irr --n 256 --output out/global_sa.csv
+
+Morris with an OPTIMISED trajectory subset (#617 — Campolongo/Ruano spread-maximising
+selection; cost ~ optimal_trajectories*(D+1) runs, OSeMOSYS "10-from-100" guidance)::
+
+    python scripts/run_global_sensitivity.py \\
+      --config scenarios/dutchbay_lendercase_2025Q4.yaml \\
+      --method morris --n 100 --optimal-trajectories 10
+
+See ``docs/SENSITIVITY_DECISION_TREE.md`` for which method to reach for.
 """
 
 from __future__ import annotations
@@ -64,8 +73,25 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Sobol base sample N (default 256) or Morris trajectories (default 16).",
     )
+    p.add_argument(
+        "--optimal-trajectories",
+        type=int,
+        default=None,
+        dest="optimal_trajectories",
+        help=(
+            "Morris only: select this many optimised trajectories (Campolongo/Ruano "
+            "spread-maximising subset) from the --n candidate pool; must be "
+            "2 <= k < n_trajectories. Omit for vanilla Morris."
+        ),
+    )
     p.add_argument("--output", default=None, help="CSV output path (default: stdout).")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    if args.optimal_trajectories is not None and args.method != "morris":
+        p.error(
+            "--optimal-trajectories is a Morris-only knob (SALib's optimal-trajectory "
+            f"subset selection); it cannot be combined with --method {args.method}."
+        )
+    return args
 
 
 def _rows(result: dict) -> List[dict]:
@@ -91,7 +117,10 @@ def main(argv: List[str] | None = None) -> int:
 
         if args.method == "morris":
             result = run_morris(
-                args.config, metrics=metrics, n_trajectories=args.n or 16
+                args.config,
+                metrics=metrics,
+                n_trajectories=args.n or 16,
+                optimal_trajectories=args.optimal_trajectories,
             )
         else:
             result = run_sobol(args.config, metrics=metrics, n=args.n or 256)

@@ -36,14 +36,18 @@ from pathlib import Path
 
 import pytest
 
+import analytics.core.parameter_solvers as ps
+from analytics.contracts_v14 import BreakevenResult
 from analytics.core.parameter_solvers import (
     SOLVER_REGISTRY,
     get_solver,
     solve_for_max_debt_given_dscr,
     solve_for_max_debt_multi_covenant,
     solve_for_min_capex_given_irr_floor,
+    solve_for_tariff_given_equity_irr,
     solve_for_tariff_given_irr,
     solve_for_tariff_given_npv,
+    solve_tariff_breakeven,
 )
 from analytics.evaluate_scenario import evaluate_with_overrides
 
@@ -113,6 +117,237 @@ def test_irr_solver_zero_iterations_raises_no_midpoint() -> None:
         solve_for_tariff_given_irr(
             LENDER_CONFIG, None, target_irr=0.20, bounds=(40.0, 100.0), max_iterations=0
         )
+
+
+def test_irr_solver_rejects_invalid_metric() -> None:
+    """metric must be one of the IRR KPIs; an unknown metric fails loud up front."""
+    with pytest.raises(ValueError, match="Invalid IRR metric"):
+        solve_for_tariff_given_irr(
+            LENDER_CONFIG, None, target_irr=0.20, metric="not_a_metric"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Equity-IRR tariff solver (#615): registry fix + generalized metric
+# ---------------------------------------------------------------------------
+
+
+def test_equity_irr_solver_converges_to_a_real_tariff() -> None:
+    """The equity-IRR-pinned solver genuinely SOLVES the engine's equity_irr KPI: the achieved
+    equity_irr at the returned tariff matches the target. On the lender case equity_irr spans
+    ~0.13..0.40 over 40..100 LKR/kWh, so 0.20 is bracketed and interior."""
+    target = 0.20
+    tariff = solve_for_tariff_given_equity_irr(
+        LENDER_CONFIG, None, target_irr=target, bounds=(40.0, 100.0), tolerance=1e-4
+    )
+    assert 40.0 < tariff < 100.0
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG,
+            overrides={"tariff": {"lkr_per_kwh": tariff}},
+        )["equity_irr"]
+    )
+    assert achieved == pytest.approx(target, abs=2e-3)
+
+
+def test_equity_irr_solver_differs_from_project_irr_solver() -> None:
+    """Solving for the same target against equity_irr vs project_irr yields DIFFERENT tariffs —
+    proving the registry fix actually answers a different question. On the geared lender case
+    equity_irr > project_irr at any given tariff (leverage lifts equity returns: at the
+    project-solve tariff project_irr==0.20 while equity_irr~=0.269), so the equity solve reaches
+    the same 0.20 target at a LOWER tariff. Either way the two tariffs differ; the assertion only
+    pins that they are not equal.
+    """
+    target = 0.20
+    tariff_project = solve_for_tariff_given_irr(
+        LENDER_CONFIG,
+        None,
+        target_irr=target,
+        metric="project_irr",
+        bounds=(40.0, 100.0),
+    )
+    tariff_equity = solve_for_tariff_given_equity_irr(
+        LENDER_CONFIG, None, target_irr=target, bounds=(40.0, 100.0)
+    )
+    assert tariff_equity != pytest.approx(tariff_project, abs=1.0)
+
+
+def test_generalized_metric_matches_dedicated_equity_wrapper() -> None:
+    """The generalized solver with metric='equity_irr' and the dedicated wrapper solve the
+    identical problem (the wrapper is a thin pin), so they return the same tariff."""
+    target = 0.20
+    via_metric = solve_for_tariff_given_irr(
+        LENDER_CONFIG,
+        None,
+        target_irr=target,
+        metric="equity_irr",
+        bounds=(40.0, 100.0),
+    )
+    via_wrapper = solve_for_tariff_given_equity_irr(
+        LENDER_CONFIG, None, target_irr=target, bounds=(40.0, 100.0)
+    )
+    assert via_metric == pytest.approx(via_wrapper, abs=1e-9)
+
+
+def test_equity_irr_solver_fails_loud_when_equity_irr_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CESSPIT: if the scenario computes no equity distribution the engine emits no equity_irr,
+    and the equity solver must FAIL LOUD naming the missing KPI rather than silently solving a
+    different one. Simulated by a gateway stub that omits equity_irr (all committed scenarios
+    happen to compute it, so the miss is forced here)."""
+
+    def _no_equity_eval(base_config_path: str, overrides=None, **_kw):  # type: ignore[no-untyped-def]
+        return {"project_irr": 0.10, "project_npv": -1.0e7}
+
+    monkeypatch.setattr(ps, "evaluate_with_overrides", _no_equity_eval)
+    with pytest.raises(ValueError, match="does not.*expose"):
+        solve_for_tariff_given_equity_irr(
+            LENDER_CONFIG, None, target_irr=0.15, bounds=(40.0, 100.0)
+        )
+
+
+def test_project_irr_default_metric_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression pin: the default (no metric arg) still targets project_irr. A gateway stub
+    that exposes ONLY project_irr solves fine by default, proving the default path never reads
+    equity_irr."""
+
+    def _project_only_eval(base_config_path: str, overrides=None, **_kw):  # type: ignore[no-untyped-def]
+        tariff = float(overrides["tariff"]["lkr_per_kwh"]) if overrides else 0.0
+        # Monotone-in-tariff synthetic project_irr with a root at tariff==70.
+        return {"project_irr": (tariff - 70.0) / 100.0}
+
+    monkeypatch.setattr(ps, "evaluate_with_overrides", _project_only_eval)
+    tariff = solve_for_tariff_given_irr(
+        LENDER_CONFIG, None, target_irr=0.0, bounds=(40.0, 100.0), tolerance=1e-4
+    )
+    assert tariff == pytest.approx(70.0, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# Tariff-breakeven surface (#615): returns contracts_v14.BreakevenResult
+# ---------------------------------------------------------------------------
+
+
+def test_breakeven_npv_zero_converges_and_returns_result() -> None:
+    """NPV=0 breakeven: over 10..60 LKR/kWh project_npv crosses zero (~$-149M..$+35M), so the
+    breakeven is bracketed. The result is a BreakevenResult with status='converged' and a
+    breakeven_value whose achieved project_npv is ~0 (within tolerance)."""
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG,
+        metric="project_npv",
+        target_value=0.0,
+        bounds=(10.0, 60.0),
+        tolerance=1.0e5,
+    )
+    assert isinstance(result, BreakevenResult)
+    assert result.status == "converged"
+    assert result.variable == "tariff.lkr_per_kwh"
+    assert result.target_metric == "project_npv"
+    assert result.target_value == 0.0
+    assert result.breakeven_value is not None and 10.0 < result.breakeven_value < 60.0
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG,
+            overrides={"tariff": {"lkr_per_kwh": result.breakeven_value}},
+        )["project_npv"]
+    )
+    assert achieved == pytest.approx(0.0, abs=1.0e5)
+
+
+def test_breakeven_equity_irr_hurdle_converges() -> None:
+    """IRR-hurdle breakeven: the tariff at which equity_irr equals a 0.15 hurdle. Returns a
+    converged BreakevenResult whose achieved equity_irr matches the hurdle."""
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG,
+        metric="equity_irr",
+        target_value=0.15,
+        bounds=(40.0, 100.0),
+        tolerance=1.0e-4,
+    )
+    assert result.status == "converged"
+    assert result.target_metric == "equity_irr"
+    assert result.breakeven_value is not None
+    achieved = float(
+        evaluate_with_overrides(
+            base_config_path=LENDER_CONFIG,
+            overrides={"tariff": {"lkr_per_kwh": result.breakeven_value}},
+        )["equity_irr"]
+    )
+    assert achieved == pytest.approx(0.15, abs=2e-3)
+
+
+def test_breakeven_unreachable_reports_unbracketed_not_raises() -> None:
+    """When the target is not achievable over the bounds the breakeven surface does NOT raise a
+    bare exception — it returns a BreakevenResult with status='unbracketed', breakeven_value
+    None, and the searched bracket populated (so a batch sweep is safe). project_npv is positive
+    (~$85M..$439M) over 40..100 LKR/kWh, so NPV=0 is unreachable there."""
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG,
+        metric="project_npv",
+        target_value=0.0,
+        bounds=(40.0, 100.0),
+    )
+    assert result.status == "unbracketed"
+    assert result.breakeven_value is None
+    assert result.bracket == (40.0, 100.0)
+    assert "not achievable within bounds" in result.metadata.get("error", "")
+
+
+def test_breakeven_missing_equity_irr_reports_error_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The equity-IRR breakeven surface translates the underlying fail-loud (missing equity_irr)
+    into status='error' with the message captured — not a bare raise."""
+
+    def _no_equity_eval(base_config_path: str, overrides=None, **_kw):  # type: ignore[no-untyped-def]
+        return {"project_irr": 0.10, "project_npv": -1.0e7}
+
+    monkeypatch.setattr(ps, "evaluate_with_overrides", _no_equity_eval)
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG, metric="equity_irr", target_value=0.12, bounds=(40.0, 100.0)
+    )
+    assert result.status == "error"
+    assert result.breakeven_value is None
+    assert "equity_irr" in result.metadata.get("error", "")
+
+
+def test_breakeven_rejects_invalid_metric() -> None:
+    """A truly unknown metric is a programming error (not scenario infeasibility) and raises."""
+    with pytest.raises(ValueError, match="Invalid breakeven metric"):
+        solve_tariff_breakeven(LENDER_CONFIG, metric="not_a_metric")
+
+
+def test_breakeven_iteration_starved_reports_max_iterations_not_converged() -> None:
+    """HONEST convergence status (Fable blocker on #615). The underlying root-finders return the
+    last midpoint on iteration exhaustion (they raise ONLY when no midpoint could be evaluated) and
+    merely log a warning, so a naive wrapper would stamp status='converged' on a bound that misses
+    the target by orders of magnitude. With a bracketed NPV=0 target but only 2 iterations and a
+    $1 tolerance the solve CANNOT reach tolerance; the breakeven surface must report a NON-
+    'converged' status with the true residual in metadata, not a false 'converged'.
+
+    Exact repro from the review: project_npv target 0.0 over 10..60 LKR/kWh, tolerance=1.0,
+    max_iterations=2 lands the bisection at tariff 22.5 where project_npv ~= -$53.5M."""
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG,
+        metric="project_npv",
+        target_value=0.0,
+        bounds=(10.0, 60.0),
+        tolerance=1.0,
+        max_iterations=2,
+    )
+    assert isinstance(result, BreakevenResult)
+    # status must NOT falsely claim convergence.
+    assert result.status != "converged"
+    assert result.status == "max_iterations"
+    # No trustworthy breakeven value on a non-converged solve.
+    assert result.breakeven_value is None
+    # The residual is surfaced honestly and is far outside tolerance.
+    assert "abs_residual" in result.metadata
+    assert result.metadata["abs_residual"] > result.metadata["tolerance"]
+    # The achieved value at the last bound is captured (the ~-$53.5M miss).
+    assert result.metadata["achieved"] < -1.0e7
+    assert result.bracket == (10.0, 60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +510,9 @@ def test_registry_exposes_all_expected_labels() -> None:
 
 def test_get_solver_returns_correct_callable() -> None:
     assert get_solver("target_project_irr") is solve_for_tariff_given_irr
-    assert get_solver("target_equity_irr") is solve_for_tariff_given_irr
+    # #615: target_equity_irr now resolves to the equity-IRR-pinned solver (it previously
+    # mislabelled the project-IRR solver, silently solving the wrong KPI).
+    assert get_solver("target_equity_irr") is solve_for_tariff_given_equity_irr
     assert get_solver("dscr_covenant") is solve_for_max_debt_given_dscr
     assert get_solver("target_project_npv") is solve_for_tariff_given_npv
     assert get_solver("target_equity_npv") is solve_for_tariff_given_npv
