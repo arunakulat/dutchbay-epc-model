@@ -5,6 +5,30 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in pymoo NSGA-II backend for the multi-objective Pareto optimizer (#603).**
+  `analytics.sensitivity.optimizer.run_pareto_search` now accepts `plan_kind="pymoo"`: an
+  adaptive NSGA-II search over each swept parameter's `[min(values), max(values)]` range,
+  for >=2-parameter trade-offs (e.g. tariff vs gearing) where the Cartesian `grid` plan
+  explodes past `max_points` and a coarse grid or the lightweight `lhs` sampler
+  under-resolves the frontier.
+  - Evaluation stays exclusively on the `analytics.evaluation_v14.evaluate_with_overrides`
+    gateway (CCCDIR); results reuse the existing `ParetoPoint`/`ParetoResult` contracts, and
+    the frontier is recomputed over ALL evaluated points with the module's own
+    `pareto_frontier()`, so dominance semantics are identical to the `grid`/`lhs` plans.
+  - Deterministic given `seed` (MRM-01); the process-global `random`/`numpy.random` states
+    pymoo seeds are snapshot and restored around the run. The evaluation budget is
+    `n_samples` (enforced `<= max_points`, keeping `max_points` the hard cap), shaped as
+    `pop_size x n_gen` generations so the engine is never called more than `n_samples` times.
+    A new keyword-only `pop_size` argument (default 32) shapes the population and is ignored
+    by `grid`/`lhs`.
+  - CASPER: pymoo is OPTIONAL — call-time `_require_pymoo()` guard mirroring
+    `_require_salib` (actionable install message), import-safe module, and a new `[pareto]`
+    extras group in pyproject (`pip install -e ".[pareto]"`); the base finance install and
+    the default `grid`/`lhs` paths never import pymoo. Backend tests are
+    `pytest.importorskip("pymoo")`-gated; the missing-dependency fail-loud path is tested
+    without pymoo.
+  - DEFAULT OFF / KPI-neutral: no committed scenario or caller selects the backend; all
+    committed-scenario KPIs are oracle byte-identical.
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:
