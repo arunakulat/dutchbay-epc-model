@@ -13,7 +13,7 @@ dependencies = [
   # Cap <3.0: pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default
   # str dtype — unconditional breaking changes. Lift only after a deliberate,
   # KPI-oracle-verified 3.0 migration (#593).
-  "pandas>=2.0,<3.0",
+  "pandas>=2.0,<4.0",
   "numpy-financial>=1.0.0",
   "openpyxl>=3.1",
   "matplotlib>=3.7",
