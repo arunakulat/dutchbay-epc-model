@@ -5,6 +5,34 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Tariff-breakeven and equity-IRR tariff solvers — on-demand analysis tools (#615, KPI-neutral).**
+  Two additions to `analytics.core.parameter_solvers`, both routed ONLY through the
+  `evaluate_with_overrides` gateway (ARCH-02: no direct IRR/NPV math — that stays in
+  `finance/irr.py`), and with no committed-scenario caller so the KPI oracle is byte-identical
+  across every scenario:
+  (1) `solve_for_tariff_given_irr` is generalized with a `metric` parameter
+  (`project_irr` | `equity_irr`); the project-IRR path is the default and unchanged, and a new
+  `solve_for_tariff_given_equity_irr` wrapper pins the equity KPI. Both preserve the existing
+  `_assert_override_is_live` / `_assert_target_bracketed` fail-loud guards and fail loud
+  (CESSPIT) via a new `_require_kpi_present` check when the scenario computes no equity
+  distribution (so `equity_irr` is absent) instead of silently solving project IRR.
+  (2) `solve_tariff_breakeven` — a first-class breakeven surface (tariff at NPV=`target`, default
+  NPV=0; or the tariff hitting an IRR hurdle) returning the centralized
+  `contracts_v14.BreakevenResult` (CCCDIR: no new contract types) with `status`
+  (`converged` | `max_iterations` | `unbracketed` | `error`) and the searched `bracket`
+  populated, rather than a bare float — so a batch sweep gets structured infeasibility instead of
+  a raised exception. HONEST convergence status (Fable blocker on #615): the underlying
+  root-finders return the last midpoint on iteration exhaustion (they raise only when NO midpoint
+  could be evaluated) and merely log a warning, so a naive wrapper would stamp `status="converged"`
+  on a bound that misses the target by orders of magnitude. `solve_tariff_breakeven` now RE-VERIFIES
+  the returned tariff via one extra `evaluate_with_overrides` evaluation and emits
+  `status="converged"` ONLY when `|achieved - target| <= tolerance`; otherwise it reports
+  `status="max_iterations"` with the residual (`achieved`, `target`, `abs_residual`, `tolerance`)
+  in `metadata`. The inaccurate "raises on non-convergence" docstring claim (and the
+  `solve_for_tariff_given_irr` / `_npv` "Raises: … fails to converge" sections) were corrected to
+  state the true behaviour (they return the last bound on exhaustion, not raise). No behaviour
+  change to the numeric bisection core. CLI exposure is deferred (module status note updated); any
+  future CLI must be Hydra-only (R3).
 - **Distribution-free order-statistic CI for the MC P90/P95 tail band + a Wilson breach-probability CI (#642, read-only/additive, KPI-neutral).**
   The convergence diagnostic (#590/#643) bounds only the *mean's* Monte Carlo error
   (`z·sd/√k`), but a lender reads the **P90/P95 band** (and the DSCR covenant breach
@@ -392,6 +420,13 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **`SOLVER_REGISTRY['target_equity_irr']` no longer silently solves the WRONG KPI (#615, KPI-neutral).**
+  The registry key `target_equity_irr` pointed at `solve_for_tariff_given_irr`, which was
+  hardcoded to the `project_irr` KPI — so `get_solver("target_equity_irr")(…)` returned the
+  tariff for a target PROJECT IRR while claiming to target equity IRR. It now resolves to the
+  new `solve_for_tariff_given_equity_irr` (equity-IRR-pinned), which fails loud when the
+  scenario computes no equity distribution. These solvers have no committed-scenario caller, so
+  the KPI oracle is byte-identical; the fix corrects an analyst-facing answer, not a model KPI.
 - **Global SA: shared finite-mask stops a partial-NaN metric column poisoning Sobol/Morris/PAWN
   indices (#644, KPI-neutral).** A metric column with SOME non-finite entries (an engine KPI
   returning `None` on a subset of sample rows) passed the `_is_flat_output` guard — which inspects
