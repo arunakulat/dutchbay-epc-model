@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict
 
 import pytest
+from pydantic import ValidationError
 
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
@@ -12,6 +13,7 @@ from app.reports.report_config import Covenants, ReportConfig, ReportMeta
 from app.reports.report_model import (
     ReportContext,
     Verdict,
+    WaterfallRow,
     build_report_context,
     fmt_gwh,
     fmt_pct,
@@ -410,6 +412,42 @@ def test_build_context_basic_shape() -> None:
     assert ctx.site_name == "Dutch Bay"
     assert ctx.status == "success"
     assert ctx.scenario_variant == "lendercase"
+
+
+# --------------------------------------------------------------------------- #
+# Frozen-contract semantics (#608): built once, consumed read-only
+# --------------------------------------------------------------------------- #
+def test_report_context_is_frozen() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, inputs=_inputs()
+    )
+    with pytest.raises(ValidationError):
+        ctx.site_name = "Mutated Bay"
+    # Construct-anew is the sanctioned way to derive a variant.
+    variant = ctx.model_copy(update={"site_name": "Copied Bay"})
+    assert variant.site_name == "Copied Bay"
+    assert ctx.site_name == "Dutch Bay"
+
+
+def test_verdict_is_frozen() -> None:
+    verdict = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    ).verdict
+    assert isinstance(verdict, Verdict)
+    with pytest.raises(ValidationError):
+        verdict.project_viable = True
+
+
+def test_waterfall_row_is_frozen() -> None:
+    row = WaterfallRow(
+        year=3,
+        cfads=10_000_000.0,
+        scheduled_debt_service=8_000_000.0,
+        balloon_sweep=0.0,
+        cash_to_equity=2_000_000.0,
+    )
+    with pytest.raises(ValidationError):
+        row.cfads = 0.0
 
 
 def test_risk_register_projected_from_config() -> None:

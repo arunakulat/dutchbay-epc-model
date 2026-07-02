@@ -82,6 +82,74 @@ def test_global_sa_returns_none_when_no_drivers() -> None:
     )
 
 
+def _flagged_result(flag: str, reason_key: str, reason: str) -> Dict[str, Any]:
+    """An engine result whose target metric is FLAGGED: zeroed placeholder drivers."""
+    return {
+        "method": "morris",
+        "n_runs": 112,
+        "metrics": {
+            "project_irr": {
+                "drivers": {
+                    "tariff.lkr_per_kwh": {"mu_star": 0.0, "sigma": 0.0},
+                    "capex.usd_total": {"mu_star": 0.0, "sigma": 0.0},
+                },
+                "ranking": ["tariff.lkr_per_kwh", "capex.usd_total"],
+                flag: True,
+                reason_key: reason,
+                "masked": {"nan_poisoned": flag == "nan_poisoned"},
+            }
+        },
+    }
+
+
+def test_global_sa_omits_section_for_nan_poisoned_metric() -> None:
+    """Fable blocker on #644: a nan_poisoned metric carries ZEROED placeholder drivers;
+    rendering them would print every driver at 0.00% with no caveat — a confident false
+    claim (e.g. 'FX does not influence the IRR'). The documented CASPER degrade path is
+    to omit the section: the adapter returns None, and the template's existing
+    `if ctx.global_sa` guard (pinned by test_html_omits_global_sa_section_when_absent)
+    drops the section end-to-end."""
+    flagged = _flagged_result(
+        "nan_poisoned",
+        "nan_poisoned_reason",
+        "12 of 16 trajectories (75%) contain non-finite outputs",
+    )
+    assert (
+        compute_report_global_sa(
+            _SCENARIO, runner=lambda _p, *, metrics, n_trajectories: flagged
+        )
+        is None
+    )
+
+
+def test_global_sa_omits_section_for_flat_metric() -> None:
+    """A flat_metric result is the same zeroed-placeholder shape (verified: the template
+    renders it as an uncaveated all-0.00% table too), so it takes the same omission."""
+    flagged = _flagged_result(
+        "flat_metric",
+        "flat_metric_reason",
+        "the metric does not move under these sweeps",
+    )
+    assert (
+        compute_report_global_sa(
+            _SCENARIO, runner=lambda _p, *, metrics, n_trajectories: flagged
+        )
+        is None
+    )
+
+
+def test_global_sa_renders_clean_metric_with_explicit_false_flags() -> None:
+    """A clean engine result carrying the explicit falsy #644 flags renders unchanged."""
+    result = _morris_result()
+    result["metrics"]["project_irr"]["flat_metric"] = False
+    result["metrics"]["project_irr"]["nan_poisoned"] = False
+    block = compute_report_global_sa(
+        _SCENARIO, runner=lambda _p, *, metrics, n_trajectories: result
+    )
+    assert isinstance(block, GlobalSABlock)
+    assert [d.name for d in block.drivers][0] == "tariff.lkr_per_kwh"
+
+
 def test_global_sa_honours_metric_argument() -> None:
     captured: Dict[str, Any] = {}
 

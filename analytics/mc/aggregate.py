@@ -23,14 +23,32 @@ from analytics.contracts_v14 import MonteCarloResult
 def _percentiles(arr: np.ndarray, ps: Sequence[int]) -> Dict[int, float]:
     """Compute percentiles for a single metric array.
 
+    Each requested percentile is computed independently via ``np.percentile``,
+    so extending ``ps`` is strictly additive: pre-existing levels keep their
+    exact values.
+
     Args:
         arr: Metric values across all trials
-        ps: Percentiles to compute (e.g., [5, 10, 50, 90, 95])
+        ps: Percentiles to compute (e.g., [1, 5, 10, 50, 90, 95, 99])
 
     Returns:
         Dictionary mapping percentile to value
     """
     return {int(p): float(np.percentile(arr, p)) for p in ps}
+
+
+#: Default raw-percentile levels reported by :func:`aggregate_trials` when the
+#: scenario does not pin ``monte_carlo.percentiles``. P99 is first-class (#599)
+#: because senior-debt loan-size capping is conventionally set at P99.
+#:
+#: Lender exceedance convention (tail direction, consistent with #563 in
+#: ``analytics.mc.exports``): these keys are RAW percentiles of the metric
+#: distribution. For higher-is-better metrics (DSCR, IRR, NPV, LLCR, PLCR) the
+#: lender's "P99" — the value exceeded 99% of the time — is the RAW 1st
+#: percentile (key ``1`` below), NOT the raw 99th. The raw 99th (key ``99``) is
+#: the favourable upside tail. Both tails ship by default so downside-P99
+#: consumers never mistake the upside for it.
+DEFAULT_PERCENTILES: tuple[int, ...] = (1, 5, 10, 50, 90, 95, 99)
 
 
 def aggregate_trials(
@@ -40,7 +58,7 @@ def aggregate_trials(
     param_names: Sequence[str],
     samples: np.ndarray,
     meta: Mapping[str, Any],
-    percentiles: Sequence[int] = (5, 10, 50, 90, 95),
+    percentiles: Sequence[int] = DEFAULT_PERCENTILES,
 ) -> MonteCarloResult:
     """
     Aggregate per-trial metrics into MonteCarloResult.
@@ -55,7 +73,13 @@ def aggregate_trials(
         param_names: Parameter names that were varied
         samples: LHS sample matrix [n_trials, n_params]
         meta: Execution metadata (seed, sampler, correlation_enabled)
-        percentiles: Percentiles to compute (default: P5, P10, P50, P90, P95)
+        percentiles: RAW percentiles to compute (default: ``DEFAULT_PERCENTILES``
+            = P1, P5, P10, P50, P90, P95, P99). P99 is first-class for
+            senior-debt loan-size capping (#599). Tail direction: for
+            higher-is-better metrics the lender exceedance "P99" is the raw
+            1st percentile (key 1); the raw 99th is the upside tail — see
+            ``DEFAULT_PERCENTILES`` and the #563 convention in
+            ``analytics.mc.exports``.
 
     Returns:
         MonteCarloResult with:

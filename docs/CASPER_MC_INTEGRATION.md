@@ -48,10 +48,17 @@ contract stays `casper_result_v1`; see
 - the `MonteCarloResult` is summary-only (no raw `dscr_min` trial array), or
 - the optional `pandas` export dependency is absent.
 
-The covenant DSCR floor is resolved config-first from the scenario's
-`debt_covenants.dscr_threshold`, falling back to the `CovenantSpec` default
-(1.30); the floor actually used is surfaced in `mc_risk.covenant.dscr_floor`.
-`NaN` placeholder cells are emitted as `null` (strict-JSON safe).
+The covenant DSCR floor is resolved config-first with the MC engine's own
+resolver (`analytics.mc.covenant.resolve_min_dscr_covenant`, shared since #639
+so the CASPER table and the engine breach test cannot disagree) applied to the
+raw config on `ScenarioResult.config`: precedence
+`constraints.min_dscr_covenant` → `Financing_Terms.target_dscr` →
+`Financing_Terms.min_dscr` → `monte_carlo.min_dscr_covenant`, default 1.30.
+When the scenario carries no raw config (bare-string sentinel or synthetic
+result), the floor falls back to the pipeline's `debt_covenants.dscr_threshold`
+snapshot and then the `CovenantSpec` default (1.30); the floor actually used is
+surfaced in `mc_risk.covenant.dscr_floor`. `NaN` placeholder cells are emitted
+as `null` (strict-JSON safe).
 
 The caller-side `payload["tables"]["lender_risk_table"]` insertion shown in
 the snippets below is therefore the **legacy/manual pattern**: it is only
