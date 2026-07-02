@@ -744,14 +744,16 @@ class MonteCarloEngine:
 
         if self._correlation is not None and self._correlation.enabled:
             if self._sampler == "sobol":
-                # Iman-Conover rank-reordering preserves each driver's marginal but destroys the
-                # JOINT low-discrepancy structure Sobol was chosen for — the balance benefit then
+                # Correlation-induced rank-reordering (Iman-Conover and the opt-in Gaussian
+                # copula alike, #601) preserves each driver's marginal but destroys the JOINT
+                # low-discrepancy structure Sobol was chosen for — the balance benefit then
                 # only accrues to the marginals. Warn once so an opted-in user is not misled.
                 logger.warning(
                     "monte_carlo.sampler='sobol' with an enabled correlation block: "
-                    "Iman-Conover rank-reordering preserves marginals but destroys the joint "
+                    "the '%s' rank-reordering preserves marginals but destroys the joint "
                     "Sobol low-discrepancy structure (the QMC benefit is limited to the "
-                    "marginals). Disable correlation to retain the full QMC balance."
+                    "marginals). Disable correlation to retain the full QMC balance.",
+                    self._correlation.method,
                 )
             samples = apply_correlation_structure(
                 lhs_samples=samples,
