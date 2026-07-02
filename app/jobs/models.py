@@ -59,9 +59,16 @@ class JobProgress(BaseModel):
 
 
 class JobRecord(BaseModel):
-    """The full, serialisable state of one async job."""
+    """The full, serialisable state of one async job.
 
-    model_config = ConfigDict(extra="forbid")
+    Frozen (#608, the analytics/core frozen-contract pattern): every lifecycle
+    transition goes through a store's ``update()`` — which constructs anew via
+    ``model_copy(update=...)`` and stamps ``updated_at`` — so in-place attribute
+    assignment on a fetched record is a bug (it would silently skip the stamp
+    and, on the Redis store, never persist) and now raises.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     job_id: str
     owner: str = Field(
