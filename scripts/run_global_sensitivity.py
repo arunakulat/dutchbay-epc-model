@@ -20,6 +20,13 @@ Sobol indices for one metric to a CSV (cost ~ n*(D+2) pipeline runs)::
     python scripts/run_global_sensitivity.py \\
       --config scenarios/dutchbay_lendercase_2025Q4.yaml \\
       --method sobol --metric project_irr --n 256 --output out/global_sa.csv
+
+PAWN (moment-independent, KS-based) — robust on skewed / covenant-pinned KPIs where
+Sobol misbehaves (cost ~ n pipeline runs)::
+
+    python scripts/run_global_sensitivity.py \\
+      --config scenarios/dutchbay_lendercase_2025Q4.yaml \\
+      --method pawn --metric min_dscr --n 256 --s 10
 """
 
 from __future__ import annotations
@@ -48,9 +55,13 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--method",
-        choices=["morris", "sobol"],
+        choices=["morris", "sobol", "pawn"],
         default="morris",
-        help="morris = cheap screening (default); sobol = S1/ST variance decomposition.",
+        help=(
+            "morris = cheap screening (default); sobol = S1/ST variance "
+            "decomposition; pawn = moment-independent KS index (robust on "
+            "skewed / covenant-pinned KPIs where Sobol misbehaves)."
+        ),
     )
     p.add_argument(
         "--metric",
@@ -62,10 +73,36 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--n",
         type=int,
         default=None,
-        help="Sobol base sample N (default 256) or Morris trajectories (default 16).",
+        help=(
+            "Sobol base sample N or PAWN LHS sample N (default 256); Morris "
+            "trajectories (default 16)."
+        ),
+    )
+    p.add_argument(
+        "--s",
+        type=int,
+        default=None,
+        help="PAWN conditioning slices S (default 10); ignored for morris/sobol.",
     )
     p.add_argument("--output", default=None, help="CSV output path (default: stdout).")
     return p.parse_args(argv)
+
+
+def _flag_suffix(block: dict) -> str:
+    """Human ' (FLAG: reason)' suffix disclosing a flat / NaN-poisoned metric block.
+
+    CESSPIT fail-loud: a metric flagged ``flat_metric`` (covenant-pinned / degenerate)
+    or ``nan_poisoned`` (#644) carries zeroed indices and an insertion-order ranking —
+    the headline must say so, not present the zeroed ranking as an influence ranking.
+    Returns an empty string for a normally-analyzed block.
+    """
+    if block.get("nan_poisoned"):
+        reason = block.get("nan_poisoned_reason", "non-finite outputs over the sweep")
+        return f" (NaN-POISONED: {reason})"
+    if block.get("flat_metric"):
+        reason = block.get("flat_metric_reason", "the metric does not move")
+        return f" (FLAT: {reason})"
+    return ""
 
 
 def _rows(result: dict) -> List[dict]:
@@ -87,11 +124,21 @@ def main(argv: List[str] | None = None) -> int:
 
     # CASPER: SALib is optional — fail with a clear, actionable message, not a stack trace.
     try:
-        from analytics.sensitivity.global_sa import run_morris, run_sobol
+        from analytics.sensitivity.global_sa import (
+            run_morris,
+            run_pawn,
+            run_sobol,
+        )
 
         if args.method == "morris":
             result = run_morris(
                 args.config, metrics=metrics, n_trajectories=args.n or 16
+            )
+        elif args.method == "pawn":
+            # run_pawn takes n= (LHS sample) and s= (conditioning slices) — NOT
+            # n_trajectories=. See analytics.sensitivity.global_sa.run_pawn.
+            result = run_pawn(
+                args.config, metrics=metrics, n=args.n or 256, s=args.s or 10
             )
         else:
             result = run_sobol(args.config, metrics=metrics, n=args.n or 256)
@@ -128,6 +175,16 @@ def main(argv: List[str] | None = None) -> int:
             )
             print(
                 f"[{metric}] total-order (ST) ranking: {ranked}{flag}", file=sys.stderr
+            )
+        elif args.method == "pawn":
+            # PAWN ranks by the median KS statistic per driver (block["ranking"] is
+            # already median-sorted by run_pawn). Disclose the flat / NaN-poisoned
+            # flags (CESSPIT: a zeroed ranking on a covenant-pinned or NaN-poisoned
+            # metric is not evidence of driver influence).
+            flag = _flag_suffix(block)
+            print(
+                f"[{metric}] PAWN median-KS ranking: {block['ranking']}{flag}",
+                file=sys.stderr,
             )
         else:
             print(f"[{metric}] mu_star ranking: {block['ranking']}", file=sys.stderr)

@@ -12,8 +12,10 @@ never touched (no canonical-KPI assertions belong here).
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import math
+import sys
 
 import pytest
 
@@ -479,3 +481,77 @@ def test_masking_warning_pluralizes_trajectory(caplog) -> None:
     msgs = [r.getMessage() for r in caplog.records]
     assert any("trajectories" in msg for msg in msgs), msgs
     assert not any("trajectorys" in msg for msg in msgs), msgs
+
+
+# ---------------------------------------------------------------------------
+# #658 — CLI dispatch: `run_global_sensitivity.py --method pawn` (SOLE owner of
+# the --method pawn CLI wiring). The module-level importorskip("SALib") already
+# gates this whole file, so the PAWN path is exercised only when SALib is present.
+# ---------------------------------------------------------------------------
+
+
+def _load_global_sa_cli():
+    """Import scripts/run_global_sensitivity.py as a module (it lives in scripts/)."""
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    spec = importlib.util.spec_from_file_location(
+        "run_global_sensitivity", REPO / "scripts" / "run_global_sensitivity.py"
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
+def test_cli_method_pawn_dispatches_and_tags_rows(capsys) -> None:
+    """`--method pawn` runs run_pawn, prints a CSV whose method column is 'pawn'."""
+    cli = _load_global_sa_cli()
+    rc = cli.main(
+        [
+            "--config",
+            LENDER,
+            "--method",
+            "pawn",
+            "--metric",
+            "project_irr",
+            "--n",
+            "16",
+            "--s",
+            "3",
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr()
+    # The stdout table (to_string) carries a 'pawn' method column and PAWN's
+    # driver stat columns (median / mean / cv), NOT the Sobol/Morris columns.
+    assert "pawn" in out.out
+    assert "median" in out.out and "cv" in out.out
+    # Lender headline on stderr uses the PAWN wording (median-KS ranking).
+    assert "PAWN median-KS ranking" in out.err
+
+
+@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
+def test_cli_method_pawn_covenant_metric_is_flagged_flat(capsys) -> None:
+    """The covenant-pinned min_dscr KPI must be disclosed FLAT in the PAWN headline,
+    not presented as an influence ranking (CESSPIT fail-loud; #644 mask + #658 CLI)."""
+    cli = _load_global_sa_cli()
+    rc = cli.main(
+        ["--config", LENDER, "--method", "pawn", "--metric", "min_dscr", "--n", "16"]
+    )
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "[min_dscr] PAWN median-KS ranking" in err
+    assert "FLAT" in err
+
+
+def test_cli_method_choices_include_pawn_and_default_morris() -> None:
+    """--method still DEFAULTS to morris (opt-in), and now offers pawn (#658)."""
+    cli = _load_global_sa_cli()
+    args = cli._parse_args(["--config", LENDER])
+    assert args.method == "morris"  # default unchanged
+    args_pawn = cli._parse_args(["--config", LENDER, "--method", "pawn"])
+    assert args_pawn.method == "pawn"
+    # sobol still rejects a non-power-of-two n path unchanged; pawn is a distinct choice.
+    with pytest.raises(SystemExit):
+        cli._parse_args(["--config", LENDER, "--method", "bogus"])
