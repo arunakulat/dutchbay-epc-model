@@ -130,6 +130,7 @@ import yaml
 from omegaconf import DictConfig
 
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
+from analytics.executive_workbook import emit_executive_workbook_from_pipeline
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
@@ -288,6 +289,27 @@ def _load_wind_export(export_path: str | Path) -> dict[str, Any]:
     # Producer wraps under 'cashflow_export'; tolerate both shapes.
     if "cashflow_export" in payload and isinstance(payload["cashflow_export"], dict):
         return payload["cashflow_export"]
+    return payload
+
+
+def _read_wind_export_payload(export_path: str | Path) -> dict[str, Any]:
+    """Load the FULL frozen wind-export JSON (top-level, not just cashflow_export).
+
+    :func:`_load_wind_export` unwraps to the ``cashflow_export`` contract for the
+    finance adapter; the Executive Workbook step instead needs the top-level
+    payload so it can read the optional ``long_term_trend`` block that rides
+    alongside ``cashflow_export`` (see
+    ``analytics.executive_workbook.resource_trend_df_from_wind_export``). Pure
+    read — no validation beyond "is a dict".
+    """
+    p = Path(export_path)
+    with p.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Wind export {export_path!r} did not parse to a dict "
+            f"(got {type(payload).__name__})"
+        )
     return payload
 
 
@@ -634,6 +656,19 @@ def cli(cfg: DictConfig) -> None:
                   (default: 'P50' — the producer is deterministic P50 today).
                 - solar_technology: generation.technologies key the solar
                   export targets (default: 'solar').
+            Optional fields (#656 slice 3 — Executive Workbook emission; OFF
+            by default — leaving emit_executive_workbook false preserves
+            behaviour and keeps committed-scenario output byte-identical):
+                - emit_executive_workbook: If true, write a single-scenario
+                  lender Executive Workbook (.xlsx) after a successful run via
+                  analytics.executive_workbook.emit_executive_workbook_from_pipeline.
+                  The five finance sheets come from the pipeline result; the
+                  optional "ResourceTrend" sheet is added only when the supplied
+                  frozen wind export carries a long_term_trend block. No live
+                  ERA5 is run (the finance CLI stays cdsapi-free). Default false.
+                - executive_workbook_path: Target .xlsx path. Default
+                  '<export_dir>/executive_workbook.xlsx'. On emission the written
+                  path is echoed back under result['executive_workbook_path'].
 
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
@@ -710,9 +745,27 @@ def cli(cfg: DictConfig) -> None:
     solar_export_scenario = str(cfg.get("solar_export_scenario", "P50"))
     solar_technology = str(cfg.get("solar_technology", "solar"))
 
+    # ------------------------------------------------------------------
+    # #656 (slice 3): optional single-scenario Executive Workbook emission
+    # (OFF by default). When true, after a successful finance run this CLI
+    # writes a lender-facing .xlsx via
+    # analytics.executive_workbook.emit_executive_workbook_from_pipeline —
+    # the genuine live caller of build_executive_workbook. The five finance
+    # sheets are assembled from the pipeline result; the optional
+    # "ResourceTrend" sheet is added only when a supplied frozen wind export
+    # carries a long_term_trend block. Emission derives no financial value and
+    # never mutates KPIs, so committed-scenario runs (which leave this off) stay
+    # byte-identical.
+    # ------------------------------------------------------------------
+    emit_executive_workbook = bool(cfg.get("emit_executive_workbook", False))
+    executive_workbook_path = cfg.get("executive_workbook_path", None)
+
     effective_config: str = str(config)
     # Temp patched-scenario files (wind then solar) to clean up in ``finally``.
     patched_scenario_paths: list[Path] = []
+    # Resolved frozen wind-export path (if any), captured for the optional
+    # Executive Workbook step so it can read the long_term_trend block.
+    resolved_wind_json_path: Path | None = None
     try:
         if wind_assessment_json or wind_auto_orchestrate:
             # Resolve the wind export path: either explicitly supplied or
@@ -732,6 +785,8 @@ def cli(cfg: DictConfig) -> None:
                     )
                     / "wind_export",
                 )
+
+            resolved_wind_json_path = wind_json_path
 
             patched_scenario_path = _apply_wind_to_scenario(
                 scenario_path=config,
@@ -858,6 +913,29 @@ def cli(cfg: DictConfig) -> None:
 
         write_artifacts = bool(cfg.get("write_artifacts", False))
         export_dir_raw = cfg.get("export_dir", "_out/run_full_pipeline_v14")
+
+        # #656 (slice 3): optional single-scenario Executive Workbook emission.
+        # OFF unless emit_executive_workbook=true (committed scenarios leave it
+        # off → byte-identical). Reads no live ERA5: the resource-trend sheet is
+        # sourced only from a long_term_trend block riding in the frozen wind
+        # export (when one was supplied). Fails loudly on error, since the caller
+        # explicitly opted into the workbook (CESSPIT).
+        if emit_executive_workbook and isinstance(result, dict):
+            workbook_out = (
+                Path(str(executive_workbook_path))
+                if executive_workbook_path
+                else Path(str(export_dir_raw)) / "executive_workbook.xlsx"
+            )
+            wind_export_payload = (
+                _read_wind_export_payload(resolved_wind_json_path)
+                if resolved_wind_json_path is not None
+                else None
+            )
+            written = emit_executive_workbook_from_pipeline(
+                result, workbook_out, wind_export=wind_export_payload
+            )
+            result["executive_workbook_path"] = str(written)
+            logger.info("Wrote Executive Workbook to %s", written)
 
         if write_artifacts:
             export_dir = Path(str(export_dir_raw))
