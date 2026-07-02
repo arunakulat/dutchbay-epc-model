@@ -376,16 +376,18 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
     # WIND-10 (#484): this is a SINGLE-CELL ERA5 timeseries retrieval — the assessment uses
     # one grid cell and implicitly assumes it typifies the site neighbourhood. Surface that
     # limitation honestly rather than leaving it unstated; a representativeness verdict
-    # requires a neighbourhood, which the single-point timeseries product does not fetch. To
-    # assess it, run an n×n grid (``wind_resource.era5_grid``) and pass the cells to
-    # ``wind_resource.era5_grid.spatial_representativeness``.
+    # requires a neighbourhood, which the single-point timeseries product does not fetch and
+    # so this result stays assessed=False. To get the real verdict, run the wired GIS export
+    # (``analytics.gis.gis_export.run_gis_export``) — it now samples an n×n native grid and
+    # emits a spatial_representativeness verdict per grid into its summary + DataLake manifest.
     result["spatial_representativeness"] = {
         "assessed": False,
         "n_cells": 1,
         "site_cell": {"latitude": config.latitude, "longitude": config.longitude},
         "reason": (
-            "single-cell ERA5 timeseries retrieval; neighbourhood not fetched. Run an n×n "
-            "grid (wind_resource.era5_grid) + spatial_representativeness() to assess whether "
+            "single-cell ERA5 timeseries retrieval; neighbourhood not fetched. Run the GIS "
+            "export (analytics.gis.gis_export.run_gis_export), which samples an n×n native "
+            "grid and emits a spatial_representativeness verdict per grid, to assess whether "
             "the site cell is representative of its surroundings (e.g. coastal/ridge gradient)."
         ),
     }
