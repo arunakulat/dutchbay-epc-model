@@ -5,6 +5,31 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Wind artifact hygiene (#618, KPI-neutral: committed scenarios byte-identical, frozen AEP artifacts untouched).**
+  Three fixes on the `wind_resource` timeseries-diagnostic path (finance reads the frozen
+  `aep_summary` JSON, so lender KPIs cannot move):
+  - **Version strings**: `wind_resource.__version__`, the `ERA5Fetcher`/`WindPipeline`/
+    `EnergyCalculator`/`WindAnalyzer` init logs, the ERA5 download-metadata `version` field and the
+    `WindPipeline` results-metadata `version` field now derive from
+    `analytics.run_manifest.engine_version()` (the repo `VERSION` file) instead of the stale
+    hardcoded `1.0.0`/`1.1.0 (CCCDIR Compliant)` literals (runtime JSON artifacts now stamp e.g.
+    `15.2.0`). Owned here per the #584 hand-off; a source-scan test fences the literals out.
+  - **`resource.uncertainty.*` plumbing**: `EnergyCalculator.calculate_net_aep` builds its IEC
+    61400-15-2 exceedance budget from an optional `uncertainty` mapping (new constructor knob,
+    passed through `WindPipeline`) via a new shared, policy-free sigma parser
+    `wind_resource.bankable_aep.budget_from_mapping` — the same parser
+    `analytics.wind.aep_summary_builder._uncertainty_from_config` now delegates to, so the two
+    consumers cannot drift. `correlation` and `life_years` are honoured; **`p50_haircut_pct` is
+    deliberately NOT applied on this path** (kernel 0.0 pinned; a declared key is logged, not
+    silently used) — the builder-vs-kernel haircut-policy question remains the user-gated #653 and
+    is NOT settled here. Absent config = the previous `UncertaintyBudget()` defaults, exactly.
+  - **Air density on timeseries AEP**: `EnergyCalculator.calculate_gross_aep` (and the monthly
+    profile, for consistency) now applies the IEC 61400-12-1 velocity correction
+    `(rho_site/rho_ref)**(1/3)` when `air_density_site_kgm3` is supplied (new constructor knobs,
+    `ref` defaulting to the IEC 1.225 kg/m^3), matching the bankable path's
+    `density_velocity_factor`; absent = factor 1.0, no correction — parity with
+    `aep_summary_builder`'s fallback when a scenario declares no densities. The factor used is
+    disclosed in the gross-AEP result.
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:
