@@ -1,6 +1,34 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Tuple
+
+
+@dataclass(frozen=True)
+class FxHedge:
+    """Resolved FX-forward hedge state threaded into the USD-view conversion.
+
+    The v14 engine is USD-equivalent-numeraire: FX risk enters ONLY where LKR CFADS is
+    converted to ``cfads_usd`` (the stream debt sizing and DSCR run on). This immutable
+    record carries the levers that let a scenario replace part of that per-year spot
+    conversion with a locked forward rate:
+
+    - hedge_ratio: float (decimal, 0-1). Fraction of each year's LKR CFADS converted at
+      the CIP forward rate instead of the projected spot. Default 0.0 -> the pure-spot
+      path is taken unchanged (byte-identical to the pre-hedge engine).
+    - spread: float (decimal, >=0). Hedging bid/ask cost applied to the forward rate as
+      ``forward * (1 + spread)`` (so more LKR per USD -> fewer USD -> a real cost).
+      Sourced from ``fx.spread_bps`` (basis points / 10 000). Default 0.0.
+    - forward_curve: Tuple[float, ...] (LKR per USD per year). The CIP forward path,
+      ``spot_0 * ((1 + r_lkr) / (1 + r_usd)) ** t`` for period index t. Empty when
+      hedge_ratio == 0.0 (no forward is needed for the pure-spot path).
+
+    A default ``FxHedge()`` is the null hedge: hedge_ratio 0.0, spread 0.0, empty curve.
+    """
+
+    hedge_ratio: float = 0.0
+    spread: float = 0.0
+    forward_curve: Tuple[float, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -50,4 +78,4 @@ class CashflowParams:
     curtailment_pct: float = 0.0
 
 
-__all__ = ["CashflowParams"]
+__all__ = ["CashflowParams", "FxHedge"]

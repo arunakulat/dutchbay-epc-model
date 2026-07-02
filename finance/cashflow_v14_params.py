@@ -577,6 +577,26 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
                 "fx: invalid configuration; expected 'start_lkr_per_usd' or an explicit 'curve' list"
             )
 
+        # FX-forward hedge levers (both optional; default 0.0 -> pure-spot, byte-identical).
+        # fx.hedge_ratio: fraction 0.0-1.0 of CFADS converted at the CIP forward; fail-loud
+        # rather than silently clamp an out-of-band ratio (CESSPIT / FIN-2 unit naming).
+        hedge_ratio_raw = fx_cfg.get("hedge_ratio")
+        if hedge_ratio_raw is not None:
+            hedge_ratio = _as_float_or_none(hedge_ratio_raw)
+            if hedge_ratio is None or not (0.0 <= hedge_ratio <= 1.0):
+                errors.append(
+                    f"fx.hedge_ratio: {hedge_ratio_raw} out of range "
+                    "(must be a decimal 0.0-1.0)"
+                )
+        # fx.spread_bps: hedging cost in basis points, >= 0.
+        spread_bps_raw = fx_cfg.get("spread_bps")
+        if spread_bps_raw is not None:
+            spread_bps = _as_float_or_none(spread_bps_raw)
+            if spread_bps is None or spread_bps < 0.0:
+                errors.append(
+                    f"fx.spread_bps: {spread_bps_raw} invalid (must be >= 0 basis points)"
+                )
+
     if errors:
         error_msg = "Configuration validation failed:\n" + "\n".join(
             f"  • {err}" for err in errors

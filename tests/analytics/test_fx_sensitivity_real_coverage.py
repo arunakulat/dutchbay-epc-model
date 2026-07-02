@@ -526,7 +526,13 @@ def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
     """End-to-end, NO mock: the fx_rate sweep now drives the live engine key
     start_lkr_per_usd, so the fx_rate coefficient is genuinely non-zero on the real
     lender scenario — proving the dead-key fake-zero (Wave-2 finding) is fixed. Project
-    IRR falls as the LKR/USD rate rises, so the coefficient is negative."""
+    IRR falls as the LKR/USD rate rises, so the coefficient is negative.
+
+    hedge_ratio is now ALSO engine-driven (FX forward hedging, #652): the lender case's
+    CIP forward drift is just below its spot drift, so hedging raises project IRR — a real,
+    POSITIVE coefficient. spread still overrides the legacy `fx.spread_shock_bps` key the
+    engine does not read (live key `fx.spread_bps`, and spread only bites under an active
+    hedge), so its coefficient remains ~0 pending the #659 accessor wiring."""
     cfg = FXSensitivityConfig(
         fx_rate_shocks=[-0.05, 0.0, 0.05],
         hedge_ratio_values=[0.0, 1.0],
@@ -537,10 +543,12 @@ def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
     fx_coef = next(c for c in result.coefficients if c.parameter == "fx_rate")
     assert abs(fx_coef.coefficient) > 1e-6  # REAL sensitivity, not a fake ~0
     assert fx_coef.coefficient < 0.0  # weaker LKR (higher rate) -> lower IRR
-    # hedge/spread are not modeled by the cashflow engine -> structurally ~0 (honest).
-    for name in ("hedge_ratio", "spread"):
-        coef = next(c for c in result.coefficients if c.parameter == name)
-        assert abs(coef.coefficient) < 1e-9
+    # hedge_ratio is a live lever: forward below spot -> hedging raises IRR (positive).
+    hedge_coef = next(c for c in result.coefficients if c.parameter == "hedge_ratio")
+    assert hedge_coef.coefficient > 1e-6
+    # spread still routes through the legacy key the engine ignores -> ~0 (see #659).
+    spread_coef = next(c for c in result.coefficients if c.parameter == "spread")
+    assert abs(spread_coef.coefficient) < 1e-9
 
 
 def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
