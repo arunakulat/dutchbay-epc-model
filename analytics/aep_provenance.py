@@ -45,7 +45,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
 
-from analytics.loader.aep_loader import validate_config_aep_provenance
+from analytics.loader.aep_loader import (
+    APPROVED_SOURCES,
+    register_approved_source,
+    validate_config_aep_provenance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +150,161 @@ def _declared_source_id(config: Mapping[str, Any]) -> Any:
     return source_id
 
 
+def _declared_approved_sources_yaml(config: Mapping[str, Any]) -> Any:
+    """Return the raw ``resource.power_curve.approved_sources_yaml`` (or None).
+
+    Returns the value verbatim so a malformed non-string declaration becomes a clean
+    guard error in :func:`register_scenario_approved_sources` rather than a downstream
+    ``TypeError`` — mirroring :func:`_declared_source_id`.
+    """
+    resource = config.get("resource")
+    if not isinstance(resource, Mapping):
+        return None
+    power_curve = resource.get("power_curve")
+    if not isinstance(power_curve, Mapping):
+        return None
+    value = power_curve.get("approved_sources_yaml")
+    if value is None or value == "":
+        return None
+    return value
+
+
+def _resolve_approved_sources_path(raw_path: str, config_path: str | None) -> Path:
+    """Resolve the approved-sources YAML path relative to the SCENARIO file.
+
+    An absolute ``raw_path`` is used as-is. A relative ``raw_path`` resolves against the
+    directory of the scenario file (``config_path``) so a project can ship its
+    approved-sources manifest alongside its scenario (e.g.
+    ``resource.power_curve.approved_sources_yaml: approved_sources.yaml``). When
+    ``config_path`` is absent or not a real on-disk file (an INLINE config submitted over
+    the API / gateway, where ``config_path`` is ``"<inline>"`` or None), a relative path
+    resolves against the current working directory as a documented fallback — committed
+    scenarios never declare this key, so this path is inert for byte-identical economics.
+    """
+    candidate = Path(raw_path)
+    if candidate.is_absolute():
+        return candidate
+    if config_path:
+        base = Path(config_path)
+        if base.is_file():
+            return base.parent / candidate
+    return candidate
+
+
+def register_scenario_approved_sources(
+    config: dict[str, Any], config_path: str | None = None
+) -> list[str]:
+    """Register a scenario's per-project approved AEP sources before the provenance guard.
+
+    Config-first provenance widening (ARCH-01 / CESSPIT): when a scenario declares the
+    optional ``resource.power_curve.approved_sources_yaml``, load that YAML manifest and
+    register each ``{source_id: {type, description, iec_standard, ...}}`` entry into the
+    process-global ``APPROVED_SOURCES`` — so a project can vet + admit its own turbine /
+    source provenance from config instead of editing the code registry. Each entry is
+    schema-validated by ``aep_loader.register_approved_source`` (required
+    type/description/known IEC standard) and, with the default ``overwrite=False``, cannot
+    silently replace a built-in entry (a duplicate ``source_id`` with DIFFERING metadata
+    raises) — so config-driven widening admits new sources but cannot weaken the placeholder
+    / curve-key cross-check controls on the existing ones. Re-registering an EXACT-duplicate
+    entry (identical metadata) is idempotent — a no-op — so this seam is safe to run twice
+    on the same config (the path-based API request registers once at load and once at the
+    api boundary).
+
+    Runs at AUTHORED-scenario LOAD time and at the inline-config boundaries, immediately
+    BEFORE :func:`enforce_aep_provenance`, so the widened manifest is in force for every
+    live provenance guard (``enforce_aep_provenance``, ``validate_curve_selection``,
+    ``validate_config_aep_provenance``). No-op when the key is absent (the common case —
+    committed scenarios do not declare it, preserving byte-identical economics).
+
+    Args:
+        config: Parsed scenario config mapping.
+        config_path: The scenario file path, used to resolve a relative YAML path and to
+            annotate errors. ``"<inline>"`` / None for inline configs.
+
+    Returns:
+        The list of ``source_id`` values registered (empty when the key is absent).
+
+    Raises:
+        AepProvenanceError: If the key is declared but is not a string, or the resolved
+            YAML is missing / unreadable / malformed, or an entry fails schema validation
+            (CESSPIT — a declared manifest must load; no silent skip).
+    """
+    where = f" in '{config_path}'" if config_path else ""
+    raw_path = _declared_approved_sources_yaml(config)
+    if raw_path is None:
+        return []
+
+    if not isinstance(raw_path, str):
+        raise AepProvenanceError(
+            "resource.power_curve.approved_sources_yaml must be a string path"
+            + where
+            + f"; got {type(raw_path).__name__}."
+        )
+
+    resolved = _resolve_approved_sources_path(raw_path, config_path)
+    if not resolved.is_file():
+        raise AepProvenanceError(
+            f"resource.power_curve.approved_sources_yaml {raw_path!r} is declared"
+            + where
+            + f" but does not resolve to a readable file ({resolved}). A declared "
+            "approved-sources manifest must load — refusing to silently skip it (CESSPIT)."
+        )
+
+    import yaml  # project core dep
+
+    try:
+        data = yaml.safe_load(resolved.read_text()) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise AepProvenanceError(
+            f"resource.power_curve.approved_sources_yaml {raw_path!r} could not be "
+            f"read/parsed as YAML{where}: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise AepProvenanceError(
+            f"resource.power_curve.approved_sources_yaml {raw_path!r} must be a mapping "
+            f"of source_id -> metadata{where}; got {type(data).__name__}."
+        )
+
+    registered: list[str] = []
+    for raw_id, meta in data.items():
+        source_id = str(raw_id)
+        # Idempotent re-registration: this seam can run twice for a path-based API request
+        # (once inside load_scenario_config, once at the api.pipeline_api boundary on the
+        # same cfg). An EXACT-duplicate entry (identical metadata to what is already in the
+        # manifest) is a no-op, so the second pass does not spuriously raise. A DIFFERING
+        # entry for an existing source_id still raises via register_approved_source's
+        # duplicate refusal below — a project cannot silently overwrite a built-in control.
+        existing = APPROVED_SOURCES.get(source_id)
+        if (
+            existing is not None
+            and isinstance(meta, Mapping)
+            and dict(meta) == existing
+        ):
+            registered.append(source_id)
+            continue
+        try:
+            register_approved_source(source_id, meta)
+        except (TypeError, ValueError) as exc:
+            # ValueError covers every per-entry schema failure (missing field, unknown IEC
+            # standard, differing-duplicate id); TypeError covers a non-mapping meta value.
+            # Re-raise as this module's error type with the offending config for a single,
+            # actionable message.
+            raise AepProvenanceError(
+                f"resource.power_curve.approved_sources_yaml {raw_path!r} could not be "
+                f"loaded{where}: {exc}"
+            ) from exc
+        registered.append(source_id)
+
+    logger.debug(
+        "AEP provenance: registered %d project source(s) from %s%s: %s",
+        len(registered),
+        raw_path,
+        where,
+        registered,
+    )
+    return registered
+
+
 def enforce_aep_provenance(
     config: dict[str, Any], config_path: str | None = None
 ) -> None:
@@ -220,5 +379,6 @@ __all__ = [
     "ProvenancePolicy",
     "default_provenance_policy",
     "resolve_provenance_policy",
+    "register_scenario_approved_sources",
     "enforce_aep_provenance",
 ]

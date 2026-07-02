@@ -5,6 +5,29 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Per-project approved AEP sources registered from YAML (#661, config-first provenance widening, opt-in, KPI-neutral).**
+  A scenario may now declare an optional `resource.power_curve.approved_sources_yaml` naming a
+  project-local YAML manifest of vetted AEP/curve sources (`{source_id: {type, description,
+  iec_standard, [curve_key], ...}}`). At authored-scenario load and at both inline-config
+  boundaries (the API and app-service seams), the new
+  `analytics.aep_provenance.register_scenario_approved_sources` loads that manifest and registers
+  each entry into the process-global `APPROVED_SOURCES` **before** the provenance guard
+  (`enforce_aep_provenance`) runs — so a project can admit its own vetted turbine/source from
+  config (ARCH-01) rather than editing the code registry, and all three live guard call sites
+  (`enforce_aep_provenance`, `validate_curve_selection`, `validate_config_aep_provenance`) then
+  accept it.
+  - **Provenance-widening only, cannot weaken the contract.** Each entry is schema-validated by
+    `aep_loader.register_approved_source` (required `type`/`description`/known `iec_standard`), and
+    with the default `overwrite=False` a project YAML that re-declares a built-in `source_id` is
+    refused — so config-driven registration admits new sources but cannot silently overwrite the
+    placeholder / curve-key cross-check controls on the shipped entries.
+  - **Fail-loud once declared (CESSPIT).** A declared `approved_sources_yaml` that is missing,
+    unreadable, malformed, or non-string raises `AepProvenanceError`; the relative YAML path
+    resolves against the scenario file's directory. No-op when the key is absent (the common
+    case), so no committed scenario is affected and all-scenarios KPIs are byte-identical
+    (verified via the all-scenarios kpi oracle).
+  - `aep_loader.load_approved_sources_from_yaml` (and `register_approved_source`) are now in the
+    module `__all__` (CASPER clean API surface).
 - **Richer board-deck charts + embedded / live-formatted batch Excel (#662, opt-in, KPI-neutral).**
   The batch scenario-comparison export (`analytics.scenario_analytics.ScenarioAnalytics`, behind
   `run_scenario_analytics_v14.py`) gains a board-deck-grade enrichment on the charts-enabled path
