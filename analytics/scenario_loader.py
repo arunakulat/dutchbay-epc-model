@@ -22,7 +22,10 @@ from typing import Any
 
 import yaml
 
-from analytics.aep_provenance import enforce_aep_provenance
+from analytics.aep_provenance import (
+    enforce_aep_provenance,
+    register_scenario_approved_sources,
+)
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
@@ -253,6 +256,14 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # time, NOT on every derived run, so deliberate sensitivity/Monte-Carlo perturbations
     # of capacity_factor (which pass in-memory dicts, never re-loaded) are unaffected.
     reconcile_capacity_factor_with_bankable_aep(cfg, str(config_path))
+
+    # Register any per-project approved AEP sources the scenario declares
+    # (resource.power_curve.approved_sources_yaml) into the process-global manifest BEFORE
+    # the provenance guard runs, so a project can admit its own vetted turbine/source from
+    # config (ARCH-01) rather than editing the code registry. No-op (byte-identical) unless
+    # the key is declared; fails loud on a missing/malformed manifest (CESSPIT). The YAML
+    # path resolves relative to this scenario file.
+    register_scenario_approved_sources(cfg, str(config_path))
 
     # A scenario that names a turbine power-curve source must name an APPROVED one — the
     # #18 lender-grade provenance control. No-op when no source_id is declared (graceful

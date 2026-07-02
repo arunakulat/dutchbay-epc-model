@@ -20,7 +20,11 @@ from typing import Any, Dict, List, Literal, Mapping, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from analytics.aep_provenance import AepProvenanceError, enforce_aep_provenance
+from analytics.aep_provenance import (
+    AepProvenanceError,
+    enforce_aep_provenance,
+    register_scenario_approved_sources,
+)
 from analytics.aep_reconciliation import (
     AepReconciliationError,
     reconcile_capacity_factor_with_bankable_aep,
@@ -572,6 +576,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         reconcile_capacity_factor_with_bankable_aep(
             cfg, payload.config_path or "<inline>"
         )
+        register_scenario_approved_sources(cfg, payload.config_path or "<inline>")
         enforce_aep_provenance(cfg, payload.config_path or "<inline>")
         validate_evidence_register(cfg, payload.config_path or "<inline>")
         validate_development_readiness(cfg, payload.config_path or "<inline>")

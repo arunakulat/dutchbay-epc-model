@@ -34,6 +34,51 @@ All notable changes to this project will be documented here.
     argparse is introduced under `finance/`, `analytics/`, `dutchbay_v14chat/` or the canonical
     root entrypoints. Supersedes the `--method pawn` ask of #645 (its report-block extras remain
     out of scope).
+- **Per-project approved AEP sources registered from YAML (#661, config-first provenance widening, opt-in, KPI-neutral).**
+  A scenario may now declare an optional `resource.power_curve.approved_sources_yaml` naming a
+  project-local YAML manifest of vetted AEP/curve sources (`{source_id: {type, description,
+  iec_standard, [curve_key], ...}}`). At authored-scenario load and at both inline-config
+  boundaries (the API and app-service seams), the new
+  `analytics.aep_provenance.register_scenario_approved_sources` loads that manifest and registers
+  each entry into the process-global `APPROVED_SOURCES` **before** the provenance guard
+  (`enforce_aep_provenance`) runs — so a project can admit its own vetted turbine/source from
+  config (ARCH-01) rather than editing the code registry, and all three live guard call sites
+  (`enforce_aep_provenance`, `validate_curve_selection`, `validate_config_aep_provenance`) then
+  accept it.
+  - **Provenance-widening only, cannot weaken the contract.** Each entry is schema-validated by
+    `aep_loader.register_approved_source` (required `type`/`description`/known `iec_standard`), and
+    with the default `overwrite=False` a project YAML that re-declares a built-in `source_id` is
+    refused — so config-driven registration admits new sources but cannot silently overwrite the
+    placeholder / curve-key cross-check controls on the shipped entries.
+  - **Fail-loud once declared (CESSPIT).** A declared `approved_sources_yaml` that is missing,
+    unreadable, malformed, or non-string raises `AepProvenanceError`; the relative YAML path
+    resolves against the scenario file's directory. No-op when the key is absent (the common
+    case), so no committed scenario is affected and all-scenarios KPIs are byte-identical
+    (verified via the all-scenarios kpi oracle).
+  - `aep_loader.load_approved_sources_from_yaml` (and `register_approved_source`) are now in the
+    module `__all__` (CASPER clean API surface).
+- **Richer board-deck charts + embedded / live-formatted batch Excel (#662, opt-in, KPI-neutral).**
+  The batch scenario-comparison export (`analytics.scenario_analytics.ScenarioAnalytics`, behind
+  `run_scenario_analytics_v14.py`) gains a board-deck-grade enrichment on the charts-enabled path
+  (`charts=true`):
+  - `_export_charts` now also emits the cross-scenario `ChartGenerator` visuals into the
+    `*_charts` sidecar — a KPI-comparison bar (`kpi_comparison.png`), a DSCR-comparison line with
+    the 1.0 covenant floor (`dscr_comparison.png`), and an end-of-horizon debt waterfall
+    (`debt_waterfall.png`) — alongside the existing per-scenario DSCR series and IRR histogram,
+    and returns the written PNG paths.
+  - The single `.xlsx` deliverable now embeds those PNGs into a dedicated `Charts` sheet
+    (`ExcelExporter.add_chart_image`) and applies a **live** `CellIsRule` (`lessThan` 1.0) to the
+    `DSCR_View` covenant column (`ExcelExporter.add_conditional_formatting`) — this re-evaluates as
+    the reader edits, unlike the pre-existing static highlight fill.
+  - **MRM-02 provenance** stamps every enriched artefact: a `Report_Cover` sheet and a
+    `charts_metadata.json` sidecar carry the scenario list, scenarios directory, engine `VERSION`,
+    commit, and economics basis, so any reported KPI set is reconstructable.
+  - **DEFAULT OFF = byte-identical (#662).** With `charts=false` (the default for existing callers)
+    the workbook is unchanged: no `Report_Cover`, no `Charts` sheet, no conditional-formatting rule,
+    no charts directory. The two new `export_summary_and_timeseries` knobs
+    (`dscr_conditional_threshold`, `embed_chart_images`) default to `None`. Exports are downstream of
+    KPIs, so all committed-scenario KPIs are byte-identical (verified via the multi-scenario oracle).
+    No new dependency (openpyxl / matplotlib already present, both optional).
 - **Spatial-representativeness verdict wired into the GIS export / DataLake manifest (#660, WIND-10/#484, read-only diagnostic, KPI-neutral).**
   `analytics.gis.gis_export.run_gis_export` now retains the native n×n `CellResult`
   neighbourhood it samples per grid (previously discarded after `assemble_grids`) and runs
