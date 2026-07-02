@@ -11,6 +11,12 @@ defensible answer to "what actually drives outcome variance" is variance-based:
   variance-based analogue of the one-way tornado's ``flat_metric`` flag.
 * **Morris** elementary effects (``mu_star`` / ``sigma``) — the cheap *screening* pass
   (``N·(D+1)`` runs) to rank drivers before paying for Sobol (``N·(D+2)`` runs here).
+  :func:`run_morris` can optionally draw an OPTIMISED trajectory subset
+  (``optimal_trajectories``, #617) — SALib's Campolongo/Ruano spread-maximising selection.
+
+For *when* to reach for each method (Morris screen → Sobol on the top subset → PAWN
+cross-check → local tornado), see the SA decision tree in
+``docs/SENSITIVITY_DECISION_TREE.md``.
 
 This is **additive and KPI-neutral**: it reuses the SAME ``monte_carlo.parameters`` driver
 list the MC engine reads (CESSPIT: config-first, no new authored constants; CCCDIR: one
@@ -544,6 +550,7 @@ def run_morris(
     *,
     metrics: Sequence[str] = DEFAULT_METRICS,
     n_trajectories: int = 16,
+    optimal_trajectories: Optional[int] = None,
     params: Optional[Sequence[Mapping[str, Any]]] = None,
     seed: Optional[int] = 42,
     problem: Optional[GlobalSAProblem] = None,
@@ -555,24 +562,56 @@ def run_morris(
     :func:`run_sobol`. ``mu_star`` ranks importance; high ``sigma`` flags non-linear/interactive.
     ``problem``/``evaluate_fn`` override the config-derived defaults (used by closed-form tests).
 
+    ``optimal_trajectories`` (default ``None``, OPT-IN #617) selects an optimised subset via
+    SALib's Campolongo/Ruano enhancement: ``n_trajectories`` candidate trajectories are drawn
+    and the ``optimal_trajectories`` with the highest spread in the input space are kept, so the
+    cost drops to ``optimal_trajectories·(D+1)`` evaluations while covering more of the box. It
+    must satisfy ``2 <= optimal_trajectories < n_trajectories`` — we validate here (CESSPIT,
+    fail-loud) rather than rely on SALib, whose own guard is inconsistent (it silently accepts
+    ``0`` and only rejects ``>= n_trajectories`` / ``< 2``). ``None`` (the default) is the
+    VANILLA Morris path, byte-identical to prior behaviour; SALib's ``local_optimization``
+    default is irrelevant when no subset is requested. The chosen value (or ``None``) is
+    recorded in the result metadata next to ``n_trajectories`` / ``n_runs``. MRM-01: the subset
+    selection is seeded, so a fixed ``seed`` gives a deterministic optimised sample. See the SA
+    method-selection decision tree — ``docs/SENSITIVITY_DECISION_TREE.md`` (OSeMOSYS's
+    "10-from-100 at step-size-4" is this knob) — for when to reach for it.
+
     Non-finite outputs (#644): whole trajectories (``D+1`` consecutive rows) containing any
     non-finite output are dropped from BOTH ``X`` and ``Y`` before ``analyze`` — never
     single rows, which would corrupt the elementary-effect pairing — with a ``masked``
     disclosure in the per-metric result; above ``_MASKED_SHARE_POISONED`` the metric is
     flagged ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`).
     """
+    if optimal_trajectories is not None and (
+        isinstance(optimal_trajectories, bool)
+        or not isinstance(optimal_trajectories, int)
+        or not (2 <= optimal_trajectories < n_trajectories)
+    ):
+        raise ValueError(
+            "run_morris optimal_trajectories must be an int with "
+            f"2 <= optimal_trajectories < n_trajectories (={n_trajectories}); got "
+            f"{optimal_trajectories!r}. SALib selects this many optimised trajectories from "
+            "the n_trajectories candidate pool — its own bound check is inconsistent (it "
+            "silently accepts 0), so we reject out-of-range values here (no silent clamping)."
+        )
     _require_salib()
     from SALib.analyze import morris as morris_analyze
     from SALib.sample import morris as morris_sample
 
     prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
     salib_problem = prob.as_salib()
-    X = morris_sample.sample(salib_problem, N=n_trajectories, seed=seed)
+    X = morris_sample.sample(
+        salib_problem,
+        N=n_trajectories,
+        optimal_trajectories=optimal_trajectories,
+        seed=seed,
+    )
     cols = _evaluate_rows(evfn, prob, X, metrics)
 
     out: Dict[str, Any] = {
         "method": "morris",
         "n_trajectories": n_trajectories,
+        "optimal_trajectories": optimal_trajectories,
         "n_runs": len(X),
         "problem": salib_problem,
     }
