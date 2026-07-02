@@ -665,6 +665,15 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **CI: shard the Test Suite into a parallel matrix to cut PR wall-clock (#729, infra-only, KPI-neutral).**
+  `test-suite.yml`'s single `Run Tests` job (the full ~3,400-test tree + 6-package coverage on one
+  runner, which had drifted to ~12-17 min as the suite grew) is split into a 4-way `pytest-split`
+  shard matrix (`--splits 4 --group N`, still `-n auto` within each shard), so the gate's wall-clock
+  is the slowest shard (~a quarter) instead of the whole run. The R8/TEST-02 95%-coverage floor is
+  preserved exactly: each shard writes coverage DATA ONLY (distinct `COVERAGE_FILE`), and a new
+  `coverage` gate job runs `coverage combine` + `coverage report --fail-under=95` over the union;
+  `Test Summary` now also gates on it. `pytest-split>=0.8` added to the dev/test extras. No engine
+  code touched — committed KPIs and the coverage gate strength are unchanged.
 - **`build_lhs_plan` now samples via `scipy.stats.qmc.LatinHypercube` (#598, KPI-neutral).**
   The Pareto optimizer's `lhs` plan builder (`analytics.sensitivity.optimizer.build_lhs_plan`)
   replaces its hand-rolled stratified sampler — whose own docstring admitted it was "NOT full
