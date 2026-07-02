@@ -76,6 +76,19 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Batch discount-rate default consolidated to a single source of truth (#586).** The default was
+  stated three times with two different values: a silent `0.10` fallback in
+  `run_scenario_analytics_v14.py`, the authoritative `0.12` in `conf/run_scenario_analytics_v14.yaml`,
+  and a `0.10` constructor default in `analytics.scenario_analytics.ScenarioAnalytics`. Now: the
+  packaged YAML (`default_discount_rate: 0.12`) is THE source for batch runs and the CLI **fails loudly
+  (`ValueError`) if the key is missing** instead of silently substituting 0.10 (CESSPIT — config
+  explicit, no silent defaults); the direct-API constructor default is defined once as
+  `analytics.scenario_analytics.DEFAULT_GLOBAL_DISCOUNT_RATE` (still `0.10`). No resolved value moves
+  for any committed run: the packaged config always carries the key, invalid-value handling is
+  unchanged, and direct-API callers keep 0.10. The only behavioural change is fail-loud on a config
+  that omits the key (e.g. a `~default_discount_rate` Hydra delete-override), previously a silent
+  0.10. Regression-pinned in `tests/analytics/test_run_scenario_analytics_discount_default.py`,
+  including a pin on the committed YAML 0.12 so the authoritative batch value cannot drift silently.
 - **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
   remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
   (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
