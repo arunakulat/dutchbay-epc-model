@@ -46,7 +46,24 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
-- **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
+- **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
+  `mc_risk` block's DSCR breach floor was resolved from the pipeline's
+  `debt_covenants.dscr_threshold` snapshot (= `Financing_Terms.target_dscr` only), while the
+  MC engine's fixed-debt breach test used the 4-path precedence
+  `constraints.min_dscr_covenant` → `Financing_Terms.target_dscr` → `Financing_Terms.min_dscr`
+  → `monte_carlo.min_dscr_covenant` (default 1.30) — two resolutions that could disagree on
+  the same scenario. The resolvers were extracted verbatim from `analytics.mc.engine` into the
+  dependency-light `analytics.mc.covenant` (MOVE → SHIM; the engine re-exports them unchanged
+  under their original private names), and `casper_payload` now resolves the floor with the
+  shared resolver over the raw `ScenarioResult.config`, falling back to the
+  `debt_covenants.dscr_threshold` snapshot and then the `CovenantSpec` default (1.30) only
+  when no raw config is attached (bare-string/synthetic scenarios). Verified against all
+  committed scenarios: every lendercase has both resolutions in agreement at 1.30
+  (kpi-oracle byte-identical; the floor is not part of the committed KPI surface); the only
+  runtime `mc_risk` movers are the two non-bankable mixed-covenant configs, which now adopt
+  the engine floor the way the covenant surface always intended
+  (`dutchbay_equitycase_2025Q4` 1.40 → 1.30; `edge_extreme_stress` 1.25 → 1.15), with the
+  floor used still surfaced explicitly in `mc_risk.covenant.dscr_floor`. The four
   remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
   (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
   `test_oem_parser.py` seeds 42/43) — moved to `np.random.default_rng(seed)` (PCG64) per NEP 19,

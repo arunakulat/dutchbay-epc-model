@@ -46,3 +46,32 @@ def test_cashflow_v14_cold_import() -> None:
     """
     result = _cold_import("finance.cashflow_v14")
     assert result.returncode == 0, f"cold import failed:\n{result.stderr}"
+
+
+def test_casper_payload_cold_import_stays_off_the_mc_engine() -> None:
+    """`import analytics.casper.casper_payload` must not load the MC engine.
+
+    The CASPER payload module reuses the engine's covenant-floor resolver via the
+    deliberately dependency-light `analytics.mc.covenant` (#639) precisely so it
+    does NOT pull `analytics.mc.engine` (and its full MC stack) into its import
+    chain; the engine merely re-exports the resolvers (MOVE -> SHIM). This guard
+    pins that boundary: if `analytics.mc.covenant` (or `analytics.mc.__init__`,
+    which is lazy per PEP 562) ever grows an engine/exports import, this fails.
+    """
+    probe = (
+        "import sys; import analytics.casper.casper_payload; "
+        "assert 'analytics.mc.covenant' in sys.modules, 'covenant not imported'; "
+        "leaked = [m for m in ('analytics.mc.engine', 'analytics.mc.exports') "
+        "if m in sys.modules]; "
+        "assert not leaked, f'MC engine leaked into casper_payload chain: {leaked}'"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        result.returncode == 0
+    ), f"cold-import boundary probe failed:\n{result.stderr}"
