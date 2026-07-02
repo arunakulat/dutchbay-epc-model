@@ -70,7 +70,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from .bess_revenue import (
+    _DEFAULT_DOD_CAPACITY_CHARGE,
+    _DEFAULT_DOD_ENERGY_TARIFF,
     _DEFAULT_ROUND_TRIP_EFFICIENCY,
+    _SOH_MODEL_GEOMETRIC,
     mdsc_soh_for_year,
     resolve_bess_specs,
 )
@@ -81,16 +84,17 @@ from .tech_types import is_generation_type
 #: Default depth-of-discharge by revenue model. A capacity-charge (availability) BESS is
 #: dispatched deep on call (0.80); an energy-tariff night-peak BESS does a shallower
 #: partial daily shift of its pack (0.40). Both are overridable per scenario via
-#: ``revenue.depth_of_discharge``.
-_DEFAULT_DOD_CAPACITY_CHARGE = 0.80
-_DEFAULT_DOD_ENERGY_TARIFF = 0.40
+#: ``revenue.depth_of_discharge``. Imported from :mod:`finance.bess_revenue` (the single
+#: source of truth) so the LCOS energy basis and the separable-cycle-aging throughput share
+#: one DoD default and cannot drift apart (re-exported here for readability / back-compat).
+# NB: _DEFAULT_DOD_CAPACITY_CHARGE / _DEFAULT_DOD_ENERGY_TARIFF and _DEFAULT_ROUND_TRIP_EFFICIENCY
+# are imported from finance.bess_revenue (single source of truth, #588/#606) rather than redefined
+# here — those defaults can no longer drift between the two modules.
 #: Default cycles/year for the LCOS energy basis (one charge/discharge per day). Mirrors
 #: :data:`finance.bess_revenue._DEFAULT_CYCLES_PER_YEAR`; overridable via
 #: ``revenue.cycles_per_year``.
 _DEFAULT_CYCLES_PER_YEAR = 365.0
-# NB: _DEFAULT_ROUND_TRIP_EFFICIENCY is imported from finance.bess_revenue (the single source of
-# truth, #588) rather than redefined here — the RTE default can no longer drift between the two
-# modules. (_DEFAULT_CYCLES_PER_YEAR above is still a local mirror; consolidating it is a follow-up.)
+# NB: _DEFAULT_CYCLES_PER_YEAR above is still a local mirror; consolidating it is a follow-up.
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -184,6 +188,13 @@ class LcosSpec:
     opex_escalation_pct: float
     salvage_usd: float
     contract_years: Optional[int]
+    #: Degradation model tag from :func:`finance.bess_revenue.resolve_bess_specs`
+    #: (``geometric`` or ``separable_calendar_cycle``); threaded here so the LCOS SoH curve
+    #: is the SAME curve the revenue path uses (single source of truth, cannot diverge).
+    soh_model: str
+    #: The per-year fade the resolver stored under ``mdsc_fade_pct_annual`` — for the
+    #: geometric model the compounding ``(1-rate)**t`` base, for the separable model the
+    #: collapsed calendar+cycle linear annual rate.
     soh_fade_pct_annual: float
     soh_floor: float
     #: Mid-life cell top-ups: ``{year, capex_usd, restore_to_soh}`` (1-based year).
@@ -433,6 +444,7 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
                 opex_escalation_pct=project_opex_esc,
                 salvage_usd=salvage_usd,
                 contract_years=spec.get("contract_years"),
+                soh_model=str(spec.get("soh_model", _SOH_MODEL_GEOMETRIC)),
                 soh_fade_pct_annual=float(spec.get("mdsc_fade_pct_annual", 0.0)),
                 soh_floor=float(spec.get("mdsc_floor_soh", 0.70)),
                 augmentation_events=tuple(spec.get("augmentation_events") or ()),
@@ -476,7 +488,11 @@ def compute_lcos(spec: LcosSpec, *, wacc: float, project_years: int) -> LcosResu
         horizon = min(int(spec.contract_years), project_years)
     horizon = max(1, horizon)
 
+    # The SAME degradation curve the revenue path uses (single source of truth): carry the
+    # resolver's soh_model tag and its collapsed annual fade rate so the geometric and
+    # separable (BLAST) curves are honoured identically by revenue and LCOS.
     soh_lookup: Dict[str, Any] = {
+        "soh_model": spec.soh_model,
         "mdsc_fade_pct_annual": spec.soh_fade_pct_annual,
         "mdsc_floor_soh": spec.soh_floor,
         "augmentation_events": list(spec.augmentation_events),
