@@ -26,7 +26,7 @@ import numpy as np
 from analytics.contracts_v14 import MonteCarloResult
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.aggregate import aggregate_trials
-from analytics.mc.convergence import convergence_diagnostic
+from analytics.mc.convergence import convergence_diagnostic, percentile_ci_diagnostic
 from analytics.mc.correlation import (
     CorrelationSpec,
     align_correlation_to_params,
@@ -908,6 +908,14 @@ class MonteCarloEngine:
         # can see whether n_trials sufficed for THIS scenario. Additive metadata only — it
         # never changes n_trials or the reported bands (#590).
         result.metadata["convergence"] = convergence_diagnostic(result.trials or {})
+        # The mean CI above does NOT certify the tails, but a lender reads the P90/P95 band
+        # (and the DSCR breach probability), not the mean. Add a distribution-free order-
+        # statistic CI for those percentiles plus a Wilson CI for the covenant breach
+        # probability on dscr_min. Read-only/additive — same KPI-neutral contract as #590.
+        result.metadata["percentile_ci"] = percentile_ci_diagnostic(
+            result.trials or {},
+            breach_thresholds={"dscr_min": float(self._fixed_debt_covenant)},
+        )
         return result
 
     @staticmethod

@@ -11,8 +11,10 @@ from analytics.core.parameter_solvers import (
     solve_for_max_debt_given_dscr,
     solve_for_max_debt_multi_covenant,
     solve_for_min_capex_given_irr_floor,
+    solve_for_tariff_given_equity_irr,
     solve_for_tariff_given_irr,
     solve_for_tariff_given_npv,
+    solve_tariff_breakeven,
 )
 
 # Returns module - Project & Equity returns analytics
@@ -79,8 +81,10 @@ __all__ = [
     "solve_for_max_debt_given_dscr",
     "solve_for_max_debt_multi_covenant",
     "solve_for_min_capex_given_irr_floor",
+    "solve_for_tariff_given_equity_irr",
     "solve_for_tariff_given_irr",
     "solve_for_tariff_given_npv",
+    "solve_tariff_breakeven",
     # Sensitivity analysis
     "run_sensitivity_analysis",
     "run_sensitivity_analysis_from_path",
