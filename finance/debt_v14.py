@@ -944,6 +944,7 @@ def _maybe_autosolve_dscr(
     binding_case = "P50"
     binding_gearing = solved
     solved_p90: Optional[float] = None
+    target_p90: Optional[float] = None
     if bind_downside:
         downside_ratio, downside_source = _resolve_downside_ratio(config, fin)
         target_p90 = _as_float(fin.get("target_dscr_p90"), target)
@@ -990,6 +991,8 @@ def _maybe_autosolve_dscr(
             detail["solved_gearing_p50"] = solved
             if solved_p90 is not None:
                 detail["solved_gearing_p90"] = solved_p90
+            if target_p90 is not None:
+                detail["target_dscr_p90"] = target_p90
             detail["downside_ratio"] = round(downside, 6)
             detail["downside_source"] = downside_source
         except ValueError:

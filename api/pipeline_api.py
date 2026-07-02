@@ -125,6 +125,15 @@ class DebtBlock(BaseModel):
     binding_production_case: Optional[str] = (
         None  # "P50" | "P90" (downside-binding sizing)
     )
+    # P90 (downside) sizing detail — populated only when a scenario opts into
+    # Financing_Terms.bind_downside; absent (None) for the default P50-only solve, so
+    # the lender-pack rows render only for a downside-binding scenario. Pure
+    # serialisation from debt_result['dual_dscr'] (no finance logic here).
+    solved_gearing_p50: Optional[float] = None
+    solved_gearing_p90: Optional[float] = None
+    target_dscr_p90: Optional[float] = None
+    downside_ratio: Optional[float] = None
+    downside_source: Optional[str] = None
     sizing_mode: Optional[str] = None
     tenor_years: Optional[int] = None
     construction_years: Optional[int] = None
@@ -363,6 +372,11 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         gearing=_f(dual.get("solved_gearing")),
         binding_constraint=dual.get("binding_constraint"),
         binding_production_case=dual.get("binding_production_case"),
+        solved_gearing_p50=_f(dual.get("solved_gearing_p50")),
+        solved_gearing_p90=_f(dual.get("solved_gearing_p90")),
+        target_dscr_p90=_f(dual.get("target_dscr_p90")),
+        downside_ratio=_f(dual.get("downside_ratio")),
+        downside_source=dual.get("downside_source"),
         sizing_mode=dual.get("sizing_mode"),
         tenor_years=(
             int(debt["tenor_years"]) if debt.get("tenor_years") is not None else None
