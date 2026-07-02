@@ -113,18 +113,31 @@ returns:
 
 **Capabilities:**
 - Value at Risk (VaR) at configurable confidence levels
-- Conditional Value at Risk (CVaR / Expected Shortfall)
+- Conditional Value at Risk (CVaR / Expected Shortfall). CVaR and Expected
+  Shortfall (ES) are the same statistic; the display label reports both
+  (`CVaR/ES(95%)`).
 - Tail risk analysis
 - Percentile distributions
+
+**Small-sample caveat (CVaR/ES):** CVaR/ES is a tail mean estimated from only
+the `(1 - confidence) * n` worst trials. At n=1000 trials a 1% tail averages
+~10 raw trials and a 5% tail ~50 — too noisy for a covenant or pricing input
+on its own. ES converges slower than the mean, so a tight mean confidence
+interval from the post-hoc convergence diagnostic
+(`analytics/mc/convergence.py`, #643) does not certify the tail. The
+`>= max(20, 1/(1-confidence))`-sample floor in
+`analytics/capital_risk_layer_v14.py` is a degeneracy guard (the tail must
+hold at least one sample), not a sufficiency certificate — size the Monte
+Carlo so the tail itself carries enough trials for the intended use.
 
 **Example:**
 ```python
 risk = result['analytics_result']['risk_analysis']
 
-# VaR/CVaR
+# VaR/CVaR (CVaR == Expected Shortfall)
 var_cvar = risk['var_cvar']
 print(f"VaR(95%): {var_cvar['var_value']:.2f} M LKR")
-print(f"CVaR(95%): {var_cvar['cvar_value']:.2f} M LKR")
+print(f"CVaR/ES(95%): {var_cvar['cvar_value']:.2f} M LKR")
 
 # Tail risk
 tail_risk = risk['tail_risk']
