@@ -46,3 +46,29 @@ def test_load_manifest_config_degrade_warns_loudly(
     # ...but the degrade is now visible, not silent.
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert any("manifest degraded" in r.getMessage().lower() for r in warnings)
+
+
+def test_stamp_manifest_if_absent_defers_to_engine_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Half 2 of #577: the engine stamps the manifest from the RESOLVED config it
+    # evaluated; the CLI fallback must not re-load the config nor overwrite it.
+    sentinel = {"config_sha256": "e" * 64}
+    result: dict = {"status": "success", "run_manifest": sentinel}
+
+    def _must_not_reload(_path: object) -> dict:
+        raise AssertionError("engine manifest present -> CLI must not re-load config")
+
+    monkeypatch.setattr(rfp, "_load_manifest_config", _must_not_reload)
+    rfp._stamp_manifest_if_absent(result, "scenarios/does_not_matter.yaml", "strict")
+    assert result["run_manifest"] is sentinel
+
+
+def test_stamp_manifest_if_absent_falls_back_when_missing() -> None:
+    # A result without a manifest (e.g. an error-shaped dict or a patched engine)
+    # still gets the CLI stamp, via the retained _load_manifest_config path.
+    result: dict = {"status": "error"}
+    rfp._stamp_manifest_if_absent(result, str(LENDER), "strict")
+    manifest = result["run_manifest"]
+    assert len(manifest["config_sha256"]) == 64
+    assert manifest["validation_mode"] == "strict"

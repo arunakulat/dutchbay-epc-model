@@ -33,6 +33,15 @@ from analytics.mc.correlation import (
     apply_correlation_structure,
     load_correlation_from_config,
 )
+
+# MOVE -> SHIM (#639): the covenant-floor resolvers now live in the dependency-light
+# analytics.mc.covenant module (shared with the CASPER mc_risk block, which must not
+# import this heavy engine module). Re-exported here under their original private
+# names so the engine path and any existing importer are behaviorally unchanged.
+from analytics.mc.covenant import resolve_config_value as _resolve_config_value
+from analytics.mc.covenant import (
+    resolve_min_dscr_covenant as _resolve_min_dscr_covenant,
+)
 from analytics.mc.degradation import apply_degradation_if_enabled
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 
@@ -196,34 +205,6 @@ def _tail_risk(
         cvar = float(tail.mean()) if tail.size else var
         out[k] = {"var": var, "cvar": cvar}
     return out
-
-
-def _resolve_config_value(cfg: Mapping[str, Any], dotted: str) -> Optional[float]:
-    """Resolve a dotted path to its float base value in cfg, or None if absent/non-numeric."""
-    cur: Any = cfg
-    for k in dotted.split("."):
-        if isinstance(cur, Mapping) and k in cur:
-            cur = cur[k]
-        else:
-            return None
-    try:
-        return float(cur)
-    except (TypeError, ValueError):
-        return None
-
-
-def _resolve_min_dscr_covenant(cfg: Mapping[str, Any]) -> float:
-    """The DSCR covenant a fixed-debt stress breaches, from the scenario (default 1.30)."""
-    for path in (
-        "constraints.min_dscr_covenant",
-        "Financing_Terms.target_dscr",
-        "Financing_Terms.min_dscr",
-        "monte_carlo.min_dscr_covenant",
-    ):
-        v = _resolve_config_value(cfg, path)
-        if v is not None:
-            return float(v)
-    return 1.30
 
 
 def _trial_fixed_debt_min_dscr(
