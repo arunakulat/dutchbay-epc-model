@@ -5,6 +5,21 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Spatial-representativeness verdict wired into the GIS export / DataLake manifest (#660, WIND-10/#484, read-only diagnostic, KPI-neutral).**
+  `analytics.gis.gis_export.run_gis_export` now retains the native n×n `CellResult`
+  neighbourhood it samples per grid (previously discarded after `assemble_grids`) and runs
+  the already-tested-but-unwired `wind_resource.era5_grid.spatial_representativeness` on it,
+  attaching the `assessed: True` verdict (neighbourhood ws spread + centre-cell deviation vs
+  tolerance) to BOTH the returned per-grid summary and each grid's `DataLake_Manifest_All.json`
+  entry. Each interpolated (downscaled) grid carries its native source grid's verdict rather
+  than recomputing one on the smoothed field. An even-`n` native grid (no well-defined centre
+  cell) records an explicit `assessed: False` + reason instead of silently skipping the
+  diagnostic (CESSPIT). The single-cell `wind_resource.era5_retrieval.run` result STAYS
+  `assessed: False` (a single-point timeseries genuinely has no neighbourhood) but its reason
+  string now points at the wired GIS-export path. `build_manifest_entry` gains an optional
+  `representativeness` argument whose key is OMITTED when absent, so a manifest produced
+  without a verdict is byte-identical to the pre-#660 manifest. Purely a provenance
+  disclosure — it alters no exported raster, AEP or KPI (all-scenarios oracle byte-identical).
 - **Tariff-breakeven and equity-IRR tariff solvers — on-demand analysis tools (#615, KPI-neutral).**
   Two additions to `analytics.core.parameter_solvers`, both routed ONLY through the
   `evaluate_with_overrides` gateway (ARCH-02: no direct IRR/NPV math — that stays in
