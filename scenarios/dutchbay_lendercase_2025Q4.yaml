@@ -681,6 +681,11 @@ evidence_register:
       source: "~9.83% build-up WACC from the modelled capital structure (project discount 10% / equity 12%)"
       as_of: "2026"
       tier: derived
+    climate_risk:
+      source: "Analyst climate-risk screen in the lender risk register (TCFD physical: resource/curtailment; transition: regulatory/tariff). No standalone EP4 Climate Change Risk Assessment (CCRA) commissioned yet."
+      as_of: "2026"
+      tier: assumption
+      note: "Honest tier: this is documented analyst judgement, not a formal EP4-mandated CCRA. A financed run should retire this to a commissioned CCRA (contracted/vendor_quote tier)."
 
 # Development-readiness / E&S status register (#C11). Per-workstream R/A/G to financial
 # close; validated softly by analytics.development_readiness (no-op on the economics). An

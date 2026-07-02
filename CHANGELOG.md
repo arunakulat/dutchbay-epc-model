@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **TCFD-aligned climate-risk fields in the risk / evidence register (#607, additive, KPI-neutral).**
+  `RiskItem` (config) and its render twin `RiskRow` gain an OPTIONAL
+  `climate_risk_category: physical | transition` field (pydantic `Literal`, `extra="forbid"`
+  preserved) threaded through `_build_risk_register`; the report template renders a TCFD tag
+  in the Risk Register only when the field is present (untagged rows render unchanged), so
+  every existing config still loads. `config/evidence_register.yaml`'s `material_assumptions`
+  taxonomy gains a `climate_risk` (CCRA-exists) entry, matching Equator Principles 4's
+  mandatory TCFD-structured Climate Change Risk Assessment; enforcement stays soft
+  (`enforce=false`, `require_complete=false` in `config/defaults.yaml`), so a scenario without
+  a CCRA entry is warn-only, never blocked. The committed `report_defaults.yaml` tags
+  Resource/Curtailment as `physical` and Regulatory/Tariff as `transition`; the lendercase
+  scenario declares an honest `assumption`-tier `climate_risk` entry (analyst screen, not a
+  commissioned CCRA). Pure detector + presentation — committed-scenario KPIs are byte-identical.
 - **Scenario-YAML wiring for `resource.solar.uncertainty` (#604, opt-in, KPI-neutral).**
   `SolarResourceConfig.from_scenario` now accepts an OPTIONAL `resource.solar.uncertainty`
   mapping instead of rejecting it as an unknown key, closing the wind/solar asymmetry (wind

@@ -51,3 +51,7 @@ material_assumptions:
   - inflation         # USD/LKR inflation assumptions feeding escalation
   - tax               # corporate income tax, WHT, holiday status
   - discount_rate     # WACC / cost of equity used for NPV
+  - climate_risk      # existence of a TCFD-aligned Climate Change Risk Assessment (CCRA)
+                      # per Equator Principles 4: physical + transition risk screened and
+                      # sourced. Warn-only like the rest of the register (soft default), so
+                      # a scenario without a CCRA entry is flagged-missing, never blocked.

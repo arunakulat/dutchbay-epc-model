@@ -26,6 +26,13 @@ KpiKind = Literal["pct", "multiple", "usd"]
 #: Residual severity of a registered risk AFTER its mitigation — drives badge colour.
 RiskSeverity = Literal["low", "medium", "high"]
 
+#: TCFD climate-risk taxonomy for a registered risk. ``physical`` = acute/chronic hazards
+#: to the asset (e.g. extreme wind, flooding); ``transition`` = policy/market/technology
+#: shifts (e.g. tariff or tax-regime change). Aligns the register with Equator Principles 4's
+#: mandatory TCFD-structured Climate Change Risk Assessment (CCRA). Optional — an untagged
+#: (absent) risk carries no climate classification, so all existing configs still load.
+ClimateRiskCategory = Literal["physical", "transition"]
+
 
 class ReportMeta(BaseModel):
     """Branding / front-matter for the rendered report."""
@@ -71,6 +78,10 @@ class RiskItem(BaseModel):
     risk: str
     mitigation: str
     severity: RiskSeverity
+    # TCFD/EP4 climate-risk classification (physical | transition). Optional: absent = the
+    # risk is not climate-classified (extra="forbid" preserved), so every existing config
+    # still validates. Additive presentation only — moves no computed number.
+    climate_risk_category: Optional[ClimateRiskCategory] = None
 
 
 class ReportConfig(BaseModel):
