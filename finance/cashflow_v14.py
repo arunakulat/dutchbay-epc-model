@@ -11,8 +11,8 @@ from .bess_revenue import (
     bess_revenue_lkr_for_year,
     resolve_bess_specs,
 )
-from .cashflow_v14_contracts import CashflowParams
-from .cashflow_v14_fx import _fx_curve
+from .cashflow_v14_contracts import CashflowParams, FxHedge
+from .cashflow_v14_fx import _fx_curve, _hedged_usd, _resolve_fx_hedge
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
 from .cashflow_v14_production import (
     _apply_risk_haircut,
@@ -116,6 +116,7 @@ def _prepare_cashflow_context(
     int,
     TaxProfile,
     DepreciationSchedule,
+    FxHedge,
 ]:
     """
     Shared context builder for build_annual_cfads and build_annual_rows.
@@ -123,11 +124,15 @@ def _prepare_cashflow_context(
     Returns
     -------
     (params_dict, fx_curve_resolved, capex_depreciable_resolved,
-     interest_series, years, tax_profile, depreciation_schedule)
+     interest_series, years, tax_profile, depreciation_schedule, fx_hedge)
 
     The TaxProfile and DepreciationSchedule are now built upfront and
     reused for all years, avoiding repeated computation and ensuring
     consistent loss carry-forward tracking.
+
+    ``fx_hedge`` carries the resolved FX-forward hedge state (ratio, spread, CIP forward
+    curve). It is the null :class:`FxHedge` unless ``fx.hedge_ratio > 0`` — in which case
+    the USD-view conversion blends spot with the locked forward (see ``_hedged_usd``).
     """
     # Validate parameters before expensive calculations
     validate_parameters(config)
@@ -299,6 +304,11 @@ def _prepare_cashflow_context(
         project_life_years=years,
     )
 
+    # Resolve the FX-forward hedge AFTER fx_curve_resolved is finalized, so the CIP
+    # forward is anchored on the SAME spot_0 the per-year spot path uses. Null (pure
+    # spot, byte-identical) unless fx.hedge_ratio > 0.
+    fx_hedge = _resolve_fx_hedge(config, fx_curve_resolved)
+
     return (
         params_dict,
         fx_curve_resolved,
@@ -307,6 +317,7 @@ def _prepare_cashflow_context(
         years,
         tax_profile,
         depreciation_schedule,
+        fx_hedge,
     )
 
 
@@ -324,6 +335,9 @@ def calculate_single_year_cfads(
     interest_expense_lkr: float = 0.0,
     verbose: bool = False,
     prior_year_losses: float = 0.0,
+    hedge_ratio: float = 0.0,
+    spread: float = 0.0,
+    forward_rate: float = 0.0,
 ) -> Dict[str, float]:
     """
     Compute detailed CFADS breakdown for a single year.
@@ -334,7 +348,17 @@ def calculate_single_year_cfads(
         Normalized parameter dict from _extract_parameters.
 
     fx_rate :
-        LKR per USD FX rate for the given year.
+        LKR per USD spot FX rate for the given year.
+
+    hedge_ratio :
+        Fraction (0-1) of this year's LKR CFADS/revenue converted to USD at the CIP
+        forward instead of spot. Default 0.0 -> pure-spot conversion (byte-identical).
+
+    spread :
+        Hedging cost (decimal) loaded onto the forward rate as ``forward * (1 + spread)``.
+
+    forward_rate :
+        LKR per USD CIP forward rate for the given year (used only when hedge_ratio > 0).
 
     year :
         Project year (1-based, matching tax_profile.tax_holidays_by_year keys).
@@ -457,9 +481,17 @@ def calculate_single_year_cfads(
     cfads_final_lkr = cfads_final_lkr - bess_augmentation_capex_lkr
 
     # --- USD views ------------------------------------------------------------
+    # FX risk enters the USD-numeraire engine ONLY here. With a null hedge (hedge_ratio
+    # 0.0, the default) _hedged_usd returns exactly `value_lkr / fx_rate` — byte-identical
+    # to the pre-hedge path. With a hedge, part of the flow is converted at the locked CIP
+    # forward instead of the projected spot (see finance.cashflow_v14_fx._hedged_usd).
     if fx_rate > 0.0:
-        revenue_usd = revenue_lkr / fx_rate
-        cfads_usd = cfads_final_lkr / fx_rate
+        revenue_usd = _hedged_usd(
+            revenue_lkr, fx_rate, forward_rate, hedge_ratio, spread
+        )
+        cfads_usd = _hedged_usd(
+            cfads_final_lkr, fx_rate, forward_rate, hedge_ratio, spread
+        )
     else:
         revenue_usd = 0.0
         cfads_usd = 0.0
@@ -529,6 +561,7 @@ def build_annual_cfads(
         years,
         tax_profile,
         depreciation_schedule,
+        fx_hedge,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
@@ -543,6 +576,9 @@ def build_annual_cfads(
         year_index = year - 1
         fx_rate = fx_curve_resolved[year_index]
         interest_lkr = interest_series[year_index]
+        forward_rate = (
+            fx_hedge.forward_curve[year_index] if fx_hedge.forward_curve else 0.0
+        )
 
         result = calculate_single_year_cfads(
             params=params,
@@ -553,6 +589,9 @@ def build_annual_cfads(
             interest_expense_lkr=interest_lkr,
             verbose=verbose,
             prior_year_losses=carried_losses,
+            hedge_ratio=fx_hedge.hedge_ratio,
+            spread=fx_hedge.spread,
+            forward_rate=forward_rate,
         )
 
         cfads_list.append(result["cfads_final_lkr"])
@@ -602,6 +641,7 @@ def build_annual_rows(
         years,
         tax_profile,
         depreciation_schedule,
+        fx_hedge,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
@@ -617,6 +657,9 @@ def build_annual_rows(
         year_index = year - 1
         fx_rate = fx_curve_resolved[year_index]
         interest_lkr = interest_series[year_index]
+        forward_rate = (
+            fx_hedge.forward_curve[year_index] if fx_hedge.forward_curve else 0.0
+        )
 
         row = calculate_single_year_cfads(
             params=params,
@@ -627,6 +670,9 @@ def build_annual_rows(
             interest_expense_lkr=interest_lkr,
             verbose=False,
             prior_year_losses=carried_losses,
+            hedge_ratio=fx_hedge.hedge_ratio,
+            spread=fx_hedge.spread,
+            forward_rate=forward_rate,
         )
 
         rows.append(row)
@@ -673,6 +719,7 @@ def build_annual_rows_efficient(
         years,
         tax_profile,
         depreciation_schedule,
+        fx_hedge,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
@@ -799,12 +846,28 @@ def build_annual_rows_efficient(
             }
         )
 
-        # USD views
+        # USD views — spot/forward blend (mirrors calculate_single_year_cfads so the two
+        # builders stay identical). Null hedge -> byte-identical `value_lkr / fx_rate`.
+        forward_rate = (
+            fx_hedge.forward_curve[year_index] if fx_hedge.forward_curve else 0.0
+        )
         if fx_rate > 0.0:
             row.update(
                 {
-                    "revenue_usd": row["revenue_lkr"] / fx_rate,
-                    "cfads_usd": cfads_final_lkr / fx_rate,
+                    "revenue_usd": _hedged_usd(
+                        row["revenue_lkr"],
+                        fx_rate,
+                        forward_rate,
+                        fx_hedge.hedge_ratio,
+                        fx_hedge.spread,
+                    ),
+                    "cfads_usd": _hedged_usd(
+                        cfads_final_lkr,
+                        fx_rate,
+                        forward_rate,
+                        fx_hedge.hedge_ratio,
+                        fx_hedge.spread,
+                    ),
                 }
             )
         else:

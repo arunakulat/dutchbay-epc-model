@@ -177,6 +177,31 @@ def _validate_fx_section(
             f"(annual FX depreciation), got {depr!r}."
         )
 
+    # FX-forward hedge levers (both optional; default 0.0 -> pure-spot, byte-identical).
+    # Mirrors finance.cashflow_v14_params.validate_parameters so the strict CLI pre-flight
+    # gate names the offending field before the engine runs (CESSPIT).
+    hedge_ratio = fx_cfg.get("hedge_ratio")
+    if hedge_ratio is not None:
+        if not _is_finite_number(hedge_ratio):
+            errors.append(
+                f"FX `hedge_ratio` must be a finite number (decimal 0-1), got {hedge_ratio!r}."
+            )
+        elif not (0.0 <= float(hedge_ratio) <= 1.0):
+            errors.append(
+                f"FX `hedge_ratio` must be in [0.0, 1.0], got {hedge_ratio!r}."
+            )
+
+    spread_bps = fx_cfg.get("spread_bps")
+    if spread_bps is not None:
+        if not _is_finite_number(spread_bps):
+            errors.append(
+                f"FX `spread_bps` must be a finite number (basis points), got {spread_bps!r}."
+            )
+        elif float(spread_bps) < 0.0:
+            errors.append(
+                f"FX `spread_bps` must be >= 0 basis points, got {spread_bps!r}."
+            )
+
 
 def _is_finite_number(value: Any) -> bool:
     """True when ``value`` coerces to a finite float (``bool`` excluded)."""

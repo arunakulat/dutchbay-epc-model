@@ -365,7 +365,7 @@ def _context() -> Any:
 
 def test_single_year_zero_fx_zeroes_usd_views() -> None:
     """A zero FX rate forces the USD revenue/CFADS views to 0.0 (no div-by-0)."""
-    params, _fxc, _cd, _ints, _years, tp, ds = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds, _fxh = _context()
     row = calculate_single_year_cfads(
         params=params, fx_rate=0.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -377,7 +377,7 @@ def test_single_year_zero_fx_zeroes_usd_views() -> None:
 
 def test_single_year_negative_fx_zeroes_usd_views() -> None:
     """A non-positive (negative) FX rate also zeroes the USD views."""
-    params, _fxc, _cd, _ints, _years, tp, ds = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds, _fxh = _context()
     row = calculate_single_year_cfads(
         params=params, fx_rate=-5.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -387,7 +387,7 @@ def test_single_year_negative_fx_zeroes_usd_views() -> None:
 
 def test_single_year_verbose_logs(caplog: pytest.LogCaptureFixture) -> None:
     """verbose=True emits a per-year CFADS log line without changing the result."""
-    params, _fxc, _cd, _ints, _years, tp, ds = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds, _fxh = _context()
     quiet = calculate_single_year_cfads(
         params=params, fx_rate=300.0, year=1, tax_profile=tp, depreciation_schedule=ds
     )
@@ -412,7 +412,7 @@ def test_single_year_prior_losses_threaded_into_tax() -> None:
     Derive: a large prior-year loss shield must not increase the tax versus a
     zero-loss baseline (monotonic, sign-correct shield).
     """
-    params, _fxc, _cd, _ints, _years, tp, ds = _context()
+    params, _fxc, _cd, _ints, _years, tp, ds, _fxh = _context()
     no_loss = calculate_single_year_cfads(
         params=params,
         fx_rate=300.0,
@@ -456,10 +456,10 @@ def _force_zero_years(
         interest_expense_series: Any,
         **kwargs: Any,
     ) -> Any:
-        params, fxc, cd, ints, _years, tp, ds = real(
+        params, fxc, cd, ints, _years, tp, ds, fxh = real(
             config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
-        return (params, fxc, cd, [], 0, tp, ds)
+        return (params, fxc, cd, [], 0, tp, ds, fxh)
 
     def _apply() -> None:
         monkeypatch.setattr(cf, "_prepare_cashflow_context", _patched)
@@ -509,10 +509,10 @@ def test_build_annual_rows_efficient_zero_years_returns_empty(
         interest_expense_series: Any,
         **kwargs: Any,
     ) -> Any:
-        params, fxc, cd, ints, _years, tp, ds = real(
+        params, fxc, cd, ints, _years, tp, ds, fxh = real(
             config, fx_curve, capex_depreciable_lkr, interest_expense_series, **kwargs
         )
-        return (params, fxc, cd, [], 0, tp, ds)
+        return (params, fxc, cd, [], 0, tp, ds, fxh)
 
     def _empty_tax_series(**_kwargs: Any) -> List[Any]:
         return []

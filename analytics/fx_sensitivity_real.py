@@ -233,11 +233,11 @@ class FXSensitivityAnalyzer:
             fx_values.append(_metric_from_result(out, metric))
         pairs.append(_linear_fit("fx_rate", self.config.fx_rate_shocks, fx_values))
 
-        # NOTE: the v14 cashflow engine does NOT model FX hedging or an FX bid/ask spread,
-        # so hedge_ratio / spread have no live lever — their production sensitivity is
-        # structurally ~0. The sweeps are retained (the regression machinery is exercised
-        # under test and will report real coefficients once the engine models them), but a
-        # ~0 here is an unmodeled-lever signal, not an FX-rate-style cash sensitivity.
+        # hedge_ratio is now a LIVE engine lever: the v14 cashflow engine models FX forward
+        # hedging (fx.hedge_ratio blends spot with the CIP forward in cfads_usd, #652), so
+        # this coefficient is genuinely engine-driven on a scenario that carries the debt
+        # rates the forward is built from (Financing_Terms.rates). Its sign follows the
+        # forward-vs-spot relationship for the scenario's rates.
         hedge_values = []
         for hedge_ratio in self.config.hedge_ratio_values:
             out = evaluate_with_overrides(
@@ -248,6 +248,11 @@ class FXSensitivityAnalyzer:
             _linear_fit("hedge_ratio", self.config.hedge_ratio_values, hedge_values)
         )
 
+        # Spread sweep: this overrides the LEGACY key `fx.spread_shock_bps`, which the
+        # cashflow engine does not read (the live key is `fx.spread_bps`, and a spread only
+        # bites under an active hedge, hedge_ratio > 0). So this coefficient stays ~0 until
+        # the spread accessor is wired to drive the engine jointly with an active hedge —
+        # tracked as #659 (the analysis-layer follow-up to the engine hedging feature).
         spread_values = []
         for spread_bps in self.config.spread_shocks_bps:
             out = evaluate_with_overrides(
@@ -257,13 +262,13 @@ class FXSensitivityAnalyzer:
         pairs.append(
             _linear_fit("spread", self.config.spread_shocks_bps, spread_values)
         )
-        if all(abs(v - hedge_values[0]) < 1e-12 for v in hedge_values) and all(
-            abs(v - spread_values[0]) < 1e-12 for v in spread_values
-        ):
+        if all(abs(v - spread_values[0]) < 1e-12 for v in spread_values):
             logger.warning(
-                "FX hedge_ratio / spread show zero sensitivity: the cashflow engine does "
-                "not model FX hedging or spread, so these are unmodeled levers (not an "
-                "FX-rate cash sensitivity). Only the fx_rate coefficient is engine-driven."
+                "FX spread sweep shows zero sensitivity: it overrides the legacy "
+                "`fx.spread_shock_bps` key, which the cashflow engine does not read (the "
+                "live key is `fx.spread_bps`, and spread only bites under an active hedge). "
+                "Wiring the spread accessor is tracked as #659; the hedge_ratio coefficient "
+                "IS engine-driven."
             )
 
         total_variance = float(sum(variance for _, variance in pairs))
@@ -291,8 +296,9 @@ class FXSensitivityAnalyzer:
         # callee hard-guards its config to (str | Path) (added #156), so the old
         # dict-config call always raised TypeError, leaving this public method dead in
         # production and only ever exercised under a monkeypatched pipeline in tests
-        # (round-2 audit). start_lkr_per_usd is the LIVE engine key; hedge_ratio /
-        # spread_bps are carried through but not modeled by the cashflow engine (see run()).
+        # (round-2 audit). start_lkr_per_usd, hedge_ratio and spread_bps are ALL live engine
+        # keys now (FX forward hedging, #652): a non-zero hedge_ratio blends the CIP forward
+        # into cfads_usd, and spread_bps loads the forward rate under that hedge.
         overrides: dict[str, Any] = {
             "fx": {
                 "start_lkr_per_usd": float(fx_rate),

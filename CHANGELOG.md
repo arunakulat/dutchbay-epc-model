@@ -4,6 +4,47 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
+  Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
+  locked covered-interest-parity (CIP) forward rate instead of the projected spot:
+  - `fx.hedge_ratio` (decimal 0.0–1.0, default **0.0**): fraction of each year's LKR CFADS/revenue
+    converted at the forward.
+  - `fx.spread_bps` (basis points, ≥0, default **0.0**): hedging cost loaded onto the forward as
+    `forward · (1 + spread)`.
+
+  The engine is USD-equivalent-numeraire, so FX risk enters only where LKR CFADS becomes `cfads_usd`
+  (the stream debt sizing and DSCR run on, `finance.debt_v14`). The conversion is now a blend,
+  `cfads_usd = (1−h)·(cfads_lkr/spot_t) + h·(cfads_lkr/(fwd_t·(1+spread)))`, applied consistently in
+  both `calculate_single_year_cfads` and `build_annual_rows_efficient` (the two builders remain
+  identical). The forward curve is CIP,
+  `fwd_t = spot_0 · ((1+r_lkr)/(1+r_usd))^t`, anchored on the same `spot_0` the spot path uses; `t=0`
+  yields spot. `(r_lkr, r_usd)` are resolved from `Financing_Terms.rates` using the **same key priority
+  and normalization as `finance.debt_v14._solve_mix`** (`lkr_nominal`/`lkr_min`;
+  `usd_nominal`/`usd_commercial_min`) — the forward uses the rates the facility is actually serviced at.
+  A hedge with unresolvable rates fails loud; `fx.hedge_ratio`/`fx.spread_bps` are range-validated in
+  both `finance.cashflow_v14_params.validate_parameters` and the strict `analytics.schema_guard`
+  pre-flight gate (CESSPIT).
+
+  - **Byte-identity:** at `hedge_ratio = 0` (the default) the blend is never evaluated — the original
+    `value_lkr / spot` arithmetic is returned unchanged — so all committed scenarios are
+    **kpi_oracle byte-identical (argv-correct, verified across all 27 committed scenarios)**. The
+    feature is inert until a scenario opts in.
+  - **Direction (verified, canonical lender case):** the CIP forward drift `(1+r_lkr)/(1+r_usd)−1`
+    ≈ **5.48%/yr** is fractionally **below** the projected spot drift `fx.annual_depr` = **5.89%/yr**,
+    because the committed `lkr_nominal` (13.39%) was itself built as additive UIP (usd 7.5% + drift
+    5.89%). The forward is therefore slightly *less* depreciated than spot, so hedging yields marginally
+    *more* USD and **raises** project IRR (2.68% → 2.94% at full hedge) / NPV / LLCR. `min_dscr` is
+    invariant at the 1.30 target because debt auto-sizes to it (the effect surfaces in IRR/NPV/LLCR).
+    This corrects the original design assumption that hedging would lower returns, which presumed
+    `r_usd ≈ 6%`; with the scenario's own rates the FX forward is near a wash — the LKR rate already
+    prices the depreciation via UIP.
+  - **Limitations:** the CIP forward uses the project's LKR/USD *debt* rates (not risk-free money-market
+    rates) as the parity inputs, a deliberate, auditable simplification (the rate the borrower actually
+    transacts at). Hedge behaviour is pinned end-to-end by an integration regression test that overlays
+    the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
+    duplicated hedged scenario fixture.
+
 ### Changed
 - **BESS default round-trip efficiency re-baselined 0.90 → 0.85 (#588, user-authorized KPI-move).**
   The default AC-AC round-trip efficiency (`finance.bess_revenue._DEFAULT_ROUND_TRIP_EFFICIENCY`) moves
