@@ -9,8 +9,12 @@ rounded UP to the next power of two and all 2**m points are used.
 from __future__ import annotations
 
 import copy
+import json
 import math
+import subprocess
+import sys
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -19,15 +23,12 @@ import yaml
 from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 
-_SCENARIO = (
-    Path(__file__).resolve().parents[2]
-    / "scenarios"
-    / "dutchbay_lendercase_2025Q4.yaml"
-)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SCENARIO = _REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 
-def _load() -> dict:
-    return yaml.safe_load(_SCENARIO.read_text())
+def _load() -> dict[str, Any]:
+    return cast("dict[str, Any]", yaml.safe_load(_SCENARIO.read_text()))
 
 
 BOUNDS = [(0.0, 1.0), (10.0, 20.0), (-5.0, 5.0)]
@@ -120,3 +121,65 @@ class TestEngineSamplerSwitch:
         res = MonteCarloEngine(cfg, seed=123).run(n_trials=64)
         assert res.metadata["n_trials"] == 64
         assert "sobol_n_requested" not in res.metadata  # no rounding -> no noise keys
+
+
+class TestCliTopLevelNTrialsMatchesMetadata:
+    """#647: one artifact, one honest trial count.
+
+    The MC CLI used to echo the REQUESTED n_trials at the payload top level while
+    metadata carried the count actually EVALUATED (Sobol rounds a non-power-of-two
+    request up to 2**m, #589), so one summary artifact held two conflicting
+    n_trials. The top-level number must equal metadata["n_trials"], with the
+    request still disclosed via metadata sobol_n_requested/sobol_n_used.
+    """
+
+    def test_sobol_cli_stdout_and_artifact_report_used_count(
+        self, tmp_path: Path
+    ) -> None:
+        # Opt the canonical scenario into Sobol with a deliberately
+        # non-power-of-two request: 12 -> 16 = 2**4 evaluated trials.
+        cfg = _load()
+        cfg["monte_carlo"]["sampler"] = "sobol"
+        scenario = tmp_path / "lendercase_sobol.yaml"
+        scenario.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+        out_dir = tmp_path / "mc_out"
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "analytics.cli.cli_monte_carlo_hydra",
+                f"config={scenario}",
+                "n_trials=12",
+                "seed=123",
+                f"output_dir={out_dir}",
+                "write_artifacts=true",
+            ],
+            cwd=str(_REPO_ROOT),  # makes `analytics` importable
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        combined = proc.stdout + proc.stderr
+        assert (
+            proc.returncode == 0
+        ), f"CLI exited {proc.returncode}:\n{combined[-2000:]}"
+
+        # The JSON payload is the last column-0 "{" block on stdout (hydra/engine
+        # log lines may precede it; nothing prints after it).
+        start = proc.stdout.rfind("\n{")
+        payload = json.loads(proc.stdout[start + 1 :] if start != -1 else proc.stdout)
+        assert payload["n_trials"] == 16  # the count actually evaluated, not 12
+        assert payload["n_trials"] == payload["metadata"]["n_trials"]
+        # The request is not lost: the #589 rounding disclosure travels with it.
+        assert payload["metadata"]["sobol_n_requested"] == 12
+        assert payload["metadata"]["sobol_n_used"] == 16
+
+        # The written artifact tells the same single story.
+        artifact = json.loads(
+            (out_dir / "monte_carlo_summary.json").read_text(encoding="utf-8")
+        )
+        assert artifact["n_trials"] == 16
+        assert artifact["n_trials"] == artifact["metadata"]["n_trials"]
+        assert artifact["metadata"]["sobol_n_requested"] == 12
+        assert artifact["metadata"]["sobol_n_used"] == 16

@@ -82,6 +82,19 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **MC CLI artifact no longer carries two conflicting `n_trials` (#647, KPI-neutral).** On the
+  opt-in `monte_carlo.sampler: sobol` path (#589) a non-power-of-two trial request is rounded UP
+  to the next 2**m and ALL points are evaluated; the engine already stamped the evaluated count in
+  `metadata.n_trials` (plus the `sobol_n_requested`/`sobol_n_used` disclosure pair when they
+  diverge), but `cli_monte_carlo_hydra` kept echoing the REQUESTED count at the payload/artifact
+  top level — one `monte_carlo_summary.json` told two different trial-count stories. The CLI now
+  sources the top-level `n_trials` (and the completion log line) from `result.metadata`, so
+  top-level == metadata == trials actually run, with the original request still disclosed via
+  `metadata.sobol_n_requested`. The pre-run error payload keeps the requested count (no result
+  exists there — now commented as such). Default `lhs` path is untouched (requested == used);
+  no other code reads the artifact's top-level `n_trials` (verified). Pinned by a CLI-level
+  subprocess test (`tests/analytics/test_mc_sobol_sampler.py`) driving a 12→16 Sobol run and
+  asserting stdout payload + written artifact agree with metadata.
 - **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
   Five verified erosions of the fail-loud stance closed; all committed scenarios verified
   **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
