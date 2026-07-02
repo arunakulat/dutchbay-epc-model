@@ -557,6 +557,50 @@ class SharedPoiCurtailmentResult(ContractMixin):
     hours_total: int
 
 
+@dataclass(frozen=True)
+class IrrBridgeComponent(ContractMixin):
+    """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
+
+    ``contribution`` is the change in IRR (decimal, e.g. 0.012 = +1.2 pp) attributed to this
+    effect as the cashflow is transformed step-by-step from the project basis toward the equity
+    basis. ``irr_after`` is the intermediate IRR of the *cumulative* transformation up to and
+    including this leg (so successive ``irr_after`` values walk from the project IRR to the
+    equity IRR), or ``None`` if that intermediate IRR is undefined. Every leg is a labelled,
+    signed step — no leg silently re-derives a published headline KPI.
+    """
+
+    name: str
+    contribution: float
+    irr_after: float | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class ProjectEquityIrrBridge(ContractMixin):
+    """Reconciliation of the published project IRR to the published equity IRR (IC disclosure).
+
+    A **disclosure-only** decomposition of the leverage uplift ``equity_irr − project_irr`` into
+    labelled legs (leverage, cost of debt, tax shield, cashflow timing) plus an explicit
+    ``residual`` that captures everything not attributed to a named leg (covenant lockup, DSRA,
+    WHT, terminal value, and the intrinsic non-additivity of IRR). By construction
+    ``sum(component.contribution for component in components) + residual == equity_irr −
+    project_irr`` to within ``reconcile_tolerance`` — asserted at build time (CESSPIT). It never
+    recomputes or moves a headline KPI: ``project_irr`` and ``equity_irr`` are the engine-published
+    values, and the legs only *explain* the gap between them. ``None``-valued IRRs (undefined
+    project or equity IRR) are represented honestly rather than coerced to a number.
+    """
+
+    project_irr: float | None
+    equity_irr: float | None
+    total_uplift: float | None
+    components: list[IrrBridgeComponent] = field(default_factory=list)
+    residual: float = 0.0
+    reconciled: bool = False
+    reconcile_tolerance: float = 1e-9
+    currency: str = "USD"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     "check_covenant_breach_with_tolerance",
@@ -592,4 +636,6 @@ __all__ = [
     "TechnologyCostReturn",
     "MultiTechWBS",
     "SharedPoiCurtailmentResult",
+    "IrrBridgeComponent",
+    "ProjectEquityIrrBridge",
 ]
