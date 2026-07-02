@@ -31,6 +31,16 @@ All notable changes to this project will be documented here.
     self-sampled path (closed-form Ishigami test). The self-sampled default is unchanged, so
     every committed scenario's KPIs are byte-identical (verified via the all-scenarios kpi
     oracle) and the report is byte-identical when the PAWN block is absent (default).
+  - **Non-finite `given_x` is now a hard `ValueError`, naming the offending column and count
+    (#645, Fable blocker — mirrors the #644 CESSPIT pattern).** `_validate_given_data` had
+    validated `given_x`'s shape/alignment but not its finiteness, so a NaN/inf slipped in
+    silently; PAWN then slices X with `np.nanquantile`, dropping those rows from the
+    *conditional* CDFs while still counting them in the *unconditional* CDF — corrupting every
+    reported KS index while the function's docstring promised "every mismatch raises
+    ValueError." Unlike the Y-side (which takes the #644 row-mask), X cannot be masked without
+    breaking PAWN's conditional design, so non-finite X is rejected outright. The finite reuse
+    path is unaffected (indices stay bit-identical); no committed scenario exercises the
+    given-data path, so all KPIs remain byte-identical.
   - The `--method pawn` CLI dispatch is tracked separately (#658); this change is the report
     surface + (X, Y)-reuse half only.
 - **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**

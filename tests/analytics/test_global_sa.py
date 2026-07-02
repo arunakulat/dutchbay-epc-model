@@ -303,6 +303,37 @@ def test_pawn_reuse_invalid_shapes_fail_loud(kwargs, match) -> None:
         run_pawn(problem=_PAWN_PROB, metrics=("y",), **kwargs)
 
 
+@pytest.mark.parametrize("bad", [np.inf, -np.inf, np.nan])
+def test_pawn_reuse_nonfinite_given_x_raises(bad) -> None:
+    """Fable blocker (#645): a non-finite value in the reused given_x is a HARD error, not a
+    silent corruption. PAWN slices X with ``np.nanquantile``, so a NaN/inf-X row vanishes
+    from the conditional CDFs (but not the unconditional one) and poisons every reported KS
+    index — so _validate_given_data must raise, naming the offending column and count, exactly
+    as the function's docstring ('every mismatch raises ValueError') already promises.
+    """
+    X, Y = _ishigami_design(128, seed=5)
+    X = X.copy()
+    X[3, 1] = bad  # inject into the x2 column so the message names it
+    with pytest.raises(ValueError, match=r"non-finite.*x2 \(1\)"):
+        run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+
+
+def test_pawn_reuse_finite_given_x_unaffected() -> None:
+    """The finite (X, Y) reuse path is untouched by the #645 X-finiteness guard: a clean
+    reused design still yields KS indices bit-identical to the self-sampled run."""
+    own = run_pawn(
+        problem=_PAWN_PROB, evaluate_fn=_ishigami, metrics=("y",), n=256, seed=11
+    )
+    X, Y = _ishigami_design(256, seed=11)
+    assert np.isfinite(X).all()  # the guard is a no-op on a clean design
+    reused = run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+    own_d, reu_d = own["metrics"]["y"]["drivers"], reused["metrics"]["y"]["drivers"]
+    for name in _PAWN_PROB.names:
+        assert reu_d[name]["median"] == pytest.approx(own_d[name]["median"], abs=1e-12)
+        assert reu_d[name]["mean"] == pytest.approx(own_d[name]["mean"], abs=1e-12)
+    assert reused["metrics"]["y"]["ranking"] == own["metrics"]["y"]["ranking"]
+
+
 # ---------------------------------------------------------------------------
 # #644 — shared finite-mask: a partial-NaN metric column must not poison indices
 # ---------------------------------------------------------------------------

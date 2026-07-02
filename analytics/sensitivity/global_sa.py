@@ -429,6 +429,27 @@ def _validate_given_data(
     n_runs = X.shape[0]
     if n_runs < 1:
         raise ValueError("given_x must have at least one row.")
+    # X-side non-finite is a HARD error (#645, mirroring the #644 CESSPIT pattern): PAWN's
+    # conditional slicing uses ``np.nanquantile`` over X, so NaN/inf rows silently vanish
+    # from the conditional CDFs while still counting in the unconditional CDF — corrupting
+    # every reported KS index. Unlike the Y-side (#644 row mask), X cannot be masked without
+    # breaking the conditional design, so it must not be tolerated at all.
+    finite_x = np.isfinite(X)
+    if not finite_x.all():
+        col_nonfinite = (~finite_x).sum(axis=0)
+        offending = [
+            (problem.names[j] if j < len(problem.names) else f"col{j}", int(count))
+            for j, count in enumerate(col_nonfinite)
+            if count
+        ]
+        summary = ", ".join(f"{name} ({count})" for name, count in offending)
+        raise ValueError(
+            f"given_x contains {int((~finite_x).sum())} non-finite value(s) "
+            f"(NaN/inf) in column(s): {summary}. PAWN slices X with nanquantile, so "
+            "non-finite rows silently drop from the conditional CDFs (but not the "
+            "unconditional one) and corrupt the reported KS indices; the X design must "
+            "be finite (there is no valid X-side mask — fix the reused design)."
+        )
     cols: Dict[str, Any] = {}
     for m in metrics:
         if m not in given_y:
