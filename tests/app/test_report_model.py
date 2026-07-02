@@ -9,7 +9,12 @@ from pydantic import ValidationError
 
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
-from app.reports.report_config import Covenants, ReportConfig, ReportMeta
+from app.reports.report_config import (
+    Covenants,
+    ReportConfig,
+    ReportMeta,
+    RiskItem,
+)
 from app.reports.report_model import (
     ReportContext,
     Verdict,
@@ -460,6 +465,87 @@ def test_risk_register_projected_from_config() -> None:
         assert row.category and row.risk and row.mitigation
         assert row.severity in {"low", "medium", "high"}
     assert any(r.severity == "high" for r in ctx.risk_register)
+
+
+def test_risk_register_climate_category_passthrough() -> None:
+    """_build_risk_register threads the TCFD climate tag onto the render row (and None stays None)."""
+    cfg = ReportConfig(
+        report=ReportMeta(
+            title="t",
+            subtitle="s",
+            organization="o",
+            version="1.0",
+            confidentiality="c",
+            disclaimer="d",
+        ),
+        covenants=Covenants(
+            min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4
+        ),
+        kpi_table=[],
+        risk_register=[
+            RiskItem(
+                category="Resource",
+                risk="r",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="physical",
+            ),
+            RiskItem(
+                category="Regulatory",
+                risk="r",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="transition",
+            ),
+            RiskItem(category="EPC", risk="r", mitigation="m", severity="low"),
+        ],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, config=cfg
+    )
+    tags = [row.climate_risk_category for row in ctx.risk_register]
+    assert tags == ["physical", "transition", None]
+
+
+def test_risk_register_html_renders_tcfd_tag_only_when_present() -> None:
+    """The template renders a TCFD tag for a tagged risk and omits it for an untagged one."""
+    from app.reports.renderer import render_report_html
+
+    cfg = ReportConfig(
+        report=ReportMeta(
+            title="t",
+            subtitle="s",
+            organization="o",
+            version="1.0",
+            confidentiality="c",
+            disclaimer="d",
+        ),
+        covenants=Covenants(
+            min_dscr_floor=1.2, min_dscr_target=1.3, max_balloon_pct=0.4
+        ),
+        kpi_table=[],
+        risk_register=[
+            RiskItem(
+                category="Resource",
+                risk="yield",
+                mitigation="m",
+                severity="medium",
+                climate_risk_category="physical",
+            ),
+            RiskItem(category="EPC", risk="overrun", mitigation="m", severity="low"),
+        ],
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, config=cfg
+    )
+    html = render_report_html(ctx)
+    # The tagged Resource row renders a physical TCFD tag span...
+    assert "TCFD: Physical" in html
+    assert 'class="badge tcfd-physical"' in html
+    # ...and the untagged EPC row emits no TCFD tag span at all. (The .tcfd-* CSS classes
+    # always live in the <style> block, so we assert on the rendered <span>, not the class.)
+    assert "TCFD: Transition" not in html
+    assert 'class="badge tcfd-transition"' not in html
 
 
 def test_readiness_projected_from_scenario_config() -> None:
