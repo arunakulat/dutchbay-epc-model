@@ -46,6 +46,28 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
+- **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
+  modelled in the engine (above), the analysis layer's sweeps now drive the live keys end-to-end:
+  - `FXSensitivityAnalyzer.run()`'s spread sweep drives `fx.spread_bps` (the legacy, engine-ignored
+    `fx.spread_shock_bps` override and its "unmodeled lever" warning are retired) **jointly with an
+    active hedge** — the engine prices a spread only on the hedged fraction, so the sweep runs at the
+    scenario's own `fx.hedge_ratio` when > 0, else at a documented reference FULL hedge (h = 1.0); the
+    coefficient reads "metric change per bp of hedging cost, if fully hedged".
+  - **Spread-shock semantics settled:** `FXSensitivityConfig.spread_shocks_bps` are DELTAS (bps)
+    around the scenario's base `fx.spread_bps`; the swept absolute spread is `base + shock` and a
+    delta that crosses zero **fails loud** (never clamps), mirroring the engine's `>= 0` gate. The
+    default grid moves `[-100, 0, 100]` → `[0, +50, +100]` so no unhedged (base-0) scenario can trip
+    the gate.
+  - `analyze_fx_sensitivity` now **uses** its `hedge_ratio_steps` / `spread_variation_bps` /
+    `spread_steps` parameters (previously accepted and silently ignored — `hedge_ratio_points` /
+    `spread_points` always came back empty): both sweeps are populated from the real pipeline, and
+    `calculate_summary_metrics` fits engine-driven `hedge_ratio_irr/npv_sensitivity`,
+    `spread_irr/npv_sensitivity` and `fx_rate_npv_sensitivity` (fx-rate IRR was previously the only
+    fitted summary).
+  Committed KPIs are untouched (analysis layer only; the engine is not modified). On the canonical
+  lender case the surfaced sensitivities read: hedging raises IRR/NPV (CIP forward below spot, see
+  the feature entry above), and each bp of spread is a cost (negative slope) under the reference
+  hedge.
 - **BESS default round-trip efficiency re-baselined 0.90 → 0.85 (#588, user-authorized KPI-move).**
   The default AC-AC round-trip efficiency (`finance.bess_revenue._DEFAULT_ROUND_TRIP_EFFICIENCY`) moves
   from the Ember-2025 upper-end 0.90 to NREL ATB 2024's representative utility-scale Li-ion figure (Cole &

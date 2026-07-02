@@ -42,7 +42,9 @@ def test_config_defaults_are_populated() -> None:
     assert cfg.confidence_level == 0.95
     assert cfg.fx_rate_shocks == [-0.10, -0.05, 0.0, 0.05, 0.10]
     assert cfg.hedge_ratio_values == [0.0, 0.5, 1.0]
-    assert cfg.spread_shocks_bps == [-100, 0, 100]
+    # DELTAS around the scenario's base fx.spread_bps — non-negative by default so no
+    # committed (unhedged, base-spread-0) path can trip the engine's >= 0 gate (#659).
+    assert cfg.spread_shocks_bps == [0.0, 50.0, 100.0]
 
 
 def test_config_rejects_out_of_range_confidence() -> None:
@@ -282,7 +284,10 @@ def _stub_evaluate_with_overrides(
         if start is not None:
             shock = float(start) / 333.79 - 1.0
         hedge = float(fx.get("hedge_ratio", 0.0))
-        spread = float(fx.get("spread_shock_bps", 0.0))
+        # The spread sweep drives the LIVE key fx.spread_bps (#659); the hedge term is a
+        # CONSTANT offset within that sweep (ref hedge 1.0 on an unhedged base), so it
+        # shifts the intercept, never the spread slope.
+        spread = float(fx.get("spread_bps", 0.0))
         # IRR falls as LKR weakens (higher LKR/USD = positive shock), rises with hedging,
         # falls as the spread widens — a plausible, monotone tail.
         irr = 0.06 - 0.20 * shock + 0.01 * hedge - 0.00001 * spread
@@ -490,6 +495,33 @@ def test_analyze_fx_sensitivity_sweeps_and_orders_tail(
     assert result.fx_rate_irr_sensitivity < 0.0
 
 
+def test_analyze_fx_sensitivity_tolerates_explicit_null_hedge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An explicit YAML `hedge_ratio: null` resolves to the null hedge instead of
+    crashing float(None) (Fable review of 9cafb41)."""
+    _patch_pipeline(monkeypatch)
+    cfg = tmp_path / "null_hedge.yaml"
+    cfg.write_text("fx:\n  spot_rate: 300.0\n  hedge_ratio: null\n  spread_bps: null\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    result = analyzer.analyze_fx_sensitivity(fx_steps=3, spread_steps=2)
+    assert result.base_hedge_ratio == 0.0
+    assert result.base_spread_bps == 0.0
+    # unhedged base -> spread sweep at the reference full hedge
+    assert all(p.hedge_ratio == pytest.approx(1.0) for p in result.spread_points)
+
+
+def test_analyze_fx_sensitivity_rejects_negative_spread_variation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A negative spread_variation_bps fails loud at the analyzer's named pre-check,
+    not deep in the engine's >= 0 gate (Fable review of 9cafb41)."""
+    _patch_pipeline(monkeypatch)
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    with pytest.raises(ValueError, match="spread_variation_bps must be >= 0"):
+        analyzer.analyze_fx_sensitivity(spread_variation_bps=-50.0)
+
+
 def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -499,13 +531,24 @@ def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(
         "fx:\n  spot_rate: 300.0\n  hedge_ratio: 0.75\n  spread_bps: 120.0\n"
     )
     analyzer = FXSensitivityAnalyzer(str(cfg))
-    result = analyzer.analyze_fx_sensitivity(fx_steps=3)
+    result = analyzer.analyze_fx_sensitivity(fx_steps=3, spread_steps=3)
     assert result.base_hedge_ratio == pytest.approx(0.75)
     assert result.base_spread_bps == pytest.approx(120.0)
-    # every swept call carries the scenario hedge/spread, only spot varies
-    for config in captured:
+    # The FX-RATE sweep respects the scenario hedge/spread — only spot varies there.
+    # (calls: 1 base + fx_steps fx-rate points, in order, before the hedge/spread sweeps)
+    for config in captured[: 1 + 3]:
         assert config["fx"]["hedge_ratio"] == pytest.approx(0.75)
         assert config["fx"]["spread_bps"] == pytest.approx(120.0)
+    # The SPREAD sweep runs at the scenario's OWN hedge (0.75, not the h=1.0 reference)
+    # and sweeps upward deltas from the scenario's OWN base spread (120 -> 220).
+    assert all(p.hedge_ratio == pytest.approx(0.75) for p in result.spread_points)
+    assert result.spread_points[0].spread_bps == pytest.approx(120.0)
+    assert result.spread_points[-1].spread_bps == pytest.approx(220.0)
+    # The HEDGE sweep varies hedge_ratio at the scenario's own base spread.
+    assert all(p.spread_bps == pytest.approx(120.0) for p in result.hedge_ratio_points)
+    assert [p.hedge_ratio for p in result.hedge_ratio_points] == [
+        pytest.approx(h) for h in [0.0, 0.25, 0.5, 0.75, 1.0]
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -523,20 +566,20 @@ def test_public_exports() -> None:
 
 
 def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
-    """End-to-end, NO mock: the fx_rate sweep now drives the live engine key
-    start_lkr_per_usd, so the fx_rate coefficient is genuinely non-zero on the real
-    lender scenario — proving the dead-key fake-zero (Wave-2 finding) is fixed. Project
-    IRR falls as the LKR/USD rate rises, so the coefficient is negative.
+    """End-to-end, NO mock: all THREE sweeps now drive live engine keys on the real
+    lender scenario.
 
-    hedge_ratio is now ALSO engine-driven (FX forward hedging, #652): the lender case's
-    CIP forward drift is just below its spot drift, so hedging raises project IRR — a real,
-    POSITIVE coefficient. spread still overrides the legacy `fx.spread_shock_bps` key the
-    engine does not read (live key `fx.spread_bps`, and spread only bites under an active
-    hedge), so its coefficient remains ~0 pending the #659 accessor wiring."""
+    - fx_rate drives start_lkr_per_usd: IRR falls as the LKR/USD rate rises (negative).
+    - hedge_ratio is engine-driven (FX forward hedging, #652): the lender case's CIP
+      forward drift sits just below its spot drift, so hedging raises project IRR — a
+      real, POSITIVE coefficient.
+    - spread drives the live fx.spread_bps under the reference full hedge (#659, the
+      lender case is unhedged so ref h=1.0): a wider spread is a hedging COST — a real,
+      NEGATIVE coefficient (per bp)."""
     cfg = FXSensitivityConfig(
         fx_rate_shocks=[-0.05, 0.0, 0.05],
         hedge_ratio_values=[0.0, 1.0],
-        spread_shocks_bps=[-100.0, 100.0],
+        spread_shocks_bps=[0.0, 100.0],
     )
     analyzer = FXSensitivityAnalyzer(str(LENDER), config=cfg)
     result = analyzer.run()
@@ -546,9 +589,72 @@ def test_fx_rate_sweep_is_live_against_the_real_engine() -> None:
     # hedge_ratio is a live lever: forward below spot -> hedging raises IRR (positive).
     hedge_coef = next(c for c in result.coefficients if c.parameter == "hedge_ratio")
     assert hedge_coef.coefficient > 1e-6
-    # spread still routes through the legacy key the engine ignores -> ~0 (see #659).
+    # spread is a live lever under the ref hedge: a cost -> negative slope per bp.
     spread_coef = next(c for c in result.coefficients if c.parameter == "spread")
-    assert abs(spread_coef.coefficient) < 1e-9
+    assert spread_coef.coefficient < 0.0
+    assert abs(spread_coef.coefficient) > 1e-9  # engine-driven, not the old inert ~0
+
+
+def test_spread_sweep_negative_absolute_fails_loud(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A spread delta that takes base + shock below zero raises (never clamps) —
+    mirroring the engine's fail-loud >= 0 gate (#659 / CESSPIT)."""
+    _stub_evaluate_with_overrides(monkeypatch)
+    cfg = FXSensitivityConfig(spread_shocks_bps=[-100.0, 0.0])
+    analyzer = FXSensitivityAnalyzer(str(LENDER), config=cfg)  # base spread 0
+    with pytest.raises(ValueError, match="below zero"):
+        analyzer.run()
+
+
+def test_spread_sweep_uses_reference_full_hedge_on_unhedged_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On an unhedged scenario (base hedge 0) the spread sweep runs at the documented
+    reference FULL hedge (h=1.0) — spread is inert at h=0, so sweeping there would
+    reintroduce the fake-zero coefficient the wiring removed (#659)."""
+    calls = _stub_evaluate_with_overrides(monkeypatch)
+    cfg = FXSensitivityConfig(
+        fx_rate_shocks=[0.0], hedge_ratio_values=[0.0], spread_shocks_bps=[0.0, 50.0]
+    )
+    analyzer = FXSensitivityAnalyzer(str(LENDER), config=cfg)  # lender case: unhedged
+    analyzer.run()
+    spread_calls = [c["fx"] for c in calls if "spread_bps" in c.get("fx", {})]
+    assert len(spread_calls) == 2
+    for fx in spread_calls:
+        assert fx["hedge_ratio"] == pytest.approx(1.0)  # reference full hedge
+    # deltas around base spread 0 -> absolute values equal the shocks
+    assert [fx["spread_bps"] for fx in spread_calls] == [
+        pytest.approx(0.0),
+        pytest.approx(50.0),
+    ]
+
+
+def test_spread_sweep_uses_base_hedge_when_scenario_hedges(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """On a hedged scenario the spread sweep runs at the scenario's OWN hedge ratio and
+    deltas apply around the scenario's OWN base spread (#659)."""
+    calls = _stub_evaluate_with_overrides(monkeypatch)
+    cfg_file = tmp_path / "hedged.yaml"
+    cfg_file.write_text(
+        "fx:\n  start_lkr_per_usd: 333.79\n  annual_depr: 0.0589\n"
+        "  hedge_ratio: 0.75\n  spread_bps: 20.0\n"
+    )
+    cfg = FXSensitivityConfig(
+        fx_rate_shocks=[0.0], hedge_ratio_values=[0.0], spread_shocks_bps=[0.0, 30.0]
+    )
+    analyzer = FXSensitivityAnalyzer(str(cfg_file), config=cfg)
+    analyzer.run()
+    spread_calls = [c["fx"] for c in calls if "spread_bps" in c.get("fx", {})]
+    assert len(spread_calls) == 2
+    for fx in spread_calls:
+        assert fx["hedge_ratio"] == pytest.approx(0.75)  # scenario's own hedge
+    # deltas around the scenario's base 20 bps -> absolute 20 and 50
+    assert [fx["spread_bps"] for fx in spread_calls] == [
+        pytest.approx(20.0),
+        pytest.approx(50.0),
+    ]
 
 
 def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
@@ -562,7 +668,13 @@ def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
     exercised under a monkeypatched pipeline. This drives it unmocked so the fix is real.
     """
     analyzer = FXSensitivityAnalyzer(str(LENDER))
-    result = analyzer.analyze_fx_sensitivity(fx_variation_pct=10.0, fx_steps=3)
+    result = analyzer.analyze_fx_sensitivity(
+        fx_variation_pct=10.0,
+        fx_steps=3,
+        hedge_ratio_steps=[0.0, 0.5, 1.0],
+        spread_variation_bps=100.0,
+        spread_steps=3,
+    )
     assert isinstance(result, RealFXSensitivityResult)
     assert result.base_fx_rate == pytest.approx(333.79)
     assert len(result.fx_rate_points) == 3
@@ -570,3 +682,18 @@ def test_analyze_fx_sensitivity_is_live_against_the_real_engine() -> None:
     assert len(irrs) == 3  # every swept point produced a real IRR (no TypeError)
     # weaker LKR (higher spot) -> lower project IRR: a real, monotone tail
     assert irrs[-1] < irrs[0]
+
+    # hedge/spread sweeps are now POPULATED and engine-driven (#652/#659): previously
+    # the step params were accepted but never used and both point lists stayed empty.
+    assert len(result.hedge_ratio_points) == 3
+    assert len(result.spread_points) == 3
+    # the lender case is unhedged -> the spread sweep runs at the reference full hedge
+    assert all(p.hedge_ratio == pytest.approx(1.0) for p in result.spread_points)
+    # engine-driven summary sensitivities: hedging helps (forward below spot), and a
+    # wider spread is a hedging cost (negative per-bp slope on IRR and NPV)
+    assert result.hedge_ratio_irr_sensitivity > 0.0
+    assert result.hedge_ratio_npv_sensitivity > 0.0
+    assert result.spread_irr_sensitivity < 0.0
+    assert result.spread_npv_sensitivity < 0.0
+    # fx_rate NPV sensitivity is also fitted now (weaker LKR -> lower NPV)
+    assert result.fx_rate_npv_sensitivity < 0.0
