@@ -8,10 +8,16 @@ orchestration control flow, every documented ``raise``, and both export paths
 The only compute-heavy / pipeline dependency is
 ``analytics.evaluation_v14.evaluate_with_overrides``; it is monkeypatched to a
 deterministic synthetic evaluator so the tests stay fast and reproducible.
+
+The optional pymoo backend's CASPER guard path (fail-loud ImportError before
+any evaluation) is covered here WITHOUT pymoo installed; the backend's
+behavior tests live in test_sens_optimizer_pymoo.py, gated behind
+``pytest.importorskip("pymoo")``.
 """
 
 from __future__ import annotations
 
+import builtins
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -291,13 +297,71 @@ def test_run_pareto_search_lhs_samples_exceed_max_points_raises() -> None:
 
 
 def test_run_pareto_search_bad_plan_kind_raises() -> None:
-    with pytest.raises(ValueError, match="plan_kind must be 'grid' or 'lhs'"):
+    with pytest.raises(ValueError, match="plan_kind must be 'grid', 'lhs', or 'pymoo'"):
         run_pareto_search(
             base_config={},
             objectives=_objectives(),
             grid=_grid_one(),
             plan_kind="random",
         )
+
+
+# ---------------------------------------------------------------------------
+# pymoo backend — CASPER guard path (must work WITHOUT pymoo installed)
+# ---------------------------------------------------------------------------
+
+
+def _block_pymoo_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force ``import pymoo`` to fail regardless of the local environment.
+
+    ``import pymoo`` always routes through ``builtins.__import__`` (even when
+    the module is already in ``sys.modules``), so patching it makes the guard
+    path deterministic whether or not the optional dependency is installed.
+    """
+    real_import = builtins.__import__
+
+    def _no_pymoo(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "pymoo" or name.startswith("pymoo."):
+            raise ImportError("No module named 'pymoo' (forced by test)")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_pymoo)
+
+
+def test_require_pymoo_missing_fails_loud_with_actionable_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _block_pymoo_import(monkeypatch)
+    with pytest.raises(ImportError) as excinfo:
+        opt._require_pymoo()
+    msg = str(excinfo.value)
+    # CASPER: actionable, names both install routes, states it is optional.
+    assert "pymoo" in msg
+    assert "pip install pymoo" in msg
+    assert '".[pareto]"' in msg
+    assert "OPTIONAL" in msg
+
+
+def test_run_pareto_search_pymoo_missing_dep_fails_before_any_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Any] = []
+
+    def _spy(**kwargs: Any) -> Dict[str, Any]:  # pragma: no cover - must not run
+        calls.append(kwargs)
+        return {"kpis": {"project_irr": 0.1, "min_dscr": 1.5}}
+
+    monkeypatch.setattr(opt, "evaluate_with_overrides", _spy)
+    _block_pymoo_import(monkeypatch)
+    with pytest.raises(ImportError, match="pymoo"):
+        run_pareto_search(
+            base_config={"finance": {"tariff_usd": 1.0}},
+            objectives=_objectives(),
+            grid=_grid_one(),
+            plan_kind="pymoo",
+        )
+    # The call-time gate fires before the evaluation gateway is ever touched.
+    assert calls == []
 
 
 def test_run_pareto_search_with_canonical_scenario(
