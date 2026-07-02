@@ -305,6 +305,15 @@ class FXSensitivityAnalyzer:
         base_hedge = float(fx_cfg.get("hedge_ratio") or 0.0)
         base_spread = float(fx_cfg.get("spread_bps") or 0.0)
         ref_hedge = base_hedge if base_hedge > 0.0 else 1.0
+        if ref_hedge != base_hedge:
+            # Surface the convention in the RUN OUTPUT stream, not just source docs: the
+            # "spread" coefficient below presumes a full hedge on an unhedged scenario.
+            logger.info(
+                "FX spread sweep: scenario is unhedged (fx.hedge_ratio %.2f) — sweeping "
+                "at the reference FULL hedge (h=1.0); the 'spread' coefficient reads "
+                "'metric change per bp of hedging cost, if fully hedged'.",
+                base_hedge,
+            )
         spread_values = []
         for shock_bps in self.config.spread_shocks_bps:
             absolute_bps = base_spread + float(shock_bps)
@@ -324,6 +333,10 @@ class FXSensitivityAnalyzer:
             _linear_fit("spread", self.config.spread_shocks_bps, spread_values)
         )
 
+        # NB: variance_contribution mixes sweep regimes in one total (the fx_rate sweep
+        # runs at the base hedge, the spread sweep at ref_hedge) — it is a rough relative
+        # attribution across the three levers, not a decomposition at a single operating
+        # point (pre-existing convention; caveat per Fable review of 9cafb41).
         total_variance = float(sum(variance for _, variance in pairs))
         coefficients = [
             SensitivityCoefficient(
@@ -389,8 +402,18 @@ class FXSensitivityAnalyzer:
     ) -> RealFXSensitivityResult:
         fx_config = self.base_config.get("fx", {})
         base_fx = self._base_fx()
-        base_hedge = float(fx_config.get("hedge_ratio", 0.0))
-        base_spread = float(fx_config.get("spread_bps", 0.0))
+        # `or 0.0` (not a .get default): an explicit YAML `hedge_ratio: null` must resolve
+        # to the null hedge, not crash float(None) — mirrors run() (Fable review, 9cafb41).
+        base_hedge = float(fx_config.get("hedge_ratio") or 0.0)
+        base_spread = float(fx_config.get("spread_bps") or 0.0)
+        if spread_variation_bps < 0.0:
+            # Mirror run()'s named pre-check so a negative variation fails loud HERE with
+            # the offending argument named, not deep in the engine's >= 0 gate.
+            raise ValueError(
+                f"spread_variation_bps must be >= 0 (got {spread_variation_bps:g}); "
+                "the sweep walks upward deltas from the base fx.spread_bps and the "
+                "engine rejects negative spreads."
+            )
         base_result = self._run_pipeline_with_fx_params(
             base_fx, base_hedge, base_spread
         )
@@ -452,10 +475,20 @@ class FXSensitivityAnalyzer:
             )
 
         # SPREAD sweep (live fx.spread_bps, #659): upward deltas from the base spread —
-        # non-negative by construction, so the engine's >= 0 gate can never trip — run
-        # under an ACTIVE hedge (base hedge when > 0, else the documented reference full
-        # hedge h=1.0; spread is inert at hedge_ratio=0). Same convention as run().
+        # non-negative for any valid call (spread_variation_bps >= 0 is enforced above,
+        # so base + delta can never cross the engine's >= 0 gate) — run under an ACTIVE
+        # hedge (base hedge when > 0, else the documented reference full hedge h=1.0;
+        # spread is inert at hedge_ratio=0). Same convention as run().
         ref_hedge = base_hedge if base_hedge > 0.0 else 1.0
+        if ref_hedge != base_hedge:
+            # Surface the convention in the RUN OUTPUT stream, not just source docs: the
+            # spread sensitivities below presume a full hedge on an unhedged scenario.
+            logger.info(
+                "FX spread sweep: scenario is unhedged (fx.hedge_ratio %.2f) — sweeping "
+                "at the reference FULL hedge (h=1.0); spread sensitivities read 'per bp "
+                "of hedging cost, if fully hedged'.",
+                base_hedge,
+            )
         for spread in np.linspace(
             base_spread, base_spread + spread_variation_bps, spread_steps
         ):

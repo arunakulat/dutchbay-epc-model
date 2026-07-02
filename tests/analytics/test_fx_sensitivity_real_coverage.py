@@ -495,6 +495,33 @@ def test_analyze_fx_sensitivity_sweeps_and_orders_tail(
     assert result.fx_rate_irr_sensitivity < 0.0
 
 
+def test_analyze_fx_sensitivity_tolerates_explicit_null_hedge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An explicit YAML `hedge_ratio: null` resolves to the null hedge instead of
+    crashing float(None) (Fable review of 9cafb41)."""
+    _patch_pipeline(monkeypatch)
+    cfg = tmp_path / "null_hedge.yaml"
+    cfg.write_text("fx:\n  spot_rate: 300.0\n  hedge_ratio: null\n  spread_bps: null\n")
+    analyzer = FXSensitivityAnalyzer(str(cfg))
+    result = analyzer.analyze_fx_sensitivity(fx_steps=3, spread_steps=2)
+    assert result.base_hedge_ratio == 0.0
+    assert result.base_spread_bps == 0.0
+    # unhedged base -> spread sweep at the reference full hedge
+    assert all(p.hedge_ratio == pytest.approx(1.0) for p in result.spread_points)
+
+
+def test_analyze_fx_sensitivity_rejects_negative_spread_variation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A negative spread_variation_bps fails loud at the analyzer's named pre-check,
+    not deep in the engine's >= 0 gate (Fable review of 9cafb41)."""
+    _patch_pipeline(monkeypatch)
+    analyzer = FXSensitivityAnalyzer(str(LENDER))
+    with pytest.raises(ValueError, match="spread_variation_bps must be >= 0"):
+        analyzer.analyze_fx_sensitivity(spread_variation_bps=-50.0)
+
+
 def test_analyze_fx_sensitivity_respects_scenario_hedge_and_spread(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
