@@ -49,7 +49,7 @@ generation:
         # is charged by the existing PV and exports during the 18:30-22:30 window.
         tariff_lkr_per_kwh: 45.80
         cycles_per_year: 365       # one charge/discharge per day
-        round_trip_efficiency: 0.90  # AC-AC; exported energy = stored x RTE
+        round_trip_efficiency: 0.85  # AC-AC; exported energy = stored x RTE (NREL ATB 2024 utility LFP, #588)
         availability_factor: 1.0
         contract_years: 10         # the scheme's 10-year BESS contract term
         # MDSC state-of-health fade (#470d): the night-peak export energy declines as the pack

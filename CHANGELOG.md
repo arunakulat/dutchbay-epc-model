@@ -5,6 +5,23 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **BESS default round-trip efficiency re-baselined 0.90 → 0.85 (#588, user-authorized KPI-move).**
+  The default AC-AC round-trip efficiency (`finance.bess_revenue._DEFAULT_ROUND_TRIP_EFFICIENCY`) moves
+  from the Ember-2025 upper-end 0.90 to NREL ATB 2024's representative utility-scale Li-ion figure (Cole &
+  Karmakar 2023) — a conservative mid-market value. The duplicate mirror in `finance.bess_lcos` is
+  **removed** and now imports the canonical constant (single source of truth — the two could previously
+  drift; CCCDIR). Blast radius (all verified in the venv):
+  - **Energy-tariff BESS** (the committed CEB Solar+BESS night-peak scenario, which explicitly overrode to
+    0.90 → moved to 0.85 to match): revenue and the LCOS denominator are both linear in RTE, so both fall
+    **−5.56%** (0.85/0.90); year-1 night-peak export 601.8M → 568.4M LKR, project IRR 9.72% → 8.77%.
+  - **Capacity-charge BESS**: **revenue and every cashflow/return KPI (project IRR, NPV, DSCR) are
+    RTE-independent and do NOT move** (revenue = R×MW×12). Its **reported LCOS analytic DOES move +5.88%**
+    (76.19 → 80.67 USD/MWh) — correctly: LCOS is cost per *discharged* MWh, and a less-efficient pack
+    discharges less per cycle, so a more realistic RTE gives a more realistic (higher) cost. This is a
+    reporting metric, not a covenant/return KPI, and no test pins its value; it is disclosed, not frozen.
+  - **Wind-only lender case**: carries no BESS revenue, so its committed KPIs (projIRR/eqIRR/DSCR/NPV) are
+    **byte-identical (kpi_oracle-verified, argv-correct)**.
+  Scenario/test pins updated accordingly.
 - **Dependency version bounds tightened (SOTA benchmarking #592/#593).** `pandas>=2.0` gains a `<3.0`
   cap — pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default str dtype
   (unconditional breaking changes), so 3.0 must be a deliberate, KPI-oracle-verified migration, not an

@@ -295,7 +295,7 @@ def _energy_cfg(**revenue_overrides) -> dict:
         "model": "energy_tariff",
         "tariff_lkr_per_kwh": 45.80,
         "cycles_per_year": 365,
-        "round_trip_efficiency": 0.90,
+        "round_trip_efficiency": 0.90,  # explicit override (NOT the 0.85 default); formula test below uses this same value
     }
     revenue.update(revenue_overrides)
     return {
@@ -341,7 +341,7 @@ def test_energy_tariff_defaults_cycles_and_rte():
         }
     )[0]
     assert s["cycles_per_year"] == 365.0  # one cycle/day default
-    assert s["round_trip_efficiency"] == 0.90  # default RTE
+    assert s["round_trip_efficiency"] == 0.85  # default RTE (NREL ATB 2024, #588)
 
 
 @pytest.mark.parametrize(

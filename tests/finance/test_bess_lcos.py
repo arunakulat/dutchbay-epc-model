@@ -18,7 +18,7 @@ from finance.bess_lcos import (
     compute_lcos_suite,
     resolve_lcos_specs,
 )
-from finance.bess_revenue import resolve_bess_specs
+from finance.bess_revenue import _DEFAULT_ROUND_TRIP_EFFICIENCY, resolve_bess_specs
 
 
 def _capacity_cfg(
@@ -121,6 +121,17 @@ def test_standalone_capacity_charge_defaults():
     assert s.capex_usd == 1_000.0  # block capex_usd
     assert s.opex_usd_per_year == 100.0  # standalone -> project opex
     assert any("CEB" in n for n in s.notes)  # dispatch-assumption note
+
+
+def test_capacity_charge_rte_falls_back_to_canonical_default():
+    """A capacity-charge BESS carries no explicit RTE (the committed
+    ceb_bess_10mw_capacity_charge.yaml declares none), so the LCOS denominator resolves the
+    CANONICAL default from finance.bess_revenue — the exact fallback that re-prices capacity-charge
+    LCOS when the default is re-baselined (#588). Also guards the presence-check fix: a None RTE
+    resolves to the default, not to a truthiness-collapsed value."""
+    cfg = _capacity_cfg(revenue_overrides={"round_trip_efficiency": None})
+    s = resolve_lcos_specs(cfg)[0]
+    assert s.round_trip_efficiency == _DEFAULT_ROUND_TRIP_EFFICIENCY
 
 
 def test_standalone_capex_falls_back_to_project_total_when_block_absent():
