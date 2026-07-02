@@ -5,6 +5,25 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in `method="bounded"` scalar optimizer mode in `optimize_parameter` (#602).**
+  `analytics.optimization_v14.optimize_parameter` now accepts `method="grid"` (default — the
+  unchanged exhaustive `np.linspace` sweep) or `method="bounded"`, which refines the constrained
+  optimum with `scipy.optimize.minimize_scalar(method="bounded", bounds=(lower, upper))` over the
+  same `evaluate_with_overrides` gateway (CCCDIR — no finance logic reimplemented; scipy is already
+  a core dependency). Constraint-infeasible evaluations (judged with the same `_bound_slack`
+  tolerance the grid path uses) and non-finite objectives are penalized with a large finite value
+  so the search is steered back into the feasible region, and the converged point is re-checked:
+  `best` is `None` if the solver converged on a penalized point — an infeasible point is never
+  silently returned. Fail-loud validation (CESSPIT): unknown `method`, non-finite or inverted
+  brackets, and invalid `bounded_xatol`/`bounded_maxiter` raise `ValueError`; non-convergence
+  within `bounded_maxiter` raises `RuntimeError`. The search is deterministic (Brent/golden
+  section, no randomness); `curve` holds the evaluation trace in evaluation order. Validated by
+  analytic-optimum convergence tests (interior max/min, penalization wall, all-infeasible,
+  NaN-objective, determinism) and a grid-vs-bounded cross-check on the committed lender case's
+  DSCR-sculpt plateau, where the boundary-optimum divergence (bounded searches the open interval,
+  the grid evaluates endpoints exactly) is documented and bounded at ~1e-4 IRR. Default
+  `method="grid"` keeps all existing callers byte-identical; committed-scenario KPIs verified
+  byte-identical via the multi-scenario kpi oracle (19 KPI-bearing scenarios).
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:
