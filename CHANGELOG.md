@@ -5,6 +5,21 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Scenario-YAML wiring for `resource.solar.uncertainty` (#604, opt-in, KPI-neutral).**
+  `SolarResourceConfig.from_scenario` now accepts an OPTIONAL `resource.solar.uncertainty`
+  mapping instead of rejecting it as an unknown key, closing the wind/solar asymmetry (wind
+  already reads `resource.uncertainty`). The new pure helper
+  `solar_resource.exceedance.solar_uncertainty_from_config` peels the `p50_haircut_pct` /
+  `correlation` / `life_years` exceedance knobs off the block before building the
+  `SolarUncertaintyBudget` (mirroring `analytics.wind.aep_summary_builder._uncertainty_from_config`);
+  unknown budget keys still fail loud, now at config construction (CESSPIT pre-flight).
+  `compute_solar_aep` consumes the block when `emit_exceedance=True` with precedence
+  explicit kwarg > scenario block > module default (its exceedance kwargs are now
+  `None`-sentinel defaults). DEFAULT ABSENT = byte-identical: no committed scenario carries
+  the block, `emit_exceedance` stays default-False, and the absent-block solar haircut
+  default remains **0.0** — the wind-side no-EYA `RECOMMENDED_P50_HAIRCUT_PCT` policy
+  default (#587) deliberately does NOT port to solar (a separate user/policy decision).
+  All committed-scenario KPIs verified byte-identical (all-scenarios kpi oracle).
 - **FX forward hedging modelled in the cashflow engine (#652/#659, user-authorized KPI-capable feature).**
   Two optional `fx` config levers let a scenario replace part of its per-year LKR→USD conversion with a
   locked covered-interest-parity (CIP) forward rate instead of the projected spot:

@@ -18,10 +18,15 @@ toolchain (CASPER). The exceedance z-table is the SHARED ``analytics.core.exceed
 Default budget provenance: the 1-sigma defaults below are literature-typical for a tropical
 fixed-tilt utility-scale plant (IEA-PVPS Task 13 "Uncertainties in Yield Assessments",
 IEC 61724-1). They are NOT site-specific; a real lender energy-yield assessment supplies a
-site budget by constructing a ``SolarUncertaintyBudget`` and passing it to
-``compute_solar_aep(uncertainty_budget=...)``. There is NO scenario-YAML override wired into
-the producer — ``resource.solar.uncertainty`` is not read by the pipeline (and is rejected as
-an unknown key by ``SolarResourceConfig.from_scenario``). The combined 1-year sigma at the
+site budget either programmatically (constructing a ``SolarUncertaintyBudget`` and passing
+it to ``compute_solar_aep(uncertainty_budget=...)``) or config-first via the scenario's
+OPTIONAL ``resource.solar.uncertainty`` block (#604): ``SolarResourceConfig.from_scenario``
+accepts the block, and :func:`solar_uncertainty_from_config` peels the ``p50_haircut_pct`` /
+``correlation`` / ``life_years`` exceedance knobs off it before building the budget
+(mirroring the wind side's ``resource.uncertainty`` helper in
+``analytics.wind.aep_summary_builder``). A scenario WITHOUT the block behaves byte-identically
+to the pre-wiring defaults — default budget, haircut 0.0; the wind-side no-EYA haircut policy
+default (#587) deliberately does NOT port to solar. The combined 1-year sigma at the
 defaults is ~7.6%.
 """
 
@@ -29,7 +34,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, fields
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from analytics.core.exceedance import EXCEEDANCE_Z, exceedance_value
 
@@ -37,6 +42,7 @@ __all__ = [
     "SolarUncertaintyBudget",
     "SolarExceedanceResult",
     "exceedance_levels_solar",
+    "solar_uncertainty_from_config",
 ]
 
 
@@ -49,7 +55,9 @@ class SolarUncertaintyBudget:
     is divided by ``sqrt(life_years)`` for the multi-year P90, exactly mirroring the wind
     budget's interannual handling. The defaults are tropical-fixed-tilt literature typicals;
     a caller supplies a site budget programmatically via
-    ``compute_solar_aep(uncertainty_budget=...)`` (no scenario-YAML override is wired).
+    ``compute_solar_aep(uncertainty_budget=...)`` or config-first via the scenario's
+    ``resource.solar.uncertainty`` block (#604; parsed by
+    :func:`solar_uncertainty_from_config`).
 
     Boundary note (avoids double-counting): year-1 DC degradation and multi-year degradation
     belong in the *loss/degradation* chain and the finance degradation schedule respectively,
@@ -106,10 +114,11 @@ class SolarUncertaintyBudget:
     def from_scenario(cls, block: Mapping[str, Any]) -> "SolarUncertaintyBudget":
         """Build a budget from a ``resource.solar.uncertainty`` mapping (CESSPIT: explicit keys).
 
-        A convenience constructor for a caller that already holds such a mapping; it is NOT
-        auto-invoked by the producer (``SolarResourceConfig.from_scenario`` does not read an
-        ``uncertainty`` sub-block), so wiring a scenario budget means calling this and passing
-        the result to ``compute_solar_aep(uncertainty_budget=...)``.
+        Consumes the BUDGET keys only (the category 1-sigma ``*_pct`` fields). The
+        ``p50_haircut_pct`` / ``correlation`` / ``life_years`` exceedance knobs are NOT
+        budget fields and must be peeled off first — :func:`solar_uncertainty_from_config`
+        does exactly that, and is how the producer consumes a scenario-declared
+        ``resource.solar.uncertainty`` block (#604).
 
         Unknown keys RAISE rather than being silently dropped, so a typo (e.g.
         ``soling_pct``) fails loud instead of reverting to a default.
@@ -122,6 +131,46 @@ class SolarUncertaintyBudget:
                 f"valid keys: {sorted(known)}"
             )
         return cls(**block)
+
+
+def solar_uncertainty_from_config(
+    block: Optional[Mapping[str, Any]],
+) -> "tuple[SolarUncertaintyBudget, float, float, int]":
+    """Budget + exceedance knobs from a ``resource.solar.uncertainty`` mapping (#604).
+
+    The solar analogue of ``analytics.wind.aep_summary_builder._uncertainty_from_config``:
+    the ``p50_haircut_pct`` / ``correlation`` / ``life_years`` knobs are peeled off the
+    block FIRST (they parameterise the exceedance build-up, not the 1-sigma budget), and
+    the remainder is handed to :meth:`SolarUncertaintyBudget.from_scenario`, so an unknown
+    or typo'd budget key still fails loud (CESSPIT typo protection).
+
+    Args:
+        block: The scenario's ``resource.solar.uncertainty`` mapping, or None when the
+            scenario does not declare one.
+
+    Returns:
+        ``(budget, p50_haircut_pct, correlation, life_years)``. With ``block=None`` (or an
+        empty mapping) this is byte-identical to the pre-wiring defaults:
+        ``(SolarUncertaintyBudget(), 0.0, 0.0, 20)``. The absent-knob haircut default is
+        0.0 — the wind side's no-EYA ``RECOMMENDED_P50_HAIRCUT_PCT`` policy default (#587)
+        deliberately does NOT port to solar (a separate user/policy decision).
+
+    Raises:
+        KeyError: an unknown budget field remains after the knobs are peeled off.
+        TypeError / ValueError: a knob or budget value is non-numeric or out of range.
+    """
+    if block is None:
+        return SolarUncertaintyBudget(), 0.0, 0.0, 20
+    unc = dict(block)
+    p50_haircut_pct = float(unc.pop("p50_haircut_pct", 0.0))
+    correlation = float(unc.pop("correlation", 0.0))
+    life_years = int(unc.pop("life_years", 20))
+    return (
+        SolarUncertaintyBudget.from_scenario(unc),
+        p50_haircut_pct,
+        correlation,
+        life_years,
+    )
 
 
 @dataclass(frozen=True)

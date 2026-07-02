@@ -14,6 +14,7 @@ from solar_resource.exceedance import (
     SolarExceedanceResult,
     SolarUncertaintyBudget,
     exceedance_levels_solar,
+    solar_uncertainty_from_config,
 )
 
 
@@ -66,6 +67,56 @@ class TestUncertaintyBudget:
         assert b.transposition_pct == 2.5  # default retained
         with pytest.raises(KeyError, match="unknown field"):
             SolarUncertaintyBudget.from_scenario({"soling_pct": 2.0})  # typo
+
+
+class TestSolarUncertaintyFromConfig:
+    """solar_uncertainty_from_config — the #604 resource.solar.uncertainty wiring helper."""
+
+    def test_none_block_returns_pre_wiring_defaults(self):
+        budget, haircut_pct, correlation, life_years = solar_uncertainty_from_config(
+            None
+        )
+        assert budget == SolarUncertaintyBudget()
+        # The wind side's no-EYA haircut policy default (#587) must NOT port to solar.
+        assert haircut_pct == 0.0
+        assert correlation == 0.0
+        assert life_years == 20
+
+    def test_empty_block_identical_to_none(self):
+        assert solar_uncertainty_from_config({}) == solar_uncertainty_from_config(None)
+
+    def test_knobs_are_peeled_before_budget_construction(self):
+        budget, haircut_pct, correlation, life_years = solar_uncertainty_from_config(
+            {
+                "p50_haircut_pct": 2.0,
+                "correlation": 0.25,
+                "life_years": 25,
+                "soiling_pct": 3.5,
+            }
+        )
+        assert haircut_pct == 2.0
+        assert correlation == 0.25
+        assert life_years == 25
+        assert budget.soiling_pct == 3.5  # budget override applied
+        assert budget.ghi_dataset_pct == 4.0  # untouched category keeps its default
+
+    def test_block_presence_alone_introduces_no_haircut(self):
+        # Declaring the block with only budget sigmas must keep the haircut at 0.0.
+        _, haircut_pct, _, _ = solar_uncertainty_from_config({"soiling_pct": 3.0})
+        assert haircut_pct == 0.0
+
+    def test_typo_budget_key_fails_loud(self):
+        with pytest.raises(KeyError, match="unknown field"):
+            solar_uncertainty_from_config({"soling_pct": 2.0})  # typo of soiling_pct
+
+    def test_typo_knob_key_fails_loud(self):
+        with pytest.raises(KeyError, match="unknown field"):
+            solar_uncertainty_from_config({"p50_haircut": 2.0})  # missing _pct suffix
+
+    def test_input_block_is_not_mutated(self):
+        block = {"p50_haircut_pct": 1.0, "soiling_pct": 2.5}
+        solar_uncertainty_from_config(block)
+        assert block == {"p50_haircut_pct": 1.0, "soiling_pct": 2.5}
 
 
 class TestExceedanceLevels:
