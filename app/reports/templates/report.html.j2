@@ -557,7 +557,10 @@
       {%- if ctx.resource_trend.upside_p50_gwh is not none %}, upside {{ fmt_gwh(ctx.resource_trend.upside_p50_gwh) }}{% endif %}.
       This is an IEC 61400-15-1 / MEASNET long-term-reference disclosure of the forward resource
       basis; it does <strong>not</strong> change the committed/frozen scenario P50 used in the
-      economics above.</p>
+      economics above. The trend is computed on ERA5 reanalysis annual means: a statistically
+      significant slope may reflect reanalysis inhomogeneity (evolving assimilated observation
+      streams across decades) rather than a real climatological signal, so it is presented as a
+      long-term-reference disclosure, not an operational forecast.</p>
   </section>
   {% endif %}
 
