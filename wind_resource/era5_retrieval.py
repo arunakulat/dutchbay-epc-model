@@ -131,6 +131,12 @@ class ERA5RequestConfig:
     reference_mode: str = "fixed"
     resolved_at: str = ""
     strict_coverage: bool = True
+    # Opt-in (#178 → #656): when true, ``run()`` also computes the long-term Mann-Kendall /
+    # Sen's-slope resource trend + net-AEP-by-reference-period table on the SAME already-retrieved
+    # hub-height series (no second CDS fetch) and attaches it under ``result["long_term_trend"]``.
+    # DEFAULT OFF and report/VALIDATE-only: it never changes the retrieved series, the coverage
+    # guard, or the frozen ``net_aep_p50_gwh`` — it is a disclosed forward-P50 basis, not a driver.
+    analyze_trend: bool = False
 
     @classmethod
     def from_yaml(cls, path: str) -> "ERA5RequestConfig":
@@ -159,6 +165,7 @@ class ERA5RequestConfig:
             reference_mode=mode,
             resolved_at=_dt.datetime.now().isoformat(timespec="seconds"),
             strict_coverage=bool(dl.get("strict_coverage", True)),
+            analyze_trend=bool(dl.get("analyze_trend", False)),
         )
 
     @property
@@ -389,6 +396,38 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
             "the site cell is representative of its surroundings (e.g. coastal/ridge gradient)."
         ),
     }
+    # Opt-in long-term resource & trend (#178 → #656): reuse the SAME hub-height series just
+    # built above — no second CDS fetch — to compute the Mann-Kendall / Sen's-slope trend and the
+    # net-AEP-by-reference-period table. Attached under ``long_term_trend`` for the lender report /
+    # workbook; report/VALIDATE-only, so it changes no committed AEP or KPI. A trend test needs a
+    # minimum span of annual means; a short series degrades EXPLICITLY (a recorded reason), never
+    # silently — the trend is simply not attempted rather than emitting a spurious tau on 2-3 years.
+    if config.analyze_trend:
+        from wind_resource.long_term_trend import (
+            MIN_TREND_YEARS,
+            analyze_long_term_resource,
+        )
+
+        # Gate on the ACTUAL number of distinct calendar years in the retrieved series (the
+        # honest signal), not the requested config window — a coverage shortfall (only reachable
+        # when strict_coverage is off; the strict path already raised above) must not slip a
+        # 3-year series past a 20-year config span into a spurious trend statistic.
+        n_years = int(pd.DatetimeIndex(series.index).year.nunique())
+        if n_years < MIN_TREND_YEARS:
+            result["long_term_trend"] = {
+                "analyzed": False,
+                "reason": (
+                    f"long-term trend not computed: the retrieved series spans {n_years} "
+                    f"calendar year(s), shorter than the {MIN_TREND_YEARS}-yr minimum for a "
+                    "Mann-Kendall / Sen's-slope trend test. Pin a longer reference window "
+                    "(and full coverage) to enable the trend section."
+                ),
+            }
+        else:
+            result["long_term_trend"] = {
+                "analyzed": True,
+                **analyze_long_term_resource(config, series=series),
+            }
     logger.info(
         "%s: %.1f GWh P50 (CF %.1f%%) from %s vintage %d-%d (%d h, %s)",
         config.project_name,

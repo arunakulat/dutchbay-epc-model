@@ -10,8 +10,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from wind_resource import era5_retrieval
 from wind_resource.era5_retrieval import ERA5RequestConfig
 from wind_resource.long_term_trend import (
+    MIN_TREND_YEARS,
     TrendResult,
     _classify,
     analyze_long_term_resource,
@@ -170,3 +172,93 @@ def test_executive_workbook_resource_trend_sheet(tmp_path):
     # backward-compatible: omitting it creates no such sheet
     out2 = build_executive_workbook(d, d, d, d, d, tmp_path / "wb2.xlsx")
     assert "ResourceTrend" not in openpyxl.load_workbook(out2).sheetnames
+
+
+# ---------------------------------------------------------------------------
+# Live invocation on the wind-assessment path (era5_retrieval.run) — #656.
+# The trend is computed on the SAME already-retrieved hub-height series (no second
+# CDS fetch), is opt-in (analyze_trend), and never changes the frozen AEP/KPIs.
+# ---------------------------------------------------------------------------
+
+
+def _wire_fake_retrieval(monkeypatch, series, calls):
+    """Patch run()'s retrieval stages to synthetic outputs and count CDS retrievals."""
+    from pathlib import Path
+
+    def _fake_retrieve(c):
+        calls["retrieve"] = calls.get("retrieve", 0) + 1
+        return Path("/tmp/sentinel.nc")
+
+    def _fake_build(nc, c):
+        calls["build"] = calls.get("build", 0) + 1
+        return series
+
+    def _fake_validate(s, c):
+        return {
+            "actual_hours": len(s),
+            "expected_hours": len(s),
+            "coverage_complete": True,
+            "missing_hours": 0,
+        }
+
+    monkeypatch.setattr(era5_retrieval, "retrieve_era5_timeseries", _fake_retrieve)
+    monkeypatch.setattr(era5_retrieval, "build_hub_height_series", _fake_build)
+    monkeypatch.setattr(era5_retrieval, "validate_coverage", _fake_validate)
+    # NOTE: compute_site_aep is deliberately NOT mocked — it runs on the synthetic series
+    # (no CDS), and analyze_long_term_resource's period_aep_table calls the real one, so a
+    # simplified stub would break its contract. The retrieval stages above are what would hit
+    # the network; leaving compute real keeps the AEP figures internally consistent.
+
+
+def _run_cfg(analyze_trend, start=2005, end=2024):
+    return ERA5RequestConfig(
+        project_name="T",
+        latitude=8.27,
+        longitude=79.75,
+        start_year=start,
+        end_year=end,
+        hub_height_m=150.0,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
+        analyze_trend=analyze_trend,
+    )
+
+
+def test_run_default_omits_trend(monkeypatch):
+    """analyze_trend defaults OFF: run() attaches no trend and stays byte-identical."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    result = era5_retrieval.run(_run_cfg(analyze_trend=False))
+    assert "long_term_trend" not in result
+    # Only the retrieval + AEP happened; the trend added no work.
+    assert calls == {"retrieve": 1, "build": 1}
+
+
+def test_run_analyze_trend_reuses_series_no_second_fetch(monkeypatch):
+    """Opt-in trend runs on the already-retrieved series — exactly ONE CDS retrieval."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    baseline_aep = era5_retrieval.run(_run_cfg(analyze_trend=False))["net_aep_p50_gwh"]
+    calls.clear()
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    # The trend must NOT trigger a second retrieve/build (it reuses run()'s series).
+    assert calls["retrieve"] == 1
+    assert calls["build"] == 1
+    trend = result["long_term_trend"]
+    assert trend["analyzed"] is True
+    assert "## Long-Term Wind Resource & Trend" in trend["markdown"]
+    assert list(trend["summary_df"].columns) == ["Metric", "Value"]
+    # Report/VALIDATE-only: the headline frozen AEP is unchanged by the trend disclosure.
+    assert result["net_aep_p50_gwh"] == baseline_aep
+
+
+def test_run_short_series_degrades_explicitly(monkeypatch):
+    """A record shorter than the trend minimum degrades explicitly, not silently."""
+    calls: dict = {}
+    short = _ws_series(2021, 2024)  # 4 yr < MIN_TREND_YEARS
+    _wire_fake_retrieval(monkeypatch, short, calls)
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True, start=2021, end=2024))
+    trend = result["long_term_trend"]
+    assert trend["analyzed"] is False
+    assert str(MIN_TREND_YEARS) in trend["reason"]
+    assert "markdown" not in trend

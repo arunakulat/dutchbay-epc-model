@@ -5,6 +5,26 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Live long-term wind-resource & trend section wired into the lender report (#178 → #656, opt-in, disclose-only, KPI-neutral).**
+  The Mann-Kendall + Sen's-slope trend analysis (`wind_resource.long_term_trend`) was complete
+  and tested but reached no live path. It is now wired end-to-end as a report disclosure:
+  - `wind_resource.era5_retrieval.ERA5RequestConfig` gains an opt-in `analyze_trend` flag
+    (DEFAULT OFF; `download.analyze_trend` in YAML). When true, `run()` computes the trend on the
+    SAME already-retrieved hub-height ERA5 series — **no second CDS fetch** — and attaches it
+    under `result["long_term_trend"]`. A record shorter than `long_term_trend.MIN_TREND_YEARS`
+    (10 yr) degrades **explicitly** (a recorded `analyzed: false` reason), never with a spurious
+    tau (CESSPIT — fail-loud, no silent default).
+  - `app.reports.report_model.ReportContext` gains an optional `resource_trend`
+    (`ResourceTrendBlock`) projected from the live `analyze_long_term_resource` output
+    (`render_trend_markdown` narrative + `trend_summary_dataframe` table, **not re-derived** —
+    CCCDIR one-source-of-truth), and the lender report template renders an optional
+    "Long-Term Wind Resource & Trend" section following the existing omit-when-absent pattern.
+  - **Report / VALIDATE-only:** the section discloses a forward-looking P50 basis (IEC 61400-15-1
+    / MEASNET) and explicitly states it does **not** overwrite the committed/frozen scenario P50.
+    No engine, finance, or scenario-YAML value changes. Every existing report caller (the API
+    report routes) supplies no ERA5 series, so `resource_trend` stays `None` and the rendered
+    report is unchanged — all-scenarios KPIs are byte-identical (verified via the all-scenarios
+    kpi oracle).
 - **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
   New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
   conditions-precedent checklist: the discrete named line items that must be satisfied (or

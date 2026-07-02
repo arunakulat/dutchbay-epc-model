@@ -32,6 +32,12 @@ logger = logging.getLogger(__name__)
 MK_ALPHA = 0.05
 WEAK_TREND_R2 = 0.20
 
+# Minimum span (years of annual means) for a meaningful Mann-Kendall / Sen's-slope trend test.
+# A bankable long-term reference is 10-20+ yr (IEC 61400-15-1 / MEASNET); below this a trend
+# statistic is unstable, so live callers (era5_retrieval.run) degrade EXPLICITLY rather than
+# emit a spurious tau on a handful of years.
+MIN_TREND_YEARS = 10
+
 
 @dataclass(frozen=True)
 class TrendResult:
