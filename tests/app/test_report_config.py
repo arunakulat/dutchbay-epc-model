@@ -49,6 +49,74 @@ def test_risk_register_loads_with_valid_severities() -> None:
     assert fx.severity == "high"
 
 
+def test_risk_register_climate_category_optional_and_validated(tmp_path: Path) -> None:
+    """A valid TCFD climate_risk_category loads; an absent one stays None (extra=forbid ok)."""
+    good = tmp_path / "good.yaml"
+    good.write_text(
+        textwrap.dedent("""
+            report:
+              title: t
+              subtitle: s
+              organization: o
+              version: "1.0"
+              confidentiality: c
+              disclaimer: d
+            covenants:
+              min_dscr_floor: 1.2
+              min_dscr_target: 1.3
+              max_balloon_pct: 0.4
+            kpi_table: []
+            risk_register:
+              - {category: c1, risk: r, mitigation: m, severity: high,
+                 climate_risk_category: physical}
+              - {category: c2, risk: r, mitigation: m, severity: medium,
+                 climate_risk_category: transition}
+              - {category: c3, risk: r, mitigation: m, severity: low}
+            """),
+        encoding="utf-8",
+    )
+    cfg = load_report_config(good)
+    assert cfg.risk_register[0].climate_risk_category == "physical"
+    assert cfg.risk_register[1].climate_risk_category == "transition"
+    # Absent tag -> None (untagged), and the field is not required.
+    assert cfg.risk_register[2].climate_risk_category is None
+
+
+def test_risk_register_rejects_unknown_climate_category(tmp_path: Path) -> None:
+    bad = tmp_path / "bad_climate.yaml"
+    bad.write_text(
+        textwrap.dedent("""
+            report:
+              title: t
+              subtitle: s
+              organization: o
+              version: "1.0"
+              confidentiality: c
+              disclaimer: d
+            covenants:
+              min_dscr_floor: 1.2
+              min_dscr_target: 1.3
+              max_balloon_pct: 0.4
+            kpi_table: []
+            risk_register:
+              - {category: c, risk: r, mitigation: m, severity: high,
+                 climate_risk_category: cyber}
+            """),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):  # not in the ClimateRiskCategory Literal
+        load_report_config(bad)
+
+
+def test_default_risk_register_carries_tcfd_tags() -> None:
+    """The committed default seeds both a physical and a transition TCFD tag (EP4/CCRA)."""
+    cfg = load_report_config()
+    tags = {r.climate_risk_category for r in cfg.risk_register}
+    assert "physical" in tags and "transition" in tags
+    # Untagged rows are allowed (None) and coexist with tagged ones.
+    assert None in tags
+
+
 def test_risk_register_rejects_bad_severity(tmp_path: Path) -> None:
     bad = tmp_path / "bad.yaml"
     bad.write_text(

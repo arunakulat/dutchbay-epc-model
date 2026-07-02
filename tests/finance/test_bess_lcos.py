@@ -452,3 +452,67 @@ def test_capacity_charge_lcos_still_applies_depth_of_discharge():
     r = compute_lcos(spec, wacc=0.0, project_years=1)
     # DoD applied: 40 x 1 cycle x 0.80 dod x 1.0 rte x 1.0 soh = 32.
     assert r.pv_discharged_mwh == pytest.approx(32.0)
+
+
+# ── #606: the separable BLAST SoH model threads through LCOS identically ─────────
+
+
+def test_separable_soh_model_threads_into_lcos_spec():
+    spec = resolve_lcos_specs(
+        _capacity_cfg(
+            revenue_overrides={
+                "soh_model": "separable_calendar_cycle",
+                "calendar_fade_pct_annual": 0.02,
+            }
+        )
+    )[0]
+    assert spec.soh_model == "separable_calendar_cycle"
+    # cycles_per_year=1, dod default 0.80 -> efc=0.80 -> annual = 0.02 + 0 = 0.02.
+    assert spec.soh_fade_pct_annual == pytest.approx(0.02)
+
+
+def test_lcos_soh_curve_equals_the_revenue_curve_for_separable_model():
+    """The single source of truth invariant: for the separable model, the SoH curve the
+    LCOS denominator applies (built from the LcosSpec) must equal the revenue-path curve
+    year-for-year — they can never diverge (#606)."""
+    cfg = _energy_cfg(
+        soh_model="separable_calendar_cycle",
+        calendar_fade_pct_annual=0.008,
+        cycle_fade_pct_per_efc=0.00003,
+        cycles_per_year=365,
+        depth_of_discharge=0.40,
+    )
+    rev_spec = resolve_bess_specs(cfg)[0]
+    lcos_spec = resolve_lcos_specs(cfg)[0]
+    # Reproduce the soh_lookup compute_lcos builds from the LcosSpec.
+    lookup = {
+        "soh_model": lcos_spec.soh_model,
+        "mdsc_fade_pct_annual": lcos_spec.soh_fade_pct_annual,
+        "mdsc_floor_soh": lcos_spec.soh_floor,
+        "augmentation_events": list(lcos_spec.augmentation_events),
+    }
+    from finance.bess_revenue import mdsc_soh_for_year
+
+    for t in range(10):
+        assert mdsc_soh_for_year(rev_spec, t) == mdsc_soh_for_year(lookup, t)
+
+
+def test_separable_lcos_energy_declines_linearly_vs_geometric():
+    """A separable (linear) fade lowers the discharged-energy PV differently from a
+    geometric (compounding) fade — the LCOS honours the chosen model."""
+    lin = resolve_lcos_specs(
+        _capacity_cfg(
+            revenue_overrides={
+                "soh_model": "separable_calendar_cycle",
+                "calendar_fade_pct_annual": 0.02,
+            }
+        )
+    )[0]
+    geo = resolve_lcos_specs(
+        _capacity_cfg(revenue_overrides={"mdsc_fade_pct_annual": 0.02})
+    )[0]
+    r_lin = compute_lcos(lin, wacc=0.0, project_years=10)
+    r_geo = compute_lcos(geo, wacc=0.0, project_years=10)
+    # Linear 1-0.02n falls faster early than compounding (1-0.02)^n, so at wacc=0 the
+    # summed linear discharged energy is strictly LOWER over the horizon.
+    assert r_lin.pv_discharged_mwh < r_geo.pv_discharged_mwh

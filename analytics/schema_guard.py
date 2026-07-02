@@ -60,6 +60,9 @@ _MODULE_IMPORTS: dict[str, tuple[str, ...]] = {
     "irr": ("finance.irr",),
     "wind": ("analytics.wind.wind_interface_schema",),
     "era5": ("analytics.wind.era5_interface_schema",),
+    # `crossval` registers the OPT-IN second-source cross-validation block (#612); enforced
+    # only when a scenario declares `resource.crossval` (see the auto-enforce loop below).
+    "crossval": ("analytics.wind.crossval_interface_schema",),
 }
 
 
@@ -69,9 +72,27 @@ def _ensure_module_registered(name: str) -> None:
 
     The finance/analytics modules are expected to register their
     required-field specifications with analytics.config_schema on import.
+
+    Registration is an import-time side effect, so a module already in
+    ``sys.modules`` will NOT re-register on a plain ``import_module``. If the
+    process-global registry has since been CLEARED (e.g. a test that snapshots
+    and restores ``config_schema._REGISTRY`` around an isolated case, taking the
+    snapshot before this module was first imported), the specs would be silently
+    absent and a malformed block would slip through the gate. Guard that: when a
+    mapped module is already imported but its specs are missing, ``reload`` it to
+    re-run the top-level ``register_required_fields``. In the normal single-import
+    lifecycle the specs are present, so this branch never fires and production
+    behaviour is unchanged.
     """
-    for module_path in _MODULE_IMPORTS.get(name, ()):
-        importlib.import_module(module_path)
+    module_paths = _MODULE_IMPORTS.get(name, ())
+    modules = [importlib.import_module(path) for path in module_paths]
+    # Decide ONCE (not inside the loop) whether the registry lacks this logical
+    # module's specs, so a logical name backed by SEVERAL python modules (e.g.
+    # "cashflow" -> cashflow_v14 + epc_helper_v14) re-registers ALL of them rather
+    # than short-circuiting after the first reload repopulates the bucket.
+    if module_paths and not get_required_fields(name):
+        for module in modules:
+            importlib.reload(module)
 
 
 def _get_nested(container: Mapping[str, Any], path: PathSpec) -> Any:
@@ -291,9 +312,12 @@ def validate_config_for_v14(
     # scenario could carry a malformed wind/era5 block that never got validated. Adding the
     # module only when the block is present keeps non-wind scenarios untouched (and all
     # shipped wind scenarios already satisfy the schema, so this is byte-identical today).
+    # `crossval` (#612) is the OPT-IN second-source cross-validation block: validated only
+    # when declared, so scenarios without it are untouched (byte-identical, feature default
+    # OFF). Same auto-enforce approach as wind/era5.
     resource = raw_config.get("resource") if isinstance(raw_config, Mapping) else None
     if isinstance(resource, Mapping):
-        for _block in ("wind", "era5"):
+        for _block in ("wind", "era5", "crossval"):
             if isinstance(resource.get(_block), Mapping) and _block not in module_list:
                 module_list.append(_block)
     for name in module_list:

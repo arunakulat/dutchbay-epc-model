@@ -235,10 +235,35 @@ def build_lhs_plan(
     seed: int = 123,
 ) -> List[Tuple[str, Dict[str, Any]]]:
     """
-    Build a bounded LHS-like plan over each parameter's [min(values), max(values)] range.
-    Useful when full grid explodes.
+    Build a bounded Latin Hypercube plan over each parameter's
+    [min(values), max(values)] range. Useful when the full Cartesian grid
+    explodes past ``max_points``.
 
-    Note: This is NOT full LHS over arbitrary distributions; it's a lightweight bounded sampler.
+    Sampler: ``scipy.stats.qmc.LatinHypercube(d=len(grid), scramble=True,
+    rng=np.random.default_rng(int(seed)))`` (formal LHS with Koksma-Hlawka
+    error bounds), replacing the previous hand-rolled stratified sampler that
+    its own docstring admitted was "NOT full LHS". ``d`` is the number of
+    parameters; ``engine.random(n_samples)`` returns an ``[n_samples, d]``
+    array with one draw per ``[i/n, (i+1)/n)`` stratum per dimension (the
+    Latin Hypercube property), independently permuted across dimensions.
+
+    Scrambling / seed semantics (documented honestly, MRM-01): ``scramble=True``
+    applies an Owen-style random-linear scramble that jitters each point WITHIN
+    its stratum (so samples are not cell-centred and successive n stay balanced);
+    the single ``seed``-seeded ``default_rng`` drives BOTH the per-dimension
+    stratum permutation and that scramble, so the output is a pure deterministic
+    function of ``(seed, n_samples, len(grid))``. Because this is a genuine LHS
+    stream, the drawn VALUES differ from the legacy hand-rolled sampler's — an
+    accepted change: ``build_lhs_plan`` has no pipeline/report/committed-scenario
+    caller (its only consumer is the on-demand ``run_pareto_search(plan_kind=
+    "lhs")`` analytics tool), and no test/artifact pins the specific value stream
+    (only shape, per-dimension bounds and same-seed reproducibility).
+
+    Scaling uses the same manual ``lo + u * (hi - lo)`` affine map as
+    ``analytics.mc.samplers`` (NOT ``qmc.scale``, which raises on a degenerate
+    ``lo == hi`` parameter): a pinned parameter yields a constant column, matching
+    the previous behaviour and the ranges convention shared with
+    :func:`build_grid_plan` / the pymoo backend.
     """
     if not grid:
         raise ValueError("grid must be non-empty")
@@ -246,28 +271,28 @@ def build_lhs_plan(
     if n <= 0:
         raise ValueError("n_samples must be > 0")
 
-    rng = np.random.default_rng(int(seed))
+    try:
+        from scipy.stats import qmc  # lazy: CASPER call-time gate
+    except ImportError as exc:  # pragma: no cover - scipy is a core dep in practice
+        raise ImportError(
+            "The 'lhs' Pareto plan requires SciPy (scipy.stats.qmc.LatinHypercube). "
+            "scipy is a base dependency (pyproject: scipy>=1.10); reinstall the "
+            "package, or use plan_kind='grid' which needs numpy only."
+        ) from exc
+
+    engine = qmc.LatinHypercube(
+        d=len(grid), scramble=True, rng=np.random.default_rng(int(seed))
+    )
+    unit = engine.random(n)  # [n, len(grid)] in [0, 1), one draw per stratum per dim
+
     plan: List[Tuple[str, Dict[str, Any]]] = []
-
-    # Build stratified samples in [0,1] per dimension
-    cut = np.linspace(0.0, 1.0, n + 1)
-    u = rng.uniform(size=(n, len(grid)))
-    a = cut[:n]
-    b = cut[1:]
-    pts = u * (b - a)[:, None] + a[:, None]
-
-    # Permute per dimension for LHS-like
-    lhs = np.zeros_like(pts)
-    for j in range(len(grid)):
-        lhs[:, j] = pts[rng.permutation(n), j]
-
     for i in range(n):
         overrides: Dict[str, Any] = {}
         label_parts: List[str] = []
         for j, g in enumerate(grid):
             lo = float(min(g.values))
             hi = float(max(g.values))
-            v = lo + float(lhs[i, j]) * (hi - lo)
+            v = lo + float(unit[i, j]) * (hi - lo)
             overrides[g.override_key] = v
             label_parts.append(f"{g.name}~{v:.6g}")
         plan.append((";".join(label_parts), overrides))
