@@ -46,6 +46,18 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Changed
+- **Legacy `np.random.RandomState` retired from the test suite (#619, autonomous half).** The four
+  remaining `RandomState` sites — all synthetic-input fixtures under `tests/analytics/`
+  (`test_capital_risk_layer_v14.py` seed 0, `test_mc_aep_weibull.py` seed 7,
+  `test_oem_parser.py` seeds 42/43) — moved to `np.random.default_rng(seed)` (PCG64) per NEP 19,
+  completing the migration the #473 MC-5 dolphin applied to the production RNG. Determinism under
+  fixed seeds is preserved (MRM-01); the sampled streams change, but every consuming assertion is
+  band/ordering/statistical and was verified to hold with comfortable margins on the new streams
+  (tightest: DSCR breach-prob 0.096 vs 0.106 ± 0.04; MC-AEP p50 402.76 vs 402.6 ± 10), so no
+  assertion was re-baselined and no site needed seed-stream pinning. Test-only; the committed
+  scenario KPI surface is kpi-oracle byte-identical. The `datetime.utcnow()` half of #619's sweep
+  has exactly one live site (`analytics/pipeline_v14_enhanced.py:80`), owned by #586b and
+  deliberately not touched here; the `pyxirr`/QuantLib lock fork stays user-gated (W5).
 - **hydra-core pinned 1.3.2 → 1.3.3 + declared as an abstract runtime dep + maintenance-risk ADR (#609).**
   The reproducibility-lock pin moves to 1.3.3 (upstream is packaging-only — removes `setup.py`'s
   `pkg_resources` dependency, hydra#3207 — so runtime behaviour and all committed KPIs are unchanged;
