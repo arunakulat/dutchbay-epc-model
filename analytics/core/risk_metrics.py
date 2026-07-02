@@ -73,11 +73,13 @@ class VaRCVaRResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     var: float = Field(description="Value at Risk at confidence level")
-    cvar: float = Field(description="Conditional VaR (expected shortfall)")
+    cvar: float = Field(
+        description="Conditional VaR == Expected Shortfall (ES): mean of the tail at/below VaR"
+    )
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence level")
     return_type: str = Field(description="Metric type (equity_irr, project_npv, etc)")
     var_label: str = Field(description="Display label for VaR")
-    cvar_label: str = Field(description="Display label for CVaR")
+    cvar_label: str = Field(description="Display label for CVaR / Expected Shortfall")
 
 
 class PercentileAnalysis(BaseModel):
@@ -228,8 +230,22 @@ class TailRiskAnalyzer:
         """
         Calculate Value-at-Risk (VaR) and Conditional Value-at-Risk (CVaR).
 
+        CVaR is the Expected Shortfall (ES) — the two names denote the same
+        statistic and the display label reports both (``CVaR/ES(95%)``).
+
         VaR(95%) = worst outcome at 95% confidence (5th percentile)
-        CVaR(95%) = average of outcomes worse than VaR (expected shortfall)
+        CVaR/ES(95%) = average of outcomes worse than VaR (Expected Shortfall)
+
+        Small-sample caveat: CVaR/ES is a tail MEAN, estimated from only the
+        ``(1 - confidence) * n`` worst trials — at n=1000 a 99% ES averages ~10
+        raw trials and a 95% ES ~50, so the estimate is noisy and unstable for a
+        covenant or pricing input at typical trial counts. ES converges slower
+        than the mean: a tight mean confidence interval from the post-hoc
+        convergence diagnostic (``analytics.mc.convergence``, #643) does NOT
+        certify the tail. The ``>= 20``-sample floor in
+        ``analytics.capital_risk_layer_v14.compute_capital_risk_layer`` is a
+        degeneracy guard, not a sufficiency certificate; size ``n`` so the tail
+        itself holds enough trials for the use at hand.
 
         CASPER: Returns Pydantic V2 contract.
 
@@ -263,7 +279,7 @@ class TailRiskAnalyzer:
             confidence=self.config.confidence_level,
             return_type=return_type,
             var_label=f"VaR({confidence_pct}%)",
-            cvar_label=f"CVaR({confidence_pct}%)",
+            cvar_label=f"CVaR/ES({confidence_pct}%)",
         )
 
     def percentile_analysis(

@@ -151,9 +151,17 @@ def _tail_risk(
 ) -> Dict[str, Dict[str, float]]:
     """Downside VaR/CVaR per metric at ``confidence`` from the raw trial arrays.
 
-    For return-style metrics (higher is better) the downside lives in the lower tail, so
-    VaR is the (1 - confidence) quantile and CVaR is the mean of the trials at or below it.
-    Consumes the scenario's var_confidence / cvar_confidence (previously ignored).
+    CVaR here is the Expected Shortfall (ES) — the same statistic under its other
+    standard name. For return-style metrics (higher is better) the downside lives in
+    the lower tail, so VaR is the (1 - confidence) quantile and CVaR/ES is the mean of
+    the trials at or below it. Consumes the scenario's var_confidence /
+    cvar_confidence (previously ignored).
+
+    Small-sample caveat: the tail mean rests on only ``(1 - confidence) * n`` trials —
+    at n=1000 a 99% ES averages ~10 raw trials (too noisy for a covenant/pricing input
+    on its own), and ES converges slower than the mean, so a tight mean CI from the
+    post-hoc convergence diagnostic (``analytics.mc.convergence``, #643) does not
+    certify the tail.
     """
     if not (0.0 < confidence < 1.0) or not trial_metrics:
         return {}
