@@ -235,6 +235,38 @@ def test_html_omits_global_sa_section_when_absent() -> None:
     assert "Global Sensitivity" not in render_report_html(_context())
 
 
+def test_html_contains_pawn_block_when_supplied() -> None:
+    """#645: the PAWN median-KS block renders as its own subsection with the KS columns
+    and the finite-sample noise-floor caveat; it is additive to the Morris section."""
+    from app.services.report_global_sa import GlobalSABlock, GlobalSADriver
+
+    block = GlobalSABlock(
+        method="pawn",
+        metric="project_irr",
+        n_runs=256,
+        drivers=[
+            GlobalSADriver(name="tariff.lkr_per_kwh", median_ks=0.4210, ks_cv=0.1200),
+            GlobalSADriver(name="capex.usd_total", median_ks=0.3105, ks_cv=0.0900),
+        ],
+    )
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, global_sa_pawn=block)
+    )
+    assert "PAWN (Distribution-Based)" in html
+    assert "256 model evaluations" in html
+    assert "Median KS" in html
+    assert "noise floor" in html  # the finite-sample caveat copy
+    assert "tariff.lkr_per_kwh" in html and "capex.usd_total" in html
+    assert "42.10%" in html  # median_ks rendered via fmt_ratio_pct(0.4210)
+
+
+def test_html_omits_pawn_block_when_absent() -> None:
+    assert "PAWN (Distribution-Based)" not in render_report_html(_context())
+
+
 def test_html_contains_evidence_register_when_supplied() -> None:
     case = CaseResult(
         status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None

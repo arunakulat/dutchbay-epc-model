@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from app.services.report_global_sa import GlobalSABlock, compute_report_global_sa
+from app.services.report_global_sa import (
+    GlobalSABlock,
+    compute_report_global_sa,
+    compute_report_global_sa_pawn,
+)
 
 _SCENARIO = {"monte_carlo": {"parameters": [{"name": "tariff.lkr_per_kwh"}]}}
 
@@ -165,4 +169,132 @@ def test_global_sa_honours_metric_argument() -> None:
 
     block = compute_report_global_sa(_SCENARIO, metric="equity_irr", runner=_runner)
     assert captured["metrics"] == ["equity_irr"]
+    assert block is not None and block.metric == "equity_irr"
+
+
+# ---------------------------------------------------------------------------
+# #645 — PAWN report block (median-KS complement to the Morris screening)
+# ---------------------------------------------------------------------------
+
+
+def _pawn_result() -> Dict[str, Any]:
+    return {
+        "method": "pawn",
+        "n_runs": 256,
+        "metrics": {
+            "project_irr": {
+                "drivers": {
+                    "tariff.lkr_per_kwh": {
+                        "median": 0.42,
+                        "mean": 0.40,
+                        "cv": 0.12,
+                    },
+                    "capex.usd_total": {"median": 0.31, "mean": 0.30, "cv": 0.09},
+                },
+                "ranking": ["tariff.lkr_per_kwh", "capex.usd_total"],
+                "flat_metric": False,
+                "nan_poisoned": False,
+            }
+        },
+    }
+
+
+def test_pawn_block_maps_median_ks_and_keeps_ranking() -> None:
+    block = compute_report_global_sa_pawn(
+        _SCENARIO, runner=lambda _p, *, metrics, n, s: _pawn_result()
+    )
+    assert isinstance(block, GlobalSABlock)
+    assert block.method == "pawn" and block.metric == "project_irr"
+    assert block.n_runs == 256
+    assert [d.name for d in block.drivers] == [
+        "tariff.lkr_per_kwh",
+        "capex.usd_total",
+    ]
+    top = block.drivers[0]
+    assert top.median_ks == 0.42 and top.ks_cv == 0.12
+    # PAWN block carries no Morris fields (the template renders the KS columns).
+    assert top.mu_star is None and top.sigma is None
+
+
+def test_pawn_block_sorts_by_median_when_no_ranking() -> None:
+    result = _pawn_result()
+    del result["metrics"]["project_irr"]["ranking"]  # force the median sort fallback
+    block = compute_report_global_sa_pawn(
+        _SCENARIO, runner=lambda _p, *, metrics, n, s: result
+    )
+    assert block is not None
+    assert [d.name for d in block.drivers][0] == "tariff.lkr_per_kwh"  # widest KS
+
+
+def test_pawn_block_returns_none_when_runner_raises() -> None:
+    def _boom(_p: str, *, metrics: Any, n: int, s: int) -> Dict[str, Any]:
+        raise RuntimeError("SALib missing / no parameters")
+
+    assert compute_report_global_sa_pawn(_SCENARIO, runner=_boom) is None
+
+
+def test_pawn_block_returns_none_when_no_drivers() -> None:
+    empty = {"method": "pawn", "n_runs": 0, "metrics": {"project_irr": {"drivers": {}}}}
+    assert (
+        compute_report_global_sa_pawn(
+            _SCENARIO, runner=lambda _p, *, metrics, n, s: empty
+        )
+        is None
+    )
+
+
+def _flagged_pawn(flag: str, reason_key: str) -> Dict[str, Any]:
+    return {
+        "method": "pawn",
+        "n_runs": 256,
+        "metrics": {
+            "project_irr": {
+                "drivers": {"tariff.lkr_per_kwh": {"median": 0.0, "cv": 0.0}},
+                "ranking": ["tariff.lkr_per_kwh"],
+                flag: True,
+                reason_key: "reason",
+            }
+        },
+    }
+
+
+def test_pawn_block_omits_section_for_nan_poisoned_metric() -> None:
+    """Same CASPER degrade as Morris: a nan_poisoned metric carries ZEROED placeholder
+    drivers; rendering them would print an uncaveated all-0.00% KS table, so the PAWN
+    subsection is omitted (adapter returns None; the template's `if ctx.global_sa_pawn`
+    guard drops the subsection)."""
+    flagged = _flagged_pawn("nan_poisoned", "nan_poisoned_reason")
+    assert (
+        compute_report_global_sa_pawn(
+            _SCENARIO, runner=lambda _p, *, metrics, n, s: flagged
+        )
+        is None
+    )
+
+
+def test_pawn_block_omits_section_for_flat_metric() -> None:
+    flagged = _flagged_pawn("flat_metric", "flat_metric_reason")
+    assert (
+        compute_report_global_sa_pawn(
+            _SCENARIO, runner=lambda _p, *, metrics, n, s: flagged
+        )
+        is None
+    )
+
+
+def test_pawn_block_forwards_metric_and_sampling_args() -> None:
+    captured: Dict[str, Any] = {}
+
+    def _runner(_p: str, *, metrics: Any, n: int, s: int) -> Dict[str, Any]:
+        captured.update(metrics=list(metrics), n=n, s=s)
+        return {
+            "method": "pawn",
+            "n_runs": n,
+            "metrics": {"equity_irr": {"drivers": {"x": {"median": 0.2, "cv": 0.05}}}},
+        }
+
+    block = compute_report_global_sa_pawn(
+        _SCENARIO, metric="equity_irr", n=128, s=8, runner=_runner
+    )
+    assert captured == {"metrics": ["equity_irr"], "n": 128, "s": 8}
     assert block is not None and block.metric == "equity_irr"

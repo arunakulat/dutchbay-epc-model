@@ -317,6 +317,44 @@
   </section>
   {% endif %}
 
+  {# 4g. Global sensitivity (PAWN median-KS) — #645 #}
+  {% if ctx.global_sa_pawn and ctx.global_sa_pawn.drivers %}
+  <section class="page">
+    <h2>Global Sensitivity &mdash; PAWN (Distribution-Based)</h2>
+    <p class="muted">Moment-independent global importance for the project IRR: PAWN
+      (Pianosi &amp; Wagener 2018) measures each driver's influence by the median
+      Kolmogorov&ndash;Smirnov distance between the unconditional and conditioned output
+      distributions over {{ ctx.global_sa_pawn.n_runs }} model evaluations. Unlike the
+      variance-based indices it stays bounded in [0,&nbsp;1] and does not misbehave on
+      skewed or covenant-pinned (DSCR-floor) outputs, so it complements the Morris
+      screening above. Drivers are ranked by median KS (distributional influence); the CV
+      is the dispersion of the KS across the conditioning slices.</p>
+    <p class="muted"><strong>Finite-sample noise floor:</strong> at these settings
+      (n&nbsp;=&nbsp;{{ ctx.global_sa_pawn.n_runs }}, s&nbsp;=&nbsp;10) even an inert
+      driver measures a median KS of ~0.15, so low-end ranking positions reflect sampling
+      noise, not influence &mdash; read only the top of this table as evidence of a
+      driver's effect.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">Median KS (importance)</th>
+          <th style="text-align:right;">CV (across slices)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in ctx.global_sa_pawn.drivers %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.median_ks) }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.ks_cv) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>
@@ -577,6 +615,61 @@
           <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_scheduled_debt_service) }}</strong></td>
           <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_balloon_sweep) }}</strong></td>
           <td class="num"><strong>{{ fmt_usd(ctx.cashflow_waterfall.total_cash_to_equity) }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {# 8a2. Project → equity IRR bridge — #621 #}
+  {% if ctx.irr_bridge %}
+  <section class="page">
+    <h2>Project &rarr; Equity IRR Bridge</h2>
+    <p>How leverage converts the unlevered <strong>project IRR</strong> into the levered
+      <strong>equity IRR</strong>. The two endpoints are the report's headline returns — this
+      bridge only explains the gap between them, it does not recompute them. Each leg is a single
+      substitution step: leverage (the same operating cash on a smaller equity base) lifts the
+      return; the cost of debt (interest paid to lenders) drags it down; the interest tax shield
+      (interest is tax-deductible) restores part of that drag. The <strong>residual</strong> is
+      shown as its own line — IRR is not additive, and the residual carries that interaction term
+      together with principal-repayment timing, covenant lockup, the debt-service reserve and
+      withholding tax, which the three named legs do not capture in isolation. Legs plus residual
+      reconcile exactly to the total uplift.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th style="text-align:right;">Contribution</th>
+          <th style="text-align:right;">Cumulative IRR</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Project IRR (unlevered)</strong></td>
+          <td class="num">&mdash;</td>
+          <td class="num"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.project_irr) }}</strong></td>
+          <td>Base: return on total project cost.</td>
+        </tr>
+        {% for leg in ctx.irr_bridge.legs %}
+        <tr>
+          <td>{{ leg.name|replace("_", " ")|capitalize }}</td>
+          <td class="num">{{ fmt_pp(leg.contribution) }}</td>
+          <td class="num">{{ fmt_ratio_pct(leg.irr_after) }}</td>
+          <td>{{ leg.detail }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td>{{ ctx.irr_bridge.residual_label|replace("_", " ")|capitalize }} (residual)</td>
+          <td class="num">{{ fmt_pp(ctx.irr_bridge.residual) }}</td>
+          <td class="num">&mdash;</td>
+          <td>Principal-repayment timing, covenant lockup, DSRA, WHT and the IRR interaction term.</td>
+        </tr>
+        <tr>
+          <td><strong>Equity IRR (levered)</strong></td>
+          <td class="num"><strong>{{ fmt_pp(ctx.irr_bridge.total_uplift) }}</strong></td>
+          <td class="num"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.equity_irr) }}</strong></td>
+          <td>Total uplift over the project IRR.</td>
         </tr>
       </tbody>
     </table>

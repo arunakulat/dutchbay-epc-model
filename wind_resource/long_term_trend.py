@@ -32,6 +32,12 @@ logger = logging.getLogger(__name__)
 MK_ALPHA = 0.05
 WEAK_TREND_R2 = 0.20
 
+# Minimum distinct calendar years for a meaningful Mann-Kendall / Sen's-slope trend test.
+# A bankable long-term reference is 10-20+ yr (IEC 61400-15-1 / MEASNET); below this a trend
+# statistic is unstable, so a producer degrades EXPLICITLY rather than emit a spurious tau on
+# a handful of years (see build_resource_trend_export_block).
+MIN_TREND_YEARS = 10
+
 
 @dataclass(frozen=True)
 class TrendResult:
@@ -315,3 +321,59 @@ def analyze_long_term_resource(
         "markdown": render_trend_markdown(trend, table, rec),
         "summary_df": trend_summary_dataframe(trend, table, rec),
     }
+
+
+def build_resource_trend_export_block(
+    config: Any,
+    series: pd.DataFrame,
+    *,
+    min_years: int = MIN_TREND_YEARS,
+) -> Dict[str, Any]:
+    """Compute the JSON-safe ``long_term_trend`` block for a frozen wind export.
+
+    The producer-side counterpart of the consumer decoder
+    ``analytics.executive_workbook.resource_trend_df_from_wind_export`` (issue
+    #656): a wind producer (e.g. :class:`wind_resource.wind_pipeline.WindPipeline`)
+    calls this on its ALREADY-retrieved multi-year hub series — no second CDS
+    fetch — and embeds the returned dict under ``long_term_trend`` in the export
+    JSON. The finance CLI then surfaces it as the workbook "ResourceTrend" sheet
+    without ever running live ERA5.
+
+    Degrades EXPLICITLY on a short record (CESSPIT fail-loud, no silent default):
+    a Mann-Kendall / Sen's-slope trend needs a bankable long-term reference
+    (IEC 61400-15-1 / MEASNET, 10-20+ yr). Gating on the ACTUAL number of distinct
+    calendar years in ``series`` (not a requested window) prevents a spurious tau
+    on a handful of years — the trend is simply not attempted, with a recorded
+    reason, rather than emitting a misleading statistic.
+
+    Args:
+        config: A config exposing ``hub_height_m``, ``turbine_model``,
+            ``num_turbines`` and site identity — i.e. an
+            :class:`wind_resource.era5_retrieval.ERA5RequestConfig` — as consumed
+            by :func:`analyze_long_term_resource`.
+        series: The hub-height wind series, indexed by timestamp, carrying the
+            ``ws_<hub>m`` column.
+        min_years: Minimum distinct calendar years for a trend test
+            (default :data:`MIN_TREND_YEARS`).
+
+    Returns:
+        ``{"analyzed": True, "summary_records": [...]}`` (the encoded live
+        ``summary_df``) on a sufficient record, else
+        ``{"analyzed": False, "reason": ...}``. Report/VALIDATE-only: it changes
+        no committed AEP or KPI.
+    """
+    n_years = int(pd.DatetimeIndex(series.index).year.nunique())
+    if n_years < min_years:
+        return {
+            "analyzed": False,
+            "reason": (
+                f"long-term trend not computed: the series spans {n_years} calendar "
+                f"year(s), shorter than the {min_years}-yr minimum for a Mann-Kendall "
+                "/ Sen's-slope trend test (IEC 61400-15-1 / MEASNET). Extend the "
+                "reference window to enable the trend section."
+            ),
+        }
+    # Lazy import keeps the encoder edge (wind_resource -> analytics) off module load.
+    from analytics.executive_workbook import serialize_resource_trend
+
+    return serialize_resource_trend(analyze_long_term_resource(config, series=series))

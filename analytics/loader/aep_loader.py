@@ -497,6 +497,8 @@ __all__ = [
     "IEC_STANDARDS",
     "PLACEHOLDER_SOURCE_IDS",
     "validate_source_manifest",
+    "register_approved_source",
+    "load_approved_sources_from_yaml",
     "assert_source_in_manifest",
     "is_placeholder_source",
     "has_certified_oem_curve",

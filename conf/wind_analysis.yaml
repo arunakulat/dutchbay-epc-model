@@ -31,3 +31,11 @@ output_dir: "outputs/wind_assessment"
 # P-level scenario for cashflow export (P50, P75, or P90)
 # P75 is typically the lender base case
 export_scenario: "P75"
+
+# Opt-in (#656): also compute the long-term Mann-Kendall / Sen's-slope resource
+# trend on the retrieved multi-year hub series and attach a JSON-safe
+# long_term_trend block to the export (surfaced as the lender workbook's
+# "ResourceTrend" sheet). DEFAULT OFF and report/VALIDATE-only — it changes no
+# committed AEP or KPI. A record shorter than the 10-yr minimum degrades
+# explicitly (analyzed: false + reason).
+analyze_trend: false

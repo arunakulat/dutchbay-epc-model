@@ -75,6 +75,77 @@ def test_run_gis_export_manifest_idempotent(tmp_path):
     summary = run_gis_export(cfg, source=_synthetic_source)  # re-run
     doc = json.loads(Path(summary["manifest_path"]).read_text())
     assert len(doc["datasets"]) == 2  # no duplication
+    # Re-run keeps exactly ONE representativeness verdict per grid — no accumulation.
+    for d in doc["datasets"]:
+        assert isinstance(d["spatial_representativeness"], dict)
+        assert d["spatial_representativeness"]["assessed"] is True
+
+
+# ── WIND-10 (#484): spatial representativeness wired into the export + manifest ──
+
+
+def _representative_source(spec: GridSpec):
+    """A gentle west→east gradient — within tolerance, so representative == True."""
+    west = spec.center_lon - spec.span_deg / 2.0
+    return [
+        CellResult(lat, lon, 8.0 + (lon - west) * 0.2, 0.30, 17.5)
+        for lat, lon in spec.cell_centers()
+    ]
+
+
+def _non_representative_source(spec: GridSpec):
+    """A steep west→east gradient — the site cell is NOT representative (spread fires)."""
+    west = spec.center_lon - spec.span_deg / 2.0
+    return [
+        CellResult(lat, lon, 5.0 + (lon - west) * 12.0, 0.33, 18.0)
+        for lat, lon in spec.cell_centers()
+    ]
+
+
+def test_representative_neighbourhood_flows_to_summary_and_manifest(tmp_path):
+    summary = run_gis_export(_cfg(tmp_path), source=_representative_source)
+
+    # Attached to the returned per-grid summary (native + interpolated inherit).
+    coarse_sr = summary["grids"]["coarse"]["spatial_representativeness"]
+    assert coarse_sr["assessed"] is True
+    assert coarse_sr["representative"] is True
+    assert coarse_sr["grid"] == "coarse"
+    # A fine grid carries its native source's verdict.
+    assert summary["grids"]["fine"]["spatial_representativeness"]["grid"] == "coarse"
+
+    # And to the DataLake manifest entry.
+    doc = json.loads(Path(summary["manifest_path"]).read_text())
+    coarse = next(d for d in doc["datasets"] if d["name"].endswith("coarse"))
+    assert coarse["spatial_representativeness"]["assessed"] is True
+    assert coarse["spatial_representativeness"]["representative"] is True
+
+
+def test_non_representative_neighbourhood_is_flagged_in_manifest(tmp_path):
+    summary = run_gis_export(_cfg(tmp_path), source=_non_representative_source)
+
+    coarse_sr = summary["grids"]["coarse"]["spatial_representativeness"]
+    assert coarse_sr["assessed"] is True
+    assert coarse_sr["spread_pct"] > coarse_sr["spread_tol_pct"]
+    assert coarse_sr["representative"] is False
+
+    doc = json.loads(Path(summary["manifest_path"]).read_text())
+    coarse = next(d for d in doc["datasets"] if d["name"].endswith("coarse"))
+    assert coarse["spatial_representativeness"]["representative"] is False
+
+
+def test_even_n_native_grid_records_explicit_unassessed(tmp_path):
+    """An even-n native grid has no centre cell — explicit assessed:False, not a silent skip."""
+    cfg = _cfg(tmp_path)
+    cfg["grids"] = [{"name": "coarse", "n": 2, "cell_deg": 0.25, "mode": "native"}]
+    summary = run_gis_export(cfg, source=_representative_source)
+
+    sr = summary["grids"]["coarse"]["spatial_representativeness"]
+    assert sr["assessed"] is False
+    assert "even n=2" in sr["reason"]
+
+    doc = json.loads(Path(summary["manifest_path"]).read_text())
+    coarse = next(d for d in doc["datasets"] if d["name"].endswith("coarse"))
+    assert coarse["spatial_representativeness"]["assessed"] is False
 
 
 # ── ARCH-01 / CESSPIT: gis.era5 turbine/site identity is config-required ─────────

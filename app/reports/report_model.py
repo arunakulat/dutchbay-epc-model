@@ -20,8 +20,10 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
+from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
@@ -97,6 +99,15 @@ def fmt_ratio_pct(value: Optional[float]) -> str:
 def fmt_pct(value: Optional[float]) -> str:
     """Display an ALREADY-percentage number, e.g. ``13.39 -> 13.39%`` (None -> em-dash)."""
     return _ABSENT if value is None else f"{value:.2f}%"
+
+
+def fmt_pp(value: Optional[float]) -> str:
+    """Display a decimal IRR DELTA as SIGNED percentage points, e.g. ``0.012 -> +1.20 pp``.
+
+    Used for the IRR-bridge leg contributions, where the sign carries meaning (a lift vs a drag);
+    ``None -> em-dash``.
+    """
+    return _ABSENT if value is None else f"{value * 100:+.2f} pp"
 
 
 class KpiRow(BaseModel):
@@ -280,6 +291,42 @@ class WaterfallBlock(BaseModel):
     total_cash_to_equity: float
 
 
+class IrrBridgeLeg(BaseModel):
+    """One labelled step of the project→equity IRR bridge (#621, IC disclosure)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    contribution: float
+    irr_after: Optional[float] = None
+    detail: Optional[str] = None
+
+
+class IrrBridgeBlock(BaseModel):
+    """Project→equity IRR bridge: the leverage uplift decomposed for the IC (#621, disclosure).
+
+    A disclosure-only reconciliation of the engine's PUBLISHED ``project_irr`` to its published
+    ``equity_irr`` (CCCDIR — one source of truth; the two endpoints are the headline KPIs, not
+    recomputed here). The named legs (leverage, cost of debt, tax shield) plus the explicit
+    ``residual`` sum exactly to ``total_uplift = equity_irr − project_irr`` — the residual carries
+    the IRR interaction term and the equity-waterfall effects (principal timing, covenant lockup,
+    DSRA, WHT, terminal value) the four legs do not model in isolation. Rendered only when the run
+    supplies a computed equity distribution; the section is otherwise omitted (additive,
+    default-off — no committed KPI is moved).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    currency: str
+    project_irr: Optional[float] = None
+    equity_irr: Optional[float] = None
+    total_uplift: Optional[float] = None
+    legs: List[IrrBridgeLeg]
+    residual: float
+    residual_label: str
+    reconciled: bool
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -310,6 +357,12 @@ class ReportContext(BaseModel):
     #: Global (Morris) sensitivity screening over the MC drivers (MC-1). None when not
     #: supplied or the (best-effort) screening failed/has no drivers — section omitted.
     global_sa: Optional[GlobalSABlock] = None
+    #: Global (PAWN) sensitivity block over the MC drivers (#645) — the distribution-based
+    #: (median-KS) complement to the variance-based Morris screening, robust on the
+    #: covenant-pinned / skewed KPIs. None when not supplied or the (best-effort) block
+    #: failed/has no drivers — that subsection is then omitted (additive; default absent =
+    #: byte-identical to the pre-#645 report).
+    global_sa_pawn: Optional[GlobalSABlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -323,6 +376,11 @@ class ReportContext(BaseModel):
     #: per-row figures (ties to the headline CFADS + DSCR section); None on the legacy KPI-only
     #: path, where the section is omitted.
     cashflow_waterfall: Optional[WaterfallBlock] = None
+    #: Project→equity IRR bridge (#621). Reconciles the published project IRR to the published
+    #: equity IRR via labelled legs (leverage / cost of debt / tax shield) + an explicit residual.
+    #: None unless the caller supplies the full run result AND it carries a computed equity
+    #: distribution — additive, default-off; the section is otherwise omitted.
+    irr_bridge: Optional[IrrBridgeBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -789,6 +847,47 @@ def _waterfall_block(
     )
 
 
+def _irr_bridge_block(
+    run_result: Optional[Mapping[str, Any]],
+) -> Optional[IrrBridgeBlock]:
+    """Project the project→equity IRR bridge into a report block (#621, IC disclosure).
+
+    Built from the engine's published surface via
+    ``analytics.irr_bridge.build_project_equity_irr_bridge_from_run`` (project/equity IRR are the
+    headline KPIs; the legs only explain the gap — CCCDIR one source of truth). ``None`` when the
+    caller supplies no full run result, or the run lacks a computed equity distribution / resolvable
+    project cost — the section is then omitted (additive, default-off).
+    """
+    if not run_result:
+        return None
+    bridge: Optional[ProjectEquityIrrBridge] = build_project_equity_irr_bridge_from_run(
+        run_result
+    )
+    if bridge is None:
+        return None
+    residual_label = str(
+        bridge.metadata.get("residual_label", "cashflow_timing_and_interaction")
+    )
+    return IrrBridgeBlock(
+        currency=bridge.currency,
+        project_irr=bridge.project_irr,
+        equity_irr=bridge.equity_irr,
+        total_uplift=bridge.total_uplift,
+        legs=[
+            IrrBridgeLeg(
+                name=leg.name,
+                contribution=leg.contribution,
+                irr_after=leg.irr_after,
+                detail=leg.detail,
+            )
+            for leg in bridge.components
+        ],
+        residual=bridge.residual,
+        residual_label=residual_label,
+        reconciled=bridge.reconciled,
+    )
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -800,6 +899,8 @@ def build_report_context(
     annual_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
+    global_sa_pawn: Optional[GlobalSABlock] = None,
+    run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -825,6 +926,14 @@ def build_report_context(
         global_sa: A pre-computed global (Morris) sensitivity block (MC-1). Computed
             upstream (it runs a multi-evaluation screening) and passed in so this builder
             stays pure; ``None`` when the best-effort screening was skipped or failed.
+        global_sa_pawn: A pre-computed global (PAWN, median-KS) sensitivity block (#645) —
+            the distribution-based complement to the Morris screening. Computed upstream
+            and passed in; ``None`` when the best-effort block was skipped or failed, in
+            which case only that subsection is omitted.
+        run_result: The full pipeline run result (``kpis`` / ``annual_rows`` /
+            ``debt_result`` / ``equity_distribution``), used solely to build the additive
+            project→equity IRR bridge (#621). Optional — ``None`` for legacy callers, in which
+            case the bridge section is omitted (default-off).
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
@@ -852,9 +961,11 @@ def build_report_context(
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
         global_sa=global_sa,
+        global_sa_pawn=global_sa_pawn,
         evidence=_build_evidence(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
+        irr_bridge=_irr_bridge_block(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )

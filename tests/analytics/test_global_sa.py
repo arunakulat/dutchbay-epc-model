@@ -12,8 +12,10 @@ never touched (no canonical-KPI assertions belong here).
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import math
+import sys
 
 import pytest
 
@@ -128,9 +130,108 @@ def test_build_problem_requires_both_bounds() -> None:
 def test_morris_smoke_lendercase_ranks_dominant_drivers() -> None:
     res = run_morris(LENDER, n_trajectories=4, metrics=("project_irr",), seed=1)
     assert res["n_runs"] == 4 * (res["problem"]["num_vars"] + 1)
+    assert res["optimal_trajectories"] is None
     ranking = res["metrics"]["project_irr"]["ranking"]
     # tariff and capex are the model's known dominant project-IRR drivers; one should top it.
     assert ranking[0] in {"tariff.lkr_per_kwh", "capex.usd_total"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Morris optimal-trajectories mode (#617) — opt-in subset selection.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _linear_dominant(overrides):
+    """A closed-form with one strongly-dominant linear driver — its Morris ranking is
+    stable under the Campolongo/Ruano optimal-trajectory subset (unlike near-tied drivers).
+    """
+    return {"y": 10.0 * overrides["x1"] + 0.1 * overrides["x2"] + 0.1 * overrides["x3"]}
+
+
+def test_morris_optimal_trajectories_reduces_runs_and_keeps_ranking() -> None:
+    """#617: an optimal-trajectories run costs optimal_trajectories*(D+1) evals (a subset of
+    the n_trajectories candidate pool) and still ranks the dominant driver on top."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    res = run_morris(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=20,
+        optimal_trajectories=10,
+        seed=1,
+    )
+    assert res["optimal_trajectories"] == 10
+    # Cost is the SUBSET size, not the candidate pool: 10*(3+1)=40, not 20*(3+1)=80.
+    assert res["n_runs"] == 10 * (res["problem"]["num_vars"] + 1)
+    assert res["metrics"]["y"]["ranking"][0] == "x1"
+
+
+def test_morris_optimal_trajectories_is_deterministic() -> None:
+    """MRM-01: subset selection is seeded, so a fixed seed gives an identical sample/result."""
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    kwargs = dict(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=20,
+        optimal_trajectories=8,
+        seed=7,
+    )
+    a = run_morris(**kwargs)
+    b = run_morris(**kwargs)
+    assert a["metrics"]["y"]["drivers"] == b["metrics"]["y"]["drivers"]
+    assert a["n_runs"] == b["n_runs"] == 8 * (prob.num_vars + 1)
+
+
+def test_morris_default_none_is_byte_identical_to_vanilla() -> None:
+    """The opt-in default (None) must leave the sample — and therefore every index —
+    byte-identical to the prior vanilla Morris call (KPI-neutral #617)."""
+    from SALib.sample import morris as morris_sample
+
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    salib_problem = prob.as_salib()
+    x_vanilla = morris_sample.sample(salib_problem, N=12, seed=3)
+    x_none = morris_sample.sample(
+        salib_problem, N=12, optimal_trajectories=None, seed=3
+    )
+    assert np.array_equal(x_vanilla, x_none)
+    res = run_morris(
+        problem=prob,
+        evaluate_fn=_linear_dominant,
+        metrics=("y",),
+        n_trajectories=12,
+        seed=3,
+    )
+    assert res["optimal_trajectories"] is None
+    assert res["n_runs"] == 12 * (prob.num_vars + 1)
+
+
+def test_morris_optimal_trajectories_rejects_out_of_range() -> None:
+    """CESSPIT fail-loud: optimal_trajectories must be 2 <= k < n_trajectories, no silent
+    clamping. Guards the boundaries SALib itself handles inconsistently (it accepts 0).
+    """
+    prob = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(0.0, 1.0)] * 3)
+    # < 2 (incl. SALib's silently-accepted 0), == n_trajectories, and > n_trajectories.
+    for bad in (0, 1, 16, 17, -4):
+        with pytest.raises(ValueError, match="optimal_trajectories"):
+            run_morris(
+                problem=prob,
+                evaluate_fn=_linear_dominant,
+                metrics=("y",),
+                n_trajectories=16,
+                optimal_trajectories=bad,
+                seed=1,
+            )
+    # bool is an int subclass; True == 1 must be rejected, not coerced.
+    with pytest.raises(ValueError, match="optimal_trajectories"):
+        run_morris(
+            problem=prob,
+            evaluate_fn=_linear_dominant,
+            metrics=("y",),
+            n_trajectories=16,
+            optimal_trajectories=True,
+            seed=1,
+        )
 
 
 def _ishigami_with_flat(overrides):
@@ -218,6 +319,120 @@ def test_pawn_flags_covenant_pinned_metric_as_flat() -> None:
     assert flat["flat_metric"] is True
     for d in flat["drivers"].values():
         assert d == {"median": 0.0, "mean": 0.0, "cv": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# #645 — PAWN (X, Y) given-data reuse: skip resampling, reuse a prior design
+# ---------------------------------------------------------------------------
+
+_PAWN_PROB = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+
+
+def _ishigami_design(n: int, seed: int) -> tuple:
+    """Draw a PAWN LHS design over the Ishigami problem and its evaluated output vector.
+
+    Returns ``(X, Y)`` where ``X`` is the exact LHS sample ``run_pawn`` would draw for the
+    same ``(n, seed)`` and ``Y`` is the Ishigami output — so a reuse run is provably fed the
+    identical design as the self-sampled run and the two must agree to the bit.
+    """
+    from SALib.sample import latin as latin_sample
+
+    X = latin_sample.sample(_PAWN_PROB.as_salib(), n, seed=seed)
+    Y = np.array([_ishigami(dict(zip(_PAWN_PROB.names, row)))["y"] for row in X])
+    return X, Y
+
+
+def test_pawn_given_data_reuse_matches_own_sample() -> None:
+    """The (X, Y) reuse path fed the SAME design as the self-sampled run yields identical
+    KS indices and ranking (#645) — reuse is a pure evaluation-cost saving, not a new
+    estimator. ``reused_given_data`` distinguishes the two paths in the result."""
+    own = run_pawn(
+        problem=_PAWN_PROB, evaluate_fn=_ishigami, metrics=("y",), n=512, seed=7
+    )
+    X, Y = _ishigami_design(512, seed=7)
+    reused = run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+
+    assert own["reused_given_data"] is False
+    assert reused["reused_given_data"] is True
+    assert reused["n_runs"] == own["n_runs"] == 512
+    own_d, reu_d = own["metrics"]["y"]["drivers"], reused["metrics"]["y"]["drivers"]
+    for name in _PAWN_PROB.names:
+        assert reu_d[name]["median"] == pytest.approx(own_d[name]["median"], abs=1e-12)
+        assert reu_d[name]["mean"] == pytest.approx(own_d[name]["mean"], abs=1e-12)
+    assert reused["metrics"]["y"]["ranking"] == own["metrics"]["y"]["ranking"]
+    # KS indices stay in-band and the influential drivers still top the ranking.
+    for name in _PAWN_PROB.names:
+        assert 0.0 <= reu_d[name]["median"] <= 1.0
+    assert reused["metrics"]["y"]["ranking"][0] in {"x1", "x2"}
+
+
+def test_pawn_reuse_skips_evaluator() -> None:
+    """Given (X, Y), ``run_pawn`` must NOT call the evaluator at all — the reuse is free."""
+
+    def _boom(_overrides):  # pragma: no cover - asserted never called
+        raise AssertionError("evaluator must not run on the given-data reuse path")
+
+    X, Y = _ishigami_design(128, seed=3)
+    res = run_pawn(
+        problem=_PAWN_PROB,
+        evaluate_fn=_boom,
+        metrics=("y",),
+        given_x=X,
+        given_y={"y": Y},
+    )
+    assert res["reused_given_data"] is True and res["n_runs"] == 128
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"given_x": None, "given_y": {"y": np.zeros(8)}}, "BOTH given_x and given_y"),
+        ({"given_x": np.zeros((8, 3)), "given_y": None}, "BOTH given_x and given_y"),
+        ({"given_x": np.zeros((8, 2)), "given_y": {"y": np.zeros(8)}}, "2-D"),
+        ({"given_x": np.zeros(8), "given_y": {"y": np.zeros(8)}}, "2-D"),
+        ({"given_x": np.zeros((8, 3)), "given_y": {"y": np.zeros(7)}}, "aligned"),
+        (
+            {"given_x": np.zeros((8, 3)), "given_y": {"z": np.zeros(8)}},
+            "missing metric",
+        ),
+    ],
+)
+def test_pawn_reuse_invalid_shapes_fail_loud(kwargs, match) -> None:
+    """CESSPIT: every malformed (X, Y) reuse raises a clear ValueError — no silent LHS
+    fallback that would mask a caller wiring a mismatched design (#645)."""
+    with pytest.raises(ValueError, match=match):
+        run_pawn(problem=_PAWN_PROB, metrics=("y",), **kwargs)
+
+
+@pytest.mark.parametrize("bad", [np.inf, -np.inf, np.nan])
+def test_pawn_reuse_nonfinite_given_x_raises(bad) -> None:
+    """Fable blocker (#645): a non-finite value in the reused given_x is a HARD error, not a
+    silent corruption. PAWN slices X with ``np.nanquantile``, so a NaN/inf-X row vanishes
+    from the conditional CDFs (but not the unconditional one) and poisons every reported KS
+    index — so _validate_given_data must raise, naming the offending column and count, exactly
+    as the function's docstring ('every mismatch raises ValueError') already promises.
+    """
+    X, Y = _ishigami_design(128, seed=5)
+    X = X.copy()
+    X[3, 1] = bad  # inject into the x2 column so the message names it
+    with pytest.raises(ValueError, match=r"non-finite.*x2 \(1\)"):
+        run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+
+
+def test_pawn_reuse_finite_given_x_unaffected() -> None:
+    """The finite (X, Y) reuse path is untouched by the #645 X-finiteness guard: a clean
+    reused design still yields KS indices bit-identical to the self-sampled run."""
+    own = run_pawn(
+        problem=_PAWN_PROB, evaluate_fn=_ishigami, metrics=("y",), n=256, seed=11
+    )
+    X, Y = _ishigami_design(256, seed=11)
+    assert np.isfinite(X).all()  # the guard is a no-op on a clean design
+    reused = run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+    own_d, reu_d = own["metrics"]["y"]["drivers"], reused["metrics"]["y"]["drivers"]
+    for name in _PAWN_PROB.names:
+        assert reu_d[name]["median"] == pytest.approx(own_d[name]["median"], abs=1e-12)
+        assert reu_d[name]["mean"] == pytest.approx(own_d[name]["mean"], abs=1e-12)
+    assert reused["metrics"]["y"]["ranking"] == own["metrics"]["y"]["ranking"]
 
 
 # ---------------------------------------------------------------------------
@@ -479,3 +694,77 @@ def test_masking_warning_pluralizes_trajectory(caplog) -> None:
     msgs = [r.getMessage() for r in caplog.records]
     assert any("trajectories" in msg for msg in msgs), msgs
     assert not any("trajectorys" in msg for msg in msgs), msgs
+
+
+# ---------------------------------------------------------------------------
+# #658 — CLI dispatch: `run_global_sensitivity.py --method pawn` (SOLE owner of
+# the --method pawn CLI wiring). The module-level importorskip("SALib") already
+# gates this whole file, so the PAWN path is exercised only when SALib is present.
+# ---------------------------------------------------------------------------
+
+
+def _load_global_sa_cli():
+    """Import scripts/run_global_sensitivity.py as a module (it lives in scripts/)."""
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    spec = importlib.util.spec_from_file_location(
+        "run_global_sensitivity", REPO / "scripts" / "run_global_sensitivity.py"
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
+def test_cli_method_pawn_dispatches_and_tags_rows(capsys) -> None:
+    """`--method pawn` runs run_pawn, prints a CSV whose method column is 'pawn'."""
+    cli = _load_global_sa_cli()
+    rc = cli.main(
+        [
+            "--config",
+            LENDER,
+            "--method",
+            "pawn",
+            "--metric",
+            "project_irr",
+            "--n",
+            "16",
+            "--s",
+            "3",
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr()
+    # The stdout table (to_string) carries a 'pawn' method column and PAWN's
+    # driver stat columns (median / mean / cv), NOT the Sobol/Morris columns.
+    assert "pawn" in out.out
+    assert "median" in out.out and "cv" in out.out
+    # Lender headline on stderr uses the PAWN wording (median-KS ranking).
+    assert "PAWN median-KS ranking" in out.err
+
+
+@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
+def test_cli_method_pawn_covenant_metric_is_flagged_flat(capsys) -> None:
+    """The covenant-pinned min_dscr KPI must be disclosed FLAT in the PAWN headline,
+    not presented as an influence ranking (CESSPIT fail-loud; #644 mask + #658 CLI)."""
+    cli = _load_global_sa_cli()
+    rc = cli.main(
+        ["--config", LENDER, "--method", "pawn", "--metric", "min_dscr", "--n", "16"]
+    )
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "[min_dscr] PAWN median-KS ranking" in err
+    assert "FLAT" in err
+
+
+def test_cli_method_choices_include_pawn_and_default_morris() -> None:
+    """--method still DEFAULTS to morris (opt-in), and now offers pawn (#658)."""
+    cli = _load_global_sa_cli()
+    args = cli._parse_args(["--config", LENDER])
+    assert args.method == "morris"  # default unchanged
+    args_pawn = cli._parse_args(["--config", LENDER, "--method", "pawn"])
+    assert args_pawn.method == "pawn"
+    # sobol still rejects a non-power-of-two n path unchanged; pawn is a distinct choice.
+    with pytest.raises(SystemExit):
+        cli._parse_args(["--config", LENDER, "--method", "bogus"])

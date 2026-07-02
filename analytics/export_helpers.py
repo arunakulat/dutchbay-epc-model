@@ -25,6 +25,13 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+#: DSCR board-view highlight threshold (single source of truth). The ``DSCR_View``
+#: sheet flags any DSCR below this value. It drives BOTH the pre-existing static
+#: :class:`~openpyxl.styles.PatternFill` baked in by ``_add_board_friendly_views``
+#: AND the opt-in live ``CellIsRule`` (#662), so the two highlights can never
+#: silently diverge.
+DSCR_HIGHLIGHT_THRESHOLD: float = 1.2
+
 
 def validate_for_export(
     summary_df: pd.DataFrame,
@@ -362,7 +369,25 @@ class ExcelExporter:
         scenario_metadata: Optional[Dict[str, Any]] = None,
         run_id: Optional[str] = None,
         validate_before_export: bool = True,
+        dscr_conditional_threshold: Optional[float] = None,
+        embed_chart_images: Optional[Sequence[Union[str, PathLike[Any]]]] = None,
     ) -> None:
+        """Write the board workbook (summary + timeseries + optional views).
+
+        The two trailing parameters are ADDITIVE opt-in board-deck enrichments
+        (#662); both default to ``None`` so the packaged/default export is
+        byte-identical to before:
+
+        - ``dscr_conditional_threshold`` — when a float is supplied AND a
+          ``DSCR_View`` sheet was produced, a live openpyxl ``CellIsRule``
+          (``lessThan`` the threshold) is applied to the DSCR column. Unlike the
+          static ``highlight_warnings`` fill baked in by ``_add_board_friendly_views``,
+          a conditional-formatting rule re-evaluates as the reader edits the cells.
+        - ``embed_chart_images`` — an iterable of PNG paths embedded (via
+          :meth:`add_chart_image`) into a dedicated ``Charts`` sheet, so the
+          board-deck DSCR/IRR/comparison visuals travel inside the single .xlsx
+          deliverable. Missing files are skipped non-fatally (CASPER).
+        """
         logger.info(
             "ExcelExporter: exporting summary + timeseries to %s", self.output_path
         )
@@ -380,10 +405,101 @@ class ExcelExporter:
 
         if add_board_views:
             self._add_board_friendly_views(summary_df, timeseries_df)
+            if dscr_conditional_threshold is not None:
+                self._apply_dscr_conditional_formatting(
+                    timeseries_df, dscr_conditional_threshold
+                )
+
+        if embed_chart_images:
+            self._embed_chart_images(embed_chart_images)
 
         self._reorder_sheets_for_board()
         self.autofit_all()
         self.save()
+
+    def _apply_dscr_conditional_formatting(
+        self,
+        timeseries_df: pd.DataFrame,
+        threshold: float,
+    ) -> None:
+        """Apply a live ``CellIsRule`` on the ``DSCR_View`` sheet's DSCR column.
+
+        The DSCR_View sheet (built by :meth:`_add_board_friendly_views`) carries a
+        ``dscr`` column whose position depends on which index label
+        (``Year``/``Period``) survived; this resolves the column letter from that
+        same projection so the rule always lands on the right cells, then spans
+        every data row. No-op (logged) if the DSCR_View sheet was not produced.
+        """
+        if self._writer is None:
+            return
+        if "DSCR_View" not in self._writer.book.sheetnames:
+            return
+        # Reconstruct the DSCR_View column projection to find the dscr column.
+        dscr_cols = [
+            c
+            for c in timeseries_df.columns
+            if c in {"scenario_name", "year", "period", "dscr"}
+        ]
+        if "dscr" not in dscr_cols:
+            return
+        try:
+            from openpyxl.utils import get_column_letter
+
+            col_idx = dscr_cols.index("dscr") + 1  # 1-based Excel column
+            col_letter = get_column_letter(col_idx)
+            n_rows = len(timeseries_df)
+            # Data rows start at row 2 (row 1 is the header).
+            column_range = f"{col_letter}2:{col_letter}{n_rows + 1}"
+        except Exception as exc:  # pragma: no cover - cosmetic
+            logger.warning(
+                "ExcelExporter: could not resolve DSCR_View range for "
+                "conditional formatting: %s",
+                exc,
+            )
+            return
+
+        self.add_conditional_formatting(
+            sheet_name="DSCR_View",
+            column_range=column_range,
+            rule_type="lessThan",
+            threshold=threshold,
+        )
+
+    def _embed_chart_images(
+        self,
+        image_paths: Sequence[Union[str, PathLike[Any]]],
+    ) -> None:
+        """Embed existing chart PNGs into a dedicated ``Charts`` sheet.
+
+        Only files that exist are embedded; each is anchored a fixed number of
+        rows below the previous one so multiple charts stack without overlap.
+        Failures are non-fatal (CASPER): a bad image logs a warning and the rest
+        of the workbook is unaffected.
+        """
+        writer = self._ensure_writer()
+        existing = [Path(p) for p in image_paths if Path(p).exists()]
+        if not existing:
+            return
+        sheet_name = "Charts"
+        try:
+            if sheet_name not in writer.book.sheetnames:
+                # A minimal frame gives the sheet a stable header row to anchor under.
+                pd.DataFrame({"Board-deck charts": []}).to_excel(
+                    writer, sheet_name=sheet_name, index=False
+                )
+        except Exception as exc:  # pragma: no cover - env / IO
+            logger.warning("ExcelExporter: could not create Charts sheet: %s", exc)
+            return
+
+        # Stack images vertically; ~20 rows per chart keeps 150-dpi PNGs clear.
+        rows_per_image = 20
+        for i, img_path in enumerate(existing):
+            anchor = f"A{2 + i * rows_per_image}"
+            self.add_chart_image(
+                sheet_name=sheet_name,
+                image_path=str(img_path),
+                cell=anchor,
+            )
 
     # ---------------------------------------------------------------------
     # Board-friendly views + sheet ordering
@@ -413,7 +529,7 @@ class ExcelExporter:
                     df=dscr_view,
                     highlight_warnings=True,
                     warning_column="dscr",
-                    warning_threshold=1.2,
+                    warning_threshold=DSCR_HIGHLIGHT_THRESHOLD,
                 )
             except Exception as exc:  # pragma: no cover - cosmetic
                 logger.warning("ExcelExporter: DSCR view export failed: %s", exc)
@@ -610,7 +726,7 @@ class ChartGenerator:
     Legacy / more generic chart generator used by other analytics layers.
     """
 
-    def __init__(self, output_dir: PathLike[Any]) -> None:
+    def __init__(self, output_dir: Union[PathLike[Any], str]) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -623,7 +739,7 @@ class ChartGenerator:
             logger.warning("ChartGenerator: matplotlib not available: %s", exc)
             return None
 
-    def _resolve_path(self, output_file: PathLike[Any]) -> Path:
+    def _resolve_path(self, output_file: Union[PathLike[Any], str]) -> Path:
         path = Path(output_file)
         if not path.is_absolute():
             path = self.output_dir / path
@@ -634,7 +750,7 @@ class ChartGenerator:
         self,
         kpi_data: Union[pd.DataFrame, Mapping[str, Iterable[float]]],
         kpi_name: str,
-        output_file: PathLike[Any],
+        output_file: Union[PathLike[Any], str],
     ) -> Path:
         plt = self._get_plt()
         path = self._resolve_path(output_file)
@@ -678,7 +794,7 @@ class ChartGenerator:
     def plot_npv_distribution(
         self,
         npv_values: Iterable[float],
-        output_file: PathLike[Any],
+        output_file: Union[PathLike[Any], str],
         bins: int = 20,
     ) -> Path:
         plt = self._get_plt()
@@ -700,7 +816,7 @@ class ChartGenerator:
     def plot_dscr_comparison(
         self,
         scenario_data: Mapping[str, Sequence[float]],
-        output_file: PathLike[Any],
+        output_file: Union[PathLike[Any], str],
         threshold: Optional[float] = None,
     ) -> Path:
         plt = self._get_plt()
@@ -730,7 +846,7 @@ class ChartGenerator:
     def plot_debt_waterfall(
         self,
         scenario_data: Mapping[str, Sequence[float]],
-        output_file: PathLike[Any],
+        output_file: Union[PathLike[Any], str],
     ) -> Path:
         plt = self._get_plt()
         path = self._resolve_path(output_file)
