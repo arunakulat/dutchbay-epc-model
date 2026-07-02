@@ -377,15 +377,73 @@ def _resolve(
     evaluate_fn: Optional[EvaluateFn],
 ) -> Tuple[GlobalSAProblem, EvaluateFn]:
     """Resolve the (problem, evaluator) pair — from explicit args, else from config_path."""
-    if problem is None:
-        if config_path is None:
-            raise ValueError("Provide either config_path or an explicit problem.")
-        problem = build_problem(config_path, params)
+    problem = _resolve_problem(config_path, params, problem)
     if evaluate_fn is None:
         if config_path is None:
             raise ValueError("Provide either config_path or an explicit evaluate_fn.")
         evaluate_fn = _engine_evaluate_fn(config_path)
     return problem, evaluate_fn
+
+
+def _resolve_problem(
+    config_path: Optional[str],
+    params: Optional[Sequence[Mapping[str, Any]]],
+    problem: Optional[GlobalSAProblem],
+) -> GlobalSAProblem:
+    """Resolve just the SA problem — from an explicit ``problem`` else from ``config_path``.
+
+    Split out from :func:`_resolve` for the given-data PAWN path (#645), which reuses a
+    caller-supplied (X, Y) and therefore needs the driver contract but NOT an evaluator.
+    """
+    if problem is None:
+        if config_path is None:
+            raise ValueError("Provide either config_path or an explicit problem.")
+        problem = build_problem(config_path, params)
+    return problem
+
+
+def _validate_given_data(
+    problem: GlobalSAProblem,
+    given_x: Optional[Any],
+    given_y: Optional[Mapping[str, Any]],
+    metrics: Sequence[str],
+) -> Tuple[Any, Dict[str, Any]]:
+    """Validate a reused (X, Y) design for the given-data PAWN path (#645, CESSPIT — fail loud).
+
+    Returns the ``(R, D)`` design matrix and a ``{metric: float-vector}`` column map matching
+    :func:`_evaluate_rows`'s shape, so the downstream masking/analysis is identical to the
+    self-sampled path. Every mismatch raises ``ValueError`` — never a silent LHS fallback.
+    """
+    if given_x is None or given_y is None:
+        raise ValueError(
+            "PAWN (X, Y) reuse needs BOTH given_x and given_y (no silent LHS fallback); "
+            f"got given_x={'set' if given_x is not None else 'None'}, "
+            f"given_y={'set' if given_y is not None else 'None'}."
+        )
+    X = np.asarray(given_x, dtype=float)
+    if X.ndim != 2 or X.shape[1] != problem.num_vars:
+        raise ValueError(
+            f"given_x must be a 2-D (n_runs, {problem.num_vars}) design over the problem's "
+            f"{problem.num_vars} drivers ({list(problem.names)}); got shape {X.shape}."
+        )
+    n_runs = X.shape[0]
+    if n_runs < 1:
+        raise ValueError("given_x must have at least one row.")
+    cols: Dict[str, Any] = {}
+    for m in metrics:
+        if m not in given_y:
+            raise ValueError(
+                f"given_y is missing metric '{m}' (has: {sorted(given_y)}); every requested "
+                "metric must carry an output vector for the reused design."
+            )
+        y = np.asarray(given_y[m], dtype=float).ravel()
+        if y.shape[0] != n_runs:
+            raise ValueError(
+                f"given_y['{m}'] has {y.shape[0]} outputs but given_x has {n_runs} rows; "
+                "each metric vector must be aligned row-for-row with the reused design."
+            )
+        cols[m] = y
+    return X, cols
 
 
 def _evaluate_rows(
@@ -646,6 +704,8 @@ def run_pawn(
     seed: Optional[int] = 42,
     problem: Optional[GlobalSAProblem] = None,
     evaluate_fn: Optional[EvaluateFn] = None,
+    given_x: Optional[Any] = None,
+    given_y: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """PAWN (moment-independent, KS-based) global SA — robust on skewed / covenant-pinned KPIs.
 
@@ -654,9 +714,20 @@ def run_pawn(
     ``s`` slices — a *distribution*-based index, not a *variance*-based one. Unlike Sobol it
     stays bounded in [0,1] and does not misbehave on bimodal / DSCR-floor-pinned outputs, which
     is exactly the DutchBay case, so it is the right complement to the variance-based tornado /
-    Sobol. It is a GIVEN-DATA method (``SALib.analyze.pawn``): here it is driven by its own LHS
-    sample (``n`` rows), but the same (X, Y) could be reused from any prior sweep. Reports the
-    **median** KS statistic per driver (with mean / CV of the KS across slices).
+    Sobol. It is a GIVEN-DATA method (``SALib.analyze.pawn``): by default it draws its own LHS
+    sample (``n`` rows), but ``given_x`` / ``given_y`` let it REUSE a prior sweep's design at
+    zero extra evaluation cost. Reports the **median** KS statistic per driver (with mean / CV
+    of the KS across slices).
+
+    (X, Y) reuse (#645): pass ``given_x`` (an ``(R, D)`` design matrix over the SAME ``problem``
+    drivers, columns in ``problem.names`` order) together with ``given_y`` (a ``{metric: vector}``
+    mapping, each vector length ``R``) to skip both LHS sampling AND the ``R`` model evaluations —
+    the given-data path of PAWN, so a Sobol / MC design already paid for can be re-decomposed by
+    KS for free. ``n`` is ignored in this mode (``n_runs = len(given_x)``); ``given_x`` and
+    ``given_y`` must be supplied together and shape-match the problem and each other, or a
+    ``ValueError`` is raised (CESSPIT — no silent LHS fallback). A ``given_y`` that omits a
+    requested ``metric`` is likewise rejected. Non-finite outputs in ``given_y`` take the same
+    row-wise mask as the self-sampled path.
 
     A structurally-flat metric (a covenant-pinned ``min_dscr`` carrying only FP jitter) yields
     SPURIOUS non-zero PAWN indices — verified empirically — so the same ``_is_flat_output`` /
@@ -675,16 +746,25 @@ def run_pawn(
     from SALib.analyze import pawn as pawn_analyze
     from SALib.sample import latin as latin_sample
 
-    prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
-    salib_problem = prob.as_salib()
-    X = latin_sample.sample(salib_problem, n, seed=seed)
-    cols = _evaluate_rows(evfn, prob, X, metrics)
+    reuse = given_x is not None or given_y is not None
+    if reuse:
+        prob = _resolve_problem(config_path, params, problem)
+        salib_problem = prob.as_salib()
+        X, cols = _validate_given_data(prob, given_x, given_y, metrics)
+        n_effective = len(X)
+    else:
+        prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
+        salib_problem = prob.as_salib()
+        X = latin_sample.sample(salib_problem, n, seed=seed)
+        cols = _evaluate_rows(evfn, prob, X, metrics)
+        n_effective = n
 
     out: Dict[str, Any] = {
         "method": "pawn",
-        "n": n,
+        "n": n_effective,
         "s": int(s),
         "n_runs": len(X),
+        "reused_given_data": reuse,
         "problem": salib_problem,
     }
     per_metric: Dict[str, Any] = {}

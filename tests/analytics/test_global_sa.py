@@ -221,6 +221,89 @@ def test_pawn_flags_covenant_pinned_metric_as_flat() -> None:
 
 
 # ---------------------------------------------------------------------------
+# #645 — PAWN (X, Y) given-data reuse: skip resampling, reuse a prior design
+# ---------------------------------------------------------------------------
+
+_PAWN_PROB = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+
+
+def _ishigami_design(n: int, seed: int) -> tuple:
+    """Draw a PAWN LHS design over the Ishigami problem and its evaluated output vector.
+
+    Returns ``(X, Y)`` where ``X`` is the exact LHS sample ``run_pawn`` would draw for the
+    same ``(n, seed)`` and ``Y`` is the Ishigami output — so a reuse run is provably fed the
+    identical design as the self-sampled run and the two must agree to the bit.
+    """
+    from SALib.sample import latin as latin_sample
+
+    X = latin_sample.sample(_PAWN_PROB.as_salib(), n, seed=seed)
+    Y = np.array([_ishigami(dict(zip(_PAWN_PROB.names, row)))["y"] for row in X])
+    return X, Y
+
+
+def test_pawn_given_data_reuse_matches_own_sample() -> None:
+    """The (X, Y) reuse path fed the SAME design as the self-sampled run yields identical
+    KS indices and ranking (#645) — reuse is a pure evaluation-cost saving, not a new
+    estimator. ``reused_given_data`` distinguishes the two paths in the result."""
+    own = run_pawn(
+        problem=_PAWN_PROB, evaluate_fn=_ishigami, metrics=("y",), n=512, seed=7
+    )
+    X, Y = _ishigami_design(512, seed=7)
+    reused = run_pawn(problem=_PAWN_PROB, metrics=("y",), given_x=X, given_y={"y": Y})
+
+    assert own["reused_given_data"] is False
+    assert reused["reused_given_data"] is True
+    assert reused["n_runs"] == own["n_runs"] == 512
+    own_d, reu_d = own["metrics"]["y"]["drivers"], reused["metrics"]["y"]["drivers"]
+    for name in _PAWN_PROB.names:
+        assert reu_d[name]["median"] == pytest.approx(own_d[name]["median"], abs=1e-12)
+        assert reu_d[name]["mean"] == pytest.approx(own_d[name]["mean"], abs=1e-12)
+    assert reused["metrics"]["y"]["ranking"] == own["metrics"]["y"]["ranking"]
+    # KS indices stay in-band and the influential drivers still top the ranking.
+    for name in _PAWN_PROB.names:
+        assert 0.0 <= reu_d[name]["median"] <= 1.0
+    assert reused["metrics"]["y"]["ranking"][0] in {"x1", "x2"}
+
+
+def test_pawn_reuse_skips_evaluator() -> None:
+    """Given (X, Y), ``run_pawn`` must NOT call the evaluator at all — the reuse is free."""
+
+    def _boom(_overrides):  # pragma: no cover - asserted never called
+        raise AssertionError("evaluator must not run on the given-data reuse path")
+
+    X, Y = _ishigami_design(128, seed=3)
+    res = run_pawn(
+        problem=_PAWN_PROB,
+        evaluate_fn=_boom,
+        metrics=("y",),
+        given_x=X,
+        given_y={"y": Y},
+    )
+    assert res["reused_given_data"] is True and res["n_runs"] == 128
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"given_x": None, "given_y": {"y": np.zeros(8)}}, "BOTH given_x and given_y"),
+        ({"given_x": np.zeros((8, 3)), "given_y": None}, "BOTH given_x and given_y"),
+        ({"given_x": np.zeros((8, 2)), "given_y": {"y": np.zeros(8)}}, "2-D"),
+        ({"given_x": np.zeros(8), "given_y": {"y": np.zeros(8)}}, "2-D"),
+        ({"given_x": np.zeros((8, 3)), "given_y": {"y": np.zeros(7)}}, "aligned"),
+        (
+            {"given_x": np.zeros((8, 3)), "given_y": {"z": np.zeros(8)}},
+            "missing metric",
+        ),
+    ],
+)
+def test_pawn_reuse_invalid_shapes_fail_loud(kwargs, match) -> None:
+    """CESSPIT: every malformed (X, Y) reuse raises a clear ValueError — no silent LHS
+    fallback that would mask a caller wiring a mismatched design (#645)."""
+    with pytest.raises(ValueError, match=match):
+        run_pawn(problem=_PAWN_PROB, metrics=("y",), **kwargs)
+
+
+# ---------------------------------------------------------------------------
 # #644 — shared finite-mask: a partial-NaN metric column must not poison indices
 # ---------------------------------------------------------------------------
 

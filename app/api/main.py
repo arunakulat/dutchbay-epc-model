@@ -49,7 +49,10 @@ from app.reports.renderer import (
 )
 from app.reports.report_model import ReportContext, build_report_context
 from app.services.pipeline_service import run_finance_case
-from app.services.report_global_sa import compute_report_global_sa
+from app.services.report_global_sa import (
+    compute_report_global_sa,
+    compute_report_global_sa_pawn,
+)
 from app.services.report_tornado import compute_report_tornado
 
 app = FastAPI(
@@ -250,9 +253,10 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
     # Pass the resolved scenario + the run's debt_result so the report can render the
     # quantitative lender sections (production P50/P90, sources-and-uses, DSCR profile,
     # readiness/E&S) — not just the KPI summary (RPT-1). The sensitivity tornado (local,
-    # RPT-1) and the Morris global-SA screening (MC-1) are computed here (each runs a
-    # multi-evaluation sweep) and passed in pre-built; both are best-effort (None on
-    # failure) so neither sinks the core report.
+    # RPT-1), the Morris global-SA screening (MC-1) and the PAWN median-KS block (#645,
+    # the distribution-based complement) are computed here (each runs a multi-evaluation
+    # sweep) and passed in pre-built; all are best-effort (None on failure) so none sinks
+    # the core report.
     return build_report_context(
         case_result,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -262,6 +266,7 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
         annual_rows=result.get("annual_rows"),
         tornado=compute_report_tornado(scenario),
         global_sa=compute_report_global_sa(scenario),
+        global_sa_pawn=compute_report_global_sa_pawn(scenario),
     )
 
 
