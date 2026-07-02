@@ -71,10 +71,51 @@ def _cvar(arr: np.ndarray, alpha: float) -> float:
     return float(tail.mean())
 
 
+# Relative tolerance for the covenant-breach comparison. A dual-DSCR sculpt pins
+# every trial's per-year minimum DSCR at the covenant floor *by construction*, so the
+# resulting per-trial ``dscr_min`` array clusters at the floor to within floating-point
+# representation noise (values like ``1.2999999999999996`` for a 1.30 floor, spread
+# ~1e-16). A strict ``arr < floor`` miscounts that sub-ULP noise as covenant breaches
+# and fabricates an 85-93% breach probability on a case whose TRUE breach probability is
+# 0.0 (#657, Fable blocker). ``1e-9`` relative is many orders of magnitude above the
+# ~1e-16 pin scatter yet far below any economically-meaningful DSCR margin (0.001 of a
+# 1.30 covenant is 0.0013), so a value counts as a breach only if it is below the floor
+# by more than representation noise. Mirrors ``numpy.isclose``'s default ``rtol`` scale.
+_PROB_BREACH_RTOL: float = 1e-9
+
+
 def _prob_breach(arr: np.ndarray, floor: float) -> float:
+    """Fraction of trials that breach ``floor``, robust to floating-point pin noise.
+
+    A trial counts as a breach only when it sits below ``floor`` by *more than*
+    representation noise: ``arr < floor`` **and not** ``np.isclose(arr, floor)`` at
+    ``_PROB_BREACH_RTOL``. Without the tolerance, a sculpted-amortization DSCR array
+    pinned at the covenant floor (all trials within ~1e-16 of the floor, some just
+    below it) would report a spurious 85-93% breach probability where the true value is
+    0.0 (#657). The tolerance is representation-noise-scale (1e-9 relative), far tighter
+    than any real DSCR margin, so genuine breaches below the floor are still counted.
+    """
     if arr.size == 0:
         return float("nan")
-    return float(np.mean(arr < float(floor)))
+    floor_f = float(floor)
+    below = arr < floor_f
+    at_floor = np.isclose(arr, floor_f, rtol=_PROB_BREACH_RTOL, atol=0.0)
+    return float(np.mean(below & ~at_floor))
+
+
+def _is_pinned_at_floor(arr: np.ndarray, floor: float) -> bool:
+    """Whether every trial's min-DSCR sits at the covenant floor (sculpt degeneracy).
+
+    A dual-DSCR sculpt sets each year's debt service so the binding DSCR equals the
+    covenant floor, which makes the per-trial *minimum* DSCR invariant at that floor to
+    within floating-point noise. When that holds, the min-DSCR breach probability is a
+    structural 0.0 and carries no distributional signal — the caller discloses that
+    rather than presenting an uninformative statistic as if it were a risk read (#657).
+    Uses the same ``_PROB_BREACH_RTOL`` representation-noise scale as the breach count.
+    """
+    if arr.size == 0:
+        return False
+    return bool(np.all(np.isclose(arr, float(floor), rtol=_PROB_BREACH_RTOL, atol=0.0)))
 
 
 def enrich_suite_with_tail_risk(
@@ -263,6 +304,19 @@ def _build_case_tail_snapshot(
         if "dscr" in m.lower():
             row["prob_breach"] = _prob_breach(arr, run_cfg.dscr_floor)
             row["dscr_floor"] = float(run_cfg.dscr_floor)
+            if _is_pinned_at_floor(arr, run_cfg.dscr_floor):
+                # Disclose-don't-mislead: a dual-DSCR sculpt makes the per-trial
+                # minimum DSCR invariant at the covenant floor by construction, so
+                # prob_breach here is 0.0 and carries no distributional information.
+                # The informative lender tail lives in LLCR/PLCR and the balloon,
+                # not in min-DSCR. Say so on the row (#657).
+                row["degeneracy"] = "dscr_min_pinned_at_floor"
+                row["degeneracy_note"] = (
+                    "Sculpted amortization pins per-trial min-DSCR at the covenant "
+                    "floor by construction; prob_breach is 0.0 and non-informative. "
+                    "Read the distributional lender tail from LLCR/PLCR and the "
+                    "balloon, not min-DSCR."
+                )
 
         rows.append(row)
 

@@ -205,6 +205,25 @@ def test_build_driver_mc_tail_snapshot_respects_metric_keys() -> None:
     assert [r["metric"] for r in snap["rows"]] == ["dscr_min"]
 
 
+@pytest.mark.parametrize("seed", [11, 42, 7])
+def test_lender_case_dscr_breach_is_zero_not_fabricated(seed: int) -> None:
+    # #657 Fable blocker (SERIOUS: false lender risk number). The dual-DSCR sculpt
+    # pins per-trial dscr_min at the covenant floor (1.30) by construction — every
+    # trial within ~1e-16 of the floor. Before the fix, the strict `arr < floor`
+    # comparison counted that representation noise as breaches and reported an 85-93%
+    # DSCR covenant-breach probability on the flagship lender case whose TRUE value is
+    # 0.0. A lender must never see a fabricated breach probability.
+    snap = build_driver_mc_tail_snapshot(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=seed
+    )
+    dscr_row = {r["metric"]: r for r in snap["rows"]}["dscr_min"]
+    assert dscr_row["prob_breach"] == pytest.approx(0.0)
+    # The sculpt degeneracy is disclosed, not silently swallowed: the informative
+    # lender tail lives in LLCR/PLCR and the balloon, not min-DSCR.
+    assert dscr_row["degeneracy"] == "dscr_min_pinned_at_floor"
+    assert "LLCR/PLCR" in dscr_row["degeneracy_note"]
+
+
 def test_tail_snapshot_require_trials_fail_loud_when_absent() -> None:
     # CESSPIT: a metric with no trial array yields an explicit no_trials note,
     # never a silently fabricated distributional statistic.

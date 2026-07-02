@@ -31,6 +31,21 @@ All notable changes to this project will be documented here.
   - Follow-ups filed for the two remaining wires of #657: `tail_risk_report` render into
     the capital-risk report output (needs the per-year DSCR/LLCR/PLCR `(n_scenarios,
     n_years)` matrix), and the `plot_npv_distribution` PNG from the same trial arrays.
+  - **DSCR covenant-breach probability now robust to sculpt floor-pin representation noise
+    (#657, Fable blocker — was a false lender risk number).** A dual-DSCR sculpt pins each
+    trial's per-trial minimum DSCR at the covenant floor *by construction*, so the
+    `dscr_min` trial array clusters at the floor to within ~1e-16 floating-point noise
+    (values like `1.2999999999999996` for a 1.30 floor). The strict `arr < floor`
+    comparison in `analytics.sensitivity.tail_risk._prob_breach` counted that sub-ULP
+    scatter as breaches and reported an 85-93% DSCR breach probability on the flagship
+    lender case whose true value is 0.0. `_prob_breach` now counts a breach only when a
+    trial sits below the floor by more than representation noise (`arr < floor` and not
+    `np.isclose(..., rtol=1e-9)`) — far tighter than any real DSCR margin, so genuine
+    breaches are still counted. When the trial array is fully pinned at the floor,
+    `build_driver_mc_tail_snapshot` now emits a disclosed `degeneracy` note on the DSCR row
+    (`dscr_min_pinned_at_floor`): sculpted amortization makes per-trial min-DSCR invariant,
+    so the informative lender tail lives in LLCR/PLCR and the balloon, not min-DSCR. Report
+    diagnostic only — committed-scenario KPIs remain byte-identical (multi-scenario oracle).
 - **Conditions-precedent (CP) checklist register — first slice of the feasibility-report generator (#616, config-first, soft-by-default, KPI-neutral).**
   New `analytics.conditions_precedent` adds the config-first data model for a DFI/lender
   conditions-precedent checklist: the discrete named line items that must be satisfied (or

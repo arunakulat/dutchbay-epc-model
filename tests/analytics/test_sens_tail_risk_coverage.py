@@ -114,6 +114,38 @@ def test_prob_breach_empty_array_is_nan() -> None:
     assert math.isnan(out)
 
 
+def test_prob_breach_ignores_floor_representation_noise() -> None:
+    # #657 Fable blocker: a sculpted-amortization DSCR array pins every trial at the
+    # covenant floor to within floating-point noise (values like 1.2999999999999996
+    # for a 1.30 floor). A strict `arr < floor` miscounts that sub-ULP scatter as
+    # breaches; the tolerance must report the TRUE breach probability of 0.0.
+    pinned = np.array(
+        [1.2999999999999996, 1.2999999999999998, 1.3, 1.3000000000000003] * 10
+    )
+    assert _prob_breach(pinned, 1.30) == pytest.approx(0.0)
+
+
+def test_prob_breach_still_counts_genuine_breaches_below_pin() -> None:
+    # The tolerance must not mask a real breach: an array pinned at the floor plus a
+    # single genuine breacher (1.10, well below representation noise) reports > 0.
+    pinned = np.array([1.2999999999999996, 1.3, 1.3000000000000003] * 10)
+    mixed = np.concatenate([pinned, [1.10]])
+    pb = _prob_breach(mixed, 1.30)
+    assert pb > 0.0
+    assert pb == pytest.approx(1.0 / mixed.size)
+
+
+def test_is_pinned_at_floor_detects_sculpt_degeneracy() -> None:
+    from analytics.sensitivity.tail_risk import _is_pinned_at_floor
+
+    pinned = np.array([1.2999999999999996, 1.3, 1.3000000000000003] * 5)
+    assert _is_pinned_at_floor(pinned, 1.30) is True
+    # A distribution with genuine spread is not pinned.
+    assert _is_pinned_at_floor(np.array([1.0, 1.2, 1.3, 1.5, 2.0]), 1.30) is False
+    # Empty array is not pinned.
+    assert _is_pinned_at_floor(np.array([], dtype=float), 1.30) is False
+
+
 # ---------------------------------------------------------------------------
 # _tornado_tail_stats
 # ---------------------------------------------------------------------------
