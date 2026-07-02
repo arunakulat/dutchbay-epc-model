@@ -1,0 +1,118 @@
+# DutchBay EPC Model — CONDITIONS-PRECEDENT (CP) checklist taxonomy (issue #616, slice 2 of 5)
+#
+# Purpose (CESSPIT / CCCDIR — single source):
+#   The vocabulary the conditions-precedent (CP) checklist validates against, in ONE place:
+#     1. cp_statuses  — the ordered satisfaction scale (BEST -> WORST) for a single CP item
+#     2. cp_workstreams — the canonical CP workstreams a lender's first-/subsequent-drawdown
+#                         CP schedule is organised under (mirrors the development-readiness
+#                         workstreams: land, permits, E&S, grid, PPA, EPC, financing)
+#     3. cp_items     — the canonical, named conditions precedent within each workstream that a
+#                       DFI/lender requires satisfied (or explicitly waived) before first
+#                       drawdown / financial close
+#
+#   A DFI/lender loan agreement lists specific *conditions precedent* to first drawdown — the
+#   discrete documentary / legal / technical deliverables that must be in place before funds
+#   flow (e.g. "PPA executed", "ESIA approval obtained", "EPC contract signed", "all permits
+#   issued"). This is finer-grained than the development-readiness R/A/G register (which rolls
+#   a whole workstream to one status): a CP checklist tracks each *named condition* to a
+#   satisfied / pending / waived state, so the lender knows exactly which line items still gate
+#   the first drawdown.
+#
+#   A scenario declares its actual CP status in its own `conditions_precedent.items` block
+#   (item -> {status, note, waived_reason?}); analytics.conditions_precedent validates that
+#   block against this taxonomy and the policy in config/defaults.yaml
+#   (defaults.conditions_precedent), and rolls each workstream and the overall schedule up to
+#   a satisfaction summary. This file carries NO per-project status — it is read by exactly one
+#   resolver (analytics.conditions_precedent.load_cp_taxonomy) and never moves KPIs.
+#
+#   Soft by default (warn-only) — a scenario with no CP checklist is reported on, not broken.
+#   Mirrors the development-readiness register (analytics.development_readiness, #C11) and the
+#   evidence register (analytics.evidence_register, #C5).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CP satisfaction scale — ordered BEST -> WORST. A scenario item's `status` must be one of
+# these. `waived` is a lender decision to proceed without the condition (with a documented
+# reason) and is treated as NOT outstanding (it does not gate drawdown); `pending` is an
+# outstanding CP that still gates first drawdown. The overall / per-workstream rollup reports
+# the count outstanding (pending) — a single outstanding CP blocks first drawdown.
+# ─────────────────────────────────────────────────────────────────────────────
+cp_statuses:
+  - satisfied   # condition met / deliverable in place / documentary evidence received
+  - waived      # lender has waived this CP (documented reason) — not outstanding
+  - pending     # outstanding — still gates first drawdown / financial close
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical CP workstreams — the buckets the CP schedule is organised under. These MUST be a
+# subset of / aligned with the development-readiness workstreams so a lender can read the CP
+# checklist and the readiness R/A/G side by side. Each cp_item below is tagged to one of these.
+# ─────────────────────────────────────────────────────────────────────────────
+cp_workstreams:
+  - land
+  - permits
+  - environmental_social
+  - grid_connection
+  - ppa
+  - epc
+  - financing
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical conditions precedent — the named line items a DFI/lender CP schedule requires
+# satisfied (or waived) before first drawdown. Each item declares its `workstream` (one of
+# cp_workstreams above). An item declared in a scenario whose name is NOT here is flagged
+# (unknown_item); when policy require_complete is set, every item here must have a declared
+# status. This list is the conservative superset — a scenario need only declare the subset
+# that applies (soft by default).
+# ─────────────────────────────────────────────────────────────────────────────
+cp_items:
+  # ── land ────────────────────────────────────────────────────────────────────
+  - name: site_land_secured
+    workstream: land
+    description: Site land lease / acquisition executed and registered for the full project area.
+  - name: right_of_way_secured
+    workstream: land
+    description: Rights of way / easements for the grid interconnection route secured.
+
+  # ── permits ──────────────────────────────────────────────────────────────────
+  - name: generation_licence_issued
+    workstream: permits
+    description: Generation / electricity-generation licence issued by the regulator.
+  - name: construction_permits_issued
+    workstream: permits
+    description: Construction and building permits issued for all works.
+
+  # ── environmental & social ───────────────────────────────────────────────────
+  - name: esia_approved
+    workstream: environmental_social
+    description: ESIA approved by the competent authority (IFC PS / Equator Principles aligned).
+  - name: esmp_adopted
+    workstream: environmental_social
+    description: Environmental & Social Management Plan adopted and lender-approved.
+
+  # ── grid connection ──────────────────────────────────────────────────────────
+  - name: grid_connection_agreement_signed
+    workstream: grid_connection
+    description: Grid connection / interconnection agreement executed with the transmission operator.
+
+  # ── PPA ──────────────────────────────────────────────────────────────────────
+  - name: ppa_executed
+    workstream: ppa
+    description: Power purchase agreement executed and effective (or conditions to effectiveness met).
+
+  # ── EPC ──────────────────────────────────────────────────────────────────────
+  - name: epc_contract_signed
+    workstream: epc
+    description: EPC (turnkey construction) contract awarded and signed with the contractor.
+  - name: epc_performance_security_posted
+    workstream: epc
+    description: EPC performance bond / security posted as required by the loan agreement.
+
+  # ── financing ────────────────────────────────────────────────────────────────
+  - name: equity_commitments_in_place
+    workstream: financing
+    description: Sponsor equity commitments (equity contribution agreement) executed and funded/escrowed.
+  - name: security_package_perfected
+    workstream: financing
+    description: Lender security package (share pledge, asset & receivables security) perfected.
+  - name: insurance_in_place
+    workstream: financing
+    description: Construction / operational insurance package placed to the lender's satisfaction.

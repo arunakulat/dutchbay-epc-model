@@ -63,3 +63,35 @@ wind_tolerance_pct: 0.5
 # P-level selector for the wind export ('P50' | 'P75' | 'P90').
 # Must match the scenario field of the export JSON.
 wind_export_scenario: P75
+
+# ---------------------------------------------------------------------------
+# W4 (#614): Solar→Finance integration (OFF by default).
+# Leaving solar_assessment_json null skips solar entirely and preserves
+# behaviour exactly. Frozen-export ONLY: there is no solar auto-orchestrate
+# analogue and compute_solar_aep is never called at finance time — the finance
+# path stays pvlib-free (the offline physics freeze happens once behind the
+# [solar] extra). Solar chains AFTER any wind patch, patching the per-tech
+# generation.technologies.<tech> block and re-blending project.capacity_factor,
+# with semantics matching app/services/pipeline_service.run_integrated_case.
+# See run_full_pipeline_v14.py docstring for the full design.
+# ---------------------------------------------------------------------------
+
+# Path to a frozen solar-export JSON (the serialized output of
+# solar_resource.cashflow_adapter.build_solar_cashflow_export). When set, the
+# finance run consumes this export via solar_resource.cashflow_adapter.
+solar_assessment_json: null
+
+# Solar adapter merge mode: 'overwrite' | 'fill_if_absent' | 'validate_only'
+# See solar_resource.cashflow_adapter module docstring for semantics.
+solar_adapter_mode: fill_if_absent
+
+# Acceptable symmetric relative drift (percent) between solar-derived and YAML
+# per-tech values in fill_if_absent and validate_only modes.
+solar_tolerance_pct: 0.5
+
+# P-level selector for the solar export ('P50' | 'P75' | 'P90').
+# Must match the scenario field of the export JSON (producer is deterministic P50).
+solar_export_scenario: P50
+
+# The generation.technologies key the solar export targets.
+solar_technology: solar

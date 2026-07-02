@@ -24,6 +24,7 @@ import yaml
 
 from analytics.aep_provenance import enforce_aep_provenance
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 
@@ -270,6 +271,12 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # no-op when none is declared; a lender-grade scenario opts in to hard enforcement.
     # Changes no computed number.
     validate_development_readiness(cfg, str(config_path))
+
+    # Validate the CONDITIONS-PRECEDENT checklist (#616): the named first-drawdown CP line
+    # items (PPA executed, ESIA approved, EPC signed, security perfected, ...) each to a
+    # satisfied/waived/pending status. SOFT by default and a no-op when none is declared; a
+    # lender-grade scenario opts in to hard enforcement. Changes no computed number.
+    validate_conditions_precedent(cfg, str(config_path))
 
     # Cross-assert the LKR/USD spot pinned under fx.rates / fx.start / fx.source so the
     # cashflow economics and the FX reporting block cannot read divergent rates.

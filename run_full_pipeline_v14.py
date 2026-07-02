@@ -8,6 +8,9 @@ financial analysis. Integrates:
 - Optional auto-orchestration: when ``wind_auto_orchestrate=true`` and the
   ``[wind]`` extra is installed, this CLI subprocesses the wind producer
   to mint a fresh frozen export before the finance run
+- Solar-resource frozen-export ingestion (consumes JSON produced by the
+  offline :func:`solar_resource.cashflow_adapter.build_solar_cashflow_export`
+  freeze; never imports ``pvlib`` and never calls ``compute_solar_aep``)
 - Financial modelling (cashflow, IRR, NPV)
 - Equity distribution waterfall and equity investor metrics
 - Monte Carlo uncertainty analysis
@@ -19,6 +22,26 @@ through :mod:`wind_resource.cashflow_adapter` in the configured
 ``adapter_mode`` (default ``fill_if_absent``) and the patched scenario
 is written to a temp file before being handed to ``run_v14_pipeline``.
 The pipeline signature is unchanged — wiring is purely additive.
+
+Solar parity is by FROZEN EXPORT ONLY (#614)
+--------------------------------------------
+The solar-resource path is likewise OFF by default — leaving
+``solar_assessment_json`` null skips solar entirely. When a frozen solar
+export is supplied it flows through
+:func:`solar_resource.cashflow_adapter.solar_export_to_scenario_patch`
+(the pvlib-free adapter), patching the per-technology
+``generation.technologies.<tech>`` block and re-blending
+``project.capacity_factor`` — the SAME semantics the web API uses at
+``app/services/pipeline_service.run_integrated_case``. It chains AFTER any
+wind patch (wind writes the project headline; solar re-blends it), matching
+``run_integrated_case``'s wind-then-solar order. Deliberately there is NO
+solar auto-orchestrate analogue and ``compute_solar_aep`` is NEVER invoked
+in the finance path: lender-grade runs consume an audited frozen export and
+the base install / every CI lane runs the finance case with no ``pvlib``
+dependency (the offline physics freeze happens once behind the ``[solar]``
+extra). This closes issue #614's "or document" alternative — the canonical
+CLI achieves hybrid solar parity via the frozen export, not by re-running
+the producer at finance time.
 
 Usage:
     Basic (uses default validation):
@@ -53,6 +76,13 @@ Usage:
             config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
             wind_auto_orchestrate=true \\
             wind_export_scenario=P75
+
+    Consume a frozen solar export into a hybrid (frozen-export parity, #614):
+        python run_full_pipeline_v14.py \\
+            config=scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml \\
+            solar_assessment_json=_out/solar_assessment/dutchbay_P50.json \\
+            solar_adapter_mode=fill_if_absent \\
+            solar_export_scenario=P50
 
 Output:
     JSON to stdout with:
@@ -103,6 +133,18 @@ from omegaconf import DictConfig
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
+
+# W4 (#614): the solar→finance adapter is the photovoltaic analogue of the wind
+# adapter — a pure function over plain dicts with no pvlib/PyWake dependency, so
+# importing it unconditionally is safe even when the [solar] extra is absent. The
+# canonical CLI consumes a *frozen* solar export via this adapter exactly as the API
+# layer does (app/services/pipeline_service.run_integrated_case); compute_solar_aep is
+# NEVER called at finance time (CASPER/frozen-export design).
+from solar_resource.cashflow_adapter import (
+    SolarAdapterDriftError,
+    SolarAdapterMode,
+    solar_export_to_scenario_patch,
+)
 
 # Sprint 19 (W.6): the wind→finance adapter is a leaf module with no
 # heavy dependencies, so importing it unconditionally is safe even when
@@ -249,6 +291,37 @@ def _load_wind_export(export_path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def _load_solar_export(export_path: str | Path) -> dict[str, Any]:
+    """Load a frozen solar-export JSON into the SolarCashflowExport contract shape.
+
+    The frozen export is the serialized output of
+    :func:`solar_resource.cashflow_adapter.build_solar_cashflow_export` (the offline
+    freeze of a :func:`solar_resource.pv_producer.compute_solar_aep` run behind the
+    ``[solar]`` extra). This CLI never calls ``compute_solar_aep`` — it only ingests
+    the audited frozen number, exactly as the API layer does.
+
+    Both a bare contract-shaped object and one wrapped under ``cashflow_export`` /
+    ``solar_export`` are accepted (symmetry with :func:`_load_wind_export`, which
+    tolerates the producer's ``cashflow_export`` wrapper). No validation is performed
+    here beyond "is a dict" — contract enforcement is the adapter's job (the Pydantic
+    ``SolarCashflowExport`` rejects any payload that fails the schema with a clear
+    ValidationError, incl. a CF > 1.0 mis-scaled-percent guard).
+    """
+    p = Path(export_path)
+    with p.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Solar export {export_path!r} did not parse to a dict "
+            f"(got {type(payload).__name__})"
+        )
+    for wrapper in ("cashflow_export", "solar_export"):
+        inner = payload.get(wrapper)
+        if isinstance(inner, dict):
+            return inner
+    return payload
+
+
 def _run_wind_producer(
     scenario_yaml_path: str | Path,
     export_scenario: str,
@@ -381,6 +454,84 @@ def _apply_wind_to_scenario(
     return Path(tmp.name)
 
 
+def _apply_solar_to_scenario(
+    scenario_path: str | Path,
+    solar_export_path: str | Path,
+    adapter_mode: str,
+    tolerance_pct: float,
+    scenario_name: str,
+    technology: str,
+) -> Path:
+    """Patch the scenario with a frozen solar export; return path to patched copy.
+
+    Photovoltaic analogue of :func:`_apply_wind_to_scenario`. Consumes a frozen solar
+    export via the pvlib-free ``solar_resource.cashflow_adapter.solar_export_to_scenario_patch``
+    — the SAME adapter and semantics the API seam uses
+    (``app/services/pipeline_service.run_integrated_case``): it patches the per-tech
+    ``generation.technologies.<technology>`` block and re-blends
+    ``project.capacity_factor``, whereas the wind adapter writes the wind-only
+    project headline. No ``pvlib`` import and no ``compute_solar_aep`` call.
+
+    Returns the path of a *new* temp file containing the patched scenario. The original
+    scenario file on disk is never touched.
+    """
+    scenario_dict = _load_yaml_scenario(scenario_path)
+    export_dict = _load_solar_export(solar_export_path)
+
+    patched = solar_export_to_scenario_patch(
+        export_dict,
+        scenario_dict,
+        scenario_name=scenario_name,
+        # adapter_mode is validated for membership inside the callee (it raises on an
+        # unknown mode); cast is a no-op at runtime, so the same string value flows
+        # through unchanged.
+        adapter_mode=cast(SolarAdapterMode, adapter_mode),
+        tolerance_pct=float(tolerance_pct),
+        technology=technology,
+    )
+
+    # Write to a temp file alongside the original scenario so any relative paths inside
+    # the YAML still resolve correctly. delete=False because we hand the path to
+    # run_v14_pipeline; cleanup is performed by the ``finally`` block in :func:`cli`.
+    # The original scenario YAML on disk is never mutated.
+    src_dir = Path(scenario_path).resolve().parent
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".patched.yaml",
+        dir=str(src_dir),
+        delete=False,
+    )
+    try:
+        yaml.safe_dump(patched, tmp, sort_keys=False)
+    finally:
+        tmp.close()
+    logger.info(
+        "Solar→scenario patch applied (mode=%s, tolerance=%.3f%%, scenario=%s, tech=%s)",
+        adapter_mode,
+        tolerance_pct,
+        scenario_name,
+        technology,
+    )
+    return Path(tmp.name)
+
+
+def _cleanup_patched_scenarios(paths: list[Path]) -> None:
+    """Best-effort remove temp patched-scenario files; never raises.
+
+    Shared by the pipeline ``finally`` (success/pipeline-error path) and the solar
+    ingestion error branches (which ``raise SystemExit`` before the pipeline ``try`` is
+    entered, so its ``finally`` would not run and any earlier wind temp file would leak).
+    """
+    for p in paths:
+        try:
+            p.unlink(missing_ok=True)
+        except OSError as cleanup_exc:  # pragma: no cover (best-effort)
+            logger.warning(
+                "Could not remove temp patched scenario %s: %s", p, cleanup_exc
+            )
+
+
 def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
     """Write annual cashflow rows as CSV (stdlib csv module - no pandas).
 
@@ -460,12 +611,37 @@ def cli(cfg: DictConfig) -> None:
                 - wind_export_scenario: P-level selector ('P50' | 'P75' |
                   'P90'); must match the scenario field of the export JSON
                   (default: 'P75').
+            Optional fields (W4 #614 — solar→finance ingestion; OFF by
+            default — leaving solar_assessment_json null skips solar entirely
+            and preserves behaviour exactly. Frozen-export only: there is NO
+            solar auto-orchestrate analogue and compute_solar_aep is never
+            called — the finance path stays pvlib-free, matching the
+            'lender-grade runs consume audited frozen exports' design and
+            app/services/pipeline_service.run_integrated_case):
+                - solar_assessment_json: Path to a frozen solar-export JSON
+                  (the serialized output of
+                  solar_resource.cashflow_adapter.build_solar_cashflow_export).
+                  When set, the finance run consumes this export via
+                  solar_resource.cashflow_adapter — it patches the per-tech
+                  generation.technologies.<tech> block and re-blends
+                  project.capacity_factor. Chains AFTER any wind patch.
+                - solar_adapter_mode: 'overwrite' | 'fill_if_absent' |
+                  'validate_only' (default: 'fill_if_absent').
+                - solar_tolerance_pct: Symmetric relative drift tolerance in
+                  percent for fill_if_absent and validate_only (default: 0.5).
+                - solar_export_scenario: P-level selector ('P50' | 'P75' |
+                  'P90'); must match the scenario field of the export JSON
+                  (default: 'P50' — the producer is deterministic P50 today).
+                - solar_technology: generation.technologies key the solar
+                  export targets (default: 'solar').
 
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
-        On wind-ingestion failure, prints a structured error JSON with
-        ``status='error'`` and ``phase='wind_resource_ingestion'`` (or
-        ``error_type='WindAdapterDriftError'`` for drift failures) and
+        On wind- or solar-ingestion failure, prints a structured error JSON
+        with ``status='error'`` and ``phase='wind_resource_ingestion'`` /
+        ``phase='solar_resource_ingestion'`` (or
+        ``error_type='WindAdapterDriftError'`` /
+        ``error_type='SolarAdapterDriftError'`` for drift failures) and
         exits 1 before the finance pipeline runs.
 
     Raises:
@@ -488,7 +664,12 @@ def cli(cfg: DictConfig) -> None:
                 "[wind_auto_orchestrate=false] "
                 "[adapter_mode=fill_if_absent] "
                 "[wind_tolerance_pct=0.5] "
-                "[wind_export_scenario=P75]"
+                "[wind_export_scenario=P75] "
+                "[solar_assessment_json=_out/solar_assessment/dutchbay_P50.json] "
+                "[solar_adapter_mode=fill_if_absent] "
+                "[solar_tolerance_pct=0.5] "
+                "[solar_export_scenario=P50] "
+                "[solar_technology=solar]"
             ),
         }
         print(json.dumps(error_result, indent=2))
@@ -508,8 +689,30 @@ def cli(cfg: DictConfig) -> None:
     wind_tolerance_pct = float(cfg.get("wind_tolerance_pct", 0.5))
     wind_export_scenario = str(cfg.get("wind_export_scenario", "P75"))
 
+    # ------------------------------------------------------------------
+    # W4 (#614): optional solar-resource ingestion (frozen export only).
+    #
+    # OFF by default — solar_assessment_json defaults to null, so when it
+    # is unset the solar block is skipped entirely and CLI behaviour is
+    # byte-identical (no committed scenario passes a solar export). There is
+    # deliberately NO solar auto-orchestrate analogue: lender-grade runs
+    # consume an audited frozen export, and the finance stack stays pvlib-free
+    # (compute_solar_aep is never called here). When set, the solar export
+    # flows through solar_resource.cashflow_adapter with the SAME semantics as
+    # app/services/pipeline_service.run_integrated_case, patching the per-tech
+    # generation block and re-blending the project headline. It chains AFTER
+    # the wind patch (wind writes the project headline; solar re-blends it),
+    # matching run_integrated_case's wind-then-solar ordering.
+    # ------------------------------------------------------------------
+    solar_assessment_json = cfg.get("solar_assessment_json", None)
+    solar_adapter_mode = str(cfg.get("solar_adapter_mode", "fill_if_absent"))
+    solar_tolerance_pct = float(cfg.get("solar_tolerance_pct", 0.5))
+    solar_export_scenario = str(cfg.get("solar_export_scenario", "P50"))
+    solar_technology = str(cfg.get("solar_technology", "solar"))
+
     effective_config: str = str(config)
-    patched_scenario_path: Path | None = None
+    # Temp patched-scenario files (wind then solar) to clean up in ``finally``.
+    patched_scenario_paths: list[Path] = []
     try:
         if wind_assessment_json or wind_auto_orchestrate:
             # Resolve the wind export path: either explicitly supplied or
@@ -537,6 +740,7 @@ def cli(cfg: DictConfig) -> None:
                 tolerance_pct=wind_tolerance_pct,
                 scenario_name=wind_export_scenario,
             )
+            patched_scenario_paths.append(patched_scenario_path)
             effective_config = str(patched_scenario_path)
     except WindAdapterDriftError as e:
         # Surface as structured error — lender CI should fail loudly.
@@ -568,6 +772,65 @@ def cli(cfg: DictConfig) -> None:
         }
         print(json.dumps(error_result, indent=2))
         logger.error("Wind→scenario ingestion failed: %s", e)
+        raise SystemExit(1) from e
+
+    # ------------------------------------------------------------------
+    # W4 (#614): optional solar-resource ingestion — chains on effective_config
+    # (which already carries any wind patch), mirroring run_integrated_case's
+    # wind-then-solar ordering. OFF unless solar_assessment_json is set.
+    # ------------------------------------------------------------------
+    try:
+        if solar_assessment_json:
+            solar_json_path = Path(str(solar_assessment_json))
+            if not solar_json_path.exists():
+                raise FileNotFoundError(
+                    f"solar_assessment_json={solar_json_path} does not exist"
+                )
+            patched_scenario_path = _apply_solar_to_scenario(
+                scenario_path=effective_config,
+                solar_export_path=solar_json_path,
+                adapter_mode=solar_adapter_mode,
+                tolerance_pct=solar_tolerance_pct,
+                scenario_name=solar_export_scenario,
+                technology=solar_technology,
+            )
+            patched_scenario_paths.append(patched_scenario_path)
+            effective_config = str(patched_scenario_path)
+    except SolarAdapterDriftError as e:
+        # Surface as structured error — lender CI should fail loudly. Mirrors the
+        # WindAdapterDriftError branch; note the solar detail field is ``solar_value``.
+        error_result = {
+            "status": "error",
+            "error": str(e),
+            "error_type": "SolarAdapterDriftError",
+            "field": e.field,
+            "solar_value": e.solar_value,
+            "scenario_value": e.scenario_value,
+            "drift_pct": e.drift_pct,
+            "tolerance_pct": e.tolerance_pct,
+            "adapter_mode": e.mode,
+        }
+        print(json.dumps(error_result, indent=2))
+        logger.error("Solar→scenario adapter raised drift error: %s", e)
+        # A wind temp file may have been minted before solar failed — the pipeline
+        # ``finally`` will not run because we exit here, so clean up now.
+        _cleanup_patched_scenarios(patched_scenario_paths)
+        raise SystemExit(1) from e
+    except (FileNotFoundError, RuntimeError, ValueError) as e:
+        # Catches: missing solar_assessment_json, malformed solar export JSON,
+        # scenario YAML parse error, a bad adapter_mode/scenario_name. Surface as
+        # structured JSON consistent with the wind ingestion path so CI can parse the
+        # failure uniformly.
+        error_result = {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "phase": "solar_resource_ingestion",
+            "config": str(config),
+        }
+        print(json.dumps(error_result, indent=2))
+        logger.error("Solar→scenario ingestion failed: %s", e)
+        _cleanup_patched_scenarios(patched_scenario_paths)
         raise SystemExit(1) from e
 
     validation_mode = cfg.get("validation_mode", "strict")
@@ -649,17 +912,10 @@ def cli(cfg: DictConfig) -> None:
         logger.exception("Pipeline execution failed")
         raise SystemExit(1) from e
     finally:
-        # Sprint 19 W.6: clean up the temp patched-scenario file. Done in
-        # a finally so it runs whether the pipeline succeeded or raised.
-        if patched_scenario_path is not None:
-            try:
-                patched_scenario_path.unlink(missing_ok=True)
-            except OSError as cleanup_exc:  # pragma: no cover (best-effort)
-                logger.warning(
-                    "Could not remove temp patched scenario %s: %s",
-                    patched_scenario_path,
-                    cleanup_exc,
-                )
+        # Sprint 19 W.6 (#614: extended to wind + solar): clean up every temp
+        # patched-scenario file (wind then solar). Done in a finally so it runs
+        # whether the pipeline succeeded or raised.
+        _cleanup_patched_scenarios(patched_scenario_paths)
 
 
 if __name__ == "__main__":
