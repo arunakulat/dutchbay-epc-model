@@ -72,3 +72,19 @@ block that belongs in v14 outputs (JSON / CSV / summary):
 
 When adding a new AEP source, add it to `APPROVED_SOURCES` first, then reference
 its `source_id` from the scenario config.
+
+## P50 haircut calibration note (#654)
+
+The flagship scenarios pin `resource.uncertainty.p50_haircut_pct: 2.0`. The
+bankable P50 (464.3 GWh) matches the Envision EN220 EYA P50 (464.5 GWh) to
+within ~0.04%, but that EYA is the OEM's own pre-construction estimate — the
+population Hammond & Simley (WES 2026) measured over-predicting by 6.6%/7.4%.
+The corroboration therefore bounds model-vs-EYA drift, not EYA-vs-operations
+bias. The 2.0% sits well below the WES-2026 measured bias and is a deliberate,
+separately-authorized calibration choice (documented rationale: uncertain
+SL-transferability of the WES-2026 sample), not a claim that the model beats
+the measured bias. Any move of the flagship 2.0% toward the WES-2026 range is
+KPI-moving and requires separate user authorization (explicitly declined for
+#587). The canonical caveat lives on
+`wind_resource.bankable_aep.RECOMMENDED_P50_HAIRCUT_PCT` (the no-EYA config
+default of 5.0%, applied only when a scenario declares no haircut).
