@@ -11,8 +11,11 @@ Method (equivalent to a Welford online accumulator over the same arrays): at eac
 checkpoint ``k`` the CI half-width is the Monte Carlo standard error of the mean scaled to
 a ``z``-level two-sided normal CI, ``err_k = z * sd_k / sqrt(k)`` (see the SAS DO-Loop
 convergence-monitoring note). ``final_rel_ci_halfwidth = err_N / |mean_N|`` is the headline:
-a reader can compare it to a target precision. NB tail statistics (P95/P99/ES) converge
-slower than the mean, so a tight mean-CI does NOT certify the tails.
+a reader can compare it to a target precision. NB tail statistics (P95/P99/ES, where
+ES = Expected Shortfall, a.k.a. CVaR) converge slower than the mean, so a tight mean-CI
+does NOT certify the tails: a 1% tail at n=1000 trials rests on only ~10 raw trials
+(see the small-sample caveats at the CVaR/ES surfaces, e.g.
+``analytics.core.risk_metrics.TailRiskAnalyzer.calculate_var_cvar``, #600).
 
 Keep import-light: numpy only.
 """

@@ -54,7 +54,7 @@ def site_curve() -> pd.DataFrame:
 @pytest.fixture
 def weibull_wind_8760() -> np.ndarray:
     """Deterministic 8760-hour Weibull wind timeseries (A=7.5, k=2.0)."""
-    rng = np.random.RandomState(42)
+    rng = np.random.default_rng(42)
     return rng.weibull(2.0, 8760) * 7.5
 
 
@@ -67,7 +67,7 @@ def constant_wind_8760() -> np.ndarray:
 @pytest.fixture
 def low_wind_8760() -> np.ndarray:
     """Deterministic 8760-hour low-wind timeseries (mean ~4 m/s)."""
-    rng = np.random.RandomState(43)
+    rng = np.random.default_rng(43)
     return rng.weibull(1.5, 8760) * 4.5
 
 
