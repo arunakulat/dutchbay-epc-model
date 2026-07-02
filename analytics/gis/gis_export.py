@@ -30,9 +30,38 @@ from wind_resource.era5_grid import (
     assemble_grids,
     downscale_bilinear,
     fetch_cell_results,
+    spatial_representativeness,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _assess_representativeness(
+    cells: List[CellResult], spec: GridSpec
+) -> Dict[str, Any]:
+    """Return the WIND-10 (#484) spatial-representativeness verdict for a native grid.
+
+    Wraps :func:`wind_resource.era5_grid.spatial_representativeness`, which needs an ODD
+    grid size for a well-defined centre cell. An even-``n`` native grid has no unambiguous
+    centre, so rather than silently skipping the diagnostic (CESSPIT — no silent skip) this
+    records an explicit ``assessed: False`` verdict with the reason. This is a read-only
+    disclosure: it never alters any raster, AEP or KPI.
+    """
+    if spec.n % 2 == 0:
+        return {
+            "assessed": False,
+            "n_cells": spec.n * spec.n,
+            "grid": spec.name,
+            "reason": (
+                f"native grid '{spec.name}' has even n={spec.n}; a well-defined centre "
+                "cell needs an odd n. Configure an odd grid size to assess whether the "
+                "site cell is representative of its neighbourhood."
+            ),
+        }
+    verdict = spatial_representativeness(cells, spec.n)
+    verdict["grid"] = spec.name
+    return verdict
+
 
 #: A provider mapping a grid spec to its per-cell ERA5 results.
 CellSource = Callable[[GridSpec], List[CellResult]]
@@ -103,7 +132,15 @@ def run_gis_export(
             fetch built from ``gis_cfg['era5']``; tests/demos inject a synthetic one.
 
     Returns:
-        Summary: per-grid bbox / resolution / written file paths + the manifest path.
+        Summary: per-grid bbox / resolution / written file paths, a read-only
+        ``spatial_representativeness`` verdict (WIND-10, #484 — whether the site cell
+        typifies its ERA5 neighbourhood; see
+        :func:`wind_resource.era5_grid.spatial_representativeness`), and the manifest path.
+        The same verdict is attached to each grid's DataLake manifest entry. It NEVER
+        alters any exported raster or KPI. A native grid with an even ``n`` (no
+        well-defined centre cell) yields an explicit ``assessed: False`` verdict with a
+        reason rather than a silent skip (CESSPIT); each interpolated grid carries its
+        native source grid's verdict.
     """
     crs = str(gis_cfg.get("crs", DEFAULT_CRS))
     out_dir = Path(gis_cfg["out_dir"])
@@ -115,11 +152,18 @@ def run_gis_export(
     if source is None:
         source = default_era5_source(gis_cfg["era5"])
 
-    # 1) Native grids — sample ERA5 at each cell centre.
+    # 1) Native grids — sample ERA5 at each cell centre. Retain the raw per-cell results
+    #    (not just the assembled rasters) so the spatial-representativeness diagnostic can
+    #    inspect the neighbourhood (WIND-10, #484).
     native_grids: Dict[str, Dict[str, np.ndarray]] = {}
+    native_representativeness: Dict[str, Dict[str, Any]] = {}
     for spec in specs:
         if spec.mode == "native":
-            native_grids[spec.name] = assemble_grids(source(spec), spec.n)
+            cells = source(spec)
+            native_grids[spec.name] = assemble_grids(cells, spec.n)
+            native_representativeness[spec.name] = _assess_representativeness(
+                cells, spec
+            )
 
     # 2) Write every grid (native directly; interpolated as a downscale of its source).
     entries: List[Dict[str, Any]] = []
@@ -134,6 +178,7 @@ def run_gis_export(
                 "cell_deg": spec.cell_deg,
                 "note": "one ERA5 point per cell (native ~0.25 deg reanalysis)",
             }
+            representativeness = native_representativeness[spec.name]
         else:
             src_name = str(grid_cfg_by_name[spec.name].get("source", "coarse"))
             if src_name not in native_grids:
@@ -147,6 +192,10 @@ def run_gis_export(
                 "cell_deg": spec.cell_deg,
                 "note": "interpolated from native ERA5 ~0.25 deg; NOT a measured sub-grid field",
             }
+            # A fine grid is a smooth downscale of one native source, so the honest
+            # neighbourhood verdict is the native source's — carried through, not recomputed
+            # on the interpolated field (which would understate the real ERA5 spread).
+            representativeness = native_representativeness.get(src_name, {})
 
         bbox = spec.bbox()
         paths = export_grid_rasters(
@@ -166,6 +215,7 @@ def run_gis_export(
                 paths=paths,
                 provenance=provenance,
                 crs=crs,
+                representativeness=representativeness or None,
             )
         )
         summary["grids"][spec.name] = {
@@ -173,6 +223,7 @@ def run_gis_export(
             "resolution_deg": spec.cell_deg,
             "mode": spec.mode,
             "files": paths,
+            "spatial_representativeness": representativeness,
         }
 
     manifest = append_manifest(manifest_path, entries)

@@ -267,6 +267,7 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
         tornado=compute_report_tornado(scenario),
         global_sa=compute_report_global_sa(scenario),
         global_sa_pawn=compute_report_global_sa_pawn(scenario),
+        run_result=result,
     )
 
 

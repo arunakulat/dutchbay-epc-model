@@ -8,8 +8,10 @@ from analytics.contracts_v14 import (
     CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
+    IrrBridgeComponent,
     MonteCarloResult,
     ParameterRangeConfig,
+    ProjectEquityIrrBridge,
     ScenarioResult,
     SensitivityRequest,
     SensitivitySuite,
@@ -139,6 +141,29 @@ def test_contracts_v14_sensitivity_and_mc_surface_is_importable() -> None:
     # Resolved Sprint 18D, D.X+6: contract_version is now a class-level
     # frozen attribute (init=False), not a no-args method.
     assert casper.contract_version == "casper_result_v1"
+
+
+def test_irr_bridge_contracts_are_importable_and_serializable() -> None:
+    """Pin the #621 project→equity IRR bridge contract surface (CCCDIR, frozen)."""
+    leg = IrrBridgeComponent(
+        name="leverage",
+        contribution=0.216,
+        irr_after=0.275,
+        detail="Smaller equity outlay.",
+    )
+    bridge = ProjectEquityIrrBridge(
+        project_irr=0.058,
+        equity_irr=0.030,
+        total_uplift=-0.028,
+        components=[leg],
+        residual=-0.244,
+        reconciled=True,
+    )
+    payload = asdict(bridge)
+    assert payload["components"][0]["name"] == "leverage"
+    assert payload["residual"] == -0.244
+    assert bridge.model_dump()["reconciled"] is True
+    assert bridge.currency == "USD"
 
 
 def test_covenant_breach_tolerance_helper() -> None:

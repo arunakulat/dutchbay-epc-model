@@ -121,10 +121,20 @@ def build_manifest_entry(
     paths: Mapping[str, str],
     provenance: Mapping[str, Any] | None = None,
     crs: str = DEFAULT_CRS,
+    representativeness: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Build a single ``DataLake_Manifest_All.json`` dataset entry for a grid."""
+    """Build a single ``DataLake_Manifest_All.json`` dataset entry for a grid.
+
+    Args:
+        representativeness: Optional read-only spatial-representativeness verdict for the
+            grid's neighbourhood (WIND-10, #484 — see
+            :func:`wind_resource.era5_grid.spatial_representativeness`). When ``None`` the
+            key is OMITTED entirely, so a manifest produced without a verdict is
+            byte-identical to the pre-#660 manifest. It is a diagnostic disclosure only and
+            never alters any exported raster or KPI.
+    """
     west, south, east, north = bbox
-    return {
+    entry: Dict[str, Any] = {
         "name": name,
         "gis": {
             "extent": {"west": west, "south": south, "east": east, "north": north},
@@ -135,6 +145,9 @@ def build_manifest_entry(
         "files": {v: paths[v] for v in variables if v in paths},
         "provenance": dict(provenance or {}),
     }
+    if representativeness is not None:
+        entry["spatial_representativeness"] = dict(representativeness)
+    return entry
 
 
 def append_manifest(manifest_path: str | Path, entries: list[Dict[str, Any]]) -> Path:
