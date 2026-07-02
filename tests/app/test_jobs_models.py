@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.jobs.models import (
     TERMINAL_STATES,
     JobProgress,
+    JobRecord,
     JobState,
     WindJobRequest,
     utc_now_iso,
@@ -56,6 +58,44 @@ def test_progress_pct_computed() -> None:
 
 def test_progress_zero_step() -> None:
     assert JobProgress(step=0, total_steps=4, message="queued").pct == 0.0
+
+
+def _job_record() -> JobRecord:
+    return JobRecord(
+        job_id="j1",
+        owner="u1",
+        state=JobState.QUEUED,
+        progress=JobProgress(step=0, total_steps=4, message="Queued"),
+        created_at="t0",
+        updated_at="t0",
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Frozen-contract semantics (#608): transitions construct anew via the stores
+# --------------------------------------------------------------------------- #
+def test_job_record_is_frozen() -> None:
+    record = _job_record()
+    with pytest.raises(ValidationError):
+        record.state = JobState.RUNNING
+    with pytest.raises(ValidationError):
+        record.updated_at = "t1"
+
+
+def test_job_record_model_copy_update_is_the_transition_path() -> None:
+    # The store update path (model_copy(update=...)) must stay frozen-compatible.
+    record = _job_record()
+    updated = record.model_copy(update={"state": JobState.RUNNING, "updated_at": "t1"})
+    assert updated.state is JobState.RUNNING and updated.updated_at == "t1"
+    assert record.state is JobState.QUEUED  # the original is untouched
+
+
+def test_job_record_json_round_trip_survives_frozen() -> None:
+    # The Redis store round-trips records through JSON (incl. the computed
+    # progress.pct field, tolerated by JobProgress's extra="ignore").
+    record = _job_record()
+    parsed = JobRecord.model_validate_json(record.model_dump_json())
+    assert parsed == record
 
 
 def test_terminal_states() -> None:

@@ -117,6 +117,19 @@ All notable changes to this project will be documented here.
   computed") instead of a definitive `False` no index backs (the CLI's truthy check degrades
   identically), and the masking disclosures pluralize their sample unit correctly
   ("trajectories", not "trajectorys").
+- **MC CLI artifact no longer carries two conflicting `n_trials` (#647, KPI-neutral).** On the
+  opt-in `monte_carlo.sampler: sobol` path (#589) a non-power-of-two trial request is rounded UP
+  to the next 2**m and ALL points are evaluated; the engine already stamped the evaluated count in
+  `metadata.n_trials` (plus the `sobol_n_requested`/`sobol_n_used` disclosure pair when they
+  diverge), but `cli_monte_carlo_hydra` kept echoing the REQUESTED count at the payload/artifact
+  top level — one `monte_carlo_summary.json` told two different trial-count stories. The CLI now
+  sources the top-level `n_trials` (and the completion log line) from `result.metadata`, so
+  top-level == metadata == trials actually run, with the original request still disclosed via
+  `metadata.sobol_n_requested`. The pre-run error payload keeps the requested count (no result
+  exists there — now commented as such). Default `lhs` path is untouched (requested == used);
+  no other code reads the artifact's top-level `n_trials` (verified). Pinned by a CLI-level
+  subprocess test (`tests/analytics/test_mc_sobol_sampler.py`) driving a 12→16 Sobol run and
+  asserting stdout payload + written artifact agree with metadata.
 - **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
   Five verified erosions of the fail-loud stance closed; all committed scenarios verified
   **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a
@@ -147,6 +160,68 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
+  `mc_risk` block's DSCR breach floor was resolved from the pipeline's
+  `debt_covenants.dscr_threshold` snapshot (= `Financing_Terms.target_dscr` only), while the
+  MC engine's fixed-debt breach test used the 4-path precedence
+  `constraints.min_dscr_covenant` → `Financing_Terms.target_dscr` → `Financing_Terms.min_dscr`
+  → `monte_carlo.min_dscr_covenant` (default 1.30) — two resolutions that could disagree on
+  the same scenario. The resolvers were extracted verbatim from `analytics.mc.engine` into the
+  dependency-light `analytics.mc.covenant` (MOVE → SHIM; the engine re-exports them unchanged
+  under their original private names), and `casper_payload` now resolves the floor with the
+  shared resolver over the raw `ScenarioResult.config`, falling back to the
+  `debt_covenants.dscr_threshold` snapshot and then the `CovenantSpec` default (1.30) only
+  when no raw config is attached (bare-string/synthetic scenarios). Verified against all
+  committed scenarios: every lendercase has both resolutions in agreement at 1.30
+  (kpi-oracle byte-identical; the floor is not part of the committed KPI surface); the only
+  runtime `mc_risk` movers are the two non-bankable mixed-covenant configs, which now adopt
+  the engine floor the way the covenant surface always intended
+  (`dutchbay_equitycase_2025Q4` 1.40 → 1.30; `edge_extreme_stress` 1.25 → 1.15), with the
+  floor used still surfaced explicitly in `mc_risk.covenant.dscr_floor`. The four
+- **Run manifest is now stamped inside the engine (#577, half 2 — engine-internal provenance,
+  KPI-neutral).** `run_v14_pipeline_enhanced` stamps `result["run_manifest"]` itself, immediately
+  after config resolution + schema validation, hashing the ALREADY-RESOLVED post-override config it
+  actually evaluates (no re-load) — so every caller (CLI, web API, `evaluation_v14` gateway,
+  MC/sensitivity per-trial entries, scripts) now receives a manifest whose `config_sha256` binds to
+  the exact inputs, for both path and inline-Mapping configs. Outer stampers defer to it:
+  `run_full_pipeline_v14` becomes stamp-if-absent (new `_stamp_manifest_if_absent` helper; the
+  `_load_manifest_config` re-load with its loud degraded-path WARNING from half 1 is retained as the
+  fallback), `api.pipeline_api.run_pipeline` returns the engine manifest instead of rebuilding one,
+  and `app.services.pipeline_service.run_finance_case`'s existing stamp-if-absent guard is kept as a
+  defensive fallback. `analytics.run_manifest.git_sha()` is now process-cached (`lru_cache` on the
+  `git rev-parse HEAD` probe) so per-trial manifest stamping no longer forks a git subprocess per MC
+  trial; the `DUTCHBAY_GIT_SHA`/`GIT_COMMIT` env override deliberately stays outside the cache and is
+  consulted on every call. `ScenarioAnalytics` batch stamps are unchanged (that surface builds
+  cashflow/debt/KPIs directly and never calls the engine). Additive metadata only: committed scenario
+  KPIs are kpi-oracle byte-identical.
+- **Batch-path economics now labelled non-authoritative in every emitted JSON (#611).** The batch
+  comparison CLI (`run_scenario_analytics_v14.py` → `analytics.scenario_analytics`) computes DSCR/IRR
+  on a deliberately lighter basis than the canonical pipeline (PIPE-1, #472: no build-up WACC, no
+  two-pass interest tax shield, no equity waterfall), but only a docstring said so. Both emitted JSON
+  payloads — the persisted `output_summary_json` (serialised `BatchResultSummary`, which gains a
+  `basis` field defaulting to the new `analytics.scenario_analytics.BATCH_ECONOMICS_BASIS`) and the
+  CLI stdout summary (now built by `run_scenario_analytics_v14._build_stdout_payload`) — carry a
+  machine-readable `basis: "comparison_snapshot"` marker so a consumer cannot mistake batch numbers
+  for `run_full_pipeline_v14.py` economics. Strictly ADDITIVE: no existing key is renamed, removed or
+  revalued (downstream consumers grep-verified: tests only); committed scenario KPIs are
+  kpi-oracle byte-identical. JSON-shape tests extended to pin the marker at both emission points.
+- **Frozen-contract pattern extended to the report/job models (#608, KPI-neutral).** All 13
+  report-section models in `app/reports/report_model.py` (`KpiRow`, `AssumptionRow`, `RiskRow`,
+  `ReadinessRow`, `Verdict`, `ReportContext` — previously `extra="forbid"` only — plus
+  `EvidenceRow`/`EvidenceBlock`, `MultiTechRow`/`MultiTechBlock`, `ThreeStatementBlock`,
+  `WaterfallRow`/`WaterfallBlock`, which had no `model_config`) and `JobRecord` in
+  `app/jobs/models.py` are now `ConfigDict(frozen=True)`, matching the 15 frozen pydantic contracts
+  in `analytics/core/{returns,risk_metrics}.py`, `analytics/pipeline_analytics_v14.py` and the two
+  cashflow adapters. Each model's existing `extra` policy is preserved (no silent forbid/ignore
+  flips), and `JobProgress`'s deliberate `extra="ignore"` (computed-`pct` JSON round-trip) is
+  untouched. Post-construction attribute assignment now raises `ValidationError`; derive variants
+  with `model_copy(update=...)` — the path both job stores already use, so `InMemoryJobStore`/
+  `RedisJobStore` update flows are unchanged. Report contexts are built once in
+  `build_report_context` and consumed read-only by the renderer/API, so no production mutation site
+  existed; the single test that mutated a fetched `JobRecord` in place
+  (`tests/app/test_jobs_store.py::test_get_returns_detached_copy`) now asserts frozen semantics and
+  covers deep-copy detachment via the nested mutable `progress` instead. Committed scenario KPIs are
+  kpi-oracle byte-identical; passes the CI `pydantic.mypy` strict gate (#594).
 - **Tiered MCP bankability guard on measurement-campaign duration (#597).** `wind_resource.mcp`
   previously enforced only a 24-sample statistical floor (`DEFAULT_MIN_CONCURRENT`, one day of hourly
   data) while its own comment conceded a bankable MCP needs months of concurrent data. `run_mcp()` now

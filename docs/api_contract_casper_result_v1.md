@@ -102,10 +102,15 @@ Semantics:
   IRR, NPV, LLCR, PLCR) the `P90`/`P95` columns report the value exceeded
   90%/95% of the time — i.e. the 10th/5th percentile — consistent with the
   AEP P90 convention. They are NOT the favourable 90th/95th percentiles.
-- **Covenant floor is config-first (CESSPIT)**: resolved from the scenario's
-  `debt_covenants.dscr_threshold`; falls back to the `CovenantSpec` default
-  (1.30) only when no structured covenant is attached. The floor actually used
-  is always surfaced in `covenant.dscr_floor`.
+- **Covenant floor is config-first (CESSPIT)**: resolved with the MC engine's
+  own resolver (`analytics.mc.covenant.resolve_min_dscr_covenant`, shared since
+  #639) over the raw config on `ScenarioResult.config` — precedence
+  `constraints.min_dscr_covenant` → `Financing_Terms.target_dscr` →
+  `Financing_Terms.min_dscr` → `monte_carlo.min_dscr_covenant`, default 1.30 —
+  so the `mc_risk` table and the engine's fixed-debt breach test use one floor.
+  Falls back to the scenario's `debt_covenants.dscr_threshold` snapshot, then
+  the `CovenantSpec` default (1.30), only when no raw config is attached. The
+  floor actually used is always surfaced in `covenant.dscr_floor`.
 - **JSON safety**: non-finite floats (the `NaN` placeholders in covenant rows)
   are mapped to `null`; the payload is valid under a strict encoder
   (`allow_nan=False`). Integer fields such as `n_trials` stay integers.
@@ -132,4 +137,5 @@ degradation paths above are the ONLY swallowed ones.
 - `docs/analytics_restructure_migration_plan.md` — migration history that
   references this contract.
 
-**Last updated**: 2026-07-02 (#638; records the #637 `mc_risk` auto-wiring)
+**Last updated**: 2026-07-02 (#639; `mc_risk` covenant floor unified on the
+engine resolver — `analytics.mc.covenant`)

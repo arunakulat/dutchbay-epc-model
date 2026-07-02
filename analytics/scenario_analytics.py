@@ -44,6 +44,15 @@ if not logger.handlers:
     logger.addHandler(_handler)
 logger.setLevel(logging.INFO)
 
+#: Machine-readable provenance marker for batch-path economics (#611). The batch
+#: comparison path (this module, behind ``run_scenario_analytics_v14.py``) computes
+#: DSCR/IRR on a deliberately lighter basis than the canonical pipeline (PIPE-1,
+#: #472): no build-up WACC, no two-pass interest tax shield, no equity-distribution
+#: waterfall. This marker is stamped into every emitted batch JSON payload so a
+#: consumer cannot mistake batch numbers for the authoritative
+#: ``run_full_pipeline_v14.py`` economics.
+BATCH_ECONOMICS_BASIS = "comparison_snapshot"
+
 
 # ---------------------------------------------------------------------------
 # Discount-rate default (single source of truth for the code-level fallback)
@@ -104,6 +113,13 @@ class BatchResultSummary:
     n_success: int
     n_failed: int
     batch_summary: Dict[str, Any]
+    #: Provenance of the batch economics (#611): always
+    #: :data:`BATCH_ECONOMICS_BASIS` (``"comparison_snapshot"``) — these numbers
+    #: are ranking/comparison snapshots, NOT the canonical lender-grade economics
+    #: (use ``run_full_pipeline_v14.py`` for those). Serialised into both the
+    #: persisted ``output_summary_json`` payload and the CLI stdout JSON. Additive
+    #: field: no existing key is renamed or removed.
+    basis: str = BATCH_ECONOMICS_BASIS
 
 
 # ---------------------------------------------------------------------------

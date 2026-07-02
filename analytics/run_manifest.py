@@ -46,12 +46,18 @@ def config_sha256(config: Mapping[str, Any]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def git_sha(default: str = "unknown") -> str:
-    """Current commit SHA: an env override first (CI/artifacts without .git), then
-    ``git rev-parse HEAD``, then ``default``. Never raises."""
-    env = os.environ.get("DUTCHBAY_GIT_SHA") or os.environ.get("GIT_COMMIT")
-    if env:
-        return env.strip()
+@lru_cache(maxsize=1)
+def _git_head_sha() -> Optional[str]:
+    """``git rev-parse HEAD`` at the repo root, forked AT MOST ONCE per process.
+
+    Cache semantics (#577): the engine stamps a run manifest on every pipeline
+    result, and Monte-Carlo / sensitivity enter the pipeline once per trial, so an
+    uncached probe would fork one git subprocess per trial. The HEAD SHA is treated
+    as process-constant: a commit made while a run is in flight is deliberately NOT
+    picked up (the run is stamped with the code identity it started under). A failed
+    probe (no git binary, no repository) is cached as ``None`` for the same reason.
+    Tests reset with ``_git_head_sha.cache_clear()``.
+    """
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -60,11 +66,27 @@ def git_sha(default: str = "unknown") -> str:
             timeout=5,
             cwd=_REPO_ROOT,
         )
-        if out.returncode == 0 and out.stdout.strip():
-            return out.stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        pass
-    return default
+        return None
+    if out.returncode == 0 and out.stdout.strip():
+        return out.stdout.strip()
+    return None
+
+
+def git_sha(default: str = "unknown") -> str:
+    """Current commit SHA: an env override first (CI/artifacts without .git), then
+    a process-cached ``git rev-parse HEAD``, then ``default``. Never raises.
+
+    The env override (``DUTCHBAY_GIT_SHA`` or ``GIT_COMMIT``) is consulted on EVERY
+    call — it is intentionally outside the cache so CI wrappers and tests can set or
+    change it at any point in the process lifetime. Only the git subprocess probe is
+    cached; see :func:`_git_head_sha` for the cache semantics.
+    """
+    env = os.environ.get("DUTCHBAY_GIT_SHA") or os.environ.get("GIT_COMMIT")
+    if env:
+        return env.strip()
+    sha = _git_head_sha()
+    return sha if sha is not None else default
 
 
 @dataclass(frozen=True)

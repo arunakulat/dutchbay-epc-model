@@ -115,10 +115,10 @@ def _debt_profile() -> TrancheDebtProfile:
     )
 
 
-def _debt_covenants() -> DebtCovenantSnapshot:
+def _debt_covenants(dscr_threshold: float = 1.20) -> DebtCovenantSnapshot:
     return DebtCovenantSnapshot(
         dscr_min=1.30,
-        dscr_threshold=1.20,
+        dscr_threshold=dscr_threshold,
         years_below_threshold=0,
         first_breach_year=None,
         last_breach_year=None,
@@ -477,8 +477,10 @@ def _monte_carlo_with_trials() -> MonteCarloResult:
     )
 
 
-def test_mc_risk_surfaced_from_trials_and_config_first_floor() -> None:
-    """The real MC risk table is surfaced, JSON-safe, with a config-first DSCR floor."""
+def test_mc_risk_surfaced_from_trials_and_snapshot_floor_fallback() -> None:
+    """The real MC risk table is surfaced, JSON-safe; without a raw config the DSCR
+    floor gracefully falls back to the ``debt_covenants.dscr_threshold`` snapshot (#639).
+    """
     scenario = _bare_scenario(debt_covenants=_debt_covenants())  # dscr_threshold=1.20
     payload = build_casper_payload(
         scenario=scenario, monte_carlo=_monte_carlo_with_trials()
@@ -490,7 +492,8 @@ def test_mc_risk_surfaced_from_trials_and_config_first_floor() -> None:
     metrics = {row["metric"] for row in mc_risk["lender_risk_table"]}
     assert "DSCR (min)" in metrics
     assert any(m.startswith("Prob(DSCR <") for m in metrics)
-    # Config-first covenant floor came from debt_covenants.dscr_threshold (1.20), not 1.30.
+    # No ScenarioResult.config attached (empty default), so the floor fell back to
+    # debt_covenants.dscr_threshold (1.20), not the CovenantSpec default (1.30).
     cov = mc_risk["covenant"]
     assert cov["dscr_floor"] == pytest.approx(1.20)
     assert 0.0 <= cov["prob_breach"] <= 1.0
@@ -524,5 +527,67 @@ def test_mc_risk_floor_falls_back_to_default_without_covenants() -> None:
     payload = build_casper_payload(
         scenario=_bare_scenario(),  # no debt_covenants
         monte_carlo=_monte_carlo_with_trials(),
+    )
+    assert payload["mc_risk"]["covenant"]["dscr_floor"] == pytest.approx(1.30)
+
+
+def test_mc_risk_floor_prefers_engine_resolver_over_covenant_snapshot() -> None:
+    """With a raw config attached, the floor is the ENGINE resolution (#639).
+
+    The 4-path precedence (``constraints.min_dscr_covenant`` first) wins over the
+    pipeline's ``debt_covenants.dscr_threshold`` snapshot (= ``Financing_Terms.
+    target_dscr``). This mirrors the committed equitycase mixed-covenant shape
+    (engine 1.30 vs snapshot 1.40); the breach probability is measured against
+    the engine floor, so the CASPER table and the MC engine cannot disagree.
+    """
+    config: dict[str, Any] = {
+        "constraints": {"min_dscr_covenant": 1.30},
+        "Financing_Terms": {"target_dscr": 1.40, "min_dscr": 1.20},
+        "monte_carlo": {"min_dscr_covenant": 1.20},
+    }
+    scenario = _bare_scenario(
+        config=config, debt_covenants=_debt_covenants(dscr_threshold=1.40)
+    )
+    payload = build_casper_payload(
+        scenario=scenario, monte_carlo=_monte_carlo_with_trials()
+    )
+    cov = payload["mc_risk"]["covenant"]
+    assert cov["dscr_floor"] == pytest.approx(1.30)
+    # 5 of the 10 dscr_min trials sit strictly below 1.30 (vs 8 below the
+    # snapshot's 1.40): the breach probability follows the engine floor.
+    assert cov["prob_breach"] == pytest.approx(0.5)
+
+
+def test_mc_risk_floor_engine_precedence_walks_config_paths() -> None:
+    """The shared resolver walks the engine's fallback paths within the config.
+
+    Without ``constraints.min_dscr_covenant`` it lands on ``Financing_Terms.
+    target_dscr``; a config carrying NO covenant path at all resolves to the
+    engine default (1.30) — in both cases the attached config wins over the
+    covenant snapshot (the snapshot is only a no-config fallback).
+    """
+    with_target = _bare_scenario(
+        config={"Financing_Terms": {"target_dscr": 1.25}},
+        debt_covenants=_debt_covenants(),  # snapshot 1.20 must NOT win
+    )
+    payload = build_casper_payload(
+        scenario=with_target, monte_carlo=_monte_carlo_with_trials()
+    )
+    assert payload["mc_risk"]["covenant"]["dscr_floor"] == pytest.approx(1.25)
+
+    no_covenant_paths = _bare_scenario(
+        config={"project": {"name": "floorless"}},
+        debt_covenants=_debt_covenants(),  # snapshot 1.20 must NOT win
+    )
+    payload = build_casper_payload(
+        scenario=no_covenant_paths, monte_carlo=_monte_carlo_with_trials()
+    )
+    assert payload["mc_risk"]["covenant"]["dscr_floor"] == pytest.approx(1.30)
+
+
+def test_mc_risk_floor_bare_string_scenario_uses_covenant_default() -> None:
+    """A bare-string scenario has no config and no snapshot: CovenantSpec default."""
+    payload = build_casper_payload(
+        scenario="just_a_name", monte_carlo=_monte_carlo_with_trials()
     )
     assert payload["mc_risk"]["covenant"]["dscr_floor"] == pytest.approx(1.30)
