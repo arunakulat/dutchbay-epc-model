@@ -58,7 +58,11 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from .bess_revenue import mdsc_soh_for_year, resolve_bess_specs
+from .bess_revenue import (
+    _DEFAULT_ROUND_TRIP_EFFICIENCY,
+    mdsc_soh_for_year,
+    resolve_bess_specs,
+)
 from .cashflow_v14_utils import pct_to_decimal
 from .irr import npv
 from .tech_types import is_generation_type
@@ -73,10 +77,9 @@ _DEFAULT_DOD_ENERGY_TARIFF = 0.40
 #: :data:`finance.bess_revenue._DEFAULT_CYCLES_PER_YEAR`; overridable via
 #: ``revenue.cycles_per_year``.
 _DEFAULT_CYCLES_PER_YEAR = 365.0
-#: Default AC-AC round-trip efficiency (mirrors
-#: :data:`finance.bess_revenue._DEFAULT_ROUND_TRIP_EFFICIENCY`); overridable via
-#: ``revenue.round_trip_efficiency``.
-_DEFAULT_ROUND_TRIP_EFFICIENCY = 0.90
+# NB: _DEFAULT_ROUND_TRIP_EFFICIENCY is imported from finance.bess_revenue (the single source of
+# truth, #588) rather than redefined here — the RTE default can no longer drift between the two
+# modules. (_DEFAULT_CYCLES_PER_YEAR above is still a local mirror; consolidating it is a follow-up.)
 
 
 def _nested_get(config: Mapping[str, Any], *path: str) -> Any:
@@ -327,12 +330,15 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
             field="cycles_per_year",
             default=float(spec.get("cycles_per_year") or _DEFAULT_CYCLES_PER_YEAR),
         )
+        # Presence check, not truthiness: a legal explicit RTE of 0.0 must not be silently
+        # replaced by the default (Fable #588). None (absent) -> canonical default.
+        _spec_rte = spec.get("round_trip_efficiency")
         rte = _ratio(
             revenue.get("round_trip_efficiency"),
             tech=name,
             field="round_trip_efficiency",
             default=float(
-                spec.get("round_trip_efficiency") or _DEFAULT_ROUND_TRIP_EFFICIENCY
+                _spec_rte if _spec_rte is not None else _DEFAULT_ROUND_TRIP_EFFICIENCY
             ),
         )
         default_dod = (

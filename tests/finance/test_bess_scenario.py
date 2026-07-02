@@ -76,8 +76,8 @@ def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     rows = out["annual_rows"]
     assert len(rows) == 10  # 10-year night-peak contract term
     full_export = (
-        40 * 1000 * 365 * 0.90 * 1.0 * 45.80
-    )  # energy_mwh×1000×cycles×RTE×avail×tariff (SoH 1.0, year 1)
+        40 * 1000 * 365 * 0.85 * 1.0 * 45.80
+    )  # energy_mwh×1000×cycles×RTE(0.85, #588)×avail×tariff (SoH 1.0, year 1)
     assert rows[0]["bess_revenue_lkr"] == pytest.approx(
         full_export
     )  # year 1 undiminished

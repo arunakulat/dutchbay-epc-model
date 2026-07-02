@@ -24,7 +24,7 @@ The sensible default is an **LFP system of 2–8 hours duration**. (Source: Bloo
 
 | Parameter | Default | Notes / source |
 |---|---|---|
-| Round-trip efficiency (RTE) | **90%** (model); **85–86% conservative anchor** | Ember/Lazard cite up to 90–92% for new AC-coupled systems; **NREL is more conservative — 86% (Mongird et al. 2020) and 85% in the 2024 ATB (Cole & Karmakar 2023)**. Use 85–86% for bankable/lifetime modelling, 90% only for fresh, optimistic AC RTE. |
+| Round-trip efficiency (RTE) | **85%** (model default, NREL ATB 2024, #588); **90% optimistic fresh-AC anchor** | Ember/Lazard cite up to 90–92% for new AC-coupled systems; **NREL is more conservative — 86% (Mongird et al. 2020) and 85% in the 2024 ATB (Cole & Karmakar 2023)**. The model default is now 85% for bankable/lifetime modelling; use 90% only for fresh, optimistic AC RTE. |
 | Depth of discharge (DoD) | **90%** | Standard for LFP cycling |
 | Annual degradation | **~2%/yr** | → ~65% usable capacity after 20 years (without augmentation). Consistent with NREL stationary-degradation work (LFP retains >80% capacity after ~3,000 full cycles at 100% DoD, 25 °C). |
 | Design life | **20 yr / 6,000–12,000+ cycles** | NREL/industry: LFP ~6,000–10,000+ cycles; calendar life is the binding constraint for daily-cycling grid duty over 15–20 yr. |

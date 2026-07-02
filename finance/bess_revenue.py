@@ -50,7 +50,7 @@ for night-peak energy exported (the CEB Solar+BESS night-peak scheme, 45.80 LKR/
                  × availability_factor × tariff_lkr_per_kwh
 
 flat over ``contract_years`` (``cycles_per_year`` defaults to 365 — one cycle/day;
-``round_trip_efficiency`` to 0.90). BESS-6 (#486): the charging energy carries NO cost here
+``round_trip_efficiency`` to 0.85, NREL ATB 2024, #588). BESS-6 (#486): the charging energy carries NO cost here
 because the scheme charges the BESS from a SEPARATE co-located solar PV plant the EPC owns;
 ``round_trip_efficiency`` already books the dispatch loss, so a charging-cost line would
 double-count. Out of scope: the Kolonnawa 100 MW single-site
@@ -80,8 +80,12 @@ _MONTHS_PER_YEAR = 12.0
 _KWH_PER_MWH = 1000.0
 #: Default cycles/year for an energy-tariff BESS (one charge/discharge per day).
 _DEFAULT_CYCLES_PER_YEAR = 365.0
-#: Default AC-AC round-trip efficiency (Ember 2025, upper-end LFP utility).
-_DEFAULT_ROUND_TRIP_EFFICIENCY = 0.90
+#: Default AC-AC round-trip efficiency. Re-baselined 0.90 -> 0.85 (#588) to NREL ATB 2024's
+#: representative utility-scale Li-ion figure (Cole & Karmakar, "Cost Projections for Utility-Scale
+#: Battery Storage", NREL/ATB 2023-24) — a conservative mid-market value, versus the prior
+#: Ember-2025 upper-end 0.90. This is the CANONICAL constant; ``finance.bess_lcos`` imports it
+#: (single source of truth). Overridable per scenario via ``revenue.round_trip_efficiency``.
+_DEFAULT_ROUND_TRIP_EFFICIENCY = 0.85
 #: Default lower bound on the year-indexed state-of-health (MDSC) curve. LFP degrades
 #: near-linearly to its ~70% warranty / end-of-life threshold, below which fade turns
 #: non-linear and is unmodelled — so soh(t) floors here rather than extrapolating
