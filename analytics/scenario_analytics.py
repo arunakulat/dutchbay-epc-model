@@ -32,6 +32,7 @@ import pandas as pd
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.cost.benchmark import lcos_benchmark
+from analytics.export_helpers import DSCR_HIGHLIGHT_THRESHOLD
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
@@ -480,12 +481,27 @@ class ScenarioAnalytics:
             for r in failures:
                 logger.info("    - %s: %s", r.name, r.fail_reason)
 
-        # Exports
-        if export_excel and self.output_path is not None:
-            self._export_to_excel(summary_df, timeseries_df)
-
+        # Exports.
+        # When charts are enabled we generate the PNGs FIRST so the board-deck
+        # workbook can embed them inline (#662); a live conditional-formatting
+        # rule is then applied to the DSCR_View sheet at the SAME 1.2 threshold
+        # the pre-existing static highlight fill uses (the static fill is kept —
+        # the live rule is additive, so highlighting also survives user edits).
+        # When charts are OFF (the default), the Excel path is unchanged and the
+        # workbook is byte-identical to before (no cover sheet / no Charts sheet).
+        chart_images: List[Path] = []
         if export_charts and self.output_path is not None:
-            self._export_charts(summary_df, timeseries_df)
+            chart_images = self._export_charts(summary_df, timeseries_df)
+
+        if export_excel and self.output_path is not None:
+            self._export_to_excel(
+                summary_df,
+                timeseries_df,
+                chart_images=chart_images or None,
+                dscr_conditional_threshold=(
+                    DSCR_HIGHLIGHT_THRESHOLD if export_charts else None
+                ),
+            )
 
         if output_summary_json is not None:
             output_summary_json = Path(output_summary_json)
@@ -586,12 +602,47 @@ class ScenarioAnalytics:
     # ------------------------------------------------------------------
     # Excel and chart export
     # ------------------------------------------------------------------
+    def _build_export_metadata(self, summary_df: pd.DataFrame) -> Dict[str, Any]:
+        """Assemble the MRM-02 provenance block that stamps every board artefact.
+
+        MRM-02 requires exported artefacts (Excel / PNG / JSON) to carry the
+        scenario name(s), config source, and model VERSION so any reported KPI
+        set can be reconstructed. This batch surface fans out over many scenarios,
+        so it records the scenario list and their source directory (the per-run
+        config-SHA manifests are already stamped into the summary_json by
+        :meth:`run`). The engine version is the single-source-of-truth repo
+        ``VERSION`` file, reused via :func:`analytics.run_manifest.engine_version`.
+        """
+        from analytics.run_manifest import engine_version, git_sha
+
+        if "scenario_name" in summary_df.columns:
+            scenarios = [str(s) for s in summary_df["scenario_name"].tolist()]
+        else:
+            scenarios = [str(s) for s in summary_df.index.tolist()]
+
+        return {
+            "Model Version": engine_version(),
+            "Commit": git_sha(),
+            "Economics Basis": BATCH_ECONOMICS_BASIS,
+            "Scenarios Directory": str(self.scenarios_dir),
+            "Scenario Count": len(scenarios),
+            "Scenarios": ", ".join(scenarios),
+        }
+
     def _export_to_excel(
         self,
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
+        chart_images: Optional[Sequence[Path]] = None,
+        dscr_conditional_threshold: Optional[float] = None,
     ) -> None:
-        """Export summary and timeseries to Excel."""
+        """Export summary and timeseries to Excel.
+
+        ``chart_images`` / ``dscr_conditional_threshold`` are ADDITIVE opt-in
+        board-deck enrichments (#662), populated only on the charts-enabled path
+        via :meth:`run`. Both default to ``None`` so the default (charts-off)
+        Excel deliverable — the one existing callers get — is byte-identical.
+        """
         if self.output_path is None:
             logger.warning("No output_path configured; skipping Excel export")
             return
@@ -599,12 +650,23 @@ class ScenarioAnalytics:
             from analytics.export_helpers import ExcelExporter
 
             exporter = ExcelExporter(self.output_path)
+            # MRM-02 cover sheet is only added when a board-deck enrichment is
+            # requested, so the vanilla workbook stays byte-identical.
+            scenario_metadata: Optional[Dict[str, Any]] = None
+            if chart_images or dscr_conditional_threshold is not None:
+                scenario_metadata = self._build_export_metadata(summary_df)
+
             exporter.export_summary_and_timeseries(
                 summary_df=summary_df,
                 timeseries_df=timeseries_df,
                 summary_sheet="Summary",
                 timeseries_sheet="Timeseries",
                 add_board_views=True,
+                scenario_metadata=scenario_metadata,
+                dscr_conditional_threshold=dscr_conditional_threshold,
+                embed_chart_images=(
+                    [str(p) for p in chart_images] if chart_images else None
+                ),
             )
         except Exception:
             logger.warning(
@@ -620,11 +682,25 @@ class ScenarioAnalytics:
         self,
         summary_df: pd.DataFrame,
         timeseries_df: pd.DataFrame,
-    ) -> None:
-        """Export charts if ChartExporter is available."""
+    ) -> List[Path]:
+        """Export board-deck charts and return the PNG paths that were written.
+
+        Emits, into the ``*_charts`` sidecar directory:
+          - the existing per-scenario DSCR series + IRR histogram (ChartExporter);
+          - richer cross-scenario board visuals (ChartGenerator, #662): a KPI
+            comparison bar (equity/project IRR), a DSCR comparison line with the
+            covenant floor, and an end-of-horizon debt waterfall — all
+            matplotlib-optional (return no path if matplotlib is absent);
+          - an MRM-02 ``charts_metadata.json`` provenance sidecar
+            (scenario/config/VERSION).
+
+        The returned list feeds :meth:`_export_to_excel`, which embeds the PNGs
+        into the single .xlsx deliverable when charts are enabled.
+        """
         if self.output_path is None:
             logger.warning("No output_path configured; skipping chart export")
-            return
+            return []
+        written: List[Path] = []
         try:
             from analytics.export_helpers import ChartExporter
 
@@ -632,15 +708,104 @@ class ScenarioAnalytics:
             charts_dir.parent.mkdir(parents=True, exist_ok=True)
             chart_exporter = ChartExporter(output_dir=str(charts_dir))
             if hasattr(chart_exporter, "export_charts"):
-                chart_exporter.export_charts(summary_df, timeseries_df)
+                produced = chart_exporter.export_charts(summary_df, timeseries_df)
+                if isinstance(produced, dict):
+                    written.extend(p for p in produced.values() if p is not None)
             else:
                 if hasattr(chart_exporter, "export_dscr_chart"):
-                    chart_exporter.export_dscr_chart(timeseries_df)
+                    p = chart_exporter.export_dscr_chart(timeseries_df)
+                    if p is not None:
+                        written.append(p)
                 if hasattr(chart_exporter, "export_irr_histogram"):
-                    chart_exporter.export_irr_histogram(summary_df)
+                    p = chart_exporter.export_irr_histogram(summary_df)
+                    if p is not None:
+                        written.append(p)
+
+            # Richer cross-scenario board visuals (#662). Best-effort (CASPER):
+            # a failure here logs and yields no extra chart rather than sinking
+            # the whole chart export, and it never touches KPIs.
+            written.extend(
+                self._export_board_comparison_charts(
+                    summary_df, timeseries_df, charts_dir
+                )
+            )
+
+            # MRM-02 provenance sidecar for the charts directory.
+            self._write_charts_metadata(summary_df, charts_dir)
+
             logger.info("Charts exported to %s", charts_dir)
         except Exception:
             logger.warning("ChartExporter not available; skipping chart export")
+        return written
+
+    def _export_board_comparison_charts(
+        self,
+        summary_df: pd.DataFrame,
+        timeseries_df: pd.DataFrame,
+        charts_dir: Path,
+    ) -> List[Path]:
+        """Emit the ChartGenerator cross-scenario board visuals (#662)."""
+        extra: List[Path] = []
+        try:
+            from analytics.export_helpers import ChartGenerator
+
+            generator = ChartGenerator(output_dir=str(charts_dir))
+
+            # (1) KPI comparison bar — pick the first available IRR column.
+            irr_col: Optional[str] = None
+            for candidate in ("equity_irr", "project_irr"):
+                if candidate in summary_df.columns:
+                    irr_col = candidate
+                    break
+            if irr_col is not None:
+                extra.append(
+                    generator.plot_kpi_comparison(
+                        summary_df, irr_col, "kpi_comparison.png"
+                    )
+                )
+
+            # (2) DSCR comparison line with the covenant floor drawn in.
+            if {"scenario_name", "dscr"}.issubset(timeseries_df.columns):
+                dscr_by_scenario: Dict[str, List[float]] = {}
+                for name, grp in timeseries_df.groupby("scenario_name"):
+                    series = pd.to_numeric(grp["dscr"], errors="coerce")
+                    dscr_by_scenario[str(name)] = [
+                        float(v) for v in series.tolist() if pd.notna(v)
+                    ]
+                if dscr_by_scenario:
+                    extra.append(
+                        generator.plot_dscr_comparison(
+                            dscr_by_scenario,
+                            "dscr_comparison.png",
+                            threshold=1.0,
+                        )
+                    )
+
+                    # (3) Debt waterfall (end-of-horizon) reuses the same
+                    # per-scenario DSCR projection as a stand-in trajectory.
+                    extra.append(
+                        generator.plot_debt_waterfall(
+                            dscr_by_scenario, "debt_waterfall.png"
+                        )
+                    )
+        except Exception as exc:  # pragma: no cover - additive, best-effort
+            logger.warning("Board comparison charts failed: %s", exc)
+        return extra
+
+    def _write_charts_metadata(
+        self,
+        summary_df: pd.DataFrame,
+        charts_dir: Path,
+    ) -> None:
+        """Write the MRM-02 provenance sidecar into the charts directory."""
+        try:
+            charts_dir.mkdir(parents=True, exist_ok=True)
+            metadata = self._build_export_metadata(summary_df)
+            meta_path = charts_dir / "charts_metadata.json"
+            with meta_path.open("w", encoding="utf-8") as fh:
+                json.dump(metadata, fh, indent=2, sort_keys=True)
+        except Exception as exc:  # pragma: no cover - additive, best-effort
+            logger.warning("Charts metadata sidecar failed: %s", exc)
 
 
 # EOF
