@@ -76,6 +76,23 @@ defaults:
     # top-down anchor a bottom-up cost stack is sanity-checked against (range 727-2110).
     irena_benchmark_per_kw: 1041
     irena_benchmark_year: 2024
+    # BESS LCOS advisory sanity band (USD per MWh discharged) — the external
+    # plausibility comparator for the read-only finance.bess_lcos view (#605), checked
+    # by analytics.cost.benchmark.lcos_benchmark. NON-ITC band, because Sri Lanka has
+    # no US Investment Tax Credit: Lazard LCOS v10.0 (nested in the June-2025 LCOE+
+    # report) reports USD 115-254/MWh unsubsidised (vs 83-192 with ITC) for 100MW/4hr
+    # utility-scale storage; the LCOS = PV(costs)/PV(discharge) methodology is
+    # cross-anchored to PNNL ESGC 2024. ADVISORY ONLY: an out-of-band LCOS logs a
+    # WARNING citing these sources and is flagged in the report pack — nothing raises
+    # and no computed value changes. NB the model's LCOS is a fixed-dispatch basis
+    # (see the finance.bess_lcos limitation notes, #596), so a divergence from the
+    # dispatch-optimised literature band is a prompt to review, not an error.
+    lcos_band_low_usd_per_mwh: 115
+    lcos_band_high_usd_per_mwh: 254
+    lcos_band_year: 2025               # Lazard LCOS v10.0 publication vintage (June 2025)
+    lcos_band_sources:
+      - "PNNL ESGC 2024"
+      - "Lazard LCOS v10.0 (June 2025 LCOE+, non-ITC)"
     # AACE estimate class — the default maturity of an unlabelled estimate. A real
     # bottom-up WBS sanity-checked against a benchmark is ~Class 3 (budget authorization).
     estimate_class: 3
