@@ -281,6 +281,31 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **`build_lhs_plan` now samples via `scipy.stats.qmc.LatinHypercube` (#598, KPI-neutral).**
+  The Pareto optimizer's `lhs` plan builder (`analytics.sensitivity.optimizer.build_lhs_plan`)
+  replaces its hand-rolled stratified sampler — whose own docstring admitted it was "NOT full
+  LHS" — with a formal scrambled Latin Hypercube: `qmc.LatinHypercube(d=len(grid),
+  scramble=True, rng=np.random.default_rng(int(seed)))`, giving Koksma-Hlawka error bounds and
+  no new dependency (scipy is already a base dep, `scipy>=1.10`). The public signature and
+  semantics of `build_lhs_plan(grid, *, n_samples, seed=123)` are unchanged: same
+  `List[(label, overrides)]` shape, same `[min(values), max(values)]` per-parameter ranges,
+  same `f"{name}~{v:.6g}"` labels, same fail-loud validation (empty grid / `n_samples<=0`).
+  - MRM-01: the drawn VALUES differ from the legacy stream (it is now genuine LHS), but this is
+    an accepted change — `build_lhs_plan` has NO pipeline/report/committed-scenario caller (its
+    only consumer is the on-demand `run_pareto_search(plan_kind="lhs")` analytics tool) and no
+    test or artifact pins the specific value stream (tests assert shape, per-dimension bounds,
+    same-seed reproducibility, the one-point-per-stratum LHS property and a degenerate pinned
+    parameter — not values). All committed-scenario KPIs verified byte-identical (all-scenarios
+    kpi oracle, 27 scenarios).
+  - CASPER: `from scipy.stats import qmc` is a lazy call-time import with a fail-loud
+    `ImportError` guard (actionable message; `grid` plan still needs numpy only), mirroring the
+    established `analytics.mc.samplers` Sobol pattern (#650). Scaling uses the same manual
+    `lo + u*(hi-lo)` affine map (NOT `qmc.scale`, which raises on a degenerate `lo == hi`
+    parameter), so a pinned parameter yields a constant column exactly as before.
+  - Scrambling/seed semantics (documented honestly): `scramble=True` applies an Owen-style
+    random-linear scramble jittering each point within its stratum; the single seeded
+    `default_rng` drives both the per-dimension stratum permutation and that scramble, so the
+    output is a pure deterministic function of `(seed, n_samples, len(grid))`.
 - **CASPER `mc_risk` covenant floor unified on the MC engine's resolver (#639).** The
   `mc_risk` block's DSCR breach floor was resolved from the pipeline's
   `debt_covenants.dscr_threshold` snapshot (= `Financing_Terms.target_dscr` only), while the
