@@ -29,9 +29,24 @@ Frozen surfaces used
 --------------------
 - analytics.evaluate_scenario.evaluate_with_overrides
 
-Status: standalone solver utility. It is NOT wired into a live caller yet (the historical
-"via monte_carlo_v14" claim was false — that module never imported these solvers); exposing
-it through a CLI / the sensitivity runner is a follow-up.
+Status: standalone, on-demand analyst solver utility. These are read-only analysis tools with
+NO committed-scenario caller — they perturb tariff/capex overrides purely to answer "what
+input hits target X" and never touch a committed KPI. The module is still NOT wired into a
+Hydra CLI (the historical "via monte_carlo_v14" claim was false — that module never imported
+these solvers); a ``conf/cli_solvers.yaml`` + a wrapper alongside
+``analytics/cli/cli_sensitivity_hydra.py`` is the deferred follow-up (issue #615). Any future
+CLI exposure must be Hydra-only (argparse is banned repo-wide, GWTF R3/CLI-01).
+
+W4 (issue #615) tariff-solver deltas
+------------------------------------
+- ``solve_for_tariff_given_irr`` generalized with a ``metric`` parameter
+  (``project_irr`` | ``equity_irr``); project-IRR behaviour is the default and unchanged.
+- ``solve_for_tariff_given_equity_irr`` added; ``SOLVER_REGISTRY['target_equity_irr']`` now
+  resolves to it (it previously mislabelled the project-IRR solver, silently solving the
+  wrong KPI). Fails loud when the scenario computes no equity distribution.
+- ``solve_tariff_breakeven`` added — a first-class breakeven surface (NPV=0 or IRR-hurdle
+  over tariff) returning the centralized ``contracts_v14.BreakevenResult`` with a ``status``
+  and searched ``bracket`` instead of a bare float.
 
 Sprint 16 P3-2 Enhancements (12h)
 ----------------------------------
@@ -46,8 +61,9 @@ Sprint 16 P3-2 Enhancements (12h)
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
+from analytics.contracts_v14 import BreakevenResult
 from analytics.evaluate_scenario import evaluate_with_overrides
 
 logger = logging.getLogger(__name__)
@@ -69,6 +85,27 @@ def _clone_overrides(base_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]
     return dict(base_overrides) if base_overrides else {}
 
 
+def _require_kpi_present(kpis: Mapping[str, Any], kpi_key: str, *, lever: str) -> float:
+    """Return ``kpis[kpi_key]`` as a float, failing loud (CESSPIT) if it is absent or None.
+
+    Some KPIs are only emitted when a companion computation ran. In particular the engine
+    merges ``equity_irr`` into the KPI surface only when an equity distribution was computed
+    (``pipeline_v14_enhanced._update_kpis_with_equity_distribution``); a scenario with no
+    equity distribution exposes no ``equity_irr``. Rather than let a bare ``KeyError`` (or a
+    silent ``0.0`` default) leak out and make the solver answer the wrong question, raise a
+    clear error naming the missing KPI and the lever so the analyst knows the scenario cannot
+    support this solve.
+    """
+    if kpi_key not in kpis or kpis[kpi_key] is None:
+        raise ValueError(
+            f"Solver lever {lever!r} targets KPI {kpi_key!r}, but this scenario does not "
+            f"expose it (equity_irr is only present when an equity distribution is "
+            f"computed). Refusing to solve on a missing KPI — choose a scenario that "
+            f"computes it, or target a KPI the scenario emits."
+        )
+    return float(kpis[kpi_key])
+
+
 def _assert_override_is_live(
     base_config_path: str,
     base_overrides: Optional[Dict[str, Any]],
@@ -86,20 +123,24 @@ def _assert_override_is_live(
     ``kpi_key`` is unchanged the override is a DEAD lever for this scenario — a wrong key,
     or one the engine auto-overrides (e.g. debt amount/ratio under dual_dscr sizing). Raise
     rather than return a fake bound.
+
+    The probe evaluations also gate KPI presence via :func:`_require_kpi_present`, so a
+    scenario missing the targeted KPI (e.g. ``equity_irr`` with no equity distribution) fails
+    loud here with a clear message before any bisection begins.
     """
     lo_over = _clone_overrides(base_overrides)
     apply(lo_over, float(probes[0]))
     hi_over = _clone_overrides(base_overrides)
     apply(hi_over, float(probes[1]))
-    lo = float(
-        evaluate_with_overrides(base_config_path=base_config_path, overrides=lo_over)[
-            kpi_key
-        ]
+    lo = _require_kpi_present(
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=lo_over),
+        kpi_key,
+        lever=lever,
     )
-    hi = float(
-        evaluate_with_overrides(base_config_path=base_config_path, overrides=hi_over)[
-            kpi_key
-        ]
+    hi = _require_kpi_present(
+        evaluate_with_overrides(base_config_path=base_config_path, overrides=hi_over),
+        kpi_key,
+        lever=lever,
     )
     if abs(hi - lo) < 1e-9:
         raise ValueError(
@@ -155,11 +196,15 @@ def _bracket_deltas(
 # ---------------------------------------------------------------------------
 
 
+IRR_METRICS = ("project_irr", "equity_irr")
+
+
 def solve_for_tariff_given_irr(
     base_config_path: str,
     base_overrides: Optional[Dict[str, Any]],
     target_irr: float,
     *,
+    metric: str = "project_irr",
     method: str = "bisection",
     bounds: Tuple[float, float] = (40.0, 100.0),
     tolerance: float = 0.0001,
@@ -167,13 +212,19 @@ def solve_for_tariff_given_irr(
     **_kwargs: Any,
 ) -> float:
     """
-    Find the PPA tariff (LKR/kWh) that achieves a target project IRR.
+    Find the PPA tariff (LKR/kWh) that achieves a target IRR.
 
+    Targets either the project IRR (default) or the equity IRR, selected by ``metric``.
     Uses bisection solver for robust convergence:
-      - At each step, set financial.tariff_lkr_per_kwh = mid
+      - At each step, set tariff.lkr_per_kwh = mid (the LIVE engine input)
       - Evaluate through evaluate_with_overrides()
-      - Compare achieved project_irr vs target_irr
+      - Compare achieved ``metric`` vs target_irr
       - Narrow [low, high] accordingly
+
+    The equity-IRR path fails loud (CESSPIT) if the scenario computes no equity distribution
+    (``equity_irr`` absent from the KPI surface) rather than silently solving a different KPI —
+    the ``_assert_override_is_live`` precheck routes both probes through
+    :func:`_require_kpi_present`.
 
     Example:
         >>> tariff = solve_for_tariff_given_irr(
@@ -191,7 +242,9 @@ def solve_for_tariff_given_irr(
         base_overrides:
             Sampled parameter overrides from Monte Carlo (may be None).
         target_irr:
-            Desired project-level IRR (e.g. 0.12 for 12%).
+            Desired IRR (e.g. 0.12 for 12%), interpreted against ``metric``.
+        metric:
+            IRR metric to target ("project_irr" or "equity_irr").
         method:
             Solver method. Only "bisection" is currently supported.
         bounds:
@@ -205,10 +258,15 @@ def solve_for_tariff_given_irr(
         Tariff in LKR/kWh that approximately hits target_irr.
 
     Raises:
-        ValueError: If the solver fails to converge or method is invalid.
+        ValueError: If the solver fails to converge, ``method`` is invalid, ``metric`` is
+            invalid, or (for ``equity_irr``) the scenario exposes no equity distribution.
     """
     if method.lower() != "bisection":
         raise ValueError(f"Unsupported solver method: {method!r}. Use 'bisection'.")
+    if metric not in IRR_METRICS:
+        raise ValueError(
+            f"Invalid IRR metric: {metric!r}. Must be one of {IRR_METRICS}."
+        )
 
     low, high = float(bounds[0]), float(bounds[1])
 
@@ -221,12 +279,12 @@ def solve_for_tariff_given_irr(
         base_overrides,
         _apply_tariff,
         (low, high),
-        "project_irr",
+        metric,
         lever="tariff.lkr_per_kwh",
     )
 
     def _evaluate_at(tariff: float) -> float:
-        """Return IRR - target_irr at a given tariff."""
+        """Return achieved IRR - target_irr at a given tariff."""
         overrides = _clone_overrides(base_overrides)
         _apply_tariff(overrides, tariff)
 
@@ -234,7 +292,7 @@ def solve_for_tariff_given_irr(
             base_config_path=base_config_path,
             overrides=overrides,
         )
-        achieved_irr = float(kpis["project_irr"])
+        achieved_irr = _require_kpi_present(kpis, metric, lever="tariff.lkr_per_kwh")
         return achieved_irr - float(target_irr)
 
     # Bracketing precheck: fail loud if target_irr is outside the achievable IRR range over
@@ -306,6 +364,39 @@ def solve_for_tariff_given_irr(
     raise ValueError(
         "IRR solver failed to converge; no valid midpoint found. "
         f"Final bounds: [{low:.2f}, {high:.2f}] LKR/kWh, target_irr={target_irr:.4f}"
+    )
+
+
+def solve_for_tariff_given_equity_irr(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]],
+    target_irr: float,
+    *,
+    method: str = "bisection",
+    bounds: Tuple[float, float] = (40.0, 100.0),
+    tolerance: float = 0.0001,
+    max_iterations: int = 50,
+    **_kwargs: Any,
+) -> float:
+    """Find the PPA tariff (LKR/kWh) that achieves a target EQUITY IRR.
+
+    Thin, registry-friendly wrapper around :func:`solve_for_tariff_given_irr` pinned to the
+    ``equity_irr`` KPI. This is the solver behind ``SOLVER_REGISTRY['target_equity_irr']``;
+    the registry key previously (mis)pointed at the project-IRR solver, silently answering
+    the wrong question. Fails loud (CESSPIT) if the scenario computes no equity distribution
+    (``equity_irr`` absent) rather than falling back to project IRR.
+
+    Args mirror :func:`solve_for_tariff_given_irr` (``metric`` is fixed to ``equity_irr``).
+    """
+    return solve_for_tariff_given_irr(
+        base_config_path,
+        base_overrides,
+        target_irr,
+        metric="equity_irr",
+        method=method,
+        bounds=bounds,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
     )
 
 
@@ -927,13 +1018,141 @@ def solve_for_min_capex_given_irr_floor(
 
 
 # ---------------------------------------------------------------------------
+# NEW: First-class tariff-breakeven surface (returns contracts_v14.BreakevenResult)
+# ---------------------------------------------------------------------------
+
+_BREAKEVEN_METRICS = ("project_npv", "equity_npv", "project_irr", "equity_irr")
+
+
+def solve_tariff_breakeven(
+    base_config_path: str,
+    base_overrides: Optional[Dict[str, Any]] = None,
+    *,
+    metric: str = "project_npv",
+    target_value: float = 0.0,
+    bounds: Tuple[float, float] = (40.0, 100.0),
+    tolerance: Optional[float] = None,
+    max_iterations: int = 50,
+) -> BreakevenResult:
+    """Solve the breakeven PPA tariff (LKR/kWh) for a target KPI, as a structured result.
+
+    First-class convenience over the tariff root-finders that returns the centralized
+    :class:`analytics.contracts_v14.BreakevenResult` (CCCDIR: no new contract types outside
+    ``contracts_v14``) instead of a bare float, so a caller always gets the variable, the
+    target, and — critically — the ``status`` and achievable ``bracket`` even when the target
+    is not reachable or the solve does not converge.
+
+    Two breakeven flavours, both driven ONLY through the ``evaluate_with_overrides`` gateway
+    (ARCH-02: no direct IRR/NPV math here — that lives in ``finance/irr.py``):
+
+    - NPV breakeven (``metric`` = ``project_npv`` | ``equity_npv``): the tariff at which NPV
+      equals ``target_value`` (default 0.0, i.e. the classic NPV=0 breakeven), via
+      :func:`solve_for_tariff_given_npv`.
+    - IRR-hurdle breakeven (``metric`` = ``project_irr`` | ``equity_irr``): the tariff at which
+      that IRR equals ``target_value`` (the hurdle rate), via
+      :func:`solve_for_tariff_given_irr`. The ``equity_irr`` flavour fails loud if the scenario
+      computes no equity distribution.
+
+    Deterministic and fail-loud at the numeric core: the underlying solvers raise on a missing
+    lever, an unbracketed target, or a missing KPI. This wrapper translates those raises into a
+    ``BreakevenResult`` with ``status="unbracketed"`` (or ``"error"``) and the searched
+    ``bracket`` populated, rather than propagating a bare exception — so breakeven is safe to
+    call in a batch analytics sweep. A genuine convergence returns ``status="converged"`` with
+    ``breakeven_value`` set.
+
+    Args:
+        base_config_path: Path to the base scenario YAML.
+        base_overrides: Optional nested overrides applied before solving (may be None).
+        metric: Target KPI — one of ``project_npv``, ``equity_npv``, ``project_irr``,
+            ``equity_irr``.
+        target_value: The breakeven target value for ``metric`` (0.0 gives NPV=0; a hurdle
+            rate, e.g. 0.12, for the IRR flavours).
+        bounds: (min_tariff, max_tariff) search range in LKR/kWh.
+        tolerance: Convergence tolerance in ``metric`` units; defaults to a metric-appropriate
+            value (1e5 USD for NPV, 1e-4 for IRR) when None.
+        max_iterations: Maximum bisection iterations.
+
+    Returns:
+        A :class:`BreakevenResult` with ``variable="tariff.lkr_per_kwh"``, the requested
+        ``target_metric`` / ``target_value``, and ``status`` in
+        {``converged``, ``unbracketed``, ``error``}. ``breakeven_value`` is the solved tariff
+        on success; ``bracket`` records the searched tariff range.
+
+    Raises:
+        ValueError: Only for a programming error — an unknown ``metric``. Scenario/target
+            infeasibility is reported via ``status``, not raised.
+    """
+    if metric not in _BREAKEVEN_METRICS:
+        raise ValueError(
+            f"Invalid breakeven metric: {metric!r}. Must be one of {_BREAKEVEN_METRICS}."
+        )
+
+    is_irr_metric = metric in IRR_METRICS
+    eff_tolerance = (
+        tolerance if tolerance is not None else (1e-4 if is_irr_metric else 1e5)
+    )
+    bracket = (float(bounds[0]), float(bounds[1]))
+
+    try:
+        if is_irr_metric:
+            solved = solve_for_tariff_given_irr(
+                base_config_path,
+                base_overrides,
+                float(target_value),
+                metric=metric,
+                bounds=bounds,
+                tolerance=eff_tolerance,
+                max_iterations=max_iterations,
+            )
+        else:
+            solved = solve_for_tariff_given_npv(
+                base_config_path,
+                base_overrides,
+                float(target_value),
+                metric=metric,
+                bounds=bounds,
+                tolerance=eff_tolerance,
+                max_iterations=max_iterations,
+            )
+    except ValueError as exc:
+        # Unbracketed / missing-lever / missing-KPI / non-convergence: report as a structured
+        # result rather than a bare float or a raw exception. The achievable-range guard raises
+        # "not achievable within bounds"; classify that as an explicit "unbracketed" status.
+        status = (
+            "unbracketed" if "not achievable within bounds" in str(exc) else "error"
+        )
+        return BreakevenResult(
+            variable="tariff.lkr_per_kwh",
+            target_metric=metric,
+            target_value=float(target_value),
+            breakeven_value=None,
+            status=status,
+            bracket=bracket,
+            metadata={"error": str(exc)},
+        )
+
+    return BreakevenResult(
+        variable="tariff.lkr_per_kwh",
+        target_metric=metric,
+        target_value=float(target_value),
+        breakeven_value=float(solved),
+        status="converged",
+        bracket=bracket,
+        metadata={"tolerance": eff_tolerance, "max_iterations": max_iterations},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Solver registry (public surface) - COMPLETE WITH ALL SOLVERS
 # ---------------------------------------------------------------------------
 
 SOLVER_REGISTRY: Dict[str, Callable[..., float]] = {
     # IRR-based tariff solvers (original)
     "target_project_irr": solve_for_tariff_given_irr,
-    "target_equity_irr": solve_for_tariff_given_irr,
+    # target_equity_irr previously (mis)pointed at the project-IRR solver, silently solving
+    # the wrong KPI; it now resolves to the equity-IRR-pinned solver (fails loud if the
+    # scenario computes no equity distribution).
+    "target_equity_irr": solve_for_tariff_given_equity_irr,
     # DSCR covenant-based debt solver (original)
     "dscr_covenant": solve_for_max_debt_given_dscr,
     # NEW Sprint 16 P3-2: NPV-based tariff solvers
@@ -950,7 +1169,8 @@ def get_solver(derive_from: str) -> Callable[..., float]:
     """
     Look up a solver function by its derive_from label.
 
-    This is the only public registry accessor used by monte_carlo_v14.
+    This is the public registry accessor for the on-demand solver surface. (It is not wired
+    into a live pipeline caller — the historical "used by monte_carlo_v14" note was false.)
 
     Example:
         >>> solver = get_solver("target_project_npv")
