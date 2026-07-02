@@ -356,6 +356,36 @@ All notable changes to this project will be documented here.
   intentionally untouched (their fate belongs to the gated lint-stack consolidation, #610). No
   gate is weakened: the mandatory repo-wide black/isort checks still block every PR.
 
+### Fixed
+- **Hygiene cluster, docs/header/naming shims (#586, dolphin a of 3 — KPI-neutral).**
+  - `finance/debt_v14.py`: replaced the corrupted stray header (`# [File content too long...]`,
+    a leftover editing artifact) with the module's real docstring, now at the top of the file
+    where Python actually binds `__doc__` (it previously sat as an inert string literal below
+    the imports). Comment/docstring-only; no code change.
+  - `analytics/pipeline_v14_enhanced.PipelineMetrics.timestamp`: deprecated naive
+    `datetime.utcnow()` → tz-aware `datetime.now(timezone.utc)`. The ISO metadata timestamp now
+    carries an explicit `+00:00` offset, matching the tz-aware run manifest. Metadata-only; no
+    KPI reads this field. (Owned here; struck from the #619 repo-wide utcnow sweep.)
+  - `analytics/mc/samplers.generate_lhs_samples`: the misleading `common_random_numbers`
+    parameter is renamed `shared_permutation_stream` (it selects the permutation-stream
+    derivation — CRN across runs comes from passing the same `seed`, not from this flag). The
+    old keyword keeps working as a deprecated alias (DeprecationWarning; conflicting values
+    fail loud with ValueError); output for either spelling is bit-identical. The engine-level
+    `common_random_numbers` config/API/metadata name is unchanged — at that level it genuinely
+    toggles the MC-9 CRN feature.
+  - `analytics/core/sensitivity_runner`: the path-based entry point is canonically named
+    `run_sensitivity_analysis_from_path`, disambiguating it from the engine orchestrator
+    `analytics.sensitivity.run_sensitivity_analysis` (same exported name, incompatible
+    keyword-only/in-memory signature). The historical `run_sensitivity_analysis` export remains
+    as an additive module alias (same object) in both the module and `analytics.core.__all__`;
+    all existing imports keep working. Alias retirement is deferred to a user-approved batch.
+  - `analytics/pipeline_analytics_v14._calculate_risk_analysis`: documented (labeling only)
+    that the enhanced-analytics risk path deliberately reads `cfads_final_lkr`, so its
+    level-denominated outputs (VaR/CVaR, CFADS percentiles) are LKR-based — unlike the returns
+    path, which #559 made USD-consistent. No numeric change; a USD re-basing of risk outputs
+    requires separate user authorization.
+  Validators, Sobol power-of-2, deep-merge and discount-default items are dolphins b/c of #586.
+
 ## v15.2.0 - 2026-07-01
 
 _Consolidates everything merged since the v15.0.0 tag: the #529 solar re-baseline (which bumped the

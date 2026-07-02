@@ -1,5 +1,8 @@
-# [File content too long - showing key changes only]
-# Line 268-275: Changed from float('inf') to None
+"""Debt Planning Module for DutchBay V14 Project Finance.
+
+Author: DutchBay V14 Team, Nov 2025
+Version: 3.7 (Dynamic debt timeline + explicit CAPEX guard + balloon treatment)
+"""
 
 from __future__ import annotations
 
@@ -11,12 +14,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from finance.utils import as_float, get_nested
 
 logger = logging.getLogger(__name__)
-
-"""Debt Planning Module for DutchBay V14 Project Finance.
-
-Author: DutchBay V14 Team, Nov 2025
-Version: 3.7 (Dynamic debt timeline + explicit CAPEX guard + balloon treatment)
-"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Balloon treatment
