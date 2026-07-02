@@ -30,6 +30,7 @@ Typical usage:
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 import glob
 import json
@@ -361,6 +362,27 @@ def compute_site_aep(series: pd.DataFrame, config: ERA5RequestConfig) -> Dict[st
     }
 
 
+def _json_safe_trend(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Project ``analyze_long_term_resource``'s rich output into a JSON-safe dict.
+
+    ``analyze_long_term_resource`` returns the live ``TrendResult`` dataclass under ``trend``
+    and a pandas ``DataFrame`` under ``summary_df`` (both intended for the report_model /
+    executive_workbook consumers, which want the objects). Neither is JSON-serializable, so
+    the ``run()`` result — which ``main()`` emits via ``json.dumps`` — must carry a JSON-safe
+    projection instead: the dataclass as ``dataclasses.asdict``, the DataFrame as records. The
+    ``period_aep`` list, ``recommendation`` dict and ``markdown`` string are already JSON-safe
+    and pass through verbatim (CCCDIR — same source of truth, no re-derivation). Downstream
+    JSON consumers (report_model, executive_workbook) thus get clean data.
+    """
+    return {
+        "trend": dataclasses.asdict(analysis["trend"]),
+        "period_aep": analysis["period_aep"],
+        "recommendation": analysis["recommendation"],
+        "markdown": analysis["markdown"],
+        "summary_df": analysis["summary_df"].to_dict(orient="records"),
+    }
+
+
 def run(config: ERA5RequestConfig) -> Dict[str, Any]:
     """End-to-end: retrieve -> hub series -> coverage guard -> net AEP (+ frozen vintage)."""
     nc_path = retrieve_era5_timeseries(config)
@@ -424,9 +446,13 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
                 ),
             }
         else:
+            # Attach a JSON-safe projection (not the raw TrendResult dataclass / DataFrame) so
+            # main()'s json.dumps(result) round-trips and downstream JSON consumers get clean
+            # data. The rich objects remain available to report_model via a direct
+            # analyze_long_term_resource call (that consumer wants the dataclass + DataFrame).
             result["long_term_trend"] = {
                 "analyzed": True,
-                **analyze_long_term_resource(config, series=series),
+                **_json_safe_trend(analyze_long_term_resource(config, series=series)),
             }
     logger.info(
         "%s: %.1f GWh P50 (CF %.1f%%) from %s vintage %d-%d (%d h, %s)",

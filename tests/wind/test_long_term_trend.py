@@ -6,6 +6,8 @@ lender-workbook wiring is tested via openpyxl. No live CDS is exercised.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -247,7 +249,13 @@ def test_run_analyze_trend_reuses_series_no_second_fetch(monkeypatch):
     trend = result["long_term_trend"]
     assert trend["analyzed"] is True
     assert "## Long-Term Wind Resource & Trend" in trend["markdown"]
-    assert list(trend["summary_df"].columns) == ["Metric", "Value"]
+    # run() attaches a JSON-safe projection (records), not the raw DataFrame: each row is a
+    # {"Metric": ..., "Value": ...} dict verbatim from trend_summary_dataframe.
+    assert isinstance(trend["summary_df"], list)
+    assert all(set(row) == {"Metric", "Value"} for row in trend["summary_df"])
+    # The TrendResult dataclass is likewise projected to a plain (JSON-safe) dict.
+    assert isinstance(trend["trend"], dict)
+    assert trend["trend"]["n_years"] == 20
     # Report/VALIDATE-only: the headline frozen AEP is unchanged by the trend disclosure.
     assert result["net_aep_p50_gwh"] == baseline_aep
 
@@ -262,3 +270,38 @@ def test_run_short_series_degrades_explicitly(monkeypatch):
     assert trend["analyzed"] is False
     assert str(MIN_TREND_YEARS) in trend["reason"]
     assert "markdown" not in trend
+
+
+def test_run_analyze_trend_result_is_json_serializable(monkeypatch):
+    """The whole run() result round-trips through json.dumps with the trend attached (#656).
+
+    Regression for the Fable blocker: the trend block carried a TrendResult dataclass and a
+    pandas DataFrame, so main()'s json.dumps(result) crashed with 'Object of type TrendResult
+    is not JSON serializable' AFTER a full CDS retrieval + analysis. run() must now attach a
+    JSON-safe projection so the success path serializes cleanly.
+    """
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)  # 20 yr >= minimum
+    result = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    assert result["long_term_trend"]["analyzed"] is True
+
+    # Round-trips without a TypeError, and the projection survives the round-trip intact.
+    round_tripped = json.loads(json.dumps(result))
+    rt_trend = round_tripped["long_term_trend"]
+    assert rt_trend["trend"]["n_years"] == 20
+    assert rt_trend["summary_df"] and all(
+        set(row) == {"Metric", "Value"} for row in rt_trend["summary_df"]
+    )
+    assert "## Long-Term Wind Resource & Trend" in rt_trend["markdown"]
+
+
+def test_run_analyze_trend_does_not_mutate_committed_aep(monkeypatch):
+    """Disclose-don't-mutate: the frozen net AEP is identical with the trend on and off (#656)."""
+    calls: dict = {}
+    _wire_fake_retrieval(monkeypatch, _ws_series(2005, 2024), calls)
+    off = era5_retrieval.run(_run_cfg(analyze_trend=False))
+    on = era5_retrieval.run(_run_cfg(analyze_trend=True))
+    for key in ("net_aep_p50_gwh", "net_aep_p90_gwh", "capacity_factor_p50"):
+        assert on[key] == off[key]
+    # The trend is purely additive: the only new top-level key is the disclosure block.
+    assert set(on) - set(off) == {"long_term_trend"}

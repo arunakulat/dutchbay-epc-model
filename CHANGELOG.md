@@ -345,6 +345,18 @@ All notable changes to this project will be documented here.
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Fixed
+- **Long-term trend block is JSON-serializable on the `run()` success path (#656, KPI-neutral).**
+  With `analyze_trend=True`, `wind_resource.era5_retrieval.run()` attached the raw `TrendResult`
+  dataclass and a pandas `DataFrame` under `result["long_term_trend"]`, so `main()`'s
+  `print(json.dumps(result))` crashed with `TypeError: Object of type TrendResult is not JSON
+  serializable` **after** the full CDS retrieval + analysis. `run()` now attaches a **JSON-safe
+  projection** (`dataclasses.asdict(trend)`; `summary_df.to_dict(orient="records")`; markdown /
+  `period_aep` / `recommendation` pass through verbatim), so the whole result round-trips through
+  `json.dumps` and downstream JSON consumers get clean data. The rich objects remain available to
+  `report_model` via a direct `analyze_long_term_resource` call (that consumer wants the dataclass
+  + DataFrame). The `analyzed: false` short-series shape and the disclose-don't-mutate invariant
+  (committed AEP identical with the trend on/off) are unchanged; default-off all-scenarios KPIs
+  remain byte-identical.
 - **Global SA: shared finite-mask stops a partial-NaN metric column poisoning Sobol/Morris/PAWN
   indices (#644, KPI-neutral).** A metric column with SOME non-finite entries (an engine KPI
   returning `None` on a subset of sample rows) passed the `_is_flat_output` guard — which inspects
