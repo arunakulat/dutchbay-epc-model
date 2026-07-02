@@ -44,6 +44,17 @@ All notable changes to this project will be documented here.
     transacts at). Hedge behaviour is pinned end-to-end by an integration regression test that overlays
     the lever on the live lender case (`tests/integration/test_fx_hedge_lendercase.py`), avoiding a
     duplicated hedged scenario fixture.
+- **BESS LCOS fixed-dispatch limitation note extended to the energy-tariff model (#596,
+  documentation/notes only, KPI-neutral).** `finance.bess_lcos.resolve_lcos_specs` now appends a
+  fixed-dispatch-basis note for `model: energy_tariff` (a fixed `cycles_per_year` at full nameplate
+  energy per cycle — RTE/SoH-derated, no depth-of-discharge factor, the post-M1/#557 revenue-export
+  basis), mirroring the existing capacity-charge cycles-at-DoD note; the note surfaces additively in
+  `LcosResult.notes` / `as_dict()` and hence in the analytics `bess_lcos` report block. The module
+  docstring's LIMITATIONS block now states, for BOTH revenue models, that dispatch is not simulated
+  or optimised — the fixed `cycles_per_year` basis is a known, intentional simplification versus
+  2025–2026 MILP/stochastic dispatch-optimisation LCOS — and the discharged-energy formula reflects
+  the model-gated `dod_factor` (M1) instead of an unconditional `depth_of_discharge`. No numeric
+  field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
 ### Changed
 - **FX sensitivity sweeps wired to the live hedge engine (#652/#659).** With FX forward hedging
