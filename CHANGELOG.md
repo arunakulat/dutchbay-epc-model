@@ -112,6 +112,23 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Frozen-contract pattern extended to the report/job models (#608, KPI-neutral).** All 13
+  report-section models in `app/reports/report_model.py` (`KpiRow`, `AssumptionRow`, `RiskRow`,
+  `ReadinessRow`, `Verdict`, `ReportContext` — previously `extra="forbid"` only — plus
+  `EvidenceRow`/`EvidenceBlock`, `MultiTechRow`/`MultiTechBlock`, `ThreeStatementBlock`,
+  `WaterfallRow`/`WaterfallBlock`, which had no `model_config`) and `JobRecord` in
+  `app/jobs/models.py` are now `ConfigDict(frozen=True)`, matching the 15 frozen pydantic contracts
+  in `analytics/core/{returns,risk_metrics}.py`, `analytics/pipeline_analytics_v14.py` and the two
+  cashflow adapters. Each model's existing `extra` policy is preserved (no silent forbid/ignore
+  flips), and `JobProgress`'s deliberate `extra="ignore"` (computed-`pct` JSON round-trip) is
+  untouched. Post-construction attribute assignment now raises `ValidationError`; derive variants
+  with `model_copy(update=...)` — the path both job stores already use, so `InMemoryJobStore`/
+  `RedisJobStore` update flows are unchanged. Report contexts are built once in
+  `build_report_context` and consumed read-only by the renderer/API, so no production mutation site
+  existed; the single test that mutated a fetched `JobRecord` in place
+  (`tests/app/test_jobs_store.py::test_get_returns_detached_copy`) now asserts frozen semantics and
+  covers deep-copy detachment via the nested mutable `progress` instead. Committed scenario KPIs are
+  kpi-oracle byte-identical; passes the CI `pydantic.mypy` strict gate (#594).
 - **Tiered MCP bankability guard on measurement-campaign duration (#597).** `wind_resource.mcp`
   previously enforced only a 24-sample statistical floor (`DEFAULT_MIN_CONCURRENT`, one day of hourly
   data) while its own comment conceded a bankable MCP needs months of concurrent data. `run_mcp()` now
