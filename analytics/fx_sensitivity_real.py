@@ -23,11 +23,27 @@ VALID_TARGET_METRICS = {
 
 @dataclass(frozen=True)
 class FXSensitivityConfig:
+    """Sweep grids for the real-engine FX sensitivity analyzer.
+
+    - ``fx_rate_shocks``: relative shocks applied to the scenario's base
+      ``fx.start_lkr_per_usd`` (e.g. -0.10 = LKR 10% stronger).
+    - ``hedge_ratio_values``: absolute ``fx.hedge_ratio`` values (0-1) swept at the
+      scenario's own base spread.
+    - ``spread_shocks_bps``: DELTAS in basis points around the scenario's base
+      ``fx.spread_bps`` (#659). The swept absolute spread is ``base + shock`` and must
+      stay >= 0 — the engine fail-loud rejects negative spreads, and this analyzer
+      raises (never clamps) when a delta would cross zero (CESSPIT). The default grid
+      is non-negative so unhedged scenarios (base spread 0) sweep [0, +50, +100] bps.
+      Spread only bites under an active hedge, so the sweep runs at the scenario's own
+      ``fx.hedge_ratio`` when > 0, else at a documented reference FULL hedge (h=1.0):
+      the coefficient then reads "metric change per bp of hedging cost, if fully hedged".
+    """
+
     fx_rate_shocks: list[float] = field(
         default_factory=lambda: [-0.10, -0.05, 0.0, 0.05, 0.10]
     )
     hedge_ratio_values: list[float] = field(default_factory=lambda: [0.0, 0.5, 1.0])
-    spread_shocks_bps: list[float] = field(default_factory=lambda: [-100, 0, 100])
+    spread_shocks_bps: list[float] = field(default_factory=lambda: [0.0, 50.0, 100.0])
     target_metric: str = "project_irr"
     confidence_level: float = 0.95
 
@@ -98,14 +114,41 @@ class RealFXSensitivityResult:
     def calculate_summary_metrics(self) -> None:
         if self.base_project_irr is None:
             return
-        if len(self.fx_rate_points) >= 2:
-            xs = [p.fx_rate for p in self.fx_rate_points]
-            ys = [
-                p.project_irr for p in self.fx_rate_points if p.project_irr is not None
+
+        def _slope(points: list[FXSensitivityPoint], x_attr: str, y_attr: str) -> float:
+            """Linear-fit slope of y over x across swept points (None y dropped)."""
+            pairs = [
+                (float(getattr(p, x_attr)), float(getattr(p, y_attr)))
+                for p in points
+                if getattr(p, y_attr) is not None
             ]
-            if len(xs) == len(ys) and len(ys) >= 2:
-                coef, _variance = _linear_fit("fx_rate", xs, [float(y) for y in ys])
-                self.fx_rate_irr_sensitivity = coef.coefficient
+            if len(pairs) < 2:
+                return 0.0
+            coef, _variance = _linear_fit(
+                x_attr, [x for x, _ in pairs], [y for _, y in pairs]
+            )
+            return coef.coefficient
+
+        self.fx_rate_irr_sensitivity = _slope(
+            self.fx_rate_points, "fx_rate", "project_irr"
+        )
+        self.fx_rate_npv_sensitivity = _slope(
+            self.fx_rate_points, "fx_rate", "project_npv"
+        )
+        # Engine-driven since the FX forward hedge landed (#652): hedge_ratio blends the
+        # CIP forward into cfads_usd; spread prices the hedged fraction.
+        self.hedge_ratio_irr_sensitivity = _slope(
+            self.hedge_ratio_points, "hedge_ratio", "project_irr"
+        )
+        self.hedge_ratio_npv_sensitivity = _slope(
+            self.hedge_ratio_points, "hedge_ratio", "project_npv"
+        )
+        self.spread_irr_sensitivity = _slope(
+            self.spread_points, "spread_bps", "project_irr"
+        )
+        self.spread_npv_sensitivity = _slope(
+            self.spread_points, "spread_bps", "project_npv"
+        )
 
 
 def evaluate_with_overrides(
@@ -248,28 +291,38 @@ class FXSensitivityAnalyzer:
             _linear_fit("hedge_ratio", self.config.hedge_ratio_values, hedge_values)
         )
 
-        # Spread sweep: this overrides the LEGACY key `fx.spread_shock_bps`, which the
-        # cashflow engine does not read (the live key is `fx.spread_bps`, and a spread only
-        # bites under an active hedge, hedge_ratio > 0). So this coefficient stays ~0 until
-        # the spread accessor is wired to drive the engine jointly with an active hedge —
-        # tracked as #659 (the analysis-layer follow-up to the engine hedging feature).
+        # SPREAD sweep drives the LIVE engine key `fx.spread_bps` (#659), jointly with an
+        # ACTIVE hedge — the engine prices a spread only on the hedged fraction
+        # (`forward * (1 + spread)`), so sweeping it at hedge_ratio=0 is structurally
+        # inert. Convention: sweep at the scenario's own base hedge when it hedges
+        # (base_hedge > 0), else at a documented reference FULL hedge (h=1.0) — the
+        # coefficient then reads "metric change per bp of hedging cost, if fully hedged".
+        # Shock semantics: `spread_shocks_bps` are DELTAS around the scenario's base
+        # `fx.spread_bps`; a delta that takes the absolute spread below zero fails loud
+        # (the engine gate rejects negative spreads — no silent clamping, CESSPIT).
+        fx_cfg_raw = self.base_config.get("fx")
+        fx_cfg = fx_cfg_raw if isinstance(fx_cfg_raw, dict) else {}
+        base_hedge = float(fx_cfg.get("hedge_ratio") or 0.0)
+        base_spread = float(fx_cfg.get("spread_bps") or 0.0)
+        ref_hedge = base_hedge if base_hedge > 0.0 else 1.0
         spread_values = []
-        for spread_bps in self.config.spread_shocks_bps:
+        for shock_bps in self.config.spread_shocks_bps:
+            absolute_bps = base_spread + float(shock_bps)
+            if absolute_bps < 0.0:
+                raise ValueError(
+                    f"spread shock {float(shock_bps):+g} bps takes the absolute "
+                    f"fx.spread_bps below zero (base {base_spread:g} bps -> "
+                    f"{absolute_bps:g} bps); the engine rejects negative spreads — "
+                    "use deltas that keep base + shock >= 0."
+                )
             out = evaluate_with_overrides(
-                self.base_config_path, {"fx": {"spread_shock_bps": float(spread_bps)}}
+                self.base_config_path,
+                {"fx": {"spread_bps": absolute_bps, "hedge_ratio": ref_hedge}},
             )
             spread_values.append(_metric_from_result(out, metric))
         pairs.append(
             _linear_fit("spread", self.config.spread_shocks_bps, spread_values)
         )
-        if all(abs(v - spread_values[0]) < 1e-12 for v in spread_values):
-            logger.warning(
-                "FX spread sweep shows zero sensitivity: it overrides the legacy "
-                "`fx.spread_shock_bps` key, which the cashflow engine does not read (the "
-                "live key is `fx.spread_bps`, and spread only bites under an active hedge). "
-                "Wiring the spread accessor is tracked as #659; the hedge_ratio coefficient "
-                "IS engine-driven."
-            )
 
         total_variance = float(sum(variance for _, variance in pairs))
         coefficients = [
@@ -374,6 +427,53 @@ class FXSensitivityAnalyzer:
                     dscr,
                 )
             )
+
+        # HEDGE-RATIO sweep (engine-driven since #652): absolute fx.hedge_ratio values
+        # at the scenario's own base spread.
+        hedge_steps = (
+            [float(h) for h in hedge_ratio_steps]
+            if hedge_ratio_steps is not None
+            else [0.0, 0.25, 0.5, 0.75, 1.0]
+        )
+        for hedge in hedge_steps:
+            out = self._run_pipeline_with_fx_params(base_fx, hedge, base_spread)
+            irr, npv, equity_irr, equity_npv, dscr = self._extract_metrics(out)
+            result.hedge_ratio_points.append(
+                FXSensitivityPoint(
+                    base_fx,
+                    hedge,
+                    base_spread,
+                    irr,
+                    npv,
+                    equity_irr,
+                    equity_npv,
+                    dscr,
+                )
+            )
+
+        # SPREAD sweep (live fx.spread_bps, #659): upward deltas from the base spread —
+        # non-negative by construction, so the engine's >= 0 gate can never trip — run
+        # under an ACTIVE hedge (base hedge when > 0, else the documented reference full
+        # hedge h=1.0; spread is inert at hedge_ratio=0). Same convention as run().
+        ref_hedge = base_hedge if base_hedge > 0.0 else 1.0
+        for spread in np.linspace(
+            base_spread, base_spread + spread_variation_bps, spread_steps
+        ):
+            out = self._run_pipeline_with_fx_params(base_fx, ref_hedge, float(spread))
+            irr, npv, equity_irr, equity_npv, dscr = self._extract_metrics(out)
+            result.spread_points.append(
+                FXSensitivityPoint(
+                    base_fx,
+                    ref_hedge,
+                    float(spread),
+                    irr,
+                    npv,
+                    equity_irr,
+                    equity_npv,
+                    dscr,
+                )
+            )
+
         result.calculate_summary_metrics()
         return result
 

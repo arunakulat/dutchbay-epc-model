@@ -40,7 +40,9 @@ def sample_config() -> FXSensitivityConfig:
     return FXSensitivityConfig(
         fx_rate_shocks=[-0.10, -0.05, 0.0, 0.05, 0.10],
         hedge_ratio_values=[0.0, 0.25, 0.50, 0.75, 1.0],
-        spread_shocks_bps=[-100, -50, 0, 50, 100],
+        # DELTAS around the base fx.spread_bps — non-negative so base+shock can never
+        # cross the engine's >= 0 gate on an unhedged (base 0) scenario (#659).
+        spread_shocks_bps=[0, 25, 50, 75, 100],
         target_metric="project_irr",
         confidence_level=0.95,
     )
@@ -71,7 +73,8 @@ class TestFXSensitivityConfig:
         config = FXSensitivityConfig()
         assert config.fx_rate_shocks == [-0.10, -0.05, 0.0, 0.05, 0.10]
         assert config.hedge_ratio_values == [0.0, 0.5, 1.0]
-        assert config.spread_shocks_bps == [-100, 0, 100]
+        # non-negative DELTAS around base fx.spread_bps (#659)
+        assert config.spread_shocks_bps == [0.0, 50.0, 100.0]
         assert config.target_metric == "project_irr"
         assert config.confidence_level == 0.95
 
@@ -414,7 +417,7 @@ class TestFXSensitivityIntegration:
         config = FXSensitivityConfig(
             fx_rate_shocks=[-0.05, 0.0, 0.05],
             hedge_ratio_values=[0.0, 0.5, 1.0],
-            spread_shocks_bps=[-50, 0, 50],
+            spread_shocks_bps=[0, 25, 50],  # non-negative deltas (#659)
             target_metric="project_irr",
         )
 
