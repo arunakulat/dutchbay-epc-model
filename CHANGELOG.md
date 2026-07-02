@@ -5,6 +5,24 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in solar frozen-export ingestion in the canonical CLI (#614, default OFF, KPI-neutral).**
+  `run_full_pipeline_v14.py` + `conf/run_full_pipeline_v14.yaml` gain the opt-in,
+  default-null Hydra keys `solar_assessment_json` (+ `solar_adapter_mode` /
+  `solar_tolerance_pct` / `solar_export_scenario` / `solar_technology`), the photovoltaic
+  analogue of the Sprint-19 wind ingestion path. When set, the CLI consumes a **frozen**
+  solar export through the pvlib-free
+  `solar_resource.cashflow_adapter.solar_export_to_scenario_patch` — patching the per-tech
+  `generation.technologies.<tech>` block and re-blending `project.capacity_factor` — with
+  semantics matching `app/services/pipeline_service.run_integrated_case` (it chains AFTER any
+  wind patch). `compute_solar_aep` / `pvlib` are NEVER imported in the finance path, and
+  there is deliberately no solar auto-orchestrate analogue: lender-grade runs consume an
+  audited frozen export (CASPER/frozen-export design). Ingestion failures fail loud with a
+  structured error JSON (`status='error'`, `phase='solar_resource_ingestion'`, or
+  `error_type='SolarAdapterDriftError'` with `solar_value`/`drift_pct`) and exit 1 before
+  finance. This closes #614's "or document" alternative — hybrid solar parity is via the
+  frozen export, not a producer re-run. DEFAULT ABSENT = byte-identical: no committed
+  scenario passes a solar export, verified via the all-scenarios KPI oracle (all 27 scenarios
+  unchanged).
 - **P90 (downside) debt-sizing detail surfaced in the lender report (#613, render-when-present, KPI-neutral).**
   The lender pack already renders "Binding sizing constraint … (P50/P90)" by default for
   every `debt_sizing: dual_dscr` scenario (`report.html.j2` via `api.pipeline_api._extract_debt`);
