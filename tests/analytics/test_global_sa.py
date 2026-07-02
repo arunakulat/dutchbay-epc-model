@@ -12,6 +12,7 @@ never touched (no canonical-KPI assertions belong here).
 
 from __future__ import annotations
 
+import logging
 import math
 
 import pytest
@@ -19,6 +20,8 @@ import pytest
 pytest.importorskip("SALib")  # optional dependency (CASPER); skip cleanly if absent
 
 from pathlib import Path  # noqa: E402
+
+import numpy as np  # noqa: E402
 
 from analytics.sensitivity.global_sa import (  # noqa: E402
     GlobalSAProblem,
@@ -180,3 +183,241 @@ def test_pawn_flags_covenant_pinned_metric_as_flat() -> None:
     assert flat["flat_metric"] is True
     for d in flat["drivers"].values():
         assert d == {"median": 0.0, "mean": 0.0, "cv": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# #644 — shared finite-mask: a partial-NaN metric column must not poison indices
+# ---------------------------------------------------------------------------
+
+_PROB3 = GlobalSAProblem(names=["x1", "x2", "x3"], bounds=[(-math.pi, math.pi)] * 3)
+
+
+class _NanInjector:
+    """Ishigami evaluator whose 'y_nan' copy returns None on a deterministic subset of calls.
+
+    ``_evaluate_rows`` walks the sample rows in order, so "every ``keep_period``-th call"
+    is a pure function of row order (MRM-01: deterministic masking). 'y' stays fully
+    finite — the sibling-metric-isolation control.
+    """
+
+    def __init__(self, nan_period: int) -> None:
+        self.nan_period = nan_period
+        self.calls = 0
+
+    def __call__(self, overrides):
+        out = dict(_ishigami(overrides))
+        self.calls += 1
+        out["y_nan"] = None if self.calls % self.nan_period == 0 else out["y"]
+        return out
+
+
+class _MostlyNoneInjector:
+    """Ishigami evaluator whose 'y_nan' copy is None on 2 of every 3 calls (share > 50%)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, overrides):
+        out = dict(_ishigami(overrides))
+        self.calls += 1
+        out["y_nan"] = out["y"] if self.calls % 3 == 0 else None
+        return out
+
+
+def test_sobol_partial_nan_masks_whole_saltelli_blocks() -> None:
+    """A partially-NaN column yields FINITE Sobol indices computed on the finite subset,
+    masked by WHOLE Saltelli blocks (D+2 rows — row masking would corrupt the A/B/AB
+    pairing), with a loud disclosure; the sibling clean metric is untouched (#644)."""
+    res = run_sobol(
+        problem=_PROB3,
+        evaluate_fn=_NanInjector(97),
+        metrics=("y", "y_nan"),
+        n=512,
+        seed=1,
+    )
+    clean, poisoned = res["metrics"]["y"], res["metrics"]["y_nan"]
+    # Sibling metric: fully finite column -> analyzed on the FULL sample, no disclosure.
+    assert clean["flat_metric"] is False
+    assert clean["nan_poisoned"] is False
+    assert "masked" not in clean
+    # Masked metric: finite indices, Ishigami structure still recovered.
+    assert poisoned["flat_metric"] is False
+    assert poisoned["nan_poisoned"] is False
+    d = poisoned["drivers"]
+    for name in _PROB3.names:
+        for k in ("S1", "S1_conf", "ST", "ST_conf"):
+            assert math.isfinite(d[name][k])
+    assert d["x1"]["S1"] > 0.2
+    assert d["x2"]["S1"] > 0.3
+    assert d["x3"]["ST"] > 0.1
+    # Disclosure: whole (D+2)-row blocks dropped, share disclosed and sub-threshold.
+    m = poisoned["masked"]
+    assert m["unit"] == "saltelli_block"
+    assert m["block_size"] == len(_PROB3.names) + 2
+    assert 0 < m["n_units_dropped"] < m["n_units"]
+    assert m["n_rows_dropped"] == m["n_units_dropped"] * m["block_size"]
+    assert 0.0 < m["dropped_share"] < 0.5
+    assert m["nan_poisoned"] is False
+
+
+def test_morris_partial_nan_drops_whole_trajectories() -> None:
+    """A partially-NaN column yields FINITE Morris mu_star/sigma with whole (D+1)-row
+    trajectories dropped, and a ranking derived from the actual values — not the
+    pre-#644 fabricated insertion-order sort over NaN keys."""
+    res = run_morris(
+        problem=_PROB3,
+        evaluate_fn=_NanInjector(29),
+        metrics=("y", "y_nan"),
+        n_trajectories=32,
+        seed=1,
+    )
+    clean, poisoned = res["metrics"]["y"], res["metrics"]["y_nan"]
+    assert clean["nan_poisoned"] is False
+    assert "masked" not in clean
+    d = poisoned["drivers"]
+    for name in _PROB3.names:
+        assert math.isfinite(d[name]["mu_star"])
+        assert math.isfinite(d[name]["sigma"])
+    assert any(d[name]["mu_star"] > 0.0 for name in _PROB3.names)
+    # Ranking follows the reported mu_star values (pre-fix: all-NaN -> fabricated order).
+    assert poisoned["ranking"] == sorted(d, key=lambda k: d[k]["mu_star"], reverse=True)
+    m = poisoned["masked"]
+    assert m["unit"] == "trajectory"
+    assert m["block_size"] == len(_PROB3.names) + 1
+    assert 0 < m["n_units_dropped"] < m["n_units"]
+    assert m["nan_poisoned"] is False
+
+
+def test_pawn_partial_nan_masks_rows() -> None:
+    """PAWN is given-data, so the mask is row-wise: finite, in-band KS indices on the
+    finite subset, with the dropped-row disclosure (#644)."""
+    res = run_pawn(
+        problem=_PROB3,
+        evaluate_fn=_NanInjector(37),
+        metrics=("y", "y_nan"),
+        n=256,
+        seed=1,
+    )
+    clean, poisoned = res["metrics"]["y"], res["metrics"]["y_nan"]
+    assert clean["nan_poisoned"] is False
+    assert "masked" not in clean
+    d = poisoned["drivers"]
+    for name in _PROB3.names:
+        assert 0.0 <= d[name]["median"] <= 1.0
+        assert math.isfinite(d[name]["mean"])
+    assert poisoned["ranking"] == sorted(d, key=lambda k: d[k]["median"], reverse=True)
+    m = poisoned["masked"]
+    assert m["unit"] == "row"
+    assert m["block_size"] == 1
+    assert m["n_rows_dropped"] == m["n_units_dropped"] > 0
+    assert m["nan_poisoned"] is False
+
+
+def test_sobol_clean_data_indices_identical_to_direct_salib() -> None:
+    """The finite-mask is a strict no-op on clean data: run_sobol's indices are IDENTICAL
+    to a hand-rolled SALib sample->analyze on the same seed, proving the Saltelli
+    pairing is untouched by the #644 guard."""
+    from SALib.analyze import sobol as sobol_analyze
+    from SALib.sample import sobol as sobol_sample
+
+    res = run_sobol(
+        problem=_PROB3, evaluate_fn=_ishigami, metrics=("y",), n=128, seed=3
+    )
+    X = sobol_sample.sample(_PROB3.as_salib(), 128, calc_second_order=False, seed=3)
+    Y = np.asarray(
+        [_ishigami(dict(zip(_PROB3.names, row)))["y"] for row in X], dtype=float
+    )
+    Si = sobol_analyze.analyze(
+        _PROB3.as_salib(), Y, calc_second_order=False, seed=3, print_to_console=False
+    )
+    entry = res["metrics"]["y"]
+    assert entry["nan_poisoned"] is False
+    assert "masked" not in entry
+    for i, name in enumerate(_PROB3.names):
+        assert entry["drivers"][name]["S1"] == float(Si["S1"][i])
+        assert entry["drivers"][name]["S1_conf"] == float(Si["S1_conf"][i])
+        assert entry["drivers"][name]["ST"] == float(Si["ST"][i])
+        assert entry["drivers"][name]["ST_conf"] == float(Si["ST_conf"][i])
+
+
+@pytest.mark.parametrize(
+    "runner, kwargs, zeroed",
+    [
+        (
+            run_sobol,
+            {"n": 128},
+            {
+                "S1": 0.0,
+                "S1_conf": 0.0,
+                "ST": 0.0,
+                "ST_conf": 0.0,
+                "interactive": False,
+            },
+        ),
+        (run_morris, {"n_trajectories": 16}, {"mu_star": 0.0, "sigma": 0.0}),
+        (run_pawn, {"n": 128}, {"median": 0.0, "mean": 0.0, "cv": 0.0}),
+    ],
+)
+def test_nan_poisoned_threshold_flags_metric(runner, kwargs, zeroed) -> None:
+    """Above the 50% masked-share guard the metric is flagged nan_poisoned (the NaN
+    analogue of flat_metric): zeroed indices + reason + disclosure, no exception, and the
+    sibling clean metric's decomposition is unaffected (#644)."""
+    res = runner(
+        problem=_PROB3,
+        evaluate_fn=_MostlyNoneInjector(),
+        metrics=("y", "y_nan"),
+        seed=1,
+        **kwargs,
+    )
+    poisoned = res["metrics"]["y_nan"]
+    assert poisoned["nan_poisoned"] is True
+    assert poisoned["flat_metric"] is False
+    assert "guard" in poisoned["nan_poisoned_reason"]
+    assert poisoned["masked"]["nan_poisoned"] is True
+    assert poisoned["masked"]["dropped_share"] > 0.5
+    for d in poisoned["drivers"].values():
+        assert d == zeroed
+    # The clean sibling metric is still genuinely decomposed.
+    clean = res["metrics"]["y"]
+    assert clean["flat_metric"] is False
+    assert clean["nan_poisoned"] is False
+    assert "masked" not in clean
+
+
+def test_all_nan_column_still_resolves_via_flat_guard() -> None:
+    """An ALL-NaN column keeps resolving through _is_flat_output (flat_metric=True), not
+    through the #644 mask (#644 acceptance: the pre-existing path is preserved)."""
+
+    def _fn(overrides):
+        out = dict(_ishigami(overrides))
+        out["y_nan"] = None
+        return out
+
+    res = run_sobol(
+        problem=_PROB3, evaluate_fn=_fn, metrics=("y", "y_nan"), n=64, seed=1
+    )
+    entry = res["metrics"]["y_nan"]
+    assert entry["flat_metric"] is True
+    assert entry["nan_poisoned"] is False
+    assert "masked" not in entry
+
+
+def test_masking_emits_warning_with_count_and_metric(caplog) -> None:
+    """Any masking is disclosed loudly (CESSPIT): a WARNING naming the metric and carrying
+    the dropped count — never a silent truncation (#644)."""
+    with caplog.at_level(logging.WARNING, logger="analytics.sensitivity.global_sa"):
+        res = run_pawn(
+            problem=_PROB3,
+            evaluate_fn=_NanInjector(37),
+            metrics=("y_nan",),
+            n=128,
+            seed=1,
+        )
+    m = res["metrics"]["y_nan"]["masked"]
+    assert m["n_units_dropped"] > 0
+    msgs = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    matching = [msg for msg in msgs if "y_nan" in msg and "dropping" in msg]
+    assert matching, f"no masking warning found in: {msgs}"
+    assert any(
+        f"dropping {m['n_units_dropped']} of {m['n_units']}" in msg for msg in matching
+    )

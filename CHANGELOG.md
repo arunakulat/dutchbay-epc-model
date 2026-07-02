@@ -46,6 +46,27 @@ All notable changes to this project will be documented here.
     duplicated hedged scenario fixture.
 
 ### Fixed
+- **Global SA: shared finite-mask stops a partial-NaN metric column poisoning Sobol/Morris/PAWN
+  indices (#644, KPI-neutral).** A metric column with SOME non-finite entries (an engine KPI
+  returning `None` on a subset of sample rows) passed the `_is_flat_output` guard — which inspects
+  only finite values — and fed NaNs straight into SALib `analyze`, yielding all-NaN indices plus a
+  fabricated insertion-order `ranking` (`sorted()` over NaN keys). All three runners in
+  `analytics.sensitivity.global_sa` now mask non-finite outputs BEFORE `analyze` via a shared
+  helper (`_apply_finite_mask`) that respects each estimator's sample design: **Sobol** drops whole
+  Saltelli blocks (`D+2` rows, `2D+2` with second order) and **Morris** whole trajectories
+  (`D+1` rows) containing any non-finite output — never single rows, which would corrupt the
+  A/B/AB and elementary-effect pairing (verified against SALib 1.5.2's block indexing) — while the
+  given-data **PAWN** masks row-wise. Masking is deterministic (a pure function of the output
+  vector, MRM-01) and loudly disclosed (CESSPIT): a `logger.warning` carries the metric name and
+  dropped block/row count + share, and a `masked` disclosure dict is attached to the per-metric
+  result. Documented thresholds (the issue names none): above a 10% dropped share the warning
+  escalates; above 50% the metric is flagged **`nan_poisoned`** with zeroed indices (the NaN
+  analogue of `flat_metric`, logged at ERROR) instead of analyzing an unrepresentative residue —
+  flag-not-raise, so one poisoned metric cannot destroy the other metrics' indices in the same
+  run. The all-NaN column still resolves via `_is_flat_output` (unchanged), clean-data index
+  values are bit-identical to a direct SALib `sample->analyze` (pinned by test), and all committed
+  scenarios are **kpi_oracle byte-identical (argv-correct)** — the guard is unreachable on the
+  committed lender case, whose worst-corner KPIs are all finite.
 - **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
   Five verified erosions of the fail-loud stance closed; all committed scenarios verified
   **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a

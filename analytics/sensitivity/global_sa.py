@@ -22,6 +22,14 @@ a new read-only analysis artifact only.
 CASPER: SALib is an optional dependency (the ``[dev]`` toolchain / the pinned lock carry it);
 :func:`_require_salib` fails loud with an actionable message if it is absent, so the base
 finance install never needs it.
+
+CESSPIT (#644): a PARTIALLY non-finite metric column (an engine KPI returning ``None`` on a
+subset of sample rows) would silently poison SALib's estimators into all-NaN indices plus a
+fabricated insertion-order ranking. :func:`_apply_finite_mask` guards all three methods:
+non-finite outputs are masked out BEFORE ``analyze`` — whole Saltelli blocks for Sobol,
+whole trajectories for Morris, single rows for the given-data PAWN — with a loud disclosure
+(dropped count + share, in the log and in the result). Above ``_MASKED_SHARE_POISONED`` the
+metric is flagged ``nan_poisoned`` (the NaN analogue of ``flat_metric``) instead of analyzed.
 """
 
 from __future__ import annotations
@@ -58,6 +66,17 @@ _COVENANT_METRIC_TOKENS: Tuple[str, ...] = ("dscr", "llcr", "plcr")
 _FLAT_ABS_TOL: float = 1e-12
 _FLAT_REL_TOL: float = 1e-6
 
+#: NaN-poisoning guards (#644). Issue names no threshold, so these are set here and
+#: documented: any drop is disclosed with a WARNING carrying the count/share; above
+#: ``_MASKED_SHARE_WARN`` the warning escalates (the finite subsample is materially
+#: reduced — treat rankings with caution); above ``_MASKED_SHARE_POISONED`` the metric is
+#: flagged ``nan_poisoned`` with zeroed indices (the NaN analogue of ``flat_metric``)
+#: instead of analyzing a residue too thin to be representative. Flag-not-raise, per the
+#: issue's flat_metric-analogue prescription: one poisoned metric must not destroy the
+#: other metrics' indices in the same run.
+_MASKED_SHARE_WARN: float = 0.10
+_MASKED_SHARE_POISONED: float = 0.50
+
 
 def _flat_metric_reason(metric_key: str) -> str:
     """Covenant-aware explanation for a structurally-flat global-SA metric."""
@@ -84,6 +103,145 @@ def _is_flat_output(values: Sequence[float]) -> Tuple[bool, float]:
     spread = float(np.ptp(finite))
     scale = max(abs(float(np.mean(finite))), 1.0)
     return spread <= max(_FLAT_ABS_TOL, _FLAT_REL_TOL * scale), spread
+
+
+def _apply_finite_mask(
+    method: str,
+    metric: str,
+    X: np.ndarray,
+    Y: np.ndarray,
+    *,
+    block_size: int,
+    unit_label: str,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    """Mask sample units whose output contains any non-finite value — the shared #644 guard.
+
+    A partially-NaN output column passes :func:`_is_flat_output` (which inspects only the
+    FINITE values) and then poisons SALib's estimators into all-NaN indices plus a
+    fabricated insertion-order ranking. This helper masks non-finite outputs BEFORE
+    ``analyze``, respecting each estimator's sample design:
+
+    * **Sobol / Morris** assume the structured design — Saltelli cross-sample blocks of
+      ``D+2`` (or ``2D+2`` with second order) consecutive rows / one-at-a-time
+      trajectories of ``D+1`` consecutive rows — so plain row masking silently corrupts
+      the estimator pairing. The WHOLE sample unit (``block_size`` consecutive rows) is
+      dropped when ANY of its outputs is non-finite; SALib's ``analyze`` then sees fewer
+      complete units, which is estimator-valid (verified against SALib 1.5.2's block
+      indexing: ``A = Y[0::step]``, ``AB_j = Y[j+1::step]``, ``B = Y[step-1::step]``).
+    * **PAWN** is a given-data method, so ``block_size=1`` (row-wise masking) is valid.
+
+    Deterministic (MRM-01): the mask is a pure function of ``Y``. Disclosure is loud
+    (CESSPIT — no silent truncation): any drop logs a WARNING with the metric name and
+    the dropped unit/row counts, and the returned disclosure dict is attached to the
+    per-metric result. Above ``_MASKED_SHARE_POISONED`` the disclosure carries
+    ``nan_poisoned=True`` and an ERROR is logged; the caller must then flag the metric
+    (zeroed indices — the NaN analogue of ``flat_metric``) instead of analyzing, and the
+    inputs are returned unmasked since they will not be analyzed at all.
+
+    Returns ``(X_masked, Y_masked, disclosure)``; the inputs are returned unchanged
+    (same objects, pairing untouched) when every output is finite.
+    """
+    n_rows = int(Y.shape[0])
+    if block_size < 1 or n_rows < block_size or n_rows % block_size:
+        raise ValueError(
+            f"global SA ({method}) metric '{metric}': sample of {n_rows} rows is not a "
+            f"whole number of {unit_label}s of {block_size} rows — cannot mask by "
+            "sample unit."
+        )
+    n_units = n_rows // block_size
+    finite_rows = np.isfinite(Y)
+    unit_keep = finite_rows.reshape(n_units, block_size).all(axis=1)
+    n_units_dropped = int(n_units - int(unit_keep.sum()))
+    dropped_share = n_units_dropped / n_units
+    disclosure: Dict[str, Any] = {
+        "unit": unit_label,
+        "block_size": int(block_size),
+        "n_rows": n_rows,
+        "n_rows_dropped": n_units_dropped * int(block_size),
+        "n_nonfinite_rows": int(np.count_nonzero(~finite_rows)),
+        "n_units": n_units,
+        "n_units_dropped": n_units_dropped,
+        "dropped_share": float(dropped_share),
+        "nan_poisoned": dropped_share > _MASKED_SHARE_POISONED,
+    }
+    if n_units_dropped == 0:
+        return X, Y, disclosure
+    human_unit = unit_label.replace("_", " ")
+    if disclosure["nan_poisoned"]:
+        logger.error(
+            "global SA (%s) metric '%s' is NaN-POISONED: %d of %d %ss (%.1f%%, %d rows) "
+            "contain non-finite outputs (%d non-finite values), above the %.0f%% guard "
+            "— flagging nan_poisoned and zeroing indices (the NaN analogue of "
+            "flat_metric) instead of analyzing the residue.",
+            method,
+            metric,
+            n_units_dropped,
+            n_units,
+            human_unit,
+            100.0 * dropped_share,
+            disclosure["n_rows_dropped"],
+            disclosure["n_nonfinite_rows"],
+            100.0 * _MASKED_SHARE_POISONED,
+        )
+        return X, Y, disclosure
+    escalation = ""
+    if dropped_share > _MASKED_SHARE_WARN:
+        escalation = (
+            f"; the dropped share exceeds {_MASKED_SHARE_WARN:.0%} — treat the "
+            "resulting indices and rankings with caution"
+        )
+    logger.warning(
+        "global SA (%s) metric '%s': dropping %d of %d %ss (%.1f%%, %d rows) containing "
+        "%d non-finite outputs before analyze() — indices are computed on the finite "
+        "subset only%s.",
+        method,
+        metric,
+        n_units_dropped,
+        n_units,
+        human_unit,
+        100.0 * dropped_share,
+        disclosure["n_rows_dropped"],
+        disclosure["n_nonfinite_rows"],
+        escalation,
+    )
+    row_keep = np.repeat(unit_keep, block_size)
+    return X[row_keep], Y[row_keep], disclosure
+
+
+def _nan_poisoned_reason(masked: Mapping[str, Any]) -> str:
+    """Human-readable reason attached to a ``nan_poisoned`` metric (#644)."""
+    unit = str(masked["unit"]).replace("_", " ")
+    return (
+        f"{masked['n_units_dropped']} of {masked['n_units']} {unit}s "
+        f"({masked['dropped_share']:.0%}) contain non-finite outputs — above the "
+        f"{_MASKED_SHARE_POISONED:.0%} guard, indices computed on the finite residue "
+        "would be unrepresentative; fix the evaluator (why is this KPI None/NaN over so "
+        "much of the sweep box?) or narrow the driver bounds"
+    )
+
+
+def _zeroed_sobol_drivers(names: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+    """Zeroed, in-band Sobol driver entries for a flagged (flat / nan_poisoned) metric."""
+    return {
+        name: {
+            "S1": 0.0,
+            "S1_conf": 0.0,
+            "ST": 0.0,
+            "ST_conf": 0.0,
+            "interactive": False,
+        }
+        for name in names
+    }
+
+
+def _zeroed_morris_drivers(names: Sequence[str]) -> Dict[str, Dict[str, float]]:
+    """Zeroed Morris driver entries for a flagged (flat / nan_poisoned) metric."""
+    return {name: {"mu_star": 0.0, "sigma": 0.0} for name in names}
+
+
+def _zeroed_pawn_drivers(names: Sequence[str]) -> Dict[str, Dict[str, float]]:
+    """Zeroed PAWN driver entries for a flagged (flat / nan_poisoned) metric."""
+    return {name: {"median": 0.0, "mean": 0.0, "cv": 0.0} for name in names}
 
 
 def _require_salib() -> None:
@@ -257,6 +415,12 @@ def run_sobol(
     Cost is ``n·(D+2)`` evaluations (``calc_second_order=False``). Returns a dict keyed by
     metric → {driver → {S1, S1_conf, ST, ST_conf, interactive}}, plus ``problem`` metadata.
     ``problem``/``evaluate_fn`` override the config-derived defaults (used by closed-form tests).
+
+    Non-finite outputs (#644): whole Saltelli blocks (``D+2`` rows, ``2D+2`` with second
+    order) containing any non-finite output are dropped before ``analyze`` — never single
+    rows, which would corrupt the A/B/AB pairing — with a ``masked`` disclosure in the
+    per-metric result; above ``_MASKED_SHARE_POISONED`` the metric is flagged
+    ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`).
     """
     _require_salib()
     from SALib.analyze import sobol as sobol_analyze
@@ -275,6 +439,8 @@ def run_sobol(
         "n_runs": len(X),
         "problem": prob.as_salib(),
     }
+    # Saltelli sample-unit size: [A, AB_1..AB_D, B] (+ BA_1..BA_D with second order).
+    block_rows = 2 * prob.num_vars + 2 if calc_second_order else prob.num_vars + 2
     per_metric: Dict[str, Any] = {}
     for m in metrics:
         is_flat, spread = _is_flat_output(cols[m])
@@ -289,24 +455,34 @@ def run_sobol(
                 reason,
             )
             per_metric[m] = {
-                "drivers": {
-                    name: {
-                        "S1": 0.0,
-                        "S1_conf": 0.0,
-                        "ST": 0.0,
-                        "ST_conf": 0.0,
-                        "interactive": False,
-                    }
-                    for name in prob.names
-                },
+                "drivers": _zeroed_sobol_drivers(prob.names),
                 "interactions_present": False,
                 "flat_metric": True,
                 "flat_metric_reason": reason,
+                "nan_poisoned": False,
+            }
+            continue
+        _, y_masked, masked = _apply_finite_mask(
+            "sobol",
+            m,
+            X,
+            cols[m],
+            block_size=block_rows,
+            unit_label="saltelli_block",
+        )
+        if masked["nan_poisoned"]:
+            per_metric[m] = {
+                "drivers": _zeroed_sobol_drivers(prob.names),
+                "interactions_present": False,
+                "flat_metric": False,
+                "nan_poisoned": True,
+                "nan_poisoned_reason": _nan_poisoned_reason(masked),
+                "masked": masked,
             }
             continue
         Si = sobol_analyze.analyze(
             salib_problem,
-            cols[m],
+            y_masked,
             calc_second_order=calc_second_order,
             seed=seed,
             print_to_console=False,
@@ -321,11 +497,15 @@ def run_sobol(
                 "ST_conf": float(Si["ST_conf"][i]),
                 "interactive": (st - s1) > INTERACTION_TOL,
             }
-        per_metric[m] = {
+        entry: Dict[str, Any] = {
             "drivers": drivers,
             "interactions_present": any(d["interactive"] for d in drivers.values()),
             "flat_metric": False,
+            "nan_poisoned": False,
         }
+        if masked["n_units_dropped"]:
+            entry["masked"] = masked
+        per_metric[m] = entry
     out["metrics"] = per_metric
     return out
 
@@ -345,6 +525,12 @@ def run_morris(
     Cheap (``n_trajectories·(D+1)`` evaluations) — use it to RANK drivers before paying for
     :func:`run_sobol`. ``mu_star`` ranks importance; high ``sigma`` flags non-linear/interactive.
     ``problem``/``evaluate_fn`` override the config-derived defaults (used by closed-form tests).
+
+    Non-finite outputs (#644): whole trajectories (``D+1`` consecutive rows) containing any
+    non-finite output are dropped from BOTH ``X`` and ``Y`` before ``analyze`` — never
+    single rows, which would corrupt the elementary-effect pairing — with a ``masked``
+    disclosure in the per-metric result; above ``_MASKED_SHARE_POISONED`` the metric is
+    flagged ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`).
     """
     _require_salib()
     from SALib.analyze import morris as morris_analyze
@@ -374,23 +560,49 @@ def run_morris(
                 len(X),
                 reason,
             )
-            drivers_flat = {name: {"mu_star": 0.0, "sigma": 0.0} for name in prob.names}
             per_metric[m] = {
-                "drivers": drivers_flat,
+                "drivers": _zeroed_morris_drivers(prob.names),
                 "ranking": list(prob.names),
                 "flat_metric": True,
                 "flat_metric_reason": reason,
+                "nan_poisoned": False,
+            }
+            continue
+        x_masked, y_masked, masked = _apply_finite_mask(
+            "morris",
+            m,
+            X,
+            cols[m],
+            block_size=prob.num_vars + 1,
+            unit_label="trajectory",
+        )
+        if masked["nan_poisoned"]:
+            per_metric[m] = {
+                "drivers": _zeroed_morris_drivers(prob.names),
+                "ranking": list(prob.names),
+                "flat_metric": False,
+                "nan_poisoned": True,
+                "nan_poisoned_reason": _nan_poisoned_reason(masked),
+                "masked": masked,
             }
             continue
         Si = morris_analyze.analyze(
-            salib_problem, X, cols[m], print_to_console=False, seed=seed
+            salib_problem, x_masked, y_masked, print_to_console=False, seed=seed
         )
         drivers = {
             name: {"mu_star": float(Si["mu_star"][i]), "sigma": float(Si["sigma"][i])}
             for i, name in enumerate(prob.names)
         }
         ranked = sorted(drivers, key=lambda k: drivers[k]["mu_star"], reverse=True)
-        per_metric[m] = {"drivers": drivers, "ranking": ranked, "flat_metric": False}
+        entry: Dict[str, Any] = {
+            "drivers": drivers,
+            "ranking": ranked,
+            "flat_metric": False,
+            "nan_poisoned": False,
+        }
+        if masked["n_units_dropped"]:
+            entry["masked"] = masked
+        per_metric[m] = entry
     out["metrics"] = per_metric
     return out
 
@@ -424,6 +636,11 @@ def run_pawn(
     an inert driver still measures a median KS of ~0.15, so low-end ranking positions are not
     evidence of influence (the floor roughly halves as ``n`` doubles). ``problem``/``evaluate_fn``
     override the config-derived defaults (used by closed-form tests).
+
+    Non-finite outputs (#644): PAWN is given-data, so rows with a non-finite output are
+    masked from BOTH ``X`` and ``Y`` row-wise (estimator-valid, unlike Sobol/Morris) with a
+    ``masked`` disclosure in the per-metric result; above ``_MASKED_SHARE_POISONED`` the
+    metric is flagged ``nan_poisoned`` with zeroed KS (see :func:`_apply_finite_mask`).
     """
     _require_salib()
     from SALib.analyze import pawn as pawn_analyze
@@ -455,12 +672,29 @@ def run_pawn(
                 reason,
             )
             per_metric[m] = {
-                "drivers": {
-                    name: {"median": 0.0, "mean": 0.0, "cv": 0.0} for name in prob.names
-                },
+                "drivers": _zeroed_pawn_drivers(prob.names),
                 "ranking": list(prob.names),
                 "flat_metric": True,
                 "flat_metric_reason": reason,
+                "nan_poisoned": False,
+            }
+            continue
+        x_masked, y_masked, masked = _apply_finite_mask(
+            "pawn",
+            m,
+            X,
+            np.asarray(cols[m], dtype=float),
+            block_size=1,
+            unit_label="row",
+        )
+        if masked["nan_poisoned"]:
+            per_metric[m] = {
+                "drivers": _zeroed_pawn_drivers(prob.names),
+                "ranking": list(prob.names),
+                "flat_metric": False,
+                "nan_poisoned": True,
+                "nan_poisoned_reason": _nan_poisoned_reason(masked),
+                "masked": masked,
             }
             continue
         # PAWN is deterministic given (X, Y); ``seed`` is not passed to ``analyze`` because
@@ -468,8 +702,8 @@ def run_pawn(
         # leaving the KS computation unchanged. The seed that matters is on ``latin.sample`` above.
         Si = pawn_analyze.analyze(
             salib_problem,
-            X,
-            np.asarray(cols[m], dtype=float),
+            x_masked,
+            y_masked,
             S=int(s),
             print_to_console=False,
         )
@@ -482,6 +716,14 @@ def run_pawn(
             for i, name in enumerate(prob.names)
         }
         ranked = sorted(drivers, key=lambda k: drivers[k]["median"], reverse=True)
-        per_metric[m] = {"drivers": drivers, "ranking": ranked, "flat_metric": False}
+        entry: Dict[str, Any] = {
+            "drivers": drivers,
+            "ranking": ranked,
+            "flat_metric": False,
+            "nan_poisoned": False,
+        }
+        if masked["n_units_dropped"]:
+            entry["masked"] = masked
+        per_metric[m] = entry
     out["metrics"] = per_metric
     return out
