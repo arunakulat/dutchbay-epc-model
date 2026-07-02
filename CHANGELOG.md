@@ -112,6 +112,17 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Batch-path economics now labelled non-authoritative in every emitted JSON (#611).** The batch
+  comparison CLI (`run_scenario_analytics_v14.py` → `analytics.scenario_analytics`) computes DSCR/IRR
+  on a deliberately lighter basis than the canonical pipeline (PIPE-1, #472: no build-up WACC, no
+  two-pass interest tax shield, no equity waterfall), but only a docstring said so. Both emitted JSON
+  payloads — the persisted `output_summary_json` (serialised `BatchResultSummary`, which gains a
+  `basis` field defaulting to the new `analytics.scenario_analytics.BATCH_ECONOMICS_BASIS`) and the
+  CLI stdout summary (now built by `run_scenario_analytics_v14._build_stdout_payload`) — carry a
+  machine-readable `basis: "comparison_snapshot"` marker so a consumer cannot mistake batch numbers
+  for `run_full_pipeline_v14.py` economics. Strictly ADDITIVE: no existing key is renamed, removed or
+  revalued (downstream consumers grep-verified: tests only); committed scenario KPIs are
+  kpi-oracle byte-identical. JSON-shape tests extended to pin the marker at both emission points.
 - **Frozen-contract pattern extended to the report/job models (#608, KPI-neutral).** All 13
   report-section models in `app/reports/report_model.py` (`KpiRow`, `AssumptionRow`, `RiskRow`,
   `ReadinessRow`, `Verdict`, `ReportContext` — previously `extra="forbid"` only — plus
