@@ -23,7 +23,10 @@ from __future__ import annotations
 
 from typing import Any, Literal, Mapping, Sequence
 
-from analytics.aep_provenance import enforce_aep_provenance
+from analytics.aep_provenance import (
+    enforce_aep_provenance,
+    register_scenario_approved_sources,
+)
 from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
@@ -79,6 +82,7 @@ def run_finance_case(
     # input is not mutated.
     guarded = dict(scenario)
     reconcile_capacity_factor_with_bankable_aep(guarded, "<inline>")
+    register_scenario_approved_sources(guarded, "<inline>")
     enforce_aep_provenance(guarded, "<inline>")
     validate_evidence_register(guarded, "<inline>")
     validate_development_readiness(guarded, "<inline>")

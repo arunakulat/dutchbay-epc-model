@@ -95,3 +95,23 @@ solar_export_scenario: P50
 
 # The generation.technologies key the solar export targets.
 solar_technology: solar
+
+# ---------------------------------------------------------------------------
+# #656 (slice 3): single-scenario Executive Workbook emission (OFF by default).
+# When true, after a successful finance run this CLI writes a lender-facing
+# .xlsx via analytics.executive_workbook.emit_executive_workbook_from_pipeline
+# (the genuine live caller of build_executive_workbook). The five finance
+# sheets are assembled from the pipeline result; the optional "ResourceTrend"
+# sheet is added only when a supplied frozen wind export carries a
+# long_term_trend block. No live ERA5 is run (the finance CLI stays cdsapi-free).
+# Emission derives no financial value, so leaving this off keeps committed
+# scenarios byte-identical.
+# ---------------------------------------------------------------------------
+
+# If true, write the single-scenario Executive Workbook after the finance run.
+emit_executive_workbook: false
+
+# Target .xlsx path. When null, defaults to
+# '<export_dir>/executive_workbook.xlsx'. The written path is echoed back under
+# result['executive_workbook_path'].
+executive_workbook_path: null

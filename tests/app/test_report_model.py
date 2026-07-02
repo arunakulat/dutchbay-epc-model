@@ -23,6 +23,7 @@ from app.reports.report_model import (
     build_report_context,
     fmt_gwh,
     fmt_pct,
+    fmt_pp,
     fmt_ratio_pct,
     fmt_usd,
     fmt_x,
@@ -1240,3 +1241,104 @@ def test_resource_trend_omitted_section_absent_from_html() -> None:
     )
     html = render_report_html(ctx)
     assert "Long-Term Wind Resource &amp; Trend" not in html
+
+
+# --------------------------------------------------------------------------- #
+# Project → equity IRR bridge (#621) — additive, default-off
+# --------------------------------------------------------------------------- #
+def _irr_bridge_run_result() -> Dict[str, object]:
+    """A minimal full run result carrying a computed equity distribution (bridge input)."""
+    from finance.irr import irr as _irr
+
+    cfads = [18.0] * 10
+    project_irr = _irr([-100.0] + cfads)
+    annual_rows = [
+        {"cfads_usd": 18.0, "interest_usd": 2.0, "effective_tax_rate": 0.3}
+        for _ in range(10)
+    ]
+    return {
+        "kpis": {"project_irr": project_irr, "equity_irr": 0.05},
+        "annual_rows": annual_rows,
+        "debt_result": {"construction_years": 0},
+        "equity_distribution": {
+            "status": "computed",
+            "equity_summary": {"equity_investment_usd": 30.0},
+            "equity_cashflows_usd": [-30.0] + [11.0] * 10,
+        },
+        "scenario_result": {"config": {"finance": {"capex_usd": 100.0}}},
+    }
+
+
+def test_irr_bridge_none_by_default_without_run_result() -> None:
+    """Default-off: absent a run_result, the bridge section is omitted (KPI-neutral)."""
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+    )
+    assert ctx.irr_bridge is None
+
+
+def test_irr_bridge_populated_from_run_result() -> None:
+    """When a run_result with a computed equity distribution is supplied, the bridge builds."""
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+        run_result=_irr_bridge_run_result(),
+    )
+    assert ctx.irr_bridge is not None
+    bridge = ctx.irr_bridge
+    assert bridge.reconciled is True
+    # Legs + residual reconcile exactly to the published uplift.
+    assert bridge.total_uplift is not None
+    named = sum(leg.contribution for leg in bridge.legs)
+    assert named + bridge.residual == pytest.approx(bridge.total_uplift, abs=1e-9)
+    assert {leg.name for leg in bridge.legs} == {
+        "leverage",
+        "cost_of_debt",
+        "tax_shield",
+    }
+
+
+def test_irr_bridge_none_when_equity_distribution_failed() -> None:
+    """A run whose equity distribution failed yields no bridge (additive, no fabrication)."""
+    run = _irr_bridge_run_result()
+    run["equity_distribution"]["status"] = "failed"  # type: ignore[index]
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+        run_result=run,
+    )
+    assert ctx.irr_bridge is None
+
+
+def test_irr_bridge_section_renders_in_html() -> None:
+    from app.reports.renderer import render_report_html
+
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="lendercase"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCENARIO_CFG,
+        debt_result=_DEBT_RESULT,
+        run_result=_irr_bridge_run_result(),
+    )
+    html = render_report_html(ctx)
+    assert (
+        "Project &rarr; Equity IRR Bridge" in html
+        or "Project → Equity IRR Bridge" in html
+    )
+    assert "Leverage" in html
+    assert "Cost of debt" in html
+    assert "Tax shield" in html
+
+
+def test_fmt_pp_signed_percentage_points() -> None:
+    assert fmt_pp(0.012) == "+1.20 pp"
+    assert fmt_pp(-0.201939) == "-20.19 pp"
+    assert fmt_pp(0.0) == "+0.00 pp"
+    assert fmt_pp(None) == "—"

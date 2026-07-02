@@ -11,6 +11,12 @@ defensible answer to "what actually drives outcome variance" is variance-based:
   variance-based analogue of the one-way tornado's ``flat_metric`` flag.
 * **Morris** elementary effects (``mu_star`` / ``sigma``) — the cheap *screening* pass
   (``N·(D+1)`` runs) to rank drivers before paying for Sobol (``N·(D+2)`` runs here).
+  :func:`run_morris` can optionally draw an OPTIMISED trajectory subset
+  (``optimal_trajectories``, #617) — SALib's Campolongo/Ruano spread-maximising selection.
+
+For *when* to reach for each method (Morris screen → Sobol on the top subset → PAWN
+cross-check → local tornado), see the SA decision tree in
+``docs/SENSITIVITY_DECISION_TREE.md``.
 
 This is **additive and KPI-neutral**: it reuses the SAME ``monte_carlo.parameters`` driver
 list the MC engine reads (CESSPIT: config-first, no new authored constants; CCCDIR: one
@@ -377,15 +383,94 @@ def _resolve(
     evaluate_fn: Optional[EvaluateFn],
 ) -> Tuple[GlobalSAProblem, EvaluateFn]:
     """Resolve the (problem, evaluator) pair — from explicit args, else from config_path."""
-    if problem is None:
-        if config_path is None:
-            raise ValueError("Provide either config_path or an explicit problem.")
-        problem = build_problem(config_path, params)
+    problem = _resolve_problem(config_path, params, problem)
     if evaluate_fn is None:
         if config_path is None:
             raise ValueError("Provide either config_path or an explicit evaluate_fn.")
         evaluate_fn = _engine_evaluate_fn(config_path)
     return problem, evaluate_fn
+
+
+def _resolve_problem(
+    config_path: Optional[str],
+    params: Optional[Sequence[Mapping[str, Any]]],
+    problem: Optional[GlobalSAProblem],
+) -> GlobalSAProblem:
+    """Resolve just the SA problem — from an explicit ``problem`` else from ``config_path``.
+
+    Split out from :func:`_resolve` for the given-data PAWN path (#645), which reuses a
+    caller-supplied (X, Y) and therefore needs the driver contract but NOT an evaluator.
+    """
+    if problem is None:
+        if config_path is None:
+            raise ValueError("Provide either config_path or an explicit problem.")
+        problem = build_problem(config_path, params)
+    return problem
+
+
+def _validate_given_data(
+    problem: GlobalSAProblem,
+    given_x: Optional[Any],
+    given_y: Optional[Mapping[str, Any]],
+    metrics: Sequence[str],
+) -> Tuple[Any, Dict[str, Any]]:
+    """Validate a reused (X, Y) design for the given-data PAWN path (#645, CESSPIT — fail loud).
+
+    Returns the ``(R, D)`` design matrix and a ``{metric: float-vector}`` column map matching
+    :func:`_evaluate_rows`'s shape, so the downstream masking/analysis is identical to the
+    self-sampled path. Every mismatch raises ``ValueError`` — never a silent LHS fallback.
+    """
+    if given_x is None or given_y is None:
+        raise ValueError(
+            "PAWN (X, Y) reuse needs BOTH given_x and given_y (no silent LHS fallback); "
+            f"got given_x={'set' if given_x is not None else 'None'}, "
+            f"given_y={'set' if given_y is not None else 'None'}."
+        )
+    X = np.asarray(given_x, dtype=float)
+    if X.ndim != 2 or X.shape[1] != problem.num_vars:
+        raise ValueError(
+            f"given_x must be a 2-D (n_runs, {problem.num_vars}) design over the problem's "
+            f"{problem.num_vars} drivers ({list(problem.names)}); got shape {X.shape}."
+        )
+    n_runs = X.shape[0]
+    if n_runs < 1:
+        raise ValueError("given_x must have at least one row.")
+    # X-side non-finite is a HARD error (#645, mirroring the #644 CESSPIT pattern): PAWN's
+    # conditional slicing uses ``np.nanquantile`` over X, so NaN/inf rows silently vanish
+    # from the conditional CDFs while still counting in the unconditional CDF — corrupting
+    # every reported KS index. Unlike the Y-side (#644 row mask), X cannot be masked without
+    # breaking the conditional design, so it must not be tolerated at all.
+    finite_x = np.isfinite(X)
+    if not finite_x.all():
+        col_nonfinite = (~finite_x).sum(axis=0)
+        offending = [
+            (problem.names[j] if j < len(problem.names) else f"col{j}", int(count))
+            for j, count in enumerate(col_nonfinite)
+            if count
+        ]
+        summary = ", ".join(f"{name} ({count})" for name, count in offending)
+        raise ValueError(
+            f"given_x contains {int((~finite_x).sum())} non-finite value(s) "
+            f"(NaN/inf) in column(s): {summary}. PAWN slices X with nanquantile, so "
+            "non-finite rows silently drop from the conditional CDFs (but not the "
+            "unconditional one) and corrupt the reported KS indices; the X design must "
+            "be finite (there is no valid X-side mask — fix the reused design)."
+        )
+    cols: Dict[str, Any] = {}
+    for m in metrics:
+        if m not in given_y:
+            raise ValueError(
+                f"given_y is missing metric '{m}' (has: {sorted(given_y)}); every requested "
+                "metric must carry an output vector for the reused design."
+            )
+        y = np.asarray(given_y[m], dtype=float).ravel()
+        if y.shape[0] != n_runs:
+            raise ValueError(
+                f"given_y['{m}'] has {y.shape[0]} outputs but given_x has {n_runs} rows; "
+                "each metric vector must be aligned row-for-row with the reused design."
+            )
+        cols[m] = y
+    return X, cols
 
 
 def _evaluate_rows(
@@ -544,6 +629,7 @@ def run_morris(
     *,
     metrics: Sequence[str] = DEFAULT_METRICS,
     n_trajectories: int = 16,
+    optimal_trajectories: Optional[int] = None,
     params: Optional[Sequence[Mapping[str, Any]]] = None,
     seed: Optional[int] = 42,
     problem: Optional[GlobalSAProblem] = None,
@@ -555,24 +641,56 @@ def run_morris(
     :func:`run_sobol`. ``mu_star`` ranks importance; high ``sigma`` flags non-linear/interactive.
     ``problem``/``evaluate_fn`` override the config-derived defaults (used by closed-form tests).
 
+    ``optimal_trajectories`` (default ``None``, OPT-IN #617) selects an optimised subset via
+    SALib's Campolongo/Ruano enhancement: ``n_trajectories`` candidate trajectories are drawn
+    and the ``optimal_trajectories`` with the highest spread in the input space are kept, so the
+    cost drops to ``optimal_trajectories·(D+1)`` evaluations while covering more of the box. It
+    must satisfy ``2 <= optimal_trajectories < n_trajectories`` — we validate here (CESSPIT,
+    fail-loud) rather than rely on SALib, whose own guard is inconsistent (it silently accepts
+    ``0`` and only rejects ``>= n_trajectories`` / ``< 2``). ``None`` (the default) is the
+    VANILLA Morris path, byte-identical to prior behaviour; SALib's ``local_optimization``
+    default is irrelevant when no subset is requested. The chosen value (or ``None``) is
+    recorded in the result metadata next to ``n_trajectories`` / ``n_runs``. MRM-01: the subset
+    selection is seeded, so a fixed ``seed`` gives a deterministic optimised sample. See the SA
+    method-selection decision tree — ``docs/SENSITIVITY_DECISION_TREE.md`` (OSeMOSYS's
+    "10-from-100 at step-size-4" is this knob) — for when to reach for it.
+
     Non-finite outputs (#644): whole trajectories (``D+1`` consecutive rows) containing any
     non-finite output are dropped from BOTH ``X`` and ``Y`` before ``analyze`` — never
     single rows, which would corrupt the elementary-effect pairing — with a ``masked``
     disclosure in the per-metric result; above ``_MASKED_SHARE_POISONED`` the metric is
     flagged ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`).
     """
+    if optimal_trajectories is not None and (
+        isinstance(optimal_trajectories, bool)
+        or not isinstance(optimal_trajectories, int)
+        or not (2 <= optimal_trajectories < n_trajectories)
+    ):
+        raise ValueError(
+            "run_morris optimal_trajectories must be an int with "
+            f"2 <= optimal_trajectories < n_trajectories (={n_trajectories}); got "
+            f"{optimal_trajectories!r}. SALib selects this many optimised trajectories from "
+            "the n_trajectories candidate pool — its own bound check is inconsistent (it "
+            "silently accepts 0), so we reject out-of-range values here (no silent clamping)."
+        )
     _require_salib()
     from SALib.analyze import morris as morris_analyze
     from SALib.sample import morris as morris_sample
 
     prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
     salib_problem = prob.as_salib()
-    X = morris_sample.sample(salib_problem, N=n_trajectories, seed=seed)
+    X = morris_sample.sample(
+        salib_problem,
+        N=n_trajectories,
+        optimal_trajectories=optimal_trajectories,
+        seed=seed,
+    )
     cols = _evaluate_rows(evfn, prob, X, metrics)
 
     out: Dict[str, Any] = {
         "method": "morris",
         "n_trajectories": n_trajectories,
+        "optimal_trajectories": optimal_trajectories,
         "n_runs": len(X),
         "problem": salib_problem,
     }
@@ -646,6 +764,8 @@ def run_pawn(
     seed: Optional[int] = 42,
     problem: Optional[GlobalSAProblem] = None,
     evaluate_fn: Optional[EvaluateFn] = None,
+    given_x: Optional[Any] = None,
+    given_y: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """PAWN (moment-independent, KS-based) global SA — robust on skewed / covenant-pinned KPIs.
 
@@ -654,9 +774,20 @@ def run_pawn(
     ``s`` slices — a *distribution*-based index, not a *variance*-based one. Unlike Sobol it
     stays bounded in [0,1] and does not misbehave on bimodal / DSCR-floor-pinned outputs, which
     is exactly the DutchBay case, so it is the right complement to the variance-based tornado /
-    Sobol. It is a GIVEN-DATA method (``SALib.analyze.pawn``): here it is driven by its own LHS
-    sample (``n`` rows), but the same (X, Y) could be reused from any prior sweep. Reports the
-    **median** KS statistic per driver (with mean / CV of the KS across slices).
+    Sobol. It is a GIVEN-DATA method (``SALib.analyze.pawn``): by default it draws its own LHS
+    sample (``n`` rows), but ``given_x`` / ``given_y`` let it REUSE a prior sweep's design at
+    zero extra evaluation cost. Reports the **median** KS statistic per driver (with mean / CV
+    of the KS across slices).
+
+    (X, Y) reuse (#645): pass ``given_x`` (an ``(R, D)`` design matrix over the SAME ``problem``
+    drivers, columns in ``problem.names`` order) together with ``given_y`` (a ``{metric: vector}``
+    mapping, each vector length ``R``) to skip both LHS sampling AND the ``R`` model evaluations —
+    the given-data path of PAWN, so a Sobol / MC design already paid for can be re-decomposed by
+    KS for free. ``n`` is ignored in this mode (``n_runs = len(given_x)``); ``given_x`` and
+    ``given_y`` must be supplied together and shape-match the problem and each other, or a
+    ``ValueError`` is raised (CESSPIT — no silent LHS fallback). A ``given_y`` that omits a
+    requested ``metric`` is likewise rejected. Non-finite outputs in ``given_y`` take the same
+    row-wise mask as the self-sampled path.
 
     A structurally-flat metric (a covenant-pinned ``min_dscr`` carrying only FP jitter) yields
     SPURIOUS non-zero PAWN indices — verified empirically — so the same ``_is_flat_output`` /
@@ -675,16 +806,25 @@ def run_pawn(
     from SALib.analyze import pawn as pawn_analyze
     from SALib.sample import latin as latin_sample
 
-    prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
-    salib_problem = prob.as_salib()
-    X = latin_sample.sample(salib_problem, n, seed=seed)
-    cols = _evaluate_rows(evfn, prob, X, metrics)
+    reuse = given_x is not None or given_y is not None
+    if reuse:
+        prob = _resolve_problem(config_path, params, problem)
+        salib_problem = prob.as_salib()
+        X, cols = _validate_given_data(prob, given_x, given_y, metrics)
+        n_effective = len(X)
+    else:
+        prob, evfn = _resolve(config_path, params, problem, evaluate_fn)
+        salib_problem = prob.as_salib()
+        X = latin_sample.sample(salib_problem, n, seed=seed)
+        cols = _evaluate_rows(evfn, prob, X, metrics)
+        n_effective = n
 
     out: Dict[str, Any] = {
         "method": "pawn",
-        "n": n,
+        "n": n_effective,
         "s": int(s),
         "n_runs": len(X),
+        "reused_given_data": reuse,
         "problem": salib_problem,
     }
     per_metric: Dict[str, Any] = {}

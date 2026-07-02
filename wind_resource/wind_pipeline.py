@@ -191,6 +191,7 @@ class WindPipeline:
         start_date: str = "2014-12-01",
         end_date: str = "2025-12-31",
         force_download: bool = False,
+        analyze_trend: bool = False,
     ) -> Dict[str, Any]:
         """Run complete wind resource assessment pipeline.
 
@@ -206,6 +207,14 @@ class WindPipeline:
             start_date: Start date 'YYYY-MM-DD'. Default '2014-12-01'.
             end_date: End date 'YYYY-MM-DD'. Default '2025-12-31'.
             force_download: Force re-download of ERA5 data. Default False.
+            analyze_trend: Opt-in (#656). When True, compute the long-term
+                Mann-Kendall / Sen's-slope resource trend on the SAME already-built
+                hub-height series (no second fetch) and attach a JSON-safe
+                ``long_term_trend`` block to the results (and saved JSON) for the
+                lender workbook's "ResourceTrend" sheet. DEFAULT OFF and
+                report/VALIDATE-only: it changes no committed AEP or KPI, and a
+                short record degrades explicitly (see
+                ``wind_resource.long_term_trend.build_resource_trend_export_block``).
 
         Returns:
             Complete assessment results dictionary with keys:
@@ -297,6 +306,36 @@ class WindPipeline:
             "energy_production": energy_assessment,
             "summary": self._generate_summary(statistical_analysis, energy_assessment),
         }
+
+        # Opt-in long-term resource & trend (#656): reuse the SAME hub-height
+        # series built above (no second CDS fetch) to compute the Mann-Kendall /
+        # Sen's-slope trend and attach a JSON-safe long_term_trend block for the
+        # lender workbook. DEFAULT OFF and report/VALIDATE-only — it never changes
+        # the retrieved series, the committed AEP, or any KPI; every existing
+        # caller leaves analyze_trend False and gets a byte-identical result.
+        if analyze_trend:
+            from wind_resource.era5_retrieval import ERA5RequestConfig
+            from wind_resource.long_term_trend import (
+                build_resource_trend_export_block,
+            )
+
+            trend_series = (
+                df.set_index("timestamp") if "timestamp" in df.columns else df
+            )
+            years = pd.DatetimeIndex(trend_series.index).year
+            trend_config = ERA5RequestConfig(
+                project_name=str(self.location["name"]),
+                latitude=float(self.location["lat"]),
+                longitude=float(self.location["lon"]),
+                start_year=int(years.min()),
+                end_year=int(years.max()),
+                hub_height_m=float(self.hub_height),
+                turbine_model=str(self.turbine_model),
+                num_turbines=int(self.num_turbines),
+            )
+            results["long_term_trend"] = build_resource_trend_export_block(
+                trend_config, trend_series
+            )
 
         # Save to JSON
         output_file = (

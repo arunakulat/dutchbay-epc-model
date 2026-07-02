@@ -366,6 +366,91 @@ def test_export_summary_and_timeseries_minimal(
 
 
 # ---------------------------------------------------------------------------
+# export_summary_and_timeseries: board-deck enrichments (#662)
+# ---------------------------------------------------------------------------
+def test_export_dscr_conditional_formatting_and_embedded_charts(
+    tmp_path: Path, summary_df: pd.DataFrame, timeseries_df: pd.DataFrame
+) -> None:
+    """The opt-in #662 knobs add a live DSCR rule + a Charts sheet with images."""
+    img = tmp_path / "board.png"
+    _write_png(img)
+
+    out = tmp_path / "board_deck.xlsx"
+    exporter = ExcelExporter(out)
+    exporter.export_summary_and_timeseries(
+        summary_df=summary_df,
+        timeseries_df=timeseries_df,
+        add_board_views=True,
+        dscr_conditional_threshold=1.2,
+        embed_chart_images=[str(img)],
+    )
+
+    wb = load_workbook(out)
+    # DSCR_View carries a live conditional-formatting rule (not just a static fill).
+    dscr_ws = wb["DSCR_View"]
+    rules = list(dscr_ws.conditional_formatting)
+    assert len(rules) == 1
+    # dscr is the 3rd column (scenario_name, Year, dscr) -> column C.
+    assert any("C2:C" in str(r) for r in rules)
+    # Charts sheet exists with the embedded image.
+    assert "Charts" in wb.sheetnames
+    assert len(wb["Charts"]._images) == 1
+
+
+def test_export_enrichments_default_off_is_unchanged(
+    tmp_path: Path, summary_df: pd.DataFrame, timeseries_df: pd.DataFrame
+) -> None:
+    """With both #662 knobs left at their None default, no rule/Charts sheet appears."""
+    out = tmp_path / "no_enrich.xlsx"
+    exporter = ExcelExporter(out)
+    exporter.export_summary_and_timeseries(
+        summary_df=summary_df,
+        timeseries_df=timeseries_df,
+        add_board_views=True,
+    )
+
+    wb = load_workbook(out)
+    assert "Charts" not in wb.sheetnames
+    assert len(list(wb["DSCR_View"].conditional_formatting)) == 0
+
+
+def test_embed_chart_images_skips_missing_files(
+    tmp_path: Path, summary_df: pd.DataFrame, timeseries_df: pd.DataFrame
+) -> None:
+    """A list of only-missing image paths produces no Charts sheet (nothing to embed)."""
+    out = tmp_path / "no_files.xlsx"
+    exporter = ExcelExporter(out)
+    exporter.export_summary_and_timeseries(
+        summary_df=summary_df,
+        timeseries_df=timeseries_df,
+        add_board_views=True,
+        embed_chart_images=[str(tmp_path / "does_not_exist.png")],
+    )
+
+    wb = load_workbook(out)
+    assert "Charts" not in wb.sheetnames
+
+
+def test_dscr_conditional_formatting_noop_without_dscr_view(
+    tmp_path: Path, summary_df: pd.DataFrame
+) -> None:
+    """A threshold with no DSCR column in the timeseries adds no rule (no DSCR_View)."""
+    ts_no_dscr = pd.DataFrame({"scenario_name": ["base"], "year": [1]})
+    out = tmp_path / "no_dscr.xlsx"
+    exporter = ExcelExporter(out)
+    exporter.export_summary_and_timeseries(
+        summary_df=summary_df,
+        timeseries_df=ts_no_dscr,
+        add_board_views=True,
+        dscr_conditional_threshold=1.2,
+    )
+
+    wb = load_workbook(out)
+    # No DSCR_View sheet was produced, so the conditional-formatting path is a no-op.
+    assert "DSCR_View" not in wb.sheetnames
+
+
+# ---------------------------------------------------------------------------
 # _add_board_friendly_views: period-named DSCR + no-IRR summary branches
 # ---------------------------------------------------------------------------
 def test_board_views_period_column_and_no_irr(tmp_path: Path) -> None:
