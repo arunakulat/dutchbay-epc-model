@@ -33,7 +33,7 @@ CANONICAL_LOSSES = {
 
 
 def _synthetic_ws150(a: float = 8.32, k: float = 2.1, n: int = 50_000) -> np.ndarray:
-    return np.random.RandomState(7).weibull(k, n) * a
+    return np.random.default_rng(7).weibull(k, n) * a
 
 
 def test_fit_recovers_known_weibull() -> None:

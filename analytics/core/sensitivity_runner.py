@@ -110,7 +110,7 @@ def _default_parameters(cfg: Mapping[str, Any]) -> List[ParameterRangeConfig]:
     return params
 
 
-def run_sensitivity_analysis(
+def run_sensitivity_analysis_from_path(
     base_config_path: str | Path,
     metric: str = "project_irr",
     parameters: Optional[Sequence[ParameterRangeConfig]] = None,
@@ -123,6 +123,14 @@ def run_sensitivity_analysis(
     scenario, builds a default library of empirically-verified LIVE drivers when
     ``parameters`` is not supplied, and delegates orchestration and contract
     assembly to :func:`analytics.sensitivity.engine.run_sensitivity_analysis`.
+
+    Naming (#586): this function was previously exported as
+    ``run_sensitivity_analysis``, colliding with the engine's same-named but
+    signature-incompatible orchestrator (``analytics.sensitivity.
+    run_sensitivity_analysis`` is keyword-only and takes an in-memory config
+    mapping; this one is path-based). ``run_sensitivity_analysis_from_path`` is
+    the canonical name; the old name remains as a backward-compatible module
+    alias (MOVE→SHIM — retirement deferred to a user-approved batch).
 
     Args:
         base_config_path: Path to the base scenario YAML/JSON config.
@@ -157,3 +165,13 @@ def run_sensitivity_analysis(
         scenario_name=str(scenario_name),
         analysis_timestamp=datetime.now(timezone.utc).isoformat(),
     )
+
+
+# Backward-compatible alias (#586, MOVE→SHIM): the historical export name. It is
+# additive — every existing `from analytics.core.sensitivity_runner import
+# run_sensitivity_analysis` (api/, app/, scripts/, tests/) keeps working
+# unchanged. New code should import ``run_sensitivity_analysis_from_path`` to
+# avoid the name collision with the engine orchestrator
+# ``analytics.sensitivity.run_sensitivity_analysis`` (keyword-only, in-memory
+# config mapping). Retiring the alias is deferred to a user-approved batch.
+run_sensitivity_analysis = run_sensitivity_analysis_from_path

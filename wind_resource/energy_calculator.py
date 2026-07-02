@@ -6,11 +6,11 @@ Calculates Annual Energy Production (AEP) from wind speed data using:
 - P-level scenarios (P50, P75, P90)
 - Revenue projections with configurable tariffs
 
-All configuration loaded from YAML files (CCCDIR compliant).
+All configuration loaded from YAML files (config-first, GWTF ARCH-01).
 
 SCOPE / WIND-4 (#484): this is the TIMESERIES-INTEGRATION AEP path used by the
 ``wind_resource`` diagnostic pipeline (``wind_pipeline.WindPipeline``,
-``era5_retrieval.compute_net_aep``). It is NOT on the lender FINANCE path — the canonical
+``era5_retrieval.compute_site_aep``). It is NOT on the lender FINANCE path — the canonical
 bankable headline (net P50 464.3 GWh, frozen into ``scenarios/aep_summary_dutchbay_10mw.json``)
 is produced by the analytic-Weibull integrator
 ``analytics.wind.aep_summary_builder → analytics.wind.aep_tornado.gross_aep_farm_gwh``, which

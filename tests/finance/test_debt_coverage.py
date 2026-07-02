@@ -242,6 +242,59 @@ def test_financing_terms_no_section_returns_params() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# #585 fail-loud: placeholder-substitution WARNs (A1/#91) on BOTH schema paths
+# ─────────────────────────────────────────────────────────────────────────────
+def test_financing_terms_placeholder_substitution_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Missing draw/capex schedules on the Financing_Terms path WARN, not silent."""
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        terms = _extract_financing_terms({"Financing_Terms": {"debt_ratio": 0.6}})
+    # Values are the documented placeholders (unchanged — byte-identity).
+    assert terms["debt_drawdown_pct"] == [0.5, 0.5]
+    assert terms["construction_schedule"] == [40.0, 60.0]
+    msgs = [r.message for r in caplog.records]
+    assert any("debt_drawdown_pct" in m and "placeholder" in m for m in msgs)
+    assert any("construction_schedule" in m and "placeholder" in m for m in msgs)
+
+
+def test_compact_debt_schema_placeholder_substitution_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The compact ``debt:`` schema emits the SAME placeholder WARNs (#585).
+
+    Previously this path substituted [0.5, 0.5] / [40, 60] silently while the
+    Financing_Terms path warned — the two schemas must be equally loud.
+    """
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        terms = _extract_financing_terms({"debt": {"debt_ratio": 0.6}})
+    assert terms["debt_drawdown_pct"] == [0.5, 0.5]
+    assert terms["construction_schedule"] == [40.0, 60.0]
+    msgs = [r.message for r in caplog.records]
+    assert any("debt.debt_drawdown_pct" in m and "placeholder" in m for m in msgs)
+    assert any("debt.construction_schedule" in m and "placeholder" in m for m in msgs)
+
+
+def test_compact_debt_schema_explicit_schedules_do_not_warn(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Explicitly supplied schedules pass through untouched, with no WARN."""
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        terms = _extract_financing_terms(
+            {
+                "debt": {
+                    "debt_ratio": 0.6,
+                    "construction_schedule": [30.0, 70.0],
+                    "debt_drawdown_pct": [0.4, 0.6],
+                }
+            }
+        )
+    assert terms["construction_schedule"] == [30.0, 70.0]
+    assert terms["debt_drawdown_pct"] == [0.4, 0.6]
+    assert not [r for r in caplog.records if "placeholder" in r.message]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Annuity schedule with interest-only years (lines 407-408)
 # ─────────────────────────────────────────────────────────────────────────────
 def test_annuity_schedule_interest_only_rows() -> None:
@@ -307,6 +360,81 @@ def test_apply_debt_layer_fx_bad_value_skipped() -> None:
     assert core["fx_min"] == pytest.approx(300.0)
     assert core["fx_max"] == pytest.approx(320.0)
     assert core["fx_avg"] == pytest.approx(310.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# #585 fail-loud: _pmt degenerate-nper guard
+# ─────────────────────────────────────────────────────────────────────────────
+def test_pmt_nonzero_rate_nonpositive_nper_fails_loud() -> None:
+    """rate != 0 with nper <= 0 raises a clear ValueError, not ZeroDivisionError."""
+    with pytest.raises(ValueError, match="nper"):
+        debt_v14._pmt(0.08, 0, 100.0)
+    with pytest.raises(ValueError, match="nper"):
+        debt_v14._pmt(0.08, -1, 100.0)
+
+
+def test_pmt_zero_rate_degenerate_contract_preserved() -> None:
+    """The historical rate == 0 contract is untouched (byte-identity guard)."""
+    # nper <= 0 at zero rate keeps its documented 0.0 return.
+    assert debt_v14._pmt(0.0, 0, 100.0) == 0.0
+    # Zero-rate annuity is straight-line: pv / nper.
+    assert debt_v14._pmt(0.0, 4, 100.0) == pytest.approx(25.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# #585 fail-loud: amortization_style whitelist ('auto' is an explicit alias)
+# ─────────────────────────────────────────────────────────────────────────────
+def _amort_params(style: str) -> dict[str, object]:
+    return {
+        "Financing_Terms": {
+            "debt_ratio": 0.6,
+            "tenor_years": 5,
+            "construction_periods": 1,
+            "construction_schedule": [40.0, 60.0],
+            "debt_drawdown_pct": [0.5, 0.5],
+            "rates": {"usd_nominal": 0.08},
+            "mix": {"usd_commercial_min": 1.0},
+            "amortization_style": style,
+            "target_dscr": 1.30,
+        },
+        "capex": {"usd_total": 100.0},
+    }
+
+
+def test_amortization_style_auto_is_whitelisted_sculpted_alias(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """'auto' (used by committed scenarios) maps to sculpted with NO warning."""
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        core_auto = apply_debt_layer(
+            params=_amort_params("auto"), annual_rows=_rows(20.0)
+        )
+    assert not any(
+        "amortization_style" in r.message.lower() for r in caplog.records
+    ), "whitelisted 'auto' must not warn"
+    core_sculpted = apply_debt_layer(
+        params=_amort_params("sculpted"), annual_rows=_rows(20.0)
+    )
+    # Identical schedule: 'auto' IS sculpted, not a fall-through accident.
+    assert core_auto["debt_service_total"] == core_sculpted["debt_service_total"]
+
+
+def test_amortization_style_unknown_warns_and_falls_back_sculpted(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unknown style WARNs (like balloon_treatment) and keeps the sculpted result."""
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        core_bogus = apply_debt_layer(
+            params=_amort_params("bullet-ish"), annual_rows=_rows(20.0)
+        )
+    assert any(
+        "Unknown amortization_style" in r.message for r in caplog.records
+    ), "non-whitelisted style must fail loud"
+    core_sculpted = apply_debt_layer(
+        params=_amort_params("sculpted"), annual_rows=_rows(20.0)
+    )
+    # Behaviour preserved: the fallback is exactly the old silent fall-through.
+    assert core_bogus["debt_service_total"] == core_sculpted["debt_service_total"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

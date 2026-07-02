@@ -25,20 +25,31 @@ Costs (all USD, discounted at WACC over the asset's operating horizon)::
 
 Discharged energy (MWh, discounted at WACC), per operating year ``t`` (1-based)::
 
-    discharged_mwh(t) = energy_per_cycle_mwh × cycles_per_year × depth_of_discharge
+    discharged_mwh(t) = energy_per_cycle_mwh × cycles_per_year × dod_factor
                         × round_trip_efficiency × soh(t)
 
 where ``energy_per_cycle_mwh`` is the nameplate energy (``energy_mwh``, or
-``power_mw × duration_h`` when only the power/duration rating is given) and ``soh(t)`` is
-the year-indexed state-of-health from :func:`finance.bess_revenue.mdsc_soh_for_year` (so
-the LCOS energy declines with the same MDSC fade / augmentation curve the revenue uses).
+``power_mw × duration_h`` when only the power/duration rating is given); ``dod_factor``
+is ``depth_of_discharge`` for a ``capacity_charge`` BESS and ``1.0`` (full nameplate per
+cycle, matching the revenue export basis — M1, #557) for an ``energy_tariff`` BESS; and
+``soh(t)`` is the year-indexed state-of-health from
+:func:`finance.bess_revenue.mdsc_soh_for_year` (so the LCOS energy declines with the same
+MDSC fade / augmentation curve the revenue uses).
 
 LIMITATIONS (stated for lender DD, DOC-03):
 
-* The discharged energy of a **capacity-charge** (availability-tolling) BESS depends on
-  CEB dispatch, which the engine does not simulate. Its LCOS therefore assumes a fixed
-  ``cycles_per_year`` at ``depth_of_discharge`` — an explicit, overridable assumption,
-  not a simulated dispatch. The result carries a note recording this.
+* **Dispatch is not simulated or optimised — for either revenue model.** The discharged
+  energy comes from a fixed, overridable ``cycles_per_year``, a known, intentional
+  simplification versus the 2025–2026 state of the art (MILP / stochastic
+  dispatch-optimisation LCOS, which co-optimises the charge/discharge schedule against
+  prices or dispatch instructions). The result carries a note recording the fixed basis
+  in each case:
+
+  - **capacity-charge** (availability tolling): a fixed ``cycles_per_year`` at
+    ``depth_of_discharge`` — actual dispatch is set by CEB and not simulated.
+  - **energy-tariff**: a fixed ``cycles_per_year`` at FULL nameplate energy per cycle
+    (derated by RTE and SoH only, no depth-of-discharge factor), matching the revenue
+    export basis (M1, #557).
 * **Opex attribution** is clean only for a standalone BESS, where the project's
   ``opex.usd_per_year`` is wholly the battery's. On a hybrid (wind/solar + BESS) the
   project opex is shared, so it is NOT attributed to the BESS unless the BESS block
@@ -357,6 +368,18 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
                 f"capacity-charge LCOS assumes {cycles:g} cycles/yr at "
                 f"{dod:g} depth-of-discharge — actual dispatch is set by CEB and not "
                 "simulated."
+            )
+        elif model == "energy_tariff":
+            # Parallel fixed-dispatch-basis note (#596). Post-M1 (#557) the energy-tariff
+            # LCOS denominator uses the FULL nameplate energy per cycle (x RTE x SoH, no
+            # depth-of-discharge factor), matching the revenue export basis — so this note
+            # deliberately does NOT mention DoD.
+            notes.append(
+                f"energy-tariff LCOS assumes a fixed {cycles:g} cycles/yr at full "
+                "nameplate energy per cycle (derated by round-trip efficiency and "
+                "state-of-health only, no depth-of-discharge factor, matching the "
+                "revenue export basis) — dispatch is not simulated or optimised (no "
+                "MILP/stochastic schedule)."
             )
 
         # --- Capex (USD) --------------------------------------------------------------
