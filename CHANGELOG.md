@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **`MonteCarloResult.sampling_method` is now populated from the sampler actually used (#648a, provenance wiring, KPI-neutral).**
+  The `sampling_method` field on `MonteCarloResult` (`analytics.contracts_v14`) existed but was
+  never set, so every result reported the `None` default while the sampler identity lived only in
+  the loose `metadata["sampler"]` dict (`"lhs"` or the opt-in `"sobol"`). `aggregate_trials`
+  (`analytics.mc.aggregate`) now passes `sampling_method=meta.get("sampler")` into the result on
+  BOTH the canonical LHS and the opt-in Sobol path, so the lender-facing MC risk blocks can
+  attribute the bands to their generation method as a first-class field (CCCDIR). Pure additive
+  metadata: the deterministic pipeline KPI oracle is byte-identical across all committed scenarios
+  (they run LHS), and no config interpretation changes — the dead `monte_carlo.sampling_method`
+  config key retirement remains gated in #648.
 - **Opt-in solar frozen-export ingestion in the canonical CLI (#614, default OFF, KPI-neutral).**
   `run_full_pipeline_v14.py` + `conf/run_full_pipeline_v14.yaml` gain the opt-in,
   default-null Hydra keys `solar_assessment_json` (+ `solar_adapter_mode` /
