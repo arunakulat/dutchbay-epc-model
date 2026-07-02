@@ -5,6 +5,30 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Live FX-sensitivity CLI surface + legacy `fx.fx_shock` base-key retirement (#659, analysis-only, KPI-neutral).**
+  Closes the residual FX-reporting scope of #659 in two parts:
+  - **New `scripts/run_fx_sensitivity.py`** — a thin argparse CLI (the FX analogue of
+    `scripts/run_tornado_from_cli.py`; `scripts/` is the sanctioned argparse carve-out per
+    `tests/lint/test_entrypoints_hydra_only.py`) that wraps
+    `analytics.fx_sensitivity_real.FXSensitivityAnalyzer.analyze_fx_sensitivity`. It loads a
+    scenario, sweeps the three LIVE engine FX levers (`fx.start_lkr_per_usd` / `fx.hedge_ratio`
+    / `fx.spread_bps`, all wired by the FX-forward-hedging build #652/#666) around the
+    scenario's own base, and emits a SINGLE JSON object to stdout or `--output`: the
+    `fx_rate_points` / `hedge_ratio_points` / `spread_points` series plus the six engine-driven
+    linear-fit summary sensitivities (`fx_rate_irr`/`fx_rate_npv`/`hedge_ratio_irr`/
+    `hedge_ratio_npv`/`spread_irr`/`spread_npv`) and the scenario base metrics. The `fx_rate`
+    IRR/NPV slopes are negative on the flat-LKR lender case (a weaker LKR erodes USD returns —
+    the core bankability risk this surface quantifies). Fail-loud on a bad scenario / degenerate
+    step count / negative spread band (exit 2, no traceback; CESSPIT).
+  - **Retired the dead `fx.fx_shock` base key** from `FXSensitivityAnalyzer.run()`. The base
+    evaluation used to seed `{"fx": {"fx_shock": 0.0}}`, but `fx.fx_shock` is a key the v14
+    cashflow engine never reads (Fable finding from the #666 review), so it was inert; it is
+    replaced with a clean no-override base call (`{}`). Proven byte-identical: the base metric
+    is unchanged (a dedicated real-engine base-identity test pins `{} == {"fx": {"fx_shock":
+    0.0}}`), and the stale "old keys" comment is corrected.
+  - **Analysis surface only — no committed-scenario caller changes**, so every committed
+    scenario's KPIs are byte-identical (verified via the all-scenarios KPI oracle, before-vs-
+    after within the worktree).
 - **Live long-term wind-resource & trend section wired into the lender report (#178 → #656, opt-in, disclose-only, KPI-neutral).**
   The Mann-Kendall + Sen's-slope trend analysis (`wind_resource.long_term_trend`) was complete
   and tested but reached no live path. It is now wired end-to-end as a report disclosure:
