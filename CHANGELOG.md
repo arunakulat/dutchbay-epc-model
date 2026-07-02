@@ -67,6 +67,20 @@ All notable changes to this project will be documented here.
   values are bit-identical to a direct SALib `sample->analyze` (pinned by test), and all committed
   scenarios are **kpi_oracle byte-identical (argv-correct)** — the guard is unreachable on the
   committed lender case, whose worst-corner KPIs are all finite.
+
+  **Report layer (Fable-review blocker):** the lender report's Global-SA adapter
+  (`app.services.report_global_sa.compute_report_global_sa`) previously read only
+  `drivers`/`ranking` and stripped the flags, so a flagged metric's ZEROED placeholder drivers
+  rendered a "Global Sensitivity — Morris Screening" section with every driver at 0.00% and no
+  caveat — a confident false claim (e.g. "FX does not influence the IRR"). The adapter now takes
+  its documented CASPER degrade path for a `nan_poisoned` — and, same placeholder shape, a
+  `flat_metric` — target metric: it returns `None` (section omitted, engine reason logged),
+  pinned end-to-end (adapter returns `None`; the template's existing `if ctx.global_sa` guard
+  omission is already pinned). Two same-surface refinements from the same review: a flagged
+  (`flat_metric`/`nan_poisoned`) Sobol metric now carries `interactions_present=None` ("not
+  computed") instead of a definitive `False` no index backs (the CLI's truthy check degrades
+  identically), and the masking disclosures pluralize their sample unit correctly
+  ("trajectories", not "trajectorys").
 - **Fail-loud-erosion cluster: silent-swallowing finance helpers hardened (#585, KPI-neutral).**
   Five verified erosions of the fail-loud stance closed; all committed scenarios verified
   **kpi_oracle byte-identical (argv-correct, 19/19 KPI-bearing scenarios)** — each fix only converts a

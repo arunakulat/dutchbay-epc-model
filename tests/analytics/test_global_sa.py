@@ -127,7 +127,9 @@ def test_sobol_flags_covenant_pinned_metric_as_flat() -> None:
     flat = res["metrics"]["min_dscr"]
     assert flat["flat_metric"] is True
     assert "covenant-pinned" in flat["flat_metric_reason"]
-    assert flat["interactions_present"] is False
+    # Indices are undefined on a flat output, so no interaction claim is computable:
+    # None ("not computed"), not a definitive False (Fable review on #644).
+    assert flat["interactions_present"] is None
     for d in flat["drivers"].values():
         assert d == {
             "S1": 0.0,
@@ -377,6 +379,13 @@ def test_nan_poisoned_threshold_flags_metric(runner, kwargs, zeroed) -> None:
     assert poisoned["masked"]["dropped_share"] > 0.5
     for d in poisoned["drivers"].values():
         assert d == zeroed
+    if runner is run_sobol:
+        # Nothing was analyzed, so no interaction claim is computable: None ("not
+        # computed"), not a definitive False (Fable review on #644).
+        assert poisoned["interactions_present"] is None
+    if runner is run_morris:
+        # The reason string pluralizes its sample unit correctly (not 'trajectorys').
+        assert "trajectories" in poisoned["nan_poisoned_reason"]
     # The clean sibling metric is still genuinely decomposed.
     clean = res["metrics"]["y"]
     assert clean["flat_metric"] is False
@@ -421,3 +430,19 @@ def test_masking_emits_warning_with_count_and_metric(caplog) -> None:
     assert any(
         f"dropping {m['n_units_dropped']} of {m['n_units']}" in msg for msg in matching
     )
+
+
+def test_masking_warning_pluralizes_trajectory(caplog) -> None:
+    """The Morris masking disclosure pluralizes its sample unit as 'trajectories' —
+    the naive '+s' rendered 'trajectorys' (Fable review on #644)."""
+    with caplog.at_level(logging.WARNING, logger="analytics.sensitivity.global_sa"):
+        run_morris(
+            problem=_PROB3,
+            evaluate_fn=_NanInjector(29),
+            metrics=("y_nan",),
+            n_trajectories=32,
+            seed=1,
+        )
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("trajectories" in msg for msg in msgs), msgs
+    assert not any("trajectorys" in msg for msg in msgs), msgs

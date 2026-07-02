@@ -78,6 +78,18 @@ _MASKED_SHARE_WARN: float = 0.10
 _MASKED_SHARE_POISONED: float = 0.50
 
 
+def _pluralize_unit(unit_label: str) -> str:
+    """Human plural for a sample-unit label: 'trajectory' → 'trajectories', 'row' → 'rows'.
+
+    Underscores become spaces ('saltelli_block' → 'saltelli blocks'); a consonant-y
+    ending takes '-ies' — the naive '+s' rendered 'trajectorys' in the #644 disclosures.
+    """
+    human = unit_label.replace("_", " ")
+    if human.endswith("y") and len(human) >= 2 and human[-2] not in "aeiou":
+        return human[:-1] + "ies"
+    return human + "s"
+
+
 def _flat_metric_reason(metric_key: str) -> str:
     """Covenant-aware explanation for a structurally-flat global-SA metric."""
     if any(tok in metric_key.lower() for tok in _COVENANT_METRIC_TOKENS):
@@ -145,8 +157,8 @@ def _apply_finite_mask(
     if block_size < 1 or n_rows < block_size or n_rows % block_size:
         raise ValueError(
             f"global SA ({method}) metric '{metric}': sample of {n_rows} rows is not a "
-            f"whole number of {unit_label}s of {block_size} rows — cannot mask by "
-            "sample unit."
+            f"whole number of {_pluralize_unit(unit_label)} of {block_size} rows — "
+            "cannot mask by sample unit."
         )
     n_units = n_rows // block_size
     finite_rows = np.isfinite(Y)
@@ -166,10 +178,10 @@ def _apply_finite_mask(
     }
     if n_units_dropped == 0:
         return X, Y, disclosure
-    human_unit = unit_label.replace("_", " ")
+    human_units = _pluralize_unit(unit_label)
     if disclosure["nan_poisoned"]:
         logger.error(
-            "global SA (%s) metric '%s' is NaN-POISONED: %d of %d %ss (%.1f%%, %d rows) "
+            "global SA (%s) metric '%s' is NaN-POISONED: %d of %d %s (%.1f%%, %d rows) "
             "contain non-finite outputs (%d non-finite values), above the %.0f%% guard "
             "— flagging nan_poisoned and zeroing indices (the NaN analogue of "
             "flat_metric) instead of analyzing the residue.",
@@ -177,7 +189,7 @@ def _apply_finite_mask(
             metric,
             n_units_dropped,
             n_units,
-            human_unit,
+            human_units,
             100.0 * dropped_share,
             disclosure["n_rows_dropped"],
             disclosure["n_nonfinite_rows"],
@@ -191,14 +203,14 @@ def _apply_finite_mask(
             "resulting indices and rankings with caution"
         )
     logger.warning(
-        "global SA (%s) metric '%s': dropping %d of %d %ss (%.1f%%, %d rows) containing "
+        "global SA (%s) metric '%s': dropping %d of %d %s (%.1f%%, %d rows) containing "
         "%d non-finite outputs before analyze() — indices are computed on the finite "
         "subset only%s.",
         method,
         metric,
         n_units_dropped,
         n_units,
-        human_unit,
+        human_units,
         100.0 * dropped_share,
         disclosure["n_rows_dropped"],
         disclosure["n_nonfinite_rows"],
@@ -210,9 +222,9 @@ def _apply_finite_mask(
 
 def _nan_poisoned_reason(masked: Mapping[str, Any]) -> str:
     """Human-readable reason attached to a ``nan_poisoned`` metric (#644)."""
-    unit = str(masked["unit"]).replace("_", " ")
+    units = _pluralize_unit(str(masked["unit"]))
     return (
-        f"{masked['n_units_dropped']} of {masked['n_units']} {unit}s "
+        f"{masked['n_units_dropped']} of {masked['n_units']} {units} "
         f"({masked['dropped_share']:.0%}) contain non-finite outputs — above the "
         f"{_MASKED_SHARE_POISONED:.0%} guard, indices computed on the finite residue "
         "would be unrepresentative; fix the evaluator (why is this KPI None/NaN over so "
@@ -420,7 +432,9 @@ def run_sobol(
     order) containing any non-finite output are dropped before ``analyze`` — never single
     rows, which would corrupt the A/B/AB pairing — with a ``masked`` disclosure in the
     per-metric result; above ``_MASKED_SHARE_POISONED`` the metric is flagged
-    ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`).
+    ``nan_poisoned`` with zeroed indices (see :func:`_apply_finite_mask`). A flagged
+    (``flat_metric`` / ``nan_poisoned``) metric carries ``interactions_present=None``:
+    no indices were computed, so no interaction claim — definitive ``False`` would be one.
     """
     _require_salib()
     from SALib.analyze import sobol as sobol_analyze
@@ -456,7 +470,9 @@ def run_sobol(
             )
             per_metric[m] = {
                 "drivers": _zeroed_sobol_drivers(prob.names),
-                "interactions_present": False,
+                # Indices are undefined on a flat output, so no interaction claim can
+                # be made either way: None = "not computed", not a definitive False.
+                "interactions_present": None,
                 "flat_metric": True,
                 "flat_metric_reason": reason,
                 "nan_poisoned": False,
@@ -473,7 +489,9 @@ def run_sobol(
         if masked["nan_poisoned"]:
             per_metric[m] = {
                 "drivers": _zeroed_sobol_drivers(prob.names),
-                "interactions_present": False,
+                # Nothing was analyzed, so no interaction claim can be made either
+                # way: None = "not computed", not a definitive False.
+                "interactions_present": None,
                 "flat_metric": False,
                 "nan_poisoned": True,
                 "nan_poisoned_reason": _nan_poisoned_reason(masked),
