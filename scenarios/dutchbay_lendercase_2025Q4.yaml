@@ -646,9 +646,10 @@ evidence_register:
       tier: benchmark
       note: "$1,000/kW; cross-checked vs the SINOHYDRO Mannar EPC quote (~$889/kW) and the Envision Dutch Bay EIA (~$1,420/kW). Not derived from this project's EIA."
     opex:
-      source: "Full-service O&M contract + insurance/land-lease/admin build-up ($20/kW-yr, IRENA/NREL onshore benchmark)"
+      source: "Full-service O&M contract + insurance/land-lease/admin build-up ($20/kW-yr, IRENA RPGC 2024 / NREL ATB 2024-2025 onshore benchmark)"
       as_of: "2026"
       tier: benchmark
+      note: "ATB vintage recorded 2026-07-02 (#620): the NREL side of the O&M benchmark refers to the ATB 2024/2025 land-based-wind releases; figure unchanged."
     capacity_factor:
       source: "ERA5-fitted Weibull -> PyWake wake -> power-curve -> AEP chain, post a 2% pre-construction over-prediction haircut (net P50 CF 0.332)"
       as_of: "2026"
@@ -662,7 +663,7 @@ evidence_register:
       source: "Indicative lender terms: 15-yr tenor; per-tranche USD 7.5% commercial / 6.5% DFI + UIP-implied LKR 13.39% (blended kd ~7.63%); DSCR-sculpted gearing (~0.45 to the 1.30x floor)"
       as_of: "2025"
       tier: assumption
-      note: "No executed term sheet (financing uncommitted). Financing_Terms.interest_rate_nominal 8% is capacity-metadata only; the schedule amortises on the per-tranche rates above."
+      note: "No executed term sheet (financing uncommitted). Financing_Terms.interest_rate_nominal 8% is capacity-metadata only; the schedule amortises on the per-tranche rates above. Cross-check (NREL ATB 2024 financial cases, recorded 2026-07-02): P50 DSCR ~1.25x contracted solar / ~1.3-1.4x contracted wind at a ~2.5% real rate — the modelled 1.30x floor sits within the contracted-wind band."
     degradation:
       source: "0.5%/yr turbine performance degradation (industry-standard onshore wind aging)"
       as_of: "2026"
