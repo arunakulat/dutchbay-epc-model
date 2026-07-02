@@ -130,4 +130,36 @@ You now have:
 **You can copy-paste these files, update as needed for naming/real contracts, and immediately wire to workbook, MC, dashboard, optimizer, any analytics pipeline.**
 **Say “continue” for any additional standardized test case examples, edge/CI configs, or ask for advanced dashboard/calling pattern!**
 
+***
+
+## Global SA and `fx_calibrated` FX drivers (#582)
+
+`build_problem` in `analytics/sensitivity/global_sa.py` builds a single SALib problem from
+the scenario's `monte_carlo.parameters`, and all three global-SA methods — Morris
+(`run_morris`), Sobol (`run_sobol`) and PAWN (`run_pawn`) — sample that same problem, so
+its bounds (and its skips) govern all three alike.
+
+Drivers whose `distribution`/`kind` is `fx_calibrated` are skipped by design, not by
+omission. Their Monte Carlo dimension is a unit uniform mapped through the calibrated
+two-regime inverse-CDF inside `CalibratedFXSampler`
+(`analytics/fx/fx_calibration.py`), so they carry no authored `[low, high]` bound that
+the SA samplers could sweep through `evaluate_with_overrides`. Skipped names are recorded
+in `GlobalSAProblem.skipped` and logged as a warning. As of this note no committed
+scenario authors an `fx_calibrated` entry in `monte_carlo.parameters` — FX is swept via
+the explicit uniform `fx.start_lkr_per_usd` driver — so nothing is skipped in practice.
+
+If a future SA run must include an `fx_calibrated` driver, derive a proxy bound from the
+calibrated inverse-CDF at the 1st/99th percentiles:
+
+```python
+from analytics.fx.fx_calibration import CalibratedFXSampler
+
+sampler = CalibratedFXSampler(calibration)
+low, high = sampler.spot_from_unit(0.01), sampler.spot_from_unit(0.99)
+```
+
+and author it as an explicit `{name, low, high}` entry in `monte_carlo.parameters`.
+Limitation: the SA sweep is then uniform over that range; the two-regime mixture shape
+(crisis tail) remains a Monte-Carlo-only feature.
+
 Sources
