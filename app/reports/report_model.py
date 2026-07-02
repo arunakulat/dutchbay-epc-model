@@ -6,6 +6,12 @@ and flags them against lender covenants. It contains **no finance logic**
 cost-of-capital hurdle is read from the run's own ``discount_rate_used`` KPI
 rather than hardcoded. ``generated_at`` is supplied by the caller so the build is
 deterministic and unit-testable (CASPER).
+
+All section models are frozen (``ConfigDict(frozen=True)``, #608), extending the
+frozen-contract pattern of the analytics/core returns contracts: a context is
+built once in :func:`build_report_context` and consumed read-only by the renderer
+and the API, so post-construction mutation is a bug and now raises. Derive a
+variant with ``model_copy(update=...)`` instead of assignment.
 """
 
 from __future__ import annotations
@@ -96,7 +102,7 @@ def fmt_pct(value: Optional[float]) -> str:
 class KpiRow(BaseModel):
     """One rendered KPI line: raw value plus its formatted display string."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: str
     label: str
@@ -107,7 +113,7 @@ class KpiRow(BaseModel):
 class AssumptionRow(BaseModel):
     """One assumptions-register line: value + evidence source/as-of + a model-impact note."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     label: str
     display: str
@@ -119,7 +125,7 @@ class AssumptionRow(BaseModel):
 class RiskRow(BaseModel):
     """One rendered risk-register line (category, risk, mitigation, residual severity)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     category: str
     risk: str
@@ -130,7 +136,7 @@ class RiskRow(BaseModel):
 class ReadinessRow(BaseModel):
     """One rendered development-readiness line (workstream, R/A/G status, note)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     workstream: str
     status: str  # green | amber | red — drives the badge class in the template
@@ -140,7 +146,7 @@ class ReadinessRow(BaseModel):
 class Verdict(BaseModel):
     """Covenant/return flags and a one-line headline, all config-thresholded."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     headline: str
     project_viable: bool
@@ -153,6 +159,8 @@ class Verdict(BaseModel):
 class EvidenceRow(BaseModel):
     """One material assumption's declared evidence (source / as-of / tier)."""
 
+    model_config = ConfigDict(frozen=True)
+
     assumption: str
     source: str
     as_of: str
@@ -163,6 +171,8 @@ class EvidenceRow(BaseModel):
 class EvidenceBlock(BaseModel):
     """Coverage of a scenario's assumption-evidence register (#435 → RPT-1)."""
 
+    model_config = ConfigDict(frozen=True)
+
     rows: List[EvidenceRow]
     missing: List[str]  # material assumptions with no declared evidence
     covered: int
@@ -171,6 +181,8 @@ class EvidenceBlock(BaseModel):
 
 class MultiTechRow(BaseModel):
     """One technology's line in the multi-technology breakdown (ARCH-4, #476)."""
+
+    model_config = ConfigDict(frozen=True)
 
     technology: str
     aep_gwh: Optional[float] = None
@@ -192,6 +204,8 @@ class MultiTechBlock(BaseModel):
     the shared / balance-of-plant bucket. Rendered only for genuine hybrids (2+ generation
     technologies).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     rows: List[MultiTechRow]
     total_aep_gwh: Optional[float] = None
@@ -215,6 +229,8 @@ class ThreeStatementBlock(BaseModel):
     the lender-relevant signal that the statements articulate.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     currency: str
     tie_outs_pass: bool
     balance_sheet_balances: bool
@@ -229,6 +245,8 @@ class ThreeStatementBlock(BaseModel):
 
 class WaterfallRow(BaseModel):
     """One operating year of the cash-flow waterfall by payment priority (#481, RPT-2)."""
+
+    model_config = ConfigDict(frozen=True)
 
     year: int
     cfads: float
@@ -249,6 +267,8 @@ class WaterfallBlock(BaseModel):
     ``cash_to_equity`` is the distribution (no reserve build-up beyond the DSRA funded at close).
     """
 
+    model_config = ConfigDict(frozen=True)
+
     currency: str
     rows: List[WaterfallRow]
     total_cfads: float
@@ -260,7 +280,7 @@ class WaterfallBlock(BaseModel):
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     meta: ReportMeta
     covenants: Covenants
