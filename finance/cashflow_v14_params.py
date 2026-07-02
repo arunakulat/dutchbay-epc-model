@@ -561,9 +561,17 @@ def validate_parameters(config: Dict[str, Any]) -> List[str]:
         if risk and not (0.0 <= risk < 1.0):
             errors.append(f"risk_haircut_pct: {risk} out of range (must be 0.0-1.0)")
 
-    depreciation_years = as_int(
-        _resolve_first(config, ("tax", "depreciation_years"), "depreciation_years")
-    )
+    # as_int fails loud on a present-but-malformed value (#585); convert that into a
+    # field-named validation error so this collector keeps its report-all contract
+    # (mirrors the project_life_years try/except above). Previously a malformed
+    # depreciation_years silently coerced to None and PASSED validation.
+    try:
+        depreciation_years = as_int(
+            _resolve_first(config, ("tax", "depreciation_years"), "depreciation_years")
+        )
+    except ValueError as e:
+        errors.append(f"depreciation_years: {e}")
+        depreciation_years = None
     if depreciation_years is not None and depreciation_years < 1:
         errors.append(
             f"depreciation_years: {depreciation_years} invalid (must be >= 1)"

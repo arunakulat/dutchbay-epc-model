@@ -128,7 +128,8 @@ def test_var_cvar_direction_and_labels() -> None:
     assert out.var < float(returns.mean())
     assert out.return_type == "equity_irr"
     assert out.var_label == "VaR(95%)"
-    assert out.cvar_label == "CVaR(95%)"
+    # CVaR is labelled with both standard names: CVaR == Expected Shortfall (#600).
+    assert out.cvar_label == "CVaR/ES(95%)"
     assert out.confidence == pytest.approx(0.95)
 
 
