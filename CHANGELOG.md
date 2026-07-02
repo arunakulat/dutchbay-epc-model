@@ -112,6 +112,22 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Run manifest is now stamped inside the engine (#577, half 2 — engine-internal provenance,
+  KPI-neutral).** `run_v14_pipeline_enhanced` stamps `result["run_manifest"]` itself, immediately
+  after config resolution + schema validation, hashing the ALREADY-RESOLVED post-override config it
+  actually evaluates (no re-load) — so every caller (CLI, web API, `evaluation_v14` gateway,
+  MC/sensitivity per-trial entries, scripts) now receives a manifest whose `config_sha256` binds to
+  the exact inputs, for both path and inline-Mapping configs. Outer stampers defer to it:
+  `run_full_pipeline_v14` becomes stamp-if-absent (new `_stamp_manifest_if_absent` helper; the
+  `_load_manifest_config` re-load with its loud degraded-path WARNING from half 1 is retained as the
+  fallback), `api.pipeline_api.run_pipeline` returns the engine manifest instead of rebuilding one,
+  and `app.services.pipeline_service.run_finance_case`'s existing stamp-if-absent guard is kept as a
+  defensive fallback. `analytics.run_manifest.git_sha()` is now process-cached (`lru_cache` on the
+  `git rev-parse HEAD` probe) so per-trial manifest stamping no longer forks a git subprocess per MC
+  trial; the `DUTCHBAY_GIT_SHA`/`GIT_COMMIT` env override deliberately stays outside the cache and is
+  consulted on every call. `ScenarioAnalytics` batch stamps are unchanged (that surface builds
+  cashflow/debt/KPIs directly and never calls the engine). Additive metadata only: committed scenario
+  KPIs are kpi-oracle byte-identical.
 - **Batch-path economics now labelled non-authoritative in every emitted JSON (#611).** The batch
   comparison CLI (`run_scenario_analytics_v14.py` → `analytics.scenario_analytics`) computes DSCR/IRR
   on a deliberately lighter basis than the canonical pipeline (PIPE-1, #472: no build-up WACC, no
