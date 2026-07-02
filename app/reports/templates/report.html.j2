@@ -317,6 +317,44 @@
   </section>
   {% endif %}
 
+  {# 4g. Global sensitivity (PAWN median-KS) — #645 #}
+  {% if ctx.global_sa_pawn and ctx.global_sa_pawn.drivers %}
+  <section class="page">
+    <h2>Global Sensitivity &mdash; PAWN (Distribution-Based)</h2>
+    <p class="muted">Moment-independent global importance for the project IRR: PAWN
+      (Pianosi &amp; Wagener 2018) measures each driver's influence by the median
+      Kolmogorov&ndash;Smirnov distance between the unconditional and conditioned output
+      distributions over {{ ctx.global_sa_pawn.n_runs }} model evaluations. Unlike the
+      variance-based indices it stays bounded in [0,&nbsp;1] and does not misbehave on
+      skewed or covenant-pinned (DSCR-floor) outputs, so it complements the Morris
+      screening above. Drivers are ranked by median KS (distributional influence); the CV
+      is the dispersion of the KS across the conditioning slices.</p>
+    <p class="muted"><strong>Finite-sample noise floor:</strong> at these settings
+      (n&nbsp;=&nbsp;{{ ctx.global_sa_pawn.n_runs }}, s&nbsp;=&nbsp;10) even an inert
+      driver measures a median KS of ~0.15, so low-end ranking positions reflect sampling
+      noise, not influence &mdash; read only the top of this table as evidence of a
+      driver's effect.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">Median KS (importance)</th>
+          <th style="text-align:right;">CV (across slices)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in ctx.global_sa_pawn.drivers %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.median_ks) }}</td>
+          <td class="num">{{ fmt_ratio_pct(d.ks_cv) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>

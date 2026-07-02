@@ -5,6 +5,44 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **PAWN (median-KS) global-sensitivity block in the lender report + PAWN (X, Y) given-data reuse (#645, additive, default-absent = byte-identical).**
+  The lender report's Global Sensitivity area now carries an optional **PAWN** subsection
+  alongside the existing Morris screening. PAWN (Pianosi & Wagener 2018) is a
+  *distribution*-based (median Kolmogorov-Smirnov) index that stays bounded in [0, 1] and,
+  unlike variance-based Sobol, is robust on the skewed / covenant-pinned (DSCR-floor) KPIs
+  that are exactly the DutchBay case — so it is the natural complement to the Morris
+  elementary-effects screening.
+  - `app.services.report_global_sa.compute_report_global_sa_pawn` maps the canonical
+    `analytics.sensitivity.global_sa.run_pawn` result to a render-ready `GlobalSABlock`
+    (drivers ranked by median KS), reusing the same temp-file + CASPER degrade path as the
+    Morris adapter (a nan_poisoned / flat_metric flag, a raising runner, or an empty result
+    omits only that subsection — never sinks the core report; no SA logic reimplemented,
+    CCCDIR). `GlobalSADriver` gains optional `median_ks` / `ks_cv` fields; `report.html.j2`
+    renders the block as section 4g with the finite-sample **noise-floor** caveat (an inert
+    driver measures a median KS of ~0.15 at n=256, s=10, so low-end ranks are sampling noise,
+    not influence). Wired best-effort into the report route (`app/api/main.py`) via a new
+    `global_sa_pawn` context field on `build_report_context`.
+  - `run_pawn` gains optional **`given_x` / `given_y`** kwargs: pass a prior sweep's design
+    matrix and its per-metric output vectors to REUSE them at zero extra evaluation cost (the
+    given-data path — a Sobol / MC design already paid for can be re-decomposed by KS for
+    free). `given_x` and `given_y` must be supplied together and shape-match the problem and
+    each other or a `ValueError` is raised (CESSPIT — no silent LHS fallback); `n` is then
+    ignored (`n_runs = len(given_x)`), and the reused design produces indices identical to the
+    self-sampled path (closed-form Ishigami test). The self-sampled default is unchanged, so
+    every committed scenario's KPIs are byte-identical (verified via the all-scenarios kpi
+    oracle) and the report is byte-identical when the PAWN block is absent (default).
+  - **Non-finite `given_x` is now a hard `ValueError`, naming the offending column and count
+    (#645, Fable blocker — mirrors the #644 CESSPIT pattern).** `_validate_given_data` had
+    validated `given_x`'s shape/alignment but not its finiteness, so a NaN/inf slipped in
+    silently; PAWN then slices X with `np.nanquantile`, dropping those rows from the
+    *conditional* CDFs while still counting them in the *unconditional* CDF — corrupting every
+    reported KS index while the function's docstring promised "every mismatch raises
+    ValueError." Unlike the Y-side (which takes the #644 row-mask), X cannot be masked without
+    breaking PAWN's conditional design, so non-finite X is rejected outright. The finite reuse
+    path is unaffected (indices stay bit-identical); no committed scenario exercises the
+    given-data path, so all KPIs remain byte-identical.
+  - The `--method pawn` CLI dispatch is tracked separately (#658); this change is the report
+    surface + (X, Y)-reuse half only.
 - **PAWN method + tax / DSCR presets exposed on the sensitivity CLIs (#658, closes #645, opt-in, report-only, KPI-neutral).**
   Three verified-existing, tested-but-CLI-orphaned sensitivity runners are now reachable from the
   two thin `scripts/` sensitivity CLIs. All additions are opt-in and change no computed KPI — the

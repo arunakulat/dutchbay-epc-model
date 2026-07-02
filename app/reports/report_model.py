@@ -357,6 +357,12 @@ class ReportContext(BaseModel):
     #: Global (Morris) sensitivity screening over the MC drivers (MC-1). None when not
     #: supplied or the (best-effort) screening failed/has no drivers — section omitted.
     global_sa: Optional[GlobalSABlock] = None
+    #: Global (PAWN) sensitivity block over the MC drivers (#645) — the distribution-based
+    #: (median-KS) complement to the variance-based Morris screening, robust on the
+    #: covenant-pinned / skewed KPIs. None when not supplied or the (best-effort) block
+    #: failed/has no drivers — that subsection is then omitted (additive; default absent =
+    #: byte-identical to the pre-#645 report).
+    global_sa_pawn: Optional[GlobalSABlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -893,6 +899,7 @@ def build_report_context(
     annual_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
+    global_sa_pawn: Optional[GlobalSABlock] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
@@ -919,6 +926,10 @@ def build_report_context(
         global_sa: A pre-computed global (Morris) sensitivity block (MC-1). Computed
             upstream (it runs a multi-evaluation screening) and passed in so this builder
             stays pure; ``None`` when the best-effort screening was skipped or failed.
+        global_sa_pawn: A pre-computed global (PAWN, median-KS) sensitivity block (#645) —
+            the distribution-based complement to the Morris screening. Computed upstream
+            and passed in; ``None`` when the best-effort block was skipped or failed, in
+            which case only that subsection is omitted.
         run_result: The full pipeline run result (``kpis`` / ``annual_rows`` /
             ``debt_result`` / ``equity_distribution``), used solely to build the additive
             project→equity IRR bridge (#621). Optional — ``None`` for legacy callers, in which
@@ -950,6 +961,7 @@ def build_report_context(
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
         global_sa=global_sa,
+        global_sa_pawn=global_sa_pawn,
         evidence=_build_evidence(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
