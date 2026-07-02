@@ -1,13 +1,19 @@
 """Tests for the AEP uncertainty knobs: P50 bankability haircut + correlation-aware sigma.
 
-Two config-driven, default-off options on the IEC 61400-15-2 exceedance build-up:
+Two config-driven options on the IEC 61400-15-2 exceedance build-up:
 - ``resource.uncertainty.p50_haircut_pct`` — a haircut on the modelled P50 (empirical
-  pre-construction over-prediction), applied before the P-value build-up.
+  pre-construction over-prediction), applied before the P-value build-up. At the CONFIG layer
+  (aep_summary_builder) a scenario that is SILENT on it now defaults to the recommended
+  ``RECOMMENDED_P50_HAIRCUT_PCT`` (5%, WES 2026; #587), not 0 — a no-EYA scenario is corrected
+  for the documented P50 optimism. The ``exceedance_levels`` KERNEL keeps a 0.0 identity default.
 - ``resource.uncertainty.correlation`` — uniform inter-category correlation rho in [0,1]
   for combining the systematic sigmas (rho=0 = the IEC root-sum-of-squares baseline;
-  rho=1 = fully correlated / linear sum). RSS empirically understates total uncertainty.
+  rho=1 = fully correlated / linear sum). RSS empirically understates total uncertainty. Defaults
+  to 0.
 
-Both default to 0, so scenarios without an `uncertainty` block are byte-identical.
+Every COMMITTED scenario now sets p50_haircut_pct explicitly (has-EYA DutchBay scenarios — lender,
+5usc, hybrid, both capex variants — at 2.0%; the two no-EYA fixtures kalpitiya_160m/mullikulam at 0.0%),
+so the recommended default governs only future NEW no-EYA scenarios — all committed KPIs are unchanged.
 """
 
 from __future__ import annotations
@@ -19,7 +25,11 @@ import pytest
 
 from analytics.scenario_loader import load_scenario_config
 from analytics.wind.aep_summary_builder import build_aep_summary_from_config
-from wind_resource.bankable_aep import UncertaintyBudget, exceedance_levels
+from wind_resource.bankable_aep import (
+    RECOMMENDED_P50_HAIRCUT_PCT,
+    UncertaintyBudget,
+    exceedance_levels,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -74,7 +84,7 @@ def test_exceedance_correlation_widens_lowers_p90_only() -> None:
     assert corr.p90_1yr_gwh < base.p90_1yr_gwh  # wider band -> lower P90
 
 
-# --- builder: config-driven, default-off ---------------------------------------
+# --- builder: config-driven (haircut defaults to recommended; correlation default-off) --------
 def test_builder_default_reproduces_canonical_exceedance() -> None:
     """LENDER YAML carries the 2% pre-construction P50 haircut -> canonical post-haircut exceedance."""
     summary = build_aep_summary_from_config(load_scenario_config(LENDER))
@@ -102,9 +112,28 @@ def test_builder_haircut_reduces_bankable_p50() -> None:
     assert summary["exceedance"]["net_aep_p50_gwh"] == pytest.approx(450.1, abs=0.5)
 
 
+def test_builder_defaults_to_recommended_haircut_when_silent() -> None:
+    """A scenario SILENT on p50_haircut_pct now picks up the recommended WES-2026 default (#587):
+    a no-EYA scenario is corrected for pre-construction P50 optimism rather than assuming 0%. The
+    committed DutchBay scenarios all set it explicitly, so this governs only no-EYA regenerations.
+    """
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {}  # silent -> recommended default applies
+    summary = build_aep_summary_from_config(cfg)
+    assert summary["uncertainty"]["p50_haircut_pct"] == RECOMMENDED_P50_HAIRCUT_PCT
+    assert summary["net_site_aep_gwh"] == pytest.approx(
+        473.8 * (1.0 - RECOMMENDED_P50_HAIRCUT_PCT / 100.0), abs=0.5
+    )
+    # provenance: the modelled (pre-haircut) P50 is still preserved
+    assert summary["uncertainty"]["modelled_p50_gwh"] == pytest.approx(473.8, abs=0.5)
+
+
 def test_builder_correlation_widens_uncertainty() -> None:
     cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
-    cfg["resource"]["uncertainty"] = {"correlation": 0.5}
+    # Pin the haircut to 0.0 so this isolates the correlation knob: post-#587 an uncertainty
+    # block that omits p50_haircut_pct picks up the recommended 5% default, which would confound
+    # the "P50 unchanged by correlation" assertion.
+    cfg["resource"]["uncertainty"] = {"correlation": 0.5, "p50_haircut_pct": 0.0}
     summary = build_aep_summary_from_config(cfg)
     assert summary["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)  # P50 unchanged
     assert summary["exceedance"]["sigma_1yr_pct"] > 10.07  # wider than RSS baseline

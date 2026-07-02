@@ -70,6 +70,10 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: dtu_reference_10mw
   aep_summary_path: scenarios/aep_summary_kalpitiya_160m_fitted.json
+  # No-EYA illustrative fixture: its frozen AEP artifact was built at 0% haircut, so pin 0.0 EXPLICITLY
+  # (#587) to keep an AEP regen reproducible and opt out of the recommended no-EYA default (not bankable).
+  uncertainty:
+    p50_haircut_pct: 0.0
   losses:
     wake_loss_pct: 7.28
     availability_pct: 97.0

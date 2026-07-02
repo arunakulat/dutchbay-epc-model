@@ -352,6 +352,24 @@ class ExceedanceResult:
     life_years: int
 
 
+#: Recommended default pre-construction P50 over-prediction haircut (%), applied by the config
+#: layer (:func:`analytics.wind.aep_summary_builder._uncertainty_from_config`) ONLY when a
+#: scenario declares no ``resource.uncertainty.p50_haircut_pct``. Operational P50s run BELOW
+#: pre-construction model estimates: Hammond & Simley (WES 2026) measure a −6.6%/−7.4%
+#: pre-construction bias, and the operational-vs-predicted validation literature places the
+#: adjustment in a ~0–7% range. 5.0% is a documented default that is deliberately CONSERVATIVE —
+#: it sits below the WES-2026 central estimate — for a project WITHOUT its own operational or
+#: third-party EYA. A project that HAS an EYA should override it: the DutchBay lender case sets 2.0%
+#: (its bankable P50 464.3 GWh — modelled 473.8, post-2% — matches the Envision EN220 EYA P50 464.5
+#: to within 0.04%; note that corroboration bounds MODEL-vs-EYA drift, not EYA-vs-operations bias —
+#: the EN220 EYA is the OEM's own pre-construction estimate, i.e. the WES-2026 population, so the 2.0%
+#: is a separately-authorized calibration choice, not a claim that the model beats the measured bias).
+#: The :func:`exceedance_levels` KERNEL keeps a 0.0 identity default — this is a *policy* default,
+#: applied only at config consumption, never in the math. Wind-only by design; the solar exceedance
+#: layer (:mod:`solar_resource.exceedance`) intentionally stays 0.0. (#587)
+RECOMMENDED_P50_HAIRCUT_PCT = 5.0
+
+
 def exceedance_levels(
     p50_gwh: float,
     budget: UncertaintyBudget,

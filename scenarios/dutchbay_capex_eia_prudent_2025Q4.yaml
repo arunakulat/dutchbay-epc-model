@@ -108,6 +108,12 @@ resource:
 
   aep_summary_path: "scenarios/aep_summary_dutchbay_10mw.json"
 
+  # Pre-construction P50 over-prediction haircut: 2.0% (matches the frozen aep_summary_dutchbay_10mw.json
+  # this scenario pins; EN220-EYA-corroborated). Made EXPLICIT (#587) so an AEP regen from this config
+  # reproduces the pinned 464.3 GWh rather than silently picking up the recommended no-EYA default.
+  uncertainty:
+    p50_haircut_pct: 2.0
+
   # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:

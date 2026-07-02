@@ -28,6 +28,7 @@ Context:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -45,10 +46,13 @@ from analytics.power_curves.oem_parser import (
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses, net_capacity_factor
 from wind_resource.bankable_aep import (
+    RECOMMENDED_P50_HAIRCUT_PCT,
     UncertaintyBudget,
     density_velocity_factor,
     exceedance_levels,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def validate_curve_selection(
@@ -109,9 +113,14 @@ def _uncertainty_from_config(
 ) -> "tuple[UncertaintyBudget, float, float, int]":
     """Build the IEC 61400-15-2 uncertainty budget + knobs from ``resource.uncertainty``.
 
-    All fields are optional; category sigmas default to the UncertaintyBudget defaults,
-    and the two knobs (p50_haircut_pct, correlation) default to 0 -> the IEC RSS baseline
-    with no haircut, so scenarios without an `uncertainty` block are unchanged.
+    All fields are optional; category sigmas default to the UncertaintyBudget defaults.
+    ``correlation`` defaults to 0 (the IEC RSS baseline). ``p50_haircut_pct`` defaults to the
+    recommended pre-construction over-prediction haircut
+    :data:`~wind_resource.bankable_aep.RECOMMENDED_P50_HAIRCUT_PCT` (WES 2026; #587) when a
+    scenario is SILENT on it — so a no-EYA scenario is corrected for the well-documented P50
+    optimism rather than assuming a naive 0%. A scenario that has its own EYA sets an explicit
+    value (the DutchBay lender case: 2.0%, EN220-corroborated), which overrides the default. This
+    is a policy default at config-consumption; the ``exceedance_levels`` kernel stays 0.0-identity.
     """
     unc: Dict[str, Any] = dict(resource.get("uncertainty", {}) or {})
     d = UncertaintyBudget()
@@ -132,7 +141,17 @@ def _uncertainty_from_config(
             unc.get("interannual_variability_pct", d.interannual_variability_pct)
         ),
     )
-    haircut_pct = float(unc.get("p50_haircut_pct", 0.0))
+    if "p50_haircut_pct" in unc:
+        haircut_pct = float(unc["p50_haircut_pct"])
+    else:
+        # Silent-default observability (CESSPIT): a scenario that omits the knob gets the
+        # recommended no-EYA default — surface it so a regeneration is never quietly haircut.
+        haircut_pct = float(RECOMMENDED_P50_HAIRCUT_PCT)
+        logger.info(
+            "AEP summary: resource.uncertainty.p50_haircut_pct not set; applying the recommended "
+            "%.1f%% pre-construction P50 over-prediction default (WES 2026). Set it explicitly to override.",
+            haircut_pct,
+        )
     correlation = float(unc.get("correlation", 0.0))
     life_years = int(unc.get("life_years", 20))
     return budget, haircut_pct, correlation, life_years
@@ -289,10 +308,11 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     loss_result = apply_losses(gross_gwh, losses)
     modelled_p50_gwh = loss_result.net_aep_gwh  # net P50 before any bankability haircut
 
-    # IEC 61400-15-2 exceedance build-up, with two optional config-driven knobs
+    # IEC 61400-15-2 exceedance build-up, with two config-driven knobs
     # (resource.uncertainty): a P50 over-prediction haircut and an inter-category
-    # correlation for the systematic-sigma combination. Both default to 0 -> the
-    # bankable P50 == modelled net AEP and the RSS baseline is preserved.
+    # correlation for the systematic-sigma combination. `correlation` defaults to 0 (RSS
+    # baseline preserved); `p50_haircut_pct` defaults to RECOMMENDED_P50_HAIRCUT_PCT (5.0)
+    # at this config layer for a silent scenario (#587) — the kernel default stays 0.0.
     budget, haircut_pct, correlation, life_years = _uncertainty_from_config(resource)
     exceedance = exceedance_levels(
         modelled_p50_gwh,

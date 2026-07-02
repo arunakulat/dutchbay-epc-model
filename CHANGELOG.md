@@ -22,6 +22,25 @@ All notable changes to this project will be documented here.
   - **Wind-only lender case**: carries no BESS revenue, so its committed KPIs (projIRR/eqIRR/DSCR/NPV) are
     **byte-identical (kpi_oracle-verified, argv-correct)**.
   Scenario/test pins updated accordingly.
+- **Recommended default P50 over-prediction haircut wired at the config layer (#587).** The AEP
+  summary builder's `resource.uncertainty.p50_haircut_pct` policy default moves from 0.0 to a
+  documented `RECOMMENDED_P50_HAIRCUT_PCT` (**5.0%**, `wind_resource.bankable_aep`): a scenario
+  that is SILENT on the haircut now corrects for the well-documented pre-construction P50
+  over-prediction bias (Hammond & Simley, WES 2026: −6.6%/−7.4%; the ~0–7% range in the
+  operational-vs-predicted validation literature) rather than assuming a naive 0%. The
+  `exceedance_levels` KERNEL keeps its 0.0 identity default — this is a *policy* default applied only
+  at config-consumption, never in the math (wind-only by design; the solar layer intentionally stays
+  0.0). **KPI-neutral for every committed scenario, and every committed scenario is now made explicit**
+  so the default never silently applies on a regeneration: the has-EYA DutchBay scenarios set
+  `p50_haircut_pct: 2.0` (lender/5usc/hybrid, and now the two capex variants — previously they carried
+  only a pinned/frozen 464.3 AEP, not an explicit knob), and the two no-EYA fixtures (kalpitiya_160m,
+  mullikulam) set `0.0` (their frozen artifacts were built at 0%). Finance never recomputes AEP (it
+  bills off the config `capacity_factor` / frozen `aep_summary_path`), so the wind lender case is
+  **kpi_oracle byte-identical (argv-correct), and all 19 evaluable scenarios are byte-identical vs the
+  parent**; the recommended default now governs only *future new* no-EYA scenarios. (Verify-before-apply:
+  the issue's premise that the haircut was "unused at 0.0" was stale — it was already wired via
+  WIND-5/#484; per user direction the flagship 2.0% is left untouched, tracked as a separate
+  calibration note — see the OEM-EYA-bias caveat issue.)
 - **Dependency version bounds tightened (SOTA benchmarking #592/#593).** `pandas>=2.0` gains a `<3.0`
   cap — pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default str dtype
   (unconditional breaking changes), so 3.0 must be a deliberate, KPI-oracle-verified migration, not an
