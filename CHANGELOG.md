@@ -5,6 +5,26 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Opt-in NREL-BLAST separable calendar+cycle BESS aging curve (#606, opt-in, KPI-neutral).**
+  `finance.bess_revenue` gains a `revenue.soh_model` selector: the default (absent) `geometric`
+  keeps the compounding `(1 − mdsc_fade_pct_annual)^t` state-of-health curve unchanged, while
+  the new `separable_calendar_cycle` models calendar aging (loss ∝ time) and cycle aging
+  (loss ∝ equivalent-full-cycle throughput = `cycles_per_year × depth_of_discharge`) as a
+  linear superposition — the NREL **BLAST** decomposition used by SAM. New `revenue.*` keys
+  `calendar_fade_pct_annual` and `cycle_fade_pct_per_efc` get fail-loud CESSPIT validation
+  (non-numeric / out-of-`[0,1)` / a combined annual rate outside `[0,1)` raise with the full
+  config path); the two models are mutually exclusive (mixing `mdsc_fade_pct_annual` with the
+  separable keys, or an unknown `soh_model`, raises — no silent precedence). The `mdsc_floor_soh`
+  floor and `augmentation_schedule` origin-reset semantics apply identically to both models.
+  The curve is honoured by BOTH consumers through the single source of truth
+  `mdsc_soh_for_year`: the resolver collapses the separable channels into one annual rate stored
+  on the spec and threaded through `LcosSpec` / `resolve_lcos_specs` / the `compute_lcos`
+  `soh_lookup`, so the cashflow revenue path and `finance.bess_lcos` can never diverge. The
+  per-model depth-of-discharge defaults are now imported by `bess_lcos` from `bess_revenue`
+  (single source of truth). DEFAULT OFF = byte-identical: both committed BESS scenarios
+  (`ceb_bess_10mw_capacity_charge.yaml`, `ceb_solar_bess_nightpeak_10mw.yaml`) keep the
+  geometric curve, and all committed-scenario KPIs are verified byte-identical (all-scenarios
+  kpi oracle).
 - **TCFD-aligned climate-risk fields in the risk / evidence register (#607, additive, KPI-neutral).**
   `RiskItem` (config) and its render twin `RiskRow` gain an OPTIONAL
   `climate_risk_category: physical | transition` field (pydantic `Literal`, `extra="forbid"`
