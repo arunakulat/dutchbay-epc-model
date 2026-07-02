@@ -152,8 +152,11 @@ def test_equity_irr_solver_converges_to_a_real_tariff() -> None:
 
 def test_equity_irr_solver_differs_from_project_irr_solver() -> None:
     """Solving for the same target against equity_irr vs project_irr yields DIFFERENT tariffs —
-    proving the registry fix actually answers a different question (equity_irr < project_irr on
-    the geared lender case, so the equity solve needs a higher tariff for the same target).
+    proving the registry fix actually answers a different question. On the geared lender case
+    equity_irr > project_irr at any given tariff (leverage lifts equity returns: at the
+    project-solve tariff project_irr==0.20 while equity_irr~=0.269), so the equity solve reaches
+    the same 0.20 target at a LOWER tariff. Either way the two tariffs differ; the assertion only
+    pins that they are not equal.
     """
     target = 0.20
     tariff_project = solve_for_tariff_given_irr(
@@ -313,6 +316,38 @@ def test_breakeven_rejects_invalid_metric() -> None:
     """A truly unknown metric is a programming error (not scenario infeasibility) and raises."""
     with pytest.raises(ValueError, match="Invalid breakeven metric"):
         solve_tariff_breakeven(LENDER_CONFIG, metric="not_a_metric")
+
+
+def test_breakeven_iteration_starved_reports_max_iterations_not_converged() -> None:
+    """HONEST convergence status (Fable blocker on #615). The underlying root-finders return the
+    last midpoint on iteration exhaustion (they raise ONLY when no midpoint could be evaluated) and
+    merely log a warning, so a naive wrapper would stamp status='converged' on a bound that misses
+    the target by orders of magnitude. With a bracketed NPV=0 target but only 2 iterations and a
+    $1 tolerance the solve CANNOT reach tolerance; the breakeven surface must report a NON-
+    'converged' status with the true residual in metadata, not a false 'converged'.
+
+    Exact repro from the review: project_npv target 0.0 over 10..60 LKR/kWh, tolerance=1.0,
+    max_iterations=2 lands the bisection at tariff 22.5 where project_npv ~= -$53.5M."""
+    result = solve_tariff_breakeven(
+        LENDER_CONFIG,
+        metric="project_npv",
+        target_value=0.0,
+        bounds=(10.0, 60.0),
+        tolerance=1.0,
+        max_iterations=2,
+    )
+    assert isinstance(result, BreakevenResult)
+    # status must NOT falsely claim convergence.
+    assert result.status != "converged"
+    assert result.status == "max_iterations"
+    # No trustworthy breakeven value on a non-converged solve.
+    assert result.breakeven_value is None
+    # The residual is surfaced honestly and is far outside tolerance.
+    assert "abs_residual" in result.metadata
+    assert result.metadata["abs_residual"] > result.metadata["tolerance"]
+    # The achieved value at the last bound is captured (the ~-$53.5M miss).
+    assert result.metadata["achieved"] < -1.0e7
+    assert result.bracket == (10.0, 60.0)
 
 
 # ---------------------------------------------------------------------------

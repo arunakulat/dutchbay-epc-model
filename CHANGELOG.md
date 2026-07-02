@@ -19,9 +19,20 @@ All notable changes to this project will be documented here.
   (2) `solve_tariff_breakeven` — a first-class breakeven surface (tariff at NPV=`target`, default
   NPV=0; or the tariff hitting an IRR hurdle) returning the centralized
   `contracts_v14.BreakevenResult` (CCCDIR: no new contract types) with `status`
-  (`converged` | `unbracketed` | `error`) and the searched `bracket` populated, rather than a
-  bare float — so a batch sweep gets structured infeasibility instead of a raised exception.
-  CLI exposure is deferred (module status note updated); any future CLI must be Hydra-only (R3).
+  (`converged` | `max_iterations` | `unbracketed` | `error`) and the searched `bracket`
+  populated, rather than a bare float — so a batch sweep gets structured infeasibility instead of
+  a raised exception. HONEST convergence status (Fable blocker on #615): the underlying
+  root-finders return the last midpoint on iteration exhaustion (they raise only when NO midpoint
+  could be evaluated) and merely log a warning, so a naive wrapper would stamp `status="converged"`
+  on a bound that misses the target by orders of magnitude. `solve_tariff_breakeven` now RE-VERIFIES
+  the returned tariff via one extra `evaluate_with_overrides` evaluation and emits
+  `status="converged"` ONLY when `|achieved - target| <= tolerance`; otherwise it reports
+  `status="max_iterations"` with the residual (`achieved`, `target`, `abs_residual`, `tolerance`)
+  in `metadata`. The inaccurate "raises on non-convergence" docstring claim (and the
+  `solve_for_tariff_given_irr` / `_npv` "Raises: … fails to converge" sections) were corrected to
+  state the true behaviour (they return the last bound on exhaustion, not raise). No behaviour
+  change to the numeric bisection core. CLI exposure is deferred (module status note updated); any
+  future CLI must be Hydra-only (R3).
 - **P90 (downside) debt-sizing detail surfaced in the lender report (#613, render-when-present, KPI-neutral).**
   The lender pack already renders "Binding sizing constraint … (P50/P90)" by default for
   every `debt_sizing: dual_dscr` scenario (`report.html.j2` via `api.pipeline_api._extract_debt`);

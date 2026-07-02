@@ -95,13 +95,20 @@ def _require_kpi_present(kpis: Mapping[str, Any], kpi_key: str, *, lever: str) -
     silent ``0.0`` default) leak out and make the solver answer the wrong question, raise a
     clear error naming the missing KPI and the lever so the analyst knows the scenario cannot
     support this solve.
+
+    The "not exposed" hint is parameterized on ``kpi_key``: ``equity_irr``/``equity_npv`` are
+    absent when the scenario computes no equity distribution; the project KPIs are absent only
+    on a genuinely degenerate KPI surface (they always ride the base pipeline result).
     """
     if kpi_key not in kpis or kpis[kpi_key] is None:
+        if kpi_key.startswith("equity_"):
+            hint = f"{kpi_key} is only present when an equity distribution is computed"
+        else:
+            hint = f"the scenario's KPI surface does not include {kpi_key}"
         raise ValueError(
             f"Solver lever {lever!r} targets KPI {kpi_key!r}, but this scenario does not "
-            f"expose it (equity_irr is only present when an equity distribution is "
-            f"computed). Refusing to solve on a missing KPI — choose a scenario that "
-            f"computes it, or target a KPI the scenario emits."
+            f"expose it ({hint}). Refusing to solve on a missing KPI — choose a scenario "
+            f"that computes it, or target a KPI the scenario emits."
         )
     return float(kpis[kpi_key])
 
@@ -255,11 +262,19 @@ def solve_for_tariff_given_irr(
             Maximum number of bisection iterations.
 
     Returns:
-        Tariff in LKR/kWh that approximately hits target_irr.
+        Tariff in LKR/kWh that approximately hits target_irr. NOTE: on iteration exhaustion
+        WITHOUT meeting ``tolerance`` this returns the last evaluated midpoint (a best-effort
+        bound) and only logs a warning — it does NOT raise. A ``ValueError`` is raised only
+        when NO midpoint could be evaluated at all (every bound evaluation failed). Callers
+        that need a guaranteed-within-tolerance answer must re-verify the returned tariff
+        (see :func:`solve_tariff_breakeven`, which does exactly that before reporting
+        ``status="converged"``).
 
     Raises:
-        ValueError: If the solver fails to converge, ``method`` is invalid, ``metric`` is
-            invalid, or (for ``equity_irr``) the scenario exposes no equity distribution.
+        ValueError: If ``method`` is invalid, ``metric`` is invalid, the target is not
+            bracketed by the bounds, the override is a dead lever, (for ``equity_irr``) the
+            scenario exposes no equity distribution, or no valid midpoint could be evaluated.
+            Iteration exhaustion short of ``tolerance`` does NOT raise (see Returns).
     """
     if method.lower() != "bisection":
         raise ValueError(f"Unsupported solver method: {method!r}. Use 'bisection'.")
@@ -593,10 +608,17 @@ def solve_for_tariff_given_npv(
             Maximum number of bisection iterations.
 
     Returns:
-        Tariff in LKR/kWh that approximately hits target_npv.
+        Tariff in LKR/kWh that approximately hits target_npv. NOTE: on iteration exhaustion
+        WITHOUT meeting ``tolerance`` this returns the last evaluated midpoint (a best-effort
+        bound) and only logs a warning — it does NOT raise. A ``ValueError`` is raised only
+        when NO midpoint could be evaluated at all. Callers needing a guaranteed-within-
+        tolerance answer must re-verify the returned tariff (see
+        :func:`solve_tariff_breakeven`).
 
     Raises:
-        ValueError: If the solver fails to converge or metric is invalid.
+        ValueError: If ``metric`` is invalid, the target is not bracketed by the bounds, the
+            override is a dead lever, or no valid midpoint could be evaluated. Iteration
+            exhaustion short of ``tolerance`` does NOT raise (see Returns).
     """
     if metric not in ("project_npv", "equity_npv"):
         raise ValueError(
@@ -1053,12 +1075,22 @@ def solve_tariff_breakeven(
       :func:`solve_for_tariff_given_irr`. The ``equity_irr`` flavour fails loud if the scenario
       computes no equity distribution.
 
-    Deterministic and fail-loud at the numeric core: the underlying solvers raise on a missing
-    lever, an unbracketed target, or a missing KPI. This wrapper translates those raises into a
-    ``BreakevenResult`` with ``status="unbracketed"`` (or ``"error"``) and the searched
+    Fail-loud at the numeric core for structural problems: the underlying solvers raise on a
+    missing lever, an unbracketed target, or a missing KPI. This wrapper translates those raises
+    into a ``BreakevenResult`` with ``status="unbracketed"`` (or ``"error"``) and the searched
     ``bracket`` populated, rather than propagating a bare exception — so breakeven is safe to
-    call in a batch analytics sweep. A genuine convergence returns ``status="converged"`` with
-    ``breakeven_value`` set.
+    call in a batch analytics sweep.
+
+    HONEST convergence status (Fable blocker on #615): the underlying root-finders do NOT raise
+    on iteration exhaustion — they return the last evaluated midpoint (a best-effort bound) with
+    only a ``logger.warning`` — so a bare ``except`` would never see non-convergence and would
+    stamp ``status="converged"`` on a bound that misses the target by orders of magnitude. This
+    wrapper therefore RE-VERIFIES the returned tariff through one extra ``evaluate_with_overrides``
+    gateway evaluation: ``status="converged"`` is emitted ONLY when the achieved metric is within
+    ``tolerance`` of ``target_value``. When it is not, the result reports
+    ``status="max_iterations"`` with the residual (``achieved``, ``target``, ``abs_residual``,
+    ``tolerance``) captured in ``metadata`` so the analyst sees the true miss instead of a false
+    "converged".
 
     Args:
         base_config_path: Path to the base scenario YAML.
@@ -1075,12 +1107,14 @@ def solve_tariff_breakeven(
     Returns:
         A :class:`BreakevenResult` with ``variable="tariff.lkr_per_kwh"``, the requested
         ``target_metric`` / ``target_value``, and ``status`` in
-        {``converged``, ``unbracketed``, ``error``}. ``breakeven_value`` is the solved tariff
-        on success; ``bracket`` records the searched tariff range.
+        {``converged``, ``max_iterations``, ``unbracketed``, ``error``}. ``breakeven_value``
+        is the solved tariff only when ``status="converged"`` (genuinely within ``tolerance``);
+        on ``max_iterations`` it is None and the residual is in ``metadata``. ``bracket`` records
+        the searched tariff range.
 
     Raises:
         ValueError: Only for a programming error — an unknown ``metric``. Scenario/target
-            infeasibility is reported via ``status``, not raised.
+            infeasibility and non-convergence are reported via ``status``, not raised.
     """
     if metric not in _BREAKEVEN_METRICS:
         raise ValueError(
@@ -1115,9 +1149,9 @@ def solve_tariff_breakeven(
                 max_iterations=max_iterations,
             )
     except ValueError as exc:
-        # Unbracketed / missing-lever / missing-KPI / non-convergence: report as a structured
-        # result rather than a bare float or a raw exception. The achievable-range guard raises
-        # "not achievable within bounds"; classify that as an explicit "unbracketed" status.
+        # Unbracketed / missing-lever / missing-KPI: report as a structured result rather than a
+        # bare float or a raw exception. The achievable-range guard raises "not achievable within
+        # bounds"; classify that as an explicit "unbracketed" status.
         status = (
             "unbracketed" if "not achievable within bounds" in str(exc) else "error"
         )
@@ -1131,14 +1165,79 @@ def solve_tariff_breakeven(
             metadata={"error": str(exc)},
         )
 
+    # HONEST convergence check (Fable blocker on #615). The root-finders return the last
+    # midpoint on iteration exhaustion (they raise ONLY when NO midpoint could be evaluated),
+    # so a returned float is NOT proof of convergence. Re-verify by evaluating the achieved
+    # metric at the solved tariff through the same gateway; emit status="converged" ONLY when
+    # |achieved - target| <= tolerance, else status="max_iterations" with the residual.
+    try:
+        verify_kpis = evaluate_with_overrides(
+            base_config_path=base_config_path,
+            overrides={
+                **_clone_overrides(base_overrides),
+                "tariff": {"lkr_per_kwh": float(solved)},
+            },
+        )
+        achieved = _require_kpi_present(verify_kpis, metric, lever="tariff.lkr_per_kwh")
+    except (
+        ValueError
+    ) as exc:  # pragma: no cover - defensive: solve succeeded, re-eval failed
+        return BreakevenResult(
+            variable="tariff.lkr_per_kwh",
+            target_metric=metric,
+            target_value=float(target_value),
+            breakeven_value=None,
+            status="error",
+            bracket=bracket,
+            metadata={"error": str(exc)},
+        )
+
+    abs_residual = abs(achieved - float(target_value))
+    if abs_residual <= eff_tolerance:
+        return BreakevenResult(
+            variable="tariff.lkr_per_kwh",
+            target_metric=metric,
+            target_value=float(target_value),
+            breakeven_value=float(solved),
+            status="converged",
+            bracket=bracket,
+            metadata={
+                "tolerance": eff_tolerance,
+                "max_iterations": max_iterations,
+                "achieved": achieved,
+                "abs_residual": abs_residual,
+            },
+        )
+
+    # Solver exhausted its iterations without meeting tolerance: the returned float is a
+    # best-effort bound, NOT a converged breakeven. Report it honestly with the residual so the
+    # analyst sees the true miss rather than a false "converged".
+    logger.warning(
+        "Tariff-breakeven did NOT converge for metric=%s: solved tariff=%.4f achieves "
+        "%s=%.6g vs target=%.6g (|residual|=%.6g > tolerance=%.6g). Reporting "
+        "status='max_iterations'.",
+        metric,
+        float(solved),
+        metric,
+        achieved,
+        float(target_value),
+        abs_residual,
+        eff_tolerance,
+    )
     return BreakevenResult(
         variable="tariff.lkr_per_kwh",
         target_metric=metric,
         target_value=float(target_value),
-        breakeven_value=float(solved),
-        status="converged",
+        breakeven_value=None,
+        status="max_iterations",
         bracket=bracket,
-        metadata={"tolerance": eff_tolerance, "max_iterations": max_iterations},
+        metadata={
+            "tolerance": eff_tolerance,
+            "max_iterations": max_iterations,
+            "achieved": achieved,
+            "abs_residual": abs_residual,
+            "last_bound_tariff": float(solved),
+        },
     )
 
 
