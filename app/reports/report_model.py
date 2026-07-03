@@ -16,10 +16,12 @@ variant with ``model_copy(update=...)`` instead of assignment.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
@@ -532,6 +534,59 @@ class IrrBridgeBlock(BaseModel):
     reconciled: bool
 
 
+class CapitalRiskMetricRow(BaseModel):
+    """One MC return-metric's distributional summary (mean + VaR/CVaR) — #776 / #657."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str  # equity_irr | project_irr | equity_npv | project_npv
+    unit: (
+        str  # "pct" (IRR ratios) | "usd" (NPV dollars) — drives the display formatting
+    )
+    mean: float
+    var: float
+    cvar: float
+    var_label: str  # e.g. "VaR(95%)"
+    cvar_label: str  # e.g. "CVaR/ES(95%)"
+
+
+class CapitalRiskBlock(BaseModel):
+    """Capital-risk (Monte-Carlo) block for the lender report (#776, surfacing #657).
+
+    A read-only projection of :class:`analytics.capital_risk_layer_v14.CapitalRiskReport` —
+    the unified output of the CANONICAL Monte-Carlo (LHS + Iman-Conover correlation): the
+    covenant-breach probabilities (DSCR/LLCR/PLCR) against their floors, the probability equity
+    IRR falls below the hurdle, the per-metric VaR/CVaR for the four return metrics, and the
+    path to the NPV-distribution chart. Provenance (``scenario`` / ``model_version`` /
+    ``n_trials``) is carried for the audit trail (MRM-02). Rendered only when a caller supplies
+    the pre-computed report (the MC is heavy and runs out-of-band, not in the report builder) —
+    otherwise the section is omitted (additive, default-off; committed reports byte-identical).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scenario: str
+    model_version: str
+    method: (
+        str  # the ACTUAL MC method provenance (e.g. "lhs sampling, rank correlation")
+    )
+    n_trials: int
+    dscr_breach_probability: float
+    llcr_breach_probability: float
+    plcr_breach_probability: float
+    dscr_floor: float
+    llcr_floor: float
+    plcr_floor: float
+    probability_below_hurdle: float
+    target_equity_irr: float
+    metrics: List[CapitalRiskMetricRow]
+    #: The NPV-distribution chart's basename (no absolute path — avoids leaking the server
+    #: filesystem layout into a lender document) and, when the PNG exists, an embedded
+    #: base64 data-URI so the chart renders self-contained. None when matplotlib degraded.
+    npv_distribution_filename: str
+    npv_distribution_img: Optional[str] = None
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -580,6 +635,11 @@ class ReportContext(BaseModel):
     #: failed/has no drivers — that subsection is then omitted (additive; default absent =
     #: byte-identical to the pre-#645 report).
     global_sa_pawn: Optional[GlobalSABlock] = None
+    #: Capital-risk (canonical Monte-Carlo) block (#776 / #657): covenant-breach
+    #: probabilities, probability-below-hurdle, per-metric VaR/CVaR, NPV-distribution chart.
+    #: Pre-computed out-of-band (the MC is heavy) and passed in; None for callers that supply
+    #: no capital-risk report, in which case the section is omitted (default-off, byte-identical).
+    capital_risk: Optional[CapitalRiskBlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -1209,6 +1269,81 @@ def _build_finance_blocks(
     return extract_finance_report_blocks(scenario_config, debt_result, case_result.kpis)
 
 
+def _build_capital_risk(
+    capital_risk: Optional[CapitalRiskReport],
+) -> Optional[CapitalRiskBlock]:
+    """Project a pre-computed capital-risk report into a report block (#776 / #657).
+
+    Read-only projection of :class:`analytics.capital_risk_layer_v14.CapitalRiskReport`: the
+    covenant-breach probabilities + floors, the probability-below-hurdle, the per-metric
+    VaR/CVaR for the four return metrics, and the NPV-distribution chart path. The Monte-Carlo
+    that produces the report is heavy, so it is run OUT-OF-BAND and passed in (like the
+    tornado / global-SA blocks); ``None`` (the default) omits the section. Pure presentation —
+    recomputes no risk number, only reshapes the report's own values for the template.
+    """
+    if capital_risk is None:
+        return None
+    cb = capital_risk.tail_report.covenant_breaches
+    thresholds = cb.thresholds
+    metrics = [
+        CapitalRiskMetricRow(
+            metric=summary.metric_name,
+            # IRR metrics are ratios (shown as %), NPV metrics are USD — so the template
+            # never renders a dollar VaR and an IRR VaR in one unit-less column.
+            unit="usd" if "npv" in summary.metric_name else "pct",
+            mean=summary.mean,
+            var=summary.var_cvar.var,
+            cvar=summary.var_cvar.cvar,
+            var_label=summary.var_cvar.var_label,
+            cvar_label=summary.var_cvar.cvar_label,
+        )
+        for summary in (
+            capital_risk.tail_report.equity_irr,
+            capital_risk.tail_report.project_irr,
+            capital_risk.tail_report.equity_npv,
+            capital_risk.tail_report.project_npv,
+        )
+    ]
+    png_path = Path(str(capital_risk.npv_distribution_png))
+    img = _png_data_uri(png_path)
+    return CapitalRiskBlock(
+        scenario=capital_risk.scenario,
+        model_version=capital_risk.model_version,
+        method=capital_risk.method,
+        n_trials=capital_risk.n_trials,
+        dscr_breach_probability=cb.dscr_breach_probability,
+        llcr_breach_probability=cb.llcr_breach_probability,
+        plcr_breach_probability=cb.plcr_breach_probability,
+        dscr_floor=float(thresholds.get("min_dscr", 0.0)),
+        llcr_floor=float(thresholds.get("min_llcr", 0.0)),
+        plcr_floor=float(thresholds.get("min_plcr", 0.0)),
+        probability_below_hurdle=capital_risk.tail_report.probability_below_hurdle,
+        target_equity_irr=capital_risk.tail_report.target_equity_irr,
+        metrics=metrics,
+        npv_distribution_filename=png_path.name,
+        npv_distribution_img=img,
+    )
+
+
+def _png_data_uri(path: Path) -> Optional[str]:
+    """A base64 ``data:image/png`` URI for an existing PNG (self-contained embed), else None.
+
+    Embedding the chart keeps the lender report self-contained and avoids leaking the
+    server's absolute filesystem path into the document (MRM). Returns None when the file is
+    absent (e.g. matplotlib degraded, no chart written) or unreadable — the section then
+    renders without an image rather than a broken reference.
+    """
+    try:
+        if not path.is_file():
+            return None
+        import base64
+
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return None
+
+
 def _build_multi_tech(
     case_result: CaseResult,
     scenario_config: Optional[Mapping[str, Any]],
@@ -1462,6 +1597,7 @@ def build_report_context(
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
     global_sa_pawn: Optional[GlobalSABlock] = None,
+    capital_risk: Optional[CapitalRiskReport] = None,
     resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
@@ -1540,6 +1676,7 @@ def build_report_context(
         tornado=tornado,
         global_sa=global_sa,
         global_sa_pawn=global_sa_pawn,
+        capital_risk=_build_capital_risk(capital_risk),
         evidence=_build_evidence(scenario_config),
         evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
