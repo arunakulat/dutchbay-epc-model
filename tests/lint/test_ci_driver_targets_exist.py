@@ -6,9 +6,10 @@ Two latent failures in scripts/go_with_the_flow_ci.py motivated this guard (audi
 1. FAST_PYTEST_TARGETS listed ``tests/api/test_scenario_manager_smoke.py``, which never
    existed on disk. Pytest treats a missing path argument as a usage error (exit code 4),
    so ``python scripts/go_with_the_flow_ci.py --fast`` aborted before running ANY test —
-   a silently-broken local fast lane. Remote CI was unaffected (the GitHub ``fastlane``
-   job runs ``pytest tests/`` directly, NOT this driver), which is exactly why CI stayed
-   green and hid the rot. Its subject, analytics/scenario_manager.py, was itself orphaned
+   a silently-broken local fast lane. Remote CI was unaffected (at the time the GitHub
+   ``fastlane`` job ran ``pytest tests/`` directly — it became lint-only in #760, with the
+   full suite now in test-suite.yml's sharded ``test`` job — and it never used this driver
+   either way), which is exactly why CI stayed green and hid the rot. Its subject, analytics/scenario_manager.py, was itself orphaned
    dead code (zero importers) and was deleted alongside the dead CI entry.
 
 2. A stray bare ``EOF`` heredoc terminator sat at module top level, so *importing* the

@@ -85,11 +85,14 @@ jobs:
         # Distinct per-shard coverage data file so the combine job merges cleanly.
         COVERAGE_FILE: .coverage.${{ matrix.python-version }}.${{ matrix.shard }}
       run: |
-        # Full tests/ tree, split into TOTAL_SHARDS balanced groups by pytest-split.
-        # No .test_durations checked in yet, so the split is by test COUNT (even
-        # quarters); a durations file can be added later for time-balance. The whole
-        # tree is still exercised — every test runs in exactly one shard, so the gate
-        # can no longer be dodged by omission (the #149 Test Summary rubber-stamp hole).
+        # Full tests/ tree, split into TOTAL_SHARDS TIME-balanced groups by pytest-split
+        # using the committed `.test_durations` (passed explicitly via --durations-path;
+        # it is pytest-split's default, but being explicit documents the dependency and
+        # survives a rootdir change). Balancing is by duration SUM, so groups carry unequal
+        # test COUNTS by design; a test absent from the durations file is assigned the mean.
+        # Regenerate periodically with `pytest tests/ --store-durations` so new tests are
+        # timed (see #760). The whole tree is still exercised — every test runs in exactly
+        # one shard, so the gate can't be dodged by omission (the #149 Test Summary hole).
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
@@ -97,6 +100,7 @@ jobs:
           tests/ \
           --splits "$TOTAL_SHARDS" \
           --group ${{ matrix.shard }} \
+          --durations-path .test_durations \
           -n auto \
           --tb=short \
           --maxfail=10 \
