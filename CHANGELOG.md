@@ -780,6 +780,15 @@ All notable changes to this project will be documented here.
   linters -> four (ruff/black/isort/mypy), same enforced gate, a lighter CI install. Enabling ruff's `B`
   (flake8-bugbear) rule set as a mandatory gate is a documented follow-up (the tree carries ~18 `B904`
   `raise ... from` findings that need code fixes first, out of scope for this tooling-only change).
+- **Dead `pyxirr==0.10.8` lock line removed from `requirements.txt` (#619, remainder — user-gated W5 half, KPI-neutral).**
+  `pyxirr` is imported nowhere in the repo (verified: zero `.py` references) and is neither an abstract
+  dependency in `pyproject.toml` nor a transitive requirement of any installed package (`Required-by:` is
+  empty), so a clean regeneration of the lock from `pip install -e '.[...]'` + `pip freeze` would not
+  re-emit it — the pin was an orphaned leftover. Deleting the single alphabetical line (between `pytz` and
+  `PyYAML`) matches the documented regeneration output; no production IRR engine change (finance.irr stays
+  the single source of truth per ARCH-04). The `RandomState`/`datetime.utcnow()` halves of #619 were already
+  fully swept (test fixtures by #619a's autonomous half, `pipeline_v14_enhanced` utcnow by #586b) — zero live
+  sites remain, so this completes #619. Lock-only change; committed scenario KPIs are byte-identical.
 - **CI: shard the Test Suite into a parallel matrix to cut PR wall-clock (#729, infra-only, KPI-neutral).**
   `test-suite.yml`'s single `Run Tests` job (the full ~3,400-test tree + 6-package coverage on one
   runner, which had drifted to ~12-17 min as the suite grew) is split into a 4-way `pytest-split`
@@ -914,7 +923,8 @@ All notable changes to this project will be documented here.
   assertion was re-baselined and no site needed seed-stream pinning. Test-only; the committed
   scenario KPI surface is kpi-oracle byte-identical. The `datetime.utcnow()` half of #619's sweep
   has exactly one live site (`analytics/pipeline_v14_enhanced.py:80`), owned by #586b and
-  deliberately not touched here; the `pyxirr`/QuantLib lock fork stays user-gated (W5).
+  deliberately not touched here; the dead `pyxirr` lock line is removed in #619's W5 remainder half
+  (see Changed, above), while the QuantLib lock fork stays user-gated (W5).
 - **hydra-core pinned 1.3.2 → 1.3.3 + declared as an abstract runtime dep + maintenance-risk ADR (#609).**
   The reproducibility-lock pin moves to 1.3.3 (upstream is packaging-only — removes `setup.py`'s
   `pkg_resources` dependency, hydra#3207 — so runtime behaviour and all committed KPIs are unchanged;
