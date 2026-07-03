@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import numpy as np
 
+from analytics.core.covenant_breach import prob_breach
 from analytics.core.risk_metrics import RiskConfig, TailRiskAnalyzer, VaRCVaRResult
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.sensitivity.tail_risk import TailRiskConfig, _build_case_tail_snapshot
@@ -145,7 +146,9 @@ def compute_capital_risk_layer(
         "min": float(dscr.min()),
         "p5": float(np.percentile(dscr, 5)),
         "p50": float(np.percentile(dscr, 50)),
-        "prob_breach": float(np.mean(dscr < dscr_covenant)),
+        # Noise-tolerant so a covenant == dual-DSCR-sculpt-floor case is not
+        # reported as a spurious ~85-93% breach (#725; true value 0.0).
+        "prob_breach": prob_breach(dscr, dscr_covenant),
     }
 
     aep_block: Optional[Dict[str, float]] = None
