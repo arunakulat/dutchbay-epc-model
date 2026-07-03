@@ -17,7 +17,8 @@ import hashlib
 import json
 import logging
 import math
-from dataclasses import dataclass
+import warnings
+from dataclasses import asdict, dataclass
 from statistics import NormalDist
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -353,16 +354,7 @@ class MonteCarloEngine:
         # canonical Latin-Hypercube path — byte-identical to every existing run. Sobol is a
         # low-discrepancy QMC alternative offered for the model's SMOOTHER KPIs only (see
         # generate_sobol_samples / #589); it rounds the trial count up to a power of two.
-        _sampler = (
-            str(_mc_cfg.get("sampler", "lhs")).strip().lower()
-            if isinstance(_mc_cfg, Mapping)
-            else "lhs"
-        )
-        if _sampler not in ("lhs", "sobol"):
-            raise MonteCarloConfigError(
-                f"monte_carlo.sampler must be 'lhs' or 'sobol', got {_sampler!r}."
-            )
-        self._sampler: str = _sampler
+        self._sampler: str = self._resolve_sampler(_mc_cfg)
 
         # Fixed-debt covenant-stress (opt-in via monte_carlo.fixed_debt_stress: true).
         self._fixed_debt_stress: bool = (
@@ -404,8 +396,23 @@ class MonteCarloEngine:
         self._shaped_params: Dict[int, Tuple[str, float, float, float]] = {}
         self._init_distribution_shapes()
 
-        self._meta = MonteCarloRunMeta(
-            n_trials=0,
+        # Provenance stamp. Built here with the config-time fields (seed, sampler, CRN,
+        # param_names, config_hash) that are known before a run; n_trials is filled with the
+        # EFFECTIVE trial count in run() (which may exceed the request under Sobol rounding)
+        # via _build_run_meta, so the frozen record is truthful rather than a n_trials=0
+        # placeholder (#649). config_hash is consumed by the run() metadata dict.
+        self._meta = self._build_run_meta(n_trials=0)
+
+    def _build_run_meta(self, *, n_trials: int) -> MonteCarloRunMeta:
+        """Assemble the immutable :class:`MonteCarloRunMeta` provenance stamp.
+
+        Called once in ``__init__`` (with ``n_trials=0`` before any run) and re-called in
+        ``run()`` with the effective trial count so the stamp records the number of trials
+        actually evaluated (#649). All other fields are config-time invariants of the engine
+        instance. Pure metadata — no KPI or behavioural effect.
+        """
+        return MonteCarloRunMeta(
+            n_trials=int(n_trials),
             seed=self._seed,
             sampler=self._sampler,
             common_random_numbers=self._crn,
@@ -715,6 +722,67 @@ class MonteCarloEngine:
 
         return param_names, bounds, kinds, dead_names, base_outside
 
+    @staticmethod
+    def _resolve_sampler(mc_cfg: Any) -> str:
+        """Resolve the validated sampler identity ("lhs"|"sobol") from the config block.
+
+        The live selector is ``monte_carlo.sampler``. ``monte_carlo.sampling_method`` is a
+        DEPRECATED ALIAS retained for back-compat (#648): historically it was a decorative,
+        never-read key, so a scenario setting ``sampling_method: sobol`` silently ran LHS. It
+        is now honored — mapped onto ``sampler`` with a ``DeprecationWarning`` — rather than
+        removed, per CESSPIT (accept the config surface, fail loud only on genuine conflict)
+        and the ask-before-delete directive. Precedence when BOTH are present:
+
+        - identical values -> use it, warn to migrate to ``sampler``;
+        - different values -> ``sampler`` wins (the live key is authoritative), warn that the
+          alias is being ignored — never silently pick the deprecated one.
+
+        Every committed scenario carries ``sampling_method: lhs`` (== the ``sampler`` default),
+        so this resolution is byte-identical for all of them (guarded by the KPI oracle).
+        """
+        if not isinstance(mc_cfg, Mapping):
+            return "lhs"
+
+        def _norm(raw: Any) -> str:
+            value = str(raw).strip().lower()
+            if value not in ("lhs", "sobol"):
+                raise MonteCarloConfigError(
+                    f"monte_carlo.sampler must be 'lhs' or 'sobol', got {value!r}."
+                )
+            return value
+
+        has_sampler = "sampler" in mc_cfg
+        has_alias = "sampling_method" in mc_cfg
+        sampler = _norm(mc_cfg.get("sampler", "lhs"))
+
+        if has_alias:
+            alias = _norm(mc_cfg.get("sampling_method"))
+            if has_sampler and alias != sampler:
+                msg = (
+                    "monte_carlo.sampling_method is a deprecated alias for "
+                    f"monte_carlo.sampler and conflicts with it (alias={alias!r}, "
+                    f"sampler={sampler!r}); the live 'sampler' key wins. Remove "
+                    "'sampling_method' and set 'sampler' only."
+                )
+            else:
+                # Alias-only (or agreeing) -> honor it so `sampling_method: sobol` no longer
+                # silently runs LHS. When sampler is absent the alias becomes the selection.
+                msg = (
+                    "monte_carlo.sampling_method is a deprecated alias for "
+                    "monte_carlo.sampler; rename the key to 'sampler'."
+                )
+                if not has_sampler:
+                    sampler = alias
+            # Dual channel: warnings.warn for tooling/pytest, AND logger.warning so a real
+            # CLI/pipeline user actually SEES it — Python's default filters suppress
+            # library-code DeprecationWarnings outside __main__, so the warnings.warn alone
+            # is invisible to the very user setting the dead key (the conflict case worst of
+            # all, where their key is being ignored). Mirrors the engine's sobol+CRN caveat.
+            warnings.warn(msg, DeprecationWarning, stacklevel=2)
+            logger.warning(msg)
+
+        return sampler
+
     def run(self, *, n_trials: int) -> MonteCarloResult:
         n_requested = int(n_trials)
         if n_requested <= 0:
@@ -741,6 +809,10 @@ class MonteCarloEngine:
             )
 
         n = int(samples.shape[0])  # effective trial count (Sobol may round up to 2**m)
+        # Refresh the provenance stamp with the EFFECTIVE trial count now that sampling has
+        # fixed it (Sobol may round the request up to a power of two) — replacing the
+        # config-time n_trials=0 placeholder with a truthful record (#649).
+        self._meta = self._build_run_meta(n_trials=n)
 
         if self._correlation is not None and self._correlation.enabled:
             if self._sampler == "sobol":
@@ -916,6 +988,15 @@ class MonteCarloEngine:
             result.trials or {},
             breach_thresholds={"dscr_min": float(self._fixed_debt_covenant)},
         )
+        # Wire the now-truthful provenance stamp onto the result surface (#649): a JSON-safe
+        # dict of (n_trials, seed, sampler, common_random_numbers, param_names, config_hash),
+        # so a run manifest carries a first-class record of HOW the bands were generated
+        # instead of that record living only as a semi-vestigial n_trials=0 placeholder object.
+        # param_names is emitted as a list for JSON round-tripping. Additive/read-only —
+        # same KPI-neutral contract as the convergence/percentile_ci diagnostics above.
+        run_meta = asdict(self._meta)
+        run_meta["param_names"] = list(self._meta.param_names)
+        result.metadata["run_meta"] = run_meta
         return result
 
     @staticmethod

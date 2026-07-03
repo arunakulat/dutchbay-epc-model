@@ -205,3 +205,95 @@ class TestSamplingMethodProvenance:
         assert res.metadata["sampler"] == "sobol"
         assert res.sampling_method == "sobol"
         assert res.sampling_method == res.metadata["sampler"]
+
+
+class TestSamplingMethodAlias:
+    """#648: monte_carlo.sampling_method is a DEPRECATED ALIAS for monte_carlo.sampler.
+
+    Historically a decorative, never-read key (a scenario setting `sampling_method: sobol`
+    silently ran LHS). It is now honored — mapped onto `sampler` with a DeprecationWarning —
+    rather than removed, per CESSPIT / ask-before-delete. `sampler` wins on conflict.
+    """
+
+    def _cfg(self) -> dict[str, Any]:
+        return copy.deepcopy(_load())
+
+    def test_committed_scenario_alias_is_kpi_neutral(self) -> None:
+        # Every committed scenario carries `sampling_method: lhs`; with no `sampler` key the
+        # alias resolves to the same "lhs" default -> byte-identical selection (KPI-neutral).
+        cfg = self._cfg()
+        cfg["monte_carlo"].pop("sampler", None)
+        cfg["monte_carlo"]["sampling_method"] = "lhs"
+        with pytest.warns(DeprecationWarning, match="deprecated alias"):
+            eng = MonteCarloEngine(cfg, seed=123)
+        assert eng._sampler == "lhs"
+
+    def test_alias_only_sobol_is_honored_not_silently_lhs(self) -> None:
+        # The footgun the issue calls out: `sampling_method: sobol` with no `sampler` key must
+        # now actually select Sobol, not silently fall back to LHS.
+        cfg = self._cfg()
+        cfg["monte_carlo"].pop("sampler", None)
+        cfg["monte_carlo"]["sampling_method"] = "sobol"
+        with pytest.warns(DeprecationWarning, match="deprecated alias"):
+            eng = MonteCarloEngine(cfg, seed=123)
+        assert eng._sampler == "sobol"
+
+    def test_live_sampler_key_wins_on_conflict(self) -> None:
+        # When both are set and disagree, the live `sampler` key is authoritative; the alias is
+        # ignored (with a warning) rather than silently overriding the real selector.
+        cfg = self._cfg()
+        cfg["monte_carlo"]["sampler"] = "lhs"
+        cfg["monte_carlo"]["sampling_method"] = "sobol"
+        with pytest.warns(DeprecationWarning, match="conflicts with it"):
+            eng = MonteCarloEngine(cfg, seed=123)
+        assert eng._sampler == "lhs"
+
+    def test_agreeing_keys_warn_but_resolve(self) -> None:
+        cfg = self._cfg()
+        cfg["monte_carlo"]["sampler"] = "sobol"
+        cfg["monte_carlo"]["sampling_method"] = "sobol"
+        with pytest.warns(DeprecationWarning, match="deprecated alias"):
+            eng = MonteCarloEngine(cfg, seed=123)
+        assert eng._sampler == "sobol"
+
+    def test_bad_alias_value_raises(self) -> None:
+        cfg = self._cfg()
+        cfg["monte_carlo"].pop("sampler", None)
+        cfg["monte_carlo"]["sampling_method"] = "halton"
+        with pytest.raises(MonteCarloConfigError, match="must be 'lhs' or 'sobol'"):
+            MonteCarloEngine(cfg, seed=123)
+
+
+class TestRunMetaProvenance:
+    """#649: MonteCarloRunMeta is populated with the real run values (n_trials, sampler, seed)
+    and surfaced onto result.metadata['run_meta'] as a truthful, JSON-safe provenance stamp —
+    replacing the semi-vestigial n_trials=0 placeholder. Metadata only; KPI-neutral.
+    """
+
+    def test_run_meta_populated_on_lhs_run(self) -> None:
+        eng = MonteCarloEngine(_load(), seed=123)
+        # Config-time stamp is the n_trials=0 placeholder until a run fixes the count.
+        assert eng._meta.n_trials == 0
+        res = eng.run(n_trials=32)
+        rm = res.metadata["run_meta"]
+        assert rm["n_trials"] == 32
+        assert rm["sampler"] == "lhs"
+        assert rm["seed"] == 123
+        assert isinstance(rm["param_names"], list) and rm["param_names"]
+        assert rm["config_hash"] == res.metadata["config_hash"]
+        # The engine's own stamp is refreshed in place to the effective count.
+        assert eng._meta.n_trials == 32
+
+    def test_run_meta_records_effective_sobol_count(self) -> None:
+        cfg = copy.deepcopy(_load())
+        cfg["monte_carlo"]["sampler"] = "sobol"
+        res = MonteCarloEngine(cfg, seed=123).run(n_trials=48)  # rounds up to 64 = 2**6
+        rm = res.metadata["run_meta"]
+        assert rm["sampler"] == "sobol"
+        assert rm["n_trials"] == 64  # effective count, not the requested 48
+        assert rm["n_trials"] == res.metadata["n_trials"]
+
+    def test_run_meta_is_json_serializable(self) -> None:
+        res = MonteCarloEngine(_load(), seed=123).run(n_trials=16)
+        # Round-trips through JSON (param_names is a list, not a tuple) so it survives a manifest.
+        assert json.loads(json.dumps(res.metadata["run_meta"]))["n_trials"] == 16

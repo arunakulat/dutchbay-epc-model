@@ -148,7 +148,7 @@ monte_carlo:
   
   # Simulation parameters
   n_iterations: 10000
-  sampling_method: "lhs"  # Latin Hypercube Sampling
+  sampler: "lhs"  # Latin Hypercube Sampling
   seed: 42                # Reproducibility
   
   # Discount rate (CESSPIT: required, no default)

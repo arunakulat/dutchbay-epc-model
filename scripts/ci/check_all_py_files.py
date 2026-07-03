@@ -54,10 +54,13 @@ def main():
         console.print("[yellow]No Python files found.[/yellow]")
         sys.exit(0)
 
+    # Lint-stack consolidation (#610): flake8 + pylint retired. ruff (E/W/F — the same rule
+    # families the mandatory CI gate enforces) replaces flake8; a scoped pylint pass is not
+    # viable on the CASPER optional-dependency / dynamic-`__all__` patterns (false-positive
+    # wall). black (format), isort (import order) and mypy (types) are unchanged.
     tools = [
         ("mypy " + " ".join(files), "mypy (static typing)"),
-        ("flake8 " + " ".join(files), "flake8 (lint/PEP8)"),
-        ("pylint " + " ".join(files) + " --exit-zero", "pylint (code quality/linting)"),
+        ("ruff check " + " ".join(files), "ruff (lint: pycodestyle/pyflakes)"),
         ("bandit -r . -c", "bandit (security scan)"),
         ("black --check --diff " + " ".join(files), "black (code format)"),
         ("isort --check-only " + " ".join(files), "isort (import order)"),

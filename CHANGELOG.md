@@ -5,6 +5,36 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **MC contract cleanup: honored `monte_carlo.sampling_method` alias + populated `MonteCarloRunMeta` provenance stamp (#648, #649, metadata-only, KPI-neutral).**
+  Two CCCDIR follow-ups from the Sobol QMC (#589) Fable review, both pure metadata:
+  - **`monte_carlo.sampling_method` is now a honored DEPRECATED ALIAS for the live
+    `monte_carlo.sampler` selector (#648).** It was a decorative, never-read config key, so a
+    scenario setting `sampling_method: sobol` silently ran LHS. `MonteCarloEngine._resolve_sampler`
+    now accepts it, maps it onto `sampler` with a `DeprecationWarning`, and — when both keys are
+    present and disagree — the live `sampler` key wins (the alias is ignored with a warning, never
+    silently overriding). Aliased rather than deleted, per CESSPIT / ask-before-delete. The nine
+    committed scenarios (and the integration fixture) are migrated `sampling_method: lhs` ->
+    `sampler: lhs` (== the default, byte-identical) so they no longer emit the deprecation warning;
+    the `contracts_v14.MonteCarloScenario.sampling_method` field carries a deprecation note.
+  - **`MonteCarloRunMeta` is populated with real run values and wired onto the result surface
+    (#649).** It was constructed once in `__init__` with a permanent `n_trials=0` placeholder and
+    only `config_hash` was ever consumed. It is now refreshed in `run()` with the EFFECTIVE trial
+    count (which may exceed the request under Sobol's power-of-two rounding) via `_build_run_meta`,
+    and surfaced as a JSON-safe `result.metadata["run_meta"]` provenance record (n_trials, seed,
+    sampler, common_random_numbers, param_names, config_hash) — a truthful run manifest instead of a
+    semi-vestigial object. Additive/read-only, same KPI-neutral contract as the convergence /
+    percentile_ci diagnostics.
+  - **KPI-neutral:** all committed-scenario KPIs verified byte-identical via the all-scenarios KPI
+    oracle (27 scenarios, branch vs origin/main, zero KPI-bearing mismatches).
+- **`docs/STANDARDS_WATCH.md` — tracked-deferral register for external-standard re-checks (#620, docs-only, KPI-neutral).**
+  Records the two remaining #620 items as owned, dated deferrals rather than losing them in the
+  issue tracker: (1) the **IFC Sustainability Framework Phase I** re-check (~Q4 2026 — the 2012
+  Performance Standards remain in force; do not pre-emptively rewrite the ESIA/safeguards
+  citations), and (2) the **6-month DSRA** business confirmation against the intended CEB-PPA
+  lender term sheet (the engine funds `reserves.dsra_months: 6`; confirm before financial close,
+  KPI-moving if the lender differs). The already-landed **ATB-vintage** citation refresh (#620a,
+  commit `0f24863`) is recorded as DONE for a complete watch list. No engine code touched; no
+  computed KPI changes.
 - **ADR: P50-haircut layering ruled intentional — builder-policy 5% vs kernel-identity 0% (#653, docs-only, KPI-neutral).**
   New `docs/P50_HAIRCUT_LAYERING_DECISION.md` codifies the user ruling on the #587 Fable
   follow-up: the config/builder layer
@@ -816,6 +846,24 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Tooling: consolidate the lint stack toward ruff — retire flake8 + pylint (#610, tooling-only, KPI-neutral).**
+  The dev/CI toolchain declared five overlapping linters (ruff/black/isort/flake8/pylint). flake8 is
+  now RETIRED from `pyproject [dev]`, the `requirements.txt` lock, `fx-tests.yml` (its only invocation
+  was an advisory `continue-on-error` FX-scoped step, never a mandatory gate), and the `scripts/ci/*`
+  helper scripts — its rule families all live in ruff (E/W pycodestyle, F pyflakes, B flake8-bugbear,
+  C90 mccabe), and the mandatory repo-wide `ruff check .` gate in `test-suite.yml` already enforces
+  E/F, so no enforced check is lost. **black (format) and isort (import order) are KEPT unchanged:**
+  ruff's own isort (`I`) cannot reproduce isort `profile=black` byte-for-byte on this tree (isort keeps
+  an aliased `from X import a as b` on its own line while merging non-aliased siblings; 3 files diverge
+  irreducibly, and `force-single-line`/`force-sort-within-sections` are far worse at 433/163 diffs), so
+  per the issue's "don't drop it if import order changes" guardrail isort-the-tool stays. **pylint is
+  retired from the toolchain too** (it was never a gate — only a non-blocking `--exit-zero` call in the
+  unwired `scripts/ci/*` helpers): `pylint --errors-only` over the engine is a wall of false positives
+  on the CASPER optional-dependency (`_require_*`-guarded imports) and dynamic-`__all__` re-export
+  patterns (E0603/E0611/E0401/E1133), so a scoped real-error pylint pass is not viable here. Net: five
+  linters -> four (ruff/black/isort/mypy), same enforced gate, a lighter CI install. Enabling ruff's `B`
+  (flake8-bugbear) rule set as a mandatory gate is a documented follow-up (the tree carries ~18 `B904`
+  `raise ... from` findings that need code fixes first, out of scope for this tooling-only change).
 - **Dead `pyxirr==0.10.8` lock line removed from `requirements.txt` (#619, remainder — user-gated W5 half, KPI-neutral).**
   `pyxirr` is imported nowhere in the repo (verified: zero `.py` references) and is neither an abstract
   dependency in `pyproject.toml` nor a transitive requirement of any installed package (`Required-by:` is

@@ -255,6 +255,11 @@ class DerivedParameter(ContractMixin):
 class MonteCarloScenario(ContractMixin):
     scenario_name: str
     n_iterations: int = 1000
+    # DEPRECATED naming (#648): the live engine selector is the ``monte_carlo.sampler`` config
+    # key (see analytics.mc.engine.MonteCarloEngine._resolve_sampler), NOT ``sampling_method``.
+    # This field name predates that switch; ``monte_carlo.sampling_method`` in a scenario YAML
+    # is now accepted as a deprecated alias for ``sampler`` (mapped on with a DeprecationWarning)
+    # rather than silently ignored. Prefer ``sampler`` in new scenarios.
     sampling_method: str = "lhs"
     seed: int | None = None
     distributions: dict[str, Distribution] = field(default_factory=dict)

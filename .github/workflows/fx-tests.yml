@@ -93,19 +93,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mypy flake8 pylint
           pip install -e .[dev]
 
       # Advisory black/isort steps removed: formatting and import order are
       # enforced repo-wide by the MANDATORY lint gate in test-suite.yml (#545),
       # which supersedes the FX-scoped advisory checks that used to run here.
+      # Advisory flake8 step removed (#610): flake8 is retired from the toolchain
+      # (its E/W/F/B/C90 rules all live in ruff), and the mandatory repo-wide ruff
+      # gate in test-suite.yml already covers this surface. The `.[dev]` install now
+      # provides mypy, so the explicit `pip install mypy flake8 pylint` is gone.
 
       - name: Type check with mypy
         run: mypy analytics/fx/ --ignore-missing-imports
-        continue-on-error: true
-
-      - name: Lint with flake8
-        run: flake8 analytics/fx/ tests/analytics_layer/test_fx_sensitivity_real.py --max-line-length=88
         continue-on-error: true
 
   smoke-test:
