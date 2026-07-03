@@ -775,6 +775,38 @@
   </section>
   {% endif %}
 
+  {# 8c. Bankability evidence-completeness score — #707 #}
+  {% if ctx.evidence_score %}
+  <section class="page">
+    <h2>Bankability Evidence-Completeness Score</h2>
+    <p>Overall score:
+      <strong>{{ "%.1f"|format(ctx.evidence_score.score) }} / 100</strong>
+      &mdash; <em>{{ ctx.evidence_score.band }}</em>.</p>
+    <p class="muted">A config-weighted measure of how completely and how strongly the material
+      assumptions are evidenced: {{ ctx.evidence_score.covered }} of
+      {{ ctx.evidence_score.total }} assumptions carry gradeable (sourced, in-tier) evidence
+      ({{ "%.0f"|format(ctx.evidence_score.coverage_pct) }}% coverage){% if ctx.evidence_score.covered %}; mean evidence strength
+      over those is {{ "%.2f"|format(ctx.evidence_score.mean_covered_strength) }}{% endif %}. Read-only —
+      it derives from the evidence register above and moves no financial figure.</p>
+    {% if ctx.evidence_score.rows %}
+    <table>
+      <thead>
+        <tr><th>Assumption</th><th>Tier</th><th style="text-align:right;">Strength</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.evidence_score.rows %}
+        <tr>
+          <td>{{ r.assumption }}</td>
+          <td>{{ r.tier or "—" }}</td>
+          <td class="num">{{ "%.2f"|format(r.strength) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 9. Audit manifest & methodology #}
   <section class="page">
     <h2>Audit Manifest &amp; Methodology</h2>
