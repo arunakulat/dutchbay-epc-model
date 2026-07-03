@@ -27,7 +27,7 @@ CASPER: Contract-explicit transformations.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Tuple
 
 from analytics.contracts_v14 import (
     ParameterRangeConfig,
@@ -223,30 +223,4 @@ def engine_to_sensitivity_suite(
         base_config_path=base_config_path,
         tornado_results=tornado_results,
         base_kpis=base_kpis,
-    )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Convenience Functions
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-def build_tornado_result_from_engine(
-    *,
-    parameter: ParameterRangeConfig,
-    metric_key: str,
-    base_kpis: Mapping[str, Any],
-    cases: List[Dict[str, Any]],
-) -> TornadoResult:
-    """
-    Convenience wrapper: extract base_value from KPIs and build TornadoResult.
-
-    This is what sensitivity.engine will call after evaluation.
-    """
-    base_value = float(base_kpis.get(metric_key, 0.0))
-    return engine_to_tornado_result(
-        parameter=parameter,
-        metric_key=metric_key,
-        base_value=base_value,
-        cases=cases,
     )

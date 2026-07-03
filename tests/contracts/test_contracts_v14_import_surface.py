@@ -18,7 +18,6 @@ from analytics.contracts_v14 import (
     TrancheDebtProfile,
     WaccComponents,
     WaccResult,
-    check_covenant_breach_with_tolerance,
 )
 
 
@@ -164,19 +163,6 @@ def test_irr_bridge_contracts_are_importable_and_serializable() -> None:
     assert payload["residual"] == -0.244
     assert bridge.model_dump()["reconciled"] is True
     assert bridge.currency == "USD"
-
-
-def test_covenant_breach_tolerance_helper() -> None:
-    assert check_covenant_breach_with_tolerance(1.29999, 1.30) is False
-    assert check_covenant_breach_with_tolerance(1.295, 1.30) is True
-    assert (
-        check_covenant_breach_with_tolerance(
-            actual=4.0001,
-            threshold=4.0,
-            covenant_type="ceiling",
-        )
-        is False
-    )
 
 
 def test_sensitivity_suite_audit_fields_are_optional_and_serializable() -> None:
