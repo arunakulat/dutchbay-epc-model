@@ -419,7 +419,8 @@ class DepreciationSchedule:
             start_year,
         )
         annual_amounts = [
-            p + c for p, c in zip(plant.annual_amounts, civil.annual_amounts)
+            p + c
+            for p, c in zip(plant.annual_amounts, civil.annual_amounts, strict=True)
         ]
         accumulated: List[float] = []
         acc = 0.0

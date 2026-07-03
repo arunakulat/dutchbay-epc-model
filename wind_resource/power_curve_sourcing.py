@@ -39,7 +39,7 @@ def _rated_wind_speed(
     wind_speeds_ms: Sequence[float], power_kw: Sequence[float], rated_kw: float
 ) -> Optional[float]:
     """First wind speed at which the curve reaches ~rated power."""
-    for w, p in zip(wind_speeds_ms, power_kw):
+    for w, p in zip(wind_speeds_ms, power_kw, strict=False):
         if rated_kw > 0 and p >= 0.99 * rated_kw:
             return float(w)
     return None
@@ -192,7 +192,7 @@ def validate_power_curve(pc: PowerCurve, *, rated_tol_pct: float = 5.0) -> List[
         issues.append(f"ws/power length mismatch ({len(ws)} vs {len(power)})")
     if len(ws) < 3:
         issues.append("need at least 3 curve points")
-    if any(b <= a for a, b in zip(ws, ws[1:])):
+    if any(b <= a for a, b in zip(ws, ws[1:], strict=False)):
         issues.append("wind speeds must be strictly increasing")
     if any(p < -1e-9 for p in power):
         issues.append("power must be non-negative")

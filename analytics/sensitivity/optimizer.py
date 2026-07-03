@@ -163,7 +163,7 @@ def pareto_frontier(
     # Build normalized matrix: shape (n, m)
     mat = np.zeros((len(points), len(objectives)), dtype=float)
     for i, p in enumerate(points):
-        for j, (k, d) in enumerate(zip(obj_keys, directions)):
+        for j, (k, d) in enumerate(zip(obj_keys, directions, strict=True)):
             mat[i, j] = _normalize_for_dominance(float(p.objectives[k]), d)
 
     n = mat.shape[0]
@@ -183,7 +183,7 @@ def pareto_frontier(
                 is_efficient[i] = False
                 break
 
-    return [p for p, ok in zip(points, is_efficient) if ok]
+    return [p for p, ok in zip(points, is_efficient, strict=True) if ok]
 
 
 # -----------------------------
@@ -220,7 +220,7 @@ def build_grid_plan(
     for combo in product(*[g.values for g in grid]):
         overrides: Dict[str, Any] = {}
         label_parts: List[str] = []
-        for g, v in zip(grid, combo):
+        for g, v in zip(grid, combo, strict=True):
             overrides[g.override_key] = float(v)
             label_parts.append(f"{g.name}={v}")
         plan.append((";".join(label_parts), overrides))

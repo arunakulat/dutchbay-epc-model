@@ -18,6 +18,18 @@ All notable changes to this project will be documented here.
   entries: `B905` (zip strict=, #752) and `B008` (function-call-in-default-args, #753); each needs a
   per-site behavioural review rather than a blanket lint fix.
 
+### Changed
+- **flake8-bugbear B905 resolved and gated: every `zip()` now declares `strict=` explicitly (#752, KPI-neutral).**
+  Follow-up to the B-gate (#758): B905 is removed from the `ruff.toml` ignore list and enforced repo-wide.
+  Each of the 15 call sites was resolved per a multi-agent analyze-then-adversarially-verify pass: 13 sites
+  that carry a provable equal-length invariant (an explicit `len()` guard, pad-and-truncate-to-`n`, a
+  one-to-one list comprehension, `itertools.product` arity, a numpy row width, or two columns of one
+  DataFrame) now use `strict=True`, which is output-identical on all valid inputs and converts a latent
+  silent-truncation into a loud error; two sites in `wind_resource/power_curve_sourcing.py` use
+  `strict=False` because they are legitimately unequal-length (an anticipated, separately-reported mismatch
+  state, and a deliberate adjacent-pair `zip(ws, ws[1:])`). No committed KPI changes — the all-scenarios KPI
+  oracle is byte-identical (no committed scenario ever triggers a `strict=True` raise).
+
 ### Fixed
 - **DSCR covenant-breach probability: floor-pin FP fabrication removed from four sibling paths (#725, from the #657 review).**
   A strict `arr < floor` comparison fabricates an ~85-93% DSCR-breach probability on any dual-DSCR-sculpted

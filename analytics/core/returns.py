@@ -487,7 +487,7 @@ def calculate_equity_returns(
 
     # Equity cashflows = CFADS - Debt Service
     equity_cashflows: List[float] = [
-        cfads - ds for cfads, ds in zip(cfads_series, debt_service_series)
+        cfads - ds for cfads, ds in zip(cfads_series, debt_service_series, strict=True)
     ]
 
     # Full equity cashflows: [-equity_investment at t=0, ECF1, ECF2, ...]
