@@ -1462,7 +1462,8 @@ def size_debt_with_dual_dscr(
         service = [cf / target for cf in cfads]
         capacity = _npv(service, debt_rate)
         profile = [
-            (cf / svc) if svc > 0 else float("inf") for cf, svc in zip(cfads, service)
+            (cf / svc) if svc > 0 else float("inf")
+            for cf, svc in zip(cfads, service, strict=True)
         ]
         min_dscr = min(profile) if profile else 0.0
         return service, capacity, profile, min_dscr

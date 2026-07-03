@@ -289,7 +289,7 @@ def xnpv(rate: float, cashflows: Sequence[float], dates: Sequence[datetime]) -> 
     t0 = dates[0]
     total = 0.0
 
-    for cf, date in zip(cfs, dates):
+    for cf, date in zip(cfs, dates, strict=True):
         days = (date - t0).days
         years = days / 365.25
         total += cf / ((1.0 + float(rate)) ** years)

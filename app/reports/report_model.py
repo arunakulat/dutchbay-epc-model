@@ -920,7 +920,7 @@ def _build_resource_trend(
     summary_df = analysis["summary_df"]
     summary_rows = [
         ResourceTrendRow(metric=str(m), value=str(v))
-        for m, v in zip(summary_df["Metric"], summary_df["Value"])
+        for m, v in zip(summary_df["Metric"], summary_df["Value"], strict=True)
     ]
     return ResourceTrendBlock(
         markdown=str(analysis["markdown"]),

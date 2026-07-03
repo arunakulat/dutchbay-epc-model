@@ -488,7 +488,9 @@ def _evaluate_rows(
 
     cols: Dict[str, List[float]] = {m: [] for m in metrics}
     for row in samples:
-        overrides = {name: float(val) for name, val in zip(problem.names, row)}
+        overrides = {
+            name: float(val) for name, val in zip(problem.names, row, strict=True)
+        }
         kpis = evaluate_fn(overrides)
         for m in metrics:
             v = kpis.get(m)

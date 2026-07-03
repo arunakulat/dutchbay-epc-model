@@ -801,7 +801,7 @@ def build_annual_rows_efficient(
     rows: List[Dict[str, float]] = []
 
     for year_index, (prod_data, tax_result) in enumerate(
-        zip(production_data, tax_results)
+        zip(production_data, tax_results, strict=True)
     ):
         fx_rate = fx_curve_resolved[year_index]
 

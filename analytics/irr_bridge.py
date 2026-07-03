@@ -158,14 +158,14 @@ def build_project_equity_irr_bridge(
         else None
     )
     # Step 3 — cost of debt: strip per-year interest from operating cash.
-    cod_cash = [c - i for c, i in zip(cfads, interest)]
+    cod_cash = [c - i for c, i in zip(cfads, interest, strict=True)]
     irr_cod = (
         _irr(_vec(equity_investment_usd, cod_cash))
         if equity_investment_usd > 0.0
         else None
     )
     # Step 4 — tax shield: add back the interest tax shield.
-    ts_cash = [c - i + i * t for c, i, t in zip(cfads, interest, tax_rate)]
+    ts_cash = [c - i + i * t for c, i, t in zip(cfads, interest, tax_rate, strict=True)]
     irr_ts = (
         _irr(_vec(equity_investment_usd, ts_cash))
         if equity_investment_usd > 0.0
