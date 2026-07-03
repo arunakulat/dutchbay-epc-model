@@ -70,7 +70,7 @@ monte_carlo_enhanced:
   
   # Simulation parameters
   n_iterations: 10000      # 10,000 iterations for smooth distributions
-  sampling_method: "lhs"   # Latin Hypercube Sampling (variance reduction)
+  sampler: "lhs"   # Latin Hypercube Sampling (variance reduction)
   seed: 42                 # Reproducibility
   
   # ──────────────────────────────────────────────────────────

@@ -87,7 +87,7 @@ def dutchbay_base_config() -> Dict[str, Any]:
             "enabled": True,
             "n_iterations": 1000,  # Fast for testing
             "discount_rate_pct": 8.0,
-            "sampling_method": "lhs",
+            "sampler": "lhs",
             "seed": 42,  # Reproducible
             "revenue_std_pct": 10.0,
             "cost_std_pct": 5.0,

@@ -5,6 +5,27 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **MC contract cleanup: honored `monte_carlo.sampling_method` alias + populated `MonteCarloRunMeta` provenance stamp (#648, #649, metadata-only, KPI-neutral).**
+  Two CCCDIR follow-ups from the Sobol QMC (#589) Fable review, both pure metadata:
+  - **`monte_carlo.sampling_method` is now a honored DEPRECATED ALIAS for the live
+    `monte_carlo.sampler` selector (#648).** It was a decorative, never-read config key, so a
+    scenario setting `sampling_method: sobol` silently ran LHS. `MonteCarloEngine._resolve_sampler`
+    now accepts it, maps it onto `sampler` with a `DeprecationWarning`, and — when both keys are
+    present and disagree — the live `sampler` key wins (the alias is ignored with a warning, never
+    silently overriding). Aliased rather than deleted, per CESSPIT / ask-before-delete. The nine
+    committed scenarios (and the integration fixture) are migrated `sampling_method: lhs` ->
+    `sampler: lhs` (== the default, byte-identical) so they no longer emit the deprecation warning;
+    the `contracts_v14.MonteCarloScenario.sampling_method` field carries a deprecation note.
+  - **`MonteCarloRunMeta` is populated with real run values and wired onto the result surface
+    (#649).** It was constructed once in `__init__` with a permanent `n_trials=0` placeholder and
+    only `config_hash` was ever consumed. It is now refreshed in `run()` with the EFFECTIVE trial
+    count (which may exceed the request under Sobol's power-of-two rounding) via `_build_run_meta`,
+    and surfaced as a JSON-safe `result.metadata["run_meta"]` provenance record (n_trials, seed,
+    sampler, common_random_numbers, param_names, config_hash) — a truthful run manifest instead of a
+    semi-vestigial object. Additive/read-only, same KPI-neutral contract as the convergence /
+    percentile_ci diagnostics.
+  - **KPI-neutral:** all committed-scenario KPIs verified byte-identical via the all-scenarios KPI
+    oracle (27 scenarios, branch vs origin/main, zero KPI-bearing mismatches).
 - **Live FX-sensitivity CLI surface + legacy `fx.fx_shock` base-key retirement (#659, analysis-only, KPI-neutral).**
   Closes the residual FX-reporting scope of #659 in two parts:
   - **New `scripts/run_fx_sensitivity.py`** — a thin argparse CLI (the FX analogue of

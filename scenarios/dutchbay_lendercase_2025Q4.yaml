@@ -440,7 +440,7 @@ constraints:
 monte_carlo:
   enabled: true
   n_scenarios: 100000
-  sampling_method: lhs  # Latin Hypercube Sampling
+  sampler: lhs  # Latin Hypercube Sampling
   seed: 42
   
   # Wind resource uncertainty (dominant risk driver)
