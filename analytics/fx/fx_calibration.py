@@ -3,9 +3,8 @@
 Turns a provenance-bearing historical series (:mod:`analytics.fx.fx_history`) into
 a calibrated FX spec — drift + volatility + a crisis-regime mixture — that the
 Monte-Carlo engine samples instead of the hand-authored uniform bound
-``fx.start_lkr_per_usd ∈ [300, 367]`` (which had zero empirical provenance). This
-supersedes the never-wired ``scripts/analysis/fx_correlation_module.py`` by
-folding the same GBM-drift / regime / crisis maths into the live analytics layer.
+``fx.start_lkr_per_usd ∈ [300, 367]`` (which had zero empirical provenance). It
+folds GBM-drift / regime / crisis maths into the live analytics layer.
 
 What it produces
 ----------------

@@ -11,7 +11,7 @@ Date: November 8, 2025
 Version: V12 RECONSTRUCTED
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Final, List, Optional
 
 import numpy as np
@@ -55,21 +55,6 @@ MONTHS_TO_COD: Final[float] = 49.0
 # =========================================================================
 # DATACLASSES
 # =========================================================================
-
-
-@dataclass
-class FinancialResults:
-    equity_irr: float
-    project_irr: float
-    npv_12pct: float
-    min_dscr: float
-    avg_dscr: float
-    year1_dscr: float
-    annual_data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    project_cashflows: list = field(default_factory=list)
-    equity_cashflows: list = field(default_factory=list)
-    irr_convergence_status: str = "UNKNOWN"
-    irr_method: str = "UNKNOWN"
 
 
 @dataclass

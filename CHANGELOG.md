@@ -679,6 +679,45 @@ All notable changes to this project will be documented here.
   the model-gated `dod_factor` (M1) instead of an unconditional `depth_of_discharge`. No numeric
   field of `LcosSpec`/`LcosResult` changes; all committed KPIs byte-identical.
 
+### Removed
+- **Verified dead code removed (#583, #664, KPI-neutral).** A user-approved batch of symbols
+  and whole modules with ZERO live production consumers at current `main`, each re-grepped across
+  the whole repo (production `.py`, tests, `__all__`, docs, config) before deletion. All committed
+  scenario KPIs are byte-identical (all-scenarios KPI oracle, before-vs-after within the worktree).
+  Paired test files, `__all__` entries and dangling doc/config comments referencing only the
+  deleted symbols were removed alongside each item.
+  - `finance/cashflow_v14_production.py`: the divergent 2nd degradation implementation
+    `apply_degradation_profile` + its `_load_degradation_config` helper (the live path is per-tech
+    `degradation` in `_calculate_net_production` / `calculate_net_production_for_year`) — removed
+    with the `__all__` entry, the now-orphaned `logging`/`pathlib.Path`/`typing.cast`/`numpy`/`yaml`
+    imports, the two paired tests (`tests/finance/test_prod_coverage.py`,
+    `test_production_degradation.py`), and the dangling `degradation:` fallback doc-comments in
+    `config/defaults.yaml` that named `_load_degradation_config` (the inert reference-default
+    `defaults.degradation` YAML block is retained and re-annotated as inert).
+  - `analytics/mc/exports.py`: the unused `DEFAULT_PERCENTILES` constant (name-shadowed the live
+    `analytics.mc.aggregate.DEFAULT_PERCENTILES`) + the now-orphaned `typing.Tuple` import.
+  - `analytics/contracts_v14.py`: the dead `check_covenant_breach_with_tolerance` (in `__all__`)
+    + the targeting lines in `tests/contracts/test_contracts_v14_import_surface.py`.
+  - `analytics/sensitivity/config_lookup.py`: whole module (`_ConfigLookup` / `_flatten_dict`,
+    superseded by `engine._resolves_in_config`) + its coverage test.
+  - `analytics/sensitivity/adapters.py`: the orphan wrapper `build_tornado_result_from_engine`
+    (the engine calls `engine_to_tornado_result` directly) + the now-orphaned `typing.Mapping`.
+  - `analytics/sensitivity/viz.py`: whole module (`plot_tornado` / `plot_heatmap_matrix`
+    non-functional placeholders, imported nowhere; the live plotter `plot_tornado_chart` is a
+    distinct symbol and is untouched).
+  - `scripts/analysis/fx_correlation_module.py`: whole module (`FXCorrelationModule`, superseded by
+    `analytics/fx/fx_calibration.py`) + the archived
+    `legacy_tests/archive/test_fx_dual_regime_standalone_fixed.py` and the coupled path-loading
+    test `tests/analytics/test_fx_correlation_var.py`; the stale doc-reference in
+    `analytics/fx/fx_calibration.py` was pruned.
+  - `scripts/ci/parameter_validation.py`: whole module (`validate_project_parameters`, a dead
+    bridge to the non-existent `dutchbay_v13`).
+  - `scripts/research/optimization.py`: the toy test-shim `solve_tariff` (NOT the live
+    `analytics.core.parameter_solvers.solve_tariff_breakeven`, which is untouched).
+  - `scripts/research/charts.py`: the unused `equity_fcf_series` plot helper.
+  - `scripts/research/legacy_v12.py`: the dead `FinancialResults` dataclass + the now-orphaned
+    `dataclasses.field` import.
+
 ### Fixed
 - **Long-term trend block is JSON-serializable on the `run()` success path (#656, KPI-neutral).**
   With `analyze_trend=True`, `wind_resource.era5_retrieval.run()` attached the raw `TrendResult`

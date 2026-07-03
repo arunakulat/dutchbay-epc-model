@@ -26,7 +26,7 @@ GWTF/CASPER:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
@@ -41,9 +41,6 @@ from analytics.contracts_v14 import MonteCarloResult
 @dataclass(frozen=True)
 class CovenantSpec:
     dscr_floor: float = 1.30
-
-
-DEFAULT_PERCENTILES: Tuple[int, int, int] = (50, 90, 95)
 
 
 def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:

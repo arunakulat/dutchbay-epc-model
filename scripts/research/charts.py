@@ -42,17 +42,6 @@ def dscr_series(df_annual: pd.DataFrame, path: str | Path) -> None:
     plt.close()
 
 
-def equity_fcf_series(df_annual: pd.DataFrame, path: str | Path) -> None:
-    plt.figure(figsize=(8, 4))
-    plt.plot(df_annual["year"], df_annual["equity_fcf_usd"])
-    plt.xlabel("Year")
-    plt.ylabel("Equity FCF (USD)")
-    plt.title("Equity FCF over time")
-    plt.tight_layout()
-    plt.savefig(path)
-    plt.close()
-
-
 def pareto_chart(
     frontier_df: pd.DataFrame, path: str | Path, grid_df: pd.DataFrame | None = None
 ) -> None:

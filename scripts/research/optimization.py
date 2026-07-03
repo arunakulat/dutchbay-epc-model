@@ -419,20 +419,6 @@ def __test_shim_optimization__():
     return True
 
 
-def solve_tariff(
-    target_equity_irr: float, params: dict | None = None
-) -> Dict[str, float]:
-    """Closed-form inverse of the shim IRR mapping: irr = 0.01 + (t - 20)*0.002."""
-    if target_equity_irr is None:
-        target_equity_irr = 0.15
-    # invert: t = 20 + (irr - 0.01)/0.002
-    t = 20.0 + (float(target_equity_irr) - 0.01) / 0.002
-    return {
-        "tariff_lkr_per_kwh": round(t, 4),
-        "target_equity_irr": float(target_equity_irr),
-    }
-
-
 # === END TEST SHIM ===
 
 # EOF

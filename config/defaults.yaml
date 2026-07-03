@@ -25,7 +25,6 @@
 #   aep_provenance                -> analytics.aep_provenance
 #   evidence_register             -> analytics.evidence_register
 #   development_readiness         -> analytics.development_readiness
-#   degradation                   -> finance.cashflow_v14_production._load_degradation_config
 #   wind_resource.loss_taxonomy   -> analytics.wind.losses_model
 
 defaults:
@@ -187,12 +186,13 @@ defaults:
     require_complete: false  # if true, EVERY canonical cp_item must have a declared status
 
   # ═══════════════════════════════════════════════════════════════════
-  # DEGRADATION MODELING
+  # DEGRADATION MODELING (reference defaults — inert)
   # ═══════════════════════════════════════════════════════════════════
-  # Consumed by finance.cashflow_v14_production._load_degradation_config (the
-  # degradation-profile utility). The live single-tech cashflow bills off an explicit
-  # per-scenario degradation_pct; this block is the documented house default + MC
-  # shape that the profile utility falls back to when a degradation rate is omitted.
+  # Documented house-default degradation rate + MC shape, retained for reference.
+  # The live single-tech cashflow bills off an explicit per-scenario
+  # degradation_pct (project.degradation / per-tech degradation_pct); the Monte-Carlo
+  # degradation driver reads monte_carlo.degradation, not this block. No resolver
+  # currently consumes defaults.degradation.
 
   degradation:
     # Annual performance degradation rate

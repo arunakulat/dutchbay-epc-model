@@ -45,24 +45,6 @@ class ContractMixin:
         return self.model_dump()
 
 
-def check_covenant_breach_with_tolerance(
-    actual: float,
-    threshold: float,
-    tolerance_bps: int = 1,
-    covenant_type: str = "floor",
-) -> bool:
-    """Return True when a covenant is breached beyond tolerance."""
-    if tolerance_bps < 0:
-        raise ValueError(f"tolerance_bps must be non-negative, got {tolerance_bps}")
-    if covenant_type not in {"floor", "ceiling"}:
-        raise ValueError("covenant_type must be 'floor' or 'ceiling'")
-
-    tolerance_abs = abs(threshold) * (tolerance_bps / 10_000.0)
-    if covenant_type == "floor":
-        return actual < (threshold - tolerance_abs)
-    return actual > (threshold + tolerance_abs)
-
-
 @dataclass(frozen=True)
 class WaccComponents(ContractMixin):
     mode: str
@@ -603,7 +585,6 @@ class ProjectEquityIrrBridge(ContractMixin):
 
 __all__ = [
     "CASPER_CONTRACT_VERSION",
-    "check_covenant_breach_with_tolerance",
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
