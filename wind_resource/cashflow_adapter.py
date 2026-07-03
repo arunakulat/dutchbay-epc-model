@@ -353,7 +353,7 @@ def wind_export_to_scenario_patch(
                 drift_pct=None,
                 tolerance_pct=tolerance_pct,
                 mode=adapter_mode,
-            )
+            ) from None
 
         drift = _drift_pct(wind_value, scenario_value_f)
         if drift > tolerance_pct:
