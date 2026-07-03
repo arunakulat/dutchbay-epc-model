@@ -240,3 +240,175 @@ def test_tail_snapshot_require_trials_fail_loud_when_absent() -> None:
         "metric": "project_irr",
         "note": "no_trials",
     }
+
+
+# ---------------------------------------------------------------------------
+# tail_risk_report wire (#657 wire b / #715)
+# ---------------------------------------------------------------------------
+
+
+def test_build_driver_mc_tail_report_returns_full_report() -> None:
+    from analytics.capital_risk_layer_v14 import build_driver_mc_tail_report
+    from analytics.core.risk_metrics import TailRiskReport
+
+    rep = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11
+    )
+    assert isinstance(rep, TailRiskReport)
+    # every per-metric summary is populated + the covenant + hurdle rollups exist.
+    for name in ("equity_irr", "project_irr", "equity_npv", "project_npv"):
+        summary = getattr(rep, name)
+        assert summary.metric_name == name
+        assert summary.var_cvar is not None and summary.percentiles is not None
+    assert 0.0 <= rep.covenant_breaches.dscr_breach_probability <= 1.0
+    assert 0.0 <= rep.probability_below_hurdle <= 1.0
+
+
+def test_tail_report_return_metrics_match_the_collected_mc_arrays() -> None:
+    # the four return summaries are the MC distributions themselves — not recomputed.
+    from analytics.capital_risk_layer_v14 import (
+        build_driver_mc_tail_report,
+        run_driver_mc,
+    )
+
+    trials = run_driver_mc(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11, collect_trials=True
+    )
+    rep = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11
+    )
+    assert rep.equity_irr.mean == pytest.approx(float(trials["equity_irr"].mean()))
+    assert rep.project_npv.mean == pytest.approx(float(trials["project_npv"].mean()))
+    assert rep.equity_npv.min == pytest.approx(float(trials["equity_npv"].min()))
+
+
+def test_tail_report_covenant_reshape_is_faithful() -> None:
+    # the (n_trials, 1) covenant reshape must be lossless: covenant_breach_probability's
+    # per-scenario min(axis=1) of a single column returns the collected per-trial scalars,
+    # so the reported *_min_mean equals the mean of the collected scalar arrays.
+    from analytics.capital_risk_layer_v14 import (
+        build_driver_mc_tail_report,
+        run_driver_mc,
+    )
+
+    trials = run_driver_mc(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11, collect_trials=True
+    )
+    rep = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=11
+    )
+    cb = rep.covenant_breaches
+    assert cb.dscr_min_mean == pytest.approx(float(trials["dscr_min"].mean()))
+    assert cb.llcr_min_mean == pytest.approx(float(trials["llcr"].mean()))
+    assert cb.plcr_min_mean == pytest.approx(float(trials["plcr"].mean()))
+
+
+@pytest.mark.parametrize("seed", [11, 42, 7])
+def test_tail_report_lender_dscr_breach_is_zero_not_fabricated(seed: int) -> None:
+    # Same #657 blocker as the snapshot path, now via the full report: the dual-DSCR
+    # sculpt pins per-trial dscr_min at the covenant floor (1.30), and the noise-tolerant
+    # prob_breach must report 0.0, never a fabricated lender breach probability.
+    from analytics.capital_risk_layer_v14 import build_driver_mc_tail_report
+
+    rep = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=seed
+    )
+    assert rep.covenant_breaches.dscr_breach_probability == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("seed", [11, 42, 3])
+def test_tail_report_undeclared_llcr_plcr_covenant_not_fabricated(seed: int) -> None:
+    # The #715 Fable BLOCK: the lender scenario declares no top-level LLCR/PLCR covenant.
+    # Borrowing the DSCR floor (1.30) fabricated a 95-100% LLCR breach (LLCR ~1.296 < 1.30);
+    # an undeclared covenant must default to the non-binding 1.0 coverage floor, so a real
+    # LLCR/PLCR ~1.30/1.34 reports 0.0 breach — never a fabricated lender covenant breach.
+    from analytics.capital_risk_layer_v14 import build_driver_mc_tail_report
+
+    rep = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=40, seed=seed
+    )
+    cb = rep.covenant_breaches
+    assert cb.llcr_breach_probability == pytest.approx(0.0)
+    assert cb.plcr_breach_probability == pytest.approx(0.0)
+    # sanity: the coverage ratios really are well above the non-binding 1.0 floor.
+    assert cb.llcr_min_mean > 1.0 and cb.plcr_min_mean > 1.0
+
+
+def test_risk_config_llcr_plcr_default_is_non_binding_not_dscr() -> None:
+    # _risk_config_from_scenario must NOT borrow the DSCR covenant for an undeclared
+    # LLCR/PLCR floor (that is the fabricated-breach root); the default is 1.0.
+    from analytics.capital_risk_layer_v14 import _risk_config_from_scenario
+
+    rc = _risk_config_from_scenario(LENDER_CONFIG)
+    assert rc.min_dscr == pytest.approx(1.30)  # the declared DSCR covenant is read
+    assert rc.min_llcr == pytest.approx(1.0)  # undeclared -> non-binding, NOT 1.30
+    assert rc.min_plcr == pytest.approx(1.0)
+
+
+def test_declared_llcr_covenant_in_constraints_is_read(tmp_path) -> None:
+    # when a scenario DOES declare an LLCR covenant in constraints, it is honored (so the
+    # non-binding default is only a fallback, not a ceiling on real covenant evaluation).
+    import yaml
+
+    from analytics.capital_risk_layer_v14 import _risk_config_from_scenario
+    from analytics.scenario_loader import load_scenario_config
+
+    cfg = load_scenario_config(LENDER_CONFIG)
+    cfg.setdefault("constraints", {})["min_llcr_covenant"] = 1.40
+    p = tmp_path / "with_llcr_covenant.yaml"
+    p.write_text(yaml.safe_dump(cfg))
+    rc = _risk_config_from_scenario(str(p))
+    assert rc.min_llcr == pytest.approx(1.40)
+
+
+def test_tail_report_is_deterministic_for_a_seed() -> None:
+    from analytics.capital_risk_layer_v14 import build_driver_mc_tail_report
+
+    a = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=30, seed=5
+    )
+    b = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=30, seed=5
+    )
+    assert a.equity_irr.mean == b.equity_irr.mean
+    assert a.covenant_breaches.dscr_breach_probability == (
+        b.covenant_breaches.dscr_breach_probability
+    )
+
+
+def test_tail_report_covenant_threshold_flows_through() -> None:
+    # the covenant floor in the supplied RiskConfig reaches covenant_breach_probability:
+    # an unreachably-low DSCR floor => 0 breach; a floor above every trial => 1.0 breach.
+    from analytics.capital_risk_layer_v14 import build_driver_mc_tail_report
+    from analytics.core.risk_metrics import RiskConfig
+
+    loose = RiskConfig(
+        confidence_level=0.95,
+        target_return=0.0,
+        min_dscr=0.01,
+        min_llcr=0.01,
+        min_plcr=0.01,
+    )
+    strict = RiskConfig(
+        confidence_level=0.95,
+        target_return=0.0,
+        min_dscr=99.0,
+        min_llcr=99.0,
+        min_plcr=99.0,
+    )
+    rep_loose = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=30, seed=9, risk_config=loose
+    )
+    rep_strict = build_driver_mc_tail_report(
+        LENDER_CONFIG, drivers=_DRIVERS, n_samples=30, seed=9, risk_config=strict
+    )
+    assert rep_loose.covenant_breaches.dscr_breach_probability == pytest.approx(0.0)
+    assert rep_strict.covenant_breaches.dscr_breach_probability == pytest.approx(1.0)
+
+
+def test_risk_config_from_scenario_is_config_first() -> None:
+    from analytics.capital_risk_layer_v14 import _risk_config_from_scenario
+
+    rc = _risk_config_from_scenario(LENDER_CONFIG)
+    assert 0.0 <= rc.confidence_level <= 1.0
+    assert rc.min_dscr > 0.0 and rc.min_llcr > 0.0 and rc.min_plcr > 0.0
