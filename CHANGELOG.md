@@ -18,6 +18,24 @@ All notable changes to this project will be documented here.
   entries: `B905` (zip strict=, #752) and `B008` (function-call-in-default-args, #753); each needs a
   per-site behavioural review rather than a blanket lint fix.
 
+### Fixed
+- **DSCR covenant-breach probability: floor-pin FP fabrication removed from four sibling paths (#725, from the #657 review).**
+  A strict `arr < floor` comparison fabricates an ~85-93% DSCR-breach probability on any dual-DSCR-sculpted
+  scenario, because the sculpt pins per-trial min-DSCR at EXACTLY the covenant (e.g. 1.30) and floating-point
+  representation noise (`1.2999999999999996 < 1.30`) counts as a breach; the true probability is 0.0. #657 fixed
+  this in `analytics/sensitivity/tail_risk`; the same latent bug lived in four siblings. The noise-tolerant
+  primitive (breach only when below the floor by MORE than representation noise, `PROB_BREACH_RTOL = 1e-9`) is
+  now extracted into a single source of truth, `analytics/core/covenant_breach.py` (`prob_breach` /
+  `is_floor_pinned`), and all paths route through it: `analytics/capital_risk_layer_v14.py`,
+  `analytics/core/risk_metrics.py` (DSCR, plus LLCR/PLCR for consistency), `analytics/mc/exports.py`
+  (`dscr_breach_probability`, used by both the lender risk table and the CASPER covenant block), and
+  `tail_risk` (re-exported). The lender-facing MC `covenant_block` now also carries a `floor_pinned` disclosure
+  (a structural 0.0 carries no distributional signal — read the tail from LLCR/PLCR and the balloon). The
+  committed defaults were already correct (the flagship `capital_risk_layer` covenant defaults to 1.20, not the
+  1.30 sculpt floor), so this is **KPI-neutral for committed scenarios** (all-scenarios KPI oracle
+  byte-identical) but removes a false-lender-risk hazard for any authorized `covenant == sculpt-floor` case.
+  Each path has a sculpt-pinned repro (prob == 0.0) and a genuine-breach repro (prob > 0).
+
 ## v15.3.0 - 2026-07-03
 
 ### Added
