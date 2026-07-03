@@ -167,7 +167,7 @@ def _validate_annual_rows_structure(
         except (TypeError, ValueError):
             raise PipelineValidationError(
                 f"annual_rows[0]['{key}'] not convertible to float: {first_row[key]}"
-            )
+            ) from None
 
     logger.debug(
         "Validated annual_rows: %d rows, first_row_keys=%s",
@@ -198,7 +198,7 @@ def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
     except (TypeError, ValueError) as exc:
         raise PipelineValidationError(
             f"debt_result critical field type validation failed: {exc}"
-        )
+        ) from exc
 
     logger.debug(
         "Validated debt_result: %d keys, min_dscr=%.2f",

@@ -140,7 +140,7 @@ def _resolve_default_discount_rate(cfg_dict: Mapping[Any, Any]) -> float:
     except (TypeError, ValueError):
         raise ValueError(
             f"Invalid default_discount_rate: {raw!r} – expected a float-like value."
-        )
+        ) from None
 
 
 @hydra.main(

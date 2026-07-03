@@ -4,6 +4,20 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- **flake8-bugbear (`B`) enabled as a mandatory ruff gate; B904 (`raise ... from`) fixed repo-wide (follow-up to #610, KPI-neutral).**
+  The retired flake8 stack (#610) enforced bugbear via `select = C,E,F,W,B,B950`; ruff did not yet
+  cover it. `ruff.toml` now selects `B`, restoring and strengthening that coverage as a hard gate.
+  All 7 B904 sites were fixed by adding `raise ... from err` / `raise ... from None` (exception-chaining
+  only — `__cause__` / `__suppress_context__`; no computed value changes) across
+  `analytics/pipeline_v14_enhanced.py`, `finance/wacc_v14.py`, `run_scenario_analytics_v14.py`,
+  `wind_resource/cashflow_adapter.py`, and `solar_resource/cashflow_adapter.py`. Because these edit
+  KPI-bearing engine `.py`, the change was gated on an all-scenarios KPI oracle (27 scenarios,
+  19 success + 8 error-path exception signatures) proven byte-identical before/after. The two other
+  bugbear families surfaced by the gate are deferred with tracked follow-ups and explicit `ignore`
+  entries: `B905` (zip strict=, #752) and `B008` (function-call-in-default-args, #753); each needs a
+  per-site behavioural review rather than a blanket lint fix.
+
 ## v15.3.0 - 2026-07-03
 
 ### Added

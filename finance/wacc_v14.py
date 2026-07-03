@@ -199,7 +199,7 @@ def _parse_prudential_spread_bps(raw: Any, default_bps: int = 100) -> int:
         try:
             val = float(s)
         except ValueError:
-            raise ValueError(f"Invalid prudential_spread_bps: {raw!r}")
+            raise ValueError(f"Invalid prudential_spread_bps: {raw!r}") from None
         return int(val)
 
     raise ValueError(f"Invalid prudential_spread_bps type: {type(raw).__name__}")
