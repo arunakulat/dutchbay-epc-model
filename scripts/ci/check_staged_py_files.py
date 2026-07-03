@@ -63,13 +63,13 @@ def main():
         )
         sys.exit(0)
 
+    # Lint-stack consolidation (#610): flake8 + pylint retired. ruff (E/W/F — the same rule
+    # families the mandatory CI gate enforces) replaces flake8; a scoped pylint pass is not
+    # viable on the CASPER optional-dependency / dynamic-`__all__` patterns (false-positive
+    # wall). black (format), isort (import order) and mypy (types) are unchanged.
     tools = [
         ("mypy " + " ".join(py_files), "mypy (static typing)"),
-        ("flake8 " + " ".join(py_files), "flake8 (lint/PEP8)"),
-        (
-            "pylint " + " ".join(py_files) + " --exit-zero",
-            "pylint (code quality/linting)",
-        ),
+        ("ruff check " + " ".join(py_files), "ruff (lint: pycodestyle/pyflakes)"),
         ("black --check --diff " + " ".join(py_files), "black (code format)"),
         ("isort --check-only " + " ".join(py_files), "isort (import order)"),
         ("bandit -r . -c", "bandit (security scan)"),

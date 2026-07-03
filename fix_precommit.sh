@@ -15,7 +15,7 @@ python -m isort finance/cashflow_v14.py
 python -m isort finance/cashflow_v14_fx.py
 echo "✅ isort complete"
 
-# Step 2: Run flake8/ruff to check E402
+# Step 2: Run ruff to check E402
 echo ""
 echo "📝 Step 2: Checking for import order issues..."
 python -m ruff check --select E402 analytics/evaluation_v14.py --fix || true
