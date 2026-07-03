@@ -477,6 +477,82 @@
     {% endif %}
   </section>
 
+  {# 7b. Conditions-precedent checklist — #708 (full line-item table; the IC red-flag
+     block above surfaces only the outstanding count). Render-when-present. #}
+  {% if ctx.cp_checklist %}
+  <section class="page">
+    <h2>Conditions Precedent</h2>
+    <p>First-drawdown conditions:
+      <strong>{{ ctx.cp_checklist.n_satisfied }} satisfied</strong>,
+      {{ ctx.cp_checklist.n_waived }} waived,
+      <strong>{{ ctx.cp_checklist.n_outstanding }} outstanding</strong>.
+      {% if ctx.cp_checklist.all_satisfied %}
+      <span class="badge pass">No outstanding conditions</span>
+      {% else %}
+      <span class="badge fail">Outstanding conditions gate first drawdown</span>
+      {% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Condition</th><th>Workstream</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for r in ctx.cp_checklist.rows %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td>{{ r.workstream }}</td>
+          <td>
+            {% if r.status == "satisfied" %}<span class="badge pass">Satisfied</span>
+            {% elif r.status == "waived" %}<span class="badge sev-medium">Waived</span>
+            {% else %}<span class="badge fail">Pending</span>{% endif %}
+          </td>
+          <td>{{ r.waived_reason or r.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.cp_checklist.missing %}
+    <h3>Conditions not yet on the checklist</h3>
+    <p class="muted">{{ ctx.cp_checklist.missing | join(", ") }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 7c. Feasibility-report section coverage — #708 / #705 (the 20-section skeleton).
+     Render-when-present. #}
+  {% if ctx.feasibility_sections %}
+  <section class="page">
+    <h2>Feasibility Report Structure</h2>
+    <p>Section coverage:
+      <strong>{{ ctx.feasibility_sections.n_complete }} complete</strong>,
+      {{ ctx.feasibility_sections.n_draft }} draft,
+      {{ ctx.feasibility_sections.n_not_applicable }} n/a
+      of {{ ctx.feasibility_sections.total }} canonical sections.
+      {% if ctx.feasibility_sections.all_complete %}
+      <span class="badge pass">Complete</span>
+      {% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Section</th><th>Group</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for r in ctx.feasibility_sections.rows %}
+        <tr>
+          <td>{{ r.title }}</td>
+          <td>{{ r.group }}</td>
+          <td>
+            {% if r.status == "complete" %}<span class="badge pass">Complete</span>
+            {% elif r.status == "draft" %}<span class="badge sev-medium">Draft</span>
+            {% else %}<span class="muted">Not applicable</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.feasibility_sections.missing %}
+    <h3>Sections not yet authored</h3>
+    <p class="muted">{{ ctx.feasibility_sections.missing | join(", ") }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 8. Assumptions register #}
   <section class="page">
     <h2>Assumptions Register</h2>
