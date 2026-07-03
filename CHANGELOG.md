@@ -19,6 +19,18 @@ All notable changes to this project will be documented here.
   per-site behavioural review rather than a blanket lint fix.
 
 ### Changed
+- **CI: `fastlane` is now a real fast lane — it no longer re-runs the full test suite (#760, CI-only, KPI-neutral).**
+  The required `fastlane` check was running the entire ~3,500-test tree single-process on Python 3.11 (~9m),
+  making it the merge-critical long pole and executing the tree twice per PR (the other run being the `test`
+  job's 3.12-sharded matrix). `fastlane` is now lint-only (focused ruff + mypy on the v14 entrypoint surface),
+  so the gate's wall-clock is the slowest shard, not a serial full-suite job. The full suite still runs exactly
+  once per PR (the sharded `test` job on 3.12, gated by `Test Summary`), and the FULL 3.11+3.12 matrix runs on
+  push-to-main and the nightly schedule — the 3.11 leg PRs skip is covered post-merge, matching the sharding
+  design's documented tradeoff. `fastlane` stays a required status check (name preserved; no ruleset change).
+  Also: the sharded split now passes `--durations-path .test_durations` explicitly and `.test_durations` was
+  regenerated so all current tests are time-weighted (the in-code comment claiming a count-based split was
+  stale — pytest-split was already balancing by duration sum).
+
 - **flake8-bugbear B905 resolved and gated: every `zip()` now declares `strict=` explicitly (#752, KPI-neutral).**
   Follow-up to the B-gate (#758): B905 is removed from the `ruff.toml` ignore list and enforced repo-wide.
   Each of the 15 call sites was resolved per a multi-agent analyze-then-adversarially-verify pass: 13 sites

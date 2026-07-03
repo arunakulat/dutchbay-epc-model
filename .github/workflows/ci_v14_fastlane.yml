@@ -1,3 +1,14 @@
+# CI - v14 fastlane
+#
+# Genuinely FAST early-fail lane: a focused ruff + mypy pass over the v14 entrypoint
+# surface on Python 3.11, so an obvious break fails in ~a couple of minutes without
+# waiting on the sharded suite. It deliberately does NOT run the test tree anymore
+# (#760): the full ~3,500-test suite is the `test` job in test-suite.yml — sharded +
+# `-n auto` on 3.12 for every PR, and the FULL 3.11+3.12 matrix on push-to-main and the
+# nightly schedule. Running the whole suite here too (single-process, ~9m) made this the
+# merge-critical long pole AND executed the tree twice per PR; removing it lets the gate's
+# wall-clock be the slowest shard. `fastlane` remains a required status check (name
+# preserved — no ruleset change); the 3.11 leg PRs skip is still covered post-merge/nightly.
 name: "CI - v14 fastlane"
 
 on:
@@ -63,12 +74,6 @@ jobs:
             analytics/fx_sensitivity_real.py \
             run_full_pipeline_v14.py
 
-      - name: Pytest - fast lane (including Sprint 11 compliance tests)
-        run: |
-          # Run the FULL tests/ tree (no test paths are excluded) so the fast lane
-          # cannot hide failures in unlisted files either; --maxfail=1 keeps it fail-fast.
-          pytest \
-            tests/ \
-            --maxfail=1 \
-            --disable-warnings \
-            --tb=short
+      # The full tests/ tree runs in test-suite.yml's sharded `test` job (gated by the
+      # required `Test Summary` check), NOT here — see the header note (#760). This lane is
+      # lint-only so it cannot be the merge long pole or a redundant second full-suite run.
