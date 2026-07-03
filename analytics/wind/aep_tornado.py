@@ -67,6 +67,12 @@ class AEPTornadoConfig:
     alt_curve_key: str | None = None
 
 
+# Module-level singleton: shared read-only default built once at import time
+# (AEPTornadoConfig is frozen) — behaviour-identical to the old argument-default
+# `= AEPTornadoConfig()` calls but B008-compliant (#753).
+_DEFAULT_AEP_TORNADO_CONFIG = AEPTornadoConfig()
+
+
 def _load_curve(
     key: str, store: Path = POWER_CURVE_STORE
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -166,7 +172,7 @@ def run_aep_tornado(
     n_turbines: int,
     curve_key: str = CANONICAL_CURVE_KEY,
     density_factor: float = 1.0,
-    cfg: AEPTornadoConfig = AEPTornadoConfig(),
+    cfg: AEPTornadoConfig = _DEFAULT_AEP_TORNADO_CONFIG,
 ) -> pd.DataFrame:
     """Run the AEP tornado and return a DataFrame ranked by absolute swing.
 
@@ -289,7 +295,7 @@ def run_aep_tornado(
 
 def tornado_from_config(
     config: Mapping[str, Any],
-    cfg: AEPTornadoConfig = AEPTornadoConfig(),
+    cfg: AEPTornadoConfig = _DEFAULT_AEP_TORNADO_CONFIG,
 ) -> pd.DataFrame:
     """Build and run the AEP tornado from a parsed v14 scenario config.
 

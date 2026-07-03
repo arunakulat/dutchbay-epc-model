@@ -30,12 +30,19 @@ class DscrSensitivityConfig:
     dscr_floor: float = 1.30
 
 
+# Module-level singletons: shared read-only defaults built once at import time
+# (both configs are frozen) — behaviour-identical to the old argument-default
+# `= X()` calls but B008-compliant (#753).
+_DEFAULT_DSCR_SENSITIVITY_CONFIG = DscrSensitivityConfig()
+_DEFAULT_SENSITIVITY_RUN_CONFIG = SensitivityRunConfig()
+
+
 def run_dscr_one_way(
     *,
     base_config: Mapping[str, Any],
     parameter: ParameterRangeConfig,
-    cfg: DscrSensitivityConfig = DscrSensitivityConfig(),
-    run_cfg: SensitivityRunConfig = SensitivityRunConfig(),
+    cfg: DscrSensitivityConfig = _DEFAULT_DSCR_SENSITIVITY_CONFIG,
+    run_cfg: SensitivityRunConfig = _DEFAULT_SENSITIVITY_RUN_CONFIG,
 ) -> SensitivitySuite:
     """
     Convenience wrapper: one-way sensitivity for DSCR(min).
