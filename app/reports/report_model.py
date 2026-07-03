@@ -20,19 +20,12 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from analytics.conditions_precedent import (
-    ConditionsPrecedentError,
-    CpReport,
-    build_cp_report,
-)
+from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
-from analytics.feasibility_sections import (
-    FeasibilitySectionsError,
-    build_feasibility_report,
-)
+from analytics.feasibility_sections import build_feasibility_report
 from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
@@ -195,6 +188,13 @@ class CpChecklistBlock(BaseModel):
     n_satisfied: int
     n_waived: int
     missing: List[str]
+    #: Declared conditions the register flagged (unknown item, off-scale status, missing
+    #: status) — surfaced so a declared line is NEVER silently dropped from every view.
+    flagged: List[str]
+    #: True only when the register recorded NO finding. The "no outstanding conditions"
+    #: pass-badge requires this AND all_satisfied, so a green badge cannot render over a
+    #: declared-but-unrenderable (e.g. typo'd-status) condition.
+    is_clean: bool
     all_satisfied: bool
 
 
@@ -226,7 +226,15 @@ class FeasibilitySectionsBlock(BaseModel):
     n_draft: int
     n_not_applicable: int
     missing: List[str]
+    #: Declared sections the register flagged (unknown section, off-scale status, missing
+    #: status) — surfaced so a declared section is NEVER silently dropped from every view.
+    flagged: List[str]
+    #: The canonical section count (always the fixed 20-section skeleton), independent of how
+    #: many were declared — so the displayed "of N" is never understated by a dropped item.
     total: int
+    #: True only when the register recorded NO finding; the "Complete" pass-badge requires
+    #: this AND all_complete, so a green badge cannot render over a typo'd/dropped section.
+    is_clean: bool
     all_complete: bool
 
 
@@ -836,7 +844,10 @@ def _build_ic_summary(
         cp_report: Optional[CpReport]
         try:
             cp_report = build_cp_report(scenario_config)
-        except ConditionsPrecedentError:
+        except ValueError:
+            # ConditionsPrecedentError (malformed items) AND a plain ValueError from a
+            # non-bool enforce/require_complete flag both degrade to no CP contribution
+            # (matches _build_evidence and _build_cp_checklist) — never crash the report.
             cp_report = None
     else:
         cp_report = None
@@ -1023,13 +1034,20 @@ def _build_cp_checklist(
         return None
     try:
         report = build_cp_report(scenario_config)
-    except ConditionsPrecedentError:
+    except ValueError:
+        # ConditionsPrecedentError (malformed items container) AND a plain ValueError from
+        # a non-bool enforce/require_complete flag both degrade to no section, matching the
+        # sibling _build_evidence — the report never crashes on a malformed CP block.
         return None
-    # Render only when the scenario actually declared a checklist (render-when-present);
-    # `missing` is always the full canonical set, so it can't signal "declared". A scenario
-    # that authored no CP block gets no section (the committed lender reports are unchanged).
-    if not report.items:
+    # Render when the scenario declared a checklist — valid items OR flagged declarations
+    # (an off-scale/typo'd status is dropped from `items` but must still surface, never
+    # vanish). A scenario that authored no CP block has neither, so it gets no section
+    # (committed lender reports unchanged); `missing` alone can't signal "declared".
+    if not report.items and not report.findings:
         return None
+    # Declared conditions the register flagged (unknown item, off-scale status, missing
+    # status) — NOT the `incomplete` findings, which are the already-listed missing items.
+    flagged = sorted({f.item for f in report.findings if f.kind != "incomplete"})
     return CpChecklistBlock(
         rows=[
             CpItemRow(
@@ -1045,6 +1063,8 @@ def _build_cp_checklist(
         n_satisfied=report.n_satisfied,
         n_waived=report.n_waived,
         missing=list(report.missing),
+        flagged=flagged,
+        is_clean=report.is_clean,
         all_satisfied=report.all_satisfied,
     )
 
@@ -1065,12 +1085,15 @@ def _build_feasibility_sections(
         return None
     try:
         report = build_feasibility_report(scenario_config)
-    except FeasibilitySectionsError:
+    except ValueError:
+        # FeasibilitySectionsError (malformed sections container) AND a plain ValueError from
+        # a non-bool enforce/require_complete flag both degrade to no section (as _build_evidence).
         return None
-    # Render only when the scenario actually declared sections (render-when-present); a
-    # scenario that authored no feasibility_sections block gets no section.
-    if not report.sections:
+    # Render when the scenario declared sections — valid OR flagged (a dropped off-scale
+    # status must still surface). No declaration at all -> no section.
+    if not report.sections and not report.findings:
         return None
+    flagged = sorted({f.section for f in report.findings if f.kind != "incomplete"})
     return FeasibilitySectionsBlock(
         rows=[
             FeasibilitySectionRow(
@@ -1082,7 +1105,12 @@ def _build_feasibility_sections(
         n_draft=report.n_draft,
         n_not_applicable=report.n_not_applicable,
         missing=list(report.missing),
-        total=len(report.sections) + len(report.missing),
+        flagged=flagged,
+        # covered (canonical-declared) + missing (canonical-not-declared) = the full fixed
+        # skeleton, INCLUDING a declared item dropped for a bad status — so "of N" is never
+        # understated (report.sections would drop it and show 19 of a 20-section skeleton).
+        total=len(report.covered) + len(report.missing),
+        is_clean=report.is_clean,
         all_complete=report.all_complete,
     )
 
