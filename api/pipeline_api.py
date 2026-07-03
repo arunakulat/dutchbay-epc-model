@@ -35,6 +35,7 @@ from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
+from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario_config
@@ -581,6 +582,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         validate_evidence_register(cfg, payload.config_path or "<inline>")
         validate_development_readiness(cfg, payload.config_path or "<inline>")
         validate_conditions_precedent(cfg, payload.config_path or "<inline>")
+        validate_feasibility_sections(cfg, payload.config_path or "<inline>")
         # Same rationale for the FX spot keys: an inline/overridden authored config bypasses
         # the load-time cross-assert, so a divergent fx.rates/start/pinned would yield a
         # self-inconsistent lender pack (#236 class). A client authoring/overriding the

@@ -1,0 +1,148 @@
+# DutchBay EPC Model — FEASIBILITY-REPORT section taxonomy (issue #616, slice 1 of 5 — #705)
+#
+# Purpose (CESSPIT / CCCDIR — single source):
+#   The vocabulary the feasibility-report section schema validates against, in ONE place:
+#     1. section_groups   — the canonical report groups a full renewable-energy feasibility
+#                           report is organised under (technical / financial / legal /
+#                           environmental & social / grid / logistics / risk)
+#     2. section_statuses — the ordered declaration scale (BEST -> WORST) for a single
+#                           section's authored content in a scenario
+#     3. sections         — the canonical, ORDERED 20-section feasibility-report skeleton
+#                           (static-audit §11 list, adopted via the benchmarking register §I)
+#
+#   A full project feasibility report is broader than the lender financial-model report the
+#   pipeline already renders: it wraps the model outputs in the complete IC/DFI document
+#   skeleton (investment thesis, site & permits, technology basis, E&S, logistics, risk
+#   register, appendices). This taxonomy is that skeleton as config — the report layer reads
+#   it to know WHICH sections exist, in WHAT order, and under WHICH group; it carries NO
+#   per-project content or status.
+#
+#   A scenario declares its actual authored coverage in its own `feasibility_sections.sections`
+#   block (section -> {status, narrative?, na_reason?}); analytics.feasibility_sections
+#   validates that block against this taxonomy and the policy in config/defaults.yaml
+#   (defaults.feasibility_sections), and rolls coverage up per group and overall. This file is
+#   read by exactly one resolver (analytics.feasibility_sections.load_feasibility_taxonomy)
+#   and never moves KPIs.
+#
+#   Soft by default (warn-only) — a scenario with no authored sections is reported on, not
+#   broken (render-when-present). Mirrors the conditions-precedent taxonomy
+#   (config/conditions_precedent.yaml, slice 2) and the development-readiness register.
+#
+#   Group tags are PRESENTATION buckets (config-first — retag here without a code change).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical report groups — the buckets the feasibility skeleton is organised under (epic
+# #616's seven: technical / financial / legal / E&S / grid / logistics / risk). Each section
+# below is tagged to exactly one of these.
+# ─────────────────────────────────────────────────────────────────────────────
+section_groups:
+  - technical
+  - financial
+  - legal
+  - environmental_social
+  - grid
+  - logistics
+  - risk
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section declaration scale — ordered BEST -> WORST. A scenario section's `status` must be
+# one of these. `not_applicable` is a documented decision to exclude a section (with a
+# reason, e.g. no BESS -> no augmentation plan) and is treated as NOT missing; a canonical
+# section with no declared status at all is reported as `missing` in the rollup (it is not a
+# declarable status). `draft` marks authored-but-unfinished narrative.
+# ─────────────────────────────────────────────────────────────────────────────
+section_statuses:
+  - complete        # section authored and final — feasibility-report ready
+  - draft           # section authored but not final — still needs work
+  - not_applicable  # documented exclusion (na_reason) — not missing, not rendered
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The canonical 20-section feasibility-report skeleton — ORDERED (list position = report
+# order). Source: static-audit §11 ("A proper feasibility report should include", items
+# 1–20), adopted for the generator by the enhancement-benchmarking register §I. Each section
+# declares its `group` (one of section_groups above). A section declared in a scenario whose
+# name is NOT here is flagged (unknown_section); when policy require_complete is set, every
+# section here must have a declared status. Soft by default — a scenario need only declare
+# the subset it has authored.
+# ─────────────────────────────────────────────────────────────────────────────
+sections:
+  - name: executive_investment_thesis
+    group: financial
+    title: Executive investment thesis
+    description: The IC-facing case for the investment — what is being financed, why now, and the headline economics.
+  - name: project_description_and_structure
+    group: technical
+    title: Project description and sponsor/EPC/O&M structure
+    description: The project, its sponsors, and the EPC / O&M contracting structure.
+  - name: site_land_permits_legal_status
+    group: legal
+    title: Site, land, permits and legal status
+    description: Site control, land tenure, permits and licences, and the project's legal standing.
+  - name: resource_and_energy_yield
+    group: technical
+    title: Resource assessment and energy-yield assessment
+    description: Wind/solar resource basis, long-term correction, and the P50/P90 energy-yield assessment.
+  - name: technology_selection_design_basis
+    group: technical
+    title: Technology selection and design basis
+    description: Turbine/module/BESS selection rationale and the engineering design basis.
+  - name: grid_interconnection_curtailment
+    group: grid
+    title: Grid/interconnection and curtailment assessment
+    description: Interconnection route and agreement status, grid capacity, and curtailment expectations.
+  - name: construction_logistics_plan
+    group: logistics
+    title: Construction and logistics plan
+    description: Construction programme, transport/port logistics, and constructability constraints.
+  - name: environmental_social_summary
+    group: environmental_social
+    title: Environmental and social assessment summary
+    description: ESIA findings, IFC PS / EP4 alignment, and the E&S management framework.
+  - name: climate_resilience_assessment
+    group: environmental_social
+    title: Climate and resilience assessment
+    description: Physical climate risk and resilience of the asset over the project life (TCFD-aligned).
+  - name: capex_opex_contingency_procurement
+    group: financial
+    title: Capex, opex, contingency and procurement basis
+    description: Capital and operating cost build-up, contingency policy, and the procurement basis.
+  - name: revenue_ppa_tariff_assumptions
+    group: financial
+    title: Revenue, PPA and tariff assumptions
+    description: The offtake structure, tariff level and currency, escalation/indexation, and deemed-energy terms.
+  - name: financing_plan_debt_sizing
+    group: financial
+    title: Financing plan and debt sizing
+    description: Debt/equity structure, sizing basis (DSCR/gearing), tenors, pricing, and covenants.
+  - name: tax_fx_inflation_accounting
+    group: financial
+    title: Tax, FX, inflation and accounting basis
+    description: The fiscal regime, FX/depreciation treatment, inflation indices, and accounting conventions.
+  - name: base_case_financial_outputs
+    group: financial
+    title: Base-case financial outputs
+    description: The base-case KPI set — IRRs, NPV, DSCR/LLCR profile, and the lender covenant view.
+  - name: sensitivity_downside_cases
+    group: risk
+    title: Sensitivity and downside cases
+    description: One-way sensitivities and named downside scenarios against the base case.
+  - name: monte_carlo_risk_distribution
+    group: risk
+    title: Monte Carlo risk distribution
+    description: Probabilistic KPI distributions, P50/P90/P95 tails, and breach probabilities.
+  - name: optimization_alternatives_analysis
+    group: technical
+    title: Optimization and alternatives analysis
+    description: Configuration alternatives considered and any optimization results informing the selected design.
+  - name: risk_register_and_mitigations
+    group: risk
+    title: Risk register and mitigations
+    description: The consolidated risk register with severity, ownership, and mitigation status.
+  - name: decision_checklist_conditions_precedent
+    group: legal
+    title: Decision checklist and conditions precedent
+    description: The IC decision checklist and the conditions-precedent schedule gating first drawdown.
+  - name: appendices_provenance_audit_trail
+    group: technical
+    title: Appendices — data provenance and model audit trail
+    description: Data-provenance appendix, evidence register, and the reproducibility/model audit trail.
