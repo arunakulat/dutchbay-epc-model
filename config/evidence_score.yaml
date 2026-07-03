@@ -1,0 +1,63 @@
+# DutchBay EPC Model — BANKABILITY EVIDENCE-COMPLETENESS SCORE weights (issue #616, slice 4 of 5 — #707)
+#
+# Purpose (CESSPIT / CCCDIR — single source):
+#   The weights the bankability evidence-completeness SCORE is computed from, in ONE place.
+#   The evidence REGISTER (config/evidence_register.yaml + analytics.evidence_register) already
+#   defines the tier hierarchy and the canonical material assumptions, and builds coverage
+#   (covered vs missing) — but computes NO score. This file adds the scoring layer on top:
+#     1. tier_weights   — a strength weight in [0, 1] for each evidence tier (measured is the
+#                         strongest = 1.0; placeholder is the weakest). EVERY tier in
+#                         config/evidence_register.yaml `evidence_tiers` MUST have a weight here
+#                         (the loader fails loud if the two drift — single source, no silent gap).
+#     2. missing_weight — the strength credited to a material assumption with NO gradeable
+#                         evidence entry (missing, or an entry whose tier is absent/unknown).
+#                         The missing-evidence PENALTY: 0.0 means an un-evidenced assumption
+#                         contributes nothing to the score.
+#     3. bands          — ordered (BEST -> WORST) score→label bands, so the 0-100 score also
+#                         carries a plain bankability label for the IC reader.
+#
+#   The score is a PURE read-only derivation over the evidence-register coverage + tier strength
+#   (analytics.evidence_score.build_evidence_score) — it recomputes no finance metric and moves
+#   no KPI. Soft by default: a scenario with no register simply scores 0 / "insufficiently
+#   evidenced" and is reported on, never broken (mirrors the register's soft default).
+#
+#   Weights are a lender's-engineer judgement of evidence strength, NOT a live computation:
+#   metered site data / an executed contract is the strongest basis for a number; an un-sourced
+#   placeholder is the weakest. Retune here (config-first) without a code change.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-tier strength weights (0..1), keyed by the evidence tiers in
+# config/evidence_register.yaml (STRONGEST -> WEAKEST there). Every one of those tiers must
+# appear here; a tier present here but absent from the register taxonomy is also rejected
+# (the loader cross-checks both directions, so the two configs cannot drift).
+# ─────────────────────────────────────────────────────────────────────────────
+tier_weights:
+  measured: 1.00       # site measurement / metered data — strongest basis for a number
+  contracted: 0.95     # executed contract (signed PPA, awarded EPC) — nearly as firm
+  vendor_quote: 0.80   # firm/budgetary vendor or OEM quote
+  benchmark: 0.65      # vetted third-party benchmark (IRENA, Lazard, NREL ATB, IEA)
+  derived: 0.50        # computed/modeled from other evidenced inputs
+  assumption: 0.30     # documented analyst judgement, no external source
+  placeholder: 0.10    # TBD / illustrative — weakest; must be retired before financial close
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The strength credited to a material assumption with no gradeable evidence — the
+# missing-evidence penalty floor. 0.0 (default): an un-evidenced assumption contributes
+# nothing, so the score is a true completeness measure. An entry earns its tier weight ONLY
+# when the register (analytics.evidence_register) deems it well-formed; an entry the register
+# flags — missing source/as_of/tier, an unknown tier, or a tier weaker than the scenario's own
+# declared min_tier — is scored at this same floor (un-sourced / ungradeable / below-bar
+# evidence earns no credit). So the score cannot read bankable for a zero-provenance base.
+# ─────────────────────────────────────────────────────────────────────────────
+missing_weight: 0.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bankability bands — ordered BEST -> WORST by their inclusive lower bound on the 0-100
+# score. The score's band label is the first band whose `min` the score meets or exceeds.
+# The lowest band's `min` MUST be 0 so every score maps to a label.
+# ─────────────────────────────────────────────────────────────────────────────
+bands:
+  - {min: 85, label: bankable}                    # strong, near-complete evidence base
+  - {min: 70, label: substantially evidenced}     # most material assumptions firmly evidenced
+  - {min: 50, label: partially evidenced}         # material gaps or weak-tier reliance remain
+  - {min: 0,  label: insufficiently evidenced}    # not decision-grade — evidence base too thin

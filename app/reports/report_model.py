@@ -28,6 +28,7 @@ from analytics.conditions_precedent import (
 from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
+from analytics.evidence_score import build_evidence_score
 from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
@@ -241,6 +242,38 @@ class EvidenceBlock(BaseModel):
     missing: List[str]  # material assumptions with no declared evidence
     covered: int
     total: int
+
+
+class EvidenceScoreRow(BaseModel):
+    """One material assumption's contribution to the evidence-completeness score (#707)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    assumption: str
+    tier: str  # declared tier, or "" when missing / ungradeable
+    strength: float  # credited strength in [0, 1]
+    covered: bool
+
+
+class EvidenceScoreBlock(BaseModel):
+    """Bankability evidence-completeness score for a scenario (#707, slice 4/5 of #616).
+
+    A read-only projection of :class:`analytics.evidence_score.EvidenceScore`: the 0-100
+    score and its plain band label, the coverage counts, the mean strength over covered
+    entries, and the per-assumption breakdown. Pure surfacing — no finance metric is
+    recomputed. None (section omitted) for legacy callers or a malformed register.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    score: float
+    band: str
+    covered: int
+    total: int
+    missing: List[str]
+    coverage_pct: float
+    mean_covered_strength: float
+    rows: List[EvidenceScoreRow]
 
 
 class MultiTechRow(BaseModel):
@@ -469,6 +502,10 @@ class ReportContext(BaseModel):
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
+    #: Bankability evidence-completeness score (#707) — the config-weighted score on top of
+    #: the evidence-register coverage. None for legacy callers / a malformed register; the
+    #: section is then omitted. Additive; committed scenarios byte-identical.
+    evidence_score: Optional[EvidenceScoreBlock] = None
     #: Per-technology production/economics breakdown for a hybrid (ARCH-4, #476). None for
     #: single-tech plants or legacy callers — the section is then omitted.
     multi_tech: Optional[MultiTechBlock] = None
@@ -936,6 +973,45 @@ def _build_evidence(
     )
 
 
+def _build_evidence_score(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[EvidenceScoreBlock]:
+    """Project the bankability evidence-completeness score into a report block (#707).
+
+    Reads the score via the canonical :func:`analytics.evidence_score.build_evidence_score`
+    (config-weighted tier strength over the evidence-register coverage). Returns ``None``
+    when no scenario config is supplied (legacy callers) or the register/weights config is
+    malformed — the section is then omitted, exactly like :func:`_build_evidence`. Pure
+    presentation; recomputes no finance metric.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        score = build_evidence_score(scenario_config)
+    except ValueError:
+        # A malformed register or a drifted evidence_score.yaml raises a plain ValueError;
+        # degrade to no section rather than break the report (mirrors _build_evidence).
+        return None
+    return EvidenceScoreBlock(
+        score=score.score,
+        band=score.band,
+        covered=score.n_covered,
+        total=score.n_total,
+        missing=list(score.missing),
+        coverage_pct=round(100.0 * score.coverage_fraction, 2),
+        mean_covered_strength=score.mean_covered_strength,
+        rows=[
+            EvidenceScoreRow(
+                assumption=a.assumption,
+                tier=a.tier,
+                strength=a.strength,
+                covered=a.covered,
+            )
+            for a in score.assumptions
+        ],
+    )
+
+
 def _build_finance_blocks(
     case_result: CaseResult,
     scenario_config: Optional[Mapping[str, Any]],
@@ -1282,6 +1358,7 @@ def build_report_context(
         global_sa=global_sa,
         global_sa_pawn=global_sa_pawn,
         evidence=_build_evidence(scenario_config),
+        evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
