@@ -486,10 +486,12 @@
       <strong>{{ ctx.cp_checklist.n_satisfied }} satisfied</strong>,
       {{ ctx.cp_checklist.n_waived }} waived,
       <strong>{{ ctx.cp_checklist.n_outstanding }} outstanding</strong>.
-      {% if ctx.cp_checklist.all_satisfied %}
+      {% if not ctx.cp_checklist.all_satisfied %}
+      <span class="badge fail">Outstanding conditions gate first drawdown</span>
+      {% elif ctx.cp_checklist.is_clean %}
       <span class="badge pass">No outstanding conditions</span>
       {% else %}
-      <span class="badge fail">Outstanding conditions gate first drawdown</span>
+      <span class="badge sev-medium">Checklist has unresolved entries — review below</span>
       {% endif %}
     </p>
     <table>
@@ -509,6 +511,12 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.cp_checklist.flagged %}
+    <h3>Declared conditions with unresolved data issues</h3>
+    <p class="muted">These conditions were declared but could not be graded (unknown item or
+      off-scale status) — resolve before relying on the outstanding count:
+      {{ ctx.cp_checklist.flagged | join(", ") }}</p>
+    {% endif %}
     {% if ctx.cp_checklist.missing %}
     <h3>Conditions not yet on the checklist</h3>
     <p class="muted">{{ ctx.cp_checklist.missing | join(", ") }}</p>
@@ -526,8 +534,10 @@
       {{ ctx.feasibility_sections.n_draft }} draft,
       {{ ctx.feasibility_sections.n_not_applicable }} n/a
       of {{ ctx.feasibility_sections.total }} canonical sections.
-      {% if ctx.feasibility_sections.all_complete %}
-      <span class="badge pass">Complete</span>
+      {% if ctx.feasibility_sections.all_complete and ctx.feasibility_sections.is_clean %}
+      <span class="badge pass">All sections addressed</span>
+      {% elif not ctx.feasibility_sections.is_clean %}
+      <span class="badge sev-medium">Section coverage has unresolved entries — review below</span>
       {% endif %}
     </p>
     <table>
@@ -546,6 +556,11 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.feasibility_sections.flagged %}
+    <h3>Declared sections with unresolved data issues</h3>
+    <p class="muted">These sections were declared but could not be graded (unknown section or
+      off-scale status): {{ ctx.feasibility_sections.flagged | join(", ") }}</p>
+    {% endif %}
     {% if ctx.feasibility_sections.missing %}
     <h3>Sections not yet authored</h3>
     <p class="muted">{{ ctx.feasibility_sections.missing | join(", ") }}</p>

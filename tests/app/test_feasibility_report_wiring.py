@@ -91,6 +91,60 @@ def test_malformed_cp_checklist_degrades_to_none() -> None:
     assert ctx.cp_checklist is None
 
 
+def test_non_bool_cp_flag_degrades_to_none_not_crash() -> None:
+    # a non-bool enforce raises a plain ValueError in the register; the report must degrade
+    # (broadened except), not crash (the #708 Fable review defense-in-depth finding).
+    scenario = {
+        "conditions_precedent": {
+            "enforce": "true",
+            "items": {"ppa_executed": {"status": "satisfied"}},
+        }
+    }
+    ctx = build_report_context(
+        _case(), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert ctx.cp_checklist is None
+
+
+def test_off_scale_cp_status_is_surfaced_not_silently_dropped() -> None:
+    # The #708 Fable BLOCK: a declared condition with a typo'd/off-scale status must NOT
+    # vanish, and must NOT let a green "no outstanding" badge render over it.
+    scenario = {
+        "conditions_precedent": {
+            "items": {
+                "ppa_executed": {"status": "satisfied"},
+                "esia_approved": {"status": "in_review"},  # off-scale (not pending)
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert ctx.cp_checklist is not None
+    # the dropped item is surfaced as flagged (not vanished from every view)
+    assert "esia_approved" in ctx.cp_checklist.flagged
+    assert ctx.cp_checklist.is_clean is False
+    html = render_report_html(ctx)
+    assert "esia_approved" in html
+    # the green "no outstanding conditions" badge must NOT render over an ungraded condition
+    assert "No outstanding conditions" not in html
+    assert "unresolved entries" in html
+
+
+def test_only_invalid_cp_items_still_render_the_section() -> None:
+    # a checklist whose ONLY declared item is off-scale still renders (surfacing the flag)
+    # rather than silently omitting the whole section.
+    scenario = {
+        "conditions_precedent": {"items": {"ppa_executed": {"status": "bogus"}}}
+    }
+    ctx = build_report_context(
+        _case(), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert ctx.cp_checklist is not None
+    assert ctx.cp_checklist.rows == []
+    assert "ppa_executed" in ctx.cp_checklist.flagged
+
+
 # ── feasibility section coverage ─────────────────────────────────────────────────
 def test_feasibility_sections_render_when_declared() -> None:
     scenario = {
@@ -142,6 +196,62 @@ def test_malformed_feasibility_sections_degrades_to_none() -> None:
         _case(), generated_at=GENERATED_AT, scenario_config=scenario
     )
     assert ctx.feasibility_sections is None
+
+
+def test_non_bool_feasibility_flag_degrades_to_none_not_crash() -> None:
+    scenario = {
+        "feasibility_sections": {
+            "require_complete": 1,
+            "sections": {"executive_investment_thesis": {"status": "complete"}},
+        }
+    }
+    ctx = build_report_context(
+        _case(), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert ctx.feasibility_sections is None
+
+
+def test_off_scale_feasibility_status_keeps_total_20_and_is_surfaced() -> None:
+    # The #708 Fable BLOCK: a section with an off-scale status must not drop the "of N"
+    # count below the fixed 20-section skeleton, nor vanish from every view.
+    scenario = {
+        "feasibility_sections": {
+            "sections": {
+                "executive_investment_thesis": {"status": "complete"},
+                "resource_and_energy_yield": {"status": "in_progress"},  # off-scale
+            }
+        }
+    }
+    ctx = build_report_context(
+        _case(), generated_at=GENERATED_AT, scenario_config=scenario
+    )
+    assert ctx.feasibility_sections is not None
+    assert ctx.feasibility_sections.total == 20  # NOT 19
+    assert "resource_and_energy_yield" in ctx.feasibility_sections.flagged
+    assert ctx.feasibility_sections.is_clean is False
+    html = render_report_html(ctx)
+    assert "of 20 canonical sections" in html
+    assert "resource_and_energy_yield" in html
+
+
+def test_off_scale_status_blocks_the_all_addressed_badge() -> None:
+    # a full 20-section declaration with ONE typo'd status must not render the green
+    # "All sections addressed" badge (all_complete would be True over the survivors).
+    from analytics.feasibility_sections import load_feasibility_taxonomy
+
+    names = list(load_feasibility_taxonomy().section_names)
+    sections = {n: {"status": "complete"} for n in names}
+    sections[names[5]] = {"status": "donezo"}  # off-scale typo on one section
+    ctx = build_report_context(
+        _case(),
+        generated_at=GENERATED_AT,
+        scenario_config={"feasibility_sections": {"sections": sections}},
+    )
+    assert ctx.feasibility_sections is not None
+    assert ctx.feasibility_sections.is_clean is False
+    html = render_report_html(ctx)
+    assert "All sections addressed" not in html
+    assert names[5] in ctx.feasibility_sections.flagged
 
 
 # ── the full feasibility document assembles through the existing renderer ─────────
