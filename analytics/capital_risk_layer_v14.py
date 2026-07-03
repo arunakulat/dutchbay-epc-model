@@ -611,6 +611,10 @@ class CapitalRiskReport:
     npv_metric: str
     scenario: str
     model_version: str
+    #: The MC method provenance (MRM-02), e.g. "lhs sampling, rank correlation" for the
+    #: canonical engine or "gaussian bootstrap" for run_driver_mc — carried so a lender-facing
+    #: renderer states the ACTUAL method rather than assuming one (source-agnostic report).
+    method: str = "monte_carlo"
 
 
 def build_capital_risk_report_from_trials(
@@ -623,6 +627,7 @@ def build_capital_risk_report_from_trials(
     npv_metric: str = "equity_npv",
     metric_keys: Optional[List[str]] = None,
     run_cfg: Optional[TailRiskConfig] = None,
+    method: str = "monte_carlo",
 ) -> CapitalRiskReport:
     """Assemble the unified :class:`CapitalRiskReport` from collected per-trial arrays (#657).
 
@@ -702,7 +707,24 @@ def build_capital_risk_report_from_trials(
         npv_metric=npv_metric,
         scenario=scenario,
         model_version=version,
+        method=method,
     )
+
+
+def _mc_method_label(result: Any) -> str:
+    """A faithful MC-method provenance string from a MonteCarloResult's metadata (MRM-02).
+
+    Reads ``metadata['sampler']`` and ``metadata['correlation_enabled']`` so the report states
+    the ACTUAL method (e.g. ``"lhs sampling, rank correlation"``) rather than assuming one.
+    """
+    metadata = getattr(result, "metadata", None)
+    if not isinstance(metadata, Mapping):
+        return "monte_carlo"
+    sampler = str(metadata.get("sampler", "monte_carlo"))
+    label = f"{sampler} sampling"
+    if bool(metadata.get("correlation_enabled", False)):
+        label += ", rank correlation"
+    return label
 
 
 def build_capital_risk_report_from_mc_result(
@@ -769,6 +791,7 @@ def build_capital_risk_report_from_mc_result(
         npv_metric=npv_metric,
         metric_keys=metric_keys,
         run_cfg=run_cfg,
+        method=_mc_method_label(result),
     )
 
 

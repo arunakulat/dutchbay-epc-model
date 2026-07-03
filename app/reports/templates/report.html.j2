@@ -385,6 +385,62 @@
   </section>
   {% endif %}
 
+  {# 4h. Capital risk (canonical Monte-Carlo) — #776 / #657. Render-when-present; the MC runs
+     out-of-band (heavy) and is passed in. Distributional covenant-breach + VaR/CVaR. #}
+  {% if ctx.capital_risk %}
+  <section class="page">
+    <h2>Capital Risk — Monte-Carlo Distribution</h2>
+    <p class="muted">Probabilistic risk from a Monte-Carlo ({{ ctx.capital_risk.method }})
+      over {{ ctx.capital_risk.n_trials }} trials — {{ ctx.capital_risk.scenario }},
+      engine v{{ ctx.capital_risk.model_version }}.</p>
+    <h3>Covenant-breach probability</h3>
+    <table>
+      <thead><tr><th>Covenant</th><th style="text-align:right;">Floor</th><th style="text-align:right;">Breach probability</th></tr></thead>
+      <tbody>
+        <tr><td>Minimum DSCR</td><td class="num">{{ fmt_x(ctx.capital_risk.dscr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.dscr_breach_probability) }}</td></tr>
+        <tr><td>LLCR</td><td class="num">{{ fmt_x(ctx.capital_risk.llcr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.llcr_breach_probability) }}</td></tr>
+        <tr><td>PLCR</td><td class="num">{{ fmt_x(ctx.capital_risk.plcr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.plcr_breach_probability) }}</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">A covenant not declared by the scenario defaults to the 1.00x non-binding
+      coverage-of-one floor (breach flags only genuine sub-1.0 coverage), not a contracted
+      covenant.</p>
+    <p>Probability equity IRR is below the
+      {{ fmt_ratio_pct(ctx.capital_risk.target_equity_irr) }} hurdle:
+      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>.</p>
+    <h3>Value at Risk / Expected Shortfall</h3>
+    <table>
+      <thead><tr><th>Metric</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
+      <tbody>
+        {% for m in ctx.capital_risk.metrics %}
+        <tr>
+          <td>{{ m.metric }}</td>
+          {% if m.unit == "usd" %}
+          <td class="num">{{ fmt_usd(m.mean) }}</td>
+          <td class="num">{{ fmt_usd(m.var) }}</td>
+          <td class="num">{{ fmt_usd(m.cvar) }}</td>
+          {% else %}
+          <td class="num">{{ fmt_ratio_pct(m.mean) }}</td>
+          <td class="num">{{ fmt_ratio_pct(m.var) }}</td>
+          <td class="num">{{ fmt_ratio_pct(m.cvar) }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.capital_risk.npv_distribution_img %}
+    <h3>NPV distribution</h3>
+    <img src="{{ ctx.capital_risk.npv_distribution_img }}" alt="NPV distribution" style="max-width:100%;" />
+    {% else %}
+    <p class="muted">NPV distribution chart ({{ ctx.capital_risk.npv_distribution_filename }})
+      was not embedded (chart rendering unavailable).</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>
