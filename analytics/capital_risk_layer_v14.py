@@ -20,9 +20,17 @@ full per-trial metric arrays (``collect_trials=True``), and
 VaR/CVaR + DSCR covenant-breach path in :mod:`analytics.sensitivity.tail_risk` — a
 report-layer surface that the deterministic tornado cannot produce. The trial-array
 metadata packaging (:func:`build_case_metadata_from_trials`) is the shared prerequisite
-for the follow-up wires. :func:`build_driver_mc_tail_report` (wire b, #715) renders the
-full canonical :class:`~analytics.core.risk_metrics.TailRiskReport` from the same arrays
-(the NPV-distribution PNG wire, #716, is the remaining slice).
+for the follow-up wires. The trials→surface cores are MC-source-agnostic:
+:func:`_tail_report_from_trials` renders the full canonical
+:class:`~analytics.core.risk_metrics.TailRiskReport` (wire b, #715) and
+:func:`emit_npv_distribution_from_trials` emits the NPV-distribution PNG (wire c, #716) from
+any per-trial arrays. :func:`build_capital_risk_report_from_trials` assembles all three
+surfaces into the unified :class:`CapitalRiskReport`, and
+:func:`build_capital_risk_report_from_mc_result` feeds it from the CANONICAL
+:class:`~analytics.contracts_v14.MonteCarloResult` (``analytics.mc.engine`` — LHS +
+Iman-Conover correlation, the real lender MC), which is the intended production source
+(``run_driver_mc`` is a lightweight Gaussian bootstrap). Rendering the report in the lender
+report is a follow-up.
 
 Context:
     Sprint 11 - Issue #33 (capital_risk_layer_v14 facade).
@@ -32,6 +40,8 @@ Context:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from os import PathLike
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
 import numpy as np
@@ -473,7 +483,19 @@ def build_driver_mc_tail_report(
         if risk_config is not None
         else _risk_config_from_scenario(config_path)
     )
-    analyzer = TailRiskAnalyzer(config=rc)
+    return _tail_report_from_trials(trials, rc)
+
+
+def _tail_report_from_trials(
+    trials: Mapping[str, np.ndarray], risk_config: RiskConfig
+) -> TailRiskReport:
+    """Render a :class:`TailRiskReport` from already-collected per-trial arrays.
+
+    The shared trials→report core so a caller that already ran the driver MC (e.g.
+    :func:`build_capital_risk_report`) does not re-run it. The covenant scalars are reshaped
+    to ``(n_trials, 1)`` — see :func:`build_driver_mc_tail_report` for why this is faithful.
+    """
+    analyzer = TailRiskAnalyzer(config=risk_config)
 
     def _covenant_column(key: str) -> np.ndarray:
         # per-trial scalar (n_trials,) -> (n_trials, 1); axis-1 min is then a no-op.
@@ -490,8 +512,269 @@ def build_driver_mc_tail_report(
     )
 
 
+def _npv_distribution_png_from_trials(
+    trials: Mapping[str, np.ndarray],
+    output_path: "PathLike[Any] | str",
+    *,
+    npv_metric: str = "equity_npv",
+    title: Optional[str] = None,
+    bins: int = 20,
+) -> Path:
+    """Emit the NPV-distribution histogram PNG from a collected per-trial NPV array (#716).
+
+    Uses :meth:`analytics.export_helpers.ChartGenerator.plot_npv_distribution`, which carries
+    the CASPER call-time matplotlib guard: when matplotlib is absent ``_get_plt()`` returns
+    ``None`` and the resolved path is returned WITHOUT writing (no import-time failure), so
+    this degrades gracefully. ``title`` carries the MRM-02 scenario/version annotation.
+    """
+    from analytics.export_helpers import (  # local: optional matplotlib dep
+        ChartGenerator,
+    )
+
+    if npv_metric not in ("equity_npv", "project_npv"):
+        raise ValueError(
+            f"npv_metric must be 'equity_npv' or 'project_npv'; got {npv_metric!r}"
+        )
+    out = Path(output_path)
+    values = np.asarray(trials[npv_metric], dtype=float)
+    finite = values[np.isfinite(values)]
+    generator = ChartGenerator(out.parent)
+    if finite.size == 0:
+        # No finite NPVs to plot — return the resolved path WITHOUT writing a blank
+        # histogram (same graceful-degradation contract as the matplotlib-absent path).
+        return generator._resolve_path(out.name)
+    return generator.plot_npv_distribution(
+        finite.tolist(),
+        out.name,
+        bins=bins,
+        title=title if title is not None else f"NPV distribution ({npv_metric})",
+    )
+
+
+def emit_npv_distribution_from_trials(
+    trials: Mapping[str, Any],
+    output_path: PathLike[Any] | str,
+    *,
+    npv_metric: str = "equity_npv",
+    title: Optional[str] = None,
+    bins: int = 20,
+) -> Path:
+    """Emit the NPV-distribution PNG from a collected per-trial NPV array (#657 wire c / #716).
+
+    The public, MC-source-agnostic NPV-distribution emitter: it plots ``trials[npv_metric]``
+    (``equity_npv`` or ``project_npv``) regardless of which Monte-Carlo produced the arrays —
+    the canonical :class:`~analytics.contracts_v14.MonteCarloResult` (LHS + correlation) or any
+    other. matplotlib absence degrades gracefully (path returned, nothing written).
+    """
+    return _npv_distribution_png_from_trials(
+        trials, output_path, npv_metric=npv_metric, title=title, bins=bins
+    )
+
+
+#: Minimum trial count for a stable VaR/CVaR tail — matches the degeneracy floor in
+#: :func:`compute_capital_risk_layer`. Below this the tail is a single-sample coin-flip and
+#: ``calculate_var_cvar`` would index past the array end; fail loud instead.
+_MIN_TRIALS = 20
+
+#: The per-trial metric keys :func:`build_capital_risk_report_from_trials` requires.
+_REQUIRED_TRIAL_KEYS: tuple[str, ...] = (
+    "equity_irr",
+    "project_irr",
+    "equity_npv",
+    "project_npv",
+    "dscr_min",
+    "llcr",
+    "plcr",
+)
+
+
+@dataclass(frozen=True)
+class CapitalRiskReport:
+    """The unified capital-risk output (#657): the three distributional surfaces from ONE MC.
+
+    Assembled by :func:`build_capital_risk_report_from_trials` (and its
+    :func:`build_capital_risk_report_from_mc_result` convenience) so a lender-facing consumer
+    reads one object: the per-metric distributional ``snapshot`` (VaR/CVaR + DSCR
+    covenant-breach, slice 1), the full ``tail_report`` (:class:`TailRiskReport`, slice 2 /
+    #715), and the ``npv_distribution_png`` path (slice 3 / #716). ``scenario`` /
+    ``model_version`` carry the MRM-02 provenance; ``n_trials`` records the MC size.
+
+    Source-agnostic: fed from the per-trial arrays of ANY Monte-Carlo — the canonical
+    :class:`~analytics.contracts_v14.MonteCarloResult` (LHS + Iman-Conover correlation, the
+    real lender MC) is the intended production source.
+    """
+
+    snapshot: Dict[str, Any]
+    tail_report: TailRiskReport
+    npv_distribution_png: Path
+    n_trials: int
+    npv_metric: str
+    scenario: str
+    model_version: str
+
+
+def build_capital_risk_report_from_trials(
+    trials: Mapping[str, Any],
+    output_dir: PathLike[Any] | str,
+    *,
+    risk_config: RiskConfig,
+    scenario: str,
+    model_version: Optional[str] = None,
+    npv_metric: str = "equity_npv",
+    metric_keys: Optional[List[str]] = None,
+    run_cfg: Optional[TailRiskConfig] = None,
+) -> CapitalRiskReport:
+    """Assemble the unified :class:`CapitalRiskReport` from collected per-trial arrays (#657).
+
+    MC-source-agnostic: derives all three distributional surfaces from ONE set of trial
+    arrays — the snapshot (:func:`analytics.sensitivity.tail_risk._build_case_tail_snapshot`),
+    the full :class:`TailRiskReport` (:func:`_tail_report_from_trials`), and the
+    NPV-distribution PNG (:func:`emit_npv_distribution_from_trials`). The intended production
+    source is the canonical :class:`~analytics.contracts_v14.MonteCarloResult` (LHS +
+    Iman-Conover correlation) via :func:`build_capital_risk_report_from_mc_result`.
+
+    ``trials`` must carry the seven canonical per-trial metric keys
+    (:data:`_REQUIRED_TRIAL_KEYS`); a missing key fails loud. Computes no new IRR/NPV (the MC
+    already produced the trials) and touches no committed KPI. matplotlib absence degrades
+    gracefully (the PNG path is returned without writing).
+
+    Args:
+        trials: ``{metric_key: per-trial array}`` (e.g. ``MonteCarloResult.trials``).
+        output_dir: Directory for the NPV-distribution PNG.
+        risk_config: Covenant/target thresholds (source config-first at the call site, e.g.
+            via :func:`_risk_config_from_scenario`).
+        scenario: Scenario label for provenance.
+        model_version: Engine version for provenance; defaults to :func:`engine_version`.
+        npv_metric: Which NPV bucket to plot (``equity_npv`` or ``project_npv``).
+        metric_keys: Snapshot metrics; defaults to :data:`DRIVER_MC_TRIAL_METRICS`.
+        run_cfg: Tail-risk snapshot config; defaults to :class:`TailRiskConfig`.
+
+    Returns:
+        The unified :class:`CapitalRiskReport`.
+    """
+    from analytics.run_manifest import engine_version  # local: avoid import cycle
+
+    missing = [k for k in _REQUIRED_TRIAL_KEYS if k not in trials]
+    if missing:
+        raise KeyError(
+            "capital-risk report needs the canonical per-trial keys; missing: "
+            f"{', '.join(missing)}"
+        )
+    version = model_version if model_version is not None else engine_version()
+    n_trials = int(len(np.asarray(trials["equity_npv"], dtype=float).reshape(-1)))
+    if n_trials < _MIN_TRIALS:
+        # Fail loud rather than crash deep inside VaR/CVaR (an n=1 tail indexes past the
+        # array end) or fabricate a lender number from a coin-flip tail.
+        raise ValueError(
+            f"capital-risk report needs >= {_MIN_TRIALS} trials for a stable VaR/CVaR "
+            f"tail; got {n_trials}"
+        )
+
+    case = build_case_metadata_from_trials(trials, label=scenario)
+    keys = (
+        list(metric_keys) if metric_keys is not None else list(DRIVER_MC_TRIAL_METRICS)
+    )
+    # Snapshot DSCR floor comes from the SAME config-first covenant as the tail_report
+    # (risk_config.min_dscr), so one report never shows two different DSCR floors (CESSPIT).
+    snap_cfg = (
+        run_cfg
+        if run_cfg is not None
+        else TailRiskConfig(dscr_floor=risk_config.min_dscr)
+    )
+    snapshot = _build_case_tail_snapshot(
+        case=case,
+        metric_keys=keys,
+        run_cfg=snap_cfg,
+    )
+    tail_report = _tail_report_from_trials(trials, risk_config)
+    png = emit_npv_distribution_from_trials(
+        trials,
+        Path(output_dir) / f"npv_distribution_{npv_metric}.png",
+        npv_metric=npv_metric,
+        title=f"NPV distribution ({npv_metric}) — {scenario} · v{version}",
+    )
+
+    return CapitalRiskReport(
+        snapshot=snapshot,
+        tail_report=tail_report,
+        npv_distribution_png=png,
+        n_trials=n_trials,
+        npv_metric=npv_metric,
+        scenario=scenario,
+        model_version=version,
+    )
+
+
+def build_capital_risk_report_from_mc_result(
+    result: Any,
+    output_dir: PathLike[Any] | str,
+    *,
+    config_path: Optional[str] = None,
+    risk_config: Optional[RiskConfig] = None,
+    npv_metric: str = "equity_npv",
+    metric_keys: Optional[List[str]] = None,
+    run_cfg: Optional[TailRiskConfig] = None,
+) -> CapitalRiskReport:
+    """Assemble the capital-risk report from a canonical :class:`MonteCarloResult` (#657).
+
+    The production entry: the real lender Monte-Carlo (``analytics.mc.engine`` — LHS +
+    Iman-Conover correlation, reading the scenario's ``monte_carlo.parameters``) produces a
+    :class:`~analytics.contracts_v14.MonteCarloResult` whose ``.trials`` carry the seven
+    canonical per-trial metric keys. This wires those into
+    :func:`build_capital_risk_report_from_trials`. Covenant floors come from ``risk_config``
+    if supplied, else config-first from ``config_path`` (:func:`_risk_config_from_scenario`);
+    one of the two must be given.
+
+    Fails loud on a **toy-fallback-contaminated** result. When a trial's full v14 evaluation
+    raises, the engine (``monte_carlo.allow_toy_fallback: true``, the default) substitutes a
+    FABRICATED toy metric that emits the same seven keys and is stored into ``.trials`` — its
+    off-floor ``dscr_min`` would poison the lender covenant-breach / VaR-CVaR / NPV numbers
+    with no disclosure. A lender-grade report must not be built over fabricated trials, so
+    this refuses when ``metadata['toy_fallback_count'] > 0`` and directs the caller to re-run
+    with ``allow_toy_fallback: false`` (the toy values cannot be surgically removed from the
+    aggregated ``.trials`` arrays post-hoc).
+    """
+    if risk_config is None and config_path is None:
+        raise ValueError(
+            "build_capital_risk_report_from_mc_result needs a risk_config or a config_path "
+            "to source the covenant floors (config-first)"
+        )
+    metadata = getattr(result, "metadata", None)
+    toy = (
+        int(metadata.get("toy_fallback_count", 0))
+        if isinstance(metadata, Mapping)
+        else 0
+    )
+    if toy > 0:
+        raise ValueError(
+            f"MonteCarloResult has {toy} toy-fallback trial(s): a full v14 evaluation failed "
+            "and the engine substituted fabricated KPIs, which would poison the lender "
+            "covenant-breach / VaR-CVaR / NPV numbers. Re-run the MC with "
+            "monte_carlo.allow_toy_fallback: false (so a failed trial raises) before building "
+            "a lender-grade capital-risk report."
+        )
+    rc = (
+        risk_config
+        if risk_config is not None
+        else _risk_config_from_scenario(str(config_path))
+    )
+    scenario = getattr(result, "scenario_name", None) or (
+        Path(config_path).stem if config_path is not None else "monte_carlo"
+    )
+    return build_capital_risk_report_from_trials(
+        result.trials,
+        output_dir,
+        risk_config=rc,
+        scenario=scenario,
+        npv_metric=npv_metric,
+        metric_keys=metric_keys,
+        run_cfg=run_cfg,
+    )
+
+
 __all__ = [
     "CapitalRiskLayer",
+    "CapitalRiskReport",
     "DRIVER_MC_TRIAL_METRICS",
     "compute_capital_risk_layer",
     "run_driver_mc",
@@ -499,4 +782,7 @@ __all__ = [
     "build_case_metadata_from_trials",
     "build_driver_mc_tail_snapshot",
     "build_driver_mc_tail_report",
+    "emit_npv_distribution_from_trials",
+    "build_capital_risk_report_from_trials",
+    "build_capital_risk_report_from_mc_result",
 ]

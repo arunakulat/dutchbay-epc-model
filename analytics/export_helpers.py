@@ -796,6 +796,7 @@ class ChartGenerator:
         npv_values: Iterable[float],
         output_file: Union[PathLike[Any], str],
         bins: int = 20,
+        title: str = "NPV distribution",
     ) -> Path:
         plt = self._get_plt()
         path = self._resolve_path(output_file)
@@ -807,7 +808,9 @@ class ChartGenerator:
         ax.hist(list(npv_values), bins=bins, edgecolor="black", alpha=0.7)
         ax.set_xlabel("NPV")
         ax.set_ylabel("Frequency")
-        ax.set_title("NPV distribution")
+        # `title` carries an optional scenario/version annotation (MRM-02) when the caller
+        # supplies one; defaults to the historical "NPV distribution".
+        ax.set_title(title)
         fig.tight_layout()
         fig.savefig(path, dpi=150)
         plt.close(fig)

@@ -412,3 +412,240 @@ def test_risk_config_from_scenario_is_config_first() -> None:
     rc = _risk_config_from_scenario(LENDER_CONFIG)
     assert 0.0 <= rc.confidence_level <= 1.0
     assert rc.min_dscr > 0.0 and rc.min_llcr > 0.0 and rc.min_plcr > 0.0
+
+
+# ---------------------------------------------------------------------------
+# NPV-distribution PNG + unified capital-risk report from the CANONICAL MC
+# (#657 wire c / #716) — MC-source-agnostic, fed from MonteCarloResult.trials
+# ---------------------------------------------------------------------------
+
+_RC = None
+
+
+def _risk_cfg():
+    from analytics.capital_risk_layer_v14 import _risk_config_from_scenario
+
+    return _risk_config_from_scenario(LENDER_CONFIG)
+
+
+def _synthetic_trials(n: int = 60, *, seed: int = 0) -> dict:
+    # per-trial arrays with the seven canonical keys; LLCR/PLCR safely above the 1.0 floor
+    # and DSCR ~ at the 1.30 sculpt floor (so the no-fabricated-breach path is exercised).
+    rng = np.random.default_rng(seed)
+    return {
+        "equity_irr": rng.normal(-0.048, 0.01, n),
+        "project_irr": rng.normal(0.027, 0.01, n),
+        "equity_npv": rng.normal(-65e6, 5e6, n),
+        "project_npv": rng.normal(-48e6, 5e6, n),
+        "dscr_min": np.full(n, 1.30),
+        "llcr": rng.normal(1.30, 0.002, n),
+        "plcr": rng.normal(1.35, 0.002, n),
+    }
+
+
+def test_emit_npv_distribution_from_trials_writes_png(tmp_path) -> None:
+    pytest.importorskip("matplotlib")
+    from analytics.capital_risk_layer_v14 import emit_npv_distribution_from_trials
+
+    out = tmp_path / "npv.png"
+    p = emit_npv_distribution_from_trials(
+        _synthetic_trials(), out, npv_metric="equity_npv"
+    )
+    assert p == out and p.exists() and p.stat().st_size > 0
+
+
+def test_emit_npv_distribution_degrades_without_matplotlib(
+    tmp_path, monkeypatch
+) -> None:
+    from analytics import export_helpers
+    from analytics.capital_risk_layer_v14 import emit_npv_distribution_from_trials
+
+    monkeypatch.setattr(export_helpers.ChartGenerator, "_get_plt", lambda self: None)
+    out = tmp_path / "npv.png"
+    p = emit_npv_distribution_from_trials(_synthetic_trials(), out)
+    assert p == out and not p.exists()  # degraded gracefully — no file written
+
+
+def test_emit_npv_distribution_rejects_unknown_metric(tmp_path) -> None:
+    from analytics.capital_risk_layer_v14 import emit_npv_distribution_from_trials
+
+    with pytest.raises(ValueError, match="equity_npv.*project_npv"):
+        emit_npv_distribution_from_trials(
+            _synthetic_trials(), tmp_path / "x.png", npv_metric="made_up"
+        )
+
+
+def test_build_from_trials_assembles_all_three_surfaces(tmp_path) -> None:
+    pytest.importorskip("matplotlib")
+    from analytics.capital_risk_layer_v14 import (
+        DRIVER_MC_TRIAL_METRICS,
+        CapitalRiskReport,
+        build_capital_risk_report_from_trials,
+    )
+    from analytics.core.risk_metrics import TailRiskReport
+
+    rep = build_capital_risk_report_from_trials(
+        _synthetic_trials(60), tmp_path, risk_config=_risk_cfg(), scenario="lender"
+    )
+    assert isinstance(rep, CapitalRiskReport)
+    assert {r["metric"] for r in rep.snapshot["rows"]} == set(DRIVER_MC_TRIAL_METRICS)
+    assert isinstance(rep.tail_report, TailRiskReport)
+    assert (
+        rep.npv_distribution_png.exists()
+        and rep.npv_distribution_png.stat().st_size > 0
+    )
+    assert rep.scenario == "lender" and rep.model_version and rep.n_trials == 60
+
+
+def test_build_from_trials_fails_loud_on_missing_key(tmp_path) -> None:
+    from analytics.capital_risk_layer_v14 import build_capital_risk_report_from_trials
+
+    trials = _synthetic_trials()
+    del trials["llcr"]
+    with pytest.raises(KeyError, match="llcr"):
+        build_capital_risk_report_from_trials(
+            trials, tmp_path, risk_config=_risk_cfg(), scenario="x"
+        )
+
+
+def test_build_from_trials_no_fabricated_breach(tmp_path) -> None:
+    # dscr pinned at the 1.30 floor -> 0.0 breach (the #725/#657 invariant), and the
+    # config-first LLCR/PLCR non-binding 1.0 floor (the #715 fix) -> 0.0 (llcr ~1.30 > 1.0).
+    from analytics.capital_risk_layer_v14 import build_capital_risk_report_from_trials
+
+    rep = build_capital_risk_report_from_trials(
+        _synthetic_trials(60), tmp_path, risk_config=_risk_cfg(), scenario="x"
+    )
+    cb = rep.tail_report.covenant_breaches
+    assert cb.dscr_breach_probability == pytest.approx(0.0)
+    assert cb.llcr_breach_probability == pytest.approx(0.0)
+    assert cb.plcr_breach_probability == pytest.approx(0.0)
+
+
+def test_build_from_trials_degrades_png_without_matplotlib(
+    tmp_path, monkeypatch
+) -> None:
+    from analytics import export_helpers
+    from analytics.capital_risk_layer_v14 import build_capital_risk_report_from_trials
+
+    monkeypatch.setattr(export_helpers.ChartGenerator, "_get_plt", lambda self: None)
+    rep = build_capital_risk_report_from_trials(
+        _synthetic_trials(), tmp_path, risk_config=_risk_cfg(), scenario="x"
+    )
+    assert rep.snapshot["rows"] and rep.tail_report is not None
+    assert not rep.npv_distribution_png.exists()  # PNG degraded, report still built
+
+
+def test_from_mc_result_needs_risk_config_or_config_path(tmp_path) -> None:
+    from analytics.capital_risk_layer_v14 import (
+        build_capital_risk_report_from_mc_result,
+    )
+    from analytics.contracts_v14 import MonteCarloResult
+
+    result = MonteCarloResult(
+        trials={k: list(v) for k, v in _synthetic_trials().items()}
+    )
+    with pytest.raises(ValueError, match="risk_config or a config_path"):
+        build_capital_risk_report_from_mc_result(result, tmp_path)
+
+
+def test_from_mc_result_from_synthetic_result(tmp_path) -> None:
+    pytest.importorskip("matplotlib")
+    from analytics.capital_risk_layer_v14 import (
+        build_capital_risk_report_from_mc_result,
+    )
+    from analytics.contracts_v14 import MonteCarloResult
+
+    result = MonteCarloResult(
+        trials={k: list(v) for k, v in _synthetic_trials(50).items()}
+    )
+    rep = build_capital_risk_report_from_mc_result(
+        result, tmp_path, risk_config=_risk_cfg()
+    )
+    assert rep.n_trials == 50 and rep.npv_distribution_png.exists()
+    assert rep.tail_report.covenant_breaches.dscr_breach_probability == pytest.approx(
+        0.0
+    )
+
+
+@pytest.mark.slow
+def test_canonical_mc_end_to_end_feeds_capital_risk_report(tmp_path) -> None:
+    # The production path: the CANONICAL MonteCarloEngine (LHS + Iman-Conover correlation,
+    # reading the scenario's monte_carlo.parameters) -> MonteCarloResult.trials -> the unified
+    # capital-risk report. Proves the driver spec is fed from config, not a toy Gaussian MC.
+    pytest.importorskip("matplotlib")
+    from omegaconf import OmegaConf
+
+    from analytics.capital_risk_layer_v14 import (
+        DRIVER_MC_TRIAL_METRICS,
+        build_capital_risk_report_from_mc_result,
+    )
+    from analytics.contracts_v14 import MonteCarloResult
+    from analytics.mc.engine import MonteCarloEngine
+
+    cfg = OmegaConf.load(LENDER_CONFIG)
+    result = MonteCarloEngine(cfg, seed=42).run(n_trials=30)
+    assert isinstance(result, MonteCarloResult)
+    assert set(DRIVER_MC_TRIAL_METRICS).issubset(result.trials)
+    # the healthy lender path uses no toy fallbacks — lock that so a fully-toy regression
+    # (fabricated KPIs with the same 7 keys) can't pass this test silently (#716 F1/F6).
+    assert result.metadata.get("toy_fallback_count", 0) == 0
+
+    rep = build_capital_risk_report_from_mc_result(
+        result, tmp_path, config_path=LENDER_CONFIG
+    )
+    assert rep.n_trials == 30 and rep.npv_distribution_png.exists()
+    # the #725/#657 + #715 no-fabricated-breach invariants hold on the canonical MC too.
+    cb = rep.tail_report.covenant_breaches
+    assert cb.dscr_breach_probability == pytest.approx(0.0)
+    assert cb.llcr_breach_probability == pytest.approx(0.0)
+
+
+def test_build_from_trials_requires_min_trials(tmp_path) -> None:
+    # F2/F3: an n=1 (or n=0) MC must fail loud, not crash inside VaR/CVaR with IndexError.
+    from analytics.capital_risk_layer_v14 import build_capital_risk_report_from_trials
+
+    for n in (0, 1, 5):
+        trials = {k: list(v)[:n] for k, v in _synthetic_trials(60).items()}
+        with pytest.raises(ValueError, match="stable VaR/CVaR tail"):
+            build_capital_risk_report_from_trials(
+                trials, tmp_path, risk_config=_risk_cfg(), scenario="x"
+            )
+
+
+def test_from_mc_result_refuses_toy_fallback_contamination(tmp_path) -> None:
+    # F1: a MonteCarloResult carrying toy-fallback trials (fabricated KPIs) must be refused,
+    # not silently fed into the lender covenant-breach / VaR-CVaR / NPV numbers.
+    from analytics.capital_risk_layer_v14 import (
+        build_capital_risk_report_from_mc_result,
+    )
+    from analytics.contracts_v14 import MonteCarloResult
+
+    result = MonteCarloResult(
+        trials={k: list(v) for k, v in _synthetic_trials(50).items()},
+        metadata={"toy_fallback_count": 3},
+    )
+    with pytest.raises(ValueError, match="toy-fallback"):
+        build_capital_risk_report_from_mc_result(
+            result, tmp_path, risk_config=_risk_cfg()
+        )
+
+
+def test_snapshot_dscr_floor_matches_config_first_covenant(tmp_path) -> None:
+    # F7: the snapshot (slice 1) DSCR floor must be the config-first covenant, not a hardcoded
+    # 1.30 default — one report never shows two different DSCR floors.
+    from analytics.capital_risk_layer_v14 import build_capital_risk_report_from_trials
+    from analytics.core.risk_metrics import RiskConfig
+
+    rc = RiskConfig(
+        confidence_level=0.95,
+        target_return=0.0,
+        min_dscr=1.20,
+        min_llcr=1.0,
+        min_plcr=1.0,
+    )
+    rep = build_capital_risk_report_from_trials(
+        _synthetic_trials(60), tmp_path, risk_config=rc, scenario="x"
+    )
+    dscr_row = {r["metric"]: r for r in rep.snapshot["rows"]}["dscr_min"]
+    assert dscr_row["dscr_floor"] == pytest.approx(1.20)
