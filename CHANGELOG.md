@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **`docs/STANDARDS_WATCH.md` — tracked-deferral register for external-standard re-checks (#620, docs-only, KPI-neutral).**
+  Records the two remaining #620 items as owned, dated deferrals rather than losing them in the
+  issue tracker: (1) the **IFC Sustainability Framework Phase I** re-check (~Q4 2026 — the 2012
+  Performance Standards remain in force; do not pre-emptively rewrite the ESIA/safeguards
+  citations), and (2) the **6-month DSRA** business confirmation against the intended CEB-PPA
+  lender term sheet (the engine funds `reserves.dsra_months: 6`; confirm before financial close,
+  KPI-moving if the lender differs). The already-landed **ATB-vintage** citation refresh (#620a,
+  commit `0f24863`) is recorded as DONE for a complete watch list. No engine code touched; no
+  computed KPI changes.
 - **Live FX-sensitivity CLI surface + legacy `fx.fx_shock` base-key retirement (#659, analysis-only, KPI-neutral).**
   Closes the residual FX-reporting scope of #659 in two parts:
   - **New `scripts/run_fx_sensitivity.py`** — a thin argparse CLI (the FX analogue of
