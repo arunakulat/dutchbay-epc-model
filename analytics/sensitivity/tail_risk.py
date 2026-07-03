@@ -56,6 +56,12 @@ class TailRiskConfig:
     require_trials: bool = True
 
 
+# Module-level singleton: shared read-only default built once at import time
+# (TailRiskConfig is frozen) — behaviour-identical to the old argument-default
+# `= TailRiskConfig()` but B008-compliant (#753).
+_DEFAULT_TAIL_RISK_CONFIG = TailRiskConfig()
+
+
 def _percentile(arr: np.ndarray, p: int) -> float:
     return float(np.percentile(arr, int(p)))
 
@@ -88,7 +94,7 @@ def enrich_suite_with_tail_risk(
     *,
     suite: SensitivitySuite,
     base_config: Mapping[str, Any],
-    run_cfg: TailRiskConfig = TailRiskConfig(),
+    run_cfg: TailRiskConfig = _DEFAULT_TAIL_RISK_CONFIG,
 ) -> SensitivitySuite:
     """Enrich ``suite.metadata`` with lender-grade tail-risk blocks.
 

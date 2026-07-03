@@ -22,17 +22,12 @@ extend-exclude = [
 # ruff did not yet cover. B904 (raise ... from) is clean and gated repo-wide.
 select = ["E", "F", "B"]
 
-# Ignore long lines and the Black/E203 mismatch. B905 is now resolved and gated
-# (#752); B008 is a real bugbear check DEFERRED pending a per-site review (not
-# disabled on principle) — see the tracked follow-up below.
+# Ignore only long lines and the Black/E203 mismatch. Every flake8-bugbear family
+# surfaced when B was enabled (#758) is now resolved and gated: B904 raise-from
+# (#758), B905 zip strict= (#752), B008 call-in-arg-default (#753).
 ignore = [
   "E203",
   "E501",
-  # B008 — function call in argument defaults (config-dataclass factories, e.g.
-  # SensitivityRunConfig()). The safe rewrite (=None + build inside) is
-  # KPI-neutral only after confirming each config is immutable. Tracked in
-  # #753 (resolve, then un-ignore).
-  "B008",
 ]
 
 # Per-file exceptions for intentional patterns

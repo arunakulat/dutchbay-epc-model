@@ -29,6 +29,17 @@ All notable changes to this project will be documented here.
   `strict=False` because they are legitimately unequal-length (an anticipated, separately-reported mismatch
   state, and a deliberate adjacent-pair `zip(ws, ws[1:])`). No committed KPI changes — the all-scenarios KPI
   oracle is byte-identical (no committed scenario ever triggers a `strict=True` raise).
+- **flake8-bugbear B008 resolved and gated: config-dataclass argument defaults use module-level singletons (#753, KPI-neutral).**
+  Follow-up to the B-gate (#758): B008 is removed from the `ruff.toml` ignore list and enforced repo-wide.
+  All 11 sites passed a frozen-config factory (`CovenantSpec()`, `SensitivityRunConfig()`,
+  `DscrSensitivityConfig()`, `TaxSensitivityConfig()`, `TailRiskConfig()`, `AEPTornadoConfig()`) as an
+  argument default. Each is replaced by a module-level singleton (`_DEFAULT_*`) built once at import and
+  shared read-only. All six config classes were confirmed `@dataclass(frozen=True)` by a multi-agent
+  analyze-then-adversarially-verify pass, so the singleton is **behaviour-identical** to the old argument
+  default (both share one instance) — B008-compliant with no signature/type change and no `Optional`. Each
+  singleton is defined once per module (`sensitivity/{dscr,tax}.py` and `mc/exports.py`, `wind/aep_tornado.py`
+  reuse one singleton across their two sites). No committed KPI changes — the all-scenarios KPI oracle is
+  byte-identical.
 
 ### Fixed
 - **DSCR covenant-breach probability: floor-pin FP fabrication removed from four sibling paths (#725, from the #657 review).**

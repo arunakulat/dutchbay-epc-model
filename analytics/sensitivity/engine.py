@@ -72,6 +72,13 @@ class SensitivityRunConfig:
     tail_risk: TailRiskConfig = TailRiskConfig()
 
 
+# Module-level singleton: the default run config is built once at import time and
+# shared read-only (SensitivityRunConfig is frozen), which is behaviour-identical
+# to the old `run_cfg=SensitivityRunConfig()` argument default but B008-compliant
+# (#753). Reused by every function in this module that defaults run_cfg.
+_DEFAULT_SENSITIVITY_RUN_CONFIG = SensitivityRunConfig()
+
+
 def _deepcopy_cfg(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     # Keep config immutable for callers
     return copy.deepcopy(dict(cfg))
@@ -153,7 +160,7 @@ def build_one_way_sensitivity_suite(
     base_config_path: str = "<in-memory>",
     parameter: ParameterRangeConfig,
     metric_key: str,
-    run_cfg: SensitivityRunConfig = SensitivityRunConfig(),
+    run_cfg: SensitivityRunConfig = _DEFAULT_SENSITIVITY_RUN_CONFIG,
 ) -> SensitivitySuite:
     """
     Build a one-way SensitivitySuite for a single parameter and a single metric.
@@ -240,7 +247,7 @@ def run_sensitivity_analysis(
     base_config_path: str = "<in-memory>",
     parameters: Sequence[ParameterRangeConfig],
     metric_keys: Sequence[str],
-    run_cfg: SensitivityRunConfig = SensitivityRunConfig(),
+    run_cfg: SensitivityRunConfig = _DEFAULT_SENSITIVITY_RUN_CONFIG,
 ) -> SensitivitySuite:
     """
     Multi-parameter, multi-metric orchestration.

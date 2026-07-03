@@ -30,12 +30,19 @@ class TaxSensitivityConfig:
     metric_key: str = "project_irr"
 
 
+# Module-level singletons: shared read-only defaults built once at import time
+# (both configs are frozen) — behaviour-identical to the old argument-default
+# `= X()` calls but B008-compliant (#753).
+_DEFAULT_TAX_SENSITIVITY_CONFIG = TaxSensitivityConfig()
+_DEFAULT_SENSITIVITY_RUN_CONFIG = SensitivityRunConfig()
+
+
 def run_tax_one_way(
     *,
     base_config: Mapping[str, Any],
     parameter: ParameterRangeConfig,
-    cfg: TaxSensitivityConfig = TaxSensitivityConfig(),
-    run_cfg: SensitivityRunConfig = SensitivityRunConfig(),
+    cfg: TaxSensitivityConfig = _DEFAULT_TAX_SENSITIVITY_CONFIG,
+    run_cfg: SensitivityRunConfig = _DEFAULT_SENSITIVITY_RUN_CONFIG,
 ) -> SensitivitySuite:
     """
     Convenience wrapper: one-way sensitivity for a tax parameter on a chosen metric.

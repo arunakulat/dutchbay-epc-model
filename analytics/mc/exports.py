@@ -44,6 +44,12 @@ class CovenantSpec:
     dscr_floor: float = 1.30
 
 
+# Module-level singleton: the default covenant is built once at import time and
+# shared read-only (CovenantSpec is frozen), which is behaviour-identical to the
+# old `covenant=CovenantSpec()` argument default but B008-compliant (#753).
+_DEFAULT_COVENANT_SPEC = CovenantSpec()
+
+
 def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
     """
     Pull a raw per-trial array for metric key.
@@ -107,7 +113,7 @@ def worst_year_dscr_p95(dscr_min_by_trial: np.ndarray) -> float:
 def build_lender_risk_table(
     result: MonteCarloResult,
     *,
-    covenant: CovenantSpec = CovenantSpec(),
+    covenant: CovenantSpec = _DEFAULT_COVENANT_SPEC,
     metric_map: Optional[Mapping[str, str]] = None,
 ) -> "pd.DataFrame":
     """
@@ -223,7 +229,7 @@ def build_lender_risk_table(
 def build_casper_risk_blocks(
     result: MonteCarloResult,
     *,
-    covenant: CovenantSpec = CovenantSpec(),
+    covenant: CovenantSpec = _DEFAULT_COVENANT_SPEC,
     metric_map: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """
