@@ -4,6 +4,8 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.3.0 - 2026-07-03
+
 ### Added
 - **MC contract cleanup: honored `monte_carlo.sampling_method` alias + populated `MonteCarloRunMeta` provenance stamp (#648, #649, metadata-only, KPI-neutral).**
   Two CCCDIR follow-ups from the Sobol QMC (#589) Fable review, both pure metadata:

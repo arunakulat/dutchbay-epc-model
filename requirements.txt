@@ -143,6 +143,7 @@ pyparsing==3.2.5
 pyproject-api==1.10.0
 pytest==9.0.3
 pytest-cov==7.0.0
+pytest-split==0.11.0
 pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
 python-decouple==3.8
