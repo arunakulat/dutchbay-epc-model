@@ -14,6 +14,21 @@ All notable changes to this project will be documented here.
   KPI-moving if the lender differs). The already-landed **ATB-vintage** citation refresh (#620a,
   commit `0f24863`) is recorded as DONE for a complete watch list. No engine code touched; no
   computed KPI changes.
+- **ADR: P50-haircut layering ruled intentional — builder-policy 5% vs kernel-identity 0% (#653, docs-only, KPI-neutral).**
+  New `docs/P50_HAIRCUT_LAYERING_DECISION.md` codifies the user ruling on the #587 Fable
+  follow-up: the config/builder layer
+  (`analytics.wind.aep_summary_builder._uncertainty_from_config`) deliberately defaults a silent
+  `p50_haircut_pct` to the recommended `RECOMMENDED_P50_HAIRCUT_PCT` (5.0%), while the exceedance
+  KERNEL (`wind_resource.bankable_aep.exceedance_levels`, and its solar twin) keeps a `0.0`
+  identity default and NEVER embeds the policy in the math. The `wind_resource.energy_calculator`
+  timeseries-diagnostic path stays raw-modelled (kernel-identity, hard-pinned), surfacing rather
+  than silently applying any declared haircut. Records the two layers' distinct roles, why the
+  kernel must not become a policy layer (CESSPIT — no policy in the math, no double-apply), the
+  wind-only scope (solar exceedance intentionally 0.0), and the audit trail (#587 wired the
+  builder default, #618 shared the policy-free sigma parser, #654 codified the flagship 2.0%
+  calibration note). Resolves the prior "pending #653" in-code pins. **No haircut value or
+  default changes anywhere** — every committed scenario already sets its haircut explicitly, so
+  all committed-scenario KPIs are byte-identical. Closes #653.
 - **Live FX-sensitivity CLI surface + legacy `fx.fx_shock` base-key retirement (#659, analysis-only, KPI-neutral).**
   Closes the residual FX-reporting scope of #659 in two parts:
   - **New `scripts/run_fx_sensitivity.py`** — a thin argparse CLI (the FX analogue of
