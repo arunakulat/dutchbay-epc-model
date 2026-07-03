@@ -20,7 +20,9 @@ full per-trial metric arrays (``collect_trials=True``), and
 VaR/CVaR + DSCR covenant-breach path in :mod:`analytics.sensitivity.tail_risk` — a
 report-layer surface that the deterministic tornado cannot produce. The trial-array
 metadata packaging (:func:`build_case_metadata_from_trials`) is the shared prerequisite
-for the two follow-up wires (``tail_risk_report`` render, NPV-distribution PNG).
+for the follow-up wires. :func:`build_driver_mc_tail_report` (wire b, #715) renders the
+full canonical :class:`~analytics.core.risk_metrics.TailRiskReport` from the same arrays
+(the NPV-distribution PNG wire, #716, is the remaining slice).
 
 Context:
     Sprint 11 - Issue #33 (capital_risk_layer_v14 facade).
@@ -35,7 +37,12 @@ from typing import Any, Dict, List, Mapping, Optional
 import numpy as np
 
 from analytics.core.covenant_breach import prob_breach
-from analytics.core.risk_metrics import RiskConfig, TailRiskAnalyzer, VaRCVaRResult
+from analytics.core.risk_metrics import (
+    RiskConfig,
+    TailRiskAnalyzer,
+    TailRiskReport,
+    VaRCVaRResult,
+)
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.sensitivity.tail_risk import TailRiskConfig, _build_case_tail_snapshot
 
@@ -371,6 +378,118 @@ def build_driver_mc_tail_snapshot(
     )
 
 
+def _risk_config_from_scenario(config_path: str) -> RiskConfig:
+    """Build a :class:`RiskConfig` from a scenario config (config-first, CESSPIT).
+
+    Mirrors :func:`analytics.pipeline_analytics_v14._calculate_risk_analysis` exactly:
+    ``confidence_level`` from ``risk.confidence_level`` (default 0.95), ``target_return``
+    from ``returns.equity_discount_rate`` (default 0.0), ``min_dscr`` from
+    ``constraints.min_dscr_covenant`` (default 1.0), and ``min_{llcr,plcr}`` from
+    ``constraints.min_{llcr,plcr}_covenant`` when the scenario declares them, else the
+    NON-BINDING coverage-of-one floor (1.0, as in :func:`_analyzer`).
+
+    Note (the #715 review lesson): LLCR/PLCR do NOT fall back to the DSCR covenant. The
+    deterministic risk block (:func:`analytics.pipeline_analytics_v14._calculate_risk_analysis`)
+    borrows the DSCR floor for its LLCR/PLCR fields, but it never calls
+    ``covenant_breach_probability`` — those fields are inert there. This function is the FIRST
+    consumer that actually breaches LLCR/PLCR against their floor, so borrowing the (typically
+    higher) DSCR covenant would FABRICATE a lender covenant-breach against a floor the scenario
+    never declared. A scenario wanting a real LLCR/PLCR covenant declares it (or passes an
+    explicit ``risk_config``); an undeclared covenant flags only genuine sub-1.0 coverage.
+    """
+    from analytics.scenario_loader import (  # local: avoid import cycle
+        load_scenario_config,
+    )
+
+    cfg = load_scenario_config(config_path)
+    constraints = cfg.get("constraints", {})
+    dscr_cov = float(constraints.get("min_dscr_covenant", 1.0))
+    return RiskConfig(
+        confidence_level=float(cfg.get("risk", {}).get("confidence_level", 0.95)),
+        target_return=float(cfg.get("returns", {}).get("equity_discount_rate", 0.0)),
+        min_dscr=dscr_cov,
+        min_llcr=float(constraints.get("min_llcr_covenant", 1.0)),
+        min_plcr=float(constraints.get("min_plcr_covenant", 1.0)),
+    )
+
+
+def build_driver_mc_tail_report(
+    config_path: str,
+    *,
+    drivers: Mapping[str, Mapping[str, float]],
+    n_samples: int = 500,
+    seed: int = 42,
+    risk_config: Optional[RiskConfig] = None,
+) -> TailRiskReport:
+    """Run the driver MC and render the full lender tail-risk report (#657 wire b, #715).
+
+    Wires :meth:`analytics.core.risk_metrics.TailRiskAnalyzer.tail_risk_report` onto the
+    per-trial arrays collected by :func:`run_driver_mc` with ``collect_trials=True`` — the
+    MC-distribution path the deterministic risk block in
+    :func:`analytics.pipeline_analytics_v14._calculate_risk_analysis` could not produce (it
+    had only a single scenario's CFADS). It returns the canonical :class:`TailRiskReport`
+    contract: per-metric VaR/CVaR + downside summaries for equity/project IRR & NPV, the
+    covenant-breach probabilities, and the probability equity IRR is below the target return.
+
+    Shape bridge (the #657 slice-2 blocker). ``tail_risk_report`` takes the four return
+    metrics as 1-D MC distributions and the three covenant metrics as ``(n_scenarios,
+    n_years)`` time series over which
+    :meth:`~analytics.core.risk_metrics.TailRiskAnalyzer.covenant_breach_probability` takes a
+    per-scenario minimum (``np.min(..., axis=1)``). ``run_driver_mc`` collects the covenants
+    as per-trial SCALARS (``dscr_min``/``llcr``/``plcr``), so each is reshaped to
+    ``(n_trials, 1)`` — a faithful, not lossy, adaptation:
+
+    * ``dscr_min`` is already the per-trial MINIMUM DSCR, i.e. exactly what the axis-1 min of
+      the full per-year DSCR series would return, so the single-column reshape yields the
+      identical breach probability without collecting the (unused-elsewhere) per-year matrix;
+    * ``llcr``/``plcr`` are loan-/project-life ratios — scenario scalars with no per-year
+      series — so the per-trial value IS the covenant value and the axis-1 min is a no-op.
+
+    The four return metrics (``equity_irr``/``project_irr``/``equity_npv``/``project_npv``)
+    are passed as the collected 1-D per-trial arrays directly. Additive / default-off:
+    computes no new IRR/NPV (all evaluation flows through ``evaluate_with_overrides``) and
+    touches no committed-scenario KPI.
+
+    Args:
+        config_path: Path to the v14 scenario config.
+        drivers: ``{dotted_param_path: {"mean": float, "std": float}}`` driver spec.
+        n_samples: Monte-Carlo sample count.
+        seed: RNG seed (reproducible).
+        risk_config: Covenant/target thresholds; defaults to the config-sourced
+            :func:`_risk_config_from_scenario` (config-first) when omitted.
+
+    Returns:
+        The :class:`TailRiskReport` for this driver MC.
+    """
+    trials = run_driver_mc(
+        config_path,
+        drivers=drivers,
+        n_samples=n_samples,
+        seed=seed,
+        collect_trials=True,
+    )
+    rc = (
+        risk_config
+        if risk_config is not None
+        else _risk_config_from_scenario(config_path)
+    )
+    analyzer = TailRiskAnalyzer(config=rc)
+
+    def _covenant_column(key: str) -> np.ndarray:
+        # per-trial scalar (n_trials,) -> (n_trials, 1); axis-1 min is then a no-op.
+        return np.asarray(trials[key], dtype=float).reshape(-1, 1)
+
+    return analyzer.tail_risk_report(
+        equity_irr=np.asarray(trials["equity_irr"], dtype=float),
+        project_irr=np.asarray(trials["project_irr"], dtype=float),
+        equity_npv=np.asarray(trials["equity_npv"], dtype=float),
+        project_npv=np.asarray(trials["project_npv"], dtype=float),
+        dscr_results=_covenant_column("dscr_min"),
+        llcr_results=_covenant_column("llcr"),
+        plcr_results=_covenant_column("plcr"),
+    )
+
+
 __all__ = [
     "CapitalRiskLayer",
     "DRIVER_MC_TRIAL_METRICS",
@@ -379,4 +498,5 @@ __all__ = [
     "run_capital_risk_layer",
     "build_case_metadata_from_trials",
     "build_driver_mc_tail_snapshot",
+    "build_driver_mc_tail_report",
 ]
