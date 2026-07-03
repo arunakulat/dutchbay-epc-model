@@ -31,15 +31,27 @@ dependencies = [
 
 [project.optional-dependencies]
 # The single dev/CI toolchain. `pip install -e ".[dev]"` provides every gate CI runs
-# (ruff/black/isort/flake8/pylint, mypy + the type stubs, bandit + pip-audit, pytest +
+# (ruff/black/isort, mypy + the type stubs, bandit + pip-audit, pytest +
 # xdist/cov/html/timeout, hypothesis, httpx TestClient, libcst, build). Supersedes the
 # retired requirements_dev.txt — pyproject is the single abstract source of truth.
+#
+# Lint-stack consolidation (#610): flake8 was RETIRED — its rule families are all in
+# ruff (E/W pycodestyle, F pyflakes, B flake8-bugbear, C90 mccabe) and it was only ever
+# an ADVISORY (continue-on-error) FX-scoped step, never a mandatory gate, so dropping it
+# loses no enforced check. black (format) and isort (import order) are KEPT: ruff's own
+# isort (I) cannot reproduce isort profile=black byte-for-byte on this tree (isort keeps
+# an aliased `from X import a as b` on its own line while merging non-aliased siblings —
+# 3 files diverge irreducibly; force-single-line/force-sort-within-sections are far worse
+# at 433/163 diffs), so per the #610 guardrail isort-the-tool stays. pylint stays OUT of
+# every gate too: `pylint --errors-only` over the engine is a wall of false positives on
+# the CASPER optional-dependency (`_require_*` guarded imports) and dynamic-`__all__`
+# re-export patterns (E0603/E0611/E0401/E1133), so a scoped pylint pass is not viable here.
+# Enabling ruff's B (flake8-bugbear) rule set as a mandatory gate is a separate follow-up:
+# the tree is not yet B-clean (~18 B904 `raise ... from` findings that need code fixes).
 dev = [
   "ruff>=0.5",
   "black>=24.0",
   "isort>=5.13",
-  "flake8>=7.0",
-  "pylint>=3.0",
   "mypy>=1.18",
   "mypy-extensions>=1.1",
   "pandas-stubs",        # the mypy gate is only faithful WITH these stubs (else falsely clean)

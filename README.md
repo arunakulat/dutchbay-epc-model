@@ -146,8 +146,8 @@ mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools
   run_full_pipeline_v14.py run_scenario_analytics_v14.py \
   dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 
-# Linting
-flake8 analytics/ finance/
+# Linting (ruff replaced flake8 in the consolidated toolchain, #610)
+ruff check analytics/ finance/
 black --check analytics/ finance/
 isort --check-only analytics/ finance/
 
@@ -271,7 +271,7 @@ build_executive_workbook(
 1. Create feature branch: `git checkout -b feature/your-feature`
 2. Make changes following "Go with the Flow" rules
 3. Run tests: `pytest tests/`
-4. Run quality checks: `mypy`, `flake8`, `black`
+4. Run quality checks: `ruff`, `black`, `isort`, `mypy`
 5. Commit: `git commit -am "feat: Your feature description"`
 6. Push: `git push origin feature/your-feature`
 7. Create Pull Request
