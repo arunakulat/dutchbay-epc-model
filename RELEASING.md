@@ -49,7 +49,15 @@ python -c "import importlib.metadata as m; print('built', m.version('dutchbay-ep
 
 ## 4) Update the changelog
 
-Move the `## [Unreleased]` items in `CHANGELOG.md` under a new dated heading:
+First fold any pending per-PR fragments into `[Unreleased]` (routine entries live in
+`changelog.d/`, not in `CHANGELOG.md` — see `changelog.d/README.md`):
+
+```bash
+python scripts/compile_changelog.py --check   # confirm what's pending
+python scripts/compile_changelog.py           # fold changelog.d/*.md into [Unreleased], delete them
+```
+
+Then move the `## [Unreleased]` items in `CHANGELOG.md` under a new dated heading:
 `## v<version> - YYYY-MM-DD`.
 
 ## 5) Commit on the branch, open the PR, merge
