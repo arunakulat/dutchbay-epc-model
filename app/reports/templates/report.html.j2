@@ -133,6 +133,36 @@
     </ul>
   </section>
 
+  {# 3b. IC red flags — #706. Rendered only when the context carries the block; every
+     flag is presence-gated surfacing of engine-published signals (no recomputation). #}
+  {% if ctx.ic_summary %}
+  <section class="page">
+    <h2>Investment Committee — Red Flags</h2>
+    {% if ctx.ic_summary.red_flags %}
+    <table>
+      <thead><tr><th>Severity</th><th>Flag</th><th>Source</th></tr></thead>
+      <tbody>
+        {% for f in ctx.ic_summary.red_flags %}
+        <tr>
+          <td><span class="badge sev-{{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td>{{ f.detail }}</td>
+          <td class="muted">{{ f.source }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.ic_summary.cp_outstanding > 0 %}
+    <p>Conditions precedent outstanding: <strong>{{ ctx.ic_summary.cp_outstanding }}</strong>
+      &mdash; first drawdown is gated until these are satisfied or waived.</p>
+    {% endif %}
+    {% else %}
+    <p><span class="badge pass">No red flags</span> &mdash; no covenant breach, negative
+      sponsor return, below-hurdle project IRR, outstanding condition precedent, or
+      readiness RED was surfaced for this run.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4. Key financial indicators #}
   <section class="page">
     <h2>Key Financial Indicators</h2>

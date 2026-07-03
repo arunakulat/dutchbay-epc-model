@@ -20,6 +20,11 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.conditions_precedent import (
+    ConditionsPrecedentError,
+    CpReport,
+    build_cp_report,
+)
 from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
@@ -168,6 +173,51 @@ class Verdict(BaseModel):
     dscr_covenant_met: bool
     balloon_within_limit: bool
     notes: List[str] = Field(default_factory=list)
+
+
+class RedFlag(BaseModel):
+    """One explicit negative signal surfaced (not recomputed) from the run (#706).
+
+    ``kind`` is the machine key (covenant_breach | negative_equity | below_hurdle |
+    cp_outstanding | readiness_red); ``severity`` is presentation triage only —
+    ``high`` for value/covenant signals the engine published, ``medium`` for
+    execution-gate signals from the scenario registers — not a new risk model.
+    ``source`` names where the signal was read from, for the audit trail.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    severity: str  # medium | high — drives the badge class in the template
+    detail: str
+    source: str
+
+
+class IcSummaryBlock(BaseModel):
+    """IC executive summary — the verdict plus every explicit red flag (#706).
+
+    A pure read-only projection for the Investment Committee: the headline verdict
+    (single source: :class:`Verdict` — never re-derived here), the explicit
+    red-flag list, and the two execution-gate rollups (outstanding conditions
+    precedent, development-readiness reds). ``is_clean`` is True only when no red
+    flag fired. Every flag is presence-gated: an ABSENT KPI or register never
+    fabricates a flag (an IC pack must not report a breach it has no evidence for).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    headline: str
+    red_flags: List[RedFlag] = Field(default_factory=list)
+    #: Outstanding (pending) conditions precedent — 0 when none declared.
+    cp_outstanding: int = 0
+    #: Outstanding CP count per workstream (empty when none outstanding).
+    cp_outstanding_by_workstream: Dict[str, int] = Field(default_factory=dict)
+    #: Development-readiness workstreams declared RED (empty when none).
+    readiness_reds: List[str] = Field(default_factory=list)
+
+    @property
+    def is_clean(self) -> bool:
+        return not self.red_flags
 
 
 class EvidenceRow(BaseModel):
@@ -387,6 +437,12 @@ class ReportContext(BaseModel):
     status: str
     kpi_rows: List[KpiRow]
     verdict: Verdict
+    #: IC executive summary + explicit red-flag block (#706): the verdict headline plus
+    #: every presence-gated negative signal (covenant breaches, negative sponsor returns,
+    #: below-hurdle project IRR, outstanding CPs, readiness reds). Pure surfacing over
+    #: engine-published outputs; None only for callers that construct a context without
+    #: this block, in which case the section is omitted (render-when-present).
+    ic_summary: Optional[IcSummaryBlock] = None
     assumptions: List[AssumptionRow]
     risk_register: List[RiskRow] = Field(default_factory=list)
     readiness: List[ReadinessRow] = Field(default_factory=list)
@@ -555,6 +611,161 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
         dscr_covenant_met=dscr_covenant_met,
         balloon_within_limit=balloon_within_limit,
         notes=notes,
+    )
+
+
+def _build_ic_summary(
+    kpis: Dict[str, float],
+    verdict: Verdict,
+    scenario_config: Optional[Mapping[str, Any]],
+    readiness_rows: Sequence[ReadinessRow],
+) -> IcSummaryBlock:
+    """Project the run's explicit negative signals into the IC red-flag block (#706).
+
+    Pure surfacing, no recomputation: the covenant/return judgments are read from the
+    already-built :class:`Verdict` (single source — this honors the engine-published
+    ``balloon_covenant_breach`` flag exactly the way :func:`_build_verdict` does, per the
+    CCCDIR precedent), the CP-outstanding rollup from the canonical
+    :func:`analytics.conditions_precedent.build_cp_report`, and the readiness reds from
+    the rows already built for the readiness section (one register pass, one source).
+
+    Every flag is PRESENCE-GATED on the underlying KPI/register: the verdict's booleans
+    deliberately read "absent" as "not met" for the headline, but a red-flag section
+    must never fabricate a breach from a missing number — an absent KPI raises no flag
+    here (the #657 fabricated-breach lesson applied to the report layer).
+    """
+    flags: List[RedFlag] = []
+
+    min_dscr = kpis.get("min_dscr")
+    if min_dscr is not None and not verdict.dscr_covenant_met:
+        flags.append(
+            RedFlag(
+                kind="covenant_breach",
+                severity="high",
+                detail=f"Minimum DSCR {min_dscr:.2f}x breaches the lender floor.",
+                source="engine KPI min_dscr vs configured DSCR covenant",
+            )
+        )
+
+    balloon_pct = kpis.get("balloon_pct")
+    balloon_breach = kpis.get("balloon_covenant_breach")
+    if (
+        balloon_breach is not None or balloon_pct is not None
+    ) and not verdict.balloon_within_limit:
+        if balloon_breach is not None:
+            # The engine judged it against the scenario's own covenant (CCCDIR).
+            detail = (
+                "Balloon/bullet share BREACHES the modeled refinance-risk covenant"
+                + (
+                    f" ({balloon_pct * 100:.2f}% of debt)."
+                    if balloon_pct is not None
+                    else "."
+                )
+            )
+            source = "engine flag balloon_covenant_breach"
+        else:
+            # balloon_breach is None here, so the outer guard implies balloon_pct
+            # is not None; the explicit narrowing is for the type checker.
+            assert balloon_pct is not None
+            detail = (
+                f"Balloon/bullet share {balloon_pct * 100:.2f}% exceeds the "
+                "report refinance-risk ceiling."
+            )
+            source = "engine KPI balloon_pct vs report covenant ceiling"
+        flags.append(
+            RedFlag(
+                kind="covenant_breach", severity="high", detail=detail, source=source
+            )
+        )
+
+    equity_irr = kpis.get("equity_irr")
+    equity_npv = kpis.get("equity_npv")
+    negative_parts: List[str] = []
+    # Strict < 0 (matching the NPV part below): a break-even equity IRR of exactly
+    # 0.0 — reachable from a genuine break-even waterfall (finance/irr.py returns
+    # 0.0) or the metrics 0.0 no-waterfall sentinel — is NOT negative, so the flag
+    # must not print "equity IRR 0.00% is negative" (a literal falsehood that could
+    # co-render with a Bankable headline).
+    if equity_irr is not None and equity_irr < 0:
+        negative_parts.append(f"equity IRR {equity_irr * 100:.2f}% is negative")
+    if equity_npv is not None and equity_npv < 0:
+        negative_parts.append(f"equity NPV {fmt_usd(equity_npv)} is negative")
+    if negative_parts:
+        flags.append(
+            RedFlag(
+                kind="negative_equity",
+                severity="high",
+                detail="Sponsor returns: " + " and ".join(negative_parts) + ".",
+                source="engine KPIs equity_irr / equity_npv",
+            )
+        )
+
+    project_irr = kpis.get("project_irr")
+    hurdle = kpis.get("discount_rate_used")
+    if project_irr is not None and hurdle is not None and not verdict.project_viable:
+        flags.append(
+            RedFlag(
+                kind="below_hurdle",
+                severity="high",
+                detail=(
+                    f"Project IRR {project_irr * 100:.2f}% is below the "
+                    f"{hurdle * 100:.2f}% cost of capital."
+                ),
+                source="engine KPIs project_irr vs discount_rate_used",
+            )
+        )
+
+    cp_outstanding = 0
+    cp_by_ws: Dict[str, int] = {}
+    if scenario_config is not None:
+        # build_cp_report is the tolerant builder, but it still raises on a
+        # structurally malformed conditions_precedent.items container. Degrade to
+        # "no CP block" on that (like the other best-effort report inputs —
+        # tornado/global_sa/evidence are None-on-failure) rather than break the whole
+        # report; production configs are validated upstream so this never fires there.
+        cp_report: Optional[CpReport]
+        try:
+            cp_report = build_cp_report(scenario_config)
+        except ConditionsPrecedentError:
+            cp_report = None
+    else:
+        cp_report = None
+    if cp_report is not None:
+        cp_outstanding = cp_report.n_outstanding
+        cp_by_ws = dict(cp_report.by_workstream_outstanding)
+        if cp_outstanding > 0:
+            per_ws = ", ".join(f"{ws}: {n}" for ws, n in sorted(cp_by_ws.items()))
+            flags.append(
+                RedFlag(
+                    kind="cp_outstanding",
+                    severity="medium",
+                    detail=(
+                        f"{cp_outstanding} condition(s) precedent outstanding "
+                        f"({per_ws}) — first drawdown is gated."
+                    ),
+                    source="conditions_precedent checklist (scenario register)",
+                )
+            )
+
+    readiness_reds = [r.workstream for r in readiness_rows if r.status == "red"]
+    if readiness_reds:
+        flags.append(
+            RedFlag(
+                kind="readiness_red",
+                severity="medium",
+                detail=(
+                    "Development readiness RED in: " + ", ".join(readiness_reds) + "."
+                ),
+                source="development_readiness register (scenario register)",
+            )
+        )
+
+    return IcSummaryBlock(
+        headline=verdict.headline,
+        red_flags=flags,
+        cp_outstanding=cp_outstanding,
+        cp_outstanding_by_workstream=cp_by_ws,
+        readiness_reds=readiness_reds,
     )
 
 
@@ -1042,6 +1253,9 @@ def build_report_context(
     """
     cfg = config if config is not None else load_report_config()
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
+    # The verdict is built once and shared: the IC summary reads its covenant/return
+    # judgments (single source) rather than re-deriving them.
+    verdict = _build_verdict(case_result.kpis, cfg.covenants)
     # Assemble the three-statement result once; both the statements and the payment-priority
     # waterfall blocks derive from it (one engine-output source, no second pass).
     ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
@@ -1055,7 +1269,10 @@ def build_report_context(
         ),
         status=case_result.status,
         kpi_rows=_build_kpi_rows(case_result.kpis, cfg),
-        verdict=_build_verdict(case_result.kpis, cfg.covenants),
+        verdict=verdict,
+        ic_summary=_build_ic_summary(
+            case_result.kpis, verdict, scenario_config, readiness_rows
+        ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(cfg.risk_register),
         readiness=readiness_rows,
