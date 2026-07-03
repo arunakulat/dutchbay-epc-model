@@ -275,7 +275,7 @@ constraints:
 monte_carlo:
   enabled: true
   n_scenarios: 100000
-  sampling_method: lhs
+  sampler: lhs
   seed: 42
   weibull_uncertainty_pct: 10.0
   wake_loss_std_pct: 2.0
