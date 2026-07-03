@@ -5,6 +5,45 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Feasibility-report section schema (#705, slice 1/5 of #616)** — config-first canonical
+  20-section IC skeleton (static-audit §11 list) in `config/feasibility_sections.yaml`
+  (7 groups: technical/financial/legal/E&S/grid/logistics/risk), resolved by the new
+  `analytics.feasibility_sections` module (frozen pydantic `extra="forbid"` models). A
+  scenario may declare per-section `complete/draft/not_applicable` coverage under
+  `feasibility_sections.sections`; validated softly at all three load seams
+  (enforce=false / render-when-present — committed scenarios byte-identical).
+- **IC executive summary + explicit red-flag section (#706, slice 3/5 of #616)** — new
+  `IcSummaryBlock`/`RedFlag` on `ReportContext` and an "Investment Committee — Red Flags"
+  report section: presence-gated surfacing of covenant breaches (honoring the
+  engine-published `balloon_covenant_breach` flag), negative sponsor returns, below-hurdle
+  project IRR, outstanding conditions precedent (per workstream), and readiness reds.
+  Pure read-only derivation over the shared `Verdict` + canonical registers — an absent
+  KPI or register never fabricates a flag; render-when-present.
+- **Bankability evidence-completeness score (#707, slice 4/5 of #616)** — new
+  `analytics.evidence_score` module computes a config-weighted 0–100 score (+ band label)
+  on top of the evidence-register coverage: each material assumption is credited its
+  evidence tier's strength (`config/evidence_score.yaml`, cross-checked against the register
+  taxonomy so the two can't drift), with a missing-evidence penalty floor. Surfaced as an
+  `EvidenceScoreBlock` on `ReportContext` and a report section (render-when-present). Pure
+  read-only derivation — recomputes no finance metric; committed scenarios byte-identical.
+- **Feasibility report route + template wiring (#708, slice 5/5 of #616 — completes the epic)**
+  — the conditions-precedent checklist (full line-item table) and the 20-section feasibility
+  coverage (schema from #705) now render as report sections via the **existing**
+  `app/reports` HTML/PDF renderer, from one `ReportContext`, served through the existing
+  report route (no new dependency; WeasyPrint stays optional behind its call-time guard).
+  Both are read-only projections (render-when-present) — legacy KPI-only reports and the
+  committed lender reports are unchanged; oracle byte-identical.
+- **Multi-tech Executive Workbook guard (#726)** — parametrized test that a real
+  `run_v14_pipeline` + `emit_executive_workbook_from_pipeline` emits exactly the five
+  technology-agnostic finance sheets (Summary/Cashflow/DebtService/Ratios/ScenarioSummary)
+  for a hybrid (wind+solar), a solar+BESS, and a BESS scenario — locking the tech-agnostic
+  behaviour against regression (#656 follow-up).
+- **Changelog fragments: per-PR entries now live in `changelog.d/` and compile into `CHANGELOG.md` on demand (dev-workflow, no runtime/KPI impact).**
+  Editing the shared `CHANGELOG.md [Unreleased]` block in every PR guaranteed a merge conflict between concurrent
+  dolphins (→ forced rebase → a second full CI run). Each change now drops a `changelog.d/<id>.<category>.md`
+  fragment (unique filename → never conflicts); `python scripts/compile_changelog.py` folds pending fragments into
+  `[Unreleased]` under their Keep-a-Changelog section (newest first) and deletes them — run on demand (end of a
+  batch / before a release). `--check` lists pending, `--dry-run` previews. See `changelog.d/README.md`.
 - **flake8-bugbear (`B`) enabled as a mandatory ruff gate; B904 (`raise ... from`) fixed repo-wide (follow-up to #610, KPI-neutral).**
   The retired flake8 stack (#610) enforced bugbear via `select = C,E,F,W,B,B950`; ruff did not yet
   cover it. `ruff.toml` now selects `B`, restoring and strengthening that coverage as a hard gate.
@@ -54,6 +93,10 @@ All notable changes to this project will be documented here.
   byte-identical.
 
 ### Fixed
+- **Bootstrap stale checks fixed (#765)** — `dutchbay_bootstrap.py` now detects the
+  repo's `.venv` (legacy `.venv311` still accepted) and validates pytest config via
+  `[tool.pytest.ini_options]` in `pyproject.toml` instead of requiring a `pytest.ini`;
+  a healthy clone now bootstraps all-✅ / exit 0.
 - **DSCR covenant-breach probability: floor-pin FP fabrication removed from four sibling paths (#725, from the #657 review).**
   A strict `arr < floor` comparison fabricates an ~85-93% DSCR-breach probability on any dual-DSCR-sculpted
   scenario, because the sculpt pins per-trial min-DSCR at EXACTLY the covenant (e.g. 1.30) and floating-point
