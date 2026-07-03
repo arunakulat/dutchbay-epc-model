@@ -762,6 +762,24 @@ All notable changes to this project will be documented here.
   raise/warn path.
 
 ### Changed
+- **Tooling: consolidate the lint stack toward ruff — retire flake8 + pylint (#610, tooling-only, KPI-neutral).**
+  The dev/CI toolchain declared five overlapping linters (ruff/black/isort/flake8/pylint). flake8 is
+  now RETIRED from `pyproject [dev]`, the `requirements.txt` lock, `fx-tests.yml` (its only invocation
+  was an advisory `continue-on-error` FX-scoped step, never a mandatory gate), and the `scripts/ci/*`
+  helper scripts — its rule families all live in ruff (E/W pycodestyle, F pyflakes, B flake8-bugbear,
+  C90 mccabe), and the mandatory repo-wide `ruff check .` gate in `test-suite.yml` already enforces
+  E/F, so no enforced check is lost. **black (format) and isort (import order) are KEPT unchanged:**
+  ruff's own isort (`I`) cannot reproduce isort `profile=black` byte-for-byte on this tree (isort keeps
+  an aliased `from X import a as b` on its own line while merging non-aliased siblings; 3 files diverge
+  irreducibly, and `force-single-line`/`force-sort-within-sections` are far worse at 433/163 diffs), so
+  per the issue's "don't drop it if import order changes" guardrail isort-the-tool stays. **pylint is
+  retired from the toolchain too** (it was never a gate — only a non-blocking `--exit-zero` call in the
+  unwired `scripts/ci/*` helpers): `pylint --errors-only` over the engine is a wall of false positives
+  on the CASPER optional-dependency (`_require_*`-guarded imports) and dynamic-`__all__` re-export
+  patterns (E0603/E0611/E0401/E1133), so a scoped real-error pylint pass is not viable here. Net: five
+  linters -> four (ruff/black/isort/mypy), same enforced gate, a lighter CI install. Enabling ruff's `B`
+  (flake8-bugbear) rule set as a mandatory gate is a documented follow-up (the tree carries ~18 `B904`
+  `raise ... from` findings that need code fixes first, out of scope for this tooling-only change).
 - **CI: shard the Test Suite into a parallel matrix to cut PR wall-clock (#729, infra-only, KPI-neutral).**
   `test-suite.yml`'s single `Run Tests` job (the full ~3,400-test tree + 6-package coverage on one
   runner, which had drifted to ~12-17 min as the suite grew) is split into a 4-way `pytest-split`

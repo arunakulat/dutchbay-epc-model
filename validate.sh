@@ -13,7 +13,7 @@
 #
 # Requirements:
 #   - Python 3.10+
-#   - mypy, ruff, black, isort, pylint (optional)
+#   - mypy, ruff, black, isort (optional)
 
 set -e  # Exit on first error
 
@@ -157,7 +157,7 @@ echo
 # Installation recommendation
 echo -e "${BLUE}💡 Next Steps:${NC}"
 echo "   1. Install dev tools (optional):"
-echo "      pip install mypy ruff black isort pylint"
+echo "      pip install mypy ruff black isort"
 echo
 echo "   2. Run full validation:"
 echo "      ./validate.sh"
