@@ -758,25 +758,28 @@ class MonteCarloEngine:
         if has_alias:
             alias = _norm(mc_cfg.get("sampling_method"))
             if has_sampler and alias != sampler:
-                warnings.warn(
+                msg = (
                     "monte_carlo.sampling_method is a deprecated alias for "
                     f"monte_carlo.sampler and conflicts with it (alias={alias!r}, "
                     f"sampler={sampler!r}); the live 'sampler' key wins. Remove "
-                    "'sampling_method' and set 'sampler' only.",
-                    DeprecationWarning,
-                    stacklevel=2,
+                    "'sampling_method' and set 'sampler' only."
                 )
             else:
                 # Alias-only (or agreeing) -> honor it so `sampling_method: sobol` no longer
                 # silently runs LHS. When sampler is absent the alias becomes the selection.
-                warnings.warn(
+                msg = (
                     "monte_carlo.sampling_method is a deprecated alias for "
-                    "monte_carlo.sampler; rename the key to 'sampler'.",
-                    DeprecationWarning,
-                    stacklevel=2,
+                    "monte_carlo.sampler; rename the key to 'sampler'."
                 )
                 if not has_sampler:
                     sampler = alias
+            # Dual channel: warnings.warn for tooling/pytest, AND logger.warning so a real
+            # CLI/pipeline user actually SEES it — Python's default filters suppress
+            # library-code DeprecationWarnings outside __main__, so the warnings.warn alone
+            # is invisible to the very user setting the dead key (the conflict case worst of
+            # all, where their key is being ignored). Mirrors the engine's sobol+CRN caveat.
+            warnings.warn(msg, DeprecationWarning, stacklevel=2)
+            logger.warning(msg)
 
         return sampler
 
