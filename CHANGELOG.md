@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **`docs/STANDARDS_WATCH.md` — tracked-deferral register for external-standard re-checks (#620, docs-only, KPI-neutral).**
+  Records the two remaining #620 items as owned, dated deferrals rather than losing them in the
+  issue tracker: (1) the **IFC Sustainability Framework Phase I** re-check (~Q4 2026 — the 2012
+  Performance Standards remain in force; do not pre-emptively rewrite the ESIA/safeguards
+  citations), and (2) the **6-month DSRA** business confirmation against the intended CEB-PPA
+  lender term sheet (the engine funds `reserves.dsra_months: 6`; confirm before financial close,
+  KPI-moving if the lender differs). The already-landed **ATB-vintage** citation refresh (#620a,
+  commit `0f24863`) is recorded as DONE for a complete watch list. No engine code touched; no
+  computed KPI changes.
 - **ADR: P50-haircut layering ruled intentional — builder-policy 5% vs kernel-identity 0% (#653, docs-only, KPI-neutral).**
   New `docs/P50_HAIRCUT_LAYERING_DECISION.md` codifies the user ruling on the #587 Fable
   follow-up: the config/builder layer
