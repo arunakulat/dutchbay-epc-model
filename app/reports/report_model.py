@@ -29,6 +29,10 @@ from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
+from analytics.feasibility_sections import (
+    FeasibilitySectionsError,
+    build_feasibility_report,
+)
 from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
@@ -161,6 +165,69 @@ class ReadinessRow(BaseModel):
     workstream: str
     status: str  # green | amber | red — drives the badge class in the template
     note: str = ""
+
+
+class CpItemRow(BaseModel):
+    """One rendered conditions-precedent line (item, workstream, status, note) — #708."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    workstream: str
+    status: str  # satisfied | waived | pending — drives the badge class
+    note: str = ""
+    waived_reason: str = ""
+
+
+class CpChecklistBlock(BaseModel):
+    """Conditions-precedent checklist gating first drawdown (#708, slice 5/5 of #616).
+
+    A read-only projection of :class:`analytics.conditions_precedent.CpReport`: the declared
+    CP line items with their satisfied/waived/pending status, the outstanding rollup, and the
+    canonical items still missing from the checklist. ``all_satisfied`` is the headline gate.
+    None (section omitted) for legacy callers or a malformed checklist.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rows: List[CpItemRow]
+    n_outstanding: int
+    n_satisfied: int
+    n_waived: int
+    missing: List[str]
+    all_satisfied: bool
+
+
+class FeasibilitySectionRow(BaseModel):
+    """One rendered feasibility-report section line (title, group, status) — #708."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    title: str
+    group: str
+    status: str  # complete | draft | not_applicable
+
+
+class FeasibilitySectionsBlock(BaseModel):
+    """Feasibility-report section coverage against the 20-section skeleton (#708, #616).
+
+    A read-only projection of :class:`analytics.feasibility_sections.FeasibilityReport`
+    (slice 1, #705): the scenario's declared section coverage in report order, the
+    complete/draft/not-applicable counts, and the canonical sections still missing.
+    ``all_complete`` is the IC-readiness gate. None (section omitted) for legacy callers or a
+    malformed declaration.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rows: List[FeasibilitySectionRow]
+    n_complete: int
+    n_draft: int
+    n_not_applicable: int
+    missing: List[str]
+    total: int
+    all_complete: bool
 
 
 class Verdict(BaseModel):
@@ -482,6 +549,12 @@ class ReportContext(BaseModel):
     overall_readiness: Optional[str] = (
         None  # green | amber | red — worst declared status
     )
+    #: Conditions-precedent checklist gating first drawdown (#708). None for legacy callers /
+    #: no declared checklist / a malformed one — the section is then omitted.
+    cp_checklist: Optional[CpChecklistBlock] = None
+    #: Feasibility-report section coverage against the 20-section skeleton (#708 / #705). None
+    #: for legacy callers / no declared sections / a malformed declaration — section omitted.
+    feasibility_sections: Optional[FeasibilitySectionsBlock] = None
     #: Serialised finance blocks (production P50/P90, sources-and-uses, DSCR profile,
     #: exec KPI callout) — RPT-1. None when the caller supplies no debt_result /
     #: scenario_config (e.g. the legacy KPI-only report path), in which case those
@@ -934,6 +1007,86 @@ def _build_readiness(
     return rows, report.overall_status
 
 
+def _build_cp_checklist(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[CpChecklistBlock]:
+    """Project the conditions-precedent checklist into a report block (#708).
+
+    Reads the declared CP items via the canonical
+    :func:`analytics.conditions_precedent.build_cp_report` and renders the full checklist
+    (each item's satisfied/waived/pending status) plus the outstanding rollup. Returns
+    ``None`` when no scenario config is supplied, none is declared, or the checklist is
+    structurally malformed — the section is then omitted. Pure presentation; the IC red-flag
+    block (#706) surfaces only the outstanding COUNT, this is the full line-item table.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        report = build_cp_report(scenario_config)
+    except ConditionsPrecedentError:
+        return None
+    # Render only when the scenario actually declared a checklist (render-when-present);
+    # `missing` is always the full canonical set, so it can't signal "declared". A scenario
+    # that authored no CP block gets no section (the committed lender reports are unchanged).
+    if not report.items:
+        return None
+    return CpChecklistBlock(
+        rows=[
+            CpItemRow(
+                name=i.name,
+                workstream=i.workstream,
+                status=i.status,
+                note=i.note,
+                waived_reason=i.waived_reason,
+            )
+            for i in report.items
+        ],
+        n_outstanding=report.n_outstanding,
+        n_satisfied=report.n_satisfied,
+        n_waived=report.n_waived,
+        missing=list(report.missing),
+        all_satisfied=report.all_satisfied,
+    )
+
+
+def _build_feasibility_sections(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[FeasibilitySectionsBlock]:
+    """Project the feasibility-report section coverage into a report block (#708 / #705).
+
+    Reads the declared section coverage via the canonical
+    :func:`analytics.feasibility_sections.build_feasibility_report` (the 20-section skeleton)
+    and renders the declared sections in report order plus the complete/draft/not-applicable
+    counts and the missing set. Returns ``None`` when no scenario config is supplied, none is
+    declared, or the declaration is structurally malformed — the section is then omitted.
+    Pure presentation.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        report = build_feasibility_report(scenario_config)
+    except FeasibilitySectionsError:
+        return None
+    # Render only when the scenario actually declared sections (render-when-present); a
+    # scenario that authored no feasibility_sections block gets no section.
+    if not report.sections:
+        return None
+    return FeasibilitySectionsBlock(
+        rows=[
+            FeasibilitySectionRow(
+                name=s.name, title=s.title, group=s.group, status=s.status
+            )
+            for s in report.sections
+        ],
+        n_complete=report.n_complete,
+        n_draft=report.n_draft,
+        n_not_applicable=report.n_not_applicable,
+        missing=list(report.missing),
+        total=len(report.sections) + len(report.missing),
+        all_complete=report.all_complete,
+    )
+
+
 def _build_evidence(
     scenario_config: Optional[Mapping[str, Any]],
 ) -> Optional[EvidenceBlock]:
@@ -1353,6 +1506,8 @@ def build_report_context(
         risk_register=_build_risk_register(cfg.risk_register),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,
+        cp_checklist=_build_cp_checklist(scenario_config),
+        feasibility_sections=_build_feasibility_sections(scenario_config),
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
         global_sa=global_sa,

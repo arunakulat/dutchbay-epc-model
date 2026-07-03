@@ -114,6 +114,50 @@ def test_lender_report_renders_every_section_with_live_kpis() -> None:
     assert "Scheduled debt service" in html and "Impact" in html
 
 
+def test_feasibility_sections_render_through_the_production_path() -> None:
+    """A scenario that declares the CP checklist + feasibility section schema (#708 slices)
+    renders those sections through the EXACT production report path (run_finance_case →
+    build_report_context → render_report_html), alongside the live KPIs — no new dependency.
+    """
+    inputs = _inputs()
+    scenario = inputs.to_scenario_config()
+    scenario["conditions_precedent"] = {
+        "items": {
+            "ppa_executed": {"status": "satisfied"},
+            "esia_approved": {"status": "pending"},
+        }
+    }
+    scenario["feasibility_sections"] = {
+        "sections": {
+            "executive_investment_thesis": {"status": "complete"},
+            "base_case_financial_outputs": {"status": "draft"},
+        }
+    }
+    result = run_finance_case(scenario)
+    case = CaseResult.from_pipeline_result(
+        result, scenario_variant=inputs.scenario_variant
+    )
+    ctx = build_report_context(
+        case,
+        generated_at=GENERATED_AT,
+        inputs=inputs,
+        scenario_config=scenario,
+        debt_result=result.get("debt_result"),
+        annual_rows=result.get("annual_rows"),
+    )
+    html = render_report_html(ctx)
+
+    assert case.status == "success"
+    assert ctx.cp_checklist is not None and ctx.cp_checklist.n_outstanding == 1
+    assert ctx.feasibility_sections is not None
+    assert ctx.feasibility_sections.total == 20
+    for section in ("Conditions Precedent", "Feasibility Report Structure"):
+        assert section in html, f"missing feasibility section: {section!r}"
+    # the live KPIs still reach the same report (the new sections are additive)
+    npv_row = next(r for r in ctx.kpi_rows if r.key == "project_npv")
+    assert npv_row.display in html
+
+
 def test_rendered_waterfall_ties_to_the_headline_cfads() -> None:
     """The cash-flow waterfall in the rendered report is one source of truth with the engine:
     its total CFADS equals the run's headline ``total_cfads_usd`` KPI (haircut included).
