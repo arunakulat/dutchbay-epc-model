@@ -10,6 +10,7 @@ renders and stays internally consistent.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Tuple
 
 import pytest
@@ -183,14 +184,33 @@ def test_production_path_renders_sensitivity_sections() -> None:
     assert "Sensitivity Tornado" in html and "Global Sensitivity" in html
 
 
-def test_lender_report_renders_through_the_auth_gated_http_route() -> None:
+def test_lender_report_renders_through_the_auth_gated_http_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Full-stack e2e: the auth-gated ``POST /cases/report.html`` route renders the report over
     HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath.
+
+    The route's wall-clock ceiling (``DUTCHBAY_SYNC_ROUTE_TIMEOUT``, default 120s) exists to
+    bound CLIENT waits in production; on slow shared CI runners the report compute (Morris +
+    PAWN sensitivity under the hood) intermittently exceeded it and the test 504-flaked. The
+    ceiling is not what THIS test verifies (the timeout shell's 504 behaviour has its own
+    coverage), so run the route with a generous test-only ceiling: patch the module-level
+    ``_run_with_timeout`` (the env default is bound at import time, so an env var cannot
+    change it here) to force a 600s limit. Route handlers resolve the global at call time.
     """
     pytest.importorskip("httpx")
+    import functools
+
     from fastapi.testclient import TestClient
 
     from app.api.auth import get_current_subject
+
+    generous = float(os.environ.get("DUTCHBAY_SYNC_ROUTE_TIMEOUT_E2E", "600"))
+    monkeypatch.setattr(
+        api_main,
+        "_run_with_timeout",
+        functools.partial(api_main._run_with_timeout, timeout=generous),
+    )
 
     # Auth is exercised end-to-end in test_auth.py; override it so this stays focused on rendering.
     api_main.app.dependency_overrides[get_current_subject] = lambda: "e2e-user"
