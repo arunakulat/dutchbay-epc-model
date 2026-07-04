@@ -669,6 +669,29 @@ def cli(cfg: DictConfig) -> None:
                 - executive_workbook_path: Target .xlsx path. Default
                   '<export_dir>/executive_workbook.xlsx'. On emission the written
                   path is echoed back under result['executive_workbook_path'].
+            Optional fields (#779 — capital-risk Monte-Carlo report emission; OFF
+            by default — leaving emit_capital_risk_report false preserves behaviour
+            and keeps committed-scenario output byte-identical):
+                - emit_capital_risk_report: If true, after a successful run run the
+                  CANONICAL MC (analytics.mc.engine — LHS + Iman-Conover, with
+                  monte_carlo.allow_toy_fallback forced false so a failed trial
+                  raises rather than fabricating a toy metric) over a bounded trial
+                  count and render a lender HTML report carrying the capital-risk
+                  section, via app.reports.capital_risk_emit. Heavy (each trial is a
+                  full evaluation), so batch-path only. Default false.
+                - capital_risk_report.n_trials: Bounded MC trial count for the
+                  report tail (NOT the scenario's monte_carlo.n_scenarios). Default
+                  2000 (app.reports.capital_risk_emit.DEFAULT_CAPITAL_RISK_N_TRIALS).
+                  A lender-grade floor (LENDER_GRADE_MIN_TRIALS = 1000) is enforced:
+                  a smaller n_trials fails loud rather than emitting a VaR/CVaR
+                  number off a statistically inadequate tail.
+                - capital_risk_report.seed: MC seed; defaults to the scenario's
+                  monte_carlo.seed.
+                - capital_risk_report.npv_metric: 'equity_npv' | 'project_npv' for
+                  the NPV-distribution chart. Default 'equity_npv'.
+                - capital_risk_report.path: Target .html path. Default
+                  '<export_dir>/capital_risk_report.html'. On emission the written
+                  path is echoed back under result['capital_risk_report_path'].
 
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
@@ -759,6 +782,19 @@ def cli(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     emit_executive_workbook = bool(cfg.get("emit_executive_workbook", False))
     executive_workbook_path = cfg.get("executive_workbook_path", None)
+
+    # ------------------------------------------------------------------
+    # #779: optional capital-risk (Monte-Carlo) report emission (OFF by default).
+    # When true, after a successful finance run this CLI runs the CANONICAL MC
+    # (analytics.mc.engine, allow_toy_fallback forced false — no fabricated
+    # trials) over a BOUNDED trial count and renders a lender HTML report that
+    # carries the capital-risk section, via app.reports.capital_risk_emit. It is
+    # heavy (each trial is a full v14 evaluation), so it belongs in this batch
+    # path, never the synchronous HTTP report route. Emission derives no committed
+    # KPI, so leaving this off keeps committed scenarios byte-identical.
+    # ------------------------------------------------------------------
+    emit_capital_risk_report = bool(cfg.get("emit_capital_risk_report", False))
+    capital_risk_report_cfg = cfg.get("capital_risk_report", None) or {}
 
     effective_config: str = str(config)
     # Temp patched-scenario files (wind then solar) to clean up in ``finally``.
@@ -936,6 +972,41 @@ def cli(cfg: DictConfig) -> None:
             )
             result["executive_workbook_path"] = str(written)
             logger.info("Wrote Executive Workbook to %s", written)
+
+        # #779: optional capital-risk (Monte-Carlo) report emission. OFF unless
+        # emit_capital_risk_report=true (committed scenarios leave it off →
+        # byte-identical). Runs the canonical MC (allow_toy_fallback forced false)
+        # over a bounded n and renders a lender report with the capital-risk
+        # section. Fails loud on error, since the caller explicitly opted in
+        # (CESSPIT). Imported lazily so the report stack (jinja/matplotlib) is not
+        # pulled onto the finance CLI's import path unless this step runs.
+        if emit_capital_risk_report and isinstance(result, dict):
+            from app.reports.capital_risk_emit import (
+                DEFAULT_CAPITAL_RISK_N_TRIALS,
+                emit_capital_risk_report_from_pipeline,
+            )
+
+            cr_path_raw = capital_risk_report_cfg.get("path", None)
+            cr_out = (
+                Path(str(cr_path_raw))
+                if cr_path_raw
+                else Path(str(export_dir_raw)) / "capital_risk_report.html"
+            )
+            cr_seed_raw = capital_risk_report_cfg.get("seed", None)
+            cr_written = emit_capital_risk_report_from_pipeline(
+                result,
+                effective_config,
+                cr_out,
+                n_trials=int(
+                    capital_risk_report_cfg.get(
+                        "n_trials", DEFAULT_CAPITAL_RISK_N_TRIALS
+                    )
+                ),
+                seed=int(cr_seed_raw) if cr_seed_raw is not None else None,
+                npv_metric=str(capital_risk_report_cfg.get("npv_metric", "equity_npv")),
+            )
+            result["capital_risk_report_path"] = str(cr_written)
+            logger.info("Wrote capital-risk report to %s", cr_written)
 
         if write_artifacts:
             export_dir = Path(str(export_dir_raw))
