@@ -101,3 +101,29 @@ risk_register:
     severity: "medium"
     # TCFD transition: policy / tax-regime / tariff-framework shifts are transition risk.
     climate_risk_category: "transition"
+
+# Model limitations & assumptions (#734): the report-wide scope caveats surfaced in every
+# generated report, so no output is read without them. These consolidate caveats that were
+# otherwise documented only in module docstrings/result-notes (verified in-code, not invented):
+#   - BESS dispatch  -> finance/bess_lcos.py "LIMITATIONS (stated for lender DD, DOC-03)"
+#   - Tax shield / 100% sweep / equity-balancing -> analytics/three_statement.py "Documented limitations"
+model_limitations:
+  - topic: "BESS dispatch"
+    detail: >
+      Battery revenue and LCOS use a fixed, overridable cycles-per-year at the rated
+      depth-of-discharge; intra-day charge/discharge is not dispatch-optimised or simulated
+      (actual dispatch is set by the offtaker). A deliberate simplification versus
+      MILP/stochastic dispatch-optimisation.
+  - topic: "Tax shield"
+    detail: >
+      The tax line is the engine's computed tax; because the model sequences cash-flow then
+      debt sizing, it does not re-credit the full debt-interest shield.
+  - topic: "Equity distributions"
+    detail: >
+      Distributions assume a 100% cash sweep, and equity is the balancing item of the
+      three-statement build (which therefore articulates by construction).
+  - topic: "Deterministic base case"
+    detail: >
+      Headline KPIs are a deterministic P50 case; distributional and tail risk (VaR/CVaR,
+      covenant-breach probabilities) are a separate, opt-in Monte-Carlo surface, not the
+      base figures.
