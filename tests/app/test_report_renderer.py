@@ -235,6 +235,30 @@ def test_html_omits_global_sa_section_when_absent() -> None:
     assert "Global Sensitivity" not in render_report_html(_context())
 
 
+def test_html_contains_model_limitations_from_default_config() -> None:
+    """#734: the committed report config seeds model-wide scope caveats, so every report
+    surfaces a 'Model Limitations & Assumptions' block with the sourced caveats."""
+    html = render_report_html(_context())
+    assert "Model Limitations" in html
+    assert "BESS dispatch" in html
+    assert "dispatch-optimised" in html  # a seeded detail fragment (verified in-code)
+    assert "Deterministic base case" in html
+
+
+def test_html_omits_model_limitations_when_config_has_none() -> None:
+    """Render-when-present: a config with no model_limitations omits the section entirely."""
+    from app.reports.report_config import load_report_config
+
+    cfg = load_report_config().model_copy(update={"model_limitations": []})
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, config=cfg)
+    )
+    assert "Model Limitations" not in html
+
+
 def test_html_contains_pawn_block_when_supplied() -> None:
     """#645: the PAWN median-KS block renders as its own subsection with the KS columns
     and the finite-sample noise-floor caveat; it is additive to the Morris section."""

@@ -43,6 +43,7 @@ from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
     Covenants,
     KpiKind,
+    LimitationItem,
     ReportConfig,
     ReportMeta,
     RiskItem,
@@ -150,6 +151,15 @@ class RiskRow(BaseModel):
     #: TCFD/EP4 climate-risk class (physical | transition); None when the risk is untagged,
     #: in which case the template renders no climate tag. Additive presentation only.
     climate_risk_category: Optional[str] = None
+
+
+class LimitationRow(BaseModel):
+    """One rendered model-limitation line (topic + detail) — #734."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    topic: str
+    detail: str
 
 
 class ReadinessRow(BaseModel):
@@ -608,6 +618,9 @@ class ReportContext(BaseModel):
     ic_summary: Optional[IcSummaryBlock] = None
     assumptions: List[AssumptionRow]
     risk_register: List[RiskRow] = Field(default_factory=list)
+    #: Model-limitations / scope caveats surfaced in every report (#734). Config-authored;
+    #: default empty so a legacy/minimal config omits the section (render-when-present).
+    model_limitations: List[LimitationRow] = Field(default_factory=list)
     readiness: List[ReadinessRow] = Field(default_factory=list)
     overall_readiness: Optional[str] = (
         None  # green | amber | red — worst declared status
@@ -1066,6 +1079,11 @@ def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
         )
         for r in risks
     ]
+
+
+def _build_model_limitations(limits: List[LimitationItem]) -> List[LimitationRow]:
+    """Project the config-authored model limitations into render-ready rows (#734, passthrough)."""
+    return [LimitationRow(topic=lim.topic, detail=lim.detail) for lim in limits]
 
 
 def _build_readiness(
@@ -1695,6 +1713,7 @@ def build_report_context(
         ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(cfg.risk_register),
+        model_limitations=_build_model_limitations(cfg.model_limitations),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,
         cp_checklist=_build_cp_checklist(scenario_config),

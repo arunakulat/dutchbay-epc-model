@@ -993,6 +993,19 @@
       All values in this report are engine outputs presented unchanged; the cost
       of capital shown is the run's own resolved project discount rate.
     </p>
+    {# Model limitations & assumptions (#734): the one report-wide home for scope caveats,
+       so no output is read without them. Render-when-present. #}
+    {% if ctx.model_limitations %}
+    <h3>Model Limitations &amp; Assumptions</h3>
+    <table>
+      <thead><tr><th>Area</th><th>Limitation</th></tr></thead>
+      <tbody>
+        {% for lim in ctx.model_limitations %}
+        <tr><td>{{ lim.topic }}</td><td>{{ lim.detail }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </section>
 
 </body>
