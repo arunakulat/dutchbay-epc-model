@@ -131,6 +131,7 @@ from omegaconf import DictConfig
 
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.executive_workbook import emit_executive_workbook_from_pipeline
+from analytics.output_paths import DEFAULT_PIPELINE_OUTPUT_ROOT, resolve_output_dir
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
@@ -817,7 +818,7 @@ def cli(cfg: DictConfig) -> None:
                     scenario_yaml_path=config,
                     export_scenario=wind_export_scenario,
                     output_dir=Path(
-                        str(cfg.get("export_dir", "_out/run_full_pipeline_v14"))
+                        str(cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT))
                     )
                     / "wind_export",
                 )
@@ -948,7 +949,7 @@ def cli(cfg: DictConfig) -> None:
         _stamp_manifest_if_absent(result, effective_config, str(validation_mode))
 
         write_artifacts = bool(cfg.get("write_artifacts", False))
-        export_dir_raw = cfg.get("export_dir", "_out/run_full_pipeline_v14")
+        export_dir_raw = cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT)
 
         # #656 (slice 3): optional single-scenario Executive Workbook emission.
         # OFF unless emit_executive_workbook=true (committed scenarios leave it
@@ -1009,7 +1010,10 @@ def cli(cfg: DictConfig) -> None:
             logger.info("Wrote capital-risk report to %s", cr_written)
 
         if write_artifacts:
-            export_dir = Path(str(export_dir_raw))
+            # #735: route through the single-source resolver. Default (run_scoped=False) returns
+            # the configured root unchanged, so committed runs write to the same paths
+            # (byte-identical); the opt-in run-scoping + converging the other entrypoints follow.
+            export_dir = resolve_output_dir(export_dir_raw)
             _safe_mkdir(export_dir)
 
             _write_json(export_dir / "summary.json", result)
