@@ -23,6 +23,7 @@ __all__ = [
     "SensitivityRunConfig",
     "run_sensitivity_analysis",
     "build_one_way_sensitivity_suite",
+    "build_two_factor_interaction_grid",
     "TailRiskConfig",
     "enrich_suite_with_tail_risk",
     "suite_to_tables",
@@ -54,6 +55,14 @@ def __getattr__(name: str) -> Any:
             "run_sensitivity_analysis": run_sensitivity_analysis,
             "build_one_way_sensitivity_suite": build_one_way_sensitivity_suite,
         }[name]
+
+    # Interaction-grid exports (#739)
+    if name == "build_two_factor_interaction_grid":
+        from analytics.sensitivity.interaction import (
+            build_two_factor_interaction_grid,
+        )
+
+        return build_two_factor_interaction_grid
 
     # Tail risk exports
     if name in ("TailRiskConfig", "enrich_suite_with_tail_risk"):
