@@ -250,10 +250,12 @@ def _calculate_risk_analysis(
         # The deterministic VaR/CVaR + percentile metrics above are computed on this single
         # scenario's CFADS series and stand alone. The full MC-distribution
         # TailRiskAnalyzer.tail_risk_report() (per-metric VaR/CVaR for equity/project IRR &
-        # NPV + covenant-breach probabilities) is now available via
-        # analytics.capital_risk_layer_v14.build_driver_mc_tail_report (#657 wire b / #715);
-        # it is a separate opt-in surface that needs a driver spec (mean/std per parameter)
-        # and runs its own driver Monte-Carlo, so it is not run inline here — keeping this
+        # NPV + covenant-breach probabilities) is available via the canonical MC path —
+        # analytics.mc.engine.MonteCarloEngine feeding
+        # analytics.capital_risk_layer_v14.build_capital_risk_report_from_mc_result
+        # (opt-in production caller: app.reports.capital_risk_emit, #779; the toy
+        # driver-MC runner was retired by #780). It is a separate opt-in surface that
+        # runs its own Monte-Carlo, so it is not run inline here — keeping this
         # per-scenario pipeline block fast and free of MC configuration.
         return {
             "var_cvar": var_cvar.model_dump(),
