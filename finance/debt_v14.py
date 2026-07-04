@@ -597,9 +597,17 @@ def apply_debt_layer(
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
     tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
-    amortization = str(
-        p.get("amortization_style", _AMORT_DEFAULT_STYLE) or _AMORT_DEFAULT_STYLE
-    ).lower()
+    amort_raw = p.get("amortization_style", _AMORT_DEFAULT_STYLE)
+    if amort_raw is not None and not isinstance(amort_raw, str):
+        # A present-but-non-string style (YAML `5`, `true`) is a config error, not
+        # a stylistic typo: reject it loudly instead of warn-falling-back (#683 —
+        # the #585 cluster's one tolerance increase, reverted to fail-loud).
+        raise ValueError(
+            "amortization_style (under Financing_Terms / financing / debt) must be "
+            f"a string (got {amort_raw!r}); "
+            f"valid: {'/'.join(sorted(_AMORT_VALID_STYLES))}"
+        )
+    amortization = str(amort_raw or _AMORT_DEFAULT_STYLE).lower()
     if amortization not in _AMORT_VALID_STYLES:
         logger.warning(
             "Unknown amortization_style %r; falling back to %s "

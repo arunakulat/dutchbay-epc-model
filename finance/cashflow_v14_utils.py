@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Sequence, Union
 
 
-def as_float(value: Any, default: Optional[float] = None) -> Optional[float]:
+def as_float(
+    value: Any, default: Optional[float] = None, *, key: Optional[str] = None
+) -> Optional[float]:
     """Convert a value to float; ``None`` yields ``default``, malformed fails loud.
 
     A *present-but-non-coercible* value (e.g. ``"12,5"`` or a mapping) raises
@@ -11,23 +13,34 @@ def as_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     every caller sits on a precedence chain where a silent fallback can move a
     tax/capex base with no trace. Use :func:`as_float_or_none` where probe /
     fall-through semantics are intended (heuristic tree-walks, candidate scans).
+
+    Args:
+        value: Raw config value to coerce.
+        default: Returned when ``value`` is ``None``.
+        key: Optional config-key context (e.g. ``"tax.depreciable_capex_lkr"``)
+            named in the error so the operator does not have to infer which
+            candidate of a precedence chain held the malformed value (#683).
     """
     if value is None:
         return default
     try:
         return float(value)
     except (TypeError, ValueError) as exc:
+        where = f" (config key {key!r})" if key else ""
         raise ValueError(
-            f"as_float: cannot convert {value!r} to float; supply a numeric "
+            f"as_float: cannot convert {value!r} to float{where}; supply a numeric "
             "value or omit the key (an absent/None value yields the default)"
         ) from exc
 
 
-def as_int(value: Any, default: Optional[int] = None) -> Optional[int]:
+def as_int(
+    value: Any, default: Optional[int] = None, *, key: Optional[str] = None
+) -> Optional[int]:
     """Convert a value to int; ``None`` yields ``default``, malformed fails loud.
 
     Mirrors :func:`as_float`: a present-but-non-coercible value raises
-    ``ValueError`` (#585 fail-loud). Use :func:`as_int_or_none` where probe /
+    ``ValueError`` (#585 fail-loud), and ``key`` names the offending config key
+    in the error when provided (#683). Use :func:`as_int_or_none` where probe /
     fall-through semantics are intended (e.g. the project-life tree-walk).
     """
     if value is None:
@@ -35,8 +48,9 @@ def as_int(value: Any, default: Optional[int] = None) -> Optional[int]:
     try:
         return int(value)
     except (TypeError, ValueError) as exc:
+        where = f" (config key {key!r})" if key else ""
         raise ValueError(
-            f"as_int: cannot convert {value!r} to int; supply an integer "
+            f"as_int: cannot convert {value!r} to int{where}; supply an integer "
             "value or omit the key (an absent/None value yields the default)"
         ) from exc
 
