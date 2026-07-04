@@ -73,4 +73,4 @@ def test_cost_block_surfaces_estimate_class() -> None:
     # canonical economics unchanged by the WBS split (projIRR ~2.75% after the
     # 5.9% FX-drift re-baseline; the WBS split itself does not move it)
     assert resp.cost.capex_total_usd == pytest.approx(159_600_000, rel=1e-4)
-    assert resp.kpis.project_irr == pytest.approx(0.0275, abs=0.003)
+    assert resp.kpis.project_irr == pytest.approx(0.0203, abs=0.003)

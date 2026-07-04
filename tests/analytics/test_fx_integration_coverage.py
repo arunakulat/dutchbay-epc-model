@@ -231,6 +231,6 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     #  projIRR unchanged (unlevered); the costlier LKR tranche pushes equity_irr
     #  -0.0193 -> -0.0486 and de-levers the deal (gearing ~0.59 -> ~0.45).)
     k = out["kpis"]
-    assert k["project_irr"] == pytest.approx(0.02683686114665262, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.048585780806075674, abs=1e-9)
+    assert k["project_irr"] == pytest.approx(0.020322992686519513, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.04992120564267999, abs=1e-9)
     assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)

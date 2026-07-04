@@ -523,7 +523,7 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
     assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
     # start_year=1 default is byte-identical to the canonical baseline (PR-A fabricated-levy
     # removal lifts CFADS 199.10M -> 202.33M; dividend WHT / IDC are equity-path only)
-    assert base["total_cfads_usd"] == pytest.approx(202332872.38974944, rel=1e-9)
+    assert base["total_cfads_usd"] == pytest.approx(191218454.47506344, rel=1e-9)
 
 
 def test_depreciation_start_year_overrun_warns_about_forfeited_tail(

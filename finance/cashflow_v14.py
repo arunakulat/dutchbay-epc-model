@@ -108,6 +108,7 @@ def _prepare_cashflow_context(
     capex_depreciable_lkr: Optional[float],
     interest_expense_series: Optional[List[float]],
     extra_depreciable_usd: Optional[float] = None,
+    senior_fee_lkr_series: Optional[List[float]] = None,
 ) -> Tuple[
     Dict[str, Any],
     List[float],
@@ -117,6 +118,7 @@ def _prepare_cashflow_context(
     TaxProfile,
     DepreciationSchedule,
     FxHedge,
+    List[float],
 ]:
     """
     Shared context builder for build_annual_cfads and build_annual_rows.
@@ -124,7 +126,8 @@ def _prepare_cashflow_context(
     Returns
     -------
     (params_dict, fx_curve_resolved, capex_depreciable_resolved,
-     interest_series, years, tax_profile, depreciation_schedule, fx_hedge)
+     interest_series, years, tax_profile, depreciation_schedule, fx_hedge,
+     senior_fee_series)
 
     The TaxProfile and DepreciationSchedule are now built upfront and
     reused for all years, avoiding repeated computation and ensuring
@@ -224,6 +227,19 @@ def _prepare_cashflow_context(
     elif len(interest_series) > years:
         interest_series = interest_series[:years]
 
+    # Senior credit-support fee series (#737): per-operating-year LKR fee (guarantee +
+    # PRI on outstanding senior debt), computed by the debt engine and FX-translated by
+    # the pipeline. Aligned exactly like the interest series; None -> zeros ->
+    # byte-identical rows.
+    if senior_fee_lkr_series is None:
+        senior_fee_series = [0.0] * years
+    else:
+        senior_fee_series = [float(v or 0.0) for v in senior_fee_lkr_series]
+    if len(senior_fee_series) < years:
+        senior_fee_series = senior_fee_series + [0.0] * (years - len(senior_fee_series))
+    elif len(senior_fee_series) > years:
+        senior_fee_series = senior_fee_series[:years]
+
     # === NEW: Build TaxConfig and TaxProfile upfront ===
     # This avoids repeated computation and ensures consistent tax modeling
     # across all years (especially important for loss carry-forward).
@@ -318,6 +334,7 @@ def _prepare_cashflow_context(
         tax_profile,
         depreciation_schedule,
         fx_hedge,
+        senior_fee_series,
     )
 
 
@@ -338,6 +355,7 @@ def calculate_single_year_cfads(
     hedge_ratio: float = 0.0,
     spread: float = 0.0,
     forward_rate: float = 0.0,
+    senior_fee_lkr: float = 0.0,
 ) -> Dict[str, float]:
     """
     Compute detailed CFADS breakdown for a single year.
@@ -424,8 +442,18 @@ def calculate_single_year_cfads(
     opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
-    # Depreciation is NOT in EBIT; it's a tax deduction
-    ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
+    # Depreciation is NOT in EBIT; it's a tax deduction.
+    # senior_fee_lkr (#737) is the annual credit-support fee (guarantee + PRI on
+    # outstanding senior debt, computed by the debt engine and FX-translated by the
+    # pipeline). It ranks senior/above debt service, so it comes out at this line —
+    # reducing CFADS and, because ebit == ebitda feeds the tax engine, taxable income
+    # and tax automatically (deductible opex). 0.0 -> byte-identical.
+    ebitda_lkr = (
+        revenue_lkr
+        - statutory["total_statutory_deductions"]
+        - opex_lkr
+        - senior_fee_lkr
+    )
     ebit = ebitda_lkr
 
     # --- Tax and depreciation (with loss carry-forward) ----------------------
@@ -511,6 +539,7 @@ def calculate_single_year_cfads(
         "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
         "fx_rate": fx_rate,
         "opex_lkr": opex_lkr,
+        "senior_fee_lkr": senior_fee_lkr,
         "ebitda_lkr": ebitda_lkr,
         "pretax_cfads_lkr": ebit,
         "total_depreciation_lkr": total_depr,
@@ -546,6 +575,7 @@ def build_annual_cfads(
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
     verbose: bool = False,
+    senior_fee_lkr_series: Optional[List[float]] = None,
 ) -> List[float]:
     """
     Return list of CFADS (LKR) for each project year.
@@ -562,11 +592,13 @@ def build_annual_cfads(
         tax_profile,
         depreciation_schedule,
         fx_hedge,
+        senior_fee_series,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
+        senior_fee_lkr_series=senior_fee_lkr_series,
     )
 
     cfads_list: List[float] = []
@@ -592,6 +624,7 @@ def build_annual_cfads(
             hedge_ratio=fx_hedge.hedge_ratio,
             spread=fx_hedge.spread,
             forward_rate=forward_rate,
+            senior_fee_lkr=senior_fee_series[year_index],
         )
 
         cfads_list.append(result["cfads_final_lkr"])
@@ -616,6 +649,7 @@ def build_annual_rows(
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
     extra_depreciable_usd: Optional[float] = None,
+    senior_fee_lkr_series: Optional[List[float]] = None,
 ) -> List[Dict[str, float]]:
     """
     Return list of per-year breakdown rows including CFADS in LKR and USD.
@@ -631,6 +665,11 @@ def build_annual_rows(
     ``extra_depreciable_usd`` augments the depreciable tax base by an extra USD capex
     amount (translated at year-0 FX). It is used by the equity-facing pass to capitalize
     debt IDC (#36/#75); the unlevered project pass leaves it None and is byte-identical.
+
+    ``senior_fee_lkr_series`` charges the per-operating-year senior credit-support fee
+    (#737: guarantee + PRI on outstanding senior debt, LKR-translated by the pipeline)
+    at the EBITDA line — reducing CFADS and, through ebit == ebitda, taxable income.
+    None is byte-identical.
     """
 
     (
@@ -642,12 +681,14 @@ def build_annual_rows(
         tax_profile,
         depreciation_schedule,
         fx_hedge,
+        senior_fee_series,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
         extra_depreciable_usd=extra_depreciable_usd,
+        senior_fee_lkr_series=senior_fee_lkr_series,
     )
 
     rows: List[Dict[str, float]] = []
@@ -673,6 +714,7 @@ def build_annual_rows(
             hedge_ratio=fx_hedge.hedge_ratio,
             spread=fx_hedge.spread,
             forward_rate=forward_rate,
+            senior_fee_lkr=senior_fee_series[year_index],
         )
 
         rows.append(row)
@@ -697,6 +739,7 @@ def build_annual_rows_efficient(
     fx_curve: Optional[List[float]] = None,
     capex_depreciable_lkr: Optional[float] = None,
     interest_expense_series: Optional[List[float]] = None,
+    senior_fee_lkr_series: Optional[List[float]] = None,
 ) -> List[Dict[str, float]]:
     """
     Build annual rows using batch tax calculation (build_tax_series).
@@ -720,11 +763,13 @@ def build_annual_rows_efficient(
         tax_profile,
         depreciation_schedule,
         fx_hedge,
+        senior_fee_series,
     ) = _prepare_cashflow_context(
         config,
         fx_curve,
         capex_depreciable_lkr,
         interest_expense_series,
+        senior_fee_lkr_series=senior_fee_lkr_series,
     )
 
     # Step 1: Compute all production/revenue/opex data
@@ -761,7 +806,15 @@ def build_annual_rows_efficient(
         )
         opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
 
-        ebitda_lkr = revenue_lkr - statutory["total_statutory_deductions"] - opex_lkr
+        # Senior credit-support fee at the EBITDA line (#737) — mirrors
+        # calculate_single_year_cfads so the two builders stay identical.
+        senior_fee_lkr = senior_fee_series[year_index]
+        ebitda_lkr = (
+            revenue_lkr
+            - statutory["total_statutory_deductions"]
+            - opex_lkr
+            - senior_fee_lkr
+        )
 
         production_data.append(
             {
@@ -781,6 +834,7 @@ def build_annual_rows_efficient(
                 "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
                 "fx_rate": fx_rate,
                 "opex_lkr": opex_lkr,
+                "senior_fee_lkr": senior_fee_lkr,
                 "ebitda_lkr": ebitda_lkr,
             }
         )

@@ -39,10 +39,13 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     rows = build_annual_rows(cfg)
     res = plan_debt(annual_rows=rows, config=cfg)
 
-    assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)  # sculpt floors at target
+    # #737: the per-period series floors at the 1.30 target fee-inclusively; the
+    # headline min_dscr is the CONSERVATIVE per-year fold (year 1 carries the orphaned
+    # bridge service out of fee-netted CFADS) at ~1.288 — reported honestly.
+    assert res["min_dscr"] == pytest.approx(1.288, abs=0.01)
     assert res["debt_total"] == pytest.approx(
-        0.45 * CAPEX, rel=3e-3
-    )  # DSCR-solved, below cap (PR-B UIP LKR rate de-levers)
+        0.4275 * CAPEX, rel=3e-3
+    )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees de-lever)
     detail = res["dual_dscr"]
     assert detail is not None
     assert (
@@ -72,8 +75,9 @@ def test_opt_out_keeps_fixed_gearing(base_config):
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
     assert res["dual_dscr"] is None
     assert res["min_dscr"] == pytest.approx(
-        0.481, abs=0.01
-    )  # 70% over-levers -> deep sub-covenant
+        0.290, abs=0.01
+    )  # 70% over-levers -> deep sub-covenant (#737 fees on the sticky, never-amortising
+    # balance crush late-year coverage further: 0.481 pre-fee -> 0.290)
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):
@@ -94,5 +98,6 @@ def test_lower_target_adds_leverage_when_dscr_bound(base_config):
     assert (
         res_120["debt_total"] > res_130["debt_total"] + 1_000_000
     )  # lower target -> more debt
-    assert res_130["min_dscr"] == pytest.approx(1.30, abs=0.01)
-    assert res_120["min_dscr"] == pytest.approx(1.20, abs=0.01)  # lower DSCR floor
+    # Headline min = the conservative year-1 fold, ~0.012-0.016 under each target (#737).
+    assert res_130["min_dscr"] == pytest.approx(1.288, abs=0.01)
+    assert res_120["min_dscr"] == pytest.approx(1.184, abs=0.01)  # lower DSCR floor

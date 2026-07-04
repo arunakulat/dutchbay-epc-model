@@ -31,8 +31,8 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # rate 8% -> UIP-implied 13.39%; the costlier LKR tranche hits levered equity hard).
 # CFADS is the UNLEVERED project series — unchanged by PR B (the debt rate is downstream of it),
 # so _CANON_CFADS stays 202.33M (it rose from 199.10M only via PR-A's fabricated-levy removal).
-_CANON_EQ_IRR = -0.048585780806075674
-_CANON_CFADS = 202332872.38974944
+_CANON_EQ_IRR = -0.04992120564267999
+_CANON_CFADS = 191218454.47506344
 
 
 def test_default_off_is_byte_identical() -> None:
@@ -106,9 +106,9 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     """Round-5 #5: tax.interest_deductibility was decorative (toggling it changed nothing
     because the live pipeline computed CFADS with interest_expense=0). The levered equity
     path now applies the interest tax shield, so True (default) yields the canonical
-    -0.048586 and False recovers the unlevered -0.08473157279360188 (after the PR-B UIP LKR
-    debt rate 13.39%; the off case still keeps the IDC depreciation shield + dividend WHT,
-    only dropping the interest deduction — a bigger shield now that LKR interest is higher).
+    -0.049921 and False recovers the shield-free -0.07946587403034577 (after the PR-B UIP
+    LKR debt rate 13.39% and the #737 credit-support fees; the off case still keeps the
+    IDC depreciation shield + dividend WHT, only dropping the interest deduction).
     The project IRR / DSCR / CFADS are upstream of the equity waterfall and are byte-identical
     either way — the shield is confined to the equity path (project captures it via after-tax kd).
     """
@@ -117,10 +117,10 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
         LENDER, overrides={"tax.interest_deductibility": False}
     )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.08473157279360188, abs=1e-9)
+    assert off["equity_irr"] == pytest.approx(-0.07946587403034577, abs=1e-9)
     assert (
         on["equity_irr"] > off["equity_irr"] + 0.02
-    )  # the shield is material (+408bps)
+    )  # the shield is material (+295bps)
     # The shield is confined to the equity path: project KPIs identical both ways.
     assert on["project_irr"] == pytest.approx(off["project_irr"], abs=1e-12)
     assert on["min_dscr"] == pytest.approx(off["min_dscr"], abs=1e-12)

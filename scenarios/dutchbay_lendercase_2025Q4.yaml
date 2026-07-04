@@ -400,7 +400,14 @@ Financing_Terms:
   
   fees:
     upfront_pct: 0.01
-  
+    # Annual credit-support fees (#737), decimals per year on the OUTSTANDING senior
+    # debt (declining base; ADB PCG convention: annual guarantee fee on the principal
+    # outstanding). Charged senior to debt service (reduce CFADS), operations-period
+    # only, tax-deductible, and sized INSIDE the DSCR sculpt (rigorous treatment: the
+    # gearing solve re-sizes debt to hold the 1.30 target including the fee).
+    guarantee_fee_pct_per_year: 0.0075  # DFI partial credit guarantee, 75 bps (IDA level)
+    pri_premium_pct_per_year: 0.01      # political risk insurance, 100 bps (mid MIGA 50-150 bps band)
+
   enforce_hard_covenants: false
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -585,21 +592,36 @@ expected_results:
   # 5.89% data-derived LKR drift) — the 8% implied a concessional facility; this is the
   # market-rate assumption (pending a real LKR term-sheet). projIRR UNCHANGED (unlevered); the
   # costlier LKR tranche lifts WACC 8.11% -> 9.83%, deepens NPV -$54.0M -> -$65.5M, takes equity
-  # IRR -1.93% -> -4.86%, and de-levers the DSCR-solved gearing 0.588 -> ~0.45.
-  # Net current canonical: project IRR 2.68% (BELOW the ~9.83% WACC), equity IRR -4.86% (NEGATIVE),
-  # NPV -$65.5M, DSCR-solved gearing ~0.45. The project is value-destructive, honestly so.
-  project_irr: 0.027       # UNLEVERED (shield-free) — unchanged by the debt-rate change; << WACC
-  equity_irr: -0.049       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
+  # IRR -1.93% -> -4.86%, and de-levers the DSCR-solved gearing 0.588 -> ~0.45; and (9) the
+  # 2026-07-04 #737 CREDIT-SUPPORT FEES: guarantee 75 bps + PRI 100 bps per year on the
+  # OUTSTANDING senior debt (Financing_Terms.fees), charged senior to debt service
+  # (reduces CFADS), ops-period only, tax-deductible, and sized INSIDE the DSCR sculpt —
+  # the gearing solve holds the 1.30 per-period target fee-inclusively, de-levering
+  # 0.45 -> 0.4275 (debt $71.8M -> $68.2M). CFADS $202.3M -> $191.2M (-5.5%), project IRR
+  # 2.68% -> 2.03%, equity IRR -4.86% -> -4.99%, NPV -$65.5M -> -$70.9M (WACC 9.83% ->
+  # 9.94%, more equity in the stack). NOTE the conservative per-year covenant table reads
+  # year 1 at ~1.288 (it folds the orphaned half-year bridge service into year 1, and the
+  # fee consumed the pre-fee slack there); the per-period series holds 1.30 everywhere.
+  # A real blended-finance deal pays these fees; the fee-free case was overstating
+  # coverage and returns.
+  # Net current canonical: project IRR 2.03% (BELOW the ~9.94% WACC), equity IRR -4.99% (NEGATIVE),
+  # NPV -$70.9M, DSCR-solved gearing 0.4275. The project is value-destructive, honestly so.
+  # (Equity bears the fee net of the cash-sweep interaction: the sweep headroom is also
+  #  fee-netted, so the un-swept residual grows — reported as a balloon covenant breach.)
+  project_irr: 0.020       # UNLEVERED (shield-free) — now net of #737 credit-support fees; << WACC
+  equity_irr: -0.050       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
                             # -0.0100 (2% AEP haircut) -> -0.0193 (PR-A dividend WHT + IDC) ->
-                            # -0.0486 (PR-B UIP LKR debt rate 13.39%). The flat-nominal-LKR tariff
-                            # cannot clear equity. (Set tax.interest_deductibility: false to recover
-                            # the unlevered case.) MOIC < 1.
-  project_npv_m_usd: -65.5 # discount at build-up WACC ~9.83%. NPV -32.34M -> -53.29M (FX) -> -56.1M
-                            # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up).
-  min_dscr: 1.30            # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.4
-  llcr: 1.30
-  plcr: 1.35
+                            # -0.0486 (PR-B UIP LKR debt rate 13.39%) -> -0.0499 (#737 guarantee+PRI
+                            # fees). The flat-nominal-LKR tariff cannot clear equity. (Set
+                            # tax.interest_deductibility: false to recover the unlevered case.) MOIC < 1.
+  project_npv_m_usd: -70.9 # discount at build-up WACC ~9.94%. NPV -32.34M -> -53.29M (FX) -> -56.1M
+                            # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up)
+                            # -> -70.9M (#737 credit-support fees).
+  min_dscr: 1.30            # dual-DSCR sculpt pins the per-period min at the covenant target —
+                            # INCLUDING the #737 fee (per-year table: year 1 ~1.288, see note above)
+  avg_dscr: 1.39
+  llcr: 1.27                # fee-netted CFADS numerator (#737) over the fee-sized debt
+  plcr: 1.31
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
@@ -614,6 +636,9 @@ metadata:
   gwtf_compliance: 'All 51 rules audited + wind energy calculator integration'
   
   changes:
+    - '2026-07-04 (#737): annual credit-support fees ON — guarantee 75 bps + PRI 100 bps
+      on outstanding senior debt, fee-inside-sculpt; expected_results re-baselined
+      (projIRR 2.68%->2.03%, eqIRR -4.86%->-4.99%, NPV -65.5->-70.9M, gearing 0.45->0.4275)'
     - 'v3.0: Added multi-currency PPA structure (LKR/USD/EUR/CNY)'
     - 'v3.0: Integrated wind resource parameters (Weibull, air density, ERA5)'
     - 'v3.0: Added turbine technical specs for energy calculator'
