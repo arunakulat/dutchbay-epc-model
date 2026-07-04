@@ -283,13 +283,45 @@ class ScenarioAnalytics:
             annual_rows = build_annual_rows(config)
 
             # Debt layer (may mutate annual_rows in-place)
-            # NOTE (#737 follow-up): this batch surface builds PRE-FEE rows while
-            # apply_debt_layer nets the Financing_Terms.fees credit-support fee from
-            # its DSCR/LLCR/PLCR — so for a fee-bearing scenario the rows/IRR/NPV
-            # here are pre-fee (this surface already skips the gearing autosolve and
-            # the WACC drive, so it is non-canonical by design). Wiring the
-            # senior_fee_lkr rebuild here is tracked as a filed follow-up issue.
             debt_result = apply_debt_layer(config, annual_rows)
+
+            # Senior credit-support fees (#789, mirroring the canonical pipeline's
+            # #737 step): apply_debt_layer nets the Financing_Terms.fees fee
+            # (rate x opening outstanding) from its DSCR/LLCR/PLCR, so the rows
+            # this surface reports must bear the SAME fee — otherwise its
+            # IRR/NPV/CFADS would be pre-fee while its coverage ratios are
+            # fee-netted (internally inconsistent). Translate the engine's USD fee
+            # at each operating row's spot FX via the canonical row->debt-period
+            # map and rebuild the rows with it. No fees configured -> the original
+            # rows pass through untouched (byte-identical). NB: this surface stays
+            # non-canonical by design (fixed debt_ratio — no gearing autosolve;
+            # config/default discount, not the build-up WACC).
+            senior_fee_usd = [
+                float(v or 0.0) for v in (debt_result.get("senior_fee_usd") or [])
+            ]
+            if any(fee > 0.0 for fee in senior_fee_usd):
+                fee_row_to_period: Dict[int, int] = {}
+                for mapping in debt_result.get("annual_row_debt_period_map") or []:
+                    try:
+                        fee_row_to_period[int(mapping["annual_row_index"])] = int(
+                            mapping["debt_period"]
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                senior_fee_lkr_series = []
+                for row_idx, row in enumerate(annual_rows):
+                    period_idx = fee_row_to_period.get(row_idx, row_idx)
+                    fee_usd = (
+                        senior_fee_usd[period_idx]
+                        if 0 <= period_idx < len(senior_fee_usd)
+                        else 0.0
+                    )
+                    senior_fee_lkr_series.append(
+                        fee_usd * float(row.get("fx_rate") or 0.0)
+                    )
+                annual_rows = build_annual_rows(
+                    config, senior_fee_lkr_series=senior_fee_lkr_series
+                )
 
             # KPIs. This batch surface uses a config/default discount, NOT the
             # computed build-up WACC, so report wacc_is_real=False explicitly:
