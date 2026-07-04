@@ -737,9 +737,14 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
         # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag
         # (equity_positive). A positive IRR that is still below the equity hurdle has a
         # negative NPV; labelling it "negative to sponsors" off the NPV flag printed a
-        # literally false statement (round-11 fix). Distinguish all three cases.
-        if equity_irr <= 0:
+        # literally false statement (round-11 fix). A break-even 0.00% is likewise not
+        # "negative": gate the negative wording on a strict < 0 and give exactly-0.0 its
+        # own honest word (#769 — mirrors the #706 _build_ic_summary <= 0 -> < 0 fix;
+        # finance.irr / metrics can emit an exact 0.0). Distinguish all four cases.
+        if equity_irr < 0:
             desc = "negative to sponsors"
+        elif equity_irr == 0:
+            desc = "break-even to sponsors"
         elif not equity_positive:
             desc = "positive but below the equity hurdle"
         else:
