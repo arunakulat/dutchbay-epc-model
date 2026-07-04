@@ -47,7 +47,7 @@ jobs:
     steps:
     - name: Checkout repository (full history for the base diff)
       if: github.event_name == 'pull_request'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -112,11 +112,11 @@ jobs:
     steps:
     - name: Checkout repository
       if: needs.changes.outputs.code_changed == 'true'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python-version }}
       if: needs.changes.outputs.code_changed == 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -183,7 +183,7 @@ jobs:
           --cov-report=
 
     - name: Upload shard artifacts (coverage data + junit)
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always() && needs.changes.outputs.code_changed == 'true'
       with:
         name: shard-${{ matrix.python-version }}-${{ matrix.shard }}
@@ -211,11 +211,11 @@ jobs:
     steps:
     - name: Checkout repository
       if: needs.changes.outputs.code_changed == 'true'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python-version }}
       if: needs.changes.outputs.code_changed == 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -230,7 +230,7 @@ jobs:
 
     - name: Download this version's shard artifacts
       if: needs.changes.outputs.code_changed == 'true'
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         pattern: shard-${{ matrix.python-version }}-*
         path: shard-artifacts
@@ -253,7 +253,7 @@ jobs:
         coverage html
 
     - name: Upload combined coverage
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always() && needs.changes.outputs.code_changed == 'true'
       with:
         name: coverage-${{ matrix.python-version }}
@@ -262,7 +262,7 @@ jobs:
           htmlcov/
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       if: matrix.python-version == '3.12' && needs.changes.outputs.code_changed == 'true'
       with:
         files: ./coverage.xml
@@ -283,10 +283,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
         cache: 'pip'
@@ -350,10 +350,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
         cache: 'pip'
