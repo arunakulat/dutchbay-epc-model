@@ -437,6 +437,23 @@ def test_amortization_style_unknown_warns_and_falls_back_sculpted(
     assert core_bogus["debt_service_total"] == core_sculpted["debt_service_total"]
 
 
+@pytest.mark.parametrize("bad_style", [5, True, 1.5, ["sculpted"]])
+def test_amortization_style_non_string_rejected_loud(bad_style: object) -> None:
+    """A present-but-non-string style (YAML `5`/`true`) raises, no fallback (#683).
+
+    The #585 cluster turned the pre-existing AttributeError crash into a
+    warn-fallback — the one spot it made the engine MORE tolerant. A non-string
+    is a config error, not a stylistic typo: reject it loudly. Unknown STRING
+    styles keep the warn-fallback pinned by the test above.
+    """
+    params = _amort_params("sculpted")
+    financing = params["Financing_Terms"]
+    assert isinstance(financing, dict)
+    financing["amortization_style"] = bad_style
+    with pytest.raises(ValueError, match=r"amortization_style .* must be a string"):
+        apply_debt_layer(params=params, annual_rows=_rows(20.0))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # _solve_gearing_for_dscr — non-dict Financing_Terms branch + fallthrough
 # ─────────────────────────────────────────────────────────────────────────────
