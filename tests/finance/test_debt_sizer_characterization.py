@@ -51,15 +51,21 @@ def _kpis(debt_ratio: float) -> dict:
 
 
 def test_no_phantom_covenant_lockup() -> None:
-    """The sculpted lender case holds DSCR at target with NO covenant lockup.
+    """The sculpted lender case locks exactly the ONE honest year, no phantom ones.
 
     Guards the debt-service alignment fix: debt_service_total is period-indexed
     (offset by construction + bridge periods), and indexing it by annual-row index
     had spuriously collapsed the achieved DSCR ~3 years out of phase, locking 13
-    years of equity distributions. Correct alignment leaves zero locked years.
+    years of equity distributions. Correct alignment leaves exactly ONE locked
+    year: with the #737 credit-support fees, operating year 1 — which covers its
+    own service PLUS the orphaned half-year bridge service out of fee-netted
+    CFADS — reads ~1.288 on the per-year covenant table, just under the 1.30
+    lockup threshold (pre-fee it cleared at ~1.306 on slack). The per-period
+    series still holds 1.30 everywhere; the phase bug this guards would lock ~13
+    years, not 1.
     """
     kpis = evaluate_with_overrides(LENDER_CONFIG, overrides={})
-    assert kpis["equity_covenant_locked_years"] == 0
+    assert kpis["equity_covenant_locked_years"] == 1
     # The reported covenant DSCR is genuinely achieved (sculpted to target).
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
 
@@ -110,7 +116,7 @@ def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap(
     assert (
         max(plateau) - min(plateau) < 1e-6
     ), f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0486, abs=0.002)
+    assert plateau[0] == pytest.approx(-0.0499, abs=0.002)
     # Value-destructive leverage: the least-levered point beats the clamped high-gearing plateau,
     # and the gap is material.
     assert irrs[0] > plateau[0], f"leverage not value-destructive: {irrs}"

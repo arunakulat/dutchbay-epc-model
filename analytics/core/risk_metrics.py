@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from analytics.core.covenant_breach import prob_breach
+
 __version__ = "2.0.0"
 __author__ = "DutchBay Analytics Team"
 
@@ -377,17 +379,16 @@ class TailRiskAnalyzer:
         CovenantBreachAnalysis
             Pydantic V2 contract with breach probabilities.
         """
-        n_scenarios = dscr_results.shape[0]
-
         # Find minimum of each metric across all years (per scenario)
         dscr_min = np.min(dscr_results, axis=1)
         llcr_min = np.min(llcr_results, axis=1)
         plcr_min = np.min(plcr_results, axis=1)
 
-        # Probability of breach (min < threshold)
-        dscr_breach = float((dscr_min < self.config.min_dscr).sum() / n_scenarios)
-        llcr_breach = float((llcr_min < self.config.min_llcr).sum() / n_scenarios)
-        plcr_breach = float((plcr_min < self.config.min_plcr).sum() / n_scenarios)
+        # Probability of breach (min < threshold), noise-tolerant so a covenant
+        # pinned at a dual-DSCR sculpt floor is not fabricated as a breach (#725).
+        dscr_breach = prob_breach(dscr_min, self.config.min_dscr)
+        llcr_breach = prob_breach(llcr_min, self.config.min_llcr)
+        plcr_breach = prob_breach(plcr_min, self.config.min_plcr)
 
         return CovenantBreachAnalysis(
             dscr_breach_probability=dscr_breach,

@@ -815,6 +815,35 @@ def test_equity_irr_note_reflects_irr_sign_not_npv_flag() -> None:
     assert "positive to sponsors" in pos_ok
 
 
+def test_equity_irr_note_at_exact_break_even_is_not_negative() -> None:
+    """#769: at exactly equity_irr == 0.0 the note must NOT say 'negative to sponsors'.
+
+    A break-even 0.00% return is not negative (same literal-falsehood class as the #706
+    _build_ic_summary <= 0 -> < 0 fix). finance.irr / metrics can emit an exact 0.0, so the
+    boundary is reachable. Committed scenarios carry a non-zero equity IRR, so this is pure
+    presentation and the KPI oracle is unaffected.
+    """
+
+    def note(kpis):
+        v = build_report_context(_case(kpis), generated_at=GENERATED_AT).verdict
+        return next(n for n in v.notes if "Equity IRR" in n)
+
+    break_even = note(
+        {
+            "project_irr": 0.05,
+            "discount_rate_used": 0.078,
+            "equity_irr": 0.0,
+            "equity_npv": -20_000_000.0,
+            "min_dscr": 1.30,
+        }
+    )
+    assert "0.00%" in break_even
+    assert "break-even to sponsors" in break_even
+    assert (
+        "negative" not in break_even
+    )  # the #769 bug: it used to say "negative to sponsors"
+
+
 def test_verdict_not_bankable_on_dscr_breach() -> None:
     # DSCR floor breached while returns are acceptable -> explicit covenant breach.
     kpis = {

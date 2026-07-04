@@ -30,6 +30,7 @@ from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
+from analytics.feasibility_sections import validate_feasibility_sections
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +289,12 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # satisfied/waived/pending status. SOFT by default and a no-op when none is declared; a
     # lender-grade scenario opts in to hard enforcement. Changes no computed number.
     validate_conditions_precedent(cfg, str(config_path))
+
+    # Validate the FEASIBILITY-REPORT section declarations (#616 slice 1): a scenario's
+    # authored coverage of the canonical 20-section IC skeleton, each section to a
+    # complete/draft/not_applicable status. SOFT by default and a no-op when none is
+    # declared; an IC-grade scenario opts in to hard enforcement. Changes no computed number.
+    validate_feasibility_sections(cfg, str(config_path))
 
     # Cross-assert the LKR/USD spot pinned under fx.rates / fx.start / fx.source so the
     # cashflow economics and the FX reporting block cannot read divergent rates.

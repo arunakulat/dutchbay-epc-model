@@ -36,8 +36,8 @@ def test_default_off_preserves_canonical() -> None:
     # Canonical after PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR 2.68%
     # unchanged; the costlier LKR tranche takes equity IRR to -4.86% and the DSCR-solved
     # gearing DOWN to ~0.45 (debt ~71.82M) to hold the 1.30 sculpt target.
-    assert kpis["project_irr"] == pytest.approx(0.0268, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0486, abs=0.003)
+    assert kpis["project_irr"] == pytest.approx(0.0203, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.0499, abs=0.003)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"
@@ -47,8 +47,8 @@ def test_default_off_preserves_canonical() -> None:
     # No downside solve => no P90 target detail either (report renders no P90 rows).
     assert "target_dscr_p90" not in d
     assert d["solved_gearing_p50"] == pytest.approx(
-        0.45, abs=0.01
-    )  # PR-B UIP LKR rate de-levers
+        0.4275, abs=0.01
+    )  # PR-B UIP LKR rate + #737 fee-inside-sculpt de-lever
 
 
 def test_p90_binds_when_floor_is_high() -> None:
@@ -67,12 +67,13 @@ def test_p90_binds_when_floor_is_high() -> None:
 
 
 def test_low_p90_floor_keeps_p50_binding() -> None:
-    # At a 0.80 P90 floor the canonical still clears the downside, so P50 binds and
-    # gearing is unchanged from the default solve. (The 5.9% FX-drift re-baseline weakened
-    # the deal: a 1.00 P90 floor — used here before the re-baseline — now binds P90; the
-    # P50/P90 crossover dropped between 0.80 and 0.90.)
+    # At a 0.65 P90 floor the canonical still clears the downside, so P50 binds and
+    # gearing is unchanged from the default solve. (The crossover keeps dropping as the
+    # deal weakens: the 5.9% FX-drift re-baseline moved it below 1.00; the #737
+    # credit-support fees — a fixed charge that eats a LARGER share of the scaled-down
+    # P90 CFADS — moved it below 0.80, to between 0.65 and 0.70.)
     _, d_off = _run()
-    _, d_on = _run(bind_downside=True, target_dscr_p90=0.80)
+    _, d_on = _run(bind_downside=True, target_dscr_p90=0.65)
     assert d_on["binding_production_case"] == "P50"
     assert d_on["solved_gearing"] == pytest.approx(d_off["solved_gearing"], abs=1e-6)
 

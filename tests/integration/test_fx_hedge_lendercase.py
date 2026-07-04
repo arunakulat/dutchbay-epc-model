@@ -34,10 +34,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 # Committed lender-case pins (argv-correct, kpi_oracle).
-BASE_PROJECT_IRR = 0.02683686114665262
-BASE_EQUITY_IRR = -0.048585780806075674
+# Re-baselined by #737 (2026-07-04): guarantee + PRI credit-support fees ON,
+# fee-inside-sculpt (gearing 0.45 -> 0.4275); minDSCR re-pins at the 1.30 target.
+BASE_PROJECT_IRR = 0.020322992686519513
+BASE_EQUITY_IRR = -0.04992120564267999
 BASE_MIN_DSCR = 1.2999999999999998
-BASE_PROJECT_NPV = -65455817.14404039
+BASE_PROJECT_NPV = -70947738.39230962
 
 
 @pytest.fixture(scope="module")

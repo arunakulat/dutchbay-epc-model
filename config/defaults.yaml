@@ -186,6 +186,23 @@ defaults:
     require_complete: false  # if true, EVERY canonical cp_item must have a declared status
 
   # ═══════════════════════════════════════════════════════════════════
+  # FEASIBILITY-REPORT SECTION SCHEMA (#616 slice 1 — the 20-section skeleton)
+  # ═══════════════════════════════════════════════════════════════════
+  # A scenario may declare a `feasibility_sections.sections` block mapping each canonical
+  # feasibility-report section (e.g. executive_investment_thesis, resource_and_energy_yield,
+  # risk_register_and_mitigations — see config/feasibility_sections.yaml) to a
+  # complete/draft/not_applicable declaration with an optional authored narrative;
+  # analytics.feasibility_sections validates it against that taxonomy and rolls coverage up
+  # per group and overall, reporting which canonical sections are still MISSING from the IC
+  # pack. SOFT by design — a scenario with no authored sections is reported on, never broken
+  # (render-when-present; mirrors conditions_precedent above). An IC-grade scenario opts in
+  # to hard enforcement via its own feasibility_sections block: enforce: true,
+  # require_complete: true. Pure presentation schema — changes no computed number.
+  feasibility_sections:
+    enforce: false           # warn on findings (default); true => raise (block the run)
+    require_complete: false  # if true, EVERY canonical section must have a declared status
+
+  # ═══════════════════════════════════════════════════════════════════
   # DEGRADATION MODELING (reference defaults — inert)
   # ═══════════════════════════════════════════════════════════════════
   # Documented house-default degradation rate + MC shape, retained for reference.

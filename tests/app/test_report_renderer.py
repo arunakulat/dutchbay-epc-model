@@ -235,6 +235,30 @@ def test_html_omits_global_sa_section_when_absent() -> None:
     assert "Global Sensitivity" not in render_report_html(_context())
 
 
+def test_html_contains_model_limitations_from_default_config() -> None:
+    """#734: the committed report config seeds model-wide scope caveats, so every report
+    surfaces a 'Model Limitations & Assumptions' block with the sourced caveats."""
+    html = render_report_html(_context())
+    assert "Model Limitations" in html
+    assert "BESS dispatch" in html
+    assert "dispatch-optimised" in html  # a seeded detail fragment (verified in-code)
+    assert "Deterministic base case" in html
+
+
+def test_html_omits_model_limitations_when_config_has_none() -> None:
+    """Render-when-present: a config with no model_limitations omits the section entirely."""
+    from app.reports.report_config import load_report_config
+
+    cfg = load_report_config().model_copy(update={"model_limitations": []})
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    html = render_report_html(
+        build_report_context(case, generated_at=GENERATED_AT, config=cfg)
+    )
+    assert "Model Limitations" not in html
+
+
 def test_html_contains_pawn_block_when_supplied() -> None:
     """#645: the PAWN median-KS block renders as its own subsection with the KS columns
     and the finite-sample noise-floor caveat; it is additive to the Morris section."""
@@ -343,3 +367,37 @@ def test_pdf_render_when_weasyprint_available() -> None:
     pdf = render_report_pdf(_context())
     assert isinstance(pdf, bytes)
     assert pdf[:5] == b"%PDF-"
+
+
+def test_fx_warning_renders_when_fx_integration_failed() -> None:
+    """#736: a failed FX integration surfaces an explicit banner in the report, not just a log."""
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    run_result = {
+        "fx_integration": {
+            "attempted": True,
+            "succeeded": False,
+            "warning": (
+                "FX integration failed: the report's FX curve and risk profile are "
+                "unavailable, so any FX-sensitive figures rely on the scenario's static FX "
+                "assumption rather than a calibrated path. Cause: boom"
+            ),
+        }
+    }
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=run_result)
+    assert ctx.fx_warning is not None
+    html = render_report_html(ctx)
+    assert "FX assumption notice" in html
+    assert "FX curve and risk profile are unavailable" in html
+
+
+def test_fx_warning_omitted_when_fx_integration_succeeded() -> None:
+    """Render-when-present: a healthy FX integration (or no fx status) omits the banner."""
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    ok = {"fx_integration": {"attempted": True, "succeeded": True, "warning": None}}
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=ok)
+    assert ctx.fx_warning is None
+    assert "FX assumption notice" not in render_report_html(ctx)

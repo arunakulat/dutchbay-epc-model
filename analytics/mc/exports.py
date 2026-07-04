@@ -36,11 +36,18 @@ except Exception:  # pragma: no cover
     pd = None  # type: ignore[assignment]
 
 from analytics.contracts_v14 import MonteCarloResult
+from analytics.core.covenant_breach import is_floor_pinned, prob_breach
 
 
 @dataclass(frozen=True)
 class CovenantSpec:
     dscr_floor: float = 1.30
+
+
+# Module-level singleton: the default covenant is built once at import time and
+# shared read-only (CovenantSpec is frozen), which is behaviour-identical to the
+# old `covenant=CovenantSpec()` argument default but B008-compliant (#753).
+_DEFAULT_COVENANT_SPEC = CovenantSpec()
 
 
 def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
@@ -83,9 +90,13 @@ def _p(arr: np.ndarray, pctl: int) -> float:
 
 
 def dscr_breach_probability(dscr: np.ndarray, *, floor: float) -> float:
-    if dscr.size == 0:
-        return float("nan")
-    return float(np.mean(dscr < float(floor)))
+    """Noise-tolerant DSCR covenant-breach fraction.
+
+    Delegates to :func:`analytics.core.covenant_breach.prob_breach` so a dual-DSCR
+    sculpt that pins per-trial min-DSCR at exactly ``floor`` is not fabricated as an
+    85-93% breach (#725); the true probability there is 0.0.
+    """
+    return prob_breach(dscr, floor)
 
 
 def worst_year_dscr_p95(dscr_min_by_trial: np.ndarray) -> float:
@@ -102,7 +113,7 @@ def worst_year_dscr_p95(dscr_min_by_trial: np.ndarray) -> float:
 def build_lender_risk_table(
     result: MonteCarloResult,
     *,
-    covenant: CovenantSpec = CovenantSpec(),
+    covenant: CovenantSpec = _DEFAULT_COVENANT_SPEC,
     metric_map: Optional[Mapping[str, str]] = None,
 ) -> "pd.DataFrame":
     """
@@ -218,7 +229,7 @@ def build_lender_risk_table(
 def build_casper_risk_blocks(
     result: MonteCarloResult,
     *,
-    covenant: CovenantSpec = CovenantSpec(),
+    covenant: CovenantSpec = _DEFAULT_COVENANT_SPEC,
     metric_map: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """
@@ -243,6 +254,10 @@ def build_casper_risk_blocks(
     covenant_block = {
         "dscr_floor": float(covenant.dscr_floor),
         "prob_breach": dscr_breach_probability(dscr, floor=covenant.dscr_floor),
+        # Disclose-don't-mislead: when a dual-DSCR sculpt pins per-trial min-DSCR at
+        # the floor, prob_breach is a structural 0.0 with no distributional signal --
+        # read the lender tail from LLCR/PLCR and the balloon, not min-DSCR (#725).
+        "floor_pinned": bool(is_floor_pinned(dscr, covenant.dscr_floor)),
         "worst_year_dscr_p95_downside": worst_year_dscr_p95(dscr),
         "n_trials": int(len(dscr)),
     }

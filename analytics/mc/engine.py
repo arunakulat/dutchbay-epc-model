@@ -1080,7 +1080,7 @@ class MonteCarloEngine:
         schema guard raised ValidationError on every trial.
         """
         overrides: Dict[str, Any] = {}
-        for name, val in zip(param_names, sample_row.tolist()):
+        for name, val in zip(param_names, sample_row.tolist(), strict=True):
             keys = name.split(".")
             if len(keys) == 1:
                 # Non-dotted name: place at top level (backward-compatible)

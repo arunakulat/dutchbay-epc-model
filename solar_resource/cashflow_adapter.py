@@ -419,7 +419,7 @@ def solar_export_to_scenario_patch(
                     None,
                     tolerance_pct,
                     adapter_mode,
-                )
+                ) from None
             if _drift_pct(solar_value, existing) > 100.0 * _CAPACITY_IDENTITY_TOL:
                 raise SolarAdapterDriftError(
                     label,
@@ -452,7 +452,7 @@ def solar_export_to_scenario_patch(
         except (TypeError, ValueError):
             raise SolarAdapterDriftError(
                 label, solar_value, scenario_value, None, tolerance_pct, adapter_mode
-            )
+            ) from None
         drift = _drift_pct(solar_value, scenario_value_f)
         if drift > tolerance_pct:
             raise SolarAdapterDriftError(

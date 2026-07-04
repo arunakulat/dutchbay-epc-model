@@ -31,6 +31,7 @@ from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
+from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import _assert_fx_spot_consistency
@@ -87,6 +88,7 @@ def run_finance_case(
     validate_evidence_register(guarded, "<inline>")
     validate_development_readiness(guarded, "<inline>")
     validate_conditions_precedent(guarded, "<inline>")
+    validate_feasibility_sections(guarded, "<inline>")
     # PIPE-3 (#489): the FX spot cross-assert is a load-time guard too, and was the one
     # integrity detector this seam still skipped — so a web/notebook caller could submit a
     # scenario whose fx.rates.lkr_per_usd, fx.start_lkr_per_usd and fx.source.pinned_rate

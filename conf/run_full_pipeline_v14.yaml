@@ -115,3 +115,34 @@ emit_executive_workbook: false
 # '<export_dir>/executive_workbook.xlsx'. The written path is echoed back under
 # result['executive_workbook_path'].
 executive_workbook_path: null
+
+# ---------------------------------------------------------------------------
+# #779: capital-risk (Monte-Carlo) report emission (OFF by default).
+# When true, after a successful finance run this CLI runs the CANONICAL MC
+# (analytics.mc.engine — LHS + Iman-Conover, with monte_carlo.allow_toy_fallback
+# forced false so a failed trial raises rather than fabricating a toy metric)
+# over a BOUNDED trial count and renders a lender HTML report carrying the
+# capital-risk section, via app.reports.capital_risk_emit. It is heavy (each
+# trial is a full v14 evaluation), so it lives in this batch path only — never
+# the synchronous HTTP report route. Emission derives no committed KPI, so
+# leaving this off keeps committed scenarios byte-identical.
+# ---------------------------------------------------------------------------
+
+# If true, render the capital-risk lender report after the finance run.
+emit_capital_risk_report: false
+
+capital_risk_report:
+  # Bounded, report-appropriate trial count (NOT the scenario's 100k
+  # monte_carlo.n_scenarios). Each trial is a full evaluation. A lender-grade
+  # floor is enforced (app.reports.capital_risk_emit.LENDER_GRADE_MIN_TRIALS =
+  # 1000): setting n_trials below it fails loud rather than emitting a VaR/CVaR
+  # number off a statistically inadequate tail.
+  n_trials: 2000
+  # MC seed. When null, defaults to the scenario's monte_carlo.seed.
+  seed: null
+  # NPV bucket the distribution chart plots ('equity_npv' | 'project_npv').
+  npv_metric: equity_npv
+  # Target .html path. When null, defaults to
+  # '<export_dir>/capital_risk_report.html'. The written path is echoed back
+  # under result['capital_risk_report_path'].
+  path: null

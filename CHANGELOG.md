@@ -4,6 +4,206 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- **Tail-risk report wired onto the driver Monte-Carlo (#715, slice 2 of #657)** — new
+  `analytics.capital_risk_layer_v14.build_driver_mc_tail_report` renders the full
+  `TailRiskReport` (per-metric VaR/CVaR + downside for equity/project IRR & NPV, covenant-breach
+  probabilities, probability-below-hurdle) from the per-trial arrays collected by
+  `run_driver_mc(collect_trials=True)`. Resolves the #657 shape gap by reshaping the per-trial
+  covenant scalars (`dscr_min`/`llcr`/`plcr`) to `(n_trials, 1)` — a faithful adaptation, since
+  `dscr_min` is already the per-trial minimum DSCR and LLCR/PLCR are scenario scalars. Covenant
+  floors are config-first (mirrors the deterministic risk block). Additive / opt-in (needs a
+  driver spec); no committed KPI changes — the DSCR-breach probability stays 0.0 on the lender
+  case via the #725 noise-tolerant `prob_breach` (no fabricated breach). Covenant floors are
+  config-first: `min_dscr` from `constraints.min_dscr_covenant`, and `min_{llcr,plcr}` from
+  `constraints.min_{llcr,plcr}_covenant` when declared, else a NON-BINDING 1.0 coverage floor —
+  it does NOT borrow the DSCR covenant for undeclared LLCR/PLCR (which would fabricate a lender
+  covenant breach the scenario never declared). The pipeline's deterministic risk NOTE is
+  updated to point at this now-available path. *(Reconciliation, #780: the
+  `build_driver_mc_tail_report` / `run_driver_mc` ENTRY POINTS named here were retired
+  unreleased — superseded by the canonical MC path,
+  `build_capital_risk_report_from_mc_result` fed by `analytics.mc.engine`; the shape-bridge
+  core this slice built, `_tail_report_from_trials`, is what shipped and remains.)*
+- **Capital-risk NPV-distribution PNG + unified capital-risk report, canonical-MC-fed (#716, slice 3 of #657)** —
+  `analytics.capital_risk_layer_v14.emit_npv_distribution_from_trials` emits the NPV-distribution
+  histogram PNG (`export_helpers.ChartGenerator.plot_npv_distribution`, now with a `title` param for
+  the MRM-02 scenario/version annotation) from per-trial arrays; matplotlib absence degrades
+  gracefully via the CASPER `_get_plt()` guard. `build_capital_risk_report_from_trials` /
+  `build_capital_risk_report_from_mc_result` assemble the three distributional surfaces — VaR/CVaR
+  snapshot (slice 1), `TailRiskReport` (slice 2 / #715), NPV PNG — into the unified
+  `CapitalRiskReport`, **MC-source-agnostic and fed from the canonical `MonteCarloResult.trials`**
+  (the real lender MC: LHS + Iman-Conover correlation, reading `monte_carlo.parameters`) rather than
+  the toy `run_driver_mc`. Covenant floors config-first; the #715/#725 no-fabricated-breach invariants
+  hold on the canonical MC. Additive / opt-in; no committed KPI change. Rendering it in the lender
+  report is a follow-up (#776).
+- **Model-limitations block in every report (#734)** — a config-authored "Model Limitations &
+  Assumptions" block (`report_defaults.yaml` → `ReportConfig.model_limitations` →
+  `ReportContext` → the Methodology section) so no generated report is read without its scope
+  caveats. It consolidates caveats that previously lived only as module docstrings/result-notes
+  (the BESS-LCOS "dispatch is not simulated" note; the three-statement tax-shield / 100%-sweep /
+  equity-balancing note) into one report-wide block, plus the deterministic-P50-vs-Monte-Carlo
+  scope note. Render-when-present / additive — a config without limitations omits the section, and
+  no computed KPI moves (pure presentation; the rendered report gains a caveat section by design).
+- **FX-failure warning surfaced to the report (#736)** — when the pipeline's FX
+  calibration/integration step fails, it was a log-only warning (`pipeline_v14_enhanced` caught the
+  exception, continued reporting-only), so a stale/fallback FX assumption was invisible to a report
+  reader. The run result now carries an `fx_integration` status block (`attempted` / `succeeded` /
+  `warning`, surfaced unconditionally — not gated on monitoring), and `build_report_context`
+  projects any `warning` into `ReportContext.fx_warning`, rendered as an explicit "FX assumption
+  notice" banner in the report's Important Notice section. Render-when-present / additive: a healthy
+  run (FX integration succeeds) sets no warning, so the banner is omitted and committed reports stay
+  byte-identical; no computed KPI is touched.
+Annual credit-support fees on outstanding senior debt (#737): `Financing_Terms.fees.guarantee_fee_pct_per_year` (DFI partial credit guarantee) + `Financing_Terms.fees.pri_premium_pct_per_year` (political risk insurance), each an annual rate on the outstanding (declining) senior balance. The fee ranks senior to debt service (reduces CFADS), applies to operating periods only, is tax-deductible (charged at the EBITDA line), and is sized **inside** the DSCR sculpt — the gearing solve re-sizes the debt so the per-period DSCR series holds the target fee-inclusively. The debt engine exposes `senior_fee_usd`/`senior_fee_rate`; the pipeline FX-translates the fee into each row's `senior_fee_lkr`; LLCR/PLCR numerators net the same fee. Committed lendercase turns both fees ON (75 bps + 100 bps) and re-baselines the canonical KPIs: projIRR 2.68%→2.03%, eqIRR −4.86%→−4.99%, NPV −$65.5M→−$70.9M, CFADS −5.5%, gearing 0.45→0.4275 (debt $71.8M→$68.2M), per-period minDSCR held at 1.30 (the conservative per-year covenant table reads year 1 at ~1.288 — the bridge-service fold — and reports it honestly). Scenarios without the keys are byte-identical.
+- **Capital-risk (Monte-Carlo) report section (#776, surfacing #657 slices 1–3)** — the unified
+  `CapitalRiskReport` (canonical MC: LHS + Iman-Conover correlation) now renders in the lender
+  report as a `CapitalRiskBlock` on `ReportContext` + a "Capital Risk — Monte-Carlo Distribution"
+  template section: the DSCR/LLCR/PLCR covenant-breach probabilities against their floors, the
+  probability equity IRR is below the hurdle, per-metric VaR/CVaR for the four return metrics, and
+  the NPV-distribution chart. Pure presentation (recomputes no risk number); the heavy MC runs
+  out-of-band and is passed into `build_report_context` (like the tornado / global-SA blocks).
+  Render-when-present / default-off — committed reports are byte-identical. The opt-in production
+  caller that runs the MC and supplies the report is a follow-up (#776 slice 2).
+- **Capital-risk report — opt-in production caller (#779, completing #657 / #776)** — the lender
+  report already *rendered* the capital-risk (Monte-Carlo) section render-when-present, but nothing
+  ran the MC and supplied a `CapitalRiskReport`, so it never appeared for a lender. New
+  `app.reports.capital_risk_emit` runs the CANONICAL MC engine (LHS + Iman-Conover, reading the
+  scenario's `monte_carlo.parameters`) with `monte_carlo.allow_toy_fallback` forced **false** (a
+  failed trial raises rather than fabricating a toy metric) over a **bounded**, config-first trial
+  count (`capital_risk_report.n_trials`, default 2000 — not the scenario's 100k), builds the report
+  via `build_capital_risk_report_from_mc_result`, and renders a lender HTML report carrying the
+  section. A lender-grade sample floor (`LENDER_GRADE_MIN_TRIALS` = 1000) fails loud rather than
+  emitting a VaR/CVaR number off a statistically inadequate tail (CESSPIT). Wired opt-in / default-off into `run_full_pipeline_v14.py`
+  (`emit_capital_risk_report: true`) — the heavy MC lives in the batch path only, never the
+  synchronous HTTP report route (which passes `capital_risk=None` → section omitted → fast).
+  Leaving the flag off keeps committed-scenario output byte-identical.
+- **GWTF R26 — "Convert PDFs with local markitdown before parsing"** — codified the standing
+  practice as GWTF rule R26 (CLI & Tooling) in `go_with_the_flow_rules_v3_0_clean.csv`: never parse
+  a PDF from raw WebFetch/HTTP output (it returns unparseable binary); always convert to Markdown
+  first via the local markitdown (DutchBay `.venv`), then parse. Covers deep-research source
+  ingestion, document conversion, and lender-DD PDF reading. The ruleset is now 63 rules.
+- **Feasibility-report section schema (#705, slice 1/5 of #616)** — config-first canonical
+  20-section IC skeleton (static-audit §11 list) in `config/feasibility_sections.yaml`
+  (7 groups: technical/financial/legal/E&S/grid/logistics/risk), resolved by the new
+  `analytics.feasibility_sections` module (frozen pydantic `extra="forbid"` models). A
+  scenario may declare per-section `complete/draft/not_applicable` coverage under
+  `feasibility_sections.sections`; validated softly at all three load seams
+  (enforce=false / render-when-present — committed scenarios byte-identical).
+- **IC executive summary + explicit red-flag section (#706, slice 3/5 of #616)** — new
+  `IcSummaryBlock`/`RedFlag` on `ReportContext` and an "Investment Committee — Red Flags"
+  report section: presence-gated surfacing of covenant breaches (honoring the
+  engine-published `balloon_covenant_breach` flag), negative sponsor returns, below-hurdle
+  project IRR, outstanding conditions precedent (per workstream), and readiness reds.
+  Pure read-only derivation over the shared `Verdict` + canonical registers — an absent
+  KPI or register never fabricates a flag; render-when-present.
+- **Bankability evidence-completeness score (#707, slice 4/5 of #616)** — new
+  `analytics.evidence_score` module computes a config-weighted 0–100 score (+ band label)
+  on top of the evidence-register coverage: each material assumption is credited its
+  evidence tier's strength (`config/evidence_score.yaml`, cross-checked against the register
+  taxonomy so the two can't drift), with a missing-evidence penalty floor. Surfaced as an
+  `EvidenceScoreBlock` on `ReportContext` and a report section (render-when-present). Pure
+  read-only derivation — recomputes no finance metric; committed scenarios byte-identical.
+- **Feasibility report route + template wiring (#708, slice 5/5 of #616 — completes the epic)**
+  — the conditions-precedent checklist (full line-item table) and the 20-section feasibility
+  coverage (schema from #705) now render as report sections via the **existing**
+  `app/reports` HTML/PDF renderer, from one `ReportContext`, served through the existing
+  report route (no new dependency; WeasyPrint stays optional behind its call-time guard).
+  Both are read-only projections (render-when-present) — legacy KPI-only reports and the
+  committed lender reports are unchanged; oracle byte-identical.
+- **Multi-tech Executive Workbook guard (#726)** — parametrized test that a real
+  `run_v14_pipeline` + `emit_executive_workbook_from_pipeline` emits exactly the five
+  technology-agnostic finance sheets (Summary/Cashflow/DebtService/Ratios/ScenarioSummary)
+  for a hybrid (wind+solar), a solar+BESS, and a BESS scenario — locking the tech-agnostic
+  behaviour against regression (#656 follow-up).
+- **Changelog fragments: per-PR entries now live in `changelog.d/` and compile into `CHANGELOG.md` on demand (dev-workflow, no runtime/KPI impact).**
+  Editing the shared `CHANGELOG.md [Unreleased]` block in every PR guaranteed a merge conflict between concurrent
+  dolphins (→ forced rebase → a second full CI run). Each change now drops a `changelog.d/<id>.<category>.md`
+  fragment (unique filename → never conflicts); `python scripts/compile_changelog.py` folds pending fragments into
+  `[Unreleased]` under their Keep-a-Changelog section (newest first) and deletes them — run on demand (end of a
+  batch / before a release). `--check` lists pending, `--dry-run` previews. See `changelog.d/README.md`.
+- **flake8-bugbear (`B`) enabled as a mandatory ruff gate; B904 (`raise ... from`) fixed repo-wide (follow-up to #610, KPI-neutral).**
+  The retired flake8 stack (#610) enforced bugbear via `select = C,E,F,W,B,B950`; ruff did not yet
+  cover it. `ruff.toml` now selects `B`, restoring and strengthening that coverage as a hard gate.
+  All 7 B904 sites were fixed by adding `raise ... from err` / `raise ... from None` (exception-chaining
+  only — `__cause__` / `__suppress_context__`; no computed value changes) across
+  `analytics/pipeline_v14_enhanced.py`, `finance/wacc_v14.py`, `run_scenario_analytics_v14.py`,
+  `wind_resource/cashflow_adapter.py`, and `solar_resource/cashflow_adapter.py`. Because these edit
+  KPI-bearing engine `.py`, the change was gated on an all-scenarios KPI oracle (27 scenarios,
+  19 success + 8 error-path exception signatures) proven byte-identical before/after. The two other
+  bugbear families surfaced by the gate are deferred with tracked follow-ups and explicit `ignore`
+  entries: `B905` (zip strict=, #752) and `B008` (function-call-in-default-args, #753); each needs a
+  per-site behavioural review rather than a blanket lint fix.
+
+### Changed
+- **Output-path resolver — single-sourced default roots (#735, slice 1)** — the v14 entrypoints
+  each built their artifact directory from a scattered per-config default (`_out/run_full_pipeline_v14`,
+  `_out/monte_carlo`, `_out/sensitivity`) with no shared resolver. New `analytics/output_paths.py`
+  single-sources the pipeline default root and adds `resolve_output_dir(root, *, run_scoped, run_id)` — its
+  default returns the root unchanged (committed runs write the same paths, byte-identical), with an
+  opt-in run-scoped mode that groups artifacts under a reproducible `v<engine_version>_<git_sha>`
+  subdirectory (reusing `analytics.run_manifest` for MRM-02 provenance). `run_full_pipeline_v14.py`
+  now resolves its `export_dir` through it and uses the shared default constant. Routing the other
+  entrypoints/configs onto it and converging the naming are follow-up slices.
+CI cost diet (Test Suite workflow): (1) merges to `main` now re-validate on **Python 3.11 only** — the one leg the PR gate skips; the PR just validated 3.12 on the same tree, so the full-matrix post-merge re-run duplicated ~32 runner-minutes per merge for near-zero signal (the nightly schedule keeps the FULL 3.11+3.12 cross-version backstop). (2) `TOTAL_SHARDS` 4→6: slowest-shard wall time drops ~490s→~350s, taking the merge-critical path from ~10 to ~7.5 minutes per PR at ~2 runner-minutes extra. (3) **Docs-only fast path**: a new `changes` classifier job skips the pytest shards + coverage combine (steps, not jobs — the required `Test Summary` check still reports) when a PR touches only markdown/`changelog.d/`/`docs/`; a changelog flush now costs ~2 runner-minutes instead of ~35. Fail-safe: any non-doc file, empty or undeterminable diff → full gate. (4) `.test_durations` regenerated against the current 3,661-test collection (51 stale IDs pruned; CI-skipping weasyprint/reportlab-gated tests pinned to skip-cost so local installs don't distort CI shard balance).
+- **CI: `fastlane` is now a real fast lane — it no longer re-runs the full test suite (#760, CI-only, KPI-neutral).**
+  The required `fastlane` check was running the entire ~3,500-test tree single-process on Python 3.11 (~9m),
+  making it the merge-critical long pole and executing the tree twice per PR (the other run being the `test`
+  job's 3.12-sharded matrix). `fastlane` is now lint-only (focused ruff + mypy on the v14 entrypoint surface),
+  so the gate's wall-clock is the slowest shard, not a serial full-suite job. The full suite still runs exactly
+  once per PR (the sharded `test` job on 3.12, gated by `Test Summary`), and the FULL 3.11+3.12 matrix runs on
+  push-to-main and the nightly schedule — the 3.11 leg PRs skip is covered post-merge, matching the sharding
+  design's documented tradeoff. `fastlane` stays a required status check (name preserved; no ruleset change).
+  Also: the sharded split now passes `--durations-path .test_durations` explicitly and `.test_durations` was
+  regenerated so all current tests are time-weighted (the in-code comment claiming a count-based split was
+  stale — pytest-split was already balancing by duration sum).
+
+- **flake8-bugbear B905 resolved and gated: every `zip()` now declares `strict=` explicitly (#752, KPI-neutral).**
+  Follow-up to the B-gate (#758): B905 is removed from the `ruff.toml` ignore list and enforced repo-wide.
+  Each of the 15 call sites was resolved per a multi-agent analyze-then-adversarially-verify pass: 13 sites
+  that carry a provable equal-length invariant (an explicit `len()` guard, pad-and-truncate-to-`n`, a
+  one-to-one list comprehension, `itertools.product` arity, a numpy row width, or two columns of one
+  DataFrame) now use `strict=True`, which is output-identical on all valid inputs and converts a latent
+  silent-truncation into a loud error; two sites in `wind_resource/power_curve_sourcing.py` use
+  `strict=False` because they are legitimately unequal-length (an anticipated, separately-reported mismatch
+  state, and a deliberate adjacent-pair `zip(ws, ws[1:])`). No committed KPI changes — the all-scenarios KPI
+  oracle is byte-identical (no committed scenario ever triggers a `strict=True` raise).
+- **flake8-bugbear B008 resolved and gated: config-dataclass argument defaults use module-level singletons (#753, KPI-neutral).**
+  Follow-up to the B-gate (#758): B008 is removed from the `ruff.toml` ignore list and enforced repo-wide.
+  All 11 sites passed a frozen-config factory (`CovenantSpec()`, `SensitivityRunConfig()`,
+  `DscrSensitivityConfig()`, `TaxSensitivityConfig()`, `TailRiskConfig()`, `AEPTornadoConfig()`) as an
+  argument default. Each is replaced by a module-level singleton (`_DEFAULT_*`) built once at import and
+  shared read-only. All six config classes were confirmed `@dataclass(frozen=True)` by a multi-agent
+  analyze-then-adversarially-verify pass, so the singleton is **behaviour-identical** to the old argument
+  default (both share one instance) — B008-compliant with no signature/type change and no `Optional`. Each
+  singleton is defined once per module (`sensitivity/{dscr,tax}.py` and `mc/exports.py`, `wind/aep_tornado.py`
+  reuse one singleton across their two sites). No committed KPI changes — the all-scenarios KPI oracle is
+  byte-identical.
+
+### Removed
+Retired the toy `run_driver_mc` capital-risk stack (#780, user-approved dead-code removal): `run_driver_mc` (independent-Gaussian bootstrap — no LHS/correlation), `run_capital_risk_layer`, `build_driver_mc_tail_snapshot`, `build_driver_mc_tail_report`, the `scripts/run_capital_risk_layer.py` CLI and their tests. Superseded end-to-end by the canonical MC path: `analytics.mc.engine.MonteCarloEngine` (LHS + Iman-Conover) → `build_capital_risk_report_from_mc_result` → the lender report (opt-in caller `app.reports.capital_risk_emit`, #779/#776). The MC-source-agnostic cores (`compute_capital_risk_layer`, `build_case_metadata_from_trials`, `_tail_report_from_trials`, `emit_npv_distribution_from_trials`, `build_capital_risk_report_from_trials`/`_from_mc_result`) are kept; their guards now run on synthetic per-trial arrays. KPI-neutral.
+
+### Fixed
+Batch scenario-analytics surface now bears the #737 senior credit-support fee (#789): `ScenarioAnalytics._run_single` mirrors the canonical pipeline's post-debt step — the engine's per-period USD fee is FX-translated at each row's spot rate via the canonical row→debt-period map and the rows are rebuilt with `senior_fee_lkr_series`, so the batch surface's IRR/NPV/CFADS are no longer pre-fee beside fee-netted DSCR/LLCR/PLCR on the same result. Scenarios without the fee keys pass through byte-identical. (The surface remains non-canonical by design: fixed `debt_ratio`, no gearing autosolve, config/default discount.)
+- **Bootstrap stale checks fixed (#765)** — `dutchbay_bootstrap.py` now detects the
+  repo's `.venv` (legacy `.venv311` still accepted) and validates pytest config via
+  `[tool.pytest.ini_options]` in `pyproject.toml` instead of requiring a `pytest.ini`;
+  a healthy clone now bootstraps all-✅ / exit 0.
+- **DSCR covenant-breach probability: floor-pin FP fabrication removed from four sibling paths (#725, from the #657 review).**
+  A strict `arr < floor` comparison fabricates an ~85-93% DSCR-breach probability on any dual-DSCR-sculpted
+  scenario, because the sculpt pins per-trial min-DSCR at EXACTLY the covenant (e.g. 1.30) and floating-point
+  representation noise (`1.2999999999999996 < 1.30`) counts as a breach; the true probability is 0.0. #657 fixed
+  this in `analytics/sensitivity/tail_risk`; the same latent bug lived in four siblings. The noise-tolerant
+  primitive (breach only when below the floor by MORE than representation noise, `PROB_BREACH_RTOL = 1e-9`) is
+  now extracted into a single source of truth, `analytics/core/covenant_breach.py` (`prob_breach` /
+  `is_floor_pinned`), and all paths route through it: `analytics/capital_risk_layer_v14.py`,
+  `analytics/core/risk_metrics.py` (DSCR, plus LLCR/PLCR for consistency), `analytics/mc/exports.py`
+  (`dscr_breach_probability`, used by both the lender risk table and the CASPER covenant block), and
+  `tail_risk` (re-exported). The lender-facing MC `covenant_block` now also carries a `floor_pinned` disclosure
+  (a structural 0.0 carries no distributional signal — read the tail from LLCR/PLCR and the balloon). The
+  committed defaults were already correct (the flagship `capital_risk_layer` covenant defaults to 1.20, not the
+  1.30 sculpt floor), so this is **KPI-neutral for committed scenarios** (all-scenarios KPI oracle
+  byte-identical) but removes a false-lender-risk hazard for any authorized `covenant == sculpt-floor` case.
+  Each path has a sculpt-pinned repro (prob == 0.0) and a genuine-breach repro (prob > 0).
+
 ## v15.3.0 - 2026-07-03
 
 ### Added

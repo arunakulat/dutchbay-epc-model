@@ -84,6 +84,15 @@
     ul.notes li { margin-bottom: 3pt; }
     .disclaimer { font-size: 9pt; color: #555; }
     .muted { color: #888; }
+    /* FX-integration failure notice (#736) — amber caveat box surfaced to the reader. */
+    .fx-warning {
+      margin-top: 10pt;
+      padding: 8pt 12pt;
+      border-left: 4px solid #9a6700;
+      background: #fff4e0;
+      color: #7a5200;
+      font-size: 9.5pt;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +115,11 @@
   <section class="page">
     <h2>Important Notice</h2>
     <p class="disclaimer">{{ ctx.meta.disclaimer }}</p>
+    {# FX-integration failure warning (#736): surface a stale/fallback FX assumption to the
+       reader, not just the logs. Render-when-present. #}
+    {% if ctx.fx_warning %}
+    <p class="fx-warning"><strong>FX assumption notice:</strong> {{ ctx.fx_warning }}</p>
+    {% endif %}
   </section>
 
   {# 3. Executive summary #}
@@ -132,6 +146,36 @@
       {% endfor %}
     </ul>
   </section>
+
+  {# 3b. IC red flags — #706. Rendered only when the context carries the block; every
+     flag is presence-gated surfacing of engine-published signals (no recomputation). #}
+  {% if ctx.ic_summary %}
+  <section class="page">
+    <h2>Investment Committee — Red Flags</h2>
+    {% if ctx.ic_summary.red_flags %}
+    <table>
+      <thead><tr><th>Severity</th><th>Flag</th><th>Source</th></tr></thead>
+      <tbody>
+        {% for f in ctx.ic_summary.red_flags %}
+        <tr>
+          <td><span class="badge sev-{{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td>{{ f.detail }}</td>
+          <td class="muted">{{ f.source }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.ic_summary.cp_outstanding > 0 %}
+    <p>Conditions precedent outstanding: <strong>{{ ctx.ic_summary.cp_outstanding }}</strong>
+      &mdash; first drawdown is gated until these are satisfied or waived.</p>
+    {% endif %}
+    {% else %}
+    <p><span class="badge pass">No red flags</span> &mdash; no covenant breach, negative
+      sponsor return, below-hurdle project IRR, outstanding condition precedent, or
+      readiness RED was surfaced for this run.</p>
+    {% endif %}
+  </section>
+  {% endif %}
 
   {# 4. Key financial indicators #}
   <section class="page">
@@ -355,6 +399,62 @@
   </section>
   {% endif %}
 
+  {# 4h. Capital risk (canonical Monte-Carlo) — #776 / #657. Render-when-present; the MC runs
+     out-of-band (heavy) and is passed in. Distributional covenant-breach + VaR/CVaR. #}
+  {% if ctx.capital_risk %}
+  <section class="page">
+    <h2>Capital Risk — Monte-Carlo Distribution</h2>
+    <p class="muted">Probabilistic risk from a Monte-Carlo ({{ ctx.capital_risk.method }})
+      over {{ ctx.capital_risk.n_trials }} trials — {{ ctx.capital_risk.scenario }},
+      engine v{{ ctx.capital_risk.model_version }}.</p>
+    <h3>Covenant-breach probability</h3>
+    <table>
+      <thead><tr><th>Covenant</th><th style="text-align:right;">Floor</th><th style="text-align:right;">Breach probability</th></tr></thead>
+      <tbody>
+        <tr><td>Minimum DSCR</td><td class="num">{{ fmt_x(ctx.capital_risk.dscr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.dscr_breach_probability) }}</td></tr>
+        <tr><td>LLCR</td><td class="num">{{ fmt_x(ctx.capital_risk.llcr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.llcr_breach_probability) }}</td></tr>
+        <tr><td>PLCR</td><td class="num">{{ fmt_x(ctx.capital_risk.plcr_floor) }}</td>
+          <td class="num">{{ fmt_ratio_pct(ctx.capital_risk.plcr_breach_probability) }}</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">A covenant not declared by the scenario defaults to the 1.00x non-binding
+      coverage-of-one floor (breach flags only genuine sub-1.0 coverage), not a contracted
+      covenant.</p>
+    <p>Probability equity IRR is below the
+      {{ fmt_ratio_pct(ctx.capital_risk.target_equity_irr) }} hurdle:
+      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>.</p>
+    <h3>Value at Risk / Expected Shortfall</h3>
+    <table>
+      <thead><tr><th>Metric</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
+      <tbody>
+        {% for m in ctx.capital_risk.metrics %}
+        <tr>
+          <td>{{ m.metric }}</td>
+          {% if m.unit == "usd" %}
+          <td class="num">{{ fmt_usd(m.mean) }}</td>
+          <td class="num">{{ fmt_usd(m.var) }}</td>
+          <td class="num">{{ fmt_usd(m.cvar) }}</td>
+          {% else %}
+          <td class="num">{{ fmt_ratio_pct(m.mean) }}</td>
+          <td class="num">{{ fmt_ratio_pct(m.var) }}</td>
+          <td class="num">{{ fmt_ratio_pct(m.cvar) }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.capital_risk.npv_distribution_img %}
+    <h3>NPV distribution</h3>
+    <img src="{{ ctx.capital_risk.npv_distribution_img }}" alt="NPV distribution" style="max-width:100%;" />
+    {% else %}
+    <p class="muted">NPV distribution chart ({{ ctx.capital_risk.npv_distribution_filename }})
+      was not embedded (chart rendering unavailable).</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>
@@ -446,6 +546,97 @@
     <p class="muted">No development-readiness register was supplied for this scenario.</p>
     {% endif %}
   </section>
+
+  {# 7b. Conditions-precedent checklist — #708 (full line-item table; the IC red-flag
+     block above surfaces only the outstanding count). Render-when-present. #}
+  {% if ctx.cp_checklist %}
+  <section class="page">
+    <h2>Conditions Precedent</h2>
+    <p>First-drawdown conditions:
+      <strong>{{ ctx.cp_checklist.n_satisfied }} satisfied</strong>,
+      {{ ctx.cp_checklist.n_waived }} waived,
+      <strong>{{ ctx.cp_checklist.n_outstanding }} outstanding</strong>.
+      {% if not ctx.cp_checklist.all_satisfied %}
+      <span class="badge fail">Outstanding conditions gate first drawdown</span>
+      {% elif ctx.cp_checklist.is_clean %}
+      <span class="badge pass">No outstanding conditions</span>
+      {% else %}
+      <span class="badge sev-medium">Checklist has unresolved entries — review below</span>
+      {% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Condition</th><th>Workstream</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for r in ctx.cp_checklist.rows %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td>{{ r.workstream }}</td>
+          <td>
+            {% if r.status == "satisfied" %}<span class="badge pass">Satisfied</span>
+            {% elif r.status == "waived" %}<span class="badge sev-medium">Waived</span>
+            {% else %}<span class="badge fail">Pending</span>{% endif %}
+          </td>
+          <td>{{ r.waived_reason or r.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.cp_checklist.flagged %}
+    <h3>Declared conditions with unresolved data issues</h3>
+    <p class="muted">These conditions were declared but could not be graded (unknown item or
+      off-scale status) — resolve before relying on the outstanding count:
+      {{ ctx.cp_checklist.flagged | join(", ") }}</p>
+    {% endif %}
+    {% if ctx.cp_checklist.missing %}
+    <h3>Conditions not yet on the checklist</h3>
+    <p class="muted">{{ ctx.cp_checklist.missing | join(", ") }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 7c. Feasibility-report section coverage — #708 / #705 (the 20-section skeleton).
+     Render-when-present. #}
+  {% if ctx.feasibility_sections %}
+  <section class="page">
+    <h2>Feasibility Report Structure</h2>
+    <p>Section coverage:
+      <strong>{{ ctx.feasibility_sections.n_complete }} complete</strong>,
+      {{ ctx.feasibility_sections.n_draft }} draft,
+      {{ ctx.feasibility_sections.n_not_applicable }} n/a
+      of {{ ctx.feasibility_sections.total }} canonical sections.
+      {% if ctx.feasibility_sections.all_complete and ctx.feasibility_sections.is_clean %}
+      <span class="badge pass">All sections addressed</span>
+      {% elif not ctx.feasibility_sections.is_clean %}
+      <span class="badge sev-medium">Section coverage has unresolved entries — review below</span>
+      {% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Section</th><th>Group</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for r in ctx.feasibility_sections.rows %}
+        <tr>
+          <td>{{ r.title }}</td>
+          <td>{{ r.group }}</td>
+          <td>
+            {% if r.status == "complete" %}<span class="badge pass">Complete</span>
+            {% elif r.status == "draft" %}<span class="badge sev-medium">Draft</span>
+            {% else %}<span class="muted">Not applicable</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if ctx.feasibility_sections.flagged %}
+    <h3>Declared sections with unresolved data issues</h3>
+    <p class="muted">These sections were declared but could not be graded (unknown section or
+      off-scale status): {{ ctx.feasibility_sections.flagged | join(", ") }}</p>
+    {% endif %}
+    {% if ctx.feasibility_sections.missing %}
+    <h3>Sections not yet authored</h3>
+    <p class="muted">{{ ctx.feasibility_sections.missing | join(", ") }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
 
   {# 8. Assumptions register #}
   <section class="page">
@@ -745,6 +936,38 @@
   </section>
   {% endif %}
 
+  {# 8c. Bankability evidence-completeness score — #707 #}
+  {% if ctx.evidence_score %}
+  <section class="page">
+    <h2>Bankability Evidence-Completeness Score</h2>
+    <p>Overall score:
+      <strong>{{ "%.1f"|format(ctx.evidence_score.score) }} / 100</strong>
+      &mdash; <em>{{ ctx.evidence_score.band }}</em>.</p>
+    <p class="muted">A config-weighted measure of how completely and how strongly the material
+      assumptions are evidenced: {{ ctx.evidence_score.covered }} of
+      {{ ctx.evidence_score.total }} assumptions carry gradeable (sourced, in-tier) evidence
+      ({{ "%.0f"|format(ctx.evidence_score.coverage_pct) }}% coverage){% if ctx.evidence_score.covered %}; mean evidence strength
+      over those is {{ "%.2f"|format(ctx.evidence_score.mean_covered_strength) }}{% endif %}. Read-only —
+      it derives from the evidence register above and moves no financial figure.</p>
+    {% if ctx.evidence_score.rows %}
+    <table>
+      <thead>
+        <tr><th>Assumption</th><th>Tier</th><th style="text-align:right;">Strength</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ctx.evidence_score.rows %}
+        <tr>
+          <td>{{ r.assumption }}</td>
+          <td>{{ r.tier or "—" }}</td>
+          <td class="num">{{ "%.2f"|format(r.strength) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 9. Audit manifest & methodology #}
   <section class="page">
     <h2>Audit Manifest &amp; Methodology</h2>
@@ -770,6 +993,19 @@
       All values in this report are engine outputs presented unchanged; the cost
       of capital shown is the run's own resolved project discount rate.
     </p>
+    {# Model limitations & assumptions (#734): the one report-wide home for scope caveats,
+       so no output is read without them. Render-when-present. #}
+    {% if ctx.model_limitations %}
+    <h3>Model Limitations &amp; Assumptions</h3>
+    <table>
+      <thead><tr><th>Area</th><th>Limitation</th></tr></thead>
+      <tbody>
+        {% for lim in ctx.model_limitations %}
+        <tr><td>{{ lim.topic }}</td><td>{{ lim.detail }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </section>
 
 </body>

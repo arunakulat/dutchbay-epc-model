@@ -33,11 +33,11 @@ Run this from the repo root:
 
     python3 dutchbay_bootstrap.py
 or:
-    ./.venv311/bin/python dutchbay_bootstrap.py
+    ./.venv/bin/python dutchbay_bootstrap.py
 
 What it does (read-only, no mutations):
 - Infers the repo root from this file.
-- Detects the shared virtualenv (.venv311) in sensible locations.
+- Detects the shared virtualenv (.venv, or legacy .venv311) in sensible locations.
 - Checks for venv helper scripts (setup_venv.sh, scripts/venv_up.sh).
 - Verifies critical project files and v14 entrypoints.
 - Locates the Go-with-the-Flow ruleset CSV and does a basic structural check.
@@ -58,8 +58,10 @@ THIS_FILE = Path(__file__).resolve()
 REPO_ROOT = THIS_FILE.parent
 PARENT_DIR = REPO_ROOT.parent
 
-# We prefer a shared .venv311, either in the repo or just above it.
+# We prefer the repo's .venv; legacy .venv311 layouts (repo or parent) still count.
 VENV_DIR_CANDIDATES: Sequence[Path] = (
+    REPO_ROOT / ".venv",
+    PARENT_DIR / ".venv",
     REPO_ROOT / ".venv311",
     PARENT_DIR / ".venv311",
 )
@@ -82,7 +84,6 @@ RULESET_CANDIDATE_NAMES: Sequence[str] = (
 # Critical infra files that should exist in a healthy checkout
 CRITICAL_FILES: Mapping[str, str] = {
     "pyproject.toml": "Project configuration",
-    "pytest.ini": "Test configuration",
     ".pre-commit-config.yaml": "Pre-commit hooks configuration",
     "ruff.toml": "Ruff linter config",
 }
@@ -175,7 +176,7 @@ def validate_repo_structure() -> List[CheckResult]:
     if venv_dir is not None:
         results.append(
             CheckResult(
-                name="venv:.venv311",
+                name="venv:virtualenv",
                 ok=True,
                 details=str(venv_dir),
             )
@@ -183,10 +184,10 @@ def validate_repo_structure() -> List[CheckResult]:
     else:
         results.append(
             CheckResult(
-                name="venv:.venv311",
+                name="venv:virtualenv",
                 ok=False,
                 details=(
-                    "No .venv311 found in repo or parent. "
+                    "No .venv (or legacy .venv311) found in repo or parent. "
                     "Run setup_venv.sh or scripts/venv_up.sh to create it."
                 ),
             )
@@ -239,7 +240,50 @@ def validate_critical_files() -> List[CheckResult]:
                 )
             )
 
+    results.append(validate_pytest_config())
+
     return results
+
+
+def validate_pytest_config() -> CheckResult:
+    """
+    Pytest config lives in pyproject.toml [tool.pytest.ini_options] (the
+    consolidated single source per #439/#451); a standalone pytest.ini is
+    also accepted for older layouts.
+    """
+    pyproject = REPO_ROOT / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+        except OSError as exc:  # pragma: no cover - filesystem edge
+            return CheckResult(
+                name="file:pytest-config",
+                ok=False,
+                details=f"Could not read {pyproject}: {exc}",
+            )
+        if "[tool.pytest.ini_options]" in content:
+            return CheckResult(
+                name="file:pytest-config",
+                ok=True,
+                details=f"[tool.pytest.ini_options] in {pyproject}",
+            )
+
+    pytest_ini = REPO_ROOT / "pytest.ini"
+    if pytest_ini.exists():
+        return CheckResult(
+            name="file:pytest-config",
+            ok=True,
+            details=str(pytest_ini),
+        )
+
+    return CheckResult(
+        name="file:pytest-config",
+        ok=False,
+        details=(
+            "No pytest configuration found: expected "
+            "[tool.pytest.ini_options] in pyproject.toml (or a pytest.ini)."
+        ),
+    )
 
 
 def validate_canonical_entrypoints() -> List[CheckResult]:

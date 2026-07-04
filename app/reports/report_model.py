@@ -16,13 +16,18 @@ variant with ``model_copy(update=...)`` instead of assignment.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.capital_risk_layer_v14 import CapitalRiskReport
+from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
+from analytics.evidence_score import build_evidence_score
+from analytics.feasibility_sections import build_feasibility_report
 from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
@@ -38,6 +43,7 @@ from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
     Covenants,
     KpiKind,
+    LimitationItem,
     ReportConfig,
     ReportMeta,
     RiskItem,
@@ -147,6 +153,15 @@ class RiskRow(BaseModel):
     climate_risk_category: Optional[str] = None
 
 
+class LimitationRow(BaseModel):
+    """One rendered model-limitation line (topic + detail) — #734."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    topic: str
+    detail: str
+
+
 class ReadinessRow(BaseModel):
     """One rendered development-readiness line (workstream, R/A/G status, note)."""
 
@@ -155,6 +170,84 @@ class ReadinessRow(BaseModel):
     workstream: str
     status: str  # green | amber | red — drives the badge class in the template
     note: str = ""
+
+
+class CpItemRow(BaseModel):
+    """One rendered conditions-precedent line (item, workstream, status, note) — #708."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    workstream: str
+    status: str  # satisfied | waived | pending — drives the badge class
+    note: str = ""
+    waived_reason: str = ""
+
+
+class CpChecklistBlock(BaseModel):
+    """Conditions-precedent checklist gating first drawdown (#708, slice 5/5 of #616).
+
+    A read-only projection of :class:`analytics.conditions_precedent.CpReport`: the declared
+    CP line items with their satisfied/waived/pending status, the outstanding rollup, and the
+    canonical items still missing from the checklist. ``all_satisfied`` is the headline gate.
+    None (section omitted) for legacy callers or a malformed checklist.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rows: List[CpItemRow]
+    n_outstanding: int
+    n_satisfied: int
+    n_waived: int
+    missing: List[str]
+    #: Declared conditions the register flagged (unknown item, off-scale status, missing
+    #: status) — surfaced so a declared line is NEVER silently dropped from every view.
+    flagged: List[str]
+    #: True only when the register recorded NO finding. The "no outstanding conditions"
+    #: pass-badge requires this AND all_satisfied, so a green badge cannot render over a
+    #: declared-but-unrenderable (e.g. typo'd-status) condition.
+    is_clean: bool
+    all_satisfied: bool
+
+
+class FeasibilitySectionRow(BaseModel):
+    """One rendered feasibility-report section line (title, group, status) — #708."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    title: str
+    group: str
+    status: str  # complete | draft | not_applicable
+
+
+class FeasibilitySectionsBlock(BaseModel):
+    """Feasibility-report section coverage against the 20-section skeleton (#708, #616).
+
+    A read-only projection of :class:`analytics.feasibility_sections.FeasibilityReport`
+    (slice 1, #705): the scenario's declared section coverage in report order, the
+    complete/draft/not-applicable counts, and the canonical sections still missing.
+    ``all_complete`` is the IC-readiness gate. None (section omitted) for legacy callers or a
+    malformed declaration.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rows: List[FeasibilitySectionRow]
+    n_complete: int
+    n_draft: int
+    n_not_applicable: int
+    missing: List[str]
+    #: Declared sections the register flagged (unknown section, off-scale status, missing
+    #: status) — surfaced so a declared section is NEVER silently dropped from every view.
+    flagged: List[str]
+    #: The canonical section count (always the fixed 20-section skeleton), independent of how
+    #: many were declared — so the displayed "of N" is never understated by a dropped item.
+    total: int
+    #: True only when the register recorded NO finding; the "Complete" pass-badge requires
+    #: this AND all_complete, so a green badge cannot render over a typo'd/dropped section.
+    is_clean: bool
+    all_complete: bool
 
 
 class Verdict(BaseModel):
@@ -168,6 +261,51 @@ class Verdict(BaseModel):
     dscr_covenant_met: bool
     balloon_within_limit: bool
     notes: List[str] = Field(default_factory=list)
+
+
+class RedFlag(BaseModel):
+    """One explicit negative signal surfaced (not recomputed) from the run (#706).
+
+    ``kind`` is the machine key (covenant_breach | negative_equity | below_hurdle |
+    cp_outstanding | readiness_red); ``severity`` is presentation triage only —
+    ``high`` for value/covenant signals the engine published, ``medium`` for
+    execution-gate signals from the scenario registers — not a new risk model.
+    ``source`` names where the signal was read from, for the audit trail.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    severity: str  # medium | high — drives the badge class in the template
+    detail: str
+    source: str
+
+
+class IcSummaryBlock(BaseModel):
+    """IC executive summary — the verdict plus every explicit red flag (#706).
+
+    A pure read-only projection for the Investment Committee: the headline verdict
+    (single source: :class:`Verdict` — never re-derived here), the explicit
+    red-flag list, and the two execution-gate rollups (outstanding conditions
+    precedent, development-readiness reds). ``is_clean`` is True only when no red
+    flag fired. Every flag is presence-gated: an ABSENT KPI or register never
+    fabricates a flag (an IC pack must not report a breach it has no evidence for).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    headline: str
+    red_flags: List[RedFlag] = Field(default_factory=list)
+    #: Outstanding (pending) conditions precedent — 0 when none declared.
+    cp_outstanding: int = 0
+    #: Outstanding CP count per workstream (empty when none outstanding).
+    cp_outstanding_by_workstream: Dict[str, int] = Field(default_factory=dict)
+    #: Development-readiness workstreams declared RED (empty when none).
+    readiness_reds: List[str] = Field(default_factory=list)
+
+    @property
+    def is_clean(self) -> bool:
+        return not self.red_flags
 
 
 class EvidenceRow(BaseModel):
@@ -191,6 +329,38 @@ class EvidenceBlock(BaseModel):
     missing: List[str]  # material assumptions with no declared evidence
     covered: int
     total: int
+
+
+class EvidenceScoreRow(BaseModel):
+    """One material assumption's contribution to the evidence-completeness score (#707)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    assumption: str
+    tier: str  # declared tier, or "" when missing / ungradeable
+    strength: float  # credited strength in [0, 1]
+    covered: bool
+
+
+class EvidenceScoreBlock(BaseModel):
+    """Bankability evidence-completeness score for a scenario (#707, slice 4/5 of #616).
+
+    A read-only projection of :class:`analytics.evidence_score.EvidenceScore`: the 0-100
+    score and its plain band label, the coverage counts, the mean strength over covered
+    entries, and the per-assumption breakdown. Pure surfacing — no finance metric is
+    recomputed. None (section omitted) for legacy callers or a malformed register.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    score: float
+    band: str
+    covered: int
+    total: int
+    missing: List[str]
+    coverage_pct: float
+    mean_covered_strength: float
+    rows: List[EvidenceScoreRow]
 
 
 class MultiTechRow(BaseModel):
@@ -374,6 +544,59 @@ class IrrBridgeBlock(BaseModel):
     reconciled: bool
 
 
+class CapitalRiskMetricRow(BaseModel):
+    """One MC return-metric's distributional summary (mean + VaR/CVaR) — #776 / #657."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str  # equity_irr | project_irr | equity_npv | project_npv
+    unit: (
+        str  # "pct" (IRR ratios) | "usd" (NPV dollars) — drives the display formatting
+    )
+    mean: float
+    var: float
+    cvar: float
+    var_label: str  # e.g. "VaR(95%)"
+    cvar_label: str  # e.g. "CVaR/ES(95%)"
+
+
+class CapitalRiskBlock(BaseModel):
+    """Capital-risk (Monte-Carlo) block for the lender report (#776, surfacing #657).
+
+    A read-only projection of :class:`analytics.capital_risk_layer_v14.CapitalRiskReport` —
+    the unified output of the CANONICAL Monte-Carlo (LHS + Iman-Conover correlation): the
+    covenant-breach probabilities (DSCR/LLCR/PLCR) against their floors, the probability equity
+    IRR falls below the hurdle, the per-metric VaR/CVaR for the four return metrics, and the
+    path to the NPV-distribution chart. Provenance (``scenario`` / ``model_version`` /
+    ``n_trials``) is carried for the audit trail (MRM-02). Rendered only when a caller supplies
+    the pre-computed report (the MC is heavy and runs out-of-band, not in the report builder) —
+    otherwise the section is omitted (additive, default-off; committed reports byte-identical).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scenario: str
+    model_version: str
+    method: (
+        str  # the ACTUAL MC method provenance (e.g. "lhs sampling, rank correlation")
+    )
+    n_trials: int
+    dscr_breach_probability: float
+    llcr_breach_probability: float
+    plcr_breach_probability: float
+    dscr_floor: float
+    llcr_floor: float
+    plcr_floor: float
+    probability_below_hurdle: float
+    target_equity_irr: float
+    metrics: List[CapitalRiskMetricRow]
+    #: The NPV-distribution chart's basename (no absolute path — avoids leaking the server
+    #: filesystem layout into a lender document) and, when the PNG exists, an embedded
+    #: base64 data-URI so the chart renders self-contained. None when matplotlib degraded.
+    npv_distribution_filename: str
+    npv_distribution_img: Optional[str] = None
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -387,12 +610,27 @@ class ReportContext(BaseModel):
     status: str
     kpi_rows: List[KpiRow]
     verdict: Verdict
+    #: IC executive summary + explicit red-flag block (#706): the verdict headline plus
+    #: every presence-gated negative signal (covenant breaches, negative sponsor returns,
+    #: below-hurdle project IRR, outstanding CPs, readiness reds). Pure surfacing over
+    #: engine-published outputs; None only for callers that construct a context without
+    #: this block, in which case the section is omitted (render-when-present).
+    ic_summary: Optional[IcSummaryBlock] = None
     assumptions: List[AssumptionRow]
     risk_register: List[RiskRow] = Field(default_factory=list)
+    #: Model-limitations / scope caveats surfaced in every report (#734). Config-authored;
+    #: default empty so a legacy/minimal config omits the section (render-when-present).
+    model_limitations: List[LimitationRow] = Field(default_factory=list)
     readiness: List[ReadinessRow] = Field(default_factory=list)
     overall_readiness: Optional[str] = (
         None  # green | amber | red — worst declared status
     )
+    #: Conditions-precedent checklist gating first drawdown (#708). None for legacy callers /
+    #: no declared checklist / a malformed one — the section is then omitted.
+    cp_checklist: Optional[CpChecklistBlock] = None
+    #: Feasibility-report section coverage against the 20-section skeleton (#708 / #705). None
+    #: for legacy callers / no declared sections / a malformed declaration — section omitted.
+    feasibility_sections: Optional[FeasibilitySectionsBlock] = None
     #: Serialised finance blocks (production P50/P90, sources-and-uses, DSCR profile,
     #: exec KPI callout) — RPT-1. None when the caller supplies no debt_result /
     #: scenario_config (e.g. the legacy KPI-only report path), in which case those
@@ -410,9 +648,18 @@ class ReportContext(BaseModel):
     #: failed/has no drivers — that subsection is then omitted (additive; default absent =
     #: byte-identical to the pre-#645 report).
     global_sa_pawn: Optional[GlobalSABlock] = None
+    #: Capital-risk (canonical Monte-Carlo) block (#776 / #657): covenant-breach
+    #: probabilities, probability-below-hurdle, per-metric VaR/CVaR, NPV-distribution chart.
+    #: Pre-computed out-of-band (the MC is heavy) and passed in; None for callers that supply
+    #: no capital-risk report, in which case the section is omitted (default-off, byte-identical).
+    capital_risk: Optional[CapitalRiskBlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
+    #: Bankability evidence-completeness score (#707) — the config-weighted score on top of
+    #: the evidence-register coverage. None for legacy callers / a malformed register; the
+    #: section is then omitted. Additive; committed scenarios byte-identical.
+    evidence_score: Optional[EvidenceScoreBlock] = None
     #: Per-technology production/economics breakdown for a hybrid (ARCH-4, #476). None for
     #: single-tech plants or legacy callers — the section is then omitted.
     multi_tech: Optional[MultiTechBlock] = None
@@ -433,6 +680,11 @@ class ReportContext(BaseModel):
     #: None unless the caller supplies the full run result AND it carries a computed equity
     #: distribution — additive, default-off; the section is otherwise omitted.
     irr_bridge: Optional[IrrBridgeBlock] = None
+    #: FX-integration failure warning (#736). Set when the run's FX calibration/integration failed
+    #: (a log-only event today), so a stale/fallback FX assumption is surfaced to the reader rather
+    #: than buried in logs. None when FX integration succeeded or was not reported — the banner is
+    #: then omitted (render-when-present; committed runs succeed, so byte-identical).
+    fx_warning: Optional[str] = None
     manifest: Dict[str, Any]
 
 
@@ -503,9 +755,14 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
         # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag
         # (equity_positive). A positive IRR that is still below the equity hurdle has a
         # negative NPV; labelling it "negative to sponsors" off the NPV flag printed a
-        # literally false statement (round-11 fix). Distinguish all three cases.
-        if equity_irr <= 0:
+        # literally false statement (round-11 fix). A break-even 0.00% is likewise not
+        # "negative": gate the negative wording on a strict < 0 and give exactly-0.0 its
+        # own honest word (#769 — mirrors the #706 _build_ic_summary <= 0 -> < 0 fix;
+        # finance.irr / metrics can emit an exact 0.0). Distinguish all four cases.
+        if equity_irr < 0:
             desc = "negative to sponsors"
+        elif equity_irr == 0:
+            desc = "break-even to sponsors"
         elif not equity_positive:
             desc = "positive but below the equity hurdle"
         else:
@@ -555,6 +812,164 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
         dscr_covenant_met=dscr_covenant_met,
         balloon_within_limit=balloon_within_limit,
         notes=notes,
+    )
+
+
+def _build_ic_summary(
+    kpis: Dict[str, float],
+    verdict: Verdict,
+    scenario_config: Optional[Mapping[str, Any]],
+    readiness_rows: Sequence[ReadinessRow],
+) -> IcSummaryBlock:
+    """Project the run's explicit negative signals into the IC red-flag block (#706).
+
+    Pure surfacing, no recomputation: the covenant/return judgments are read from the
+    already-built :class:`Verdict` (single source — this honors the engine-published
+    ``balloon_covenant_breach`` flag exactly the way :func:`_build_verdict` does, per the
+    CCCDIR precedent), the CP-outstanding rollup from the canonical
+    :func:`analytics.conditions_precedent.build_cp_report`, and the readiness reds from
+    the rows already built for the readiness section (one register pass, one source).
+
+    Every flag is PRESENCE-GATED on the underlying KPI/register: the verdict's booleans
+    deliberately read "absent" as "not met" for the headline, but a red-flag section
+    must never fabricate a breach from a missing number — an absent KPI raises no flag
+    here (the #657 fabricated-breach lesson applied to the report layer).
+    """
+    flags: List[RedFlag] = []
+
+    min_dscr = kpis.get("min_dscr")
+    if min_dscr is not None and not verdict.dscr_covenant_met:
+        flags.append(
+            RedFlag(
+                kind="covenant_breach",
+                severity="high",
+                detail=f"Minimum DSCR {min_dscr:.2f}x breaches the lender floor.",
+                source="engine KPI min_dscr vs configured DSCR covenant",
+            )
+        )
+
+    balloon_pct = kpis.get("balloon_pct")
+    balloon_breach = kpis.get("balloon_covenant_breach")
+    if (
+        balloon_breach is not None or balloon_pct is not None
+    ) and not verdict.balloon_within_limit:
+        if balloon_breach is not None:
+            # The engine judged it against the scenario's own covenant (CCCDIR).
+            detail = (
+                "Balloon/bullet share BREACHES the modeled refinance-risk covenant"
+                + (
+                    f" ({balloon_pct * 100:.2f}% of debt)."
+                    if balloon_pct is not None
+                    else "."
+                )
+            )
+            source = "engine flag balloon_covenant_breach"
+        else:
+            # balloon_breach is None here, so the outer guard implies balloon_pct
+            # is not None; the explicit narrowing is for the type checker.
+            assert balloon_pct is not None
+            detail = (
+                f"Balloon/bullet share {balloon_pct * 100:.2f}% exceeds the "
+                "report refinance-risk ceiling."
+            )
+            source = "engine KPI balloon_pct vs report covenant ceiling"
+        flags.append(
+            RedFlag(
+                kind="covenant_breach", severity="high", detail=detail, source=source
+            )
+        )
+
+    equity_irr = kpis.get("equity_irr")
+    equity_npv = kpis.get("equity_npv")
+    negative_parts: List[str] = []
+    # Strict < 0 (matching the NPV part below): a break-even equity IRR of exactly
+    # 0.0 — reachable from a genuine break-even waterfall (finance/irr.py returns
+    # 0.0) or the metrics 0.0 no-waterfall sentinel — is NOT negative, so the flag
+    # must not print "equity IRR 0.00% is negative" (a literal falsehood that could
+    # co-render with a Bankable headline).
+    if equity_irr is not None and equity_irr < 0:
+        negative_parts.append(f"equity IRR {equity_irr * 100:.2f}% is negative")
+    if equity_npv is not None and equity_npv < 0:
+        negative_parts.append(f"equity NPV {fmt_usd(equity_npv)} is negative")
+    if negative_parts:
+        flags.append(
+            RedFlag(
+                kind="negative_equity",
+                severity="high",
+                detail="Sponsor returns: " + " and ".join(negative_parts) + ".",
+                source="engine KPIs equity_irr / equity_npv",
+            )
+        )
+
+    project_irr = kpis.get("project_irr")
+    hurdle = kpis.get("discount_rate_used")
+    if project_irr is not None and hurdle is not None and not verdict.project_viable:
+        flags.append(
+            RedFlag(
+                kind="below_hurdle",
+                severity="high",
+                detail=(
+                    f"Project IRR {project_irr * 100:.2f}% is below the "
+                    f"{hurdle * 100:.2f}% cost of capital."
+                ),
+                source="engine KPIs project_irr vs discount_rate_used",
+            )
+        )
+
+    cp_outstanding = 0
+    cp_by_ws: Dict[str, int] = {}
+    if scenario_config is not None:
+        # build_cp_report is the tolerant builder, but it still raises on a
+        # structurally malformed conditions_precedent.items container. Degrade to
+        # "no CP block" on that (like the other best-effort report inputs —
+        # tornado/global_sa/evidence are None-on-failure) rather than break the whole
+        # report; production configs are validated upstream so this never fires there.
+        cp_report: Optional[CpReport]
+        try:
+            cp_report = build_cp_report(scenario_config)
+        except ValueError:
+            # ConditionsPrecedentError (malformed items) AND a plain ValueError from a
+            # non-bool enforce/require_complete flag both degrade to no CP contribution
+            # (matches _build_evidence and _build_cp_checklist) — never crash the report.
+            cp_report = None
+    else:
+        cp_report = None
+    if cp_report is not None:
+        cp_outstanding = cp_report.n_outstanding
+        cp_by_ws = dict(cp_report.by_workstream_outstanding)
+        if cp_outstanding > 0:
+            per_ws = ", ".join(f"{ws}: {n}" for ws, n in sorted(cp_by_ws.items()))
+            flags.append(
+                RedFlag(
+                    kind="cp_outstanding",
+                    severity="medium",
+                    detail=(
+                        f"{cp_outstanding} condition(s) precedent outstanding "
+                        f"({per_ws}) — first drawdown is gated."
+                    ),
+                    source="conditions_precedent checklist (scenario register)",
+                )
+            )
+
+    readiness_reds = [r.workstream for r in readiness_rows if r.status == "red"]
+    if readiness_reds:
+        flags.append(
+            RedFlag(
+                kind="readiness_red",
+                severity="medium",
+                detail=(
+                    "Development readiness RED in: " + ", ".join(readiness_reds) + "."
+                ),
+                source="development_readiness register (scenario register)",
+            )
+        )
+
+    return IcSummaryBlock(
+        headline=verdict.headline,
+        red_flags=flags,
+        cp_outstanding=cp_outstanding,
+        cp_outstanding_by_workstream=cp_by_ws,
+        readiness_reds=readiness_reds,
     )
 
 
@@ -666,6 +1081,11 @@ def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
     ]
 
 
+def _build_model_limitations(limits: List[LimitationItem]) -> List[LimitationRow]:
+    """Project the config-authored model limitations into render-ready rows (#734, passthrough)."""
+    return [LimitationRow(topic=lim.topic, detail=lim.detail) for lim in limits]
+
+
 def _build_readiness(
     scenario_config: Optional[Mapping[str, Any]],
 ) -> tuple[List[ReadinessRow], Optional[str]]:
@@ -684,6 +1104,103 @@ def _build_readiness(
         for i in report.items
     ]
     return rows, report.overall_status
+
+
+def _build_cp_checklist(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[CpChecklistBlock]:
+    """Project the conditions-precedent checklist into a report block (#708).
+
+    Reads the declared CP items via the canonical
+    :func:`analytics.conditions_precedent.build_cp_report` and renders the full checklist
+    (each item's satisfied/waived/pending status) plus the outstanding rollup. Returns
+    ``None`` when no scenario config is supplied, none is declared, or the checklist is
+    structurally malformed — the section is then omitted. Pure presentation; the IC red-flag
+    block (#706) surfaces only the outstanding COUNT, this is the full line-item table.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        report = build_cp_report(scenario_config)
+    except ValueError:
+        # ConditionsPrecedentError (malformed items container) AND a plain ValueError from
+        # a non-bool enforce/require_complete flag both degrade to no section, matching the
+        # sibling _build_evidence — the report never crashes on a malformed CP block.
+        return None
+    # Render when the scenario declared a checklist — valid items OR flagged declarations
+    # (an off-scale/typo'd status is dropped from `items` but must still surface, never
+    # vanish). A scenario that authored no CP block has neither, so it gets no section
+    # (committed lender reports unchanged); `missing` alone can't signal "declared".
+    if not report.items and not report.findings:
+        return None
+    # Declared conditions the register flagged (unknown item, off-scale status, missing
+    # status) — NOT the `incomplete` findings, which are the already-listed missing items.
+    flagged = sorted({f.item for f in report.findings if f.kind != "incomplete"})
+    return CpChecklistBlock(
+        rows=[
+            CpItemRow(
+                name=i.name,
+                workstream=i.workstream,
+                status=i.status,
+                note=i.note,
+                waived_reason=i.waived_reason,
+            )
+            for i in report.items
+        ],
+        n_outstanding=report.n_outstanding,
+        n_satisfied=report.n_satisfied,
+        n_waived=report.n_waived,
+        missing=list(report.missing),
+        flagged=flagged,
+        is_clean=report.is_clean,
+        all_satisfied=report.all_satisfied,
+    )
+
+
+def _build_feasibility_sections(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[FeasibilitySectionsBlock]:
+    """Project the feasibility-report section coverage into a report block (#708 / #705).
+
+    Reads the declared section coverage via the canonical
+    :func:`analytics.feasibility_sections.build_feasibility_report` (the 20-section skeleton)
+    and renders the declared sections in report order plus the complete/draft/not-applicable
+    counts and the missing set. Returns ``None`` when no scenario config is supplied, none is
+    declared, or the declaration is structurally malformed — the section is then omitted.
+    Pure presentation.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        report = build_feasibility_report(scenario_config)
+    except ValueError:
+        # FeasibilitySectionsError (malformed sections container) AND a plain ValueError from
+        # a non-bool enforce/require_complete flag both degrade to no section (as _build_evidence).
+        return None
+    # Render when the scenario declared sections — valid OR flagged (a dropped off-scale
+    # status must still surface). No declaration at all -> no section.
+    if not report.sections and not report.findings:
+        return None
+    flagged = sorted({f.section for f in report.findings if f.kind != "incomplete"})
+    return FeasibilitySectionsBlock(
+        rows=[
+            FeasibilitySectionRow(
+                name=s.name, title=s.title, group=s.group, status=s.status
+            )
+            for s in report.sections
+        ],
+        n_complete=report.n_complete,
+        n_draft=report.n_draft,
+        n_not_applicable=report.n_not_applicable,
+        missing=list(report.missing),
+        flagged=flagged,
+        # covered (canonical-declared) + missing (canonical-not-declared) = the full fixed
+        # skeleton, INCLUDING a declared item dropped for a bad status — so "of N" is never
+        # understated (report.sections would drop it and show 19 of a 20-section skeleton).
+        total=len(report.covered) + len(report.missing),
+        is_clean=report.is_clean,
+        all_complete=report.all_complete,
+    )
 
 
 def _build_evidence(
@@ -725,6 +1242,45 @@ def _build_evidence(
     )
 
 
+def _build_evidence_score(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[EvidenceScoreBlock]:
+    """Project the bankability evidence-completeness score into a report block (#707).
+
+    Reads the score via the canonical :func:`analytics.evidence_score.build_evidence_score`
+    (config-weighted tier strength over the evidence-register coverage). Returns ``None``
+    when no scenario config is supplied (legacy callers) or the register/weights config is
+    malformed — the section is then omitted, exactly like :func:`_build_evidence`. Pure
+    presentation; recomputes no finance metric.
+    """
+    if scenario_config is None:
+        return None
+    try:
+        score = build_evidence_score(scenario_config)
+    except ValueError:
+        # A malformed register or a drifted evidence_score.yaml raises a plain ValueError;
+        # degrade to no section rather than break the report (mirrors _build_evidence).
+        return None
+    return EvidenceScoreBlock(
+        score=score.score,
+        band=score.band,
+        covered=score.n_covered,
+        total=score.n_total,
+        missing=list(score.missing),
+        coverage_pct=round(100.0 * score.coverage_fraction, 2),
+        mean_covered_strength=score.mean_covered_strength,
+        rows=[
+            EvidenceScoreRow(
+                assumption=a.assumption,
+                tier=a.tier,
+                strength=a.strength,
+                covered=a.covered,
+            )
+            for a in score.assumptions
+        ],
+    )
+
+
 def _build_finance_blocks(
     case_result: CaseResult,
     scenario_config: Optional[Mapping[str, Any]],
@@ -739,6 +1295,81 @@ def _build_finance_blocks(
     if scenario_config is None or debt_result is None:
         return None
     return extract_finance_report_blocks(scenario_config, debt_result, case_result.kpis)
+
+
+def _build_capital_risk(
+    capital_risk: Optional[CapitalRiskReport],
+) -> Optional[CapitalRiskBlock]:
+    """Project a pre-computed capital-risk report into a report block (#776 / #657).
+
+    Read-only projection of :class:`analytics.capital_risk_layer_v14.CapitalRiskReport`: the
+    covenant-breach probabilities + floors, the probability-below-hurdle, the per-metric
+    VaR/CVaR for the four return metrics, and the NPV-distribution chart path. The Monte-Carlo
+    that produces the report is heavy, so it is run OUT-OF-BAND and passed in (like the
+    tornado / global-SA blocks); ``None`` (the default) omits the section. Pure presentation —
+    recomputes no risk number, only reshapes the report's own values for the template.
+    """
+    if capital_risk is None:
+        return None
+    cb = capital_risk.tail_report.covenant_breaches
+    thresholds = cb.thresholds
+    metrics = [
+        CapitalRiskMetricRow(
+            metric=summary.metric_name,
+            # IRR metrics are ratios (shown as %), NPV metrics are USD — so the template
+            # never renders a dollar VaR and an IRR VaR in one unit-less column.
+            unit="usd" if "npv" in summary.metric_name else "pct",
+            mean=summary.mean,
+            var=summary.var_cvar.var,
+            cvar=summary.var_cvar.cvar,
+            var_label=summary.var_cvar.var_label,
+            cvar_label=summary.var_cvar.cvar_label,
+        )
+        for summary in (
+            capital_risk.tail_report.equity_irr,
+            capital_risk.tail_report.project_irr,
+            capital_risk.tail_report.equity_npv,
+            capital_risk.tail_report.project_npv,
+        )
+    ]
+    png_path = Path(str(capital_risk.npv_distribution_png))
+    img = _png_data_uri(png_path)
+    return CapitalRiskBlock(
+        scenario=capital_risk.scenario,
+        model_version=capital_risk.model_version,
+        method=capital_risk.method,
+        n_trials=capital_risk.n_trials,
+        dscr_breach_probability=cb.dscr_breach_probability,
+        llcr_breach_probability=cb.llcr_breach_probability,
+        plcr_breach_probability=cb.plcr_breach_probability,
+        dscr_floor=float(thresholds.get("min_dscr", 0.0)),
+        llcr_floor=float(thresholds.get("min_llcr", 0.0)),
+        plcr_floor=float(thresholds.get("min_plcr", 0.0)),
+        probability_below_hurdle=capital_risk.tail_report.probability_below_hurdle,
+        target_equity_irr=capital_risk.tail_report.target_equity_irr,
+        metrics=metrics,
+        npv_distribution_filename=png_path.name,
+        npv_distribution_img=img,
+    )
+
+
+def _png_data_uri(path: Path) -> Optional[str]:
+    """A base64 ``data:image/png`` URI for an existing PNG (self-contained embed), else None.
+
+    Embedding the chart keeps the lender report self-contained and avoids leaking the
+    server's absolute filesystem path into the document (MRM). Returns None when the file is
+    absent (e.g. matplotlib degraded, no chart written) or unreadable — the section then
+    renders without an image rather than a broken reference.
+    """
+    try:
+        if not path.is_file():
+            return None
+        import base64
+
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return None
 
 
 def _build_multi_tech(
@@ -920,7 +1551,7 @@ def _build_resource_trend(
     summary_df = analysis["summary_df"]
     summary_rows = [
         ResourceTrendRow(metric=str(m), value=str(v))
-        for m, v in zip(summary_df["Metric"], summary_df["Value"])
+        for m, v in zip(summary_df["Metric"], summary_df["Value"], strict=True)
     ]
     return ResourceTrendBlock(
         markdown=str(analysis["markdown"]),
@@ -939,6 +1570,23 @@ def _build_resource_trend(
         downside_p50_gwh=rec.get("downside_gwh"),
         upside_p50_gwh=rec.get("upside_gwh"),
     )
+
+
+def _build_fx_warning(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Surface the run's FX-integration failure warning into the report (#736).
+
+    The pipeline records an ``fx_integration`` status block on its result; when integration
+    failed it carries a human ``warning`` (a log-only event before this). Returns that string so
+    the report renders an explicit banner, or ``None`` when FX integration succeeded / was not
+    reported (banner omitted — render-when-present, so a healthy run is byte-identical).
+    """
+    if not run_result:
+        return None
+    fx = run_result.get("fx_integration")
+    if not isinstance(fx, Mapping):
+        return None
+    warning = fx.get("warning")
+    return str(warning) if warning else None
 
 
 def _irr_bridge_block(
@@ -994,6 +1642,7 @@ def build_report_context(
     tornado: Optional[TornadoBlock] = None,
     global_sa: Optional[GlobalSABlock] = None,
     global_sa_pawn: Optional[GlobalSABlock] = None,
+    capital_risk: Optional[CapitalRiskReport] = None,
     resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
@@ -1042,6 +1691,9 @@ def build_report_context(
     """
     cfg = config if config is not None else load_report_config()
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
+    # The verdict is built once and shared: the IC summary reads its covenant/return
+    # judgments (single source) rather than re-deriving them.
+    verdict = _build_verdict(case_result.kpis, cfg.covenants)
     # Assemble the three-statement result once; both the statements and the payment-priority
     # waterfall blocks derive from it (one engine-output source, no second pass).
     ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
@@ -1055,20 +1707,29 @@ def build_report_context(
         ),
         status=case_result.status,
         kpi_rows=_build_kpi_rows(case_result.kpis, cfg),
-        verdict=_build_verdict(case_result.kpis, cfg.covenants),
+        verdict=verdict,
+        ic_summary=_build_ic_summary(
+            case_result.kpis, verdict, scenario_config, readiness_rows
+        ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(cfg.risk_register),
+        model_limitations=_build_model_limitations(cfg.model_limitations),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,
+        cp_checklist=_build_cp_checklist(scenario_config),
+        feasibility_sections=_build_feasibility_sections(scenario_config),
         finance=_build_finance_blocks(case_result, scenario_config, debt_result),
         tornado=tornado,
         global_sa=global_sa,
         global_sa_pawn=global_sa_pawn,
+        capital_risk=_build_capital_risk(capital_risk),
         evidence=_build_evidence(scenario_config),
+        evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
         resource_trend=_build_resource_trend(resource_trend),
         irr_bridge=_irr_bridge_block(run_result),
+        fx_warning=_build_fx_warning(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )

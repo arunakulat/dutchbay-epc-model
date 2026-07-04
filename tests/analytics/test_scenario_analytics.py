@@ -579,3 +579,88 @@ def test_cli_stdout_payload_summary_json_none() -> None:
     payload = _build_stdout_payload(meta, Path("exports/v14.xlsx"), None)
     assert payload["summary_json"] is None
     assert payload["basis"] == "comparison_snapshot"
+
+
+# ---------------------------------------------------------------------------
+# Senior credit-support fee consistency (#789, mirrors the pipeline's #737 step)
+# ---------------------------------------------------------------------------
+def test_run_single_rows_bear_the_senior_fee(
+    lender_analytics: ScenarioAnalytics,
+) -> None:
+    """Fee-bearing scenario: the batch rows carry the SAME fee the debt layer nets.
+
+    apply_debt_layer nets the Financing_Terms.fees credit-support fee (#737) from
+    its DSCR/LLCR/PLCR; without the #789 rebuild the batch surface reported pre-fee
+    rows/IRR/NPV beside fee-netted coverage ratios on the same result — internally
+    inconsistent. The rebuilt rows must carry senior_fee_lkr == the engine's USD fee
+    x each row's spot FX (the canonical row->debt-period alignment), and the KPI
+    CFADS base must be the fee-netted rows.
+    """
+    path = lender_analytics.discover_scenarios()[0]
+    res = lender_analytics._run_single(path)
+    assert res.fail_reason is None
+    debt = res.debt_result
+    fees_usd = [float(v) for v in debt["senior_fee_usd"]]
+    assert any(f > 0.0 for f in fees_usd)  # lendercase declares 75+100 bps
+    row_to_period = {
+        int(m["annual_row_index"]): int(m["debt_period"])
+        for m in debt["annual_row_debt_period_map"]
+    }
+    total_fee_lkr = 0.0
+    for idx, row in enumerate(res.annual_rows):
+        expected = fees_usd[row_to_period[idx]] * float(row["fx_rate"])
+        assert row["senior_fee_lkr"] == pytest.approx(expected, rel=1e-12), f"row {idx}"
+        total_fee_lkr += row["senior_fee_lkr"]
+    assert total_fee_lkr > 0.0
+    # The KPI CFADS base is the fee-netted rows (not the discarded pre-fee build).
+    assert res.kpis["total_cfads_usd"] == pytest.approx(
+        sum(float(r["cfads_usd"]) for r in res.annual_rows), rel=1e-12
+    )
+
+
+def test_run_single_no_fee_scenario_short_circuits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No fee keys -> exactly ONE row build (the rebuild gate short-circuits).
+
+    Row equality alone could not distinguish a short-circuit from a rebuild with
+    an all-zero fee series (both yield identical rows), so the gate is proven with
+    a call counter on the surface's build_annual_rows binding.
+    """
+    import yaml
+
+    import analytics.scenario_analytics as sa_mod
+    from analytics.scenario_loader import load_scenario_config
+    from finance.cashflow_v14 import build_annual_rows
+
+    cfg = load_scenario_config(str(LENDER_YAML))
+    fees = cfg["Financing_Terms"]["fees"]
+    fees.pop("guarantee_fee_pct_per_year", None)
+    fees.pop("pri_premium_pct_per_year", None)
+    staged = tmp_path / "lender_fee_off.yaml"
+    staged.write_text(yaml.safe_dump(cfg))
+    # Keep the mocked-AEP summary path resolvable from the staged dir.
+    aep_src = SCENARIOS_DIR / "aep_summary_dutchbay_10mw.json"
+    aep_dst = tmp_path / "scenarios" / "aep_summary_dutchbay_10mw.json"
+    aep_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(aep_src, aep_dst)
+
+    calls: list[bool] = []
+
+    def _counting_build(config: dict, *args: object, **kwargs: object) -> list:
+        calls.append(kwargs.get("senior_fee_lkr_series") is not None)
+        return build_annual_rows(config, *args, **kwargs)
+
+    monkeypatch.setattr(sa_mod, "build_annual_rows", _counting_build)
+    sa = ScenarioAnalytics(scenarios_dir=tmp_path)
+    res = sa._run_single(staged)
+    assert res.fail_reason is None
+    assert all(f == 0.0 for f in res.debt_result["senior_fee_usd"])
+    assert all(row["senior_fee_lkr"] == 0.0 for row in res.annual_rows)
+    # THE short-circuit proof: one build, and never with a fee series.
+    assert calls == [False]
+    # And the surviving rows are bit-identical to a direct pre-fee build.
+    direct = build_annual_rows(load_scenario_config(str(staged)))
+    assert len(direct) == len(res.annual_rows)
+    for mine, theirs in zip(res.annual_rows, direct, strict=True):
+        assert mine == theirs

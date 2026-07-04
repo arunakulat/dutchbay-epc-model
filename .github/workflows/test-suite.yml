@@ -10,8 +10,10 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # Nightly full-matrix run (03:17 UTC) so the 3.11 leg that PRs skip is still
-    # exercised every day against main.
+    # Nightly FULL-matrix run (03:17 UTC): the one place both 3.11 AND 3.12 run
+    # together against main every day. PRs gate on 3.12 only and merges to main
+    # re-validate on 3.11 only (the leg the PR skipped) — this schedule is the
+    # cross-version backstop for anything that slips between those two halves.
     - cron: '17 3 * * *'
   workflow_dispatch:
 
@@ -29,43 +31,98 @@ permissions:
   issues: write
 
 jobs:
+  changes:
+    # Docs-only fast path (CI cost diet): classify the PR diff ONCE; when every changed
+    # file is documentation (markdown anywhere, changelog.d/ fragments, docs/), the
+    # expensive pytest shards + coverage combine SKIP THEIR STEPS while the jobs (and the
+    # required 'Test Summary' check) still report success — a changelog flush or docs PR
+    # costs ~2 runner-minutes instead of ~35. Fail-safe direction: ANY file outside the
+    # allowlist (or an empty/undeterminable diff) classifies as code and the full gate
+    # runs; a false negative can only ever run MORE tests, never fewer. Non-PR events
+    # (push-to-main, nightly, dispatch) always classify as code.
+    name: Classify changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.classify.outputs.code_changed }}
+    steps:
+    - name: Checkout repository (full history for the base diff)
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Classify diff against the PR base
+      id: classify
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "code_changed=true" >> "$GITHUB_OUTPUT"
+          echo "non-PR event: full gate"
+          exit 0
+        fi
+        files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+        echo "changed files:"; echo "$files"
+        code=false
+        [ -z "$files" ] && code=true  # undeterminable diff -> run everything
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          case "$f" in
+            *.md) ;;            # markdown anywhere (README, CHANGELOG, memory docs)
+            changelog.d/*) ;;   # changelog fragments (incl. deletions on flush)
+            docs/*) ;;          # docs tree
+            *) code=true; break ;;
+          esac
+        done <<< "$files"
+        echo "code_changed=$code" >> "$GITHUB_OUTPUT"
+        echo "classification: code_changed=$code"
+
   test:
-    # Sharded matrix: the ~3,400-test tree is split into TOTAL_SHARDS balanced slices
+    # Sharded matrix: the ~3,600-test tree is split into TOTAL_SHARDS balanced slices
     # (pytest-split --splits/--group) that run as parallel jobs, so the gate's wall-clock
-    # is the slowest single shard (~a quarter of the whole run) instead of the full
-    # serial-ish suite. Each shard still runs its slice across the runner cores via
-    # -n auto, so the two parallelisms compound. Coverage is measured per shard (DATA
-    # FILE ONLY — NO --cov-fail-under here, one shard cannot reach the 95% floor alone);
-    # the combined 95% gate lives in the `coverage` job below, preserving R8/TEST-02.
+    # is the slowest single shard instead of the full serial-ish suite. Each shard still
+    # runs its slice across the runner cores via -n auto, so the two parallelisms
+    # compound. Coverage is measured per shard (DATA FILE ONLY — NO --cov-fail-under
+    # here, one shard cannot reach the 95% floor alone); the combined 95% gate lives in
+    # the `coverage` job below, preserving R8/TEST-02.
     name: Run Tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
+    needs: changes
 
     env:
-      TOTAL_SHARDS: 4
+      TOTAL_SHARDS: 6
 
     strategy:
       fail-fast: false
       matrix:
-        # On a PR, test only 3.12 (the dominant dev/runtime version) to halve the
-        # gate's wall time; on push-to-main, the nightly schedule, and manual
-        # dispatch, run the FULL 3.11+3.12 matrix so cross-version breaks still
-        # surface before a release. The required 'Test Summary' check aggregates
-        # whatever legs ran (needs.test), so PR merges are unaffected; a 3.11-only
-        # regression would surface at merge-to-main / nightly rather than on the PR.
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.11", "3.12"]') }}
-        shard: [1, 2, 3, 4]
+        # Version matrix by event (CI cost diet):
+        # - pull_request: 3.12 only (the dominant dev/runtime version) — halves the
+        #   PR gate's wall time.
+        # - push to main: 3.11 only — the ONE leg the PR gate skipped. The merged tree's
+        #   3.12 leg was just validated on the PR itself (GWTF: work reaches main only
+        #   through PRs, and the merge-train keeps PRs current before merge), so
+        #   re-running 3.12 post-merge duplicated ~32 runner-minutes per merge for
+        #   near-zero signal.
+        # - nightly schedule + manual dispatch: FULL 3.11+3.12 matrix — the daily
+        #   backstop that exercises both versions against main end-to-end.
+        # The required 'Test Summary' check aggregates whatever legs ran (needs.test),
+        # so PR merges are unaffected; a cross-version regression surfaces at
+        # merge-to-main (3.11) or nightly (both) rather than on the PR.
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+        shard: [1, 2, 3, 4, 5, 6]
 
     steps:
     - name: Checkout repository
+      if: needs.changes.outputs.code_changed == 'true'
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
+      if: needs.changes.outputs.code_changed == 'true'
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
     - name: Install dependencies
+      if: needs.changes.outputs.code_changed == 'true'
       run: |
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
@@ -75,21 +132,30 @@ jobs:
         python -m pip install pytest pytest-cov pytest-xdist pytest-split pytest-html
 
     - name: Display environment info
+      if: needs.changes.outputs.code_changed == 'true'
       run: |
         python --version
         pip --version
         pytest --version
 
-    - name: Run test shard ${{ matrix.shard }}/4
+    - name: Skip note (docs-only PR)
+      if: needs.changes.outputs.code_changed != 'true'
+      run: echo "Docs-only PR — pytest shard skipped (see the 'Classify changed paths' job)."
+
+    - name: Run test shard ${{ matrix.shard }}/${{ env.TOTAL_SHARDS }}
+      if: needs.changes.outputs.code_changed == 'true'
       env:
         # Distinct per-shard coverage data file so the combine job merges cleanly.
         COVERAGE_FILE: .coverage.${{ matrix.python-version }}.${{ matrix.shard }}
       run: |
-        # Full tests/ tree, split into TOTAL_SHARDS balanced groups by pytest-split.
-        # No .test_durations checked in yet, so the split is by test COUNT (even
-        # quarters); a durations file can be added later for time-balance. The whole
-        # tree is still exercised — every test runs in exactly one shard, so the gate
-        # can no longer be dodged by omission (the #149 Test Summary rubber-stamp hole).
+        # Full tests/ tree, split into TOTAL_SHARDS TIME-balanced groups by pytest-split
+        # using the committed `.test_durations` (passed explicitly via --durations-path;
+        # it is pytest-split's default, but being explicit documents the dependency and
+        # survives a rootdir change). Balancing is by duration SUM, so groups carry unequal
+        # test COUNTS by design; a test absent from the durations file is assigned the mean.
+        # Regenerate periodically with `pytest tests/ --store-durations` so new tests are
+        # timed (see #760). The whole tree is still exercised — every test runs in exactly
+        # one shard, so the gate can't be dodged by omission (the #149 Test Summary hole).
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
@@ -97,6 +163,7 @@ jobs:
           tests/ \
           --splits "$TOTAL_SHARDS" \
           --group ${{ matrix.shard }} \
+          --durations-path .test_durations \
           -n auto \
           --tb=short \
           --maxfail=10 \
@@ -111,7 +178,7 @@ jobs:
 
     - name: Upload shard artifacts (coverage data + junit)
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && needs.changes.outputs.code_changed == 'true'
       with:
         name: shard-${{ matrix.python-version }}-${{ matrix.shard }}
         include-hidden-files: true   # .coverage.* are dotfiles
@@ -125,25 +192,30 @@ jobs:
     # gate the old single-job `--cov-fail-under=95` provided, now downstream of sharding.
     name: Coverage Gate (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    needs: test
+    needs: [changes, test]
     if: always()
 
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.11", "3.12"]') }}
+        # Mirrors the test job's per-event version selection (PR: 3.12; push-to-main:
+        # 3.11; nightly/dispatch: both) so the gate combines exactly the shards that ran.
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
 
     steps:
     - name: Checkout repository
+      if: needs.changes.outputs.code_changed == 'true'
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
+      if: needs.changes.outputs.code_changed == 'true'
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
     - name: Install project (for coverage source resolution) + coverage
+      if: needs.changes.outputs.code_changed == 'true'
       run: |
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
@@ -151,13 +223,19 @@ jobs:
         python -m pip install "coverage>=7"
 
     - name: Download this version's shard artifacts
+      if: needs.changes.outputs.code_changed == 'true'
       uses: actions/download-artifact@v4
       with:
         pattern: shard-${{ matrix.python-version }}-*
         path: shard-artifacts
         merge-multiple: true
 
+    - name: Skip note (docs-only PR)
+      if: needs.changes.outputs.code_changed != 'true'
+      run: echo "Docs-only PR — no shard coverage produced; the 95% floor gate is not applicable."
+
     - name: Combine coverage + enforce 95% floor
+      if: needs.changes.outputs.code_changed == 'true'
       run: |
         # Gather the per-shard data files and merge. `coverage combine` auto-discovers
         # .coverage.* in the working dir, so move them out of the artifact dir first.
@@ -170,7 +248,7 @@ jobs:
 
     - name: Upload combined coverage
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && needs.changes.outputs.code_changed == 'true'
       with:
         name: coverage-${{ matrix.python-version }}
         path: |
@@ -179,7 +257,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
-      if: matrix.python-version == '3.12'
+      if: matrix.python-version == '3.12' && needs.changes.outputs.code_changed == 'true'
       with:
         files: ./coverage.xml
         flags: unittests
@@ -188,7 +266,7 @@ jobs:
 
     - name: Publish combined test results on PR
       uses: EnricoMi/publish-unit-test-result-action@v2
-      if: always() && github.event_name == 'pull_request'
+      if: always() && github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
       with:
         files: shard-artifacts/test-results-${{ matrix.python-version }}-*.xml
         check_name: Test Results (Python ${{ matrix.python-version }})

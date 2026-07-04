@@ -167,7 +167,7 @@ def _validate_annual_rows_structure(
         except (TypeError, ValueError):
             raise PipelineValidationError(
                 f"annual_rows[0]['{key}'] not convertible to float: {first_row[key]}"
-            )
+            ) from None
 
     logger.debug(
         "Validated annual_rows: %d rows, first_row_keys=%s",
@@ -198,7 +198,7 @@ def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
     except (TypeError, ValueError) as exc:
         raise PipelineValidationError(
             f"debt_result critical field type validation failed: {exc}"
-        )
+        ) from exc
 
     logger.debug(
         "Validated debt_result: %d keys, min_dscr=%.2f",
@@ -714,6 +714,44 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
         debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
         debt_result = _validate_debt_result_structure(debt_result)
+
+        # Senior credit-support fees (#737): the debt engine sized the debt with the
+        # guarantee + PRI fee inside the sculpt and exposes the per-period USD fee
+        # (rate x opening outstanding). Translate it to LKR at each operating row's
+        # spot FX (same basis as opex/interest; the fee base is USD debt, so no
+        # _hedged_usd) and REBUILD the unlevered rows with the fee charged at the
+        # EBITDA line — so reported CFADS, project NPV/IRR and (levered) tax all bear
+        # the SAME fee the sculpt and the DSCR series charged. Construction periods
+        # carry no operating row and a 0.0 engine fee. No fees configured -> the
+        # original rows pass through untouched (byte-identical).
+        senior_fee_usd = [
+            float(v or 0.0) for v in (debt_result.get("senior_fee_usd") or [])
+        ]
+        senior_fee_lkr_series: list[float] | None = None
+        if any(fee > 0.0 for fee in senior_fee_usd):
+            fee_period_map = debt_result.get("annual_row_debt_period_map") or []
+            fee_row_to_period: dict[int, int] = {}
+            for mapping in fee_period_map:
+                try:
+                    fee_row_to_period[int(mapping["annual_row_index"])] = int(
+                        mapping["debt_period"]
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+            senior_fee_lkr_series = []
+            for row_idx, row in enumerate(annual_rows):
+                period_idx = fee_row_to_period.get(row_idx, row_idx)
+                fee_usd = (
+                    senior_fee_usd[period_idx]
+                    if 0 <= period_idx < len(senior_fee_usd)
+                    else 0.0
+                )
+                senior_fee_lkr_series.append(fee_usd * float(row.get("fx_rate") or 0.0))
+            annual_rows = build_annual_rows(
+                cfg, senior_fee_lkr_series=senior_fee_lkr_series
+            )
+            annual_rows = _validate_annual_rows_structure(annual_rows)
+
         annual_rows_enriched = _enrich_annual_rows_with_debt(annual_rows, debt_result)
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
@@ -818,6 +856,9 @@ def run_v14_pipeline_enhanced(
                     cfg,
                     interest_expense_series=op_interest_lkr,
                     extra_depreciable_usd=idc_usd,
+                    # The equity waterfall bears the same senior fee (#737) the
+                    # project pass charged; None when no fees are configured.
+                    senior_fee_lkr_series=senior_fee_lkr_series,
                 ),
                 debt_result,
             )
@@ -889,6 +930,10 @@ def run_v14_pipeline_enhanced(
         # docstrings claiming otherwise. It is additive (reporting only — no effect on
         # IRR/NPV/DSCR) and non-fatal: a malformed fx config must not fail the financed run.
         _fx_t0 = time.perf_counter()
+        # #736: on failure the FX block is a log-only warning today, so a stale/fallback FX
+        # assumption is invisible to a report reader. Capture the failure into the result (below)
+        # so the report/user layer can surface it explicitly, not just the logs.
+        fx_integration_warning: Optional[str] = None
         try:
             from analytics.fx.fx_integration import integrate_fx_into_scenario_result
 
@@ -902,6 +947,11 @@ def run_v14_pipeline_enhanced(
         except Exception as exc:  # pragma: no cover - defensive (reporting-only slice)
             logger.warning("FX integration failed (non-fatal, reporting-only): %s", exc)
             metrics.fx_integration_succeeded = False
+            fx_integration_warning = (
+                "FX integration failed: the report's FX curve and risk profile are "
+                "unavailable, so any FX-sensitive figures rely on the scenario's static FX "
+                f"assumption rather than a calibrated path. Cause: {exc}"
+            )
         metrics.fx_integration_attempted = True
         metrics.fx_integration_time_sec = time.perf_counter() - _fx_t0
 
@@ -924,6 +974,14 @@ def run_v14_pipeline_enhanced(
             "debt_result": debt_result,
             "equity_distribution": equity_distribution,
             "metrics": asdict(metrics) if enable_monitoring else {},
+            # #736: FX-integration status, surfaced unconditionally (not gated on monitoring) so
+            # the report layer can render an explicit warning when it failed. ``warning`` is None
+            # on success -> the report banner is omitted (render-when-present, byte-identical).
+            "fx_integration": {
+                "attempted": metrics.fx_integration_attempted,
+                "succeeded": metrics.fx_integration_succeeded,
+                "warning": fx_integration_warning,
+            },
             "run_manifest": run_manifest,
         }
 

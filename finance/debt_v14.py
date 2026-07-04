@@ -532,6 +532,7 @@ def _sculpted_schedule(
     amort_years: int,
     cfads: List[float],
     dscr_target: float,
+    senior_fee_rate: float = 0.0,
 ) -> Dict[str, List[Tuple[float, float, float]]]:
     obals = {k: tr.principal for k, tr in tranches.items()}
     schedules: Dict[str, List[Tuple[float, float, float]]] = {k: [] for k in tranches}
@@ -544,7 +545,20 @@ def _sculpted_schedule(
         year_index += 1
     for _ in range(amort_years):
         cf = cfads[year_index] if cfads and year_index < len(cfads) else 0.0
-        target_svc = max(0.0, cf / dscr_target) if dscr_target > 0 else 0.0
+        # Fee-inside-the-sculpt (#737): the annual credit-support fee (guarantee + PRI,
+        # senior_fee_rate x the OPENING outstanding balance) ranks senior to debt service,
+        # so the CFADS available for sculpting is net of it — the bankable-correct
+        # treatment (pre-fee sizing oversizes debt). The gearing solve re-runs this whole
+        # schedule per candidate, so leverage is re-sized fee-inclusively with no extra
+        # loop. apply_debt_layer's reported DSCR nets the SAME rate x opening-outstanding
+        # fee, which is what lands the reported DSCR exactly on target. 0.0 rate is
+        # byte-identical. NOTE: with interest-only years the first sculpt entry is the
+        # synthetic half-year bridge period, which is an IO year for every committed
+        # scenario; an io_years=0 config would fee-net the bridge here while the reported
+        # series charges it no fee — sizing then errs conservative (DSCR above target).
+        fee = senior_fee_rate * sum(obals.values())
+        cf_net = cf - fee
+        target_svc = max(0.0, cf_net / dscr_target) if dscr_target > 0 else 0.0
         interest_map = {k: obals[k] * tranches[k].rate for k in tranches}
         principal_total = max(0.0, target_svc - sum(interest_map.values()))
         total_bal = sum(obals.values()) or 1.0
@@ -597,6 +611,25 @@ def apply_debt_layer(
         )
         amortization = _AMORT_DEFAULT_STYLE
     target_dscr = _as_float(p.get("target_dscr"), 1.30)
+
+    # Annual credit-support fees (#737): DFI partial-credit-guarantee fee + PRI premium,
+    # each an annual rate on the OUTSTANDING senior debt (ADB PCG convention). Config
+    # decimals under Financing_Terms.fees; absent keys -> 0.0 -> byte-identical. The
+    # combined rate is charged senior to debt service (reduces the CFADS used for
+    # sculpting AND the reported DSCR/LLCR/PLCR coverage bases) and is exposed per
+    # period as senior_fee_usd for the pipeline's reported rows. USD throughout — the
+    # tranche balances and cfads_usd share the numeraire, so no FX enters here.
+    fees_cfg = p.get("fees")
+    fees_map: Mapping[str, Any] = fees_cfg if isinstance(fees_cfg, Mapping) else {}
+    guarantee_fee_rate = _as_float(fees_map.get("guarantee_fee_pct_per_year"), 0.0)
+    pri_premium_rate = _as_float(fees_map.get("pri_premium_pct_per_year"), 0.0)
+    senior_fee_rate = guarantee_fee_rate + pri_premium_rate
+    if guarantee_fee_rate < 0.0 or pri_premium_rate < 0.0 or senior_fee_rate >= 1.0:
+        raise ValueError(
+            "Financing_Terms.fees guarantee_fee_pct_per_year / pri_premium_pct_per_year "
+            f"must be non-negative decimals well below 1.0 (got {guarantee_fee_rate!r} "
+            f"and {pri_premium_rate!r}); e.g. 75 bps -> 0.0075."
+        )
 
     capex = _extract_capex_usd(params)
     debt_total = capex * debt_ratio
@@ -659,6 +692,7 @@ def apply_debt_layer(
             amort_years,
             cfads_ext[construction_periods:],
             target_dscr,
+            senior_fee_rate=senior_fee_rate,
         )
 
     for k in schedules:
@@ -671,11 +705,24 @@ def apply_debt_layer(
     # waterfall to charge a grossed-up non-resident interest WHT (CESSPIT wht_gross_up).
     interest_total: List[float] = []
     debt_outstanding: List[float] = []
+    # Per-period senior credit-support fee (#737): senior_fee_rate x the OPENING
+    # outstanding balance — the SAME base the sculpt netted, so the reported DSCR lands
+    # exactly on the sculpt target. Charged for operating periods only; 0.0 during
+    # construction (no operations to bear an ops-period fee) and for the synthetic
+    # half-year bridge period (it maps to no operating row, so a fee there could never
+    # reach the reported CFADS rows — the consistency requirement wins).
+    senior_fee_schedule: List[float] = []
 
     out_bals = {k: t.principal for k, t in tranches.items()}
 
     for period in range(timeline_periods):
-        debt_outstanding.append(sum(out_bals.values()))
+        opening_outstanding = sum(out_bals.values())
+        debt_outstanding.append(opening_outstanding)
+        fee_applies = period >= construction_periods and (
+            bridge_debt_period is None or period != int(bridge_debt_period)
+        )
+        fee_period = senior_fee_rate * opening_outstanding if fee_applies else 0.0
+        senior_fee_schedule.append(fee_period)
         svc = 0.0
         intr = 0.0
         for k in schedules:
@@ -687,11 +734,12 @@ def apply_debt_layer(
         debt_service_total.append(svc)
         interest_total.append(intr)
         cf = cfads_ext[period] if period < len(cfads_ext) else 0.0
+        cf_net = cf - fee_period
 
         if period < construction_periods:
             dscr_series.append(None)
         elif svc > 0:
-            dscr_series.append(cf / svc)
+            dscr_series.append(cf_net / svc)
         else:
             dscr_series.append(None)
 
@@ -718,8 +766,15 @@ def apply_debt_layer(
             dscr_by_year[year_key] = None
         elif row_i == 0 and bridge_extra_service > 0.0:
             cf = cfads_ext[debt_period] if debt_period < len(cfads_ext) else 0.0
+            # Net year 1's own senior fee (#737), same as dscr_series does; the bridge
+            # period itself carries no fee (see senior_fee_schedule above).
+            fee = (
+                senior_fee_schedule[debt_period]
+                if debt_period < len(senior_fee_schedule)
+                else 0.0
+            )
             svc = float(debt_service_total[debt_period]) + bridge_extra_service
-            dscr_by_year[year_key] = (cf / svc) if svc > 0 else None
+            dscr_by_year[year_key] = ((cf - fee) / svc) if svc > 0 else None
         else:
             dscr_by_year[year_key] = dscr_series[debt_period]
 
@@ -774,7 +829,21 @@ def apply_debt_layer(
     # convention, internally consistent with PLCR (full operating horizon) and the project
     # life, and the divergence is an artifact of the bridge period, not an economic extra
     # year of loan life. PLCR uses the full operating horizon.
-    project_cfads = list(cfads)
+    # #737: LLCR/PLCR discount CFADS *available for debt service*, and the senior
+    # credit-support fee ranks above debt service — so the numerator nets the SAME
+    # per-period fee the DSCR series charges (via the canonical row->debt-period map).
+    # Leaving the numerator pre-fee would overstate coverage relative to the reported
+    # (fee-netted) CFADS rows and the DSCR series. 0.0 fees -> byte-identical.
+    fee_by_row: Dict[int, float] = {}
+    for mapping in annual_row_debt_period_map:
+        debt_period = int(mapping["debt_period"])
+        if 0 <= debt_period < len(senior_fee_schedule):
+            fee_by_row[int(mapping["annual_row_index"])] = senior_fee_schedule[
+                debt_period
+            ]
+    project_cfads = [
+        value - fee_by_row.get(row_i, 0.0) for row_i, value in enumerate(cfads)
+    ]
     cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
 
     llcr = (
@@ -808,6 +877,8 @@ def apply_debt_layer(
         "debt_service_total": debt_service_total,
         "interest_total": interest_total,
         "debt_outstanding": debt_outstanding,
+        "senior_fee_usd": senior_fee_schedule,
+        "senior_fee_rate": senior_fee_rate,
         "balloon_remaining": sum(out_bals.values()),
         "construction_periods": construction_periods,
         "construction_schedule": construction_schedule,
@@ -863,6 +934,14 @@ def _solve_gearing_for_dscr(
         core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
         # Target the SAME public covenant metric plan_debt reports (cleaned series),
         # not the raw operational dscr_min (which includes the balloon/bridge period).
+        # NOTE (#737): deliberately NOT the bridge-corrected per-year fold. With senior
+        # credit-support fees, operating year 1 — which covers its own service PLUS the
+        # orphaned bridge service out of fee-netted CFADS — can read slightly below the
+        # per-period floor (the pre-fee slack absorbed it); binding the fold here was
+        # tried and rejected: at interest_only_years=0 the fold is quasi-insensitive to
+        # gearing (year 1 is sculpt-targeted, so extra de-leveraging cannot lift it)
+        # and the solve degenerates to a near-zero facility. plan_debt's conservative
+        # min_dscr (round-5 #3) still REPORTS the fold honestly.
         public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
         return min(public) if public else float(core.get("dscr_min", 0.0))
 
@@ -1044,6 +1123,7 @@ def _balloon_resolution_stream(
     avg_rate: float,
     refi_tenor_years: int,
     refi_rate_premium: float,
+    senior_fee_usd: Sequence[float] = (),
 ) -> Tuple[List[float], float]:
     """Per-period cash diverted from equity to retire the balloon + residual.
 
@@ -1083,10 +1163,16 @@ def _balloon_resolution_stream(
         return resolution, 0.0
 
     # Default: cash_sweep — trap post-maturity CFADS until the balloon clears.
+    # The sweepable headroom is net of the senior credit-support fee (#737): the
+    # reported rows already charge equity that fee, so sweeping pre-fee CFADS would
+    # double-count the same cash as both fee-paid and balloon-sweepable, overstating
+    # how fast equity can retire the balloon. (The fee is charged on the UN-swept
+    # structural balloon — conservative.) Zero fees -> byte-identical.
     remaining = float(balloon)
     for p in range(maturity, n):
         available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
-        pay = min(max(0.0, available), remaining)
+        fee = _as_float(senior_fee_usd[p], 0.0) if p < len(senior_fee_usd) else 0.0
+        pay = min(max(0.0, available - fee), remaining)
         resolution[p] = pay
         remaining -= pay
         if remaining <= _BALLOON_TOL:
@@ -1281,6 +1367,7 @@ def plan_debt(
     balloon_resolution, balloon_residual = _balloon_resolution_stream(
         treatment=treatment,
         balloon=structural_balloon,
+        senior_fee_usd=core.get("senior_fee_usd", []) or [],
         cfads_ext=core.get("cfads_extended", []) or [],
         debt_service_total=core.get("debt_service_total", []) or [],
         construction_periods=int(core.get("construction_periods", 0) or 0),
@@ -1370,6 +1457,8 @@ def plan_debt(
         "debt_service_total": debt_service_total,
         "interest_total": interest_total,
         "total_service": debt_service_total,
+        "senior_fee_usd": core.get("senior_fee_usd", []),
+        "senior_fee_rate": core.get("senior_fee_rate", 0.0),
         "dscr_series": public_dscr_series,
         "raw_dscr_series": core.get("dscr_series", []),
         "dscr_by_year": core.get("dscr_by_year", {}),
@@ -1462,7 +1551,8 @@ def size_debt_with_dual_dscr(
         service = [cf / target for cf in cfads]
         capacity = _npv(service, debt_rate)
         profile = [
-            (cf / svc) if svc > 0 else float("inf") for cf, svc in zip(cfads, service)
+            (cf / svc) if svc > 0 else float("inf")
+            for cf, svc in zip(cfads, service, strict=True)
         ]
         min_dscr = min(profile) if profile else 0.0
         return service, capacity, profile, min_dscr
