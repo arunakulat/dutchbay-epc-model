@@ -85,6 +85,16 @@ def test_as_float_unconvertible_object_fails_loud() -> None:
         as_float(_Uncoercible(), -1.0)
 
 
+def test_as_float_key_context_names_the_config_key() -> None:
+    """With key= supplied, the error names the offending config key (#683)."""
+    with pytest.raises(ValueError, match=r"config key 'tax\.depreciable_capex_lkr'"):
+        as_float("12,5", key="tax.depreciable_capex_lkr")
+    # Without key= the message stays key-less (backward-compatible wording).
+    with pytest.raises(ValueError) as exc_info:
+        as_float("12,5")
+    assert "config key" not in str(exc_info.value)
+
+
 # ---------------------------------------------------------------------------
 # as_int (lines 16-23)
 # ---------------------------------------------------------------------------
@@ -116,6 +126,15 @@ def test_as_int_unconvertible_object_fails_loud() -> None:
     """An object int() can't handle (TypeError) is re-raised as ValueError (#585)."""
     with pytest.raises(ValueError, match="cannot convert"):
         as_int(_Uncoercible(), 99)
+
+
+def test_as_int_key_context_names_the_config_key() -> None:
+    """With key= supplied, the error names the offending config key (#683)."""
+    with pytest.raises(ValueError, match=r"config key 'tax\.depreciation_years'"):
+        as_int("six", key="tax.depreciation_years")
+    with pytest.raises(ValueError) as exc_info:
+        as_int("six")
+    assert "config key" not in str(exc_info.value)
 
 
 def test_probe_variants_keep_swallow_semantics() -> None:

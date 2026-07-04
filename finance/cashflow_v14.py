@@ -185,22 +185,34 @@ def _prepare_cashflow_context(
 
     if capex_dep_resolved is None:
         # 1) Explicit tax base if provided
-        dep_lkr = as_float(get_nested(config, ["tax", "depreciable_capex_lkr"], None))
+        dep_lkr = as_float(
+            get_nested(config, ["tax", "depreciable_capex_lkr"], None),
+            key="tax.depreciable_capex_lkr",
+        )
 
         if dep_lkr is None:
-            dep_lkr = as_float(get_nested(config, ["tax", "dep_base_lkr"], None))
+            dep_lkr = as_float(
+                get_nested(config, ["tax", "dep_base_lkr"], None),
+                key="tax.dep_base_lkr",
+            )
 
         if dep_lkr is not None:
             capex_dep_resolved = dep_lkr
         else:
             # 2) Project-wide LKR capex
-            capex_lkr = as_float(get_nested(config, ["capex", "lkr_total"], None))
+            capex_lkr = as_float(
+                get_nested(config, ["capex", "lkr_total"], None),
+                key="capex.lkr_total",
+            )
 
             if capex_lkr is not None:
                 capex_dep_resolved = capex_lkr
             else:
                 # 3) USD capex translated at year-0 FX
-                capex_usd = as_float(get_nested(config, ["capex", "usd_total"], None))
+                capex_usd = as_float(
+                    get_nested(config, ["capex", "usd_total"], None),
+                    key="capex.usd_total",
+                )
 
                 if capex_usd is not None:
                     capex_dep_resolved = capex_usd * fx_curve_resolved[0]

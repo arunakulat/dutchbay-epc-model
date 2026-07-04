@@ -282,6 +282,25 @@ def test_capex_usd_total_translated_at_year0_fx() -> None:
     assert math.isclose(_first_year_depreciation(cfg), expected, rel_tol=1e-9)
 
 
+def test_malformed_tax_base_error_names_the_config_key() -> None:
+    """A malformed value in the tax-base precedence ladder names its key (#683).
+
+    The 4-candidate chain (tax.depreciable_capex_lkr -> tax.dep_base_lkr ->
+    capex.lkr_total -> capex.usd_total) previously raised a key-less
+    "cannot convert" error, leaving the operator to infer which candidate
+    held the malformed value.
+    """
+    cfg = _base_config()
+    cfg["tax"]["depreciable_capex_lkr"] = "12,5"
+    with pytest.raises(ValueError, match=r"config key 'tax\.depreciable_capex_lkr'"):
+        build_annual_rows(cfg)
+
+    cfg = _base_config()
+    cfg["capex"] = {"usd_total": "1e8 USD"}
+    with pytest.raises(ValueError, match=r"config key 'capex\.usd_total'"):
+        build_annual_rows(cfg)
+
+
 def test_enhanced_capital_allowance_scales_depreciation_base() -> None:
     """When the enhanced allowance applies, the whole base is scaled up.
 
