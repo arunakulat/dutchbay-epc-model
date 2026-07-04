@@ -618,10 +618,18 @@ def test_run_single_rows_bear_the_senior_fee(
     )
 
 
-def test_run_single_no_fee_scenario_short_circuits(tmp_path: Path) -> None:
-    """No fee keys -> the original rows pass through untouched (byte-identical)."""
+def test_run_single_no_fee_scenario_short_circuits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No fee keys -> exactly ONE row build (the rebuild gate short-circuits).
+
+    Row equality alone could not distinguish a short-circuit from a rebuild with
+    an all-zero fee series (both yield identical rows), so the gate is proven with
+    a call counter on the surface's build_annual_rows binding.
+    """
     import yaml
 
+    import analytics.scenario_analytics as sa_mod
     from analytics.scenario_loader import load_scenario_config
     from finance.cashflow_v14 import build_annual_rows
 
@@ -637,12 +645,21 @@ def test_run_single_no_fee_scenario_short_circuits(tmp_path: Path) -> None:
     aep_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(aep_src, aep_dst)
 
+    calls: list[bool] = []
+
+    def _counting_build(config: dict, *args: object, **kwargs: object) -> list:
+        calls.append(kwargs.get("senior_fee_lkr_series") is not None)
+        return build_annual_rows(config, *args, **kwargs)
+
+    monkeypatch.setattr(sa_mod, "build_annual_rows", _counting_build)
     sa = ScenarioAnalytics(scenarios_dir=tmp_path)
     res = sa._run_single(staged)
     assert res.fail_reason is None
     assert all(f == 0.0 for f in res.debt_result["senior_fee_usd"])
     assert all(row["senior_fee_lkr"] == 0.0 for row in res.annual_rows)
-    # Bit-identical to a direct pre-fee build: the rebuild gate short-circuited.
+    # THE short-circuit proof: one build, and never with a fee series.
+    assert calls == [False]
+    # And the surviving rows are bit-identical to a direct pre-fee build.
     direct = build_annual_rows(load_scenario_config(str(staged)))
     assert len(direct) == len(res.annual_rows)
     for mine, theirs in zip(res.annual_rows, direct, strict=True):

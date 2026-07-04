@@ -282,7 +282,9 @@ class ScenarioAnalytics:
             # Annual cashflow rows
             annual_rows = build_annual_rows(config)
 
-            # Debt layer (may mutate annual_rows in-place)
+            # Debt layer. NB: apply_debt_layer only READS annual_rows (verified
+            # #789 review) — the fee rebuild below depends on that staying true,
+            # since rebuilt rows would silently discard any in-place enrichment.
             debt_result = apply_debt_layer(config, annual_rows)
 
             # Senior credit-support fees (#789, mirroring the canonical pipeline's
