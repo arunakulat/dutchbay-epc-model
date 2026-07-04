@@ -20,6 +20,41 @@ updates:
       python-deps:
         patterns:
           - "*"
+    # MAJOR-version updates on the load-bearing set are POLICY DECISIONS, not bot
+    # chores (#756 post-mortem: the weekly group bumped pandas 2->3 and rewrote our
+    # own pyproject `<3.0` cap to make it fit, desynced mypy/isort/ruff from the
+    # versions the mandatory gates were cleared against, and shipped an internally
+    # inconsistent freeze — ResolutionImpossible at pip install).
+    #  - Engine numerics (pandas/numpy/scipy/pydantic + their stubs): majors land only
+    #    via a deliberate, KPI-oracle-verified migration (pandas 3.0 = #593).
+    #  - Gate toolchain: mypy diagnostics change on MINORS (the lint job pins the
+    #    cleared 1.19.0); ruff is 0.x-versioned, so minors are its breaking level;
+    #    black is CalVer (every yearly bump is a "major").
+    # Minor/patch updates keep flowing weekly for everything else, and Dependabot
+    # SECURITY updates are settings-driven — unaffected by these ignores.
+    ignore:
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas-stubs"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scipy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scipy-stubs"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic-core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mypy"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "isort"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ruff"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "black"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions: keeps the workflow action pins current (the repo had checkout@v3/@v4,
   # setup-python@v4/@v5, codecov@v3/@v4 drift).
