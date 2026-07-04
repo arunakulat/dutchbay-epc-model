@@ -84,6 +84,21 @@ class RiskItem(BaseModel):
     climate_risk_category: Optional[ClimateRiskCategory] = None
 
 
+class LimitationItem(BaseModel):
+    """One model-limitation / scope caveat rendered in every report (#734).
+
+    Config-authored (CCCDIR) so no output is read without its scope caveats; the report layer
+    renders these verbatim and derives none. This is the one report-wide home for caveats that
+    otherwise lived only as module docstrings / result-notes (e.g. the BESS-LCOS 'dispatch is not
+    simulated' note in finance.bess_lcos, the three-statement tax/100%-sweep/equity-balancing note
+    in analytics.three_statement) — surfaced, not duplicated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    topic: str
+    detail: str
+
+
 class ReportConfig(BaseModel):
     """The full validated report presentation config."""
 
@@ -95,6 +110,9 @@ class ReportConfig(BaseModel):
     # Optional so a minimal/legacy config (or a test fixture) without a register still
     # validates; the committed default seeds the real DutchBay risk profile.
     risk_register: List[RiskItem] = Field(default_factory=list)
+    # Optional so a minimal/legacy config (or a test fixture) without limitations still validates;
+    # the committed default seeds the model-wide scope caveats (#734).
+    model_limitations: List[LimitationItem] = Field(default_factory=list)
 
 
 def load_report_config(path: Optional[Path] = None) -> ReportConfig:
