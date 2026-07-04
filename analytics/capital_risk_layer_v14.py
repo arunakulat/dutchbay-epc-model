@@ -73,6 +73,11 @@ DRIVER_MC_TRIAL_METRICS: tuple[str, ...] = (
     "plcr",
 )
 
+#: The NPV buckets a capital-risk report can plot. Single source for the ``npv_metric`` guard here
+#: and for any caller that wants to fail fast before running a bounded MC (e.g.
+#: :func:`app.reports.capital_risk_emit.build_capital_risk_report_for_scenario`).
+NPV_METRICS: tuple[str, ...] = ("equity_npv", "project_npv")
+
 
 @dataclass(frozen=True)
 class CapitalRiskLayer:
@@ -531,10 +536,8 @@ def _npv_distribution_png_from_trials(
         ChartGenerator,
     )
 
-    if npv_metric not in ("equity_npv", "project_npv"):
-        raise ValueError(
-            f"npv_metric must be 'equity_npv' or 'project_npv'; got {npv_metric!r}"
-        )
+    if npv_metric not in NPV_METRICS:
+        raise ValueError(f"npv_metric must be one of {NPV_METRICS}; got {npv_metric!r}")
     out = Path(output_path)
     values = np.asarray(trials[npv_metric], dtype=float)
     finite = values[np.isfinite(values)]
@@ -799,6 +802,7 @@ __all__ = [
     "CapitalRiskLayer",
     "CapitalRiskReport",
     "DRIVER_MC_TRIAL_METRICS",
+    "NPV_METRICS",
     "compute_capital_risk_layer",
     "run_driver_mc",
     "run_capital_risk_layer",
