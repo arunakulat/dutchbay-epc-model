@@ -154,7 +154,12 @@ jobs:
         # survives a rootdir change). Balancing is by duration SUM, so groups carry unequal
         # test COUNTS by design; a test absent from the durations file is assigned the mean.
         # Regenerate periodically with `pytest tests/ --store-durations` so new tests are
-        # timed (see #760). The whole tree is still exercised — every test runs in exactly
+        # timed (see #760). --splitting-algorithm least_duration bin-packs tests into
+        # shards by duration (greedy LPT) instead of the default CONTIGUOUS chunking,
+        # which stranded whole heavy files in one shard (measured 426s vs 129s spread
+        # on the first 6-shard run). Non-contiguous grouping is safe here: -n auto
+        # already distributes tests across workers arbitrarily WITHIN a shard, so
+        # inter-test order was never guaranteed anyway. The whole tree is still exercised — every test runs in exactly
         # one shard, so the gate can't be dodged by omission (the #149 Test Summary hole).
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
@@ -163,6 +168,7 @@ jobs:
           tests/ \
           --splits "$TOTAL_SHARDS" \
           --group ${{ matrix.shard }} \
+          --splitting-algorithm least_duration \
           --durations-path .test_durations \
           -n auto \
           --tb=short \
