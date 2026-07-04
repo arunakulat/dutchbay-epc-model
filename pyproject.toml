@@ -49,6 +49,12 @@ dependencies = [
 # Enabling ruff's B (flake8-bugbear) rule set as a mandatory gate is a separate follow-up:
 # the tree is not yet B-clean (~18 B904 `raise ... from` findings that need code fixes).
 dev = [
+  # typer backs the LEGACY (frozen, CLI-01-tolerated) scripts/go_with_the_flow_ci.py
+  # driver, which tests/lint/test_ci_driver_targets_exist.py IMPORTS to assert its
+  # targets exist. It was an UNDECLARED dependency riding the requirements.txt freeze
+  # by accident until the 2026-07-04 freeze refresh purged undeclared strays and the
+  # suite caught it (#756 post-mortem). Remove together with the legacy driver.
+  "typer>=0.12",
   "ruff>=0.5",
   "black>=24.0",
   "isort>=5.13",

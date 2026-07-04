@@ -127,7 +127,7 @@ def optimize_capital_structure(
     nlc_dscr = NonlinearConstraint(constraint_min_dscr, 0, np.inf)  # type: ignore[arg-type]  # scipy stub demands invariant 1-D float64 ndarray callable
     x0 = np.array([0.8, 0.45, 0.10])
     try:
-        res = minimize(  # type: ignore[call-overload]  # scipy stub demands invariant 1-D float64 ndarray callable for objective_func
+        res = minimize(  # scipy-stubs >=1.17 accepts the callable directly (the old call-overload ignore is now unused)
             objective_func,
             x0,
             method="SLSQP",

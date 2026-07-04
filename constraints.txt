@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FREEZE-REFRESH POLICY CONSTRAINTS (#756 post-mortem, 2026-07-04).
+#
+# Applied when regenerating requirements.txt (see its header for the recipe):
+#   PIP_CONSTRAINT=constraints.txt pip install -e '.[dev,test,api,dashboard,wind,gis]'
+#
+# These hold the versions the mandatory gates were CLEARED against. Lifting any
+# line is a deliberate migration dolphin, not a dependency chore — mirrored by
+# the semver-major ignore rules in .github/dependabot.yml.
+# ─────────────────────────────────────────────────────────────────────────────
+# pandas 3.0: mandatory Copy-on-Write + default str-dtype inference — unconditional
+# breaking changes for the finance engine. Lift only via the KPI-oracle-verified
+# migration tracked as #593 (also capped in pyproject).
+pandas<3
+# mypy: the lint gate pins the version the typed surface was cleared against
+# (diagnostics change on minors); keep the freeze in lockstep with the workflow pin.
+mypy==1.19.0
+# isort 8 / ruff 0.15: mandatory-gate rule churn; bump in a dedicated lint dolphin.
+isort<8
+ruff<0.15
+# black is CalVer — every yearly bump is a "major"; hold within the cleared year.
+black<27
+# Typed-surface toolchain held at the gate-cleared releases (newer stub/typing
+# releases change mypy diagnostics; bump them in a dedicated typed-surface dolphin
+# together with the accompanying type fixes):
+pandas-stubs==2.3.3.251201
+requests==2.33.0
