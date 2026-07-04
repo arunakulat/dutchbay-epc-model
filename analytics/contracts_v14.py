@@ -222,6 +222,32 @@ class SensitivityRequest(ContractMixin):
 
 
 @dataclass(frozen=True)
+class TwoFactorInteractionGrid(ContractMixin):
+    """Two-driver sensitivity interaction surface (#739).
+
+    ``values[i][j]`` is the RAW metric at row driver A's case ``a_labels[i]``
+    and column driver B's case ``b_labels[j]`` (labels ordered base/low/high as
+    emitted by the sweep adapter; raw metric values, NOT exceedance levels).
+    ``interaction[i][j]`` is the deviation of the joint cell from the additive
+    combination of the two one-way effects measured in the metric's own units —
+    identically zero everywhere when the drivers do not interact. Cells that
+    failed to evaluate carry NaN and are counted in
+    ``metadata['n_failed_cells']`` (never silently substituted).
+    """
+
+    metric_name: str
+    param_a_name: str
+    param_b_name: str
+    a_labels: list[str] = field(default_factory=list)
+    b_labels: list[str] = field(default_factory=list)
+    values: list[list[float]] = field(default_factory=list)
+    interaction: list[list[float]] = field(default_factory=list)
+    base_metric: float = 0.0
+    max_abs_interaction: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class BreakevenResult(ContractMixin):
     variable: str
     target_metric: str
@@ -604,6 +630,7 @@ __all__ = [
     "SensitivitySuite",
     "MultiMetricSensitivitySuite",
     "SensitivityRequest",
+    "TwoFactorInteractionGrid",
     "BreakevenResult",
     "ShockResult",
     "Distribution",
