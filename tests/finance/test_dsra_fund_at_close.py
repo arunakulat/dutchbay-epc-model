@@ -37,8 +37,8 @@ def test_default_off_preserves_canonical() -> None:
     # Canonical after PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR ~2.68%
     # is unchanged (debt-structure independent), minDSCR 1.30. The costlier LKR tranche takes
     # equity IRR to ~-4.86% at the flat-LKR tariff.
-    assert kpis["project_irr"] == pytest.approx(0.02684, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.048586, abs=0.001)
+    assert kpis["project_irr"] == pytest.approx(0.02032, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.049921, abs=0.001)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0

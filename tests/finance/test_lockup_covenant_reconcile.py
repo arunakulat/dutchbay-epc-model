@@ -47,16 +47,20 @@ def test_falls_back_to_125_when_neither_declared() -> None:
 
 
 def test_reconcile_is_kpi_neutral_on_the_sculpted_canonical() -> None:
-    """The 1.30 lockup does NOT engage on the canonical (sculpt MEETS the covenant).
+    """The 1.30 lockup engages ONLY on the one honest sub-covenant year (#737).
 
-    The dual-DSCR sculpt lands the floor year AT the covenant (1.2999999999999998 in FP),
-    which the FP-tolerant lockup treats as meeting — not breaching — the covenant, so zero
-    years lock and equity KPIs stay byte-identical to the pre-reconcile baseline.
+    The dual-DSCR sculpt lands every per-period floor year AT the covenant
+    (1.2999999999999998 in FP), which the FP-tolerant lockup treats as meeting the
+    covenant. With the #737 credit-support fees, operating year 1's per-YEAR covenant
+    value — its own service PLUS the orphaned half-year bridge service, out of
+    fee-netted CFADS — reads ~1.288, a genuine (small) breach beyond _DSCR_LOCKUP_EPS,
+    so exactly ONE year locks. Pre-fee it cleared at ~1.306 on slack and zero years
+    locked. A phantom (misalignment) lockup would trap many years, not one.
     """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
     kpis = evaluate_with_overrides(str(LENDER), overrides={})
-    assert kpis["equity_covenant_locked_years"] == 0
+    assert kpis["equity_covenant_locked_years"] == 1
 
 
 def test_reconcile_genuinely_engages_on_a_real_sub_covenant_breach() -> None:

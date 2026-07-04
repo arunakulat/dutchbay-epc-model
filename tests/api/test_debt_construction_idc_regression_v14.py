@@ -123,34 +123,37 @@ def test_lendercase_idc_totals_pinned() -> None:
     tol = 0.002  # 0.2% relative tolerance
 
     # Principals by tranche (absolute USD amounts, not "millions"). PR B (group-C #3) raised
-    # the LKR tranche rate to the UIP-implied 13.39%, so the DSCR sizer DE-LEVERS (gearing
-    # ~0.588 -> ~0.45); the IDC-inclusive tranche principals scale down accordingly (the LKR
-    # tranche's per-unit IDC rises with its rate, but the much smaller total debt dominates).
+    # the LKR tranche rate to the UIP-implied 13.39% and #737 put the credit-support fees
+    # INSIDE the sculpt, so the DSCR sizer DE-LEVERS (gearing ~0.588 -> ~0.45 -> 0.4275);
+    # the IDC-inclusive tranche principals scale down accordingly.
     assert float(lkr.get("principal_m", 0.0)) == pytest.approx(
-        39_099_998.218995, rel=tol
+        37_144_998.308045, rel=tol
     )
-    assert float(usd.get("principal_m", 0.0)) == pytest.approx(36_045_784.6875, rel=tol)
-    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(7_897_416.975, rel=tol)
+    assert float(usd.get("principal_m", 0.0)) == pytest.approx(
+        34_243_495.453125, rel=tol
+    )
+    assert float(dfi.get("principal_m", 0.0)) == pytest.approx(7_502_546.12625, rel=tol)
 
     total_principal = (
         float(lkr.get("principal_m", 0.0))
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(83_043_199.881495, rel=tol)
+    assert total_principal == pytest.approx(78_891_039.887420, rel=tol)
 
-    # IDC by tranche. Total IDC RISES vs PR A (10.998M -> 11.223M) despite the smaller debt:
-    # the LKR tranche's 13.39% rate accrues much more construction interest per unit principal.
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(6_780_998.218995, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(3_726_784.6875, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(715_416.975, rel=tol)
+    # IDC by tranche (scales with the fee-de-levered principals).
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(6_441_948.308045, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(3_540_445.453125, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(679_646.12625, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(11_223_199.881495, rel=tol)
+    assert total_idc == pytest.approx(10_662_039.887420, rel=tol)
 
-    # Min DSCR and audit status
+    # Min DSCR: the headline is the CONSERVATIVE per-year fold (#737 — year 1 carries
+    # the orphaned bridge service out of fee-netted CFADS, ~1.288); the per-period
+    # series still floors at the 1.30 sculpt target.
     min_dscr = float(result.get("min_dscr"))
-    assert min_dscr == pytest.approx(1.30, rel=tol)
+    assert min_dscr == pytest.approx(1.2884, rel=tol)
 
     # audit_status is PASS iff the debt-engine dscr_min >= the 1.30 target. The dual-DSCR
     # sculpt lands dscr_min AT the target, so this `>=` comparison sits on the boundary and

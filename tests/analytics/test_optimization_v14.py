@@ -320,6 +320,16 @@ def test_grid_vs_bounded_cross_check_dscr_sculpt() -> None:
     exactly. The resulting objective shortfall is bounded by (local slope
     ~0.13 IRR/unit ratio) x (boundary offset < ~1e-3) ~ 1e-4; assert the
     direction="max" cross-check within a 2e-4 tolerance.
+
+    BRACKET (#737): strictly SUB-CAP [0.30, 0.42]. Above the ~0.4275
+    DSCR-solved cap the sizer clamps every requested ratio to the same solved
+    structure, but the gearing scan's 0.0025 step grid is anchored at the
+    REQUESTED ratio, so the clamp region carries a small quantization texture
+    (~5e-4 IRR between adjacent requests). That texture fakes interior optima
+    and violates the unimodality assumption Brent needs — the pre-#737 bracket
+    reached 0.70 only because the texture then sat below the solver tolerance.
+    Sub-cap, the fee-inclusive objective is smooth and strictly decreasing in
+    gearing (deleveraging wins), which is exactly the property cross-checked.
     """
     common: Dict[str, Any] = dict(
         config_path=LENDER_CONFIG,
@@ -327,7 +337,7 @@ def test_grid_vs_bounded_cross_check_dscr_sculpt() -> None:
         objective_key="equity_irr",
         direction="max",
         lower=0.30,
-        upper=0.70,
+        upper=0.42,
         constraint_key="min_dscr",
         constraint_min=1.30,
     )

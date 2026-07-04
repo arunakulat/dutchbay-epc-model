@@ -20,6 +20,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import pytest
+
 from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -35,10 +37,13 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     scenario_result = result["scenario_result"]
 
     drate = kpis["discount_rate_used"]
-    # The build-up WACC (~0.082), NOT the legacy 0.10.
+    # The build-up WACC, NOT the legacy 0.10 default. Since #737 de-levered the deal
+    # the build-up WACC (~0.0994) sits coincidentally close to the 0.10 default, so a
+    # distance check no longer discriminates; pin the computed value instead (the
+    # wacc_is_real/wacc_label assertions below prove the BASIS).
     assert math.isfinite(drate)
-    assert abs(drate - DEFAULT_DISCOUNT_RATE) > 1e-3
-    assert 0.05 < drate < 0.10
+    assert drate == pytest.approx(0.09935759321847387, abs=1e-9)
+    assert 0.05 < drate < 0.12
 
     # The flag/label no longer contradict the rate that was actually used.
     assert kpis["wacc_is_real"] is True

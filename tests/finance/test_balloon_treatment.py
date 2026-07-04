@@ -61,8 +61,11 @@ def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None
     sculpt amortises less and the structural balloon is $59.16M (fraction 0.575).
     """
     dr = results["cash_sweep"]["debt_result"]
-    assert dr["balloon_remaining"] == pytest.approx(34_291_333, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.413, abs=0.01)
+    # #737 credit-support fees (senior to debt service, inside the sculpt) divert
+    # sculpted service capacity from principal, so the structural balloon grows
+    # ($34.3M/0.413 -> $38.4M/0.487).
+    assert dr["balloon_remaining"] == pytest.approx(38_406_982, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.487, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -76,7 +79,7 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(-0.0115, abs=0.002)
+    assert kpis["equity_irr"] == pytest.approx(-0.0177, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -105,7 +108,7 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
         dr["balloon_remaining"], rel=0.02
     )
     assert sweep < legacy - 0.025  # materially below the free pass, honest
-    assert sweep == pytest.approx(-0.0486, abs=0.003)
+    assert sweep == pytest.approx(-0.0499, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -115,7 +118,7 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     assert refi <= sweep
     # The 5.9% FX-drift re-baseline plus the 2.0% AEP haircut leave a large balloon ($59.16M);
     # refinancing it at the penalty rate against the weaker CFADS is catastrophic for equity (~-0.40).
-    assert refi == pytest.approx(-0.1323, abs=0.005)
+    assert refi == pytest.approx(-0.3318, abs=0.005)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:
