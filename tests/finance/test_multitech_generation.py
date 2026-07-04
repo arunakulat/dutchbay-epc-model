@@ -281,7 +281,7 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
     # Re-baselined by #737 (2026-07-04): annual credit-support fees ON for the lendercase —
     # guarantee 75 bps + PRI 100 bps on OUTSTANDING senior debt, senior to debt service,
-    # tax-deductible, sized INSIDE the DSCR sculpt. CFADS 202.33M -> 191.76M (-5.5%),
+    # tax-deductible, sized INSIDE the DSCR sculpt. CFADS 202.33M -> 191.22M (-5.5%),
     # projIRR 2.68% -> 2.03%, eqIRR -4.86% -> -4.99%, NPV -65.46M -> -70.95M; the gearing
     # solve de-levers 0.45 -> 0.4275 (debt 71.82M -> 68.23M) to hold the per-period
     # minDSCR at the 1.30 target fee-inclusively. Prior: PR B (group-C #3) UIP LKR debt rate re-baseline.

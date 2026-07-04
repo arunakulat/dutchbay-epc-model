@@ -29,8 +29,9 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # 0.339 -> 0.332), which lowers eqIRR and CFADS further:
 # eqIRR ... -> -0.019289278896401862 (PR-A tax/levy) -> -0.048585780806075674 (PR-B: LKR debt
 # rate 8% -> UIP-implied 13.39%; the costlier LKR tranche hits levered equity hard).
-# CFADS is the UNLEVERED project series — unchanged by PR B (the debt rate is downstream of it),
-# so _CANON_CFADS stays 202.33M (it rose from 199.10M only via PR-A's fabricated-levy removal).
+# CFADS was unchanged by PR B (the debt rate was downstream of it), but #737's credit-support
+# fees ARE in the unlevered CFADS (senior fee at the EBITDA line, sized off the debt structure):
+# _CANON_CFADS 202.33M -> 191.22M.
 _CANON_EQ_IRR = -0.04992120564267999
 _CANON_CFADS = 191218454.47506344
 

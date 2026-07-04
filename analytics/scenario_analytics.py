@@ -283,6 +283,12 @@ class ScenarioAnalytics:
             annual_rows = build_annual_rows(config)
 
             # Debt layer (may mutate annual_rows in-place)
+            # NOTE (#737 follow-up): this batch surface builds PRE-FEE rows while
+            # apply_debt_layer nets the Financing_Terms.fees credit-support fee from
+            # its DSCR/LLCR/PLCR — so for a fee-bearing scenario the rows/IRR/NPV
+            # here are pre-fee (this surface already skips the gearing autosolve and
+            # the WACC drive, so it is non-canonical by design). Wiring the
+            # senior_fee_lkr rebuild here is tracked as a filed follow-up issue.
             debt_result = apply_debt_layer(config, annual_rows)
 
             # KPIs. This batch surface uses a config/default discount, NOT the
