@@ -889,6 +889,10 @@ def run_v14_pipeline_enhanced(
         # docstrings claiming otherwise. It is additive (reporting only — no effect on
         # IRR/NPV/DSCR) and non-fatal: a malformed fx config must not fail the financed run.
         _fx_t0 = time.perf_counter()
+        # #736: on failure the FX block is a log-only warning today, so a stale/fallback FX
+        # assumption is invisible to a report reader. Capture the failure into the result (below)
+        # so the report/user layer can surface it explicitly, not just the logs.
+        fx_integration_warning: Optional[str] = None
         try:
             from analytics.fx.fx_integration import integrate_fx_into_scenario_result
 
@@ -902,6 +906,11 @@ def run_v14_pipeline_enhanced(
         except Exception as exc:  # pragma: no cover - defensive (reporting-only slice)
             logger.warning("FX integration failed (non-fatal, reporting-only): %s", exc)
             metrics.fx_integration_succeeded = False
+            fx_integration_warning = (
+                "FX integration failed: the report's FX curve and risk profile are "
+                "unavailable, so any FX-sensitive figures rely on the scenario's static FX "
+                f"assumption rather than a calibrated path. Cause: {exc}"
+            )
         metrics.fx_integration_attempted = True
         metrics.fx_integration_time_sec = time.perf_counter() - _fx_t0
 
@@ -924,6 +933,14 @@ def run_v14_pipeline_enhanced(
             "debt_result": debt_result,
             "equity_distribution": equity_distribution,
             "metrics": asdict(metrics) if enable_monitoring else {},
+            # #736: FX-integration status, surfaced unconditionally (not gated on monitoring) so
+            # the report layer can render an explicit warning when it failed. ``warning`` is None
+            # on success -> the report banner is omitted (render-when-present, byte-identical).
+            "fx_integration": {
+                "attempted": metrics.fx_integration_attempted,
+                "succeeded": metrics.fx_integration_succeeded,
+                "warning": fx_integration_warning,
+            },
             "run_manifest": run_manifest,
         }
 

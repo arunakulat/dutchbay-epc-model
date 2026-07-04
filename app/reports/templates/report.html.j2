@@ -84,6 +84,15 @@
     ul.notes li { margin-bottom: 3pt; }
     .disclaimer { font-size: 9pt; color: #555; }
     .muted { color: #888; }
+    /* FX-integration failure notice (#736) — amber caveat box surfaced to the reader. */
+    .fx-warning {
+      margin-top: 10pt;
+      padding: 8pt 12pt;
+      border-left: 4px solid #9a6700;
+      background: #fff4e0;
+      color: #7a5200;
+      font-size: 9.5pt;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +115,11 @@
   <section class="page">
     <h2>Important Notice</h2>
     <p class="disclaimer">{{ ctx.meta.disclaimer }}</p>
+    {# FX-integration failure warning (#736): surface a stale/fallback FX assumption to the
+       reader, not just the logs. Render-when-present. #}
+    {% if ctx.fx_warning %}
+    <p class="fx-warning"><strong>FX assumption notice:</strong> {{ ctx.fx_warning }}</p>
+    {% endif %}
   </section>
 
   {# 3. Executive summary #}

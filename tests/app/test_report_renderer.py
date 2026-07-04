@@ -343,3 +343,37 @@ def test_pdf_render_when_weasyprint_available() -> None:
     pdf = render_report_pdf(_context())
     assert isinstance(pdf, bytes)
     assert pdf[:5] == b"%PDF-"
+
+
+def test_fx_warning_renders_when_fx_integration_failed() -> None:
+    """#736: a failed FX integration surfaces an explicit banner in the report, not just a log."""
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    run_result = {
+        "fx_integration": {
+            "attempted": True,
+            "succeeded": False,
+            "warning": (
+                "FX integration failed: the report's FX curve and risk profile are "
+                "unavailable, so any FX-sensitive figures rely on the scenario's static FX "
+                "assumption rather than a calibrated path. Cause: boom"
+            ),
+        }
+    }
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=run_result)
+    assert ctx.fx_warning is not None
+    html = render_report_html(ctx)
+    assert "FX assumption notice" in html
+    assert "FX curve and risk profile are unavailable" in html
+
+
+def test_fx_warning_omitted_when_fx_integration_succeeded() -> None:
+    """Render-when-present: a healthy FX integration (or no fx status) omits the banner."""
+    case = CaseResult(
+        status="success", scenario_variant="lendercase", kpis=_KPIS, run_manifest=None
+    )
+    ok = {"fx_integration": {"attempted": True, "succeeded": True, "warning": None}}
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=ok)
+    assert ctx.fx_warning is None
+    assert "FX assumption notice" not in render_report_html(ctx)

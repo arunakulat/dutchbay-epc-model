@@ -667,6 +667,11 @@ class ReportContext(BaseModel):
     #: None unless the caller supplies the full run result AND it carries a computed equity
     #: distribution — additive, default-off; the section is otherwise omitted.
     irr_bridge: Optional[IrrBridgeBlock] = None
+    #: FX-integration failure warning (#736). Set when the run's FX calibration/integration failed
+    #: (a log-only event today), so a stale/fallback FX assumption is surfaced to the reader rather
+    #: than buried in logs. None when FX integration succeeded or was not reported — the banner is
+    #: then omitted (render-when-present; committed runs succeed, so byte-identical).
+    fx_warning: Optional[str] = None
     manifest: Dict[str, Any]
 
 
@@ -1549,6 +1554,23 @@ def _build_resource_trend(
     )
 
 
+def _build_fx_warning(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Surface the run's FX-integration failure warning into the report (#736).
+
+    The pipeline records an ``fx_integration`` status block on its result; when integration
+    failed it carries a human ``warning`` (a log-only event before this). Returns that string so
+    the report renders an explicit banner, or ``None`` when FX integration succeeded / was not
+    reported (banner omitted — render-when-present, so a healthy run is byte-identical).
+    """
+    if not run_result:
+        return None
+    fx = run_result.get("fx_integration")
+    if not isinstance(fx, Mapping):
+        return None
+    warning = fx.get("warning")
+    return str(warning) if warning else None
+
+
 def _irr_bridge_block(
     run_result: Optional[Mapping[str, Any]],
 ) -> Optional[IrrBridgeBlock]:
@@ -1689,5 +1711,6 @@ def build_report_context(
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
         resource_trend=_build_resource_trend(resource_trend),
         irr_bridge=_irr_bridge_block(run_result),
+        fx_warning=_build_fx_warning(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )
