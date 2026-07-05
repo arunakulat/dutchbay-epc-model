@@ -7,6 +7,16 @@ scenarios_dir: scenarios
 # Default Excel export path (can be overridden via CLI)
 output: exports/v14_analytics.xlsx
 
+# #735 slice-2: opt-in run-scoping (OFF by default → byte-identical).
+# `output` is a FILE path; when run_scoped is true its PARENT directory is routed
+# through analytics.output_paths.resolve_output_dir into a per-run subdirectory
+# '<parent>/<run_id>' and the filename is re-attached, so the workbook AND the
+# engine's sibling '<stem>_charts/' directory co-scope under one run directory.
+# run_id defaults to analytics.output_paths.default_run_id() when null. Default
+# false leaves the paths unchanged.
+run_scoped: false
+run_id: null
+
 # Run schema guard in strict mode by default
 strict: true
 
