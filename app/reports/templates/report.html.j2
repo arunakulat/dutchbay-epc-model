@@ -317,6 +317,14 @@
         {% endfor %}
       </tbody>
     </table>
+    <p class="muted">The headline Minimum DSCR
+      {%- if ctx.finance.kpis.min_dscr is not none %} ({{ fmt_x(ctx.finance.kpis.min_dscr) }}){% endif %}
+      is the fold-corrected covenant minimum: it folds the construction-to-operations
+      interest-only bridge service into operating year 1, the basis on which the
+      debt-service covenant is tested. It can therefore sit below the per-period sculpted
+      DSCR shown in the profile above, which holds the sculpt floor in each operating
+      period. The two coincide when no interest-only bridge loads additional service onto
+      operating year 1.</p>
     {% endif %}
   </section>
   {% endif %}
