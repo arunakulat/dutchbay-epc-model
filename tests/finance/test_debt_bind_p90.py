@@ -33,12 +33,13 @@ def _run(**fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, d = _run()  # no bind_downside -> default off
-    # Canonical after PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR 2.68%
-    # unchanged; the costlier LKR tranche takes equity IRR to -4.86% and the DSCR-solved
-    # gearing DOWN to ~0.45 (debt ~71.82M) to hold the 1.30 sculpt target.
-    assert kpis["project_irr"] == pytest.approx(0.0203, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0499, abs=0.003)
-    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
+    # Canonical after the #738 import-levy re-baseline (2026-07-05): PRUDENT duties
+    # capitalized on the imported capex share + 18% opex VAT, net of the revenue-SSCL
+    # exemption reversal — projIRR ~1.46%, equity IRR ~-5.84%, and the fee+levy-
+    # inclusive sculpt solves ~0.41 gearing on the grossed ($167.86M) base.
+    assert kpis["project_irr"] == pytest.approx(0.0146, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.0584, abs=0.003)
+    assert kpis["min_dscr"] == pytest.approx(1.29, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"
     assert d["downside_source"] == "flat_factor"
@@ -47,8 +48,8 @@ def test_default_off_preserves_canonical() -> None:
     # No downside solve => no P90 target detail either (report renders no P90 rows).
     assert "target_dscr_p90" not in d
     assert d["solved_gearing_p50"] == pytest.approx(
-        0.4275, abs=0.01
-    )  # PR-B UIP LKR rate + #737 fee-inside-sculpt de-lever
+        0.41, abs=0.01
+    )  # PR-B UIP LKR rate + #737 fees + #738 levies, sculpted on the grossed base
 
 
 def test_p90_binds_when_floor_is_high() -> None:

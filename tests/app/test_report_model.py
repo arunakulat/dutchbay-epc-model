@@ -1149,6 +1149,91 @@ def test_three_statement_section_renders_in_html() -> None:
     assert "Income statement" in html and "Balance sheet" in html
 
 
+def _debt_result_3s_with_funding(import_levies_usd) -> dict:
+    """_DEBT_RESULT_3S plus a Sources & Uses funding block (#738 footnote surface).
+
+    ``import_levies_usd=None`` omits the key entirely (a pre-#738 engine result);
+    ``0.0`` carries the disclosure key at zero (a levy-free #738 result). The two
+    must render BYTE-IDENTICALLY (render-when-present).
+    """
+    uses: dict = {"capex_usd": 60.0, "idc_usd": 5.0, "initial_dsra_usd": 0.0}
+    if import_levies_usd is not None:
+        uses["import_levies_usd"] = import_levies_usd
+    return {
+        **_DEBT_RESULT_3S,
+        "funding": {
+            "fund_at_close": False,
+            "dsra_target_months": 6.0,
+            "initial_dsra_usd": 0.0,
+            "financing_fees_in_capex_usd": 0.0,
+            "sources_and_uses": {
+                "uses": uses,
+                "sources": {"senior_debt_usd": 60.0, "equity_usd": 5.0},
+                "uses_total_usd": 65.0,
+                "sources_total_usd": 65.0,
+                "balanced": True,
+            },
+        },
+    }
+
+
+def test_three_statement_levy_reconciliation_footnote_renders_when_present() -> None:
+    """#738 R1: the levy-vs-paid-in-equity gap is explained IN the document.
+
+    The statements book paid-in equity on the pre-levy capex basis while the
+    Sources & Uses equity funds the levy-inclusive gross; with a nonzero
+    ``import_levies_usd`` the three-statement section must carry the
+    reconciliation footnote built from the actual context figures (no
+    hardcoding).
+    """
+    from app.reports.renderer import render_report_html
+
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_SCEN_3S,
+        debt_result=_debt_result_3s_with_funding(5.0),
+        annual_rows=_annual_rows_3s(3),
+    )
+    assert ctx.finance is not None
+    assert ctx.finance.funding.import_levies_usd == pytest.approx(5.0)
+    assert ctx.three_statement is not None
+    paid_in = float(ctx.three_statement.balance_sheet[0]["paid_in_equity"])
+    html = render_report_html(ctx)
+    assert "Reconciliation note: paid-in equity above" in html
+    assert "pre-levy capex basis" in html
+    # The actual context figures, not hardcoded text: the levy figure, the S&U
+    # equity, and the statements' own paid-in figure.
+    assert f"({fmt_usd(paid_in)})" in html
+    assert f"({fmt_usd(5.0)})" in html  # S&U equity_usd == 5.0 in this fixture
+    assert f"{fmt_usd(5.0)} of import duties" in html
+
+
+def test_three_statement_levy_footnote_absent_and_identical_when_levy_free() -> None:
+    """#738 R1 identity: levy-free reports render WITHOUT the footnote, and a
+    funding block carrying ``import_levies_usd: 0.0`` renders BYTE-IDENTICALLY
+    to one omitting the key entirely (the disclosure key at zero perturbs
+    nothing in the document).
+    """
+    from app.reports.renderer import render_report_html
+
+    def _html(import_levies_usd) -> str:
+        ctx = build_report_context(
+            _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+            generated_at=GENERATED_AT,
+            scenario_config=_SCEN_3S,
+            debt_result=_debt_result_3s_with_funding(import_levies_usd),
+            annual_rows=_annual_rows_3s(3),
+        )
+        return render_report_html(ctx)
+
+    html_zero = _html(0.0)
+    html_absent = _html(None)
+    assert "Reconciliation note: paid-in equity above" not in html_zero
+    assert "pre-levy capex basis" not in html_zero
+    assert html_zero == html_absent  # byte-identical rendering
+
+
 def test_cashflow_waterfall_block_populated() -> None:
     ctx = build_report_context(
         _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),

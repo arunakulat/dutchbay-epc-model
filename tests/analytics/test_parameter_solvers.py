@@ -327,7 +327,11 @@ def test_breakeven_iteration_starved_reports_max_iterations_not_converged() -> N
     'converged' status with the true residual in metadata, not a false 'converged'.
 
     Exact repro from the review: project_npv target 0.0 over 10..60 LKR/kWh, tolerance=1.0,
-    max_iterations=2 lands the bisection at tariff 22.5 where project_npv ~= -$53.5M."""
+    max_iterations=2. (#738 re-baseline note: the import-levy flip shifted the whole
+    NPV(tariff) curve down and moved NPV@35 just below zero, so the two-midpoint
+    bisection path flipped from 35 -> 22.5 (achieved ~-$59.8M) to 35 -> 47.5
+    (achieved ~+$61.1M). The test's point is unchanged: the residual is ORDERS
+    beyond the $1 tolerance and the status must say so honestly.)"""
     result = solve_tariff_breakeven(
         LENDER_CONFIG,
         metric="project_npv",
@@ -345,8 +349,10 @@ def test_breakeven_iteration_starved_reports_max_iterations_not_converged() -> N
     # The residual is surfaced honestly and is far outside tolerance.
     assert "abs_residual" in result.metadata
     assert result.metadata["abs_residual"] > result.metadata["tolerance"]
-    # The achieved value at the last bound is captured (the ~-$53.5M miss).
-    assert result.metadata["achieved"] < -1.0e7
+    # The achieved value at the last bound is captured — a $10M+ miss either way
+    # (the sign depends on which side of the root the exhausted bisection
+    # stopped; see the #738 path-flip note in the docstring).
+    assert abs(result.metadata["achieved"]) > 1.0e7
     assert result.bracket == (10.0, 60.0)
 
 

@@ -160,7 +160,15 @@ class TestMCEngineNoToyFallback:
         ), f"{result.failed_iterations} trials failed — check override nesting"
 
     def test_mc_irr_in_plausible_range(self, lendercase_config):
-        """IRR mean must fall within a plausible range given CF 0.38-0.47."""
+        """IRR mean must fall within a plausible range given CF 0.38-0.47.
+
+        #738 re-baseline: the committed lendercase now carries the PRUDENT import
+        levies + 18% opex VAT (net of the revenue-SSCL exemption reversal), which
+        pulls the sampled-CF mean project IRR from ~5.5% to the measured 4.736%
+        (seed 42) — the lower plausibility bound moves 5% -> 3%, keeping >=1.3pp
+        of margin BOTH ways (vs the 4.736% mean and vs the ~1.46% deterministic-
+        canon / toy-fallback signature this test exists to catch).
+        """
         result = MonteCarloEngine(lendercase_config, seed=42).run(n_trials=100)
 
         if "project_irr" not in result.summary:
@@ -168,8 +176,8 @@ class TestMCEngineNoToyFallback:
 
         irr_stats = result.summary["project_irr"]
         assert (
-            0.05 < irr_stats["mean"] < 0.35
-        ), f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [5%, 35%]"
+            0.03 < irr_stats["mean"] < 0.35
+        ), f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [3%, 35%]"
         p10 = irr_stats["percentiles"][10]
         p90 = irr_stats["percentiles"][90]
         assert p10 < p90, f"P10 {p10:.2%} >= P90 {p90:.2%} — distribution inverted"

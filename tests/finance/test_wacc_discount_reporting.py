@@ -37,12 +37,13 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     scenario_result = result["scenario_result"]
 
     drate = kpis["discount_rate_used"]
-    # The build-up WACC, NOT the legacy 0.10 default. Since #737 de-levered the deal
-    # the build-up WACC (~0.0994) sits coincidentally close to the 0.10 default, so a
-    # distance check no longer discriminates; pin the computed value instead (the
-    # wacc_is_real/wacc_label assertions below prove the BASIS).
+    # The build-up WACC, NOT the legacy 0.10 default. Since #737/#738 de-levered the
+    # deal the build-up WACC (~0.1002 after #738's 0.41 levy-inclusive gearing put
+    # more 12% equity in the stack) sits coincidentally close to the 0.10 default,
+    # so a distance check no longer discriminates; pin the computed value instead
+    # (the wacc_is_real/wacc_label assertions below prove the BASIS).
     assert math.isfinite(drate)
-    assert drate == pytest.approx(0.09935759321847387, abs=1e-9)
+    assert drate == pytest.approx(0.100202604022396, abs=1e-9)
     assert 0.05 < drate < 0.12
 
     # The flag/label no longer contradict the rate that was actually used.

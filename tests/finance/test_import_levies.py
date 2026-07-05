@@ -450,3 +450,138 @@ def test_breakdown_cross_check_operates_on_the_pre_levy_base(
     assert _extract_capex_usd(dict(cfg)) == pytest.approx(
         base + compute_capex_uplift_usd(base, it), rel=1e-12
     )
+
+
+def test_qra_contingency_base_attracts_levies(levied_cfg: Dict[str, Any]) -> None:
+    """QRA ordering (documented): the uplift applies to the QRA-INCLUSIVE base.
+
+    With ``contingency.method: qra`` the base resolver recomputes contingency
+    from the risk inputs (overriding the fixed line + any stated usd_total), and
+    the levies then apply on that recomputed base — duties charged on the risk
+    reserve too, the documented mildly-conservative ordering. Gross ==
+    qra_base + the cascade on qra_base, with no cross-check interaction.
+    """
+    cfg = copy.deepcopy(levied_cfg)
+    cfg["capex"]["derive_from_breakdown"] = True
+    cfg["capex"]["contingency"] = {
+        "method": "qra",
+        "base_cost_uncertainty_pct": 12.0,
+        "confidence_level": 0.80,
+    }
+    it = resolve_indirect_taxes(cfg)
+    assert it is not None
+    qra_base = _extract_capex_base_usd(dict(cfg))
+    # QRA recomputes contingency off the ex-contingency line sum (157.206M), so
+    # the base differs from (here: exceeds) the fixed-breakdown 159.6M total.
+    assert qra_base > 159_600_000.0
+    assert _extract_capex_usd(dict(cfg)) == pytest.approx(
+        qra_base + compute_capex_uplift_usd(qra_base, it), rel=1e-12
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 8. The committed lendercase posture (#738 flip) + variant overlays
+# --------------------------------------------------------------------------- #
+
+FULL_RELIEF_OVERRIDE = str(
+    REPO_ROOT / "scenarios" / "overrides" / "import_levies_full_relief.yaml"
+)
+FULL_STACK_OVERRIDE = str(
+    REPO_ROOT / "scenarios" / "overrides" / "import_levies_full_stack_paid.yaml"
+)
+
+# Levy-OFF economics of the committed lendercase (strip taxes_indirect, KEEP the
+# statutory SSCL exemption): the fee-off-pin precedent (#737). These pins give
+# the absent-block identity a fixed empirical meaning — if the mechanism ever
+# leaks into a block-less config, this breaks at 1e-12. Values = the live
+# pipeline on the committed scenario minus the block (2026-07-05 flip).
+LEVY_OFF_PROJECT_IRR = 0.02330086889477035
+LEVY_OFF_EQUITY_IRR = -0.044381188877225974
+LEVY_OFF_PROJECT_NPV = -68316613.91027918
+LEVY_OFF_TOTAL_CFADS = 196144013.5233307
+LEVY_OFF_DEBT_TOTAL = 70224000.0
+
+
+def _merged_with_override(path: str) -> Dict[str, Any]:
+    from omegaconf import OmegaConf
+
+    merged = OmegaConf.merge(OmegaConf.load(LENDER), OmegaConf.load(path))
+    out = OmegaConf.to_container(merged, resolve=True)
+    assert isinstance(out, dict)
+    return out
+
+
+def test_committed_lendercase_carries_the_prudent_posture() -> None:
+    """The YAML flip is the locked user decision — pin it so it cannot drift.
+
+    PRUDENT: PAL 5% + import-SSCL 2.5% PAID on the 0.69 imported share, capex
+    VAT relieved (BOI s.17/bonded), opex VAT 18% paid — and the revenue SSCL
+    ZEROED on the statutory exemption (IPP-to-CEB supply).
+    """
+    cfg = dict(load_scenario_config(LENDER))
+    it = resolve_indirect_taxes(cfg)
+    assert it is not None
+    assert it.import_share_pct == 0.69
+    assert it.cid_pct == 0.0
+    assert it.pal_pct == 0.05
+    assert it.sscl_import_pct == 0.025
+    assert it.vat_capex_pct == 0.18
+    assert it.vat_opex_pct == 0.18
+    assert it.vat_on_duties is True
+    assert it.vat_on_full_capex is False
+    assert it.bonded_scheme is False
+    assert it.vat_capex_relieved is True  # capex VAT relieved at this posture
+    assert it.vat_opex_relieved is False  # operating-phase VAT paid
+    assert it.duty_rate == pytest.approx(0.075, rel=1e-12)
+    assert it.capex_vat_rate == 0.0
+    assert it.opex_vat_rate == 0.18
+    # Revenue-side SSCL: statutory exemption committed (was 0.025 pre-#738).
+    assert float(cfg["statutory"]["social_services_levy_pct"]) == 0.0
+    # And the in-test PRUDENT_BLOCK mirror used above matches the committed one.
+    assert resolve_indirect_taxes({"taxes_indirect": PRUDENT_BLOCK}) == it
+
+
+def test_levy_off_strip_reproduces_the_relieved_economics_exactly() -> None:
+    """Deleting the block (SSCL exemption kept) hits the levy-off pins at 1e-12."""
+    kpis = run_v14_pipeline(config=_stripped_lender_config())["kpis"]
+    assert kpis["project_irr"] == pytest.approx(LEVY_OFF_PROJECT_IRR, abs=1e-12)
+    assert kpis["equity_irr"] == pytest.approx(LEVY_OFF_EQUITY_IRR, abs=1e-12)
+    assert kpis["project_npv"] == pytest.approx(LEVY_OFF_PROJECT_NPV, rel=1e-12)
+    assert kpis["total_cfads_usd"] == pytest.approx(LEVY_OFF_TOTAL_CFADS, rel=1e-12)
+
+
+def test_full_relief_overlay_equals_the_levy_free_economics() -> None:
+    """FULL RELIEF zeroes every line => exactly the block-absent economics."""
+    res = run_v14_pipeline(config=_merged_with_override(FULL_RELIEF_OVERRIDE))
+    kpis = res["kpis"]
+    assert kpis["project_irr"] == pytest.approx(LEVY_OFF_PROJECT_IRR, abs=1e-12)
+    assert kpis["equity_irr"] == pytest.approx(LEVY_OFF_EQUITY_IRR, abs=1e-12)
+    assert kpis["project_npv"] == pytest.approx(LEVY_OFF_PROJECT_NPV, rel=1e-12)
+    assert kpis["total_cfads_usd"] == pytest.approx(LEVY_OFF_TOTAL_CFADS, rel=1e-12)
+    debt = res["debt_result"] or {}
+    assert debt["debt_total"] == pytest.approx(LEVY_OFF_DEBT_TOTAL, rel=1e-12)
+    # Financed capex back to the pre-levy base; zero disclosed levies.
+    uses = debt["funding"]["sources_and_uses"]["uses"]
+    assert uses["capex_usd"] == pytest.approx(159_600_000.0, abs=0.01)
+    assert uses["import_levies_usd"] == 0.0
+
+
+def test_full_stack_paid_overlay_directional_signature() -> None:
+    """FULL STACK PAID (~$38.5M uplift): value further down, sculpt holds 1.30."""
+    canon = run_v14_pipeline(config=LENDER)
+    paid = run_v14_pipeline(config=_merged_with_override(FULL_STACK_OVERRIDE))
+    k_canon, k_paid = canon["kpis"], paid["kpis"]
+    assert k_paid["project_irr"] < k_canon["project_irr"]
+    assert k_paid["equity_irr"] < k_canon["equity_irr"]
+    assert k_paid["project_npv"] < k_canon["project_npv"]
+    # The sculpt re-solves: the per-period floor holds the 1.30 target...
+    assert k_paid["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    # ...while the wider uplift de-levers the solved gearing further.
+    g_canon = (canon["debt_result"] or {}).get("dual_dscr") or {}
+    g_paid = (paid["debt_result"] or {}).get("dual_dscr") or {}
+    assert g_paid["solved_gearing"] < g_canon["solved_gearing"]
+    # Uplift hand-check: duties 8.2593M + VAT 18% on (import+duties+domestic).
+    uses = (paid["debt_result"] or {})["funding"]["sources_and_uses"]["uses"]
+    duties = 159_600_000.0 * 0.69 * 0.075
+    vat = (159_600_000.0 + duties) * 0.18
+    assert uses["import_levies_usd"] == pytest.approx(duties + vat, abs=0.01)

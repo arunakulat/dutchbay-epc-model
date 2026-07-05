@@ -74,8 +74,11 @@ def test_run_pipeline_reports_cost_block() -> None:
     from api.pipeline_api import RunPipelineRequest, run_pipeline
 
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
-    assert resp.cost.capex_total_usd == pytest.approx(159_600_000, rel=0.001)
-    assert resp.cost.capex_per_kw_usd == pytest.approx(1000.0, abs=1.0)
+    # #738: the banner reports the FINANCED (levy-inclusive) capex — the 159.6M
+    # base + the PRUDENT $8.2593M duties = $1,051.75/kW, still within the IRENA
+    # band (1.01x the 2024 global average). The WBS breakdown itself still sums
+    # to the PRE-LEVY usd_total (the invariant asserted elsewhere is untouched).
+    assert resp.cost.capex_total_usd == pytest.approx(167_859_300, rel=0.001)
+    assert resp.cost.capex_per_kw_usd == pytest.approx(1051.75, abs=1.0)
     assert resp.cost.within_band is True
-    # economics unchanged by the structural WBS conversion (5.9% FX-drift re-baseline)
-    assert resp.kpis.project_irr == pytest.approx(0.0203, abs=0.005)
+    assert resp.kpis.project_irr == pytest.approx(0.0146, abs=0.005)  # #738 canon

@@ -341,7 +341,63 @@ tax:
 statutory:
   success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
-  social_services_levy_pct: 0.025  # SSL on revenue
+  # #738 (2026-07-05): SSCL on revenue ZEROED with the statutory basis — the SSCL Act
+  # First Schedule exempts "generation and supply of electricity other than by the
+  # Ceylon Electricity Board", so an IPP selling to CEB owes NO SSCL on its revenue
+  # (verified 2026-07-05 against the Act 24/2025 + 10/2026 amendments; consistent
+  # with the CEB standardized PPA's flat LKR tariff carrying no gross-up). The 0.025
+  # previously committed here WAS being charged by the engine at the EBITDA line —
+  # an overstatement of statutory deductions; reversing it RAISES the canon KPIs
+  # (disclosed in re-baseline entry (10) below). The mechanism stays
+  # config-modellable for scenarios that genuinely owe a revenue levy.
+  # Revenue VAT: likewise EXEMPT (VAT Act First Schedule Part III (b)(iii), IPP
+  # supply to CEB) — no engine hook exists and none is needed for an exempt,
+  # no-gross-up SPPA.
+  social_services_levy_pct: 0.0  # IPP-to-CEB supply is SSCL-EXEMPT (was 0.025; see note)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# INDIRECT TAXES — IMPORT LEVIES + UNRECOVERABLE VAT (#738)
+# ═════════════════════════════════════════════════════════════════════════════
+# Committed lendercase posture (user decision 2026-07-05): PRUDENT — duties PAID,
+# capex VAT RELIEVED. PAL 5% + import-SSCL 2.5% are PAID on the imported capex
+# share (DutchBay has NO CEB agreement signed before 18-Feb-2025, so the Act
+# 24/2025 power-project machinery exemption does not apply); capex VAT is
+# RELIEVED via the BOI §17 / bonded-warehouse route (the SINOHYDRO Mannar
+# precedent); operating-phase VAT on O&M is PAID (project-period relief
+# typically lapses at COD). Variant postures ship as thin-delta overlays:
+#   scenarios/overrides/import_levies_full_relief.yaml
+#   scenarios/overrides/import_levies_full_stack_paid.yaml
+# The uplift ($8.2593M duties at this posture) CAPITALIZES into the depreciable
+# base and flows coherently to debt sizing, IDC, gearing, equity and NPV
+# (single arithmetic source: finance/import_levies.py). capex.usd_total above
+# stays the PRE-LEVY base ($159.6M): the WBS breakdown invariant and the MC
+# capex.usd_total perturbation keep operating on the base, with the levies
+# re-applied on top each run. Do NOT model the PAL/CESS phase-out (Budget-2026
+# proposal only, not enacted).
+taxes_indirect:
+  # Imported share of the pre-levy capex base. Derivation (code-anchored):
+  # wtg_supply_usd 110.124M / usd_total 159.6M = 0.69. NB per that breakdown
+  # line's own wording the WTG line is "CIF + inland transport", so the 0.69
+  # base slightly OVERSTATES the pure CIF duty base (inland transport is
+  # domestic, duty-free) — prudent direction, documented. BoP/civils/
+  # development are domestic spend. SINOHYDRO comparator (turbine 43.8% of
+  # all-in capex) is the low bound; 0.69 is the prudent high-import anchor.
+  import_share_pct: 0.69
+  cid_pct: 0.0             # Customs Import Duty — HS 8502.31 wind gensets: FREE (Tariff Guide 2026 Ch.85)
+  pal_pct: 0.05            # Ports & Airports Levy, 5% on CIF
+  sscl_import_pct: 0.025   # SSCL on imports, 2.5% (Act 24/2025 restricted the machinery exemption to pre-18-Feb-2025 CEB agreements)
+  vat_capex_pct: 0.18      # unrecoverable input VAT (IPP supply VAT-EXEMPT => no input credit); relieved below
+  vat_on_full_capex: false # VAT base = imported share (+ duties); domestic share not VAT-modelled at this posture
+  vat_on_duties: true      # SL cascade: import VAT charges on CIF + CID/PAL/SSCL
+  vat_opex_pct: 0.18       # unrecoverable input VAT on O&M (expensed; tax-deductible at the
+                           # EBITDA line). Mixed-supply simplification: the 18% applies to the
+                           # ENTIRE O&M line incl. non-VATable components (insurance, land
+                           # lease) — prudent direction; calibrate a lower effective rate to
+                           # model the split.
+  relief:
+    bonded_scheme: false      # duties PAID — prudent (no signed pre-2025 CEB agreement)
+    vat_capex_relieved: true  # BOI §17 / bonded route relieves capex VAT (SINOHYDRO precedent)
+    vat_opex_relieved: false  # operating-phase VAT survives project-period relief
 
 risk_adjustment:
   cfads_haircut_pct: 0.1
@@ -482,9 +538,9 @@ monte_carlo:
       high: 3900000.0
       distribution: uniform
     - name: capex.usd_total           # base 159.6e6, rel_std 0.08 -> +/-16%
-      low: 134064000.0
-      high: 185136000.0
-      distribution: uniform
+      low: 134064000.0                 # (#738: this perturbs the PRE-LEVY base; the
+      high: 185136000.0                #  import levies re-apply on top per trial, so
+      distribution: uniform            #  duties scale with capex overruns — correct)
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
       high: 367.0
@@ -603,24 +659,37 @@ expected_results:
   # year 1 at ~1.288 (it folds the orphaned half-year bridge service into year 1, and the
   # fee consumed the pre-fee slack there); the per-period series holds 1.30 everywhere.
   # A real blended-finance deal pays these fees; the fee-free case was overstating
-  # coverage and returns.
-  # Net current canonical: project IRR 2.03% (BELOW the ~9.94% WACC), equity IRR -4.99% (NEGATIVE),
-  # NPV -$70.9M, DSCR-solved gearing 0.4275. The project is value-destructive, honestly so.
+  # coverage and returns. And (10) the 2026-07-05 #738 IMPORT LEVIES + INDIRECT-TAX
+  # re-baseline — TWO OPPOSING moves in one atomic flip: (a) SSCL-on-revenue REVERSED
+  # 2.5% -> 0 (the levy WAS being charged at the EBITDA line; the SSCL Act First
+  # Schedule exempts non-CEB electricity supply — see the statutory: block note) — on
+  # its own +CFADS/+IRR (projIRR 2.03% -> 2.33%, NPV -70.9 -> -68.3M); and (b) import
+  # levies ON at the PRUDENT posture (taxes_indirect: PAL 5% + import-SSCL 2.5% PAID
+  # on the 0.69 imported share = $8.2593M duties capitalized; capex VAT relieved via
+  # BOI §17/bonded; 18% unrecoverable VAT on O&M) — which DOMINATES: net projIRR
+  # 2.03% -> 1.46%, equity IRR -4.99% -> -5.84%, NPV -$70.9M -> -$79.3M, CFADS
+  # $191.22M -> $191.11M, gross financed capex $159.6M -> $167.86M ($1,051.75/kW),
+  # DSCR-solved gearing 0.4275 -> 0.41 (debt $68.23M -> $68.82M on the grossed
+  # base). The sculpt still holds the 1.30 PER-PERIOD floor; the #790 fold headline
+  # eases 1.2884 -> 1.2857 (still exactly 1 equity-lockup year).
+  # Net current canonical: project IRR 1.46% (BELOW the ~9.9% WACC), equity IRR -5.84% (NEGATIVE),
+  # NPV -$79.3M, DSCR-solved gearing 0.41. The project is value-destructive, honestly so.
   # (Equity bears the fee net of the cash-sweep interaction: the sweep headroom is also
   #  fee-netted, so the un-swept residual grows — reported as a balloon covenant breach.)
-  project_irr: 0.020       # UNLEVERED (shield-free) — now net of #737 credit-support fees; << WACC
-  equity_irr: -0.050       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
+  project_irr: 0.015       # UNLEVERED (shield-free) — net of #737 fees AND #738 import levies; << WACC
+  equity_irr: -0.058       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
                             # -0.0100 (2% AEP haircut) -> -0.0193 (PR-A dividend WHT + IDC) ->
                             # -0.0486 (PR-B UIP LKR debt rate 13.39%) -> -0.0499 (#737 guarantee+PRI
-                            # fees). The flat-nominal-LKR tariff cannot clear equity. (Set
-                            # tax.interest_deductibility: false to recover the unlevered case.) MOIC < 1.
-  project_npv_m_usd: -70.9 # discount at build-up WACC ~9.94%. NPV -32.34M -> -53.29M (FX) -> -56.1M
+                            # fees) -> -0.0584 (#738 import levies + opex VAT, net of the SSCL
+                            # exemption reversal). The flat-nominal-LKR tariff cannot clear equity.
+                            # (Set tax.interest_deductibility: false for the unlevered case.) MOIC < 1.
+  project_npv_m_usd: -79.3 # discount at build-up WACC ~9.9%. NPV -32.34M -> -53.29M (FX) -> -56.1M
                             # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up)
-                            # -> -70.9M (#737 credit-support fees).
-  min_dscr: 1.288           # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
-                            # per-year table, fee-netted per #737): year 1 ~1.288 < the 1.30
-                            # covenant -> 1 equity-lockup year. The dual-DSCR sculpt still pins
-                            # the PER-PERIOD min at the 1.30 target (kpis.min_dscr_period).
+                            # -> -70.9M (#737 credit-support fees) -> -79.3M (#738 import levies).
+  min_dscr: 1.286           # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
+                            # per-year table, fee-netted per #737, levy-inclusive per #738): year 1
+                            # ~1.286 < the 1.30 covenant -> 1 equity-lockup year. The dual-DSCR
+                            # sculpt still pins the PER-PERIOD min at 1.30 (kpis.min_dscr_period).
   avg_dscr: 1.39
   llcr: 1.27                # fee-netted CFADS numerator (#737) over the fee-sized debt
   plcr: 1.31
@@ -638,6 +707,12 @@ metadata:
   gwtf_compliance: 'All 51 rules audited + wind energy calculator integration'
   
   changes:
+    - '2026-07-05 (#738): import levies + indirect taxes ON (taxes_indirect, PRUDENT
+      posture: PAL 5% + import-SSCL 2.5% paid on the 0.69 imported share, capex VAT
+      relieved, 18% opex VAT paid) AND SSCL-on-revenue reversed 2.5%->0 (statutory
+      exemption, IPP-to-CEB); expected_results re-baselined (projIRR 2.03%->1.46%,
+      eqIRR -4.99%->-5.84%, NPV -70.9->-79.3M, gearing 0.4275->0.41, gross capex
+      159.6->167.86M)'
     - '2026-07-04 (#737): annual credit-support fees ON — guarantee 75 bps + PRI 100 bps
       on outstanding senior debt, fee-inside-sculpt; expected_results re-baselined
       (projIRR 2.68%->2.03%, eqIRR -4.86%->-4.99%, NPV -65.5->-70.9M, gearing 0.45->0.4275)'

@@ -74,15 +74,16 @@ def test_default_curtailment_is_byte_identical() -> None:
 
     k = run_v14_pipeline(config=LENDER)["kpis"]
     # Construction-lag-correct project economics (audit finding 2.0): operating year 1
-    # is discounted after the 2-yr build, not at t=0. After PR B (group-C #3: LKR debt rate
-    # -> UIP-implied 13.39%): projIRR 2.68% is UNCHANGED (unlevered), but the higher cost of
-    # debt lifts the WACC (8.1% -> 9.8%) so NPV deepens to -$65.5M. minDSCR headline is the
-    # #790 fold (per-period floor 1.30 lives in min_dscr_period).
-    assert k["project_irr"] == pytest.approx(0.020323, abs=1e-5)
+    # is discounted after the 2-yr build, not at t=0. Canon re-baselined by #738
+    # (2026-07-05): PRUDENT import levies capitalized + 18% opex VAT, net of the
+    # revenue-SSCL exemption reversal — projIRR 2.03% -> 1.46%, NPV -70.95M ->
+    # -79.27M. minDSCR headline is the #790 fold (per-period floor 1.30 lives in
+    # min_dscr_period).
+    assert k["project_irr"] == pytest.approx(0.014552, abs=1e-5)
     assert k["project_npv"] == pytest.approx(
-        -70947738.39, abs=1.0
-    )  # PR-B UIP LKR debt rate + #737 credit-support fees
-    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+        -79273039.21, abs=1.0
+    )  # PR-B UIP LKR debt rate + #737 credit-support fees + #738 import levies
+    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
     assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 

@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Import-levy FULL-STACK-PAID posture override  (#738; CESSPIT: a thin delta on
+# the committed lendercase — the sdp_pathway.yaml precedent, NOT a duplicate)
+#
+# Models the worst-case indirect-tax stack vs the committed PRUDENT posture: NO
+# relief instrument lands — duties paid, 18% unrecoverable capex VAT paid on the
+# FULL capex (the domestic share carries input VAT too), 18% opex VAT paid.
+# Rates and import_share_pct inherit from the base scenario; the relief toggles
+# and the VAT base widen.
+#
+# Apply by merging onto the lendercase, e.g.:
+#   from omegaconf import OmegaConf
+#   base = OmegaConf.load("scenarios/dutchbay_lendercase_2025Q4.yaml")
+#   paid = OmegaConf.merge(base, OmegaConf.load(
+#       "scenarios/overrides/import_levies_full_stack_paid.yaml"))
+#
+# Directional signature vs the committed canon (asserted in
+# tests/finance/test_import_levies.py): the ~$38.5M capitalized uplift takes
+# projIRR / equity IRR / NPV further DOWN and de-levers the gearing further,
+# while the dual-DSCR sculpt still holds the 1.30 per-period floor.
+# ─────────────────────────────────────────────────────────────────────────────
+taxes_indirect:
+  vat_on_full_capex: true     # domestic capex share carries unrecoverable VAT too
+  relief:
+    bonded_scheme: false      # duties paid
+    vat_capex_relieved: false # no SDP/BOI VAT order lands
+    vat_opex_relieved: false  # operating-phase VAT paid

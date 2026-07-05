@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Import-levy FULL-RELIEF posture override  (#738; CESSPIT: a thin delta on the
+# committed lendercase — the sdp_pathway.yaml precedent, NOT a duplicated scenario)
+#
+# Models the best-case relief stack vs the committed PRUDENT posture (duties
+# paid / capex VAT relieved / opex VAT paid): a bonded-warehouse + BOI §17
+# import scheme (the SINOHYDRO Mannar route) PLUS SDP/specified-project VAT
+# relief that survives into operations — every taxes_indirect line goes to 0,
+# so the economics equal the levy-free (block-absent) case exactly. Rates and
+# import_share_pct inherit from the base scenario; only the relief toggles move.
+#
+# Apply by merging onto the lendercase, e.g.:
+#   from omegaconf import OmegaConf
+#   base = OmegaConf.load("scenarios/dutchbay_lendercase_2025Q4.yaml")
+#   full = OmegaConf.merge(base, OmegaConf.load(
+#       "scenarios/overrides/import_levies_full_relief.yaml"))
+#
+# Empirical signature vs the committed canon (2026-07-05 flip): projIRR 1.46%
+# -> 2.33%, equity IRR -5.84% -> -4.44%, NPV -$79.3M -> -$68.3M, gearing 0.41
+# -> 0.44 (financed capex back to the $159.6M base). Asserted equal to the
+# strip-the-block economics in tests/finance/test_import_levies.py.
+# ─────────────────────────────────────────────────────────────────────────────
+taxes_indirect:
+  relief:
+    bonded_scheme: true       # CID/PAL/SSCL(import) relieved (bonded + BOI §17)
+    vat_capex_relieved: true  # SDP / Minister-approved specified-project VAT order
+    vat_opex_relieved: true   # operations-period VAT relief secured too (best case)

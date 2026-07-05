@@ -37,6 +37,18 @@ Customs computation carries second-order cascades (SSCL's CIF+10% import markup,
 VAT-on-SSCL ordering) worth ~0.1% of CIF; this module applies each ad-valorem
 rate flat on CIF and VAT on the duties-inclusive base.
 
+Opex-VAT mixed-supply simplification (documented): ``vat_opex_pct`` applies to
+the ENTIRE O&M line, including components that are not standard-rated VAT
+supplies in SL practice (insurance premia, land lease) — a prudent-direction
+simplification; calibrate via a lower effective rate if a scenario needs the
+split modelled.
+
+QRA ordering (documented): the capex uplift applies to the base AFTER any AACE
+QRA contingency recomputation (``_extract_capex_base_usd`` returns the
+QRA-inclusive base), i.e. duties are charged on the risk reserve too — mildly
+conservative, since an unspent contingency imports nothing; calibrate via
+``import_share_pct`` if that materially overstates the CIF base.
+
 Currency note: CID/PAL/SSCL/VAT are ad-valorem percentages of the CIF/invoice
 value — a pure ratio is currency-invariant at each payment date, so
 ``uplift_usd = rate * base_usd`` is exact at the construction-window FX. The

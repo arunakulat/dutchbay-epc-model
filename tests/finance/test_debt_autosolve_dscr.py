@@ -17,6 +17,9 @@ from finance.debt_v14 import plan_debt
 
 SCENARIO = "scenarios/dutchbay_lendercase_2025Q4.yaml"
 CAPEX = 159_600_000.0  # 15 x IEA-10MW re-model (was 150M at 23 x EN-171/6.5)
+# #738: the engine finances the LEVY-INCLUSIVE gross — pre-levy base + the PRUDENT
+# import duties (0.69 share x 7.5% = $8.2593M capitalized). Debt sizes on this.
+CAPEX_GROSS = CAPEX + 8_259_300.0
 
 
 @pytest.fixture(scope="module")
@@ -41,11 +44,12 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
 
     # #737: the per-period series floors at the 1.30 target fee-inclusively; the
     # headline min_dscr is the CONSERVATIVE per-year fold (year 1 carries the orphaned
-    # bridge service out of fee-netted CFADS) at ~1.288 — reported honestly.
-    assert res["min_dscr"] == pytest.approx(1.288, abs=0.01)
+    # bridge service out of fee-netted CFADS) at ~1.286 (levy-inclusive per #738) —
+    # reported honestly.
+    assert res["min_dscr"] == pytest.approx(1.286, abs=0.01)
     assert res["debt_total"] == pytest.approx(
-        0.4275 * CAPEX, rel=3e-3
-    )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees de-lever)
+        0.41 * CAPEX_GROSS, rel=3e-3
+    )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees + #738 levies de-lever)
     detail = res["dual_dscr"]
     assert detail is not None
     assert (
@@ -72,12 +76,14 @@ def test_opt_out_keeps_fixed_gearing(base_config):
     rows = build_annual_rows(cfg)
     res = plan_debt(annual_rows=rows, config=cfg)
 
-    assert res["debt_total"] == pytest.approx(0.70 * CAPEX, rel=1e-3)  # fixed 70%
+    # #738: the fixed ratio applies to the LEVY-INCLUSIVE gross the engine finances.
+    assert res["debt_total"] == pytest.approx(0.70 * CAPEX_GROSS, rel=1e-3)
     assert res["dual_dscr"] is None
     assert res["min_dscr"] == pytest.approx(
-        0.290, abs=0.01
+        0.256, abs=0.01
     )  # 70% over-levers -> deep sub-covenant (#737 fees on the sticky, never-amortising
-    # balance crush late-year coverage further: 0.481 pre-fee -> 0.290)
+    # balance crush late-year coverage: 0.481 pre-fee -> 0.290; #738's larger grossed
+    # debt + opex VAT push it further to ~0.256)
 
 
 def test_lower_target_adds_leverage_when_dscr_bound(base_config):

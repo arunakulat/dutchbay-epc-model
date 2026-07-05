@@ -50,11 +50,32 @@ PRE_737_TOTAL_CFADS = 202332872.38974944
 PRE_737_DEBT_TOTAL = 71820000.0
 
 
-def _fee_off_config() -> Dict[str, Any]:
+def _fee_only_off_config() -> Dict[str, Any]:
+    """ONLY the #737 fee keys deleted — the committed #738 posture stays.
+
+    The A/B fixture for the fee-isolation tests below: on-vs-off must differ by
+    NOTHING BUT THE FEE, so the #738 import-levy block and the SSCL exemption
+    stay exactly as committed.
+    """
     cfg = copy.deepcopy(dict(load_scenario_config(str(LENDER))))
     fees = cfg["Financing_Terms"]["fees"]
     del fees["guarantee_fee_pct_per_year"]
     del fees["pri_premium_pct_per_year"]
+    return cfg
+
+
+def _fee_off_config() -> Dict[str, Any]:
+    """Fees stripped AND the #738 layer stripped: the pre-737 canon config.
+
+    #738 strip-chain: ALSO remove the import-levy block and restore the
+    pre-#738 revenue SSCL (0.025), so the PRE_737 pins below keep their
+    historical meaning — and passing then PROVES the absent-block byte-identity
+    property end-to-end (compositionality: strip #738 + #737 => pre-737 canon
+    EXACT at 1e-12). `del` fails loud if the committed block ever disappears.
+    """
+    cfg = _fee_only_off_config()
+    del cfg["taxes_indirect"]
+    cfg["statutory"]["social_services_levy_pct"] = 0.025
     return cfg
 
 
@@ -65,7 +86,14 @@ def res_on() -> Dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def res_off() -> Dict[str, Any]:
+    """The FULL strip (fees + #738): reproduces the pre-737 canon exactly."""
     return run_v14_pipeline(config=_fee_off_config())
+
+
+@pytest.fixture(scope="module")
+def res_fee_only_off() -> Dict[str, Any]:
+    """Fee keys off, #738 posture kept: the clean fee-only A/B counterpart."""
+    return run_v14_pipeline(config=_fee_only_off_config())
 
 
 def test_fee_off_reproduces_pre_737_canon(res_off: Dict[str, Any]) -> None:
@@ -105,19 +133,24 @@ def test_fee_math_declining_outstanding_ops_only(res_on: Dict[str, Any]) -> None
 
 
 def test_a_signature_dscr_holds_with_smaller_debt(
-    res_on: Dict[str, Any], res_off: Dict[str, Any]
+    res_on: Dict[str, Any], res_fee_only_off: Dict[str, Any]
 ) -> None:
-    """Rigorous fee-inside-sculpt: min DSCR stays ON target while the debt shrinks."""
-    on, off = res_on["kpis"], res_off["kpis"]
+    """Rigorous fee-inside-sculpt: min DSCR stays ON target while the debt shrinks.
+
+    A/B against the FEE-ONLY-off fixture (#738 posture kept on both sides), so
+    every delta below is attributable to the fee alone.
+    """
+    on, off = res_on["kpis"], res_fee_only_off["kpis"]
     debt_on = res_on["debt_result"] or {}
-    debt_off = res_off["debt_result"] or {}
+    debt_off = res_fee_only_off["debt_result"] or {}
     # The per-period DSCR series holds the sculpt target fee-inclusively (the solver
     # re-sizes the gearing against the fee-netted series) — surfaced as
     # min_dscr_period since #790...
     assert on["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
     # ...and the KPI HEADLINE now agrees with the engine's fold-corrected covenant
     # minimum (#790): the two lender-facing surfaces can no longer diverge.
-    assert on["min_dscr"] == pytest.approx(1.288, abs=0.005)
+    # (~1.286 since the #738 levies reshaped year-1 CFADS slightly; was ~1.288.)
+    assert on["min_dscr"] == pytest.approx(1.286, abs=0.005)
     # ...while the CONSERVATIVE per-year covenant table reads operating year 1 slightly
     # below it: year 1 covers its own service PLUS the orphaned half-year bridge service
     # out of fee-netted CFADS, and the fee consumed the pre-fee slack there (~1.306 ->
@@ -126,7 +159,7 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     # fold in the gearing solve was tried and rejected — at interest_only_years=0 the
     # fold is quasi-insensitive to gearing and the solve degenerates; see
     # _solve_gearing_for_dscr.)
-    assert debt_on["min_dscr"] == pytest.approx(1.288, abs=0.005)
+    assert debt_on["min_dscr"] == pytest.approx(1.286, abs=0.005)
     by_year = [v for v in debt_on["dscr_by_year"].values() if v is not None]
     assert min(by_year) >= 1.28
     # ...while the structure de-levers (the fee is inside the sizing)...
@@ -169,9 +202,15 @@ def test_rows_carry_the_fx_translated_fee(res_on: Dict[str, Any]) -> None:
     assert rows[0]["senior_fee_lkr"] == pytest.approx(year1_expected, rel=1e-12)
 
 
-def test_fee_is_tax_deductible(res_on: Dict[str, Any], res_off: Dict[str, Any]) -> None:
-    """The fee reduces taxable income year-by-year and total tax overall."""
-    rows_on, rows_off = res_on["annual_rows"], res_off["annual_rows"]
+def test_fee_is_tax_deductible(
+    res_on: Dict[str, Any], res_fee_only_off: Dict[str, Any]
+) -> None:
+    """The fee reduces taxable income year-by-year and total tax overall.
+
+    A/B against the FEE-ONLY-off fixture (#738 posture kept on both sides) so
+    the 30%-of-fee shield bound isolates the fee and nothing else.
+    """
+    rows_on, rows_off = res_on["annual_rows"], res_fee_only_off["annual_rows"]
     assert len(rows_on) == len(rows_off)
     for r_on, r_off in zip(rows_on, rows_off, strict=True):
         assert r_on["taxable_income_lkr"] <= r_off["taxable_income_lkr"] + 1e-6

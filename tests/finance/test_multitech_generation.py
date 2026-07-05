@@ -279,26 +279,34 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #737 (2026-07-04): annual credit-support fees ON for the lendercase —
-    # guarantee 75 bps + PRI 100 bps on OUTSTANDING senior debt, senior to debt service,
-    # tax-deductible, sized INSIDE the DSCR sculpt. CFADS 202.33M -> 191.22M (-5.5%),
-    # projIRR 2.68% -> 2.03%, eqIRR -4.86% -> -4.99%, NPV -65.46M -> -70.95M; the gearing
-    # solve de-levers 0.45 -> 0.4275 (debt 71.82M -> 68.23M) to hold the per-period
-    # minDSCR at the 1.30 target fee-inclusively. Prior: PR B (group-C #3) UIP LKR debt rate re-baseline.
-    assert kpis["project_irr"] == pytest.approx(0.020322992686519513, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(-0.04992120564267999, abs=1e-9)
-    assert kpis["project_npv"] == pytest.approx(-70947738.39230962, rel=1e-9)
+    # Re-baselined by #738 (2026-07-05): import levies + indirect taxes ON at the
+    # PRUDENT posture (taxes_indirect: PAL 5% + import-SSCL 2.5% PAID on the 0.69
+    # imported share = $8.2593M duties capitalized into financed capex + the
+    # depreciable base; capex VAT relieved via BOI s.17/bonded; 18% unrecoverable
+    # VAT on O&M PAID) AND the revenue-SSCL statutory-exemption REVERSAL
+    # (statutory.social_services_levy_pct 0.025 -> 0.0 — IPP-to-CEB supply is
+    # SSCL-exempt; on its own that RAISES the canon, the levies dominate). Net:
+    # projIRR 2.03% -> 1.46%, eqIRR -4.99% -> -5.84%, NPV -70.95M -> -79.27M,
+    # CFADS 191.22M -> 191.11M, gross capex 159.6M -> 167.86M, gearing 0.4275 ->
+    # 0.41 (debt 68.23M -> 68.82M on the grossed base). Prior: #737 credit-support
+    # fees (2.68% -> 2.03%); PR B (group-C #3) UIP LKR debt rate re-baseline.
+    assert kpis["project_irr"] == pytest.approx(0.014551597740253388, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(-0.05841298678542661, abs=1e-9)
+    assert kpis["project_npv"] == pytest.approx(-79273039.20645273, rel=1e-9)
     # #790 (user decision 2026-07-05): the headline min_dscr is the CONSERVATIVE
     # fold-corrected covenant minimum (bridge-corrected per-year table, fee-netted
-    # per #737) — the annual number covenants are tested on. The per-period sculpt
-    # floor stays pinned as min_dscr_period.
-    assert kpis["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-9)
+    # per #737, levy-inclusive per #738) — the annual number covenants are tested
+    # on. The per-period sculpt floor stays pinned as min_dscr_period (the sculpt
+    # re-solves to hold 1.30 under the levies; the year-1 fold eases 1.2884 ->
+    # 1.2857, still exactly 1 equity-lockup year).
+    assert kpis["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-9)
     assert kpis["min_dscr_period"] == pytest.approx(1.2999999999999998, abs=1e-9)
-    assert kpis["total_cfads_usd"] == pytest.approx(191218454.47506344, rel=1e-9)
+    assert kpis["total_cfads_usd"] == pytest.approx(191111047.68242383, rel=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
-    # WACC + spread), below the base NPV. -71.32M -> -76.44M (#737 fees + higher WACC).
-    assert kpis["project_npv_prudential"] == pytest.approx(-76440158.85688269, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.10935759321847387, abs=1e-9)
+    # WACC + spread), below the base NPV. -76.44M -> -84.72M (#738 levies + higher WACC:
+    # the de-levered stack carries more 12% equity).
+    assert kpis["project_npv_prudential"] == pytest.approx(-84724967.65444505, rel=1e-9)
+    assert kpis["prudential_rate_used"] == pytest.approx(0.110202604022396, abs=1e-9)
     assert (
         kpis["project_npv_prudential"] < kpis["project_npv"]
     )  # haircut rate -> lower NPV
