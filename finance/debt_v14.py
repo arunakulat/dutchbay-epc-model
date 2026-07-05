@@ -11,6 +11,10 @@ import logging
 import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from finance.import_levies import (
+    compute_capex_uplift_usd,
+    resolve_indirect_taxes,
+)
 from finance.utils import as_float, get_nested
 
 logger = logging.getLogger(__name__)
@@ -188,14 +192,20 @@ def _npv(cashflows: Sequence[float], rate: float) -> float:
     return pv
 
 
-def _extract_capex_usd(params: Dict[str, Any]) -> float:
-    """Extract CAPEX from config, supporting v14, legacy and compact schemas.
+def _extract_capex_base_usd(params: Dict[str, Any]) -> float:
+    """Extract the PRE-LEVY CAPEX base from config (v14, legacy and compact schemas).
 
     When ``capex.derive_from_breakdown`` is truthy, CAPEX is computed BOTTOM-UP as the
     sum of the numeric line items under ``capex.breakdown`` (single source of truth, no
     flat-total/breakdown divergence). Otherwise the flat ``capex.usd_total`` (etc.) is
     used. If both a derived sum and an explicit ``usd_total`` are present, they are
     cross-checked and a mismatch >0.5% raises (CESSPIT: the two must not silently differ).
+
+    #738: this is the pre-``taxes_indirect`` base — ``capex.usd_total`` stays the
+    PRE-LEVY figure (the WBS breakdown-sums-to-usd_total invariant and the 0.5%
+    cross-check both keep operating on it, with no tolerance interaction from the
+    levies). The financed, levy-inclusive total is the :func:`_extract_capex_usd`
+    wrapper below.
     """
     capex_section = _section_case_insensitive(params, "capex")
     if capex_section and _lookup_case_insensitive(
@@ -290,6 +300,34 @@ def _extract_capex_usd(params: Dict[str, Any]) -> float:
         "sections or top-level CAPEX aliases. Set allow_toy_fallback=true only "
         "for explicit toy/test scenarios."
     )
+
+
+def _extract_capex_usd(
+    params: Dict[str, Any], *, include_import_levies: bool = True
+) -> float:
+    """Financed CAPEX in USD: the pre-levy base plus capitalized import levies (#738).
+
+    THE single capex resolution seam (debt sizing, dual-DSCR detail, sources &
+    uses / equity, and — by delegation — ``analytics.core.metrics`` NPV base and
+    ``finance.equity_distribution_v14_hydra``). When the config declares a
+    ``taxes_indirect:`` block, the import duties + unrecoverable capex VAT
+    capitalize on top of the base (single uplift source:
+    ``finance.import_levies``), so debt sizing, IDC (financed duties attract IDC),
+    gearing, equity and the depreciable base all gross the identical uplift.
+    ABSENT block => the base, byte-identical.
+
+    ``include_import_levies=False`` returns the PRE-LEVY base — used by the capex
+    Monte Carlo (``analytics.cost.mc_capex``) so a trial perturbs the base and the
+    pipeline re-applies levies on the perturbed base, instead of levying an
+    already-grossed total twice.
+    """
+    base = _extract_capex_base_usd(params)
+    if not include_import_levies:
+        return base
+    indirect = resolve_indirect_taxes(params)
+    if indirect is None or not indirect.has_capex_lines:
+        return base
+    return base + compute_capex_uplift_usd(base, indirect)
 
 
 def _rate_decimal(value: Any, default: float = 0.0) -> float:
@@ -1337,6 +1375,16 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     equity_total = max(0.0, capex - debt_total) + initial_dsra
     senior_debt = debt_total + total_idc
 
+    # #738 disclosure: the import-levy share INSIDE the gross capex_usd above
+    # (duties + unrecoverable VAT, from the same pure cascade the resolver
+    # applies). A breakdown line, NOT a new addend — uses_total is unchanged.
+    indirect = resolve_indirect_taxes(config)
+    import_levies = (
+        compute_capex_uplift_usd(_extract_capex_base_usd(config), indirect)
+        if indirect is not None and indirect.has_capex_lines
+        else 0.0
+    )
+
     financing_fees = 0.0
     cap = config.get("capex")
     if isinstance(cap, Mapping) and isinstance(cap.get("breakdown"), Mapping):
@@ -1352,6 +1400,9 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
         "sources_and_uses": {
             "uses": {
                 "capex_usd": round(capex, 2),
+                # of-which disclosure (#738): import duties + unrecoverable VAT
+                # already inside capex_usd; NOT added to uses_total again.
+                "import_levies_usd": round(import_levies, 2),
                 "idc_usd": round(total_idc, 2),
                 "initial_dsra_usd": round(initial_dsra, 2),
             },

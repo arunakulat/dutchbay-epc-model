@@ -158,17 +158,22 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     This MUST match the basis the debt engine sizes on, so we delegate to the single
     resolver ``finance.debt_v14._extract_capex_usd`` rather than reading the flat
     ``usd_total`` here — otherwise the NPV/IRR capex base could silently diverge from the
-    debt capex base (up to the 0.5% breakdown tolerance, or the full QRA delta). The flat
-    ``usd_total`` path below is unchanged for scenarios that do not derive from breakdown
-    (the canonical lendercase), so they stay byte-identical.
+    debt capex base (up to the 0.5% breakdown tolerance, or the full QRA delta). #738
+    extends the same delegation to any config declaring a ``taxes_indirect:`` block, so
+    the NPV base is the identical LEVY-INCLUSIVE gross the debt engine sizes on. The flat
+    ``usd_total`` path below is unchanged for scenarios that do neither (levy-free flat
+    configs), so they stay byte-identical.
     """
     if not config:
         return 0.0
 
+    from finance.import_levies import has_taxes_indirect
+
     capex_section = _section_case_insensitive(config, "capex")
-    if capex_section and _lookup_case_insensitive(
-        capex_section, "derive_from_breakdown"
-    ):
+    if (
+        capex_section
+        and _lookup_case_insensitive(capex_section, "derive_from_breakdown")
+    ) or has_taxes_indirect(config):
         from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
 
         return float(_resolve_capex_bottom_up(dict(config)))

@@ -136,7 +136,11 @@ def _resolve_financed_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     Delegates to :func:`finance.debt_v14._extract_capex_usd` (lazy import — the same seam
     :mod:`analytics.core.metrics` and :mod:`analytics.cost.mc_capex` use) so the
     reconciliation matches what the debt engine actually finances: ``capex.usd_total``,
-    ``capex.derive_from_breakdown`` (bottom-up line items) and AACE QRA contingency.
+    ``capex.derive_from_breakdown`` (bottom-up line items), AACE QRA contingency, and
+    (#738) capitalized import levies / unrecoverable VAT from a ``taxes_indirect`` block.
+    Per-tech ``capex_usd`` declarations are pre-levy line items, so under a levied config
+    the positive shared-cost residual of the reconciliation now also carries the import
+    levies (legitimate by design — ``_reconcile`` does not raise on under-allocation).
     Returns ``None`` when no CAPEX is resolvable (the resolver raises on an absent/empty
     CAPEX; the WBS is opportunistic and must not crash the run).
     """

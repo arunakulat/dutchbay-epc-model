@@ -34,12 +34,12 @@ def _run(dsra=None, **fin_overrides):
 
 def test_default_off_preserves_canonical() -> None:
     kpis, f = _run()
-    # Canonical after PR B (group-C #3): LKR debt rate -> UIP-implied 13.39%. projIRR ~2.68%
-    # is unchanged (debt-structure independent), minDSCR 1.30. The costlier LKR tranche takes
-    # equity IRR to ~-4.86% at the flat-LKR tariff.
-    assert kpis["project_irr"] == pytest.approx(0.02032, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.049921, abs=0.001)
-    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
+    # Canonical after the #738 import-levy re-baseline (2026-07-05): PRUDENT duties
+    # capitalized + 18% opex VAT, net of the revenue-SSCL exemption reversal —
+    # projIRR ~1.46%, equity IRR ~-5.84% at the flat-LKR tariff.
+    assert kpis["project_irr"] == pytest.approx(0.014552, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(-0.058413, abs=0.001)
+    assert kpis["min_dscr"] == pytest.approx(1.29, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0
     # the S&U is always reported and always balances
@@ -147,5 +147,8 @@ def test_api_surfaces_funding_block() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
     assert resp.funding.balanced is True
     assert resp.funding.fund_at_close is False
-    assert resp.funding.capex_usd == pytest.approx(159_600_000, rel=1e-4)
+    # #738: the S&U capex line is the LEVY-INCLUSIVE gross (base 159.6M + the
+    # PRUDENT $8.2593M duties), with the levy share disclosed as an of-which line.
+    assert resp.funding.capex_usd == pytest.approx(167_859_300, rel=1e-4)
+    assert resp.funding.import_levies_usd == pytest.approx(8_259_300, rel=1e-4)
     assert resp.funding.equity_usd is not None and resp.funding.equity_usd > 0

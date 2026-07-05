@@ -54,6 +54,12 @@ class CashflowParams:
       (see analytics.core.sensitivity_runner + the canonical scenario's monte_carlo block).
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - risk_haircut_pct: float (decimal, 0–1)
+    - opex_vat_pct: float (decimal, 0–1). Unrecoverable input VAT on O&M (#738,
+      resolved from the top-level ``taxes_indirect:`` block via
+      finance.import_levies — 0.0 when the block is absent or
+      relief.vat_opex_relieved is true). Applied multiplicatively to the
+      ESCALATED USD opex before FX translation (ad-valorem, order-independent),
+      so it lands above the EBITDA line and is tax-deductible automatically.
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
@@ -76,6 +82,7 @@ class CashflowParams:
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
     curtailment_pct: float = 0.0
+    opex_vat_pct: float = 0.0
 
 
 __all__ = ["CashflowParams", "FxHedge"]

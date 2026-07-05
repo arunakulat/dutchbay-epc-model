@@ -162,14 +162,19 @@ def _extract_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     bottom-up resolver the debt engine and ``analytics.core.metrics`` use, or the equity
     CAPEX (and thus the derived equity investment) could silently diverge from the financed
     CAPEX (up to the 0.5% breakdown tolerance / QRA delta). Delegating here keeps a single
-    source of truth — mirrors ``analytics.core.metrics._derive_capex_usd``. The flat
-    multi-section lookup below is unchanged for scenarios that do NOT derive from breakdown
-    (e.g. the canonical lendercase), so they stay byte-identical.
+    source of truth — mirrors ``analytics.core.metrics._derive_capex_usd``. #738 extends
+    the same delegation to any config declaring a ``taxes_indirect:`` block, so the equity
+    investment is derived from the identical LEVY-INCLUSIVE gross the debt engine sizes
+    on. The flat multi-section lookup below is unchanged for scenarios that do neither
+    (levy-free flat configs), so they stay byte-identical.
     """
+    from finance.import_levies import has_taxes_indirect
+
     capex_section = _section_case_insensitive(config, "capex")
-    if capex_section and _lookup_case_insensitive(
-        capex_section, "derive_from_breakdown"
-    ):
+    if (
+        capex_section
+        and _lookup_case_insensitive(capex_section, "derive_from_breakdown")
+    ) or has_taxes_indirect(config):
         from finance.debt_v14 import _extract_capex_usd as _resolve_capex_bottom_up
 
         return float(_resolve_capex_bottom_up(dict(config)))

@@ -521,9 +521,10 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
         lender, overrides={"tax.depreciation_start_year": 3}
     )
     assert deferred["total_cfads_usd"] != base["total_cfads_usd"]
-    # start_year=1 default is byte-identical to the canonical baseline (PR-A fabricated-levy
-    # removal lifts CFADS 199.10M -> 202.33M; dividend WHT / IDC are equity-path only)
-    assert base["total_cfads_usd"] == pytest.approx(191218454.47506344, rel=1e-9)
+    # start_year=1 default is byte-identical to the canonical baseline (#738
+    # re-baseline: import levies + 18% opex VAT net of the revenue-SSCL exemption
+    # reversal, CFADS 191.22M -> 191.11M; prior: #737 fees 202.33M -> 191.22M)
+    assert base["total_cfads_usd"] == pytest.approx(191111047.68242383, rel=1e-9)
 
 
 def test_depreciation_start_year_overrun_warns_about_forfeited_tail(

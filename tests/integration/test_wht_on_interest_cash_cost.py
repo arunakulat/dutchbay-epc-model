@@ -31,9 +31,13 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # rate 8% -> UIP-implied 13.39%; the costlier LKR tranche hits levered equity hard).
 # CFADS was unchanged by PR B (the debt rate was downstream of it), but #737's credit-support
 # fees ARE in the unlevered CFADS (senior fee at the EBITDA line, sized off the debt structure):
-# _CANON_CFADS 202.33M -> 191.22M.
-_CANON_EQ_IRR = -0.04992120564267999
-_CANON_CFADS = 191218454.47506344
+# _CANON_CFADS 202.33M -> 191.22M. #738 (2026-07-05) re-baselines again: import levies ON
+# (PRUDENT posture — duties on the imported capex share capitalized, 18% opex VAT) net of the
+# revenue-SSCL statutory-exemption reversal: eqIRR -0.049921 -> -0.058413, CFADS 191.22M ->
+# 191.11M (the SSCL removal nearly offsets the opex VAT at the CFADS line; the capex-side
+# levies bite through depreciation/tax, debt sizing and the equity base instead).
+_CANON_EQ_IRR = -0.05841298678542661
+_CANON_CFADS = 191111047.68242383
 
 
 def test_default_off_is_byte_identical() -> None:
@@ -42,7 +46,8 @@ def test_default_off_is_byte_identical() -> None:
     assert k["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
     assert k["total_cfads_usd"] == pytest.approx(_CANON_CFADS, rel=1e-9)
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
-    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    # (#738: the levy-inclusive year-1 fold eases 1.2884 -> 1.2857.)
+    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
     assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 
@@ -109,9 +114,10 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     """Round-5 #5: tax.interest_deductibility was decorative (toggling it changed nothing
     because the live pipeline computed CFADS with interest_expense=0). The levered equity
     path now applies the interest tax shield, so True (default) yields the canonical
-    -0.049921 and False recovers the shield-free -0.07946587403034577 (after the PR-B UIP
-    LKR debt rate 13.39% and the #737 credit-support fees; the off case still keeps the
-    IDC depreciation shield + dividend WHT, only dropping the interest deduction).
+    -0.058413 and False recovers the shield-free -0.08566395096828838 (after the PR-B UIP
+    LKR debt rate 13.39%, the #737 credit-support fees AND the #738 import-levy
+    re-baseline; the off case still keeps the IDC depreciation shield + dividend WHT,
+    only dropping the interest deduction).
     The project IRR / DSCR / CFADS are upstream of the equity waterfall and are byte-identical
     either way — the shield is confined to the equity path (project captures it via after-tax kd).
     """
@@ -120,10 +126,10 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
         LENDER, overrides={"tax.interest_deductibility": False}
     )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.07946587403034577, abs=1e-9)
+    assert off["equity_irr"] == pytest.approx(-0.08566395096828838, abs=1e-9)
     assert (
         on["equity_irr"] > off["equity_irr"] + 0.02
-    )  # the shield is material (+295bps)
+    )  # the shield is material (+272bps after the #738 re-baseline)
     # The shield is confined to the equity path: project KPIs identical both ways.
     assert on["project_irr"] == pytest.approx(off["project_irr"], abs=1e-12)
     assert on["min_dscr"] == pytest.approx(off["min_dscr"], abs=1e-12)

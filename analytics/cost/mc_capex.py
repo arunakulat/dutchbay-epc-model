@@ -115,7 +115,13 @@ def run_capex_mc(
     )
     sigma = resolve_capex_sigma_pct(cfg, sigma_pct)
     sigma = _apply_estimate_class_floor(cfg, sigma)
-    base = _extract_capex_usd(cfg)
+    # #738 no-double-count: perturb the PRE-LEVY base. Each trial writes
+    # base*factor to capex.usd_total (below) and the pipeline re-applies the
+    # taxes_indirect levies on the perturbed base (duties scale with capex
+    # overruns — correct). Grossing here would write a levy-inclusive total back
+    # as the base and levy it AGAIN per trial. base_capex_usd in the result is
+    # therefore the PRE-LEVY base.
+    base = _extract_capex_usd(cfg, include_import_levies=False)
     if base <= 0:
         raise ValueError("base CAPEX must be > 0 for a probabilistic run")
 

@@ -70,7 +70,7 @@ def test_cost_block_surfaces_estimate_class() -> None:
     assert resp.cost.estimate_class == 3
     assert resp.cost.accuracy_low_pct == -15.0
     assert resp.cost.accuracy_high_pct == 22.0
-    # canonical economics unchanged by the WBS split (projIRR ~2.75% after the
-    # 5.9% FX-drift re-baseline; the WBS split itself does not move it)
-    assert resp.cost.capex_total_usd == pytest.approx(159_600_000, rel=1e-4)
-    assert resp.kpis.project_irr == pytest.approx(0.0203, abs=0.003)
+    # #738: the cost block reports the FINANCED (levy-inclusive) capex — base
+    # 159.6M + the PRUDENT $8.2593M duties. projIRR is the #738 canon.
+    assert resp.cost.capex_total_usd == pytest.approx(167_859_300, rel=1e-4)
+    assert resp.kpis.project_irr == pytest.approx(0.0146, abs=0.003)

@@ -34,14 +34,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 # Committed lender-case pins (argv-correct, kpi_oracle).
-# Re-baselined by #737 (2026-07-04): guarantee + PRI credit-support fees ON,
-# fee-inside-sculpt (gearing 0.45 -> 0.4275); the per-period sculpt holds the 1.30
-# target while the #790 headline reports the fold-corrected covenant minimum.
-BASE_PROJECT_IRR = 0.020322992686519513
-BASE_EQUITY_IRR = -0.04992120564267999
-BASE_MIN_DSCR = 1.2883814162502452  # #790 fold headline (per-period floor: 1.30)
+# Re-baselined by #738 (2026-07-05): import levies + indirect taxes ON at the PRUDENT
+# posture (duties on the imported capex share capitalized, capex VAT relieved, 18%
+# opex VAT) net of the revenue-SSCL statutory-exemption reversal; gearing 0.4275 ->
+# 0.41 on the grossed capex. Prior: #737 credit-support fees (fee-inside-sculpt).
+# The per-period sculpt holds the 1.30 target while the #790 headline reports the
+# fold-corrected covenant minimum.
+BASE_PROJECT_IRR = 0.014551597740253388
+BASE_EQUITY_IRR = -0.05841298678542661
+BASE_MIN_DSCR = 1.285740985294611  # #790 fold headline (per-period floor: 1.30)
 BASE_MIN_DSCR_PERIOD = 1.2999999999999998
-BASE_PROJECT_NPV = -70947738.39230962
+BASE_PROJECT_NPV = -79273039.20645273
 
 
 @pytest.fixture(scope="module")

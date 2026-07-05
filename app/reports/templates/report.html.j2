@@ -228,6 +228,9 @@
     <table>
       <tbody>
         <tr><td>CAPEX (EPC + development)</td><td class="num">{{ fmt_usd(ctx.finance.funding.capex_usd) }}</td></tr>
+        {% if ctx.finance.funding.import_levies_usd %}
+        <tr><td class="muted">&mdash; of which import duties &amp; unrecoverable VAT (capitalized)</td><td class="num muted">{{ fmt_usd(ctx.finance.funding.import_levies_usd) }}</td></tr>
+        {% endif %}
         <tr><td>Interest during construction (IDC)</td><td class="num">{{ fmt_usd(ctx.finance.funding.idc_usd) }}</td></tr>
         {% if ctx.finance.funding.initial_dsra_usd %}
         <tr><td>DSRA funded at close</td><td class="num">{{ fmt_usd(ctx.finance.funding.initial_dsra_usd) }}</td></tr>
@@ -803,6 +806,18 @@
         {% endfor %}
       </tbody>
     </table>
+    {# #738 reconciliation footnote — rendered ONLY when import levies are present, so
+       levy-free reports stay byte-identical. The statements book PP&E / paid-in equity
+       on the PRE-LEVY capex basis (CCCDIR: no finance import), while the Sources & Uses
+       equity funds the levy-inclusive gross; this line closes that gap IN the document. #}
+    {% if ctx.finance and ctx.finance.funding.import_levies_usd and ctx.three_statement.balance_sheet %}
+    <p class="muted">Reconciliation note: paid-in equity above
+      ({{ fmt_usd(ctx.three_statement.balance_sheet[0].paid_in_equity) }}) is stated on the
+      pre-levy capex basis; the Sources &amp; Uses equity
+      ({{ fmt_usd(ctx.finance.funding.equity_usd) }}) includes
+      {{ fmt_usd(ctx.finance.funding.import_levies_usd) }} of import duties &amp; unrecoverable
+      VAT capitalised at financial close — see the Sources &amp; Uses of Funds table.</p>
+    {% endif %}
   </section>
   {% endif %}
 

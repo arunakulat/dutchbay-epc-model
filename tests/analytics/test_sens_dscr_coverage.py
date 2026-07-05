@@ -62,8 +62,9 @@ def test_run_dscr_one_way_real_config() -> None:
     assert suite.metric == "dscr_min"
     assert len(suite.tornado_results) == 1
     # Base case DSCR(min) headline is the #790 fold-corrected covenant minimum
-    # (the per-period sculpt floor 1.30 lives in min_dscr_period).
-    assert suite.base_kpis["dscr_min"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    # (the per-period sculpt floor 1.30 lives in min_dscr_period). #738: the
+    # levy-inclusive year-1 fold eases 1.2884 -> 1.2857.
+    assert suite.base_kpis["dscr_min"] == pytest.approx(1.285740985294611, abs=1e-6)
     assert suite.base_kpis["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 

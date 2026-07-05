@@ -25,24 +25,25 @@ HYBRID = str(REPO_ROOT / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml")
 def test_run_pipeline_returns_full_report() -> None:
     resp = run_pipeline(RunPipelineRequest(config_path=LENDER))
 
-    # KPIs reproduce the canonical lender case after PR B (group-C #3): the LKR debt rate
-    # rises to the UIP-implied 13.39%. projIRR ~2.68% is unchanged (unlevered); the costlier
-    # LKR tranche takes equity IRR to ~-4.86% and de-levers the deal — honest at the flat-LKR
-    # tariff.
-    assert resp.kpis.project_irr == pytest.approx(0.0203, abs=0.005)
-    assert resp.kpis.equity_irr == pytest.approx(-0.0499, abs=0.005)
+    # KPIs reproduce the canonical lender case after the #738 import-levy re-baseline
+    # (PRUDENT posture: PAL+SSCL duties on the imported capex share capitalized, capex
+    # VAT relieved, 18% opex VAT; revenue-SSCL statutory exemption reversed):
+    # projIRR ~1.46%, equity IRR ~-5.84% — honest at the flat-LKR tariff.
+    assert resp.kpis.project_irr == pytest.approx(0.0146, abs=0.005)
+    assert resp.kpis.equity_irr == pytest.approx(-0.0584, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
-    assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
+    assert resp.kpis.min_dscr == pytest.approx(1.29, abs=0.02)
 
     # AEP (bankable, from the committed summary; post 2% P50 over-prediction haircut).
     assert resp.aep.net_p50_gwh == pytest.approx(464.3, abs=0.5)
     assert resp.aep.net_p90_gwh == pytest.approx(404.4, abs=1.0)
     assert resp.aep.capacity_factor == pytest.approx(0.332, abs=0.005)
 
-    # Sculpted debt: DSCR-bound, three tranches, a per-period schedule. PR B's UIP LKR rate
-    # (13.39%) de-levers the deal to ~0.45 gearing (debt ~71.82M).
-    assert resp.debt.debt_total_usd == pytest.approx(68.23e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.4275, abs=0.01)
+    # Sculpted debt: DSCR-bound, three tranches, a per-period schedule. #738 grosses
+    # the financed capex to ~$167.86M; the fee+levy-inclusive sculpt solves ~0.41
+    # gearing (debt ~$68.82M on the grossed base).
+    assert resp.debt.debt_total_usd == pytest.approx(68.82e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.41, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     # Default P50-only solve (bind_downside unset): the P90 sizing-detail fields stay
     # absent (None) so the lender pack renders no P90 rows for this case (#613).
@@ -92,7 +93,7 @@ def test_inline_config_runs() -> None:
 
     cfg = dict(load_scenario_config(LENDER))
     resp = run_pipeline(RunPipelineRequest(config=cfg))
-    assert resp.kpis.project_irr == pytest.approx(0.0203, abs=0.005)
+    assert resp.kpis.project_irr == pytest.approx(0.0146, abs=0.005)  # #738 canon
     assert resp.config_path is None
 
 

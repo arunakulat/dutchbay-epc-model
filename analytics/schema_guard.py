@@ -295,6 +295,26 @@ def _validate_run_mode(raw_config: Mapping[str, Any], errors: list[str]) -> None
         errors.append(str(exc))
 
 
+def _validate_taxes_indirect(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate any declared ``taxes_indirect`` block at pre-flight (#738).
+
+    Opt-in — an ABSENT block is not an error and the config passes
+    byte-identically. A PRESENT block is delegated verbatim to
+    :func:`finance.import_levies.resolve_indirect_taxes` — the engine's single
+    resolution authority (strict decimal rates in ``[0, 1)``,
+    ``import_share_pct`` in ``[0, 1]``, unknown-key/typo rejection, bool flags,
+    the ``relief`` sub-block) — so pre-flight and call-time can never disagree
+    (the #733a ``_validate_run_mode`` pattern: a guard must reuse the engine's
+    exact resolution).
+    """
+    from finance.import_levies import resolve_indirect_taxes
+
+    try:
+        resolve_indirect_taxes(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -329,6 +349,10 @@ def validate_config_for_v14(
     # 1c. Validate any declared run mode (`run.mode` / `run_mode`) against the
     # #733 contract (opt-in: absent -> no error).
     _validate_run_mode(raw_config, errors)
+
+    # 1d. Validate any declared taxes_indirect block against the #738 contract
+    # (opt-in: absent -> no error; present -> the engine resolver's exact rules).
+    _validate_taxes_indirect(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []

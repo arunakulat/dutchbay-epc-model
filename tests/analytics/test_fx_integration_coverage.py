@@ -227,12 +227,13 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     assert sr.get("fx_curve") is not None
     assert sr.get("fx_risk_profile") is not None
     # additive — no effect on the financed economics
-    # (canonical re-baselined by PR B group-C #3: LKR debt rate 8% -> UIP-implied 13.39%.
-    #  projIRR unchanged (unlevered); the costlier LKR tranche pushes equity_irr
-    #  -0.0193 -> -0.0486 and de-levers the deal (gearing ~0.59 -> ~0.45).)
+    # (canonical re-baselined by #738 2026-07-05: PRUDENT import levies capitalized
+    #  + 18% opex VAT, net of the revenue-SSCL exemption reversal — projIRR 2.03%
+    #  -> 1.46%, equity_irr -0.0499 -> -0.0584, gearing 0.4275 -> 0.41 on the
+    #  grossed capex. Prior: PR B group-C #3 UIP LKR debt rate; #737 fees.)
     k = out["kpis"]
-    assert k["project_irr"] == pytest.approx(0.020322992686519513, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.04992120564267999, abs=1e-9)
+    assert k["project_irr"] == pytest.approx(0.014551597740253388, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(-0.05841298678542661, abs=1e-9)
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
-    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
     assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)

@@ -50,7 +50,13 @@ def test_all_three_resolvers_agree_under_derive_from_breakdown() -> None:
 
 
 def test_equity_uses_flat_total_without_derive() -> None:
+    # #738: the committed lendercase now declares taxes_indirect, which routes the
+    # equity resolver through the debt engine (levy-inclusive gross) — that
+    # single-source invariant is tested in tests/finance/test_import_levies.py.
+    # THIS test's subject is the LEVY-FREE FLAT PATH, so strip the block to keep
+    # the premise (no derive_from_breakdown, no levies => the raw flat usd_total).
     cfg = yaml.safe_load(_CANON.read_text())
+    cfg.pop("taxes_indirect", None)
     assert not (cfg.get("capex") or {}).get("derive_from_breakdown")
     assert equity_capex(cfg) == pytest.approx(float(cfg["capex"]["usd_total"]))
 

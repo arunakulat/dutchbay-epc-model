@@ -299,9 +299,20 @@ def _calculate_statutory_deductions(
     }
 
 
-def _calculate_opex_lkr(opex_usd_per_year: float, fx_rate: float) -> float:
-    """Convert annual OPEX from USD to LKR at a given FX rate."""
-    return opex_usd_per_year * fx_rate
+def _calculate_opex_lkr(
+    opex_usd_per_year: float, fx_rate: float, vat_pct: float = 0.0
+) -> float:
+    """Convert annual OPEX from USD to LKR at a given FX rate.
+
+    ``vat_pct`` (#738) is the unrecoverable input-VAT decimal on O&M (0.0 when the
+    ``taxes_indirect`` block is absent or relieved — the ``* (1.0 + 0.0)`` is an
+    exact IEEE identity, so the levy-free path stays byte-identical). This is the
+    ONE shared helper both row builders call, so the two cannot drift; escalation
+    compounds in the caller first and VAT multiplies the escalated figure —
+    ad-valorem, order-independent. The row's ``opex_usd`` stays the PRE-VAT
+    escalated USD figure; ``opex_lkr`` is VAT-inclusive.
+    """
+    return opex_usd_per_year * (1.0 + vat_pct) * fx_rate
 
 
 def _apply_risk_haircut(cfads_lkr: float, risk_haircut_pct: float) -> float:

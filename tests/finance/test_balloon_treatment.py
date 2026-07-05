@@ -79,7 +79,10 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     """
     kpis = results["legacy_ignore"]["kpis"]
     dr = results["legacy_ignore"]["debt_result"]
-    assert kpis["equity_irr"] == pytest.approx(-0.0177, abs=0.002)
+    # #738 re-baseline: the import levies + opex VAT (net of the SSCL reversal)
+    # pull the free pass further down (-0.0177 -> -0.0257); it stays well above
+    # the serviced treatments below.
+    assert kpis["equity_irr"] == pytest.approx(-0.0257, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)
@@ -108,7 +111,9 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
         dr["balloon_remaining"], rel=0.02
     )
     assert sweep < legacy - 0.025  # materially below the free pass, honest
-    assert sweep == pytest.approx(-0.0499, abs=0.003)
+    # #738 re-baseline: cash_sweep IS the committed default, so this equals the
+    # canonical equity IRR (-0.0499 -> -0.0584).
+    assert sweep == pytest.approx(-0.0584, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -116,9 +121,10 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     refi = results["refinance"]["kpis"]["equity_irr"]
     assert refi <= sweep
-    # The 5.9% FX-drift re-baseline plus the 2.0% AEP haircut leave a large balloon ($59.16M);
-    # refinancing it at the penalty rate against the weaker CFADS is catastrophic for equity (~-0.40).
-    assert refi == pytest.approx(-0.3318, abs=0.005)
+    # The 5.9% FX-drift re-baseline plus the 2.0% AEP haircut leave a large balloon;
+    # refinancing it at the penalty rate against the weaker CFADS is catastrophic for
+    # equity (#738 levies deepen it further: -0.3318 -> -0.3593).
+    assert refi == pytest.approx(-0.3593, abs=0.005)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:
