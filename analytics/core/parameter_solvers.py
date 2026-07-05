@@ -942,6 +942,9 @@ def solve_for_min_capex_given_irr_floor(
 
     def _apply_capex(overrides: Dict[str, Any], capex: float) -> None:
         # LIVE engine path is capex.usd_total (NOT the dead project.capex_usd).
+        # #738: this is the PRE-LEVY base — under a taxes_indirect config the
+        # pipeline re-applies the import levies on top of each candidate, so the
+        # solved value is the pre-levy base that clears the floor levy-inclusive.
         overrides.setdefault("capex", {})["usd_total"] = float(capex)
 
     _assert_override_is_live(

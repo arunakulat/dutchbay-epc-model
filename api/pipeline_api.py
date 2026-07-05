@@ -184,6 +184,9 @@ class FundingBlock(BaseModel):
     dsra_target_months: Optional[float] = None
     initial_dsra_usd: Optional[float] = None
     capex_usd: Optional[float] = None
+    # of-which disclosure (#738): import duties + unrecoverable VAT already
+    # INSIDE capex_usd (a breakdown line, not a uses_total addend).
+    import_levies_usd: Optional[float] = None
     idc_usd: Optional[float] = None
     senior_debt_usd: Optional[float] = None
     equity_usd: Optional[float] = None
@@ -418,6 +421,7 @@ def _extract_funding(debt: Mapping[str, Any]) -> FundingBlock:
         dsra_target_months=_f(f.get("dsra_target_months")),
         initial_dsra_usd=_f(f.get("initial_dsra_usd")),
         capex_usd=_f(uses.get("capex_usd")),
+        import_levies_usd=_f(uses.get("import_levies_usd")),
         idc_usd=_f(uses.get("idc_usd")),
         senior_debt_usd=_f(sources.get("senior_debt_usd")),
         equity_usd=_f(sources.get("equity_usd")),

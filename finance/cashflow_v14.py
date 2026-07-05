@@ -33,6 +33,7 @@ from .cashflow_v14_tax import (
     calculate_tax,
 )
 from .cashflow_v14_utils import as_float, get_nested
+from .import_levies import capex_uplift_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,20 @@ def _prepare_cashflow_context(
 
                 if capex_usd is not None:
                     capex_dep_resolved = capex_usd * fx_curve_resolved[0]
+
+    # #738: capitalized import levies + unrecoverable capex VAT augment the
+    # depreciable base. Single uplift source: finance.import_levies — the SAME
+    # pure cascade the debt engine's _extract_capex_usd wrapper grosses debt
+    # sizing / IDC / equity with — translated at the SAME year-0 FX the USD capex
+    # rung above and the IDC augment below use, so tax base, debt and NPV carry
+    # the identical uplift on a consistent basis. No double count: the ladder
+    # above reads the RAW config keys (pre-levy base), never the levy-inclusive
+    # resolver. Applied additively regardless of which rung resolved (the
+    # documented extra_depreciable_usd precedent below); 0.0 when the
+    # taxes_indirect block is absent -> byte-identical.
+    levies_uplift_usd = capex_uplift_from_config(config)
+    if levies_uplift_usd and capex_dep_resolved is not None:
+        capex_dep_resolved += levies_uplift_usd * fx_curve_resolved[0]
 
     # Optionally augment the depreciable base with extra USD capex — used by the
     # equity-facing pass to capitalize debt IDC into the tax base (#36/#75). The IDC is a
@@ -451,7 +466,11 @@ def calculate_single_year_cfads(
     opex_usd_year = (
         float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
     )
-    opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
+    # #738: unrecoverable O&M input VAT multiplies the escalated figure inside the
+    # shared helper (0.0 -> byte-identical); deductible automatically (EBITDA line).
+    opex_lkr = _calculate_opex_lkr(
+        opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
+    )
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
     # Depreciation is NOT in EBIT; it's a tax deduction.
@@ -816,7 +835,11 @@ def build_annual_rows_efficient(
         opex_usd_year = (
             float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
         )
-        opex_lkr = _calculate_opex_lkr(opex_usd_year, fx_rate)
+        # #738: O&M input VAT inside the shared helper — mirrors
+        # calculate_single_year_cfads so the two builders stay identical.
+        opex_lkr = _calculate_opex_lkr(
+            opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
+        )
 
         # Senior credit-support fee at the EBITDA line (#737) — mirrors
         # calculate_single_year_cfads so the two builders stay identical.

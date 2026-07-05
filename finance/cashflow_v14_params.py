@@ -18,6 +18,7 @@ from .cashflow_v14_utils import (
     as_int_or_none,
     get_nested,
 )
+from .import_levies import resolve_indirect_taxes
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +372,13 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     risk_haircut_pct = _pct_to_decimal(risk_haircut_raw) or 0.0
 
+    # #738: unrecoverable input VAT on O&M — resolved via the single indirect-tax
+    # authority (finance.import_levies; strict decimals, fail-loud). The effective
+    # rate is 0.0 when the taxes_indirect block is absent or
+    # relief.vat_opex_relieved is true -> byte-identical opex line.
+    indirect_taxes = resolve_indirect_taxes(raw)
+    opex_vat_pct = indirect_taxes.opex_vat_rate if indirect_taxes is not None else 0.0
+
     params = CashflowParams(
         project_life_years=project_life_years,
         capacity_mw=float(capacity_mw) if capacity_mw is not None else 0.0,
@@ -389,6 +397,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         env_surcharge_pct=float(env_surcharge_pct),
         social_levy_pct=float(social_levy_pct),
         risk_haircut_pct=float(risk_haircut_pct),
+        opex_vat_pct=float(opex_vat_pct),
     )
 
     missing_or_invalid: List[str] = []

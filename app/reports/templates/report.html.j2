@@ -228,6 +228,9 @@
     <table>
       <tbody>
         <tr><td>CAPEX (EPC + development)</td><td class="num">{{ fmt_usd(ctx.finance.funding.capex_usd) }}</td></tr>
+        {% if ctx.finance.funding.import_levies_usd %}
+        <tr><td class="muted">&mdash; of which import duties &amp; unrecoverable VAT (capitalized)</td><td class="num muted">{{ fmt_usd(ctx.finance.funding.import_levies_usd) }}</td></tr>
+        {% endif %}
         <tr><td>Interest during construction (IDC)</td><td class="num">{{ fmt_usd(ctx.finance.funding.idc_usd) }}</td></tr>
         {% if ctx.finance.funding.initial_dsra_usd %}
         <tr><td>DSRA funded at close</td><td class="num">{{ fmt_usd(ctx.finance.funding.initial_dsra_usd) }}</td></tr>
