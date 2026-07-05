@@ -148,6 +148,67 @@ def test_wake_live_drives_pywake_when_fully_specified(cfg: dict) -> None:
     assert 3.0 < pct < 15.0  # a real modelled wake, not the flat placeholder
 
 
+# ── #742: wind-rose + siting metadata surfacing (display-only, AEP-neutral) ────
+
+
+def test_lendercase_omits_optional_rose_and_siting(cfg: dict) -> None:
+    """The committed lender declares no wind_rose/siting -> provenance has only aep."""
+    summary = build_aep_summary_from_config(cfg)
+    assert sorted(summary["provenance"].keys()) == ["aep"]
+
+
+def test_wind_rose_surfaces_into_provenance_aep_neutral(cfg: dict) -> None:
+    """An optional wind rose is surfaced into provenance WITHOUT moving the AEP."""
+    base = build_aep_summary_from_config(cfg)
+    with_rose = copy.deepcopy(cfg)
+    with_rose["resource"]["wind_rose"] = {
+        "direction_deg": [225.0] * 100 + [230.0] * 20,  # SW-dominant
+        "n_sectors": 12,
+    }
+    summary = build_aep_summary_from_config(with_rose)
+    # display block present ...
+    assert "wind_rose" in summary["provenance"]
+    assert summary["provenance"]["wind_rose"]["prevailing_sector_deg"] == 240.0
+    assert "single grid-cell" in summary["provenance"]["wind_rose"]["provenance_note"]
+    # ... and the billed quantities are byte-identical to the no-rose run.
+    assert summary["net_site_aep_gwh"] == base["net_site_aep_gwh"]
+    assert summary["capacity_factor"] == base["capacity_factor"]
+    assert summary["gross_aep_gwh"] == base["gross_aep_gwh"]
+    assert summary["losses"] == base["losses"]
+
+
+def test_prebinned_wind_rose_passthrough(cfg: dict) -> None:
+    """A pre-binned rose (sector_deg + frequency) is renormalised and surfaced."""
+    with_rose = copy.deepcopy(cfg)
+    with_rose["resource"]["wind_rose"] = {
+        "sector_deg": [0.0, 90.0, 180.0, 270.0],
+        "frequency": [1.0, 1.0, 4.0, 2.0],  # unnormalised
+    }
+    summary = build_aep_summary_from_config(with_rose)
+    rose = summary["provenance"]["wind_rose"]
+    assert rose["source"] == "config_prebinned"
+    assert rose["frequency"] == [0.125, 0.125, 0.5, 0.25]  # renormalised to sum 1
+
+
+def test_siting_metadata_surfaces_and_applies_no_correction(cfg: dict) -> None:
+    """A declared terrain class is surfaced but never scales the AEP."""
+    base = build_aep_summary_from_config(cfg)
+    with_siting = copy.deepcopy(cfg)
+    with_siting["resource"]["siting"] = {"terrain_class": "coastal"}
+    summary = build_aep_summary_from_config(with_siting)
+    assert summary["provenance"]["siting"]["terrain_class"] == "coastal"
+    assert summary["provenance"]["siting"]["applies_aep_correction"] is False
+    assert summary["net_site_aep_gwh"] == base["net_site_aep_gwh"]
+    assert summary["capacity_factor"] == base["capacity_factor"]
+
+
+def test_incomplete_wind_rose_fails_loud(cfg: dict) -> None:
+    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+
+    with pytest.raises(ValueError, match="incomplete"):
+        _resolve_wind_rose({"wind_rose": {"n_sectors": 12}})
+
+
 def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
     """The regenerated summary round-trips through the AEP loader."""
     out = write_aep_summary(cfg, str(tmp_path / "regen_summary.json"))
