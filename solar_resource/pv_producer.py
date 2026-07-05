@@ -76,6 +76,7 @@ from solar_resource.exceedance import (
     solar_uncertainty_from_config,
 )
 from solar_resource.loss_model import compute_net_solar_loss_factor
+from solar_resource.soiling_profile import soiling_profile_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 #: only a calendar template — the energy is set by ``annual_ghi_kwh_m2``, not by the year.
 _REFERENCE_YEAR = 2021
 _HOURS_PER_YEAR = 8760.0
+
+#: ``resource.solar`` keys that are NOT :class:`SolarResourceConfig` physics inputs and are
+#: consumed elsewhere, so :meth:`SolarResourceConfig.from_scenario` skips them rather than
+#: rejecting them as typos. ``source_quality`` (#743) is graded into the provenance block by
+#: ``solar_resource.source_quality``; it is pure metadata and bills off nothing.
+_PRODUCER_IGNORED_KEYS: frozenset[str] = frozenset({"source_quality"})
 
 
 def _require_pvlib() -> Any:
@@ -164,6 +171,17 @@ class SolarResourceConfig:
     #: haircut policy default (#587) deliberately does NOT port to solar. ``hash=False``
     #: mirrors ``losses`` (a mapping field on a frozen dataclass).
     uncertainty: Optional[Mapping[str, Any]] = field(default=None, hash=False)
+    #: OPTIONAL time-varying soiling profile (``resource.solar.soiling_profile``, #743): a
+    #: daily accumulation rate + wash cadence (+ optional clean floor / saturation cap),
+    #: parsed by :func:`solar_resource.soiling_profile.soiling_profile_from_config`. When
+    #: present, its energy-weighted effective soiling percent REPLACES the flat static soiling
+    #: in the loss chain (the itemised ``losses['soiling_pct']`` entry, or an added soiling
+    #: reduction on the flat ``system_loss_pct`` path). Validated at construction (typo'd keys
+    #: fail loud, CESSPIT). Absent (default), the loss chain is byte-identical to the flat
+    #: soiling behaviour — the committed hybrid declares no profile. Applying a profile to move
+    #: the committed solar CF is a producer-driven re-baseline = USER GATE (same class as #529
+    #: SOLAR-6/12). ``hash=False`` mirrors ``losses`` / ``uncertainty``.
+    soiling_profile: Optional[Mapping[str, Any]] = field(default=None, hash=False)
 
     def __post_init__(self) -> None:
         if self.dc_capacity_mw <= 0:
@@ -206,6 +224,16 @@ class SolarResourceConfig:
             # non-numeric knob fails loud at construction, not at the first
             # emit_exceedance consumption (which is opt-in and may never run).
             solar_uncertainty_from_config(self.uncertainty)
+        if self.soiling_profile is not None:
+            if not isinstance(self.soiling_profile, Mapping):
+                raise TypeError(
+                    "soiling_profile must be a mapping (accumulation_rate_pct_per_day, "
+                    "wash_interval_days, ...); got "
+                    f"{type(self.soiling_profile).__name__}"
+                )
+            # CESSPIT pre-flight: build the profile NOW so a typo'd or out-of-range key
+            # fails loud at construction, not at the first compute_solar_aep consumption.
+            soiling_profile_from_config(self.soiling_profile)
 
     @classmethod
     def from_scenario(cls, scenario: Mapping[str, Any]) -> "SolarResourceConfig":
@@ -227,6 +255,11 @@ class SolarResourceConfig:
             raise KeyError(f"resource.solar is missing required field(s): {missing}")
 
         known = cls.__dataclass_fields__  # noqa: SLF001 - dataclass introspection
+        # PROVENANCE-ONLY keys the PRODUCER does not consume: they live in resource.solar
+        # for a lender audit trail but are not physics inputs. source_quality (#743) is graded
+        # by solar_resource.source_quality into the provenance block, never a billed field, so
+        # the producer skips it here rather than rejecting it as a typo.
+        block = {k: v for k, v in block.items() if k not in _PRODUCER_IGNORED_KEYS}
         # CESSPIT: reject unknown keys rather than silently dropping them, so a typo'd
         # field (e.g. system_los_pct) fails loud instead of reverting to a default.
         unknown = [k for k in block if k not in known]
@@ -444,12 +477,34 @@ def compute_solar_aep(
         eta_inv_nom=config.inverter_eff_nom,
     ).clip(upper=ac_nameplate_w)
 
+    # OPTIONAL time-varying soiling profile (#743). Present only when the scenario declares
+    # resource.solar.soiling_profile; None (default) -> the whole block below is skipped and
+    # the loss chain is byte-identical to the flat-soiling behaviour.
+    effective_soiling_pct: Optional[float] = None
+    if config.soiling_profile is not None:
+        profile = soiling_profile_from_config(config.soiling_profile)
+        assert (
+            profile is not None
+        )  # non-None config -> non-None profile (mypy narrowing)
+        effective_soiling_pct = profile.effective_soiling_pct()
+
     # Itemised loss chain (config-first) when resource.solar.losses is declared, else the
     # flat system_loss_pct derate (byte-identical to the prior behaviour when absent).
     if config.losses is not None:
-        loss_factor = compute_net_solar_loss_factor(config.losses)
+        losses = config.losses
+        if effective_soiling_pct is not None:
+            # Time-varying soiling REPLACES the static soiling_pct entry in the itemised
+            # stack (no double-count): the profile's energy-weighted mean is the soiling term.
+            losses = {**dict(losses), "soiling_pct": effective_soiling_pct}
+        loss_factor = compute_net_solar_loss_factor(losses)
     else:
         loss_factor = 1.0 - config.system_loss_pct / 100.0
+        if effective_soiling_pct is not None:
+            # The flat system_loss_pct has no separable soiling component, so the profile's
+            # effective soiling is applied as its OWN multiplicative reduction on top. A
+            # scenario opting into a profile on the flat path should therefore net soiling
+            # OUT of system_loss_pct to avoid double-counting (documented on the config field).
+            loss_factor *= 1.0 - effective_soiling_pct / 100.0
     annual_ac_wh = float(ac_power.sum()) * loss_factor
     annual_energy_gwh = annual_ac_wh / 1.0e9
     capacity_factor = annual_ac_wh / (pdc0_w * _HOURS_PER_YEAR)
