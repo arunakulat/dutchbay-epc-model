@@ -78,14 +78,18 @@ def test_package_version_tracks_engine_version() -> None:
 
 
 def test_no_stale_version_literals_in_wind_resource() -> None:
-    """Greppable fence: the stale hardcoded module versions must stay removed."""
+    """Greppable fence: the stale hardcoded module versions must stay removed.
+
+    rglob, not glob (#683): the fence must keep covering wind_resource/ if it
+    ever grows subpackages — a non-recursive scan silently stops fencing them.
+    """
     stale = re.compile(
         r"""1\.[01]\.0\s*\(CCCDIR|__version__\s*=\s*"1\.|v1\.[01]\.0\s"""
     )
     offenders = [
-        p.name
-        for p in sorted((REPO_ROOT / "wind_resource").glob("*.py"))
-        if stale.search(p.read_text())
+        str(p.relative_to(REPO_ROOT / "wind_resource"))
+        for p in sorted((REPO_ROOT / "wind_resource").rglob("*.py"))
+        if "__pycache__" not in p.parts and stale.search(p.read_text())
     ]
     assert offenders == [], f"stale version literals in: {offenders}"
 

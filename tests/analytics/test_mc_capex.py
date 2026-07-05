@@ -55,9 +55,15 @@ def test_capex_mc_distribution_is_monotonic_and_sound() -> None:
     # 5.9% FX-drift re-baseline; was ~5.7% before the data-derived BIS depreciation)
     assert res.project_irr["p50"] == pytest.approx(0.0301, abs=0.02)
 
-    # debt is DSCR-sculpted, so min DSCR holds at the covenant floor across the cost range
+    # #790: the min_dscr KPI is now the fold-corrected covenant minimum. The
+    # per-period sculpt still re-sizes debt to the 1.30 target across the cost
+    # range (so no level can EXCEED the floor), while the year-1 fold varies
+    # modestly with the financed capex (the orphaned bridge service scales with
+    # debt size) — a real band below the floor, not the old degenerate 1.30 pin.
     for level in ("p10", "p50", "p90"):
-        assert res.min_dscr[level] == pytest.approx(1.30, abs=0.02)
+        assert res.min_dscr[level] <= 1.30 + 1e-9
+        assert res.min_dscr[level] == pytest.approx(1.28, abs=0.03)
+    assert res.min_dscr["p10"] <= res.min_dscr["p50"] <= res.min_dscr["p90"]
 
 
 def test_capex_mc_is_reproducible() -> None:

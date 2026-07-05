@@ -617,8 +617,10 @@ expected_results:
   project_npv_m_usd: -70.9 # discount at build-up WACC ~9.94%. NPV -32.34M -> -53.29M (FX) -> -56.1M
                             # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up)
                             # -> -70.9M (#737 credit-support fees).
-  min_dscr: 1.30            # dual-DSCR sculpt pins the per-period min at the covenant target —
-                            # INCLUDING the #737 fee (per-year table: year 1 ~1.288, see note above)
+  min_dscr: 1.288           # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
+                            # per-year table, fee-netted per #737): year 1 ~1.288 < the 1.30
+                            # covenant -> 1 equity-lockup year. The dual-DSCR sculpt still pins
+                            # the PER-PERIOD min at the 1.30 target (kpis.min_dscr_period).
   avg_dscr: 1.39
   llcr: 1.27                # fee-netted CFADS numerator (#737) over the fee-sized debt
   plcr: 1.31

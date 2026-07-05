@@ -38,8 +38,21 @@ from finance.debt_v14 import (
     _warn_if_decorative_tranches,
     apply_debt_layer,
     plan_debt,
+    reset_placeholder_warn_dedup,
     size_debt_with_dual_dscr,
 )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_placeholder_warn_dedup() -> None:
+    """Reset the #683 warn-once state before every test in this module.
+
+    The placeholder WARNs dedup once per process; without this, any test that
+    triggers them would consume the one emission and every later warn-asserting
+    test would fail — under ANY execution order the harness picks (shards,
+    xdist workers, -k selections, or a shuffling plugin).
+    """
+    reset_placeholder_warn_dedup()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -690,3 +703,89 @@ def test_dual_dscr_capacity_equals_npv_of_service() -> None:
     # Conservative sizing never exceeds either single-scenario capacity.
     assert result["debt_sized"] <= result["debt_p50"]
     assert result["debt_sized"] <= result["debt_p99"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# #683: placeholder WARN dedup (once per process, reset hook for tests)
+# ─────────────────────────────────────────────────────────────────────────────
+def _no_schedule_params() -> dict[str, object]:
+    """Financing_Terms WITHOUT construction_schedule / debt_drawdown_pct."""
+    return {
+        "Financing_Terms": {
+            "debt_ratio": 0.6,
+            "tenor_years": 5,
+            "construction_periods": 2,
+            "rates": {"usd_nominal": 0.08},
+            "mix": {"usd_commercial_min": 1.0},
+            "amortization_style": "sculpted",
+            "target_dscr": 1.30,
+        },
+        "capex": {"usd_total": 100.0},
+    }
+
+
+def test_placeholder_warns_fire_once_per_process(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The draw/phasing placeholder WARNs dedup across repeated engine calls (#683).
+
+    The engine's iterative layers (gearing search + the range(40) balloon-resize
+    bisection) hit the extraction path ~111x per canonical pipeline run on deep
+    copies of the same params, so the (correct) A1/#91 WARNs fired ~111x each.
+    Warn-once semantics: exactly one WARNING per placeholder kind per process;
+    later occurrences drop to DEBUG.
+    """
+    reset_placeholder_warn_dedup()
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        apply_debt_layer(params=_no_schedule_params(), annual_rows=_rows(20.0))
+        apply_debt_layer(params=_no_schedule_params(), annual_rows=_rows(20.0))
+    draw_warns = [
+        r
+        for r in caplog.records
+        if "debt_drawdown_pct / drawdown_pct absent" in r.message
+    ]
+    sched_warns = [
+        r for r in caplog.records if "construction_schedule absent" in r.message
+    ]
+    assert len(draw_warns) == 1, "draw placeholder WARN must fire exactly once"
+    assert len(sched_warns) == 1, "phasing placeholder WARN must fire exactly once"
+
+
+def test_placeholder_warn_dedup_reset_hook(caplog: pytest.LogCaptureFixture) -> None:
+    """reset_placeholder_warn_dedup() restores the warning (test isolation hook)."""
+    reset_placeholder_warn_dedup()
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        apply_debt_layer(params=_no_schedule_params(), annual_rows=_rows(20.0))
+    first = sum("absent" in r.message for r in caplog.records)
+    assert first >= 2  # both kinds warned
+    caplog.clear()
+    reset_placeholder_warn_dedup()
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        apply_debt_layer(params=_no_schedule_params(), annual_rows=_rows(20.0))
+    again = sum("absent" in r.message for r in caplog.records)
+    assert again == first, "reset must fully restore the warn-once state"
+
+
+def test_placeholder_warn_dedup_is_kind_scoped(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Compact debt-block placeholders dedup independently of Financing_Terms."""
+    reset_placeholder_warn_dedup()
+    with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
+        apply_debt_layer(params=_no_schedule_params(), annual_rows=_rows(20.0))
+        # Compact schema: distinct dedup keys -> its OWN single WARN pair.
+        apply_debt_layer(
+            params={
+                "debt": {
+                    "debt_ratio": 0.6,
+                    "tenor_years": 5,
+                    "interest_rate_pct": 8.0,
+                },
+                "capex": {"usd_total": 100.0},
+            },
+            annual_rows=_rows(20.0),
+        )
+    debt_msgs = [r for r in caplog.records if r.message.startswith("debt.")]
+    ft_msgs = [r for r in caplog.records if r.message.startswith("Financing_Terms.")]
+    assert len(debt_msgs) == 2  # compact draw + phasing, once each
+    assert len(ft_msgs) == 2  # Financing_Terms draw + phasing, once each
