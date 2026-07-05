@@ -1505,9 +1505,11 @@ def plan_debt(
     # (period 2) and phantom interest-only (period 3) entries as separate values, whereas
     # dscr_by_year folds the orphaned bridge service into operating year 1. Report the
     # CONSERVATIVE minimum over both views so the headline can never overstate coverage
-    # relative to the per-year table the covenant is actually tested on. They coincide at the
-    # 1.30 sculpt floor for every current scenario (KPI-neutral) — this is a fail-safe against
-    # a future CFADS profile where the bridge/phantom period would let the two diverge.
+    # relative to the per-year table the covenant is actually tested on. The two now DIVERGE
+    # on several committed scenarios (lendercase 1.2857 fold vs 1.30 period since #737/#738;
+    # both CEB BESS scenarios ~0.91 fold vs 1.30 period — the year-1 bridge/interest-only
+    # lead-in service folds into operating year 1, verified economically real, not a
+    # double-count, in #806). The min() keeps the headline honest wherever they diverge.
     by_year_min: Optional[float] = None
     for _dscr in (core.get("dscr_by_year") or {}).values():
         if _dscr is None:

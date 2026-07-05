@@ -334,6 +334,28 @@ _CAPEX_USD_PATHS: tuple[tuple[str, ...], ...] = (
 
 
 def _resolve_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
+    # When indirect taxes (import levies, #738) or a bottom-up breakdown are declared,
+    # the capitalised base MUST be the identical LEVY-INCLUSIVE gross the debt engine
+    # sizes on (finance.debt_v14._extract_capex_usd) and the NPV base uses
+    # (analytics.core.metrics._derive_capex_usd) — otherwise PP&E and the paid-in-equity
+    # plug book the PRE-levy base and the balance sheet only ties out via a prose
+    # reconciliation footnote (#811). Delegate to that single resolver so the statements
+    # reconcile natively. Levy-free flat configs take the unchanged flat path below and
+    # stay byte-identical. This adds a call-time finance import (the CCCDIR-pure module
+    # otherwise holds none) exactly as metrics._derive_capex_usd and
+    # equity_distribution_v14_hydra already do.
+    from finance.import_levies import has_taxes_indirect
+
+    capex_section = config.get("capex") if isinstance(config, Mapping) else None
+    derive_from_breakdown = isinstance(capex_section, Mapping) and bool(
+        capex_section.get("derive_from_breakdown")
+    )
+    if derive_from_breakdown or has_taxes_indirect(config):
+        from finance.debt_v14 import _extract_capex_usd
+
+        resolved = float(_extract_capex_usd(dict(config)))
+        return resolved if resolved > 0 else None
+
     for path in _CAPEX_USD_PATHS:
         cur: Any = config
         for key in path:
