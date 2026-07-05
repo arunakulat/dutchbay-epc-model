@@ -35,6 +35,21 @@ export_dir: _out/run_full_pipeline_v14
 write_artifacts: true
 
 # ---------------------------------------------------------------------------
+# #735 slice-2: opt-in run-scoping (OFF by default → byte-identical).
+# When run_scoped is true, EVERY artifact of this run — the JSON/CSV dump and
+# the four optional report/workbook emitters below — is grouped under a per-run
+# subdirectory '<export_dir>/<run_id>' (routed via
+# analytics.output_paths.resolve_output_dir), so successive runs do not
+# overwrite each other. Default false leaves the export_dir root unchanged, so
+# committed-scenario output stays byte-identical. run_id names the subdirectory;
+# when null it defaults to analytics.output_paths.default_run_id()
+# (v<engine_version>_<git_sha12>, MRM-02 provenance). Ignored when run_scoped
+# is false.
+# ---------------------------------------------------------------------------
+run_scoped: false
+run_id: null
+
+# ---------------------------------------------------------------------------
 # #683 (a): CLI-overridable wind-resource knobs (OFF by default).
 # A mapping deep-merged onto the scenario's `resource` block, so knobs already
 # drivable in the scenario YAML — the IEC 61400-15-2 uncertainty budget / P50

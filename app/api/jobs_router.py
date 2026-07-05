@@ -15,12 +15,14 @@ in-process and the future arq paths drive the same ``run_wind_job``).
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.api.auth import get_current_subject
+from app.jobs.config import JOBS_BACKEND, JOBS_QUEUE, JOBS_REDIS_URL
 from app.jobs.models import JobRecord, JobState, WindJobRequest, utc_now_iso
 from app.jobs.runner import new_queued_record, run_wind_job
 from app.jobs.sse import job_event_stream
@@ -28,15 +30,75 @@ from app.jobs.store import InMemoryJobStore, JobStore
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-#: Process-default store. ``get_store`` is the injection seam: override it via
-#: ``app.dependency_overrides[get_store]`` (tests) or point it at a RedisJobStore
-#: for the durable, cross-process path — endpoints never reference it directly.
-_default_store: JobStore = InMemoryJobStore()
+
+def _require_jobs_extra() -> None:
+    """CASPER: fail loud at call-time when ``JOBS_BACKEND='redis'`` needs the optional
+    ``[jobs]`` extra (arq, redis) but it is not installed — never at import time."""
+    try:
+        import arq  # noqa: F401
+        import redis  # noqa: F401
+    except ImportError as exc:  # pragma: no cover - exercised only without [jobs]
+        raise RuntimeError(
+            "DUTCHBAY_JOBS_BACKEND='redis' requires the optional [jobs] extra "
+            "(arq, redis) and a live Redis. Install with: pip install -e '.[jobs]'."
+        ) from exc
+
+
+def _build_default_store() -> JobStore:
+    """Resolve the process store from ``JOBS_BACKEND`` (#663 cutover).
+
+    ``"memory"`` (default) → :class:`InMemoryJobStore` (byte-identical to pre-#663).
+    ``"redis"`` → a shared :class:`~app.jobs.redis_store.RedisJobStore` so the API
+    reads the status the arq worker writes. The redis client is lazy (redis-py does
+    not connect until a command is issued), so building it here does not require a
+    live Redis at import.
+    """
+    if JOBS_BACKEND == "redis":
+        _require_jobs_extra()
+        import redis as sync_redis  # local import — optional [jobs] extra
+
+        from app.jobs.redis_store import RedisJobStore
+
+        return RedisJobStore(sync_redis.Redis.from_url(JOBS_REDIS_URL))
+    return InMemoryJobStore()
+
+
+#: Process store, built once on first use from ``JOBS_BACKEND``. ``get_store`` is the
+#: injection seam: tests override it via ``app.dependency_overrides[get_store]``;
+#: endpoints never reference the store directly.
+_default_store: Optional[JobStore] = None
 
 
 def get_store() -> JobStore:
     """FastAPI dependency yielding the active job store (override to swap)."""
+    global _default_store
+    if _default_store is None:
+        _default_store = _build_default_store()
     return _default_store
+
+
+async def _enqueue_to_arq(job_id: str, request: WindJobRequest) -> None:
+    """Produce a job onto the arq queue the worker consumes (``redis`` backend).
+
+    Only serializable arguments cross the queue: ``job_id`` + the request payload.
+    The worker attaches its own shared ``RedisJobStore`` (``app.jobs.worker._on_startup``),
+    so the store is NOT passed here. The task name + queue match the worker
+    (``run_wind_assessment_task`` on :data:`JOBS_QUEUE`).
+    """
+    _require_jobs_extra()
+    from arq import create_pool  # local import — optional [jobs] extra
+    from arq.connections import RedisSettings
+
+    pool = await create_pool(RedisSettings.from_dsn(JOBS_REDIS_URL))
+    try:
+        await pool.enqueue_job(
+            "run_wind_assessment_task",
+            job_id,
+            request.model_dump(mode="json"),
+            _queue_name=JOBS_QUEUE,
+        )
+    finally:
+        await pool.close()
 
 
 class JobAccepted(BaseModel):
@@ -62,13 +124,24 @@ def enqueue_job(
     """Queue an async live-ERA5 finance job and schedule it to run.
 
     The job is bound to the authenticated ``subject`` so only its owner can later
-    read it (per-client isolation).
+    read it (per-client isolation). The queued record is created the same way on
+    both backends; only the SCHEDULING differs (#663): the default ``memory`` backend
+    runs ``run_wind_job`` in-process via ``BackgroundTasks`` (unchanged, byte-identical),
+    while ``redis`` produces the job onto the arq queue for the durable, cross-process
+    worker. Both drive the same ``run_wind_job`` orchestration. The route stays sync
+    (FastAPI runs it in a threadpool with no running loop, so the arq enqueue — which is
+    async — runs via ``asyncio.run`` on the redis branch only).
     """
     job_id = _new_job_id()
     store.create(
         JobRecord(**new_queued_record(job_id, now=utc_now_iso(), owner=subject))
     )
-    background.add_task(run_wind_job, job_id, request, store)
+    if JOBS_BACKEND == "redis":
+        import asyncio
+
+        asyncio.run(_enqueue_to_arq(job_id, request))
+    else:
+        background.add_task(run_wind_job, job_id, request, store)
     return JobAccepted(
         job_id=job_id,
         state=JobState.QUEUED,
