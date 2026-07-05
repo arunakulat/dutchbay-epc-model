@@ -70,7 +70,9 @@ def test_app_exposes_expected_routes() -> None:
 
 
 def test_health() -> None:
-    assert health() == {"status": "ok"}
+    # The exact /health body (incl. contract_version, #841) is pinned in
+    # test_api_contract.py; here just smoke the liveness status.
+    assert health()["status"] == "ok"
 
 
 # --------------------------------------------------------------------------- #
@@ -344,7 +346,7 @@ def test_http_smoke_if_httpx_available() -> None:
     app.dependency_overrides[get_current_subject] = lambda: "smoke-user"
     try:
         client = TestClient(app)
-        assert client.get("/health").json() == {"status": "ok"}
+        assert client.get("/health").json()["status"] == "ok"
 
         ok = client.post("/cases", json=_valid_kwargs())
         assert ok.status_code == 200
