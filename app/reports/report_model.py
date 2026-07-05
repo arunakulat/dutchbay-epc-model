@@ -675,6 +675,11 @@ class ReportContext(BaseModel):
     meta: ReportMeta
     covenants: Covenants
     generated_at: str
+    #: Declared run-mode grade stamp (#733c): "screening" / "developer" / "lender" /
+    #: "ic" from the scenario's ``run.mode`` policy, or ``None`` when no mode is
+    #: declared (byte-identical to pre-#733c reports). It labels the artefact by the
+    #: grade it was RUN at rather than the report's implicit lender framing.
+    report_grade: Optional[str] = None
     scenario_variant: str
     site_name: str
     status: str
@@ -1814,6 +1819,26 @@ def _irr_bridge_block(
     )
 
 
+def _resolve_report_grade(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[str]:
+    """Return the declared run-mode grade stamp for the report, or ``None`` (#733c).
+
+    Reads the scenario's declared ``run.mode`` / ``run_mode`` via the single
+    ``analytics.run_modes`` contract and returns that mode's ``report_grade`` (the
+    same policy the #733b debt-engine ceiling reads). An undeclared mode returns
+    ``None`` — the report carries no grade stamp and is byte-identical to a
+    pre-#733c report. A malformed declaration fails loud in ``resolve_run_mode``
+    (already the schema-guard behaviour), so the report never silently mis-grades.
+    """
+    if not scenario_config:
+        return None
+    from analytics.run_modes import POLICIES, resolve_run_mode
+
+    mode = resolve_run_mode(scenario_config)
+    return POLICIES[mode].report_grade if mode is not None else None
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -1891,6 +1916,7 @@ def build_report_context(
         meta=cfg.report,
         covenants=cfg.covenants,
         generated_at=generated_at,
+        report_grade=_resolve_report_grade(scenario_config),
         scenario_variant=case_result.scenario_variant,
         site_name=(
             inputs.site_name if inputs is not None else case_result.scenario_variant

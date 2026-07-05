@@ -1570,3 +1570,29 @@ def test_fmt_pp_signed_percentage_points() -> None:
     assert fmt_pp(-0.201939) == "-20.19 pp"
     assert fmt_pp(0.0) == "+0.00 pp"
     assert fmt_pp(None) == "—"
+
+
+def test_733c_report_grade_stamps_declared_mode_and_is_absent_otherwise() -> None:
+    """#733c: a declared run mode stamps its grade on the report; an undeclared
+    mode leaves the report byte-identically ungraded (no 'Run grade' line)."""
+    from app.reports.renderer import render_report_html
+
+    def _ctx(scenario_config):
+        return build_report_context(
+            _case(_VALUE_DESTRUCTIVE_KPIS, variant="hybrid"),
+            generated_at=GENERATED_AT,
+            scenario_config=scenario_config,
+        )
+
+    # No declared mode -> no grade stamp.
+    ctx_none = _ctx(_SCEN_3S)
+    assert ctx_none.report_grade is None
+    assert "Run grade:" not in render_report_html(ctx_none)
+
+    # A declared lender mode -> stamped in the cover metadata.
+    ctx_lender = _ctx({**_SCEN_3S, "run": {"mode": "lender"}})
+    assert ctx_lender.report_grade == "lender"
+    assert "Run grade: Lender" in render_report_html(ctx_lender)
+
+    # The alias key and IC grade resolve too.
+    assert _ctx({**_SCEN_3S, "run_mode": "ic"}).report_grade == "ic"
