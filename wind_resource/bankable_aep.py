@@ -22,8 +22,9 @@ All inputs are config-driven (GWTF ARCH-01). No finance logic lives here.
 
 from __future__ import annotations
 
+import difflib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 import numpy as np
@@ -311,6 +312,19 @@ class UncertaintyBudget:
         return float(np.sqrt(self.systematic_sigma_pct(correlation) ** 2 + iav**2))
 
 
+#: The seven IEC 61400-15-2 category sigmas ``budget_from_mapping`` consumes —
+#: derived from the dataclass fields so this allowlist can never drift from them.
+_SIGMA_KEYS: frozenset[str] = frozenset(f.name for f in fields(UncertaintyBudget))
+
+#: Policy knobs that legitimately share the ``resource.uncertainty`` mapping but are
+#: deliberately consumed by the CALLERS, never by this parser (the #653/#618 split):
+#: ``wind_resource.energy_calculator.calculate_net_aep`` and
+#: ``analytics.wind.aep_summary_builder._uncertainty_from_config`` read these directly.
+_CALLER_POLICY_KEYS: frozenset[str] = frozenset(
+    {"p50_haircut_pct", "correlation", "life_years"}
+)
+
+
 def budget_from_mapping(uncertainty: Mapping[str, Any]) -> UncertaintyBudget:
     """Build an :class:`UncertaintyBudget` from a ``resource.uncertainty``-shaped mapping.
 
@@ -322,7 +336,34 @@ def budget_from_mapping(uncertainty: Mapping[str, Any]) -> UncertaintyBudget:
     bankable builder's haircut default vs the timeseries diagnostic's 0.0 pin is an
     open policy question, #653), and keeping this helper policy-free is what lets both
     layers share ONE sigma parser that cannot drift (#618).
+
+    Any OTHER key fails loud (CESSPIT, #683): a typo'd sigma
+    (``wind_measurment_pct``) previously yielded the ALL-defaults budget silently —
+    the worst failure mode for a lender-facing P90. The error names the unknown
+    key(s), spells out the full allowlist, and suggests the nearest valid key.
+
+    Raises:
+        ValueError: the mapping carries a key that is neither one of the seven
+            sigma fields nor a caller-consumed policy knob.
     """
+    allowed = _SIGMA_KEYS | _CALLER_POLICY_KEYS
+    unknown = sorted(str(k) for k in uncertainty if k not in allowed)
+    if unknown:
+        valid = sorted(allowed)
+        described: list[str] = []
+        for key in unknown:
+            close = difflib.get_close_matches(key, valid, n=1)
+            hint = f" (did you mean {close[0]!r}?)" if close else ""
+            described.append(f"{key!r}{hint}")
+        raise ValueError(
+            "resource.uncertainty has unknown key(s): "
+            + ", ".join(described)
+            + ". Valid IEC 61400-15-2 sigma keys: "
+            + ", ".join(sorted(_SIGMA_KEYS))
+            + "; caller-consumed policy knobs: "
+            + ", ".join(sorted(_CALLER_POLICY_KEYS))
+            + "."
+        )
     d = UncertaintyBudget()
     return UncertaintyBudget(
         wind_measurement_pct=float(
