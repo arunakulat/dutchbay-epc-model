@@ -392,6 +392,15 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
                 "revenue export basis) — dispatch is not simulated or optimised (no "
                 "MILP/stochastic schedule)."
             )
+            # #683 (d): as_dict() still reports depth_of_discharge (an input record) for
+            # an energy_tariff BESS, but it is INERT in this model's LCOS math (dod_factor
+            # is forced to 1.0 for non-capacity_charge; see compute_lcos). Disclose that in
+            # the notes rather than suppress the field, so nothing silently vanishes.
+            notes.append(
+                f"the reported depth_of_discharge ({dod:g}) is an input record only and is "
+                "inert in the energy-tariff LCOS math above (the discharged-energy "
+                "denominator uses full nameplate energy per cycle, not a DoD fraction)."
+            )
 
         # --- Capex (USD) --------------------------------------------------------------
         block_capex = _non_negative(

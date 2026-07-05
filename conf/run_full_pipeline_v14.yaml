@@ -35,6 +35,18 @@ export_dir: _out/run_full_pipeline_v14
 write_artifacts: true
 
 # ---------------------------------------------------------------------------
+# #683 (a): CLI-overridable wind-resource knobs (OFF by default).
+# A mapping deep-merged onto the scenario's `resource` block, so knobs already
+# drivable in the scenario YAML — the IEC 61400-15-2 uncertainty budget / P50
+# haircut and the air-density corrections — can also be set from the CLI without
+# editing the committed scenario. Null (default) is a no-op: the original
+# scenario path flows through byte-identically. Example:
+#   python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml \
+#       'resource_overrides={uncertainty:{p50_haircut_pct:0.03},wind:{air_density_site_kgm3:1.12}}'
+# ---------------------------------------------------------------------------
+resource_overrides: null
+
+# ---------------------------------------------------------------------------
 # Sprint 19 W.6: Wind→Finance integration (OFF by default).
 # Setting neither wind_assessment_json nor wind_auto_orchestrate preserves
 # the pre-Sprint-19 behaviour exactly. See run_full_pipeline_v14.py docstring

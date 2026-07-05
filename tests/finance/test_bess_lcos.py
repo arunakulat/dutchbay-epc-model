@@ -162,10 +162,16 @@ def test_energy_tariff_carries_fixed_dispatch_basis_note():
     r = compute_lcos(s, wacc=0.08, project_years=15)
     assert any("full nameplate" in n for n in r.notes)
     assert any("full nameplate" in n for n in r.as_dict()["notes"])
-    # The note is model-gated: a capacity-charge BESS keeps its CEB cycles-at-DoD note
+    # #683 (d): the reported depth_of_discharge is disclosed as inert (not suppressed) for
+    # an energy_tariff BESS, and the note flows through to as_dict().
+    assert any("inert in the energy-tariff LCOS" in n for n in s.notes)
+    assert any("inert in the energy-tariff LCOS" in n for n in r.as_dict()["notes"])
+    assert "depth_of_discharge" in r.as_dict()  # kept, not suppressed
+    # The notes are model-gated: a capacity-charge BESS keeps its CEB cycles-at-DoD note
     # and does NOT pick up the energy-tariff wording.
     cap = resolve_lcos_specs(_capacity_cfg())[0]
     assert all("full nameplate" not in n for n in cap.notes)
+    assert all("inert in the energy-tariff LCOS" not in n for n in cap.notes)
 
 
 # ── hybrid attribution ──────────────────────────────────────────────────────────
