@@ -64,6 +64,34 @@ _SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt per
 _REFINANCE_TENOR_DEFAULT = 3
 _REFINANCE_PREMIUM_DEFAULT = 0.02
 
+# #683 warn-once dedup for the A1/#91 placeholder-substitution WARNs. The engine's
+# iterative layers (the _solve_gearing_for_dscr stepped search, the range(40)
+# balloon-resize bisection) call the extraction path ~111x per canonical pipeline
+# run on deep copies of the same params, so the (correct) placeholder WARNs fired
+# once per call — pure log spam that buries other warnings. Semantics: ONCE PER
+# PROCESS PER PLACEHOLDER KIND (later occurrences drop to DEBUG). This deliberately
+# also dedups across scenarios in a batch/MC process: the WARN marks the ENGINE-
+# LEVEL substitution behaviour, not per-scenario provenance — the per-run lender
+# disclosure lives in the #734 model-limitations block (config/report_defaults.yaml
+# "Construction draw and capex phasing", added with this dedup). Tests reset via
+# reset_placeholder_warn_dedup().
+_PLACEHOLDER_WARNS_EMITTED: set[str] = set()
+
+
+def _warn_placeholder_once(dedup_key: str, message: str) -> None:
+    """WARN the first time per process for ``dedup_key``; DEBUG thereafter."""
+    if dedup_key in _PLACEHOLDER_WARNS_EMITTED:
+        logger.debug("%s (deduplicated; warned once this process)", message)
+        return
+    _PLACEHOLDER_WARNS_EMITTED.add(dedup_key)
+    logger.warning(message)
+
+
+def reset_placeholder_warn_dedup() -> None:
+    """Clear the placeholder warn-once state (test isolation hook, #683)."""
+    _PLACEHOLDER_WARNS_EMITTED.clear()
+
+
 # Debt is sized via dual_dscr and split by Financing_Terms.mix proportions at the
 # per-currency Financing_Terms.rates. A hand-authored Financing_Terms.debt_tranches
 # list (absolute principals / per-tranche tenors) is NOT an engine input — absolute
@@ -314,23 +342,26 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 # A1/#91: no project EPC draw schedule supplied. IDC (capitalised interest)
                 # is sensitive to draw timing, so the even [0.5, 0.5] placeholder is an
                 # unfounded substitution for a missing project-specific input — WARN rather
-                # than silently substitute. Supply Financing_Terms.debt_drawdown_pct from the
-                # EPC milestone/payment schedule for an auditable, project-specific draw.
-                logger.warning(
+                # than silently substitute (once per process, #683). Supply
+                # Financing_Terms.debt_drawdown_pct from the EPC milestone/payment
+                # schedule for an auditable, project-specific draw.
+                _warn_placeholder_once(
+                    "Financing_Terms.debt_drawdown_pct",
                     "Financing_Terms.debt_drawdown_pct / drawdown_pct absent — using a "
                     "placeholder even draw [0.5, 0.5]; IDC is draw-timing-sensitive, so "
-                    "supply the EPC milestone draw schedule for a lender-grade figure."
+                    "supply the EPC milestone draw schedule for a lender-grade figure.",
                 )
                 fallback_drawdown = [0.5, 0.5]
             adapted["debt_drawdown_pct"] = fallback_drawdown
         if adapted.get("construction_schedule") is None:
             # Same A1/#91 stance as the draw schedule above (#585): the [40, 60]
             # capex phasing is a placeholder, not a project input — WARN rather
-            # than silently substitute.
-            logger.warning(
+            # than silently substitute (once per process, #683).
+            _warn_placeholder_once(
+                "Financing_Terms.construction_schedule",
                 "Financing_Terms.construction_schedule absent — using a placeholder "
                 "[40, 60] capex phasing; supply the EPC milestone schedule for a "
-                "lender-grade figure."
+                "lender-grade figure.",
             )
             adapted["construction_schedule"] = [40.0, 60.0]
         if adapted.get("mix") is None:
@@ -365,18 +396,20 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         # phasing is an unfounded stand-in for a missing project input.
         construction_schedule = debt_cfg.get("construction_schedule")
         if construction_schedule is None:
-            logger.warning(
+            _warn_placeholder_once(
+                "debt.construction_schedule",
                 "debt.construction_schedule absent — using a placeholder [40, 60] "
                 "capex phasing; supply the EPC milestone schedule for a "
-                "lender-grade figure."
+                "lender-grade figure.",
             )
             construction_schedule = [40.0, 60.0]
         debt_drawdown_pct = debt_cfg.get("debt_drawdown_pct")
         if debt_drawdown_pct is None:
-            logger.warning(
+            _warn_placeholder_once(
+                "debt.debt_drawdown_pct",
                 "debt.debt_drawdown_pct absent — using a placeholder even draw "
                 "[0.5, 0.5]; IDC is draw-timing-sensitive, so supply the EPC "
-                "milestone draw schedule for a lender-grade figure."
+                "milestone draw schedule for a lender-grade figure.",
             )
             debt_drawdown_pct = [0.5, 0.5]
 

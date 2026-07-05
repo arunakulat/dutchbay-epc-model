@@ -107,6 +107,7 @@ risk_register:
 # otherwise documented only in module docstrings/result-notes (verified in-code, not invented):
 #   - BESS dispatch  -> finance/bess_lcos.py "LIMITATIONS (stated for lender DD, DOC-03)"
 #   - Tax shield / 100% sweep / equity-balancing -> analytics/three_statement.py "Documented limitations"
+#   - Construction draw/phasing placeholders -> finance/debt_v14.py A1/#91 placeholder WARNs (#683)
 model_limitations:
   - topic: "BESS dispatch"
     detail: >
@@ -127,3 +128,11 @@ model_limitations:
       Headline KPIs are a deterministic P50 case; distributional and tail risk (VaR/CVaR,
       covenant-breach probabilities) are a separate, opt-in Monte-Carlo surface, not the
       base figures.
+  - topic: "Construction draw and capex phasing"
+    detail: >
+      Where a scenario does not supply Financing_Terms.debt_drawdown_pct or
+      construction_schedule, the debt engine substitutes documented placeholders (an even
+      [50, 50] draw and a [40, 60] capex phasing) and logs a warning. IDC (capitalised
+      construction interest) is draw-timing-sensitive, so figures derived under these
+      placeholders are indicative until the EPC milestone payment schedule is supplied.
+      The committed DutchBay lender case currently uses both placeholders.
