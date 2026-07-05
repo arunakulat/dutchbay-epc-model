@@ -767,6 +767,27 @@ def cli(cfg: DictConfig) -> None:
                   '<export_dir>/interaction_grid_report.html'. On emission the written
                   path is echoed back under result['interaction_grid_report_path'].
 
+            Optional fields (#745 slice-1 — cross-technology headline-KPI comparison
+            report emission; OFF by default — leaving emit_tech_comparison false
+            preserves behaviour and keeps committed-scenario output byte-identical):
+                - emit_tech_comparison: If true, after a successful run render a lender
+                  HTML report carrying a side-by-side headline-KPI comparison of the
+                  compared configs, via app.reports.tech_comparison_emit. Each compared
+                  config is run through the CANONICAL pipeline (strict), so every column
+                  reconciles to that config's own committed headline KPIs (the multiple
+                  full-pipeline runs are heavy — batch-path only, never the synchronous
+                  HTTP report route; the #645 latency ledger). The compared scenarios are
+                  config-required (tech_comparison.scenarios); no default pair is imposed,
+                  and an absent/empty/malformed list or a missing scenario path fails loud.
+                  Default false.
+                - tech_comparison.scenarios: A non-empty list of {label, config} entries
+                  naming the configs to compare (config-required; this slice compares the
+                  wind lender case + the hybrid case that exist — solar-only and
+                  hybrid-plus-BESS are a deferred follow-up).
+                - tech_comparison.path: Target .html path. Default
+                  '<export_dir>/tech_comparison_report.html'. On emission the written path
+                  is echoed back under result['tech_comparison_report_path'].
+
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
         On wind- or solar-ingestion failure, prints a structured error JSON
@@ -881,6 +902,14 @@ def cli(cfg: DictConfig) -> None:
     # the scenario YAML can also be set from the CLI. OFF by default (null) — when unset
     # the original scenario path flows straight through, byte-identical.
     resource_overrides = cfg.get("resource_overrides", None)
+
+    # #745 slice-1: optional cross-technology headline-KPI comparison report emission. OFF by
+    # default; the compared scenarios are config-required (tech_comparison.scenarios list of
+    # {label, config} entries), no default scenario pair is imposed. Each compared config is run
+    # through the CANONICAL pipeline (strict), so every column reconciles to that config's own
+    # committed headline KPIs (the lender-integrity basis, per #745).
+    emit_tech_comparison = bool(cfg.get("emit_tech_comparison", False))
+    tech_comparison_cfg = cfg.get("tech_comparison", None) or {}
 
     effective_config: str = str(config)
     # Temp patched-scenario files (resource-overrides then wind then solar) to clean up
@@ -1138,6 +1167,34 @@ def cli(cfg: DictConfig) -> None:
             )
             result["interaction_grid_report_path"] = str(ig_written)
             logger.info("Wrote interaction-grid report to %s", ig_written)
+
+        # #745 slice-1: optional cross-technology headline-KPI comparison report emission. OFF
+        # unless emit_tech_comparison=true (committed scenarios leave it off → byte-identical).
+        # Runs the CANONICAL pipeline per compared config (heavy multi-run — batch-path only, never
+        # the synchronous HTTP report route; the #645 latency ledger) so every column reconciles to
+        # that config's own committed headline KPIs, and renders a lender report with that section.
+        # Fails loud on an absent/empty/malformed scenarios list or a missing scenario path, since
+        # the caller explicitly opted in (CESSPIT). Imported lazily so the report stack is not
+        # pulled onto the finance CLI's import path unless this step runs.
+        if emit_tech_comparison and isinstance(result, dict):
+            from app.reports.tech_comparison_emit import (
+                emit_tech_comparison_report_from_pipeline,
+            )
+
+            tc_path_raw = tech_comparison_cfg.get("path", None)
+            tc_out = (
+                Path(str(tc_path_raw))
+                if tc_path_raw
+                else Path(str(export_dir_raw)) / "tech_comparison_report.html"
+            )
+            tc_written = emit_tech_comparison_report_from_pipeline(
+                result,
+                effective_config,
+                tc_out,
+                scenarios=tech_comparison_cfg.get("scenarios", None),
+            )
+            result["tech_comparison_report_path"] = str(tc_written)
+            logger.info("Wrote tech-comparison report to %s", tc_written)
 
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns

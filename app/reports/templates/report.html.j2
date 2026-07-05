@@ -571,6 +571,58 @@
   </section>
   {% endif %}
 
+  {# 4j. Cross-technology headline-KPI comparison — #745 slice-1. Render-when-present; each column
+     is a separate full-pipeline (canonical) run, so it is built out-of-band (heavy) and passed in
+     (never the synchronous report route — the #645 latency ledger). Each column's Project IRR
+     equals that config's own headline KPI, so the wind column reconciles exactly to this report. #}
+  {% if ctx.tech_comparison %}
+  {% set tc = ctx.tech_comparison %}
+  <section class="page">
+    <h2>Cross-Technology Comparison &mdash; Headline KPIs</h2>
+    <p class="muted">Side-by-side headline KPIs across the compared configurations, each run through
+      the same canonical v14 pipeline (strict validation) so every column reconciles to that
+      config's own committed headline &mdash; the wind column equals this report's Project IRR. A
+      metric a run did not publish shows as an em-dash (never fabricated). Solar-only and
+      hybrid-plus-BESS columns are a deferred follow-up (those configurations do not yet exist).</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          {% for row in tc.rows %}
+          <th class="num">{{ row.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Project IRR</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_ratio_pct(row.project_irr) }}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Equity IRR</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_ratio_pct(row.equity_irr) }}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Minimum DSCR</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_x(row.min_dscr) }}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Project NPV</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_usd(row.project_npv) }}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Total CFADS</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_usd(row.total_cfads_usd) }}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Gearing</td>
+          {% for row in tc.rows %}<td class="num">{{ fmt_ratio_pct(row.gearing) }}</td>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {# 5. Covenant assessment #}
   <section class="page">
     <h2>Covenant Assessment</h2>

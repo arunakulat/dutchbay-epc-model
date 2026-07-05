@@ -417,6 +417,67 @@ def test_interaction_grid_renders_failed_cell_and_disclosure() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Cross-technology comparison (#745 slice-1)
+# --------------------------------------------------------------------------- #
+def test_tech_comparison_projection_maps_rows() -> None:
+    """``_build_tech_comparison`` maps (label, kpis) pairs into rows; absent KPI -> None (em-dash)."""
+    from app.reports.report_model import _build_tech_comparison
+
+    block = _build_tech_comparison(
+        [
+            ("Wind", {"project_irr": 0.0146, "total_cfads_usd": 191111047.68}),
+            ("Hybrid", {"project_irr": 0.0186, "gearing": 0.4275}),
+        ]
+    )
+    assert block is not None
+    assert [r.label for r in block.rows] == ["Wind", "Hybrid"]
+    assert block.rows[0].project_irr == pytest.approx(0.0146)
+    assert block.rows[0].gearing is None  # absent KPI -> None, never fabricated
+    assert block.rows[1].gearing == pytest.approx(0.4275)
+
+
+def test_tech_comparison_none_by_default() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.tech_comparison is None
+
+
+def test_tech_comparison_default_off_is_byte_identical() -> None:
+    """Passing no comparison block must produce a report identical to before the feature."""
+    case = _case(_VALUE_DESTRUCTIVE_KPIS)
+    without = build_report_context(case, generated_at=GENERATED_AT)
+    explicit_none = build_report_context(
+        case, generated_at=GENERATED_AT, tech_comparison=None
+    )
+    assert without.tech_comparison is None
+    html_without = render_report_html(without)
+    assert html_without == render_report_html(explicit_none)
+    assert "Cross-Technology Comparison" not in html_without
+
+
+def test_tech_comparison_section_renders_when_present() -> None:
+    """The rendered section shows both column labels and each headline row."""
+    from app.reports.report_model import _build_tech_comparison
+
+    block = _build_tech_comparison(
+        [
+            ("Wind", {"project_irr": 0.0146, "min_dscr": 1.2857}),
+            ("Hybrid", {"project_irr": 0.0186, "min_dscr": 1.30}),
+        ]
+    )
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        tech_comparison=block,
+    )
+    html = render_report_html(ctx)
+    assert "Cross-Technology Comparison" in html
+    assert "Wind" in html and "Hybrid" in html
+    assert "Project IRR" in html and "1.46%" in html
+
+
+# --------------------------------------------------------------------------- #
 # Evidence register (#435 -> RPT-1)
 # --------------------------------------------------------------------------- #
 def test_evidence_register_projected_from_scenario_config() -> None:
