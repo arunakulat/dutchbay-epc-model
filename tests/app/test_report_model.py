@@ -1177,14 +1177,16 @@ def _debt_result_3s_with_funding(import_levies_usd) -> dict:
     }
 
 
-def test_three_statement_levy_reconciliation_footnote_renders_when_present() -> None:
-    """#738 R1: the levy-vs-paid-in-equity gap is explained IN the document.
+def test_811_removed_the_pre_levy_reconciliation_footnote() -> None:
+    """#811: the #738 pre-levy reconciliation footnote is gone.
 
-    The statements book paid-in equity on the pre-levy capex basis while the
-    Sources & Uses equity funds the levy-inclusive gross; with a nonzero
-    ``import_levies_usd`` the three-statement section must carry the
-    reconciliation footnote built from the actual context figures (no
-    hardcoding).
+    #738 (R1) papered over a pre-levy PP&E / paid-in-equity gap with a prose
+    footnote. #811 makes ``analytics.three_statement`` book the SAME levy-inclusive
+    financed-capex base the debt sizing / NPV / equity / Sources & Uses use, so the
+    statements reconcile in the numbers, not in prose. Even with a nonzero
+    ``import_levies_usd`` in the funding block, the rendered report must NO LONGER
+    carry the reconciliation footnote (its text asserted a pre-levy basis that is no
+    longer how the statements are booked).
     """
     from app.reports.renderer import render_report_html
 
@@ -1197,20 +1199,13 @@ def test_three_statement_levy_reconciliation_footnote_renders_when_present() -> 
     )
     assert ctx.finance is not None
     assert ctx.finance.funding.import_levies_usd == pytest.approx(5.0)
-    assert ctx.three_statement is not None
-    paid_in = float(ctx.three_statement.balance_sheet[0]["paid_in_equity"])
     html = render_report_html(ctx)
-    assert "Reconciliation note: paid-in equity above" in html
-    assert "pre-levy capex basis" in html
-    # The actual context figures, not hardcoded text: the levy figure, the S&U
-    # equity, and the statements' own paid-in figure.
-    assert f"({fmt_usd(paid_in)})" in html
-    assert f"({fmt_usd(5.0)})" in html  # S&U equity_usd == 5.0 in this fixture
-    assert f"{fmt_usd(5.0)} of import duties" in html
+    assert "Reconciliation note: paid-in equity above" not in html
+    assert "pre-levy capex basis" not in html
 
 
 def test_three_statement_levy_footnote_absent_and_identical_when_levy_free() -> None:
-    """#738 R1 identity: levy-free reports render WITHOUT the footnote, and a
+    """#811: with the #738 footnote removed it is absent in every report, and a
     funding block carrying ``import_levies_usd: 0.0`` renders BYTE-IDENTICALLY
     to one omitting the key entirely (the disclosure key at zero perturbs
     nothing in the document).
