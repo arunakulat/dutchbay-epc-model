@@ -10,7 +10,9 @@ Three regression families:
    ``resource.uncertainty.*`` mapping via the SHARED ``budget_from_mapping`` parser;
    the no-config default is byte-identical to the previous hardcoded
    ``UncertaintyBudget()`` call, and a declared ``p50_haircut_pct`` is NOT applied
-   (kernel 0.0 pinned pending the user-gated #653 policy decision).
+   (kernel 0.0 pinned pending the user-gated #653 policy decision). The parser
+   fails loud on unknown/typo'd sigma keys (#683) — the caller-consumed
+   ``p50_haircut_pct``/``correlation``/``life_years`` knobs are allowlisted.
 3. Air density — ``calculate_gross_aep`` applies the bankable path's IEC 61400-12-1
    velocity correction when a site density is supplied, and is exactly identity
    when it is not.
@@ -141,6 +143,63 @@ def test_budget_from_mapping_overrides_only_supplied_sigmas() -> None:
     assert b.wake_model_pct == 1.0
     assert b.long_term_pct == d.long_term_pct
     assert b.interannual_variability_pct == d.interannual_variability_pct
+
+
+def test_budget_from_mapping_rejects_typod_sigma_key_with_suggestion() -> None:
+    """#683 (CESSPIT): a typo'd sigma previously yielded the ALL-defaults budget
+    silently — the worst failure mode for a lender-facing P90. The error must name
+    the offending key, suggest the nearest valid key, and spell out the allowlist."""
+    with pytest.raises(ValueError) as exc:
+        budget_from_mapping({"wind_measurment_pct": 6.0})
+    msg = str(exc.value)
+    assert "'wind_measurment_pct'" in msg
+    assert "did you mean 'wind_measurement_pct'?" in msg
+    # The full allowlist is spelled out: all seven IEC sigmas + the policy knobs.
+    for key in (
+        "wind_measurement_pct",
+        "long_term_pct",
+        "vertical_extrapolation_pct",
+        "horizontal_flow_pct",
+        "power_curve_pct",
+        "wake_model_pct",
+        "interannual_variability_pct",
+        "p50_haircut_pct",
+        "correlation",
+        "life_years",
+    ):
+        assert key in msg
+
+
+def test_budget_from_mapping_names_every_unknown_key() -> None:
+    with pytest.raises(ValueError) as exc:
+        budget_from_mapping({"wake_pct": 1.0, "not_a_knob": 2.0, "long_term_pct": 4.0})
+    msg = str(exc.value)
+    assert "'wake_pct'" in msg
+    assert "'not_a_knob'" in msg
+
+
+def test_budget_from_mapping_tolerates_caller_policy_knobs() -> None:
+    """The knobs consumed by the CALLERS (the #653/#618 split) must not trip the
+    fence — they legitimately share the ``resource.uncertainty`` mapping."""
+    b = budget_from_mapping(
+        {"p50_haircut_pct": 2.0, "correlation": 0.5, "life_years": 25}
+    )
+    assert b == UncertaintyBudget()  # knobs are not sigmas: defaults untouched
+
+
+def test_budget_from_mapping_full_seven_key_mapping_parses() -> None:
+    vals = {
+        "wind_measurement_pct": 1.0,
+        "long_term_pct": 2.0,
+        "vertical_extrapolation_pct": 3.5,
+        "horizontal_flow_pct": 4.0,
+        "power_curve_pct": 5.5,
+        "wake_model_pct": 6.0,
+        "interannual_variability_pct": 7.0,
+    }
+    b = budget_from_mapping(vals)
+    for key, expected in vals.items():
+        assert getattr(b, key) == expected
 
 
 def test_no_uncertainty_config_is_byte_identical_to_defaults() -> None:
