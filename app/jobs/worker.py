@@ -29,19 +29,19 @@ for that step; ``RedisJobStore`` is unit-tested against a fake client.
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any, Dict
 
 import redis as sync_redis
 from arq.connections import RedisSettings
 
+from app.jobs.config import JOBS_QUEUE, JOBS_REDIS_URL
 from app.jobs.models import WindJobRequest
 from app.jobs.redis_store import RedisJobStore
 from app.jobs.runner import run_wind_job
 
-#: Named queue + Redis URL come from the environment (CCCDIR — not buried).
-JOBS_QUEUE = os.environ.get("DUTCHBAY_JOBS_QUEUE", "dutchbay:wind_jobs")
-REDIS_URL = os.environ.get("DUTCHBAY_REDIS_URL", "redis://localhost:6379")
+#: Named queue + Redis URL are single-sourced in app.jobs.config (CCCDIR — the API
+#: enqueue path and this worker MUST agree on the queue + DSN).
+REDIS_URL = JOBS_REDIS_URL
 
 
 async def run_wind_assessment_task(

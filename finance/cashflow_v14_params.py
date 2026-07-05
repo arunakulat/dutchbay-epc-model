@@ -282,6 +282,22 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     curtailment_pct = _pct_to_decimal(curtailment_raw) or 0.0
 
+    # Incremental grid-UNAVAILABILITY / outage haircut (default 0.0 → byte-identical; the
+    # embedded availability is already in the bankable net AEP / capacity_factor). The
+    # config-first grid-outage assumptions input (#744): documented ADDITIONAL grid
+    # downtime, applied after curtailment. Distinct from curtailment_pct (economic dispatch
+    # curtailment). Do not also declare resource.losses.grid_availability_pct for the same
+    # downtime (that reduces the AEP summary) or the haircut double-counts.
+    grid_outage_raw = _as_float_or_none(
+        _resolve_first(
+            raw,
+            ("project", "grid_outage_pct"),
+            ("parameters", "grid_outage_pct"),
+            "grid_outage_pct",
+        )
+    )
+    grid_outage_pct = _pct_to_decimal(grid_outage_raw) or 0.0
+
     tariff_lkr_per_kwh = _resolve_tariff_lkr_per_kwh(raw)
 
     opex_usd_per_year = _as_float_or_none(
@@ -386,6 +402,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         degradation=float(degradation),
         grid_loss_pct=float(grid_loss_pct),
         curtailment_pct=float(curtailment_pct),
+        grid_outage_pct=float(grid_outage_pct),
         tariff_lkr_per_kwh=(
             float(tariff_lkr_per_kwh) if tariff_lkr_per_kwh is not None else 0.0
         ),

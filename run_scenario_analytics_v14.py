@@ -8,6 +8,7 @@ from typing import Any, Callable, Mapping, Optional
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+from analytics.output_paths import resolve_output_dir
 from analytics.scenario_analytics import BatchResultSummary, ScenarioAnalytics
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,10 @@ Key behaviours
 - Runs v14 engine via ScenarioAnalytics (strict schema guard inside)
 - Writes summary + timeseries to `output` (Excel)
 - Optionally writes charts alongside the workbook
+- Opt-in run-scoping (#735 slice-2): `run_scoped=true` groups the workbook and its sibling
+  `*_charts/` directory under a per-run subdirectory of `output`'s parent (`run_id` names it,
+  defaulting to analytics.output_paths.default_run_id()); default false → paths unchanged
+  (byte-identical).
 - Prints a small JSON summary to stdout for CI / smoke tests:
 
     {
@@ -165,7 +170,20 @@ def main(cfg: DictConfig) -> None:
 
     # Core parameters with sane defaults.
     scenarios_dir = Path(str(cfg_dict.get("scenarios_dir", "scenarios")))
-    output_path = Path(str(cfg_dict.get("output", "exports/v14_analytics.xlsx")))
+    # `output` is a FILE path (e.g. exports/v14_analytics.xlsx). #735 slice-2: route its PARENT
+    # directory through the single-source resolver and re-attach the filename, so the workbook AND
+    # the engine's sibling `*_charts/` directory (scenario_analytics._export_charts derives it via
+    # output_path.with_name(stem + "_charts"), i.e. the same parent) co-scope under one run
+    # directory instead of re-scattering the charts. At the default (run_scoped=False) the parent
+    # is returned unchanged, so committed runs write to the same paths — byte-identical; opt-in
+    # run_scoped/run_id cfg knobs (default off/none) group the run.
+    output_path_raw = Path(str(cfg_dict.get("output", "exports/v14_analytics.xlsx")))
+    output_parent = resolve_output_dir(
+        output_path_raw.parent,
+        run_scoped=bool(cfg_dict.get("run_scoped", False)),
+        run_id=cfg_dict.get("run_id", None),
+    )
+    output_path = output_parent / output_path_raw.name
     strict = bool(cfg_dict.get("strict", True))
     parallel = bool(cfg_dict.get("parallel", False))
     charts = bool(cfg_dict.get("charts", False))
