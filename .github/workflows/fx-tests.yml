@@ -55,12 +55,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .[dev]
-          pip install pytest pytest-cov pytest-xdist pytest-timeout
+          # -c constraints.txt: hold the ad-hoc test-tool line to the committed
+          # freeze policy (#800) so it can never drift past requirements.txt.
+          pip install -c constraints.txt pytest pytest-cov pytest-xdist pytest-timeout
 
       - name: Run FX integration tests
         run: |
+          # --cov target is the PATH form (analytics/fx), NOT the dotted-module
+          # form (analytics.fx): under the post-#800 freeze (coverage 7.15 /
+          # pytest-cov 7.1) a dotted target makes coverage resolve the package by
+          # IMPORTING it through the pip editable-install finder BEFORE
+          # tests/conftest.py runs; the conftest then deletes `analytics` from
+          # sys.modules and re-imports it, and numpy's extension hits its
+          # once-per-process init guard ("cannot load module more than once per
+          # process", exit 4 at collection). The path form resolves sources
+          # without importing. Empirically bisected 2026-07-05; the failure needs
+          # BOTH the editable install and the dotted --cov target.
           pytest tests/analytics_layer/test_fx_sensitivity_real.py -v \
-            --cov=analytics.fx \
+            --cov=analytics/fx \
             --cov-report=xml \
             --cov-report=term-missing \
             --tb=short \
