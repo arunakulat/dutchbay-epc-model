@@ -72,6 +72,7 @@ def _calculate_net_production(
     grid_loss_pct: float,
     year: int,
     curtailment_pct: float = 0.0,
+    grid_outage_pct: float = 0.0,
 ) -> tuple[float, float]:
     """Calculate gross and net kWh for a given year from capacity + capacity factor.
 
@@ -98,12 +99,18 @@ def _calculate_net_production(
         INCREMENTAL financed grid-curtailment haircut (decimal), applied after grid
         losses. Default 0.0 → byte-identical (the physical/embedded curtailment is
         already in capacity_factor); a first-class stress/risk lever above that base.
+    grid_outage_pct :
+        INCREMENTAL grid-UNAVAILABILITY / outage haircut (decimal), applied after
+        curtailment (#744). Default 0.0 → byte-identical (embedded availability is
+        already in capacity_factor); models ADDITIONAL documented grid downtime.
     """
     hours_per_year = 8760.0
     effective_cf = capacity_factor * ((1.0 - degradation) ** year)
     gross_kwh = capacity_mw * 1e3 * hours_per_year * effective_cf
     grid_loss = gross_kwh * grid_loss_pct
-    net_kwh = (gross_kwh - grid_loss) * (1.0 - curtailment_pct)
+    net_kwh = (
+        (gross_kwh - grid_loss) * (1.0 - curtailment_pct) * (1.0 - grid_outage_pct)
+    )
     return gross_kwh, net_kwh
 
 
@@ -246,6 +253,7 @@ def calculate_net_production_for_year(
     """
     grid_loss = float(params["grid_loss_pct"])
     curtailment = float(params.get("curtailment_pct", 0.0))
+    grid_outage = float(params.get("grid_outage_pct", 0.0))
     specs = params.get("tech_generation_specs")
     if specs:
         gross_total = 0.0
@@ -258,6 +266,7 @@ def calculate_net_production_for_year(
                 grid_loss,
                 year_index,
                 curtailment_pct=curtailment,
+                grid_outage_pct=grid_outage,
             )
             gross_total += gross
             net_total += net
@@ -269,6 +278,7 @@ def calculate_net_production_for_year(
         grid_loss,
         year_index,
         curtailment_pct=curtailment,
+        grid_outage_pct=grid_outage,
     )
 
 

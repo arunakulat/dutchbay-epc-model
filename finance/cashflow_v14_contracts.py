@@ -52,6 +52,14 @@ class CashflowParams:
       physical/embedded curtailment is already in the bankable net AEP / capacity_factor;
       this lever models ADDITIONAL constrained-grid curtailment for stress/risk analysis
       (see analytics.core.sensitivity_runner + the canonical scenario's monte_carlo block).
+    - grid_outage_pct: float (decimal, 0–1). An INCREMENTAL grid-UNAVAILABILITY / outage
+      haircut on delivered energy, applied after grid_loss_pct and curtailment_pct — the
+      config-first grid-outage assumptions input (#744). Default 0.0 — the embedded
+      availability is already in the bankable net AEP / capacity_factor; this lever models
+      ADDITIONAL documented grid downtime for stress/risk analysis. Distinct from
+      curtailment_pct (economic/constraint-dispatch curtailment); this is grid
+      unavailability. Do NOT also declare resource.losses.grid_availability_pct for the
+      SAME downtime (that reduces the AEP summary) or the haircut double-counts.
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - risk_haircut_pct: float (decimal, 0–1)
     - opex_vat_pct: float (decimal, 0–1). Unrecoverable input VAT on O&M (#738,
@@ -82,6 +90,7 @@ class CashflowParams:
     risk_haircut_pct: float
     opex_escalation_pct: float = 0.0
     curtailment_pct: float = 0.0
+    grid_outage_pct: float = 0.0
     opex_vat_pct: float = 0.0
 
 
