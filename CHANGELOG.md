@@ -5,6 +5,52 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- Run-mode contract + policy module (#733 slice 1): `analytics.run_modes` declares
+  the four run grades (`screening` / `developer` / `lender` / `ic`) with a frozen
+  per-mode `RunModePolicy` table — lender/IC refuse toy MC fallback and toy capex
+  and carry the lender-grade `min_mc_trials` floor (1000, pinned equal to
+  `app.reports.capital_risk_emit.LENDER_GRADE_MIN_TRIALS` by a lazy-import test) —
+  plus `resolve_run_mode` reading opt-in `run.mode` (alias `run_mode`): absent ->
+  `None` (byte-identical today), present-but-malformed -> fail-loud naming the
+  key, the bad value, and the valid tokens (the #683 non-string precedent;
+  conflicting `run.mode` vs `run_mode` rejected, and unrecognised keys inside the
+  `run` block rejected too — a typo'd `Mode:`/`mdoe:` must not silently resolve
+  to no-mode). Policy booleans are permission CEILINGS, not defaults: notably
+  `allow_toy_capex=True` (screening/developer) leaves the debt engine's opt-in
+  default (`False`) untouched — the #733b wiring must-not-default-on warning is
+  documented in-module. The `validate_config_for_v14` pre-flight now validates
+  any declared mode at config time (CESSPIT, the #601 lesson). Contract only —
+  nothing consumes the policies yet; wiring is #733b/#733c.
+- Two-factor sensitivity interaction grid (#739 slice 1):
+  `analytics.sensitivity.interaction.build_two_factor_interaction_grid` evaluates a
+  KPI over the cross-product of two driver sweeps (same `ParameterRangeConfig`
+  contract as the one-way tornado, via the `evaluate_with_overrides` gateway) and
+  emits `contracts_v14.TwoFactorInteractionGrid`: the raw metric surface plus the
+  interaction surface (deviation of each joint cell from one-way additivity — an
+  all-zero surface means the drivers act independently). Fail-loud on duplicate
+  drivers, on unresolvable drivers in strict mode (the default; non-strict
+  discloses the flat axis via `metadata['unresolved_drivers']`), and on
+  base/marginal evaluation failure — including a metric that EVALUATES to a
+  non-finite value (NaN/inf), treated identically to a missing one; failed
+  interior cells are NaN +
+  disclosed via `metadata['n_failed_cells']`; a declared `base_value` that
+  drifted from the config is disclosed as `base_mismatch`.
+  Analysis-layer primitive only — report/CLI wiring is a later, latency-gated slice.
+- FX silent-fallback disclosure (#785, the #736 follow-up): the fx build path now
+  records every silent fallback the adversarial-review sweep found — six sites:
+  present-but-malformed `fx` block coerced to defaults (both builders),
+  present-but-non-mapping `fx.curve` (explicit curve silently ignored),
+  flat-curve-at-spot substitution when no explicit or parametric curve resolves,
+  degenerate minimal risk profile (both arms: no volumetry, zero peak debt),
+  declared-but-non-positive `fx.uncertainty_pct` replaced by the 0.05 VaR-shock
+  default (VaR-moving), and an unrecognised `fx.strategy` token reported as
+  'blended' (label-only) — into a caller-owned collector. The pipeline publishes
+  `result["fx_integration"].degraded` + `degraded_reasons` (additive keys, empty
+  on a clean run) and the report renders a render-when-present "FX fallback
+  notice" distinct from the #736 failure banner; a run whose integration
+  ultimately FAILED renders only the failure banner (the note requires
+  `succeeded`). The committed scenarios take no fallback — pipeline results and
+  rendered reports byte-identical (verified by HTML hash in review).
 - **Tail-risk report wired onto the driver Monte-Carlo (#715, slice 2 of #657)** — new
   `analytics.capital_risk_layer_v14.build_driver_mc_tail_report` renders the full
   `TailRiskReport` (per-metric VaR/CVaR + downside for equity/project IRR & NPV, covenant-breach
@@ -134,6 +180,135 @@ Annual credit-support fees on outstanding senior debt (#737): `Financing_Terms.f
   per-site behavioural review rather than a blanket lint fix.
 
 ### Changed
+- Error quality (#683, from the #585 review ledger): `as_float`/`as_int` accept an
+  optional `key=` context and the cashflow tax-base precedence ladder
+  (`tax.depreciable_capex_lkr` → `tax.dep_base_lkr` → `capex.lkr_total` →
+  `capex.usd_total`) now names the offending config key in its fail-loud error;
+  a present-but-non-string `Financing_Terms.amortization_style` (YAML `5`/`true`)
+  is rejected loudly instead of warn-falling-back to the sculpted default
+  (unknown *string* styles keep the existing warn-fallback). KPI-neutral:
+  canonical pins byte-identical.
+- Log hygiene (#683): the A1/#91 placeholder-substitution WARNs
+  (`debt_drawdown_pct` / `construction_schedule` absent, both schema paths) now
+  dedup ONCE PER PROCESS per placeholder kind (later occurrences drop to DEBUG) —
+  the engine's iterative layers (gearing search + balloon-resize bisection) hit
+  the extraction path ~111x per canonical pipeline run, spamming ~111 copies of
+  each WARN. `finance.debt_v14.reset_placeholder_warn_dedup()` is the
+  test-isolation hook (autouse in the debt coverage module). The per-run lender
+  disclosure now lives where it belongs: a new "Construction draw and capex
+  phasing" item in the #734 model-limitations report block
+  (`config/report_defaults.yaml`) — the committed lender case uses both
+  placeholders, which the report previously never disclosed. Also #683: the
+  wind_resource stale-version-literal lint fence now scans recursively
+  (`rglob`), so future subpackages stay fenced.
+- CESSPIT fail-loud (#683, from the #618 review ledger): the shared wind sigma
+  parser `wind_resource.bankable_aep.budget_from_mapping` now REJECTS unknown
+  `resource.uncertainty.*` keys with a `ValueError` that names the offending
+  key(s), spells out the full allowlist (the seven IEC 61400-15-2 category
+  sigmas plus the caller-consumed `p50_haircut_pct`/`correlation`/`life_years`
+  policy knobs) and suggests the nearest valid key for typos ("did you mean
+  'wind_measurement_pct'?") — a typo'd sigma (`wind_measurment_pct`) previously
+  yielded the ALL-defaults budget silently, the worst failure mode for a
+  lender-facing P90. The empty-mapping → all-defaults contract is unchanged,
+  and a sweep of every committed scenario/fixture found only allowlisted keys
+  under `uncertainty:` blocks (the 7 scenarios carry `p50_haircut_pct` only).
+  Brings the wind parser to parity with the solar side's
+  `SolarUncertaintyBudget.from_scenario` typo fence.
+- **Import levies + indirect-tax config (#738) — the 4th intentional KPI
+  re-baseline.** New opt-in top-level `taxes_indirect:` block (single arithmetic
+  source `finance/import_levies.py`): Customs Import Duty / PAL / import-SSCL on
+  the imported (CIF) capex share and unrecoverable input VAT, CAPITALIZED into
+  the financed capex and the depreciable base (flowing coherently to debt
+  sizing, IDC, gearing, equity, NPV via the single `_extract_capex_usd` seam +
+  its two flat-path mirror delegations), plus unrecoverable VAT on O&M applied
+  inside the one shared opex helper (expensed, tax-deductible). Per-line relief
+  toggles (`bonded_scheme` / `vat_capex_relieved` / `vat_opex_relieved`) model
+  the distinct BOI §17-bonded and SDP instruments. ABSENT block ⇒ byte-identical
+  (empirically proven on all 19 committed scenarios). Pre-flight schema guard
+  delegates verbatim to the engine resolver (#733a pattern); the capex Monte
+  Carlo now perturbs the PRE-LEVY base so trials cannot double-levy; sources &
+  uses, the `/run-pipeline` FundingBlock and the lender report disclose the levy
+  share inside gross CAPEX as an of-which line.
+- **Committed lendercase re-baselined (#738, user-locked PRUDENT posture) — two
+  opposing moves in ONE atomic flip of `dutchbay_lendercase_2025Q4.yaml`:**
+  1. **Revenue-SSCL REVERSED 2.5% → 0** (`statutory.social_services_levy_pct`).
+     The engine WAS charging a 2.5% revenue levy that the SSCL Act First
+     Schedule exempts ("generation and supply of electricity other than by
+     CEB"); IPP-to-CEB supply is also VAT-exempt (First Schedule Part III
+     (b)(iii)). On its own this RAISES the canon (projIRR 2.03% → 2.33%, NPV
+     −$70.9M → −$68.3M) — a reversal of a previously committed overstatement,
+     now statute-cited in the scenario.
+  2. **Import levies ON, prudent:** PAL 5% + import-SSCL 2.5% PAID on the 0.69
+     imported share (= $8.2593M duties capitalized; HS 8502.31 CID is Free),
+     capex VAT relieved via the BOI §17/bonded route (SINOHYDRO precedent), 18%
+     unrecoverable VAT on O&M PAID. This dominates the SSCL reversal.
+  **Net canon movement:** projIRR 2.0323% → **1.4552%**, equity IRR −4.9921% →
+  **−5.8413%**, NPV −$70.948M → **−$79.273M**, CFADS $191.218M → **$191.111M**,
+  gross financed capex $159.6M → **$167.859M** ($1,000 → $1,051.75/kW vs the
+  IRENA benchmark banner, still within band), DSCR-solved gearing 0.4275 →
+  **0.41** (debt $68.229M → $68.822M on the grossed base; equity at close
+  $91.37M → $99.04M), per-period min DSCR HOLDS **1.30** (sculpt re-solves),
+  #790 fold headline 1.2884 → **1.2857** (still exactly 1 equity-lockup year),
+  prudential NPV −$76.44M → −$84.72M, build-up WACC 9.936% → 10.020%.
+  **Blast radius = exactly ONE committed scenario** (empirical before/after
+  probe): every other committed scenario config — basecase, equitycase, hybrid,
+  5usc, capex-EIA/SINOHYDRO, optimistic/pessimistic, master, Kalpitiya,
+  Mullikulam, Kolonnawa, both CEB BESS cases, edge-stress — is byte-identical.
+  **29 test re-baselines, each deliberate with an in-test #738 note** (values
+  from the live mechanism run, not the design table): the canon pin block
+  (`test_multitech_generation`), scenario `expected_results` (+ history entry
+  (10)), WHT-on-interest canon + shield-free recompute, fx-hedge BASE pins, API
+  endpoint pins (debt/gearing), IDC/tranche regression pins, sens-DSCR /
+  fx-integration / estimate-class / cost-WBS ($/kW banner) pins, DSRA funding
+  pins (S&U gross capex + of-which levies), debt-autosolve (gross-base debt,
+  opt-out fixed-70% fold 0.290→0.256), bind-p90 canon, debt-sizer plateau
+  (−0.0499→−0.0584; requested 0.45 now also clamps), balloon-treatment IRRs
+  (legacy −0.0177→−0.0257 / sweep −0.0499→−0.0584 / refi −0.3318→−0.3593),
+  dep-start-year CFADS pin, WACC-drives-discount pin, breakeven-starved
+  residual (bisection path flipped 35→22.5 to 35→47.5 as NPV@35 crossed zero —
+  magnitude assert now sign-agnostic), MC plausible-range floor 5%→2%, the
+  optimization gearing bracket **re-derived** [0.30,0.42]→[0.30,0.40] (the old
+  upper edge would sit inside the new 0.41 clamp region), and
+  `test_capex_resolver_unified` premise-fixed to strip the block (its subject
+  is the levy-free flat path). `test_senior_fees` instead gained a strip-chain
+  fixture proving strip #738 + #737 reproduces the pre-737 canon at 1e-12
+  (fee-isolation A/B tests now use a fee-only-off fixture). Variant postures
+  ship as thin-delta overlays
+  `scenarios/overrides/import_levies_full_relief.yaml` (proven equal to the
+  levy-free economics at 1e-12) and `import_levies_full_stack_paid.yaml`
+  (~$38.5M uplift, worst case). No report verdict flips: the lendercase was
+  already value-destructive/RED, the 1.20x floor is not crossed, and the
+  covenant posture (1 lockup year) is unchanged; three-statement tie-outs
+  verified all-pass with levies ON (PP&E stays on the pre-levy base by CCCDIR
+  design — the equity plug absorbs it, and the lender report's three-statement
+  section now carries a reconciliation footnote closing the paid-in-equity vs
+  Sources-&-Uses-equity gap in-document, rendered only when levies are
+  present). Known net-basis display divergences (documented, tracked as #811):
+  `analytics/three_statement.py` PP&E, `analytics/core/returns.py`,
+  `multi_tech_tornado` capex coupling, `bess_lcos` — they read the raw
+  `capex.usd_total` base by design; the web-app input model
+  (`app/models/inputs.py`) has no `taxes_indirect` field yet (#788).
+- **KPI headline change (#790, user-decided 2026-07-05):** `kpis.min_dscr` (and its
+  `dscr_min` alias) is now the CONSERVATIVE minimum over the per-period sculpt
+  series AND the debt engine's fold-corrected covenant minimum (which nets the
+  #737 credit-support fee and folds the orphaned bridge service into operating
+  year 1 via `dscr_by_year`). The per-period sculpt floor stays surfaced as the
+  new `min_dscr_period` KPI. This closes the post-#737 divergence where the KPI
+  surface said 1.30 while the lender debt table said 1.2884 — the headline can
+  no longer overstate coverage against the per-year table that covenants are
+  actually tested on.
+  Committed-scenario impact (all in the honest direction; no other KPI moves):
+  - **DutchBay lendercase: 1.30 → 1.2884** (fee-netted year-1 fold; consistent
+    with the deterministic 1 equity-lockup year).
+  - **CEB BESS capacity-charge: 1.30 → 0.9075** and **CEB solar+BESS night-peak:
+    1.30 → 0.9063** — no #737 fee involved; their year-1 bridge fold was ALREADY
+    reported at ~0.91 by the debt table on main while the KPI said 1.30. Their
+    rendered report verdict flips accordingly ("meets" → "breaches the 1.20x
+    lender floor"), which is the pre-existing engine fold surfacing, not a new
+    computation. Whether that CEB year-1 fold is economically right is filed as
+    a follow-up.
+  - Basecase / hybrid / all other committed scenarios: byte-identical (their two
+    surfaces coincide).
 Dependabot policy (#756 post-mortem): semver-major updates on the load-bearing set (pandas/numpy/scipy/pydantic + stubs; mypy/ruff also minors — their breaking level; isort; CalVer black) are now ignored by the weekly `python-deps` group — majors land only as deliberate, gate-cleared migrations (pandas 3.0 = #593). Minor/patch updates keep flowing; Dependabot security updates are settings-driven and unaffected. The #756 grouped bump (103 updates) was closed: it was ResolutionImpossible at install (aiobotocore/botocore conflict), rewrote the deliberate pandas `<3.0` cap in pyproject, and desynced mypy/isort/ruff from the versions the mandatory gates were cleared against.
 Controlled `requirements.txt` freeze refresh (#756 post-mortem): the lock is regenerated from a CLEAN venv under new committed policy constraints (`constraints.txt` — pandas<3 per #593, mypy==1.19.0, isort<8, ruff<0.15, CalVer black<27, gate-cleared pandas-stubs/requests), taking ~50 safe minor/patch updates (numpy 2.4.6, scipy 1.17.1, fastapi 0.139, certifi 2026.6.17, …) with a consistent resolution. **84 undeclared stray packages purged** (openai, yfinance, quantlib, xlwings, plotly, tox, pipenv, s3fs/aiobotocore, … — the old lock froze a polluted env; a stray aiobotocore/botocore pair is what made Dependabot's #756 grouped bump ResolutionImpossible). The purge surfaced one genuinely load-bearing stray: `typer` (the frozen legacy `go_with_the_flow_ci.py` driver that `test_ci_driver_targets_exist` imports) — now properly declared in the `[dev]` extra. wind/gis extras are now pinned in the lock too (previously floated via CI's editable install). One obsolete `type: ignore[call-overload]` dropped in `scripts/research/optimization.py` (scipy-stubs 1.17 accepts the callable). Validated in a clean venv: full suite 3606 passed + 95% floor, all four lint gates, byte-identical lendercase KPI oracle under numpy 2.4.6/scipy 1.17.1, `pip-audit` clean (empty allowlist holds).
 - **Output-path resolver — single-sourced default roots (#735, slice 1)** — the v14 entrypoints
@@ -184,6 +359,16 @@ CI cost diet (Test Suite workflow): (1) merges to `main` now re-validate on **Py
 Retired the toy `run_driver_mc` capital-risk stack (#780, user-approved dead-code removal): `run_driver_mc` (independent-Gaussian bootstrap — no LHS/correlation), `run_capital_risk_layer`, `build_driver_mc_tail_snapshot`, `build_driver_mc_tail_report`, the `scripts/run_capital_risk_layer.py` CLI and their tests. Superseded end-to-end by the canonical MC path: `analytics.mc.engine.MonteCarloEngine` (LHS + Iman-Conover) → `build_capital_risk_report_from_mc_result` → the lender report (opt-in caller `app.reports.capital_risk_emit`, #779/#776). The MC-source-agnostic cores (`compute_capital_risk_layer`, `build_case_metadata_from_trials`, `_tail_report_from_trials`, `emit_npv_distribution_from_trials`, `build_capital_risk_report_from_trials`/`_from_mc_result`) are kept; their guards now run on synthetic per-trial arrays. KPI-neutral.
 
 ### Fixed
+- CI: un-broke the FX Integration Tests workflow (red since the #800 freeze
+  refresh first met it on PR #803, which merely woke its path filter — the
+  Test Suite gate was green throughout). Root cause, empirically bisected: the
+  dotted `--cov=analytics.fx` target under coverage 7.15/pytest-cov 7.1 resolves
+  the package by importing it through the pip editable-install finder before
+  `tests/conftest.py` runs; the conftest's `del sys.modules["analytics"]` +
+  re-import then trips numpy's once-per-process extension guard at collection.
+  Fixed by switching to the path-form target (`--cov=analytics/fx`, identical
+  fx-only report, no import) and holding the workflow's ad-hoc test-tool pip
+  line to the committed freeze via `-c constraints.txt` (#800 policy).
 Batch scenario-analytics surface now bears the #737 senior credit-support fee (#789): `ScenarioAnalytics._run_single` mirrors the canonical pipeline's post-debt step — the engine's per-period USD fee is FX-translated at each row's spot rate via the canonical row→debt-period map and the rows are rebuilt with `senior_fee_lkr_series`, so the batch surface's IRR/NPV/CFADS are no longer pre-fee beside fee-netted DSCR/LLCR/PLCR on the same result. Scenarios without the fee keys pass through byte-identical. (The surface remains non-canonical by design: fixed `debt_ratio`, no gearing autosolve, config/default discount.)
 - **Bootstrap stale checks fixed (#765)** — `dutchbay_bootstrap.py` now detects the
   repo's `.venv` (legacy `.venv311` still accepted) and validates pytest config via
