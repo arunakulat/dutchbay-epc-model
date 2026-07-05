@@ -133,9 +133,14 @@ _DEBT_PERIOD_SERIES: tuple[str, ...] = (
 )
 
 # Ratio / covenant scalars surfaced on the "Ratios" sheet, sourced from the
-# pipeline ``kpis`` block (order is the sheet's row order).
+# pipeline ``kpis`` block (order is the sheet's row order). ``min_dscr`` is the
+# fold-corrected covenant minimum (#790); ``min_dscr_period`` is the per-period
+# sculpt floor. Both are surfaced so the workbook exports the same fold-vs-period
+# pair the report headline distinguishes (they diverge on the lendercase and both
+# CEB scenarios since #790).
 _RATIO_KPI_KEYS: tuple[str, ...] = (
     "min_dscr",
+    "min_dscr_period",
     "avg_dscr",
     "dscr_mean",
     "dscr_median",

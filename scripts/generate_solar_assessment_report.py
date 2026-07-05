@@ -293,7 +293,13 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         upper=0.75,
         direction="max",
         n_steps=10,
-        constraint_key="min_dscr",
+        # Constrain on the per-period sculpt floor (min_dscr_period), not the
+        # fold-corrected headline (min_dscr). Since #790 the headline min_dscr is
+        # the bridge-corrected per-year minimum, which the year-1 interest-only
+        # lead-in can push below 1.30 (e.g. the CEB BESS timelines fold to ~0.91)
+        # even when the sculpt holds 1.30 every operating period. The optimiser's
+        # 1.30 target is the sculpt floor, so pair it with min_dscr_period.
+        constraint_key="min_dscr_period",
         constraint_min=1.30,
     )
     R["optimization"] = {
