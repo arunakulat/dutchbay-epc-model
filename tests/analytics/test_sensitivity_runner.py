@@ -110,20 +110,31 @@ def test_live_metric_is_not_flagged_flat() -> None:
     assert "flat_metric_reason" not in suite.metadata
 
 
-def test_covenant_pinned_dscr_tornado_is_flagged_flat() -> None:
-    """min_dscr is pinned by dual_dscr debt sizing: every bar is ~0, so the suite
-    is flagged flat with a covenant-pinned reason rather than misrepresenting it.
+def test_covenant_pinned_dscr_period_tornado_is_flagged_flat() -> None:
+    """min_dscr_period is pinned by dual_dscr debt sizing: every bar is ~0, so the
+    suite is flagged flat with a covenant-pinned reason rather than misrepresenting it.
 
     Uses the LENDER case (which actually uses debt_sizing: dual_dscr): after the 5.9%
     FX-drift re-baseline the weaker BASECASE min_dscr is no longer perfectly covenant-flat
     (the basecase uses FIXED debt + a DSCR sculpt; large CF/tariff shocks drop per-year CFADS
     below what the sculpt needs to hold 1.30, so it deviates ~0.17 — see
     test_basecase_min_dscr_no_longer_covenant_flat). The lender case stays DSCR-bound with
-    headroom, so its min_dscr remains structurally invariant."""
-    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
+    headroom, so its PER-PERIOD sculpt floor remains structurally invariant. Since #790
+    that covenant-pinned quantity is min_dscr_period; the min_dscr HEADLINE is the
+    fold-corrected covenant minimum, which genuinely MOVES under CFADS shocks (the
+    year-1 fold is not covenant-pinned) — asserted non-flat below."""
+    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr_period")
     assert max(abs(t.impact_abs) for t in suite.tornado_results) < 1e-9
     assert suite.metadata.get("flat_metric") is True
     assert "covenant" in suite.metadata.get("flat_metric_reason", "").lower()
+
+
+def test_fold_headline_min_dscr_tornado_is_not_flat() -> None:
+    """#790: the min_dscr HEADLINE (fold-corrected) responds to real shocks — a
+    lender's DSCR tornado is no longer an all-zero chart on the lender case."""
+    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
+    assert max(abs(t.impact_abs) for t in suite.tornado_results) > 0.01
+    assert suite.metadata.get("flat_metric") is False
 
 
 def test_basecase_min_dscr_no_longer_covenant_flat() -> None:

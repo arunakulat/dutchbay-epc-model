@@ -41,7 +41,9 @@ def test_default_off_is_byte_identical() -> None:
     k = evaluate_with_overrides(LENDER, overrides={})
     assert k["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
     assert k["total_cfads_usd"] == pytest.approx(_CANON_CFADS, rel=1e-9)
-    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
+    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 
 def test_gross_up_off_with_a_rate_is_still_a_no_op() -> None:

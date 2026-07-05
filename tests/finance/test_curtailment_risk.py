@@ -76,12 +76,14 @@ def test_default_curtailment_is_byte_identical() -> None:
     # Construction-lag-correct project economics (audit finding 2.0): operating year 1
     # is discounted after the 2-yr build, not at t=0. After PR B (group-C #3: LKR debt rate
     # -> UIP-implied 13.39%): projIRR 2.68% is UNCHANGED (unlevered), but the higher cost of
-    # debt lifts the WACC (8.1% -> 9.8%) so NPV deepens to -$65.5M. minDSCR unchanged (1.30).
+    # debt lifts the WACC (8.1% -> 9.8%) so NPV deepens to -$65.5M. minDSCR headline is the
+    # #790 fold (per-period floor 1.30 lives in min_dscr_period).
     assert k["project_irr"] == pytest.approx(0.020323, abs=1e-5)
     assert k["project_npv"] == pytest.approx(
         -70947738.39, abs=1.0
     )  # PR-B UIP LKR debt rate + #737 credit-support fees
-    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 
 def test_curtailment_stress_reduces_economics() -> None:
