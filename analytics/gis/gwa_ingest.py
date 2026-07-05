@@ -88,13 +88,18 @@ def _clip_reproject(
     """Read a GWA GeoTIFF, clip to ``bbox`` (in ``dst_crs``) and reproject if needed.
 
     Returns the north-up clipped float32 array and the achieved ``(west, south, east,
-    north)`` bounds (which snap to the source pixel grid, so they may differ from the
-    requested bbox by up to one cell). The band is read north-up (row 0 = north edge),
+    north)`` bounds in ``dst_crs`` (which snap to the pixel grid, so they may differ from
+    the requested bbox by up to one cell). The band is read north-up (row 0 = north edge),
     matching :func:`analytics.gis.geotiff_export.write_geotiff`.
+
+    When the source CRS already equals ``dst_crs`` this is a plain pixel-window clip. When
+    it differs (e.g. a GWA tile delivered in Web Mercator), the pixels are genuinely
+    **warped** into ``dst_crs`` (``rasterio.warp.reproject``) at the source's native
+    resolution and cropped to the requested bbox — not merely re-labelled.
     """
     rasterio = _require_rasterio()
     from rasterio.crs import CRS
-    from rasterio.warp import transform_bounds
+    from rasterio.warp import Resampling, reproject, transform_bounds
     from rasterio.windows import from_bounds as window_from_bounds
 
     west, south, east, north = bbox
@@ -107,29 +112,61 @@ def _clip_reproject(
     with rasterio.open(source_path) as src:
         src_crs = src.crs
         target = CRS.from_string(dst_crs)
-        # Express the requested (dst_crs) bbox in the source CRS so the read window is
-        # correct even when the GWA tile is delivered in a different projection.
-        if src_crs is not None and src_crs != target:
-            src_bounds = transform_bounds(target, src_crs, west, south, east, north)
-        else:
-            src_bounds = (west, south, east, north)
+        reprojecting = src_crs is not None and src_crs != target
 
-        window = window_from_bounds(*src_bounds, transform=src.transform)
-        arr = src.read(1, window=window, boundless=True, fill_value=float("nan"))
-        win_transform = src.window_transform(window)
-        rows, cols = arr.shape
-        # Bounds achieved by the pixel-aligned window (source CRS).
-        s_w, s_n = win_transform * (0, 0)
-        s_e, s_s = win_transform * (cols, rows)
+        if not reprojecting:
+            # Same CRS: a plain pixel-aligned window read is exact and cheap.
+            window = window_from_bounds(
+                west, south, east, north, transform=src.transform
+            )
+            arr = src.read(1, window=window, boundless=True, fill_value=float("nan"))
+            win_transform = src.window_transform(window)
+            rows, cols = arr.shape
+            s_w, s_n = win_transform * (0, 0)
+            s_e, s_s = win_transform * (cols, rows)
+            out = np.asarray(arr, dtype="float32")
+            return out, (float(s_w), float(s_s), float(s_e), float(s_n))
 
-        if src_crs is not None and src_crs != target:
-            out_bounds = transform_bounds(src_crs, target, s_w, s_s, s_e, s_n)
-        else:
-            out_bounds = (s_w, s_s, s_e, s_n)
+        # Differing CRS: warp the source pixels into the target CRS, then crop to bbox.
+        # Read the source window covering the requested bbox (expressed in source CRS),
+        # so we only warp the relevant pixels rather than the whole tile.
+        src_bounds = transform_bounds(target, src_crs, west, south, east, north)
+        src_window = window_from_bounds(*src_bounds, transform=src.transform)
+        src_arr = src.read(
+            1, window=src_window, boundless=True, fill_value=float("nan")
+        )
+        src_win_transform = src.window_transform(src_window)
 
-    arr = np.asarray(arr, dtype="float32")
-    o_w, o_s, o_e, o_n = out_bounds
-    return arr, (float(o_w), float(o_s), float(o_e), float(o_n))
+        # Target grid: the requested bbox at (approximately) the source pixel size,
+        # measured in target-CRS units from the reprojected window extent.
+        tgt_bounds = transform_bounds(
+            src_crs, target, *rasterio.windows.bounds(src_window, src.transform)
+        )
+        t_w = max(west, tgt_bounds[0])
+        t_s = max(south, tgt_bounds[1])
+        t_e = min(east, tgt_bounds[2])
+        t_n = min(north, tgt_bounds[3])
+        src_rows, src_cols = src_arr.shape
+        # Preserve the source pixel count so the warp keeps the native resolution.
+        dst_cols = max(1, src_cols)
+        dst_rows = max(1, src_rows)
+        from rasterio.transform import from_bounds as transform_from_bounds
+
+        dst_transform = transform_from_bounds(t_w, t_s, t_e, t_n, dst_cols, dst_rows)
+        dst_arr = np.full((dst_rows, dst_cols), float("nan"), dtype="float32")
+        reproject(
+            source=np.asarray(src_arr, dtype="float32"),
+            destination=dst_arr,
+            src_transform=src_win_transform,
+            src_crs=src_crs,
+            dst_transform=dst_transform,
+            dst_crs=target,
+            src_nodata=float("nan"),
+            dst_nodata=float("nan"),
+            resampling=Resampling.bilinear,
+        )
+
+    return dst_arr, (float(t_w), float(t_s), float(t_e), float(t_n))
 
 
 def ingest_gwa_layer(

@@ -155,3 +155,70 @@ def test_ingest_rejects_degenerate_bbox(tmp_path):
     src = _write_synthetic_tile(tmp_path / "gwa_source.tif")
     with pytest.raises(ValueError):
         ingest_gwa_layer(src, "wind_speed", (80.0, 8.0, 79.0, 8.5), tmp_path / "x.tif")
+
+
+def _write_mercator_tile(path: Path, latlon_bbox=TILE_BBOX, n=40, value=7.25) -> Path:
+    """Write a constant-value single-band GeoTIFF in EPSG:3857 (Web Mercator).
+
+    The tile's extent is the EPSG:4326 ``latlon_bbox`` transformed into Web Mercator, so
+    a 4326 target bbox forces the differing-CRS warp branch. A constant field lets us
+    assert the value survives the reprojection exactly (up to nodata edges).
+    """
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+    from rasterio.warp import transform_bounds
+
+    web = CRS.from_epsg(3857)
+    wgs = CRS.from_string(DEFAULT_CRS)
+    m_w, m_s, m_e, m_n = transform_bounds(wgs, web, *latlon_bbox)
+    arr = np.full((n, n), value, dtype="float32")
+    transform = from_bounds(m_w, m_s, m_e, m_n, n, n)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=n,
+        width=n,
+        count=1,
+        dtype="float32",
+        crs=web,
+        transform=transform,
+    ) as dst:
+        dst.write(arr, 1)
+    return path
+
+
+def test_ingest_reprojects_non_4326_source_to_target_crs(tmp_path):
+    # Source in Web Mercator (EPSG:3857); target bbox in EPSG:4326 → forces the warp path.
+    const = 7.25
+    src = _write_mercator_tile(tmp_path / "gwa_merc.tif", value=const)
+    out = tmp_path / "gwa_ws_reproj.tif"
+    result = ingest_gwa_layer(src, "wind_speed", CLIP_BBOX, out, crs=DEFAULT_CRS)
+    assert Path(result["path"]) == out
+
+    with rasterio.open(out) as ds:
+        # Reprojected + clipped: output CRS is the requested target, not the source.
+        assert ds.crs.to_string() == DEFAULT_CRS
+        assert ds.crs.to_epsg() == 4326
+        assert ds.count == 1 and ds.dtypes[0] == "float32"
+        # Sane dimensions.
+        assert ds.shape[0] > 1 and ds.shape[1] > 1
+        # Output extent lies within (or on) the requested 4326 bbox.
+        w, s, e, n = ds.bounds
+        assert CLIP_BBOX[0] - 1e-6 <= w < e <= CLIP_BBOX[2] + 1e-6
+        assert CLIP_BBOX[1] - 1e-6 <= s < n <= CLIP_BBOX[3] + 1e-6
+
+        data = ds.read(1)
+        finite = data[np.isfinite(data)]
+        # The constant field must survive the warp: every interpolated cell equals the
+        # source constant (bilinear of equal neighbours), and min/max stay in range.
+        assert finite.size > 0
+        assert np.allclose(finite, const, atol=1e-3)
+        assert float(finite.min()) >= const - 1e-3
+        assert float(finite.max()) <= const + 1e-3
+
+    # Provenance still stamps the reference labelling on the reprojected layer.
+    prov = json.loads(Path(f"{out}.prov.json").read_text())
+    assert prov["source"] == GWA_SOURCE
+    assert prov["reference_layer"] is True
+    assert prov["requested_bbox"] == list(CLIP_BBOX)
