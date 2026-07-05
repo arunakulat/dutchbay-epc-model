@@ -304,10 +304,33 @@ def calculate_scenario_kpis(
     clean_dscr = list(_clean_dscr_series(raw_dscr))
     dscr_stats = _summary_stats(clean_dscr)
 
+    # #790 (user decision 2026-07-05): the HEADLINE min_dscr is the CONSERVATIVE
+    # minimum over (a) the per-period sculpt series and (b) the debt engine's own
+    # reported min_dscr, which (round-5 #3) already folds the bridge-corrected
+    # per-year covenant table (dscr_by_year) into its minimum. Post-#737 the
+    # fee-netted year-1 fold (~1.2884 on the lender case) sits BELOW the 1.30
+    # per-period sculpt floor, so the two lender-facing surfaces diverged and the
+    # KPI headline overstated coverage relative to the per-year table covenants
+    # are actually tested on. The per-period sculpt floor stays surfaced as
+    # min_dscr_period; min() over both views means the headline can never
+    # overstate against EITHER surface.
+    engine_min: Optional[float] = None
+    if debt_result and debt_result.get("min_dscr") is not None:
+        try:
+            candidate = float(debt_result["min_dscr"])
+        except (TypeError, ValueError):
+            candidate = float("nan")
+        if math.isfinite(candidate):
+            engine_min = candidate
+    # 0.0 sentinel when the series is empty (pre-existing _summary_stats contract).
+    period_min = float(dscr_stats["min"])
+    headline_min = min(engine_min, period_min) if engine_min is not None else period_min
+
     result.update(
         dscr_series=clean_dscr,
-        min_dscr=dscr_stats["min"],
-        dscr_min=dscr_stats["min"],
+        min_dscr=headline_min,
+        dscr_min=headline_min,
+        min_dscr_period=period_min,
         dscr_max=dscr_stats["max"],
         dscr_mean=dscr_stats["mean"],
         dscr_median=dscr_stats["median"],
