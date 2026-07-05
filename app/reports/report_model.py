@@ -16,6 +16,7 @@ variant with ``model_copy(update=...)`` instead of assignment.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -23,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
-from analytics.contracts_v14 import ProjectEquityIrrBridge
+from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteractionGrid
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
@@ -597,6 +598,75 @@ class CapitalRiskBlock(BaseModel):
     npv_distribution_img: Optional[str] = None
 
 
+class InteractionGridCell(BaseModel):
+    """One (row-A, col-B) cell of the two-factor interaction grid — #739 slice-2.
+
+    ``value`` is the RAW metric at this driver pair (``None`` for a failed/non-finite cell,
+    counted in the block's ``n_failed_cells`` — never silently substituted). ``interaction`` is
+    the deviation of that cell from the additive combination of the two one-way effects (the
+    coupling term), likewise ``None`` when the value failed. ``intensity`` is a signed heatmap
+    shade in ``[-1, 1]`` (interaction normalised by the grid's ``max_abs_interaction``) that the
+    template maps to a CSS background; ``None`` for a failed cell, which renders neutral.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: Optional[float] = None
+    interaction: Optional[float] = None
+    intensity: Optional[float] = None
+
+
+class InteractionGridRow(BaseModel):
+    """One grid row: driver-A case label plus the per-column cells — #739 slice-2."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    cells: List[InteractionGridCell]
+
+
+class InteractionGridBlock(BaseModel):
+    """Two-factor sensitivity interaction grid for the lender report — #739 slice-2.
+
+    A read-only, heatmap-ready projection of
+    :class:`analytics.contracts_v14.TwoFactorInteractionGrid` (the slice-1 primitive). Each cell
+    carries the raw metric, the interaction (deviation from one-way additivity, in the metric's
+    own units), and a signed heatmap intensity. The grid is N×M full-pipeline evaluations, so it
+    is computed OUT-OF-BAND (like the tornado / global-SA / capital-risk blocks) and passed in;
+    ``None`` (the default on :class:`ReportContext`) omits the section — the synchronous API
+    report route and every committed scenario stay byte-identical (the #645 latency ledger).
+
+    The honesty metadata is surfaced as first-class fields, not buried in a dict, so the template
+    always DISCLOSES them (the #657 lesson — a heatmap that hides failed cells or a mis-declared
+    base is a lender-facing defect): ``n_failed_cells`` counts cells that failed to evaluate (shown
+    as em-dashes, never zero-filled), ``base_mismatch`` flags a driver whose declared base drifted
+    from the live config, and ``unresolved_drivers`` lists any driver that did not resolve to a
+    config path (non-strict emitters only — the strict emitter fails loud instead).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric_name: str
+    param_a_name: str
+    param_b_name: str
+    param_a_label: str
+    param_b_label: str
+    b_labels: List[str]
+    rows: List[InteractionGridRow]
+    base_metric: float
+    max_abs_interaction: float
+    #: True when the metric is an IRR/return ratio shown as a percentage (drives cell formatting);
+    #: NPV/dollar metrics render as USD. Mirrors the CapitalRiskMetricRow unit convention.
+    is_ratio_metric: bool
+    #: Honesty disclosure — always rendered so a lender sees the grid's integrity, not just its
+    #: colours (#657): failed-cell count, declared-vs-evaluated base mismatch, unresolved drivers.
+    n_failed_cells: int
+    base_mismatch: bool
+    unresolved_drivers: List[str]
+    n_evaluations: int
+    base_config_path: str
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -653,6 +723,12 @@ class ReportContext(BaseModel):
     #: Pre-computed out-of-band (the MC is heavy) and passed in; None for callers that supply
     #: no capital-risk report, in which case the section is omitted (default-off, byte-identical).
     capital_risk: Optional[CapitalRiskBlock] = None
+    #: Two-factor sensitivity interaction grid (#739 slice-2): a driver-A × driver-B heatmap of
+    #: the metric and its interaction (deviation from one-way additivity), with the honesty
+    #: disclosures. The grid is N×M full-pipeline evaluations, so it is computed OUT-OF-BAND (like
+    #: the tornado / capital-risk blocks) and passed in; None (the default) omits the section — the
+    #: synchronous API report route and every committed scenario stay byte-identical (#645).
+    interaction_grid: Optional[InteractionGridBlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -1359,6 +1435,74 @@ def _build_capital_risk(
     )
 
 
+def _finite_or_none(value: float) -> Optional[float]:
+    """Map a non-finite (NaN / inf) cell to ``None`` so the template renders an em-dash.
+
+    A failed interaction cell must never be zero-filled or silently substituted (#657): ``None``
+    surfaces as an em-dash and is separately counted in the block's ``n_failed_cells`` disclosure.
+    """
+    return value if math.isfinite(value) else None
+
+
+def _build_interaction_grid(
+    interaction_grid: Optional[TwoFactorInteractionGrid],
+) -> Optional[InteractionGridBlock]:
+    """Project a pre-computed two-factor interaction grid into a report block (#739 slice-2).
+
+    Read-only, heatmap-ready projection of
+    :class:`analytics.contracts_v14.TwoFactorInteractionGrid`: each cell carries the raw metric,
+    the interaction (deviation from one-way additivity, in the metric's units), and a signed
+    heatmap intensity (interaction normalised by ``max_abs_interaction``, in ``[-1, 1]``). The
+    N×M grid is heavy (each cell is a full pipeline evaluation), so it is computed OUT-OF-BAND
+    and passed in (like the tornado / capital-risk blocks); ``None`` (the default) omits the
+    section. Pure presentation — recomputes no metric, only reshapes the grid's own values and
+    surfaces its honesty metadata (failed cells, base mismatch, unresolved drivers) as first-class
+    fields the template always discloses (#657).
+    """
+    if interaction_grid is None:
+        return None
+    grid = interaction_grid
+    meta = grid.metadata
+    max_abs = float(grid.max_abs_interaction)
+    # A ratio/return metric (IRR) renders as a percentage; an NPV metric renders as USD. Same
+    # unit convention as CapitalRiskMetricRow so the template never mixes a dollar and a ratio.
+    is_ratio = "npv" not in grid.metric_name.lower()
+
+    rows: List[InteractionGridRow] = []
+    for i, row_label in enumerate(grid.a_labels):
+        cells: List[InteractionGridCell] = []
+        for j in range(len(grid.b_labels)):
+            raw = _finite_or_none(float(grid.values[i][j]))
+            inter = _finite_or_none(float(grid.interaction[i][j]))
+            # Signed heatmap shade in [-1, 1]; None (neutral) for a failed cell or a flat grid.
+            if inter is None or max_abs <= 0.0:
+                intensity: Optional[float] = None
+            else:
+                intensity = max(-1.0, min(1.0, inter / max_abs))
+            cells.append(
+                InteractionGridCell(value=raw, interaction=inter, intensity=intensity)
+            )
+        rows.append(InteractionGridRow(label=row_label, cells=cells))
+
+    return InteractionGridBlock(
+        metric_name=grid.metric_name,
+        param_a_name=grid.param_a_name,
+        param_b_name=grid.param_b_name,
+        param_a_label=str(meta.get("param_a_label", grid.param_a_name)),
+        param_b_label=str(meta.get("param_b_label", grid.param_b_name)),
+        b_labels=list(grid.b_labels),
+        rows=rows,
+        base_metric=float(grid.base_metric),
+        max_abs_interaction=max_abs,
+        is_ratio_metric=is_ratio,
+        n_failed_cells=int(meta.get("n_failed_cells", 0)),
+        base_mismatch=bool(meta.get("base_mismatch", False)),
+        unresolved_drivers=list(meta.get("unresolved_drivers", []) or []),
+        n_evaluations=int(meta.get("n_evaluations", 0)),
+        base_config_path=str(meta.get("base_config_path", "<unknown>")),
+    )
+
+
 def _png_data_uri(path: Path) -> Optional[str]:
     """A base64 ``data:image/png`` URI for an existing PNG (self-contained embed), else None.
 
@@ -1683,6 +1827,7 @@ def build_report_context(
     global_sa: Optional[GlobalSABlock] = None,
     global_sa_pawn: Optional[GlobalSABlock] = None,
     capital_risk: Optional[CapitalRiskReport] = None,
+    interaction_grid: Optional[TwoFactorInteractionGrid] = None,
     resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
@@ -1714,6 +1859,11 @@ def build_report_context(
             the distribution-based complement to the Morris screening. Computed upstream
             and passed in; ``None`` when the best-effort block was skipped or failed, in
             which case only that subsection is omitted.
+        interaction_grid: A pre-computed two-factor sensitivity interaction grid (#739
+            slice-2). The N×M grid is a full-pipeline evaluation per cell, so it is computed
+            OUT-OF-BAND (never in the synchronous report route — the #645 latency ledger) and
+            passed in; ``None`` (the default) omits the section, keeping every committed
+            scenario and the API report byte-identical.
         resource_trend: A pre-computed long-term wind-resource & trend analysis (#178 →
             #656) — the dict from
             :func:`wind_resource.long_term_trend.analyze_long_term_resource`, run upstream
@@ -1763,6 +1913,7 @@ def build_report_context(
         global_sa=global_sa,
         global_sa_pawn=global_sa_pawn,
         capital_risk=_build_capital_risk(capital_risk),
+        interaction_grid=_build_interaction_grid(interaction_grid),
         evidence=_build_evidence(scenario_config),
         evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
