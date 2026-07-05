@@ -1,0 +1,57 @@
+# Hydra config for the OPT-IN capital-structure optimizer CLI (#740).
+# Used by: analytics/cli/cli_capital_structure_optimize_hydra.py
+#
+# This is an ANALYSIS tool, NOT part of the canonical pipeline: it never runs
+# unless invoked explicitly, and it never mutates a committed scenario. It scores
+# candidate capital structures through analytics.evaluation_v14 and reports the
+# return-optimal one that clears the declared covenants (fail-loud when none do).
+
+defaults:
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+
+# Path to the scenario config file (required).
+# Override: config=scenarios/dutchbay_lendercase_2025Q4.yaml
+config: ""
+
+# Which optimizer to run: "debt_mix" or "capex_contingency".
+mode: debt_mix
+
+# Objective KPI to optimize and the direction.
+objective_key: equity_irr
+direction: max
+
+# Deterministic grid resolution.
+n_steps: 6
+
+# Covenant constraints: a list of {key, minimum, maximum} (either bound may be
+# null). A candidate is feasible iff every constrained KPI lies within its bounds
+# (within the shared floating-point tolerance). Empty list -> unconstrained.
+# Example (uncomment / override):
+# constraints:
+#   - {key: min_dscr_period, minimum: 1.30, maximum: null}
+#   - {key: llcr, minimum: 1.00, maximum: null}
+#   - {key: balloon_pct, minimum: null, maximum: 0.10}
+constraints: []
+
+# --- debt_mix mode -------------------------------------------------------------
+# Inclusive [low, high] share ranges to search (each in [0, 1]); USD absorbs the
+# residual (1 - lkr - dfi), so a candidate with lkr + dfi > 1 is skipped.
+lkr_bounds: [0.0, 0.6]
+dfi_bounds: [0.0, 0.4]
+
+# --- capex_contingency mode ----------------------------------------------------
+# The base capex (USD) EXCLUDING contingency; the optimizer sets
+# capex.usd_total = base_capex_usd * (1 + f). Required for mode=capex_contingency.
+base_capex_usd: null
+# Inclusive [low, high] contingency-fraction range to search (each >= 0).
+contingency_bounds: [0.0, 0.20]
+
+# Output directory for the optimizer result JSON.
+output_dir: _out/capital_structure_optimize
+
+# Write the result artifact to disk (vs stdout only).
+write_artifacts: true
