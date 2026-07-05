@@ -1,10 +1,22 @@
-"""Typed response models for the web boundary."""
+"""Typed response models for the web boundary.
+
+The public HTTP contract (#788 P1 / #841). :data:`API_CONTRACT_VERSION` versions the
+client-facing response shape (the wizard, and later an iOS client, code against it):
+bump the MINOR on an additive change (a new optional field) and the MAJOR on a breaking
+one (a removed/renamed/retyped field). ``tests/app/test_api_contract.py`` pins the public
+field set, so a breaking change to a response model fails loudly rather than silently
+shipping to clients.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
 from pydantic import BaseModel, Field
+
+#: Public API contract version (SemVer). Surfaced on ``GET /health`` and on every
+#: :class:`CaseResult`. Bump on any change to the client-facing response shape.
+API_CONTRACT_VERSION = "1.0"
 
 
 class CaseResult(BaseModel):
@@ -25,6 +37,10 @@ class CaseResult(BaseModel):
     run_manifest: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Audit manifest (config hash, engine version, commit).",
+    )
+    contract_version: str = Field(
+        default=API_CONTRACT_VERSION,
+        description="Public API contract version this response conforms to (#841).",
     )
 
     @classmethod
