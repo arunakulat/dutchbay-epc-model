@@ -77,6 +77,7 @@ def compute_fx_structured_block(
     config: Mapping[str, Any],
     debt_result: Mapping[str, Any],
     annual_rows: Sequence[Mapping[str, Any]],
+    degraded: Optional[List[str]] = None,
 ) -> FXStructuredBlock:
     """Build FXStructuredBlock from scenario configuration and debt output.
 
@@ -95,6 +96,15 @@ def compute_fx_structured_block(
     # Extract FX configuration section (case-insensitive)
     fx_config_raw = config.get("FX") or config.get("fx") or {}
     if not isinstance(fx_config_raw, Mapping):
+        # #785: a PRESENT-but-non-mapping fx block silently coerced to {} means
+        # every FX figure below is built from defaults, not the scenario — the
+        # run still "succeeds", so disclose the fallback to the caller.
+        if degraded is not None:
+            degraded.append(
+                "fx config block is not a mapping "
+                f"(got {type(fx_config_raw).__name__}); FX structured block "
+                "built from defaults"
+            )
         fx_config_raw = {}
 
     fx_config: Mapping[str, Any] = fx_config_raw
@@ -102,6 +112,13 @@ def compute_fx_structured_block(
     # Read FX strategy (default: blended)
     strategy_str = str(fx_config.get("strategy", "blended")).lower()
     if strategy_str not in ["natural_hedge", "fixed_ccy", "hedged", "blended"]:
+        # #785: label-only substitution (strategy does not move VaR/CVaR), but
+        # a declared-and-ignored token still misrepresents the config.
+        if degraded is not None:
+            degraded.append(
+                f"fx.strategy {strategy_str!r} is not a recognised token; "
+                "reported as 'blended' (label-only substitution)"
+            )
         strategy_str = "blended"
 
     # Read currency configuration
@@ -249,6 +266,7 @@ def compute_fx_curve(
     *,
     config: Mapping[str, Any],
     annual_rows: Sequence[Mapping[str, Any]],
+    degraded: Optional[List[str]] = None,
 ) -> FXCurveOutput:
     """Generate FX rate curve from configuration and scenario timeline.
 
@@ -265,11 +283,29 @@ def compute_fx_curve(
     # Extract FX curve section
     fx_config_raw = config.get("FX") or config.get("fx") or {}
     if not isinstance(fx_config_raw, Mapping):
+        # #785: same disclosure stance as compute_fx_structured_block — a
+        # present-but-non-mapping fx block degrades to defaults, loudly.
+        if degraded is not None:
+            degraded.append(
+                "fx config block is not a mapping "
+                f"(got {type(fx_config_raw).__name__}); FX curve built from "
+                "defaults"
+            )
         fx_config_raw = {}
 
     fx_config: Mapping[str, Any] = fx_config_raw
     curve_config_raw = fx_config.get("curve") or {}
     if not isinstance(curve_config_raw, Mapping):
+        # #785: a present-but-non-mapping fx.curve (e.g. a bare list) silently
+        # loses the scenario's explicit curve and falls through to the
+        # parametric/flat path — schema_guard does not validate curve shape,
+        # so this is pipeline-reachable. Disclose it.
+        if degraded is not None:
+            degraded.append(
+                "fx.curve is not a mapping "
+                f"(got {type(curve_config_raw).__name__}); the explicit curve "
+                "was ignored and the parametric/flat derivation used instead"
+            )
         curve_config_raw = {}
 
     curve_config: Mapping[str, Any] = curve_config_raw
@@ -323,6 +359,15 @@ def compute_fx_curve(
             logger.debug(
                 "compute_fx_curve: No lkr_usd / parametric curve; flat at %.2f", spot
             )
+            # #785: a FLAT curve at the resolved spot is a stale/default FX
+            # assumption presented as a projection — disclose it. (The
+            # parametric fx.annual_depr path above is the canonical derivation
+            # and is NOT a fallback.)
+            if degraded is not None:
+                degraded.append(
+                    "no explicit or parametric FX curve resolvable; using a "
+                    f"FLAT curve at spot {spot:.2f} LKR/USD for all years"
+                )
     else:
         lkr_usd = [float(x) for x in lkr_usd_raw]
 
@@ -423,6 +468,7 @@ def compute_fx_risk_profile(
     fx_block: FXStructuredBlock,
     fx_curve: FXCurveOutput,
     var_shock_pct: float = 0.05,
+    degraded: Optional[List[str]] = None,
 ) -> FXRiskProfile:
     """Calculate FX risk metrics (VaR, CVaR, concentration).
 
@@ -442,6 +488,13 @@ def compute_fx_risk_profile(
             "compute_fx_risk_profile: No volumetry in fx_block; "
             "returning minimal profile."
         )
+        # #785: a zeroed VaR/CVaR profile is not "no FX risk", it is "no data
+        # to compute FX risk from" — disclose the degenerate substitution.
+        if degraded is not None:
+            degraded.append(
+                "fx_block has no volumetry; FX risk profile is a degenerate "
+                "minimal placeholder (VaR/CVaR 0.0, nominal 100% USD)"
+            )
         return FXRiskProfile(
             var_95_usd_million=0.0,
             cvar_95_usd_million=0.0,
@@ -471,6 +524,12 @@ def compute_fx_risk_profile(
             "returning minimal profile.",
             total_debt,
         )
+        # #785: disclose the degenerate substitution (see the volumetry arm).
+        if degraded is not None:
+            degraded.append(
+                f"peak total debt is {total_debt:.2f} (zero/negative); FX risk "
+                "profile is a degenerate minimal placeholder (VaR/CVaR 0.0)"
+            )
         # With no debt there is no FX exposure, but FXRiskProfile still requires
         # the debt-currency percentages to sum to ~100. Mirror the no-volumetry
         # branch above (nominal 100% USD) so the minimal profile is valid rather
