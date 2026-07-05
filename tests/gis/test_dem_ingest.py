@@ -19,6 +19,8 @@ rasterio = pytest.importorskip("rasterio")  # CASPER: skip when [gis] is absent
 from analytics.gis.dem_ingest import (  # noqa: E402
     DEFAULT_DEM_SOURCE,
     DEM_SOURCES,
+    METRES_PER_DEG_LAT,
+    METRES_PER_DEG_LON_EQUATOR,
     TERRAIN_VARIABLES,
     derive_terrain_layers,
     load_dem,
@@ -55,6 +57,51 @@ def test_slope_matches_analytic_ramp():
     # Interior cells (Horn's kernel is exact on a plane away from replicated edges).
     interior = slope[1:-1, 1:-1]
     assert np.allclose(interior, expected, atol=1e-4)
+
+
+def test_slope_geographic_crs_auto_converts_to_metres():
+    """A GEOGRAPHIC (deg-spaced) DEM ramp: slope matches the METRE-space analytic value.
+
+    This pins the auto-conversion: without it, a 0.01-deg pixel treated as 0.01 metres
+    would report a near-vertical (~89.9 deg) slope for a 5 m/pixel rise. With the
+    latitude-aware degree->metre conversion the slope is the physically correct
+    atan(rise / dx_metres).
+    """
+    rise_per_pixel = 5.0  # metres per column step
+    cols = np.arange(NCOLS, dtype="float64")
+    elevation = np.tile(cols * rise_per_pixel, (NROWS, 1)).astype("float32")
+
+    grids = derive_terrain_layers(elevation, BBOX, is_geographic=True)
+    slope = grids["slope"]
+
+    # Reconstruct the expected metre pixel size the module should have used.
+    west, south, east, north = BBOX
+    dx_deg = (east - west) / NCOLS
+    mean_lat = 0.5 * (south + north)
+    dx_m = dx_deg * METRES_PER_DEG_LON_EQUATOR * math.cos(math.radians(mean_lat))
+    expected = math.degrees(math.atan(rise_per_pixel / dx_m))
+
+    interior = slope[1:-1, 1:-1]
+    assert np.allclose(interior, expected, atol=1e-3)
+    # And it is NOT the (wrong) consistent-units answer.
+    wrong = _analytic_slope_deg(rise_per_pixel, dx_deg)
+    assert not np.isclose(interior.mean(), wrong, atol=1.0)
+    # The lat-aware dy factor is the fixed WGS84 value.
+    assert METRES_PER_DEG_LAT == 110540.0
+
+
+def test_explicit_z_factor_overrides_geographic_auto_conversion():
+    """An explicit z_factor skips the auto-conversion (raw spacing, GDAL -z semantics)."""
+    rise_per_pixel = 5.0
+    cols = np.arange(NCOLS, dtype="float64")
+    elevation = np.tile(cols * rise_per_pixel, (NROWS, 1)).astype("float32")
+
+    # z_factor=1.0 explicit -> raw degree spacing, so we get the consistent-units answer.
+    grids = derive_terrain_layers(elevation, BBOX, is_geographic=True, z_factor=1.0)
+    dx_deg = (BBOX[2] - BBOX[0]) / NCOLS
+    expected_raw = _analytic_slope_deg(rise_per_pixel, dx_deg)
+    interior = grids["slope"][1:-1, 1:-1]
+    assert np.allclose(interior, expected_raw, atol=1e-3)
 
 
 def test_aspect_east_rising_faces_west():
@@ -107,14 +154,16 @@ def test_load_dem_full_and_clip(tmp_path):
     dem = tmp_path / "dem.tif"
     write_geotiff(elevation, BBOX, dem, provenance={"source": "synthetic"})
 
-    full, full_bbox = load_dem(dem)
+    full, full_bbox, is_geographic = load_dem(dem)
     assert full.shape == (NROWS, NCOLS)
     assert [round(b, 4) for b in full_bbox] == [round(b, 4) for b in BBOX]
+    # write_geotiff stamps EPSG:4326 -> a geographic CRS.
+    assert is_geographic is True
 
     # Clip to the western half.
     west, south, east, north = BBOX
     clip = (west, south, (west + east) / 2.0, north)
-    sub, sub_bbox = load_dem(dem, clip)
+    sub, sub_bbox, _ = load_dem(dem, clip)
     assert sub.shape[0] == NROWS
     assert sub.shape[1] == NCOLS // 2
     assert round(sub_bbox[2], 4) == round((west + east) / 2.0, 4)
@@ -157,12 +206,22 @@ def test_run_dem_ingest_writes_layers_manifest_and_prov(tmp_path):
             assert src.crs.to_string() == DEFAULT_CRS
             assert src.shape == (NROWS, NCOLS)
 
-    # Slope layer (the reusable RIX/siting input) matches the analytic ramp value.
+    # The DEM is EPSG:4326 (geographic), so slope uses the auto-converted METRE spacing —
+    # the physically correct value for the RIX/siting input, not the raw-degree answer.
     with rasterio.open(out_dir / "dutchbay_dem_slope.tif") as src:
         slope = src.read(1)
-    dx = (BBOX[2] - BBOX[0]) / NCOLS
-    expected = _analytic_slope_deg(5.0, dx)
+    west, south, east, north = BBOX
+    dx_deg = (east - west) / NCOLS
+    mean_lat = 0.5 * (south + north)
+    dx_m = dx_deg * METRES_PER_DEG_LON_EQUATOR * math.cos(math.radians(mean_lat))
+    expected = math.degrees(math.atan(5.0 / dx_m))
     assert np.allclose(slope[1:-1, 1:-1], expected, atol=1e-3)
+
+    # Provenance records that the auto-conversion fired (default, no explicit z_factor).
+    slope_prov = json.loads(
+        Path(f"{out_dir / 'dutchbay_dem_slope.tif'}.prov.json").read_text()
+    )
+    assert slope_prov["pixel_spacing_auto_converted_to_metres"] is True
 
     doc = json.loads(manifest.read_text())
     entry = [d for d in doc["datasets"] if d["name"] == "DutchBay/GIS/terrain"]

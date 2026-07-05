@@ -11,6 +11,12 @@ This is the terrain foundation the RIX ruggedness diagnostic (#831) and the
 slope-threshold siting mask (#833) consume, so the slope layer (degrees, north-up,
 same grid as the elevation input) is kept clean and directly reusable.
 
+Slope is physically correct BY DEFAULT — no manual tuning. For a geographic-CRS DEM
+(degree spacing, e.g. EPSG:4326 — GLO-30's native grid) the pixel size is auto-converted
+to metres with latitude-aware per-axis factors before Horn's slope; a projected (metre)
+DEM uses its raw spacing. An explicit ``z_factor`` remains as an override (see
+:func:`derive_terrain_layers`).
+
 CASPER: ``rasterio`` is an optional ``[gis]`` dependency, guarded at call time via
 :func:`analytics.gis.geotiff_export._require_rasterio` (so the base finance install never
 needs GDAL). CCCDIR / config-first (ARCH-01): the DEM path, bbox, sun azimuth/altitude,
@@ -56,6 +62,16 @@ DEFAULT_SUN_ALTITUDE_DEG = 45.0
 #: Terrain layers this module derives, in a stable order.
 TERRAIN_VARIABLES: Tuple[str, ...] = ("elevation", "slope", "aspect", "hillshade")
 
+#: Metres per degree of latitude (WGS84 mean; ~constant with latitude). Used to convert a
+#: geographic-CRS DEM's north-south pixel spacing to metres before Horn's slope so the
+#: slope is physically correct for a degree-spaced tile (GLO-30's native grid) with no
+#: manual tuning.
+METRES_PER_DEG_LAT = 110540.0
+
+#: Metres per degree of longitude at the equator (WGS84). The east-west pixel spacing is
+#: scaled by ``cos(mean_latitude)`` because meridians converge toward the poles.
+METRES_PER_DEG_LON_EQUATOR = 111320.0
+
 
 def _pixel_size_deg(bbox: BBox, nrows: int, ncols: int) -> Tuple[float, float]:
     """Return ``(dx, dy)`` pixel size in bbox units from the north-up affine.
@@ -66,6 +82,21 @@ def _pixel_size_deg(bbox: BBox, nrows: int, ncols: int) -> Tuple[float, float]:
     dx = (east - west) / float(ncols)
     dy = (north - south) / float(nrows)
     return dx, dy
+
+
+def _degrees_to_metres_pixel_size(
+    dx_deg: float, dy_deg: float, mean_lat_deg: float
+) -> Tuple[float, float]:
+    """Convert degree pixel spacing to metres using latitude-aware per-axis factors.
+
+    ``dx_m = dx_deg * 111320 * cos(mean_lat)`` (longitude spacing shrinks toward the poles);
+    ``dy_m = dy_deg * 110540`` (latitude spacing is ~constant). This makes Horn's slope
+    physically correct for a geographic-CRS (degree-spaced) DEM such as native GLO-30.
+    """
+    mean_lat_rad = math.radians(mean_lat_deg)
+    dx_m = dx_deg * METRES_PER_DEG_LON_EQUATOR * math.cos(mean_lat_rad)
+    dy_m = dy_deg * METRES_PER_DEG_LAT
+    return dx_m, dy_m
 
 
 def _horn_gradients(
@@ -155,7 +186,9 @@ def slope_aspect_hillshade(
     }
 
 
-def load_dem(path: str | Path, bbox: BBox | None = None) -> Tuple[np.ndarray, BBox]:
+def load_dem(
+    path: str | Path, bbox: BBox | None = None
+) -> Tuple[np.ndarray, BBox, bool]:
     """Load a local DEM GeoTIFF and (optionally) clip it to ``bbox``.
 
     NEVER fetches from the network — the DEM tile is a LOCAL config/arg path (mosaicing of
@@ -167,12 +200,18 @@ def load_dem(path: str | Path, bbox: BBox | None = None) -> Tuple[np.ndarray, BB
         bbox: Optional ``(west, south, east, north)`` clip window in the DEM CRS.
 
     Returns:
-        ``(elevation, bbox)`` — the (clipped) north-up elevation grid and its actual bbox.
+        ``(elevation, bbox, is_geographic)`` — the (clipped) north-up elevation grid, its
+        actual bbox, and whether the DEM CRS is geographic (degree-spaced, e.g. EPSG:4326;
+        GLO-30's native grid). ``is_geographic`` drives the automatic degree→metre pixel
+        conversion so slope is physically correct for a native GLO-30 tile. A DEM with no
+        CRS is treated as non-geographic (raw spacing kept, as for a projected grid).
     """
     rasterio = _require_rasterio()
     from rasterio.windows import from_bounds as window_from_bounds
 
     with rasterio.open(path) as src:
+        crs = src.crs
+        is_geographic = bool(crs is not None and crs.is_geographic)
         if bbox is None:
             arr = src.read(1)
             b = src.bounds
@@ -189,14 +228,15 @@ def load_dem(path: str | Path, bbox: BBox | None = None) -> Tuple[np.ndarray, BB
             w, n = win_transform * (0, 0)
             e, s = win_transform * (ncols, nrows)
             out_bbox = (w, s, e, n)
-    return np.asarray(arr, dtype="float32"), out_bbox
+    return np.asarray(arr, dtype="float32"), out_bbox, is_geographic
 
 
 def derive_terrain_layers(
     elevation: np.ndarray,
     bbox: BBox,
     *,
-    z_factor: float = 1.0,
+    is_geographic: bool = False,
+    z_factor: float | None = None,
     sun_azimuth_deg: float = DEFAULT_SUN_AZIMUTH_DEG,
     sun_altitude_deg: float = DEFAULT_SUN_ALTITUDE_DEG,
 ) -> Dict[str, np.ndarray]:
@@ -205,15 +245,39 @@ def derive_terrain_layers(
     Pixel size is derived from ``bbox`` and the array shape (north-up). The returned
     ``elevation`` is the input unchanged (float32); the three derivatives come from
     :func:`slope_aspect_hillshade`.
+
+    Making slope physically correct BY DEFAULT — precedence:
+
+    1. **Explicit** ``z_factor`` (not ``None``): honoured verbatim as GDAL's ``-z``
+       elevation scaling, and the RAW pixel spacing is used (no auto-conversion). This is
+       the escape hatch for a caller who wants full manual control.
+    2. **Geographic CRS** (``is_geographic=True``, e.g. EPSG:4326 — GLO-30's native grid)
+       and no explicit ``z_factor``: the degree pixel spacing is auto-converted to metres
+       with latitude-aware per-axis factors (``dx_m = dx_deg·111320·cos(mean_lat)``,
+       ``dy_m = dy_deg·110540``) at the tile's mean latitude, so slope is physically
+       correct with no manual tuning.
+    3. **Projected CRS** (``is_geographic=False``) and no explicit ``z_factor``: the raw
+       spacing is already in metres, so it is used unchanged with ``z_factor=1.0``.
     """
     elev = np.asarray(elevation, dtype="float32")
     nrows, ncols = elev.shape
     dx, dy = _pixel_size_deg(bbox, nrows, ncols)
+
+    if z_factor is None and is_geographic:
+        # Auto-convert degree spacing to metres at the tile's mean latitude.
+        _west, south, _east, north = bbox
+        mean_lat = 0.5 * (south + north)
+        dx, dy = _degrees_to_metres_pixel_size(dx, dy, mean_lat)
+        effective_z_factor = 1.0
+    else:
+        # Explicit override, or a projected (metre) grid: keep the raw spacing.
+        effective_z_factor = 1.0 if z_factor is None else z_factor
+
     derived = slope_aspect_hillshade(
         elev,
         dx,
         dy,
-        z_factor=z_factor,
+        z_factor=effective_z_factor,
         sun_azimuth_deg=sun_azimuth_deg,
         sun_altitude_deg=sun_altitude_deg,
     )
@@ -226,11 +290,23 @@ def _terrain_provenance(
     *,
     sun_azimuth_deg: float,
     sun_altitude_deg: float,
-    z_factor: float,
+    z_factor: float | None,
+    is_geographic: bool,
 ) -> Dict[str, Any]:
     """Build the shared provenance block for the four terrain layers."""
     src_label = DEM_SOURCES.get(source, source)
     west, south, east, north = bbox
+    auto_converted = z_factor is None and is_geographic
+    if auto_converted:
+        slope_units_note = (
+            "geographic CRS: degree pixel spacing auto-converted to metres "
+            "(latitude-aware: dx=dx_deg*111320*cos(mean_lat), dy=dy_deg*110540) "
+            "so slope(deg) is physically correct with no manual z_factor."
+        )
+    elif z_factor is not None:
+        slope_units_note = f"explicit z_factor={z_factor} honoured (raw pixel spacing, no auto-conversion)."
+    else:
+        slope_units_note = "projected CRS: raw metre pixel spacing used for slope."
     return {
         "source": src_label,
         "method": "horn_1981_3x3_slope_aspect_hillshade",
@@ -239,6 +315,8 @@ def _terrain_provenance(
             "derived with Horn's 3x3 kernel (same math as gdaldem). Terrain input for "
             "the RIX diagnostic (#831) and slope-threshold siting mask (#833)."
         ),
+        "slope_units": slope_units_note,
+        "pixel_spacing_auto_converted_to_metres": auto_converted,
         "clip_bbox": {"west": west, "south": south, "east": east, "north": north},
         "sun_azimuth_deg": sun_azimuth_deg,
         "sun_altitude_deg": sun_altitude_deg,
@@ -260,7 +338,12 @@ def run_dem_ingest(dem_cfg: Mapping[str, Any]) -> Dict[str, Any]:
         ``bbox``: ``[west, south, east, north]`` clip window (default: full DEM extent).
         ``source``: ``"glo30"`` (default) or ``"srtm"`` — provenance label only.
         ``sun_azimuth_deg`` / ``sun_altitude_deg``: hillshade sun geometry.
-        ``z_factor``: elevation scaling before the gradient (default 1.0).
+        ``z_factor``: OPTIONAL explicit elevation-scaling override (GDAL's ``-z``). When
+            OMITTED (the default), slope is made physically correct automatically: a
+            geographic-CRS DEM (degree spacing — GLO-30's native grid) has its pixel size
+            auto-converted to metres (latitude-aware), while a projected DEM keeps its raw
+            metre spacing. Set ``z_factor`` only to override this — it then uses the raw
+            spacing and skips the auto-conversion.
         ``crs``: output CRS (default EPSG:4326).
         ``prefix``: output filename prefix (default ``"dutchbay_dem"``).
         ``dataset_name``: manifest dataset name (default ``"DutchBay/GIS/terrain"``).
@@ -279,7 +362,8 @@ def run_dem_ingest(dem_cfg: Mapping[str, Any]) -> Dict[str, Any]:
     dataset_name = str(dem_cfg.get("dataset_name", "DutchBay/GIS/terrain"))
     sun_azimuth_deg = float(dem_cfg.get("sun_azimuth_deg", DEFAULT_SUN_AZIMUTH_DEG))
     sun_altitude_deg = float(dem_cfg.get("sun_altitude_deg", DEFAULT_SUN_ALTITUDE_DEG))
-    z_factor = float(dem_cfg.get("z_factor", 1.0))
+    raw_z = dem_cfg.get("z_factor")
+    z_factor: float | None = None if raw_z is None else float(raw_z)
 
     raw_bbox = dem_cfg.get("bbox")
     clip_bbox: BBox | None = (
@@ -293,10 +377,11 @@ def run_dem_ingest(dem_cfg: Mapping[str, Any]) -> Dict[str, Any]:
         else None
     )
 
-    elevation, bbox = load_dem(dem_path, clip_bbox)
+    elevation, bbox, is_geographic = load_dem(dem_path, clip_bbox)
     grids = derive_terrain_layers(
         elevation,
         bbox,
+        is_geographic=is_geographic,
         z_factor=z_factor,
         sun_azimuth_deg=sun_azimuth_deg,
         sun_altitude_deg=sun_altitude_deg,
@@ -308,6 +393,7 @@ def run_dem_ingest(dem_cfg: Mapping[str, Any]) -> Dict[str, Any]:
         sun_azimuth_deg=sun_azimuth_deg,
         sun_altitude_deg=sun_altitude_deg,
         z_factor=z_factor,
+        is_geographic=is_geographic,
     )
 
     nrows, ncols = elevation.shape
