@@ -45,6 +45,8 @@ from analytics.power_curves.oem_parser import (
 )
 from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses, net_capacity_factor
+from analytics.wind.siting_metadata import resolve_siting_metadata
+from analytics.wind.wind_rose import build_wind_rose
 from wind_resource.bankable_aep import (
     RECOMMENDED_P50_HAIRCUT_PCT,
     UncertaintyBudget,
@@ -225,6 +227,65 @@ def _resolve_wake_loss(
     return float(res.wake_loss_pct), f"pywake_live:{res.deficit_model}"
 
 
+def _resolve_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Build the optional directional wind-rose OUTPUT block (#742) — display only.
+
+    Reads ``resource.wind_rose`` when present:
+      - ``direction_deg``: a series of met-convention wind directions (e.g. an ERA5
+        ``wd_100m`` column) to bin, OR
+      - ``sector_deg`` + ``frequency``: a pre-binned rose to pass through (validated
+        and re-normalised, so a frozen offline rose can be surfaced without the raw
+        series).
+      - ``n_sectors`` (optional, default 12): sector count when binning a series.
+
+    Returns ``None`` when no ``resource.wind_rose`` is declared (the summary omits the
+    block). This is a PURE OUTPUT for the provenance/diagnostics section: it never
+    scales the AEP and feeds no billed quantity. Fails loud (CESSPIT) if a wind_rose is
+    declared but carries neither a direction series nor a pre-binned sector/frequency
+    pair.
+    """
+    rose_cfg = resource.get("wind_rose", {}) or {}
+    if not isinstance(rose_cfg, Mapping) or not rose_cfg:
+        return None
+
+    directions = rose_cfg.get("direction_deg")
+    if directions is not None:
+        n_sectors = int(rose_cfg.get("n_sectors", 12))
+        return build_wind_rose([float(v) for v in directions], n_sectors=n_sectors)
+
+    sector_deg = rose_cfg.get("sector_deg")
+    frequency = rose_cfg.get("frequency")
+    if sector_deg is not None and frequency is not None:
+        sectors = [float(v) for v in sector_deg]
+        freqs = [float(v) for v in frequency]
+        if len(sectors) != len(freqs):
+            raise ValueError(
+                "resource.wind_rose.sector_deg and frequency must be the same length "
+                f"(got {len(sectors)} and {len(freqs)})."
+            )
+        total = sum(freqs)
+        if total <= 0.0:
+            raise ValueError(
+                "resource.wind_rose.frequency must sum to a positive value."
+            )
+        return {
+            "n_sectors": len(sectors),
+            "sector_width_deg": round(360.0 / len(sectors), 4) if sectors else 0.0,
+            "sector_deg": [round(s, 4) for s in sectors],
+            "frequency": [round(f / total, 6) for f in freqs],
+            "source": "config_prebinned",
+            "provenance_note": (
+                "Pre-binned directional frequency supplied in config (resource.wind_rose); "
+                "display/provenance only, applies NO AEP correction."
+            ),
+        }
+
+    raise ValueError(
+        "resource.wind_rose is declared but incomplete: supply either direction_deg "
+        "(a direction series to bin) or both sector_deg and frequency (a pre-binned rose)."
+    )
+
+
 def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     """Regenerate a consistent AEP summary from a scenario config.
 
@@ -316,6 +377,18 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
         selection["source_id"], derived_from=power_curve_cfg.get("derived_from")
     )
 
+    # #742: optional display/diagnostic-only blocks. NEITHER touches any billed
+    # quantity — they surface into provenance/diagnostics only and apply NO AEP
+    # correction. A directional wind rose (single-cell ERA5, coarse) and a
+    # self-declared terrain class; both default to UNSET (omitted) when absent.
+    provenance_extras: Dict[str, Any] = {"aep": provenance}
+    wind_rose = _resolve_wind_rose(resource)
+    if wind_rose is not None:
+        provenance_extras["wind_rose"] = wind_rose
+    siting_metadata = resolve_siting_metadata(resource)
+    if siting_metadata is not None:
+        provenance_extras["siting"] = siting_metadata
+
     return {
         "capacity_factor": round(cf, 4),
         "net_site_aep_gwh": round(net_gwh, 2),
@@ -345,7 +418,7 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
             "life_years": life_years,
             "modelled_p50_gwh": round(modelled_p50_gwh, 2),
         },
-        "provenance": {"aep": provenance},
+        "provenance": provenance_extras,
         "generated_by": "analytics.wind.aep_summary_builder",
     }
 
