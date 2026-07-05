@@ -1,11 +1,13 @@
-"""Tests for the config-first output-path resolver (#735, slice 1)."""
+"""Tests for the config-first output-path resolver (#735, slices 1 and 2)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from analytics.output_paths import (
+    DEFAULT_MC_OUTPUT_ROOT,
     DEFAULT_PIPELINE_OUTPUT_ROOT,
+    DEFAULT_SENSITIVITY_OUTPUT_ROOT,
     default_run_id,
     resolve_output_dir,
 )
@@ -14,6 +16,26 @@ from analytics.output_paths import (
 def test_default_pipeline_root_is_single_sourced() -> None:
     # Pin the pipeline default now centralised here (the #735 fragmentation this consolidates).
     assert DEFAULT_PIPELINE_OUTPUT_ROOT == "_out/run_full_pipeline_v14"
+
+
+def test_default_mc_root_is_single_sourced() -> None:
+    # Slice-2: the Monte-Carlo CLI default lives here now (CCCDIR), not only in the CLI literal.
+    assert DEFAULT_MC_OUTPUT_ROOT == "_out/monte_carlo"
+
+
+def test_default_sensitivity_root_is_single_sourced() -> None:
+    # Slice-2: the sensitivity CLI default lives here now (CCCDIR), not only in the CLI literal.
+    assert DEFAULT_SENSITIVITY_OUTPUT_ROOT == "_out/sensitivity"
+
+
+def test_all_slice2_roots_are_identity_at_default() -> None:
+    # Each converged root resolves unchanged at the default -> existing runs byte-identical.
+    for root in (
+        DEFAULT_PIPELINE_OUTPUT_ROOT,
+        DEFAULT_MC_OUTPUT_ROOT,
+        DEFAULT_SENSITIVITY_OUTPUT_ROOT,
+    ):
+        assert resolve_output_dir(root) == Path(root)
 
 
 def test_resolve_default_is_identity_str() -> None:
