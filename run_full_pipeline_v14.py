@@ -670,6 +670,16 @@ def cli(cfg: DictConfig) -> None:
                   (default: '_out/run_full_pipeline_v14').
                 - write_artifacts: Write JSON/CSV files (default: false;
                   the runtime reads bool(cfg.get("write_artifacts", False))).
+                - run_scoped: If true (#735 slice-2), group EVERY artifact of
+                  this run — the JSON/CSV dump and the four optional
+                  report/workbook emitters — under a per-run subdirectory of
+                  export_dir so successive runs do not overwrite each other.
+                  Default false → the export_dir root is used unchanged, so
+                  committed-scenario output stays byte-identical.
+                - run_id: Explicit run-scope subdirectory name; defaults to
+                  analytics.output_paths.default_run_id() (v<engine>_<sha12>)
+                  when run_scoped is set and this is omitted. Ignored when
+                  run_scoped is false.
             Optional fields (Sprint 19 W.6 — wind→finance ingestion;
             OFF by default — setting neither of the first two preserves
             pre-Sprint-19 behaviour exactly):
@@ -1084,6 +1094,22 @@ def cli(cfg: DictConfig) -> None:
         write_artifacts = bool(cfg.get("write_artifacts", False))
         export_dir_raw = cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT)
 
+        # #735 slice-2: resolve the artifact directory ONCE, up front, so every
+        # pipeline artifact — the four report/workbook emitters below AND the
+        # JSON/CSV dump block — co-scopes under the same directory. At the
+        # default (run_scoped=False) the resolver returns export_dir_raw
+        # unchanged, so committed runs write to exactly the same paths
+        # (byte-identical); opt-in run-scoping (run_scoped/run_id cfg knobs,
+        # default off) groups the whole run under one reproducible subdirectory
+        # instead of scattering the JSON block into a scoped dir while the
+        # reports land un-scoped. Only the DEFAULT report paths are derived from
+        # this; an explicit user-supplied path still wins unchanged (below).
+        export_dir_scoped = resolve_output_dir(
+            export_dir_raw,
+            run_scoped=bool(cfg.get("run_scoped", False)),
+            run_id=cfg.get("run_id", None),
+        )
+
         # #656 (slice 3): optional single-scenario Executive Workbook emission.
         # OFF unless emit_executive_workbook=true (committed scenarios leave it
         # off → byte-identical). Reads no live ERA5: the resource-trend sheet is
@@ -1094,7 +1120,7 @@ def cli(cfg: DictConfig) -> None:
             workbook_out = (
                 Path(str(executive_workbook_path))
                 if executive_workbook_path
-                else Path(str(export_dir_raw)) / "executive_workbook.xlsx"
+                else export_dir_scoped / "executive_workbook.xlsx"
             )
             wind_export_payload = (
                 _read_wind_export_payload(resolved_wind_json_path)
@@ -1124,7 +1150,7 @@ def cli(cfg: DictConfig) -> None:
             cr_out = (
                 Path(str(cr_path_raw))
                 if cr_path_raw
-                else Path(str(export_dir_raw)) / "capital_risk_report.html"
+                else export_dir_scoped / "capital_risk_report.html"
             )
             cr_seed_raw = capital_risk_report_cfg.get("seed", None)
             cr_written = emit_capital_risk_report_from_pipeline(
@@ -1158,7 +1184,7 @@ def cli(cfg: DictConfig) -> None:
             ig_out = (
                 Path(str(ig_path_raw))
                 if ig_path_raw
-                else Path(str(export_dir_raw)) / "interaction_grid_report.html"
+                else export_dir_scoped / "interaction_grid_report.html"
             )
             ig_written = emit_interaction_grid_report_from_pipeline(
                 result,
@@ -1185,7 +1211,7 @@ def cli(cfg: DictConfig) -> None:
             tc_out = (
                 Path(str(tc_path_raw))
                 if tc_path_raw
-                else Path(str(export_dir_raw)) / "tech_comparison_report.html"
+                else export_dir_scoped / "tech_comparison_report.html"
             )
             tc_written = emit_tech_comparison_report_from_pipeline(
                 result,
@@ -1199,8 +1225,9 @@ def cli(cfg: DictConfig) -> None:
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns
             # the configured root unchanged, so committed runs write to the same paths
-            # (byte-identical); the opt-in run-scoping + converging the other entrypoints follow.
-            export_dir = resolve_output_dir(export_dir_raw)
+            # (byte-identical). Slice-2: reuse the one export_dir_scoped resolved up front so the
+            # JSON/CSV block co-scopes with the four report emitters under the same directory.
+            export_dir = export_dir_scoped
             _safe_mkdir(export_dir)
 
             _write_json(export_dir / "summary.json", result)

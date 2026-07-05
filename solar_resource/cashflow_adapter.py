@@ -85,6 +85,9 @@ from typing import Any, Literal, Mapping, MutableMapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from solar_resource.bifacial_guard import assert_monofacial_financed_cf
+from solar_resource.source_quality import solar_source_quality_from_config
+
 __all__ = [
     "SolarAdapterMode",
     "DEFAULT_TOLERANCE_PCT",
@@ -393,6 +396,17 @@ def solar_export_to_scenario_patch(
             f"scenario={export.scenario!r}; refusing to mix P-levels"
         )
 
+    # --- 1b. SOLAR-9 bifacial discipline (#743) --------------------------
+    # The financed solar CF chain is monofacial by design: refuse a bifacial rear-side
+    # uplift from entering the billed quantity here (the OVERWRITE bridge). Fires before any
+    # economics are written; a no-op when neither the export nor resource.solar carries a
+    # bifacial marker, so every committed scenario is byte-identical. The illustrative report
+    # sets project.capacity_factor directly (it does NOT use this bridge), so its disclosed
+    # cf_mono/cf_bifacial side-by-side is untouched.
+    assert_monofacial_financed_cf(
+        export_dict, _get_nested(scenario_yaml_dict, ("resource", "solar"))
+    )
+
     # --- 2. deep-copy so we never mutate the caller's dict ----------------
     patched: dict[str, Any] = copy.deepcopy(dict(scenario_yaml_dict))
     base = ("generation", "technologies", technology)
@@ -489,5 +503,22 @@ def solar_export_to_scenario_patch(
         solar_meta_existing["specific_yield_kwh_per_kwp"] = float(
             export.specific_yield_kwh_per_kwp
         )
+
+    # --- 6. graded source-quality provenance (#743; PURE METADATA) --------
+    # Grade the resource evidence behind the modelled P50 from the OPTIONAL
+    # resource.solar.source_quality block (config-first; default grade when absent). This
+    # is provenance ONLY — it drives no capacity factor, no haircut, no billed field, so it
+    # is byte-identical on every committed scenario (the #587 P50-haircut discipline). The
+    # scenario's own resource.solar block is read (not the frozen export), mirroring how the
+    # wind provenance.aep block is keyed off resource.power_curve.source_id.
+    solar_resource_cfg = _get_nested(patched, ("resource", "solar")) or {}
+    sq_block = (
+        solar_resource_cfg.get("source_quality")
+        if isinstance(solar_resource_cfg, Mapping)
+        else None
+    )
+    solar_meta_existing["source_quality"] = solar_source_quality_from_config(
+        sq_block
+    ).to_provenance()
 
     return patched
