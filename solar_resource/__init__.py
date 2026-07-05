@@ -31,10 +31,21 @@ Public surface:
         from a scenario's OPTIONAL ``resource.solar.uncertainty`` block (#604).
     compute_net_solar_loss_factor / default_solar_loss_taxonomy / validate_solar_loss_keys —
         the config-first itemised gross->net loss chain (replaces the flat system_loss_pct).
+    SolarSourceQuality / grade_solar_source_quality / solar_source_quality_from_config (#743) —
+        graded resource source-quality provenance (pure metadata; bills off nothing).
+    assert_monofacial_financed_cf / detect_bifacial_uplift / BifacialInFinancedChainError
+        (#743) — SOLAR-9 guard refusing a bifacial uplift in the FINANCED CF chain.
+    SoilingProfile / soiling_profile_from_config / compute_soiling_profile_effective_pct
+        (#743) — OPTIONAL time-varying soiling profile (default-off byte-identical).
 """
 
 from __future__ import annotations
 
+from solar_resource.bifacial_guard import (
+    BifacialInFinancedChainError,
+    assert_monofacial_financed_cf,
+    detect_bifacial_uplift,
+)
 from solar_resource.cashflow_adapter import (
     SolarCashflowExport,
     build_solar_cashflow_export,
@@ -58,6 +69,16 @@ from solar_resource.pv_producer import (
     compute_solar_aep,
     validate_declared_solar_cf,
 )
+from solar_resource.soiling_profile import (
+    SoilingProfile,
+    compute_soiling_profile_effective_pct,
+    soiling_profile_from_config,
+)
+from solar_resource.source_quality import (
+    SolarSourceQuality,
+    grade_solar_source_quality,
+    solar_source_quality_from_config,
+)
 
 __all__ = [
     "SolarResourceConfig",
@@ -75,4 +96,14 @@ __all__ = [
     "compute_net_solar_loss_factor",
     "default_solar_loss_taxonomy",
     "validate_solar_loss_keys",
+    # #743 solar provenance / realism dolphins
+    "SolarSourceQuality",
+    "grade_solar_source_quality",
+    "solar_source_quality_from_config",
+    "BifacialInFinancedChainError",
+    "assert_monofacial_financed_cf",
+    "detect_bifacial_uplift",
+    "SoilingProfile",
+    "compute_soiling_profile_effective_pct",
+    "soiling_profile_from_config",
 ]
