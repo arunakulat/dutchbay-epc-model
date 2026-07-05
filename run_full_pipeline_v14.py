@@ -693,6 +693,21 @@ def cli(cfg: DictConfig) -> None:
                 - capital_risk_report.path: Target .html path. Default
                   '<export_dir>/capital_risk_report.html'. On emission the written
                   path is echoed back under result['capital_risk_report_path'].
+            Optional fields (#739 slice-2 — two-factor interaction-grid report
+            emission; OFF by default — leaving emit_interaction_grid false
+            preserves behaviour and keeps committed-scenario output byte-identical):
+                - emit_interaction_grid: If true, after a successful run build the
+                  two-factor sensitivity interaction grid (N×M full-pipeline
+                  evaluations — heavy, batch-path only, never the synchronous HTTP
+                  report route; the #645 latency ledger) and render a lender HTML
+                  report carrying the interaction-grid section, via
+                  app.reports.interaction_grid_emit. The two drivers and the metric
+                  are config-required (the scenario's 'interaction_grid' block); no
+                  default pair is imposed, and a missing/malformed block fails loud.
+                  Default false.
+                - interaction_grid_report.path: Target .html path. Default
+                  '<export_dir>/interaction_grid_report.html'. On emission the written
+                  path is echoed back under result['interaction_grid_report_path'].
 
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
@@ -796,6 +811,11 @@ def cli(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     emit_capital_risk_report = bool(cfg.get("emit_capital_risk_report", False))
     capital_risk_report_cfg = cfg.get("capital_risk_report", None) or {}
+
+    # #739 slice-2: optional two-factor interaction-grid report emission. OFF by default; the
+    # drivers/metric are config-required (interaction_grid block), no default pair is imposed.
+    emit_interaction_grid = bool(cfg.get("emit_interaction_grid", False))
+    interaction_grid_cfg = cfg.get("interaction_grid_report", None) or {}
 
     effective_config: str = str(config)
     # Temp patched-scenario files (wind then solar) to clean up in ``finally``.
@@ -1008,6 +1028,32 @@ def cli(cfg: DictConfig) -> None:
             )
             result["capital_risk_report_path"] = str(cr_written)
             logger.info("Wrote capital-risk report to %s", cr_written)
+
+        # #739 slice-2: optional two-factor interaction-grid report emission. OFF unless
+        # emit_interaction_grid=true (committed scenarios leave it off → byte-identical). Builds
+        # the grid (N×M full-pipeline evaluations — heavy, batch-path only, never the synchronous
+        # HTTP report route; the #645 latency ledger) from the config-required interaction_grid
+        # block and renders a lender report with that section. Fails loud on a missing/malformed
+        # block, since the caller explicitly opted in (CESSPIT). Imported lazily so the report
+        # stack is not pulled onto the finance CLI's import path unless this step runs.
+        if emit_interaction_grid and isinstance(result, dict):
+            from app.reports.interaction_grid_emit import (
+                emit_interaction_grid_report_from_pipeline,
+            )
+
+            ig_path_raw = interaction_grid_cfg.get("path", None)
+            ig_out = (
+                Path(str(ig_path_raw))
+                if ig_path_raw
+                else Path(str(export_dir_raw)) / "interaction_grid_report.html"
+            )
+            ig_written = emit_interaction_grid_report_from_pipeline(
+                result,
+                effective_config,
+                ig_out,
+            )
+            result["interaction_grid_report_path"] = str(ig_written)
+            logger.info("Wrote interaction-grid report to %s", ig_written)
 
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns

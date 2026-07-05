@@ -93,6 +93,18 @@
       color: #7a5200;
       font-size: 9.5pt;
     }
+    /* Two-factor interaction heatmap (#739) — CSS-scaled cell shading, no new deps.
+       Positive interaction (super-additive) shades blue, negative (sub-additive) red;
+       the shade step tracks |intensity| in fifths. A failed/neutral cell stays plain. */
+    table.heatmap td.cell { text-align: right; font-variant-numeric: tabular-nums; }
+    td.cell .sub { display: block; font-size: 8pt; color: #667; }
+    td.hm-pos-1 { background: #eef4fb; } td.hm-pos-2 { background: #d6e6f6; }
+    td.hm-pos-3 { background: #b9d4ef; } td.hm-pos-4 { background: #97bfe6; }
+    td.hm-pos-5 { background: #6ea6db; color: #08243d; }
+    td.hm-neg-1 { background: #fdf0ee; } td.hm-neg-2 { background: #f8d8d3; }
+    td.hm-neg-3 { background: #f0b8af; } td.hm-neg-4 { background: #e6968a; }
+    td.hm-neg-5 { background: #d87264; color: #3d0f08; }
+    .heatmap-legend { font-size: 8.5pt; color: #667; margin-top: 4pt; }
   </style>
 </head>
 <body>
@@ -467,6 +479,91 @@
     {% else %}
     <p class="muted">NPV distribution chart ({{ ctx.capital_risk.npv_distribution_filename }})
       was not embedded (chart rendering unavailable).</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 4i. Two-factor sensitivity interaction grid — #739 slice-2. Render-when-present; the N×M
+     grid is a full-pipeline evaluation per cell, so it runs out-of-band (heavy) and is passed
+     in (never the synchronous report route — the #645 latency ledger). Discloses failed cells,
+     base mismatch and unresolved drivers so a hidden defect can't read as a clean heatmap. #}
+  {% if ctx.interaction_grid %}
+  {% set ig = ctx.interaction_grid %}
+  <section class="page">
+    <h2>Two-Factor Sensitivity &mdash; Interaction Grid</h2>
+    <p class="muted">Joint sensitivity of
+      {% if ig.is_ratio_metric %}the {{ ig.metric_name }}{% else %}{{ ig.metric_name }}{% endif %}
+      to <strong>{{ ig.param_a_label }}</strong> (rows) and
+      <strong>{{ ig.param_b_label }}</strong> (columns), evaluated over the cross-product of each
+      driver's low/base/high sweep ({{ ig.n_evaluations }} full-pipeline evaluations). The
+      one-at-a-time tornado cannot show this: each shaded cell is the
+      <em>interaction</em> &mdash; the coupling term, i.e. how far the joint outcome departs from
+      the sum of the two one-way effects
+      ({% if ig.is_ratio_metric %}percentage points{% else %}USD{% endif %}); a driver pair that
+      acts independently shows an all-neutral surface. The small figure in each cell is the raw
+      metric at that pair (base {{ fmt_ratio_pct(ig.base_metric) if ig.is_ratio_metric else fmt_usd(ig.base_metric) }}).
+      Largest interaction magnitude:
+      <strong>{{ fmt_ratio_pct(ig.max_abs_interaction) if ig.is_ratio_metric else fmt_usd(ig.max_abs_interaction) }}</strong>.</p>
+    <table class="heatmap">
+      <thead>
+        <tr>
+          <th>{{ ig.param_a_label }} \ {{ ig.param_b_label }}</th>
+          {% for bl in ig.b_labels %}
+          <th style="text-align:right;">{{ bl }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in ig.rows %}
+        <tr>
+          <td>{{ row.label }}</td>
+          {% for cell in row.cells %}
+          {% if cell.intensity is none %}
+            {% set hmclass = "" %}
+          {% elif cell.intensity >= 0 %}
+            {% set hmclass = "hm-pos-" ~ ([(cell.intensity * 5) | round(0, 'ceil') | int, 1] | max) %}
+          {% else %}
+            {% set hmclass = "hm-neg-" ~ ([((-cell.intensity) * 5) | round(0, 'ceil') | int, 1] | max) %}
+          {% endif %}
+          <td class="cell {{ hmclass }}">
+            {% if cell.interaction is none %}
+              &mdash;
+            {% else %}
+              {{ fmt_ratio_pct(cell.interaction) if ig.is_ratio_metric else fmt_usd(cell.interaction) }}
+            {% endif %}
+            <span class="sub">{{ (fmt_ratio_pct(cell.value) if ig.is_ratio_metric else fmt_usd(cell.value)) if cell.value is not none else "&mdash;" | safe }}</span>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="heatmap-legend">Cell shading: blue = super-additive (drivers reinforce), red =
+      sub-additive (drivers offset), plain = negligible or failed. Each cell shows the interaction
+      term with the raw metric beneath.</p>
+    {# Honesty disclosures (#657): never hide a failed cell, a mis-declared base, or a flat axis. #}
+    {% if ig.n_failed_cells > 0 or ig.base_mismatch or ig.unresolved_drivers %}
+    <div class="fx-warning">
+      <strong>Grid integrity:</strong>
+      {% if ig.n_failed_cells > 0 %}
+      {{ ig.n_failed_cells }} of {{ ig.rows | length * ig.b_labels | length }} interior cell(s)
+      failed to evaluate and are shown as em-dashes (not zero-filled).
+      {% endif %}
+      {% if ig.base_mismatch %}
+      A driver's declared base value drifted from the live config, so the grid's base cell does
+      not equal the independently evaluated base metric &mdash; interaction terms are computed
+      against the grid's own base frame for internal consistency, but read the surface with that
+      caveat.
+      {% endif %}
+      {% if ig.unresolved_drivers %}
+      Driver(s) {{ ig.unresolved_drivers | join(", ") }} did not resolve to a config path; their
+      axis is structurally flat.
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">Grid integrity: all
+      {{ ig.rows | length * ig.b_labels | length }} cells evaluated; declared base matches the
+      evaluated base metric; both drivers resolved.</p>
     {% endif %}
   </section>
   {% endif %}

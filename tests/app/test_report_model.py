@@ -298,6 +298,125 @@ def test_global_sa_none_by_default() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Two-factor interaction grid wiring (#739 slice-2)
+# --------------------------------------------------------------------------- #
+def _interaction_grid_fixture() -> "TwoFactorInteractionGrid":  # noqa: F821
+    """A 3x3 IRR interaction grid with one FAILED interior cell + honesty metadata.
+
+    Base cell (0,0) = 0.05. A super-additive corner at (2,2) drives max_abs_interaction, and one
+    interior cell carries NaN so the projection's failed-cell handling and disclosure are exercised.
+    """
+    from analytics.contracts_v14 import TwoFactorInteractionGrid
+
+    nan = float("nan")
+    values = [
+        [0.050, 0.052, 0.048],
+        [0.055, 0.060, nan],
+        [0.045, 0.049, 0.070],
+    ]
+    interaction = [
+        [0.000, 0.000, 0.000],
+        [0.000, 0.001, nan],
+        [0.000, -0.002, 0.015],
+    ]
+    return TwoFactorInteractionGrid(
+        metric_name="project_irr",
+        param_a_name="tariff.lkr_per_kwh",
+        param_b_name="fx.usdlkr_depreciation_pct",
+        a_labels=["tariff.lkr_per_kwh=base", "=low", "=high"],
+        b_labels=["fx=base", "=low", "=high"],
+        values=values,
+        interaction=interaction,
+        base_metric=0.050,
+        max_abs_interaction=0.015,
+        metadata={
+            "base_config_path": "scenarios/example.yaml",
+            "n_evaluations": 10,
+            "n_failed_cells": 1,
+            "base_mismatch": False,
+            "declared_base_cell": 0.050,
+            "unresolved_drivers": [],
+            "param_a_label": "PPA tariff",
+            "param_b_label": "FX depreciation",
+        },
+    )
+
+
+def test_interaction_grid_projected_and_surfaces_honesty_metadata() -> None:
+    from app.reports.report_model import build_report_context as _brc
+
+    grid = _interaction_grid_fixture()
+    ctx = _brc(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        interaction_grid=grid,
+    )
+    block = ctx.interaction_grid
+    assert block is not None
+    # Labels + shape mapped 1:1.
+    assert block.param_a_label == "PPA tariff"
+    assert block.param_b_label == "FX depreciation"
+    assert block.b_labels == ["fx=base", "=low", "=high"]
+    assert len(block.rows) == 3 and len(block.rows[0].cells) == 3
+    assert block.is_ratio_metric is True  # project_irr → ratio, not USD
+    # Honesty metadata surfaced as first-class fields.
+    assert block.n_failed_cells == 1
+    assert block.base_mismatch is False
+    assert block.unresolved_drivers == []
+    assert block.n_evaluations == 10
+    assert block.max_abs_interaction == pytest.approx(0.015)
+    # The failed interior cell (1,2) maps NaN -> None (never zero-filled).
+    failed = block.rows[1].cells[2]
+    assert (
+        failed.value is None and failed.interaction is None and failed.intensity is None
+    )
+    # The strongest corner (2,2) gets full positive intensity.
+    corner = block.rows[2].cells[2]
+    assert corner.interaction == pytest.approx(0.015)
+    assert corner.intensity == pytest.approx(1.0)
+    # A negative interaction cell gets a negative intensity.
+    neg = block.rows[2].cells[1]
+    assert neg.intensity is not None and neg.intensity < 0
+
+
+def test_interaction_grid_none_by_default() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.interaction_grid is None
+
+
+def test_interaction_grid_default_off_is_byte_identical() -> None:
+    """Passing no grid must produce a report context identical to before the feature."""
+    case = _case(_VALUE_DESTRUCTIVE_KPIS)
+    without = build_report_context(case, generated_at=GENERATED_AT)
+    explicit_none = build_report_context(
+        case, generated_at=GENERATED_AT, interaction_grid=None
+    )
+    assert without.interaction_grid is None
+    assert explicit_none.interaction_grid is None
+    # The rendered HTML omits the section entirely and is byte-identical either way.
+    html_without = render_report_html(without)
+    html_none = render_report_html(explicit_none)
+    assert html_without == html_none
+    assert "Interaction Grid" not in html_without
+
+
+def test_interaction_grid_renders_failed_cell_and_disclosure() -> None:
+    """The rendered section discloses the failed cell (em-dash) and integrity note (#657)."""
+    grid = _interaction_grid_fixture()
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS),
+        generated_at=GENERATED_AT,
+        interaction_grid=grid,
+    )
+    html = render_report_html(ctx)
+    assert "Interaction Grid" in html
+    # Honesty disclosure: the failed-cell count is surfaced, not hidden.
+    assert "1 of 9 interior cell(s)" in html
+
+
+# --------------------------------------------------------------------------- #
 # Evidence register (#435 -> RPT-1)
 # --------------------------------------------------------------------------- #
 def test_evidence_register_projected_from_scenario_config() -> None:
