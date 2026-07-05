@@ -122,12 +122,13 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
 import hydra
 import yaml
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.executive_workbook import emit_executive_workbook_from_pipeline
@@ -477,6 +478,63 @@ def _apply_wind_to_scenario(
     return Path(tmp.name)
 
 
+def _deep_merge_into(
+    base: dict[str, Any], overlay: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Recursively merge ``overlay`` into ``base`` (overlay wins); returns ``base``.
+
+    Nested mappings merge key-by-key; every non-mapping value (scalars, lists)
+    replaces the base value. Used to overlay CLI resource overrides onto a scenario's
+    ``resource`` block without discarding sibling keys.
+    """
+    for key, value in overlay.items():
+        existing = base.get(key)
+        if isinstance(existing, dict) and isinstance(value, Mapping):
+            _deep_merge_into(existing, value)
+        else:
+            base[key] = value
+    return base
+
+
+def _apply_resource_overrides_to_scenario(
+    scenario_path: str | Path,
+    resource_overrides: Mapping[str, Any],
+) -> Path:
+    """Overlay CLI ``resource_overrides`` onto the scenario's ``resource`` block (#683a).
+
+    Deep-merges the override mapping into ``scenario['resource']`` (creating it if
+    absent) so wind-resource knobs already drivable in the scenario YAML —
+    ``uncertainty.*`` (IEC 61400-15-2 budget / P50 haircut) and the air-density
+    corrections under ``wind`` — can also be set from the Hydra CLI without editing
+    the committed scenario. Returns the path of a NEW temp file; the original scenario
+    on disk is never touched. Cleaned up by the ``finally`` block in :func:`cli`.
+    """
+    scenario_dict = _load_yaml_scenario(scenario_path)
+    resource = scenario_dict.get("resource")
+    if not isinstance(resource, dict):
+        resource = {}
+    _deep_merge_into(resource, resource_overrides)
+    scenario_dict["resource"] = resource
+
+    src_dir = Path(scenario_path).resolve().parent
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".patched.yaml",
+        dir=str(src_dir),
+        delete=False,
+    )
+    try:
+        yaml.safe_dump(scenario_dict, tmp, sort_keys=False)
+    finally:
+        tmp.close()
+    logger.info(
+        "Resource overrides applied to scenario (keys=%s)",
+        sorted(resource_overrides.keys()),
+    )
+    return Path(tmp.name)
+
+
 def _apply_solar_to_scenario(
     scenario_path: str | Path,
     solar_export_path: str | Path,
@@ -817,13 +875,39 @@ def cli(cfg: DictConfig) -> None:
     emit_interaction_grid = bool(cfg.get("emit_interaction_grid", False))
     interaction_grid_cfg = cfg.get("interaction_grid_report", None) or {}
 
+    # #683 (a): optional CLI-overridable wind-resource knobs. A ``resource_overrides``
+    # mapping (uncertainty budget / P50 haircut, air-density corrections, ...) is
+    # deep-merged onto the scenario's ``resource`` block, so knobs already drivable in
+    # the scenario YAML can also be set from the CLI. OFF by default (null) — when unset
+    # the original scenario path flows straight through, byte-identical.
+    resource_overrides = cfg.get("resource_overrides", None)
+
     effective_config: str = str(config)
-    # Temp patched-scenario files (wind then solar) to clean up in ``finally``.
+    # Temp patched-scenario files (resource-overrides then wind then solar) to clean up
+    # in ``finally``.
     patched_scenario_paths: list[Path] = []
     # Resolved frozen wind-export path (if any), captured for the optional
     # Executive Workbook step so it can read the long_term_trend block.
     resolved_wind_json_path: Path | None = None
     try:
+        # #683 (a): apply CLI resource overrides FIRST so any subsequent wind/solar
+        # patch builds on the overridden resource block. Empty/absent -> no-op ->
+        # the original scenario path flows through unchanged (byte-identical).
+        if resource_overrides:
+            overrides_dict = OmegaConf.to_container(resource_overrides, resolve=True)
+            if not isinstance(overrides_dict, Mapping):
+                raise ValueError(
+                    "resource_overrides must be a mapping (e.g. "
+                    "'resource_overrides={uncertainty:{p50_haircut_pct:0.05}}'); "
+                    f"got {type(overrides_dict).__name__}"
+                )
+            resource_patched_path = _apply_resource_overrides_to_scenario(
+                scenario_path=config,
+                resource_overrides=cast(Mapping[str, Any], overrides_dict),
+            )
+            patched_scenario_paths.append(resource_patched_path)
+            config = str(resource_patched_path)
+            effective_config = str(resource_patched_path)
         if wind_assessment_json or wind_auto_orchestrate:
             # Resolve the wind export path: either explicitly supplied or
             # produced via auto-orchestrate subprocess.
