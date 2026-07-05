@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from analytics.config_schema import get_required_fields
+from analytics.run_modes import resolve_run_mode
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +273,28 @@ def _validate_technology_types(
             )
 
 
+def _validate_run_mode(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate any declared run mode (``run.mode`` / ``run_mode``) at pre-flight.
+
+    #733 slice 1 (CESSPIT, the #601 lesson: validate at config time, not first
+    use). The run mode is OPT-IN — an ABSENT declaration is not an error and the
+    config passes byte-identically. A PRESENT-but-malformed declaration (bad
+    token, non-string token, non-mapping ``run`` block, unrecognised keys
+    inside the ``run`` block — a typo'd ``Mode:``/``mdoe:`` must not silently
+    resolve to no-mode — or conflicting keys) is collected as a validation
+    error naming the key, the bad value, and the valid tokens.
+
+    The check delegates to :func:`analytics.run_modes.resolve_run_mode` — the
+    single resolution authority — so this gate can never drift from what the
+    #733b/#733c wiring will actually resolve (a guard must reuse the engine's
+    exact resolution).
+    """
+    try:
+        resolve_run_mode(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -302,6 +325,10 @@ def validate_config_for_v14(
 
     # 1b. Validate any declared technology `type` against the enum (ARCH-6, #488).
     _validate_technology_types(raw_config, errors)
+
+    # 1c. Validate any declared run mode (`run.mode` / `run_mode`) against the
+    # #733 contract (opt-in: absent -> no error).
+    _validate_run_mode(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
