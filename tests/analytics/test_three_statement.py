@@ -209,3 +209,55 @@ def test_waterfall_reconstructs_cash_to_equity_when_row_omits_it() -> None:
     }
     wf = build_cashflow_waterfall([row])
     assert wf.rows[0].cash_to_equity == pytest.approx(65.0)
+
+
+# --------------------------------------------------------------------------- #
+# #811 — levy-inclusive capex tie-out (structural, replaces the #738 footnote)
+# --------------------------------------------------------------------------- #
+def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> None:
+    """#811: with import levies declared, the statements book PP&E / paid-in equity
+    on the SAME levy-inclusive financed-capex base the debt sizing, NPV, equity
+    distribution and Sources & Uses use, so paid-in equity ties out natively (no
+    reconciliation footnote). The lendercase's financed capex is $167,859,300
+    (= $159.6M pre-levy + $8,259,300 import duties/unrecoverable VAT) and its S&U
+    equity is $99,036,987 — exactly what the three-statement paid-in equity must equal.
+    """
+    from pathlib import Path
+
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+    from analytics.scenario_loader import load_scenario_config
+    from analytics.three_statement import _resolve_capex_usd
+
+    repo_root = Path(__file__).resolve().parents[2]
+    lender = str(repo_root / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
+
+    config = load_scenario_config(lender)
+    # The capitalised base is the levy-inclusive financed capex (delegated to the
+    # single finance.debt_v14._extract_capex_usd resolver), not the pre-levy usd_total.
+    assert _resolve_capex_usd(config) == pytest.approx(167_859_300.0, abs=1e-6)
+
+    result = run_v14_pipeline(config=lender, validation_mode="strict")
+    ts = build_three_statement_from_run(result, config)
+    assert ts is not None
+    # Paid-in equity ties EXACTLY to the Sources & Uses equity (levy-inclusive).
+    assert float(ts.balance_sheet[0].paid_in_equity) == pytest.approx(
+        99_036_987.0, abs=1e-6
+    )
+    # And the balance sheet still articulates: every tie-out passes.
+    assert ts.tie_outs.balance_sheet_balances
+    assert ts.tie_outs.debt_retires_to_residual
+    assert ts.tie_outs.cashflow_reconciles
+    assert ts.tie_outs.retained_earnings_rolls
+
+
+def test_levy_free_capex_resolution_is_unchanged_flat_path() -> None:
+    """#811 byte-identity: a config with no ``taxes_indirect`` block (and no
+    ``derive_from_breakdown``) resolves capex via the unchanged flat ``usd_total``
+    path, so levy-free three-statement output is untouched."""
+    from analytics.three_statement import _resolve_capex_usd
+
+    levy_free = {
+        "capex": {"usd_total": 123_456_789.0},
+        "fx": {"start_lkr_per_usd": 100.0},
+    }
+    assert _resolve_capex_usd(levy_free) == pytest.approx(123_456_789.0, abs=1e-6)

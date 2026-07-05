@@ -806,18 +806,13 @@
         {% endfor %}
       </tbody>
     </table>
-    {# #738 reconciliation footnote — rendered ONLY when import levies are present, so
-       levy-free reports stay byte-identical. The statements book PP&E / paid-in equity
-       on the PRE-LEVY capex basis (CCCDIR: no finance import), while the Sources & Uses
-       equity funds the levy-inclusive gross; this line closes that gap IN the document. #}
-    {% if ctx.finance and ctx.finance.funding.import_levies_usd and ctx.three_statement.balance_sheet %}
-    <p class="muted">Reconciliation note: paid-in equity above
-      ({{ fmt_usd(ctx.three_statement.balance_sheet[0].paid_in_equity) }}) is stated on the
-      pre-levy capex basis; the Sources &amp; Uses equity
-      ({{ fmt_usd(ctx.finance.funding.equity_usd) }}) includes
-      {{ fmt_usd(ctx.finance.funding.import_levies_usd) }} of import duties &amp; unrecoverable
-      VAT capitalised at financial close — see the Sources &amp; Uses of Funds table.</p>
-    {% endif %}
+    {# #811: the three statements now book PP&E / paid-in equity on the SAME
+       levy-inclusive financed-capex basis the debt sizing, NPV, equity distribution,
+       and Sources & Uses use (analytics.three_statement._resolve_capex_usd delegates
+       to the single finance.debt_v14._extract_capex_usd resolver when import levies /
+       a bottom-up breakdown are declared), so paid-in equity ties out to the Sources &
+       Uses equity natively. The #738 pre-levy reconciliation footnote is therefore
+       removed — the statements reconcile in the numbers, not in prose. #}
   </section>
   {% endif %}
 
