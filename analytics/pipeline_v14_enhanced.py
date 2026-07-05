@@ -712,7 +712,21 @@ def run_v14_pipeline_enhanced(
         )
 
         phase_start = time.time()
-        debt_result = plan_debt(annual_rows=annual_rows, config=cfg)
+        # #733b: translate a declared run mode (run.mode / run_mode) into the debt
+        # engine's toy-fallback ceiling. A lender/IC policy (allow_toy_capex=False)
+        # hard-forbids the toy CAPEX=100 and cost-free-debt fallbacks even where the
+        # config opted in; screening/developer (allow_toy_capex=True) and an
+        # undeclared mode leave the engine's opt-in semantics untouched — the ceiling
+        # is never applied as a default-on, so those runs stay byte-identical.
+        from analytics.run_modes import POLICIES, resolve_run_mode
+
+        _mode = resolve_run_mode(cfg)
+        _forbid_toy_fallback = _mode is not None and not POLICIES[_mode].allow_toy_capex
+        debt_result = plan_debt(
+            annual_rows=annual_rows,
+            config=cfg,
+            forbid_toy_fallback=_forbid_toy_fallback,
+        )
         debt_result = _validate_debt_result_structure(debt_result)
 
         # Senior credit-support fees (#737): the debt engine sized the debt with the

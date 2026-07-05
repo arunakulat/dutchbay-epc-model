@@ -140,8 +140,27 @@ def _truthy_flag(value: Any) -> bool:
     return bool(value)
 
 
+#: #733b run-mode hard gate. When a declared lender/IC run resolves to
+#: ``run_modes.POLICIES[mode].allow_toy_capex is False``, the analytics pipeline
+#: asks the debt engine to forbid every toy fallback via ``plan_debt(...,
+#: forbid_toy_fallback=True)``, which stamps this reserved key onto the debt
+#: engine's OWN config copy (never the caller's config). The flag rides the
+#: engine's existing config threading to every capex-extraction and cost-free-debt
+#: site, so ONE chokepoint check in ``_allow_toy_capex_fallback`` covers them all.
+#: finance reads a plain config bool — it does not import the analytics run-mode
+#: policy (no layer inversion). Absent (every screening/developer/undeclared run)
+#: it is a strict no-op, so those runs stay byte-identical.
+_FORBID_TOY_FALLBACK_KEY = "_run_mode_forbids_toy_fallback"
+
+
 def _allow_toy_capex_fallback(params: Mapping[str, Any]) -> bool:
-    """Return true only when toy fallback is explicitly enabled."""
+    """Return true only when toy fallback is explicitly enabled AND not forbidden.
+
+    The #733b run-mode ceiling (``_FORBID_TOY_FALLBACK_KEY``) is a HARD gate: a
+    declared lender/IC run forbids the toy fallback even where the config opted in.
+    """
+    if bool(params.get(_FORBID_TOY_FALLBACK_KEY)):
+        return False
     if _truthy_flag(_lookup_case_insensitive(params, "allow_toy_fallback")):
         return True
 
@@ -1421,6 +1440,7 @@ def plan_debt(
     *,
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
+    forbid_toy_fallback: bool = False,
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
 
@@ -1431,8 +1451,17 @@ def plan_debt(
     The debt mix/rates are governed by ``Financing_Terms.mix`` + ``Financing_Terms.rates``;
     a ``Financing_Terms.debt_tranches`` list is not an engine input (see
     :func:`_warn_if_decorative_tranches`).
+
+    ``forbid_toy_fallback`` (#733b): when True (a declared lender/IC run whose
+    ``run_modes`` policy sets ``allow_toy_capex=False``), stamp the reserved
+    :data:`_FORBID_TOY_FALLBACK_KEY` onto a LOCAL config copy so every downstream
+    capex-extraction and cost-free-debt site hard-forbids the toy fallback even
+    where the config opted in. Never mutates the caller's config; default False
+    keeps every other run byte-identical.
     """
     rows = list(annual_rows)
+    if forbid_toy_fallback:
+        config = {**config, _FORBID_TOY_FALLBACK_KEY: True}
     _warn_if_decorative_tranches(config)
     config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
     core = apply_debt_layer(params=config, annual_rows=rows)
