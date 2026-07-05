@@ -288,7 +288,12 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     assert kpis["project_irr"] == pytest.approx(0.020322992686519513, abs=1e-9)
     assert kpis["equity_irr"] == pytest.approx(-0.04992120564267999, abs=1e-9)
     assert kpis["project_npv"] == pytest.approx(-70947738.39230962, rel=1e-9)
-    assert kpis["min_dscr"] == pytest.approx(1.2999999999999998, abs=1e-9)
+    # #790 (user decision 2026-07-05): the headline min_dscr is the CONSERVATIVE
+    # fold-corrected covenant minimum (bridge-corrected per-year table, fee-netted
+    # per #737) — the annual number covenants are tested on. The per-period sculpt
+    # floor stays pinned as min_dscr_period.
+    assert kpis["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-9)
+    assert kpis["min_dscr_period"] == pytest.approx(1.2999999999999998, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(191218454.47506344, rel=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
     # WACC + spread), below the base NPV. -71.32M -> -76.44M (#737 fees + higher WACC).

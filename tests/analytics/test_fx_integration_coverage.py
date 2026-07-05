@@ -233,4 +233,6 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     k = out["kpis"]
     assert k["project_irr"] == pytest.approx(0.020322992686519513, abs=1e-9)
     assert k["equity_irr"] == pytest.approx(-0.04992120564267999, abs=1e-9)
-    assert k["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
+    assert k["min_dscr"] == pytest.approx(1.2883814162502452, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)

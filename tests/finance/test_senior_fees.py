@@ -112,8 +112,12 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     debt_on = res_on["debt_result"] or {}
     debt_off = res_off["debt_result"] or {}
     # The per-period DSCR series holds the sculpt target fee-inclusively (the solver
-    # re-sizes the gearing against the fee-netted series)...
-    assert on["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    # re-sizes the gearing against the fee-netted series) — surfaced as
+    # min_dscr_period since #790...
+    assert on["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    # ...and the KPI HEADLINE now agrees with the engine's fold-corrected covenant
+    # minimum (#790): the two lender-facing surfaces can no longer diverge.
+    assert on["min_dscr"] == pytest.approx(1.288, abs=0.005)
     # ...while the CONSERVATIVE per-year covenant table reads operating year 1 slightly
     # below it: year 1 covers its own service PLUS the orphaned half-year bridge service
     # out of fee-netted CFADS, and the fee consumed the pre-fee slack there (~1.306 ->

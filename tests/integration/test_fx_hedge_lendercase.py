@@ -35,10 +35,12 @@ SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 # Committed lender-case pins (argv-correct, kpi_oracle).
 # Re-baselined by #737 (2026-07-04): guarantee + PRI credit-support fees ON,
-# fee-inside-sculpt (gearing 0.45 -> 0.4275); minDSCR re-pins at the 1.30 target.
+# fee-inside-sculpt (gearing 0.45 -> 0.4275); the per-period sculpt holds the 1.30
+# target while the #790 headline reports the fold-corrected covenant minimum.
 BASE_PROJECT_IRR = 0.020322992686519513
 BASE_EQUITY_IRR = -0.04992120564267999
-BASE_MIN_DSCR = 1.2999999999999998
+BASE_MIN_DSCR = 1.2883814162502452  # #790 fold headline (per-period floor: 1.30)
+BASE_MIN_DSCR_PERIOD = 1.2999999999999998
 BASE_PROJECT_NPV = -70947738.39230962
 
 
@@ -85,8 +87,16 @@ def test_partial_hedge_between_base_and_full(base_cfg: Dict[str, Any]) -> None:
 
 
 def test_min_dscr_invariant_under_hedge(base_cfg: Dict[str, Any]) -> None:
-    """Debt auto-sizes to target DSCR, so the hedge surfaces in IRR/NPV, not min DSCR."""
+    """Debt auto-sizes to target DSCR, so the hedge surfaces in IRR/NPV, not min DSCR.
+
+    The structural invariant is the PER-PERIOD sculpt floor (min_dscr_period since
+    #790): the solver re-sizes debt to hold it at target under any hedge ratio. The
+    #790 fold HEADLINE is asserted separately per ratio without an invariance claim
+    (the year-1 fold is not covenant-pinned and may legitimately move with the
+    hedged USD conversion).
+    """
     for h in (0.0, 0.5, 1.0):
-        assert _run(base_cfg, h, 0.0)["min_dscr"] == pytest.approx(
-            BASE_MIN_DSCR, rel=1e-9
-        )
+        kpis = _run(base_cfg, h, 0.0)
+        assert kpis["min_dscr_period"] == pytest.approx(BASE_MIN_DSCR_PERIOD, rel=1e-9)
+        # The headline can never exceed the per-period floor (conservative min).
+        assert kpis["min_dscr"] <= kpis["min_dscr_period"] + 1e-12
