@@ -77,7 +77,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from pathlib import Path
 from typing import Any, Mapping, cast
 
 import hydra
@@ -87,6 +86,7 @@ from analytics.contracts_v14 import MonteCarloResult
 
 # Canonical Monte Carlo engine (analytics.monte_carlo_v14 is a deprecated shim).
 from analytics.mc.engine import run_monte_carlo_analysis
+from analytics.output_paths import DEFAULT_MC_OUTPUT_ROOT, resolve_output_dir
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,12 @@ def main(cfg: DictConfig) -> None:
                 - seed: Random seed (default: 42)
                 - output_dir: Output directory (default: _out/monte_carlo)
                 - write_artifacts: Write files (default: true)
+                - run_scoped: Group artifacts under a per-run subdirectory of
+                  output_dir (#735 slice-2; default false → path unchanged,
+                  byte-identical).
+                - run_id: Explicit run-scope subdirectory name; defaults to
+                  analytics.output_paths.default_run_id() when run_scoped is set
+                  and this is omitted. Ignored when run_scoped is false.
             Stochastic distributions come from the scenario's
             monte_carlo.parameters block (analytics.mc.engine), not this CLI.
 
@@ -158,8 +164,16 @@ def main(cfg: DictConfig) -> None:
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
 
-    # Extract parameters from config
-    output_dir = Path(str(cfg.get("output_dir", "_out/monte_carlo")))
+    # Extract parameters from config. #735 slice-2: route output_dir through the single-source
+    # resolver so this CLI's artifacts co-scope with the rest of a run. At the default
+    # (run_scoped=False) the resolver returns the configured root unchanged (DEFAULT_MC_OUTPUT_ROOT
+    # == "_out/monte_carlo"), so existing runs write to the same path — byte-identical; opt-in
+    # run_scoped/run_id cfg knobs (default off/none) group the run under a per-run subdirectory.
+    output_dir = resolve_output_dir(
+        cfg.get("output_dir", DEFAULT_MC_OUTPUT_ROOT),
+        run_scoped=bool(cfg.get("run_scoped", False)),
+        run_id=cfg.get("run_id", None),
+    )
     write_artifacts = bool(cfg.get("write_artifacts", True))
     n_trials = int(cfg.get("n_trials", 10000))
     seed = int(cfg.get("seed", 42))

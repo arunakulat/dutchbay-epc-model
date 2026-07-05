@@ -8,8 +8,14 @@ reproducible, run-scoped subdirectory.
 
 Slice 1 (#735): the constants + :func:`resolve_output_dir` (with a unit-tested run-scoping mode),
 consumed by ``run_full_pipeline_v14.py`` at its default (``run_scoped=False`` → the root
-unchanged, so committed runs write to the same paths — byte-identical). Routing the other
-entrypoints/configs onto it, and converging the naming, are follow-up slices.
+unchanged, so committed runs write to the same paths — byte-identical).
+
+Slice 2 (#735): the remaining artifact/report/export writers route their DEFAULT paths through
+this resolver too, so every artifact of a run co-scopes. The single-scenario pipeline's four
+report/workbook emitters derive their defaults from the resolver; the Monte-Carlo and sensitivity
+Hydra CLIs, and the batch scenario-analytics entrypoint (whose engine writes a sibling
+``*_charts/`` directory), route their output directories through it as well. Opt-in run-scoping is
+default-off everywhere, so committed runs stay byte-identical.
 
 GWTF: CCCDIR (one source for the default roots; no hardcoded literals scattered across
 entrypoints). The run-scope id reuses :mod:`analytics.run_manifest` (engine version + git SHA), so
@@ -25,15 +31,26 @@ from analytics.run_manifest import engine_version, git_sha
 
 __all__ = [
     "DEFAULT_PIPELINE_OUTPUT_ROOT",
+    "DEFAULT_MC_OUTPUT_ROOT",
+    "DEFAULT_SENSITIVITY_OUTPUT_ROOT",
     "default_run_id",
     "resolve_output_dir",
 ]
 
 #: Default artifact root for the single-scenario finance pipeline (``run_full_pipeline_v14.py``).
-#: Slice 1 single-sources this one (the entrypoint below consumes it); the Monte-Carlo
-#: (``_out/monte_carlo``) and sensitivity (``_out/sensitivity``) roots are converged onto this
-#: module in follow-up slices when their entrypoints are routed through the resolver.
+#: Slice 1 single-sourced this one; slice 2 (#735) converges the Monte-Carlo and sensitivity roots
+#: onto this module too and routes their entrypoints through :func:`resolve_output_dir`.
 DEFAULT_PIPELINE_OUTPUT_ROOT = "_out/run_full_pipeline_v14"
+
+#: Default artifact root for the Monte-Carlo Hydra CLI
+#: (``analytics/cli/cli_monte_carlo_hydra.py``). Single-sourced here (CCCDIR) so the literal no
+#: longer lives only in that CLI's ``cfg.get("output_dir", ...)`` default.
+DEFAULT_MC_OUTPUT_ROOT = "_out/monte_carlo"
+
+#: Default artifact root for the sensitivity Hydra CLI
+#: (``analytics/cli/cli_sensitivity_hydra.py``). Single-sourced here (CCCDIR) so the literal no
+#: longer lives only in that CLI's ``cfg.get("output_dir", ...)`` default.
+DEFAULT_SENSITIVITY_OUTPUT_ROOT = "_out/sensitivity"
 
 
 def default_run_id() -> str:
