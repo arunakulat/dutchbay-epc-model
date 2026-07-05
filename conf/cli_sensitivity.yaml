@@ -20,6 +20,14 @@ config: ""
 # Output directory for sensitivity results.
 output_dir: _out/sensitivity
 
+# #735 slice-2: opt-in run-scoping (OFF by default → byte-identical).
+# When run_scoped is true, artifacts are grouped under a per-run subdirectory
+# '<output_dir>/<run_id>' (routed via analytics.output_paths.resolve_output_dir).
+# run_id defaults to analytics.output_paths.default_run_id() when null. Default
+# false leaves output_dir unchanged.
+run_scoped: false
+run_id: null
+
 # Write artifacts to disk (vs stdout only).
 write_artifacts: true
 

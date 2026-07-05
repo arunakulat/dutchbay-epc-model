@@ -61,7 +61,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any
 
 import hydra
@@ -69,6 +68,7 @@ from omegaconf import DictConfig
 
 # Import engine function
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
+from analytics.output_paths import DEFAULT_SENSITIVITY_OUTPUT_ROOT, resolve_output_dir
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +89,12 @@ def main(cfg: DictConfig) -> None:
                 - output_dir: Output directory (default: _out/sensitivity)
                 - write_artifacts: Write files (default: true)
                 - metrics: KPIs to track (first is the tornado target metric)
+                - run_scoped: Group artifacts under a per-run subdirectory of
+                  output_dir (#735 slice-2; default false → path unchanged,
+                  byte-identical).
+                - run_id: Explicit run-scope subdirectory name; defaults to
+                  analytics.output_paths.default_run_id() when run_scoped is set
+                  and this is omitted. Ignored when run_scoped is false.
                 
     Returns:
         None. Prints JSON to stdout, optionally writes artifacts.
@@ -118,8 +124,17 @@ def main(cfg: DictConfig) -> None:
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
 
-    # Extract parameters from config
-    output_dir = Path(str(cfg.get("output_dir", "_out/sensitivity")))
+    # Extract parameters from config. #735 slice-2: route output_dir through the single-source
+    # resolver so this CLI's artifacts co-scope with the rest of a run. At the default
+    # (run_scoped=False) the resolver returns the configured root unchanged
+    # (DEFAULT_SENSITIVITY_OUTPUT_ROOT == "_out/sensitivity"), so existing runs write to the same
+    # path — byte-identical; opt-in run_scoped/run_id cfg knobs (default off/none) group the run
+    # under a per-run subdirectory.
+    output_dir = resolve_output_dir(
+        cfg.get("output_dir", DEFAULT_SENSITIVITY_OUTPUT_ROOT),
+        run_scoped=bool(cfg.get("run_scoped", False)),
+        run_id=cfg.get("run_id", None),
+    )
     write_artifacts = bool(cfg.get("write_artifacts", True))
     metrics = list(cfg.get("metrics", []))
 
