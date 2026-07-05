@@ -117,6 +117,9 @@
     <div class="org">{{ ctx.meta.organization }}</div>
     <div class="meta">
       Scenario variant: {{ ctx.scenario_variant }}<br />
+      {%- if ctx.report_grade %}
+      Run grade: {{ ctx.report_grade | capitalize }}<br />
+      {%- endif %}
       Generated: {{ ctx.generated_at }}<br />
       Report version: {{ ctx.meta.version }}
     </div>
