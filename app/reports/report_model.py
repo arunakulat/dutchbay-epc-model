@@ -667,6 +667,46 @@ class InteractionGridBlock(BaseModel):
     base_config_path: str
 
 
+class TechComparisonRow(BaseModel):
+    """One config's column in the cross-technology headline-KPI comparison — #745 slice-1.
+
+    A read-only projection of a single canonically-run config's headline KPIs: the label plus the
+    six lender headline metrics. Every field is ``Optional`` and renders em-dash when the run did not
+    publish that KPI (``gearing`` is not a top-level pipeline KPI, so it is em-dash unless a caller
+    supplies it in the kpis-dict) — the projection never fabricates a number it was not handed.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    project_irr: Optional[float] = None
+    equity_irr: Optional[float] = None
+    min_dscr: Optional[float] = None
+    project_npv: Optional[float] = None
+    total_cfads_usd: Optional[float] = None
+    gearing: Optional[float] = None
+
+
+class TechComparisonBlock(BaseModel):
+    """Side-by-side headline-KPI comparison across multiple scenario configs — #745 slice-1.
+
+    A read-only projection of several canonically-run configs' headline KPIs into one column each,
+    so a lender sees the wind lender case and the hybrid case (this slice: the two configs that
+    exist) reconciled to the SAME canonical basis — each column's ``project_irr`` equals
+    ``run_v14_pipeline(config).kpis['project_irr']`` for that config, byte-for-byte the report's own
+    headline (the non-canonical ScenarioAnalytics snapshot basis would silently disagree). The
+    multiple full-pipeline runs are heavy, so the block is computed OUT-OF-BAND (like the tornado /
+    capital-risk / interaction-grid blocks) and passed in; ``None`` (the default on
+    :class:`ReportContext`) omits the section — the synchronous API report route and every committed
+    scenario stay byte-identical (the #645 latency ledger). Solar-only and hybrid+BESS columns are a
+    deferred follow-up (those configs do not yet exist — no fabricated columns).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rows: List[TechComparisonRow]
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -734,6 +774,13 @@ class ReportContext(BaseModel):
     #: the tornado / capital-risk blocks) and passed in; None (the default) omits the section — the
     #: synchronous API report route and every committed scenario stay byte-identical (#645).
     interaction_grid: Optional[InteractionGridBlock] = None
+    #: Cross-technology headline-KPI comparison (#745 slice-1): one column per canonically-run
+    #: config (this slice: the wind lender case + the hybrid case), each reconciled to the report's
+    #: own canonical basis. The multiple full-pipeline runs are heavy, so it is computed OUT-OF-BAND
+    #: (like the tornado / capital-risk / interaction-grid blocks) and passed in; None (the default)
+    #: omits the section — the synchronous API report route and every committed scenario stay
+    #: byte-identical (#645).
+    tech_comparison: Optional[TechComparisonBlock] = None
     #: Assumption-evidence register coverage (#435 → RPT-1). None for legacy callers
     #: (no scenario config), in which case the section is omitted.
     evidence: Optional[EvidenceBlock] = None
@@ -1508,6 +1555,52 @@ def _build_interaction_grid(
     )
 
 
+#: The six lender headline KPIs projected into each comparison column (#745). Ordered as the
+#: template renders them; each is read from the kpis-dict by key and rendered em-dash when absent
+#: (the mapper never fabricates a metric it was not handed).
+_TECH_COMPARISON_KPI_KEYS = (
+    "project_irr",
+    "equity_irr",
+    "min_dscr",
+    "project_npv",
+    "total_cfads_usd",
+    "gearing",
+)
+
+
+def _build_tech_comparison(
+    cases: Sequence[tuple[str, Mapping[str, Any]]],
+) -> Optional[TechComparisonBlock]:
+    """Project (label, kpis-dict) pairs into the cross-technology comparison block (#745 slice-1).
+
+    PURE projection — no finance recomputation. Each pair is one canonically-run config: the label
+    and its already-computed headline KPIs (produced upstream by ``run_v14_pipeline`` per config).
+    The mapper only reshapes those published numbers into one :class:`TechComparisonRow` per case,
+    reading each of the six headline keys from the kpis-dict; a key absent from a run renders
+    em-dash (``gearing`` is not a top-level pipeline KPI, so it is em-dash unless a caller injected
+    it), and no metric is ever recomputed or fabricated here.
+
+    Returns ``None`` for an empty ``cases`` sequence — the section is then omitted (default-off,
+    byte-identical). The emitter enforces the config-required, non-empty scenario list fail-loud
+    (CESSPIT); this pure mapper stays tolerant so a legacy caller that supplies nothing simply omits
+    the section rather than crashing (mirrors the sibling ``None``-omit mappers).
+    """
+    if not cases:
+        return None
+    rows: List[TechComparisonRow] = []
+    for label, kpis in cases:
+        values: Dict[str, Optional[float]] = {}
+        for key in _TECH_COMPARISON_KPI_KEYS:
+            raw = kpis.get(key)
+            values[key] = (
+                _finite_or_none(float(raw))
+                if isinstance(raw, (int, float)) and not isinstance(raw, bool)
+                else None
+            )
+        rows.append(TechComparisonRow(label=str(label), **values))
+    return TechComparisonBlock(rows=rows)
+
+
 def _png_data_uri(path: Path) -> Optional[str]:
     """A base64 ``data:image/png`` URI for an existing PNG (self-contained embed), else None.
 
@@ -1853,6 +1946,7 @@ def build_report_context(
     global_sa_pawn: Optional[GlobalSABlock] = None,
     capital_risk: Optional[CapitalRiskReport] = None,
     interaction_grid: Optional[TwoFactorInteractionGrid] = None,
+    tech_comparison: Optional[TechComparisonBlock] = None,
     resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
 ) -> ReportContext:
@@ -1889,6 +1983,12 @@ def build_report_context(
             OUT-OF-BAND (never in the synchronous report route — the #645 latency ledger) and
             passed in; ``None`` (the default) omits the section, keeping every committed
             scenario and the API report byte-identical.
+        tech_comparison: A pre-built cross-technology headline-KPI comparison block (#745
+            slice-1), projected by the out-of-band emitter from several canonically-run configs
+            (one full-pipeline run per column — heavy, never the synchronous report route; the
+            #645 latency ledger). Passed straight through so this builder stays pure; ``None``
+            (the default) omits the section, keeping every committed scenario and the API report
+            byte-identical.
         resource_trend: A pre-computed long-term wind-resource & trend analysis (#178 →
             #656) — the dict from
             :func:`wind_resource.long_term_trend.analyze_long_term_resource`, run upstream
@@ -1940,6 +2040,7 @@ def build_report_context(
         global_sa_pawn=global_sa_pawn,
         capital_risk=_build_capital_risk(capital_risk),
         interaction_grid=_build_interaction_grid(interaction_grid),
+        tech_comparison=tech_comparison,
         evidence=_build_evidence(scenario_config),
         evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
