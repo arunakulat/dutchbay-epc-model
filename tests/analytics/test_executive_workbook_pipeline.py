@@ -63,6 +63,7 @@ def pipeline_result() -> dict[str, Any]:
             "project_npv": -65_460_000.0,
             "equity_npv": -12_000_000.0,
             "min_dscr": 1.30,
+            "min_dscr_period": 1.30,
             "avg_dscr": 1.90,
             "dscr_mean": 1.90,
             "dscr_median": 1.80,
@@ -170,7 +171,9 @@ class TestFramesFromPipelineResult:
         ratios = frames_from_pipeline_result(pipeline_result)["ratios"]
         assert list(ratios.columns) == ["Metric", "Value"]
         metrics = set(ratios["Metric"])
-        assert {"min_dscr", "llcr", "plcr"} <= metrics  # from kpis
+        # min_dscr_period (the per-period sculpt floor) is surfaced alongside the
+        # fold-corrected min_dscr headline since #806, so both export.
+        assert {"min_dscr", "min_dscr_period", "llcr", "plcr"} <= metrics  # from kpis
         assert {"dscr_threshold", "audit_status"} <= metrics  # from covenants
 
     def test_scenario_summary_single_row(self, pipeline_result) -> None:
