@@ -26,7 +26,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Sequence
 
 # TYPE_CHECKING: Import ScenarioResult for type hints only (breaks circular import)
 if TYPE_CHECKING:
@@ -48,6 +48,7 @@ def integrate_fx_into_scenario_result(
     config: Mapping[str, Any],
     debt_result: Mapping[str, Any],
     annual_rows: Sequence[Mapping[str, Any]],
+    degraded_out: Optional[List[str]] = None,
 ) -> ScenarioResult:
     """
     Wire FX blocks into an existing ScenarioResult.
@@ -64,6 +65,11 @@ def integrate_fx_into_scenario_result(
         config: Project config dict (includes FX settings).
         debt_result: Output from plan_debt() module.
         annual_rows: Annual cashflow rows from compute_cashflow().
+        degraded_out: Optional caller-owned collector (#785). When supplied, the
+            fx builders append a human-readable reason for every SILENT fallback
+            they take (malformed fx block, flat-curve substitution, degenerate
+            risk profile) — the integration still succeeds; the caller decides
+            how to disclose. None (default) preserves the exact legacy behaviour.
 
     Returns:
         New ScenarioResult with fx_block, fx_curve, fx_risk_profile populated.
@@ -113,10 +119,12 @@ def integrate_fx_into_scenario_result(
             config=config,
             debt_result=debt_result,
             annual_rows=annual_rows,
+            degraded=degraded_out,
         )
         fx_curve = compute_fx_curve(
             config=config,
             annual_rows=annual_rows,
+            degraded=degraded_out,
         )
         # Source the VaR shock from the scenario's declared FX volatility
         # (fx.uncertainty_pct) instead of a hardcoded 5%; default 0.05 when absent.
@@ -126,10 +134,20 @@ def integrate_fx_into_scenario_result(
             raw_shock = fx_cfg.get("uncertainty_pct")
             if raw_shock is not None and float(raw_shock) > 0.0:
                 shock = float(raw_shock)
+            elif raw_shock is not None:
+                # #785: a declared-but-non-positive fx.uncertainty_pct silently
+                # replaced by the 0.05 default MOVES the reported VaR/CVaR vs
+                # the declared config — disclose the substitution.
+                if degraded_out is not None:
+                    degraded_out.append(
+                        f"fx.uncertainty_pct declared as {raw_shock!r} "
+                        "(non-positive); VaR shock replaced by the 0.05 default"
+                    )
         fx_risk_profile = compute_fx_risk_profile(
             fx_block=fx_block,
             fx_curve=fx_curve,
             var_shock_pct=shock,
+            degraded=degraded_out,
         )
     except (ValueError, TypeError) as e:
         # CESSPIT: Clear error propagation

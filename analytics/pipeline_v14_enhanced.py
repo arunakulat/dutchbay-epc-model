@@ -934,6 +934,9 @@ def run_v14_pipeline_enhanced(
         # assumption is invisible to a report reader. Capture the failure into the result (below)
         # so the report/user layer can surface it explicitly, not just the logs.
         fx_integration_warning: Optional[str] = None
+        # #785: SILENT fallbacks (integration succeeds on stale/default FX data) are
+        # collected here by the fx builders — distinct from the exception path below.
+        fx_degraded_reasons: list[str] = []
         try:
             from analytics.fx.fx_integration import integrate_fx_into_scenario_result
 
@@ -942,6 +945,7 @@ def run_v14_pipeline_enhanced(
                 config=cfg,
                 debt_result=debt_result,
                 annual_rows=annual_rows_enriched,
+                degraded_out=fx_degraded_reasons,
             )
             metrics.fx_integration_succeeded = True
         except Exception as exc:  # pragma: no cover - defensive (reporting-only slice)
@@ -977,10 +981,15 @@ def run_v14_pipeline_enhanced(
             # #736: FX-integration status, surfaced unconditionally (not gated on monitoring) so
             # the report layer can render an explicit warning when it failed. ``warning`` is None
             # on success -> the report banner is omitted (render-when-present, byte-identical).
+            # #785: ``degraded``/``degraded_reasons`` disclose SILENT fallbacks — the
+            # integration SUCCEEDED but one or more FX surfaces were built from
+            # stale/default substitutions (empty on a clean run; additive keys).
             "fx_integration": {
                 "attempted": metrics.fx_integration_attempted,
                 "succeeded": metrics.fx_integration_succeeded,
                 "warning": fx_integration_warning,
+                "degraded": bool(fx_degraded_reasons),
+                "degraded_reasons": list(fx_degraded_reasons),
             },
             "run_manifest": run_manifest,
         }

@@ -685,6 +685,12 @@ class ReportContext(BaseModel):
     #: than buried in logs. None when FX integration succeeded or was not reported — the banner is
     #: then omitted (render-when-present; committed runs succeed, so byte-identical).
     fx_warning: Optional[str] = None
+    #: FX silent-fallback note (#785). Set when FX integration SUCCEEDED but one or more FX
+    #: surfaces were built from stale/default substitutions (malformed fx block, flat-curve
+    #: fallback, degenerate risk profile) — arguably more dangerous than an outright failure
+    #: because the numbers look plausible. None when no fallback fired (render-when-present;
+    #: the committed scenarios take no fallback, so byte-identical).
+    fx_fallback_note: Optional[str] = None
     manifest: Dict[str, Any]
 
 
@@ -1572,6 +1578,40 @@ def _build_resource_trend(
     )
 
 
+def _build_fx_fallback_note(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Surface the run's SILENT FX fallbacks into the report (#785).
+
+    Distinct from :func:`_build_fx_warning` (the #736 failure path): here FX
+    integration SUCCEEDED, but the pipeline's ``fx_integration.degraded_reasons``
+    records that one or more FX surfaces were built from stale/default
+    substitutions (malformed fx block, flat-curve fallback, degenerate risk
+    profile). Plausible-looking numbers on defaulted inputs are more dangerous
+    than an outright failure, so they get their own explicit note. ``None`` when
+    no fallback fired (render-when-present — the committed scenarios take no
+    fallback, so healthy reports are byte-identical).
+    """
+    if not run_result:
+        return None
+    fx = run_result.get("fx_integration")
+    if not isinstance(fx, Mapping):
+        return None
+    # A run whose integration ultimately FAILED renders the #736 failure banner;
+    # this note must not simultaneously claim the integration "completed" (a
+    # direct contradiction in a lender document). Reasons collected before the
+    # failure are still available in the block for diagnostics.
+    if fx.get("succeeded") is not True:
+        return None
+    reasons = fx.get("degraded_reasons")
+    if not isinstance(reasons, (list, tuple)) or not reasons:
+        return None
+    joined = "; ".join(str(r) for r in reasons)
+    return (
+        "FX integration completed on FALLBACK inputs — the figures below look "
+        f"normal but rest on default substitutions: {joined}. Supply the missing "
+        "FX configuration for a lender-grade FX view."
+    )
+
+
 def _build_fx_warning(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
     """Surface the run's FX-integration failure warning into the report (#736).
 
@@ -1731,5 +1771,6 @@ def build_report_context(
         resource_trend=_build_resource_trend(resource_trend),
         irr_bridge=_irr_bridge_block(run_result),
         fx_warning=_build_fx_warning(run_result),
+        fx_fallback_note=_build_fx_fallback_note(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )
