@@ -40,7 +40,7 @@ from api.sensitivity_api import SensitivityInput, run_tornado
 from app.api.auth import get_current_subject, login_for_access_token
 from app.api.config import SYNC_ROUTE_MAX_CONCURRENCY, SYNC_ROUTE_TIMEOUT_SECONDS
 from app.api.jobs_router import router as jobs_router
-from app.api.responses import CaseResult
+from app.api.responses import API_CONTRACT_VERSION, CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.renderer import (
     ReportDependencyError,
@@ -80,8 +80,8 @@ app.include_router(
 
 @app.get("/health", tags=["ops"])
 def health() -> dict[str, str]:
-    """Liveness probe."""
-    return {"status": "ok"}
+    """Liveness probe + the public API contract version (#841)."""
+    return {"status": "ok", "contract_version": API_CONTRACT_VERSION}
 
 
 class TokenRequest(BaseModel):
