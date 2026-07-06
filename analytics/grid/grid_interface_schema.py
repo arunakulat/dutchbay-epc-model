@@ -314,6 +314,53 @@ def _validate_per_tech_grid_blocks(
             )
 
 
+def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> None:
+    """QSTS curtailment sub-block rules (#882 D6a): present-only, gated feeder requirement.
+
+    The ``grid.qsts`` sub-block is OPTIONAL — a grid scenario need not declare it, so
+    grid-scenarios without QSTS stay byte-identical (no error). When it IS present the rules
+    are STRICT (CESSPIT — no silent defaults):
+
+      * ``qsts.enabled`` must be a real bool (the master gate; default-off is expressed by
+        omitting the block or setting it False, never by a truthy string / int).
+      * ``qsts.feeder_model_path`` is CONDITIONALLY required — ONLY when ``enabled`` is true.
+        The QSTS is meaningless without a REAL feeder model to solve against; a demo/
+        synthetic feeder can never overwrite the real curtailment placeholder, so an enabled
+        study with no feeder path is REJECTED here rather than silently running a synthetic
+        smoke test as if it were bankable.
+
+    This gate cannot be a flat required-field spec: a flat spec would fire on every
+    grid-scenario that omits ``qsts`` (breaking committed grid configs), and it cannot make
+    ``feeder_model_path`` conditional on ``enabled`` (same reason the estimated-Thevenin
+    opt-in and the per-tech dynamic-model gate live here, not in the flat spec list).
+    """
+    qsts = grid.get("qsts")
+    if qsts is None:
+        return  # QSTS study is opt-in — absence is byte-identical, not an error.
+    if not isinstance(qsts, Mapping):
+        errors.append(
+            f"grid.qsts must be a mapping (the QSTS curtailment sub-block), "
+            f"got {type(qsts).__name__}."
+        )
+        return
+
+    enabled = qsts.get("enabled")
+    if not _is_bool(enabled):
+        errors.append(
+            "grid.qsts.enabled must be a real boolean (the QSTS master gate; default-off). "
+            f"Got {enabled!r}."
+        )
+        return
+
+    if enabled and not _is_nonempty_str(qsts.get("feeder_model_path")):
+        errors.append(
+            "grid.qsts.enabled is true but grid.qsts.feeder_model_path is missing/empty. "
+            "The QSTS curtailment study REQUIRES a real feeder model file — a synthetic/demo "
+            "feeder is a smoke test only and cannot produce a bankable curtailment figure. "
+            "Supply a feeder_model_path (an OpenDSS .dss master file) or disable the study."
+        )
+
+
 def validate_grid_block(raw_config: Mapping[str, Any], errors: list[str]) -> None:
     """Run the conditional / cross-field grid rules that a flat spec cannot express.
 
@@ -325,6 +372,7 @@ def validate_grid_block(raw_config: Mapping[str, Any], errors: list[str]) -> Non
     grid = raw_config.get("grid")
     if isinstance(grid, Mapping):
         _validate_thevenin_conditionals(grid, errors)
+        _validate_qsts_conditionals(grid, errors)
     _validate_per_tech_grid_blocks(raw_config, errors)
 
 
