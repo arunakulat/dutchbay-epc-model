@@ -1,4 +1,4 @@
-"""Per-technology grid-capability plug-ins (issues #876, #877).
+"""Per-technology grid-capability plug-ins (issues #876, #877, #878).
 
 Each module in this package answers the CONVERTER-INTERFACE capability question for ONE
 technology class: given the plant's ratings and grid-code envelope, what fault-current
@@ -32,8 +32,12 @@ Public plug-ins:
       modelled as a synchronous machine / voltage source, which would OVERSTATE grid
       strength). Derives DC:AC clipping WITHOUT double-counting the pvlib inverter loss
       (that already lives in :mod:`solar_resource.pv_producer`).
+    - :mod:`analytics.grid.capabilities.bess` — the BESS (storage) capability plug-in:
+      a MANUAL per-site PCS short-circuit contribution fed into the SCR screen, plus an
+      SoH-degraded reactive/PQ capability screen (year-15 reactive headroom shrinks as the
+      state-of-health degrades).
 """
 
 from __future__ import annotations
 
-__all__ = ["solar", "wind"]
+__all__ = ["bess", "solar", "wind"]

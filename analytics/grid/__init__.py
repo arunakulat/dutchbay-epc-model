@@ -33,11 +33,9 @@ Public surface:
       :class:`analytics.contracts_v14.GridStudyResult`. Analytics consumers call THIS
       and import grid result types only from ``analytics.contracts_v14``.
     - :mod:`analytics.grid.capabilities` — per-technology grid-capability plug-ins keyed
-      on the :mod:`finance.tech_types` classification (e.g.
-      :func:`analytics.grid.capabilities.solar.screen_solar_capability` — solar PV as a
-      current-limited grid-following source). STANDALONE modules; a later dolphin wires
-      dispatch. They reuse the D4a ride-through core + the D3
-      :class:`analytics.contracts_v14.ReactiveCapabilityResult`.
+      on the :mod:`finance.tech_types` classification (wind, solar, bess), each reusing the
+      D4a ride-through core + the D3 reactive/SCR contracts for ONE technology. STANDALONE
+      modules; a later dolphin wires per-tech dispatch into the evaluate_grid gateway.
 """
 
 from __future__ import annotations
