@@ -18,6 +18,11 @@ Configuration is read from the environment on **every** call and is **fail-close
   is a *server misconfiguration* and surfaces as a 500, never a baked-in default.
 * ``DUTCHBAY_API_USERS`` — ``"user:<pbkdf2-hash>,user2:<hash>"``. Absent ⇒ no user can
   authenticate (every login is rejected). Hashes are produced by :func:`hash_password`.
+* ``DUTCHBAY_JWT_ISSUER`` / ``DUTCHBAY_JWT_AUDIENCE`` — **optional** ``iss`` / ``aud``
+  binding. When set, issued tokens carry the claim and validation *requires* an exact
+  match (a token minted for a different issuer/audience is rejected 401). When unset,
+  the claim is neither stamped nor enforced, so the binding is opt-in per deployment
+  (CCCDIR — documented, config-driven; no baked-in default issuer/audience).
 
 Every authentication failure is a 401 with a ``WWW-Authenticate: Bearer`` challenge;
 the token *subject* is what the API binds each :class:`~app.jobs.models.JobRecord` to
@@ -144,6 +149,8 @@ def create_access_token(
     secret: str,
     expires_in: int = _DEFAULT_TOKEN_TTL_SECONDS,
     now: Optional[int] = None,
+    issuer: Optional[str] = None,
+    audience: Optional[str] = None,
 ) -> str:
     """Mint a signed ``HS256`` JWT for ``sub`` with an expiry claim.
 
@@ -153,6 +160,10 @@ def create_access_token(
         expires_in: Token lifetime in seconds from ``now``.
         now: Optional issue time (epoch seconds) for deterministic tests; defaults
             to the current time.
+        issuer: Optional ``iss`` claim to stamp (omitted from the payload when
+            ``None`` so tokens stay backward-compatible with issuer-agnostic
+            deployments).
+        audience: Optional ``aud`` claim to stamp (omitted when ``None``).
 
     Returns:
         The compact ``header.payload.signature`` JWT string.
@@ -160,6 +171,10 @@ def create_access_token(
     issued = int(time.time()) if now is None else now
     header = {"alg": _JWT_ALG, "typ": "JWT"}
     payload = {"sub": sub, "iat": issued, "exp": issued + expires_in}
+    if issuer is not None:
+        payload["iss"] = issuer
+    if audience is not None:
+        payload["aud"] = audience
     segments = [
         _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8")),
         _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")),
@@ -170,24 +185,37 @@ def create_access_token(
     return ".".join(segments)
 
 
-def decode_token(token: str, *, secret: str, now: Optional[int] = None) -> str:
+def decode_token(
+    token: str,
+    *,
+    secret: str,
+    now: Optional[int] = None,
+    issuer: Optional[str] = None,
+    audience: Optional[str] = None,
+) -> str:
     """Validate a JWT and return its subject, or raise :class:`AuthError`.
 
     Verifies the signature in constant time, rejects any algorithm other than the
     pinned ``HS256`` (defeating ``alg: none`` / alg-confusion forgeries), and
-    enforces the ``exp`` claim.
+    enforces the ``exp`` claim. When ``issuer`` / ``audience`` are supplied, the
+    matching ``iss`` / ``aud`` claim must be present and equal (defeating token
+    replay across issuers/audiences); when they are ``None`` the claim is not
+    inspected (opt-in binding).
 
     Args:
         token: The compact JWT string.
         secret: The HMAC secret the token must be signed with.
         now: Optional validation time (epoch seconds) for deterministic tests.
+        issuer: When set, the required ``iss`` claim (exact match, else 401).
+        audience: When set, the required ``aud`` claim (exact match, else 401).
 
     Returns:
         The token's ``sub`` claim.
 
     Raises:
         AuthError: If the token is malformed, mis-signed, uses an unexpected
-            algorithm, is expired, or carries no usable subject.
+            algorithm, is expired, has a mismatched/absent issuer or audience
+            (when one is required), or carries no usable subject.
     """
     current = int(time.time()) if now is None else now
     try:
@@ -216,6 +244,10 @@ def decode_token(token: str, *, secret: str, now: Optional[int] = None) -> str:
     exp = payload.get("exp")
     if not isinstance(exp, (int, float)) or isinstance(exp, bool) or current >= exp:
         raise AuthError("token expired")
+    if issuer is not None and payload.get("iss") != issuer:
+        raise AuthError("issuer mismatch")
+    if audience is not None and payload.get("aud") != audience:
+        raise AuthError("audience mismatch")
     sub = payload.get("sub")
     if not isinstance(sub, str) or not sub:
         raise AuthError("missing subject")
@@ -238,6 +270,22 @@ def _jwt_secret() -> str:
             detail="authentication is not configured (DUTCHBAY_JWT_SECRET unset)",
         )
     return secret
+
+
+def _jwt_issuer() -> Optional[str]:
+    """Return the configured ``iss`` binding, or ``None`` when unset (opt-in).
+
+    An empty/whitespace value is treated as unset so a blank env var never becomes
+    a token-rejecting ``iss=""`` requirement by accident.
+    """
+    issuer = os.environ.get("DUTCHBAY_JWT_ISSUER", "").strip()
+    return issuer or None
+
+
+def _jwt_audience() -> Optional[str]:
+    """Return the configured ``aud`` binding, or ``None`` when unset (opt-in)."""
+    audience = os.environ.get("DUTCHBAY_JWT_AUDIENCE", "").strip()
+    return audience or None
 
 
 def _api_users() -> Dict[str, str]:
@@ -314,7 +362,12 @@ def login_for_access_token(username: str, password: str) -> str:
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return create_access_token(subject, secret=_jwt_secret())
+    return create_access_token(
+        subject,
+        secret=_jwt_secret(),
+        issuer=_jwt_issuer(),
+        audience=_jwt_audience(),
+    )
 
 
 def _unauthorized() -> HTTPException:
@@ -345,6 +398,11 @@ def get_current_subject(token: Optional[str] = Depends(oauth2_scheme)) -> str:
         raise _unauthorized()
     secret = _jwt_secret()
     try:
-        return decode_token(token, secret=secret)
+        return decode_token(
+            token,
+            secret=secret,
+            issuer=_jwt_issuer(),
+            audience=_jwt_audience(),
+        )
     except AuthError as exc:
         raise _unauthorized() from exc

@@ -100,6 +100,60 @@ def test_decode_rejects_expired() -> None:
         decode_token(token, secret=_SECRET, now=2000)
 
 
+# --------------------------------------------------------------------------- #
+# Issuer / audience binding (opt-in; enforced only when required)
+# --------------------------------------------------------------------------- #
+def test_token_roundtrip_with_issuer_and_audience() -> None:
+    token = create_access_token(
+        "alice",
+        secret=_SECRET,
+        expires_in=100,
+        now=1000,
+        issuer="dutchbay",
+        audience="wizard",
+    )
+    assert (
+        decode_token(
+            token, secret=_SECRET, now=1000, issuer="dutchbay", audience="wizard"
+        )
+        == "alice"
+    )
+
+
+def test_decode_rejects_wrong_issuer() -> None:
+    token = create_access_token("alice", secret=_SECRET, now=1000, issuer="dutchbay")
+    with pytest.raises(AuthError, match="issuer"):
+        decode_token(token, secret=_SECRET, now=1000, issuer="other")
+
+
+def test_decode_rejects_missing_issuer_when_required() -> None:
+    # Token minted with no iss, but validation requires one -> reject.
+    token = create_access_token("alice", secret=_SECRET, now=1000)
+    with pytest.raises(AuthError, match="issuer"):
+        decode_token(token, secret=_SECRET, now=1000, issuer="dutchbay")
+
+
+def test_decode_rejects_wrong_audience() -> None:
+    token = create_access_token("alice", secret=_SECRET, now=1000, audience="wizard")
+    with pytest.raises(AuthError, match="audience"):
+        decode_token(token, secret=_SECRET, now=1000, audience="other")
+
+
+def test_decode_rejects_missing_audience_when_required() -> None:
+    token = create_access_token("alice", secret=_SECRET, now=1000)
+    with pytest.raises(AuthError, match="audience"):
+        decode_token(token, secret=_SECRET, now=1000, audience="wizard")
+
+
+def test_decode_ignores_issuer_audience_when_not_required() -> None:
+    # A token carrying iss/aud still validates when the verifier doesn't require them
+    # (opt-in binding; backward-compatible with issuer/audience-agnostic deployments).
+    token = create_access_token(
+        "alice", secret=_SECRET, now=1000, issuer="dutchbay", audience="wizard"
+    )
+    assert decode_token(token, secret=_SECRET, now=1000) == "alice"
+
+
 @pytest.mark.parametrize("bad", ["only-one-part", "two.parts", "a.b.c.d"])
 def test_decode_rejects_wrong_segment_count(bad: str) -> None:
     with pytest.raises(AuthError, match="malformed"):
@@ -194,6 +248,24 @@ def test_api_users_parsing_skips_malformed(monkeypatch: pytest.MonkeyPatch) -> N
 def test_api_users_absent_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DUTCHBAY_API_USERS", raising=False)
     assert auth._api_users() == {}
+
+
+@pytest.mark.parametrize(
+    ("reader", "env"),
+    [
+        (auth._jwt_issuer, "DUTCHBAY_JWT_ISSUER"),
+        (auth._jwt_audience, "DUTCHBAY_JWT_AUDIENCE"),
+    ],
+)
+def test_jwt_iss_aud_readers(
+    monkeypatch: pytest.MonkeyPatch, reader: Any, env: str
+) -> None:
+    monkeypatch.delenv(env, raising=False)
+    assert reader() is None  # unset -> opt-out
+    monkeypatch.setenv(env, "   ")
+    assert reader() is None  # blank/whitespace treated as unset (never iss="")
+    monkeypatch.setenv(env, " dutchbay ")
+    assert reader() == "dutchbay"  # trimmed
 
 
 # --------------------------------------------------------------------------- #
@@ -353,6 +425,30 @@ def test_http_auth_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "project_irr" in ok.json()["kpis"]
 
 
+def test_login_and_get_current_subject_enforce_iss_aud_via_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """login_for_access_token stamps the configured iss/aud, and get_current_subject
+    (which reads the same env) accepts it — the production wiring, end-to-end."""
+    _set_user(monkeypatch, "alice", "pw")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _SECRET)
+    monkeypatch.setenv("DUTCHBAY_JWT_ISSUER", "dutchbay")
+    monkeypatch.setenv("DUTCHBAY_JWT_AUDIENCE", "wizard")
+
+    token = login_for_access_token("alice", "pw")
+    # The dependency, reading the same configured iss/aud, accepts the stamped token.
+    assert get_current_subject(token) == "alice"
+
+    # A token minted for a DIFFERENT audience is rejected once an audience is required,
+    # even though the signature and expiry are valid (cross-audience replay defence).
+    foreign = create_access_token(
+        "alice", secret=_SECRET, issuer="dutchbay", audience="some-other-service"
+    )
+    with pytest.raises(HTTPException) as exc:
+        get_current_subject(foreign)
+    assert exc.value.status_code == 401
+
+
 def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
@@ -403,5 +499,72 @@ def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> Non
 
         # And an unauthenticated request is rejected outright.
         assert client.get(f"/jobs/{job_id}").status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_http_cross_client_report_result_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A succeeded job carries its rendered report DATA in ``JobRecord.result`` — the only
+    per-user report-read surface (the sync ``/cases/report.*`` routes persist nothing). Prove
+    that the stored result payload is owner-scoped: the owner reads its own report data, and a
+    different client gets a non-leaking 404 (never the other user's result) — the same
+    subject-scoping the jobs record uses, applied to the report payload itself."""
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    import app.api.jobs_router as jr
+    from app.api.main import app
+    from app.jobs.models import JobProgress, JobRecord, JobState, utc_now_iso
+    from app.jobs.store import InMemoryJobStore
+
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _SECRET)
+    monkeypatch.setenv(
+        "DUTCHBAY_API_USERS",
+        f"alice:{hash_password('pw')},bob:{hash_password('pw')}",
+    )
+    shared = InMemoryJobStore()
+    app.dependency_overrides[jr.get_store] = lambda: shared
+    try:
+        client = TestClient(app)
+
+        def token_for(user: str) -> str:
+            resp = client.post("/token", json={"username": user, "password": "pw"})
+            return str(resp.json()["access_token"])
+
+        alice = {"Authorization": f"Bearer {token_for('alice')}"}
+        bob = {"Authorization": f"Bearer {token_for('bob')}"}
+
+        # Seed a SUCCEEDED job owned by alice, carrying a report/result payload — the state
+        # a completed run leaves behind (bypassing the minutes-long ERA5 compute).
+        now = utc_now_iso()
+        secret_result = {
+            "kpis": {"project_irr": 0.0203},
+            "secret_client_marker": "ALICE",
+        }
+        shared.create(
+            JobRecord(
+                job_id="job-A",
+                owner="alice",
+                state=JobState.SUCCEEDED,
+                progress=JobProgress(step=3, total_steps=3, message="Complete"),
+                result=secret_result,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+        # Owner reads its own report result.
+        mine = client.get("/jobs/job-A", headers=alice)
+        assert mine.status_code == 200
+        assert mine.json()["result"] == secret_result
+
+        # A different authenticated client cannot read alice's result — non-leaking 404,
+        # and crucially the response body never contains the other user's payload.
+        theirs = client.get("/jobs/job-A", headers=bob)
+        assert theirs.status_code == 404
+        assert "secret_client_marker" not in theirs.text
+        assert "ALICE" not in theirs.text
     finally:
         app.dependency_overrides.clear()
