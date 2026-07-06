@@ -912,24 +912,31 @@ class RideThroughResult(ContractMixin):
     Fields
         case: the ride-through case kind (``"lvrt"`` | ``"hvrt"`` | ``"frequency"``).
         ran: True iff the ANDES RMS solve was actually EXECUTED for this case (the
-            dynamic-study gate was on AND a candidate ANDES case loaded and solved). It
-            is False whenever the gate was off (envelope parsed / case set up but ANDES
-            not run) or every candidate case failed to load/solve. ``ran`` says only
-            "did the solver run" — it is NOT a compliance verdict; read ``rode_through``
-            for that.
+            dynamic-study gate was on AND a candidate ANDES case loaded and the TDS ran).
+            It stays True for an early-terminated / diverged solve — the solver DID run, it
+            just did not exit cleanly. It is False whenever the gate was off (envelope
+            parsed / case set up but ANDES not run) or every candidate case failed to
+            LOAD/SET UP (a genuine setup failure — no network could be built to attempt the
+            solve). ``ran`` says only "did the solver run" — it is NOT a compliance verdict;
+            read ``rode_through`` for that.
         converged: raw RMS-solve SMOKE TEST — whether the ANDES time-domain solve exited
             cleanly (``exit_code == 0``). Convergence is necessary but NOT sufficient for
             ride-through: a solve can converge to a state where the IBR has tripped or the
             bus voltage has collapsed/failed to recover. NEVER read convergence as
-            compliance. False when the solve did not run.
-        rode_through: the COMPLIANCE VERDICT, derived from the PHYSICAL ENVELOPE (post-
-            fault recovered bus voltage vs the entry threshold, IBR-trip detection, and/or
-            frequency vs the continuous band) — NOT from the raw ``converged`` flag. True
-            = the disturbance was ridden through; False = a real breach was observed (e.g.
-            a converged-but-collapsed / tripped case); ``None`` = NOT-RUN / UNSUPPORTED
-            (the case did not physically validate the envelope — the gate was off, no
-            candidate solved, or the disturbance is not yet modeled for this case). An
-            honest ``None`` is preferred over a spurious ``True``.
+            compliance. False when the solve did not run, diverged, or terminated early on
+            a stability-criteria violation.
+        rode_through: the COMPLIANCE VERDICT. True = the disturbance was ridden through.
+            False = a real breach — this covers BOTH a cleanly converged solve that did not
+            recover / tripped the IBR (graded on the PHYSICAL ENVELOPE: post-fault recovered
+            bus voltage vs the entry threshold + IBR-trip detection), AND an
+            UNSTABLE / early-terminated / diverged LVRT solve under an APPLIED fault (the
+            solve blew up because the bus collapsed — the plant did not ride through). It is
+            NEVER read from the raw ``converged`` flag. ``None`` = NOT-RUN / UNSUPPORTED: the
+            disturbance was not modeled (unmodeled HVRT / frequency), the dynamic-study gate
+            was off, or a genuine case-setup failure meant no solve could be attempted at
+            all. An honest ``None`` is preferred over a spurious ``True``, but a diverged
+            solve under an applied fault is evidence of FAILURE (False), not absence of
+            evidence (None).
         target_pu: the voltage ride-through threshold (pu) the case probes — the LVRT /
             HVRT entry pu (``None`` for the frequency case).
         target_hz: the frequency (Hz) the frequency case probes (``None`` for voltage

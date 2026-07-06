@@ -322,6 +322,119 @@ def test_lvrt_verdict_respects_recovery_margin() -> None:
     assert lvrt_rode_through(ev, _env(), recovery_margin_pu=0.02) is False
 
 
+# ---- dynamic-run reducer (_lvrt_dynamic_verdict): PURE, grid-free, no ANDES ---
+# This reducer is what the andes LVRT path delegates to; grading its collapse→False /
+# setup-failure→None mapping here keeps the fix's decision logic covered without [grid].
+
+
+def test_dynamic_verdict_collapse_when_applied_fault_diverges() -> None:
+    """THE FIX: an applied LVRT fault whose TDS terminated early (not converged) → False.
+
+    A deep/long fault drives ANDES to terminate on a stability-criteria violation
+    (exit_code != 0). That is a COLLAPSE — the plant did NOT ride through — so the verdict
+    must be a real breach (False), NOT an honest NOT-RUN (None).
+    """
+    # Evidence from a diverged solve is present but garbled; the verdict must not depend on
+    # it — a non-converged solve under an applied fault is False regardless.
+    ev = LvrtEvidence(min_voltage_pu=0.05, recovered_voltage_pu=0.10, ibr_tripped=None)
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True,
+            solved=True,
+            converged=False,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is False
+    )
+
+
+def test_dynamic_verdict_setup_failure_is_not_run() -> None:
+    """No candidate case could be built (solved False / evidence None) → NOT-RUN (None)."""
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True,
+            solved=False,
+            converged=False,
+            evidence=None,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_dynamic_verdict_solved_but_no_evidence_is_not_run() -> None:
+    """Defensive: solved flag True but evidence missing still returns NOT-RUN, not a crash."""
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True,
+            solved=True,
+            converged=True,
+            evidence=None,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_dynamic_verdict_no_fault_applied_is_not_run() -> None:
+    """A solved run that injected no fault exercised no envelope → NOT-RUN (None)."""
+    ev = LvrtEvidence(min_voltage_pu=0.30, recovered_voltage_pu=0.99, ibr_tripped=False)
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=False,
+            solved=True,
+            converged=True,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_dynamic_verdict_converged_delegates_to_envelope() -> None:
+    """A cleanly converged applied-fault solve is graded on the physical envelope."""
+    env = _env()
+    # Recovers cleanly → True (matches lvrt_rode_through).
+    good = LvrtEvidence(
+        min_voltage_pu=0.30, recovered_voltage_pu=0.99, ibr_tripped=False
+    )
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True, solved=True, converged=True, evidence=good, envelope=env
+        )
+        is True
+    )
+    # Converged but collapsed → False (envelope breach, not a crash).
+    collapsed = LvrtEvidence(
+        min_voltage_pu=0.20, recovered_voltage_pu=0.60, ibr_tripped=False
+    )
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True,
+            solved=True,
+            converged=True,
+            evidence=collapsed,
+            envelope=env,
+        )
+        is False
+    )
+    # Converged, dip too shallow to certify → None (envelope NOT-RUN).
+    shallow = LvrtEvidence(
+        min_voltage_pu=0.95, recovered_voltage_pu=1.0, ibr_tripped=False
+    )
+    assert (
+        rt._lvrt_dynamic_verdict(
+            fault_applied=True,
+            solved=True,
+            converged=True,
+            evidence=shallow,
+            envelope=env,
+        )
+        is None
+    )
+
+
 # ------------- HVRT / frequency are NOT-RUN even with the gate ON (no andes) --
 
 

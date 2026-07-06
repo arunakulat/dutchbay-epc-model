@@ -12,13 +12,20 @@ the core is seeded from the OEM envelope.
 Convergence is NOT compliance
 -----------------------------
 The ANDES RMS solve returns a raw convergence flag (``converged`` — a smoke test that the
-time-domain integration exited cleanly). That flag is NEVER threaded into the compliance
-verdict: a solve can converge to a state where the IBR has tripped or the bus voltage has
-collapsed. The compliance verdict (``rode_through``) is derived ONLY from the PHYSICAL
-ENVELOPE — the post-fault RECOVERED bus voltage vs the entry threshold, whether the IBR
-tripped, and (for frequency) the excursion vs the continuous band. A case that cannot
-physically validate its envelope returns an HONEST ``rode_through=None`` (NOT-RUN /
-UNSUPPORTED) rather than a spurious pass.
+time-domain integration exited cleanly). That flag is NEVER read as a PASS: a solve can
+converge to a state where the IBR has tripped or the bus voltage has collapsed. A CLEANLY
+CONVERGED LVRT solve derives its compliance verdict (``rode_through``) ONLY from the
+PHYSICAL ENVELOPE — the post-fault RECOVERED bus voltage vs the entry threshold and whether
+the IBR tripped.
+
+A non-clean exit under an *applied* LVRT fault, though, is itself physical evidence of a
+FAILURE, not an absence of evidence: when the ANDES TDS diverges / terminates early on a
+stability-criteria violation while the fault is active, the plant did NOT ride through — the
+solve blew up because the bus collapsed. That case is a real breach → ``rode_through=False``
+(NOT ``None``). ``rode_through=None`` (NOT-RUN / UNSUPPORTED) is reserved for the cases that
+never physically exercised an envelope at all: the unmodeled HVRT / frequency disturbances,
+the gate-off static path, and a genuine case-SETUP failure where no candidate network could
+be built to even attempt the solve.
 
 **LVRT** is the only case this core physically models today: a shunt impedance fault
 produces a real, measurable voltage DIP whose recovery can be checked against the entry
@@ -393,6 +400,53 @@ def lvrt_rode_through(
     return bool(vrec >= enter + recovery_margin_pu)
 
 
+def _lvrt_dynamic_verdict(
+    *,
+    fault_applied: bool,
+    solved: bool,
+    converged: bool,
+    evidence: LvrtEvidence | None,
+    envelope: RideThroughEnvelope,
+) -> bool | None:
+    """Map a solved LVRT dynamics run to a ``rode_through`` verdict (PURE, grid-free).
+
+    This is the reducer the ANDES LVRT path delegates to; it is deliberately andes-free so
+    the collapse→False / setup-failure→None mapping is unit-testable without the [grid]
+    extra. The rules, in order:
+
+      * ``None`` (NOT-RUN) when no candidate case could even be set up and solved
+        (``solved is False``) — a genuine setup failure, nothing was physically attempted.
+      * ``None`` (NOT-RUN) for a solved run that did not actually apply a fault
+        (``fault_applied is False``) — no disturbance was injected, so nothing to certify.
+      * ``False`` (BREACH) when a fault WAS applied but the TDS did not exit cleanly
+        (``converged is False``: diverged / early-terminated on a stability-criteria
+        violation). An unstable solve under an active fault IS the collapse — the plant did
+        not ride through. This is the deep/long-fault case; it is a real breach, not
+        NOT-RUN.
+      * otherwise (a fault was applied AND the solve converged cleanly) the verdict comes
+        from the PHYSICAL ENVELOPE via :func:`lvrt_rode_through` (dip depth + post-fault
+        recovery + IBR-trip), which itself may return True / False / None.
+
+    Args:
+        fault_applied: whether an LVRT impedance fault was injected (``fault_x_pu`` set).
+        solved: whether a candidate ANDES case loaded and the TDS was actually run
+            (regardless of exit code) — False only on a genuine case-setup failure.
+        converged: the raw RMS smoke test (``exit_code == 0``): False on an early
+            termination / divergence / stability-criteria violation.
+        evidence: the physical LVRT evidence from the run (``None`` on a setup failure).
+        envelope: the ride-through envelope (supplies ``lvrt_enter_pu``).
+    """
+    if not solved or evidence is None:
+        return None
+    if not fault_applied:
+        return None
+    if not converged:
+        # An applied fault whose TDS diverged / terminated early on instability is a
+        # COLLAPSE: the plant did not ride through. A real breach, NOT an honest NOT-RUN.
+        return False
+    return lvrt_rode_through(evidence, envelope)
+
+
 def _n_ibr_devices(ss: Any) -> int:  # pragma: no cover - requires [grid] extra
     """Count the WECC IBR / synchronous devices present on the loaded ANDES system."""
     return int(sum(getattr(ss, m).n for m in _IBR_MODELS if hasattr(ss, m)))
@@ -485,13 +539,22 @@ def _solve_case(  # pragma: no cover - requires [grid] extra
     spec: RideThroughCaseSpec,
     *,
     tf: float = 2.0,
-) -> tuple[bool, int, float | None, float | None, LvrtEvidence | None, str]:
+) -> tuple[bool, bool, int, float | None, float | None, LvrtEvidence | None, str]:
     """Load a bundled ANDES IBR case, apply the disturbance, run PFlow + TDS.
 
-    Returns ``(converged, n_devices, vmin_pu, vmax_pu, evidence, detail)`` where
-    ``converged`` is ONLY the raw RMS-solve smoke test (``exit_code == 0``) and
-    ``evidence`` is the physical :class:`LvrtEvidence` (recovered voltage + IBR-trip
-    status) the compliance verdict is derived from — or ``None`` when no case solved.
+    Returns ``(solved, converged, n_devices, vmin_pu, vmax_pu, evidence, detail)`` where:
+
+      * ``solved`` is True once a candidate case loaded, the disturbance was applied and
+        ``TDS.run()`` was actually invoked — REGARDLESS of exit code. It is False ONLY on a
+        genuine case-SETUP failure where every candidate raised before the solve ran (no
+        network could be built to even attempt it). An early-terminated / diverged solve
+        still has ``solved=True``: the solver DID run, it just did not exit cleanly.
+      * ``converged`` is ONLY the raw RMS-solve smoke test (``exit_code == 0``) — False on
+        an early termination / stability-criteria violation / divergence.
+      * ``evidence`` is the physical :class:`LvrtEvidence` (recovered voltage + IBR-trip
+        status) — populated whenever the TDS ran (even if it terminated early), ``None``
+        only on a setup failure.
+
     Tries each candidate case in order, keeping the last failure for the report. A bus
     impedance fault (LVRT dip) is the only physically-modeled disturbance; HVRT/frequency
     reach here with no evidence and are reported NOT-RUN by the caller.
@@ -526,21 +589,23 @@ def _solve_case(  # pragma: no cover - requires [grid] extra
             )
             detail = (
                 f"case={rel}; TDS exit={int(getattr(ss, 'exit_code', 1))} "
-                f"(raw solve smoke-test, NOT compliance); "
-                f"IBR/gen devices={n_devices}; "
+                f"(raw solve smoke-test, NOT compliance"
+                f"{'; unstable/early-terminated → LVRT collapse' if not converged else ''}"
+                f"); IBR/gen devices={n_devices}; "
                 f"recovered_v={evidence.recovered_voltage_pu}; "
                 f"ibr_tripped={evidence.ibr_tripped}. {spec.detail}"
             )
-            return converged, n_devices, vmin, vmax, evidence, detail
+            return True, converged, n_devices, vmin, vmax, evidence, detail
         except Exception as exc:  # try next candidate; keep the last failure
             last_err = f"{rel}: {exc!r}"
     return (
+        False,
         False,
         0,
         None,
         None,
         None,
-        f"ANDES case did not complete ({last_err}). {spec.detail}",
+        f"ANDES case setup failed — no candidate solved ({last_err}). {spec.detail}",
     )
 
 
@@ -577,12 +642,17 @@ def run_ride_through_case(
 
     Returns:
         :class:`analytics.contracts_v14.RideThroughResult` — advisory (``bankable=False``).
-        ``ran`` reflects only whether the ANDES solve executed; ``converged`` is the raw
-        RMS smoke test; ``rode_through`` is the envelope-derived COMPLIANCE VERDICT
-        (``None`` = NOT-RUN / UNSUPPORTED). HVRT and frequency are NOT-RUN today (a shunt
-        fault cannot swell voltage; no frequency excursion is modeled yet), so they return
-        ``rode_through=None`` rather than a spurious pass — a follow-up dolphin adds the
-        real over-voltage / frequency-excursion dynamics.
+        ``ran`` reflects whether the ANDES solve actually EXECUTED (True even for an
+        early-terminated / diverged solve; False only on a genuine case-setup failure);
+        ``converged`` is the raw RMS smoke test (``exit_code == 0``); ``rode_through`` is
+        the COMPLIANCE VERDICT. For LVRT: a cleanly converged solve is graded on the
+        physical envelope (dip + recovery + trip → True / False), while an
+        unstable / early-terminated solve under the APPLIED fault is a COLLAPSE →
+        ``rode_through=False`` (NOT ``None``). ``rode_through=None`` (NOT-RUN / UNSUPPORTED)
+        is reserved for the unmodeled HVRT / frequency cases (a shunt fault cannot swell
+        voltage; no frequency excursion is modeled yet) and a genuine case-setup failure —
+        never a spurious pass. A follow-up dolphin adds the over-voltage /
+        frequency-excursion dynamics.
     """
     env = envelope if envelope is not None else envelope_from_fixture(fixture_path)
     spec = build_case_spec(
@@ -644,6 +714,7 @@ def run_ride_through_case(
 
     andes = _require_andes()  # pragma: no cover - requires [grid] extra
     (  # pragma: no cover - requires [grid] extra
+        solved,
         converged,
         n_devices,
         vmin,
@@ -651,13 +722,21 @@ def run_ride_through_case(
         evidence,
         detail,
     ) = _solve_case(andes, spec, tf=tf)
-    # rode_through is derived from the PHYSICAL EVIDENCE, never from `converged`.
-    rode_through = (  # pragma: no cover - requires [grid] extra
-        lvrt_rode_through(evidence, env) if evidence is not None else None
+    # ``ran`` reflects whether the solver ACTUALLY EXECUTED (a candidate loaded and the TDS
+    # ran) — True even for an early-terminated / diverged solve; False only on a genuine
+    # case-setup failure. ``rode_through`` is derived by the pure reducer, never from the
+    # raw ``converged`` flag: a converged solve is graded on the physical envelope, while an
+    # unstable/early-terminated solve under an APPLIED LVRT fault is a COLLAPSE → False.
+    rode_through = _lvrt_dynamic_verdict(  # pragma: no cover - requires [grid] extra
+        fault_applied=spec.fault_x_pu is not None,
+        solved=solved,
+        converged=converged,
+        evidence=evidence,
+        envelope=env,
     )
     return RideThroughResult.from_case(  # pragma: no cover - requires [grid] extra
         case=spec.kind,
-        ran=converged,
+        ran=solved,
         converged=converged,
         rode_through=rode_through,
         target_pu=spec.target_pu,
@@ -698,6 +777,7 @@ __all__ = [
     "RideThroughCaseSpec",
     "LvrtEvidence",
     "lvrt_rode_through",
+    "_lvrt_dynamic_verdict",
     "envelope_from_fixture",
     "build_case_spec",
     "run_ride_through_case",
