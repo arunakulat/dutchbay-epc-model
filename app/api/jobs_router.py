@@ -1,6 +1,11 @@
 """HTTP surface for the asynchronous live-ERA5 job path.
 
-* ``POST /jobs``              — enqueue a job (returns 202 + a ``JobAccepted`` handle).
+Mounted under the versioned ``/v1`` prefix by ``app.api.main`` (#841), so the live
+paths are ``POST /v1/jobs`` etc. (the router itself only owns the ``/jobs`` segment):
+
+* ``POST /jobs``              — enqueue a job (returns 202 + a ``JobAccepted`` handle
+                                whose ``status_url``/``events_url`` are ``url_for``-derived,
+                                so they carry the ``/v1`` mount prefix automatically).
 * ``GET  /jobs/{id}``         — poll the job record (404 if unknown).
 * ``GET  /jobs/{id}/events``  — SSE stream of progress until terminal/timeout.
 
@@ -114,10 +119,29 @@ def _new_job_id() -> str:
     return uuid.uuid4().hex
 
 
+def _job_urls(http_request: Request, job_id: str) -> tuple[str, str]:
+    """Build the status + events URLs for ``job_id`` from the mounted routes (#841).
+
+    Uses ``Request.url_for`` against the NAMED routes so the paths carry whatever
+    prefix this router is mounted under (``/v1``) rather than a hardcoded ``/jobs/...``
+    that would go stale under versioning. Falls back to relative paths derived from the
+    router's own prefix if URL resolution is unavailable (e.g. the router is exercised
+    outside a real ASGI request in a unit test)."""
+    try:
+        status_url = str(http_request.url_for("get_job", job_id=job_id))
+        events_url = str(http_request.url_for("job_events", job_id=job_id))
+    except Exception:  # pragma: no cover - only outside a real request scope
+        base = router.prefix
+        status_url = f"{base}/{job_id}"
+        events_url = f"{base}/{job_id}/events"
+    return status_url, events_url
+
+
 @router.post("", status_code=202, response_model=JobAccepted)
 def enqueue_job(
     request: WindJobRequest,
     background: BackgroundTasks,
+    http_request: Request,
     store: JobStore = Depends(get_store),
     subject: str = Depends(get_current_subject),
 ) -> JobAccepted:
@@ -142,11 +166,12 @@ def enqueue_job(
         asyncio.run(_enqueue_to_arq(job_id, request))
     else:
         background.add_task(run_wind_job, job_id, request, store)
+    status_url, events_url = _job_urls(http_request, job_id)
     return JobAccepted(
         job_id=job_id,
         state=JobState.QUEUED,
-        status_url=f"/jobs/{job_id}",
-        events_url=f"/jobs/{job_id}/events",
+        status_url=status_url,
+        events_url=events_url,
     )
 
 

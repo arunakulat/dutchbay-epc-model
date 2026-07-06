@@ -1,11 +1,13 @@
 """Typed response models for the web boundary.
 
-The public HTTP contract (#788 P1 / #841). :data:`API_CONTRACT_VERSION` versions the
-client-facing response shape (the wizard, and later an iOS client, code against it):
+The public HTTP contract (#788 P1 / #841) has two version axes that complement each
+other: the URL surface is pinned under ``/v1`` (see ``app.api.main.API_V1_PREFIX`` — a
+future breaking change lands as ``/v2``), and :data:`API_CONTRACT_VERSION` versions the
+client-facing response *shape* (the wizard, and later an iOS client, code against it):
 bump the MINOR on an additive change (a new optional field) and the MAJOR on a breaking
 one (a removed/renamed/retyped field). ``tests/app/test_api_contract.py`` pins the public
-field set, so a breaking change to a response model fails loudly rather than silently
-shipping to clients.
+field set + types + the OpenAPI schema, so a breaking change to a response model fails
+loudly rather than silently shipping to clients.
 """
 
 from __future__ import annotations
@@ -22,10 +24,10 @@ API_CONTRACT_VERSION = "1.0"
 class CaseResult(BaseModel):
     """Client-facing summary of a finance-case run.
 
-    A focused projection of the canonical pipeline result for the ``POST /cases``
+    A focused projection of the canonical pipeline result for the ``POST /v1/cases``
     wizard surface — the lender KPIs plus the audit manifest. (The full
     annual-cashflow / debt-schedule detail is available via the lower-level
-    ``/run-pipeline`` route.)
+    ``/v1/run-pipeline`` route.)
     """
 
     status: str = Field(..., description="'success' or an error status.")

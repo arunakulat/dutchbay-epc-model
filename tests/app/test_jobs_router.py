@@ -34,7 +34,11 @@ def _request() -> WindJobRequest:
 
 
 class _FakeRequest:
-    """Minimal stand-in for a Starlette Request (only is_disconnected is used)."""
+    """Minimal stand-in for a Starlette Request.
+
+    Only ``is_disconnected`` is used by ``job_events``; it deliberately has no
+    ``url_for``, so ``enqueue_job``'s URL builder takes its fallback branch and yields
+    the router-prefix-relative ``/jobs/{id}`` paths (asserted below)."""
 
     async def is_disconnected(self) -> bool:  # pragma: no cover - not awaited here
         return False
@@ -47,7 +51,9 @@ def test_get_store_returns_default() -> None:
 def test_enqueue_creates_queued_record_and_schedules_task() -> None:
     store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background, store=store, subject="u1")
+    accepted = jr.enqueue_job(
+        _request(), background, _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     assert accepted.state is JobState.QUEUED
     assert accepted.status_url == f"/jobs/{accepted.job_id}"
     assert accepted.events_url == f"/jobs/{accepted.job_id}/events"
@@ -62,7 +68,9 @@ def test_enqueue_creates_queued_record_and_schedules_task() -> None:
 def test_get_job_found() -> None:
     store = InMemoryJobStore()
     background = BackgroundTasks()
-    accepted = jr.enqueue_job(_request(), background, store=store, subject="u1")
+    accepted = jr.enqueue_job(
+        _request(), background, _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     record = jr.get_job(accepted.job_id, store=store, subject="u1")
     assert record.job_id == accepted.job_id
 
@@ -76,7 +84,9 @@ def test_get_job_unknown_404() -> None:
 def test_get_job_other_owner_404() -> None:
     """A different subject cannot read another client's job (non-leaking 404)."""
     store = InMemoryJobStore()
-    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    accepted = jr.enqueue_job(
+        _request(), BackgroundTasks(), _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     with pytest.raises(HTTPException) as exc:
         jr.get_job(accepted.job_id, store=store, subject="u2")
     assert exc.value.status_code == 404
@@ -86,7 +96,9 @@ def test_get_job_other_owner_404() -> None:
 
 def test_job_events_returns_sse_stream() -> None:
     store = InMemoryJobStore()
-    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    accepted = jr.enqueue_job(
+        _request(), BackgroundTasks(), _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     resp = jr.job_events(
         accepted.job_id, request=_FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
     )
@@ -105,7 +117,9 @@ def test_job_events_unknown_404() -> None:
 def test_job_events_other_owner_404() -> None:
     """Ownership is enforced before any SSE stream opens (non-leaking 404)."""
     store = InMemoryJobStore()
-    accepted = jr.enqueue_job(_request(), BackgroundTasks(), store=store, subject="u1")
+    accepted = jr.enqueue_job(
+        _request(), BackgroundTasks(), _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
     with pytest.raises(HTTPException) as exc:
         jr.job_events(
             accepted.job_id, request=_FakeRequest(), store=store, subject="u2"  # type: ignore[arg-type]

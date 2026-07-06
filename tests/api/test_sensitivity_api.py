@@ -46,12 +46,14 @@ def test_run_tornado_returns_canonical_rows() -> None:
 
     rows = run_tornado(payload)
 
+    # #841: run_tornado now returns typed SensitivityTornadoRow models (the frozen
+    # public tornado contract), not loose dicts — assert via attribute access.
     assert len(rows) == 2
-    params = {row["parameter"] for row in rows}
+    params = {row.parameter for row in rows}
     assert params == {"capex.usd_total", "tariff.lkr_per_kwh"}
     for row in rows:
-        assert row["metric"] == "project_irr"
-        assert isinstance(row["base_metric"], float)
-        assert isinstance(row["impact_abs"], float)
-        assert isinstance(row["low_case"], float)
-        assert isinstance(row["high_case"], float)
+        assert row.metric == "project_irr"
+        assert isinstance(row.base_metric, float)
+        assert isinstance(row.impact_abs, float)
+        assert isinstance(row.low_case, float)
+        assert isinstance(row.high_case, float)

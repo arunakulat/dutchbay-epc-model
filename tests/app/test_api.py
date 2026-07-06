@@ -55,18 +55,23 @@ def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
 def test_app_exposes_expected_routes() -> None:
     # The OpenAPI schema flattens included routers (the pipeline router is nested).
     spec_paths = set(app.openapi()["paths"])
-    assert "/cases" in spec_paths
+    # #841 contract freeze: the whole client-data surface is version-pinned under /v1;
+    # only the infra /health probe is unversioned.
     assert "/health" in spec_paths
-    assert "/run-pipeline" in spec_paths  # included from api.pipeline_api.router
-    assert "/cases/report.html" in spec_paths
-    assert "/cases/report.pdf" in spec_paths
-    assert "/jobs" in spec_paths  # async live-ERA5 path (PR E)
-    assert "/jobs/{job_id}" in spec_paths
-    assert "/jobs/{job_id}/events" in spec_paths
+    assert "/v1/cases" in spec_paths
+    assert "/v1/run-pipeline" in spec_paths  # included from api.pipeline_api.router
+    assert "/v1/cases/report.html" in spec_paths
+    assert "/v1/cases/report.pdf" in spec_paths
+    assert "/v1/jobs" in spec_paths  # async live-ERA5 path (PR E)
+    assert "/v1/jobs/{job_id}" in spec_paths
+    assert "/v1/jobs/{job_id}/events" in spec_paths
     # the sensitivity surface is now composed as gated routes (no longer a mounted
     # sub-app), so its endpoints appear in the parent OpenAPI schema.
-    assert "/sensitivity/run-pipeline" in spec_paths
-    assert "/sensitivity/run-tornado/" in spec_paths
+    assert "/v1/sensitivity/run-pipeline" in spec_paths
+    assert "/v1/sensitivity/run-tornado/" in spec_paths
+    # the pre-freeze unprefixed public paths are GONE — /v1 is the single surface.
+    assert "/cases" not in spec_paths
+    assert "/jobs" not in spec_paths
 
 
 def test_health() -> None:
@@ -295,9 +300,11 @@ def test_timed_out_compute_keeps_its_slot_until_the_thread_finishes(
 def test_operation_ids_are_pinned() -> None:
     """The /cases* operationIds are pinned, so the API contract is stable across renames."""
     paths = app.openapi()["paths"]
-    assert paths["/cases"]["post"]["operationId"] == "run_case"
-    assert paths["/cases/report.html"]["post"]["operationId"] == "run_case_report_html"
-    assert paths["/cases/report.pdf"]["post"]["operationId"] == "run_case_report_pdf"
+    assert paths["/v1/cases"]["post"]["operationId"] == "run_case"
+    assert (
+        paths["/v1/cases/report.html"]["post"]["operationId"] == "run_case_report_html"
+    )
+    assert paths["/v1/cases/report.pdf"]["post"]["operationId"] == "run_case_report_pdf"
 
 
 # --------------------------------------------------------------------------- #
@@ -348,12 +355,12 @@ def test_http_smoke_if_httpx_available() -> None:
         client = TestClient(app)
         assert client.get("/health").json()["status"] == "ok"
 
-        ok = client.post("/cases", json=_valid_kwargs())
+        ok = client.post("/v1/cases", json=_valid_kwargs())
         assert ok.status_code == 200
         assert "project_irr" in ok.json()["kpis"]
 
         # malformed body -> FastAPI 422
-        assert client.post("/cases", json={"site_name": ""}).status_code == 422
+        assert client.post("/v1/cases", json={"site_name": ""}).status_code == 422
     finally:
         app.dependency_overrides.clear()
 
@@ -383,15 +390,19 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
             "num_turbines": 15,
             "hub_height_m": 119.0,
         }
-        accepted = client.post("/jobs", json=body)
+        accepted = client.post("/v1/jobs", json=body)
         assert accepted.status_code == 202
-        job_id = accepted.json()["job_id"]
+        payload = accepted.json()
+        job_id = payload["job_id"]
+        # #841: the returned handle URLs carry the /v1 prefix (url_for-derived).
+        assert payload["status_url"].endswith(f"/v1/jobs/{job_id}")
+        assert payload["events_url"].endswith(f"/v1/jobs/{job_id}/events")
 
-        got = client.get(f"/jobs/{job_id}")
+        got = client.get(f"/v1/jobs/{job_id}")
         assert got.status_code == 200
         assert got.json()["job_id"] == job_id
 
-        assert client.get("/jobs/unknown-id").status_code == 404
+        assert client.get("/v1/jobs/unknown-id").status_code == 404
         # The injected store — not the module default — received the job.
         assert custom_store.get(job_id) is not None
     finally:
@@ -409,14 +420,16 @@ def test_compute_routes_require_auth_when_no_token() -> None:
     from fastapi.testclient import TestClient
 
     client = TestClient(app)  # no dependency override -> no bearer token presented
-    assert client.post("/run-pipeline", json={"config_path": "x"}).status_code == 401
+    assert client.post("/v1/run-pipeline", json={"config_path": "x"}).status_code == 401
     assert (
-        client.post("/sensitivity/run-pipeline", json={"config_path": "x"}).status_code
+        client.post(
+            "/v1/sensitivity/run-pipeline", json={"config_path": "x"}
+        ).status_code
         == 401
     )
     assert (
         client.post(
-            "/sensitivity/run-tornado/",
+            "/v1/sensitivity/run-tornado/",
             json={"config_path": "x", "parameters": []},
         ).status_code
         == 401
@@ -435,7 +448,7 @@ def test_compute_routes_pass_auth_gate_with_token() -> None:
     app.dependency_overrides[get_current_subject] = lambda: "smoke-user"
     try:
         client = TestClient(app)
-        r = client.post("/run-pipeline", json={"config_path": "does_not_exist.yaml"})
+        r = client.post("/v1/run-pipeline", json={"config_path": "does_not_exist.yaml"})
         assert r.status_code != 401  # gate passed; handler ran (and 400'd on bad path)
     finally:
         app.dependency_overrides.clear()
