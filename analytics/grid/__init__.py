@@ -32,6 +32,12 @@ Public surface:
       the SCR + reactive screens into one
       :class:`analytics.contracts_v14.GridStudyResult`. Analytics consumers call THIS
       and import grid result types only from ``analytics.contracts_v14``.
+    - :mod:`analytics.grid.capabilities` — per-technology grid-capability plug-ins
+      (D4-series) keyed on the :mod:`finance.tech_types` classification. Each plug-in reuses
+      the D4a ride-through core + the D3 reactive/SCR contracts for ONE technology.
+      :mod:`analytics.grid.capabilities.bess` is the BESS (storage) plug-in: a MANUAL
+      per-site PCS short-circuit contribution fed into the SCR screen plus an SoH-degraded
+      reactive/PQ capability screen. Standalone; a later dolphin wires per-tech dispatch.
 """
 
 from __future__ import annotations
@@ -42,4 +48,5 @@ __all__ = [
     "ride_through_poc",
     "reactive_screen",
     "evaluate_grid",
+    "capabilities",
 ]
