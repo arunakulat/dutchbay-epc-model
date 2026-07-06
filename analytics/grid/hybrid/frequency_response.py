@@ -62,12 +62,14 @@ The ANDES dynamic solve (call-time only)
 ----------------------------------------
 The per-group split, the SOC integration and the adequacy verdict are ALL pure Python and
 run in the default (grid-free) install. When a caller opts into the dynamic study
-(``run_dynamics=True``), an ANDES RMS frequency-event solve is run through the SHARED D4a
+(``run_dynamics=True``), an ANDES RMS frequency-event solve is run through the SHARED D4b
 ride-through machinery (:func:`analytics.grid.ride_through.run_ride_through_case`) to
-measure the dynamic frequency nadir/zenith — but that dynamic nadir is NOT modelled by the
-D4a core yet (a shunt fault cannot apply a frequency excursion), so it returns an explicit
-NOT-RUN (``dynamic_nadir_hz=None``) rather than a fabricated value. The CLOSED-FORM
-per-group split + band compliance are the real, physically-grounded deliverables here.
+measure the dynamic frequency nadir/zenith. As of D4b (#892) the ride-through core applies
+a REAL frequency excursion (a generator trip / load step), so it now returns a MEASURED
+dynamic nadir (``dynamic_nadir_hz`` = the frequency extreme) rather than NOT-RUN — but ONLY
+when the solve actually ran and measured one; a gate-off run / setup failure / unmeasured
+frequency var still leaves it ``None`` (no fabrication). The CLOSED-FORM per-group split +
+band compliance remain the real, physically-grounded deliverables here.
 
 CASPER / CESSPIT / NO-SPURIOUS-PASS
 -----------------------------------
@@ -108,8 +110,9 @@ _FREQ_RESPONSE_PROVENANCE = (
     "droop-commanded P(f) capped at its physical headroom (wind spinning/de-load; BESS via "
     "the ONE shared D5a SOC / frequency reserve — no double-count), and the settling "
     "frequency screened against the grid-code ride-through band. Closed-form per-group "
-    "split + band compliance are physical; the ANDES dynamic nadir is NOT modelled yet "
-    "(returned NOT-RUN). ADVISORY / design-stage ONLY — NOT a dynamic RMS/EMT "
+    "split + band compliance are physical; the ANDES dynamic nadir is now measured by the "
+    "D4b ride-through frequency excursion when the dynamic gate is on (else NOT-RUN). "
+    "ADVISORY / design-stage ONLY — NOT a dynamic RMS/EMT "
     "primary-frequency-response study against the utility base case, and NOT bankable."
 )
 
@@ -598,9 +601,10 @@ def run_hybrid_frequency_response(
             ``grid.freq_response_sustain_s`` (the mandated sustain window).
         deviation_hz: the SIGNED event deviation Δf (Hz); when ``None`` it is derived from
             ``grid.freq_event_hz − nominal_hz`` (a config key is required — no silent event).
-        run_dynamics: opt into the ANDES dynamic solve (default off). Even when on, the
-            dynamic frequency nadir is NOT modelled by the D4a core yet, so it is reported
-            NOT-RUN (``dynamic_nadir_hz=None``) — never a fabricated value.
+        run_dynamics: opt into the ANDES dynamic solve (default off). When on, the D4b
+            ride-through core applies a real frequency excursion and reports a MEASURED
+            dynamic nadir (``dynamic_nadir_hz`` = the frequency extreme) — or ``None`` when
+            the solve did not run / measured no frequency var (never a fabricated value).
         nominal_hz: nominal system frequency (Hz; > 0).
         reference_year: the BESS SoH evaluation year (``None`` = end-of-life, binding case).
         provenance: override the stamped provenance string.
@@ -659,9 +663,10 @@ def run_hybrid_frequency_response(
     else:
         response_adequate = bool(total_delivered + _MW_TOL >= total_commanded)
 
-    # The dynamic ANDES nadir is NOT modelled by the D4a core yet (a shunt fault cannot apply
-    # a frequency excursion). Even with the dynamic gate ON we return an explicit NOT-RUN
-    # rather than fabricate a nadir — mirroring how ride_through reports HVRT/frequency.
+    # The dynamic ANDES nadir is now MEASURED by the D4b ride-through frequency excursion
+    # (a generator trip / load step) when the dynamic gate is ON. It stays None when the
+    # solve did not run or measured no frequency var — never fabricated from the closed-form
+    # settling estimate (NO SPURIOUS PASS).
     dynamic_nadir_hz: float | None = None
     dynamic_ran = False
     if run_dynamics:
@@ -701,8 +706,9 @@ def run_hybrid_frequency_response(
             f"[{under_hz}, {over_hz}] Hz ({band_source}) → "
             f"{_verdict_word(band_compliant, 'band')}; response "
             f"{_verdict_word(response_adequate, 'adequacy')}. Closed-form per-group split + "
-            "band compliance are physical; the ANDES dynamic nadir is NOT modelled yet "
-            "(dynamic_nadir_hz=None). ADVISORY — confirm the dynamic PFR with an RMS/EMT "
+            "band compliance are physical; the ANDES dynamic nadir is "
+            f"{'not measured (gate off / NOT-RUN)' if dynamic_nadir_hz is None else f'{dynamic_nadir_hz:.3f} Hz (D4b excursion)'}"
+            ". ADVISORY — confirm the dynamic PFR with an RMS/EMT "
             "study against the utility base case."
         ),
     )
@@ -773,26 +779,43 @@ def _resolve_sustain_s(grid: Mapping[str, Any]) -> float:
 def _attempt_dynamic_nadir(
     deviation_hz: float,
 ) -> tuple[bool, float | None]:
-    """Attempt the ANDES dynamic frequency-event solve via the SHARED D4a machinery.
+    """Attempt the ANDES dynamic frequency-event solve via the SHARED D4b machinery.
 
     REUSES :func:`analytics.grid.ride_through.run_ride_through_case` (which reaches ``andes``
     through the shared ``_require_andes`` call-time guard) rather than re-scaffolding ANDES.
-    The D4a core does NOT model a frequency excursion yet (a shunt fault cannot apply one),
-    so the ``frequency`` ride-through case returns ``rode_through=None`` / NOT-RUN — and we
-    propagate that as ``dynamic_nadir_hz=None`` with ``dynamic_ran`` reflecting whether the
-    solve executed. We NEVER fabricate a nadir from the closed-form settling estimate: an
-    un-measured dynamic quantity stays ``None`` (NO SPURIOUS PASS).
+    As of D4b (#892) the ride-through core DOES model a real frequency excursion (a
+    generator trip / load step), so the ``frequency`` case now measures a REAL frequency
+    extreme (nadir/zenith) and surfaces it on ``RideThroughResult.freq_extreme_hz``. We
+    propagate that measured value as the dynamic nadir.
+
+    The honest-None contract is PRESERVED (NO SPURIOUS PASS): the returned nadir is ``None``
+    unless the solve ACTUALLY RAN and the core measured a frequency extreme. A gate-off run,
+    a case-setup failure, or a solve that produced no measurable frequency var all leave the
+    nadir ``None`` — we NEVER fabricate it from the closed-form settling estimate.
     """
     from analytics.grid.ride_through import run_ride_through_case
 
-    result = run_ride_through_case(
-        "frequency",
-        run_dynamics=True,
-        freq_excursion_hz=NOMINAL_FREQ_HZ + deviation_hz,
+    try:
+        result = run_ride_through_case(
+            "frequency",
+            run_dynamics=True,
+            freq_excursion_hz=NOMINAL_FREQ_HZ + deviation_hz,
+            nominal_hz=NOMINAL_FREQ_HZ,
+        )
+    except ImportError:
+        # CASPER: the [grid] extra (andes) is absent — the frequency excursion cannot be
+        # solved. Degrade to the honest NOT-RUN (ran=False, nadir=None), never fabricated.
+        # This is the ONLY branch reachable in the grid-free lane (the solve below needs
+        # andes); the andes-present branch is exercised by the grid-marked dynamics test.
+        return False, None
+    # Propagate the MEASURED frequency extreme only when the solve ran AND the core measured
+    # one (freq_extreme_hz is None on a setup failure or an unmeasured frequency var). No
+    # fabrication: an un-measured dynamic quantity stays None. Reached only WITH the [grid]
+    # extra (the try above raised otherwise).
+    nadir = (  # pragma: no cover - requires [grid] extra
+        result.freq_extreme_hz if result.ran else None
     )
-    # The D4a frequency case is NOT-RUN (unmodelled): no dynamic nadir is available. Report
-    # ran=False and nadir=None rather than fabricating a value.
-    return bool(result.ran), None
+    return bool(result.ran), nadir  # pragma: no cover - requires [grid] extra
 
 
 __all__ = [
