@@ -10,7 +10,11 @@ Modules:
                           
     cli_sensitivity_hydra: Hydra CLI wrapper for sensitivity analysis.
                           Canonical entrypoint for parameter sensitivity.
-                          
+
+    cli_capital_structure_optimize_hydra: Hydra CLI for the OPT-IN debt-mix &
+                          capex-contingency optimizers (#740). Analysis tool;
+                          never part of run_v14_pipeline.
+
     cli_sensitivity: ⚠️ DEPRECATED argparse-based sensitivity CLI.
                     Use cli_sensitivity_hydra instead.
                     Removal planned: Sprint 18 (Q1 2026).
@@ -60,5 +64,6 @@ from __future__ import annotations
 __all__ = [
     "cli_monte_carlo_hydra",
     "cli_sensitivity_hydra",
+    "cli_capital_structure_optimize_hydra",
     "cli_sensitivity",  # Deprecated but maintained for compatibility
 ]
