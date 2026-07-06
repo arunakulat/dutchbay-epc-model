@@ -52,7 +52,7 @@ def _require_pandapower() -> Any:
     try:
         import pandapower  # noqa: F401
 
-        return pandapower
+        return pandapower  # pragma: no cover - requires [grid] extra
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
             "Grid reactive/voltage screening requires the [grid] extra: "
@@ -210,7 +210,7 @@ def _iter_resources(grid: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     )
 
 
-def _build_network(
+def _build_network(  # pragma: no cover - requires [grid] extra
     pp: Any,
     *,
     poc_kv: float,
@@ -288,7 +288,7 @@ def _build_network(
     return net, b_poc, b_coll
 
 
-def _poc_pf_and_voltage(
+def _poc_pf_and_voltage(  # pragma: no cover - requires [grid] extra
     pp: Any, net: Any, poc_bus: int
 ) -> tuple[bool, float, float, float]:
     """Run ``runpp`` and read (converged, poc_v_pu, poc_p_mw, poc_q_mvar) at the POC.
@@ -394,7 +394,7 @@ def screen_reactive_capability(
         q_cmd = min(mvar_available, mvar_req)
         shortfall = max(0.0, mvar_req - mvar_available)
 
-        if pp is not None:
+        if pp is not None:  # pragma: no cover - requires [grid] extra
             for grid_v in v_points:
                 net, poc_bus, _coll = _build_network(
                     pp,
