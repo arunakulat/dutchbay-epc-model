@@ -361,6 +361,80 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
         )
 
 
+def _validate_hybrid_ppc_block(grid: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate the D5c ENPPC plant-controller block (#881) — PRESENT-ONLY, strict.
+
+    The combined frequency-droop study (:mod:`analytics.grid.hybrid.frequency_response`)
+    consumes an OPT-IN ``grid.ppc`` plant-controller block. It is a CONDITIONAL surface a
+    flat required-field spec cannot express (the fields are required only when a ``ppc``
+    block is declared), so it is validated here — exactly like the per-tech grid interface.
+    When no ``grid.ppc`` is present this does nothing, so every scenario without the hybrid
+    frequency study is byte-identical (KPI-neutral).
+
+    When ``grid.ppc`` IS present (i.e. the hybrid frequency study is enabled), it is STRICT
+    with NO silent defaults:
+
+      * ``ppc.groups`` — a non-empty list of at most SIX dispatch groups (the ENPPC
+        partitions the plant into up to six groups); each group must declare a positive
+        ``rated_mw`` (or ``rated_mva``) and a positive ``freq_droop_pct`` percent;
+      * ``ppc.p_priority_order`` — the active-power dispatch order, a list naming EXACTLY the
+        groups once each (a missing / extra / duplicated name is a mis-configured controller).
+    """
+    ppc = grid.get("ppc")
+    if ppc is None:
+        return  # opt-in — a plant without the hybrid frequency study is untouched
+    if not isinstance(ppc, Mapping):
+        errors.append(f"grid.ppc must be a mapping, got {type(ppc).__name__}.")
+        return
+
+    groups = ppc.get("groups")
+    if (
+        not isinstance(groups, list)
+        or not groups
+        or not all(isinstance(g, Mapping) for g in groups)
+    ):
+        errors.append(
+            "grid.ppc.groups must be a non-empty list of ENPPC dispatch-group mappings "
+            "(each with a rating + freq_droop_pct)."
+        )
+        return
+    if len(groups) > 6:
+        errors.append(
+            "grid.ppc.groups supports up to 6 ENPPC dispatch groups, got "
+            f"{len(groups)} (the controller partitions the plant into at most six groups)."
+        )
+
+    names: list[str] = []
+    for i, group in enumerate(groups):
+        rated = group.get("rated_mw", group.get("rated_mva"))
+        if not _is_positive_number(rated):
+            errors.append(
+                f"grid.ppc.groups[{i}].rated_mw must be a number > 0 (MW), got {rated!r}."
+            )
+        droop = group.get("freq_droop_pct")
+        if not _is_positive_number(droop):
+            errors.append(
+                f"grid.ppc.groups[{i}].freq_droop_pct must be a percent > 0 "
+                f"(e.g. 4.0 for 4 % droop), got {droop!r}."
+            )
+        names.append(str(group.get("name", f"group_{i}")))
+
+    order = ppc.get("p_priority_order")
+    if not isinstance(order, list) or any(isinstance(n, (dict, list)) for n in order):
+        errors.append(
+            "grid.ppc.p_priority_order must be a list naming the ENPPC groups in "
+            "active-power dispatch order."
+        )
+        return
+    order_names = [str(n) for n in order]
+    if sorted(order_names) != sorted(names):
+        errors.append(
+            "grid.ppc.p_priority_order must name EXACTLY the grid.ppc.groups once each "
+            f"(groups={sorted(names)!r}, order={sorted(order_names)!r}) — a missing, extra, "
+            "or duplicated name is a mis-configured controller."
+        )
+
+
 def validate_grid_block(raw_config: Mapping[str, Any], errors: list[str]) -> None:
     """Run the conditional / cross-field grid rules that a flat spec cannot express.
 
@@ -373,6 +447,7 @@ def validate_grid_block(raw_config: Mapping[str, Any], errors: list[str]) -> Non
     if isinstance(grid, Mapping):
         _validate_thevenin_conditionals(grid, errors)
         _validate_qsts_conditionals(grid, errors)
+        _validate_hybrid_ppc_block(grid, errors)
     _validate_per_tech_grid_blocks(raw_config, errors)
 
 

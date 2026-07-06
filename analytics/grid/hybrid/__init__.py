@@ -28,8 +28,18 @@ Public surface:
     - :func:`analytics.grid.hybrid.poc_aggregation.aggregate_poc_capability` — walk the
       resolved multi-tech resources, sum each tech's electrical model onto one POC bus, and
       emit the advisory :class:`analytics.contracts_v14.PocCapabilityEnvelope`.
+    - :func:`analytics.grid.hybrid.frequency_response.run_hybrid_frequency_response` (D5c,
+      #881) — the COMBINED frequency-droop study: split a frequency event's P(f) response
+      across the ENPPC dispatch groups (per-group ``freq_droop_pct``, dispatched in
+      ``p_priority_order``), each group's droop command capped at its physical headroom
+      (wind spinning/de-load; a BESS group via the ONE shared D5a SOC / frequency reserve —
+      no double-count), screen the settling frequency against the grid-code band, and emit
+      the advisory :class:`analytics.contracts_v14.FreqResponseResult`. The per-group split
+      + band compliance are pure Python (grid-free); the ANDES dynamic solve is reached only
+      through the shared D4a machinery at call-time, and the un-modelled dynamic nadir is
+      returned NOT-RUN — never fabricated (NO SPURIOUS PASS).
 """
 
 from __future__ import annotations
 
-__all__ = ["poc_aggregation"]
+__all__ = ["poc_aggregation", "frequency_response"]
