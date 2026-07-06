@@ -64,13 +64,25 @@ _TAXONOMY_PATH = (
 #: The one declaration that documents an exclusion (needs a reason, not rendered).
 _NOT_APPLICABLE_STATUS = "not_applicable"
 
+#: Recognised OPTIONAL per-section technology lens (issue #851). PRESENTATION metadata only —
+#: it never gates coverage. ``shared`` = spans every active technology (rendered as a per-tech
+#: sub-chapter for each active tech); a specific tag = reads under one technology only.
+_SECTION_TECHNOLOGIES: Tuple[str, ...] = ("wind", "solar", "bess", "shared")
+
 
 class FeasibilitySectionsError(ValueError):
     """Raised when a scenario's feasibility-section coverage is not IC-grade."""
 
 
 class SectionDefinition(BaseModel):
-    """One canonical feasibility section's definition (name, group, title, description)."""
+    """One canonical feasibility section's definition (name, group, title, description).
+
+    ``technology`` (issue #851) is an OPTIONAL presentation lens — ``wind | solar | bess |
+    shared`` — declaring which technology the section reads under; ``None`` (the default,
+    untagged) behaves exactly as before. It never gates coverage; the report layer uses it to
+    render per-technology sub-chapters (a ``shared`` section is rendered once per active
+    generation technology).
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -78,6 +90,7 @@ class SectionDefinition(BaseModel):
     group: str
     title: str
     description: str = ""
+    technology: str | None = None
 
 
 class FeasibilityTaxonomy(BaseModel):
@@ -106,6 +119,16 @@ class FeasibilityTaxonomy(BaseModel):
     def group_of(self) -> Mapping[str, str]:
         """Map each canonical section name to its declared group."""
         return {d.name: d.group for d in self.sections}
+
+    @property
+    def technology_of(self) -> Mapping[str, str]:
+        """Map each canonical section name to its OPTIONAL technology lens (#851).
+
+        Only sections that declare a ``technology`` tag appear; an untagged section is absent
+        (its lens is ``None``). Used by the report layer to decide which sections render
+        per-technology sub-chapters (``shared``) — never a coverage gate.
+        """
+        return {d.name: d.technology for d in self.sections if d.technology is not None}
 
 
 class FeasibilityPolicy(BaseModel):
@@ -217,12 +240,22 @@ def load_feasibility_taxonomy() -> FeasibilityTaxonomy:
                 f"config/feasibility_sections.yaml section {rec['name']!r} declares "
                 f"group {group!r} which is not in section_groups ({', '.join(groups)})"
             )
+        technology = rec.get("technology")
+        if technology is not None:
+            technology = str(technology).strip().lower()
+            if technology not in _SECTION_TECHNOLOGIES:
+                raise ValueError(
+                    f"config/feasibility_sections.yaml section {rec['name']!r} declares "
+                    f"technology {technology!r} which is not recognised "
+                    f"({', '.join(_SECTION_TECHNOLOGIES)})"
+                )
         sections.append(
             SectionDefinition(
                 name=str(rec["name"]),
                 group=group,
                 title=str(rec.get("title", str(rec["name"]))),
                 description=str(rec.get("description", "")),
+                technology=technology,
             )
         )
     names = [d.name for d in sections]
