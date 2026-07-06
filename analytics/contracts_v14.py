@@ -693,6 +693,182 @@ class GridStrengthResult(ContractMixin):
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D3 (#874) — steady-state reactive / voltage screen contracts.
+#
+# The D1 GridStrengthResult answers "is the grid stiff enough (SCR@POC)?"; D3 adds
+# the reactive-capability question "can the plant hold the POC power factor / voltage
+# inside the grid-code PQ box across the P × grid-voltage operating envelope, and if
+# not how many Mvar short is it?". Like GridStrengthResult these are ADVISORY, design-
+# stage screens — ``bankable=False`` always: the utility-accepted study is a PSS/E /
+# PowerFactory run against the CEB/NSCC confidential grid base case. They therefore
+# NEVER feed the finance engine (committed scenarios stay byte-identical / KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REACTIVE_SCREEN_PROVENANCE = (
+    "In-house Python design-stage reactive/voltage screen (pandapower AC load-flow; "
+    "POC transformer + collector equivalent; per-resource Q-limits from the reactive-"
+    "capability curve). NOT the utility-accepted bankable grid-connection study — "
+    "CEB/NSCC require PSS/E or PowerFactory against their confidential grid base case."
+)
+
+
+@dataclass(frozen=True)
+class ReactiveCapabilityResult(ContractMixin):
+    """Advisory reactive-capability / PQ-box screen at the POC (issue #874).
+
+    Reports whether the aggregate plant can meet the grid-code reactive requirement at
+    the point of connection — expressed as the required ``pf_range`` (equivalently a
+    ±Q(P) capability box) — over the worst operating point of the P × grid-voltage
+    sweep. It is an ADVISORY only (``bankable=False``); it never feeds the finance
+    engine.
+
+    Fields
+        pf_required_min / pf_required_max: the grid-code power-factor limits (signed;
+            e.g. -0.95 lagging / +0.95 leading) the plant must be able to hold at the POC.
+        mvar_required: the Mvar the grid code demands at the governing operating point
+            (the ± capability the PQ box requires at that P, given the pf limit).
+        mvar_available: the Mvar the plant can actually deliver at that operating point
+            (sum of per-resource reactive headroom after the collector/transformer path).
+        mvar_shortfall: ``max(0, mvar_required - mvar_available)`` — the Mvar gap the
+            plant must close (0.0 when the plant meets the requirement). This is the
+            sizing figure for any additional reactive plant (STATCOM / MSC).
+        pf_at_poc: the achievable power factor at the POC at the governing operating
+            point (signed; the sign follows the reactive-flow direction convention).
+        inside_pq_box: True iff the plant stays inside the required PQ box at EVERY
+            swept operating point (``mvar_shortfall == 0`` across the whole sweep) AND
+            the governing corner's load-flow converged — a non-converged governing corner
+            is a binding failure and forces this False.
+        governing_p_mw / governing_grid_v_pu: the P (MW) and grid voltage (pu) of the
+            worst-case operating point that set ``mvar_shortfall`` (the binding corner).
+        governing_converged: whether the load-flow converged at the governing corner.
+            False = the screen could not place the operating point (binding failure).
+    """
+
+    pf_required_min: float
+    pf_required_max: float
+    mvar_required: float
+    mvar_available: float
+    mvar_shortfall: float
+    pf_at_poc: float
+    inside_pq_box: bool
+    governing_p_mw: float | None = None
+    governing_grid_v_pu: float | None = None
+    governing_converged: bool = True
+    method: str = "pandapower_runpp"  # "pandapower_runpp" | "closed_form"
+    bankable: bool = False
+    provenance: str = _REACTIVE_SCREEN_PROVENANCE
+    notes: str = ""
+
+    @classmethod
+    def from_screen(
+        cls,
+        *,
+        pf_required_min: float,
+        pf_required_max: float,
+        mvar_required: float,
+        mvar_available: float,
+        pf_at_poc: float,
+        governing_p_mw: float | None = None,
+        governing_grid_v_pu: float | None = None,
+        governing_converged: bool = True,
+        method: str = "pandapower_runpp",
+        provenance: str = _REACTIVE_SCREEN_PROVENANCE,
+        notes: str = "",
+    ) -> "ReactiveCapabilityResult":
+        """Build the advisory reactive result, deriving the shortfall + PQ-box verdict.
+
+        ``mvar_shortfall`` is ``max(0, mvar_required - mvar_available)``. A non-converged
+        governing corner (``governing_converged=False``) is a BINDING failure: the shortfall
+        is escalated to at least the full reactive demand and ``inside_pq_box`` is forced
+        False (the screen could not place the operating point, so the plant is NOT provably
+        compliant). ``inside_pq_box`` is otherwise True iff the shortfall is zero.
+        ``bankable`` is always ``False`` for an in-house Python screen.
+        """
+        shortfall = max(0.0, float(mvar_required) - float(mvar_available))
+        if not governing_converged:
+            # Binding failure: the load-flow could not place the governing operating point,
+            # so the reactive gap is at least the full demand there and the plant cannot be
+            # certified inside the PQ box by this screen.
+            shortfall = max(shortfall, float(mvar_required))
+        return cls(
+            pf_required_min=pf_required_min,
+            pf_required_max=pf_required_max,
+            mvar_required=mvar_required,
+            mvar_available=mvar_available,
+            mvar_shortfall=shortfall,
+            pf_at_poc=pf_at_poc,
+            inside_pq_box=bool(governing_converged) and shortfall <= 0.0,
+            governing_p_mw=governing_p_mw,
+            governing_grid_v_pu=governing_grid_v_pu,
+            governing_converged=governing_converged,
+            method=method,
+            bankable=False,
+            provenance=provenance,
+            notes=notes,
+        )
+
+
+@dataclass(frozen=True)
+class PowerFlowResult(ContractMixin):
+    """Advisory steady-state AC load-flow snapshot at the governing operating point (#874).
+
+    Captures the pandapower ``runpp`` outcome for the worst-case operating point of the
+    reactive screen's P × grid-voltage sweep: the bus voltages (pu), the achieved POC
+    power factor, and whether the solve converged. ADVISORY only (``bankable=False``);
+    a non-converged solve (``converged=False``) means the screen could not place the
+    operating point and its reactive verdict for that corner is unreliable.
+
+    Fields
+        converged: True iff the pandapower load-flow solved at the governing point.
+        bus_voltages_pu: bus-name → voltage-magnitude (pu) at the governing point.
+        poc_voltage_pu: the POC busbar voltage magnitude (pu) at the governing point.
+        poc_pf: the achieved power factor at the POC (signed) at the governing point.
+        governing_p_mw / governing_grid_v_pu: the operating point this snapshot is for.
+    """
+
+    converged: bool
+    bus_voltages_pu: dict[str, float]
+    poc_voltage_pu: float
+    poc_pf: float
+    governing_p_mw: float | None = None
+    governing_grid_v_pu: float | None = None
+    method: str = "pandapower_runpp"
+    bankable: bool = False
+    provenance: str = _REACTIVE_SCREEN_PROVENANCE
+    notes: str = ""
+
+
+@dataclass(frozen=True)
+class GridStudyResult(ContractMixin):
+    """Bundled advisory grid interconnection study for the POC (issue #874).
+
+    The single composite the D3 gateway (:func:`analytics.grid.evaluate_grid.evaluate_grid`)
+    returns: the D1 SCR/grid-strength screen plus the D3 reactive-capability + power-flow
+    screens, tied to one POC. Every sub-screen is design-stage advisory
+    (``bankable=False``) and none of them feeds the finance engine, so committed
+    scenarios remain byte-identical (KPI-neutral).
+
+    Fields
+        strength: the D1 :class:`GridStrengthResult` (SCR@POC → GFL/GFM/EMT screen).
+        reactive: the D3 :class:`ReactiveCapabilityResult` (PQ-box / Mvar-shortfall
+            screen); ``None`` when the reactive screen was not run (e.g. missing config).
+        power_flow: the D3 :class:`PowerFlowResult` snapshot at the governing operating
+            point; ``None`` when the reactive screen did not run.
+        study_enabled: echoes ``grid.study_enabled`` — the master default-off gate.
+        poc_bus_name: the POC busbar identifier the study is tied to.
+    """
+
+    strength: "GridStrengthResult"
+    reactive: "ReactiveCapabilityResult | None" = None
+    power_flow: "PowerFlowResult | None" = None
+    study_enabled: bool = False
+    poc_bus_name: str | None = None
+    bankable: bool = False
+    provenance: str = ""
+    notes: str = ""
+
+
 @dataclass(frozen=True)
 class IrrBridgeComponent(ContractMixin):
     """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
@@ -878,6 +1054,9 @@ __all__ = [
     "MultiTechWBS",
     "SharedPoiCurtailmentResult",
     "GridStrengthResult",
+    "ReactiveCapabilityResult",
+    "PowerFlowResult",
+    "GridStudyResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
