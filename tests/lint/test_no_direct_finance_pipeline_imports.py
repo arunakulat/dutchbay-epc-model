@@ -141,6 +141,13 @@ ALLOWLIST: dict[str, str] = {
         "imports. Importing the shared contract directly is the point (CCCDIR), not a "
         "breach; the wind capability plug-in is KPI-neutral / advisory-only."
     ),
+    "analytics/grid/capabilities/solar.py": (
+        "[PERMANENT] Imports finance.tech_types (is_generation_type / is_storage_type) to "
+        "key the solar capability plug-in on the technology classification — a pure leaf "
+        "registry of TYPE discriminators with no engine logic, identical in spirit to the "
+        "wind / grid_interface_schema / multi_tech_tornado tech-type imports. The solar "
+        "capability plug-in is KPI-neutral / advisory-only."
+    ),
     # --- [TODO] real layering violations to refactor toward the gateway -----
     "analytics/dscr_sensitivity.py": (
         "[TODO #36] Imports finance.debt_v14.size_debt_with_dual_dscr directly "
