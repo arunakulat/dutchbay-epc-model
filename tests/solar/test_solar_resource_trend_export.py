@@ -35,9 +35,11 @@ from analytics.executive_workbook import (
 )
 from solar_resource.long_term_trend import (
     MIN_TREND_YEARS,
+    PERIOD_ENERGY_BASIS,
     analyze_long_term_solar_resource,
     build_solar_resource_trend_export_block,
     compute_solar_trend,
+    render_trend_markdown,
 )
 
 BASE_GHI = 2000.0  # Puttalam-ish annual GHI (kWh/m2/yr)
@@ -92,6 +94,25 @@ class TestTrendRecovery:
         assert t.significant is False
         assert t.classification == "decadal_variability"
 
+    def test_constant_series_no_nan_and_json_safe(self) -> None:
+        # LOW #727-review: a zero-variance GHI series must not emit NaN tau/p/r2 that
+        # a strict JSON encoder rejects — it degrades to a serializable no-trend.
+        import json
+        import math
+
+        annual = _annual_ghi(1990, 2024, slope_per_yr=0.0, noise=0.0)["ghi_kwh_m2"]
+        annual.index = annual.index.year
+        t = compute_solar_trend(annual)
+        for v in (t.mk_tau, t.mk_pvalue, t.ols_r2, t.sen_slope_per_decade, t.cov_pct):
+            assert math.isfinite(v)
+        assert t.significant is False
+        assert t.classification == "decadal_variability"
+        # The full frozen block round-trips through strict JSON (allow_nan=False).
+        block = build_solar_resource_trend_export_block(
+            _annual_ghi(1990, 2024, slope_per_yr=0.0, noise=0.0)
+        )
+        json.dumps(block, allow_nan=False)
+
 
 # ---------------------------------------------------------------------------
 # build_solar_resource_trend_export_block — encoder + explicit degrade
@@ -127,14 +148,42 @@ class TestBuildBlock:
         assert any(m.startswith("AEP P50 ") for m in recs)
         assert any(m.startswith("CF ") for m in recs)
         assert recs["Recommended P50 (GWh)"] is not None
+        # MEDIUM #727-review: the proxy nature is stated IN the artifact (a "Method" row)
+        # and the derived energy is not over-precise (1 dp) — a lender must not read it
+        # as a precise pvlib P50.
+        assert "proxy" in recs["AEP basis (per-period energy/CF)"].lower()
+        assert "not a pvlib re-run" in recs["AEP basis (per-period energy/CF)"]
+        aep_val = next(v for m, v in recs.items() if m.startswith("AEP P50 "))
+        assert round(aep_val, 1) == aep_val  # <=1 decimal place, no false precision
 
-    def test_no_energy_base_omits_energy_rows(self) -> None:
+    def test_markdown_header_caveats_the_ghi_proxy(self) -> None:
+        series = _annual_ghi(1995, 2024, slope_per_yr=+3.0, noise=4.0)
+        out = analyze_long_term_solar_resource(
+            series, base_energy_gwh=464.5, base_cf=0.354
+        )
+        md = out["markdown"]
+        # render_trend_markdown built the same string analyze_* returns.
+        assert md == render_trend_markdown(
+            out["trend"], out["period_ghi"], out["recommendation"]
+        )
+        assert PERIOD_ENERGY_BASIS in md
+        assert "GHI-scaled AEP by reference period" in md
+        # The precise-modelled-sounding bare header is NOT used when energy is present.
+        assert "**GHI by reference period:**" not in md
+        # The recommended-P50 headline itself carries the proxy caveat.
+        assert PERIOD_ENERGY_BASIS in md.split("Recommended P50 basis")[1]
+
+    def test_no_energy_base_omits_energy_rows_and_method(self) -> None:
         out = analyze_long_term_solar_resource(
             _annual_ghi(1995, 2024, slope_per_yr=2.0)
         )
         metrics = [r["Metric"] for r in out["summary_df"].to_dict("records")]
         assert not any(m.startswith("AEP P50 ") for m in metrics)
         assert not any(m.startswith("CF ") for m in metrics)
+        # No spurious Method row on a GHI-only sheet.
+        assert "AEP basis (per-period energy/CF)" not in metrics
+        # The bare (non-proxy) header IS used when there is no derived energy.
+        assert "**GHI by reference period:**" in out["markdown"]
 
     def test_round_trips_into_workbook_decoder(self) -> None:
         series = _annual_ghi(1995, 2024, slope_per_yr=+3.0, noise=4.0)

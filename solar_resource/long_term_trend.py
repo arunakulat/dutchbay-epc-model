@@ -56,6 +56,16 @@ MIN_TREND_YEARS = 10
 # Default label for the frozen multi-decade annual-GHI source (documented, not fetched).
 DEFAULT_GHI_SOURCE = "PVGIS SARAH-3 (frozen annual GHI)"
 
+# Lender-facing provenance for the per-period energy/CF (MEDIUM #727-review fix): the
+# per-period AEP/CF are the full-record base value scaled LINEARLY by the period-to-record
+# GHI ratio — a first-order proxy, NOT a per-period pvlib re-run (contrast the wind side,
+# whose table IS a canonical-power-curve re-run). Surfaced IN the artifact (the markdown
+# table header + a workbook "Method" row) so a lender never reads the proxy as a precise
+# modelled P50.
+PERIOD_ENERGY_BASIS = (
+    "first-order linear GHI-ratio proxy of the full-record P50, not a pvlib re-run"
+)
+
 
 @dataclass(frozen=True)
 class SolarTrendResult:
@@ -131,6 +141,34 @@ def compute_solar_trend(annual: pd.Series) -> SolarTrendResult:
     """Mann-Kendall + Theil-Sen (Sen's slope) + OLS trend on the annual-mean GHI series."""
     yrs = np.asarray(annual.index.values, dtype="float64")
     vals = np.asarray(annual.values, dtype="float64")
+    # Zero-variance guard (LOW #727-review fix, mirrors the wind side's latent risk): a
+    # perfectly constant GHI series makes kendalltau / linregress return NaN tau/p/r2,
+    # which a strict JSON encoder (json.dumps(allow_nan=False)) or decoder would reject
+    # in the frozen export. Not reachable with real PVGIS SARAH-3 (measured GHI always
+    # varies), but treat it as an unambiguous no-trend with serializable zeros.
+    if float(vals.std()) == 0.0:
+        return SolarTrendResult(
+            start_year=int(yrs.min()),
+            end_year=int(yrs.max()),
+            n_years=int(len(yrs)),
+            mean_ghi_kwh_m2=round(float(vals.mean()), 1),
+            cov_pct=0.0,
+            mk_tau=0.0,
+            mk_pvalue=1.0,
+            significant=False,
+            sen_slope_per_decade=0.0,
+            sen_ci_low_per_decade=0.0,
+            sen_ci_high_per_decade=0.0,
+            ols_slope_per_decade=0.0,
+            ols_r2=0.0,
+            decade_means=_decade_means(annual),
+            classification="decadal_variability",
+            classification_note=(
+                "Constant annual GHI (zero interannual variance): no trend is "
+                "computable; treated as no monotonic trend. Use a long-term mean as "
+                "the central P50."
+            ),
+        )
     _kt = _st.kendalltau(yrs, vals)
     tau = float(_kt.statistic)
     p_mk = float(_kt.pvalue)
@@ -207,10 +245,13 @@ def period_ghi_table(
             "years": int(len(sub)),
             "mean_ghi_kwh_m2": round(mean_ghi, 1),
         }
+        # First-order LINEAR GHI-ratio proxy (NOT a pvlib re-run); round to few sig
+        # figs so the artifact does not read as a precise modelled P50 (see
+        # PERIOD_ENERGY_BASIS / the caveated table header + workbook "Method" row).
         if base_energy_gwh is not None:
-            row["net_aep_p50_gwh"] = round(float(base_energy_gwh) * ratio, 3)
+            row["net_aep_p50_gwh"] = round(float(base_energy_gwh) * ratio, 1)
         if base_cf is not None:
-            row["capacity_factor"] = round(float(base_cf) * ratio, 4)
+            row["capacity_factor"] = round(float(base_cf) * ratio, 3)
         rows.append(row)
     return rows
 
@@ -268,7 +309,11 @@ def render_trend_markdown(
         f"- **Classification: {trend.classification.replace('_', ' ')}.** "
         f"{trend.classification_note}",
         "",
-        "**GHI by reference period:**",
+        (
+            f"**GHI-scaled AEP by reference period ({PERIOD_ENERGY_BASIS}):**"
+            if has_energy
+            else "**GHI by reference period:**"
+        ),
         "",
     ]
     if has_energy:
@@ -286,7 +331,7 @@ def render_trend_markdown(
         for r in table:
             lines.append(f"| {r['period']} | {r['role']} | {r['mean_ghi_kwh_m2']} |")
     p50_energy = (
-        f" = {rec['p50_gwh']} GWh (CF {rec['p50_cf']})"
+        f" = {rec['p50_gwh']} GWh (CF {rec['p50_cf']}; {PERIOD_ENERGY_BASIS})"
         if rec.get("p50_gwh") is not None
         else ""
     )
@@ -336,6 +381,10 @@ def trend_summary_dataframe(
         ("Classification", trend.classification.replace("_", " ")),
         ("Classification note", trend.classification_note),
     ]
+    # MEDIUM #727-review: when the sheet carries GHI-scaled per-period energy/CF, state
+    # their basis IN the artifact so a lender does not read them as precise pvlib P50s.
+    if any("net_aep_p50_gwh" in r or "capacity_factor" in r for r in table):
+        rows.append(("AEP basis (per-period energy/CF)", PERIOD_ENERGY_BASIS))
     for k, v in trend.decade_means.items():
         rows.append((f"Decade mean GHI {k} (kWh/m2)", v))
     for r in table:
