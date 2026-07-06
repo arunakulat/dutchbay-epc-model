@@ -1394,6 +1394,79 @@ def test_per_tech_chapters_none_without_scenario_config() -> None:
     assert ctx.per_tech_chapters is None
 
 
+def test_per_tech_wind_chapter_degrades_on_bad_config_without_crashing() -> None:
+    # A malformed wind_rose (length mismatch) and an invalid terrain_class are BOTH fail-loud
+    # in the wind analytics. The report must NOT crash — the chapter renders present-but-
+    # degraded (sub-blocks omitted, a "provenance unavailable" note), so one bad config field
+    # never takes down the whole lender report.
+    bad = {
+        "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+        "resource": {
+            "wind_rose": {"sector_deg": [0.0, 90.0], "frequency": [0.5, 0.2, 0.3]},
+            "siting": {"terrain_class": "not_a_real_class"},
+        },
+        "generation": {
+            "technologies": {
+                "wind": {"type": "wind", "aep_gwh": 400.0, "capacity_factor": 0.34}
+            }
+        },
+    }
+    # Must not raise.
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=bad
+    )
+    block = ctx.per_tech_chapters
+    assert block is not None
+    assert [c.technology for c in block.chapters] == ["wind"]
+    wind = block.chapters[0]
+    # Both provenance sub-blocks were invalid -> omitted, not crashing.
+    assert wind.wind_rose == []
+    assert wind.terrain_class is None
+    assert wind.provenance_note is not None
+    assert "unavailable" in wind.provenance_note.lower()
+    # The HTML still renders.
+    from app.reports.renderer import render_report_html
+
+    assert "Resource &amp; Technology by Technology" in render_report_html(ctx)
+
+
+def test_report_wind_rose_resolver_agrees_with_canonical() -> None:
+    # #851 must NOT fork a divergent rose resolver: the report path reuses the canonical
+    # analytics.wind resolver and only back-fills the two display fields the pre-binned path
+    # omits. Assert byte-equality on every canonical key for BOTH input paths.
+    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+    from app.reports.report_model import _resolve_report_wind_rose
+
+    for cfg in (
+        {
+            "wind_rose": {
+                "sector_deg": [0.0, 90.0, 180.0, 270.0],
+                "frequency": [0.5, 0.2, 0.2, 0.1],
+            }
+        },
+        {"wind_rose": {"direction_deg": [10, 10, 10, 200, 200, 90], "n_sectors": 8}},
+    ):
+        canonical = _resolve_wind_rose(cfg)
+        report = _resolve_report_wind_rose(cfg)
+        assert canonical is not None and report is not None
+        # The report block is a SUPERSET (adds sector_label/prevailing_sector_deg on the
+        # pre-binned path); every key the canonical block carries must match exactly.
+        for key, value in canonical.items():
+            assert report[key] == value, (key, value, report[key])
+    # And the back-filled display fields are populated for an 8-sector pre-binned rose.
+    prebinned = _resolve_report_wind_rose(
+        {
+            "wind_rose": {
+                "sector_deg": [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0],
+                "frequency": [3, 1, 1, 1, 1, 1, 1, 1],
+            }
+        }
+    )
+    assert prebinned is not None
+    assert prebinned["sector_label"] == ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    assert prebinned["prevailing_sector_deg"] == 0.0
+
+
 def test_per_tech_chapters_render_in_html() -> None:
     """The per-tech chapters render in the HTML (Jinja step; no weasyprint needed)."""
     from app.reports.renderer import render_report_html

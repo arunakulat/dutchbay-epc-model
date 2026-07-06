@@ -1797,61 +1797,77 @@ def _build_multi_tech(
     )
 
 
-def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
-    """Resolve the optional ``resource.wind_rose`` display block in the report layer (#851).
+def _normalize_report_wind_rose(rose: Dict[str, Any]) -> Dict[str, Any]:
+    """Guarantee ``sector_label`` + ``prevailing_sector_deg`` on a canonical rose block (#851).
 
-    Mirrors the AEP-summary resolver's OUTPUT (analytics.wind.aep_summary_builder), reading
-    the same config so the two agree, but self-contained in the report layer (it never edits
-    the wind analytics). Accepts either a raw ``direction_deg`` series (binned via the public
-    :func:`analytics.wind.wind_rose.build_wind_rose`) or a pre-binned ``sector_deg`` +
-    ``frequency`` pair (re-normalised). Returns ``None`` when no rose is declared. Display /
-    provenance only — applies NO AEP correction.
+    The canonical :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` emits both keys
+    on the ``direction_deg`` path (via :func:`~analytics.wind.wind_rose.build_wind_rose`) but
+    NEITHER on the pre-binned ``sector_deg`` + ``frequency`` path. Rather than fork a divergent
+    resolver, the report reuses the canonical block and back-fills those two display fields
+    here, using the SAME public :func:`~analytics.wind.wind_rose._sector_label` helper and the
+    ALREADY-ROUNDED ``sector_deg`` (so the prevailing flag's exact-equality check in
+    :func:`_build_wind_chapter` cannot miss on a rounding mismatch). Never mutates the input.
     """
-    rose_cfg = resource.get("wind_rose", {}) or {}
-    if not isinstance(rose_cfg, Mapping) or not rose_cfg:
-        return None
+    from analytics.wind.wind_rose import _sector_label
 
-    directions = rose_cfg.get("direction_deg")
-    if directions is not None:
-        from analytics.wind.wind_rose import build_wind_rose
+    sector_deg = [
+        float(s) for s in rose["sector_deg"]
+    ]  # canonical: already round(_, 4)
+    frequency = [float(f) for f in rose["frequency"]]
+    out = dict(rose)
+    if not out.get("sector_label"):
+        n_sectors = int(rose.get("n_sectors", len(sector_deg)))
+        out["sector_label"] = [_sector_label(s, n_sectors) for s in sector_deg]
+    if out.get("prevailing_sector_deg") is None and sector_deg:
+        # Derive the prevailing sector from the ROUNDED sector_deg so it compares equal to the
+        # per-row sector_deg (defect #3a — consistent rounding).
+        out["prevailing_sector_deg"] = sector_deg[
+            max(range(len(frequency)), key=lambda i: frequency[i])
+        ]
+    return out
 
-        n_sectors = int(rose_cfg.get("n_sectors", 12))
-        return build_wind_rose([float(v) for v in directions], n_sectors=n_sectors)
 
-    sector_deg = rose_cfg.get("sector_deg")
-    frequency = rose_cfg.get("frequency")
-    if sector_deg is None or frequency is None:
+def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve the optional ``resource.wind_rose`` display block for the report layer (#851).
+
+    Reuses the CANONICAL resolver
+    :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` (the exact block the #742
+    AEP-summary provenance carries — no divergent copy) and normalises the two display fields
+    the pre-binned path omits (:func:`_normalize_report_wind_rose`). Returns ``None`` when no
+    rose is declared. Display / provenance only — applies NO AEP correction. Propagates the
+    canonical resolver's fail-loud ``ValueError`` on a malformed rose; the caller
+    (:func:`_build_wind_chapter`) catches it so a bad config degrades the report gracefully
+    rather than crashing it.
+    """
+    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+
+    rose = _resolve_wind_rose(resource)
+    if rose is None:
         return None
-    sectors = [float(v) for v in sector_deg]
-    freqs = [float(v) for v in frequency]
-    if not sectors or len(sectors) != len(freqs):
-        return None
-    total = sum(freqs)
-    if total <= 0.0:
-        return None
-    norm = [f / total for f in freqs]
-    prevailing = sectors[max(range(len(norm)), key=lambda i: norm[i])]
-    return {
-        "sector_deg": [round(s, 4) for s in sectors],
-        "frequency": [round(f, 6) for f in norm],
-        "prevailing_sector_deg": prevailing,
-        "provenance_note": (
-            "Pre-binned directional frequency supplied in config (resource.wind_rose); "
-            "display/provenance only, applies NO AEP correction."
-        ),
-    }
+    return _normalize_report_wind_rose(rose)
 
 
 def _build_wind_chapter(
     resource: Mapping[str, Any], aep_gwh: Optional[float], share_pct: Optional[float]
 ) -> PerTechChapter:
-    """Assemble the WIND resource sub-chapter (#851): wind rose + terrain siting (#742)."""
-    from analytics.wind.siting_metadata import resolve_siting_metadata
+    """Assemble the WIND resource sub-chapter (#851): wind rose + terrain siting (#742).
 
-    rose = _resolve_report_wind_rose(resource)
+    Both provenance resolvers are fail-loud (CESSPIT) on a malformed config; each is wrapped
+    so a bad ``resource.wind_rose`` / ``resource.siting`` block DEGRADES the sub-block (it is
+    simply omitted) rather than propagating a ``ValueError`` up through
+    :func:`build_report_context` and crashing the whole report. The chapter still renders (with
+    whatever provenance IS valid), and a note flags that a block was unavailable.
+    """
     rows: List[WindRoseSectorRow] = []
     prevailing_deg: Optional[float] = None
     note: Optional[str] = None
+    degraded: List[str] = []
+
+    try:
+        rose = _resolve_report_wind_rose(resource)
+    except (TypeError, ValueError):
+        rose = None
+        degraded.append("wind rose")
     if rose is not None:
         prevailing_deg = rose.get("prevailing_sector_deg")
         note = rose.get("provenance_note")
@@ -1870,15 +1886,29 @@ def _build_wind_chapter(
                 )
             )
 
-    siting = resolve_siting_metadata(resource)
     terrain_class: Optional[str] = None
     terrain_notes: Optional[str] = None
+    try:
+        from analytics.wind.siting_metadata import resolve_siting_metadata
+
+        siting = resolve_siting_metadata(resource)
+    except (TypeError, ValueError):
+        siting = None
+        degraded.append("terrain siting")
     if siting is not None:
         terrain_class = siting.get("terrain_class")
         terrain_notes = siting.get("terrain_notes")
         # Prefer the siting caveat when no rose note; keep both notes distinct but surface one.
         if note is None:
             note = siting.get("note")
+
+    if degraded:
+        flag = (
+            "Provenance unavailable ("
+            + ", ".join(degraded)
+            + "): the declared config was invalid and has been omitted."
+        )
+        note = f"{note} {flag}" if note else flag
 
     return PerTechChapter(
         technology="wind",
