@@ -112,6 +112,19 @@ wind = [
   "turbine-models>=0.2",  # NREL reference power curves (5-18 MW) for sourcing fallback (#181)
   "py-wake>=2.6",  # DTU PyWake — granular per-turbine wake model (Bastankhah/TurbOPark) for the bankable AEP engine
 ]
+# Micro-siting layout optimizer (issue #835, Deliverable A). DTU TopFarm is built
+# directly on the [wind] PyWake and drives the area->optimized-layout tool in
+# wind_resource.layout_optimizer: boundary + exclusion + wind-rose + PyWake wake
+# model -> an AEP-maximising candidate layout. Kept as a SEPARATE opt-in extra (NOT
+# folded into [wind] or the CI toolchain) because TopFarm pulls OpenMDAO + a scipy
+# optimizer stack that the base finance/CI runs never need — the optimizer only ever
+# PROPOSES a candidate (KPI-neutral), so no headline path depends on it. The import
+# is CASPER-guarded via wind_resource.layout_optimizer._require_topfarm, and its
+# tests are gated behind ``pytest.importorskip('topfarm')``. Install with:
+#     pip install -e ".[micrositing]"
+micrositing = [
+  "topfarm>=2.6",  # DTU TopFarm — layout optimizer on PyWake (OpenMDAO/SLSQP)
+]
 # Solar-resource producer (multi-tech hybrid). pvlib turns a PV-system spec + a measured
 # site GHI into a bankable solar AEP / capacity factor — the photovoltaic analogue of the
 # [wind] bankable-AEP engine. Opt-in like [wind]: a hybrid's declared P50 solar CF
@@ -134,9 +147,15 @@ pareto = [
 # GeoTIFF / raster export for QGIS (issue #20). rasterio wheels bundle their own GDAL,
 # so no system GDAL/apt is needed on the CI runner or macOS. Opt-in like [wind]; the
 # export code (analytics.gis.geotiff_export) guards the import via _require_rasterio
-# (CASPER), so the base finance install never needs the GIS toolchain.
+# (CASPER), so the base finance install never needs the GIS toolchain. shapely (#833)
+# joins here because the constraint/exclusion mask (analytics.gis.exclusion_mask) buffers
+# setback features and rasterises exclusion polygons with it — the vector half of the same
+# GIS siting toolchain; it is guarded via _require_shapely (CASPER) exactly like rasterio,
+# so the base finance install still needs neither. (shapely otherwise only rode in
+# transitively via geopandas in [report], which the test job does not install.)
 gis = [
   "rasterio>=1.3",
+  "shapely>=2.0",
 ]
 # PDF report rendering (Sprint 2). Jinja2 (in core deps) drives the HTML report;
 # WeasyPrint is opt-in because it needs the pango/cairo system libraries that a

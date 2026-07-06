@@ -695,6 +695,16 @@ class CapitalStructureOptimizationResult(ContractMixin):
     when it is ``False`` the search failed loud and ``infeasible_reason`` names
     the constraint(s) that bound every candidate (a minimal diagnostic — the
     full infeasibility register is #741).
+
+    ``diagnostics`` / ``audit_log`` (#741) are populated ONLY on the infeasible
+    path (``feasible=False``) with the structured why-infeasible register
+    (per-covenant bound + achieved vs required) and a lightweight optimization
+    audit trail. On a feasible solve BOTH stay ``None`` so the numeric result is
+    byte-identical to the #740 surface. They are typed ``Any`` to avoid an
+    import cycle (``analytics.infeasibility_diagnostics`` imports nothing from
+    this module); their concrete types are that module's
+    ``InfeasibilityDiagnostics`` / ``OptimizationAuditLog``, which serialize
+    cleanly via ``asdict`` / ``model_dump``.
     """
 
     kind: str
@@ -705,6 +715,8 @@ class CapitalStructureOptimizationResult(ContractMixin):
     curve: list[CapitalStructurePoint] = field(default_factory=list)
     feasible: bool = True
     infeasible_reason: str | None = None
+    diagnostics: Any = None
+    audit_log: Any = None
 
 
 __all__ = [

@@ -28,9 +28,13 @@ from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteraction
 from analytics.development_readiness import build_readiness_report
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
-from analytics.feasibility_sections import build_feasibility_report
+from analytics.feasibility_sections import (
+    build_feasibility_report,
+    load_feasibility_taxonomy,
+)
 from analytics.irr_bridge import build_project_equity_irr_bridge_from_run
 from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
+from analytics.portfolio.multi_tech_tornado import discover_generation_technologies
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
 from analytics.three_statement import (
@@ -404,6 +408,93 @@ class MultiTechBlock(BaseModel):
     poi_limit_mw: Optional[float] = None
     poi_curtailment_pct: Optional[float] = None
     poi_curtailed_energy_mwh: Optional[float] = None
+
+
+class WindRoseSectorRow(BaseModel):
+    """One directional sector of the wind-rose frequency table (#742 → #851).
+
+    A pure display projection (no plot dependency): the sector centre bearing, its compass
+    label (blank when the centre does not map onto the 16-point compass), and its fraction of
+    valid samples. The rose applies NO AEP correction — it is coarse single-cell ERA5
+    provenance surfaced into the WIND resource sub-chapter.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sector_deg: float
+    label: str = ""
+    frequency: float
+    is_prevailing: bool = False
+
+
+class PerTechChapter(BaseModel):
+    """One active technology's sub-chapter of a per-technology §4/§5 section (#851).
+
+    Presentation-only; every field is provenance/metadata surfaced (never recomputed) from the
+    scenario config. A chapter is emitted only for a technology the scenario actually runs
+    (reusing the multi-tech generation discovery / the genuine-hybrid gate), so wind-only
+    scenarios carry only the wind chapter, solar-only only the solar chapter, and a hybrid
+    carries both. Fields are populated as their provenance blocks are declared: an absent block
+    leaves the corresponding field ``None``/empty (render-when-present).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technology: str
+    #: Display label (title-cased technology name).
+    label: str
+    #: Net P50 AEP for this technology (GWh), from the multi-tech generation split.
+    aep_gwh: Optional[float] = None
+    #: Share of the plant's total net AEP (%), from the multi-tech split.
+    share_of_aep_pct: Optional[float] = None
+    # --- WIND provenance (#742) -------------------------------------------------
+    #: Directional wind-rose sector table (sector-frequency); empty when no rose declared.
+    wind_rose: List[WindRoseSectorRow] = Field(default_factory=list)
+    #: Centre bearing of the prevailing (most-frequent) sector, when a rose is present.
+    prevailing_sector_deg: Optional[float] = None
+    #: Self-declared site terrain class (metadata only; applies NO AEP correction).
+    terrain_class: Optional[str] = None
+    #: Optional free-text terrain notes passthrough.
+    terrain_notes: Optional[str] = None
+    #: Honesty caveat surfaced with the rose / siting metadata (coarse single-cell ERA5).
+    provenance_note: Optional[str] = None
+    # --- SOLAR provenance (#743) ------------------------------------------------
+    #: Source-quality letter grade (A/B/C/D) of the irradiance evidence.
+    source_quality_grade: Optional[str] = None
+    #: The combined 0–1 source-quality score behind the grade.
+    source_quality_score: Optional[float] = None
+    #: The graded measurement type (ground_measured / satellite_calibrated / satellite / modelled).
+    measurement_type: Optional[str] = None
+    #: True when a non-neutral bifacial uplift marker is declared on the solar block. The
+    #: financed chain is monofacial by design (SOLAR-9) — surfaced as a disclosure, not a KPI.
+    bifacial_declared: bool = False
+    #: The declared bifacial marker (e.g. "bifacial_gain=1.07"), for the audit trail.
+    bifacial_marker: Optional[str] = None
+    #: Effective flat soiling loss (%) from a declared time-varying soiling profile, else None.
+    soiling_effective_pct: Optional[float] = None
+
+
+class PerTechChaptersBlock(BaseModel):
+    """Per-technology sub-chapters of the §4/§5 resource & technology sections (#851).
+
+    Renders the resource-assessment (§4) and technology-selection (§5) sections *per active
+    generation technology*, driven by the config-tagged ``shared`` sections (issue #851) and
+    the scenario's active technologies (the multi-tech generation discovery). Each active tech
+    gets one :class:`PerTechChapter`; a tech's chapter is omitted when that tech is absent. For
+    a hybrid the existing cross-technology reconciliation (:class:`MultiTechBlock`) still
+    renders alongside. Pure presentation — no economics; ``None`` (the section omitted) when no
+    generation technology is resolvable or no scenario config is supplied.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: The canonical §4/§5 section titles this block sub-divides (from the taxonomy), so the
+    #: rendered heading matches the feasibility skeleton exactly (CCCDIR — one source).
+    section_titles: List[str]
+    chapters: List[PerTechChapter]
+    #: True when 2+ generation technologies are active (a genuine hybrid) — the same gate the
+    #: MultiTechBlock reconciliation uses; drives the "both chapters + reconciliation" note.
+    is_hybrid: bool = False
 
 
 class ThreeStatementBlock(BaseModel):
@@ -791,6 +882,12 @@ class ReportContext(BaseModel):
     #: Per-technology production/economics breakdown for a hybrid (ARCH-4, #476). None for
     #: single-tech plants or legacy callers — the section is then omitted.
     multi_tech: Optional[MultiTechBlock] = None
+    #: Per-technology sub-chapters of the §4 resource-assessment / §5 technology-selection
+    #: sections (#851). One chapter per active generation technology — wind-only carries the
+    #: wind chapter, solar-only the solar chapter, a hybrid both. Surfaces the #742 wind-rose /
+    #: siting and #743 solar source-quality / bifacial / soiling provenance per tech. None
+    #: (section omitted) for legacy callers or when no generation technology is resolvable.
+    per_tech_chapters: Optional[PerTechChaptersBlock] = None
     #: Three-statement output + tie-out status (#479). None when the caller supplies no
     #: annual_rows / debt_result — the section is then omitted.
     three_statement: Optional[ThreeStatementBlock] = None
@@ -1700,6 +1797,263 @@ def _build_multi_tech(
     )
 
 
+def _normalize_report_wind_rose(rose: Dict[str, Any]) -> Dict[str, Any]:
+    """Guarantee ``sector_label`` + ``prevailing_sector_deg`` on a canonical rose block (#851).
+
+    The canonical :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` emits both keys
+    on the ``direction_deg`` path (via :func:`~analytics.wind.wind_rose.build_wind_rose`) but
+    NEITHER on the pre-binned ``sector_deg`` + ``frequency`` path. Rather than fork a divergent
+    resolver, the report reuses the canonical block and back-fills those two display fields
+    here, using the SAME public :func:`~analytics.wind.wind_rose._sector_label` helper and the
+    ALREADY-ROUNDED ``sector_deg`` (so the prevailing flag's exact-equality check in
+    :func:`_build_wind_chapter` cannot miss on a rounding mismatch). Never mutates the input.
+    """
+    from analytics.wind.wind_rose import _sector_label
+
+    sector_deg = [
+        float(s) for s in rose["sector_deg"]
+    ]  # canonical: already round(_, 4)
+    frequency = [float(f) for f in rose["frequency"]]
+    out = dict(rose)
+    if not out.get("sector_label"):
+        n_sectors = int(rose.get("n_sectors", len(sector_deg)))
+        out["sector_label"] = [_sector_label(s, n_sectors) for s in sector_deg]
+    if out.get("prevailing_sector_deg") is None and sector_deg:
+        # Derive the prevailing sector from the ROUNDED sector_deg so it compares equal to the
+        # per-row sector_deg (defect #3a — consistent rounding).
+        out["prevailing_sector_deg"] = sector_deg[
+            max(range(len(frequency)), key=lambda i: frequency[i])
+        ]
+    return out
+
+
+def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve the optional ``resource.wind_rose`` display block for the report layer (#851).
+
+    Reuses the CANONICAL resolver
+    :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` (the exact block the #742
+    AEP-summary provenance carries — no divergent copy) and normalises the two display fields
+    the pre-binned path omits (:func:`_normalize_report_wind_rose`). Returns ``None`` when no
+    rose is declared. Display / provenance only — applies NO AEP correction. Propagates the
+    canonical resolver's fail-loud ``ValueError`` on a malformed rose; the caller
+    (:func:`_build_wind_chapter`) catches it so a bad config degrades the report gracefully
+    rather than crashing it.
+    """
+    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+
+    rose = _resolve_wind_rose(resource)
+    if rose is None:
+        return None
+    return _normalize_report_wind_rose(rose)
+
+
+def _build_wind_chapter(
+    resource: Mapping[str, Any], aep_gwh: Optional[float], share_pct: Optional[float]
+) -> PerTechChapter:
+    """Assemble the WIND resource sub-chapter (#851): wind rose + terrain siting (#742).
+
+    Both provenance resolvers are fail-loud (CESSPIT) on a malformed config; each is wrapped
+    so a bad ``resource.wind_rose`` / ``resource.siting`` block DEGRADES the sub-block (it is
+    simply omitted) rather than propagating a ``ValueError`` up through
+    :func:`build_report_context` and crashing the whole report. The chapter still renders (with
+    whatever provenance IS valid), and a note flags that a block was unavailable.
+    """
+    rows: List[WindRoseSectorRow] = []
+    prevailing_deg: Optional[float] = None
+    note: Optional[str] = None
+    degraded: List[str] = []
+
+    try:
+        rose = _resolve_report_wind_rose(resource)
+    except (TypeError, ValueError):
+        rose = None
+        degraded.append("wind rose")
+    if rose is not None:
+        prevailing_deg = rose.get("prevailing_sector_deg")
+        note = rose.get("provenance_note")
+        labels = rose.get("sector_label") or [""] * len(rose["sector_deg"])
+        for deg, freq, label in zip(
+            rose["sector_deg"], rose["frequency"], labels, strict=True
+        ):
+            rows.append(
+                WindRoseSectorRow(
+                    sector_deg=float(deg),
+                    label=str(label),
+                    frequency=float(freq),
+                    is_prevailing=(
+                        prevailing_deg is not None and deg == prevailing_deg
+                    ),
+                )
+            )
+
+    terrain_class: Optional[str] = None
+    terrain_notes: Optional[str] = None
+    try:
+        from analytics.wind.siting_metadata import resolve_siting_metadata
+
+        siting = resolve_siting_metadata(resource)
+    except (TypeError, ValueError):
+        siting = None
+        degraded.append("terrain siting")
+    if siting is not None:
+        terrain_class = siting.get("terrain_class")
+        terrain_notes = siting.get("terrain_notes")
+        # Prefer the siting caveat when no rose note; keep both notes distinct but surface one.
+        if note is None:
+            note = siting.get("note")
+
+    if degraded:
+        flag = (
+            "Provenance unavailable ("
+            + ", ".join(degraded)
+            + "): the declared config was invalid and has been omitted."
+        )
+        note = f"{note} {flag}" if note else flag
+
+    return PerTechChapter(
+        technology="wind",
+        label="Wind",
+        aep_gwh=aep_gwh,
+        share_of_aep_pct=share_pct,
+        wind_rose=rows,
+        prevailing_sector_deg=prevailing_deg,
+        terrain_class=terrain_class,
+        terrain_notes=terrain_notes,
+        provenance_note=note,
+    )
+
+
+def _build_solar_chapter(
+    resource: Mapping[str, Any], aep_gwh: Optional[float], share_pct: Optional[float]
+) -> PerTechChapter:
+    """Assemble the SOLAR resource sub-chapter (#851): source-quality / bifacial / soiling (#743)."""
+    from solar_resource.bifacial_guard import detect_bifacial_uplift
+    from solar_resource.soiling_profile import soiling_profile_from_config
+    from solar_resource.source_quality import solar_source_quality_from_config
+
+    solar = resource.get("solar", {}) or {}
+    if not isinstance(solar, Mapping):
+        solar = {}
+
+    grade: Optional[str] = None
+    score: Optional[float] = None
+    measurement_type: Optional[str] = None
+    try:
+        sq = solar_source_quality_from_config(solar.get("source_quality"))
+        grade = sq.grade
+        score = round(sq.quality_score, 4)
+        measurement_type = sq.measurement_type
+    except (TypeError, KeyError, ValueError):
+        # A malformed source_quality block degrades this field only (render-when-present).
+        grade = score = measurement_type = None
+
+    marker = detect_bifacial_uplift(solar)
+    bifacial_declared = marker is not None
+    bifacial_marker = f"{marker[0]}={marker[1]}" if marker is not None else None
+
+    soiling_effective: Optional[float] = None
+    soiling_cfg = solar.get("soiling_profile")
+    if soiling_cfg is not None:
+        try:
+            profile = soiling_profile_from_config(soiling_cfg)
+            if profile is not None:
+                soiling_effective = round(profile.effective_soiling_pct(), 4)
+        except (TypeError, KeyError, ValueError):
+            soiling_effective = None
+
+    return PerTechChapter(
+        technology="solar",
+        label="Solar",
+        aep_gwh=aep_gwh,
+        share_of_aep_pct=share_pct,
+        source_quality_grade=grade,
+        source_quality_score=score,
+        measurement_type=measurement_type,
+        bifacial_declared=bifacial_declared,
+        bifacial_marker=bifacial_marker,
+        soiling_effective_pct=soiling_effective,
+    )
+
+
+def _build_per_tech_chapters(
+    case_result: CaseResult,
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[PerTechChaptersBlock]:
+    """Build the per-technology §4/§5 sub-chapters (#851) — display-only.
+
+    Reuses the multi-tech generation discovery (:func:`build_multi_tech_from_run`) to find the
+    ACTIVE generation technologies and their AEP split — exactly the gate the ARCH-4
+    reconciliation uses — then emits one :class:`PerTechChapter` per active tech. Wind-only
+    yields only the wind chapter; solar-only only the solar chapter; a hybrid yields both. A
+    tech present in neither the split nor the config is never rendered. The §4/§5 headings this
+    block sub-divides are the config-tagged ``shared`` sections from the taxonomy (CCCDIR — one
+    source). Returns ``None`` for legacy callers (no scenario config) or when no generation
+    technology is resolvable — the section is then omitted. Pure presentation; no economics.
+    """
+    if scenario_config is None:
+        return None
+    result, breakdown = build_multi_tech_from_run(case_result.kpis, scenario_config)
+    if result is None:
+        return None
+
+    # AEP / share per tech from the generation split (breakdown may be None on a degraded run).
+    share_by_tech: Dict[str, Optional[float]] = {}
+    if breakdown is not None:
+        for row in breakdown:
+            share_by_tech[row.technology] = row.share_of_aep_pct
+    aep_by_tech: Dict[str, Optional[float]] = {
+        tech: (profile.annual_aep_kwh / 1_000_000.0)
+        for tech, profile in result.technologies.items()
+    }
+
+    resource = scenario_config.get("resource", {}) or {}
+    if not isinstance(resource, Mapping):
+        resource = {}
+
+    # Preserve the generation discovery order (declaration order), falling back to the split
+    # keys for legacy single-tech scenarios that carry no generation.technologies block.
+    ordered = discover_generation_technologies(scenario_config) or list(
+        result.technologies.keys()
+    )
+    active = [t for t in ordered if t in result.technologies]
+
+    chapters: List[PerTechChapter] = []
+    for tech in active:
+        aep = aep_by_tech.get(tech)
+        share = share_by_tech.get(tech)
+        if tech == "wind":
+            chapters.append(_build_wind_chapter(resource, aep, share))
+        elif tech == "solar":
+            chapters.append(_build_solar_chapter(resource, aep, share))
+        else:
+            # A generation tech with no bespoke provenance surface (e.g. tidal): still render a
+            # chapter carrying its AEP/share so it is not silently dropped from §4/§5.
+            chapters.append(
+                PerTechChapter(
+                    technology=tech,
+                    label=tech.replace("_", " ").title(),
+                    aep_gwh=aep,
+                    share_of_aep_pct=share,
+                )
+            )
+
+    if not chapters:
+        return None
+
+    taxonomy = load_feasibility_taxonomy()
+    title_of = {d.name: d.title for d in taxonomy.sections}
+    tech_of = taxonomy.technology_of
+    section_titles = [
+        title_of[name] for name, lens in tech_of.items() if lens == "shared"
+    ]
+
+    return PerTechChaptersBlock(
+        section_titles=section_titles,
+        chapters=chapters,
+        is_hybrid=len(result.technologies) >= 2,
+    )
+
+
 def _build_three_statement_result(
     scenario_config: Optional[Mapping[str, Any]],
     debt_result: Optional[Mapping[str, Any]],
@@ -2044,6 +2398,7 @@ def build_report_context(
         evidence=_build_evidence(scenario_config),
         evidence_score=_build_evidence_score(scenario_config),
         multi_tech=_build_multi_tech(case_result, scenario_config),
+        per_tech_chapters=_build_per_tech_chapters(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
         resource_trend=_build_resource_trend(resource_trend),
