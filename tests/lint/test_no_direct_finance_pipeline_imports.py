@@ -133,6 +133,14 @@ ALLOWLIST: dict[str, str] = {
         "generation_aggregator/multi_tech_tornado. Importing the shared contract directly "
         "is the point (CCCDIR), not a breach; the grid schema is KPI-neutral / advisory-only."
     ),
+    "analytics/grid/capabilities/wind.py": (
+        "[PERMANENT] Imports finance.grid.grid_types (the wind-turbine converter enums "
+        "is_type3_dfig / is_type4_full_converter) to shape the topology-aware reactive PQ "
+        "envelope — a pure leaf registry of grid TYPE discriminators with no engine logic, "
+        "identical in spirit to the grid_interface_schema / multi_tech_tornado tech-type "
+        "imports. Importing the shared contract directly is the point (CCCDIR), not a "
+        "breach; the wind capability plug-in is KPI-neutral / advisory-only."
+    ),
     # --- [TODO] real layering violations to refactor toward the gateway -----
     "analytics/dscr_sensitivity.py": (
         "[TODO #36] Imports finance.debt_v14.size_debt_with_dual_dscr directly "
