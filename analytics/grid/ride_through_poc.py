@@ -45,6 +45,10 @@ class LvrtScaffoldResult:
     Retained for backward compatibility; :func:`run_lvrt_case` adapts the shared core's
     :class:`analytics.contracts_v14.RideThroughResult` (the ``"lvrt"`` case) into this
     legacy shape.
+
+    ``ran`` says only that the ANDES RMS solve EXECUTED (it is NOT a compliance verdict);
+    ``rode_through`` is the envelope-derived compliance verdict from the shared core
+    (``None`` = NOT-RUN / UNSUPPORTED). Do not read ``ran`` as "passed".
     """
 
     ran: bool
@@ -52,6 +56,7 @@ class LvrtScaffoldResult:
     detail: str
     n_devices: int = 0
     min_bus_voltage_pu: float | None = None
+    rode_through: bool | None = None
 
 
 def run_lvrt_case(
@@ -102,6 +107,7 @@ def run_lvrt_case(
         detail=result.detail,
         n_devices=result.n_devices,
         min_bus_voltage_pu=result.min_voltage_pu,
+        rode_through=result.rode_through,
     )
 
 

@@ -34,9 +34,11 @@ from analytics.grid import ride_through as rt
 from analytics.grid import ride_through_poc
 from analytics.grid.ride_through import (
     RIDE_THROUGH_CASES,
+    LvrtEvidence,
     RideThroughEnvelope,
     build_case_spec,
     envelope_from_fixture,
+    lvrt_rode_through,
     run_ride_through_case,
     run_ride_through_suite,
 )
@@ -201,12 +203,17 @@ def test_build_case_spec_unknown_kind_raises() -> None:
 
 @pytest.mark.parametrize("kind", RIDE_THROUGH_CASES)
 def test_run_case_gate_off_is_static(kind: str) -> None:
-    """run_dynamics=False parses + sets up but never runs andes → ran/converged False."""
+    """run_dynamics=False parses + sets up but never runs andes → NOT-RUN result.
+
+    Nothing is physically validated, so ran/converged are False and the compliance
+    verdict ``rode_through`` is an honest None — NEVER a spurious pass.
+    """
     res = run_ride_through_case(kind, run_dynamics=False)
     assert isinstance(res, RideThroughResult)
     assert res.case == kind
     assert res.ran is False
     assert res.converged is False
+    assert res.rode_through is None  # NOT-RUN — no spurious pass
     assert res.n_devices == 0
     assert res.min_voltage_pu is None
     assert res.max_voltage_pu is None
@@ -253,6 +260,94 @@ def test_run_suite_gate_off_covers_all_three() -> None:
     assert suite["frequency"].target_hz == 51.5
 
 
+# --------------------------------- rode_through verdict (PURE, no ANDES) ------
+
+
+def _env(enter: float = 0.89) -> RideThroughEnvelope:
+    return RideThroughEnvelope(
+        lvrt_enter_pu=enter,
+        hvrt_enter_pu=1.10,
+        lvrt_k_factor=2.0,
+        hvrt_k_factor=1.9,
+        freq_continuous_hz=(47.5, 51.5),
+        source="unit-test",
+    )
+
+
+def test_lvrt_verdict_true_when_dip_and_recovery() -> None:
+    """A real dip that recovers above the entry pu with no trip → rode through."""
+    ev = LvrtEvidence(min_voltage_pu=0.30, recovered_voltage_pu=0.99, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env()) is True
+
+
+def test_lvrt_verdict_false_when_ibr_tripped() -> None:
+    """Deep dip, IBR trips → breach even if the bus later 'recovers'."""
+    ev = LvrtEvidence(min_voltage_pu=0.20, recovered_voltage_pu=0.99, ibr_tripped=True)
+    assert lvrt_rode_through(ev, _env()) is False
+
+
+def test_lvrt_verdict_false_when_voltage_does_not_recover() -> None:
+    """Converged-but-collapsed: dip injected but recovered voltage stays below entry."""
+    ev = LvrtEvidence(min_voltage_pu=0.20, recovered_voltage_pu=0.60, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env()) is False
+
+
+def test_lvrt_verdict_none_when_no_measurable_dip() -> None:
+    """No dip below the entry pu → the ride-through path was never exercised → None."""
+    ev = LvrtEvidence(min_voltage_pu=0.95, recovered_voltage_pu=1.0, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env()) is None
+
+
+def test_lvrt_verdict_none_when_vmin_missing() -> None:
+    ev = LvrtEvidence(min_voltage_pu=None, recovered_voltage_pu=1.0, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env()) is None
+
+
+def test_lvrt_verdict_none_when_recovery_unknown() -> None:
+    """Dip injected but recovered voltage unreadable → honest None, not a pass."""
+    ev = LvrtEvidence(min_voltage_pu=0.30, recovered_voltage_pu=None, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env()) is None
+
+
+def test_lvrt_verdict_none_when_trip_status_unknown_but_recovered() -> None:
+    """Trip-status unknown (None) with a good recovery is still a pass (no trip seen)."""
+    ev = LvrtEvidence(min_voltage_pu=0.30, recovered_voltage_pu=0.99, ibr_tripped=None)
+    assert lvrt_rode_through(ev, _env()) is True
+
+
+def test_lvrt_verdict_respects_recovery_margin() -> None:
+    """A recovery that just touches the entry pu fails once a margin is demanded."""
+    ev = LvrtEvidence(min_voltage_pu=0.30, recovered_voltage_pu=0.89, ibr_tripped=False)
+    assert lvrt_rode_through(ev, _env(), recovery_margin_pu=0.0) is True
+    assert lvrt_rode_through(ev, _env(), recovery_margin_pu=0.02) is False
+
+
+# ------------- HVRT / frequency are NOT-RUN even with the gate ON (no andes) --
+
+
+def test_hvrt_run_dynamics_is_not_run_no_andes() -> None:
+    """HVRT with run_dynamics=True short-circuits to NOT-RUN — no ANDES import, no pass."""
+    res = run_ride_through_case("hvrt", run_dynamics=True)
+    assert res.case == "hvrt"
+    assert res.ran is False
+    assert res.converged is False
+    assert res.rode_through is None  # UNSUPPORTED — never a spurious swell pass
+    assert res.max_voltage_pu is None
+    assert "NOT-RUN" in res.detail
+    assert "swell" in res.detail.lower()
+
+
+def test_frequency_run_dynamics_is_not_run_no_andes() -> None:
+    """Frequency with run_dynamics=True short-circuits to NOT-RUN — no disturbance yet."""
+    res = run_ride_through_case("frequency", run_dynamics=True)
+    assert res.case == "frequency"
+    assert res.ran is False
+    assert res.converged is False
+    assert res.rode_through is None
+    assert "NOT-RUN" in res.detail
+    assert "frequency" in res.detail.lower()
+
+
 # ---------------------------------------------- RideThroughResult contract ----
 
 
@@ -261,6 +356,7 @@ def test_from_case_stamps_disclaimer_and_bankable_false() -> None:
         case="lvrt",
         ran=True,
         converged=True,
+        rode_through=True,
         target_pu=0.89,
         k_factor=2.0,
         min_voltage_pu=0.42,
@@ -271,6 +367,14 @@ def test_from_case_stamps_disclaimer_and_bankable_false() -> None:
     assert "NOT the OEM-certified" in res.disclaimer
     assert "generic wecc" in res.provenance.lower()
     assert res.ran is True and res.converged is True
+    assert res.rode_through is True
+
+
+def test_from_case_rode_through_defaults_to_none_not_converged() -> None:
+    """rode_through is NOT defaulted from converged — a converged case is not a pass."""
+    res = RideThroughResult.from_case(case="lvrt", ran=True, converged=True)
+    assert res.converged is True
+    assert res.rode_through is None  # must be passed explicitly, never inferred
 
 
 def test_ride_through_result_is_frozen_and_dumps() -> None:

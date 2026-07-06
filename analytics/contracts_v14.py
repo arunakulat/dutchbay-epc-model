@@ -911,11 +911,25 @@ class RideThroughResult(ContractMixin):
 
     Fields
         case: the ride-through case kind (``"lvrt"`` | ``"hvrt"`` | ``"frequency"``).
-        ran: True iff the ANDES RMS solve was executed AND converged (rode through). It
-            is False whenever the dynamic-study gate was off (envelope parsed / case set
-            up but ANDES not run) or the solve did not converge — read ``converged`` +
-            ``detail`` to distinguish "not run" from "ran but failed".
-        converged: whether the time-domain solve converged (False when not run).
+        ran: True iff the ANDES RMS solve was actually EXECUTED for this case (the
+            dynamic-study gate was on AND a candidate ANDES case loaded and solved). It
+            is False whenever the gate was off (envelope parsed / case set up but ANDES
+            not run) or every candidate case failed to load/solve. ``ran`` says only
+            "did the solver run" — it is NOT a compliance verdict; read ``rode_through``
+            for that.
+        converged: raw RMS-solve SMOKE TEST — whether the ANDES time-domain solve exited
+            cleanly (``exit_code == 0``). Convergence is necessary but NOT sufficient for
+            ride-through: a solve can converge to a state where the IBR has tripped or the
+            bus voltage has collapsed/failed to recover. NEVER read convergence as
+            compliance. False when the solve did not run.
+        rode_through: the COMPLIANCE VERDICT, derived from the PHYSICAL ENVELOPE (post-
+            fault recovered bus voltage vs the entry threshold, IBR-trip detection, and/or
+            frequency vs the continuous band) — NOT from the raw ``converged`` flag. True
+            = the disturbance was ridden through; False = a real breach was observed (e.g.
+            a converged-but-collapsed / tripped case); ``None`` = NOT-RUN / UNSUPPORTED
+            (the case did not physically validate the envelope — the gate was off, no
+            candidate solved, or the disturbance is not yet modeled for this case). An
+            honest ``None`` is preferred over a spurious ``True``.
         target_pu: the voltage ride-through threshold (pu) the case probes — the LVRT /
             HVRT entry pu (``None`` for the frequency case).
         target_hz: the frequency (Hz) the frequency case probes (``None`` for voltage
@@ -933,6 +947,7 @@ class RideThroughResult(ContractMixin):
     case: str
     ran: bool
     converged: bool
+    rode_through: bool | None = None
     target_pu: float | None = None
     target_hz: float | None = None
     k_factor: float = 0.0
@@ -952,6 +967,7 @@ class RideThroughResult(ContractMixin):
         case: str,
         ran: bool,
         converged: bool,
+        rode_through: bool | None = None,
         target_pu: float | None = None,
         target_hz: float | None = None,
         k_factor: float = 0.0,
@@ -966,12 +982,15 @@ class RideThroughResult(ContractMixin):
 
         ``bankable`` is always ``False`` (in-house generic-WECC screen) and the fixed
         OEM-model ``disclaimer`` is always stamped, so no downstream emitter can present
-        the screen as a certified FRT compliance result.
+        the screen as a certified FRT compliance result. ``rode_through`` is the
+        envelope-derived compliance verdict (``None`` = NOT-RUN / UNSUPPORTED); it is NOT
+        defaulted from ``converged`` — the caller must pass the physically-derived value.
         """
         return cls(
             case=case,
             ran=bool(ran),
             converged=bool(converged),
+            rode_through=rode_through,
             target_pu=target_pu,
             target_hz=target_hz,
             k_factor=k_factor,

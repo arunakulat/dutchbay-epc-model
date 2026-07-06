@@ -1,13 +1,33 @@
 """Shared ANDES RMS ride-through dynamics core (D4a, #875).
 
 Generalises the D1 LVRT scaffold (:mod:`analytics.grid.ride_through_poc`) into ONE
-parameterised ride-through core that runs the three grid-code fault-ride-through cases
-against a generic WECC IBR — **LVRT** (a voltage dip), **HVRT** (a voltage swell), and a
-**frequency** excursion — and reports, per case, whether the ANDES RMS time-domain solve
-rode through the disturbance. The ride-through envelope (entry thresholds, k-factors,
-trip tables) is parameterised from the redacted D0 grid-code fixture
+parameterised ride-through core that runs the grid-code fault-ride-through cases against a
+generic WECC IBR — **LVRT** (a voltage dip), **HVRT** (a voltage swell), and a
+**frequency** excursion — and reports, per case, whether the plant rode through the
+disturbance. The ride-through envelope (entry thresholds, k-factors, trip tables) is
+parameterised from the redacted D0 grid-code fixture
 (``tests/fixtures/grid/envision_enpcs01_gridcode.yaml``) rather than magic constants, so
 the core is seeded from the OEM envelope.
+
+Convergence is NOT compliance
+-----------------------------
+The ANDES RMS solve returns a raw convergence flag (``converged`` — a smoke test that the
+time-domain integration exited cleanly). That flag is NEVER threaded into the compliance
+verdict: a solve can converge to a state where the IBR has tripped or the bus voltage has
+collapsed. The compliance verdict (``rode_through``) is derived ONLY from the PHYSICAL
+ENVELOPE — the post-fault RECOVERED bus voltage vs the entry threshold, whether the IBR
+tripped, and (for frequency) the excursion vs the continuous band. A case that cannot
+physically validate its envelope returns an HONEST ``rode_through=None`` (NOT-RUN /
+UNSUPPORTED) rather than a spurious pass.
+
+**LVRT** is the only case this core physically models today: a shunt impedance fault
+produces a real, measurable voltage DIP whose recovery can be checked against the entry
+pu, and IBR trips can be detected from the device online flags. **HVRT** and **frequency**
+are NOT-RUN: a shunt ``Fault`` can only DIP voltage (never SWELL), and no frequency
+excursion (generator trip / load step) is applied yet — so both return an explicit
+``rode_through=None`` with a follow-up detail rather than a trivial/spurious pass. Full
+HVRT (source-voltage step / load rejection) and frequency (generator Toggle / load step)
+dynamics are a follow-up dolphin.
 
 The dynamic model is the **generic WECC IBR** (REGCA1 / REECA1 / REPCA1 — whichever the
 installed ANDES exposes on the bundled case). It is a SCREENING-grade RMS/positive-
@@ -315,6 +335,64 @@ def build_case_spec(
     )
 
 
+@dataclass(frozen=True)
+class LvrtEvidence:
+    """The PHYSICAL evidence a solved LVRT case yields (pure data, grid-free testable).
+
+    Fields
+        min_voltage_pu: the deepest bus voltage over the run (confirms a real dip was
+            actually injected — a case with no measurable dip did not test the envelope).
+        recovered_voltage_pu: the post-fault RECOVERED bus voltage (steady-state after
+            fault clearance). The plant rode through only if this returns above the entry
+            threshold — a collapse that fails to recover is a breach.
+        ibr_tripped: whether any IBR device tripped offline during the run.
+    """
+
+    min_voltage_pu: float | None
+    recovered_voltage_pu: float | None
+    ibr_tripped: bool | None
+
+
+def lvrt_rode_through(
+    evidence: LvrtEvidence,
+    envelope: RideThroughEnvelope,
+    *,
+    recovery_margin_pu: float = 0.0,
+) -> bool | None:
+    """Envelope-derived LVRT compliance verdict (PURE — no ANDES, grid-free testable).
+
+    The verdict is derived from PHYSICAL EVIDENCE, never from a solver convergence flag:
+
+      * ``None`` (NOT-RUN / UNSUPPORTED) if the evidence is missing — no measurable dip
+        was injected (``min_voltage_pu`` is None or not actually below the entry pu, so
+        the fault did not exercise the ride-through path) or the recovered voltage is
+        unknown. We cannot claim a pass we did not physically validate.
+      * ``False`` (breach) if the IBR tripped, OR the post-fault RECOVERED voltage failed
+        to return at/above the entry threshold (``lvrt_enter_pu`` + margin) — i.e. the bus
+        collapsed / did not recover.
+      * ``True`` (rode through) only when a real dip was injected, no IBR tripped, and the
+        voltage recovered above the entry threshold.
+
+    Args:
+        evidence: the physical LVRT evidence gathered from the solved case.
+        envelope: the ride-through envelope (supplies ``lvrt_enter_pu``).
+        recovery_margin_pu: extra pu the recovered voltage must clear the entry threshold
+            by (default 0.0 — recovery to the entry pu counts).
+    """
+    vmin = evidence.min_voltage_pu
+    vrec = evidence.recovered_voltage_pu
+    enter = envelope.lvrt_enter_pu
+    # NOT-RUN: no measurable dip below the entry pu means the ride-through path was never
+    # exercised, so there is nothing to certify. Return an honest None.
+    if vmin is None or vmin >= enter:
+        return None
+    if vrec is None:
+        return None
+    if evidence.ibr_tripped:
+        return False
+    return bool(vrec >= enter + recovery_margin_pu)
+
+
 def _n_ibr_devices(ss: Any) -> int:  # pragma: no cover - requires [grid] extra
     """Count the WECC IBR / synchronous devices present on the loaded ANDES system."""
     return int(sum(getattr(ss, m).n for m in _IBR_MODELS if hasattr(ss, m)))
@@ -326,7 +404,10 @@ def _min_bus_voltage(
     """Deepest bus voltage over the simulation (the depth of the dip the IBRs rode)."""
     try:
         ts = ss.dae.ts
-        vidx = [i for i, name in enumerate(ss.dae.y_name) if name.startswith("V ")]
+        # ANDES bus voltage-MAGNITUDE algebraic vars are named lowercase "v Bus N"
+        # (the "a Bus N" vars are the angles); match "v Bus" so this returns a real
+        # float, not always-None.
+        vidx = [i for i, name in enumerate(ss.dae.y_name) if name.startswith("v Bus")]
         if vidx:
             return float(ts.y[:, vidx].min())
     except Exception:  # diagnostic only
@@ -340,7 +421,8 @@ def _max_bus_voltage(
     """Peak bus voltage over the simulation (the height of the swell the IBRs rode)."""
     try:
         ts = ss.dae.ts
-        vidx = [i for i, name in enumerate(ss.dae.y_name) if name.startswith("V ")]
+        # See _min_bus_voltage: magnitude vars are lowercase "v Bus N".
+        vidx = [i for i, name in enumerate(ss.dae.y_name) if name.startswith("v Bus")]
         if vidx:
             return float(ts.y[:, vidx].max())
     except Exception:  # diagnostic only
@@ -348,19 +430,71 @@ def _max_bus_voltage(
     return None
 
 
+def _recovered_bus_voltage(
+    ss: Any,
+) -> float | None:  # pragma: no cover - requires [grid] extra
+    """Post-fault RECOVERED bus voltage (min over buses at the LAST time step).
+
+    Reads the final time-domain sample of every ``v Bus N`` magnitude var and returns the
+    lowest — the steady-state the plant settled to once the fault cleared. This is the
+    quantity the LVRT verdict checks against the entry threshold (a converged solve that
+    settled to a collapsed voltage is NOT a ride-through).
+    """
+    try:
+        ts = ss.dae.ts
+        vidx = [i for i, name in enumerate(ss.dae.y_name) if name.startswith("v Bus")]
+        if vidx:
+            return float(ts.y[-1, vidx].min())
+    except Exception:  # diagnostic only
+        return None
+    return None
+
+
+def _any_ibr_tripped(
+    ss: Any,
+) -> bool | None:  # pragma: no cover - requires [grid] extra
+    """Whether any IBR / generator device tripped offline during the run.
+
+    Inspects each present model's online flag (``u``): a device that ends the run with
+    ``u == 0`` (or whose connection-status var went to 0) tripped. Returns ``None`` when
+    no online flag can be read (so the verdict treats trip-status as unknown, not a pass).
+    """
+    saw_flag = False
+    tripped = False
+    for model_name in _IBR_MODELS:
+        model = getattr(ss, model_name, None)
+        if model is None or getattr(model, "n", 0) == 0:
+            continue
+        u = getattr(model, "u", None)
+        values = getattr(u, "v", None)
+        if values is None:
+            continue
+        saw_flag = True
+        try:
+            if any(float(v) == 0.0 for v in values):
+                tripped = True
+        except (TypeError, ValueError):
+            continue
+    if not saw_flag:
+        return None
+    return tripped
+
+
 def _solve_case(  # pragma: no cover - requires [grid] extra
     andes: Any,
     spec: RideThroughCaseSpec,
     *,
     tf: float = 2.0,
-) -> tuple[bool, int, float | None, float | None, str]:
+) -> tuple[bool, int, float | None, float | None, LvrtEvidence | None, str]:
     """Load a bundled ANDES IBR case, apply the disturbance, run PFlow + TDS.
 
-    Returns ``(converged, n_devices, vmin_pu, vmax_pu, detail)``. Tries each candidate
-    case in order, keeping the last failure for the report. For voltage cases a bus
-    impedance fault is applied; the frequency case applies a bus fault-free TDS run as a
-    screening proxy for the frequency excursion (a full generator-trip / load-step model
-    is a later dolphin — this confirms the dynamics layer runs the frequency case).
+    Returns ``(converged, n_devices, vmin_pu, vmax_pu, evidence, detail)`` where
+    ``converged`` is ONLY the raw RMS-solve smoke test (``exit_code == 0``) and
+    ``evidence`` is the physical :class:`LvrtEvidence` (recovered voltage + IBR-trip
+    status) the compliance verdict is derived from — or ``None`` when no case solved.
+    Tries each candidate case in order, keeping the last failure for the report. A bus
+    impedance fault (LVRT dip) is the only physically-modeled disturbance; HVRT/frequency
+    reach here with no evidence and are reported NOT-RUN by the caller.
     """
     last_err = "no candidate case attempted"
     for rel in _CANDIDATE_CASES:
@@ -385,16 +519,25 @@ def _solve_case(  # pragma: no cover - requires [grid] extra
             n_devices = _n_ibr_devices(ss)
             vmin = _min_bus_voltage(ss)
             vmax = _max_bus_voltage(ss)
-            detail = (
-                f"case={rel}; TDS exit={int(getattr(ss, 'exit_code', 1))}; "
-                f"IBR/gen devices={n_devices}. {spec.detail}"
+            evidence = LvrtEvidence(
+                min_voltage_pu=vmin,
+                recovered_voltage_pu=_recovered_bus_voltage(ss),
+                ibr_tripped=_any_ibr_tripped(ss),
             )
-            return converged, n_devices, vmin, vmax, detail
+            detail = (
+                f"case={rel}; TDS exit={int(getattr(ss, 'exit_code', 1))} "
+                f"(raw solve smoke-test, NOT compliance); "
+                f"IBR/gen devices={n_devices}; "
+                f"recovered_v={evidence.recovered_voltage_pu}; "
+                f"ibr_tripped={evidence.ibr_tripped}. {spec.detail}"
+            )
+            return converged, n_devices, vmin, vmax, evidence, detail
         except Exception as exc:  # try next candidate; keep the last failure
             last_err = f"{rel}: {exc!r}"
     return (
         False,
         0,
+        None,
         None,
         None,
         f"ANDES case did not complete ({last_err}). {spec.detail}",
@@ -433,8 +576,13 @@ def run_ride_through_case(
         tf: TDS stop time (s) for the dynamics solve.
 
     Returns:
-        :class:`analytics.contracts_v14.RideThroughResult` — advisory (``bankable=False``),
-        ``ran`` True only when the dynamics solve was executed AND converged.
+        :class:`analytics.contracts_v14.RideThroughResult` — advisory (``bankable=False``).
+        ``ran`` reflects only whether the ANDES solve executed; ``converged`` is the raw
+        RMS smoke test; ``rode_through`` is the envelope-derived COMPLIANCE VERDICT
+        (``None`` = NOT-RUN / UNSUPPORTED). HVRT and frequency are NOT-RUN today (a shunt
+        fault cannot swell voltage; no frequency excursion is modeled yet), so they return
+        ``rode_through=None`` rather than a spurious pass — a follow-up dolphin adds the
+        real over-voltage / frequency-excursion dynamics.
     """
     env = envelope if envelope is not None else envelope_from_fixture(fixture_path)
     spec = build_case_spec(
@@ -453,6 +601,7 @@ def run_ride_through_case(
             case=spec.kind,
             ran=False,
             converged=False,
+            rode_through=None,  # gate off — nothing physically validated
             target_pu=spec.target_pu,
             target_hz=spec.target_hz,
             k_factor=spec.k_factor,
@@ -461,18 +610,56 @@ def run_ride_through_case(
             n_devices=0,
             detail=(
                 "Dynamic-study gate OFF (run_dynamics=False): envelope parsed + case set "
-                f"up, ANDES not run. {spec.detail}"
+                f"up, ANDES not run — rode_through=None (NOT-RUN). {spec.detail}"
             ),
         )
 
+    # HVRT and frequency are NOT physically modeled yet: a shunt Fault can only DIP the
+    # voltage (never SWELL), and no frequency excursion (generator trip / load step) is
+    # injected — so running the solver would validate nothing. Return an explicit
+    # NOT-RUN / UNSUPPORTED verdict rather than a spurious pass. No ANDES import needed.
+    if spec.kind != "lvrt":
+        reason = (
+            "HVRT NOT-RUN: a shunt Fault can only dip voltage, not swell it; a real "
+            "over-voltage (source-voltage step / load rejection) is a follow-up dolphin"
+            if spec.kind == "hvrt"
+            else (
+                "frequency ride-through NOT-RUN: no frequency excursion (generator "
+                "Toggle/trip or load step) is modeled yet — follow-up dolphin"
+            )
+        )
+        return RideThroughResult.from_case(
+            case=spec.kind,
+            ran=False,
+            converged=False,
+            rode_through=None,  # UNSUPPORTED — not yet physically modeled
+            target_pu=spec.target_pu,
+            target_hz=spec.target_hz,
+            k_factor=spec.k_factor,
+            min_voltage_pu=None,
+            max_voltage_pu=None,
+            n_devices=0,
+            detail=f"{reason}. {spec.detail}",
+        )
+
     andes = _require_andes()  # pragma: no cover - requires [grid] extra
-    converged, n_devices, vmin, vmax, detail = _solve_case(  # pragma: no cover
-        andes, spec, tf=tf
+    (  # pragma: no cover - requires [grid] extra
+        converged,
+        n_devices,
+        vmin,
+        vmax,
+        evidence,
+        detail,
+    ) = _solve_case(andes, spec, tf=tf)
+    # rode_through is derived from the PHYSICAL EVIDENCE, never from `converged`.
+    rode_through = (  # pragma: no cover - requires [grid] extra
+        lvrt_rode_through(evidence, env) if evidence is not None else None
     )
     return RideThroughResult.from_case(  # pragma: no cover - requires [grid] extra
         case=spec.kind,
         ran=converged,
         converged=converged,
+        rode_through=rode_through,
         target_pu=spec.target_pu,
         target_hz=spec.target_hz,
         k_factor=spec.k_factor,
@@ -509,6 +696,8 @@ __all__ = [
     "RIDE_THROUGH_CASES",
     "RideThroughEnvelope",
     "RideThroughCaseSpec",
+    "LvrtEvidence",
+    "lvrt_rode_through",
     "envelope_from_fixture",
     "build_case_spec",
     "run_ride_through_case",
