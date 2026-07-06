@@ -1,16 +1,20 @@
 """Unified FastAPI application for the DutchBay EPC model.
 
 Composes the existing surfaces under one app and adds the wizard-facing
-``POST /cases`` endpoint:
+``POST /v1/cases`` endpoint. The whole client-data surface is version-pinned under
+``/v1`` (#841 contract freeze) so the public contract is stable and future changes
+are additive (a breaking change lands as ``/v2``, never a mutation of ``/v1``):
 
-* ``POST /cases``        — run a lender case from a ``WindFarmInputs`` submission
-                           (synchronous, frozen-AEP; returns ``CaseResult``).
-* ``POST /cases/report.html`` — the same run, rendered as an HTML report.
-* ``POST /cases/report.pdf``  — the same run, rendered as a PDF (optional WeasyPrint).
-* ``POST /jobs`` + ``/jobs/{id}`` + ``/jobs/{id}/events`` — the async live-ERA5 path.
-* ``POST /run-pipeline`` — the lower-level inline-config route (``api.pipeline_api``).
-* ``/sensitivity/*``     — the tornado/sensitivity app (``api.sensitivity_api``).
-* ``GET /health``        — liveness probe.
+* ``POST /v1/cases``        — run a lender case from a ``WindFarmInputs`` submission
+                              (synchronous, frozen-AEP; returns ``CaseResult``).
+* ``POST /v1/cases/report.html`` — the same run, rendered as an HTML report.
+* ``POST /v1/cases/report.pdf``  — the same run, rendered as a PDF (optional WeasyPrint).
+* ``POST /v1/jobs`` + ``/v1/jobs/{id}`` + ``/v1/jobs/{id}/events`` — the async live-ERA5 path.
+* ``POST /v1/run-pipeline`` — the lower-level inline-config route (``api.pipeline_api``).
+* ``/v1/sensitivity/*``     — the tornado/sensitivity surface (``api.sensitivity_api``).
+* ``POST /v1/token``        — exchange credentials for a bearer JWT.
+* ``GET /health``           — liveness probe (deliberately UNVERSIONED infra endpoint;
+                              self-reports the body-level ``API_CONTRACT_VERSION``).
 
 The endpoint only orchestrates: it validates inputs (Pydantic), maps the form to
 a scenario (``WindFarmInputs.to_scenario_config``), and delegates the compute to
@@ -27,7 +31,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, TypeVar
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, ConfigDict
@@ -36,7 +40,7 @@ from analytics.aep_provenance import AepProvenanceError
 from analytics.aep_reconciliation import AepReconciliationError
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
-from api.sensitivity_api import SensitivityInput, run_tornado
+from api.sensitivity_api import SensitivityInput, SensitivityTornadoRow, run_tornado
 from app.api.auth import get_current_subject, login_for_access_token
 from app.api.config import SYNC_ROUTE_MAX_CONCURRENCY, SYNC_ROUTE_TIMEOUT_SECONDS
 from app.api.jobs_router import router as jobs_router
@@ -61,18 +65,39 @@ app = FastAPI(
     description="Lender-grade wind-farm project-finance, served as a web API.",
 )
 
-# Unify the pre-existing surfaces under one app (Sprint 1 roadmap). Every compute
-# surface is auth-gated via Depends(get_current_subject); only /health and /token
-# are public. The /sensitivity surface is composed here as gated routes rather than
-# a mounted sub-app: a mount is an opaque ASGI boundary that does NOT inherit the
-# parent's auth dependency, which is how /sensitivity/* was reachable anonymously.
-app.include_router(
-    pipeline_router, tags=["pipeline"], dependencies=[Depends(get_current_subject)]
-)
-app.include_router(jobs_router)  # async live-ERA5 job path (Sprint 2 PR E)
+#: The canonical public URL prefix (#841 contract freeze). Every client-data route is
+#: mounted under ``/v1``, so the whole public surface is version-pinned at the URL: a
+#: future breaking change lands additively as a ``/v2`` mount rather than mutating
+#: ``/v1`` in place. ``/health`` is deliberately left UNVERSIONED (an infra liveness
+#: probe, not a client-data contract; it self-reports :data:`API_CONTRACT_VERSION` in
+#: its body). The URL prefix pins the *surface*; the body-level ``API_CONTRACT_VERSION``
+#: and the pinned ``operation_id``s pin the response *shape* and the SDK method names.
+API_V1_PREFIX = "/v1"
+
+# ``public_router`` carries the versioned endpoints defined directly in this module
+# (token + the /cases* case runs + the sensitivity tornado). It is mounted once, under
+# /v1, alongside the pre-existing routers — one canonical surface, no forked copies to
+# drift, and no duplicate OpenAPI operationIds (CASPER: one clear, predictable surface).
+public_router = APIRouter()
+
+# Unify the pre-existing surfaces under one app (Sprint 1 roadmap), all under /v1. Every
+# compute surface is auth-gated via Depends(get_current_subject); only /health (infra,
+# unversioned) and /v1/token are public. The /sensitivity surface is composed here as
+# gated routes rather than a mounted sub-app: a mount is an opaque ASGI boundary that does
+# NOT inherit the parent's auth dependency, which is how /sensitivity/* was reachable
+# anonymously.
 app.include_router(
     pipeline_router,
-    prefix="/sensitivity",
+    prefix=API_V1_PREFIX,
+    tags=["pipeline"],
+    dependencies=[Depends(get_current_subject)],
+)
+app.include_router(
+    jobs_router, prefix=API_V1_PREFIX
+)  # async live-ERA5 job path (Sprint 2 PR E)
+app.include_router(
+    pipeline_router,
+    prefix=f"{API_V1_PREFIX}/sensitivity",
     tags=["sensitivity"],
     dependencies=[Depends(get_current_subject)],
 )
@@ -104,7 +129,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-@app.post("/token", response_model=TokenResponse, tags=["auth"])
+@public_router.post("/token", response_model=TokenResponse, tags=["auth"])
 def issue_token(credentials: TokenRequest) -> TokenResponse:
     """Exchange a username + password for a short-lived bearer JWT.
 
@@ -307,7 +332,7 @@ def run_case_report_pdf(inputs: WindFarmInputs) -> Response:
 # The ``operation_id``s are pinned (not auto-derived from the function name) so the route's
 # client-facing contract is decoupled from internal renames — a generated-SDK method name no
 # longer churns when a handler is refactored (CASPER: stable, predictable surface).
-@app.post(
+@public_router.post(
     "/cases",
     response_model=CaseResult,
     tags=["cases"],
@@ -320,7 +345,7 @@ async def run_case_endpoint(
     return await _run_with_timeout(run_case, inputs)
 
 
-@app.post(
+@public_router.post(
     "/cases/report.html",
     response_class=HTMLResponse,
     tags=["cases"],
@@ -333,7 +358,7 @@ async def run_case_report_html_endpoint(
     return await _run_with_timeout(run_case_report_html, inputs)
 
 
-@app.post(
+@public_router.post(
     "/cases/report.pdf",
     tags=["cases"],
     operation_id="run_case_report_pdf",
@@ -345,15 +370,15 @@ async def run_case_report_pdf_endpoint(
     return await _run_with_timeout(run_case_report_pdf, inputs)
 
 
-@app.post(
+@public_router.post(
     "/sensitivity/run-tornado/",
-    response_model=list[dict[str, Any]],
+    response_model=list[SensitivityTornadoRow],
     tags=["sensitivity"],
     operation_id="run_sensitivity_tornado",
 )
 async def run_sensitivity_tornado_endpoint(
     payload: SensitivityInput, subject: str = Depends(get_current_subject)
-) -> list[dict[str, Any]]:
+) -> list[SensitivityTornadoRow]:
     """Single-metric tornado sensitivity (auth-gated; sync-route timeout-bounded).
 
     Delegates to the thin ``api.sensitivity_api.run_tornado`` adapter, wrapped in
@@ -362,3 +387,9 @@ async def run_sensitivity_tornado_endpoint(
     mounted sub-app that bypassed BOTH auth and that limiter.
     """
     return await _run_with_timeout(run_tornado, payload)
+
+
+# Mount the module-defined public endpoints under the canonical /v1 prefix (#841).
+# Registered AFTER the handlers are defined so every route above is on public_router
+# before it is attached to the app.
+app.include_router(public_router, prefix=API_V1_PREFIX)

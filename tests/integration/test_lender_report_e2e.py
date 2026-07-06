@@ -187,7 +187,7 @@ def test_production_path_renders_sensitivity_sections() -> None:
 def test_lender_report_renders_through_the_auth_gated_http_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Full-stack e2e: the auth-gated ``POST /cases/report.html`` route renders the report over
+    """Full-stack e2e: the auth-gated ``POST /v1/cases/report.html`` route renders the report over
     HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath.
 
     The route's wall-clock ceiling (``DUTCHBAY_SYNC_ROUTE_TIMEOUT``, default 120s) exists to
@@ -216,7 +216,7 @@ def test_lender_report_renders_through_the_auth_gated_http_route(
     api_main.app.dependency_overrides[get_current_subject] = lambda: "e2e-user"
     try:
         client = TestClient(api_main.app)
-        resp = client.post("/cases/report.html", json=_VALID_KW)
+        resp = client.post("/v1/cases/report.html", json=_VALID_KW)
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/html")
         body = resp.text

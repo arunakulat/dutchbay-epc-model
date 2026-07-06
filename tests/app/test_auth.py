@@ -406,24 +406,26 @@ def test_http_auth_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(app)
 
     # Unauthenticated -> 401 with a Bearer challenge.
-    unauth = client.post("/cases", json=_valid_case_body())
+    unauth = client.post("/v1/cases", json=_valid_case_body())
     assert unauth.status_code == 401
     assert unauth.headers["www-authenticate"] == "Bearer"
 
     # Bad credentials -> 401.
     assert (
-        client.post("/token", json={"username": "alice", "password": "x"}).status_code
+        client.post(
+            "/v1/token", json={"username": "alice", "password": "x"}
+        ).status_code
         == 401
     )
 
     # Good credentials -> a bearer token.
-    tok = client.post("/token", json={"username": "alice", "password": "pw"})
+    tok = client.post("/v1/token", json={"username": "alice", "password": "pw"})
     assert tok.status_code == 200
     token = tok.json()["access_token"]
 
     # Authenticated -> the case runs.
     ok = client.post(
-        "/cases",
+        "/v1/cases",
         json=_valid_case_body(),
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -476,7 +478,7 @@ def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> Non
         client = TestClient(app)
 
         def token_for(user: str) -> str:
-            resp = client.post("/token", json={"username": user, "password": "pw"})
+            resp = client.post("/v1/token", json={"username": user, "password": "pw"})
             return str(resp.json()["access_token"])
 
         alice = {"Authorization": f"Bearer {token_for('alice')}"}
@@ -490,21 +492,21 @@ def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> Non
             "num_turbines": 15,
             "hub_height_m": 119.0,
         }
-        accepted = client.post("/jobs", json=body, headers=alice)
+        accepted = client.post("/v1/jobs", json=body, headers=alice)
         assert accepted.status_code == 202
         job_id = accepted.json()["job_id"]
 
         # Owner can read; the record is bound to alice.
-        mine = client.get(f"/jobs/{job_id}", headers=alice)
+        mine = client.get(f"/v1/jobs/{job_id}", headers=alice)
         assert mine.status_code == 200
         assert mine.json()["owner"] == "alice"
 
         # A different client gets a non-leaking 404 on both the record and events.
-        assert client.get(f"/jobs/{job_id}", headers=bob).status_code == 404
-        assert client.get(f"/jobs/{job_id}/events", headers=bob).status_code == 404
+        assert client.get(f"/v1/jobs/{job_id}", headers=bob).status_code == 404
+        assert client.get(f"/v1/jobs/{job_id}/events", headers=bob).status_code == 404
 
         # And an unauthenticated request is rejected outright.
-        assert client.get(f"/jobs/{job_id}").status_code == 401
+        assert client.get(f"/v1/jobs/{job_id}").status_code == 401
     finally:
         app.dependency_overrides.clear()
 
@@ -536,7 +538,7 @@ def test_http_cross_client_report_result_isolation(
         client = TestClient(app)
 
         def token_for(user: str) -> str:
-            resp = client.post("/token", json={"username": user, "password": "pw"})
+            resp = client.post("/v1/token", json={"username": user, "password": "pw"})
             return str(resp.json()["access_token"])
 
         alice = {"Authorization": f"Bearer {token_for('alice')}"}
@@ -562,13 +564,13 @@ def test_http_cross_client_report_result_isolation(
         )
 
         # Owner reads its own report result.
-        mine = client.get("/jobs/job-A", headers=alice)
+        mine = client.get("/v1/jobs/job-A", headers=alice)
         assert mine.status_code == 200
         assert mine.json()["result"] == secret_result
 
         # A different authenticated client cannot read alice's result — non-leaking 404,
         # and crucially the response body never contains the other user's payload.
-        theirs = client.get("/jobs/job-A", headers=bob)
+        theirs = client.get("/v1/jobs/job-A", headers=bob)
         assert theirs.status_code == 404
         assert "secret_client_marker" not in theirs.text
         assert "ALICE" not in theirs.text
