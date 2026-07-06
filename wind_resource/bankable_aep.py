@@ -150,6 +150,30 @@ def _require_pywake() -> Any:
     return py_wake
 
 
+# Niayifar & Porte-Agel (2016) TI-based closure for the Bastankhah-Porte-Agel 2014
+# Gaussian wake-expansion coefficient. This is the ONLY place the closure is written;
+# both ``model_wake_loss`` and the coastal-TI sensitivity share it so they can never drift.
+_K_STAR_SLOPE = 0.38
+_K_STAR_INTERCEPT = 0.004
+
+#: The kernel default ambient turbulence intensity (TI). This is the value the live
+#: PyWake path uses when a scenario does not declare ``resource.wake.turbulence_intensity``;
+#: keeping it here (and as the ``model_wake_loss`` default) is what makes the coastal-TI
+#: feature DEFAULT-OFF — an unset TI reproduces today's exact ``k*`` and wake loss.
+DEFAULT_TURBULENCE_INTENSITY = 0.10
+
+
+def gaussian_k_star(turbulence_intensity: float) -> float:
+    """Bastankhah-Porte-Agel Gaussian wake-growth rate ``k* = 0.38*TI + 0.004``.
+
+    The single source of truth for the TI -> ``k*`` closure (Niayifar & Porte-Agel
+    2016). Lower ambient TI (a low-roughness coastal/water site, z0 ~ 0.01-0.1 m) gives
+    a smaller ``k*`` and hence slower wake recovery-width growth; the *net* effect on
+    array wake LOSS is site-and-layout-specific and is what the sensitivity discloses.
+    """
+    return _K_STAR_SLOPE * float(turbulence_intensity) + _K_STAR_INTERCEPT
+
+
 @dataclass(frozen=True)
 class WakeResult:
     """Modeled wake loss over a layout."""
@@ -173,7 +197,7 @@ def model_wake_loss(
     weibull_a: float,
     weibull_k: float,
     wind_rose_freq: Optional[Sequence[float]] = None,
-    turbulence_intensity: float = 0.10,
+    turbulence_intensity: float = DEFAULT_TURBULENCE_INTENSITY,
     deficit_model: str = "bastankhah",
 ) -> WakeResult:
     """Per-turbine wake loss via PyWake over the real layout + wind rose.
@@ -231,9 +255,10 @@ def model_wake_loss(
         model_name = "TurboGaussian (TurbOPark)"
     else:
         # Wake-expansion coefficient k*: Niayifar & Porte-Agel (2016) TI-based
-        # relation k* = 0.38*I + 0.004 (the standard onshore closure for the
-        # Bastankhah-Porte-Agel 2014 Gaussian model).
-        k_star = 0.38 * float(turbulence_intensity) + 0.004
+        # relation k* = 0.38*I + 0.004. Lowering the ambient TI (a low-roughness
+        # coastal site) lowers k*; the shared :func:`gaussian_k_star` is the single
+        # source of the closure so the sensitivity can never drift from the engine.
+        k_star = gaussian_k_star(turbulence_intensity)
         wfm = Bastankhah_PorteAgel_2014(site, wt, k=k_star)
         model_name = f"Bastankhah-PorteAgel 2014 (Gaussian, k*={k_star:.4f})"
 
@@ -249,6 +274,118 @@ def model_wake_loss(
         n_turbines=len(x),
         aep_gross_gwh=aep_gross,
         aep_wake_gwh=aep_wake,
+    )
+
+
+@dataclass(frozen=True)
+class WakeTISensitivityPoint:
+    """One (TI, k*, wake-loss%) triple from a coastal-TI sensitivity sweep."""
+
+    turbulence_intensity: float
+    k_star: float
+    wake_loss_pct: float
+    #: wake-loss % at this TI minus wake-loss % at the sweep's baseline TI.
+    delta_wake_loss_pct: float
+
+
+@dataclass(frozen=True)
+class WakeTISensitivity:
+    """Array-wake-loss sensitivity to ambient turbulence intensity (issue #832).
+
+    The honest-economics disclosure: rather than silently baking a new coastal wake
+    number in, this surfaces HOW array wake loss moves as the site TI is lowered from
+    the onshore-default value toward a low-roughness coastal value, over the REAL
+    layout + wind rose (numbers come from actual PyWake recomputation, never a table).
+    """
+
+    baseline_ti: float
+    baseline_wake_loss_pct: float
+    points: Sequence[WakeTISensitivityPoint]
+
+    def per_0p01_ti_pct(self) -> Optional[float]:
+        """Mean Δ(wake-loss %) per 0.01 TI shift across the swept range (a screening slope).
+
+        Returns ``None`` when fewer than two points were swept.
+        """
+        if len(self.points) < 2:
+            return None
+        lo, hi = self.points[0], self.points[-1]
+        d_ti = hi.turbulence_intensity - lo.turbulence_intensity
+        if d_ti == 0.0:
+            return None
+        return (hi.wake_loss_pct - lo.wake_loss_pct) / d_ti * 0.01
+
+
+def wake_loss_ti_sensitivity(
+    *,
+    wind_speed_ms: Sequence[float],
+    power_kw: Sequence[float],
+    thrust_coefficient: Sequence[float],
+    rotor_diameter_m: float,
+    hub_height_m: float,
+    layout_x_m: Sequence[float],
+    layout_y_m: Sequence[float],
+    weibull_a: float,
+    weibull_k: float,
+    wind_rose_freq: Optional[Sequence[float]] = None,
+    ti_grid: Sequence[float] = (0.06, 0.08, 0.10, 0.12, 0.14),
+    baseline_ti: float = DEFAULT_TURBULENCE_INTENSITY,
+    deficit_model: str = "bastankhah",
+) -> WakeTISensitivity:
+    """Recompute array wake loss over a grid of ambient TI values (issue #832).
+
+    This is a SCREENING disclosure, not a committed KPI: it re-runs
+    :func:`model_wake_loss` over the real layout/wind-rose at each TI in ``ti_grid``
+    (plus ``baseline_ti`` if absent) so a lender can see the wake-loss slope vs TI and
+    judge how much a coastal-appropriate (lower-roughness, lower-TI) assumption would
+    move the number. It changes NO committed value; the caller decides whether to adopt
+    a new TI (a dated, oracle-gated config edit), and that adoption is out of scope here.
+
+    Args:
+        ti_grid: ambient turbulence intensities to evaluate (fractions, e.g. 0.08).
+        baseline_ti: the reference TI the deltas are measured against (default = the
+            onshore closure default 0.10). Added to the grid if not already present.
+
+    Returns:
+        A :class:`WakeTISensitivity` with a ``WakeTISensitivityPoint`` per TI, sorted by
+        TI ascending, and the Δwake-loss vs the baseline.
+    """
+    _require_pywake()
+    tis = sorted({round(float(t), 6) for t in ti_grid} | {round(float(baseline_ti), 6)})
+
+    def _loss(ti: float) -> float:
+        res = model_wake_loss(
+            wind_speed_ms=wind_speed_ms,
+            power_kw=power_kw,
+            thrust_coefficient=thrust_coefficient,
+            rotor_diameter_m=rotor_diameter_m,
+            hub_height_m=hub_height_m,
+            layout_x_m=layout_x_m,
+            layout_y_m=layout_y_m,
+            weibull_a=weibull_a,
+            weibull_k=weibull_k,
+            wind_rose_freq=wind_rose_freq,
+            turbulence_intensity=ti,
+            deficit_model=deficit_model,
+        )
+        return float(res.wake_loss_pct)
+
+    loss_by_ti = {ti: _loss(ti) for ti in tis}
+    base_key = round(float(baseline_ti), 6)
+    baseline_loss = loss_by_ti[base_key]
+    points = [
+        WakeTISensitivityPoint(
+            turbulence_intensity=ti,
+            k_star=gaussian_k_star(ti),
+            wake_loss_pct=loss_by_ti[ti],
+            delta_wake_loss_pct=loss_by_ti[ti] - baseline_loss,
+        )
+        for ti in tis
+    ]
+    return WakeTISensitivity(
+        baseline_ti=base_key,
+        baseline_wake_loss_pct=baseline_loss,
+        points=points,
     )
 
 
