@@ -239,7 +239,10 @@ def test_run_orchestrates_and_freezes_vintage(monkeypatch: pytest.MonkeyPatch) -
     """``run`` wires retrieve -> build -> coverage -> AEP and freezes vintage (345-373)."""
     cfg = _cfg(reference_mode="latest")
     sentinel_nc = Path("/tmp/sentinel.nc")
-    sentinel_series = pd.DataFrame({"ws_150m": [7.0, 7.5]})
+    # The real build_hub_height_series now emits met-convention wd_100m alongside the speed
+    # (issue #853.1), which run() re-projects into result["wind_rose"]; the sentinel series
+    # mirrors that shape so the display rose derives on the happy path.
+    sentinel_series = pd.DataFrame({"ws_150m": [7.0, 7.5], "wd_100m": [45.0, 200.0]})
     coverage = {
         "actual_hours": 8760,
         "expected_hours": 8760,
@@ -292,6 +295,12 @@ def test_run_orchestrates_and_freezes_vintage(monkeypatch: pytest.MonkeyPatch) -
     assert vintage["expected_hours"] == cfg.expected_hours
     assert vintage["actual_hours"] == 8760
     assert vintage["coverage_complete"] is True
+    # #853.1: run() re-projects the production series' wd_100m into a display wind rose that
+    # round-trips through this JSON manifest (default 12 sectors); display-only, no KPI touched.
+    rose = result["wind_rose"]
+    assert rose["n_sectors"] == 12
+    assert len(rose["frequency"]) == 12
+    assert rose["n_samples"] == 2  # both sentinel directions binned
 
 
 def test_run_logs_incomplete_branch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -319,6 +328,10 @@ def test_run_logs_incomplete_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     result = run(cfg)
     assert result["vintage"]["coverage_complete"] is False
     assert result["coverage"]["missing_hours"] == 120
+    # The mocked series has no wd_100m column, so the display wind rose fails SOFT (an explicit
+    # reason) rather than crashing the retrieval — a rose is display-only, the AEP is unaffected.
+    assert result["wind_rose"]["derived"] is False
+    assert "wind rose not derived" in result["wind_rose"]["reason"]
 
 
 def test_main_prints_run_result_for_env_config(

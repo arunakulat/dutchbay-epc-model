@@ -452,6 +452,10 @@ class PerTechChapter(BaseModel):
     wind_rose: List[WindRoseSectorRow] = Field(default_factory=list)
     #: Centre bearing of the prevailing (most-frequent) sector, when a rose is present.
     prevailing_sector_deg: Optional[float] = None
+    #: Self-contained ``data:image/png`` URI of the polar wind-rose plot (#853.2), when a rose
+    #: is present and matplotlib is available; ``None`` when no rose or the optional plotting lib
+    #: degraded (the report then shows the frequency table alone). Display only — no KPI impact.
+    wind_rose_polar_img: Optional[str] = None
     #: Self-declared site terrain class (metadata only; applies NO AEP correction).
     terrain_class: Optional[str] = None
     #: Optional free-text terrain notes passthrough.
@@ -1862,6 +1866,7 @@ def _build_wind_chapter(
     prevailing_deg: Optional[float] = None
     note: Optional[str] = None
     degraded: List[str] = []
+    polar_img: Optional[str] = None
 
     try:
         rose = _resolve_report_wind_rose(resource)
@@ -1885,6 +1890,12 @@ def _build_wind_chapter(
                     ),
                 )
             )
+        # Polar plot of the SAME rose block (#853.2): a self-contained data-URI embed. The
+        # renderer carries its own CASPER call-time matplotlib guard and fails soft to None, so
+        # a matplotlib-less deployment simply shows the frequency table above. Display only.
+        from app.reports.wind_rose_plot import render_wind_rose_polar_data_uri
+
+        polar_img = render_wind_rose_polar_data_uri(rose)
 
     terrain_class: Optional[str] = None
     terrain_notes: Optional[str] = None
@@ -1917,6 +1928,7 @@ def _build_wind_chapter(
         share_of_aep_pct=share_pct,
         wind_rose=rows,
         prevailing_sector_deg=prevailing_deg,
+        wind_rose_polar_img=polar_img,
         terrain_class=terrain_class,
         terrain_notes=terrain_notes,
         provenance_note=note,
