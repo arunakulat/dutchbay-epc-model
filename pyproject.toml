@@ -190,17 +190,19 @@ jobs = [
 # install never needs the grid toolchain, and the grid tests are gated behind
 # ``pytest.importorskip('pandapower')``. Install with:
 #     PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"
-# PIN NOTE (verified against PyPI metadata + the frozen core pins numpy==2.4.6 /
-# scipy==1.17.1 / pandas==2.3.3): pandapower is capped <3.4 deliberately — pandapower
-# 3.4.0 declares scipy<1.17 AND numpy<2.4, which would force a silent core downgrade and
-# risk KPI drift; 3.3.0 declares numpy~=2.2 / scipy~=1.15 / pandas~=2.3, all of which the
-# core pins satisfy. Always install with the repo constraints applied so the resolver
-# cannot pull 3.4.x. andes and opendssdirect.py impose no core caps. The OpenDSS wheel
+# PIN NOTE (verified empirically against PyPI metadata + the frozen core pins, which live
+# in requirements.txt: numpy==2.4.6 / scipy==1.17.1 / pandas==2.3.3): pandapower is pinned
+# EXACTLY to ==3.3.0. Both pandapower 3.4.0 and 3.3.3 declare scipy<1.17 (3.4.0 also
+# numpy<2.4) — they EXCLUDE the core pins and would force a silent scipy/numpy downgrade
+# with KPI-drift risk. 3.3.0 declares numpy~=2.2 / scipy~=1.15 / pandas~=2.3, which the core
+# pins satisfy, so the exact ==3.3.0 pin (NOT a version range) is what deterministically
+# prevents the downgrade — it holds on its own, independent of constraints.txt (which pins
+# only pandas<3). andes and opendssdirect.py impose no core caps. The OpenDSS wheel
 # dist name is ``opendssdirect.py`` (imports as ``opendssdirect``); the bare name
 # ``opendssdirect`` does NOT exist on PyPI. PyWake / windpowerlib are not needed here —
 # they already ride in via [wind]; add them as a follow-up only if a grid path requires them.
 grid = [
-  "pandapower>=3.3,<3.4",
+  "pandapower==3.3.0",
   "andes>=2.0",
   "opendssdirect.py>=0.9.4",
 ]

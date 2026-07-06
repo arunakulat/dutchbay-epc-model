@@ -439,8 +439,9 @@ jobs:
         python-version: "3.11"
         cache: pip
     - name: Install with [grid] extra (core pins constrained)
-      # PIP_CONSTRAINT pins pandas<3 and applies the frozen core lock so the grid
-      # resolver cannot silently downgrade numpy/scipy (pandapower 3.4.x would).
+      # requirements.txt (installed first) holds the frozen core lock (numpy==2.4.6/
+      # scipy==1.17.1/pandas==2.3.3); the exact pandapower==3.3.0 pin accepts those and
+      # cannot pull 3.4.x/3.3.3 (which cap scipy<1.17). PIP_CONSTRAINT adds pandas<3.
       env:
         PIP_CONSTRAINT: constraints.txt
       run: |
