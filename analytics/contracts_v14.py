@@ -1012,6 +1012,201 @@ class RideThroughResult(ContractMixin):
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D7 (#883) — harmonics / flicker + frequency-headroom SCR-coupled screen contract.
+#
+# The SCR / reactive / ride-through screens above answer stiffness, steady-state
+# reactive and dynamic ride-through. D7 adds the POWER-QUALITY question, and it is
+# EXPLICITLY SCR-COUPLED: harmonic voltage distortion and flicker Pst at the POC
+# both WORSEN as the SCR (grid stiffness) drops, because the injected harmonic
+# current and flicker current see a weaker (higher-impedance) grid. The screen also
+# indexes the IEEE 519:2022 voltage/current-distortion limits by the D1 Isc/IL (SCR)
+# ratio — the limit table is itself a function of grid stiffness — and sizes the
+# frequency-response de-load / droop headroom (energy foregone) from the grid-code
+# frequency ride-through band. Like every other grid screen this is design-stage
+# ADVISORY (``bankable=False``); it is a SCREENING APPROXIMATION that DEGRADES as SCR
+# falls, NOT a standalone pass/fail — a true harmonic/flicker study is a frequency-
+# domain PSS/E or PowerFactory scan against the utility's confidential harmonic base
+# case with the OEM current-emission spectra. It NEVER feeds the finance engine
+# (committed scenarios stay byte-identical / KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HARMONIC_SCREEN_PROVENANCE = (
+    "In-house Python design-stage harmonics/flicker + frequency-headroom screen "
+    "(SCR-coupled Zbus(h) harmonic-voltage estimate vs IEEE 519:2022 limits indexed by "
+    "Isc/IL; IEC 61400-21 flicker Pst from POC Ssc; frequency-response de-load/droop "
+    "headroom from the grid-code ride-through band). SCREENING APPROXIMATION that "
+    "DEGRADES as SCR falls — NOT a standalone pass/fail and NOT the utility-accepted "
+    "bankable study (CEB/NSCC require a frequency-domain PSS/E or PowerFactory harmonic "
+    "scan against their confidential base case with the OEM current-emission spectra)."
+)
+
+_HARMONIC_SCREEN_DISCLAIMER = (
+    "SCR-COUPLED SCREENING APPROXIMATION — harmonic voltage + flicker WORSEN as SCR "
+    "drops; degrades as the grid weakens. NOT a standalone pass/fail; confirm with a "
+    "frequency-domain harmonic study against the utility base case."
+)
+
+
+@dataclass(frozen=True)
+class HarmonicComplianceResult(ContractMixin):
+    """Advisory SCR-coupled harmonics / flicker + frequency-headroom screen (issue #883).
+
+    Emitted by :mod:`analytics.grid.harmonics` (with the frequency-headroom sizing from
+    :mod:`analytics.grid.frequency_response`). Reports, at the POC:
+
+      1. the worst per-order harmonic voltage distortion (``V_h = |Zbus(h)| · I_h`` from an
+         OEM/config current-emission spectrum) and the total harmonic voltage distortion
+         (THD_v), each compared to the IEEE 519:2022 voltage-distortion limits that are
+         INDEXED by the D1 Isc/IL (SCR) ratio;
+      2. the IEC 61400-21 short-term flicker ``Pst`` at the POC from the plant's flicker
+         coefficient and the POC short-circuit apparent power ``Ssc``; and
+      3. the frequency-response de-load / droop headroom (MW held in reserve + the annual
+         ENERGY FOREGONE, MWh/yr) implied by the grid-code frequency ride-through band.
+
+    EXPLICITLY SCR-COUPLED: both the harmonic voltage and the flicker Pst scale INVERSELY
+    with grid stiffness — as the SCR (equivalently ``Ssc``) drops, the same injected
+    harmonic / flicker current produces a LARGER POC voltage disturbance, so the screen
+    verdict DEGRADES. It is a SCREENING APPROXIMATION, NOT a standalone pass/fail, and is
+    ADVISORY only (``bankable=False``); it never feeds the finance engine (KPI-neutral).
+
+    Fields
+        scr: the short-circuit ratio the screen is coupled to (from the D1 SCR screen);
+            lower SCR ⇒ higher harmonic voltage + flicker.
+        isc_il_ratio: the IEEE 519 Isc/IL ratio (short-circuit current ÷ plant load
+            current at the POC) that INDEXES the distortion-limit table.
+        worst_harmonic_order: the harmonic order (h) with the largest voltage distortion.
+        worst_harmonic_voltage_pct: the worst per-order harmonic voltage V_h (% of nominal).
+        harmonic_voltage_limit_pct: the IEEE 519:2022 individual-harmonic voltage limit
+            (%) at the plant's voltage level (the per-order compliance yardstick).
+        thd_voltage_pct: total harmonic voltage distortion at the POC (% of nominal).
+        thd_voltage_limit_pct: the IEEE 519:2022 THD_v limit (%) at the plant's voltage.
+        current_tdd_pct: total demand distortion of the injected harmonic current (% of IL).
+        current_tdd_limit_pct: the IEEE 519:2022 current-TDD limit (%) INDEXED by
+            ``isc_il_ratio`` (a weaker grid ⇒ a lower allowed TDD).
+        flicker_pst: the IEC 61400-21 short-term flicker severity at the POC.
+        flicker_pst_limit: the flicker Pst planning limit (typically 0.35 at HV).
+        poc_ssc_mva: the POC short-circuit apparent power (MVA) the flicker / harmonic
+            voltage are referred to (the SCR coupling term).
+        harmonic_within_limits / flicker_within_limits: per-domain SCREENING verdicts —
+            True iff the estimate sits within the (SCR-indexed) limit. ``None`` when the
+            screen could not evaluate that domain (missing spectrum / flicker coefficient)
+            — an honest NOT-RUN, never a spurious pass.
+        freq_response_headroom_mw: the MW of active-power reserve the grid-code droop /
+            de-load requirement holds back (the frequency-response headroom).
+        energy_foregone_mwh_yr: the annual energy (MWh/yr) foregone to hold that headroom
+            (the de-load opportunity cost) — a SIZING figure, advisory only.
+        method: the screen method (``"pandapower_zbus"`` when the frequency-domain
+            bus-impedance scan ran, else ``"closed_form"``).
+        disclaimer: the fixed SCR-coupled-screening caveat (a distinct field so downstream
+            reports cannot drop it).
+    """
+
+    scr: float
+    isc_il_ratio: float
+    worst_harmonic_order: int | None
+    worst_harmonic_voltage_pct: float | None
+    harmonic_voltage_limit_pct: float
+    thd_voltage_pct: float | None
+    thd_voltage_limit_pct: float
+    current_tdd_pct: float | None
+    current_tdd_limit_pct: float
+    flicker_pst: float | None
+    flicker_pst_limit: float
+    poc_ssc_mva: float
+    harmonic_within_limits: bool | None = None
+    flicker_within_limits: bool | None = None
+    freq_response_headroom_mw: float | None = None
+    energy_foregone_mwh_yr: float | None = None
+    method: str = "closed_form"
+    bankable: bool = False
+    disclaimer: str = _HARMONIC_SCREEN_DISCLAIMER
+    provenance: str = _HARMONIC_SCREEN_PROVENANCE
+    notes: str = ""
+
+    @classmethod
+    def from_screen(
+        cls,
+        *,
+        scr: float,
+        isc_il_ratio: float,
+        worst_harmonic_order: int | None,
+        worst_harmonic_voltage_pct: float | None,
+        harmonic_voltage_limit_pct: float,
+        thd_voltage_pct: float | None,
+        thd_voltage_limit_pct: float,
+        current_tdd_pct: float | None,
+        current_tdd_limit_pct: float,
+        flicker_pst: float | None,
+        flicker_pst_limit: float,
+        poc_ssc_mva: float,
+        freq_response_headroom_mw: float | None = None,
+        energy_foregone_mwh_yr: float | None = None,
+        method: str = "closed_form",
+        provenance: str = _HARMONIC_SCREEN_PROVENANCE,
+        notes: str = "",
+    ) -> "HarmonicComplianceResult":
+        """Build the advisory harmonics/flicker result, deriving the per-domain verdicts.
+
+        The per-domain SCREENING verdicts are derived from PHYSICAL evidence, never
+        assumed:
+
+          * ``harmonic_within_limits`` is ``None`` (NOT-RUN) when neither a worst-order
+            harmonic voltage NOR a THD_v estimate is available (no current-emission
+            spectrum was supplied) — an honest NOT-RUN, not a spurious pass. Otherwise it
+            is True iff BOTH the worst per-order V_h ≤ the IEEE 519 individual limit AND
+            the THD_v ≤ the THD_v limit AND (when a current TDD was computed) the current
+            TDD ≤ the SCR-indexed current-TDD limit.
+          * ``flicker_within_limits`` is ``None`` (NOT-RUN) when no flicker Pst could be
+            computed (no flicker coefficient), else True iff ``flicker_pst`` ≤ the limit.
+
+        ``bankable`` is always ``False`` (in-house SCR-coupled screen) and the fixed
+        SCR-coupled-screening ``disclaimer`` is always stamped.
+        """
+        harmonic_verdict: bool | None
+        if worst_harmonic_voltage_pct is None and thd_voltage_pct is None:
+            harmonic_verdict = None
+        else:
+            ok = True
+            if worst_harmonic_voltage_pct is not None:
+                ok = ok and worst_harmonic_voltage_pct <= harmonic_voltage_limit_pct
+            if thd_voltage_pct is not None:
+                ok = ok and thd_voltage_pct <= thd_voltage_limit_pct
+            if current_tdd_pct is not None:
+                ok = ok and current_tdd_pct <= current_tdd_limit_pct
+            harmonic_verdict = ok
+
+        flicker_verdict: bool | None
+        if flicker_pst is None:
+            flicker_verdict = None
+        else:
+            flicker_verdict = flicker_pst <= flicker_pst_limit
+
+        return cls(
+            scr=scr,
+            isc_il_ratio=isc_il_ratio,
+            worst_harmonic_order=worst_harmonic_order,
+            worst_harmonic_voltage_pct=worst_harmonic_voltage_pct,
+            harmonic_voltage_limit_pct=harmonic_voltage_limit_pct,
+            thd_voltage_pct=thd_voltage_pct,
+            thd_voltage_limit_pct=thd_voltage_limit_pct,
+            current_tdd_pct=current_tdd_pct,
+            current_tdd_limit_pct=current_tdd_limit_pct,
+            flicker_pst=flicker_pst,
+            flicker_pst_limit=flicker_pst_limit,
+            poc_ssc_mva=poc_ssc_mva,
+            harmonic_within_limits=harmonic_verdict,
+            flicker_within_limits=flicker_verdict,
+            freq_response_headroom_mw=freq_response_headroom_mw,
+            energy_foregone_mwh_yr=energy_foregone_mwh_yr,
+            method=method,
+            bankable=False,
+            disclaimer=_HARMONIC_SCREEN_DISCLAIMER,
+            provenance=provenance,
+            notes=notes,
+        )
+
+
 @dataclass(frozen=True)
 class IrrBridgeComponent(ContractMixin):
     """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
@@ -1201,6 +1396,7 @@ __all__ = [
     "PowerFlowResult",
     "GridStudyResult",
     "RideThroughResult",
+    "HarmonicComplianceResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
