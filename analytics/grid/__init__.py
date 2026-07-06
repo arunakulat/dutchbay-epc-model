@@ -17,8 +17,12 @@ Public surface:
       pandapower IEC 60909 (min + max), banded into the GFL/GFM screen, with a
       closed-form Thevenin fallback; returns the advisory
       :class:`analytics.contracts_v14.GridStrengthResult`.
-    - :func:`analytics.grid.ride_through_poc.run_lvrt_case` — one ANDES RMS LVRT
-      case parameterised from the D0 grid-code fixture (dynamics-layer scaffold).
+    - :func:`analytics.grid.ride_through.run_ride_through_case` — the shared, generalised
+      ANDES RMS ride-through core: one LVRT / HVRT / frequency case (generic WECC IBR),
+      parameterised from the D0 grid-code envelope, behind the ``run_dynamics`` gate;
+      returns the advisory :class:`analytics.contracts_v14.RideThroughResult`.
+      :mod:`analytics.grid.ride_through_poc` is a backward-compatibility SHIM delegating
+      its ``run_lvrt_case`` to this core.
     - :func:`analytics.grid.reactive_screen.screen_reactive_capability` — steady-state
       reactive/voltage PQ-box screen at the POC via pandapower AC load-flow over the
       P × grid-voltage sweep; returns the advisory
@@ -32,4 +36,10 @@ Public surface:
 
 from __future__ import annotations
 
-__all__ = ["short_circuit", "ride_through_poc", "reactive_screen", "evaluate_grid"]
+__all__ = [
+    "short_circuit",
+    "ride_through",
+    "ride_through_poc",
+    "reactive_screen",
+    "evaluate_grid",
+]

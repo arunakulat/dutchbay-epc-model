@@ -869,6 +869,123 @@ class GridStudyResult(ContractMixin):
     notes: str = ""
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D4a (#875) — RMS ride-through (fault-ride-through) dynamics contract.
+#
+# The reactive/SCR screens above are STEADY-STATE; D4a adds the DYNAMIC question:
+# "does the plant ride through a voltage dip (LVRT) / swell (HVRT) / frequency
+# excursion, per the grid-code envelope?". The dynamics core
+# (:mod:`analytics.grid.ride_through`) runs one generic WECC IBR RMS case per kind
+# through ANDES and reports whether the time-domain solve rode it through. Like the
+# other grid screens this is design-stage ADVISORY (``bankable=False``): the generic
+# WECC model is NOT the OEM-certified ``.dyr``/``.dll``, and a true FRT compliance
+# study is an EMT (PSCAD/EMTP) run against the utility base case. It NEVER feeds the
+# finance engine (committed scenarios stay byte-identical / KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_RIDE_THROUGH_PROVENANCE = (
+    "In-house Python design-stage RMS ride-through screen (ANDES positive-sequence "
+    "time-domain; GENERIC WECC IBR model — REGCA1/REECA1/REPCA1 — NOT the OEM-certified "
+    ".dyr/.dll). Screening-grade: a true fault-ride-through compliance study is an EMT "
+    "(PSCAD/EMTP) run against the utility's confidential base case with the OEM binaries. "
+    "NOT the utility-accepted bankable connection study."
+)
+
+_RIDE_THROUGH_DISCLAIMER = (
+    "GENERIC WECC model, NOT the OEM-certified .dyr/.dll — advisory screening only; "
+    "confirm with an EMT FRT study against the utility base case."
+)
+
+
+@dataclass(frozen=True)
+class RideThroughResult(ContractMixin):
+    """Advisory RMS ride-through (fault-ride-through) screen for one case (issue #875).
+
+    Emitted by :mod:`analytics.grid.ride_through` for one of the three grid-code
+    ride-through cases — ``"lvrt"`` (voltage dip), ``"hvrt"`` (voltage swell), or
+    ``"frequency"`` (a frequency excursion). It reports whether the ANDES RMS
+    time-domain solve rode the disturbance through, using the GENERIC WECC IBR model.
+    ADVISORY only (``bankable=False``): the generic model is not the OEM-certified
+    ``.dyr``/``.dll`` and a true FRT study is an EMT run — the ``disclaimer`` field
+    carries that caveat. It never feeds the finance engine (KPI-neutral).
+
+    Fields
+        case: the ride-through case kind (``"lvrt"`` | ``"hvrt"`` | ``"frequency"``).
+        ran: True iff the ANDES RMS solve was executed AND converged (rode through). It
+            is False whenever the dynamic-study gate was off (envelope parsed / case set
+            up but ANDES not run) or the solve did not converge — read ``converged`` +
+            ``detail`` to distinguish "not run" from "ran but failed".
+        converged: whether the time-domain solve converged (False when not run).
+        target_pu: the voltage ride-through threshold (pu) the case probes — the LVRT /
+            HVRT entry pu (``None`` for the frequency case).
+        target_hz: the frequency (Hz) the frequency case probes (``None`` for voltage
+            cases).
+        k_factor: the fault-current (reactive) injection gain the grid code demands for
+            this case (0.0 for the frequency case).
+        min_voltage_pu / max_voltage_pu: the deepest / highest bus voltage (pu) over the
+            simulation — the depth of the dip / height of the swell the IBRs rode
+            (``None`` when the solve did not run).
+        n_devices: the number of WECC IBR / synchronous devices on the dynamics case.
+        disclaimer: the fixed "generic WECC model, NOT the OEM-certified .dyr/.dll"
+            caveat (a distinct field so downstream reports cannot drop it).
+    """
+
+    case: str
+    ran: bool
+    converged: bool
+    target_pu: float | None = None
+    target_hz: float | None = None
+    k_factor: float = 0.0
+    min_voltage_pu: float | None = None
+    max_voltage_pu: float | None = None
+    n_devices: int = 0
+    method: str = "andes_rms"
+    bankable: bool = False
+    disclaimer: str = _RIDE_THROUGH_DISCLAIMER
+    provenance: str = _RIDE_THROUGH_PROVENANCE
+    detail: str = ""
+
+    @classmethod
+    def from_case(
+        cls,
+        *,
+        case: str,
+        ran: bool,
+        converged: bool,
+        target_pu: float | None = None,
+        target_hz: float | None = None,
+        k_factor: float = 0.0,
+        min_voltage_pu: float | None = None,
+        max_voltage_pu: float | None = None,
+        n_devices: int = 0,
+        method: str = "andes_rms",
+        provenance: str = _RIDE_THROUGH_PROVENANCE,
+        detail: str = "",
+    ) -> "RideThroughResult":
+        """Build the advisory ride-through result for one case.
+
+        ``bankable`` is always ``False`` (in-house generic-WECC screen) and the fixed
+        OEM-model ``disclaimer`` is always stamped, so no downstream emitter can present
+        the screen as a certified FRT compliance result.
+        """
+        return cls(
+            case=case,
+            ran=bool(ran),
+            converged=bool(converged),
+            target_pu=target_pu,
+            target_hz=target_hz,
+            k_factor=k_factor,
+            min_voltage_pu=min_voltage_pu,
+            max_voltage_pu=max_voltage_pu,
+            n_devices=n_devices,
+            method=method,
+            bankable=False,
+            disclaimer=_RIDE_THROUGH_DISCLAIMER,
+            provenance=provenance,
+            detail=detail,
+        )
+
+
 @dataclass(frozen=True)
 class IrrBridgeComponent(ContractMixin):
     """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
@@ -1057,6 +1174,7 @@ __all__ = [
     "ReactiveCapabilityResult",
     "PowerFlowResult",
     "GridStudyResult",
+    "RideThroughResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
