@@ -138,6 +138,12 @@ class ERA5RequestConfig:
     # DEFAULT OFF and report/VALIDATE-only: it never changes the retrieved series, the coverage
     # guard, or the frozen ``net_aep_p50_gwh`` — it is a disclosed forward-P50 basis, not a driver.
     analyze_trend: bool = False
+    # Number of equal-width sectors for the directional wind rose ``run()`` derives from the
+    # real production series (#853.1). Mirrors ``build_wind_rose``'s default of 12 (30 deg each);
+    # an explicit config override (``download.wind_rose_sectors``) is honoured. Display /
+    # derivation only — the derived rose is surfaced under ``result["wind_rose"]`` for the report
+    # provenance block and NEVER feeds the wake-loss / AEP path (that is the KPI-moving #853.3).
+    wind_rose_sectors: int = 12
 
     @classmethod
     def from_yaml(cls, path: str) -> "ERA5RequestConfig":
@@ -167,6 +173,7 @@ class ERA5RequestConfig:
             resolved_at=_dt.datetime.now().isoformat(timespec="seconds"),
             strict_coverage=bool(dl.get("strict_coverage", True)),
             analyze_trend=bool(dl.get("analyze_trend", False)),
+            wind_rose_sectors=int(dl.get("wind_rose_sectors", 12)),
         )
 
     @property
@@ -258,12 +265,30 @@ def retrieve_era5_timeseries(config: ERA5RequestConfig) -> Path:
     return Path(ncs[0])
 
 
+def _met_direction_deg(u: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Wind DIRECTION (deg, met convention) from u/v components.
+
+    Met convention: 0 deg = wind FROM North, increasing clockwise. This mirrors the
+    proven formula in :meth:`wind_resource.era5_fetcher.ERA5DataFetcher._calculate_wind_metrics`
+    (``wd = (180 + degrees(arctan2(u, v))) % 360``) EXACTLY, so the ARCO/production path
+    and the legacy gridded fetcher speak the identical directional convention — the
+    :func:`analytics.wind.wind_rose.build_wind_rose` consumer bins the same 0 = North
+    bearings from either source (issue #853.1). Derivation/display only.
+    """
+    return np.asarray((180.0 + np.rad2deg(np.arctan2(u, v))) % 360.0, dtype="float64")
+
+
 def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.DataFrame:
     """Convert an ERA5 point NetCDF to an hourly hub-height wind series.
 
     Computes ws10/ws100 from u/v components, derives per-hour wind shear ``alpha``
     (clipped to the config bounds), and extrapolates to ``hub_height_m`` via the power
-    law. Returns a DataFrame indexed by timestamp with a ``ws_<hub>m`` column.
+    law. Also derives met-convention wind DIRECTION at 10 m and 100 m (``wd_10m`` /
+    ``wd_100m``) from the same u/v components, mirroring the legacy gridded fetcher
+    (issue #853.1) so a directional wind rose can be built from the real production run
+    — derivation only; the direction never enters the AEP / wake path. Returns a
+    DataFrame indexed by timestamp with ``ws_<hub>m``, ``wind_shear_alpha``, ``wd_10m``
+    and ``wd_100m`` columns.
     """
     import xarray as xr
 
@@ -277,8 +302,14 @@ def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.Data
                 return np.asarray(ds[n].values, dtype="float64").ravel()
         raise KeyError(f"None of {names} in ERA5 dataset {list(ds.data_vars)}")
 
-    ws10 = np.hypot(comp("u10"), comp("v10"))
-    ws100 = np.hypot(comp("u100"), comp("v100"))
+    u10, v10 = comp("u10"), comp("v10")
+    u100, v100 = comp("u100"), comp("v100")
+    ws10 = np.hypot(u10, v10)
+    ws100 = np.hypot(u100, v100)
+    # Met-convention direction (0 = North, clockwise) at both reference heights — the
+    # SAME formula the legacy gridded fetcher uses, so both ERA5 paths agree (#853.1).
+    wd10 = _met_direction_deg(u10, v10)
+    wd100 = _met_direction_deg(u100, v100)
     h_lo = config.reference_height_low_m
     h_hi = config.reference_height_high_m
     h_t = config.hub_height_m
@@ -294,7 +325,15 @@ def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.Data
     ws_hub = ws100 * (h_t / h_hi) ** alpha
 
     col = f"ws_{int(h_t)}m"
-    df = pd.DataFrame({col: ws_hub, "wind_shear_alpha": alpha}, index=times)
+    df = pd.DataFrame(
+        {
+            col: ws_hub,
+            "wind_shear_alpha": alpha,
+            "wd_10m": wd10,
+            "wd_100m": wd100,
+        },
+        index=times,
+    )
     df.index.name = "timestamp"
     logger.info(
         "Built %d-h hub series for %s: mean %.2f m/s (%.2f yr)",
@@ -383,6 +422,33 @@ def _json_safe_trend(analysis: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def build_production_wind_rose(
+    series: pd.DataFrame, config: ERA5RequestConfig
+) -> Dict[str, Any]:
+    """Derive the directional wind rose from the REAL production series (#853.1).
+
+    Feeds the ``wd_100m`` (hub-representative) directions and the co-indexed
+    ``ws_<hub>m`` speeds from the already-built hub-height ``series`` into the canonical
+    :func:`analytics.wind.wind_rose.build_wind_rose` — reusing its calm-exclusion +
+    energy-rose + sectorwise-Weibull enrichment (#826) verbatim, NOT a re-derivation.
+    This is what lets a rose be built from the actual run rather than only from a
+    config-supplied ``resource.wind_rose.direction_deg``.
+
+    Display / derivation only (CCCDIR — same rose builder the AEP-summary provenance
+    uses): the returned block is surfaced under ``run()``'s ``result["wind_rose"]`` for
+    the report provenance section and NEVER enters the wake-loss / AEP path (the
+    KPI-moving live-PyWake activation is the separate, oracle-gated #853.3).
+    """
+    from analytics.wind.wind_rose import build_wind_rose
+
+    ws_col = f"ws_{int(config.hub_height_m)}m"
+    return build_wind_rose(
+        wd_series=[float(v) for v in series["wd_100m"].to_numpy()],
+        n_sectors=int(config.wind_rose_sectors),
+        ws_series=[float(v) for v in series[ws_col].to_numpy()],
+    )
+
+
 def run(config: ERA5RequestConfig) -> Dict[str, Any]:
     """End-to-end: retrieve -> hub series -> coverage guard -> net AEP (+ frozen vintage)."""
     nc_path = retrieve_era5_timeseries(config)
@@ -402,6 +468,24 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
         "actual_hours": coverage["actual_hours"],
         "coverage_complete": coverage["coverage_complete"],
     }
+    # Directional wind rose derived from the REAL production series (#853.1): now that the
+    # hub series carries met-convention ``wd_100m``, a rose can be built from the actual run
+    # (not only a config-supplied ``resource.wind_rose.direction_deg``). It round-trips through
+    # this JSON manifest for the report provenance block. Display/derivation ONLY — the derived
+    # rose feeds NO wake-loss / AEP path (the KPI-moving live-PyWake activation is #853.3).
+    # Fail-soft: a rose is a pure display artifact, so a degenerate series (e.g. a direction
+    # column absent or all-NaN) records an EXPLICIT reason rather than taking down the AEP
+    # retrieval — the committed ``net_aep_p50_gwh`` never depends on the rose.
+    try:
+        result["wind_rose"] = build_production_wind_rose(series, config)
+    except (KeyError, ValueError) as exc:
+        result["wind_rose"] = {
+            "derived": False,
+            "reason": (
+                f"directional wind rose not derived from the production series: {exc}. "
+                "Display-only; the retrieved series and net AEP are unaffected."
+            ),
+        }
     # WIND-10 (#484): this is a SINGLE-CELL ERA5 timeseries retrieval — the assessment uses
     # one grid cell and implicitly assumes it typifies the site neighbourhood. Surface that
     # limitation honestly rather than leaving it unstated; a representativeness verdict

@@ -907,6 +907,9 @@
       {% if c.wind_rose %}
       <p>Directional wind rose (sector frequency){% if c.prevailing_sector_deg is not none %};
         prevailing sector {{ "%.0f"|format(c.prevailing_sector_deg) }}&deg;{% endif %}:</p>
+      {% if c.wind_rose_polar_img %}
+      <img src="{{ c.wind_rose_polar_img }}" alt="Directional wind rose (polar)" style="max-width:60%;" />
+      {% endif %}
       <table>
         <thead><tr><th>Sector (&deg;)</th><th>Compass</th><th>Frequency</th></tr></thead>
         <tbody>
