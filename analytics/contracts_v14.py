@@ -1089,6 +1089,10 @@ class RideThroughResult(ContractMixin):
         min_voltage_pu / max_voltage_pu: the deepest / highest bus voltage (pu) over the
             simulation — the depth of the dip / height of the swell the IBRs rode
             (``None`` when the solve did not run).
+        freq_extreme_hz: the measured frequency EXTREME (Hz) — the nadir/zenith furthest
+            from nominal — for the ``"frequency"`` case (``None`` for the voltage cases and
+            when the frequency solve did not run). This is the physically-measured dynamic
+            nadir the D5c combined-frequency study surfaces instead of a NOT-RUN.
         n_devices: the number of WECC IBR / synchronous devices on the dynamics case.
         disclaimer: the fixed "generic WECC model, NOT the OEM-certified .dyr/.dll"
             caveat (a distinct field so downstream reports cannot drop it).
@@ -1103,6 +1107,7 @@ class RideThroughResult(ContractMixin):
     k_factor: float = 0.0
     min_voltage_pu: float | None = None
     max_voltage_pu: float | None = None
+    freq_extreme_hz: float | None = None
     n_devices: int = 0
     method: str = "andes_rms"
     bankable: bool = False
@@ -1123,6 +1128,7 @@ class RideThroughResult(ContractMixin):
         k_factor: float = 0.0,
         min_voltage_pu: float | None = None,
         max_voltage_pu: float | None = None,
+        freq_extreme_hz: float | None = None,
         n_devices: int = 0,
         method: str = "andes_rms",
         provenance: str = _RIDE_THROUGH_PROVENANCE,
@@ -1146,6 +1152,7 @@ class RideThroughResult(ContractMixin):
             k_factor=k_factor,
             min_voltage_pu=min_voltage_pu,
             max_voltage_pu=max_voltage_pu,
+            freq_extreme_hz=freq_extreme_hz,
             n_devices=n_devices,
             method=method,
             bankable=False,
@@ -1526,8 +1533,9 @@ _FREQ_RESPONSE_PROVENANCE = (
     "droop-commanded P(f) capped at its physical headroom (wind spinning/de-load; BESS via "
     "the ONE shared D5a SOC / frequency reserve — no double-count), and the settling "
     "frequency screened against the grid-code ride-through band. Closed-form per-group "
-    "split + band compliance are physical; the ANDES dynamic nadir is NOT modelled yet "
-    "(returned NOT-RUN). ADVISORY / design-stage ONLY — NOT a dynamic RMS/EMT "
+    "split + band compliance are physical; the ANDES dynamic nadir is now measured by the "
+    "D4b ride-through frequency excursion when the dynamic gate is on (else NOT-RUN). "
+    "ADVISORY / design-stage ONLY — NOT a dynamic RMS/EMT "
     "primary-frequency-response study against the utility base case, and NOT bankable."
 )
 

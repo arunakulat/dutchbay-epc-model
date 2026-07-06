@@ -34,10 +34,15 @@ from analytics.grid import ride_through as rt
 from analytics.grid import ride_through_poc
 from analytics.grid.ride_through import (
     RIDE_THROUGH_CASES,
+    FreqEvidence,
+    HvrtEvidence,
     LvrtEvidence,
     RideThroughEnvelope,
     build_case_spec,
     envelope_from_fixture,
+    freq_extreme_hz,
+    frequency_rode_through,
+    hvrt_rode_through,
     lvrt_rode_through,
     run_ride_through_case,
     run_ride_through_suite,
@@ -84,6 +89,11 @@ def test_envelope_from_d0_fixture() -> None:
     # Widest continuous band = the longest-clearing setpoint each direction:
     # under 47.5 Hz @ 1800s (vs 47.0 @ 0.1s); over 51.5 Hz @ 1800s (vs 52.0 @ 0.1s).
     assert env.freq_continuous_hz == (47.5, 51.5)
+    # D4b (#892) trip-curve edges: the SHORTEST-clearing setpoints (instantaneous trip).
+    # over-voltage: 1.3 pu @ 0.1s (vs 1.2 @ 1.0s, 1.1 @ 20.0s) → 1.3.
+    assert env.ov_trip_pu == 1.3
+    # freq trip: under 47.0 Hz @ 0.1s (vs 47.5 @ 1800s); over 52.0 Hz @ 0.1s.
+    assert env.freq_trip_hz == (47.0, 52.0)
     assert env.source == "envision_enpcs01_gridcode.yaml"
 
 
@@ -99,6 +109,8 @@ def test_envelope_missing_file_falls_back_to_defaults() -> None:
     assert env.lvrt_k_factor == rt._DEFAULT_LVRT_K
     assert env.hvrt_k_factor == rt._DEFAULT_HVRT_K
     assert env.freq_continuous_hz == rt._DEFAULT_FREQ_HZ
+    assert env.ov_trip_pu == rt._DEFAULT_OV_TRIP_PU
+    assert env.freq_trip_hz == rt._DEFAULT_FREQ_TRIP_HZ
     assert "defaults" in env.source
 
 
@@ -151,6 +163,48 @@ def test_longest_clearing_setpoint_empty_and_bad() -> None:
     assert rt._longest_clearing_setpoint([[50.0, 1.0], [49.0, 9.0]]) == 49.0
 
 
+def test_shortest_clearing_setpoint_empty_and_bad() -> None:
+    """The instantaneous-trip edge is the MIN-clearing-time setpoint; bad tables → None."""
+    assert rt._shortest_clearing_setpoint(None) is None
+    assert rt._shortest_clearing_setpoint([]) is None
+    assert rt._shortest_clearing_setpoint("nope") is None
+    # 50 @ 1.0s vs 49 @ 9.0s → shortest clearing is the 50 @ 1.0s row.
+    assert rt._shortest_clearing_setpoint([[50.0, 1.0], [49.0, 9.0]]) == 50.0
+    # Malformed rows (wrong arity / non-numeric / bool) are skipped.
+    assert rt._shortest_clearing_setpoint([[52.0, 0.1], [51.0], ["x", 2.0]]) == 52.0
+
+
+def test_ov_trip_from_volt_table_and_fallback() -> None:
+    """Over-voltage trip = shortest-clearing overvoltage setpoint; absent → default."""
+    pcs = {
+        "volt_trip_pu": {
+            "overvoltage": [[1.1, 20.0], [1.2, 1.0], [1.3, 0.1]],
+        }
+    }
+    assert rt._ov_trip_from_volt_table(pcs) == 1.3
+    assert rt._ov_trip_from_volt_table({}) == rt._DEFAULT_OV_TRIP_PU
+    # A non-mapping table falls back to the default.
+    assert rt._ov_trip_from_volt_table({"volt_trip_pu": 5}) == rt._DEFAULT_OV_TRIP_PU
+
+
+def test_freq_trip_from_trip_table_and_partial() -> None:
+    """Instantaneous freq trip band = shortest-clearing setpoints; partial keeps defaults."""
+    pcs = {
+        "freq_trip_hz": {
+            "underfrequency": [[47.5, 1800.0], [47.0, 0.1]],
+            "overfrequency": [[51.5, 1800.0], [52.0, 0.1]],
+        }
+    }
+    assert rt._freq_trip_from_trip_table(pcs) == (47.0, 52.0)
+    # Only under present → over keeps its default.
+    partial = {"freq_trip_hz": {"underfrequency": [[46.5, 0.2]]}}
+    lo, hi = rt._freq_trip_from_trip_table(partial)
+    assert lo == 46.5
+    assert hi == rt._DEFAULT_FREQ_TRIP_HZ[1]
+    # Absent table → both defaults.
+    assert rt._freq_trip_from_trip_table({}) == rt._DEFAULT_FREQ_TRIP_HZ
+
+
 # ------------------------------------------------------------------- case specs
 
 
@@ -167,21 +221,28 @@ def test_build_case_spec_lvrt() -> None:
 
 def test_build_case_spec_hvrt() -> None:
     env = envelope_from_fixture()
-    spec = build_case_spec("hvrt", env, hvrt_fault_x_pu=7.0)
+    spec = build_case_spec("hvrt", env)
     assert spec.kind == "hvrt"
+    assert spec.disturbance == "load_rejection"  # D4b: a real swell mechanism
     assert spec.target_pu == 1.10
-    assert spec.fault_x_pu == 7.0
+    assert spec.fault_x_pu is None  # HVRT is a load rejection, not an impedance fault
+    assert (
+        spec.ov_trip_pu == 1.3
+    )  # over-voltage instantaneous-trip edge from the fixture
     assert spec.k_factor == 1.9
     assert "HVRT" in spec.detail
+    assert "LOAD REJECTION" in spec.detail
 
 
 def test_build_case_spec_frequency_defaults_to_over_edge() -> None:
     env = envelope_from_fixture()
     spec = build_case_spec("frequency", env)
     assert spec.kind == "frequency"
+    assert spec.disturbance == "generator_trip"  # D4b default frequency mechanism
     assert spec.target_pu is None
     assert spec.fault_x_pu is None
     assert spec.target_hz == 51.5  # over-frequency continuous edge
+    assert spec.freq_trip_hz == (47.0, 52.0)  # instantaneous trip band from the fixture
     assert spec.k_factor == 0.0
     assert "Frequency" in spec.detail
 
@@ -190,6 +251,18 @@ def test_build_case_spec_frequency_excursion_override() -> None:
     env = envelope_from_fixture()
     spec = build_case_spec("frequency", env, freq_excursion_hz=47.5)
     assert spec.target_hz == 47.5
+
+
+def test_build_case_spec_frequency_load_step_mechanism() -> None:
+    env = envelope_from_fixture()
+    spec = build_case_spec("frequency", env, freq_mechanism="load_step")
+    assert spec.disturbance == "load_step"
+
+
+def test_build_case_spec_frequency_unknown_mechanism_raises() -> None:
+    env = envelope_from_fixture()
+    with pytest.raises(ValueError, match="unknown freq_mechanism"):
+        build_case_spec("frequency", env, freq_mechanism="asteroid")
 
 
 def test_build_case_spec_unknown_kind_raises() -> None:
@@ -263,14 +336,23 @@ def test_run_suite_gate_off_covers_all_three() -> None:
 # --------------------------------- rode_through verdict (PURE, no ANDES) ------
 
 
-def _env(enter: float = 0.89) -> RideThroughEnvelope:
+def _env(
+    enter: float = 0.89,
+    *,
+    hvrt_enter_pu: float = 1.10,
+    ov_trip_pu: float = 1.3,
+    freq_continuous_hz: tuple[float, float] = (47.5, 51.5),
+    freq_trip_hz: tuple[float, float] = (47.0, 52.0),
+) -> RideThroughEnvelope:
     return RideThroughEnvelope(
         lvrt_enter_pu=enter,
-        hvrt_enter_pu=1.10,
+        hvrt_enter_pu=hvrt_enter_pu,
         lvrt_k_factor=2.0,
         hvrt_k_factor=1.9,
-        freq_continuous_hz=(47.5, 51.5),
+        freq_continuous_hz=freq_continuous_hz,
         source="unit-test",
+        ov_trip_pu=ov_trip_pu,
+        freq_trip_hz=freq_trip_hz,
     )
 
 
@@ -435,30 +517,257 @@ def test_dynamic_verdict_converged_delegates_to_envelope() -> None:
     )
 
 
-# ------------- HVRT / frequency are NOT-RUN even with the gate ON (no andes) --
+# ---- HVRT verdict (hvrt_rode_through): PURE, grid-free, no ANDES (#892) ------
 
 
-def test_hvrt_run_dynamics_is_not_run_no_andes() -> None:
-    """HVRT with run_dynamics=True short-circuits to NOT-RUN — no ANDES import, no pass."""
-    res = run_ride_through_case("hvrt", run_dynamics=True)
-    assert res.case == "hvrt"
-    assert res.ran is False
-    assert res.converged is False
-    assert res.rode_through is None  # UNSUPPORTED — never a spurious swell pass
-    assert res.max_voltage_pu is None
-    assert "NOT-RUN" in res.detail
-    assert "swell" in res.detail.lower()
+def test_hvrt_verdict_true_when_swell_settles_back() -> None:
+    """A real swell above the entry pu that settles back with no trip → rode through."""
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.02, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env()) is True
 
 
-def test_frequency_run_dynamics_is_not_run_no_andes() -> None:
-    """Frequency with run_dynamics=True short-circuits to NOT-RUN — no disturbance yet."""
-    res = run_ride_through_case("frequency", run_dynamics=True)
-    assert res.case == "frequency"
-    assert res.ran is False
-    assert res.converged is False
-    assert res.rode_through is None
-    assert "NOT-RUN" in res.detail
-    assert "frequency" in res.detail.lower()
+def test_hvrt_verdict_false_when_ibr_tripped() -> None:
+    ev = HvrtEvidence(max_voltage_pu=1.15, settled_voltage_pu=1.0, ibr_tripped=True)
+    assert hvrt_rode_through(ev, _env()) is False
+
+
+def test_hvrt_verdict_false_when_peak_reaches_ov_trip() -> None:
+    """A peak at/above the over-voltage instantaneous-trip edge is a hard breach."""
+    ev = HvrtEvidence(max_voltage_pu=1.31, settled_voltage_pu=1.0, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env(ov_trip_pu=1.3)) is False
+
+
+def test_hvrt_verdict_false_when_stays_swollen() -> None:
+    """Converged-but-swollen: peak swelled but the bus never settles back under entry."""
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.15, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env()) is False
+
+
+def test_hvrt_verdict_none_when_no_measurable_swell() -> None:
+    """No swell above the entry pu → the over-voltage path was never exercised → None."""
+    ev = HvrtEvidence(max_voltage_pu=1.05, settled_voltage_pu=1.0, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env()) is None
+
+
+def test_hvrt_verdict_none_when_vmax_missing() -> None:
+    ev = HvrtEvidence(max_voltage_pu=None, settled_voltage_pu=1.0, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env()) is None
+
+
+def test_hvrt_verdict_none_when_settle_unknown() -> None:
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=None, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env()) is None
+
+
+def test_hvrt_verdict_respects_settle_margin() -> None:
+    """A settle that just touches the entry pu fails once a below-entry margin is demanded."""
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.10, ibr_tripped=False)
+    assert hvrt_rode_through(ev, _env(), settle_margin_pu=0.0) is True
+    assert hvrt_rode_through(ev, _env(), settle_margin_pu=0.02) is False
+
+
+def test_hvrt_verdict_none_when_trip_unknown_but_settled() -> None:
+    """Trip-status unknown (None) with a good settle is still a pass (no trip seen)."""
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.02, ibr_tripped=None)
+    assert hvrt_rode_through(ev, _env()) is True
+
+
+# ---- HVRT dynamic reducer (_hvrt_dynamic_verdict): PURE, grid-free -----------
+
+
+def test_hvrt_dynamic_verdict_collapse_when_diverged() -> None:
+    """A runaway over-voltage that diverges under an APPLIED swell → False (collapse)."""
+    ev = HvrtEvidence(max_voltage_pu=1.5, settled_voltage_pu=1.4, ibr_tripped=None)
+    assert (
+        rt._hvrt_dynamic_verdict(
+            swell_applied=True,
+            solved=True,
+            converged=False,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is False
+    )
+
+
+def test_hvrt_dynamic_verdict_setup_failure_is_none() -> None:
+    assert (
+        rt._hvrt_dynamic_verdict(
+            swell_applied=True,
+            solved=False,
+            converged=False,
+            evidence=None,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_hvrt_dynamic_verdict_no_swell_is_none() -> None:
+    ev = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.0, ibr_tripped=False)
+    assert (
+        rt._hvrt_dynamic_verdict(
+            swell_applied=False,
+            solved=True,
+            converged=True,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_hvrt_dynamic_verdict_converged_delegates_to_envelope() -> None:
+    good = HvrtEvidence(max_voltage_pu=1.18, settled_voltage_pu=1.02, ibr_tripped=False)
+    assert (
+        rt._hvrt_dynamic_verdict(
+            swell_applied=True,
+            solved=True,
+            converged=True,
+            evidence=good,
+            envelope=_env(),
+        )
+        is True
+    )
+
+
+# ---- frequency extreme + verdict (frequency_rode_through): PURE, grid-free ----
+
+
+def test_freq_extreme_picks_furthest_from_nominal() -> None:
+    """The binding extreme is whichever of nadir/zenith deviates MORE from nominal."""
+    # Zenith 51.0 (dev 1.0) vs nadir 49.4 (dev 0.6) → zenith binds.
+    ev = FreqEvidence(nadir_hz=49.4, zenith_hz=51.0, settled_hz=50.0, ibr_tripped=False)
+    assert freq_extreme_hz(ev, nominal_hz=50.0) == 51.0
+    # Nadir 48.0 (dev 2.0) vs zenith 50.5 (dev 0.5) → nadir binds.
+    ev2 = FreqEvidence(
+        nadir_hz=48.0, zenith_hz=50.5, settled_hz=50.0, ibr_tripped=False
+    )
+    assert freq_extreme_hz(ev2, nominal_hz=50.0) == 48.0
+
+
+def test_freq_extreme_none_when_unmeasured() -> None:
+    ev = FreqEvidence(nadir_hz=None, zenith_hz=None, settled_hz=None, ibr_tripped=False)
+    assert freq_extreme_hz(ev, nominal_hz=50.0) is None
+
+
+def test_freq_verdict_true_when_excursion_settles_back() -> None:
+    """A real excursion past the band that settles back inside, no trip → rode through."""
+    ev = FreqEvidence(nadir_hz=47.3, zenith_hz=50.0, settled_hz=49.9, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env()) is True
+
+
+def test_freq_verdict_false_when_ibr_tripped() -> None:
+    ev = FreqEvidence(nadir_hz=47.3, zenith_hz=50.0, settled_hz=49.9, ibr_tripped=True)
+    assert frequency_rode_through(ev, _env()) is False
+
+
+def test_freq_verdict_false_when_extreme_reaches_trip_band() -> None:
+    """A nadir at/below the under-frequency instantaneous-trip edge is a hard breach."""
+    ev = FreqEvidence(nadir_hz=46.9, zenith_hz=50.0, settled_hz=49.9, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env(freq_trip_hz=(47.0, 52.0))) is False
+
+
+def test_freq_verdict_false_when_does_not_settle_back() -> None:
+    """Excursion past the band that never settles back inside the continuous band → False."""
+    ev = FreqEvidence(nadir_hz=47.2, zenith_hz=50.0, settled_hz=47.0, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env()) is False
+
+
+def test_freq_verdict_none_when_stays_in_band() -> None:
+    """The frequency never left the continuous band → path not exercised → None."""
+    ev = FreqEvidence(nadir_hz=49.9, zenith_hz=50.1, settled_hz=50.0, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env()) is None
+
+
+def test_freq_verdict_none_when_extreme_unmeasured() -> None:
+    ev = FreqEvidence(nadir_hz=None, zenith_hz=None, settled_hz=None, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env()) is None
+
+
+def test_freq_verdict_none_when_settle_unknown() -> None:
+    ev = FreqEvidence(nadir_hz=47.3, zenith_hz=50.0, settled_hz=None, ibr_tripped=False)
+    assert frequency_rode_through(ev, _env()) is None
+
+
+# ---- frequency dynamic reducer (_frequency_dynamic_verdict): PURE, grid-free -
+
+
+def test_freq_dynamic_verdict_collapse_when_diverged() -> None:
+    """A runaway frequency that diverges under an APPLIED excursion → False (collapse)."""
+    ev = FreqEvidence(nadir_hz=45.0, zenith_hz=50.0, settled_hz=44.0, ibr_tripped=None)
+    assert (
+        rt._frequency_dynamic_verdict(
+            excursion_applied=True,
+            solved=True,
+            converged=False,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is False
+    )
+
+
+def test_freq_dynamic_verdict_setup_failure_is_none() -> None:
+    assert (
+        rt._frequency_dynamic_verdict(
+            excursion_applied=True,
+            solved=False,
+            converged=False,
+            evidence=None,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_freq_dynamic_verdict_no_excursion_is_none() -> None:
+    ev = FreqEvidence(nadir_hz=47.3, zenith_hz=50.0, settled_hz=49.9, ibr_tripped=False)
+    assert (
+        rt._frequency_dynamic_verdict(
+            excursion_applied=False,
+            solved=True,
+            converged=True,
+            evidence=ev,
+            envelope=_env(),
+        )
+        is None
+    )
+
+
+def test_freq_dynamic_verdict_converged_delegates_to_envelope() -> None:
+    good = FreqEvidence(
+        nadir_hz=47.3, zenith_hz=50.0, settled_hz=49.9, ibr_tripped=False
+    )
+    assert (
+        rt._frequency_dynamic_verdict(
+            excursion_applied=True,
+            solved=True,
+            converged=True,
+            evidence=good,
+            envelope=_env(),
+        )
+        is True
+    )
+
+
+# --- ALL cases with the gate ON require the [grid] extra (CASPER, no silent pass) --
+# D4b (#892): HVRT and frequency are now physically modeled — a gate-ON call therefore
+# reaches the CASPER _require_andes guard (no more grid-free NOT-RUN short-circuit). Without
+# andes it raises loud; it NEVER returns a fabricated pass.
+
+
+@pytest.mark.parametrize("kind", ["lvrt", "hvrt", "frequency"])
+def test_run_dynamics_gate_on_requires_grid_extra(kind: str) -> None:
+    """Gate-ON reaches _require_andes for EVERY case; absent [grid] it raises, never passes."""
+    try:
+        import andes  # noqa: F401
+    except ImportError:
+        with pytest.raises(ImportError, match=r"\[grid\] extra"):
+            run_ride_through_case(kind, run_dynamics=True)
+    else:  # pragma: no cover - only when the [grid] extra is installed
+        res = run_ride_through_case(kind, run_dynamics=True)
+        assert res.rode_through in (True, False, None)
 
 
 # ---------------------------------------------- RideThroughResult contract ----
