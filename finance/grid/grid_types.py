@@ -38,6 +38,26 @@ GFM_CAPABLE_CONVERTER_TYPES: frozenset[str] = frozenset({"gfm", "grid_forming"})
 #: ``generation.technologies.<name>.grid.converter_type`` is validated against this set.
 CONVERTER_TYPES: frozenset[str] = GFL_CONVERTER_TYPES | GFM_CAPABLE_CONVERTER_TYPES
 
+#: WIND-TURBINE converter topologies (D4b, #876) — a distinct axis from the GFL/GFM
+#: control mode above. A ``type4_full_converter`` turbine decouples the machine from the
+#: grid through a FULL back-to-back converter, so its reactive (Q) capability is a full
+#: ~rectangular PQ box available across the whole active-power range. A ``type3_dfig``
+#: (doubly-fed induction generator) converts only the ~30 % rotor slip power, so its Q
+#: capability SHRINKS at partial load — the reactive headroom is proportional to the
+#: converter's slip-power rating, which falls with active power. Aliases mirror the
+#: ``_norm`` convention (spaces/dashes/underscores collapse to the canonical token).
+TYPE3_DFIG_CONVERTER_TYPES: frozenset[str] = frozenset(
+    {"type3_dfig", "type3", "dfig", "doubly_fed"}
+)
+TYPE4_FULL_CONVERTER_TYPES: frozenset[str] = frozenset(
+    {"type4_full_converter", "type4", "full_converter", "full_scale_converter"}
+)
+
+#: All recognised wind-turbine converter topologies (Type-3 ∪ Type-4).
+WIND_TURBINE_CONVERTER_TYPES: frozenset[str] = (
+    TYPE3_DFIG_CONVERTER_TYPES | TYPE4_FULL_CONVERTER_TYPES
+)
+
 #: Generation/storage classes for which a real grid-interface model (converter dynamics +
 #: transformer/collector impedance) is meaningful — the inverter/converter-interfaced
 #: technologies. Synchronous/other classes are recognised elsewhere but are NOT screened by
@@ -82,6 +102,27 @@ def is_modelled_grid_tech(tech_name: Any) -> bool:
     return _norm(tech_name) in MODELLED_GRID_TECHS
 
 
+def _norm_wind_converter(converter_type: Any) -> str:
+    """Collapse a wind-turbine converter token (spaces/dashes -> underscores) and lower-case."""
+    raw = str(converter_type).strip().lower() if converter_type is not None else ""
+    return "_".join(raw.replace("-", " ").split())
+
+
+def is_type3_dfig(converter_type: Any) -> bool:
+    """True iff ``converter_type`` is a Type-3 doubly-fed-induction (DFIG) turbine."""
+    return _norm_wind_converter(converter_type) in TYPE3_DFIG_CONVERTER_TYPES
+
+
+def is_type4_full_converter(converter_type: Any) -> bool:
+    """True iff ``converter_type`` is a Type-4 full-converter turbine."""
+    return _norm_wind_converter(converter_type) in TYPE4_FULL_CONVERTER_TYPES
+
+
+def is_known_wind_converter_type(converter_type: Any) -> bool:
+    """True iff ``converter_type`` is a recognised wind-turbine converter topology."""
+    return _norm_wind_converter(converter_type) in WIND_TURBINE_CONVERTER_TYPES
+
+
 def is_known_assumption_basis(basis: Any) -> bool:
     """True iff ``basis`` is a recognised Thevenin/fault-level provenance basis."""
     return _norm(basis) in GRID_ASSUMPTION_BASES
@@ -112,11 +153,17 @@ __all__ = [
     "GFL_CONVERTER_TYPES",
     "GFM_CAPABLE_CONVERTER_TYPES",
     "CONVERTER_TYPES",
+    "TYPE3_DFIG_CONVERTER_TYPES",
+    "TYPE4_FULL_CONVERTER_TYPES",
+    "WIND_TURBINE_CONVERTER_TYPES",
     "MODELLED_GRID_TECHS",
     "GRID_ASSUMPTION_BASES",
     "is_gfl_converter",
     "is_gfm_capable_converter",
     "is_known_converter_type",
+    "is_type3_dfig",
+    "is_type4_full_converter",
+    "is_known_wind_converter_type",
     "is_modelled_grid_tech",
     "is_known_assumption_basis",
     "is_estimated_assumption_basis",
