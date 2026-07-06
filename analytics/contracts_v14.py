@@ -614,6 +614,99 @@ class ProjectEquityIrrBridge(ContractMixin):
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Capital-structure optimizer contracts (#740)
+#
+# Opt-in ANALYSIS surfaces: the debt-tranche-mix optimizer and the
+# capex-contingency optimizer search a candidate space against a return
+# objective subject to covenant constraints, scoring each candidate through the
+# ``analytics.evaluation_v14.evaluate_with_overrides`` gateway (CCCDIR / ARCH-04
+# — no re-implemented pipeline, no IRR/NPV redefinition). They are NEVER wired
+# into ``run_v14_pipeline``, so committed scenarios stay byte-identical. The
+# rich infeasibility diagnostics + full optimization audit log are a separate
+# issue (#741); these carry only the minimal result surface (#740).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DebtTrancheMix(ContractMixin):
+    """One point in the debt-tranche-mix search space: the lkr/usd/dfi split.
+
+    The three shares are financing PROPORTIONS of the auto-sized total debt, not
+    absolute principals (the engine sizes total debt via ``dual_dscr`` and then
+    splits it by ``Financing_Terms.mix``). By construction
+    ``lkr_share + usd_share + dfi_share == 1`` to within ``_SHARE_SUM_TOL``;
+    ``usd_share`` is the residual (``1 - lkr_share - dfi_share``), mirroring the
+    engine's ``_solve_mix`` where the USD_Commercial tranche absorbs the balance.
+    """
+
+    lkr_share: float
+    dfi_share: float
+    usd_share: float
+
+
+@dataclass(frozen=True)
+class CapitalStructurePoint(ContractMixin):
+    """One evaluated candidate: the decision value, its objective and constraints.
+
+    ``value`` is a JSON-safe scalar/tuple encoding of the candidate (a
+    ``(lkr_share, dfi_share)`` pair for the debt-mix optimizer, a scalar
+    contingency fraction for the contingency optimizer). ``objective`` is the
+    read-back objective KPI; ``constraints`` records every constrained KPI's
+    value; ``feasible`` reflects whether ALL constraint bounds were satisfied
+    within tolerance; ``binding_constraints`` names the constraint keys that were
+    violated (empty when feasible) — a minimal diagnostic (rich diagnostics: #741).
+    """
+
+    value: tuple[float, ...]
+    mix: DebtTrancheMix | None
+    objective: float
+    constraints: dict[str, float] = field(default_factory=dict)
+    feasible: bool = True
+    binding_constraints: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CovenantConstraint(ContractMixin):
+    """A single covenant bound applied to a KPI during the optimizer search.
+
+    ``minimum`` / ``maximum`` are inclusive bounds (either may be ``None``); at
+    least one is set. A candidate satisfies the constraint when its KPI value
+    lies within ``[minimum, maximum]`` to within the optimizer's shared
+    floating-point ``_bound_slack`` tolerance (the same tolerance
+    ``optimization_v14`` uses so DSCR-sculpt plateaus are not spuriously
+    marked infeasible).
+    """
+
+    key: str
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+@dataclass(frozen=True)
+class CapitalStructureOptimizationResult(ContractMixin):
+    """Outcome of a debt-mix or capex-contingency optimizer run (#740).
+
+    ``kind`` is ``"debt_mix"`` or ``"capex_contingency"``. ``best`` is the
+    highest-scoring FEASIBLE candidate in the requested ``direction`` (or
+    ``None`` when the search is infeasible everywhere). ``curve`` is the full
+    evaluated candidate set in evaluation order (the objective/feasibility
+    surface). ``feasible`` is ``True`` iff at least one candidate was feasible;
+    when it is ``False`` the search failed loud and ``infeasible_reason`` names
+    the constraint(s) that bound every candidate (a minimal diagnostic — the
+    full infeasibility register is #741).
+    """
+
+    kind: str
+    objective_key: str
+    direction: str
+    constraints: list[CovenantConstraint]
+    best: CapitalStructurePoint | None
+    curve: list[CapitalStructurePoint] = field(default_factory=list)
+    feasible: bool = True
+    infeasible_reason: str | None = None
+
+
 __all__ = [
     "CASPER_CONTRACT_VERSION",
     "WaccComponents",
@@ -651,4 +744,8 @@ __all__ = [
     "SharedPoiCurtailmentResult",
     "IrrBridgeComponent",
     "ProjectEquityIrrBridge",
+    "DebtTrancheMix",
+    "CapitalStructurePoint",
+    "CovenantConstraint",
+    "CapitalStructureOptimizationResult",
 ]
