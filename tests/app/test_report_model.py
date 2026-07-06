@@ -1250,6 +1250,185 @@ def test_multi_tech_block_surfaces_poi_curtailment_when_configured() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Per-technology §4/§5 sub-chapters (#851)
+# --------------------------------------------------------------------------- #
+_WIND_ONLY_851 = {
+    "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+    "resource": {
+        "wind_rose": {
+            "sector_deg": [0.0, 90.0, 180.0, 270.0],
+            "frequency": [0.5, 0.2, 0.2, 0.1],
+        },
+        "siting": {"terrain_class": "coastal", "terrain_notes": "coastal ridge line"},
+    },
+    "generation": {
+        "technologies": {
+            "wind": {"type": "wind", "aep_gwh": 400.0, "capacity_factor": 0.34}
+        }
+    },
+}
+_SOLAR_ONLY_851 = {
+    "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
+    "resource": {
+        "solar": {
+            "source_quality": {
+                "measurement_type": "ground_measured",
+                "years_of_record": 10,
+                "tmy_source": "Solargis",
+            },
+            "bifacial_gain": 1.07,
+            "soiling_profile": {
+                "accumulation_rate_pct_per_day": 0.1,
+                "wash_interval_days": 30,
+            },
+        }
+    },
+    "generation": {
+        "technologies": {
+            "solar": {"type": "solar", "aep_gwh": 100.0, "capacity_factor": 0.20}
+        }
+    },
+}
+#: A hybrid declaring BOTH the #742 wind provenance and the #743 solar provenance.
+_HYBRID_851 = {
+    **_HYBRID_SCENARIO,
+    "resource": {
+        "wind_rose": {
+            "sector_deg": [0.0, 90.0, 180.0, 270.0],
+            "frequency": [0.5, 0.2, 0.2, 0.1],
+        },
+        "siting": {"terrain_class": "coastal"},
+        "solar": {
+            "source_quality": {"measurement_type": "satellite", "years_of_record": 3},
+            "bifacial_gain": 1.07,
+        },
+    },
+}
+
+
+def test_per_tech_chapters_wind_only_emits_wind_chapter() -> None:
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=_WIND_ONLY_851
+    )
+    block = ctx.per_tech_chapters
+    assert block is not None
+    assert [c.technology for c in block.chapters] == ["wind"]
+    assert block.is_hybrid is False
+    wind = block.chapters[0]
+    # #742 wind-rose surfaces as a sector table with the prevailing sector flagged.
+    assert len(wind.wind_rose) == 4
+    assert wind.prevailing_sector_deg == 0.0
+    assert wind.wind_rose[0].is_prevailing is True
+    assert wind.wind_rose[0].frequency == pytest.approx(0.5)
+    # #742 siting metadata surfaces (terrain class + notes), display-only.
+    assert wind.terrain_class == "coastal"
+    assert wind.terrain_notes == "coastal ridge line"
+    assert wind.provenance_note  # the coarse-ERA5 caveat
+    # Solar-only fields stay empty on a wind chapter.
+    assert wind.source_quality_grade is None
+    assert wind.bifacial_declared is False
+
+
+def test_per_tech_chapters_solar_only_emits_solar_chapter() -> None:
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=_SOLAR_ONLY_851
+    )
+    block = ctx.per_tech_chapters
+    assert block is not None
+    assert [c.technology for c in block.chapters] == ["solar"]
+    assert block.is_hybrid is False
+    solar = block.chapters[0]
+    # #743 source-quality grade (ground-measured, 10y -> top grade) + measurement type.
+    assert solar.source_quality_grade == "A"
+    assert solar.measurement_type == "ground_measured"
+    assert solar.source_quality_score is not None
+    # #743 bifacial disclosure (financed chain is monofacial; this is disclosed, not billed).
+    assert solar.bifacial_declared is True
+    assert solar.bifacial_marker == "bifacial_gain=1.07"
+    # #743 time-varying soiling effective flat percent.
+    assert solar.soiling_effective_pct is not None and solar.soiling_effective_pct > 0.0
+    # Wind-only fields stay empty on a solar chapter.
+    assert solar.wind_rose == []
+    assert solar.terrain_class is None
+
+
+def test_per_tech_chapters_hybrid_emits_both() -> None:
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS, variant="hybrid"),
+        generated_at=GENERATED_AT,
+        scenario_config=_HYBRID_851,
+    )
+    block = ctx.per_tech_chapters
+    assert block is not None
+    assert {c.technology for c in block.chapters} == {"wind", "solar"}
+    assert block.is_hybrid is True
+    # Each chapter carries its AEP share from the generation split.
+    by_tech = {c.technology: c for c in block.chapters}
+    assert by_tech["wind"].share_of_aep_pct == pytest.approx(80.0)
+    assert by_tech["solar"].share_of_aep_pct == pytest.approx(20.0)
+    assert by_tech["wind"].wind_rose  # wind provenance present
+    assert by_tech["solar"].source_quality_grade  # solar provenance present
+    # The block names the two §4/§5 sections it sub-divides (from the taxonomy).
+    assert len(block.section_titles) == 2
+
+
+def test_per_tech_chapters_omits_absent_tech() -> None:
+    # A wind-only scenario must NOT emit a solar chapter (tech absent -> chapter omitted).
+    ctx = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=_WIND_ONLY_851
+    )
+    assert ctx.per_tech_chapters is not None
+    assert "solar" not in {c.technology for c in ctx.per_tech_chapters.chapters}
+    # A solar-only scenario must NOT emit a wind chapter.
+    ctx2 = build_report_context(
+        _case(_HYBRID_KPIS), generated_at=GENERATED_AT, scenario_config=_SOLAR_ONLY_851
+    )
+    assert ctx2.per_tech_chapters is not None
+    assert "wind" not in {c.technology for c in ctx2.per_tech_chapters.chapters}
+
+
+def test_per_tech_chapters_none_without_scenario_config() -> None:
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT
+    )
+    assert ctx.per_tech_chapters is None
+
+
+def test_per_tech_chapters_render_in_html() -> None:
+    """The per-tech chapters render in the HTML (Jinja step; no weasyprint needed)."""
+    from app.reports.renderer import render_report_html
+
+    html = render_report_html(
+        build_report_context(
+            _case(_HYBRID_KPIS, variant="hybrid"),
+            generated_at=GENERATED_AT,
+            scenario_config=_HYBRID_851,
+        )
+    )
+    assert "Resource &amp; Technology by Technology" in html
+    assert "Directional wind rose" in html
+    assert "source-quality grade" in html
+    assert "monofacial by design" in html  # bifacial disclosure
+
+    # Wind-only omits the solar chapter's provenance strings.
+    html_wind = render_report_html(
+        build_report_context(
+            _case(_HYBRID_KPIS),
+            generated_at=GENERATED_AT,
+            scenario_config=_WIND_ONLY_851,
+        )
+    )
+    assert "Directional wind rose" in html_wind
+    assert "source-quality grade" not in html_wind
+
+    # Legacy (no scenario config) omits the section entirely.
+    html_legacy = render_report_html(
+        build_report_context(_case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT)
+    )
+    assert "Resource &amp; Technology by Technology" not in html_legacy
+
+
+# --------------------------------------------------------------------------- #
 # Three-statement output + tie-outs (#479)
 # --------------------------------------------------------------------------- #
 def _annual_rows_3s(n: int = 3) -> list:

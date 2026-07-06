@@ -64,6 +64,14 @@ section_statuses:
 # name is NOT here is flagged (unknown_section); when policy require_complete is set, every
 # section here must have a declared status. Soft by default — a scenario need only declare
 # the subset it has authored.
+#
+# OPTIONAL `technology` tag (issue #851): a section may declare which technology lens it
+# reads under — `wind | solar | bess | shared`. It is PRESENTATION metadata only (config-first
+# — retag here without a code change) and does NOT gate coverage: a section without it behaves
+# exactly as before (backward compatible). `shared` marks a section that spans every active
+# technology (the report renders a per-technology sub-chapter of it for each active tech); a
+# specific tech tag marks a section that reads under one technology only. The renderer omits a
+# per-tech sub-chapter for any technology the scenario does not run.
 # ─────────────────────────────────────────────────────────────────────────────
 sections:
   - name: executive_investment_thesis
@@ -80,10 +88,12 @@ sections:
     description: Site control, land tenure, permits and licences, and the project's legal standing.
   - name: resource_and_energy_yield
     group: technical
+    technology: shared  # #851 — rendered per active generation technology (wind / solar / …)
     title: Resource assessment and energy-yield assessment
     description: Wind/solar resource basis, long-term correction, and the P50/P90 energy-yield assessment.
   - name: technology_selection_design_basis
     group: technical
+    technology: shared  # #851 — rendered per active generation technology (wind / solar / …)
     title: Technology selection and design basis
     description: Turbine/module/BESS selection rationale and the engineering design basis.
   - name: grid_interconnection_curtailment
