@@ -12,6 +12,7 @@ __all__ = [
     "frames_from_pipeline_result",
     "serialize_resource_trend",
     "resource_trend_df_from_wind_export",
+    "resource_trend_df_from_solar_export",
     "emit_executive_workbook_from_pipeline",
 ]
 
@@ -348,24 +349,26 @@ def serialize_resource_trend(analysis: Mapping[str, Any]) -> dict[str, Any]:
     return {"analyzed": True, "summary_records": summary_df.to_dict("records")}
 
 
-def resource_trend_df_from_wind_export(
-    wind_export: Optional[Mapping[str, Any]],
+def _resource_trend_df_from_export(
+    export: Optional[Mapping[str, Any]],
 ) -> Optional[pd.DataFrame]:
-    """Reconstruct the ResourceTrend frame from a frozen wind export, if carried.
+    """Reconstruct the ResourceTrend frame from a frozen resource export, if carried.
 
-    Looks for a ``long_term_trend`` block at the export top level or nested
-    under ``cashflow_export`` (both wrapper shapes the finance CLI already
-    tolerates). Returns the (Metric, Value) DataFrame when the block is present
-    and marked ``analyzed`` with non-empty ``summary_records``; otherwise
-    ``None`` (absent, opt-out, or an explicit short-series degrade) so the
-    workbook simply omits the sheet. The inverse of
+    Tech-agnostic core of the workbook trend decoder: the JSON-safe
+    ``long_term_trend`` block contract (``serialize_resource_trend``) is identical for
+    wind and solar (a tidy Metric/Value ``summary_records`` list), so one decoder serves
+    both. Looks for a ``long_term_trend`` block at the export top level or nested under
+    ``cashflow_export`` (both wrapper shapes the finance CLI already tolerates). Returns
+    the (Metric, Value) DataFrame when the block is present and marked ``analyzed`` with
+    non-empty ``summary_records``; otherwise ``None`` (absent, opt-out, or an explicit
+    short-series degrade) so the workbook simply omits the sheet. The inverse of
     :func:`serialize_resource_trend`.
     """
-    if not isinstance(wind_export, Mapping):
+    if not isinstance(export, Mapping):
         return None
-    block = wind_export.get(RESOURCE_TREND_KEY)
+    block = export.get(RESOURCE_TREND_KEY)
     if not isinstance(block, Mapping):
-        nested = wind_export.get("cashflow_export")
+        nested = export.get("cashflow_export")
         block = nested.get(RESOURCE_TREND_KEY) if isinstance(nested, Mapping) else None
     if not isinstance(block, Mapping) or not block.get("analyzed"):
         return None
@@ -375,28 +378,72 @@ def resource_trend_df_from_wind_export(
     return pd.DataFrame(records)
 
 
+def resource_trend_df_from_wind_export(
+    wind_export: Optional[Mapping[str, Any]],
+) -> Optional[pd.DataFrame]:
+    """Reconstruct the ResourceTrend frame from a frozen WIND export, if carried.
+
+    The wind-named face of :func:`_resource_trend_df_from_export` (the block contract is
+    tech-agnostic; see ``wind_resource.long_term_trend``). Kept as a named public surface
+    for the wind CLI/tests. The inverse of :func:`serialize_resource_trend`.
+    """
+    return _resource_trend_df_from_export(wind_export)
+
+
+def resource_trend_df_from_solar_export(
+    solar_export: Optional[Mapping[str, Any]],
+) -> Optional[pd.DataFrame]:
+    """Reconstruct the ResourceTrend frame from a frozen SOLAR export, if carried (#727).
+
+    The solar-named face of :func:`_resource_trend_df_from_export`. Decodes the JSON-safe
+    ``long_term_trend`` block a solar producer freezes from a PVGIS SARAH-3 multi-decade
+    annual-GHI series (``solar_resource.long_term_trend.build_solar_resource_trend_export_block``).
+    Because the block contract is identical to the wind side, this shares the tech-agnostic
+    core verbatim; it exists as a distinct symbol so the CLI/tests read intently and a future
+    per-tech format tweak has a seam. The inverse of :func:`serialize_resource_trend`.
+    """
+    return _resource_trend_df_from_export(solar_export)
+
+
 def emit_executive_workbook_from_pipeline(
     result: Mapping[str, Any],
     output_path: PathLike,
     wind_export: Optional[Mapping[str, Any]] = None,
+    solar_export: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     """Build the single-scenario Executive Workbook from a live pipeline result.
 
     The genuine live caller of :func:`build_executive_workbook`. Assembles the
     five finance frames from ``result`` via :func:`frames_from_pipeline_result`
-    and, when ``wind_export`` carries a long-term-trend block
-    (:func:`resource_trend_df_from_wind_export`), adds the "ResourceTrend" sheet.
+    and, when a frozen resource export carries a long-term-trend block, adds the
+    single "ResourceTrend" sheet.
+
+    HYBRID sheet-choice decision (#727): there is exactly ONE "ResourceTrend" sheet, not
+    a per-tech pair. The workbook is a single-scenario disclose-only surface and a lender
+    reads one long-term-resource narrative; two ResourceTrend sheets would be redundant and
+    schema-churny for the (common) single-tech run. When BOTH a wind and a solar export
+    carry a trend block (a wind+solar hybrid), WIND takes precedence — DutchBay is a
+    wind-primary project and the wind series is the longer, ERA5-backed record. A pure-solar
+    run therefore fills the sheet from the solar export; a wind or wind+solar run fills it
+    from the wind export. OUT OF SCOPE per the issue: tidal (deterministic resource) and
+    BESS (no resource series) carry no trend block, so they never contribute a sheet.
 
     Args:
         result: A ``run_v14_pipeline`` result dict.
         output_path: Target XLSX path (parents are created).
         wind_export: Optional frozen wind-export mapping; its ``long_term_trend``
             block, if present, supplies the resource-trend sheet.
+        solar_export: Optional frozen solar-export mapping; its ``long_term_trend``
+            block supplies the resource-trend sheet only when no wind trend is present.
 
     Returns:
         The resolved path to the workbook written.
     """
     frames = frames_from_pipeline_result(result)
+    # Wind-precedence single-sheet resolution (see the HYBRID note above).
+    resource_trend_df = resource_trend_df_from_wind_export(wind_export)
+    if resource_trend_df is None:
+        resource_trend_df = resource_trend_df_from_solar_export(solar_export)
     return build_executive_workbook(
         summary_df=frames["summary"],
         cashflow_df=frames["cashflow"],
@@ -404,7 +451,7 @@ def emit_executive_workbook_from_pipeline(
         ratios_df=frames["ratios"],
         scenario_summary_df=frames["scenario_summary"],
         output_path=output_path,
-        resource_trend_df=resource_trend_df_from_wind_export(wind_export),
+        resource_trend_df=resource_trend_df,
     )
 
 
