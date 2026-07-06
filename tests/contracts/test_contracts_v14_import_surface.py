@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+import pytest
+
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
     CashflowResult,
@@ -192,3 +194,72 @@ def test_sensitivity_suite_audit_fields_are_optional_and_serializable() -> None:
     assert payload["scenario_name"] == "dutchbay_lendercase_2025Q4"
     assert payload["analysis_timestamp"] == "2026-05-26T00:00:00Z"
     assert populated.model_dump()["base_kpis"]["project_irr"] == 0.124
+
+
+def test_d3_grid_study_contracts_are_importable_and_serializable() -> None:
+    """Pin the #874 D3 grid-study contract surface (frozen, advisory, CCCDIR-centralised).
+
+    The reactive/power-flow/study result types must live ONLY in ``contracts_v14`` and be
+    frozen, ``bankable=False`` advisories that round-trip through asdict / model_dump.
+    """
+    from analytics.contracts_v14 import (
+        GridStrengthResult,
+        GridStudyResult,
+        PowerFlowResult,
+        ReactiveCapabilityResult,
+    )
+
+    reactive = ReactiveCapabilityResult.from_screen(
+        pf_required_min=-0.95,
+        pf_required_max=0.95,
+        mvar_required=52.5,
+        mvar_available=40.0,
+        pf_at_poc=0.97,
+        governing_p_mw=159.6,
+        governing_grid_v_pu=1.1,
+    )
+    # from_screen derives the shortfall + PQ-box verdict.
+    assert reactive.mvar_shortfall == pytest.approx(12.5)
+    assert reactive.inside_pq_box is False
+    assert reactive.bankable is False
+
+    power_flow = PowerFlowResult(
+        converged=True,
+        bus_voltages_pu={"GRID": 1.1, "POC": 1.08, "COLLECTOR": 1.06},
+        poc_voltage_pu=1.08,
+        poc_pf=0.97,
+        governing_p_mw=159.6,
+        governing_grid_v_pu=1.1,
+    )
+    assert power_flow.bankable is False
+
+    strength = GridStrengthResult.from_screen(
+        scr_min=3.5,
+        fault_level_poc_min_mva=560.0,
+        plant_rating_mva=160.0,
+    )
+    study = GridStudyResult(
+        strength=strength,
+        reactive=reactive,
+        power_flow=power_flow,
+        study_enabled=True,
+        poc_bus_name="Puttalam 220kV",
+    )
+
+    # Frozen: assignment must raise FrozenInstanceError.
+    from dataclasses import FrozenInstanceError
+
+    with pytest.raises(FrozenInstanceError):
+        study.study_enabled = False  # type: ignore[misc]
+
+    payload = asdict(study)
+    assert payload["strength"]["scr"] == 3.5
+    assert payload["reactive"]["mvar_shortfall"] == pytest.approx(12.5)
+    assert payload["reactive"]["inside_pq_box"] is False
+    assert payload["power_flow"]["bus_voltages_pu"]["POC"] == 1.08
+    assert payload["poc_bus_name"] == "Puttalam 220kV"
+    # model_dump recurses through the bundled sub-results.
+    dumped = study.model_dump()
+    assert dumped["study_enabled"] is True
+    assert dumped["bankable"] is False
+    assert dumped["reactive"]["pf_at_poc"] == 0.97

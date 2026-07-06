@@ -19,8 +19,17 @@ Public surface:
       :class:`analytics.contracts_v14.GridStrengthResult`.
     - :func:`analytics.grid.ride_through_poc.run_lvrt_case` — one ANDES RMS LVRT
       case parameterised from the D0 grid-code fixture (dynamics-layer scaffold).
+    - :func:`analytics.grid.reactive_screen.screen_reactive_capability` — steady-state
+      reactive/voltage PQ-box screen at the POC via pandapower AC load-flow over the
+      P × grid-voltage sweep; returns the advisory
+      :class:`analytics.contracts_v14.ReactiveCapabilityResult` +
+      :class:`analytics.contracts_v14.PowerFlowResult`.
+    - :func:`analytics.grid.evaluate_grid.evaluate_grid` — the CCCDIR gateway composing
+      the SCR + reactive screens into one
+      :class:`analytics.contracts_v14.GridStudyResult`. Analytics consumers call THIS
+      and import grid result types only from ``analytics.contracts_v14``.
 """
 
 from __future__ import annotations
 
-__all__ = ["short_circuit", "ride_through_poc"]
+__all__ = ["short_circuit", "ride_through_poc", "reactive_screen", "evaluate_grid"]
