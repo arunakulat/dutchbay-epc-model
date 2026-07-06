@@ -23,6 +23,49 @@ from .import_levies import resolve_indirect_taxes
 logger = logging.getLogger(__name__)
 
 
+def _resolve_self_curtailment_composed(
+    raw: Dict[str, Any], config_curtailment_pct: float
+) -> float:
+    """Compose the self-curtailment fraction into curtailment_pct — DEFAULT-OFF (#885, D6b).
+
+    Returns ``config_curtailment_pct`` UNCHANGED (byte-identical) unless the explicit
+    finance-wiring opt-in ``grid.qsts.finance_wiring.enabled: true`` is set. The opt-in
+    check runs FIRST and short-circuits before any grid/QSTS import, so the committed canon
+    never touches the ``[grid]`` extra and stays byte-identical.
+
+    When the opt-in IS set, it runs the gated D6a QSTS study
+    (:func:`analytics.grid.curtailment_qsts.run_qsts_curtailment` — itself default-off /
+    real-feeder-guarded) and composes ONLY ``self_curtailed_pct`` (never deemed-paid) into
+    the loss key via :func:`finance.self_curtailment_v14.compose_curtailment`.
+    """
+    # Lazy imports: keep the committed cashflow free of the analytics.grid / self_curtailment
+    # dependency surface (and the [grid] OpenDSS extra) on the default-off path.
+    from .self_curtailment_v14 import (
+        compose_curtailment,
+        resolve_self_curtailment_decimal,
+        self_curtailment_finance_wiring_enabled,
+    )
+
+    if not self_curtailment_finance_wiring_enabled(raw):
+        return config_curtailment_pct
+
+    from analytics.grid.curtailment_qsts import run_qsts_curtailment
+
+    result = run_qsts_curtailment(raw)
+    self_curtail = resolve_self_curtailment_decimal(raw, result)
+    if self_curtail <= 0.0:
+        return config_curtailment_pct
+    composed = compose_curtailment(config_curtailment_pct, self_curtail)
+    logger.info(
+        "D6b self-curtailment wired into curtailment_pct: config=%.6f self=%.6f "
+        "composed=%.6f (deemed-paid excluded — KPI-neutral per CEB SPPA).",
+        config_curtailment_pct,
+        self_curtail,
+        composed,
+    )
+    return composed
+
+
 def _resolve_project_life_components(
     raw: Dict[str, Any],
     *,
@@ -281,6 +324,15 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         )
     )
     curtailment_pct = _pct_to_decimal(curtailment_raw) or 0.0
+
+    # D6b (#885) — the SOLE KPI-mover of grid-epic #870, DEFAULT-OFF. ONLY when the explicit
+    # finance-wiring opt-in (grid.qsts.finance_wiring.enabled: true) is set AND a real QSTS
+    # study ran do we compose the plant's OWN self-curtailment fraction into curtailment_pct.
+    # The deemed-paid / grid-instructed fraction is NEVER read (CEB SPPA: paid as deemed
+    # energy → KPI-neutral). Absent the opt-in, resolve_self_curtailment_decimal short-
+    # circuits to 0.0 BEFORE any QSTS is consulted, so no [grid] dep is touched and the
+    # committed curtailment_pct (hence the whole cashflow) is byte-identical.
+    curtailment_pct = _resolve_self_curtailment_composed(raw, curtailment_pct)
 
     # Incremental grid-UNAVAILABILITY / outage haircut (default 0.0 → byte-identical; the
     # embedded availability is already in the bankable net AEP / capacity_factor). The
