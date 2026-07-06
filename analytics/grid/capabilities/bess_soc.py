@@ -35,6 +35,7 @@ missing / ill-formed / out-of-window value is rejected, not assumed.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Mapping, TypeGuard
 
 from analytics.contracts_v14 import BessSocState, ReserveSplitResult
@@ -59,8 +60,18 @@ _MWH_TOL = 1e-9
 
 
 def _is_number(value: Any) -> TypeGuard[int | float]:
-    """True iff ``value`` is a real (non-bool) int/float (narrows the type for mypy)."""
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """True iff ``value`` is a real, FINITE (non-bool, non-NaN/inf) int/float.
+
+    Finiteness is part of the guard so NaN / ±inf are REJECTED at every input boundary:
+    NaN silently passes all ``<``/``>`` comparisons, which would let a NaN reserve request
+    yield a spurious ``feasible=True`` (``max(0, nan - available) == 0``). Rejecting it here
+    keeps the no-double-count invariant honest (NO SPURIOUS PASS).
+    """
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
 
 def _require_positive(value: Any, field: str) -> float:

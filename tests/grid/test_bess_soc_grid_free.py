@@ -315,5 +315,20 @@ def test_split_bad_request_raises(kwargs: dict, field: str) -> None:
         split_reserves(state, **kwargs)  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_soc_state_rejects_non_finite_soc(bad: float) -> None:
+    # NaN / ±inf must be REJECTED at the boundary, not silently passed: NaN slips through
+    # every < / > comparison, which would yield a spurious feasible verdict downstream.
+    with pytest.raises(ValueError):
+        bess_soc_state(_BESS, soc_fraction=bad)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_split_reserves_rejects_non_finite_request(bad: float) -> None:
+    state = bess_soc_state(_BESS, soc_fraction=0.60)
+    with pytest.raises(ValueError):
+        split_reserves(state, firming_mwh=bad, frequency_mwh=0.0, curtailment_mwh=0.0)
+
+
 def test_module_all_surface() -> None:
     assert set(bess_soc.__all__) == {"bess_soc_state", "split_reserves"}
