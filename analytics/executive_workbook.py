@@ -5,6 +5,8 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import pandas as pd
 
+from analytics.reproducible_workbook import normalize_xlsx_reproducible
+
 PathLike = Union[str, Path]
 
 __all__ = [
@@ -99,6 +101,12 @@ def build_executive_workbook(
             # Content is intentionally minimal; tests only care about row count.
             while summary_ws.max_row < 3:
                 summary_ws.append([""])
+
+    # Freeze the volatile document timestamps openpyxl bakes into the archive so
+    # two builds of the same data are raw-ZIP-byte identical (#886): the byte
+    # identity the KPI-neutral emitter discipline (and the byte-identity tests)
+    # rely on must be a real property of the artifact, not a timing coincidence.
+    normalize_xlsx_reproducible(out_path)
 
     return out_path
 
