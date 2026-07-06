@@ -113,7 +113,9 @@ def _sector_index(wrapped_deg: np.ndarray, n_sectors: int) -> np.ndarray:
     """
     width = 360.0 / n_sectors
     idx = np.floor(np.mod(wrapped_deg + width / 2.0, 360.0) / width).astype(int)
-    return np.clip(idx, 0, n_sectors - 1)
+    # np.clip is typed as returning Any under strict mypy; pin to a concrete
+    # int ndarray so the declared return type is not Any (warn_return_any).
+    return np.asarray(np.clip(idx, 0, n_sectors - 1), dtype=int)
 
 
 def _sector_weibull(speeds: np.ndarray) -> Optional[Dict[str, float]]:
