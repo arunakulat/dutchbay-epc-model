@@ -125,6 +125,14 @@ ALLOWLIST: dict[str, str] = {
         "to classify generation vs storage by the shared TYPE registry. A pure leaf "
         "contract import, identical in spirit to the analytics.core finance adapters."
     ),
+    "analytics/grid/grid_interface_schema.py": (
+        "[PERMANENT] Imports finance.grid.grid_types (GFL/GFM converter enums, "
+        "MODELLED_GRID_TECHS, assumption-basis enum + the allow_unvalidated_grid gate) "
+        "to build the strict grid-schema validators — a pure leaf registry of grid TYPE "
+        "discriminators with no engine logic, exactly like finance.tech_types in "
+        "generation_aggregator/multi_tech_tornado. Importing the shared contract directly "
+        "is the point (CCCDIR), not a breach; the grid schema is KPI-neutral / advisory-only."
+    ),
     # --- [TODO] real layering violations to refactor toward the gateway -----
     "analytics/dscr_sensitivity.py": (
         "[TODO #36] Imports finance.debt_v14.size_debt_with_dual_dscr directly "

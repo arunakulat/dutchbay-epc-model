@@ -85,6 +85,55 @@ layout:
   utm_zone: "44N"
 
 # ═════════════════════════════════════════════════════════════════════════════
+# GRID INTERCONNECTION STUDY (design-stage screen — #872 D1 / #873 D2)
+# ═════════════════════════════════════════════════════════════════════════════
+# DEFAULT-OFF, ADVISORY, KPI-NEUTRAL. This block feeds the in-house grid-strength
+# SCREEN (analytics.grid) ONLY — it NEVER touches the finance engine, so every KPI
+# is byte-identical whether or not it is present. `study_enabled: false` keeps the
+# whole feature off; flipping it true runs the SCR@POC / GFL-vs-GFM screen but does
+# NOT change any published number (project/equity IRR, NPV, DSCR are untouched).
+#
+# ⚠️ THEVENIN PROVENANCE = SCREENING ESTIMATE (NOT BANKABLE). The short-circuit
+# levels below are an in-house rule-of-thumb for a strong 220kV coastal busbar, NOT
+# a CEB/NSCC-issued fault level from their confidential grid base case. A bankable
+# grid-connection study requires PSS/E or PowerFactory against the utility model.
+# Because `assumption_basis: screening_estimate` is an ESTIMATE, the block MUST opt
+# in via `allow_unvalidated_grid: true` — otherwise the strict schema guard REFUSES
+# to run the screen on an estimated fault level (a user can never silently treat a
+# screening estimate as bankable). Replace with a utility_provided fault level +
+# drop the opt-in before relying on any output for lender DD.
+grid:
+  study_enabled: false          # master gate — advisory feature default-OFF
+  allow_unvalidated_grid: true  # REQUIRED: the Thevenin below is a screening estimate
+  # --- D1 flat core (the values the closed-form / pandapower screen consumes) ---
+  poc_voltage_kv: 33.0          # collector-side POC (33kV) stepped up to the 220kV line
+  source_fault_level_mva: 900.0 # screening estimate at the 220kV Puttalam busbar
+  source_rx: 0.083              # ≈ 1 / (X/R 12) for a stiff transmission source
+  connection_r_ohm: 0.6         # connection resistance @ POC kV (estimate)
+  connection_x_ohm: 6.0         # connection reactance @ POC kV (estimate)
+  plant_rating_mva: 159.6       # 159.6 MW aggregate plant (the SCR denominator)
+  # --- D2 structured per-site interconnection block ---
+  poc:
+    bus_name: "Puttalam 220kV Substation"
+    nominal_kv: 33.0            # POC nominal voltage (collector side)
+    plant_rated_mva: 159.6
+  thevenin:
+    short_circuit_mva_min: 700.0   # IEC-60909 MIN case — GOVERNS the screen (weakest credible)
+    short_circuit_mva_max: 1100.0  # IEC-60909 MAX case — reported for context only
+    x_r: 12.0                      # source X/R ratio (transmission-stiff)
+    assumption_basis: "screening_estimate"  # in-house estimate (see red-flag note above)
+  scr:
+    gfl_min: 3.0                # below this SCR@POC, GFL is at risk (EMT study territory)
+    gfl_comfortable: 5.0        # comfortable GFL headroom
+  gridcode:
+    pf_range: [-0.95, 0.95]              # required power-factor operating range
+    voltage_control_mode: "voltage_droop"
+    lvrt_hvrt_envelope: "ceb_grid_code_2023"
+    rc_k_factor: 2.0                     # reactive-current injection gain during faults
+    freq_ride_through: "47.5-51.5Hz continuous"
+    harmonic_allocation: "IEC 61000-3-6 stage-2 (pending CEB allocation)"
+
+# ═════════════════════════════════════════════════════════════════════════════
 # RESOURCE ASSESSMENT & LOSSES
 # ═════════════════════════════════════════════════════════════════════════════
 resource:

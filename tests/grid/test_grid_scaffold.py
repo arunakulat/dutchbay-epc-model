@@ -182,12 +182,25 @@ _VALID_GRID_CFG = {
     "fx": {"start_lkr_per_usd": 333.79, "annual_depr": 0.059},
     "grid": {
         "study_enabled": False,
+        # D1 flat core (screen inputs)
         "poc_voltage_kv": 33.0,
         "source_fault_level_mva": 250.0,
         "source_rx": 0.1,
         "connection_r_ohm": 0.5,
         "connection_x_ohm": 4.0,
         "plant_rating_mva": 11.0,
+        # D2 structured per-site block (#873). A utility_provided basis needs no opt-in.
+        "poc": {
+            "bus_name": "Puttalam 220kV",
+            "nominal_kv": 33.0,
+            "plant_rated_mva": 11.0,
+        },
+        "thevenin": {
+            "short_circuit_mva_min": 250.0,
+            "short_circuit_mva_max": 320.0,
+            "x_r": 10.0,
+            "assumption_basis": "utility_provided",
+        },
     },
 }
 
@@ -195,6 +208,7 @@ _VALID_GRID_CFG = {
 def test_grid_specs_registered() -> None:
     names = {spec.name for spec in get_required_fields(GRID_INTERFACE_MODULE)}
     assert names == {
+        # D1 flat core
         "study_enabled",
         "poc_voltage_kv",
         "source_fault_level_mva",
@@ -202,6 +216,14 @@ def test_grid_specs_registered() -> None:
         "connection_r_ohm",
         "connection_x_ohm",
         "plant_rating_mva",
+        # D2 structured per-site block (#873)
+        "poc.bus_name",
+        "poc.nominal_kv",
+        "poc.plant_rated_mva",
+        "thevenin.short_circuit_mva_min",
+        "thevenin.short_circuit_mva_max",
+        "thevenin.x_r",
+        "thevenin.assumption_basis",
     }
 
 
