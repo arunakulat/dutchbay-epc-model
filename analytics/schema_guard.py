@@ -319,6 +319,45 @@ def _validate_taxes_indirect(raw_config: Mapping[str, Any], errors: list[str]) -
         errors.append(str(exc))
 
 
+def _validate_grid_conditionals(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Validate the CROSS-FIELD / conditional grid rules a flat spec cannot express (#873 D2).
+
+    Opt-in / present-only. The flat required-field specs (module ``"grid"``) already
+    enforce presence + per-leaf type of the D1 core and the D2 structured ``poc`` /
+    ``thevenin`` fields; this delegates the DEPENDENT rules to
+    :func:`analytics.grid.grid_interface_schema.validate_grid_block` — the schema module's
+    single authority — so pre-flight and the study layer can never drift:
+
+      * ``thevenin.short_circuit_mva_min`` must be <= ``..._max`` (the IEC-60909 min case
+        governs the screen);
+      * an ESTIMATED ``thevenin.assumption_basis`` (``screening_estimate``) requires the
+        opt-in ``grid.allow_unvalidated_grid: true`` (mirrors ``allow_unvalidated_flat_cf``);
+      * a per-tech ``generation.technologies.<name>.grid`` block is validated (rated_mva,
+        converter_type enum, converter-interfaced tech, enum-only-needs-opt-in).
+
+    It runs only when a top-level ``grid`` block OR a per-tech ``grid`` interface is
+    present, so every grid-absent scenario is byte-identical (no import, no error).
+    """
+    has_top_grid = isinstance(raw_config, Mapping) and isinstance(
+        raw_config.get("grid"), Mapping
+    )
+    generation = (
+        raw_config.get("generation") if isinstance(raw_config, Mapping) else None
+    )
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    has_tech_grid = isinstance(techs, Mapping) and any(
+        isinstance(block, Mapping) and "grid" in block for block in techs.values()
+    )
+    if not (has_top_grid or has_tech_grid):
+        return
+
+    from analytics.grid.grid_interface_schema import validate_grid_block
+
+    validate_grid_block(raw_config, errors)
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -357,6 +396,12 @@ def validate_config_for_v14(
     # 1d. Validate any declared taxes_indirect block against the #738 contract
     # (opt-in: absent -> no error; present -> the engine resolver's exact rules).
     _validate_taxes_indirect(raw_config, errors)
+
+    # 1e. Validate the CROSS-FIELD grid rules a flat spec cannot express (#873 D2):
+    # the Thevenin min<=max range, the estimated-basis opt-in gate, and any per-tech
+    # `generation.technologies.<name>.grid` interface. Opt-in / present-only, so
+    # grid-absent scenarios are byte-identical.
+    _validate_grid_conditionals(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
