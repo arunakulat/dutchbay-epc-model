@@ -888,6 +888,70 @@
   </section>
   {% endif %}
 
+  {# 8a-bis-1b. Per-technology resource & technology chapters — #851 (§4 / §5) #}
+  {% if ctx.per_tech_chapters %}
+  <section class="page">
+    <h2>Resource &amp; Technology by Technology</h2>
+    <p>The resource-assessment and technology-selection sections
+      ({{ ctx.per_tech_chapters.section_titles | join("; ") }}) rendered per active
+      generation technology.
+      {% if ctx.per_tech_chapters.is_hybrid %}This is a hybrid plant, so both technology
+      chapters render; the cross-technology reconciliation is in the Multi-Technology
+      Breakdown above.{% else %}This is a single-technology plant, so only that technology's
+      chapter renders.{% endif %}
+      These are display-only provenance sections and change no committed economics.</p>
+    {% for c in ctx.per_tech_chapters.chapters %}
+    <h3>{{ c.label }}
+      {% if c.aep_gwh is not none %}— net AEP {{ fmt_gwh(c.aep_gwh) }}{% if c.share_of_aep_pct is not none %} ({{ fmt_pct(c.share_of_aep_pct) }} of plant){% endif %}{% endif %}</h3>
+    {% if c.technology == "wind" %}
+      {% if c.wind_rose %}
+      <p>Directional wind rose (sector frequency){% if c.prevailing_sector_deg is not none %};
+        prevailing sector {{ "%.0f"|format(c.prevailing_sector_deg) }}&deg;{% endif %}:</p>
+      <table>
+        <thead><tr><th>Sector (&deg;)</th><th>Compass</th><th>Frequency</th></tr></thead>
+        <tbody>
+        {% for s in c.wind_rose %}
+        <tr{% if s.is_prevailing %} class="prevailing"{% endif %}>
+          <td class="num">{{ "%.0f"|format(s.sector_deg) }}</td>
+          <td>{{ s.label }}{% if s.is_prevailing %} (prevailing){% endif %}</td>
+          <td class="num">{{ fmt_pct(s.frequency * 100.0) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No directional wind rose declared for this scenario.</p>
+      {% endif %}
+      {% if c.terrain_class %}
+      <p class="muted">Self-declared terrain class: <strong>{{ c.terrain_class }}</strong>{% if c.terrain_notes %} — {{ c.terrain_notes }}{% endif %}.
+        Metadata only; applies no AEP correction.</p>
+      {% endif %}
+      {% if c.provenance_note %}
+      <p class="muted">{{ c.provenance_note }}</p>
+      {% endif %}
+    {% elif c.technology == "solar" %}
+      {% if c.source_quality_grade %}
+      <p>Resource source-quality grade: <strong>{{ c.source_quality_grade }}</strong>
+        {% if c.source_quality_score is not none %}(score {{ "%.2f"|format(c.source_quality_score) }}){% endif %}
+        {% if c.measurement_type %}— measurement type {{ c.measurement_type }}{% endif %}.
+        Provenance only; grades the irradiance evidence and moves no KPI.</p>
+      {% endif %}
+      {% if c.bifacial_declared %}
+      <p class="muted">Bifacial uplift declared ({{ c.bifacial_marker }}). The financed solar
+        chain is monofacial by design (SOLAR-9); this is disclosed, not billed.</p>
+      {% endif %}
+      {% if c.soiling_effective_pct is not none %}
+      <p class="muted">Time-varying soiling profile declared: effective flat soiling loss
+        {{ fmt_pct(c.soiling_effective_pct) }}.</p>
+      {% endif %}
+      {% if not c.source_quality_grade and not c.bifacial_declared and c.soiling_effective_pct is none %}
+      <p class="muted">No additional solar resource provenance declared for this scenario.</p>
+      {% endif %}
+    {% endif %}
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {# 8a-bis-2. Long-term wind resource & trend (disclose-only) — #178 / #656 #}
   {% if ctx.resource_trend %}
   <section class="page">

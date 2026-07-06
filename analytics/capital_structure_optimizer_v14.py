@@ -57,6 +57,12 @@ from analytics.contracts_v14 import (
     DebtTrancheMix,
 )
 from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.infeasibility_diagnostics import (
+    InfeasibilityDiagnostics,
+    OptimizationAuditLog,
+    audit_log_from_diagnostics,
+    build_capital_structure_diagnostics,
+)
 
 _DIRECTIONS = ("max", "min")
 
@@ -185,6 +191,22 @@ def _infeasible_reason(
         "no single candidate satisfied all covenants simultaneously; "
         f"binding across the search: {keys}"
     )
+
+
+def _failure_diagnostics(
+    kind: str,
+    curve: Sequence[CapitalStructurePoint],
+    constraints: Sequence[CovenantConstraint],
+) -> Tuple[Optional[InfeasibilityDiagnostics], Optional[OptimizationAuditLog]]:
+    """Structured why-infeasible register + audit log (#741) for a failed search.
+
+    Called ONLY on the infeasible path (no feasible candidate). Returns
+    ``(diagnostics, audit_log)``; a feasible solve never calls this and carries
+    ``(None, None)`` so its result is byte-identical to the #740 surface.
+    """
+    diagnostics = build_capital_structure_diagnostics(curve, constraints)
+    audit = audit_log_from_diagnostics(kind, diagnostics)
+    return diagnostics, audit
 
 
 def _select_best(
@@ -332,6 +354,9 @@ def optimize_debt_mix(
 
     best = _select_best(curve, direction)
     feasible = best is not None
+    diagnostics, audit_log = (
+        (None, None) if feasible else _failure_diagnostics("debt_mix", curve, cons)
+    )
     return CapitalStructureOptimizationResult(
         kind="debt_mix",
         objective_key=objective_key,
@@ -341,6 +366,8 @@ def optimize_debt_mix(
         curve=curve,
         feasible=feasible,
         infeasible_reason=None if feasible else _infeasible_reason(curve, cons),
+        diagnostics=diagnostics,
+        audit_log=audit_log,
     )
 
 
@@ -430,6 +457,11 @@ def optimize_capex_contingency(
 
     best = _select_best(curve, direction)
     feasible = best is not None
+    diagnostics, audit_log = (
+        (None, None)
+        if feasible
+        else _failure_diagnostics("capex_contingency", curve, cons)
+    )
     return CapitalStructureOptimizationResult(
         kind="capex_contingency",
         objective_key=objective_key,
@@ -439,6 +471,8 @@ def optimize_capex_contingency(
         curve=curve,
         feasible=feasible,
         infeasible_reason=None if feasible else _infeasible_reason(curve, cons),
+        diagnostics=diagnostics,
+        audit_log=audit_log,
     )
 
 
