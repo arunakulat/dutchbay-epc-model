@@ -1324,6 +1324,10 @@ def test_per_tech_chapters_wind_only_emits_wind_chapter() -> None:
     assert wind.terrain_class == "coastal"
     assert wind.terrain_notes == "coastal ridge line"
     assert wind.provenance_note  # the coarse-ERA5 caveat
+    # #853.2 polar wind-rose plot surfaces as a self-contained PNG data-URI (matplotlib present
+    # in CI). Display only — the plot is a re-projection of the SAME rose block, moves no KPI.
+    assert wind.wind_rose_polar_img is not None
+    assert wind.wind_rose_polar_img.startswith("data:image/png;base64,")
     # Solar-only fields stay empty on a wind chapter.
     assert wind.source_quality_grade is None
     assert wind.bifacial_declared is False
@@ -1422,6 +1426,8 @@ def test_per_tech_wind_chapter_degrades_on_bad_config_without_crashing() -> None
     # Both provenance sub-blocks were invalid -> omitted, not crashing.
     assert wind.wind_rose == []
     assert wind.terrain_class is None
+    # No rose => no polar plot either (nothing to re-project); the #853.2 field stays None.
+    assert wind.wind_rose_polar_img is None
     assert wind.provenance_note is not None
     assert "unavailable" in wind.provenance_note.lower()
     # The HTML still renders.
