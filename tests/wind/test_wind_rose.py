@@ -9,6 +9,8 @@ billed quantity. These tests pin the binning against synthetic direction data
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -328,6 +330,39 @@ def test_sparse_sector_weibull_is_none() -> None:
     east_idx = rose["sector_deg"].index(90.0)
     assert rose["sector_weibull"][north_idx] is None  # too sparse
     assert rose["sector_weibull"][east_idx] is not None  # enough points
+
+
+def test_near_constant_sector_weibull_is_none_not_bogus_k() -> None:
+    """A well-populated but near-CONSTANT sector reports None, not a millions-scale k.
+
+    Constant-ish data drives the Weibull MLE to a physically nonsensical shape (k of
+    order 1e5-1e6) that IS finite+positive and would otherwise leak into a display
+    block. It also trips scipy's catastrophic-cancellation RuntimeWarning. Guard:
+    the sector must report None (or, defensively, a bounded k <= 50), and no
+    RuntimeWarning may escape the builder.
+    """
+    # 20 near-identical speeds all from due North (CV ~ 1e-8, far below the floor).
+    directions = [0.0] * 20
+    speeds = [8.0 + i * 1e-7 for i in range(20)]
+
+    with warnings.catch_warnings():
+        # Any RuntimeWarning escaping build_wind_rose would fail the test.
+        warnings.simplefilter("error", RuntimeWarning)
+        rose = build_wind_rose(directions, n_sectors=12, ws_series=speeds)
+
+    fit = rose["sector_weibull"][0]
+    # Must NOT be a bogus astronomically-large k. Either None (preferred) or a sane,
+    # bounded shape — never a millions-scale value.
+    if fit is not None:
+        assert fit["weibull_k"] <= 50.0
+    else:
+        assert fit is None
+    # Real-wind sanity: a healthy, dispersed sector still fits fine (regression guard).
+    rng = np.random.default_rng(11)
+    good_speeds = list(rng.weibull(2.0, size=200) * 7.5)
+    good = build_wind_rose([0.0] * 200, n_sectors=12, ws_series=good_speeds)
+    assert good["sector_weibull"][0] is not None
+    assert good["sector_weibull"][0]["weibull_k"] <= 50.0
 
 
 def test_length_mismatch_fails_loud() -> None:

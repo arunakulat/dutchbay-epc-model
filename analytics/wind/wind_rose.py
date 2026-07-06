@@ -29,6 +29,7 @@ GWTF: config-first, fully typed, fail-loud on bad input (CESSPIT), no ``argparse
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
@@ -47,6 +48,18 @@ DEFAULT_CALM_LIMIT_MS: float = 2.0
 #: Below this the 2-parameter fit is too unstable to be meaningful, so the sector
 #: reports ``None`` (fail-soft — a sparse sector never crashes the rose).
 _MIN_SECTOR_WEIBULL_N: int = 10
+
+#: Minimum coefficient of variation (std / mean) a sector's speeds must have before
+#: a Weibull MLE is attempted. Near-constant data (CV below this) drives the shape
+#: ``k`` toward a physically meaningless spike (order 1e5+) and trips a scipy
+#: "catastrophic cancellation" warning; such a sector reports ``None`` instead.
+_MIN_SECTOR_WEIBULL_CV: float = 1e-3
+
+#: Plausibility cap on the fitted Weibull shape ``k``. Real onshore wind ``k`` is
+#: ~1.5–3; anything above this is a degenerate fit, not a physical shape, and is
+#: rejected (report ``None``) so a bogus millions-scale ``k`` can never reach a
+#: display block.
+_MAX_SECTOR_WEIBULL_K: float = 50.0
 
 #: Compass labels for the canonical 8/16-sector roses (met convention, N = 0°).
 _COMPASS_16: tuple[str, ...] = (
@@ -108,18 +121,41 @@ def _sector_weibull(speeds: np.ndarray) -> Optional[Dict[str, float]]:
 
     Uses the repo convention ``scipy.stats.weibull_min.fit(x, floc=0)`` (identical
     to :mod:`wind_resource.weibull_fit`): the returned ``shape`` is ``k`` and the
-    returned ``scale`` is the Weibull ``A`` (m/s). A sector with fewer than
-    :data:`_MIN_SECTOR_WEIBULL_N` positive samples — or one whose fit fails to
-    converge / returns non-finite params — reports ``None`` rather than raising.
+    returned ``scale`` is the Weibull ``A`` (m/s). Reports ``None`` (never raises) for
+    any sector that is:
+
+    - too sparse (< :data:`_MIN_SECTOR_WEIBULL_N` positive samples);
+    - near-constant (coefficient of variation < :data:`_MIN_SECTOR_WEIBULL_CV`) —
+      whose MLE otherwise emits a millions-scale, physically meaningless ``k``;
+    - a fit that fails / warns (scipy ``RuntimeWarning`` is promoted to an error),
+      returns non-finite params, or returns an implausible shape
+      (``k`` > :data:`_MAX_SECTOR_WEIBULL_K`).
     """
     positive = speeds[speeds > 0.0]
     if positive.size < _MIN_SECTOR_WEIBULL_N:
         return None
-    try:
-        shape_k, _loc, scale_a = stats.weibull_min.fit(positive, floc=0)
-    except Exception:  # pragma: no cover - scipy fit is robust on positive data
+
+    # Degenerate/near-constant guard: a sector whose speeds are almost identical has
+    # no real Weibull shape — the MLE drives ``k`` toward a meaningless spike (order
+    # 1e5+) that IS finite and positive (so it would escape the checks below) and
+    # trips scipy's "catastrophic cancellation" moment warning. Reject before fitting.
+    mean_v = float(positive.mean())
+    if mean_v <= 0.0 or float(positive.std()) / mean_v < _MIN_SECTOR_WEIBULL_CV:
         return None
+
+    # Promote scipy's numerical-instability RuntimeWarning to an error so a bogus fit
+    # can never hide behind a silently-swallowed warning; treat it as "no fit".
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            shape_k, _loc, scale_a = stats.weibull_min.fit(positive, floc=0)
+    except Exception:  # pragma: no cover - guarded above; belt-and-braces
+        return None
+
     if not (np.isfinite(shape_k) and np.isfinite(scale_a)) or scale_a <= 0.0:
+        return None
+    # Plausibility cap: reject a non-physical shape (real onshore k ~1.5–3).
+    if shape_k > _MAX_SECTOR_WEIBULL_K:
         return None
     return {
         "weibull_a": round(float(scale_a), 4),
