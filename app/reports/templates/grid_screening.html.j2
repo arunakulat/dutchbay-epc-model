@@ -1,0 +1,219 @@
+{# Standalone advisory GRID-SCREENING report (#884, D8).
+
+   The SCREENING-not-bankable caveat, the EMT gap, the tender evidence, the verification
+   discipline and the dependency provenance are rendered STRUCTURALLY here — there is no
+   config toggle that removes them (the un-suppressible-caveat requirement). Autoescape is
+   forced on in the Python environment, so a site / bus name is HTML-escaped. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Grid Interconnection SCREENING — {{ m.scenario }}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.1rem; margin-top: 1.6rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  .caveat { border: 2px solid #b00020; background: #fff3f3; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .caveat .label { color: #b00020; font-weight: 700; letter-spacing: .04em; }
+  .emt { border: 2px solid #a05a00; background: #fff8ec; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .emt .label { color: #a05a00; font-weight: 700; }
+  .evidence { border-left: 4px solid #446; background: #f5f6fa; padding: .8rem 1rem; margin: 1rem 0; font-size: .92rem; }
+  .provenance { border-left: 4px solid #2a7; background: #f2fbf6; padding: .8rem 1rem; margin: 1rem 0; font-size: .9rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .92rem; }
+  th, td { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; }
+  th { background: #f0f0f0; }
+  .notrun { color: #888; font-style: italic; }
+  .avail { color: #2a7; font-weight: 600; }
+  .degraded { color: #a05a00; font-weight: 600; }
+  .meta { color: #555; font-size: .85rem; }
+  code { background: #eee; padding: 0 .2rem; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<h1>Grid Interconnection SCREENING Study</h1>
+<p class="meta">Scenario: <strong>{{ m.scenario }}</strong>
+  {% if m.poc_bus_name %}· POC: <strong>{{ m.poc_bus_name }}</strong>{% endif %}
+  · Generated: {{ m.generated_at }} · Python {{ m.python_version }}</p>
+
+{# ── UN-SUPPRESSIBLE headline caveat ─────────────────────────────────────── #}
+<div class="caveat">
+  <span class="label">⚠ {{ m.mandatory_caveat }}</span>
+</div>
+<div class="emt">
+  <span class="label">{{ m.emt_gap_caveat }}</span>
+</div>
+{% if m.emt_confirmation_required %}
+<div class="emt">
+  <span class="label">{{ m.emt_confirmation_stamp }}</span>
+</div>
+{% endif %}
+<div class="evidence">{{ m.tender_evidence }}</div>
+
+{# ── D1 grid strength (SCR / GFL-vs-GFM / EMT) ───────────────────────────── #}
+<h2>1 · Grid strength (SCR @ POC) — GFL vs GFM</h2>
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Short-circuit ratio (SCR, IEC 60909 min case)</td><td>{{ fmt(m.study.strength.scr) }}</td></tr>
+  <tr><td>SCR band</td><td>{{ m.study.strength.scr_band }}</td></tr>
+  <tr><td>Converter-control recommendation</td><td>{{ m.study.strength.gfl_gfm_recommendation }}</td></tr>
+  <tr><td>Fault level @ POC (min, MVA)</td><td>{{ fmt(m.study.strength.fault_level_poc_mva) }}</td></tr>
+  <tr><td>Fault level @ POC (max context, MVA)</td><td>{{ fmt(m.study.strength.fault_level_poc_max_mva) }}</td></tr>
+  <tr><td>Plant rating (MVA)</td><td>{{ fmt(m.study.strength.plant_rating_mva) }}</td></tr>
+  <tr><td>Method</td><td>{{ m.study.strength.method }}</td></tr>
+  <tr><td>EMT confirmation required?</td><td>{{ 'YES — marginal SCR' if m.study.strength.emt_confirmation_required else 'no' }}</td></tr>
+  <tr><td>Bankable?</td><td>NO — advisory screening only</td></tr>
+</table>
+
+{# ── D3 reactive / PQ-box ────────────────────────────────────────────────── #}
+<h2>2 · Reactive capability (PQ box / Mvar shortfall) @ POC</h2>
+{% if m.study.reactive %}
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Required pf range</td><td>{{ fmt(m.study.reactive.pf_required_min) }} … {{ fmt(m.study.reactive.pf_required_max) }}</td></tr>
+  <tr><td>Mvar required (governing corner)</td><td>{{ fmt(m.study.reactive.mvar_required) }}</td></tr>
+  <tr><td>Mvar available</td><td>{{ fmt(m.study.reactive.mvar_available) }}</td></tr>
+  <tr><td>Mvar shortfall (STATCOM/MSC sizing)</td><td>{{ fmt(m.study.reactive.mvar_shortfall) }}</td></tr>
+  <tr><td>Achievable pf @ POC</td><td>{{ fmt(m.study.reactive.pf_at_poc) }}</td></tr>
+  <tr><td>Inside PQ box?</td><td>{{ verdict(m.study.reactive.inside_pq_box, ok='yes', bad='NO — shortfall') }}</td></tr>
+  <tr><td>Governing corner (P MW / grid V pu)</td><td>{{ fmt(m.study.reactive.governing_p_mw) }} / {{ fmt(m.study.reactive.governing_grid_v_pu, digits=3) }}</td></tr>
+  <tr><td>Load-flow converged?</td><td>{{ verdict(m.study.reactive.governing_converged, ok='yes', bad='NO — binding failure') }}</td></tr>
+  <tr><td>Method</td><td>{{ m.study.reactive.method }}</td></tr>
+</table>
+{% else %}
+<p class="notrun">Reactive/PQ screen not run.</p>
+{% endif %}
+
+{# ── D7 harmonics / flicker (SCR-coupled) ────────────────────────────────── #}
+<h2>3 · Harmonics &amp; flicker (SCR-coupled screening approximation)</h2>
+{% if m.harmonics %}
+<p class="meta">{{ m.harmonics.disclaimer }}</p>
+<table>
+  <tr><th>Metric</th><th>Value</th><th>Limit</th></tr>
+  <tr><td>Isc/IL ratio (IEEE 519 index)</td><td>{{ fmt(m.harmonics.isc_il_ratio) }}</td><td>—</td></tr>
+  <tr><td>Worst harmonic order</td><td>{{ fmt(m.harmonics.worst_harmonic_order, digits=0) }}</td><td>—</td></tr>
+  <tr><td>Worst harmonic voltage (%)</td><td>{{ fmt(m.harmonics.worst_harmonic_voltage_pct) }}</td><td>{{ fmt(m.harmonics.harmonic_voltage_limit_pct) }}</td></tr>
+  <tr><td>THD voltage (%)</td><td>{{ fmt(m.harmonics.thd_voltage_pct) }}</td><td>{{ fmt(m.harmonics.thd_voltage_limit_pct) }}</td></tr>
+  <tr><td>Current TDD (%)</td><td>{{ fmt(m.harmonics.current_tdd_pct) }}</td><td>{{ fmt(m.harmonics.current_tdd_limit_pct) }}</td></tr>
+  <tr><td>Harmonic verdict</td><td colspan="2">{{ verdict(m.harmonics.harmonic_within_limits) }}</td></tr>
+  <tr><td>Flicker Pst</td><td>{{ fmt(m.harmonics.flicker_pst) }}</td><td>{{ fmt(m.harmonics.flicker_pst_limit) }}</td></tr>
+  <tr><td>Flicker verdict</td><td colspan="2">{{ verdict(m.harmonics.flicker_within_limits) }}</td></tr>
+  <tr><td>Freq-response headroom (MW)</td><td>{{ fmt(m.harmonics.freq_response_headroom_mw) }}</td><td>—</td></tr>
+  <tr><td>Energy foregone to de-load (MWh/yr)</td><td>{{ fmt(m.harmonics.energy_foregone_mwh_yr) }}</td><td>—</td></tr>
+</table>
+{% else %}
+<p class="notrun">Harmonics/flicker screen not run (see degradation notes).</p>
+{% endif %}
+
+{# ── D4a RMS ride-through (LVRT / HVRT / frequency) ──────────────────────── #}
+<h2>4 · Ride-through (RMS envelope: LVRT / HVRT / frequency)</h2>
+{% if m.ride_through %}
+<table>
+  <tr><th>Case</th><th>Ran?</th><th>Rode through?</th><th>Target</th><th>Min V (pu)</th><th>Max V (pu)</th></tr>
+  {% for rt in m.ride_through %}
+  <tr>
+    <td>{{ rt.case }}</td>
+    <td>{{ 'yes' if rt.ran else 'no' }}</td>
+    <td>{{ verdict(rt.rode_through, ok='yes', bad='NO — breach') }}</td>
+    <td>{% if rt.target_pu is not none %}{{ fmt(rt.target_pu, digits=3) }} pu{% elif rt.target_hz is not none %}{{ fmt(rt.target_hz) }} Hz{% else %}—{% endif %}</td>
+    <td>{{ fmt(rt.min_voltage_pu, digits=3) }}</td>
+    <td>{{ fmt(rt.max_voltage_pu, digits=3) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="meta">{{ m.ride_through[0].disclaimer }}</p>
+{% else %}
+<p class="notrun">Ride-through screen not run (see degradation notes).</p>
+{% endif %}
+
+{# ── D5b hybrid-POC composite SCR / aggregate Q ─────────────────────────── #}
+<h2>5 · Hybrid-POC aggregation (composite SCR / aggregate reactive)</h2>
+{% if m.poc_envelope %}
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Resources behind POC</td><td>{{ m.poc_envelope.n_resources }}</td></tr>
+  <tr><td>Total IBR (MVA)</td><td>{{ fmt(m.poc_envelope.total_ibr_mva) }}</td></tr>
+  <tr><td>Composite / weighted SCR</td><td>{{ fmt(m.poc_envelope.composite_scr) }} ({{ m.poc_envelope.scr_band }})</td></tr>
+  <tr><td>GFL/GFM recommendation</td><td>{{ m.poc_envelope.gfl_gfm_recommendation }}</td></tr>
+  <tr><td>Aggregate Q available @ POC (Mvar)</td><td>{{ fmt(m.poc_envelope.aggregate_q_available_mvar) }}</td></tr>
+  <tr><td>Aggregate Q required (Mvar)</td><td>{{ fmt(m.poc_envelope.aggregate_q_required_mvar) }}</td></tr>
+  <tr><td>Aggregate Q shortfall (Mvar)</td><td>{{ fmt(m.poc_envelope.aggregate_q_shortfall_mvar) }}</td></tr>
+  <tr><td>Inside PQ box?</td><td>{{ verdict(m.poc_envelope.inside_pq_box, ok='yes', bad='NO — shortfall') }}</td></tr>
+</table>
+{% else %}
+<p class="notrun">Hybrid-POC aggregation not run (single-tech / no resources block).</p>
+{% endif %}
+
+{# ── D5c combined frequency-droop (ENPPC) ────────────────────────────────── #}
+<h2>6 · Combined frequency-droop response (ENPPC plant controller)</h2>
+{% if m.freq_response %}
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Event Δf (Hz)</td><td>{{ fmt(m.freq_response.deviation_hz, digits=3) }}</td></tr>
+  <tr><td>Total commanded / delivered (MW)</td><td>{{ fmt(m.freq_response.total_commanded_mw) }} / {{ fmt(m.freq_response.total_delivered_mw) }}</td></tr>
+  <tr><td>Settling frequency (Hz)</td><td>{{ fmt(m.freq_response.settling_frequency_hz, digits=3) }}</td></tr>
+  <tr><td>Band ({{ fmt(m.freq_response.band_under_hz) }}–{{ fmt(m.freq_response.band_over_hz) }} Hz) compliant?</td><td>{{ verdict(m.freq_response.band_compliant, ok='yes', bad='NO') }}</td></tr>
+  <tr><td>Response adequate?</td><td>{{ verdict(m.freq_response.response_adequate, ok='yes', bad='NO — short') }}</td></tr>
+  <tr><td>SOC-limited groups</td><td>{{ m.freq_response.n_soc_limited }} / {{ m.freq_response.n_groups }}</td></tr>
+  <tr><td>Dynamic nadir (Hz)</td><td>{{ fmt(m.freq_response.dynamic_nadir_hz, digits=3) }} (not modelled — RMS screen)</td></tr>
+</table>
+{% else %}
+<p class="notrun">Combined frequency-droop study not run (no ppc block).</p>
+{% endif %}
+
+{# ── D6 QSTS curtailment split ───────────────────────────────────────────── #}
+<h2>7 · Curtailment split (QSTS — deemed-paid vs self-curtailed)</h2>
+{% if m.curtailment and m.curtailment.ran %}
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Feeder source</td><td>{{ m.curtailment.feeder_source }}</td></tr>
+  <tr><td>Export cap (MW)</td><td>{{ fmt(m.curtailment.export_cap_mw) }}</td></tr>
+  <tr><td>Gross energy (MWh)</td><td>{{ fmt(m.curtailment.gross_energy_mwh) }}</td></tr>
+  <tr><td>Deemed-paid (MWh, KPI-neutral)</td><td>{{ fmt(m.curtailment.deemed_paid_energy_mwh) }}</td></tr>
+  <tr><td>Self-curtailed net (MWh, real loss)</td><td>{{ fmt(m.curtailment.self_curtailed_energy_mwh) }}</td></tr>
+  <tr><td>BESS-absorbed (MWh, recovered)</td><td>{{ fmt(m.curtailment.bess_absorbed_energy_mwh) }}</td></tr>
+</table>
+<p class="meta">Note: self-curtailment is the only future KPI-mover and is NOT wired to finance here (D6b).</p>
+{% elif m.curtailment %}
+<p class="notrun">QSTS curtailment not run: {{ m.curtailment.reason }}</p>
+{% else %}
+<p class="notrun">QSTS curtailment screen not run (see degradation notes).</p>
+{% endif %}
+
+{# ── PROVENANCE: dependency resolution + CASPER available-vs-degraded ─────── #}
+<h2>8 · Provenance — dependency resolution &amp; reproducibility</h2>
+<div class="provenance">
+  <p>Resolved <code>[grid]</code> optional-extra pin set (the exact engines this screen is
+     built against; <code>pip install -e ".[grid]"</code>):</p>
+  <table>
+    <tr><th>Engine</th><th>Pin</th><th>Present at run-time?</th><th>Resolved version</th></tr>
+    {% for e in m.engine_status %}
+    <tr>
+      <td><code>{{ e.distribution }}</code></td>
+      <td><code>{{ e.pin }}</code></td>
+      <td>{% if e.available %}<span class="avail">available</span>{% else %}<span class="degraded">degraded (absent → closed-form / not run)</span>{% endif %}</td>
+      <td>{{ e.resolved_version or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+{# ── PROVENANCE: verification discipline ─────────────────────────────────── #}
+<h2>9 · Provenance — verification discipline</h2>
+<div class="provenance">{{ m.verification_discipline }}</div>
+
+{# ── Degraded-screen notes (CASPER — honest not-run, surfaced) ───────────── #}
+{% if m.degraded_screens %}
+<h2>10 · Screens that degraded (did not run)</h2>
+<div class="provenance">
+  <table>
+    <tr><th>Screen</th><th>Reason</th></tr>
+    {% for name, reason in m.degraded_screens.items() %}
+    <tr><td>{{ name }}</td><td>{{ reason }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+</body>
+</html>

@@ -820,6 +820,26 @@ def cli(cfg: DictConfig) -> None:
                   '<export_dir>/tech_comparison_report.html'. On emission the written path
                   is echoed back under result['tech_comparison_report_path'].
 
+            Optional fields (#884 D8 — advisory GRID-SCREENING report emission; OFF by
+            default — leaving emit_grid_screen false preserves behaviour and keeps
+            committed-scenario output BYTE-IDENTICAL; the grid study is advisory
+            (bankable=false) and NEVER feeds finance, so no committed KPI moves):
+                - emit_grid_screen: If true, after a successful run compose the in-house
+                  design-stage grid screens (SCR@POC / GFL-vs-GFM, reactive/PQ-box Mvar
+                  shortfall, SCR-coupled harmonics/flicker, RMS ride-through, hybrid-POC
+                  composite-SCR, combined frequency-droop, QSTS curtailment split) and
+                  render a STANDALONE advisory HTML report, via
+                  app.reports.grid_screening_emit. Requires the scenario's grid block with
+                  study_enabled: true (fails loud otherwise — CESSPIT). The heavy screens
+                  (pandapower / ANDES / OpenDSS) live on this batch path only, never the
+                  synchronous HTTP report route (the #645 latency ledger); a missing [grid]
+                  engine degrades that screen to an honest 'not run' state (CASPER), it does
+                  not crash. Every grid surface carries the un-suppressible SCREENING-not-
+                  bankable + EMT-gap caveat + dependency/verification provenance. Default false.
+                - grid_screen_report.path: Target .html path. Default
+                  '<export_dir>/grid_screening_report.html'. On emission the written path is
+                  echoed back under result['grid_screening_report_path'].
+
     Returns:
         None. Prints JSON result to stdout. Optionally writes artifacts.
         On wind- or solar-ingestion failure, prints a structured error JSON
@@ -942,6 +962,14 @@ def cli(cfg: DictConfig) -> None:
     # committed headline KPIs (the lender-integrity basis, per #745).
     emit_tech_comparison = bool(cfg.get("emit_tech_comparison", False))
     tech_comparison_cfg = cfg.get("tech_comparison", None) or {}
+
+    # #884 D8: optional advisory grid-screening report emission. OFF by default; the study is
+    # advisory (bankable=false) and NEVER feeds finance, so leaving this off keeps committed
+    # scenarios byte-identical. Requires the scenario's grid block with study_enabled: true
+    # (the emitter fails loud otherwise — the caller opted in). The heavy screens are on this
+    # batch path only; a missing [grid] engine degrades gracefully (CASPER).
+    emit_grid_screen = bool(cfg.get("emit_grid_screen", False))
+    grid_screen_cfg = cfg.get("grid_screen_report", None) or {}
 
     effective_config: str = str(config)
     # Temp patched-scenario files (resource-overrides then wind then solar) to clean up
@@ -1258,6 +1286,36 @@ def cli(cfg: DictConfig) -> None:
             )
             result["tech_comparison_report_path"] = str(tc_written)
             logger.info("Wrote tech-comparison report to %s", tc_written)
+
+        # #884 D8: optional advisory grid-screening report emission. OFF unless
+        # emit_grid_screen=true (committed scenarios leave it off → byte-identical). The grid
+        # study is ADVISORY (bankable=false) and NEVER feeds finance (CFADS/IRR/DSCR unchanged),
+        # so emission derives no committed KPI. Composes the in-house grid screens and writes a
+        # STANDALONE advisory HTML report carrying the un-suppressible SCREENING-not-bankable +
+        # EMT-gap caveat + dependency/verification provenance. Fails loud on a missing/disabled
+        # grid block, since the caller explicitly opted in (CESSPIT). Heavy screens (pandapower/
+        # ANDES/OpenDSS) run here on the batch path only, never the synchronous HTTP report route
+        # (the #645 latency ledger); a missing [grid] engine degrades that screen (CASPER), not
+        # crashes. Imported lazily so the report stack is not pulled onto the finance CLI's import
+        # path unless this step runs.
+        if emit_grid_screen and isinstance(result, dict):
+            from app.reports.grid_screening_emit import (
+                emit_grid_screening_report_from_pipeline,
+            )
+
+            gs_path_raw = grid_screen_cfg.get("path", None)
+            gs_out = (
+                Path(str(gs_path_raw))
+                if gs_path_raw
+                else export_dir_scoped / "grid_screening_report.html"
+            )
+            gs_written = emit_grid_screening_report_from_pipeline(
+                result,
+                effective_config,
+                gs_out,
+            )
+            result["grid_screening_report_path"] = str(gs_written)
+            logger.info("Wrote grid-screening report to %s", gs_written)
 
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns
