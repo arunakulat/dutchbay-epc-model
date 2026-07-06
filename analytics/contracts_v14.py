@@ -736,9 +736,13 @@ class ReactiveCapabilityResult(ContractMixin):
         pf_at_poc: the achievable power factor at the POC at the governing operating
             point (signed; the sign follows the reactive-flow direction convention).
         inside_pq_box: True iff the plant stays inside the required PQ box at EVERY
-            swept operating point (i.e. ``mvar_shortfall == 0`` across the whole sweep).
+            swept operating point (``mvar_shortfall == 0`` across the whole sweep) AND
+            the governing corner's load-flow converged — a non-converged governing corner
+            is a binding failure and forces this False.
         governing_p_mw / governing_grid_v_pu: the P (MW) and grid voltage (pu) of the
             worst-case operating point that set ``mvar_shortfall`` (the binding corner).
+        governing_converged: whether the load-flow converged at the governing corner.
+            False = the screen could not place the operating point (binding failure).
     """
 
     pf_required_min: float
@@ -750,6 +754,7 @@ class ReactiveCapabilityResult(ContractMixin):
     inside_pq_box: bool
     governing_p_mw: float | None = None
     governing_grid_v_pu: float | None = None
+    governing_converged: bool = True
     method: str = "pandapower_runpp"  # "pandapower_runpp" | "closed_form"
     bankable: bool = False
     provenance: str = _REACTIVE_SCREEN_PROVENANCE
@@ -766,17 +771,26 @@ class ReactiveCapabilityResult(ContractMixin):
         pf_at_poc: float,
         governing_p_mw: float | None = None,
         governing_grid_v_pu: float | None = None,
+        governing_converged: bool = True,
         method: str = "pandapower_runpp",
         provenance: str = _REACTIVE_SCREEN_PROVENANCE,
         notes: str = "",
     ) -> "ReactiveCapabilityResult":
         """Build the advisory reactive result, deriving the shortfall + PQ-box verdict.
 
-        ``mvar_shortfall`` is ``max(0, mvar_required - mvar_available)`` and
-        ``inside_pq_box`` is True iff that shortfall is zero. ``bankable`` is always
-        ``False`` for an in-house Python screen.
+        ``mvar_shortfall`` is ``max(0, mvar_required - mvar_available)``. A non-converged
+        governing corner (``governing_converged=False``) is a BINDING failure: the shortfall
+        is escalated to at least the full reactive demand and ``inside_pq_box`` is forced
+        False (the screen could not place the operating point, so the plant is NOT provably
+        compliant). ``inside_pq_box`` is otherwise True iff the shortfall is zero.
+        ``bankable`` is always ``False`` for an in-house Python screen.
         """
         shortfall = max(0.0, float(mvar_required) - float(mvar_available))
+        if not governing_converged:
+            # Binding failure: the load-flow could not place the governing operating point,
+            # so the reactive gap is at least the full demand there and the plant cannot be
+            # certified inside the PQ box by this screen.
+            shortfall = max(shortfall, float(mvar_required))
         return cls(
             pf_required_min=pf_required_min,
             pf_required_max=pf_required_max,
@@ -784,9 +798,10 @@ class ReactiveCapabilityResult(ContractMixin):
             mvar_available=mvar_available,
             mvar_shortfall=shortfall,
             pf_at_poc=pf_at_poc,
-            inside_pq_box=shortfall <= 0.0,
+            inside_pq_box=bool(governing_converged) and shortfall <= 0.0,
             governing_p_mw=governing_p_mw,
             governing_grid_v_pu=governing_grid_v_pu,
+            governing_converged=governing_converged,
             method=method,
             bankable=False,
             provenance=provenance,

@@ -133,3 +133,38 @@ def test_evaluate_grid_gateway_returns_bundled_study() -> None:
     dumped = study.model_dump()
     assert dumped["reactive"]["mvar_shortfall"] > 0.0
     assert dumped["strength"]["bankable"] is False
+
+
+def test_reactive_screen_non_converged_corner_is_binding_failure(monkeypatch) -> None:
+    """A non-converged governing corner must NOT pass as PQ-box-compliant, even when the
+    plant has ample reactive headroom (regression for the escalation being discarded).
+    """
+    pytest.importorskip("pandapower")
+    import analytics.grid.reactive_screen as rs
+
+    # Force EVERY runpp corner to report non-convergence. Use AMPLE capability so a
+    # headroom-only shortfall would be 0 — the failure must come from non-convergence.
+    monkeypatch.setattr(
+        rs,
+        "_poc_pf_and_voltage",
+        lambda pp, net, poc_bus: (False, float("nan"), 0.0, 0.0),
+    )
+    ample = {
+        **_DUTCHBAY_GRID,
+        "resources": [
+            {
+                "name": "wind_aggregate",
+                "rated_mva": 159.6,
+                "reactive_capability": {"min_q_mvar": -80.0, "max_q_mvar": 80.0},
+            }
+        ],
+    }
+    reactive, power_flow = rs.screen_reactive_capability(ample, use_pandapower=True)
+    # 80 Mvar headroom ≥ ~52.5 Mvar demand → headroom shortfall would be 0, but the
+    # governing corner did NOT converge → binding failure: not inside the PQ box, and
+    # the shortfall is escalated to at least the full reactive demand.
+    assert reactive.governing_converged is False
+    assert reactive.inside_pq_box is False
+    assert reactive.mvar_shortfall >= reactive.mvar_required > 0.0
+    assert power_flow is not None
+    assert power_flow.converged is False

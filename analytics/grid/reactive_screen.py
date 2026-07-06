@@ -383,6 +383,7 @@ def screen_reactive_capability(
     governing_v: float | None = None
     governing_pf_poc = 1.0
     governing_mvar_req = 0.0
+    governing_converged = True
     governing_pf_result: PowerFlowResult | None = None
     method = "pandapower_runpp" if pp is not None else "closed_form"
 
@@ -421,6 +422,7 @@ def screen_reactive_capability(
                     governing_v = grid_v
                     governing_pf_poc = pf_poc
                     governing_mvar_req = mvar_req
+                    governing_converged = converged
                     governing_pf_result = PowerFlowResult(
                         converged=converged,
                         bus_voltages_pu=(
@@ -456,6 +458,7 @@ def screen_reactive_capability(
         pf_at_poc=governing_pf_poc,
         governing_p_mw=governing_p,
         governing_grid_v_pu=governing_v,
+        governing_converged=governing_converged,
         method=method,
         provenance=provenance,
         notes=(
