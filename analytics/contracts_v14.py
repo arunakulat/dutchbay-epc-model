@@ -570,6 +570,129 @@ class SharedPoiCurtailmentResult(ContractMixin):
     hours_total: int
 
 
+# ---------------------------------------------------------------------------
+# Grid interconnection strength (advisory; issue #872)
+# ---------------------------------------------------------------------------
+# SCR-band thresholds for the grid-following (GFL) vs grid-forming (GFM) screen.
+# Common design practice / IEEE Std 2800 territory: SCR < ~2 is weak (GFM likely
+# required), SCR > ~5 is strong (GFL comfortable), the band between is marginal
+# (GFM may be prudent; confirm with a dynamic study). These are SCREENING defaults,
+# overridable per-site via the `grid` config block — the config values win when
+# provided (CESSPIT: no silent magic constant downstream).
+GRID_SCR_WEAK_BELOW = 2.0
+GRID_SCR_STRONG_ABOVE = 5.0
+# Below this SCR an EMT (PSCAD/EMTP) confirmation is mandated before the screen can
+# feed any interconnection decision — RMS/positive-sequence screening is not trusted
+# for weak-grid IBR stability. Centralized here so nothing downstream re-derives it.
+GRID_EMT_CONFIRMATION_SCR = 3.0
+
+
+def grid_scr_band(
+    scr: float,
+    *,
+    weak_below: float = GRID_SCR_WEAK_BELOW,
+    strong_above: float = GRID_SCR_STRONG_ABOVE,
+) -> str:
+    """Band an SCR value into ``"weak" | "marginal" | "strong"``.
+
+    The single source of truth for SCR banding — the short-circuit module and any
+    report surface call this, so the GFL/GFM screen never drifts between callers.
+    """
+    if scr < weak_below:
+        return "weak"
+    if scr > strong_above:
+        return "strong"
+    return "marginal"
+
+
+def grid_gfl_gfm_recommendation(band: str) -> str:
+    """Map an SCR band to the GFL-vs-GFM screening recommendation string."""
+    return {
+        "weak": "GFL at risk at this SCR — grid-forming (GFM) likely required; confirm the CEB/NSCC grid-forming clause.",
+        "marginal": "GFL marginal at this SCR — GFM may be prudent; confirm with a dynamic study.",
+        "strong": "GFL viable at this SCR.",
+    }.get(band, "SCR band undetermined — recompute the screen.")
+
+
+@dataclass(frozen=True)
+class GridStrengthResult(ContractMixin):
+    """Advisory grid-strength / interconnection screen for the POC (issue #872).
+
+    Emitted by :mod:`analytics.grid.short_circuit` from a design-stage short-circuit
+    screen (pandapower IEC 60909, or a closed-form Thevenin fallback). It is a
+    SCREENING advisory ONLY — it never feeds the finance engine, so committed
+    scenarios are byte-identical (KPI-neutral).
+
+    This contract is the CONTRACT-LEVEL bankability caveat: it centralizes the two
+    lender-facing rules so nothing downstream re-implements them.
+
+    1. IEC 60909 MIN-case governs the screen. Short-circuit fault level MUST be the
+       IEC 60909 *minimum* fault level at the POC (weakest credible grid). The MAX
+       case (largest fault level → most optimistic SCR) is reported for context only;
+       ``scr`` and ``scr_band`` are taken from the min case. A screen built on the max
+       case is NOT bankable and MUST set ``bankable=False``.
+    2. Provenance → caveat strength. Any in-house Python screen is design-stage: it is
+       never the utility-accepted bankable connection study (CEB/NSCC require PSS/E or
+       PowerFactory against their confidential grid base case). ``bankable`` therefore
+       defaults to ``False``; ``emt_confirmation_required`` is set whenever the SCR is
+       low enough (``< GRID_EMT_CONFIRMATION_SCR``) that RMS/positive-sequence
+       screening cannot be trusted and an EMT (PSCAD/EMTP) study is mandated.
+
+    Use :meth:`from_screen` to construct one — it applies the min-case rule, the
+    banding, the GFL/GFM recommendation and the EMT caveat consistently.
+    """
+
+    scr: float
+    scr_band: str
+    gfl_gfm_recommendation: str
+    fault_level_poc_mva: float
+    fault_level_case: str = "iec60909_min"
+    plant_rating_mva: float | None = None
+    fault_level_poc_max_mva: float | None = None
+    method: str = "closed_form"  # "pandapower_iec60909" | "closed_form"
+    bankable: bool = False
+    emt_confirmation_required: bool = False
+    provenance: str = ""
+    notes: str = ""
+
+    @classmethod
+    def from_screen(
+        cls,
+        *,
+        scr_min: float,
+        fault_level_poc_min_mva: float,
+        plant_rating_mva: float,
+        fault_level_poc_max_mva: float | None = None,
+        method: str = "closed_form",
+        provenance: str = "",
+        weak_below: float = GRID_SCR_WEAK_BELOW,
+        strong_above: float = GRID_SCR_STRONG_ABOVE,
+        emt_confirmation_scr: float = GRID_EMT_CONFIRMATION_SCR,
+        notes: str = "",
+    ) -> "GridStrengthResult":
+        """Build the advisory result from a MIN-case short-circuit screen.
+
+        The SCR/band are taken from the IEC 60909 min case (rule 1). ``bankable`` is
+        always ``False`` for an in-house Python screen (rule 2); ``emt_confirmation_required``
+        is set when ``scr_min < emt_confirmation_scr``.
+        """
+        band = grid_scr_band(scr_min, weak_below=weak_below, strong_above=strong_above)
+        return cls(
+            scr=scr_min,
+            scr_band=band,
+            gfl_gfm_recommendation=grid_gfl_gfm_recommendation(band),
+            fault_level_poc_mva=fault_level_poc_min_mva,
+            fault_level_case="iec60909_min",
+            plant_rating_mva=plant_rating_mva,
+            fault_level_poc_max_mva=fault_level_poc_max_mva,
+            method=method,
+            bankable=False,
+            emt_confirmation_required=scr_min < emt_confirmation_scr,
+            provenance=provenance,
+            notes=notes,
+        )
+
+
 @dataclass(frozen=True)
 class IrrBridgeComponent(ContractMixin):
     """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
@@ -754,6 +877,12 @@ __all__ = [
     "TechnologyCostReturn",
     "MultiTechWBS",
     "SharedPoiCurtailmentResult",
+    "GridStrengthResult",
+    "grid_scr_band",
+    "grid_gfl_gfm_recommendation",
+    "GRID_SCR_WEAK_BELOW",
+    "GRID_SCR_STRONG_ABOVE",
+    "GRID_EMT_CONFIRMATION_SCR",
     "IrrBridgeComponent",
     "ProjectEquityIrrBridge",
     "DebtTrancheMix",
