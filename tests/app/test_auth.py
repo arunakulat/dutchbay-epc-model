@@ -4,6 +4,12 @@ Covers the stdlib crypto layer (PBKDF2 hashing, HS256 JWTs and every rejection
 branch of :func:`~app.api.auth.decode_token`), the fail-closed environment config,
 and the HTTP-level flow — login, a 401 on unauthenticated access, and cross-client
 job isolation — driven through the unified app.
+
+Also covers the #858 production posture: ``nbf`` / ``iat`` future-clock-skew rejection,
+the :func:`~app.api.auth._is_production` switch, weak/insecure-default secret rejection
+in production, and the *mandatory* issuer/audience binding in production (unset ⇒ 500 at
+both issuance and verification; an unbound token is rejected 401) — every branch asserting
+a rejection, not merely that a good token is accepted.
 """
 
 from __future__ import annotations
@@ -568,3 +574,189 @@ def test_http_cross_client_report_result_isolation(
         assert "ALICE" not in theirs.text
     finally:
         app.dependency_overrides.clear()
+
+
+# --------------------------------------------------------------------------- #
+# nbf / iat future-clock-skew rejection (#858, residual #842)
+# --------------------------------------------------------------------------- #
+def test_decode_rejects_future_nbf() -> None:
+    # A token whose nbf is well in the future is not yet valid -> reject.
+    token = _signed({"alg": "HS256"}, {"sub": "x", "exp": 9999999999, "nbf": 5000})
+    with pytest.raises(AuthError, match="not yet valid"):
+        decode_token(token, secret=_SECRET, now=1000)
+
+
+def test_decode_rejects_future_iat() -> None:
+    # A token minted "in the future" (iat > now + skew) is forged/mis-clocked -> reject.
+    token = _signed({"alg": "HS256"}, {"sub": "x", "exp": 9999999999, "iat": 5000})
+    with pytest.raises(AuthError, match="issued in the future"):
+        decode_token(token, secret=_SECRET, now=1000)
+
+
+def test_decode_allows_nbf_iat_within_skew() -> None:
+    # nbf/iat a handful of seconds ahead (peer clock slightly fast) is tolerated.
+    token = _signed(
+        {"alg": "HS256"},
+        {"sub": "alice", "exp": 9999999999, "iat": 1030, "nbf": 1030},
+    )
+    assert decode_token(token, secret=_SECRET, now=1000) == "alice"
+
+
+def test_decode_allows_normal_past_nbf_iat() -> None:
+    # A normally-minted token (iat/nbf in the past) still validates -- no false reject.
+    token = create_access_token("alice", secret=_SECRET, expires_in=100, now=1000)
+    assert decode_token(token, secret=_SECRET, now=1050) == "alice"
+
+
+# --------------------------------------------------------------------------- #
+# Production posture selector (#858)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("value", ["production", "prod", " Production ", "PROD"])
+def test_is_production_true(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", value)
+    assert auth._is_production() is True
+
+
+@pytest.mark.parametrize("value", [None, "", "development", "dev", "test", "staging"])
+def test_is_production_false(monkeypatch: pytest.MonkeyPatch, value: Any) -> None:
+    if value is None:
+        monkeypatch.delenv("DUTCHBAY_ENV", raising=False)
+    else:
+        monkeypatch.setenv("DUTCHBAY_ENV", value)
+    assert auth._is_production() is False
+
+
+# --------------------------------------------------------------------------- #
+# Production secret hardening — reject insecure/weak secrets, fail closed (#858)
+# --------------------------------------------------------------------------- #
+_STRONG_SECRET = "P" * 40  # >= _MIN_PROD_SECRET_LEN, not a known placeholder
+
+
+@pytest.mark.parametrize("weak", ["changeme", "secret", "dev", "CHANGEME", " Secret "])
+def test_jwt_secret_prod_rejects_insecure_default(
+    monkeypatch: pytest.MonkeyPatch, weak: str
+) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", weak)
+    with pytest.raises(HTTPException) as exc:
+        auth._jwt_secret()
+    assert exc.value.status_code == 500
+    assert "insecure" in str(exc.value.detail).lower()
+
+
+def test_jwt_secret_prod_rejects_too_short(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", "x" * (auth._MIN_PROD_SECRET_LEN - 1))
+    with pytest.raises(HTTPException) as exc:
+        auth._jwt_secret()
+    assert exc.value.status_code == 500
+    assert "too short" in str(exc.value.detail).lower()
+
+
+def test_jwt_secret_prod_accepts_strong(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _STRONG_SECRET)
+    assert auth._jwt_secret() == _STRONG_SECRET
+
+
+def test_jwt_secret_dev_allows_short_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Off-production, a short literal secret (as the tests themselves use) is allowed.
+    monkeypatch.delenv("DUTCHBAY_ENV", raising=False)
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", "short")
+    assert auth._jwt_secret() == "short"
+
+
+def test_jwt_secret_missing_is_500_even_in_prod(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.delenv("DUTCHBAY_JWT_SECRET", raising=False)
+    with pytest.raises(HTTPException) as exc:
+        auth._jwt_secret()
+    assert exc.value.status_code == 500
+
+
+# --------------------------------------------------------------------------- #
+# Production iss/aud mandatory posture (#858) — unset is a 500, never unbound
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("reader", "env"),
+    [
+        (auth._jwt_issuer, "DUTCHBAY_JWT_ISSUER"),
+        (auth._jwt_audience, "DUTCHBAY_JWT_AUDIENCE"),
+    ],
+)
+def test_jwt_iss_aud_mandatory_in_prod(
+    monkeypatch: pytest.MonkeyPatch, reader: Any, env: str
+) -> None:
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.delenv(env, raising=False)
+    with pytest.raises(HTTPException) as exc:
+        reader()
+    assert exc.value.status_code == 500  # unset in prod -> misconfiguration, not None
+    # Once provided, it reads normally.
+    monkeypatch.setenv(env, "dutchbay")
+    assert reader() == "dutchbay"
+
+
+def test_jwt_iss_aud_optional_off_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Off-production the #842 opt-in behaviour is unchanged: unset -> None (not enforced).
+    monkeypatch.delenv("DUTCHBAY_ENV", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_ISSUER", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_AUDIENCE", raising=False)
+    assert auth._jwt_issuer() is None
+    assert auth._jwt_audience() is None
+
+
+def test_login_fails_closed_without_iss_aud_in_prod(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Production issuance must not mint an unbound token: with iss/aud unset, login 500s
+    # rather than issuing a token that carries no audience binding.
+    _set_user(monkeypatch, "alice", "pw")
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _STRONG_SECRET)
+    monkeypatch.delenv("DUTCHBAY_JWT_ISSUER", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_AUDIENCE", raising=False)
+    with pytest.raises(HTTPException) as exc:
+        login_for_access_token("alice", "pw")
+    assert exc.value.status_code == 500
+
+
+def test_get_current_subject_fails_closed_without_iss_aud_in_prod(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Verification must not accept an (even validly-signed) token when the production
+    # iss/aud binding is unconfigured -- fail closed at the dependency (500).
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _STRONG_SECRET)
+    monkeypatch.delenv("DUTCHBAY_JWT_ISSUER", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_AUDIENCE", raising=False)
+    token = create_access_token("alice", secret=_STRONG_SECRET)
+    with pytest.raises(HTTPException) as exc:
+        get_current_subject(token)
+    assert exc.value.status_code == 500
+
+
+def test_prod_posture_rejects_unbound_token_end_to_end(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production wiring, end-to-end: with iss/aud configured, login stamps them and the
+    dependency accepts the bound token -- but a validly-signed token minted WITHOUT the
+    required iss/aud (e.g. a stale pre-binding token, or one from a different service) is
+    rejected 401. Proves the mandatory-binding posture rejects unbound tokens, not just
+    that a good one is accepted."""
+    _set_user(monkeypatch, "alice", "pw")
+    monkeypatch.setenv("DUTCHBAY_ENV", "production")
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", _STRONG_SECRET)
+    monkeypatch.setenv("DUTCHBAY_JWT_ISSUER", "dutchbay")
+    monkeypatch.setenv("DUTCHBAY_JWT_AUDIENCE", "wizard")
+
+    good = login_for_access_token("alice", "pw")
+    assert get_current_subject(good) == "alice"
+
+    # A validly-signed token that carries NO iss/aud is rejected under the prod posture.
+    unbound = create_access_token("alice", secret=_STRONG_SECRET)
+    with pytest.raises(HTTPException) as exc:
+        get_current_subject(unbound)
+    assert exc.value.status_code == 401
