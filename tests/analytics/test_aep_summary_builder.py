@@ -148,6 +148,107 @@ def test_wake_live_drives_pywake_when_fully_specified(cfg: dict) -> None:
     assert 3.0 < pct < 15.0  # a real modelled wake, not the flat placeholder
 
 
+# ── #832: coastal-TI parametrization (config-driven, CESSPIT-strict, default-off) ─
+
+
+def test_resolve_wake_ti_defaults_to_kernel_ti() -> None:
+    # DEFAULT-OFF: an unset TI reproduces the engine default 0.10 (today's exact k*).
+    from analytics.wind.aep_summary_builder import _resolve_wake_ti
+    from wind_resource.bankable_aep import DEFAULT_TURBULENCE_INTENSITY
+
+    assert _resolve_wake_ti({}) == DEFAULT_TURBULENCE_INTENSITY
+    assert _resolve_wake_ti({"model_live": True}) == DEFAULT_TURBULENCE_INTENSITY
+
+
+def test_resolve_wake_ti_accepts_a_coastal_value() -> None:
+    from analytics.wind.aep_summary_builder import _resolve_wake_ti
+
+    assert _resolve_wake_ti({"turbulence_intensity": 0.08}) == pytest.approx(0.08)
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.05, 1.5, "0.08", True])
+def test_resolve_wake_ti_rejects_out_of_range_or_nonnumeric(bad: object) -> None:
+    # CESSPIT-strict: no silent clamp/coerce that would quietly move the modelled wake.
+    from analytics.wind.aep_summary_builder import _resolve_wake_ti
+
+    with pytest.raises(ValueError, match="turbulence_intensity"):
+        _resolve_wake_ti({"turbulence_intensity": bad})
+
+
+def test_wake_live_ti_default_matches_explicit_kernel_ti(cfg: dict) -> None:
+    # The wired live path with NO TI must equal an explicit TI=0.10 -> byte-identical wiring.
+    pytest.importorskip("py_wake")
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    live_common = {
+        "model_live": True,
+        "rotor_diameter_m": 198.0,
+        "coordinates": {"x_m": [0.0] * 15, "y_m": [i * 650.0 for i in range(15)]},
+        "wind_rose_freq": [3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4],
+        "deficit_model": "bastankhah",
+    }
+    curve = parse_power_curve("iea_reference_10mw")
+
+    cfg_default = copy.deepcopy(cfg)
+    cfg_default["resource"]["wake"] = dict(live_common)
+    pct_default, _ = _resolve_wake_loss(
+        cfg_default["resource"],
+        curve,
+        weibull_a=8.199,
+        weibull_k=2.665,
+        hub_height_m=150.0,
+    )
+
+    cfg_explicit = copy.deepcopy(cfg)
+    cfg_explicit["resource"]["wake"] = {**live_common, "turbulence_intensity": 0.10}
+    pct_explicit, _ = _resolve_wake_loss(
+        cfg_explicit["resource"],
+        curve,
+        weibull_a=8.199,
+        weibull_k=2.665,
+        hub_height_m=150.0,
+    )
+    assert pct_default == pytest.approx(pct_explicit, abs=1e-12)
+
+
+def test_wake_live_lower_coastal_ti_moves_the_modelled_wake(cfg: dict) -> None:
+    # Enabling a lower coastal TI DOES change the modelled wake (why it must be gated).
+    pytest.importorskip("py_wake")
+    from analytics.power_curves.oem_parser import parse_power_curve
+    from analytics.wind.aep_summary_builder import _resolve_wake_loss
+
+    live_common = {
+        "model_live": True,
+        "rotor_diameter_m": 198.0,
+        "coordinates": {"x_m": [0.0] * 15, "y_m": [i * 650.0 for i in range(15)]},
+        "wind_rose_freq": [3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4],
+        "deficit_model": "bastankhah",
+    }
+    curve = parse_power_curve("iea_reference_10mw")
+
+    cfg_base = copy.deepcopy(cfg)
+    cfg_base["resource"]["wake"] = {**live_common, "turbulence_intensity": 0.10}
+    pct_base, _ = _resolve_wake_loss(
+        cfg_base["resource"],
+        curve,
+        weibull_a=8.199,
+        weibull_k=2.665,
+        hub_height_m=150.0,
+    )
+
+    cfg_coastal = copy.deepcopy(cfg)
+    cfg_coastal["resource"]["wake"] = {**live_common, "turbulence_intensity": 0.06}
+    pct_coastal, _ = _resolve_wake_loss(
+        cfg_coastal["resource"],
+        curve,
+        weibull_a=8.199,
+        weibull_k=2.665,
+        hub_height_m=150.0,
+    )
+    assert pct_coastal != pytest.approx(pct_base, abs=1e-6)
+
+
 # ── #742: wind-rose + siting metadata surfacing (display-only, AEP-neutral) ────
 
 

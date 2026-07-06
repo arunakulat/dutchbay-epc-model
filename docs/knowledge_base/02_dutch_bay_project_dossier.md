@@ -58,6 +58,26 @@ The disclosed **P50 capacity factor of 35.4% is consistent with — and modestly
 
 The project represents roughly 2.7% of national electricity demand. For bankable financial structuring, the P50 figure is the appropriate base case, while debt sizing should reference the P90 yield. The financial model carries an AEP of ~473.8 GWh, approximately 2% above the EIA P50 — a recalibration toward 464.5 GWh (base) and 385.8 GWh (debt-sizing) is the conservative treatment. See `03_energy_yield_and_resource_methodology.md` for the P50/P90 framework and `05_pf_analyst_playbook.md` for the P50-bias discussion.
 
+### 2.1 Wake parametrization and coastal turbulence-intensity sensitivity (#832)
+
+The bankable engine models array wake loss over the real 15-turbine layout with PyWake's **Bastankhah–Porté-Agel 2014 Gaussian** deficit, whose wake-growth rate is set by the site **ambient turbulence intensity (TI)** through the Niayifar & Porté-Agel (2016) closure **`k* = 0.38·TI + 0.004`** (`wind_resource/bankable_aep.py::gaussian_k_star`). Lower TI, characteristic of a **low-roughness coastal/water fetch** (`z₀ ≈ 0.01–0.1 m`, versus `0.1–1 m` onshore), produces a smaller `k*` and hence slower cross-wind wake spreading.
+
+> **Do NOT hardcode the "coastal 0.04" figure.** The often-quoted coastal wake-decay ≈ 0.04 (vs onshore 0.075) is a **Jensen/Park-model** constant and does **not** map onto the Gaussian `k*`. The correct, physically consistent lever is the **site TI**, not a transplanted Jensen decay constant.
+
+**Sensitivity (screening, recomputed — not assumed).** Sweeping ambient TI over the committed 15-turbine single-row layout and SW-dominant wind rose (IEA 10 MW reference curve, Weibull a=8.199, k=2.665) gives the modelled array wake loss below. Numbers come from actual PyWake recomputation via `wind_resource.bankable_aep.wake_loss_ti_sensitivity`, against the **live-path baseline TI = 0.10** (which yields ≈ 8.19% here; note this differs from the frozen headline 7.28%, computed offline with the committed inputs — the sensitivity slope, not the absolute level, is the deliverable):
+
+| Ambient TI | `k* = 0.38·TI + 0.004` | Modelled array wake loss | Δ vs TI=0.10 |
+|---|---|---|---|
+| 0.06 | 0.0268 | 8.68% | **+0.49 pp** |
+| 0.08 | 0.0344 | 8.43% | +0.24 pp |
+| **0.10** (baseline) | **0.0420** | **8.19%** | 0.00 pp |
+| 0.12 | 0.0496 | 7.94% | −0.25 pp |
+| 0.14 | 0.0572 | 7.68% | −0.51 pp |
+
+Mean slope ≈ **−0.13 pp of array wake loss per +0.01 TI** (equivalently, **+0.13 pp per −0.01 TI**) over this range. The direction is the honest, counter-intuitive result the issue warns about: for this **densely-packed single row**, a *lower* coastal TI *raises* modelled wake loss (slower recovery-width growth keeps downwind turbines deeper in the deficit) — so "coastal ⇒ lower wake loss" is **not** a safe assumption and must not be baked in blind. The sign and magnitude are layout- and spacing-dependent; a wider or 2-D array would trade off differently.
+
+**Data dependency and gating.** The coastal-appropriate TI is a **documented assumption** until validated by **site mast / lidar** turbulence measurement; absent that, adopting a non-default TI is provenance-tagged and does **not** change any committed number. The parametrization ships **default-OFF**: an unset `resource.wake.turbulence_intensity` reproduces the current `k*` (TI = 0.10) exactly, and the frozen headline wake loss (7.28%) is untouched. Enabling a coastal TI (which moves modelled AEP) is a separate, **oracle-gated (`kpi_oracle.py`) and adversarially-reviewed** config edit — never folded into a feature/GIS change (issue #832, epic #827; `seq:3-correctness`).
+
 ---
 
 ## 3. Project Economics (EIA Extended Cost-Benefit Analysis)

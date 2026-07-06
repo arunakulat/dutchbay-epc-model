@@ -48,6 +48,7 @@ from analytics.wind.losses_model import apply_losses, net_capacity_factor
 from analytics.wind.siting_metadata import resolve_siting_metadata
 from analytics.wind.wind_rose import build_wind_rose
 from wind_resource.bankable_aep import (
+    DEFAULT_TURBULENCE_INTENSITY,
     RECOMMENDED_P50_HAIRCUT_PCT,
     UncertaintyBudget,
     budget_from_mapping,
@@ -208,6 +209,13 @@ def _resolve_wake_loss(
             "live wake needs rotor_diameter_m (resource.wake or resource.turbines)."
         )
 
+    # Coastal-TI parametrization (#832), config-driven and DEFAULT-OFF: when a scenario
+    # does not declare `resource.wake.turbulence_intensity` the live path uses the engine's
+    # kernel default (0.10), i.e. today's exact k* and wake loss. A scenario MAY set a
+    # coastal-appropriate (lower-roughness, lower-TI) value; CESSPIT-strict — a supplied TI
+    # must be a fraction in (0, 1] or it fails loud (no silent clamp that would move the KPI).
+    ti = _resolve_wake_ti(wake_cfg)
+
     # Local import: py_wake is optional and must not be imported at module load (CASPER).
     from wind_resource.bankable_aep import model_wake_loss
 
@@ -222,9 +230,35 @@ def _resolve_wake_loss(
         weibull_a=float(weibull_a),
         weibull_k=float(weibull_k),
         wind_rose_freq=[float(v) for v in rose],
+        turbulence_intensity=ti,
         deficit_model=str(wake_cfg.get("deficit_model", "bastankhah")),
     )
     return float(res.wake_loss_pct), f"pywake_live:{res.deficit_model}"
+
+
+def _resolve_wake_ti(wake_cfg: Mapping[str, Any]) -> float:
+    """Resolve the ambient turbulence intensity for the live wake (#832), CESSPIT-strict.
+
+    An unset ``turbulence_intensity`` returns the engine kernel default (DEFAULT-OFF:
+    the current 0.10 onshore closure, so behaviour is unchanged). A declared value must
+    be a real number in the open-closed interval (0, 1]; anything else fails loud rather
+    than being silently coerced — a bad TI would otherwise move the modelled wake loss.
+    """
+    raw = wake_cfg.get("turbulence_intensity")
+    if raw is None:
+        return DEFAULT_TURBULENCE_INTENSITY
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError(
+            "resource.wake.turbulence_intensity must be a number in (0, 1] "
+            f"(got {raw!r})."
+        )
+    ti = float(raw)
+    if not (0.0 < ti <= 1.0):
+        raise ValueError(
+            "resource.wake.turbulence_intensity must be a fraction in (0, 1] "
+            f"(got {ti!r}); e.g. 0.08 for a low-roughness coastal site."
+        )
+    return ti
 
 
 def _resolve_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
