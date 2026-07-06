@@ -1224,6 +1224,21 @@ _HARMONIC_SCREEN_DISCLAIMER = (
     "frequency-domain harmonic study against the utility base case."
 )
 
+_CURTAILMENT_SHARE_PROVENANCE = (
+    "In-house Python design-stage OpenDSSDirect QSTS (quasi-static time-series) "
+    "curtailment split: per-tech generation profiles injected against a REAL feeder "
+    "model (load-flow feasibility solved), curtailed energy integrated over the year and "
+    "split into DEEMED-PAID (grid-instructed — an EXPLICIT committed operator/feeder-limit "
+    "schedule, NOT a monitor heuristic — paid as deemed energy under the CEB SPPA, so "
+    "KPI-neutral) vs SELF-CURTAILED (physical export-cap shed of the injected generation — "
+    "a real energy loss), with export-cap surplus optionally recovered into the shared BESS "
+    "SoC (energy-conserved). ADVISORY / config-level ONLY — a synthetic/demo feeder is a "
+    "smoke test that NEVER overwrites the real loss placeholder, and this result NEVER "
+    "feeds the finance engine here (D6b wires the self-curtailment loss). NOT the "
+    "utility-accepted bankable hosting-capacity study (that is a QSTS against the TSO base "
+    "feeder with the OEM inverter models)."
+)
+
 
 @dataclass(frozen=True)
 class BessSocState(ContractMixin):
@@ -1486,6 +1501,92 @@ class HarmonicComplianceResult(ContractMixin):
 
 
 @dataclass(frozen=True)
+class CurtailmentShareResult(ContractMixin):
+    """Advisory QSTS curtailment split — deemed-paid vs self-curtailed (issue #882).
+
+    Emitted by :mod:`analytics.grid.curtailment_qsts`. A hybrid plant behind ONE export
+    cap loses energy for two physically distinct reasons, and the CEB SPPA treats them
+    OPPOSITELY, so they MUST be split:
+
+      (a) **deemed-paid / grid-instructed** curtailment — an operator dispatch /
+          upstream-feeder-limit instruction. Under the CEB standardised PPA this is PAID as
+          *deemed energy*, so it must NOT haircut revenue → KPI-NEUTRAL. It is an EXPLICIT
+          INPUT (the committed ``grid.qsts.grid_instructed_profile_mw`` schedule, or zeros),
+          NOT inferred from a QSTS monitor heuristic — deriving it from an export-cap breach
+          would double-count the plant's own self-curtailment. Reported for the record; never
+          subtracted from generation.
+      (b) **self-curtailed** — the plant physically sheds its OWN excess above the export
+          cap (the combined instantaneous output exceeds the POC export limit and there is
+          nowhere for the surplus to go). This is a REAL energy loss — the SOLE future
+          KPI-mover — but it is NOT wired to finance HERE (D6b does that); this result is
+          advisory only.
+
+    **BESS charge-from-surplus (energy-conserved).** When a co-located BESS has charge
+    headroom, surplus that would be self-curtailed is instead ABSORBED into the shared D5a
+    SoC model (:func:`analytics.grid.capabilities.bess_soc.split_reserves`, the
+    curtailment-absorption CHARGE-direction reserve). Absorbed MWh is RECOVERED energy, so
+    ``self_curtailed_energy_mwh`` is the self-shed surplus MINUS ``bess_absorbed_energy_mwh``
+    — the battery converts a would-be loss into stored energy WITHOUT creating energy from
+    nothing (``bess_absorbed_energy_mwh <= chargeable headroom``, enforced by the D5a
+    no-double-count invariant).
+
+    **Energy is conserved** and the invariant is asserted at emit:
+    ``curtailed_total = deemed_paid + self_curtailed_pre_bess`` and
+    ``self_curtailed = self_curtailed_pre_bess - bess_absorbed`` (≥ 0). None of these come
+    from a solver convergence flag — every MWh is an INTEGRAL of physical evidence
+    (export-cap breaches of the injected generation → self-shed; the committed grid-instruction
+    schedule → deemed; SoC headroom → recovery).
+
+    **NOT-RUN honesty (``ran`` + ``None``).** A run is only meaningful against a REAL
+    feeder. When the QSTS did not run — default-off (``grid.qsts.enabled`` False), no
+    ``feeder_model_path``, or a SYNTHETIC/demo feeder (which is a smoke test only) — the
+    energy fields are ``None`` and ``ran`` is False, with ``reason`` explaining why. A
+    synthetic feeder NEVER masquerades as a real curtailment figure and NEVER overwrites the
+    real loss placeholder (NO SPURIOUS PASS: a fabricated zero-loss "pass" is refused).
+
+    Fields
+        ran: True only when the QSTS solved against a REAL feeder and produced integrated
+            energy. False for every inert / NOT-RUN / synthetic-feeder path (energy fields
+            then ``None``).
+        feeder_source: the resolved feeder provenance — the real ``feeder_model_path``, or
+            ``"synthetic_demo"`` / ``"none"`` for the non-bankable paths.
+        export_cap_mw: the POC export limit the self-curtailment is measured against.
+        gross_energy_mwh: total generation injected over the horizon BEFORE any curtailment.
+        curtailed_total_mwh: total curtailed energy = deemed_paid + self_curtailed_pre_bess.
+        deemed_paid_energy_mwh: grid-instructed curtailment — PAID as deemed energy
+            (KPI-neutral; never haircuts revenue).
+        self_curtailed_pre_bess_mwh: physical export-cap surplus shed BEFORE BESS recovery.
+        bess_absorbed_energy_mwh: surplus recovered into the BESS (energy-conserved; bounded
+            by the D5a chargeable headroom).
+        self_curtailed_energy_mwh: the NET real self-curtailment loss AFTER BESS recovery
+            (``self_curtailed_pre_bess - bess_absorbed``) — the D6b KPI-mover, ≥ 0.
+        deemed_paid_pct / self_curtailed_pct: the deemed / net-self shares of gross energy.
+        hours_self_curtailed / hours_total: QSTS timestep counts (export-cap-breach hours,
+            total horizon hours).
+        reason: a human string; for NOT-RUN paths it states WHY the QSTS did not run.
+    """
+
+    ran: bool
+    feeder_source: str
+    export_cap_mw: float | None = None
+    gross_energy_mwh: float | None = None
+    curtailed_total_mwh: float | None = None
+    deemed_paid_energy_mwh: float | None = None
+    self_curtailed_pre_bess_mwh: float | None = None
+    bess_absorbed_energy_mwh: float | None = None
+    self_curtailed_energy_mwh: float | None = None
+    deemed_paid_pct: float | None = None
+    self_curtailed_pct: float | None = None
+    hours_self_curtailed: int | None = None
+    hours_total: int | None = None
+    method: str = "opendss_qsts"
+    bankable: bool = False
+    provenance: str = _CURTAILMENT_SHARE_PROVENANCE
+    reason: str = ""
+    notes: str = ""
+
+
+@dataclass(frozen=True)
 class IrrBridgeComponent(ContractMixin):
     """One leg of the project→equity IRR bridge (an additive IRR contribution, decimal).
 
@@ -1679,6 +1780,7 @@ __all__ = [
     "ResourceReactiveContribution",
     "PocCapabilityEnvelope",
     "HarmonicComplianceResult",
+    "CurtailmentShareResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
