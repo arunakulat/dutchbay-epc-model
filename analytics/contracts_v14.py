@@ -870,6 +870,149 @@ class GridStudyResult(ContractMixin):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# D5b (#880) — static hybrid POC aggregation contract.
+#
+# The D1/D3/D4 screens above characterise ONE resource (or one flat aggregate) at the
+# POC. A hybrid plant puts MULTIPLE converter-interfaced resources (wind + solar + BESS)
+# behind ONE point of connection, and two POC-level metrics only exist for the *combined*
+# fleet — they are NOT a single-tech box:
+#
+#   * a COMPOSITE / weighted SCR (WSCR): every IBR MW added behind the POC shares the same
+#     upstream fault level, so stacking solar/BESS behind a wind POC LOWERS the effective
+#     SCR each inverter sees (fault level ÷ TOTAL IBR MVA). A BESS PCS additionally
+#     STIFFENS the grid (adds to the fault level), so it enters both the numerator (as a
+#     fault-current source) and the denominator (as IBR MVA); and
+#   * an AGGREGATE Q(P,V) capability envelope: the plant's reactive headroom at the POC is
+#     the VECTOR SUM of each resource's ±Q (from its D4b/c/d plug-in) MINUS the reactive
+#     absorbed by the collector network + POC transformer between the resources and the
+#     POC — never a single resource's box.
+#
+# Like every grid screen this is design-stage ADVISORY (``bankable=False``): it never
+# feeds the finance engine, so committed scenarios stay byte-identical (KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_POC_AGGREGATION_PROVENANCE = (
+    "In-house Python design-stage STATIC hybrid-POC aggregation (weighted/composite SCR "
+    "over the combined IBR fleet behind one POC; aggregate ±Q(P) reactive envelope = "
+    "vector sum of the per-tech D4b/c/d plug-in headroom MINUS the collector + POC-"
+    "transformer reactive path). Pure static screening — NO ANDES / EMT. NOT the "
+    "utility-accepted bankable grid-connection study — CEB/NSCC require PSS/E or "
+    "PowerFactory against their confidential grid base case."
+)
+
+
+@dataclass(frozen=True)
+class ResourceReactiveContribution(ContractMixin):
+    """One resource's reactive + rating contribution to the hybrid POC envelope (#880).
+
+    Pure data — the per-resource line item aggregated (vector-summed) into the plant-level
+    :class:`PocCapabilityEnvelope`. Each field is the GROSS contribution at the resource
+    terminals (before the collector/transformer reactive path is netted at the POC).
+
+    Fields
+        name: the resource identifier (the tech block name / label).
+        tech: the resource technology class (``"wind"`` | ``"solar"`` | ``"bess"`` | …).
+        rated_mva: the resource's apparent-power rating (MVA) — its IBR-MVA weight in the
+            composite-SCR denominator.
+        q_available_mvar: the ± reactive headroom (Mvar, symmetric magnitude) this resource
+            can present at the POC active-power reference, from its D4b/c/d plug-in
+            (a Type-3 DFIG's is the partial-load-narrowed value; a BESS's is SoH-degraded).
+        fault_mva_contribution: the resource's contribution to the POC fault level (MVA).
+            A BESS PCS adds a real (current-limited) contribution; grid-following wind/solar
+            add ≈0 (they ride their current limit and do not stiffen the grid like a
+            machine), so they are credited ~nothing here — exactly the D4c anti-optimism rule.
+        is_synchronous: whether the resource presents a machine-like (voltage-source) fault
+            contribution. Always ``False`` for the modelled IBR fleet (wind/solar/BESS are
+            converter-interfaced) — a downstream aggregation must never credit them as a
+            synchronous machine, which would OVERSTATE grid strength.
+    """
+
+    name: str
+    tech: str
+    rated_mva: float
+    q_available_mvar: float
+    fault_mva_contribution: float
+    is_synchronous: bool = False
+
+
+@dataclass(frozen=True)
+class PocCapabilityEnvelope(ContractMixin):
+    """Advisory STATIC hybrid-POC aggregation for a combined IBR fleet (issue #880).
+
+    Emitted by :func:`analytics.grid.hybrid.poc_aggregation.aggregate_poc_capability` for a
+    hybrid plant that puts MULTIPLE converter-interfaced resources (wind + solar + BESS)
+    behind ONE point of connection. It reports the two plant-level metrics that only exist
+    for the combined fleet:
+
+    1. the COMPOSITE / weighted SCR (``composite_scr``): the upstream fault level at the POC
+       (source + every resource's own fault contribution) divided by the TOTAL IBR MVA
+       behind the POC. Adding IBR MW behind the POC LOWERS this vs a single-tech SCR — the
+       load-bearing hybrid rule. Banded (weak/moderate/strong) exactly like the D1
+       :class:`GridStrengthResult`.
+    2. the AGGREGATE reactive capability (``aggregate_q_available_mvar``): the VECTOR SUM of
+       each resource's ±Q headroom MINUS the reactive absorbed by the collector network +
+       POC transformer (``collector_transformer_q_loss_mvar``) — the ±Q the fleet can
+       actually present AT THE POC — screened against the grid-code demand there
+       (``aggregate_q_required_mvar``) into a Mvar ``aggregate_q_shortfall_mvar`` + PQ-box
+       verdict (``inside_pq_box``).
+
+    ADVISORY only (``bankable=False``): a pure STATIC screen (no ANDES / EMT); it never
+    feeds the finance engine, so committed scenarios stay byte-identical (KPI-neutral).
+
+    Fields
+        contributions: the per-resource :class:`ResourceReactiveContribution` line items
+            aggregated into the plant-level metrics (the audit trail of the vector sum).
+        total_ibr_mva: the TOTAL IBR apparent-power behind the POC (Σ resource rated_mva) —
+            the composite-SCR denominator.
+        source_fault_level_mva: the upstream (grid source) fault level at the POC (MVA).
+        aggregate_fault_level_mva: the total POC fault level = source + Σ resource fault
+            contributions (a BESS PCS stiffens it; grid-following wind/solar add ≈0).
+        composite_scr: the weighted/composite SCR = ``aggregate_fault_level_mva`` /
+            ``total_ibr_mva`` (LOWER than a single-tech SCR because the whole fleet shares
+            one fault level).
+        scr_band / gfl_gfm_recommendation: the composite-SCR band + GFL/GFM recommendation
+            (same thresholds/logic as the D1 grid-strength screen).
+        gross_q_available_mvar: the Σ of the resources' ±Q headroom BEFORE the collector/
+            transformer reactive path is netted.
+        collector_transformer_q_loss_mvar: the reactive (Mvar) absorbed by the collector
+            network + POC transformer between the resources and the POC (subtracted from
+            the gross reactive to give the AT-POC headroom).
+        aggregate_q_available_mvar: the ± reactive the fleet can present AT THE POC =
+            ``max(0, gross_q_available_mvar - collector_transformer_q_loss_mvar)``.
+        aggregate_q_required_mvar: the Mvar the grid code demands at the POC reference P.
+        aggregate_q_shortfall_mvar: ``max(0, required - available)`` — the STATCOM/MSC
+            sizing figure for the WHOLE hybrid plant at the POC.
+        inside_pq_box: True iff the aggregate available reactive meets the demand
+            (``aggregate_q_shortfall_mvar == 0``).
+        reference_p_mw: the POC active-power reference the reactive demand is evaluated at.
+        pf_required_min / pf_required_max: the grid-code pf limits (signed) the plant holds.
+        n_resources: the number of resources aggregated behind the POC.
+    """
+
+    contributions: tuple["ResourceReactiveContribution", ...]
+    total_ibr_mva: float
+    source_fault_level_mva: float
+    aggregate_fault_level_mva: float
+    composite_scr: float
+    scr_band: str
+    gfl_gfm_recommendation: str
+    gross_q_available_mvar: float
+    collector_transformer_q_loss_mvar: float
+    aggregate_q_available_mvar: float
+    aggregate_q_required_mvar: float
+    aggregate_q_shortfall_mvar: float
+    inside_pq_box: bool
+    reference_p_mw: float
+    pf_required_min: float
+    pf_required_max: float
+    n_resources: int = 0
+    method: str = "static_poc_aggregation"
+    bankable: bool = False
+    provenance: str = _POC_AGGREGATION_PROVENANCE
+    notes: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # D4a (#875) — RMS ride-through (fault-ride-through) dynamics contract.
 #
 # The reactive/SCR screens above are STEADY-STATE; D4a adds the DYNAMIC question:
@@ -1201,6 +1344,8 @@ __all__ = [
     "PowerFlowResult",
     "GridStudyResult",
     "RideThroughResult",
+    "ResourceReactiveContribution",
+    "PocCapabilityEnvelope",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
