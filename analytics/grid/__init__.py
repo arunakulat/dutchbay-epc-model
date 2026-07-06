@@ -36,6 +36,12 @@ Public surface:
       on the :mod:`finance.tech_types` classification (wind, solar, bess), each reusing the
       D4a ride-through core + the D3 reactive/SCR contracts for ONE technology. STANDALONE
       modules; a later dolphin wires per-tech dispatch into the evaluate_grid gateway.
+    - :mod:`analytics.grid.hybrid` — STATIC hybrid-POC aggregation
+      (:func:`analytics.grid.hybrid.poc_aggregation.aggregate_poc_capability`): walks the
+      resolved multi-tech resources, sums each tech's electrical model (via the D4b/c/d
+      plug-ins) onto ONE POC bus, and emits the advisory
+      :class:`analytics.contracts_v14.PocCapabilityEnvelope` (composite/weighted SCR +
+      aggregate ±Q(P) envelope net of the collector/transformer path).
 """
 
 from __future__ import annotations
@@ -47,4 +53,5 @@ __all__ = [
     "reactive_screen",
     "evaluate_grid",
     "capabilities",
+    "hybrid",
 ]

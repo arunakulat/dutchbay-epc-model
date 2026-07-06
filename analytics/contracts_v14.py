@@ -870,6 +870,149 @@ class GridStudyResult(ContractMixin):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# D5b (#880) — static hybrid POC aggregation contract.
+#
+# The D1/D3/D4 screens above characterise ONE resource (or one flat aggregate) at the
+# POC. A hybrid plant puts MULTIPLE converter-interfaced resources (wind + solar + BESS)
+# behind ONE point of connection, and two POC-level metrics only exist for the *combined*
+# fleet — they are NOT a single-tech box:
+#
+#   * a COMPOSITE / weighted SCR (WSCR): every IBR MW added behind the POC shares the same
+#     upstream fault level, so stacking solar/BESS behind a wind POC LOWERS the effective
+#     SCR each inverter sees (fault level ÷ TOTAL IBR MVA). A BESS PCS additionally
+#     STIFFENS the grid (adds to the fault level), so it enters both the numerator (as a
+#     fault-current source) and the denominator (as IBR MVA); and
+#   * an AGGREGATE Q(P,V) capability envelope: the plant's reactive headroom at the POC is
+#     the VECTOR SUM of each resource's ±Q (from its D4b/c/d plug-in) MINUS the reactive
+#     absorbed by the collector network + POC transformer between the resources and the
+#     POC — never a single resource's box.
+#
+# Like every grid screen this is design-stage ADVISORY (``bankable=False``): it never
+# feeds the finance engine, so committed scenarios stay byte-identical (KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_POC_AGGREGATION_PROVENANCE = (
+    "In-house Python design-stage STATIC hybrid-POC aggregation (weighted/composite SCR "
+    "over the combined IBR fleet behind one POC; aggregate ±Q(P) reactive envelope = "
+    "vector sum of the per-tech D4b/c/d plug-in headroom MINUS the collector + POC-"
+    "transformer reactive path). Pure static screening — NO ANDES / EMT. NOT the "
+    "utility-accepted bankable grid-connection study — CEB/NSCC require PSS/E or "
+    "PowerFactory against their confidential grid base case."
+)
+
+
+@dataclass(frozen=True)
+class ResourceReactiveContribution(ContractMixin):
+    """One resource's reactive + rating contribution to the hybrid POC envelope (#880).
+
+    Pure data — the per-resource line item aggregated (vector-summed) into the plant-level
+    :class:`PocCapabilityEnvelope`. Each field is the GROSS contribution at the resource
+    terminals (before the collector/transformer reactive path is netted at the POC).
+
+    Fields
+        name: the resource identifier (the tech block name / label).
+        tech: the resource technology class (``"wind"`` | ``"solar"`` | ``"bess"`` | …).
+        rated_mva: the resource's apparent-power rating (MVA) — its IBR-MVA weight in the
+            composite-SCR denominator.
+        q_available_mvar: the ± reactive headroom (Mvar, symmetric magnitude) this resource
+            can present at the POC active-power reference, from its D4b/c/d plug-in
+            (a Type-3 DFIG's is the partial-load-narrowed value; a BESS's is SoH-degraded).
+        fault_mva_contribution: the resource's contribution to the POC fault level (MVA).
+            A BESS PCS adds a real (current-limited) contribution; grid-following wind/solar
+            add ≈0 (they ride their current limit and do not stiffen the grid like a
+            machine), so they are credited ~nothing here — exactly the D4c anti-optimism rule.
+        is_synchronous: whether the resource presents a machine-like (voltage-source) fault
+            contribution. Always ``False`` for the modelled IBR fleet (wind/solar/BESS are
+            converter-interfaced) — a downstream aggregation must never credit them as a
+            synchronous machine, which would OVERSTATE grid strength.
+    """
+
+    name: str
+    tech: str
+    rated_mva: float
+    q_available_mvar: float
+    fault_mva_contribution: float
+    is_synchronous: bool = False
+
+
+@dataclass(frozen=True)
+class PocCapabilityEnvelope(ContractMixin):
+    """Advisory STATIC hybrid-POC aggregation for a combined IBR fleet (issue #880).
+
+    Emitted by :func:`analytics.grid.hybrid.poc_aggregation.aggregate_poc_capability` for a
+    hybrid plant that puts MULTIPLE converter-interfaced resources (wind + solar + BESS)
+    behind ONE point of connection. It reports the two plant-level metrics that only exist
+    for the combined fleet:
+
+    1. the COMPOSITE / weighted SCR (``composite_scr``): the upstream fault level at the POC
+       (source + every resource's own fault contribution) divided by the TOTAL IBR MVA
+       behind the POC. Adding IBR MW behind the POC LOWERS this vs a single-tech SCR — the
+       load-bearing hybrid rule. Banded (weak/moderate/strong) exactly like the D1
+       :class:`GridStrengthResult`.
+    2. the AGGREGATE reactive capability (``aggregate_q_available_mvar``): the VECTOR SUM of
+       each resource's ±Q headroom MINUS the reactive absorbed by the collector network +
+       POC transformer (``collector_transformer_q_loss_mvar``) — the ±Q the fleet can
+       actually present AT THE POC — screened against the grid-code demand there
+       (``aggregate_q_required_mvar``) into a Mvar ``aggregate_q_shortfall_mvar`` + PQ-box
+       verdict (``inside_pq_box``).
+
+    ADVISORY only (``bankable=False``): a pure STATIC screen (no ANDES / EMT); it never
+    feeds the finance engine, so committed scenarios stay byte-identical (KPI-neutral).
+
+    Fields
+        contributions: the per-resource :class:`ResourceReactiveContribution` line items
+            aggregated into the plant-level metrics (the audit trail of the vector sum).
+        total_ibr_mva: the TOTAL IBR apparent-power behind the POC (Σ resource rated_mva) —
+            the composite-SCR denominator.
+        source_fault_level_mva: the upstream (grid source) fault level at the POC (MVA).
+        aggregate_fault_level_mva: the total POC fault level = source + Σ resource fault
+            contributions (a BESS PCS stiffens it; grid-following wind/solar add ≈0).
+        composite_scr: the weighted/composite SCR = ``aggregate_fault_level_mva`` /
+            ``total_ibr_mva`` (LOWER than a single-tech SCR because the whole fleet shares
+            one fault level).
+        scr_band / gfl_gfm_recommendation: the composite-SCR band + GFL/GFM recommendation
+            (same thresholds/logic as the D1 grid-strength screen).
+        gross_q_available_mvar: the Σ of the resources' ±Q headroom BEFORE the collector/
+            transformer reactive path is netted.
+        collector_transformer_q_loss_mvar: the reactive (Mvar) absorbed by the collector
+            network + POC transformer between the resources and the POC (subtracted from
+            the gross reactive to give the AT-POC headroom).
+        aggregate_q_available_mvar: the ± reactive the fleet can present AT THE POC =
+            ``max(0, gross_q_available_mvar - collector_transformer_q_loss_mvar)``.
+        aggregate_q_required_mvar: the Mvar the grid code demands at the POC reference P.
+        aggregate_q_shortfall_mvar: ``max(0, required - available)`` — the STATCOM/MSC
+            sizing figure for the WHOLE hybrid plant at the POC.
+        inside_pq_box: True iff the aggregate available reactive meets the demand
+            (``aggregate_q_shortfall_mvar == 0``).
+        reference_p_mw: the POC active-power reference the reactive demand is evaluated at.
+        pf_required_min / pf_required_max: the grid-code pf limits (signed) the plant holds.
+        n_resources: the number of resources aggregated behind the POC.
+    """
+
+    contributions: tuple["ResourceReactiveContribution", ...]
+    total_ibr_mva: float
+    source_fault_level_mva: float
+    aggregate_fault_level_mva: float
+    composite_scr: float
+    scr_band: str
+    gfl_gfm_recommendation: str
+    gross_q_available_mvar: float
+    collector_transformer_q_loss_mvar: float
+    aggregate_q_available_mvar: float
+    aggregate_q_required_mvar: float
+    aggregate_q_shortfall_mvar: float
+    inside_pq_box: bool
+    reference_p_mw: float
+    pf_required_min: float
+    pf_required_max: float
+    n_resources: int = 0
+    method: str = "static_poc_aggregation"
+    bankable: bool = False
+    provenance: str = _POC_AGGREGATION_PROVENANCE
+    notes: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # D4a (#875) — RMS ride-through (fault-ride-through) dynamics contract.
 #
 # The reactive/SCR screens above are STEADY-STATE; D4a adds the DYNAMIC question:
@@ -1046,6 +1189,42 @@ _BESS_SOC_PROVENANCE = (
 )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D7 (#883) — harmonics / flicker + frequency-headroom SCR-coupled screen contract.
+#
+# The SCR / reactive / ride-through screens above answer stiffness, steady-state
+# reactive and dynamic ride-through. D7 adds the POWER-QUALITY question, and it is
+# EXPLICITLY SCR-COUPLED: harmonic voltage distortion and flicker Pst at the POC
+# both WORSEN as the SCR (grid stiffness) drops, because the injected harmonic
+# current and flicker current see a weaker (higher-impedance) grid. The screen also
+# indexes the IEEE 519:2022 voltage/current-distortion limits by the D1 Isc/IL (SCR)
+# ratio — the limit table is itself a function of grid stiffness — and sizes the
+# frequency-response de-load / droop headroom (energy foregone) from the grid-code
+# frequency ride-through band. Like every other grid screen this is design-stage
+# ADVISORY (``bankable=False``); it is a SCREENING APPROXIMATION that DEGRADES as SCR
+# falls, NOT a standalone pass/fail — a true harmonic/flicker study is a frequency-
+# domain PSS/E or PowerFactory scan against the utility's confidential harmonic base
+# case with the OEM current-emission spectra. It NEVER feeds the finance engine
+# (committed scenarios stay byte-identical / KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HARMONIC_SCREEN_PROVENANCE = (
+    "In-house Python design-stage harmonics/flicker + frequency-headroom screen "
+    "(SCR-coupled Zbus(h) harmonic-voltage estimate vs IEEE 519:2022 limits indexed by "
+    "Isc/IL; IEC 61400-21 flicker Pst from POC Ssc; frequency-response de-load/droop "
+    "headroom from the grid-code ride-through band). SCREENING APPROXIMATION that "
+    "DEGRADES as SCR falls — NOT a standalone pass/fail and NOT the utility-accepted "
+    "bankable study (CEB/NSCC require a frequency-domain PSS/E or PowerFactory harmonic "
+    "scan against their confidential base case with the OEM current-emission spectra)."
+)
+
+_HARMONIC_SCREEN_DISCLAIMER = (
+    "SCR-COUPLED SCREENING APPROXIMATION — harmonic voltage + flicker WORSEN as SCR "
+    "drops; degrades as the grid weakens. NOT a standalone pass/fail; confirm with a "
+    "frequency-domain harmonic study against the utility base case."
+)
+
+
 @dataclass(frozen=True)
 class BessSocState(ContractMixin):
     """The usable-energy picture of a BESS at one state-of-charge (issue #879).
@@ -1145,6 +1324,165 @@ class ReserveSplitResult(ContractMixin):
     bankable: bool = False
     provenance: str = _BESS_SOC_PROVENANCE
     notes: str = ""
+
+
+@dataclass(frozen=True)
+class HarmonicComplianceResult(ContractMixin):
+    """Advisory SCR-coupled harmonics / flicker + frequency-headroom screen (issue #883).
+
+    Emitted by :mod:`analytics.grid.harmonics` (with the frequency-headroom sizing from
+    :mod:`analytics.grid.frequency_response`). Reports, at the POC:
+
+      1. the worst per-order harmonic voltage distortion (``V_h = |Zbus(h)| · I_h`` from an
+         OEM/config current-emission spectrum) and the total harmonic voltage distortion
+         (THD_v), each compared to the IEEE 519:2022 voltage-distortion limits that are
+         INDEXED by the D1 Isc/IL (SCR) ratio;
+      2. the IEC 61400-21 short-term flicker ``Pst`` at the POC from the plant's flicker
+         coefficient and the POC short-circuit apparent power ``Ssc``; and
+      3. the frequency-response de-load / droop headroom (MW held in reserve + the annual
+         ENERGY FOREGONE, MWh/yr) implied by the grid-code frequency ride-through band.
+
+    EXPLICITLY SCR-COUPLED: both the harmonic voltage and the flicker Pst scale INVERSELY
+    with grid stiffness — as the SCR (equivalently ``Ssc``) drops, the same injected
+    harmonic / flicker current produces a LARGER POC voltage disturbance, so the screen
+    verdict DEGRADES. It is a SCREENING APPROXIMATION, NOT a standalone pass/fail, and is
+    ADVISORY only (``bankable=False``); it never feeds the finance engine (KPI-neutral).
+
+    Fields
+        scr: the short-circuit ratio the screen is coupled to (from the D1 SCR screen);
+            lower SCR ⇒ higher harmonic voltage + flicker.
+        isc_il_ratio: the IEEE 519 Isc/IL ratio (short-circuit current ÷ plant load
+            current at the POC) that INDEXES the distortion-limit table.
+        worst_harmonic_order: the harmonic order (h) with the largest voltage distortion.
+        worst_harmonic_voltage_pct: the worst per-order harmonic voltage V_h (% of nominal).
+        harmonic_voltage_limit_pct: the IEEE 519:2022 individual-harmonic voltage limit
+            (%) at the plant's voltage level (the per-order compliance yardstick).
+        thd_voltage_pct: total harmonic voltage distortion at the POC (% of nominal).
+        thd_voltage_limit_pct: the IEEE 519:2022 THD_v limit (%) at the plant's voltage.
+        current_tdd_pct: total demand distortion of the injected harmonic current (% of IL).
+        current_tdd_limit_pct: the IEEE 519:2022 current-TDD limit (%) INDEXED by
+            ``isc_il_ratio`` (a weaker grid ⇒ a lower allowed TDD).
+        flicker_pst: the IEC 61400-21 short-term flicker severity at the POC.
+        flicker_pst_limit: the flicker Pst planning limit (typically 0.35 at HV).
+        poc_ssc_mva: the POC short-circuit apparent power (MVA) the flicker / harmonic
+            voltage are referred to (the SCR coupling term).
+        harmonic_within_limits / flicker_within_limits: per-domain SCREENING verdicts —
+            True iff the estimate sits within the (SCR-indexed) limit. ``None`` when the
+            screen could not evaluate that domain (missing spectrum / flicker coefficient)
+            — an honest NOT-RUN, never a spurious pass.
+        freq_response_headroom_mw: the MW of active-power reserve the grid-code droop /
+            de-load requirement holds back (the frequency-response headroom).
+        energy_foregone_mwh_yr: the annual energy (MWh/yr) foregone to hold that headroom
+            (the de-load opportunity cost) — a SIZING figure, advisory only.
+        method: the screen method (``"pandapower_zbus"`` when the frequency-domain
+            bus-impedance scan ran, else ``"closed_form"``).
+        disclaimer: the fixed SCR-coupled-screening caveat (a distinct field so downstream
+            reports cannot drop it).
+    """
+
+    scr: float
+    isc_il_ratio: float
+    worst_harmonic_order: int | None
+    worst_harmonic_voltage_pct: float | None
+    harmonic_voltage_limit_pct: float
+    thd_voltage_pct: float | None
+    thd_voltage_limit_pct: float
+    current_tdd_pct: float | None
+    current_tdd_limit_pct: float
+    flicker_pst: float | None
+    flicker_pst_limit: float
+    poc_ssc_mva: float
+    harmonic_within_limits: bool | None = None
+    flicker_within_limits: bool | None = None
+    freq_response_headroom_mw: float | None = None
+    energy_foregone_mwh_yr: float | None = None
+    method: str = "closed_form"
+    bankable: bool = False
+    disclaimer: str = _HARMONIC_SCREEN_DISCLAIMER
+    provenance: str = _HARMONIC_SCREEN_PROVENANCE
+    notes: str = ""
+
+    @classmethod
+    def from_screen(
+        cls,
+        *,
+        scr: float,
+        isc_il_ratio: float,
+        worst_harmonic_order: int | None,
+        worst_harmonic_voltage_pct: float | None,
+        harmonic_voltage_limit_pct: float,
+        thd_voltage_pct: float | None,
+        thd_voltage_limit_pct: float,
+        current_tdd_pct: float | None,
+        current_tdd_limit_pct: float,
+        flicker_pst: float | None,
+        flicker_pst_limit: float,
+        poc_ssc_mva: float,
+        freq_response_headroom_mw: float | None = None,
+        energy_foregone_mwh_yr: float | None = None,
+        method: str = "closed_form",
+        provenance: str = _HARMONIC_SCREEN_PROVENANCE,
+        notes: str = "",
+    ) -> "HarmonicComplianceResult":
+        """Build the advisory harmonics/flicker result, deriving the per-domain verdicts.
+
+        The per-domain SCREENING verdicts are derived from PHYSICAL evidence, never
+        assumed:
+
+          * ``harmonic_within_limits`` is ``None`` (NOT-RUN) when neither a worst-order
+            harmonic voltage NOR a THD_v estimate is available (no current-emission
+            spectrum was supplied) — an honest NOT-RUN, not a spurious pass. Otherwise it
+            is True iff BOTH the worst per-order V_h ≤ the IEEE 519 individual limit AND
+            the THD_v ≤ the THD_v limit AND (when a current TDD was computed) the current
+            TDD ≤ the SCR-indexed current-TDD limit.
+          * ``flicker_within_limits`` is ``None`` (NOT-RUN) when no flicker Pst could be
+            computed (no flicker coefficient), else True iff ``flicker_pst`` ≤ the limit.
+
+        ``bankable`` is always ``False`` (in-house SCR-coupled screen) and the fixed
+        SCR-coupled-screening ``disclaimer`` is always stamped.
+        """
+        harmonic_verdict: bool | None
+        if worst_harmonic_voltage_pct is None and thd_voltage_pct is None:
+            harmonic_verdict = None
+        else:
+            ok = True
+            if worst_harmonic_voltage_pct is not None:
+                ok = ok and worst_harmonic_voltage_pct <= harmonic_voltage_limit_pct
+            if thd_voltage_pct is not None:
+                ok = ok and thd_voltage_pct <= thd_voltage_limit_pct
+            if current_tdd_pct is not None:
+                ok = ok and current_tdd_pct <= current_tdd_limit_pct
+            harmonic_verdict = ok
+
+        flicker_verdict: bool | None
+        if flicker_pst is None:
+            flicker_verdict = None
+        else:
+            flicker_verdict = flicker_pst <= flicker_pst_limit
+
+        return cls(
+            scr=scr,
+            isc_il_ratio=isc_il_ratio,
+            worst_harmonic_order=worst_harmonic_order,
+            worst_harmonic_voltage_pct=worst_harmonic_voltage_pct,
+            harmonic_voltage_limit_pct=harmonic_voltage_limit_pct,
+            thd_voltage_pct=thd_voltage_pct,
+            thd_voltage_limit_pct=thd_voltage_limit_pct,
+            current_tdd_pct=current_tdd_pct,
+            current_tdd_limit_pct=current_tdd_limit_pct,
+            flicker_pst=flicker_pst,
+            flicker_pst_limit=flicker_pst_limit,
+            poc_ssc_mva=poc_ssc_mva,
+            harmonic_within_limits=harmonic_verdict,
+            flicker_within_limits=flicker_verdict,
+            freq_response_headroom_mw=freq_response_headroom_mw,
+            energy_foregone_mwh_yr=energy_foregone_mwh_yr,
+            method=method,
+            bankable=False,
+            disclaimer=_HARMONIC_SCREEN_DISCLAIMER,
+            provenance=provenance,
+            notes=notes,
+        )
 
 
 @dataclass(frozen=True)
@@ -1338,6 +1676,9 @@ __all__ = [
     "RideThroughResult",
     "BessSocState",
     "ReserveSplitResult",
+    "ResourceReactiveContribution",
+    "PocCapabilityEnvelope",
+    "HarmonicComplianceResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
