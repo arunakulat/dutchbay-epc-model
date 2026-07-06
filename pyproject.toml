@@ -183,6 +183,29 @@ jobs = [
   "arq>=0.25",
   "redis>=5.0",
 ]
+# Grid interconnection / hosting-capacity study (issue #871). Opt-in like [gis]/[pareto];
+# the finance engine + CLI never import it, so the default install and CI lanes stay
+# grid-free. The study code (D1, analytics.grid.*) guards its imports via
+# _require_pandapower / _require_andes / _require_opendss (CASPER), so the base finance
+# install never needs the grid toolchain, and the grid tests are gated behind
+# ``pytest.importorskip('pandapower')``. Install with:
+#     PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"
+# PIN NOTE (verified empirically against PyPI metadata + the frozen core pins, which live
+# in requirements.txt: numpy==2.4.6 / scipy==1.17.1 / pandas==2.3.3): pandapower is pinned
+# EXACTLY to ==3.3.0. Both pandapower 3.4.0 and 3.3.3 declare scipy<1.17 (3.4.0 also
+# numpy<2.4) — they EXCLUDE the core pins and would force a silent scipy/numpy downgrade
+# with KPI-drift risk. 3.3.0 declares numpy~=2.2 / scipy~=1.15 / pandas~=2.3, which the core
+# pins satisfy, so the exact ==3.3.0 pin (NOT a version range) is what deterministically
+# prevents the downgrade — it holds on its own, independent of constraints.txt (which pins
+# only pandas<3). andes and opendssdirect.py impose no core caps. The OpenDSS wheel
+# dist name is ``opendssdirect.py`` (imports as ``opendssdirect``); the bare name
+# ``opendssdirect`` does NOT exist on PyPI. PyWake / windpowerlib are not needed here —
+# they already ride in via [wind]; add them as a follow-up only if a grid path requires them.
+grid = [
+  "pandapower==3.3.0",
+  "andes>=2.0",
+  "opendssdirect.py>=0.9.4",
+]
 
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
@@ -254,6 +277,7 @@ markers = [
     "monte_carlo: Monte Carlo simulation tests",
     "sensitivity: sensitivity-analysis tests",
     "lint: static-analysis and linting tests",
+    "grid: grid-study tests requiring the [grid] optional deps (deselect with -m 'not grid')",
     "analytics_layer: functional/integration tests for the analytics layer",
     "casper: CASPER payload/contract tests",
     "frozen: tests with frozen assertions",

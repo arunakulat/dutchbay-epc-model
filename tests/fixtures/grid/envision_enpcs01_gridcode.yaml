@@ -1,0 +1,46 @@
+# Redacted grid-code parameter fixture for the Envision ENPCS01 GFL PCS.
+#
+# REFERENCED, NEVER EXECUTED. This file carries ONLY the grid-code CONstants parsed
+# from the OEM dynamic model. The proprietary OEM binaries (.dyr / .dll / .pfd) are
+# NOT committed to this repository and are not required to run any test — the grid
+# study (D1, analytics.grid.*) consumes these redacted values as reference data only.
+#
+# Units: rating in kW; per-unit (pu) on machine base unless noted; frequency in Hz;
+# time thresholds in seconds. Trip tables are ordered (setpoint @ clearing-time) pairs.
+provenance: "Envision ENPCS01 GFL PCS — PSS/E UDM V2 (2025-03-17) + DigSILENT V1.2a (2025-05-06); grid-code CONs parsed 2026-07-06; OEM .dyr/.dll/.pfd proprietary, referenced-not-executed."
+
+pcs:
+  model: "Envision ENPCS01"
+  topology: "GFL"  # grid-following
+  rating_kw: 2750
+
+  # Reactive-capability envelope
+  pf_range: [-0.95, 0.95]
+  q_range_pu: [-0.5, 0.5]
+
+  # Ride-through entry thresholds (pu)
+  lvrt_enter_pu: 0.89
+  hvrt_enter_pu: 1.10
+
+  # Fault-current injection gains (dimensionless k-factor)
+  lvrt_k_factor: 2.0
+  hvrt_k_factor: 1.9
+
+  # Frequency trip tables (Hz @ seconds)
+  freq_trip_hz:
+    underfrequency:
+      - [47.5, 1800.0]
+      - [47.0, 0.1]
+    overfrequency:
+      - [51.5, 1800.0]
+      - [52.0, 0.1]
+
+  # Voltage trip tables (pu @ seconds)
+  volt_trip_pu:
+    undervoltage:
+      - [0.85, 21.0]
+      - [0.50, 11.0]
+    overvoltage:
+      - [1.1, 20.0]
+      - [1.2, 1.0]
+      - [1.3, 0.1]
