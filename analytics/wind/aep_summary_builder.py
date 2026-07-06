@@ -167,6 +167,18 @@ def _resolve_wake_loss(
     column. The live path FAILS LOUD on any missing input rather than silently degrading to a
     uniform-rose computation that would be LESS faithful than the frozen value — and
     ``model_wake_loss`` itself raises a clear error when py_wake is not installed (CASPER).
+
+    Live-PyWake activation (#853.3), config-driven and DEFAULT-OFF: instead of a hand-typed
+    ``wind_rose_freq`` the live path can consume the DERIVED directional rose — the per-sector
+    frequencies binned by the canonical :func:`analytics.wind.wind_rose.build_wind_rose` from a
+    real met-convention direction series (e.g. the #853.1 production ``wd_100m``). This is gated
+    on an EXPLICIT opt-in ``resource.wake.use_derived_rose: true`` that DEFAULTS FALSE — when it is
+    unset/false the resolution is byte-identical to today (an explicit ``wind_rose_freq`` is still
+    required and consumed unchanged). Enabling it MOVES the headline wake loss (real sectoral
+    frequencies vs the frozen offline value) and is therefore separately oracle-gated. When ON, the
+    derived rose is required (from ``resource.wake.direction_deg`` or, failing that,
+    ``resource.wind_rose.direction_deg``); a missing/degenerate series FAILS LOUD rather than
+    silently falling back to an omnidirectional rose (which would be LESS faithful than frozen).
     """
     losses = resource.get("losses", {}) or {}
     wake_cfg = resource.get("wake", {}) or {}
@@ -187,14 +199,19 @@ def _resolve_wake_loss(
         return float(frozen), "frozen_config_pct"
 
     coords = wake_cfg.get("coordinates") or {}
-    rose = wake_cfg.get("wind_rose_freq")
     x_m, y_m = coords.get("x_m"), coords.get("y_m")
+    # Directional rose resolution. DEFAULT-OFF (#853.3): the rose is an explicit
+    # ``wind_rose_freq`` UNLESS the scenario opts into deriving it from a real direction
+    # series via ``use_derived_rose: true``. An unset/false flag keeps today's exact
+    # behaviour (explicit freq consumed unchanged) — byte-identical.
+    rose, rose_source = _resolve_live_wind_rose_freq(wake_cfg, resource)
     if x_m is None or y_m is None or rose is None:
         raise ValueError(
             "resource.wake.model_live is true but the live-wake inputs are incomplete: need "
-            "coordinates.x_m, coordinates.y_m AND wind_rose_freq. Without the wind rose the "
-            "wake defaults to a uniform direction distribution, which is LESS faithful than the "
-            "frozen offline PyWake value — so this fails loud rather than degrading the headline."
+            "coordinates.x_m, coordinates.y_m AND wind_rose_freq (or use_derived_rose with a "
+            "direction series). Without the wind rose the wake defaults to a uniform direction "
+            "distribution, which is LESS faithful than the frozen offline PyWake value — so this "
+            "fails loud rather than degrading the headline."
         )
     if "thrust_coefficient" not in curve.columns:
         raise ValueError(
@@ -233,7 +250,82 @@ def _resolve_wake_loss(
         turbulence_intensity=ti,
         deficit_model=str(wake_cfg.get("deficit_model", "bastankhah")),
     )
-    return float(res.wake_loss_pct), f"pywake_live:{res.deficit_model}"
+    # Disclose BOTH the deficit model and where the directional rose came from
+    # (explicit config freq vs a rose DERIVED from a real direction series, #853.3),
+    # so a lender report can never confuse a live-derived wake with the frozen headline.
+    return float(res.wake_loss_pct), f"pywake_live:{res.deficit_model}:{rose_source}"
+
+
+def _resolve_live_wind_rose_freq(
+    wake_cfg: Mapping[str, Any],
+    resource: Mapping[str, Any],
+) -> "tuple[Optional[list[float]], str]":
+    """Resolve the directional ``wind_rose_freq`` for the live wake (#853.3), DEFAULT-OFF.
+
+    Returns ``(freq_or_None, rose_source)``.
+
+    Two mutually-exclusive modes, gated on the explicit opt-in
+    ``resource.wake.use_derived_rose`` which DEFAULTS FALSE:
+
+    - **OFF (default)** — the rose is the explicit ``resource.wake.wind_rose_freq``
+      (a list of per-sector frequencies), consumed EXACTLY as before. When the flag is
+      unset/false the behaviour is byte-identical to the pre-#853.3 path: an absent
+      ``wind_rose_freq`` returns ``None`` so the caller fails loud on incomplete inputs;
+      supplying ``use_derived_rose: false`` alongside a ``wind_rose_freq`` is a no-op.
+      ``rose_source`` is ``"config_freq"``.
+
+    - **ON (opt-in)** — the rose is DERIVED from a real met-convention direction series by
+      the canonical :func:`analytics.wind.wind_rose.build_wind_rose`: the per-sector
+      ``frequency`` vector binned from ``resource.wake.direction_deg`` (preferred) or, if
+      absent, ``resource.wind_rose.direction_deg`` (the #853.1 production ``wd_100m`` path).
+      Sector count follows ``resource.wake.wind_rose_sectors`` (default 12, matching
+      ``build_wind_rose``). This MOVES the headline wake loss and so is separately
+      oracle-gated. ``rose_source`` is ``"derived:<n_sectors>sec"``.
+
+    CESSPIT-strict when the flag is ON:
+      - ``use_derived_rose`` and an explicit ``wind_rose_freq`` are mutually exclusive
+        (supplying both is a contradiction — fail loud, never silently pick one);
+      - a missing/empty direction series fails loud (``build_wind_rose`` also raises on an
+        all-NaN series) rather than degrading to an omnidirectional rose, which would be
+        LESS faithful than the frozen offline value.
+    """
+    use_derived = bool(wake_cfg.get("use_derived_rose", False))
+
+    if not use_derived:
+        # DEFAULT-OFF: explicit config frequency, consumed unchanged (byte-identical).
+        freq = wake_cfg.get("wind_rose_freq")
+        if freq is None:
+            return None, "config_freq"
+        return [float(v) for v in freq], "config_freq"
+
+    # --- opt-in: derive the rose from a real direction series (#853.3) ---
+    if wake_cfg.get("wind_rose_freq") is not None:
+        raise ValueError(
+            "resource.wake.use_derived_rose is true but an explicit wind_rose_freq is also "
+            "supplied; these are mutually exclusive. Remove one — either derive the rose from a "
+            "direction series (use_derived_rose) or pin the sector frequencies (wind_rose_freq)."
+        )
+
+    directions = wake_cfg.get("direction_deg")
+    if directions is None:
+        wind_rose_cfg = resource.get("wind_rose", {}) or {}
+        if isinstance(wind_rose_cfg, Mapping):
+            directions = wind_rose_cfg.get("direction_deg")
+    if directions is None:
+        raise ValueError(
+            "resource.wake.use_derived_rose is true but no direction series was found: supply "
+            "resource.wake.direction_deg (or resource.wind_rose.direction_deg) — a met-convention "
+            "wind-direction series to bin into the live-PyWake directional rose. Deriving from a "
+            "real series is the point of the opt-in; failing loud avoids silently falling back to "
+            "an omnidirectional rose that would be LESS faithful than the frozen value."
+        )
+
+    n_sectors = int(wake_cfg.get("wind_rose_sectors", 12))
+    rose = build_wind_rose(
+        [float(v) for v in directions],
+        n_sectors=n_sectors,
+    )
+    return [float(f) for f in rose["frequency"]], f"derived:{rose['n_sectors']}sec"
 
 
 def _resolve_wake_ti(wake_cfg: Mapping[str, Any]) -> float:
