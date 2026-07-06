@@ -315,6 +315,26 @@ def _read_wind_export_payload(export_path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def _read_solar_export_payload(export_path: str | Path) -> dict[str, Any]:
+    """Load the FULL frozen solar-export JSON (top-level, not just cashflow_export).
+
+    The solar analogue of :func:`_read_wind_export_payload` (#727): the Executive
+    Workbook step needs the top-level payload so it can read the optional
+    ``long_term_trend`` block a solar producer freezes alongside its cashflow export
+    (see ``analytics.executive_workbook.resource_trend_df_from_solar_export``). Pure
+    read — no validation beyond "is a dict".
+    """
+    p = Path(export_path)
+    with p.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Solar export {export_path!r} did not parse to a dict "
+            f"(got {type(payload).__name__})"
+        )
+    return payload
+
+
 def _load_solar_export(export_path: str | Path) -> dict[str, Any]:
     """Load a frozen solar-export JSON into the SolarCashflowExport contract shape.
 
@@ -733,8 +753,10 @@ def cli(cfg: DictConfig) -> None:
                   analytics.executive_workbook.emit_executive_workbook_from_pipeline.
                   The five finance sheets come from the pipeline result; the
                   optional "ResourceTrend" sheet is added only when the supplied
-                  frozen wind export carries a long_term_trend block. No live
-                  ERA5 is run (the finance CLI stays cdsapi-free). Default false.
+                  frozen wind OR solar export carries a long_term_trend block
+                  (#656 wind / #727 solar GHI; ONE sheet, wind-first on a hybrid).
+                  No live ERA5/pvlib is run (the finance CLI stays cdsapi-/pvlib-
+                  free). Default false.
                 - executive_workbook_path: Target .xlsx path. Default
                   '<export_dir>/executive_workbook.xlsx'. On emission the written
                   path is echoed back under result['executive_workbook_path'].
@@ -925,9 +947,11 @@ def cli(cfg: DictConfig) -> None:
     # Temp patched-scenario files (resource-overrides then wind then solar) to clean up
     # in ``finally``.
     patched_scenario_paths: list[Path] = []
-    # Resolved frozen wind-export path (if any), captured for the optional
-    # Executive Workbook step so it can read the long_term_trend block.
+    # Resolved frozen wind-/solar-export path (if any), captured for the optional
+    # Executive Workbook step so it can read the long_term_trend block from either
+    # (#656 wind / #727 solar). The workbook fills ONE ResourceTrend sheet, wind-first.
     resolved_wind_json_path: Path | None = None
+    resolved_solar_json_path: Path | None = None
     try:
         # #683 (a): apply CLI resource overrides FIRST so any subsequent wind/solar
         # patch builds on the overridden resource block. Empty/absent -> no-op ->
@@ -1021,6 +1045,7 @@ def cli(cfg: DictConfig) -> None:
                 raise FileNotFoundError(
                     f"solar_assessment_json={solar_json_path} does not exist"
                 )
+            resolved_solar_json_path = solar_json_path
             patched_scenario_path = _apply_solar_to_scenario(
                 scenario_path=effective_config,
                 solar_export_path=solar_json_path,
@@ -1127,8 +1152,20 @@ def cli(cfg: DictConfig) -> None:
                 if resolved_wind_json_path is not None
                 else None
             )
+            # #727: a frozen solar export can ALSO carry a long_term_trend block (GHI
+            # dimming/brightening). The workbook fills ONE ResourceTrend sheet; wind
+            # takes precedence when both are present (see the HYBRID note in
+            # emit_executive_workbook_from_pipeline). Solar-only runs fill it from solar.
+            solar_export_payload = (
+                _read_solar_export_payload(resolved_solar_json_path)
+                if resolved_solar_json_path is not None
+                else None
+            )
             written = emit_executive_workbook_from_pipeline(
-                result, workbook_out, wind_export=wind_export_payload
+                result,
+                workbook_out,
+                wind_export=wind_export_payload,
+                solar_export=solar_export_payload,
             )
             result["executive_workbook_path"] = str(written)
             logger.info("Wrote Executive Workbook to %s", written)

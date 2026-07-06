@@ -38,6 +38,7 @@ from analytics.executive_workbook import (
     resource_trend_df_from_wind_export,
     serialize_resource_trend,
 )
+from solar_resource.long_term_trend import build_solar_resource_trend_export_block
 from wind_resource.era5_retrieval import ERA5RequestConfig
 from wind_resource.long_term_trend import analyze_long_term_resource
 
@@ -394,6 +395,50 @@ class TestCliEmitWiring:
             {
                 "config": "scenarios/example_a.yaml",
                 "wind_assessment_json": str(wind_json),
+                "emit_executive_workbook": True,
+                "executive_workbook_path": str(wb_path),
+            }
+        )
+        assert "ResourceTrend" in openpyxl.load_workbook(wb_path).sheetnames
+
+    def test_emit_on_surfaces_solar_export_trend(
+        self, tmp_path, pipeline_result, monkeypatch, capsys
+    ) -> None:
+        """A frozen SOLAR export carrying a GHI trend reaches the ResourceTrend sheet (#727)."""
+        import json
+
+        import numpy as np
+        import pandas as pd
+
+        years = np.arange(1995, 2025)
+        rng = np.random.default_rng(3)
+        vals = 2000.0 + 3.0 * (years - 1995) + rng.normal(0.0, 5.0, len(years))
+        ghi_series = pd.DataFrame(
+            {"ghi_kwh_m2": vals},
+            index=pd.to_datetime([f"{y}-12-31" for y in years]),
+        )
+        export = {
+            "cashflow_export": {"scenario": "P50"},
+            "long_term_trend": build_solar_resource_trend_export_block(ghi_series),
+        }
+        solar_json = tmp_path / "solar_export_P50.json"
+        solar_json.write_text(json.dumps(export), encoding="utf-8")
+
+        # Isolate the workbook-trend glue from the solar ADAPTER contract: bypass
+        # _apply_solar_to_scenario with a throwaway patched-file copy (the real adapter
+        # is exercised in tests/api/test_run_full_pipeline_v14_solar_ingestion.py).
+        patched = tmp_path / "patched.yaml"
+        patched.write_text("project: {}\n", encoding="utf-8")
+        monkeypatch.setattr(rfp, "_apply_solar_to_scenario", lambda **_kw: patched)
+        monkeypatch.setattr(
+            rfp, "run_v14_pipeline", self._fake_engine_returning(pipeline_result)
+        )
+
+        wb_path = tmp_path / "exec.xlsx"
+        _run_cli(
+            {
+                "config": "scenarios/example_a.yaml",
+                "solar_assessment_json": str(solar_json),
                 "emit_executive_workbook": True,
                 "executive_workbook_path": str(wb_path),
             }
