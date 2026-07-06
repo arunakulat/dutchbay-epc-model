@@ -55,6 +55,11 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.infeasibility_diagnostics import (
+    InfeasibilityDiagnostics,
+    OptimizationAuditLog,
+    build_parameter_diagnostics,
+)
 
 _DIRECTIONS = ("max", "min")
 _METHODS = ("grid", "bounded")
@@ -93,7 +98,15 @@ class OptimizationPoint:
 
 @dataclass(frozen=True)
 class OptimizationResult:
-    """Outcome of an optimization run."""
+    """Outcome of an optimization run.
+
+    ``diagnostics`` / ``audit_log`` (#741) are populated ONLY when the search
+    found no feasible optimum (``best is None``): the structured why-infeasible
+    register (which bound the constrained KPI could not clear, and by how much)
+    and a lightweight audit trail (method, evaluations, iterations, final
+    status). When ``best`` is not ``None`` BOTH stay ``None`` — a successful
+    solve's numeric result is byte-identical to before #741.
+    """
 
     param_path: str
     objective_key: str
@@ -101,6 +114,39 @@ class OptimizationResult:
     constraint_key: Optional[str]
     best: Optional[OptimizationPoint]
     curve: List[OptimizationPoint]
+    diagnostics: Optional[InfeasibilityDiagnostics] = None
+    audit_log: Optional[OptimizationAuditLog] = None
+
+
+def _build_failure_records(
+    *,
+    method: str,
+    curve: List[OptimizationPoint],
+    constraint_key: Optional[str],
+    constraint_min: Optional[float],
+    constraint_max: Optional[float],
+    iterations: int,
+) -> tuple[InfeasibilityDiagnostics, OptimizationAuditLog]:
+    """Diagnostics + audit log for a no-feasible-optimum search (#741).
+
+    Called ONLY when ``best is None``. A successful solve never invokes this and
+    carries ``(None, None)`` so its result is byte-identical to before #741.
+    """
+    diagnostics = build_parameter_diagnostics(
+        curve,
+        constraint_key=constraint_key,
+        constraint_min=constraint_min,
+        constraint_max=constraint_max,
+    )
+    audit = OptimizationAuditLog(
+        method=method,
+        evaluations=len(curve),
+        iterations=iterations,
+        final_status="infeasible",
+        binding_constraints=tuple(v.key for v in diagnostics.violations),
+        best_objective=None,
+    )
+    return diagnostics, audit
 
 
 def _evaluate_point(
@@ -268,6 +314,22 @@ def _optimize_bounded(
     if candidate.feasible and math.isfinite(candidate.objective):
         best = candidate
 
+    diagnostics: Optional[InfeasibilityDiagnostics] = None
+    audit_log: Optional[OptimizationAuditLog] = None
+    if best is None:
+        # Prefer the solver's own iteration count; fall back to the evaluation
+        # count when SciPy does not report one.
+        solver_nit = getattr(solver, "nit", None)
+        iterations = int(solver_nit) if solver_nit is not None else len(curve)
+        diagnostics, audit_log = _build_failure_records(
+            method="bounded",
+            curve=curve,
+            constraint_key=constraint_key,
+            constraint_min=constraint_min,
+            constraint_max=constraint_max,
+            iterations=iterations,
+        )
+
     return OptimizationResult(
         param_path=param_path,
         objective_key=objective_key,
@@ -275,6 +337,8 @@ def _optimize_bounded(
         constraint_key=constraint_key,
         best=best,
         curve=curve,
+        diagnostics=diagnostics,
+        audit_log=audit_log,
     )
 
 
@@ -380,6 +444,18 @@ def optimize_parameter(
             else min(feasible_points, key=lambda p: p.objective)
         )
 
+    diagnostics: Optional[InfeasibilityDiagnostics] = None
+    audit_log: Optional[OptimizationAuditLog] = None
+    if best is None:
+        diagnostics, audit_log = _build_failure_records(
+            method="grid",
+            curve=curve,
+            constraint_key=constraint_key,
+            constraint_min=constraint_min,
+            constraint_max=constraint_max,
+            iterations=len(curve),
+        )
+
     return OptimizationResult(
         param_path=param_path,
         objective_key=objective_key,
@@ -387,6 +463,8 @@ def optimize_parameter(
         constraint_key=constraint_key,
         best=best,
         curve=curve,
+        diagnostics=diagnostics,
+        audit_log=audit_log,
     )
 
 
