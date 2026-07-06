@@ -62,6 +62,43 @@ def test_taxonomy_loads_the_canonical_20_section_skeleton() -> None:
     assert set(tax.group_of.values()) == set(tax.groups)
 
 
+def test_taxonomy_technology_tags_the_per_tech_sections(monkeypatch) -> None:
+    # #851: §4 (resource) and §5 (technology-selection) are tagged `shared`; the tag is
+    # OPTIONAL presentation metadata (technology_of only lists tagged sections), never a
+    # coverage gate. Untagged sections carry no lens.
+    load_feasibility_taxonomy.cache_clear()
+    try:
+        tax = load_feasibility_taxonomy()
+        tech_of = dict(tax.technology_of)
+        assert tech_of.get("resource_and_energy_yield") == "shared"
+        assert tech_of.get("technology_selection_design_basis") == "shared"
+        # An untagged section (e.g. the executive thesis) is absent from technology_of.
+        assert "executive_investment_thesis" not in tech_of
+        # Backward-compatible: untagged SectionDefinition.technology defaults to None.
+        by_name = {d.name: d for d in tax.sections}
+        assert by_name["executive_investment_thesis"].technology is None
+    finally:
+        load_feasibility_taxonomy.cache_clear()
+
+
+def test_load_taxonomy_fails_loud_on_unknown_technology(tmp_path, monkeypatch) -> None:
+    # #851: a typo'd technology lens fails loud (CESSPIT — no silent default).
+    bad = tmp_path / "feasibility_sections.yaml"
+    bad.write_text(
+        "section_statuses: [complete, draft, not_applicable]\n"
+        "section_groups: [technical]\n"
+        "sections:\n"
+        "  - {name: resource_and_energy_yield, group: technical, title: R, technology: nuclear}\n"
+    )
+    monkeypatch.setattr(fs, "_TAXONOMY_PATH", bad)
+    load_feasibility_taxonomy.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="technology"):
+            load_feasibility_taxonomy()
+    finally:
+        load_feasibility_taxonomy.cache_clear()
+
+
 def test_default_policy_is_soft() -> None:
     pol = default_feasibility_policy()
     assert pol.enforce is False
