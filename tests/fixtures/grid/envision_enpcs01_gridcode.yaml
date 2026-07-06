@@ -44,3 +44,30 @@ pcs:
       - [1.1, 20.0]
       - [1.2, 1.0]
       - [1.3, 0.1]
+
+  # Harmonic current-emission spectrum (D7, #883): per-order emission as a percentage of
+  # the plant maximum-demand (rated) current IL. REFERENCED, not executed — the redacted
+  # OEM current-emission table. Order 1 is the fundamental (100 %); the rest are the
+  # characteristic converter harmonics the D7 screen refers to Zbus(h) to get the POC
+  # harmonic VOLTAGE, compared to the SCR-indexed IEEE 519:2022 limits.
+  harmonic_spectrum:
+    - [1, 100.0]
+    - [5, 2.4]
+    - [7, 1.5]
+    - [11, 0.9]
+    - [13, 0.7]
+    - [17, 0.4]
+    - [19, 0.3]
+    - [23, 0.2]
+    - [25, 0.2]
+
+  # IEC 61400-21 short-term flicker coefficient c(psi_k, va) for the PCS at continuous
+  # operation (dimensionless) — the D7 flicker Pst = c * S_rated / Ssc term.
+  flicker_coefficient: 3.4
+
+  # Frequency ride-through / primary-frequency-response band (D7 headroom sizing). The
+  # continuous-operation window (Hz) and the governor droop the de-load headroom is sized
+  # from. continuous_hz mirrors the longest-clearing setpoints of freq_trip_hz above.
+  freq_ride_through:
+    continuous_hz: [47.5, 51.5]
+    droop: 0.04
