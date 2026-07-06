@@ -14,19 +14,37 @@ lock and the ``pip-audit`` security gate untouched (no JWT/passlib/multipart).
 Configuration is read from the environment on **every** call and is **fail-closed**
 (CESSPIT — config explicit, fail loud):
 
+* ``DUTCHBAY_ENV`` — deployment posture selector. ``production`` / ``prod`` engages the
+  hardened posture below; anything else (unset, ``development``, ``test``, …) keeps the
+  permissive dev/backward-compatible behaviour. This is the single switch that turns the
+  opt-in #842 defences into mandatory production ones (#858).
 * ``DUTCHBAY_JWT_SECRET`` — HMAC signing secret. **Required**; a missing/empty value
-  is a *server misconfiguration* and surfaces as a 500, never a baked-in default.
+  is a *server misconfiguration* and surfaces as a 500, never a baked-in default. In a
+  **production** context a *known insecure placeholder* (e.g. ``changeme``, ``secret``,
+  ``dev``) or a too-short secret is ALSO rejected 500 — no weak-secret fallback (#858).
 * ``DUTCHBAY_API_USERS`` — ``"user:<pbkdf2-hash>,user2:<hash>"``. Absent ⇒ no user can
   authenticate (every login is rejected). Hashes are produced by :func:`hash_password`.
-* ``DUTCHBAY_JWT_ISSUER`` / ``DUTCHBAY_JWT_AUDIENCE`` — **optional** ``iss`` / ``aud``
-  binding. When set, issued tokens carry the claim and validation *requires* an exact
-  match (a token minted for a different issuer/audience is rejected 401). When unset,
-  the claim is neither stamped nor enforced, so the binding is opt-in per deployment
-  (CCCDIR — documented, config-driven; no baked-in default issuer/audience).
+* ``DUTCHBAY_JWT_ISSUER`` / ``DUTCHBAY_JWT_AUDIENCE`` — ``iss`` / ``aud`` binding. When
+  set, issued tokens carry the claim and validation *requires* an exact match (a token
+  minted for a different issuer/audience is rejected 401). In a **development** context
+  the binding is **opt-in** (unset ⇒ neither stamped nor enforced, backward-compatible
+  with #842). In a **production** context BOTH are **mandatory**: an unset issuer or
+  audience is a misconfiguration (500) so the surface can never accept an unbound token
+  (CCCDIR — documented, config-driven; no baked-in default issuer/audience) (#858).
+
+Token validation additionally enforces ``exp`` (expiry), the pinned ``HS256`` algorithm
+(defeating ``alg: none`` / alg-confusion), and — when present — ``iat`` / ``nbf`` against
+a small clock-skew tolerance so a token minted "in the future" (a mis-set issuer clock or
+a forged forward-dated claim) is rejected rather than silently trusted (#858, closing the
+``nbf`` / ``iat`` residual #842 flagged).
 
 Every authentication failure is a 401 with a ``WWW-Authenticate: Bearer`` challenge;
 the token *subject* is what the API binds each :class:`~app.jobs.models.JobRecord` to
 for per-client isolation.
+
+Out of code scope (user-held ops, tracked on #858): token revocation / ``jti`` denylist /
+rotation, the secret store choice, and transport (TLS) termination — a leaked token stays
+valid until ``exp`` and no code-only change can revoke it.
 """
 
 from __future__ import annotations
@@ -56,6 +74,40 @@ _PBKDF2_SALT_BYTES = 16
 _JWT_ALG = "HS256"
 #: Default access-token lifetime (seconds).
 _DEFAULT_TOKEN_TTL_SECONDS = 3600
+#: ``DUTCHBAY_ENV`` values that engage the hardened production posture (case-insensitive).
+_PRODUCTION_ENV_VALUES = frozenset({"production", "prod"})
+#: Minimum acceptable secret length (bytes) in a production context. A ~256-bit random
+#: secret is ~43 base64url chars; 32 is a conservative floor that still rejects trivially
+#: guessable short strings while not fighting a genuinely random operator-provided secret.
+_MIN_PROD_SECRET_LEN = 32
+#: Known insecure placeholder secrets refused outright in production (lower-cased compare).
+#: These are the classic copy-paste-from-a-tutorial values; a real deployment must never
+#: ship one. Not exhaustive — the length floor is the general guard; this is defence in
+#: depth against the specific values that slip through review.
+_INSECURE_SECRET_VALUES = frozenset(
+    {
+        "changeme",
+        "change-me",
+        "changethis",
+        "secret",
+        "secretkey",
+        "secret-key",
+        "password",
+        "dev",
+        "development",
+        "test",
+        "testing",
+        "default",
+        "insecure",
+        "please-change",
+        "your-secret-here",
+        "your-256-bit-secret",
+    }
+)
+#: Clock-skew tolerance (seconds) applied to ``iat`` / ``nbf`` so a token minted on a peer
+#: whose clock is a few seconds fast is not spuriously rejected, while a wildly future-dated
+#: (forged) token still is. Symmetric with typical JWT-library defaults.
+_CLOCK_SKEW_SECONDS = 60
 
 #: Bearer-token extractor. ``auto_error=False`` so *this* module owns the 401 shape
 #: (consistent ``WWW-Authenticate`` challenge) rather than FastAPI's default.
@@ -197,10 +249,12 @@ def decode_token(
 
     Verifies the signature in constant time, rejects any algorithm other than the
     pinned ``HS256`` (defeating ``alg: none`` / alg-confusion forgeries), and
-    enforces the ``exp`` claim. When ``issuer`` / ``audience`` are supplied, the
-    matching ``iss`` / ``aud`` claim must be present and equal (defeating token
-    replay across issuers/audiences); when they are ``None`` the claim is not
-    inspected (opt-in binding).
+    enforces the ``exp`` claim. A present ``iat`` / ``nbf`` claim is checked against
+    ``now`` with a small clock-skew tolerance, so a token dated in the future (a
+    mis-set clock or a forged forward-dated claim) is rejected rather than trusted.
+    When ``issuer`` / ``audience`` are supplied, the matching ``iss`` / ``aud`` claim
+    must be present and equal (defeating token replay across issuers/audiences); when
+    they are ``None`` the claim is not inspected (opt-in binding).
 
     Args:
         token: The compact JWT string.
@@ -214,8 +268,9 @@ def decode_token(
 
     Raises:
         AuthError: If the token is malformed, mis-signed, uses an unexpected
-            algorithm, is expired, has a mismatched/absent issuer or audience
-            (when one is required), or carries no usable subject.
+            algorithm, is expired, is not yet valid / future-dated (``nbf`` / ``iat``),
+            has a mismatched/absent issuer or audience (when one is required), or
+            carries no usable subject.
     """
     current = int(time.time()) if now is None else now
     try:
@@ -244,6 +299,17 @@ def decode_token(
     exp = payload.get("exp")
     if not isinstance(exp, (int, float)) or isinstance(exp, bool) or current >= exp:
         raise AuthError("token expired")
+    # "Not-yet-valid" checks: a token whose nbf/iat is in the future (beyond the skew
+    # tolerance) is a mis-set clock or a forged forward-dated claim -- reject it rather
+    # than silently accept a token that shouldn't be usable yet (#858, residual #842).
+    nbf = payload.get("nbf")
+    if isinstance(nbf, (int, float)) and not isinstance(nbf, bool):
+        if current + _CLOCK_SKEW_SECONDS < nbf:
+            raise AuthError("token not yet valid")
+    iat = payload.get("iat")
+    if isinstance(iat, (int, float)) and not isinstance(iat, bool):
+        if current + _CLOCK_SKEW_SECONDS < iat:
+            raise AuthError("token issued in the future")
     if issuer is not None and payload.get("iss") != issuer:
         raise AuthError("issuer mismatch")
     if audience is not None and payload.get("aud") != audience:
@@ -257,35 +323,87 @@ def decode_token(
 # --------------------------------------------------------------------------- #
 # Environment-backed configuration (read every call; fail-closed — CESSPIT).
 # --------------------------------------------------------------------------- #
+def _is_production() -> bool:
+    """Return ``True`` when ``DUTCHBAY_ENV`` selects the hardened production posture.
+
+    The switch is deliberately explicit and opt-*in*: an unset/unknown value stays in
+    the permissive dev posture, so a developer running the app locally never has to
+    provision a mandatory issuer/audience. Only ``production`` / ``prod`` (case- and
+    whitespace-insensitive) engages the mandatory posture (#858).
+    """
+    return os.environ.get("DUTCHBAY_ENV", "").strip().lower() in _PRODUCTION_ENV_VALUES
+
+
+def _misconfigured(detail: str) -> HTTPException:
+    """Build the canonical 500 for a server-side auth misconfiguration (fail-closed)."""
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=detail,
+    )
+
+
 def _jwt_secret() -> str:
     """Return the configured JWT secret, or 500 if the server is unconfigured.
 
     A missing secret is an operator error, not a client error: failing closed with
-    a 500 (and never a hard-coded fallback secret) is the only safe behaviour.
+    a 500 (and never a hard-coded fallback secret) is the only safe behaviour. In a
+    **production** context (:func:`_is_production`) a *known insecure placeholder*
+    (``changeme``, ``secret``, ``dev``, …) or a secret shorter than
+    :data:`_MIN_PROD_SECRET_LEN` is *also* rejected 500 — there is no silent weak-secret
+    fallback, so a deployment cannot accidentally ship a guessable signing key (#858).
+    The weak-secret rules are relaxed off-production so tests and local dev may use a
+    short literal secret without provisioning a 32-byte one.
     """
     secret = os.environ.get("DUTCHBAY_JWT_SECRET", "")
     if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="authentication is not configured (DUTCHBAY_JWT_SECRET unset)",
+        raise _misconfigured(
+            "authentication is not configured (DUTCHBAY_JWT_SECRET unset)"
         )
+    if _is_production():
+        if secret.strip().lower() in _INSECURE_SECRET_VALUES:
+            raise _misconfigured(
+                "DUTCHBAY_JWT_SECRET is a known insecure default; "
+                "set a strong random secret in production"
+            )
+        if len(secret) < _MIN_PROD_SECRET_LEN:
+            raise _misconfigured(
+                "DUTCHBAY_JWT_SECRET is too short for production "
+                f"(need >= {_MIN_PROD_SECRET_LEN} chars)"
+            )
     return secret
 
 
 def _jwt_issuer() -> Optional[str]:
-    """Return the configured ``iss`` binding, or ``None`` when unset (opt-in).
+    """Return the configured ``iss`` binding — mandatory in production, opt-in in dev.
 
-    An empty/whitespace value is treated as unset so a blank env var never becomes
-    a token-rejecting ``iss=""`` requirement by accident.
+    An empty/whitespace value is treated as unset so a blank env var never becomes a
+    token-rejecting ``iss=""`` requirement by accident. In a **production** context an
+    unset issuer is a misconfiguration (500): a production surface must not accept an
+    unbound token (#858). Off-production the binding stays opt-in (unset ⇒ ``None`` ⇒
+    not enforced), backward-compatible with #842.
     """
-    issuer = os.environ.get("DUTCHBAY_JWT_ISSUER", "").strip()
-    return issuer or None
+    issuer = os.environ.get("DUTCHBAY_JWT_ISSUER", "").strip() or None
+    if issuer is None and _is_production():
+        raise _misconfigured(
+            "DUTCHBAY_JWT_ISSUER is required in production "
+            "(issuer/audience binding is mandatory)"
+        )
+    return issuer
 
 
 def _jwt_audience() -> Optional[str]:
-    """Return the configured ``aud`` binding, or ``None`` when unset (opt-in)."""
-    audience = os.environ.get("DUTCHBAY_JWT_AUDIENCE", "").strip()
-    return audience or None
+    """Return the configured ``aud`` binding — mandatory in production, opt-in in dev.
+
+    Mirror of :func:`_jwt_issuer`: an unset audience is a 500 in a production context so
+    no unbound token is accepted, and stays opt-in off-production (#858 / #842).
+    """
+    audience = os.environ.get("DUTCHBAY_JWT_AUDIENCE", "").strip() or None
+    if audience is None and _is_production():
+        raise _misconfigured(
+            "DUTCHBAY_JWT_AUDIENCE is required in production "
+            "(issuer/audience binding is mandatory)"
+        )
+    return audience
 
 
 def _api_users() -> Dict[str, str]:
