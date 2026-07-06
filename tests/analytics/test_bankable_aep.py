@@ -7,13 +7,16 @@ import pytest
 
 from analytics.power_curves.oem_parser import parse_power_curve
 from wind_resource.bankable_aep import (
+    DEFAULT_TURBULENCE_INTENSITY,
     UncertaintyBudget,
     density_velocity_factor,
     exceedance_levels,
+    gaussian_k_star,
     gross_aep_weibull,
     interannual_variability_drift,
     model_wake_loss,
     non_wake_retention,
+    wake_loss_ti_sensitivity,
 )
 
 # DutchBay site (Kalpitiya): ERA5-fitted Weibull + densities (was declared 8.32/2.1).
@@ -137,3 +140,97 @@ def test_interannual_variability_drift_is_validate_only() -> None:
     before = UncertaintyBudget().interannual_variability_pct
     interannual_variability_drift(9.9, assumed_pct=before)
     assert UncertaintyBudget().interannual_variability_pct == before == 4.0
+
+
+# ── #832: coastal-TI wake parametrization + sensitivity ─────────────────────────
+def test_gaussian_k_star_closure() -> None:
+    # Niayifar & Porte-Agel (2016): k* = 0.38*TI + 0.004; single source of truth.
+    assert gaussian_k_star(0.10) == pytest.approx(0.042, abs=1e-12)
+    assert gaussian_k_star(0.06) == pytest.approx(0.0268, abs=1e-12)
+    # Default kernel TI reproduces today's exact k* -> the DEFAULT-OFF guarantee.
+    assert DEFAULT_TURBULENCE_INTENSITY == 0.10
+    assert gaussian_k_star(DEFAULT_TURBULENCE_INTENSITY) == pytest.approx(
+        0.042, abs=1e-12
+    )
+
+
+def test_model_wake_loss_uses_shared_k_star_closure() -> None:
+    # The engine's k* must equal the shared helper for any TI (no drift).
+    pytest.importorskip("py_wake")
+    ws, pw, ct = _iea_curve()
+    x = np.zeros(N_TURBINES)
+    y = np.arange(N_TURBINES) * 650.0
+    rose = np.array([3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4], dtype=float)
+    res = model_wake_loss(
+        wind_speed_ms=ws,
+        power_kw=pw,
+        thrust_coefficient=ct,
+        rotor_diameter_m=ROTOR_M,
+        hub_height_m=HUB_M,
+        layout_x_m=x,
+        layout_y_m=y,
+        weibull_a=A,
+        weibull_k=K,
+        wind_rose_freq=rose,
+        turbulence_intensity=0.08,
+        deficit_model="bastankhah",
+    )
+    # deficit_model string carries the k* the model actually used.
+    assert f"k*={gaussian_k_star(0.08):.4f}" in res.deficit_model
+
+
+def _sens():
+    ws, pw, ct = _iea_curve()
+    x = np.zeros(N_TURBINES)
+    y = np.arange(N_TURBINES) * 650.0
+    rose = np.array([3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4], dtype=float)
+    return wake_loss_ti_sensitivity(
+        wind_speed_ms=ws,
+        power_kw=pw,
+        thrust_coefficient=ct,
+        rotor_diameter_m=ROTOR_M,
+        hub_height_m=HUB_M,
+        layout_x_m=x,
+        layout_y_m=y,
+        weibull_a=A,
+        weibull_k=K,
+        wind_rose_freq=rose,
+        ti_grid=(0.06, 0.08, 0.12, 0.14),
+        baseline_ti=0.10,
+    )
+
+
+def test_wake_ti_sensitivity_recomputes_and_discloses_slope() -> None:
+    pytest.importorskip("py_wake")
+    sens = _sens()
+    # baseline TI is added to the grid even though it was not in ti_grid.
+    tis = [p.turbulence_intensity for p in sens.points]
+    assert tis == sorted(tis)  # ascending
+    assert 0.10 in tis
+    assert sens.baseline_ti == 0.10
+    # The baseline point has exactly zero delta and matches the disclosed baseline loss.
+    base = [p for p in sens.points if p.turbulence_intensity == 0.10][0]
+    assert base.delta_wake_loss_pct == pytest.approx(0.0, abs=1e-12)
+    assert base.wake_loss_pct == pytest.approx(sens.baseline_wake_loss_pct, abs=1e-12)
+    # Each point's k* is the shared closure (no fabricated table).
+    for p in sens.points:
+        assert p.k_star == pytest.approx(
+            gaussian_k_star(p.turbulence_intensity), abs=1e-12
+        )
+    # Honest, layout-specific direction: for this dense single row, LOWER TI -> HIGHER
+    # wake loss (positive delta at TI < baseline), so the slope per +0.01 TI is negative.
+    low = [p for p in sens.points if p.turbulence_intensity == 0.06][0]
+    assert low.delta_wake_loss_pct > 0.0
+    slope = sens.per_0p01_ti_pct()
+    assert slope is not None and slope < 0.0
+
+
+def test_wake_ti_sensitivity_slope_none_for_degenerate_grid() -> None:
+    from wind_resource.bankable_aep import WakeTISensitivity, WakeTISensitivityPoint
+
+    one = WakeTISensitivity(
+        baseline_ti=0.10,
+        baseline_wake_loss_pct=8.0,
+        points=[WakeTISensitivityPoint(0.10, gaussian_k_star(0.10), 8.0, 0.0)],
+    )
+    assert one.per_0p01_ti_pct() is None
