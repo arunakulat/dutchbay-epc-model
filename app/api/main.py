@@ -7,8 +7,12 @@ are additive (a breaking change lands as ``/v2``, never a mutation of ``/v1``):
 
 * ``POST /v1/cases``        — run a lender case from a ``WindFarmInputs`` submission
                               (synchronous, frozen-AEP; returns ``CaseResult``).
+* ``POST /v1/cases/surface`` — the same run, projected into the wizard result surface
+                              (``CaseSurface``: KPI cards + tornado/global-SA charts +
+                              capital-risk headline + artifact links) — #844.
 * ``POST /v1/cases/report.html`` — the same run, rendered as an HTML report.
 * ``POST /v1/cases/report.pdf``  — the same run, rendered as a PDF (optional WeasyPrint).
+* ``POST /v1/cases/report.xlsx`` — the same run, emitted as the executive workbook (.xlsx) — #844.
 * ``POST /v1/jobs`` + ``/v1/jobs/{id}`` + ``/v1/jobs/{id}/events`` — the async live-ERA5 path.
 * ``POST /v1/run-pipeline`` — the lower-level inline-config route (``api.pipeline_api``).
 * ``/v1/sensitivity/*``     — the tornado/sensitivity surface (``api.sensitivity_api``).
@@ -27,7 +31,9 @@ Serve with: ``uvicorn app.api.main:app``.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, TypeVar
 
@@ -38,6 +44,7 @@ from pydantic import BaseModel, ConfigDict
 
 from analytics.aep_provenance import AepProvenanceError
 from analytics.aep_reconciliation import AepReconciliationError
+from analytics.executive_workbook import emit_executive_workbook_from_pipeline
 from analytics.schema_guard import ConfigValidationError
 from api.pipeline_api import router as pipeline_router
 from api.sensitivity_api import SensitivityInput, SensitivityTornadoRow, run_tornado
@@ -45,6 +52,7 @@ from app.api.auth import get_current_subject, login_for_access_token
 from app.api.config import SYNC_ROUTE_MAX_CONCURRENCY, SYNC_ROUTE_TIMEOUT_SECONDS
 from app.api.jobs_router import router as jobs_router
 from app.api.responses import API_CONTRACT_VERSION, CaseResult
+from app.api.surface import CaseSurface
 from app.models.inputs import WindFarmInputs
 from app.reports.renderer import (
     ReportDependencyError,
@@ -296,6 +304,59 @@ def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
     )
 
 
+def build_case_surface(inputs: WindFarmInputs) -> CaseSurface:
+    """Project a completed run into the wizard result surface (#844, synchronous core).
+
+    Reuses the SAME ``ReportContext`` the HTML/PDF report routes build, so the KPI cards,
+    tornado, both global-SA charts, and the capital-risk headline the client shows are the
+    identical numbers the PDF renders. Pure re-shaping (Dolphin) — no finance recompute — so
+    it is KPI-neutral. Kept as a plain synchronous core so it is directly unit-testable; the
+    HTTP endpoint wraps it with auth + a wall-clock timeout.
+    """
+    context = _build_report_context(inputs)
+    return CaseSurface.from_report_context(context)
+
+
+def run_case_workbook(inputs: WindFarmInputs) -> Response:
+    """Build the executive workbook (.xlsx) for a lender case (synchronous core).
+
+    Runs the case (mapping an engine-rejected scenario to a graceful 400, mirroring
+    ``run_case``) and emits the existing single-scenario Executive Workbook via the canonical
+    ``emit_executive_workbook_from_pipeline`` — no workbook logic is added here (Dolphin). The
+    emitter is path-based, so the bytes are read from a private temp file that is always
+    unlinked. The download filename is sanitised before it is interpolated into the
+    ``Content-Disposition`` header. Kept as a plain synchronous core; the HTTP endpoint wraps
+    it with auth + a wall-clock timeout.
+    """
+    try:
+        scenario = inputs.to_scenario_config()
+        result = run_finance_case(scenario)
+    except (
+        ConfigValidationError,
+        AepReconciliationError,
+        AepProvenanceError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid scenario: {exc}") from exc
+    fd, path = tempfile.mkstemp(suffix=".xlsx", prefix="dutchbay_workbook_")
+    os.close(fd)
+    try:
+        emit_executive_workbook_from_pipeline(result, path)
+        with open(path, "rb") as fh:
+            xlsx_bytes = fh.read()
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+    safe_variant = _sanitise_filename_component(inputs.scenario_variant)
+    filename = f"dutchbay_{safe_variant}_workbook.xlsx"
+    return Response(
+        content=xlsx_bytes,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def run_case_report_html(inputs: WindFarmInputs) -> HTMLResponse:
     """Build the HTML report for a lender case (synchronous core).
 
@@ -368,6 +429,36 @@ async def run_case_report_pdf_endpoint(
 ) -> Response:
     """Run a lender case and return a PDF report (auth-gated; timeout-bounded)."""
     return await _run_with_timeout(run_case_report_pdf, inputs)
+
+
+@public_router.post(
+    "/cases/surface",
+    response_model=CaseSurface,
+    tags=["cases"],
+    operation_id="run_case_surface",
+)
+async def run_case_surface_endpoint(
+    inputs: WindFarmInputs, subject: str = Depends(get_current_subject)
+) -> CaseSurface:
+    """Run a lender case and return the wizard result surface (#844; auth-gated, bounded).
+
+    The typed, chart-ready contract a future frontend (#843) consumes: KPI cards, the
+    tornado + both global-SA charts, the #657 capital-risk headline, and the artifact
+    download links — projected from the same report context the PDF renders.
+    """
+    return await _run_with_timeout(build_case_surface, inputs)
+
+
+@public_router.post(
+    "/cases/report.xlsx",
+    tags=["cases"],
+    operation_id="run_case_workbook",
+)
+async def run_case_workbook_endpoint(
+    inputs: WindFarmInputs, subject: str = Depends(get_current_subject)
+) -> Response:
+    """Run a lender case and return the executive workbook (.xlsx; auth-gated, bounded)."""
+    return await _run_with_timeout(run_case_workbook, inputs)
 
 
 @public_router.post(
