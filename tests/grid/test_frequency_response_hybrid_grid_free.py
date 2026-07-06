@@ -521,20 +521,21 @@ def test_run_custom_provenance() -> None:
 
 
 def test_run_dynamics_gate_on_reports_not_run_nadir_grid_free() -> None:
-    """run_dynamics=True is grid-free for the frequency case and MUST NOT fabricate a nadir.
+    """run_dynamics=True is grid-free-SAFE for the frequency case and MUST NOT fabricate.
 
-    The shared D4a ``run_ride_through_case("frequency", run_dynamics=True)`` returns NOT-RUN
-    BEFORE it ever imports ``andes`` (a shunt fault cannot apply a frequency excursion), so
-    this path runs WITHOUT the [grid] extra — and the dynamic nadir stays an honest ``None``
-    (NO SPURIOUS PASS), never derived from the closed-form settling estimate. This exercises
-    the dynamic-gate branch + ``_attempt_dynamic_nadir`` without touching ANDES.
+    As of D4b (#892) the frequency case DOES apply a real excursion, so
+    ``run_ride_through_case("frequency", run_dynamics=True)`` reaches the CASPER
+    ``_require_andes`` guard — which, WITHOUT the [grid] extra, raises ImportError.
+    ``_attempt_dynamic_nadir`` catches that and DEGRADES to the honest NOT-RUN
+    (``dynamic_ran=False``, ``dynamic_nadir_hz=None``), never derived from the closed-form
+    settling estimate (NO SPURIOUS PASS). This exercises the dynamic-gate branch +
+    ``_attempt_dynamic_nadir`` CASPER fallback without touching ANDES.
     """
     cfg = {"grid": {"ppc": _ppc(dict(_WG1, output_mw=0.0)), "freq_event_hz": 49.6}}
     res = run_hybrid_frequency_response(cfg, run_dynamics=True)
     # The closed-form deliverable is still physically produced.
     assert res.total_delivered_mw == pytest.approx(20.0)
-    # The un-modelled dynamic nadir is NOT-RUN, and the (unmodelled) frequency case did not
-    # execute a real excursion → dynamic_ran False.
+    # Grid-free (no andes): the dynamic nadir degrades to an honest NOT-RUN — no fabrication.
     assert res.dynamic_nadir_hz is None
     assert res.dynamic_ran is False
 
