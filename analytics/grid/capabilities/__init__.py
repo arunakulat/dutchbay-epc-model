@@ -1,4 +1,4 @@
-"""Per-technology grid-capability plug-ins (issue #876).
+"""Per-technology grid-capability plug-ins (issues #876, #877).
 
 Each module in this package answers the CONVERTER-INTERFACE capability question for ONE
 technology class: given the plant's ratings and grid-code envelope, what fault-current
@@ -24,6 +24,9 @@ Design invariants (shared by every capability plug-in)
   plug-in returns an explicit ``None`` / NOT-RUN with a reason, never a defaulted pass.
 
 Public plug-ins:
+    - :mod:`analytics.grid.capabilities.wind` — wind turbine reactive-capability (PQ
+      envelope; Type-3 DFIG partial-load narrowing vs Type-4 full-converter rectangular
+      box) + LVRT ride-through via the D4a core.
     - :mod:`analytics.grid.capabilities.solar` — solar PV as a CURRENT-LIMITED grid-
       following source (~1.1 pu max fault current, negligible fault infeed; MUST NOT be
       modelled as a synchronous machine / voltage source, which would OVERSTATE grid
@@ -33,4 +36,4 @@ Public plug-ins:
 
 from __future__ import annotations
 
-__all__ = ["solar"]
+__all__ = ["solar", "wind"]
