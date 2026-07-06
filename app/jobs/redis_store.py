@@ -13,14 +13,25 @@ lifetime, only its single worker writes (the API only reads).
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Protocol
 
 from app.jobs.config import JOB_TTL_SECONDS
 from app.jobs.models import JobRecord, utc_now_iso
 
 
-class RedisLike:
-    """Structural type documenting the sync client methods used (get/set)."""
+class RedisLike(Protocol):
+    """Structural (PEP 544) type documenting the sync client methods used (get/set).
+
+    A ``Protocol`` — not a nominal base class — so any duck-typed client with matching
+    ``get``/``set`` satisfies it *structurally*: the real ``redis.Redis`` (which does not
+    subclass this), the test fake, and, when the optional ``[jobs]`` extra is absent,
+    ``Any``. This is what keeps the mypy result identical whether or not ``redis`` is
+    installed: with ``redis`` present (typical dev venv) the injected client is checked
+    structurally and passes; without it, ``redis.Redis`` resolves to ``Any`` (ignored
+    import). A plain class here required *nominal* subclassing, so an installed, typed
+    ``redis.Redis`` spuriously failed [arg-type] locally while CI — which never installs
+    ``[jobs]`` — saw ``Any`` and passed (issue #859 local/CI divergence).
+    """
 
     def get(self, key: str) -> Any: ...  # pragma: no cover - typing shim
     def set(  # pragma: no cover - typing shim
