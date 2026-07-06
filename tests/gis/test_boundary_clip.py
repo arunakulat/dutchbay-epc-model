@@ -192,12 +192,25 @@ def test_prov_sidecar_and_crs(tmp_path):
     assert prov["all_touched"] is False
 
 
-def test_crs_override_recorded(tmp_path):
+def test_crs_override_agreeing_is_accepted(tmp_path):
+    # An override that AGREES with the raster CRS is fine (it is just a label).
     values = _grid_1to16()
     src = _write_synthetic_raster(tmp_path / "field.tif", values)
     out = tmp_path / "clipped.tif"
     summary = clip_to_polygon(src, SW_QUADRANT, out, crs="EPSG:4326", variable="ws150")
     assert summary["crs"] == "EPSG:4326"
+
+
+def test_crs_override_mismatch_fails_loud(tmp_path):
+    # A DISAGREEING crs override must raise, not write a mislabeled GeoTIFF: clip_to_polygon
+    # labels but never reprojects (CESSPIT fail-loud). The raster is EPSG:4326.
+    values = _grid_1to16()
+    src = _write_synthetic_raster(tmp_path / "field.tif", values)
+    out = tmp_path / "clipped.tif"
+    with pytest.raises(ValueError, match="disagrees with the source raster CRS"):
+        clip_to_polygon(src, SW_QUADRANT, out, crs="EPSG:3857", variable="ws150")
+    # And nothing was written.
+    assert not out.exists()
 
 
 def test_manifest_entry_written(tmp_path):

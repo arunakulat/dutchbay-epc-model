@@ -92,14 +92,15 @@ def load_polygon(path: str | Path) -> List[Dict[str, Any]]:
 def clipped_domain_stats(
     values: np.ndarray, nodata: float
 ) -> Dict[str, Optional[float]]:
-    """Area-weighted in-polygon stats over the surviving (non-nodata) cells.
+    """Plain (unweighted) in-polygon stats over the surviving (non-nodata) cells.
 
-    On a north-up EPSG:4326 grid every cell spans the same latitude extent but the same
-    *degree* of longitude subtends less ground toward the poles, so cells are weighted by
-    ``cos(latitude)`` -- a first-order equal-area correction identical in spirit to the
-    exporter's geographic grid. Because a single clip operates on one small site bbox the
-    correction is tiny, but it keeps the "area-weighted mean" label honest rather than a
-    plain cell mean mislabelled.
+    This standalone helper is raster-only and bbox-free, so the returned ``mean`` is the
+    *plain cell mean* of the surviving cells (each cell counts equally). The area-weighting
+    step lives in :func:`clip_to_polygon`, which knows the clipped bbox and OVERWRITES this
+    ``mean`` with a ``cos(latitude)`` area-weighted value -- a first-order equal-area
+    correction (on a north-up EPSG:4326 grid a degree of longitude subtends less ground
+    toward the poles). ``min``/``max``/``count`` are unaffected by weighting and are the
+    same here and in the summary.
 
     Args:
         values: 2-D clipped raster (out-of-polygon cells already set to ``nodata``).
@@ -183,11 +184,20 @@ def clip_to_polygon(
         raster_path: LOCAL path to a single-band GeoTIFF (e.g. a #20 WS150/CF/AEP export).
             No network; a fetch step is a separate concern.
         polygon: The clip geometry -- a GeoJSON Polygon/MultiPolygon/Feature/
-            FeatureCollection mapping, or a bare ring coordinate list. The polygon CRS is
-            assumed to match the raster CRS (both EPSG:4326 in the DutchBay pipeline).
+            FeatureCollection mapping, or a bare ring coordinate list. Its coordinates MUST
+            already be in the raster's CRS (both EPSG:4326 in the DutchBay pipeline). This
+            is a documented contract, not a detected one: a bare ring carries no CRS and
+            GeoJSON per RFC 7946 is WGS84, so a polygon in a different CRS cannot be
+            distinguished here -- reproject the geometry to the raster CRS before calling
+            (e.g. ``rasterio.warp.transform_geom``).
         out_path: Output ``.tif`` path for the clipped raster.
-        crs: Optional CRS override recorded in provenance/manifest; defaults to the input
-            raster's CRS (or :data:`analytics.gis.geotiff_export.DEFAULT_CRS`).
+        crs: Optional CRS *label* for the output; defaults to the input raster's CRS (or
+            :data:`analytics.gis.geotiff_export.DEFAULT_CRS`). This is a label, NOT a
+            reprojection: the clip runs in the raster's native CRS, so a ``crs`` that
+            disagrees with the source raster's CRS would mislabel the output GeoTIFF
+            (tag claiming one CRS over a transform still in another). To avoid that
+            footgun, a disagreeing ``crs`` raises ``ValueError`` (CESSPIT — fail loud, no
+            silent mislabel). Reproject the raster first if you need a different CRS.
         manifest_path: If given, append/refresh a manifest entry.
         manifest_name: Dataset name used in the manifest entry.
         variable: Variable label for the clipped band (e.g. ``"ws150"``/``"aep"``), used in
@@ -199,10 +209,16 @@ def clip_to_polygon(
 
     Returns:
         Summary dict: ``clipped_path``, ``bbox`` (of the clipped window), ``crs``,
-        ``variable``, ``nodata``, a ``stats`` block (see :func:`clipped_domain_stats`,
-        area-weighted mean) and (if written) ``manifest_path``.
+        ``variable``, ``nodata``, a ``stats`` block (see :func:`clipped_domain_stats`;
+        ``mean`` is the cos-latitude area-weighted mean) and (if written) ``manifest_path``.
+
+    Raises:
+        ValueError: if the ``crs`` override disagrees with the source raster's CRS (this
+            function labels, it does not reproject), or if the clip geometry does not
+            overlap the raster.
     """
     rasterio = _require_rasterio()
+    from rasterio.crs import CRS
     from rasterio.mask import mask as rio_mask
 
     geometries = _extract_geometries(polygon)
@@ -210,6 +226,16 @@ def clip_to_polygon(
     src_path = Path(raster_path)
     with rasterio.open(src_path) as src:
         src_crs = src.crs.to_string() if src.crs is not None else DEFAULT_CRS
+        # CESSPIT / fail-loud: `crs` is an output LABEL, not a reprojection. If the caller
+        # passes a CRS that disagrees with the raster's actual CRS, refuse rather than write
+        # a mislabeled GeoTIFF (tag says one CRS while the transform stays in another).
+        if crs is not None and src.crs is not None:
+            if CRS.from_string(str(crs)) != src.crs:
+                raise ValueError(
+                    f"crs override {crs!r} disagrees with the source raster CRS "
+                    f"{src_crs!r}; clip_to_polygon labels but does not reproject. "
+                    "Reproject the raster first (e.g. rasterio.warp) or drop the override."
+                )
         src_nodata = src.nodata
         # crop=True trims the output to the polygon's bounding window; filled=True sets
         # out-of-polygon cells to nodata. NaN is the exporter's nodata convention.
