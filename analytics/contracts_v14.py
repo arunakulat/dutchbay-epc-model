@@ -1500,6 +1500,147 @@ class HarmonicComplianceResult(ContractMixin):
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D5c (#881) — combined frequency-droop study with an ENPPC plant controller.
+#
+# The D7 sizer (:mod:`analytics.grid.frequency_response`) answers the STATIC
+# de-load COST of a droop obligation; D5c adds the COMBINED-FLEET, EVENT question:
+# for a given frequency event Δf, how does the plant power controller SPLIT the
+# required P(f) response across the multiple droop-capable groups behind one POC
+# (the ENPPC 6-group logic — per-group freq_droop_pct, dispatched in a p_priority
+# _order), is each group's share physically deliverable (wind spinning/de-load
+# headroom; a BESS group's SOC-limited discharge energy via the ONE shared D5a
+# SOC / frequency reserve — no double-count), and does the settling frequency sit
+# inside the grid-code ride-through band? Both verdicts (band compliance, response
+# adequacy) derive from PHYSICAL evidence, never a solver flag; the un-modelled
+# dynamic ANDES nadir is returned NOT-RUN. Like the other grid contracts this is
+# design-stage ADVISORY (``bankable=False``): it is NOT a dynamic RMS/EMT
+# primary-frequency-response study against the utility base case. It NEVER feeds
+# the finance engine (committed scenarios stay byte-identical / KPI-neutral).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FREQ_RESPONSE_PROVENANCE = (
+    "In-house Python design-stage COMBINED frequency-droop study with an ENPPC-style "
+    "plant controller: a frequency event Δf is split across the droop-capable groups "
+    "(per-group freq_droop_pct, dispatched in p_priority_order), each group's "
+    "droop-commanded P(f) capped at its physical headroom (wind spinning/de-load; BESS via "
+    "the ONE shared D5a SOC / frequency reserve — no double-count), and the settling "
+    "frequency screened against the grid-code ride-through band. Closed-form per-group "
+    "split + band compliance are physical; the ANDES dynamic nadir is NOT modelled yet "
+    "(returned NOT-RUN). ADVISORY / design-stage ONLY — NOT a dynamic RMS/EMT "
+    "primary-frequency-response study against the utility base case, and NOT bankable."
+)
+
+
+@dataclass(frozen=True)
+class GroupDroopContribution(ContractMixin):
+    """The P(f) contribution of ONE ENPPC dispatch group for a frequency event (#881).
+
+    A pure line item in the :class:`FreqResponseResult` per-group split — the audit trail of
+    the PPC aggregate-fill dispatch: each group's own droop share, the maximum headroom the
+    PPC could dispatch it to, and what it actually delivered. ADVISORY / config-level
+    (``bankable=False``).
+
+    Fields
+        name: the group identifier (from ``ppc.groups[].name`` / its index).
+        tech: the group's technology token (``wind`` | ``solar`` | ``bess`` | ...).
+        rated_mw: the group's rated active power (MW) — the droop base.
+        droop: the group's governor droop fraction (``freq_droop_pct`` / 100).
+        commanded_mw: the group's OWN droop share of the plant obligation for this Δf
+            (``(|Δf|/f_n)/droop · rated_mw``), a positive magnitude. The PLANT obligation the
+            PPC fills is the SUM of these shares; a group may be DISPATCHED above or below its
+            own share (up to its headroom) by the PPC to cover the plant residual.
+        headroom_mw: the MAXIMUM |ΔP| the PPC could dispatch this group to in the required
+            direction (up-regulation = rating minus current output, further SOC-energy-capped
+            for a BESS group; down-regulation = current output shed toward zero).
+        delivered_mw: the |ΔP| the PPC actually dispatched this group to — its headroom or the
+            residual plant obligation still unmet by higher-priority groups, whichever binds.
+        soc_limited: True iff a BESS group was DISPATCHED up to its SOC-bound headroom (the
+            shared D5a dischargeable ENERGY — not its converter power rating — capped what it
+            could deliver). A group the PPC never pushed to its cap is not flagged, so this is
+            physical evidence of an actual energy-limited dispatch, not a hypothetical.
+    """
+
+    name: str
+    tech: str
+    rated_mw: float
+    droop: float
+    commanded_mw: float
+    headroom_mw: float
+    delivered_mw: float
+    soc_limited: bool = False
+
+
+@dataclass(frozen=True)
+class FreqResponseResult(ContractMixin):
+    """Advisory combined frequency-droop study for a hybrid plant (issue #881).
+
+    Emitted by :mod:`analytics.grid.hybrid.frequency_response`. For a frequency event Δf it
+    reports how the ENPPC plant controller met the PLANT-LEVEL P(f) obligation (the SUM of the
+    groups' droop shares) by dispatching the droop-capable groups behind one POC in
+    ``p_priority_order`` — each group dispatched up to its physical HEADROOM (wind
+    spinning/de-load; BESS via the ONE shared D5a SOC / frequency reserve, honouring the
+    no-double-count invariant), a higher-priority group covering the shortfall a lower-priority
+    group cannot (so the priority order is load-bearing) — the estimated SETTLING frequency,
+    and whether it sits inside the grid-code ride-through band.
+
+    Both verdicts are derived from PHYSICAL evidence, never a solver flag:
+      * ``band_compliant`` — the settling frequency vs the continuous band. ``None`` (NOT-RUN)
+        when there was no command to respond to (no settling point to judge).
+      * ``response_adequate`` — the delivered response met the aggregate droop command.
+        ``None`` (NOT-RUN) for a zero-deviation / zero-command event.
+    The dynamic ANDES frequency nadir is NOT modelled by the D4a core yet (a shunt fault
+    cannot apply a frequency excursion), so ``dynamic_nadir_hz`` is an explicit ``None``
+    (NOT-RUN) even when the dynamic gate is on — never a fabricated value. ADVISORY only
+    (``bankable=False``): a true primary-frequency-response study is a dynamic RMS/EMT run
+    against the utility base case. It never feeds the finance engine (KPI-neutral).
+
+    Fields
+        contributions: the per-group :class:`GroupDroopContribution` line items, in
+            ``p_priority_order`` — the audit trail of the split.
+        deviation_hz: the SIGNED event deviation Δf (Hz; negative = under-frequency /
+            up-regulation, positive = over-frequency / down-regulation).
+        nominal_hz: the nominal system frequency (Hz) the droop is referred to.
+        sustain_s: the mandated response sustain window (s) a BESS group's SOC must cover.
+        total_commanded_mw / total_delivered_mw: the aggregate droop-commanded vs
+            physically-delivered |ΔP| (MW) summed over the groups.
+        settling_frequency_hz: the estimated post-response settling frequency (Hz), or
+            ``None`` when there was no command to respond to.
+        band_under_hz / band_over_hz: the grid-code continuous ride-through band edges (Hz)
+            the settling frequency is screened against.
+        band_compliant: the settling frequency sits inside the band (``None`` = NOT-RUN).
+        response_adequate: the delivered response met the aggregate command
+            (``None`` = NOT-RUN for a zero-command event).
+        dynamic_ran: whether the ANDES dynamic solve EXECUTED (the D4a frequency case is
+            NOT-RUN / unmodelled, so this is False unless a later dolphin models it).
+        dynamic_nadir_hz: the measured dynamic frequency nadir/zenith (Hz) — ``None``
+            (NOT-RUN) because the frequency-excursion dynamics are not modelled yet.
+        n_groups: the number of dispatch groups in the split.
+        n_soc_limited: how many BESS groups were SOC-energy-limited (delivered below their
+            droop command because their dischargeable energy could not sustain it).
+    """
+
+    contributions: tuple["GroupDroopContribution", ...]
+    deviation_hz: float
+    nominal_hz: float
+    sustain_s: float
+    total_commanded_mw: float
+    total_delivered_mw: float
+    settling_frequency_hz: float | None
+    band_under_hz: float
+    band_over_hz: float
+    band_compliant: bool | None = None
+    response_adequate: bool | None = None
+    dynamic_ran: bool = False
+    dynamic_nadir_hz: float | None = None
+    n_groups: int = 0
+    n_soc_limited: int = 0
+    method: str = "enppc_group_droop"
+    bankable: bool = False
+    provenance: str = _FREQ_RESPONSE_PROVENANCE
+    notes: str = ""
+
+
 @dataclass(frozen=True)
 class CurtailmentShareResult(ContractMixin):
     """Advisory QSTS curtailment split — deemed-paid vs self-curtailed (issue #882).
@@ -1781,6 +1922,8 @@ __all__ = [
     "PocCapabilityEnvelope",
     "HarmonicComplianceResult",
     "CurtailmentShareResult",
+    "GroupDroopContribution",
+    "FreqResponseResult",
     "grid_scr_band",
     "grid_gfl_gfm_recommendation",
     "GRID_SCR_WEAK_BELOW",
