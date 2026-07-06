@@ -64,6 +64,10 @@ _MODULE_IMPORTS: dict[str, tuple[str, ...]] = {
     # `crossval` registers the OPT-IN second-source cross-validation block (#612); enforced
     # only when a scenario declares `resource.crossval` (see the auto-enforce loop below).
     "crossval": ("analytics.wind.crossval_interface_schema",),
+    # `grid` registers the OPT-IN design-stage grid-strength study block (#872); enforced
+    # only when a scenario declares a top-level `grid` block (see the auto-enforce loop
+    # below). Default-off: `grid.study_enabled` is a strict required bool when present.
+    "grid": ("analytics.grid.grid_interface_schema",),
 }
 
 
@@ -371,6 +375,13 @@ def validate_config_for_v14(
         for _block in ("wind", "era5", "crossval"):
             if isinstance(resource.get(_block), Mapping) and _block not in module_list:
                 module_list.append(_block)
+    # `grid` (#872) is a TOP-LEVEL block (design-stage grid-strength study), not a
+    # `resource.*` sub-block. Validate its strict fields only when a scenario declares a
+    # top-level `grid` mapping, so every non-grid scenario stays byte-identical (the
+    # feature is default-off — `grid.study_enabled` gates it).
+    if isinstance(raw_config, Mapping):
+        if isinstance(raw_config.get("grid"), Mapping) and "grid" not in module_list:
+            module_list.append("grid")
     for name in module_list:
         _ensure_module_registered(name)
 
