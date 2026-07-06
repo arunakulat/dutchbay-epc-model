@@ -1156,6 +1156,40 @@ class RideThroughResult(ContractMixin):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# D5a (#879) — shared BESS state-of-charge model + reserve-split accounting.
+#
+# The grid-capability plug-ins above answer converter/PQ questions at a POINT in
+# time; D5a adds the ENERGY-ACCOUNTING question that every downstream multi-service
+# BESS study (firming, frequency response, curtailment absorption — D5c/D6) must
+# share: given the battery's usable energy at a state-of-charge, how much MWh can be
+# committed to each reserve, and can the SAME MWh be claimed by more than one service?
+#
+# The FOUNDATIONAL invariant this contract centralizes: the sum of the reserves
+# allocated in a given flow direction MUST NOT exceed the usable headroom in that
+# direction at the given SoC — a request that exceeds it is REJECTED with an explicit
+# shortfall, NEVER silently over-allocated (NO SPURIOUS PASS). Discharge services
+# (firming + frequency-response down-regulation / droop discharge) draw from the
+# energy ABOVE the min-SoC floor; curtailment-absorption charges into the room BELOW
+# the max-SoC ceiling. The two directions are physically distinct energy pools, so a
+# split is feasible only when BOTH directions clear.
+#
+# Like the other grid contracts these are design-stage ADVISORY (``bankable=False``)
+# and NEVER feed the finance engine, so committed scenarios stay byte-identical
+# (KPI-neutral). A later dolphin (D5c/D6) wires this SoC model into the multi-service
+# dispatch; here it is a standalone, config-level accounting contract.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_BESS_SOC_PROVENANCE = (
+    "In-house Python design-stage BESS state-of-charge + reserve-split accounting: "
+    "usable energy = nameplate * SoH, bounded by the [min_soc, max_soc] operating "
+    "window; multi-service reserves (firming / frequency-response / curtailment "
+    "absorption) allocated against the direction-specific headroom with a strict "
+    "no-double-count energy invariant. Advisory / config-level ONLY — NOT a dispatch "
+    "optimisation and NOT the utility-accepted bankable study."
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # D7 (#883) — harmonics / flicker + frequency-headroom SCR-coupled screen contract.
 #
 # The SCR / reactive / ride-through screens above answer stiffness, steady-state
@@ -1189,6 +1223,107 @@ _HARMONIC_SCREEN_DISCLAIMER = (
     "drops; degrades as the grid weakens. NOT a standalone pass/fail; confirm with a "
     "frequency-domain harmonic study against the utility base case."
 )
+
+
+@dataclass(frozen=True)
+class BessSocState(ContractMixin):
+    """The usable-energy picture of a BESS at one state-of-charge (issue #879).
+
+    A pure energy-accounting snapshot shared by every multi-service BESS study so the
+    SAME usable-capacity / headroom numbers are computed ONCE, not re-derived (and
+    subtly diverged) per service. ADVISORY / config-level (``bankable=False``); it
+    never feeds the finance engine.
+
+    All energies are MWh at the AC terminals (round-trip efficiency is a dispatch-layer
+    concern, out of scope for this static accounting snapshot).
+
+    Fields
+        nameplate_energy_mwh: the BESS nameplate (beginning-of-life) energy rating.
+        soh_fraction: the state-of-health fraction in (0, 1] applied to the nameplate
+            to get the usable energy at this point in life.
+        usable_energy_mwh: ``nameplate_energy_mwh * soh_fraction`` — the SoH-degraded
+            usable energy that the operating SoC window is taken against.
+        soc_fraction: the state-of-charge fraction in [0, 1] (fraction of usable energy
+            currently stored).
+        min_soc_fraction / max_soc_fraction: the operating SoC window [floor, ceiling]
+            (fractions in [0, 1], floor < ceiling) the battery is held within.
+        stored_energy_mwh: ``usable_energy_mwh * soc_fraction`` — energy currently stored.
+        dischargeable_mwh: energy available to DISCHARGE before hitting the min-SoC floor
+            (``max(0, (soc - min_soc)) * usable_energy_mwh``) — the pool firming and
+            frequency-response down/droop-discharge reserves compete for.
+        chargeable_mwh: room available to CHARGE before hitting the max-SoC ceiling
+            (``max(0, (max_soc - soc)) * usable_energy_mwh``) — the pool
+            curtailment-absorption competes for.
+    """
+
+    nameplate_energy_mwh: float
+    soh_fraction: float
+    usable_energy_mwh: float
+    soc_fraction: float
+    min_soc_fraction: float
+    max_soc_fraction: float
+    stored_energy_mwh: float
+    dischargeable_mwh: float
+    chargeable_mwh: float
+    method: str = "closed_form"
+    bankable: bool = False
+    provenance: str = _BESS_SOC_PROVENANCE
+    notes: str = ""
+
+
+@dataclass(frozen=True)
+class ReserveSplitResult(ContractMixin):
+    """Advisory allocation of a BESS's usable energy across competing reserves (#879).
+
+    Enforces the FOUNDATIONAL no-double-count energy invariant: the SAME MWh cannot be
+    claimed by firming AND frequency-response AND curtailment-absorption at once. Each
+    service is allocated against the headroom in its flow direction (discharge services
+    against ``dischargeable_mwh``; curtailment-absorption against ``chargeable_mwh``),
+    and a request whose direction-total EXCEEDS that headroom is REJECTED — ``feasible``
+    is False and the per-direction shortfall is reported (NO SPURIOUS PASS: the split is
+    never silently over-allocated). ADVISORY / config-level (``bankable=False``); it
+    never feeds the finance engine.
+
+    Fields
+        soc: the :class:`BessSocState` the split is evaluated against.
+        firming_request_mwh / frequency_request_mwh: the requested DISCHARGE-direction
+            reserves (MWh) for firming and frequency response.
+        curtailment_request_mwh: the requested CHARGE-direction reserve (MWh) for
+            curtailment absorption.
+        firming_allocated_mwh / frequency_allocated_mwh / curtailment_allocated_mwh:
+            the MWh actually allocatable to each service WITHOUT breaching its direction's
+            headroom. On a feasible split each equals its request; on an infeasible split
+            the granted MWh are clamped to the available headroom (never over-allocated).
+        discharge_requested_mwh / discharge_available_mwh / discharge_shortfall_mwh: the
+            total requested vs available vs missing MWh in the DISCHARGE direction
+            (firming + frequency vs ``dischargeable_mwh``).
+        charge_requested_mwh / charge_available_mwh / charge_shortfall_mwh: the same for
+            the CHARGE direction (curtailment vs ``chargeable_mwh``).
+        feasible: True iff BOTH directions clear (every reserve is fully covered by its
+            direction's headroom — zero shortfall in each direction). A single MWh is
+            NEVER counted toward more than one service, so the invariant
+            (Σ discharge reserves ≤ dischargeable) AND (Σ charge reserves ≤ chargeable)
+            holds by construction whenever ``feasible`` is True.
+    """
+
+    soc: "BessSocState"
+    firming_request_mwh: float
+    frequency_request_mwh: float
+    curtailment_request_mwh: float
+    firming_allocated_mwh: float
+    frequency_allocated_mwh: float
+    curtailment_allocated_mwh: float
+    discharge_requested_mwh: float
+    discharge_available_mwh: float
+    discharge_shortfall_mwh: float
+    charge_requested_mwh: float
+    charge_available_mwh: float
+    charge_shortfall_mwh: float
+    feasible: bool
+    method: str = "closed_form"
+    bankable: bool = False
+    provenance: str = _BESS_SOC_PROVENANCE
+    notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -1539,6 +1674,8 @@ __all__ = [
     "PowerFlowResult",
     "GridStudyResult",
     "RideThroughResult",
+    "BessSocState",
+    "ReserveSplitResult",
     "ResourceReactiveContribution",
     "PocCapabilityEnvelope",
     "HarmonicComplianceResult",

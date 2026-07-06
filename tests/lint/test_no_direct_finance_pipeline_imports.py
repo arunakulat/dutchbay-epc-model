@@ -155,6 +155,14 @@ ALLOWLIST: dict[str, str] = {
         "grid_interface_schema tech-type imports. The BESS capability plug-in is "
         "KPI-neutral / advisory-only."
     ),
+    "analytics/grid/capabilities/bess_soc.py": (
+        "[PERMANENT] Imports finance.tech_types (is_storage_type) to gate the shared BESS "
+        "state-of-charge / reserve-split accounting on the storage classification — a pure "
+        "leaf registry of TYPE discriminators with no engine logic, identical in spirit to "
+        "the bess / wind / solar / grid_interface_schema tech-type imports. The SoC model "
+        "is KPI-neutral / advisory-only (config-level energy accounting; nothing feeds the "
+        "finance engine)."
+    ),
     # --- [TODO] real layering violations to refactor toward the gateway -----
     "analytics/dscr_sensitivity.py": (
         "[TODO #36] Imports finance.debt_v14.size_debt_with_dual_dscr directly "

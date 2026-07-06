@@ -36,8 +36,14 @@ Public plug-ins:
       a MANUAL per-site PCS short-circuit contribution fed into the SCR screen, plus an
       SoH-degraded reactive/PQ capability screen (year-15 reactive headroom shrinks as the
       state-of-health degrades).
+    - :mod:`analytics.grid.capabilities.bess_soc` — the shared BESS state-of-charge model
+      + reserve-split accounting (D5a, #879): usable energy = nameplate * SoH bounded by
+      the [min_soc, max_soc] window, and a strict no-double-count allocation of the
+      DISCHARGE / CHARGE headroom across firming / frequency-response / curtailment-
+      absorption reserves — the SAME MWh can never be claimed by two services. FOUNDATIONAL
+      for the later D5c/D6 multi-service dolphins; standalone + config-level here.
 """
 
 from __future__ import annotations
 
-__all__ = ["bess", "solar", "wind"]
+__all__ = ["bess", "bess_soc", "solar", "wind"]
