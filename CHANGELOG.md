@@ -5,6 +5,148 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Solar-only and hybrid+BESS lender scenarios for the cross-technology comparison (#821, #745 follow-up).**
+  Added two bankable-input lender configs — `scenarios/dutchbay_solar_only_2025Q4.yaml` (150 MWac
+  fixed-tilt PV, CF 0.1685 on the frozen PVGIS TMY) and `scenarios/dutchbay_hybrid_bess_2025Q4.yaml`
+  (the wind+solar hybrid with a co-located 50 MW/200 MWh capacity-charge BESS whose $25M turnkey
+  capex is financed, BESS-3) — on the SAME lender debt/tax/FX/WACC stack as the wind lendercase, so
+  the #745 tech-comparison table now supports the full 4-way (wind / solar / hybrid / hybrid+BESS)
+  set. Comparison-only: KPI-neutral, the committed 5th-gen wind canon is untouched and the wind
+  column still reconciles to it byte-for-byte.
+- **Coastal-appropriate wake parametrization + wake-loss sensitivity disclosure (#832, epic #827).**
+  The live PyWake path (`resource.wake.model_live`) can now take a **config-driven ambient
+  turbulence intensity** via `resource.wake.turbulence_intensity`, which sets the
+  Bastankhah–Porté-Agel Gaussian growth rate through the shared closure
+  `wind_resource.bankable_aep.gaussian_k_star` (`k* = 0.38·TI + 0.004`) — the correct lever for a
+  low-roughness coastal site (NOT the Jensen "0.04" constant, which does not map onto `k*`).
+  **DEFAULT-OFF / canon byte-identical:** an unset TI reproduces the engine kernel default
+  `DEFAULT_TURBULENCE_INTENSITY = 0.10`, i.e. today's exact `k*` and wake loss; the frozen-config
+  headline (7.28%) and the committed finance canon are untouched (projIRR/eqIRR/min_dscr unchanged).
+  Supplied TI is CESSPIT-strict — a fraction in `(0, 1]` or it fails loud (no silent clamp/coerce
+  that would quietly move the modelled AEP). New `wake_loss_ti_sensitivity()` recomputes array wake
+  loss over a TI grid on the real layout + wind rose (`WakeTISensitivity` with a per-0.01-TI slope) —
+  the honest-economics disclosure; the DutchBay single-row screening gives ≈ **−0.13 pp wake loss per
+  +0.01 TI** (lower coastal TI *raises* wake loss for a dense row — layout-specific, so "coastal ⇒
+  lower wake" must not be baked in blind). Documented in
+  `docs/knowledge_base/02_dutch_bay_project_dossier.md` §2.1 as a **provenance-tagged assumption**
+  pending mast/lidar validation; enabling a non-default coastal TI (which moves modelled AEP) stays a
+  separate, **oracle-gated (`kpi_oracle.py`) and adversarially-reviewed** step — never folded in here.
+- **Result-surfacing API contract (`#844`, #788 P1)** — a typed, chart-ready server-side
+  contract for the wizard client (no UI; the frontend stack #843 is still a user gate).
+  `POST /cases/surface` returns `CaseSurface` — lender KPI cards (each with the report's own
+  display string), the sensitivity tornado, both global-SA (Morris + PAWN) charts, the #657
+  capital-risk headline, and artifact download links — projected from the SAME `ReportContext`
+  the PDF renders (`app/api/surface.py`, pure re-shaping, KPI-neutral by construction). Adds
+  `POST /cases/report.xlsx` streaming the existing executive workbook. Supplementary charts
+  degrade to `null` exactly as the report omits them (CASPER). `tests/app/test_surface_contract.py`
+  pins the response shape (frozen field sets + projected values + a real .xlsx download), not a
+  bare 200.
+- **Live-PyWake activation from a DERIVED directional rose (KPI-moving, DEFAULT-OFF, #853.3).**
+  The live wake path (`analytics.wind.aep_summary_builder._resolve_wake_loss`, gated on
+  `resource.wake.model_live: true`) can now consume the DERIVED directional `wind_rose_freq` —
+  the per-sector frequencies binned by the canonical `analytics.wind.wind_rose.build_wind_rose`
+  from a real met-convention direction series (e.g. the #853.1 production `wd_100m`) — instead of
+  a hand-typed `wind_rose_freq`. This is gated on a NEW explicit opt-in
+  `resource.wake.use_derived_rose` that **DEFAULTS FALSE** (CESSPIT-strict): when unset/false the
+  resolution is byte-identical to the pre-#853.3 path (an explicit `wind_rose_freq` is still
+  required and consumed unchanged; the frozen `resource.losses.wake_loss_pct` headline — the
+  canonical 7.28% — is untouched). When ON the rose is derived from `resource.wake.direction_deg`
+  (or, failing that, `resource.wind_rose.direction_deg`), sector count from
+  `resource.wake.wind_rose_sectors` (default 12); a missing/degenerate series or a redundant
+  explicit `wind_rose_freq` FAILS LOUD rather than silently degrading to an omnidirectional rose.
+  The `wake_source` disclosure gains a rose-provenance suffix (`pywake_live:<model>:config_freq`
+  vs `pywake_live:<model>:derived:<n>sec`). Enabling it MOVES the headline wake loss (real
+  sectoral frequencies vs the frozen offline value) and is therefore a separate, user-gated,
+  oracle-gated (`kpi_oracle.py` before/after) step — NOT this change. Canon byte-identical with the
+  flag off (`tests/finance/test_multitech_generation.py` projIRR / eqIRR / min_dscr unchanged;
+  frozen 7.28% wake oracle unchanged).
+- **Wind direction through the ERA5 production path + polar wind-rose plot (KPI-neutral, #853.1/#853.2).**
+  `wind_resource/era5_retrieval.py::build_hub_height_series` now derives met-convention wind
+  direction (`wd_10m`/`wd_100m`) from the same u/v components as the speed — reusing the exact
+  formula from the legacy gridded fetcher (`(180 + degrees(arctan2(u, v))) % 360`) — so a
+  directional wind rose can be built from the actual production run (not only a config-supplied
+  `resource.wind_rose.direction_deg`). `run()` surfaces this rose (via the canonical
+  `analytics.wind.wind_rose.build_wind_rose`, with the #826 calm-exclusion / energy-rose /
+  sectorwise-Weibull enrichment) under `result["wind_rose"]`, config-first sector count
+  (`download.wind_rose_sectors`, default 12). The report layer (`app/reports/wind_rose_plot.py`)
+  renders that block as a `projection='polar'` plot embedded as a self-contained base64 PNG in the
+  WIND resource sub-chapter, with matplotlib guarded at call-time (CASPER — degrades to the
+  frequency table alone when absent). Display/derivation only — the derived rose feeds no
+  wake-loss / AEP path (the KPI-moving live-PyWake activation is the separate oracle-gated #853.3);
+  canon byte-identical.
+# changelog.d/863.added.md
+- **BESS standalone project-economics module (`finance/bess_project_economics.py`, #863)** —
+  translates the real 2025 Sri Lankan BESS commercial inputs into project economics, opt-in and
+  **default-off**. Extends (does not duplicate) the existing BESS layer: revenue and degradation
+  reuse `finance.bess_revenue` (`resolve_bess_specs` / `bess_revenue_lkr_for_year` /
+  `mdsc_soh_for_year` / augmentation), the read-only LCOS reuses `finance.bess_lcos`, IRR/NPV
+  reuse `finance.irr` (R7 single source of truth), and USD→LKR reuses the config-first FX routine
+  `finance.cashflow_v14_fx._fx_curve` (no hardcoded rate). Genuinely new pieces:
+  (1) **landed capex** from a Huawei-LUNA2000-style CIF quote structure (equipment CIF + optional
+  15-yr warranties + freight) + a Sri Lanka customs/duty layer ("extra at actual", buyer scope) +
+  FX → landed USD/LKR; (2) the **CEB effective-cost curve** (`effective LKR/kWh = annual capacity
+  charge ÷ degradation-adjusted annual discharge`, 400 cycles/yr, 2.5%/yr fade), which — matching
+  the CEB `BESS Energy Cost` doc — **EXCLUDES charging cost** (disclosed, not hidden); (3) the
+  **separate charging-cost lever** the CEB method omits (`energy_to_charge × charging_tariff ×
+  1/RTE`); (4) a **standalone BESS cashflow → IRR/NPV/LCOS** (landed capex at t0, then capacity
+  revenue − opex − charging − warranty draws − augmentation). Provenance cited to the real
+  primary-source docs (Huawei CIF `251002 - Price Offer`, CEB `TENDER RESULTS.xlsx`, CEB
+  `BESS Energy Cost`). **KPI-neutral / byte-identical:** the module is reached only through
+  `compute_bess_project_economics`, gated on an explicit `bess_economics.enabled: true`, and is
+  imported by nothing on the committed cashflow path — the frozen 5th-gen canon is unchanged
+  (projIRR 0.014551597740253388 / eqIRR −0.05841298678542661 / min_dscr 1.285740985294611). The
+  capacity-charge / degradation / charging levers are **KPI-moving when wired into a committed
+  scenario**; that wiring is a separate, user-gated step (NOT this change). 50 new tests, 97.7%
+  module coverage; all economics hand-checked against independent `numpy_financial`.
+- **Combined frequency-droop study with an ENPPC 6-group plant controller** (`analytics/grid/hybrid/frequency_response.py`, `analytics/grid/hybrid/__init__.py`, `analytics/contracts_v14.py`, `analytics/grid/grid_interface_schema.py`, #881 D5c) — the second HYBRID-plant grid screen: where the D7 sizer (`analytics/grid/frequency_response.py`) answers the STATIC de-load COST of a droop obligation, this new module answers the COMBINED-FLEET, EVENT question. For a frequency event Δf it GENERALISES the Envision ENPPC (plant power controller) 6-group logic — config keys `ppc.groups` / per-group `freq_droop_pct` / `p_priority_order` — as a PPC AGGREGATE-FILL model (the ENPPC is a supervisory plant-level controller, not a set of independent per-turbine governors). Each group's OWN droop share is `ΔP_g = (|Δf|/f_n)/R_g · P_rated_g`; the PLANT OBLIGATION the controller must meet is their SUM. The PPC then walks `p_priority_order` and dispatches each group up to its physical HEADROOM against the running residual obligation (`take = min(headroom_g, residual)`), so a higher-priority group with spare headroom covers the shortfall a lower-priority group cannot — the priority order is LOAD-BEARING (reordering it changes the delivered split and which BESS group is SOC-limited-out). Group headroom is the maximum the PPC could dispatch it to: for up-regulation a wind group's spinning/de-load headroom = rating minus current output; for down-regulation the current output shed toward zero. A **BESS group re-uses the ONE shared D5a SOC model** (`bess_soc_state` + `split_reserves`): its up-regulation is a DISCHARGE whose energy to SUSTAIN its converter power headroom over the mandated window (`MW · sustain_s / 3600`) is requested as the DISCHARGE-direction `frequency_mwh` reserve — honouring the D5a no-double-count invariant (the same MWh is never claimed by firming AND frequency), and a group whose SOC energy cannot sustain that headroom is capped below its power rating; `soc_limited` records when the PPC actually dispatched it up to that SOC-bound cap (physical evidence, not a hypothetical). NO battery energy accounting is re-derived here. The settling frequency is estimated (quasi-steady advisory proxy) from the delivered fraction and screened against the grid-code continuous ride-through band → `band_compliant`; `response_adequate` reports whether the delivered response met the plant obligation. Two frozen advisory result types are added to `analytics.contracts_v14` (CCCDIR): `FreqResponseResult` (the plant-level study) and its per-group line item `GroupDroopContribution` (the dispatch audit trail — own droop share, headroom, delivered). NO SPURIOUS PASS: every verdict derives from PHYSICAL evidence (delivered vs obligation MW, settling frequency vs band); the response can never exceed the total fleet headroom; where a quantity is not established (a zero-command event, or the un-modelled dynamic ANDES nadir) an explicit `None` / NOT-RUN with a stated reason is returned — the ANDES dynamic frequency solve is reached ONLY through the shared D4a `run_ride_through_case` machinery at call-time and, because the D4a core does not model a frequency excursion yet, `dynamic_nadir_hz` is returned NOT-RUN (never fabricated from the closed-form estimate). CASPER: the split MATH is pure Python and imports NO grid library at module scope (the module imports cleanly WITHOUT the `[grid]` extra). CESSPIT: the new `grid.ppc` block (groups + priority order) is strict-validated (present-only, no silent defaults; up to 6 groups; positive rating + droop; a priority order naming exactly the groups once each) via a conditional rule in `validate_grid_block`, gated so it fires ONLY when a `ppc` block is declared — every scenario without the hybrid frequency study is byte-identical. Default-off / advisory-only (`bankable=False`): nothing here feeds the finance engine, so committed-scenario KPIs are byte-identical (project IRR 0.014551597740253388 / equity IRR −0.05841298678542661 / min DSCR 1.285740985294611 unchanged). Grid-free tests carry 100% coverage of the new module (the ENPPC per-group droop shares reproducing a known event, the LOAD-BEARING priority order changing the delivered split and the SOC-limited-out verdict, up/down-regulation headroom, the BESS SOC-energy limit + no-double-count-with-firming via the shared D5a model, band-compliance / adequacy / every NOT-RUN branch, and every CESSPIT raise); a `grid`-marked companion exercises the shared-D4a dynamic path live and asserts the NOT-RUN nadir discipline.
+- **Grid D6a — OpenDSSDirect QSTS curtailment engine + advisory deemed-vs-self split** (`analytics/grid/curtailment_qsts.py`, `analytics/contracts_v14.py`, `analytics/grid/grid_interface_schema.py`, #882 D6a) — a quasi-static time-series (QSTS) curtailment engine that runs over a REAL feeder model, injects the hybrid plant's per-timestep generation behind ONE point-of-connection (POC) export cap, integrates the curtailed energy over the horizon, and SPLITS it the way the CEB SPPA does. (a) **Deemed-paid / grid-instructed** curtailment — an operator dispatch / upstream-feeder-limit instruction; under the CEB standardised PPA this is PAID as deemed energy, so it must NOT haircut revenue → KPI-NEUTRAL. It is an EXPLICIT INPUT — the committed `grid.qsts.grid_instructed_profile_mw` (the real utility schedule), or all-zeros when none is supplied — NOT inferred from a QSTS monitor heuristic: a bare power-flow cannot honestly derive operator instructions, and deriving deemed from an `(export − cap)` breach would DOUBLE-COUNT the same above-cap MWh as both self and deemed (a real bug caught in review). (b) **Self-curtailed** — the plant physically sheds its OWN excess above the export cap: this IS what the QSTS establishes (generation vs the cap, its real competency), a REAL energy loss, the SOLE future KPI-mover, wired to finance later by D6b (NOT here). Hybrid curtailment-sharing under one export cap with **BESS charge-from-surplus**: surplus that would be self-curtailed is instead absorbed into the shared D5a SoC model (`split_reserves` curtailment-absorption CHARGE reserve, bounded by `chargeable_mwh`), so the battery converts a would-be loss into stored energy WITHOUT creating energy from nothing (`self_curtailed = surplus − bess_absorbed ≥ 0`, `bess_absorbed ≤ chargeable headroom`). The operating SoC (`grid.qsts.bess.soc_fraction`) is STRICT — never silently defaulted to mid-window, since it caps absorption and therefore the KPI-mover (an optimistic default would understate the self-curtailment loss). Every quantity is an INTEGRAL of physical evidence (export-cap breaches of the injected generation, the committed instruction schedule, SoC headroom), NEVER a solver-convergence flag — the energy-conservation identity is a real assertion at emit (NO SPURIOUS PASS). Emits a new frozen advisory `CurtailmentShareResult` (CCCDIR: added to `contracts_v14`, `bankable=False`) carrying the deemed-vs-self split, the pre/post-BESS self-curtailment, the BESS-absorbed energy, and the shares/hours; NOT-RUN paths return `ran=False` with every energy field `None` and a `reason`. **Real feeder vs synthetic/demo — no fabricated number**: the study is gated behind `grid.qsts.enabled` (default FALSE) and REQUIRES a real `grid.qsts.feeder_model_path`; a synthetic/demo feeder is a smoke test only and REFUSES to overwrite the real loss placeholder (inert). Default-off / no-feeder / synthetic → inert `None`, not a fabricated zero-loss pass. A new present-only CESSPIT conditional (`grid.qsts` in `grid_interface_schema.validate_grid_block`) strict-validates `qsts.enabled` as a bool and requires `feeder_model_path` only when enabled — grid scenarios without a `qsts` block are byte-identical. CASPER: `opendssdirect` is guarded at call-time via `_require_opendss` (base install never imports it; the module imports cleanly grid-free). Advisory / KPI-neutral — no finance path yet, so committed-scenario KPIs are byte-identical (project IRR 0.014551597740253388 / equity IRR −0.05841298678542661 / min DSCR 1.285740985294611 unchanged). Grid-free tests carry 100% coverage of the new module (the deemed-vs-self split math, the BESS charge-from-surplus energy balance, the energy-conservation invariant's every violation branch, all gating/inert branches, the synthetic-feeder refusal, and every CESSPIT strict-input raise); a `[grid]`-marked dynamics test exercises the live OpenDSS QSTS solve over a real feeder master.
+- **Advisory grid-screening report + un-suppressible SCREENING-not-bankable / EMT-gap caveat (#884, D8, epic #870).**
+  Added `app/reports/grid_screening_emit.py` — the opt-in, latency-gated caller that SURFACES the
+  in-house design-stage grid study (D1–D7 screens: SCR@POC / GFL-vs-GFM, reactive PQ-box Mvar
+  shortfall, SCR-coupled harmonics/flicker, RMS ride-through, hybrid-POC composite SCR, combined
+  frequency-droop, QSTS curtailment split) in a STANDALONE advisory HTML report. Wired into
+  `run_full_pipeline_v14.py` behind `emit_grid_screen:false` (the default), exactly mirroring the
+  three sibling emitters (`capital_risk`/`interaction_grid`/`tech_comparison`): the heavy screens
+  run on the batch path only, never the synchronous HTTP report route (the #645 latency ledger).
+  **The grid study is ADVISORY (`bankable=false`) and NEVER feeds finance** — the committed canon is
+  oracle byte-identical whether or not the report runs (projIRR / eqIRR / min_dscr unchanged; nothing
+  enters CFADS / IRR / DSCR). Every grid surface carries the machine-stamped, **un-suppressible**
+  SCREENING / DESIGN-STAGE-ONLY caveat, the EMT-gap boundary (ANDES/pandapower are RMS/phasor only; a
+  marginal SCR &lt;2–3 is stamped "EMT confirmation required", never sign-off) and the real #868
+  CEB (2025/003/C) / NSO (2026/001/C) tender evidence that makes the boundary EVIDENCED, not abstract
+  — none of which is removable by config. The report SURFACES provenance (the
+  `surface-provenance-in-presentation-layer` directive): the resolved `[grid]` pin set
+  (pandapower==3.3.0 / andes&gt;=2.0 / opendssdirect.py&gt;=0.9.4) with the CASPER
+  available-vs-degraded state of each optional engine, and the verification discipline (adversarially
+  reviewed, KPI-neutral / oracle byte-identical, degrades gracefully). CASPER: a missing `[grid]`
+  engine or a screen-specific config gap degrades that screen to an honest "not run" state surfaced in
+  the report, it does not crash. Ships `docs/knowledge_base/grid_screening_scope.md`. 100% coverage on
+  the new emitter; the finance canon is byte-identical.
+- **Finance loss-key wiring of ONLY the self-curtailment fraction — the sole KPI-mover of
+  grid-epic #870, DEFAULT-OFF (#885, D6b).** New `finance.self_curtailment_v14` composes the
+  plant's OWN physical export-cap shed (`CurtailmentShareResult.self_curtailed_pct`, the D6a
+  QSTS split, after BESS recovery) into the existing first-class `curtailment_pct` loss key,
+  so a real self-curtailment reduces net energy → CFADS → project/equity IRR and min DSCR.
+  The **deemed-paid / grid-instructed** fraction is NEVER read — under the CEB standardised
+  PPA it is paid as deemed energy and must stay KPI-neutral. The wiring is behind an explicit
+  opt-in that DEFAULTS OFF (`grid.qsts.finance_wiring.enabled: true`, requiring the QSTS to be
+  enabled against a real feeder); with it absent — every committed scenario — the resolver
+  short-circuits to 0.0 before any grid/QSTS import and the composition returns the input
+  verbatim, so the committed 5th-gen canon is byte-identical (projIRR 0.014551597740253388 /
+  eqIRR -0.05841298678542661 / min_dscr 1.285740985294611 unchanged). Composition is
+  multiplicative (`1-(1-config)(1-self)`), so grid_loss / config-curtailment / grid_outage do
+  not double-count. A `kpi_oracle`-style before/after test drives the FULL pipeline and asserts
+  a real, correctly-signed KPI move when enabled (8% self-curtailment: projIRR 1.455% → 0.448%,
+  eqIRR -5.84% → -7.48%, min_dscr 1.2857 → 1.2766, CFADS -$16.3M), while a 30-35% deemed-paid
+  share leaves every KPI byte-identical. Enabling this on a committed scenario is a separate,
+  user-gated decision.
+- **Real HVRT-swell + frequency-excursion ride-through dynamics** (`analytics/grid/ride_through.py`, `analytics/grid/hybrid/frequency_response.py`, `analytics/contracts_v14.py`, #892 D4b, follow-up to D4a #875) — the shared ANDES RMS ride-through core now PHYSICALLY MODELS the two cases that D4a returned as honest NOT-RUN (`rode_through=None`): **HVRT** (a shunt `Fault` can only DIP voltage, never SWELL it) and **frequency** (no excursion was applied). Each now applies a real disturbance and derives its verdict from PHYSICAL EVIDENCE — never from solver convergence.
+  - **HVRT (over-voltage swell)** — a **FULL LOAD REJECTION**: every `PQ` load is `Toggle`d OFF mid-run so the freed real+reactive power swells the buses. (Rejecting a single load on a stiff test network only lifts the bus ~1.07 pu — below the 1.10 entry — so nothing is exercised; a full rejection is the classic HVRT stimulus and reliably drives the peak past the entry pu — empirically ~1.26 pu on ieee14.) The verdict (`hvrt_rode_through`) requires a MEASURED peak above the HVRT entry pu (else NOT-RUN — the over-voltage path was never exercised), then `rode_through=False` when the IBR tripped, the peak reached the over-voltage INSTANTANEOUS-trip edge (`ov_trip_pu`, seeded from the D0 fixture `volt_trip_pu.overvoltage` shortest-clearing setpoint), or the bus failed to settle back at/below the entry pu; `True` only when a real swell settled back with no trip.
+  - **Frequency excursion** — a **generator trip** (default; a `GENROU` machine `Toggle`d off → under-frequency) or a **load step** (over-frequency). The verdict (`frequency_rode_through`) reads the measured nadir/zenith (`freq_extreme_hz` = the extreme furthest from nominal, from the machine-speed `omega` states) and requires it to leave the continuous band (else NOT-RUN), then `False` on IBR trip / reaching the instantaneous under-over-frequency trip band (`freq_trip_hz`, from the fixture shortest-clearing setpoints) / failing to settle back inside the band; `True` otherwise.
+  - **Hardened IBR trip detection** (`_any_ibr_tripped`) — trip detection now draws on TWO independent lines of physical evidence: the model online flag `u` AND a CURRENT-INJECTION collapse (an IBR whose converter current went to ~0 by the final step despite being non-zero earlier — a blocked/tripped converter a `u`-only check would miss). Returns `None` (UNREADABLE → the verdict refuses to certify) when NEITHER line is legible. The frequency case reads IBR-ONLY trip evidence (excluding `GENROU`) so its intended generator-trip disturbance is not mis-read as a compliance failure.
+  - **D5c dynamic nadir is now REAL** — `analytics.grid.hybrid.frequency_response._attempt_dynamic_nadir` propagates the measured `freq_extreme_hz` from the D4b frequency case (via the new `RideThroughResult.freq_extreme_hz` field) instead of the D4a NOT-RUN. The honest-None contract is PRESERVED: the nadir stays `None` on a gate-off run, a case-setup failure, an unmeasured frequency var, or (CASPER) when the `[grid]` extra is absent — NEVER fabricated from the closed-form settling estimate.
+  - **NO SPURIOUS PASS** — a verdict comes only from measured physical evidence (peak/nadir vs the envelope + trip curve + trip status). A disturbance that fails to move the quantity past its entry threshold, an unreadable trip status, or a candidate case with no device to actuate stays an honest NOT-RUN; a diverged/early-terminated solve UNDER an applied disturbance is a real COLLAPSE (`rode_through=False`), not None.
+  - **CASPER / KPI-neutral** — `andes` is still reached ONLY through the call-time `_require_andes` guard; the module imports cleanly without `[grid]`. Every result is ADVISORY (`bankable=False`); nothing feeds the finance engine, so committed-scenario KPIs are byte-identical (project IRR 0.014551597740253388 / equity IRR −0.05841298678542661 / min DSCR 1.285740985294611 unchanged). `RideThroughResult.freq_extreme_hz` is a new optional field defaulted `None` (byte-identical for the voltage cases and every non-frequency emitter). Grid-free tests carry 100% coverage of `ride_through.py` (the trip-table parsers, the HVRT/frequency verdicts + dynamic reducers, `freq_extreme_hz`, and every NOT-RUN branch); the `grid`-marked companion exercises the live ANDES HVRT/frequency solves and includes a FAILURE regression for each (a disturbance that must NOT ride through → `rode_through=False`).
 - **Solar long-term GHI trend -> ResourceTrend workbook sheet** (`solar_resource/long_term_trend.py`, #727) — the SOLAR analogue of the wind trend (#656). Runs Mann-Kendall + Sen's-slope (Theil-Sen) on a multi-decade annual global-horizontal-irradiance (GHI) series, classifies decadal variability vs a secular dimming/brightening trend (IEC 61724-1 / IEA-PVPS Task 13), and emits the SAME JSON-safe `long_term_trend` block the wind producer does via `build_solar_resource_trend_export_block`, with an explicit short-record degrade (`{"analyzed": false}`, <10 distinct years). The multi-decade GHI series is a FROZEN input (documented source: PVGIS SARAH-3) — never fetched live here or in tests, following the #656/#469 discipline. The finance-CLI Executive Workbook consumer gains `resource_trend_df_from_solar_export` and `emit_executive_workbook_from_pipeline(..., solar_export=...)`; the workbook fills ONE "ResourceTrend" sheet (wind takes precedence on a wind+solar hybrid — DutchBay is wind-primary and has the longer record). The per-period AEP/CF are a first-order linear GHI-ratio proxy of the full-record P50 (not a pvlib re-run); this basis is stated IN the artifact (a caveated table header + a workbook "Method" row) and rounded to avoid false precision, so a lender never reads it as a precise modelled P50. A zero-variance GHI series degrades to a JSON-safe no-trend (no NaN statistics). Tidal (deterministic) and BESS (no resource series) carry no trend, per the issue. Opt-in, default-off, pvlib-free and network-free; report-only and KPI-neutral (committed scenario KPIs byte-identical).
 Infeasibility diagnostics + optimization audit log (#741): when a
 capital-structure / single-parameter optimizer search finds no feasible
@@ -301,6 +443,31 @@ Annual credit-support fees on outstanding senior debt (#737): `Financing_Terms.f
   per-site behavioural review rather than a blanket lint fix.
 
 ### Changed
+- **API contract freeze — public surface versioned under `/v1` + tornado response typed (#841, #788 P1).**
+  The whole client-data HTTP surface (`/cases*`, `/run-pipeline`, `/sensitivity/*`, `/jobs*`,
+  `/token`) is now version-pinned under a `/v1` prefix, so the public contract is stable and a
+  future breaking change lands additively as `/v2` rather than mutating `/v1` in place; `/health`
+  stays deliberately unversioned (infra probe, self-reports `API_CONTRACT_VERSION`). The
+  `/v1/jobs` handle URLs (`status_url`/`events_url`) are now `url_for`-derived so they carry the
+  mount prefix automatically. The sensitivity tornado response, previously an untyped
+  `list[dict[str, Any]]`, is now a pinned `list[SensitivityTornadoRow]` Pydantic model. A
+  `tests/app/test_api_contract.py` pass asserts the response-model field sets + types AND the
+  generated OpenAPI schema (versioned paths, typed tornado array, pinned operationIds), so an
+  accidental contract change fails loudly. KPI-neutral (app/API layer only; no finance path).
+- **README full re-verify + re-edit (#854)** — audited every README claim against merged
+  `main` and corrected the drift: VERSION 14.15.0 → **15.3.0**, GWTF rule count 62 → **64**,
+  stale "Last Updated" date, and the Streamlit dashboard path (it lives under
+  `analytics/dashboard/`, not `app/`). Documented the newly-delivered, code-verified
+  capabilities that the README omitted: the ERA5 → Weibull → PyWake **bankable-AEP** wind
+  pipeline (P50/P75/P90), the **wind rose** (`analytics/wind/wind_rose.py`), the DTU-TopFarm
+  **micro-siting optimizer**, the **GIS-for-wind** siting toolchain (`analytics/gis/*`:
+  GeoTIFF/GWA/GLO-30 DEM/WorldCover-z₀/boundary-clip/RIX/exclusion/MCDM), the HTML/PDF lender
+  report with per-tech comparison + interaction-grid chapters (`app/reports/*`), the NSGA-II
+  Pareto optimizer, and the advisory **grid interconnection screening** study
+  (`analytics/grid/*`) — with its in-code honesty boundary preserved (screening/design-stage
+  only, NOT the bankable connection study; default-off; KPI-neutral; HVRT/frequency reported
+  as honest NOT-RUN). Added an install-extras table covering all opt-in extras. Docs-only; no
+  code or KPI change.
 - **Artifact path normalization, slice-2 (#735)** — routed the remaining artifact/report/export
   writers through the shared `analytics.output_paths.resolve_output_dir` resolver so every artifact
   of a run co-scopes. In `run_full_pipeline_v14.py` the four report/workbook emitters
@@ -495,6 +662,25 @@ CI cost diet (Test Suite workflow): (1) merges to `main` now re-validate on **Py
 Retired the toy `run_driver_mc` capital-risk stack (#780, user-approved dead-code removal): `run_driver_mc` (independent-Gaussian bootstrap — no LHS/correlation), `run_capital_risk_layer`, `build_driver_mc_tail_snapshot`, `build_driver_mc_tail_report`, the `scripts/run_capital_risk_layer.py` CLI and their tests. Superseded end-to-end by the canonical MC path: `analytics.mc.engine.MonteCarloEngine` (LHS + Iman-Conover) → `build_capital_risk_report_from_mc_result` → the lender report (opt-in caller `app.reports.capital_risk_emit`, #779/#776). The MC-source-agnostic cores (`compute_capital_risk_layer`, `build_case_metadata_from_trials`, `_tail_report_from_trials`, `emit_npv_distribution_from_trials`, `build_capital_risk_report_from_trials`/`_from_mc_result`) are kept; their guards now run on synthetic per-trial arrays. KPI-neutral.
 
 ### Fixed
+- **Local mypy on `app/` now matches CI (#859)** — `RedisJobStore`'s `RedisLike`
+  parameter type was a plain nominal class, so an installed, typed `redis.Redis`
+  (present in the shared dev venv) failed `[arg-type]` at
+  `app/jobs/worker.py:59` / `app/api/jobs_router.py:62` locally, while CI — which
+  never installs the optional `[jobs]` extra, so `redis` resolves to `Any` — stayed
+  green. Made `RedisLike` a `typing.Protocol` (PEP 544) so the sync client is matched
+  *structurally*, as its docstring always claimed ("duck-typed get/set"). No runtime
+  or KPI change (canon byte-identical); mypy is now clean whether or not `redis` is
+  installed.
+- **Byte-reproducible executive workbook (`#886`)** — `emit_executive_workbook_from_pipeline`
+  (via `build_executive_workbook`) now freezes the volatile `docProps/core.xml`
+  `dcterms:created`/`modified` timestamps *and* every ZIP member's `date_time`, so two
+  builds of the same data are raw-ZIP-byte identical. This ends the intermittent CI flake
+  in `tests/solar/test_solar_resource_trend_export.py` where openpyxl's wall-clock stamp
+  made byte-identity assertions non-deterministic. New shared helper
+  `analytics.reproducible_workbook.normalize_xlsx_reproducible` (plus the object-level
+  `freeze_workbook_reproducible`) is reusable by every openpyxl emitter under the
+  KPI-neutral byte-identity discipline. KPI-neutral: only document-metadata timestamps
+  change; the canon byte-identity tests are unaffected.
 - **Ride-through verdict now comes from the physical envelope, not the solver convergence flag** (`analytics/grid/ride_through.py`, `analytics/grid/ride_through_poc.py`, `analytics/contracts_v14.py`, #875 D4a) — the D4a review caught that `run_ride_through_case` reported a PASS from the raw ANDES RMS convergence flag (`ran=converged`), so a case that converged to a *tripped or collapsed* state was scored as a ride-through, and the HVRT/frequency cases returned a trivial pass from a disturbance that never swelled the voltage / never applied a frequency excursion (same class of bug as the D3 reactive-screen non-convergence fix, 25aceae). Fixed by introducing a DISTINCT `rode_through: bool | None` compliance verdict on `RideThroughResult`, derived from the PHYSICAL EVIDENCE — the post-fault RECOVERED bus voltage vs the entry threshold plus IBR-trip detection — while `converged` is kept as the raw RMS-solve smoke test and is NEVER threaded into the verdict (a pure, grid-free-tested `lvrt_rode_through()` reducer over a frozen `LvrtEvidence`). **LVRT** is physically modeled (a shunt fault injects a real measurable dip; `rode_through` is True only when a dip was injected, no IBR tripped, and the voltage recovered above the entry pu — a deep/long fault that collapses/trips the plant now correctly returns `rode_through=False`). **HVRT** and **frequency** are honestly reported as **NOT-RUN / UNSUPPORTED** (`rode_through=None`, explicit follow-up detail) because a shunt `Fault` can only dip voltage (never swell) and no frequency excursion is modeled yet — an honest `None` replaces the former spurious pass (full HVRT / frequency dynamics are a follow-up dolphin). Also fixed the bus-voltage variable match `name.startswith("V ")` → `name.startswith("v Bus")` so ANDES's lowercase magnitude vars are found and `min_voltage_pu` / `max_voltage_pu` are real floats instead of always-`None`. Grid-free tests add the verdict-reducer truth table (dip+recovery→True, trip→False, non-recovery→False, no-dip/unknown→None, recovery-margin) and the HVRT/frequency NOT-RUN assertions; the `-m grid` lane asserts a measurable dip below the entry pu and a deep-fault FAILURE regression (`rode_through=False`). Advisory-only and KPI-neutral: committed-scenario project/equity IRR, NPV and min DSCR remain byte-identical.
 - Three-statement PP&E and paid-in equity now book the levy-inclusive financed capex (#811): `analytics.three_statement._resolve_capex_usd` delegates to the single `finance.debt_v14._extract_capex_usd` resolver when import levies (`taxes_indirect`, #738) or a bottom-up breakdown are declared, so the balance sheet ties out natively to the debt sizing / NPV / equity distribution / Sources & Uses base. On the committed lendercase, paid-in equity now equals the Sources & Uses equity ($99,036,987) exactly, and the #738 pre-levy reconciliation footnote is removed (the statements reconcile in the numbers, not in prose). Levy-free and breakdown-only scenarios take the unchanged flat path (byte-identical); three-statement feeds no pipeline KPI, so the KPI oracle is byte-identical across all 27 committed scenarios. Surfaces (b) returns.py, (c) multi_tech_tornado, (d) bess_lcos are correct-as-is / display-only, and (e) app/models/inputs.py is #788 territory — not changed.
 - CI: un-broke the FX Integration Tests workflow (red since the #800 freeze
@@ -530,6 +716,20 @@ Batch scenario-analytics surface now bears the #737 senior credit-support fee (#
   Each path has a sculpt-pinned repro (prob == 0.0) and a genuine-breach repro (prob > 0).
 
 ### Security
+- **JWT auth production posture + residual-gap hardening (#858, a #842 follow-up).**
+  `app/api/auth.py` gains an explicit `DUTCHBAY_ENV` posture switch (`production` / `prod`
+  engages the hardened mode; anything else keeps the permissive dev/backward-compatible
+  behaviour). In a production context the auth layer now **fails closed**: a `DUTCHBAY_JWT_SECRET`
+  that is a known insecure placeholder (`changeme`, `secret`, `dev`, …) or shorter than 32 chars
+  is refused (500, no weak-secret fallback), and `DUTCHBAY_JWT_ISSUER` / `DUTCHBAY_JWT_AUDIENCE`
+  become **mandatory** — an unset issuer/audience is a misconfiguration (500) at both token
+  issuance and verification, so the surface can never accept an unbound token. Off-production the
+  #842 opt-in behaviour is unchanged. `decode_token` additionally rejects future-dated `nbf` / `iat`
+  claims (small clock-skew tolerance), closing the `nbf`/`iat` residual #842 flagged. Every new
+  branch is covered by a rejection test (bad token rejected, not just good token accepted); the
+  finance canon is byte-unchanged. NOTE (ops, user-held, out of code scope): token revocation /
+  `jti` denylist / rotation, the secret store, and TLS termination remain deployment concerns —
+  a leaked token stays valid until `exp`.
 - **Auth hardening — optional JWT issuer/audience binding (#842).** `create_access_token`
   and `decode_token` now accept `issuer` / `audience`; when a `DUTCHBAY_JWT_ISSUER` /
   `DUTCHBAY_JWT_AUDIENCE` is configured, issued tokens carry the `iss` / `aud` claim and
