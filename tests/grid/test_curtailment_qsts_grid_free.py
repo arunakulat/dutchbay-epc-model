@@ -22,6 +22,7 @@ in ``test_curtailment_qsts_dynamics.py``; it is the ONLY code carrying the
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -549,8 +550,11 @@ def test_energy_conserved_rejects_non_partition() -> None:
 # ───────────────────────────────────────────────────────────── CASPER optional-dep guard
 
 
-def test_require_opendss_raises_actionable_when_absent() -> None:
-    """The [grid] extra is absent in the default venv → an actionable ImportError."""
+def test_require_opendss_raises_actionable_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """opendssdirect absent (simulated; environment-independent) → actionable ImportError."""
+    monkeypatch.setitem(sys.modules, "opendssdirect", None)
     with pytest.raises(ImportError, match=r"\[grid\] extra"):
         cq._require_opendss()
 
