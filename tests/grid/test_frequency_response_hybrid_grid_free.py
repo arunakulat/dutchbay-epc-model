@@ -22,6 +22,7 @@ They exercise:
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import pytest
@@ -520,17 +521,22 @@ def test_run_custom_provenance() -> None:
     assert res.provenance == "CUSTOM PROV"
 
 
-def test_run_dynamics_gate_on_reports_not_run_nadir_grid_free() -> None:
+def test_run_dynamics_gate_on_reports_not_run_nadir_grid_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """run_dynamics=True is grid-free-SAFE for the frequency case and MUST NOT fabricate.
 
     As of D4b (#892) the frequency case DOES apply a real excursion, so
     ``run_ride_through_case("frequency", run_dynamics=True)`` reaches the CASPER
-    ``_require_andes`` guard — which, WITHOUT the [grid] extra, raises ImportError.
+    ``_require_andes`` guard — which, without andes importable, raises ImportError.
     ``_attempt_dynamic_nadir`` catches that and DEGRADES to the honest NOT-RUN
     (``dynamic_ran=False``, ``dynamic_nadir_hz=None``), never derived from the closed-form
     settling estimate (NO SPURIOUS PASS). This exercises the dynamic-gate branch +
-    ``_attempt_dynamic_nadir`` CASPER fallback without touching ANDES.
+    ``_attempt_dynamic_nadir`` CASPER fallback without touching ANDES. Absence is
+    SIMULATED (poisoned ``sys.modules`` entry) so the test is environment-independent —
+    it passes with or without the [grid] extra installed.
     """
+    monkeypatch.setitem(sys.modules, "andes", None)
     cfg = {"grid": {"ppc": _ppc(dict(_WG1, output_mw=0.0)), "freq_event_hz": 49.6}}
     res = run_hybrid_frequency_response(cfg, run_dynamics=True)
     # The closed-form deliverable is still physically produced.
