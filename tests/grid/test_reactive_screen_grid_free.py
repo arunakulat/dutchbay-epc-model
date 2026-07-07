@@ -20,6 +20,7 @@ requires [grid] extra`` and is exercised instead by the ``grid``-marked
 from __future__ import annotations
 
 import math
+import sys
 
 import pytest
 
@@ -265,12 +266,16 @@ def test_screen_closed_form_meets_pq_box_when_ample() -> None:
     assert power_flow is None
 
 
-def test_screen_closed_form_when_use_pandapower_true_but_absent() -> None:
+def test_screen_closed_form_when_use_pandapower_true_but_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """use_pandapower=True with pandapower ABSENT falls back to the closed form.
 
     Covers the ``try: _require_pandapower() except ImportError: pp = None`` acquisition
-    branch in the default (grid-free) venv without needing the [grid] extra.
+    branch. Absence is SIMULATED (poisoned ``sys.modules`` entry) so the test is
+    environment-independent — it passes with or without the [grid] extra installed.
     """
+    monkeypatch.setitem(sys.modules, "pandapower", None)
     reactive, power_flow = screen_reactive_capability(_TIGHT_GRID, use_pandapower=True)
     assert reactive.method == "closed_form"
     assert power_flow is None

@@ -1,8 +1,11 @@
 """Grid-FREE coverage for the D7 SCR-coupled harmonics / flicker screen (#883).
 
-These tests import NO grid library (pandapower is ABSENT in the default venv) and are NOT
-marked ``grid`` — so they run in the default ``-m 'not grid'`` coverage lane and carry the
-real coverage for :mod:`analytics.grid.harmonics`. They exercise:
+These tests import NO grid library and are NOT marked ``grid`` — so they run in the
+default ``-m 'not grid'`` coverage lane and carry the real coverage for
+:mod:`analytics.grid.harmonics`. Tests that assert the pandapower-ABSENT behaviour
+SIMULATE absence (a poisoned ``sys.modules`` entry) so they are environment-independent:
+they pass identically in the default grid-free venv and in a dev venv that has the
+``[grid]`` extra installed. They exercise:
 
   * every pure helper (IEEE 519 limit tables, ``poc_ssc_mva`` / ``isc_il_ratio``, the
     closed-form Zbus shape, ``harmonic_voltages_pct`` incl. the fundamental exclusion,
@@ -20,6 +23,7 @@ exercised by the ``grid``-marked ``test_harmonics_d7.py`` under ``pip install -e
 from __future__ import annotations
 
 import math
+import sys
 
 import pytest
 
@@ -379,16 +383,23 @@ def test_screen_capacity_factor_clamped() -> None:
     )
 
 
-def test_screen_use_pandapower_true_falls_back_when_absent() -> None:
-    # With pandapower ABSENT (default venv) but use_pandapower=True, the screen must fall
-    # back to the closed-form path (not raise) — the CASPER graceful-degradation contract.
+def test_screen_use_pandapower_true_falls_back_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With pandapower absent (SIMULATED via a poisoned sys.modules entry, so the test
+    # passes whether or not the [grid] extra is installed) but use_pandapower=True, the
+    # screen must fall back to the closed-form path (not raise) — the CASPER
+    # graceful-degradation contract.
+    monkeypatch.setitem(sys.modules, "pandapower", None)
     r = screen_harmonics(_GRID, scr=5.0, capacity_factor=0.3, use_pandapower=True)
     assert r.method == "closed_form"
     assert r.harmonic_within_limits is not None
 
 
-def test_require_pandapower_raises_actionable() -> None:
-    # pandapower is absent in the default venv → the CASPER guard raises an actionable error.
+def test_require_pandapower_raises_actionable(monkeypatch: pytest.MonkeyPatch) -> None:
+    # pandapower absent (simulated; environment-independent) → the CASPER guard raises
+    # an actionable error naming the [grid] extra.
+    monkeypatch.setitem(sys.modules, "pandapower", None)
     with pytest.raises(ImportError, match=r"\[grid\] extra"):
         hm._require_pandapower()
 

@@ -26,6 +26,7 @@ already ``# pragma: no cover - requires [grid] extra`` and is exercised by the
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -375,8 +376,14 @@ def test_result_dataclasses_are_frozen() -> None:
         pt.p_mw = 5.0  # type: ignore[misc]
 
 
-def test_module_imports_without_grid_libs() -> None:
-    """The plug-in must import with no grid library present (grid-free env)."""
+def test_module_imports_without_grid_libs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plug-in must import (and stay usable) with no grid library importable.
+
+    andes absence is SIMULATED (poisoned ``sys.modules`` entry) so the assertion is
+    environment-independent — the already-imported plug-in keeps working even when
+    ``import andes`` raises, with or without the [grid] extra installed.
+    """
+    monkeypatch.setitem(sys.modules, "andes", None)
     assert hasattr(wind, "screen_wind_capability")
     with pytest.raises(ImportError):
         __import__("andes")
