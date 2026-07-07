@@ -352,7 +352,10 @@ def test_ride_through_success_path_sorts_cases(
     """When the ride-through suite returns cases, they are surfaced sorted by kind (success path)."""
     from analytics.contracts_v14 import RideThroughResult
 
-    def _fake_suite(*, grid, run_dynamics):  # noqa: ANN001, ANN202
+    # Mirror the REAL run_ride_through_suite signature (*, run_dynamics, fixture_path,
+    # **case_kwargs) — it takes NO `grid` kwarg (the envelope is fixture-sourced), so the
+    # screen must not forward one. (The prior fake required `grid`, encoding the bug.)
+    def _fake_suite(*, run_dynamics, **case_kwargs):  # noqa: ANN003, ANN202
         return {
             "lvrt": RideThroughResult.from_case(case="lvrt", ran=True, converged=True),
             "hvrt": RideThroughResult.from_case(case="hvrt", ran=True, converged=True),

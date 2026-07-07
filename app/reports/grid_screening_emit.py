@@ -310,7 +310,13 @@ def _try_ride_through(
     try:
         # run_dynamics=False → pure-Python envelope screen (no ANDES); the ANDES dynamic
         # solve is opt-in and heavy, so the default report path stays RMS-envelope only.
-        suite = run_ride_through_suite(grid=grid, run_dynamics=False)
+        # The RMS envelope is sourced from the D0 grid-code fixture (run_ride_through_suite →
+        # envelope_from_fixture), NOT the scenario ``grid`` block — so ``grid`` is deliberately
+        # NOT forwarded here. run_ride_through_suite forwards unknown kwargs to
+        # run_ride_through_case (which takes no ``grid`` param), so passing ``grid=`` raised
+        # TypeError and degraded the whole screen. (``grid`` stays on the signature: reserved
+        # for a future grid-derived envelope override.)
+        suite = run_ride_through_suite(run_dynamics=False)
         return tuple(suite[k] for k in sorted(suite))
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
         degraded["ride_through"] = (
