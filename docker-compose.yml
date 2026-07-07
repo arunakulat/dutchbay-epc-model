@@ -1,0 +1,85 @@
+# DutchBay EPC model - local service orchestration (issue #845).
+#
+# Brings up the three-process local stack that mirrors the Fly.io deployment
+# (see fly.toml): a Redis instance, the FastAPI web process (uvicorn), and the
+# arq worker process. web and worker share the same image (build: .) and the
+# same Redis, exactly as on Fly.
+#
+# Local posture (IMPORTANT):
+#   This compose file targets LOCAL development, so DUTCHBAY_ENV is left
+#   unset/"development" (the permissive posture in app/api/auth.py:_is_production).
+#   In that posture DUTCHBAY_JWT_ISSUER / DUTCHBAY_JWT_AUDIENCE are OPTIONAL, so
+#   they are NOT required to bring the stack up locally. On Fly the posture is
+#   "production", where issuer+audience are MANDATORY (unset => 500) and are set
+#   in fly.toml [env]. Do not copy this permissive posture to production.
+#
+# Configuration is layered:
+#   1. env_file: .env         -> copy .env.example to .env and edit (secrets etc.).
+#   2. environment: overrides -> pin the Redis wiring for the compose network so a
+#                                stale .env cannot point the app at the wrong Redis.
+#
+# The Redis wiring (DUTCHBAY_JOBS_BACKEND=redis, DUTCHBAY_REDIS_URL) is overridden
+# here rather than left to .env because the hostname "redis" is a property of THIS
+# compose network, not of the developer's environment.
+#
+# Usage:
+#   cp .env.example .env      # then edit as needed
+#   docker compose up --build
+#   # web on http://localhost:8080 ; liveness: GET http://localhost:8080/health
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      # service_healthy on the web/worker depends_on gates startup on this passing.
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      # Named volume so async job state (RedisJobStore) survives `docker compose down`.
+      - redis-data:/data
+
+  web:
+    build: .
+    # ASGI app object: app.api.main:app (FastAPI). Liveness: GET /health.
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8080
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # Durable cross-process job path: the API enqueues onto arq and reads status
+      # from the shared RedisJobStore the worker writes (app/jobs/config.py).
+      DUTCHBAY_JOBS_BACKEND: "redis"
+      DUTCHBAY_REDIS_URL: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    # arq worker draining the queue (app.jobs.worker.WorkerSettings). No public port:
+    # it only consumes the arq queue and shares Redis with the web process.
+    command: arq app.jobs.worker.WorkerSettings
+    env_file:
+      - .env
+    environment:
+      # Must match the web service so producer (API) and consumer (worker) agree on
+      # backend + DSN (CCCDIR single-source in app/jobs/config.py).
+      DUTCHBAY_JOBS_BACKEND: "redis"
+      DUTCHBAY_REDIS_URL: "redis://redis:6379"
+    # The worker binds no HTTP port, so it must NOT inherit the image's HTTP
+    # HEALTHCHECK (curl :8080/health) — otherwise it is reported permanently
+    # "unhealthy". Disable it; liveness for the worker is process-exit + restart.
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data:
