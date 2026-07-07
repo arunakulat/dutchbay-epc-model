@@ -1,0 +1,57 @@
+{#
+  Base page skeleton for the DutchBay wizard frontend (#843, epic #788).
+
+  Loads the vendored htmx runtime and the wizard stylesheet, then exposes a
+  single ``content`` block that concrete pages (login, wizard) fill. Fragment
+  templates (``_results.html.j2`` / ``_error.html.j2``) do NOT extend this file;
+  they are returned raw for htmx to swap into ``#results``.
+
+  Security: this project's Jinja2 environment is constructed with
+  ``autoescape = True`` for the ``.html.j2`` suffix, so every interpolated value
+  is HTML-escaped by default. Do not disable it for user-supplied fields.
+#}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}DutchBay EPC Model{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/vendor/htmx.min.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <span class="site-header__brand">DutchBay EPC Model</span>
+        <span class="site-header__tagline">Wind project finance</span>
+        {% block header_actions %}{% endblock %}
+      </div>
+    </header>
+    <main class="site-main">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <span
+          >Screening output only. Not a bankable connection study or investment
+          advice.</span
+        >
+      </div>
+    </footer>
+    <script>
+      // htmx swaps only 2xx/3xx responses by default. The wizard's validation /
+      // engine-rejection errors come back as 400/422 (honest client-error status)
+      // with the _error fragment as the body; opt those into the swap so the error
+      // renders in #results instead of being silently discarded (#843). These are
+      // expected client errors, not system errors, so clear isError to keep htmx
+      // from logging them as failures.
+      document.body.addEventListener("htmx:beforeSwap", function (event) {
+        var status = event.detail.xhr.status;
+        if (status === 400 || status === 422) {
+          event.detail.shouldSwap = true;
+          event.detail.isError = false;
+        }
+      });
+    </script>
+  </body>
+</html>

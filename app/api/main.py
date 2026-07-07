@@ -35,11 +35,13 @@ import os
 import re
 import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from analytics.aep_provenance import AepProvenanceError
@@ -109,6 +111,14 @@ app.include_router(
     tags=["sensitivity"],
     dependencies=[Depends(get_current_subject)],
 )
+
+# Serve the HTMX wizard's static assets (CSS + vendored htmx.min.js) under /static. The
+# directory is resolved from this file's location (``app/api/main.py`` → ``app/web/static``)
+# so it is independent of the process working directory. This is the wizard UI (#843), a
+# server-rendered surface layered on top of the versioned /v1 JSON API; the mount and the
+# web router below are purely additive and do not touch any /v1 route or /health.
+_WEB_STATIC_DIR = Path(__file__).resolve().parents[1] / "web" / "static"
+app.mount("/static", StaticFiles(directory=str(_WEB_STATIC_DIR)), name="static")
 
 
 @app.get("/health", tags=["ops"])
@@ -484,3 +494,13 @@ async def run_sensitivity_tornado_endpoint(
 # Registered AFTER the handlers are defined so every route above is on public_router
 # before it is attached to the app.
 app.include_router(public_router, prefix=API_V1_PREFIX)
+
+# Mount the HTMX wizard UI (#843) at the application root (no /v1 prefix — the versioned
+# data API owns /v1; this is the human-facing surface). The import is deliberately placed
+# HERE, at the bottom of the module: ``app.web.routes`` reuses the case-run functions defined
+# above (``build_case_surface`` / ``run_case_report_*`` / ``run_case_workbook``), so importing
+# it only once those names are bound avoids a circular import. Purely additive — it registers
+# new root routes and changes no existing /v1 route or /health.
+from app.web.routes import router as web_router  # noqa: E402 — see the comment above.
+
+app.include_router(web_router)
