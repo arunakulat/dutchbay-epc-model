@@ -1,0 +1,143 @@
+{
+  "n_sectors": 12,
+  "sector_width_deg": 30.0,
+  "sector_deg": [
+    0.0,
+    30.0,
+    60.0,
+    90.0,
+    120.0,
+    150.0,
+    180.0,
+    210.0,
+    240.0,
+    270.0,
+    300.0,
+    330.0
+  ],
+  "sector_label": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "count": [
+    7765,
+    22510,
+    21974,
+    6090,
+    1906,
+    2413,
+    7681,
+    55122,
+    36794,
+    2505,
+    1718,
+    2862
+  ],
+  "frequency": [
+    0.045854,
+    0.132928,
+    0.129763,
+    0.035963,
+    0.011255,
+    0.014249,
+    0.045358,
+    0.325511,
+    0.217279,
+    0.014793,
+    0.010145,
+    0.016901
+  ],
+  "n_samples": 169340,
+  "prevailing_sector_deg": 210.0,
+  "provenance_note": "Directional frequencies derived from single grid-cell ERA5 reanalysis (~0.25 deg), not directionally mast-validated on-site measurement; coarse \u2014 indicative of prevailing sector only.",
+  "calm_limit_ms": 2.0,
+  "n_calm": 5980,
+  "mean_speed_ms": [
+    6.2752,
+    7.0191,
+    6.4115,
+    4.977,
+    3.5053,
+    3.6293,
+    4.9583,
+    8.7527,
+    9.5959,
+    4.1688,
+    4.0622,
+    5.3325
+  ],
+  "energy_frequency": [
+    0.022992,
+    0.08431,
+    0.062822,
+    0.008908,
+    0.001012,
+    0.001414,
+    0.012187,
+    0.418534,
+    0.375099,
+    0.003306,
+    0.002182,
+    0.007234
+  ],
+  "sector_weibull": [
+    {
+      "weibull_a": 6.9766,
+      "weibull_k": 3.4662
+    },
+    {
+      "weibull_a": 7.676,
+      "weibull_k": 4.6913
+    },
+    {
+      "weibull_a": 7.0147,
+      "weibull_k": 4.5668
+    },
+    {
+      "weibull_a": 5.5276,
+      "weibull_k": 3.5359
+    },
+    {
+      "weibull_a": 3.9023,
+      "weibull_k": 3.1861
+    },
+    {
+      "weibull_a": 4.0419,
+      "weibull_k": 3.2457
+    },
+    {
+      "weibull_a": 5.5631,
+      "weibull_k": 2.9804
+    },
+    {
+      "weibull_a": 9.6524,
+      "weibull_k": 4.1407
+    },
+    {
+      "weibull_a": 10.608,
+      "weibull_k": 3.9763
+    },
+    {
+      "weibull_a": 4.7151,
+      "weibull_k": 2.1619
+    },
+    {
+      "weibull_a": 4.5982,
+      "weibull_k": 2.1119
+    },
+    {
+      "weibull_a": 6.0442,
+      "weibull_k": 2.2355
+    }
+  ]
+}

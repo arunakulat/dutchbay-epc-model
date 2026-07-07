@@ -1,0 +1,362 @@
+{
+  "project": "DutchBay Kalpitiya",
+  "latitude": 8.27,
+  "longitude": 79.75,
+  "hours": 175320,
+  "years": 20.01,
+  "mean_ws_hub_ms": 7.46,
+  "net_aep_p50_gwh": 551.2,
+  "net_aep_p90_gwh": 480.0,
+  "capacity_factor_p50": 0.3943,
+  "coverage": {
+    "actual_hours": 175320,
+    "expected_hours": 175320,
+    "coverage_complete": true,
+    "missing_hours": 0
+  },
+  "vintage": {
+    "reference_mode": "fixed",
+    "start_year": 2005,
+    "end_year": 2024,
+    "resolved_at": "2026-07-07T14:22:12",
+    "dataset": "reanalysis-era5-single-levels-timeseries",
+    "latitude": 8.27,
+    "longitude": 79.75,
+    "expected_hours": 175320,
+    "actual_hours": 175320,
+    "coverage_complete": true
+  },
+  "wind_rose": {
+    "n_sectors": 12,
+    "sector_width_deg": 30.0,
+    "sector_deg": [
+      0.0,
+      30.0,
+      60.0,
+      90.0,
+      120.0,
+      150.0,
+      180.0,
+      210.0,
+      240.0,
+      270.0,
+      300.0,
+      330.0
+    ],
+    "sector_label": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "count": [
+      7292,
+      22255,
+      22424,
+      6452,
+      1911,
+      2328,
+      7394,
+      53912,
+      38386,
+      2507,
+      1727,
+      2752
+    ],
+    "frequency": [
+      0.043061,
+      0.131422,
+      0.13242,
+      0.038101,
+      0.011285,
+      0.013747,
+      0.043664,
+      0.318365,
+      0.22668,
+      0.014805,
+      0.010198,
+      0.016251
+    ],
+    "n_samples": 169340,
+    "prevailing_sector_deg": 210.0,
+    "provenance_note": "Directional frequencies derived from single grid-cell ERA5 reanalysis (~0.25 deg), not directionally mast-validated on-site measurement; coarse \u2014 indicative of prevailing sector only.",
+    "calm_limit_ms": 2.0,
+    "n_calm": 5980,
+    "mean_speed_ms": [
+      6.2684,
+      7.0045,
+      6.4373,
+      5.014,
+      3.5382,
+      3.6255,
+      4.8864,
+      8.6806,
+      9.6327,
+      4.2124,
+      4.0611,
+      5.3476
+    ],
+    "energy_frequency": [
+      0.021637,
+      0.082894,
+      0.064986,
+      0.009622,
+      0.001045,
+      0.001355,
+      0.011184,
+      0.400857,
+      0.393681,
+      0.003486,
+      0.002184,
+      0.007068
+    ],
+    "sector_weibull": [
+      {
+        "weibull_a": 6.9736,
+        "weibull_k": 3.4263
+      },
+      {
+        "weibull_a": 7.6613,
+        "weibull_k": 4.6811
+      },
+      {
+        "weibull_a": 7.045,
+        "weibull_k": 4.5441
+      },
+      {
+        "weibull_a": 5.5668,
+        "weibull_k": 3.5613
+      },
+      {
+        "weibull_a": 3.9404,
+        "weibull_k": 3.1832
+      },
+      {
+        "weibull_a": 4.0362,
+        "weibull_k": 3.266
+      },
+      {
+        "weibull_a": 5.4802,
+        "weibull_k": 2.998
+      },
+      {
+        "weibull_a": 9.5792,
+        "weibull_k": 4.0927
+      },
+      {
+        "weibull_a": 10.6385,
+        "weibull_k": 4.0416
+      },
+      {
+        "weibull_a": 4.7674,
+        "weibull_k": 2.1317
+      },
+      {
+        "weibull_a": 4.5968,
+        "weibull_k": 2.116
+      },
+      {
+        "weibull_a": 6.0627,
+        "weibull_k": 2.2197
+      }
+    ]
+  },
+  "spatial_representativeness": {
+    "assessed": false,
+    "n_cells": 1,
+    "site_cell": {
+      "latitude": 8.27,
+      "longitude": 79.75
+    },
+    "reason": "single-cell ERA5 timeseries retrieval; neighbourhood not fetched. Run the GIS export (analytics.gis.gis_export.run_gis_export), which samples an n\u00d7n native grid and emits a spatial_representativeness verdict per grid, to assess whether the site cell is representative of its surroundings (e.g. coastal/ridge gradient)."
+  },
+  "long_term_trend": {
+    "analyzed": true,
+    "trend": {
+      "start_year": 2005,
+      "end_year": 2024,
+      "n_years": 20,
+      "mean_ws_ms": 7.46,
+      "cov_pct": 2.69,
+      "mk_tau": -0.453,
+      "mk_pvalue": 0.0047,
+      "significant": true,
+      "sen_slope_per_decade": -0.2194,
+      "sen_ci_low_per_decade": -0.335,
+      "sen_ci_high_per_decade": -0.0871,
+      "ols_slope_per_decade": -0.2102,
+      "ols_r2": 0.365,
+      "decade_means": {
+        "2000-2009": 7.575,
+        "2010-2019": 7.485,
+        "2020-2029": 7.294
+      },
+      "classification": "secular_trend",
+      "classification_note": "Mann-Kendall significant with material variance explained (OLS R2 >= 0.20): a sustained decline consistent with secular stilling. Weight the recent period and consider a trend haircut on the long-term mean."
+    },
+    "period_aep": [
+      {
+        "period": "2020-2024",
+        "key": "recent_5yr",
+        "role": "downside (recent 5 yr)",
+        "years": 5.0,
+        "mean_ws_ms": 7.294,
+        "net_aep_p50_gwh": 523.0,
+        "capacity_factor": 0.3742
+      },
+      {
+        "period": "2015-2024",
+        "key": "current_decade",
+        "role": "central (current-climate decade)",
+        "years": 10.0,
+        "mean_ws_ms": 7.317,
+        "net_aep_p50_gwh": 527.5,
+        "capacity_factor": 0.3773
+      },
+      {
+        "period": "2005-2024",
+        "key": "longterm_20yr",
+        "role": "long-term (20 yr)",
+        "years": 20.0,
+        "mean_ws_ms": 7.46,
+        "net_aep_p50_gwh": 551.2,
+        "capacity_factor": 0.3943
+      },
+      {
+        "period": "2005-2024",
+        "key": "full_record",
+        "role": "full record (20 yr)",
+        "years": 20.0,
+        "mean_ws_ms": 7.46,
+        "net_aep_p50_gwh": 551.2,
+        "capacity_factor": 0.3943
+      }
+    ],
+    "recommendation": {
+      "central_basis": "recent_5yr",
+      "p50_gwh": 523.0,
+      "p50_cf": 0.3742,
+      "downside_gwh": 523.0,
+      "upside_gwh": 551.2
+    },
+    "markdown": "## Long-Term Wind Resource & Trend\n\n**Reference:** 2005-2024 (20 yr), mean 7.46 m/s (interannual CoV 2.69%).\n\n**Trend test (Mann-Kendall + Sen's slope):**\n- MK tau -0.453, p=0.0047 (significant at 5%); Sen slope -0.219 m/s/decade (95% CI [-0.335, -0.087]); OLS R2 0.365.\n- Decade means: 2000-2009 7.575 \u00b7 2010-2019 7.485 \u00b7 2020-2029 7.294\n- **Classification: secular trend.** Mann-Kendall significant with material variance explained (OLS R2 >= 0.20): a sustained decline consistent with secular stilling. Weight the recent period and consider a trend haircut on the long-term mean.\n\n**Net AEP by reference period** (canonical power curve):\n\n| Period | Role | Mean ws (m/s) | AEP P50 (GWh) | CF |\n|---|---|---|---|---|\n| 2020-2024 | downside (recent 5 yr) | 7.294 | 523.0 | 0.3742 |\n| 2015-2024 | central (current-climate decade) | 7.317 | 527.5 | 0.3773 |\n| 2005-2024 | long-term (20 yr) | 7.46 | 551.2 | 0.3943 |\n| 2005-2024 | full record (20 yr) | 7.46 | 551.2 | 0.3943 |\n\n**Recommended P50 basis: recent 5yr = 523.0 GWh (CF 0.3742)** -- downside 523.0 GWh, upside 551.2 GWh.\n\n**Bankability basis (IEC 61400-15-1 / MEASNET):** a bankable assessment uses a long-term reference period (typically 10-20+ yr) to average out interannual and decadal variability, rather than a short recent window. Where a regime shift or secular trend is detected, the long-term mean is adjusted toward the current-climate period for the forward-looking P50 (as applied above).",
+    "summary_df": [
+      {
+        "Metric": "Reference period",
+        "Value": "2005-2024 (20 yr)"
+      },
+      {
+        "Metric": "Mean wind speed (m/s)",
+        "Value": 7.46
+      },
+      {
+        "Metric": "Interannual CoV (%)",
+        "Value": 2.69
+      },
+      {
+        "Metric": "Mann-Kendall tau",
+        "Value": -0.453
+      },
+      {
+        "Metric": "Mann-Kendall p-value",
+        "Value": 0.0047
+      },
+      {
+        "Metric": "Trend significant (5%)",
+        "Value": true
+      },
+      {
+        "Metric": "Sen slope (m/s/decade)",
+        "Value": -0.2194
+      },
+      {
+        "Metric": "OLS R2",
+        "Value": 0.365
+      },
+      {
+        "Metric": "Classification",
+        "Value": "secular trend"
+      },
+      {
+        "Metric": "Classification note",
+        "Value": "Mann-Kendall significant with material variance explained (OLS R2 >= 0.20): a sustained decline consistent with secular stilling. Weight the recent period and consider a trend haircut on the long-term mean."
+      },
+      {
+        "Metric": "Decade mean 2000-2009 (m/s)",
+        "Value": 7.575
+      },
+      {
+        "Metric": "Decade mean 2010-2019 (m/s)",
+        "Value": 7.485
+      },
+      {
+        "Metric": "Decade mean 2020-2029 (m/s)",
+        "Value": 7.294
+      },
+      {
+        "Metric": "AEP P50 2020-2024 [downside (recent 5 yr)] (GWh)",
+        "Value": 523.0
+      },
+      {
+        "Metric": "CF 2020-2024",
+        "Value": 0.3742
+      },
+      {
+        "Metric": "AEP P50 2015-2024 [central (current-climate decade)] (GWh)",
+        "Value": 527.5
+      },
+      {
+        "Metric": "CF 2015-2024",
+        "Value": 0.3773
+      },
+      {
+        "Metric": "AEP P50 2005-2024 [long-term (20 yr)] (GWh)",
+        "Value": 551.2
+      },
+      {
+        "Metric": "CF 2005-2024",
+        "Value": 0.3943
+      },
+      {
+        "Metric": "AEP P50 2005-2024 [full record (20 yr)] (GWh)",
+        "Value": 551.2
+      },
+      {
+        "Metric": "CF 2005-2024",
+        "Value": 0.3943
+      },
+      {
+        "Metric": "Recommended P50 basis",
+        "Value": "recent 5yr"
+      },
+      {
+        "Metric": "Recommended P50 (GWh)",
+        "Value": 523.0
+      },
+      {
+        "Metric": "Recommended P50 CF",
+        "Value": 0.3742
+      },
+      {
+        "Metric": "Downside P50 (GWh)",
+        "Value": 523.0
+      },
+      {
+        "Metric": "Upside P50 (GWh)",
+        "Value": 551.2
+      },
+      {
+        "Metric": "Bankability basis",
+        "Value": "IEC 61400-15-1 / MEASNET long-term reference; regime-shift-adjusted to the current-climate period for the forward P50."
+      }
+    ]
+  }
+}

@@ -183,3 +183,4 @@ wind_data_output/
 # Timestamped backups (audit R1)
 .backups/
 *.py.backup.*
+feasibility_reproduce/_run_out/

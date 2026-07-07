@@ -1,0 +1,580 @@
+{
+  "bounds": [
+    [
+      0.2988,
+      0.3652
+    ],
+    [
+      16.24,
+      24.36
+    ],
+    [
+      2100000.0,
+      3900000.0
+    ],
+    [
+      134064000.0,
+      185136000.0
+    ],
+    [
+      300.0,
+      367.0
+    ],
+    [
+      0.0,
+      0.13
+    ]
+  ],
+  "config": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+  "drivers": [
+    "project.capacity_factor",
+    "tariff.lkr_per_kwh",
+    "opex.usd_per_year",
+    "capex.usd_total",
+    "fx.start_lkr_per_usd",
+    "project.curtailment_pct"
+  ],
+  "metrics": [
+    "equity_irr",
+    "project_npv",
+    "project_irr"
+  ],
+  "morris": {
+    "method": "morris",
+    "metrics": {
+      "equity_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "mu_star": 0.04811900429302974,
+            "sigma": 0.008694480771258286
+          },
+          "fx.start_lkr_per_usd": {
+            "mu_star": 0.037411518208923626,
+            "sigma": 0.004370747669947979
+          },
+          "opex.usd_per_year": {
+            "mu_star": 0.023796935927203316,
+            "sigma": 0.0032021225487568225
+          },
+          "project.capacity_factor": {
+            "mu_star": 0.03813565244085325,
+            "sigma": 0.0048277389989476545
+          },
+          "project.curtailment_pct": {
+            "mu_star": 0.02554356174785987,
+            "sigma": 0.003627907503905703
+          },
+          "tariff.lkr_per_kwh": {
+            "mu_star": 0.07721433024676319,
+            "sigma": 0.006165274071707829
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "tariff.lkr_per_kwh",
+          "capex.usd_total",
+          "project.capacity_factor",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct",
+          "opex.usd_per_year"
+        ]
+      },
+      "project_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "mu_star": 0.030317447013692732,
+            "sigma": 0.0027878198424288562
+          },
+          "fx.start_lkr_per_usd": {
+            "mu_star": 0.02527768886877458,
+            "sigma": 0.002662662073601422
+          },
+          "opex.usd_per_year": {
+            "mu_star": 0.017959055099569275,
+            "sigma": 0.00443506273198956
+          },
+          "project.capacity_factor": {
+            "mu_star": 0.025159783820676823,
+            "sigma": 0.002418350150758307
+          },
+          "project.curtailment_pct": {
+            "mu_star": 0.018082018059051293,
+            "sigma": 0.001904394355685503
+          },
+          "tariff.lkr_per_kwh": {
+            "mu_star": 0.050455677042670885,
+            "sigma": 0.005558930405602254
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "tariff.lkr_per_kwh",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.capacity_factor",
+          "project.curtailment_pct",
+          "opex.usd_per_year"
+        ]
+      },
+      "project_npv": {
+        "drivers": {
+          "capex.usd_total": {
+            "mu_star": 53256142.55181375,
+            "sigma": 563701.067405878
+          },
+          "fx.start_lkr_per_usd": {
+            "mu_star": 18989381.199062146,
+            "sigma": 2899041.9182376256
+          },
+          "opex.usd_per_year": {
+            "mu_star": 11006551.655278103,
+            "sigma": 374263.85920345836
+          },
+          "project.capacity_factor": {
+            "mu_star": 19218708.280981585,
+            "sigma": 2961584.2429514243
+          },
+          "project.curtailment_pct": {
+            "mu_star": 13292168.078723747,
+            "sigma": 2234571.29188025
+          },
+          "tariff.lkr_per_kwh": {
+            "mu_star": 38432522.121655904,
+            "sigma": 4489868.907253156
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "capex.usd_total",
+          "tariff.lkr_per_kwh",
+          "project.capacity_factor",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct",
+          "opex.usd_per_year"
+        ]
+      }
+    },
+    "n_runs": 224,
+    "n_trajectories": 32,
+    "optimal_trajectories": null,
+    "problem": {
+      "bounds": [
+        [
+          0.2988,
+          0.3652
+        ],
+        [
+          16.24,
+          24.36
+        ],
+        [
+          2100000.0,
+          3900000.0
+        ],
+        [
+          134064000.0,
+          185136000.0
+        ],
+        [
+          300.0,
+          367.0
+        ],
+        [
+          0.0,
+          0.13
+        ]
+      ],
+      "groups": [
+        "project.capacity_factor",
+        "tariff.lkr_per_kwh",
+        "opex.usd_per_year",
+        "capex.usd_total",
+        "fx.start_lkr_per_usd",
+        "project.curtailment_pct"
+      ],
+      "names": [
+        "project.capacity_factor",
+        "tariff.lkr_per_kwh",
+        "opex.usd_per_year",
+        "capex.usd_total",
+        "fx.start_lkr_per_usd",
+        "project.curtailment_pct"
+      ],
+      "num_vars": 6,
+      "sample_scaled": true
+    }
+  },
+  "pawn": {
+    "method": "pawn",
+    "metrics": {
+      "equity_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "cv": 0.3755987692707919,
+            "mean": 0.19804800902460498,
+            "median": 0.1959826899509804
+          },
+          "fx.start_lkr_per_usd": {
+            "cv": 0.3577483104098829,
+            "mean": 0.15923839651151722,
+            "median": 0.13269946935084714
+          },
+          "opex.usd_per_year": {
+            "cv": 0.3043644533114519,
+            "mean": 0.12277188332857417,
+            "median": 0.11625880821078433
+          },
+          "project.capacity_factor": {
+            "cv": 0.36886247216043655,
+            "mean": 0.1725088268013516,
+            "median": 0.15205522439558347
+          },
+          "project.curtailment_pct": {
+            "cv": 0.3422452069138193,
+            "mean": 0.14683731692009327,
+            "median": 0.16689709674828668
+          },
+          "tariff.lkr_per_kwh": {
+            "cv": 0.3597869691246122,
+            "mean": 0.3177383942806492,
+            "median": 0.3058938419117647
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "tariff.lkr_per_kwh",
+          "capex.usd_total",
+          "project.curtailment_pct",
+          "project.capacity_factor",
+          "fx.start_lkr_per_usd",
+          "opex.usd_per_year"
+        ]
+      },
+      "project_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "cv": 0.3620403962913587,
+            "mean": 0.19337160759328004,
+            "median": 0.19352213541666669
+          },
+          "fx.start_lkr_per_usd": {
+            "cv": 0.3557680945532631,
+            "mean": 0.158955057675376,
+            "median": 0.13122533031719968
+          },
+          "opex.usd_per_year": {
+            "cv": 0.31527158888563195,
+            "mean": 0.1287058994562631,
+            "median": 0.12114162071078433
+          },
+          "project.capacity_factor": {
+            "cv": 0.38137891549563757,
+            "mean": 0.172895566372787,
+            "median": 0.15254350564558347
+          },
+          "project.curtailment_pct": {
+            "cv": 0.34592143402060915,
+            "mean": 0.14364624604392728,
+            "median": 0.1603120389539311
+          },
+          "tariff.lkr_per_kwh": {
+            "cv": 0.3583290965509361,
+            "mean": 0.3173762128486103,
+            "median": 0.304409849877451
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "tariff.lkr_per_kwh",
+          "capex.usd_total",
+          "project.curtailment_pct",
+          "project.capacity_factor",
+          "fx.start_lkr_per_usd",
+          "opex.usd_per_year"
+        ]
+      },
+      "project_npv": {
+        "drivers": {
+          "capex.usd_total": {
+            "cv": 0.33601530478724795,
+            "mean": 0.333908153674091,
+            "median": 0.3274739583333333
+          },
+          "fx.start_lkr_per_usd": {
+            "cv": 0.29083523936905625,
+            "mean": 0.1343960259316105,
+            "median": 0.12287454044117646
+          },
+          "opex.usd_per_year": {
+            "cv": 0.2097555091066813,
+            "mean": 0.10654945685798592,
+            "median": 0.11493255713996764
+          },
+          "project.capacity_factor": {
+            "cv": 0.3744209751220957,
+            "mean": 0.14115698767371027,
+            "median": 0.13172392933204835
+          },
+          "project.curtailment_pct": {
+            "cv": 0.32861761775135145,
+            "mean": 0.1300584189986674,
+            "median": 0.1293774279280887
+          },
+          "tariff.lkr_per_kwh": {
+            "cv": 0.43248973344821007,
+            "mean": 0.22329308847325335,
+            "median": 0.20295266544117646
+          }
+        },
+        "flat_metric": false,
+        "nan_poisoned": false,
+        "ranking": [
+          "capex.usd_total",
+          "tariff.lkr_per_kwh",
+          "project.capacity_factor",
+          "project.curtailment_pct",
+          "fx.start_lkr_per_usd",
+          "opex.usd_per_year"
+        ]
+      }
+    },
+    "n": 1024,
+    "n_runs": 1024,
+    "problem": {
+      "bounds": [
+        [
+          0.2988,
+          0.3652
+        ],
+        [
+          16.24,
+          24.36
+        ],
+        [
+          2100000.0,
+          3900000.0
+        ],
+        [
+          134064000.0,
+          185136000.0
+        ],
+        [
+          300.0,
+          367.0
+        ],
+        [
+          0.0,
+          0.13
+        ]
+      ],
+      "names": [
+        "project.capacity_factor",
+        "tariff.lkr_per_kwh",
+        "opex.usd_per_year",
+        "capex.usd_total",
+        "fx.start_lkr_per_usd",
+        "project.curtailment_pct"
+      ],
+      "num_vars": 6,
+      "sample_scaled": true
+    },
+    "reused_given_data": false,
+    "s": 10
+  },
+  "sobol": {
+    "method": "sobol",
+    "metrics": {
+      "equity_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "S1": 0.19008289652633867,
+            "S1_conf": 0.05196560432544917,
+            "ST": 0.19439286662123814,
+            "ST_conf": 0.023624609698095333,
+            "interactive": false
+          },
+          "fx.start_lkr_per_usd": {
+            "S1": 0.11939886234118692,
+            "S1_conf": 0.039501673573599176,
+            "ST": 0.11903042361226857,
+            "ST_conf": 0.01382891058444987,
+            "interactive": false
+          },
+          "opex.usd_per_year": {
+            "S1": 0.04467627389482031,
+            "S1_conf": 0.022952082464863396,
+            "ST": 0.0443443978824993,
+            "ST_conf": 0.005604656614216619,
+            "interactive": false
+          },
+          "project.capacity_factor": {
+            "S1": 0.1192775338092511,
+            "S1_conf": 0.03812685183964042,
+            "ST": 0.11657203869128975,
+            "ST_conf": 0.014549495590963045,
+            "interactive": false
+          },
+          "project.curtailment_pct": {
+            "S1": 0.05619955299435609,
+            "S1_conf": 0.027613439298246154,
+            "ST": 0.05639479288145774,
+            "ST_conf": 0.006704547290209704,
+            "interactive": false
+          },
+          "tariff.lkr_per_kwh": {
+            "S1": 0.46868668930229007,
+            "S1_conf": 0.07825921834333742,
+            "ST": 0.47263803732243215,
+            "ST_conf": 0.047943947719111965,
+            "interactive": false
+          }
+        },
+        "flat_metric": false,
+        "interactions_present": false,
+        "nan_poisoned": false
+      },
+      "project_irr": {
+        "drivers": {
+          "capex.usd_total": {
+            "S1": 0.1803911598855277,
+            "S1_conf": 0.049501507494223884,
+            "ST": 0.1809226406426438,
+            "ST_conf": 0.022449649425402878,
+            "interactive": false
+          },
+          "fx.start_lkr_per_usd": {
+            "S1": 0.11706067302659971,
+            "S1_conf": 0.03867080285392816,
+            "ST": 0.11818907517639408,
+            "ST_conf": 0.013545032543135157,
+            "interactive": false
+          },
+          "opex.usd_per_year": {
+            "S1": 0.053215303653631675,
+            "S1_conf": 0.02538938937223625,
+            "ST": 0.0545108251135358,
+            "ST_conf": 0.007311386406464185,
+            "interactive": false
+          },
+          "project.capacity_factor": {
+            "S1": 0.11882055925878784,
+            "S1_conf": 0.03871840218505967,
+            "ST": 0.1173050013939809,
+            "ST_conf": 0.014444992645301484,
+            "interactive": false
+          },
+          "project.curtailment_pct": {
+            "S1": 0.055985186532578876,
+            "S1_conf": 0.02803615634762791,
+            "ST": 0.05685475065688934,
+            "ST_conf": 0.006851738461406179,
+            "interactive": false
+          },
+          "tariff.lkr_per_kwh": {
+            "S1": 0.4700632275720798,
+            "S1_conf": 0.07919216704497836,
+            "ST": 0.4754228927102842,
+            "ST_conf": 0.04957493177107414,
+            "interactive": false
+          }
+        },
+        "flat_metric": false,
+        "interactions_present": false,
+        "nan_poisoned": false
+      },
+      "project_npv": {
+        "drivers": {
+          "capex.usd_total": {
+            "S1": 0.513281514810347,
+            "S1_conf": 0.07680061780116947,
+            "ST": 0.5142114270313677,
+            "ST_conf": 0.06046926081725035,
+            "interactive": false
+          },
+          "fx.start_lkr_per_usd": {
+            "S1": 0.06986891964571526,
+            "S1_conf": 0.03028125552612601,
+            "ST": 0.07322174311180259,
+            "ST_conf": 0.008701173533771464,
+            "interactive": false
+          },
+          "opex.usd_per_year": {
+            "S1": 0.0214183224704452,
+            "S1_conf": 0.0170274854734729,
+            "ST": 0.021675258913384236,
+            "ST_conf": 0.0026050357518532536,
+            "interactive": false
+          },
+          "project.capacity_factor": {
+            "S1": 0.0721035713931914,
+            "S1_conf": 0.032164218660252514,
+            "ST": 0.07207725722276373,
+            "ST_conf": 0.00893330804442351,
+            "interactive": false
+          },
+          "project.curtailment_pct": {
+            "S1": 0.03374880437867429,
+            "S1_conf": 0.022393214320650168,
+            "ST": 0.03496972353047622,
+            "ST_conf": 0.004347545827294809,
+            "interactive": false
+          },
+          "tariff.lkr_per_kwh": {
+            "S1": 0.2790456722566827,
+            "S1_conf": 0.059268771284921716,
+            "ST": 0.2852309050490332,
+            "ST_conf": 0.029578194864831153,
+            "interactive": false
+          }
+        },
+        "flat_metric": false,
+        "interactions_present": false,
+        "nan_poisoned": false
+      }
+    },
+    "n": 512,
+    "n_runs": 4096,
+    "problem": {
+      "bounds": [
+        [
+          0.2988,
+          0.3652
+        ],
+        [
+          16.24,
+          24.36
+        ],
+        [
+          2100000.0,
+          3900000.0
+        ],
+        [
+          134064000.0,
+          185136000.0
+        ],
+        [
+          300.0,
+          367.0
+        ],
+        [
+          0.0,
+          0.13
+        ]
+      ],
+      "names": [
+        "project.capacity_factor",
+        "tariff.lkr_per_kwh",
+        "opex.usd_per_year",
+        "capex.usd_total",
+        "fx.start_lkr_per_usd",
+        "project.curtailment_pct"
+      ],
+      "num_vars": 6
+    }
+  }
+}
