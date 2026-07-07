@@ -1,0 +1,85 @@
+# DutchBay EPC model - Fly.io deployment (issue #845).
+#
+# Two processes off ONE image (see Dockerfile): a public "web" process (uvicorn /
+# FastAPI, app.api.main:app) and a private "worker" process (arq, draining the async
+# job queue). Only "web" is attached to the public HTTP service; "worker" exposes no
+# port and reaches the outside world only through the shared managed Redis.
+#
+# primary_region = "sin" (Singapore) is the closest Fly region to Sri Lanka, where
+# the DutchBay project sits.
+#
+# SECRETS ARE INTENTIONALLY ABSENT FROM THIS FILE.
+#   DUTCHBAY_JWT_SECRET, DUTCHBAY_API_USERS and DUTCHBAY_REDIS_URL are secrets and are
+#   provisioned out-of-band with `fly secrets set` (see scripts/provision_web_secrets.py),
+#   NOT committed here. fly.toml [env] carries ONLY non-secret configuration. The
+#   managed Redis DSN carries a password, hence DUTCHBAY_REDIS_URL is a secret too.
+#     fly secrets set DUTCHBAY_JWT_SECRET=... DUTCHBAY_API_USERS=... DUTCHBAY_REDIS_URL=...
+#
+# Production posture: DUTCHBAY_ENV="production" engages the fail-closed auth posture
+# (app/api/auth.py), which makes DUTCHBAY_JWT_ISSUER and DUTCHBAY_JWT_AUDIENCE
+# MANDATORY (an unset issuer/audience is a 500). Both are set in [env] below.
+
+app = "dutchbay-epc-model"
+primary_region = "sin"
+
+# -----------------------------------------------------------------------------
+# Non-secret configuration only. Secrets go through `fly secrets set` (see above).
+# -----------------------------------------------------------------------------
+[env]
+  # Auth posture: "production" makes the issuer/audience binding mandatory and the
+  # JWT-secret strength checks active (app/api/auth.py).
+  DUTCHBAY_ENV = "production"
+
+  # Async job path: durable cross-process arq + Redis (app/jobs/config.py). The
+  # Redis DSN itself is a secret (DUTCHBAY_REDIS_URL via `fly secrets set`).
+  DUTCHBAY_JOBS_BACKEND = "redis"
+  DUTCHBAY_JOBS_QUEUE = "dutchbay:wind_jobs"
+
+  # JWT iss/aud binding - MANDATORY in production (unset => 500). Non-secret.
+  DUTCHBAY_JWT_ISSUER = "dutchbay-epc-model"
+  DUTCHBAY_JWT_AUDIENCE = "dutchbay-web"
+
+  # Synchronous /cases* route operational limits (app/api/config.py).
+  DUTCHBAY_SYNC_ROUTE_TIMEOUT = "120"
+  DUTCHBAY_SYNC_ROUTE_MAX_CONCURRENCY = "8"
+
+  # Async job retention / TTL / SSE stream lifetime (app/jobs/config.py).
+  DUTCHBAY_JOBS_MAX_RETAINED = "1000"
+  DUTCHBAY_JOBS_TTL_SECONDS = "86400"
+  DUTCHBAY_SSE_MAX_POLLS = "600"
+  DUTCHBAY_SSE_POLL_INTERVAL = "0.5"
+
+# -----------------------------------------------------------------------------
+# Process model: web (public) + worker (private).
+# -----------------------------------------------------------------------------
+[processes]
+  web = "uvicorn app.api.main:app --host 0.0.0.0 --port 8080"
+  worker = "arq app.jobs.worker.WorkerSettings"
+
+# -----------------------------------------------------------------------------
+# Public HTTP service - attached to the "web" process ONLY. The worker has no
+# public port.
+# -----------------------------------------------------------------------------
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
+  # Liveness probe: GET /health is an UNVERSIONED, unauthenticated infra route that
+  # returns {"status": "ok", ...} (app/api/main.py).
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+# -----------------------------------------------------------------------------
+# VM sizing. weasyprint (PDF) + geopandas (GIS) want headroom; give ~1gb.
+# -----------------------------------------------------------------------------
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

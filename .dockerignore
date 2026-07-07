@@ -1,0 +1,120 @@
+# Docker build-context excludes for the DutchBay EPC image (issue #845).
+#
+# Policy: exclude everything NOT needed to (a) run the two-step install and (b) serve
+# the FastAPI app + arq worker at run time. Keep the full runtime import surface.
+#
+# KEEP (do NOT add exclusions for these — they are imported / read at run time):
+#   app/                 FastAPI surface + jobs + services + reports (NOT a pip-installed
+#                        package — served from source; see Dockerfile). Includes
+#                        app/reports/templates/*.j2, loaded via FileSystemLoader
+#                        (app/reports/renderer.py) — never exclude the templates.
+#   analytics/ finance/  the canonical v14 finance engine (imported by app.services.*).
+#   api/ config/         top-level packages the app imports (api.pipeline_api, config.*).
+#   wind_resource/ solar_resource/   cashflow adapters imported by the app.
+#   conf/ scenarios/      Hydra/scenario config + frozen AEP exports read at run time.
+#   constants.py          top-level module on the import path.
+#   pyproject.toml requirements.txt constraints.txt   install manifests (copied first).
+#   README.md VERSION     project readme (pyproject `readme=`) + version string.
+#
+# Git / VCS
+.git
+.gitignore
+.gitattributes
+.git-blame-ignore-revs
+
+# Virtual environments (never ship the host venv; the image builds its own at /opt/venv)
+.venv
+.venv3*
+.venv311
+venv
+env
+ENV
+.envrc
+
+# Local env files may hold REAL secrets — never bake them into the image. The app
+# reads os.environ / Fly secrets at run time, never a .env file inside the container,
+# so nothing here is needed at runtime. (.env.example is documentation, not runtime.)
+.env
+.env.*
+
+# Python caches / build artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+develop-eggs/
+
+# Test / type / lint caches and reports (tooling only — not runtime)
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.cache
+.test_durations
+coverage.xml
+
+# Tests are not needed at run time (the [dev,test] extras are not installed either)
+tests/
+legacy_tests/
+
+# Documentation, notebooks, changelog fragments — not imported at run time
+docs/
+*.ipynb
+changelog.d/
+CHANGELOG.md
+RELEASING.md
+QUICK_START.md
+PYDANTIC_V2_RUNTIME_RISKS.md
+SECURITY.md
+LICENSE
+
+# Legacy / frozen trees (isolated; not on the runtime import path)
+legacy/
+legacy_scenarios/
+legacy_scripts/
+
+# Generated run outputs and large local data caches (regenerated in-container; heavy)
+outputs/
+output/
+downloads/
+*.nc
+*.netcdf
+*.tif
+*.tiff
+*.grib
+*.zip
+data/
+.data_cache/
+
+# Node / frontend tooling (not part of the Python service)
+node_modules/
+
+# Editor / OS cruft
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI / deploy scaffolding not needed inside the image
+.github/
+.pre-commit-config.yaml
+Dockerfile
+.dockerignore
+fly.toml
+docker-compose.yml
+docker-compose.yaml

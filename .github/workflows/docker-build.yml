@@ -1,0 +1,92 @@
+# Build the deployment image and prove it boots (issue #845).
+#
+# This is the REAL build+boot proof for the container scaffolding: the image is built
+# with the same two-step install strategy the Dockerfile uses, then run, and the
+# unversioned /health liveness route is polled. /health needs no auth and DUTCHBAY_ENV
+# is left unset (permissive development posture), so no secrets are required for the
+# smoke test — a throwaway DUTCHBAY_JWT_SECRET is supplied only so the app imports
+# cleanly.
+name: docker-build
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pyproject.toml
+      - requirements.txt
+      - constraints.txt
+      - app/**
+      - .github/workflows/docker-build.yml
+  push:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pyproject.toml
+      - requirements.txt
+      - constraints.txt
+      - app/**
+      - .github/workflows/docker-build.yml
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    name: build image and smoke /health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (load into the local docker daemon)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: dutchbay-epc-model:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot the web process and poll /health
+        run: |
+          set -euo pipefail
+
+          # DUTCHBAY_ENV unset => permissive development posture; /health needs no auth.
+          # DUTCHBAY_JOBS_BACKEND=memory keeps the in-process job path (no Redis needed).
+          docker run -d --name dbtest -p 8080:8080 \
+            -e DUTCHBAY_JWT_SECRET=ci-not-a-real-secret \
+            -e DUTCHBAY_JOBS_BACKEND=memory \
+            dutchbay-epc-model:ci
+
+          echo "Waiting for GET /health to return 200 (up to ~40s)..."
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/health; then
+              echo
+              echo "Health check passed on attempt ${i}."
+              ok="yes"
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "${ok}" ]; then
+            echo "::error::/health did not become ready within ~40s"
+            echo "----- docker logs dbtest -----"
+            docker logs dbtest || true
+            exit 1
+          fi
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs dbtest || true
+
+      - name: Stop and remove the smoke container
+        if: always()
+        run: |
+          docker stop dbtest || true
+          docker rm dbtest || true
